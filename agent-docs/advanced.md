@@ -570,20 +570,30 @@ affects a cached page.
 ### Link prefetch
 
 Same-origin in-app links are prefetched speculatively so a click
-resolves from a warm cache with no round-trip. On by default with the
-`intent` strategy (no per-link opt-in needed), the way Next / Nuxt /
-SvelteKit ship auto-prefetch. The prefetch request carries the same
-`X-Webjs-Have` header a real navigation sends, so the server returns the
-same divergent fragment; that fragment lands in a dedicated prefetch
-cache (separate from the back/forward snapshot cache) and `fetchAndApply`
-consumes it via `prefetchTake` before falling back to the network.
+resolves from a warm cache with no round-trip. On by default (no per-link
+opt-in needed), the way Next / Nuxt / SvelteKit ship auto-prefetch. The
+prefetch request carries the same `X-Webjs-Have` header a real navigation
+sends, so the server returns the same divergent fragment; that fragment
+lands in a dedicated prefetch cache (separate from the back/forward
+snapshot cache) and `fetchAndApply` consumes it via `prefetchTake` before
+falling back to the network.
+
+The default strategy is DEVICE-ADAPTIVE, because one strategy cannot serve
+both input modalities. On a hover-capable fine pointer (mouse / trackpad)
+the default is `intent` (warm on hover / focus, a real head-start before
+the click). On touch the default is `viewport` (warm as links settle
+on-screen), because a touch device has no hover and `touchstart` fires at
+tap time, too late to front-run the navigation. The modality is detected
+with `matchMedia('(hover: hover) and (pointer: fine)')`, not a user-agent
+sniff. A per-link `data-prefetch` always overrides the adaptive default.
 
 Per link, set `data-prefetch` (a valid-HTML `data-*` attribute, the shape
 SvelteKit and Astro use; Next / Nuxt / Remix use a component prop, which
 webjs has no equivalent for since links are plain `<a href>`):
 
 ```html
-<a href="/dashboard">intent: hover / focus / touch (default)</a>
+<a href="/dashboard">adaptive: intent on pointer, viewport on touch (default)</a>
+<a href="/dashboard" data-prefetch="intent">hover / focus / touch</a>
 <a href="/dashboard" data-prefetch="render">eager on insert</a>
 <a href="/dashboard" data-prefetch="viewport">on scroll-into-view</a>
 <a href="/dashboard" data-prefetch="none">never</a>
@@ -591,9 +601,14 @@ webjs has no equivalent for since links are plain `<a href>`):
 
 Next-style aliases are accepted: `true` = `render`, `auto` = `viewport`,
 `false` = `none`. `intent` waits a short dwell (~100ms) after hover/focus
-so a pointer passing over a link does not fetch it; `viewport` uses an
-IntersectionObserver at threshold 0.5; `render` and `viewport` are
-applied by a document scan on enable and after each navigation.
+so a pointer passing over a link does not fetch it. `viewport` uses an
+IntersectionObserver at threshold 0.5 and waits a ~250ms dwell, cancelled
+the instant the link scrolls back out, so a fast scroll through a long
+list spends no requests (the same gate Astro / Next / Nuxt / Remix /
+TanStack / Turbo apply). On touch, `touchstart` additionally warms the
+tapped link itself (a single request for a link about to be navigated).
+`render` and `viewport` are applied by a document scan on enable and after
+each navigation.
 
 Only internal links qualify, using the same eligibility as a click:
 cross-origin, `download`, `target` other than `_self`, non-HTML
@@ -602,7 +617,9 @@ Opt out with `data-prefetch="none"`, `data-no-prefetch`, or
 `rel="external"`. Speculation is bounded by a concurrency cap (excess
 requests queue and drain as slots free, rather than being dropped),
 in-flight de-dupe, and an LRU + TTL cache, and is disabled entirely under
-`Save-Data` or `prefers-reduced-data`. A mutating form submission and
+`Save-Data`, `prefers-reduced-data`, or a 2g `effectiveType` connection.
+The guiding rule: snappy, but never at the cost of bloating the client
+network tab; when the two conflict, the gate under-fetches. A mutating form submission and
 `revalidate(url)` both evict the prefetch cache alongside the snapshot
 cache, so a fragment prefetched before a mutation is never served stale.
 

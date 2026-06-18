@@ -126,6 +126,28 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
     page = await browser.newPage();
+    // Model a desktop pointer deterministically. Headless Chromium reports
+    // hover:none, which would flip the adaptive prefetch default to viewport
+    // and passively warm links (breaking tests that assume nothing prefetches
+    // without a hover). Override ONLY the hover/pointer media query (other
+    // queries delegate to the real matchMedia); a test opts into touch by
+    // setting window.__webjsForceTouch before the router scans. This uses a
+    // matchMedia shim rather than emulateMediaFeatures, which CI's Chromium
+    // does not support for the hover feature.
+    await page.evaluateOnNewDocument(() => {
+      const real = window.matchMedia.bind(window);
+      window.matchMedia = (q) => {
+        if (typeof q === 'string' && q.includes('hover')) {
+          const touch = !!window.__webjsForceTouch;
+          return {
+            matches: !touch, media: q, onchange: null,
+            addEventListener() {}, removeEventListener() {},
+            addListener() {}, removeListener() {}, dispatchEvent() { return false; },
+          };
+        }
+        return real(q);
+      };
+    });
   });
 
   after(async () => {
@@ -2291,6 +2313,104 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       assert.equal(pf.optout, 0, 'data-prefetch="none" link must not trigger a webjs prefetch');
     } finally {
       page.off('request', onRequest);
+    }
+  });
+
+  test('prefetch: a data-prefetch="viewport" link warms only after it scrolls into view, not on load (#530)', async () => {
+    await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await sleep(2000);
+
+    // A unique query gives a distinct prefetch-cache key, so a prior test that
+    // warmed /about cannot mask this one. /about is a real page (200 text/html).
+    const vpHref = '/about?probe=e2e-viewport';
+    await page.evaluate((href) => {
+      const main = document.querySelector('main') || document.body;
+      // Push the link far below the fold so it starts OUTSIDE the viewport.
+      const spacer = document.createElement('div');
+      spacer.id = 'e2e-vp-spacer';
+      spacer.style.height = '4000px';
+      const a = document.createElement('a');
+      a.href = href;
+      a.id = 'e2e-vp-link';
+      a.setAttribute('data-prefetch', 'viewport');
+      a.textContent = 'viewport link';
+      main.append(spacer, a);
+      // A re-scan (what a soft nav fires) makes the router observe the new link.
+      document.dispatchEvent(new Event('webjs:navigate'));
+      window.scrollTo(0, 0);
+    }, vpHref);
+
+    let warmed = 0;
+    const origin = new URL(baseUrl).origin;
+    const onRequest = (req) => {
+      if (!req.headers()['x-webjs-prefetch']) return;
+      let u; try { u = new URL(req.url()); } catch { return; }
+      if (u.origin === origin && u.pathname === '/about' && u.search.includes('probe=e2e-viewport')) warmed++;
+    };
+    page.on('request', onRequest);
+    try {
+      // Off-screen: the viewport link must NOT prefetch on load (not eager).
+      await sleep(700);
+      assert.equal(warmed, 0, 'a viewport link below the fold must not prefetch before it is seen');
+
+      // Scroll it into view and let it settle past the ~250ms dwell.
+      await page.evaluate(() => document.getElementById('e2e-vp-link')?.scrollIntoView());
+      await waitFor(() => warmed >= 1, 4000,
+        () => `a viewport link scrolled into view should warm once it dwells (got ${warmed})`);
+      await sleep(300);
+      assert.equal(warmed, 1, 'a settled viewport link warms exactly once');
+    } finally {
+      page.off('request', onRequest);
+    }
+  });
+
+  test('prefetch: on a TOUCH viewport, a bare link (no data-prefetch) defaults to viewport prefetch (#530)', async () => {
+    // Force the touch modality (no hover) through the matchMedia shim the before
+    // hook installs, so the adaptive default resolves a bare link to `viewport`
+    // and it warms on scroll-into-view rather than needing a hover that touch
+    // cannot produce. Reset the flag in finally so later tests keep the desktop
+    // model. CI Chromium does not support emulateMediaFeatures for hover, so the
+    // shim is how the modality is controlled.
+    await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    try {
+      await page.evaluate(() => { window.__webjsForceTouch = true; });
+      await sleep(1500);
+
+      const touchHref = '/about?probe=e2e-touch-default';
+      await page.evaluate((href) => {
+        const main = document.querySelector('main') || document.body;
+        const spacer = document.createElement('div');
+        spacer.style.height = '4000px';
+        const a = document.createElement('a');
+        a.href = href;          // NO data-prefetch: relies on the adaptive default
+        a.id = 'e2e-touch-link';
+        a.textContent = 'touch default link';
+        main.append(spacer, a);
+        document.dispatchEvent(new Event('webjs:navigate'));
+        window.scrollTo(0, 0);
+      }, touchHref);
+
+      let warmed = 0;
+      const origin = new URL(baseUrl).origin;
+      const onRequest = (req) => {
+        if (!req.headers()['x-webjs-prefetch']) return;
+        let u; try { u = new URL(req.url()); } catch { return; }
+        if (u.origin === origin && u.pathname === '/about' && u.search.includes('probe=e2e-touch-default')) warmed++;
+      };
+      page.on('request', onRequest);
+      try {
+        // Off-screen: no hover exists on touch, so nothing warms yet.
+        await sleep(700);
+        assert.equal(warmed, 0, 'a bare link off-screen on touch does not warm (no hover to trigger it)');
+        // Scroll it in and let it dwell: the adaptive default warms it as viewport.
+        await page.evaluate(() => document.getElementById('e2e-touch-link')?.scrollIntoView());
+        await waitFor(() => warmed >= 1, 4000,
+          () => `a bare link on touch should warm as viewport once it dwells (got ${warmed})`);
+      } finally {
+        page.off('request', onRequest);
+      }
+    } finally {
+      await page.evaluate(() => { window.__webjsForceTouch = false; }).catch(() => {});
     }
   });
 

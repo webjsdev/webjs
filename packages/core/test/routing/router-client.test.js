@@ -31,7 +31,7 @@ let _collect, _longest, _keyOf, _diffEl, _reconcile,
   _onSubmit, _getSubmitMethod, _getSubmitAction, _buildSubmitFormData,
   _restoreOptimistic, _navToken, _bumpNavToken,
   _currentPageUrl, _setCurrentPageUrl,
-  _eligibleAnchorHref, _prefetchSuppressed, _prefetchMode, _prefetch, _prefetchTake,
+  _eligibleAnchorHref, _prefetchSuppressed, _prefetchMode, _prefetchHasHoverPointer, _prefetch, _prefetchTake,
   _prefetchSaysSaveData, _prefetchPeek, _prefetchInflightSize, _resetPrefetch,
   _viewTransitionsEnabled, _runWithTransition, _regraftPermanentElements,
   enableClientRouter, disableClientRouter, revalidate,
@@ -100,6 +100,7 @@ before(async () => {
     _eligibleAnchorHref,
     _prefetchSuppressed,
     _prefetchMode,
+    _prefetchHasHoverPointer,
     _prefetch,
     _prefetchTake,
     _prefetchSaysSaveData,
@@ -2487,6 +2488,18 @@ function mkAnchor(href, attrs = {}) {
   return a;
 }
 
+/** Run `fn` with a stubbed matchMedia answering `map[query]`, then restore. */
+function withMatchMedia(map, fn) {
+  const orig = globalThis.matchMedia;
+  globalThis.matchMedia = /** @type any */ ((q) => ({ matches: !!map[q], media: q }));
+  try {
+    return fn();
+  } finally {
+    if (orig === undefined) delete globalThis.matchMedia;
+    else globalThis.matchMedia = orig;
+  }
+}
+
 /** Install a fake same-origin location + a recording fetch. */
 function withPrefetchEnv(run, { fetchImpl, navigator: nav } = {}) {
   const origLoc = globalThis.location;
@@ -2580,6 +2593,45 @@ test('prefetchMode: suppression wins over data-prefetch', async () => {
     // Even an explicit eager request is overridden by an opt-out.
     assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'viewport', 'data-no-prefetch': '' })), 'none');
     assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'render', rel: 'external' })), 'none');
+  });
+});
+
+test('prefetchMode: the default is device-adaptive (intent on pointer, viewport on touch)', async () => {
+  await withPrefetchEnv(() => {
+    // A hover-capable fine pointer (mouse / trackpad): intent is the default.
+    withMatchMedia({ '(hover: hover) and (pointer: fine)': true }, () => {
+      assert.equal(_prefetchHasHoverPointer(), true);
+      assert.equal(_prefetchMode(mkAnchor('/a')), 'intent', 'pointer default is intent');
+      assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'bogus' })), 'intent');
+    });
+    // Touch (no hover, coarse pointer): viewport becomes the default.
+    withMatchMedia({ '(hover: hover) and (pointer: fine)': false }, () => {
+      assert.equal(_prefetchHasHoverPointer(), false);
+      assert.equal(_prefetchMode(mkAnchor('/a')), 'viewport', 'touch default is viewport');
+      assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'bogus' })), 'viewport');
+    });
+    // A per-link data-prefetch ALWAYS overrides the adaptive default, even on touch.
+    withMatchMedia({ '(hover: hover) and (pointer: fine)': false }, () => {
+      assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'intent' })), 'intent', 'explicit intent wins on touch');
+      assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'none' })), 'none');
+      assert.equal(_prefetchMode(mkAnchor('/a', { 'data-prefetch': 'render' })), 'render');
+    });
+  });
+});
+
+test('prefetchHasHoverPointer: assumes a pointer when matchMedia is unavailable', async () => {
+  await withPrefetchEnv(() => {
+    const orig = globalThis.matchMedia;
+    // @ts-ignore deliberately remove matchMedia to exercise the fallback.
+    delete globalThis.matchMedia;
+    try {
+      // No matchMedia (non-browser / partial DOM): keep the historical intent
+      // default rather than silently switching to viewport.
+      assert.equal(_prefetchHasHoverPointer(), true);
+      assert.equal(_prefetchMode(mkAnchor('/a')), 'intent');
+    } finally {
+      if (orig !== undefined) globalThis.matchMedia = orig;
+    }
   });
 });
 
@@ -2689,6 +2741,26 @@ test('prefetch: respects Save-Data (no fetch)', async () => {
     await new Promise((r) => setTimeout(r, 0));
     assert.equal(calls.length, 0, 'no fetch under Save-Data');
   }, { navigator: { connection: { saveData: true } } });
+});
+
+test('prefetch: respects a 2g effectiveType (no fetch)', async () => {
+  await withPrefetchEnv(async (calls) => {
+    assert.equal(_prefetchSaysSaveData(), true, 'slow-2g detected as a throttled link');
+    _prefetch('http://localhost/slow');
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(calls.length, 0, 'no fetch on a 2g link');
+  }, { navigator: { connection: { effectiveType: 'slow-2g' } } });
+});
+
+test('prefetch: a fast effectiveType does NOT suppress (4g still warms)', async () => {
+  // Counterfactual for the 2g gate: only the 2g tiers are throttled, so a 4g
+  // link must still prefetch (otherwise the gate would kill all speculation).
+  await withPrefetchEnv(async (calls) => {
+    assert.equal(_prefetchSaysSaveData(), false, '4g is not a throttled link');
+    _prefetch('http://localhost/fast');
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(calls.length, 1, 'fetch issued on 4g');
+  }, { navigator: { connection: { effectiveType: '4g' } } });
 });
 
 test('prefetchTake: consumes a cached entry exactly once', async () => {
