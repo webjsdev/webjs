@@ -23,14 +23,11 @@
  *   - the `dev` / `start` scripts force `bun --bun` (the server is Bun),
  *   - every other command stays `bun run` / `webjs ...` (runs on Node via the
  *     `webjs` bin's `#!/usr/bin/env node` shebang),
- *   - the Dockerfile keeps the `node:24-alpine` base and COPIES in the Bun
- *     binary (the server serves on Bun, but Node + `npx` stay available).
- *     A pure `oven/bun` base would need the installed `@webjsdev/cli` to be
- *     npx-free (#570), but a scaffolded app pins `@webjsdev/cli: latest`, and
- *     until the #570 build is the published `latest` an installed CLI may still
- *     shell `npx drizzle-kit` for the boot `webjs db migrate`, which a pure
- *     `oven/bun` image lacks. The node base works with ANY installed CLI; a
- *     future scaffold can drop to a pure `oven/bun` base once #570 is published.
+ *   - the Dockerfile is a pure `oven/bun:1` base (#595). This is safe as of
+ *     `@webjsdev/cli@0.10.20` (#570): `webjs db migrate` resolves drizzle-kit
+ *     and runs it under Bun (no `npx`), so a Node-less image works. (Before
+ *     #570 shipped as `latest`, this stayed on `node:24-alpine` + a copied Bun
+ *     binary, since the installed CLI could still shell `npx`.)
  */
 
 /**
@@ -50,10 +47,17 @@
 export function bunifyProse(s) {
   return s
     // Prose claim about the Dockerfile CMD (AGENTS.md dev-start parity section);
-    // the bun Dockerfile's CMD becomes `bun --bun run start`. The base stays
-    // node:24-alpine (+ a copied Bun binary), so the "pins node:24-alpine" prose
-    // is still accurate and is NOT rewritten.
+    // the bun Dockerfile's CMD becomes `bun --bun run start`.
     .replaceAll('`CMD ["npm", "start"]`', '`CMD ["bun", "--bun", "run", "start"]`')
+    // The "Containerized deploy" prose describes the node template's
+    // node:24-alpine base; the bun Dockerfile is a pure oven/bun:1 image (#595),
+    // so rewrite the base claim to match what the bun app actually ships. (The
+    // trailing `npm start` is rewritten to `bun --bun run start` by the generic
+    // rule below.)
+    .replaceAll(
+      'Dockerfile pins `node:24-alpine` (the same Node major CI uses), installs\ndeps (no build step, since Drizzle has no codegen), and starts via',
+      'Dockerfile is a pure `oven/bun:1` image (no Node, since `webjs db migrate`\nresolves drizzle-kit and runs under Bun with no `npx`, #570), installs deps\nwith `bun install` (no build step, since Drizzle has no codegen), and starts via',
+    )
     // The "Running on Bun" section frames Bun as opt-in ("force it with --bun").
     // In a bun-flavored app the dev/start scripts ALREADY embed --bun, so reframe
     // it as the configured default.
@@ -92,62 +96,71 @@ export function bunifyProse(s) {
 /**
  * Rewrite the scaffolded Dockerfile for Bun.
  *
- * Base decision (acceptance criterion): KEEP the `node:24-alpine` base and COPY
- * in the Bun binary, NOT a pure `oven/bun` image. Justification: the server
- * serves on Bun (`bun --bun run start` selects the `Bun.serve` listener), but a
- * scaffolded app pins `@webjsdev/cli: latest`, and until the npx-free CLI (#570)
- * is the published `latest`, the INSTALLED CLI may still shell `npx drizzle-kit`
- * for the boot-time `webjs db migrate`. A pure `oven/bun` image has NO `npx`
- * (verified), so that migrate would fail at container start. Keeping the Node
- * base gives `npx` + the Node toolchain while the copied Bun binary serves the
- * app on Bun, so the image works with ANY installed CLI version (the same
- * pattern the in-repo example apps deploy with). `bun install` (not `npm
- * install`) uses the committed `bun.lock`, and `trustedDependencies` lets
- * better-sqlite3's prebuild postinstall run. Once cli@#570 is the published
- * `latest`, a future scaffold can drop to a pure `oven/bun` base.
+ * Base decision (acceptance criterion): a pure `oven/bun:1` image (no Node).
+ * Safe as of `@webjsdev/cli@0.10.20` (#570): `webjs db` / `webjs test` resolve
+ * their tools (drizzle-kit, wtr) and spawn them with the current runtime instead
+ * of `npx`, so the boot-time `webjs db migrate` runs under Bun with no Node
+ * toolchain. (Before #570 was the published `latest`, this stayed on a
+ * `node:24-alpine` base with a copied Bun binary, since the installed CLI could
+ * still shell `npx`, which a pure Bun image lacks. #595 flipped it once the
+ * npx-free CLI shipped.) `oven/bun:1` is Debian-based: `ca-certificates` ship in
+ * the image and better-sqlite3 fetches its glibc prebuild on `bun install`
+ * (gated by `trustedDependencies`), so no build toolchain is needed.
  *
  * @param {string} s
  * @returns {string}
  */
 export function bunifyDockerfile(s) {
   return s
-    // Top comment: explain the node-base + copied-bun-binary rationale.
+    // Top comment: explain the pure oven/bun base.
     .replace(
       /# webjs serves \.ts directly[\s\S]*?since the built-in stripper and recursive fs\.watch need it\.\n/,
       '# webjs serves .ts directly by stripping types at the runtime layer, so there is\n' +
       '# NO JavaScript build step (webjs is buildless end to end; there is no bundler or\n' +
-      '# esbuild fallback). This image SERVES the app on **Bun** (`bun --bun run start`\n' +
-      '# selects the Bun.serve listener) while keeping the `node:24-alpine` base so the\n' +
-      '# Node toolchain (npx) stays available for the boot-time `webjs db migrate`. The\n' +
-      '# Bun binary is copied in below. Do not lower the Node base below 24 (the floor the\n' +
-      '# CI workflow and the framework pin enforce), since the toolchain and recursive\n' +
-      '# fs.watch need it. (A pure oven/bun base, no Node, is possible once your installed\n' +
-      '# @webjsdev/cli resolves drizzle-kit without npx; the node base works regardless.)\n',
+      '# esbuild fallback). This image runs the app on **Bun**: the type-strip comes from\n' +
+      '# `amaro`, the server serves via Bun.serve, and `webjs db migrate` runs under Bun\n' +
+      '# (the CLI resolves drizzle-kit without npx, #570), so no Node is needed. webjs also\n' +
+      '# runs on Node 24+; for a Node base instead, swap to `node:24-alpine` and start with\n' +
+      '# `npm start`.\n',
     )
-    // Copy the Bun binary (musl, matching the alpine base) in after the apk step.
+    .replace('FROM node:24-alpine', 'FROM oven/bun:1')
+    // Debian base: ca-certificates already present, no `apk`. Drop the alpine line.
     .replace(
-      'RUN apk add --no-cache ca-certificates\n',
-      'RUN apk add --no-cache ca-certificates\n\n' +
-      '# Bun binary, so the server serves on Bun while the Node toolchain above stays\n' +
-      '# available for the boot `webjs db migrate` (which may shell npx, depending on the\n' +
-      '# installed @webjsdev/cli version) and the shebang bins.\n' +
-      'COPY --from=oven/bun:1-alpine /usr/local/bin/bun /usr/local/bin/bun\n',
+      /# ca-certificates for outbound TLS \(e\.g\. a managed Postgres\)\. better-sqlite3\n# is a prebuilt native module, so no build toolchain is needed here\.\nRUN apk add --no-cache ca-certificates\n\n/,
+      '# The Debian-based oven/bun image ships ca-certificates for outbound TLS (e.g. a\n# managed Postgres). better-sqlite3 fetches its glibc prebuild on `bun install`\n# (gated by trustedDependencies), so no build toolchain is needed.\n\n',
     )
     // Lockfile + install (bun.lock, bun install).
     .replace(
       '# package-lock.json is optional (it\'s absent when the app was scaffolded with\n# --no-install); the glob keeps the COPY working with or without it.\nCOPY package.json package-lock.json* ./\nRUN npm install --no-audit --no-fund',
       '# bun.lock is optional (absent when scaffolded with --no-install); the glob keeps\n# the COPY working with or without it. trustedDependencies in package.json lets\n# better-sqlite3\'s native-prebuild postinstall run (bun skips postinstalls).\nCOPY package.json bun.lock* ./\nRUN bun install',
     )
-    // Entrypoint: serve on Bun. The healthcheck keeps `node -e` (the Node base
-    // provides node, so no change is needed there).
+    // Healthcheck: the pure Bun image has no node; use `bun -e`. Keep the
+    // dependency-free-probe comment accurate (the probe runs under Bun now).
+    .replace("(Node 24's built-in fetch, no curl/wget)", "(the runtime's built-in fetch, no curl/wget)")
+    .replace('CMD ["node", "-e", "fetch(', 'CMD ["bun", "-e", "fetch(')
+    // Entrypoint: serve on Bun.
     .replace(
       /# `npm start` is a thin alias[\s\S]*?the migrate no longer depends on an npm `prestart` hook\.\nCMD \["npm", "start"\]/,
       '# `bun --bun run start` runs the `start` script on Bun (the server serves via\n' +
       '# Bun.serve). `webjs start` runs the `webjs.start.before` step (`webjs db migrate`,\n' +
-      '# which shells drizzle-kit through the Node toolchain in this image), idempotent /\n' +
-      '# a no-op with no pending migrations, then serves on $PORT.\n' +
+      '# which resolves drizzle-kit and runs it under Bun, no npx, #570), idempotent / a\n' +
+      '# no-op with no pending migrations, then serves on $PORT.\n' +
       'CMD ["bun", "--bun", "run", "start"]',
     );
+}
+
+/**
+ * Rewrite compose.yaml for the pure-Bun image (#595): its healthcheck runs in
+ * the `oven/bun:1` container (compose's healthcheck overrides the Dockerfile's),
+ * which has no `node`, so switch `node -e` to `bun -e`. compose otherwise builds
+ * from the Dockerfile and inherits its `bun --bun run start` CMD, so nothing
+ * else changes.
+ *
+ * @param {string} s
+ * @returns {string}
+ */
+export function bunifyCompose(s) {
+  return s.replace('test: ["CMD", "node", "-e", "fetch(', 'test: ["CMD", "bun", "-e", "fetch(');
 }
 
 /**

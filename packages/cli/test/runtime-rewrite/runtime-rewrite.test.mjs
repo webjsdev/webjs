@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  bunifyProse, bunifyDockerfile, bunifyCi,
+  bunifyProse, bunifyDockerfile, bunifyCompose, bunifyCi,
 } from '../../lib/runtime-rewrite.js';
 
 test('bunifyProse: server scripts force --bun, tooling scripts stay on Node', () => {
@@ -45,13 +45,16 @@ test('bunifyProse: leaves bare "npm" registry references alone', () => {
   );
 });
 
-test('bunifyProse: rewrites the CMD prose, keeps the node:24-alpine base claim', () => {
-  // The base stays node:24-alpine (+ a copied Bun binary), so that prose is NOT
-  // rewritten; only the CMD (which becomes `bun --bun run start`) is.
-  assert.equal(
-    bunifyProse('The Dockerfile pins `node:24-alpine` (the same Node major CI uses)'),
-    'The Dockerfile pins `node:24-alpine` (the same Node major CI uses)',
-  );
+test('bunifyProse: rewrites the CMD prose and the node:24-alpine base claim to pure oven/bun', () => {
+  // The bun Dockerfile is a pure oven/bun:1 image (#595), so the "pins
+  // node:24-alpine" prose MUST be rewritten to match, and the CMD becomes
+  // `bun --bun run start`.
+  const node = 'Dockerfile pins `node:24-alpine` (the same Node major CI uses), installs\ndeps (no build step, since Drizzle has no codegen), and starts via\n`npm start`';
+  const out = bunifyProse(node);
+  assert.match(out, /Dockerfile is a pure `oven\/bun:1` image \(no Node/);
+  assert.doesNotMatch(out, /pins `node:24-alpine`/);
+  assert.match(out, /installs deps\nwith `bun install`/);
+  assert.match(out, /starts via\n`bun --bun run start`/);
   assert.equal(
     bunifyProse('`CMD ["npm", "start"]` and `CMD ["webjs", "start"]`'),
     '`CMD ["bun", "--bun", "run", "start"]` and `CMD ["webjs", "start"]`',
@@ -69,7 +72,7 @@ test('bunifyProse: reframes the opt-in "Running on Bun" section as the default',
   assert.doesNotMatch(out, /to run under Bun, force it with/);
 });
 
-test('bunifyDockerfile: keeps node base, copies bun binary, bun install, bun start', () => {
+test('bunifyDockerfile: pure oven/bun base, bun install, bun -e healthcheck, bun start', () => {
   const node = [
     '# webjs serves .ts directly by stripping types at the runtime layer, so there is',
     '# something something. Do not lower the Node base below 24 (the floor the CI workflow',
@@ -87,6 +90,7 @@ test('bunifyDockerfile: keeps node base, copies bun binary, bun install, bun sta
     'COPY package.json package-lock.json* ./',
     'RUN npm install --no-audit --no-fund',
     'COPY . .',
+    "# The probe is dependency-free (Node 24's built-in fetch, no curl/wget). For",
     'HEALTHCHECK --interval=15s CMD ["node", "-e", "fetch(\'x\')"]',
     '# `npm start` is a thin alias for `webjs start` (#550). It runs the',
     '# `webjs.start.before` step before serving, so',
@@ -94,17 +98,28 @@ test('bunifyDockerfile: keeps node base, copies bun binary, bun install, bun sta
     'CMD ["npm", "start"]',
   ].join('\n');
   const out = bunifyDockerfile(node);
-  // Node base stays (the tooling needs npx/node); the Bun binary is copied in.
-  assert.match(out, /FROM node:24-alpine/);
-  assert.match(out, /COPY --from=oven\/bun:1-alpine \/usr\/local\/bin\/bun \/usr\/local\/bin\/bun/);
+  // Pure Bun base (#595); no Node base, no apk, no copied bun binary.
+  assert.match(out, /FROM oven\/bun:1/);
+  assert.doesNotMatch(out, /FROM node:24-alpine/);
+  assert.doesNotMatch(out, /apk add/);
+  assert.doesNotMatch(out, /COPY --from=oven\/bun/);
   assert.match(out, /COPY package\.json bun\.lock\* \.\//);
   assert.match(out, /RUN bun install/);
   assert.doesNotMatch(out, /npm install/);
-  // Healthcheck stays on node (the base provides it).
-  assert.match(out, /CMD \["node", "-e"/);
+  // Healthcheck off node (the pure Bun image has none).
+  assert.match(out, /CMD \["bun", "-e"/);
+  assert.doesNotMatch(out, /CMD \["node", "-e"/);
+  // The dependency-free-probe comment is kept accurate (no stale "Node 24" claim).
+  assert.match(out, /the runtime's built-in fetch/);
+  assert.doesNotMatch(out, /Node 24's built-in fetch/);
   // Server serves on Bun.
   assert.match(out, /CMD \["bun", "--bun", "run", "start"\]/);
   assert.doesNotMatch(out, /CMD \["npm", "start"\]/);
+});
+
+test('bunifyCompose: switches the healthcheck off node', () => {
+  const node = '      test: ["CMD", "node", "-e", "fetch(\'x\')"]';
+  assert.equal(bunifyCompose(node), '      test: ["CMD", "bun", "-e", "fetch(\'x\')"]');
 });
 
 test('bunifyCi: keeps setup-node, adds setup-bun, bun install, plain bun run', () => {
