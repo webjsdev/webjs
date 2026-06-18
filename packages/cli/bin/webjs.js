@@ -216,7 +216,37 @@ async function main() {
       const map = { generate: ['generate'], migrate: ['migrate'], push: ['push'], studio: ['studio'] };
       const kitArgs = map[sub];
       if (!kitArgs) { console.error('Unknown db subcommand.\n' + USAGE); process.exit(1); }
-      const child = spawn('npx', ['drizzle-kit', ...kitArgs, ...args], { stdio: 'inherit', cwd: process.cwd() });
+      // Resolve the app's own drizzle-kit bin and spawn it with the CURRENT
+      // runtime (process.execPath), the same way `webjs typecheck` resolves tsc.
+      // This drops the hard `npx` dependency (#570): `npx` is absent in a pure
+      // oven/bun image, which broke `webjs db migrate` at boot. On Node this is
+      // `node drizzle-kit`, on Bun `bun drizzle-kit` (drizzle-kit runs under
+      // both). drizzle-kit's `exports` does not expose `./bin.cjs` or
+      // `./package.json`, so resolve its main entry (`.` IS exported), walk up to
+      // the package root, and read the `bin` field (robust across versions).
+      const { createRequire } = await import('node:module');
+      const { readFileSync, existsSync: exists } = await import('node:fs');
+      let dkPath;
+      try {
+        const req = createRequire(join(process.cwd(), 'package.json'));
+        let pkgDir = dirname(req.resolve('drizzle-kit'));
+        while (!exists(join(pkgDir, 'package.json'))) {
+          const parent = dirname(pkgDir);
+          if (parent === pkgDir) throw new Error('package.json not found');
+          pkgDir = parent;
+        }
+        const pkg = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'));
+        const binRel = typeof pkg.bin === 'string' ? pkg.bin : pkg.bin?.['drizzle-kit'];
+        if (!binRel) throw new Error('drizzle-kit bin field missing');
+        dkPath = resolve(pkgDir, binRel);
+      } catch {
+        console.error(
+          'webjs db: drizzle-kit is not installed in this project.\n' +
+          'Install it with `npm install -D drizzle-kit`, then re-run `webjs db ' + sub + '`.',
+        );
+        process.exit(1);
+      }
+      const child = spawn(process.execPath, [dkPath, ...kitArgs, ...args], { stdio: 'inherit', cwd: process.cwd() });
       child.on('exit', (code) => process.exit(code ?? 0));
       break;
     }
