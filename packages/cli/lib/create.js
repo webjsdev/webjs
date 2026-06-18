@@ -776,6 +776,15 @@ export default cors({
 
     await writeFile(join(appDir, 'modules', 'users', 'queries', 'list-users.server.ts'), `'use server';
 
+// A GET server action (#488): a read declares its HTTP semantics via reserved
+// sibling exports the framework reads statically. 'method' makes the call ride
+// the URL (cacheable, ETag/304-aware, SSR-seeded on first paint); 'cache' is the
+// max-age in seconds (private by default, do NOT add { public: true } unless the
+// data is identical for EVERY visitor); 'tags' label the cached entry so a
+// mutation can evict it. One function per file.
+export const method = 'GET';
+export const cache = 30;
+export const tags = () => ['users'];
 export async function listUsers() {
   // TODO: replace with real data source
   return [
@@ -786,6 +795,11 @@ export async function listUsers() {
 `);
     await writeFile(join(appDir, 'modules', 'users', 'actions', 'create-user.server.ts'), `'use server';
 
+// A mutation server action (#488). With no 'method' export it defaults to POST
+// (CSRF-protected, rich request body). 'invalidates' lists the cache tags to
+// evict on success, so the next listUsers() read refetches fresh instead of
+// serving a stale browser-cached value. One function per file.
+export const invalidates = () => ['users'];
 export async function createUser(input: { name: string; email: string }) {
   // TODO: validate input, persist to database
   return { success: true, data: { id: Date.now().toString(), ...input } };
