@@ -48,7 +48,7 @@ const DENYLIST = [
   { match: 'packages/server/test/websocket/websocket.test.js', reason: 'exercises the node `ws`-library upgrade subsystem directly (node:http createServer + attachWebSocket, which do not interoperate on Bun). The Bun WebSocket path (Bun.serve + the BunWsAdapter, #511) is covered by test/bun/listener.mjs.' },
   { match: 'test/cli/typecheck.test.mjs', reason: 'spawns process.execPath (the webjs CLI typecheck, a Node tsc tool); under the matrix process.execPath is bun, which resolves TypeScript differently, so the Node-tooling assertion does not hold.' },
   { match: 'packages/server/test/elision/differential-elision.test.js', reason: 'boots the examples/blog app and renders its DB-backed home page, which needs a migrated Drizzle dev.db + jspm vendor resolution the matrix job does not provision (only the e2e / in-repo-app jobs do). The elision LOGIC is covered by the other unit tests in elision/; a real app boot on Bun is covered deterministically by test/bun/listener.mjs.' },
-  { match: 'test/docs/deployment-secrets.test.mjs', reason: "boots the docs app via createRequestHandler and asserts the rendered /docs/deployment HTML (a docs-CONTENT check, not runtime-sensitive code). The cold boot resolves the docs code-sample bare imports via jspm, which exceeds bun test's 5s default per-test timeout (node --test has no default timeout), the same app-boot + vendor-resolution class as differential-elision. Covered on the Node path by the unit job." },
+  { match: 'test/docs/', reason: "every test/docs/*.test.mjs boots the docs app via createRequestHandler and asserts rendered HTML / llms output (docs-CONTENT checks, not runtime-sensitive code). The cold boot resolves the docs code-sample bare imports via jspm, which intermittently exceeds bun test's 5s default per-test timeout (node --test has no default timeout); which docs page tips over varies by run (security-page, troubleshooting-page, llms have all flaked). Same app-boot + vendor-resolution class as differential-elision, fully covered on the Node path by the unit job." },
 ];
 
 /** @param {string} dir @param {string[]} out */
@@ -82,7 +82,9 @@ const excludeSegs = [`${SEP}browser${SEP}`, `${SEP}e2e${SEP}`, `${SEP}vendor${SE
 const filter = (process.env.WEBJS_BUN_TESTS || '').split(',').map((s) => s.trim()).filter(Boolean);
 // Repo-relative path, always forward-slashed so DENYLIST matching is OS-stable.
 const rel = (f) => f.slice(ROOT.length + 1).split(sep).join('/');
-const denyOf = (f) => DENYLIST.find((d) => rel(f) === d.match);
+// A denylist entry ending in `/` is a DIRECTORY prefix (skips every file under
+// it); otherwise it is an exact repo-relative file path.
+const denyOf = (f) => DENYLIST.find((d) => (d.match.endsWith('/') ? rel(f).startsWith(d.match) : rel(f) === d.match));
 
 const files = all
   .filter((f) => !excludeSegs.some((s) => f.includes(s)))

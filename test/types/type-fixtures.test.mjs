@@ -11,6 +11,12 @@
  * (no per-module `.d.ts`), which under `--strict` would otherwise flag the
  * library's own implicit-any imports. That noise is unrelated to the fixtures;
  * the fixtures themselves are still fully type-checked.
+ *
+ * These compilations resolve the live `@webjsdev/core` / `@webjsdev/server`
+ * overlays. The companion `server-types.test.mjs` proves the overlay is
+ * load-bearing WITHOUT moving the live `index.d.ts` aside (it copies the
+ * package), so no concurrent fixture compilation here can race a missing
+ * overlay (#566).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
