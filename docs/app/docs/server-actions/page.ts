@@ -154,6 +154,62 @@ PostForm.register('post-form');</pre>
     </ul>
     <p>The stub serialises function arguments with <code>await stringify(args)</code> and deserialises the response with <code>parse(text)</code>. The server does the inverse. This is invisible to the developer, so you work with native types on both sides. The serializer is async because Blob/File/FormData require an <code>await arrayBuffer()</code>. For payloads without binary the async cost is just one Promise tick.</p>
 
+    <h2>HTTP Verbs, Caching, and Streaming</h2>
+    <p>A server action is a POST by default, but it can declare richer HTTP semantics through reserved sibling exports the framework reads statically, the same way a page declares <code>export const revalidate</code>. The call site never changes (you still write <code>await getUser(7)</code>); only the transport does. webjs needs this where React and Next do not: webjs has no server/client component split, so both reads and writes flow through the one action mechanism.</p>
+    <p><strong>One callable function per configured file.</strong> A <code>.server.ts</code> file that declares any of these config exports must export exactly one callable. A second callable in the same file is a <code>webjs check</code> error.</p>
+
+    <h3>Choosing the verb</h3>
+    <p><code>export const method</code> selects the HTTP verb (absent means POST, so existing actions are unchanged):</p>
+    <pre>// modules/users/queries/get-user.server.ts
+'use server';
+export const method = 'GET';
+export async function getUser(id: number) {
+  return db.query.users.findFirst({ where: { id } });
+}</pre>
+    <p>The verb changes the wire, not your code. A <strong>GET</strong> rides its arguments in the URL query (with an automatic POST fallback above a 4KB cap), is CSRF-exempt, and carries cache headers (below). A <strong>mutation</strong> (POST / PUT / PATCH / DELETE) sends the rich serialized body (DELETE rides the URL), is CSRF-protected, and reports cache invalidation (below). A request whose method does not match the declared verb gets a <code>405</code> with an <code>Allow</code> header.</p>
+
+    <h3>Caching a GET (and invalidating it)</h3>
+    <p>A GET action can opt into response caching, and a mutation can evict it by tag:</p>
+    <pre>// a cached, tagged GET
+'use server';
+export const method = 'GET';
+export const cache = 60;                          // seconds; or { maxAge, swr, public }
+export const tags = (id: number) => ['user:' + id];
+export async function getUser(id: number) { return db.query.users.findFirst({ where: { id } }); }</pre>
+    <pre>// a mutation evicts the tags it touches
+'use server';
+export const invalidates = (id: number) => ['user:' + id];
+export async function updateUser(id: number, patch: Partial&lt;User&gt;) { /* ... */ }</pre>
+    <p>A cached GET carries <code>Cache-Control</code> plus a weak <code>ETag</code> (answering <code>If-None-Match</code> with a <code>304</code>) and an <code>X-Webjs-Tags</code> header. When a mutation completes (it did not throw), the framework evicts its <code>invalidates</code> tags from the server cache and reports them via <code>X-Webjs-Invalidate</code>, so the client browser-cache coordinator revalidates a later read.</p>
+    <p><strong>Safety.</strong> <code>cache</code> with <code>public: true</code> SHARES one response across all users, keyed only by URL plus arguments. Use it ONLY for data identical for every visitor, never a session or per-user read. This is the same safety rule as a page's <code>export const revalidate</code>. The default (private) cache is per-response and safe.</p>
+
+    <h3>Per-action middleware</h3>
+    <p><code>export const middleware</code> runs a chain around the action on BOTH the RPC and the <code>route.ts</code> boundary. Each entry is <code>async (ctx, next) => result</code>; it short-circuits by returning an <code>ActionResult</code> instead of calling <code>next()</code>, and accumulates context the action reads via <code>actionContext()</code> from <code>@webjsdev/server</code>, with no signature change to the action.</p>
+    <pre>'use server';
+import { requireAuth } from '#lib/mw.server.ts';
+export const middleware = [requireAuth];
+export async function deletePost(id: number) { /* ... */ }</pre>
+
+    <h3>Streaming results</h3>
+    <p>An action that RETURNS a <code>ReadableStream</code>, an async iterable, or an async generator (any verb) streams its chunks over the single RPC response instead of buffering. The call site consumes it with <code>for await</code>:</p>
+    <pre>// the action
+'use server';
+export async function* streamTokens(n: number) {
+  for (let i = 0; i &lt; n; i++) yield 'token ' + i;
+}
+
+// a component
+for await (const chunk of await streamTokens(8)) {
+  this.text.set(this.text.get() + chunk);
+}</pre>
+    <p>Each chunk is rich-serialized as it is yielded (back-pressure is respected, and the source generator is cancelled on a client disconnect or a superseded render). Detection is purely on the return value, so there is no config export. A streamed result is never cached, ETagged, or seeded; a mutation still emits <code>X-Webjs-Invalidate</code>. A mid-stream throw surfaces as an error from the iterable (the production message only, since the 200 status is already sent).</p>
+
+    <h3>Cancellation</h3>
+    <p>An action reads the request's <code>AbortSignal</code> via <code>actionSignal()</code> (from <code>@webjsdev/server</code>) to stop work on a client disconnect or abort. On the client, a superseded <code>async render()</code> automatically ABORTS the previous render's in-flight action fetch, so a fast-typing user does not pile up stale requests. Outside an action, <code>actionSignal()</code> returns a never-aborting signal, so a direct server-to-server call stays safe.</p>
+
+    <h3>No re-fetch on hydration (SSR seeding)</h3>
+    <p>Each server-action result invoked during a (non-streamed) SSR render is serialized into the page, and the generated stub reads that seed on its FIRST client call, so a shipping component does not re-issue the RPC on hydration. A later refetch or argument change still goes to the network. The seed is keyed by action hash plus function plus serialized arguments, consumed once, and fail-open (a miss degrades to a normal RPC, never wrong data). It is on by default; opt out with <code>"webjs": { "seed": false }</code> or <code>WEBJS_SEED=0</code>.</p>
+
     <h2>CSRF Protection</h2>
     <p>Every server action RPC call is protected against Cross-Site Request Forgery using a <strong>double-submit cookie</strong> pattern:</p>
     <ol>
