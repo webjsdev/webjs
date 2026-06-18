@@ -53,7 +53,7 @@ const USAGE = `webjs commands:
   webjs create <name> [--template full-stack|api|saas] [--db sqlite|postgres] [--runtime node|bun] [--no-install]  Scaffold a new webjs app
                                                   (only 3 templates exist. default: full-stack, Drizzle, --db sqlite, --runtime node)
                                                   --runtime bun emits a Bun-flavored app (bun.lock, bun Dockerfile/CI, bun docs);
-                                                  also auto-detected when run via `bun create webjs`.
+                                                  also auto-detected when run via "bun create webjs".
                                                   Auto-runs the detected package manager's install in the new dir
                                                   unless --no-install is passed.
   webjs db generate                               Generate a SQL migration from the schema (drizzle-kit generate)
