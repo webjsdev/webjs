@@ -2,6 +2,7 @@
 import { resolve, join, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { resolveBin } from '../lib/resolve-bin.js';
 import { checkNodeInline, nodeInlineMessage } from '../lib/node-preflight.js';
 import { loadAppEnv, resolvePort } from '../lib/port.js';
 import { planDevSupervisor } from '../lib/dev-supervisor.js';
@@ -217,28 +218,13 @@ async function main() {
       const kitArgs = map[sub];
       if (!kitArgs) { console.error('Unknown db subcommand.\n' + USAGE); process.exit(1); }
       // Resolve the app's own drizzle-kit bin and spawn it with the CURRENT
-      // runtime (process.execPath), the same way `webjs typecheck` resolves tsc.
-      // This drops the hard `npx` dependency (#570): `npx` is absent in a pure
-      // oven/bun image, which broke `webjs db migrate` at boot. On Node this is
-      // `node drizzle-kit`, on Bun `bun drizzle-kit` (drizzle-kit runs under
-      // both). drizzle-kit's `exports` does not expose `./bin.cjs` or
-      // `./package.json`, so resolve its main entry (`.` IS exported), walk up to
-      // the package root, and read the `bin` field (robust across versions).
-      const { createRequire } = await import('node:module');
-      const { readFileSync, existsSync: exists } = await import('node:fs');
+      // runtime (process.execPath). This drops the hard `npx` dependency (#570):
+      // `npx` is absent in a pure oven/bun image, which broke `webjs db migrate`
+      // at boot. On Node this is `node drizzle-kit`, on Bun `bun drizzle-kit`
+      // (drizzle-kit runs under both).
       let dkPath;
       try {
-        const req = createRequire(join(process.cwd(), 'package.json'));
-        let pkgDir = dirname(req.resolve('drizzle-kit'));
-        while (!exists(join(pkgDir, 'package.json'))) {
-          const parent = dirname(pkgDir);
-          if (parent === pkgDir) throw new Error('package.json not found');
-          pkgDir = parent;
-        }
-        const pkg = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'));
-        const binRel = typeof pkg.bin === 'string' ? pkg.bin : pkg.bin?.['drizzle-kit'];
-        if (!binRel) throw new Error('drizzle-kit bin field missing');
-        dkPath = resolve(pkgDir, binRel);
+        dkPath = resolveBin(process.cwd(), 'drizzle-kit', 'drizzle-kit');
       } catch {
         console.error(
           'webjs db: drizzle-kit is not installed in this project.\n' +
@@ -326,7 +312,14 @@ async function main() {
 
         if (testFiles.length > 0) {
           console.log(`webjs test: running ${testFiles.length} server test file(s)…\n`);
-          const child = spawn(process.execPath, ['--test', ...testFiles], {
+          // Dispatch to the current runtime's test runner (#570). Node uses
+          // `node --test <files>`; Bun's runner is the `bun test <files>`
+          // subcommand (`bun --test` is invalid). process.execPath is the
+          // active runtime, so the args differ but the runner is native to it.
+          const testArgs = process.versions.bun
+            ? ['test', ...testFiles]
+            : ['--test', ...testFiles];
+          const child = spawn(process.execPath, testArgs, {
             stdio: 'inherit', cwd, env: { ...process.env },
           });
           const code = await new Promise(r => child.on('exit', r));
@@ -336,25 +329,32 @@ async function main() {
 
       // --- Browser tests (WTR + Playwright) ---
       if (runBrowser) {
-        const wtrConfig = join(cwd, 'web-test-runner.config.js');
-        if (existsSync(wtrConfig) || existsSync(join(cwd, 'web-test-runner.config.mjs'))) {
+        const hasConfig = existsSync(join(cwd, 'web-test-runner.config.js'))
+          || existsSync(join(cwd, 'web-test-runner.config.mjs'));
+        // Fall back to the test/browser dir only when there is no explicit config.
+        const useBrowserDir = !hasConfig && !serverOnly && existsSync(join(cwd, 'test', 'browser'));
+        // Only resolve + run when there is actually something to run, so a
+        // `webjs test` with no browser tests stays a no-op (not a hard error).
+        if (hasConfig || useBrowserDir) {
+          // Resolve the app's @web/test-runner bin and spawn it with the current
+          // runtime, dropping `npx` (#570; absent in a pure oven/bun image).
+          let wtrPath;
+          try {
+            wtrPath = resolveBin(cwd, '@web/test-runner', 'wtr');
+          } catch {
+            console.error(
+              '\nwebjs test --browser: @web/test-runner is not installed in this project.\n' +
+              'Install it with `npm install -D @web/test-runner @web/test-runner-playwright`.',
+            );
+            process.exit(1);
+          }
           console.log(`\nwebjs test: running browser tests (WTR + Playwright)…\n`);
-          const child = spawn('npx', ['wtr'], {
+          const wtrArgs = hasConfig ? [wtrPath] : [wtrPath, '--files', 'test/browser/**/*.test.js'];
+          const child = spawn(process.execPath, wtrArgs, {
             stdio: 'inherit', cwd, env: { ...process.env },
           });
           const code = await new Promise(r => child.on('exit', r));
           if (code !== 0) process.exit(code ?? 1);
-        } else if (!serverOnly) {
-          // No WTR config, check for test/browser directory
-          const browserDir = join(cwd, 'test', 'browser');
-          if (existsSync(browserDir)) {
-            console.log(`\nwebjs test: running browser tests (WTR + Playwright)…\n`);
-            const child = spawn('npx', ['wtr', '--files', 'test/browser/**/*.test.js'], {
-              stdio: 'inherit', cwd, env: { ...process.env },
-            });
-            const code = await new Promise(r => child.on('exit', r));
-            if (code !== 0) process.exit(code ?? 1);
-          }
         }
       }
 
