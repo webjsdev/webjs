@@ -304,53 +304,6 @@ export const POST = route(createPost, { validate: CreatePostSchema.parse });</pr
 
     <p><strong>Important:</strong> a <code>route.ts</code> REST endpoint is <em>not</em> CSRF-protected (only the internal RPC path is). A mutating REST endpoint is designed for external consumers who authenticate via bearer tokens, API keys, or signed requests. Add your own auth in a middleware or inside the function body.</p>
 
-    <h2>The RPC Lifecycle: Middleware, Cancellation, Streaming</h2>
-    <p>An action is a plain <code>export async function</code>, but the RPC boundary around it gives you three extra capabilities without changing the call site (the client still writes <code>await getUser(7)</code>).</p>
-
-    <h3>Per-action middleware</h3>
-    <p>Declare a chain beside the action with <code>export const middleware = [...]</code>. Each entry is an <code>async (ctx, next) =&gt; result</code> function, and the chain runs around the action on <strong>both</strong> the RPC boundary and a <code>route.ts</code> boundary (including the <code>route()</code> adapter), so an auth check, a rate-limit, or a logging wrapper applies the same way no matter how the action is reached. A middleware short-circuits by returning an <code>ActionResult</code> instead of calling <code>next()</code>, and it accumulates context the action reads via <code>actionContext()</code> from <code>@webjsdev/server</code> (no signature change to the action).</p>
-
-    <pre>// modules/posts/actions/create-post.server.ts
-'use server';
-import { actionContext } from '@webjsdev/server';
-import { currentUser } from '../../../lib/session.server.ts';
-import { db } from '../../../db/connection.server.ts';
-import { posts } from '../../../db/schema.server.ts';
-
-const requireUser = async (ctx: { request: Request }, next: () =&gt; Promise&lt;unknown&gt;) =&gt; {
-  const user = await currentUser(ctx.request);
-  if (!user) return { success: false, error: 'Not signed in', status: 401 };
-  ctx.user = user;                 // read later via actionContext()
-  return next();
-};
-
-export const middleware = [requireUser];
-
-export async function createPost(input: { title: string; body: string }) {
-  const { user } = actionContext();  // populated by the middleware above
-  const [post] = await db.insert(posts).values({ ...input, authorId: user.id }).returning();
-  return { success: true, data: post };
-}</pre>
-
-    <h3>Cancellation</h3>
-    <p>An action reads the request's <code>AbortSignal</code> via <code>actionSignal()</code> from <code>@webjsdev/server</code> to stop expensive work when the client disconnects or aborts. Pass it down to <code>fetch</code>, a database driver, or any cancelable operation. Outside an action, <code>actionSignal()</code> returns a never-aborting signal, so a server-to-server call stays safe.</p>
-
-    <pre>// modules/search/queries/search.server.ts
-'use server';
-import { actionSignal } from '@webjsdev/server';
-
-export async function search(q: string) {
-  const res = await fetch('https://api.example.com/search?q=' + encodeURIComponent(q), {
-    signal: actionSignal(),          // abort when the client goes away
-  });
-  return res.json();
-}</pre>
-
-    <p>On the client side this is automatic. When a component's <code>async render()</code> is superseded (a newer prop or signal change while a fetch is in flight), the framework <strong>aborts</strong> the previous render's in-flight action fetch, not just drops it, so the cancellation reaches the server through the signal above.</p>
-
-    <h3>Streaming results</h3>
-    <p>An action that <em>returns</em> a <code>ReadableStream</code>, an async iterable, or an async generator (any verb) streams its chunks over the single RPC response instead of buffering, and the call site gets back an async iterable to <code>for await</code>. Detection is purely on the return value, so there is no config export to set. This is the token-stream / progress / incremental-result case. See the streaming section of the <a href="/docs/data-fetching">Data fetching</a> page for the full wire details, back-pressure, and error handling.</p>
-
     <h2>ActionResult&lt;T&gt; Envelope Pattern</h2>
     <p>A recommended convention for server actions is to return a discriminated union instead of throwing errors:</p>
 
