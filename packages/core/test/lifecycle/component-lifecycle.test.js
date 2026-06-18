@@ -194,6 +194,70 @@ test('custom hasChanged short-circuits updates when false', async () => {
   assert.equal(renders, 1, 'second assignment did not schedule a render');
 });
 
+/* -------------------- declarative default (#531) -------------------- */
+
+test('default option seeds the value with no constructor', () => {
+  class C extends WebComponent {
+    static properties = {
+      count: { type: Number, default: 0 },
+      label: { type: String, default: 'hi' },
+    };
+  }
+  C.register('default-literal');
+  const el = document.createElement('default-literal');
+  assert.equal(el.count, 0);
+  assert.equal(el.label, 'hi');
+});
+
+test('a falsy default (0, false, "") is applied, not skipped', () => {
+  class C extends WebComponent {
+    static properties = {
+      n: { type: Number, default: 0 },
+      b: { type: Boolean, default: false },
+      s: { type: String, default: '' },
+    };
+  }
+  C.register('default-falsy');
+  const el = document.createElement('default-falsy');
+  assert.equal(el.n, 0);
+  assert.equal(el.b, false);
+  assert.equal(el.s, '');
+});
+
+test('a function default is called to produce a FRESH value per instance', () => {
+  class C extends WebComponent {
+    static properties = { items: { type: Array, default: () => [] } };
+  }
+  C.register('default-factory');
+  const a = document.createElement('default-factory');
+  const b = document.createElement('default-factory');
+  assert.deepEqual(a.items, []);
+  a.items.push(1);
+  // b's default must be a separate array, not a shared reference.
+  assert.deepEqual(b.items, []);
+});
+
+test('an applied attribute overrides the default', () => {
+  class C extends WebComponent {
+    static properties = { size: { type: Number, default: 7 } };
+  }
+  C.register('default-attr-override');
+  const el = document.createElement('default-attr-override');
+  assert.equal(el.size, 7);
+  el.attributeChangedCallback('size', null, '42');
+  assert.equal(el.size, 42);
+});
+
+test('a default with reflect: true reflects to the attribute on connect', () => {
+  class C extends WebComponent {
+    static properties = { mode: { type: String, reflect: true, default: 'dark' } };
+  }
+  C.register('default-reflect');
+  const el = document.createElement('default-reflect');
+  document.body.appendChild(el);
+  assert.equal(el.getAttribute('mode'), 'dark');
+});
+
 /* -------------------- lifecycle: connect / disconnect -------------------- */
 
 test('connectedCallback marks _connected true and schedules first render', async () => {

@@ -76,7 +76,7 @@ export const RULES = [
   {
     name: 'reactive-props-use-declare',
     description:
-      'Reactive properties listed in `static properties = { … }` must be typed with `declare propName: Type` (no value), and have their default set in `constructor()`. Plain class-field initializers (`prop = value` or `prop: Type = value`) compile to Object.defineProperty *after* super() under modern class-field semantics, clobbering the framework\'s reactive accessor and silently breaking re-renders.',
+      'Reactive properties listed in `static properties = { … }` must be typed with `declare propName: Type` (no value), and have their default set via the `default:` option in the declaration (`{ type: Number, default: 0 }`) or in `constructor()`. Plain class-field initializers (`prop = value` or `prop: Type = value`) compile to Object.defineProperty *after* super() under modern class-field semantics, clobbering the framework\'s reactive accessor and silently breaking re-renders.',
   },
   {
     name: 'shell-in-non-root-layout',
@@ -456,7 +456,7 @@ export async function checkConventions(appDir) {
             rule: 'reactive-props-use-declare',
             file: rel,
             message: `Reactive prop \`${bad}\` uses a class-field initializer; this clobbers the framework's reactive accessor under modern class-field semantics.`,
-            fix: `Replace with \`declare ${bad}: <Type>;\` and set the default inside \`constructor()\` after \`super()\`.`,
+            fix: `Replace with \`declare ${bad}: <Type>;\` and set the default via the \`default:\` option in \`static properties\` (\`${bad}: { type: …, default: … }\`) or inside \`constructor()\` after \`super()\`.`,
           });
         }
       }

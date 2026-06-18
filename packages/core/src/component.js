@@ -584,6 +584,18 @@ export class WebComponent extends Base {
 
       if (initial !== undefined) {
         this.__propValues[propName] = initial;
+      } else if (d.default !== undefined) {
+        // Declarative default: lets a property carry its initial value in
+        // `static properties` so the common case needs no constructor at
+        // all. A function `default` is CALLED to produce the value, so an
+        // object / array default is a fresh instance per element (no shared
+        // reference across instances); to default to a function value, wrap
+        // it: `default: () => theFn`. Applied straight to the backing store
+        // (like `initial`), so it does not fire the setter; reflection still
+        // happens on connect via `_reflectDeclaredAttributes`, and an
+        // applied attribute (which runs after construction) overrides it.
+        this.__propValues[propName] =
+          typeof d.default === 'function' ? d.default() : d.default;
       }
     }
   }

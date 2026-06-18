@@ -39,6 +39,14 @@ export interface PropertyDeclaration<T = unknown> {
   };
   /** Custom dirty check. Return `true` to schedule an update. */
   hasChanged?: (newValue: T, oldValue: T) => boolean;
+  /**
+   * Declarative initial value, so the common case needs no constructor.
+   * A function `default` is CALLED to produce the value (a fresh object /
+   * array per instance, no shared reference); to default to a function
+   * value, wrap it as `default: () => theFn`. An applied attribute
+   * overrides it.
+   */
+  default?: T | (() => T);
 }
 
 /** Reactive controller protocol (Lit-compatible). */
