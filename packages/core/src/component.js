@@ -400,6 +400,17 @@ for (const idl of ARIA_IDL_PROPS) {
 // Base class choice: real HTMLElement on the browser, the shim on the server.
 const Base = isBrowser ? HTMLElement : /** @type {any} */ (ServerElement);
 
+/**
+ * Marker stamped on the anonymous subclass the `WebComponent({...})` factory
+ * produces. It lets `_assertFactoryProperties` tell the framework's own
+ * factory-generated `static properties` (allowed) apart from a `static
+ * properties` a user wrote by hand in a class body (no longer allowed).
+ */
+const FACTORY_PROPS = Symbol('webjs.factoryProps');
+
+// Per-class memo so the constructor-time enforcement walk runs once per class.
+const _propsChecked = new WeakSet();
+
 class WebComponentBase extends Base {
   /** Whether to use shadow DOM. Default: false (light DOM). @type {boolean} */
   static shadow = false;
@@ -531,8 +542,43 @@ class WebComponentBase extends Base {
      */
     this._isUpdating = false;
 
+    // Enforce the declare-free factory DX: a hand-written `static properties`
+    // in a class body is a hard error (use `extends WebComponent({ … })`).
+    this._assertFactoryProperties();
+
     // Install reactive property accessors for `static properties` declarations.
     this._initializeProperties();
+  }
+
+  /**
+   * Throw if a class in this instance's constructor chain declares its own
+   * `static properties`. Reactive properties must be declared via the
+   * `extends WebComponent({ … })` factory, which stamps {@link FACTORY_PROPS}
+   * on the subclass it generates; a `static properties` written by hand in a
+   * class body carries no such marker and is rejected here (issue #598).
+   *
+   * The walk stops at {@link WebComponentBase} (whose `static properties = {}`
+   * default is internal) and is memoized per class so it runs once.
+   * @private
+   */
+  _assertFactoryProperties() {
+    const Ctor = /** @type {any} */ (this.constructor);
+    if (_propsChecked.has(Ctor)) return;
+    let C = Ctor;
+    while (C && C !== WebComponentBase) {
+      if (Object.hasOwn(C, 'properties') && !Object.hasOwn(C, FACTORY_PROPS)) {
+        const name = C.name || 'a component';
+        throw new Error(
+          `${name}: \`static properties\` is no longer supported. Declare reactive ` +
+            `properties via the factory instead: \`class ${name} extends WebComponent({ ` +
+            `count: Number })\`. Use the \`prop()\` helper for options ` +
+            `(\`prop(Number, { reflect: true })\`) and set defaults via the \`default\` ` +
+            `option or in the constructor. See https://docs.webjs.com/docs/components.`,
+        );
+      }
+      C = Object.getPrototypeOf(C);
+    }
+    _propsChecked.add(Ctor);
   }
 
   /**
@@ -1568,6 +1614,7 @@ export function WebComponent(properties) {
   } else {
     return class extends WebComponentBase {
       static properties = properties;
+      static [FACTORY_PROPS] = true;
     };
   }
 }
