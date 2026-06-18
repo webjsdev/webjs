@@ -20,7 +20,16 @@ const BLOG_DIR = resolve(REPO_ROOT, 'blog');
  * Each file's frontmatter requires `title` and `date`; other fields are
  * optional. Files without those fields are dropped silently (lets you
  * keep a draft `.md` in the directory without breaking the index).
+ *
+ * Declared as a GET server action (#488): a public, cacheable read of
+ * repo content that is identical for every visitor, so `public: true`
+ * is safe (the entry is shared by URL + args, not per-user). The
+ * `blog` tag lets a future write path evict it; the content only
+ * changes on redeploy, so a 5-minute max-age is comfortable.
  */
+export const method = 'GET';
+export const cache = { maxAge: 300, public: true };
+export const tags = () => ['blog'];
 export async function listPosts(): Promise<Post[]> {
   let files: string[];
   try { files = await readdir(BLOG_DIR); } catch { return []; }
