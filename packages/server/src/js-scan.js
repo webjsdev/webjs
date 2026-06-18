@@ -354,11 +354,12 @@ export function extractWebComponentClassBodies(content) {
     while (i < content.length && /\s/.test(content[i])) i++;
     if (i >= content.length) continue;
     
+    let factoryArg = '';
     const factoryProps = new Set();
     if (content[i] === '(') {
       const closeParen = matchClosingParenthesis(content, i + 1);
       if (closeParen === -1) continue;
-      const factoryArg = content.slice(i + 1, closeParen);
+      factoryArg = content.slice(i + 1, closeParen);
       
       const objStart = factoryArg.indexOf('{');
       if (objStart !== -1) {
@@ -377,7 +378,8 @@ export function extractWebComponentClassBodies(content) {
       if (end !== -1) {
         bodies.push({
           body: content.slice(bodyStart, end),
-          factoryProps
+          factoryProps,
+          factoryArg
         });
       }
     }
