@@ -347,15 +347,126 @@ export function maskComments(src) {
  */
 export function extractWebComponentClassBodies(content) {
   const bodies = [];
-  const re = /class\s+\w+\s+extends\s+WebComponent\s*\{/g;
+  const re = /class\s+\w+\s+extends\s+WebComponent/g;
   let m;
   while ((m = re.exec(content)) !== null) {
-    const bodyStart = m.index + m[0].length;
-    const end = matchClosingBrace(content, bodyStart);
-    if (end !== -1) bodies.push(content.slice(bodyStart, end));
+    let i = m.index + m[0].length;
+    while (i < content.length && /\s/.test(content[i])) i++;
+    if (i >= content.length) continue;
+    
+    let factoryArg = '';
+    const factoryProps = new Set();
+    if (content[i] === '(') {
+      const closeParen = matchClosingParenthesis(content, i + 1);
+      if (closeParen === -1) continue;
+      factoryArg = content.slice(i + 1, closeParen);
+      
+      const objStart = factoryArg.indexOf('{');
+      if (objStart !== -1) {
+        const objEnd = matchClosingBrace(factoryArg, objStart + 1);
+        if (objEnd !== -1) {
+          const objContent = factoryArg.slice(objStart + 1, objEnd);
+          parsePropsFromObjectLiteral(objContent, factoryProps);
+        }
+      }
+      i = closeParen + 1;
+      while (i < content.length && /\s/.test(content[i])) i++;
+    }
+    if (content[i] === '{') {
+      const bodyStart = i + 1;
+      const end = matchClosingBrace(content, bodyStart);
+      if (end !== -1) {
+        bodies.push({
+          body: content.slice(bodyStart, end),
+          factoryProps,
+          factoryArg
+        });
+      }
+    }
   }
   return bodies;
 }
+
+/**
+ * Extract properties from an object literal block.
+ *
+ * @param {string} obj
+ * @param {Set<string>} names
+ */
+export function parsePropsFromObjectLiteral(obj, names) {
+  let i = 0;
+  while (i < obj.length) {
+    while (i < obj.length && /[\s,]/.test(obj[i])) i++;
+    if (i >= obj.length) break;
+    let key = '';
+    if (obj[i] === '"' || obj[i] === "'") {
+      const quote = obj[i++];
+      while (i < obj.length && obj[i] !== quote) { key += obj[i++]; }
+      i++; // closing quote
+    } else {
+      while (i < obj.length && /[A-Za-z0-9_$]/.test(obj[i])) key += obj[i++];
+    }
+    while (i < obj.length && /\s/.test(obj[i])) i++;
+    if (obj[i] !== ':') break;
+    i++;
+    while (i < obj.length && /\s/.test(obj[i])) i++;
+    if (obj[i] === '{') {
+      const valEnd = matchClosingBrace(obj, i + 1);
+      if (valEnd === -1) break;
+      i = valEnd + 1;
+    } else {
+      while (i < obj.length && obj[i] !== ',' && obj[i] !== '}') i++;
+    }
+    if (key) names.add(key);
+  }
+}
+
+
+/**
+ * Walk forward from `start` (just after an opening `(`) and return the
+ * index of the matching `)`. Tracks string/template-literal state so
+ * `)` inside strings or templates does not decrement depth.
+ * Returns -1 if no balanced parenthesis is found.
+ *
+ * @param {string} s
+ * @param {number} start
+ */
+export function matchClosingParenthesis(s, start) {
+  let depth = 1;
+  let i = start;
+  let str = ''; // '', "'", '"', or backtick
+  while (i < s.length) {
+    const c = s[i];
+    if (str) {
+      if (c === '\\') { i += 2; continue; }
+      if (c === str) str = '';
+      else if (str === '`' && c === '$' && s[i + 1] === '{') {
+        const closeBrace = matchClosingBrace(s, i + 2);
+        if (closeBrace === -1) return -1;
+        i = closeBrace + 1;
+        continue;
+      }
+      i++;
+      continue;
+    }
+    if (c === "'" || c === '"' || c === '`') { str = c; i++; continue; }
+    if (c === '/' && s[i + 1] === '/') { // line comment
+      while (i < s.length && s[i] !== '\n') i++;
+      continue;
+    }
+    if (c === '/' && s[i + 1] === '*') { // block comment
+      i += 2;
+      while (i < s.length && !(s[i] === '*' && s[i + 1] === '/')) i++;
+      i += 2;
+      continue;
+    }
+    if (c === '(') depth++;
+    else if (c === ')') { depth--; if (depth === 0) return i; }
+    i++;
+  }
+  return -1;
+}
+
 
 /**
  * Walk forward from `start` (just after an opening `{`) and return the

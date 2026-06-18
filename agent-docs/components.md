@@ -14,18 +14,36 @@ Built-in constructors (`String`, `Number`, `Boolean`, `Array`, `Object`) feed
 the default attribute coercion. For anything the default can't parse correctly
 (Date, Map, Set, discriminated unions) supply a custom `converter`.
 
-## Why `declare` is required in TypeScript
+## Why `declare` is required in TypeScript (and how to avoid it)
 
-The framework installs reactive getter/setter on `this` inside the
-constructor via `Object.defineProperty`. Without `declare`, TypeScript
-emits `student = undefined` after `super()`, which under modern class-
-field semantics uses `[[Define]]` to overwrite the accessor. Result:
-`this.student = …` no longer goes through the setter, no `requestUpdate`,
-no `hasChanged`, no reflect, and reactivity silently breaks.
+The framework installs reactive getter/setter on `this` inside the constructor via `Object.defineProperty`. Under traditional class declarations with a `static properties` block, if you write a class-field initializer in TypeScript without `declare` (e.g., `student: Student = { ... }`), TypeScript compiles it to an assignment after `super()`. Under modern class-field semantics, this uses `[[Define]]` to overwrite the accessor, silently breaking reactivity.
 
-The `.d.ts` overlay shipped with the framework makes every other class
-member fully typed, so only the reactive properties need the `declare`
-line, and only in TypeScript files.
+The recommended way to avoid the `declare` requirement entirely is the **Base-Class Factory** style:
+
+```ts
+class Counter extends WebComponent({
+  count: Number
+}) {
+  constructor() {
+    super();
+    this.count = 0; // Fully typed, no declare needed!
+  }
+}
+```
+
+If you choose the traditional static field pattern, only the reactive properties need the `declare` line, and only in TypeScript files:
+
+```ts
+class Counter extends WebComponent {
+  static properties = { count: { type: Number } };
+  declare count: number;
+
+  constructor() {
+    super();
+    this.count = 0;
+  }
+}
+```
 
 ## Lifecycle hooks (lit-aligned)
 

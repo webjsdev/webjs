@@ -120,6 +120,35 @@ test('resolves <my-counter> inside html`` to the Counter class', () => {
   assert.equal(def.textSpan.length, 'my-counter'.length);
 });
 
+test('resolves <my-counter> with base-class factory declare-free properties', () => {
+  const svc = makeService({
+    '/counter.ts':
+      `import { WebComponent, html } from '@webjsdev/core';\n` +
+      `export class Counter extends WebComponent({ count: Number }) {\n` +
+      `  render() { return html\`<output>\${this.count}</output>\`; }\n` +
+      `}\n` +
+      `Counter.register('my-counter');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './counter.ts';\n` +
+      `export default function Page() {\n` +
+      `  return html\`<my-counter count=\${3}></my-counter>\`;\n` +
+      `}\n`,
+  });
+
+  const openIdx = offsetOf('/page.ts', '<my-counter');
+  const pos = openIdx + 2;
+
+  const def = svc.getDefinitionAndBoundSpan('/page.ts', pos);
+  assert.ok(def, 'should return a definition result');
+  assert.equal(def.definitions[0].name, 'Counter');
+
+  const comp = svc.getCompletionsAtPosition('/page.ts', offsetOf('/page.ts', '<my-counter ') + 12, undefined);
+  assert.ok(comp, 'should return completions');
+  const entries = comp.entries.map((e) => e.name);
+  assert.ok(entries.includes('count'), 'should complete attribute name "count"');
+});
+
 test('resolves closing tag </my-counter> just like the opening tag', () => {
   const svc = makeService({
     '/counter.ts':

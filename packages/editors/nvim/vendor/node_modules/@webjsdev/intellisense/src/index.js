@@ -940,6 +940,30 @@ function init(modules) {
         out.push({ propName: key, attrName: hyphenate(key), state: propIsState(prop) });
       }
     }
+    if (cls.heritageClauses) {
+      for (const clause of cls.heritageClauses) {
+        if (clause.token !== ts.SyntaxKind.ExtendsKeyword) continue;
+        for (const typeNode of clause.types) {
+          const expr = typeNode.expression;
+          if (ts.isCallExpression(expr)) {
+            const caller = expr.expression;
+            if (ts.isIdentifier(caller) && caller.text === 'WebComponent') {
+              const arg = expr.arguments[0];
+              if (arg && ts.isObjectLiteralExpression(arg)) {
+                for (const prop of arg.properties) {
+                  if (!prop.name) continue;
+                  let key;
+                  if (ts.isIdentifier(prop.name) || ts.isPrivateIdentifier(prop.name)) key = prop.name.text;
+                  else if (ts.isStringLiteralLike(prop.name)) key = prop.name.text;
+                  if (!key) continue;
+                  out.push({ propName: key, attrName: hyphenate(key), state: propIsState(prop) });
+                }
+              }
+            }
+          }
+        }
+      }
+    }
     return out;
   }
 
@@ -952,8 +976,24 @@ function init(modules) {
    */
   function propIsState(prop) {
     if (!ts.isPropertyAssignment(prop)) return false;
-    const v = prop.initializer;
-    if (!v || !ts.isObjectLiteralExpression(v)) return false;
+    let v = prop.initializer;
+    if (!v) return false;
+    if (ts.isCallExpression(v)) {
+      const caller = v.expression;
+      if (ts.isIdentifier(caller) && caller.text === 'prop') {
+        const args = v.arguments;
+        if (args.length === 1 && ts.isObjectLiteralExpression(args[0])) {
+          v = args[0];
+        } else if (args.length === 2 && ts.isObjectLiteralExpression(args[1])) {
+          v = args[1];
+        } else {
+          return false;
+        }
+      } else {
+        return false;
+      }
+    }
+    if (!ts.isObjectLiteralExpression(v)) return false;
     for (const o of v.properties) {
       if (!ts.isPropertyAssignment(o) || !o.name) continue;
       const n = ts.isIdentifier(o.name) || ts.isStringLiteralLike(o.name) ? o.name.text : '';

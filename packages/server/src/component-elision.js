@@ -416,7 +416,7 @@ export function analyzeComponentSource(src) {
     return { interactive: true, reason: 'no parseable WebComponent class body' };
   }
 
-  for (const body of bodies) {
+  for (const { body, factoryArg } of bodies) {
     // Shadow DOM always ships (#474). Declarative Shadow DOM attaches ONLY
     // during HTML parsing; an elided component that arrives via a client DOM
     // insertion (a soft-nav swap, a streamed <webjs-suspense> boundary's
@@ -447,7 +447,7 @@ export function analyzeComponentSource(src) {
         return { interactive: true, reason: `calls '${call}'` };
       }
     }
-    if (hasNonStateReactiveProperty(body)) {
+    if (hasNonStateReactiveProperty(body) || hasNonStateFactoryProperty(factoryArg)) {
       return {
         interactive: true,
         reason: 'declares a reactive property that is not { state: true }',
@@ -565,6 +565,36 @@ function hasNonStateReactiveProperty(classBody) {
       if (!/\bstate\s*:\s*true\b/.test(code)) return true;
     } else {
       // Shorthand like `count: Number` rides an attribute, not state.
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * True if the class factory argument declares any property that is NOT
+ * marked `{ state: true }`.
+ *
+ * @param {string} factoryArg
+ * @returns {boolean}
+ */
+function hasNonStateFactoryProperty(factoryArg) {
+  if (!factoryArg) return false;
+  const objStart = factoryArg.indexOf('{');
+  if (objStart === -1) return false;
+  const objEnd = matchClosingBrace(factoryArg, objStart);
+  if (objEnd === -1) return true;
+  const obj = factoryArg.slice(objStart + 1, objEnd);
+  if (/\.\.\./.test(obj)) return true; // spread
+  for (const entry of topLevelPropertyValues(obj)) {
+    if (entry.startsWith('{')) {
+      const code = entry
+        .replace(/'[^'\n]*'/g, "''")
+        .replace(/"[^"\n]*"/g, '""')
+        .replace(/`[^`]*`/g, '``');
+      if (!/\bstate\s*:\s*true\b/.test(code)) return true;
+    } else {
+      // Shorthand like `count: Number` rides an attribute, not state
       return true;
     }
   }

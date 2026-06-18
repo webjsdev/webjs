@@ -511,6 +511,51 @@ Methods.register('methods-prop');
   }
 });
 
+test('reactive-props-use-declare: flags class-field initializer on factory-declared reactive prop', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'factory.ts'),
+      `import { WebComponent } from '@webjsdev/core';
+class Counter extends WebComponent({ count: Number }) {
+  count = 0;
+}
+Counter.register('counter-prop');
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'reactive-props-use-declare');
+    assert.ok(v, 'expected reactive-props-use-declare violation for factory prop');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('reactive-props-use-declare: passes for factory-declared reactive prop with constructor default', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'factory-ok.ts'),
+      `import { WebComponent } from '@webjsdev/core';
+class Counter extends WebComponent({ count: Number }) {
+  constructor() {
+    super();
+    this.count = 0;
+  }
+}
+Counter.register('counter-prop-ok');
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'reactive-props-use-declare');
+    assert.equal(v, undefined, 'expected no violation for factory-declared prop');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 test('no violations for empty app', async () => {
   const appDir = await makeTempApp();
   try {

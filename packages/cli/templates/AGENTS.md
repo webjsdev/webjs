@@ -597,12 +597,13 @@ const secret = process.env.AUTH_SECRET;             // undefined (fail-closed)
 ```ts
 import { WebComponent, html, css } from '@webjsdev/core';
 
-export class Counter extends WebComponent {
-  static properties = { count: { type: Number } };
+// Recommended declare-free base-class factory style
+export class Counter extends WebComponent({
+  count: Number
+}) {
   static styles = css`button { padding: 8px 12px; }`;   // shadow-DOM only
   // static shadow = true;          // opt into shadow DOM (default: light DOM)
   // static lazy = true;             // download JS only when scrolled into view
-  declare count: number;             // TypeScript-only typed accessor
 
   constructor() {
     super();
@@ -714,11 +715,11 @@ Practical consequences for agents writing webjs code.
 | Assuming an `async render()` always ships its module | A bare one (no other client signal) is ELIDED, so it costs zero JS and skips the on-hydration re-fetch, first paint unchanged | Rely on it for a fetch-and-display leaf. `static refresh = true` keeps the on-load refresh, `static shadow = true` always ships |
 | `window.X` / `document.X` in constructor or `render()` | SSR crash | Move to `connectedCallback` |
 | Top-level `import` of a browser-only library | SSR crash | Dynamic `import()` inside `connectedCallback` |
-| Class-field initializer for a reactive property (`student: Student = {...}`) | Silently breaks reactivity (overwrites the framework accessor) | `declare student: Student` plus constructor default |
-| `@property()` decorator | Banned by invariant 10 (erasable TS) | `static properties = { ... }` plus `declare` |
+| Class-field initializer for a reactive property (`student: Student = {...}`) | Silently breaks reactivity (overwrites the framework accessor) | Use base-class factory `WebComponent({ student: Student })` with constructor default (no `declare` needed), or `declare student: Student` plus constructor default |
+| `@property()` decorator | Banned by invariant 10 (erasable TS) | Use base-class factory `WebComponent({ ... })` (recommended), or `static properties = { ... }` plus `declare` |
 | Scoped `static styles = css` or an inline `<style>` with semantic class names (`.hero`, `.card`) in a light-DOM component | Scoped block does nothing without `static shadow = true`; inline `<style>` class names leak globally | Tailwind utilities (the light-DOM default); or `static shadow = true` for genuinely scoped CSS |
 | `willUpdate` computing SSR-visible derived state | Works (runs at SSR), but overriding it opts the component out of elision | Fine for interactive components; for display-only, derive inline in `render()` |
-| `this.hasAttribute` / `getAttribute` in `render()` | Works (server attribute shim backs the attribute methods at SSR) | Read attributes directly, or via a `static properties` + `declare` reactive prop |
+| `this.hasAttribute` / `getAttribute` in `render()` | Works (server attribute shim backs the attribute methods at SSR) | Read attributes directly, or via base-class factory `WebComponent({ ... })` / `static properties` reactive prop |
 | `ContextProvider` for server-known data | Default value during SSR, content shift on hydration | Pass via props from the page function |
 
 The full annotated catalog with code examples lives in the framework

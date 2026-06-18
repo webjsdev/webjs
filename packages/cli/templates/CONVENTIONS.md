@@ -643,10 +643,11 @@ Any stateful behavior with a Tier-2 element uses the element.
 ```ts
 import { WebComponent, html } from '@webjsdev/core';
 
-export class MyWidget extends WebComponent {
-  static properties = { label: { type: String }, count: { type: Number } };
-  declare label: string;
-  declare count: number;
+// Recommended declare-free base-class factory style
+export class MyWidget extends WebComponent({
+  label: String,
+  count: Number
+}) {
   // Light DOM is the default; Tailwind utility classes apply directly.
 
   constructor() {
@@ -668,16 +669,10 @@ export class MyWidget extends WebComponent {
 MyWidget.register('my-widget');
 ```
 
-`static properties` is the runtime declaration (reactive accessor,
-attribute coercion, reflection). `declare` types the field for
-TypeScript without emitting a class-field initializer that would
-clobber the reactive accessor at construction time. The two
-declarations together give you full intelligence in any tsserver-backed
-editor. See the Editor Setup docs for the standalone `@webjsdev/intellisense`
-(no Lit dependency) that extends this to tag / attribute intelligence
-inside `html\`…\`` templates (go-to-definition, binding-aware completions,
-value/binding diagnostics, hover); in VS Code / Cursor / Windsurf the
-`webjs` extension bundles it automatically.
+webjs offers two ways to declare reactive properties:
+1. **Base-Class Factory (Recommended):** Pass the properties shape directly to the base class `WebComponent({ ... })` (e.g. `label: String`). This allows property types to flow dynamically to `this.<prop>` with no `declare` lines needed. Set default values in the constructor.
+2. **Static Properties Field:** Declare `static properties = { ... }` with a sibling `declare label: string` (no initializer) to type it for TypeScript.
+Both patterns prevent class-field initializers from emitting `[[Define]]` clobbering accessors at construction time. The declarations give you full intelligence in any tsserver-backed editor. See the Editor Setup docs for the standalone `@webjsdev/intellisense` (no Lit dependency) that extends this to tag / attribute intelligence inside `html\`…\`` templates (go-to-definition, binding-aware completions, value/binding diagnostics, hover); in VS Code / Cursor / Windsurf the `webjs` extension bundles it automatically.
 
 **Rules:**
 - One component per file
@@ -688,15 +683,8 @@ value/binding diagnostics, hover); in VS Code / Cursor / Windsurf the
   - `my-widget .body`, `my-widget .title` (descendant selector)
 - Tag name must contain a hyphen (HTML spec)
 - Always call `Class.register('tag')`. That's the standard DOM API.
-- **Reactive props use `declare propName: Type` (no value) plus a default in `constructor()` after `super()`.** Never write `propName = value` or `propName: Type = value` as a class-field initializer. It compiles to `Object.defineProperty(this, …)` after `super()` and clobbers the framework's reactive accessor, silently breaking re-renders. `webjs check` flags this via the `reactive-props-use-declare` rule.
-- Component state lives in signals. Import `signal` from
-  `@webjsdev/core`, read via `signal.get()` inside `render()`, write
-  via `signal.set(value)`. Module-scope signals share state across
-  components; instance signals (created in the constructor) carry
-  component-local state. Reactive properties (`static properties =
-  { foo: { type: ... } }` with a sibling `declare foo: T`) wrap HTML
-  attributes, attribute reflection, and `.prop=${value}` SSR
-  hydration.
+- **Reactive props must be declared declare-free via base-class factory `WebComponent({ ... })` (recommended) or using `declare` plus a constructor default.** Never write `propName = value` or `propName: Type = value` as a class-field initializer on a reactive prop. It compiles to `Object.defineProperty(this, …)` after `super()` and clobbers the framework's reactive accessor, silently breaking re-renders. `webjs check` flags this via the `reactive-props-use-declare` rule.
+- Component state lives in signals. Import `signal` from `@webjsdev/core`, read via `signal.get()` inside `render()`, write via `signal.set(value)`. Module-scope signals share state across components; instance signals (created in the constructor) carry component-local state. Reactive properties (declared via the factory or `static properties`) wrap HTML attributes, attribute reflection, and `.prop=${value}` SSR hydration.
 - Use lifecycle hooks (`firstUpdated`, `updated`) only when needed
 
 ---

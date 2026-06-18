@@ -400,7 +400,7 @@ for (const idl of ARIA_IDL_PROPS) {
 // Base class choice: real HTMLElement on the browser, the shim on the server.
 const Base = isBrowser ? HTMLElement : /** @type {any} */ (ServerElement);
 
-export class WebComponent extends Base {
+class WebComponentBase extends Base {
   /** Whether to use shadow DOM. Default: false (light DOM). @type {boolean} */
   static shadow = false;
 
@@ -1552,4 +1552,41 @@ function hyphenate(s) {
 /** @param {string} s */
 function camelCase(s) {
   return s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+}
+
+/**
+ * Dual-role WebComponent class and factory.
+ * Can be extended directly: `class X extends WebComponent`
+ * Or called as a class factory: `class X extends WebComponent({ count: Number })`
+ *
+ * @param {Record<string, any>} [properties]
+ * @returns {any}
+ */
+export function WebComponent(properties) {
+  if (new.target) {
+    return Reflect.construct(WebComponentBase, arguments, new.target);
+  } else {
+    return class extends WebComponentBase {
+      static properties = properties;
+    };
+  }
+}
+
+// Ensure static inheritance and instanceof checks work
+Object.setPrototypeOf(WebComponent, WebComponentBase);
+WebComponent.prototype = WebComponentBase.prototype;
+
+/**
+ * Helper to define properties with custom options.
+ *
+ * @param {any} [type]
+ * @param {any} [opts]
+ * @returns {any}
+ */
+export function prop(type, opts = {}) {
+  if (type && typeof type === 'object' && !('call' in type)) {
+    opts = type;
+    type = undefined;
+  }
+  return { ...(type ? { type } : {}), ...opts };
 }

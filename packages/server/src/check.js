@@ -5,6 +5,7 @@ import {
   redactStringsAndTemplates,
   extractWebComponentClassBodies,
   matchClosingBrace,
+  parsePropsFromObjectLiteral,
 } from './js-scan.js';
 import { buildModuleGraph, transitiveDeps } from './module-graph.js';
 import { scanComponents } from './component-scanner.js';
@@ -175,7 +176,6 @@ function isComponentFile(relPath) {
  * @returns {Set<string>}
  */
 function extractStaticPropertyNames(classBody) {
-  /** @type {Set<string>} */
   const names = new Set();
   const m = /static\s+properties\s*=\s*\{/.exec(classBody);
   if (!m) return names;
@@ -183,38 +183,7 @@ function extractStaticPropertyNames(classBody) {
   const objEnd = matchClosingBrace(classBody, objStart);
   if (objEnd === -1) return names;
   const obj = classBody.slice(objStart, objEnd);
-  // Match keys at the top level of the object literal. A nested `{ … }`
-  // (the per-property declaration) is skipped via brace counting.
-  let i = 0;
-  while (i < obj.length) {
-    // Skip whitespace and commas.
-    while (i < obj.length && /[\s,]/.test(obj[i])) i++;
-    if (i >= obj.length) break;
-    // Read the identifier or string-literal key.
-    let key = '';
-    if (obj[i] === '"' || obj[i] === "'") {
-      const quote = obj[i++];
-      while (i < obj.length && obj[i] !== quote) { key += obj[i++]; }
-      i++; // closing quote
-    } else {
-      while (i < obj.length && /[A-Za-z0-9_$]/.test(obj[i])) key += obj[i++];
-    }
-    // Skip whitespace, then expect `:`.
-    while (i < obj.length && /\s/.test(obj[i])) i++;
-    if (obj[i] !== ':') break;
-    i++;
-    // Skip whitespace, then skip the value (either a `{ … }` literal or
-    // a single token like `String`).
-    while (i < obj.length && /\s/.test(obj[i])) i++;
-    if (obj[i] === '{') {
-      const valEnd = matchClosingBrace(obj, i + 1);
-      if (valEnd === -1) break;
-      i = valEnd + 1;
-    } else {
-      while (i < obj.length && obj[i] !== ',' && obj[i] !== '}') i++;
-    }
-    if (key) names.add(key);
-  }
+  parsePropsFromObjectLiteral(obj, names);
   return names;
 }
 
@@ -448,8 +417,9 @@ export async function checkConventions(appDir) {
       // literals don't trip the rule. Real declarations live at
       // top-level code where the redactor leaves them alone.
       if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
-      for (const body of extractWebComponentClassBodies(scan)) {
+      for (const { body, factoryProps } of extractWebComponentClassBodies(scan)) {
         const propNames = extractStaticPropertyNames(body);
+        for (const p of factoryProps) propNames.add(p);
         if (propNames.size === 0) continue;
         for (const bad of findFieldInitializers(body, propNames)) {
           violations.push({
@@ -473,7 +443,7 @@ export async function checkConventions(appDir) {
   {
     for (const { rel, scan } of files) {
       if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
-      for (const body of extractWebComponentClassBodies(scan)) {
+      for (const { body } of extractWebComponentClassBodies(scan)) {
         for (const method of ['constructor', 'willUpdate', 'render']) {
           const code = methodBodyOf(body, method);
           if (!code) continue;

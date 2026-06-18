@@ -56,7 +56,7 @@ jobs:
           # and .claude/skills/ holds vendored agent skills (e.g. the
           # Anthropic-authored use-railway), which are external content not
           # subject to our prose style, the same as node_modules.
-          hits=$(git grep -lP "\x{2014}" -- '*.js' '*.ts' '*.md' ':!changelog/' ':!**/node_modules/**' ':!.claude/skills/**' || true)
+          hits=$(git grep -lP "\x{2014}" -- '*.js' '*.ts' '*.md' ':!changelog/' ':!**/node_modules/**' ':!.claude/skills/**' ':!.agents/skills/**' || true)
           if [ -n "$hits" ]; then
             echo "::error::em-dash (U+2014) found; replace per AGENTS.md invariant 11:"; echo "$hits"; exit 1
           fi

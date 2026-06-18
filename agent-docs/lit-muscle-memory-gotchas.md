@@ -278,17 +278,30 @@ connectedCallback() {
 
 ### 5. Class-field initializers for reactive properties
 
-This looks fine in TypeScript. It silently breaks the framework's
-accessor.
+In Lit, class-field initializers (like `student: Student = { name: '', email: '' }`) are commonly used. In webjs, the base class installs reactive accessors on `this` inside the constructor via `Object.defineProperty` (to support SSR property hydration and signals). Under modern V8 class-field semantics, a class-field initializer compiles to an assignment after `super()`, which uses `[[Define]]` and overwrites the accessor, silently breaking reactivity.
+
+webjs offers two ways to solve this:
+
+#### A. Base-Class Factory (Recommended, Declare-Free)
+By passing the properties shape directly into `WebComponent({ ... })`, the properties are fully typed in TypeScript and no `declare` lines are needed. Set defaults inside the constructor:
 
 ```ts
-// wrong (the initializer overwrites the framework accessor after super())
-class StudentCard extends WebComponent {
-  static properties = { student: { type: Object } };
-  student: Student = { name: '', email: '' };
+// recommended (declare-free factory style)
+class StudentCard extends WebComponent({
+  student: Object
+}) {
+  constructor() {
+    super();
+    this.student = { name: '', email: '' }; // fully typed, no declare needed!
+  }
 }
+```
 
-// right
+#### B. Static properties and `declare`
+Alternatively, if you use the traditional `static properties` block, use `declare` on the property to prevent it from compiling to a class-field initializer:
+
+```ts
+// traditional (static properties + declare)
 class StudentCard extends WebComponent {
   static properties = { student: { type: Object } };
   declare student: Student;
@@ -299,17 +312,11 @@ class StudentCard extends WebComponent {
 }
 ```
 
-`webjs check` flags this via the `reactive-props-use-declare` rule, but
-AI agents emit the broken form on autopilot. The convention check is
-the safety net, not the primary defense. Authoring code should use
-`declare` plus constructor defaults from the start.
+`webjs check` flags this via the `reactive-props-use-declare` rule.
 
 ### 6. The `@property()` decorator
 
-Banned by framework invariant 10 (erasable TS). The replacement is
-`static properties = { ... }` plus a matching `declare` for the typed
-accessor, as shown above. Decorators are non-erasable, so they would
-force the framework to depend on a build step.
+Banned by framework invariant 10 (erasable TS). The replacement is the base-class factory `WebComponent({ ... })` (recommended), or `static properties = { ... }` plus a matching `declare` for the typed accessor, as shown above. Decorators are non-erasable, so they would force the framework to depend on a build step.
 
 ## Patterns that produce different visual output
 
@@ -463,8 +470,8 @@ must move with it, use `repeat()` with a stable key.
 | `Task` for client-time async | `Task` (no change, that's its job) |
 | `window.X` or `document.X` in constructor or `render()` | Move to `connectedCallback` |
 | Top-level `import` of browser-only library | Dynamic `import()` inside `connectedCallback` |
-| `student: Student = { ... }` field initializer | `declare student: Student` plus constructor default |
-| `@property()` decorator | `static properties = { ... }` plus `declare` |
+| `student: Student = { ... }` field initializer | Base-class factory `WebComponent({ student: Object })` (recommended), or `declare student: Student` plus constructor default |
+| `@property()` decorator | Base-class factory `WebComponent({ ... })` (recommended), or `static properties = { ... }` plus `declare` |
 | `static styles = css` / inline `<style>` with semantic class names in a light-DOM component | Tailwind utilities (the default); or `static shadow = true` for genuinely scoped CSS |
 | Plain `.map()` for an interactive/stateful list | Works (reconciles in place, keeps node identity); use `repeat(items, key, t)` only when the list **reorders** |
 | `willUpdate` for SSR-visible derived state | Works (runs at SSR); keep it a pure derivation |
