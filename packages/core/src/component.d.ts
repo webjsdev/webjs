@@ -22,7 +22,7 @@ export type PropertyConstructor<T = unknown> =
   | (new (...args: any[]) => T)
   | ((v: any) => T);
 
-/** Runtime-level property declaration: matches `static properties = { … }`. */
+/** Runtime-level property declaration: one entry in `WebComponent({ … })`. */
 export interface PropertyDeclaration<T = unknown> {
   /** Constructor used for string → value coercion when the attribute changes. */
   type?: PropertyConstructor<T>;
@@ -52,20 +52,22 @@ export interface ReactiveController {
 /**
  * Base class for interactive web components.
  *
- * Declare runtime behaviour via `static properties = { … }` and type
- * each field with a sibling `declare foo: Foo`:
+ * Declare reactive properties via the `extends WebComponent({ … })`
+ * factory. It installs the reactive accessor AND types each field for
+ * you (no `declare`, no `static properties`):
  *
- *     class StudentCard extends WebComponent {
- *       static properties = { student: { type: Object } };
- *       declare student: Student;
+ *     class StudentCard extends WebComponent({ student: prop<Student>(Object) }) {
  *       render() { return html`<p>${this.student.name}</p>`; }
  *     }
  *     StudentCard.register('student-card');
  *
- * The `declare` field has no runtime cost: it tells TypeScript the
- * field's type without emitting a class-field initializer that would
- * clobber the reactive accessor the framework installs via
- * `Object.defineProperty` in the constructor.
+ * A bare constructor type covers the common case (`WebComponent({ count:
+ * Number })` gives `this.count: number`); use the `prop()` helper for
+ * options (`prop(Number, { reflect: true })`) or to narrow the type
+ * (`prop<Student>(Object)`). Set defaults via the `default` option or in
+ * the constructor, never a class-field initializer (it runs after super()
+ * and clobbers the reactive accessor). A hand-written `static properties`
+ * in a class body is no longer supported and throws at construction.
  *
  * See the Editor Setup doc for tooling that gives attribute/tag
  * intelligence inside `html\`…\`` templates.
@@ -73,6 +75,7 @@ export interface ReactiveController {
 abstract class WebComponentBase extends HTMLElement {
   static shadow: boolean;
   static hydrate: 'visible' | undefined;
+  /** @internal Populated by the `WebComponent({ … })` factory, not by hand. */
   static properties: Record<string, PropertyDeclaration>;
   static styles: CSSResult | CSSResult[] | null;
   static lazy?: boolean;
@@ -84,8 +87,8 @@ abstract class WebComponentBase extends HTMLElement {
    * Schedule a re-render. Optionally record a property change so lifecycle
    * hooks can branch on what changed via `changedProperties`.
    *
-   * For instance-local state, prefer a reactive property (`static
-   * properties = { foo: { state: true } }`) or a signal from
+   * For instance-local state, prefer a reactive property (`WebComponent({
+   * foo: prop({ state: true }) })`) or a signal from
    * `@webjsdev/core`'s `signal()`. The framework's built-in
    * SignalWatcher wires every signal read in `render()` to a re-render
    * automatically; explicit `requestUpdate()` is rarely needed.

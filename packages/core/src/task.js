@@ -29,9 +29,7 @@
  * import { WebComponent, html } from '@webjsdev/core';
  * import { Task } from '@webjsdev/core/task';
  *
- * class UserSearch extends WebComponent {
- *   static properties = { query: { type: String } };
- *
+ * class UserSearch extends WebComponent({ query: String }) {
  *   _search = new Task(this, {
  *     task: async (query, { signal }) => {
  *       const res = await fetch(`/api/users?q=${query}`, { signal });
