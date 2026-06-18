@@ -868,6 +868,13 @@ revalidation fetch that follows does **not** scroll, so the restored
 position survives the refresh. Cache miss → browser-native scroll
 restoration takes over.
 
+Every programmatic nav scroll (the popstate restore and the
+scroll-to-top on a forward nav) is issued with `behavior: 'instant'`, so
+an app-level `html { scroll-behavior: smooth }` does not animate it. The
+restore matches a native page load (an instant jump), not a visible
+slide. The one nav scroll left smooth is a hash-anchor (`#section`)
+target, where smooth scrolling is the intent.
+
 Inner scroll containers (e.g. `.docs-sidenav`) are preserved
 automatically by the outer-layout-DOM-identity invariant. They stay
 mounted across nav and keep their `scrollTop` natively.
