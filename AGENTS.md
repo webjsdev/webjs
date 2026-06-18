@@ -37,6 +37,18 @@ reference there.
 
 Claude Code enforces step 1 via `.claude/hooks/guard-branch-context.sh`. Other agents check manually.
 
+### One task per git worktree when agents run concurrently
+
+webjs is worked by MULTIPLE agents at once. If more than one agent (or more than one in-flight task) shares ONE working checkout, they collide: a `git checkout` in one moves `HEAD` under the other, so the next commit lands on the WRONG branch. This has happened (a `chore: release` commit landed on an unrelated `feat/` branch, with a contaminated changelog). So give each task its own worktree:
+
+```sh
+git worktree add -b <prefix>/<slug> ../<repo>-<slug> origin/main
+cd ../<repo>-<slug>          # do ALL work for the task here
+# ... commit + push from this worktree; after merge: git worktree remove ../<repo>-<slug>
+```
+
+Git enforces one-branch-per-worktree, so separate worktrees make the collision impossible. Before any commit in a shared checkout, confirm `git branch --show-current` is still the branch you created; if it moved, you are colliding, switch to a worktree. A lone agent in a clean checkout may still use a plain branch. The repo's `.hooks/pre-commit` additionally BLOCKS a published-library (`core`/`server`/`cli`/`mcp`/`ui`/`intellisense`) version bump on any non-`chore/release-*` branch, the canonical wrong-branch-release symptom.
+
 ### Skills are routed deterministically, never skipped
 
 A Skill is model-invoked, so it fires only when the model judges a match. The `.claude/hooks/route-skills.sh` `UserPromptSubmit` hook makes routing deterministic: it keyword-matches each prompt against every skill's documented triggers and injects a directive to invoke the matched skill before other work. Check the available skills and invoke a matching one before starting. The skills themselves are committed under `.claude/skills/` (alongside the hooks), so a fresh clone has both the router and the skills it routes to (no machine-local dependency). Tests in `test/hooks/route-skills.test.mjs`, which also asserts every skill the hook references is committed in-repo.
