@@ -8,6 +8,11 @@ import { listPosts } from '#modules/posts/queries/list-posts.server.ts';
 import type { ActionResult } from '#modules/auth/types.ts';
 import type { PostFormatted } from '#modules/posts/types.ts';
 
+// A mutation (#488, POST by default). A new post invalidates the `posts` tag
+// so the next listing / GET read refetches. (listPosts.invalidate() below is
+// the server-side query cache; this is the HTTP-boundary tag set.)
+export const invalidates = () => ['posts'];
+
 /**
  * Create a post authored by the currently-logged-in user. Reads the user
  * from the request context (AsyncLocalStorage): no userId parameter.

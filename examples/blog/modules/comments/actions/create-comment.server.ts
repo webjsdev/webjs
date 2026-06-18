@@ -8,6 +8,11 @@ import { formatComment } from '#modules/comments/utils/format.ts';
 import type { ActionResult } from '#modules/auth/types.ts';
 import type { CommentFormatted } from '#modules/comments/types.ts';
 
+// A mutation (#488, POST by default). A new comment invalidates the per-post
+// `comments:` tag, matching listComments' tags, so a fresh page render gets the
+// new comment even before the live WebSocket push.
+export const invalidates = (input: { postId: number }) => ['comments', `comments:${input.postId}`];
+
 /**
  * Add a comment to a post. Requires auth. Publishes to the comments bus
  * so live subscribers (WebSocket clients) pick it up instantly.
