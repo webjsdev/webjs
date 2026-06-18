@@ -87,6 +87,23 @@ test('custom element injects declarative shadow DOM', async () => {
   assert.match(out, /<\/template><\/g-reet>/);
 });
 
+test('declarative `default` prop value is baked into the SSR first paint (#531)', async () => {
+  class DefaultCard extends WebComponent {
+    static properties = {
+      count: { type: Number, default: 7 },
+      items: { type: Array, default: () => ['a', 'b'] },
+    };
+    render() {
+      return html`<p>count=${this.count} items=${this.items.join(',')}</p>`;
+    }
+  }
+  DefaultCard.register('default-card');
+  const out = await renderToString(html`<default-card></default-card>`);
+  // PE-critical: the default must be in the server HTML, not applied only
+  // on hydration (JS-off must read the real value).
+  assert.match(out, /count=7 items=a,b/);
+});
+
 test('async component render is awaited', async () => {
   class AsyncGreet extends WebComponent {
     static shadow = true;
