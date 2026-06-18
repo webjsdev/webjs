@@ -2294,6 +2294,54 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     }
   });
 
+  test('prefetch: a data-prefetch="viewport" link warms only after it scrolls into view, not on load (#530)', async () => {
+    await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await sleep(2000);
+
+    // A unique query gives a distinct prefetch-cache key, so a prior test that
+    // warmed /about cannot mask this one. /about is a real page (200 text/html).
+    const vpHref = '/about?probe=e2e-viewport';
+    await page.evaluate((href) => {
+      const main = document.querySelector('main') || document.body;
+      // Push the link far below the fold so it starts OUTSIDE the viewport.
+      const spacer = document.createElement('div');
+      spacer.id = 'e2e-vp-spacer';
+      spacer.style.height = '4000px';
+      const a = document.createElement('a');
+      a.href = href;
+      a.id = 'e2e-vp-link';
+      a.setAttribute('data-prefetch', 'viewport');
+      a.textContent = 'viewport link';
+      main.append(spacer, a);
+      // A re-scan (what a soft nav fires) makes the router observe the new link.
+      document.dispatchEvent(new Event('webjs:navigate'));
+      window.scrollTo(0, 0);
+    }, vpHref);
+
+    let warmed = 0;
+    const origin = new URL(baseUrl).origin;
+    const onRequest = (req) => {
+      if (!req.headers()['x-webjs-prefetch']) return;
+      let u; try { u = new URL(req.url()); } catch { return; }
+      if (u.origin === origin && u.pathname === '/about' && u.search.includes('probe=e2e-viewport')) warmed++;
+    };
+    page.on('request', onRequest);
+    try {
+      // Off-screen: the viewport link must NOT prefetch on load (not eager).
+      await sleep(700);
+      assert.equal(warmed, 0, 'a viewport link below the fold must not prefetch before it is seen');
+
+      // Scroll it into view and let it settle past the ~250ms dwell.
+      await page.evaluate(() => document.getElementById('e2e-vp-link')?.scrollIntoView());
+      await waitFor(() => warmed >= 1, 4000,
+        () => `a viewport link scrolled into view should warm once it dwells (got ${warmed})`);
+      await sleep(300);
+      assert.equal(warmed, 1, 'a settled viewport link warms exactly once');
+    } finally {
+      page.off('request', onRequest);
+    }
+  });
+
   test('chat: sending a message keeps you on the page and the message survives (#150)', async () => {
     // The chat form calls e.preventDefault() and sends over WebSocket, so the
     // client router must NOT intercept it (its submit listener is bubble, so the
