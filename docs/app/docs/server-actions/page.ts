@@ -211,7 +211,7 @@ for await (const chunk of await streamTokens(8)) {
     <p>Each server-action result invoked during a (non-streamed) SSR render is serialized into the page, and the generated stub reads that seed on its FIRST client call, so a shipping component does not re-issue the RPC on hydration. A later refetch or argument change still goes to the network. The seed is keyed by action hash plus function plus serialized arguments, consumed once, and fail-open (a miss degrades to a normal RPC, never wrong data). It is on by default; opt out with <code>"webjs": { "seed": false }</code> or <code>WEBJS_SEED=0</code>.</p>
 
     <h2>CSRF Protection</h2>
-    <p>Every server action RPC call is protected against Cross-Site Request Forgery using a <strong>double-submit cookie</strong> pattern:</p>
+    <p>Every <em>mutating</em> server action RPC call (POST / PUT / PATCH / DELETE) is protected against Cross-Site Request Forgery using a <strong>double-submit cookie</strong> pattern. A GET action is CSRF-exempt (as noted above), since it is a read and does not mutate state. The double-submit pattern works as follows:</p>
     <ol>
       <li>The SSR response sets a <code>webjs_csrf</code> cookie (<code>SameSite=Lax</code>, readable by JavaScript, 7-day expiry). If the cookie already exists, it is left alone.</li>
       <li>The generated client stub reads this cookie and sends its value in the <code>x-webjs-csrf</code> request header on every action call.</li>
