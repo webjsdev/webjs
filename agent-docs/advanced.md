@@ -380,7 +380,7 @@ The warning is informational; the request still proceeds. Treat it as a prompt t
 
 ## Client router: nested-layout-aware partial swap
 
-`import '@webjsdev/core/client-router'` enables SPA-style navigation that
+The client router auto-enables when `@webjsdev/core` loads in the browser (any page that ships a component), no import needed (#620). It gives SPA-style navigation that
 preserves outer-layout DOM identity at any depth. Intercepts same-origin
 `<a>` clicks (incl. inside shadow DOM via `composedPath()`), fetches the
 target HTML, and replaces only the inside of the deepest shared layout.
@@ -1122,7 +1122,7 @@ more parts in a `Response` with the stream content type. A page `action` may
 return `streamResponse(...)` directly (it is honored verbatim); on the no-JS
 branch return a normal `ActionResult` instead. `renderStream` is auto-registered
 by the client router, so it (and the `<webjs-stream>` element) is available
-wherever a layout imports `@webjsdev/core/client-router`.
+on any page that loads `@webjsdev/core` (the router auto-enables there).
 
 ### Streaming RPC results: an action returns a stream (#489)
 
