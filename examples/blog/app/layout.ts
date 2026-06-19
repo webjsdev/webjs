@@ -205,9 +205,21 @@ export default function RootLayout({ children }: LayoutProps) {
       .mobile-menu > summary .close-icon { display: none; }
       .mobile-menu[open] > summary .open-icon { display: none; }
       .mobile-menu[open] > summary .close-icon { display: inline-block; }
+
+      /* Promote the sticky header to its own compositor layer so the
+         stuck-to-static handoff on a forward-nav scroll-to-top does not
+         trigger a one-frame repaint on weaker mobile GPUs (iOS Safari
+         most of all). A static translateZ promotion, not a permanent
+         will-change, to keep the layer cheap on memory. */
+      .site-header {
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+      }
     </style>
 
-    <header class="sticky top-0 z-20 flex items-center justify-between gap-4 px-4 sm:px-6 py-3 border-b border-border bg-[var(--bg)]">
+    <header class="site-header sticky top-0 z-20 flex items-center justify-between gap-4 px-4 sm:px-6 py-3 border-b border-border bg-[var(--bg)]">
       <a href="/" class="inline-flex items-center gap-2 no-underline text-fg font-semibold text-[15px] leading-none tracking-tight">
         <span class="inline-block w-[22px] h-[22px] rounded-md bg-gradient-to-br from-accent to-[color-mix(in_oklch,var(--accent)_55%,var(--fg))] shadow-[inset_0_0_0_1px_oklch(1_0_0/0.15),0_1px_4px_var(--accent-tint)]"></span>
         <span>webjs</span>
