@@ -274,6 +274,15 @@ function hasModuleScopeSideEffect(src) {
     if (ident && /\bfunction\s*\*?\s*$/.test(frame.slice(0, m.index))) continue;
     // The component registration call is the one permitted top-level call.
     if (ident === 'register' || ident === 'define') continue;
+    // `extends WebComponent({ … })` is the declare-free reactive-prop DX (#597
+    // / #599): a class-declaration construct, not an independent side-effecting
+    // statement. Exempt it so a display-only factory-form component stays
+    // elidable; a genuinely interactive one still ships via the per-class and
+    // module-level signal checks below (events, slots, shadow, lifecycle, a
+    // non-state factory prop, a reactive import). Scoped to the `extends`
+    // position, so a top-level `WebComponent(...)` call used anywhere else
+    // still counts as a side effect (#604).
+    if (ident === 'WebComponent' && /\bextends\s+$/.test(frame.slice(0, m.index))) continue;
     return true;                                         // any other top-level call
   }
   return false;
@@ -551,18 +560,11 @@ function hasNonStateReactiveProperty(classBody) {
   // see; ship rather than guess they are all { state: true }.
   if (/\.\.\./.test(obj)) return true;
   for (const entry of topLevelPropertyValues(obj)) {
-    // Object-literal descriptor: inert only when it carries state: true.
+    // Object-literal descriptor: inert only when it carries `state: true` at
+    // its top level (descriptorDeclaresState blanks strings and ignores a
+    // nested state flag, e.g. inside a converter, so it cannot be forged).
     if (entry.startsWith('{')) {
-      // Blank string / template bodies first. Redaction keeps quoted
-      // string contents verbatim (so register('tag') stays readable), so
-      // a descriptor like `{ attribute: 'data-state: true' }` would
-      // otherwise forge the state flag. The real `state: true` is code,
-      // not a string, so it survives this blanking.
-      const code = entry
-        .replace(/'[^'\n]*'/g, "''")
-        .replace(/"[^"\n]*"/g, '""')
-        .replace(/`[^`]*`/g, '``');
-      if (!/\bstate\s*:\s*true\b/.test(code)) return true;
+      if (!descriptorDeclaresState(entry)) return true;
     } else {
       // Shorthand like `count: Number` rides an attribute, not state.
       return true;
@@ -572,8 +574,20 @@ function hasNonStateReactiveProperty(classBody) {
 }
 
 /**
- * True if the class factory argument declares any property that is NOT
- * marked `{ state: true }`.
+ * True if the class factory argument (`extends WebComponent({ … })`) declares
+ * any reactive property that is NOT `{ state: true }`. A non-state property
+ * rides an HTML attribute or a `.prop` hydration binding, the channel that
+ * forces the component to ship; a `state: true` property is component-local
+ * reactive state with no such channel, so a component whose only signal is
+ * state props stays elidable.
+ *
+ * A property value is treated as state ONLY when its descriptor declares
+ * `state: true` at the TOP LEVEL (see `descriptorDeclaresState`), which covers
+ * the bare descriptor `{ state: true }` and the `prop()` helper forms
+ * `prop({ state: true })` / `prop(Type, { state: true })`. Anything else (a bare
+ * type `Number`, `prop(Number)`, an options object without `state: true`) is
+ * non-state and ships. Conservative on a spread or an unbalanced brace (cannot
+ * prove every entry is state, so ship).
  *
  * @param {string} factoryArg
  * @returns {boolean}
@@ -582,23 +596,48 @@ function hasNonStateFactoryProperty(factoryArg) {
   if (!factoryArg) return false;
   const objStart = factoryArg.indexOf('{');
   if (objStart === -1) return false;
-  const objEnd = matchClosingBrace(factoryArg, objStart);
+  // matchClosingBrace starts at depth 1, so pass the index AFTER the brace.
+  const objEnd = matchClosingBrace(factoryArg, objStart + 1);
   if (objEnd === -1) return true;
   const obj = factoryArg.slice(objStart + 1, objEnd);
-  if (/\.\.\./.test(obj)) return true; // spread
+  if (/\.\.\./.test(obj)) return true; // spread: cannot prove all entries state
   for (const entry of topLevelPropertyValues(obj)) {
-    if (entry.startsWith('{')) {
-      const code = entry
-        .replace(/'[^'\n]*'/g, "''")
-        .replace(/"[^"\n]*"/g, '""')
-        .replace(/`[^`]*`/g, '``');
-      if (!/\bstate\s*:\s*true\b/.test(code)) return true;
-    } else {
-      // Shorthand like `count: Number` rides an attribute, not state
-      return true;
-    }
+    if (!descriptorDeclaresState(entry)) return true;
   }
   return false;
+}
+
+/**
+ * True if a reactive-property descriptor declares `state: true` at the TOP
+ * LEVEL of its options object (brace-depth 1). Restricting to depth 1 is a
+ * direction-of-safety fix: a `state: true` buried deeper (a converter /
+ * hasChanged body that happens to return `{ state: true }`) must NOT forge the
+ * flag, because wrongly treating an attribute-riding property as state would
+ * ELIDE an interactive component and break the page. Strings / templates are
+ * blanked first, so `attribute: 'data-state: true'` does not match, and the
+ * `\b` word boundary keeps a key like `firstate: true` from matching. In every
+ * legitimate shape (`{ state: true }`, `prop({ state: true })`,
+ * `prop(Type, { state: true })`) the descriptor object is the only brace group,
+ * so its `state` key sits at depth 1.
+ *
+ * @param {string} entry  the property VALUE text
+ * @returns {boolean}
+ */
+function descriptorDeclaresState(entry) {
+  const code = entry
+    .replace(/'[^'\n]*'/g, "''")
+    .replace(/"[^"\n]*"/g, '""')
+    .replace(/`[^`]*`/g, '``');
+  // Keep only text at brace-depth <= 1 (the descriptor's own level); blank
+  // deeper nesting so a nested `state: true` cannot count.
+  let depth = 0;
+  let shallow = '';
+  for (const c of code) {
+    if (c === '{') { depth++; if (depth <= 1) shallow += c; continue; }
+    if (c === '}') { if (depth <= 1) shallow += c; if (depth > 0) depth--; continue; }
+    if (depth <= 1) shallow += c;
+  }
+  return /\bstate\s*:\s*true\b/.test(shallow);
 }
 
 /**

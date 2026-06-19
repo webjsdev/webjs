@@ -14,10 +14,14 @@ import {
   computeElidableComponents,
 } from '../../src/component-elision.js';
 
+// Canonical display-only fixture in the declare-free factory DX (#597 / #599):
+// a single { state: true } prop, so nothing rides an attribute and the
+// component is elidable. (The dedicated `static properties` tests below keep
+// covering the legacy analyser path, which #599 bans at runtime but the
+// analyser still classifies defensively.)
 const DISPLAY_ONLY = `
-import { WebComponent, html } from '@webjsdev/core';
-class StudentCard extends WebComponent {
-  static properties = { student: { type: Object, state: true } };
+import { WebComponent, html, prop } from '@webjsdev/core';
+class StudentCard extends WebComponent({ student: prop({ state: true }) }) {
   constructor() { super(); this.student = { name: '' }; }
   render() { return html\`<p>\${this.student.name}</p>\`; }
 }
@@ -37,6 +41,81 @@ test('component with no static properties at all is not interactive', () => {
     HelloWorld.register('hello-world');
   `;
   assert.equal(analyzeComponentSource(src).interactive, false);
+});
+
+// --- Declare-free factory DX, the enforced reactive-prop form (#604) ---------
+// Before #604 the factory CALL `extends WebComponent({ … })` was read as a
+// module-scope side effect by `hasModuleScopeSideEffect`, so EVERY factory-form
+// component shipped, even a display-only one. The exemption (scoped to the
+// `extends` position) plus the `hasNonStateFactoryProperty` fix make the
+// factory matrix classify the same way the legacy `static properties` form did.
+
+const factory = (header, body = 'render() { return html`<span>x</span>`; }') =>
+  `import { html, WebComponent, prop } from '@webjsdev/core';\n` +
+  `class B extends ${header} { ${body} }\nB.register('b-x');`;
+
+test('factory WebComponent({}) display-only is ELIDABLE (#604)', () => {
+  assert.equal(analyzeComponentSource(factory('WebComponent({})')).interactive, false);
+});
+
+test('factory state-only prop({ state: true }) is ELIDABLE (#604)', () => {
+  const r = analyzeComponentSource(factory('WebComponent({ n: prop({ state: true }) })'));
+  assert.equal(r.interactive, false);
+});
+
+test('factory prop(Type, { state: true }) is ELIDABLE (#604)', () => {
+  const r = analyzeComponentSource(factory('WebComponent({ n: prop(Number, { state: true }) })'));
+  assert.equal(r.interactive, false);
+});
+
+test('factory NON-state prop (bare type) ships (#604)', () => {
+  const r = analyzeComponentSource(factory('WebComponent({ n: Number })', 'render() { return html`<span>${this.n}</span>`; }'));
+  assert.equal(r.interactive, true);
+  assert.match(r.reason, /reactive property/);
+});
+
+test('factory prop(Number) (no state) ships (#604)', () => {
+  const r = analyzeComponentSource(factory('WebComponent({ n: prop(Number) })', 'render() { return html`<span>${this.n}</span>`; }'));
+  assert.equal(r.interactive, true);
+  assert.match(r.reason, /reactive property/);
+});
+
+test('factory mixed state + non-state ships (the non-state prop is the signal, #604)', () => {
+  const r = analyzeComponentSource(factory('WebComponent({ a: prop({ state: true }), b: Number })', 'render() { return html`<span>${this.b}</span>`; }'));
+  assert.equal(r.interactive, true);
+});
+
+test('factory {} with an @event ships (#604)', () => {
+  const r = analyzeComponentSource(factory('WebComponent({})', 'render() { return html`<button @click=${() => {}}>x</button>`; }'));
+  assert.equal(r.interactive, true);
+  assert.match(r.reason, /@event/);
+});
+
+test('factory {} with static shadow ships (#604)', () => {
+  const r = analyzeComponentSource(factory('WebComponent({})', 'static shadow = true; render() { return html`<span>x</span>`; }'));
+  assert.equal(r.interactive, true);
+  assert.match(r.reason, /shadow/);
+});
+
+test('the WebComponent exemption is scoped: a top-level non-extends WebComponent() call still ships (#604)', () => {
+  // A non-component module calling the factory at top level is a genuine
+  // module-scope side effect; only the `extends` position is exempt.
+  const src = `import { WebComponent } from '@webjsdev/core';\nconst Base = WebComponent({ n: Number });\nexport { Base };`;
+  const r = analyzeComponentSource(src);
+  assert.equal(r.interactive, true);
+  assert.match(r.reason, /module scope/);
+});
+
+test('a non-state prop with a NESTED state:true (a converter) still ships (#604 direction-of-safety)', () => {
+  // The state flag counts only at the descriptor top level. A `state: true`
+  // buried in a converter body must NOT forge the flag, or an attribute-riding
+  // (interactive) prop would be wrongly elided and the page would break.
+  const r = analyzeComponentSource(factory(
+    'WebComponent({ n: prop(Number, { converter: { fromAttribute: () => ({ state: true }) } }) })',
+    'render() { return html`<span>${this.n}</span>`; }',
+  ));
+  assert.equal(r.interactive, true);
+  assert.match(r.reason, /reactive property/);
 });
 
 test('@event binding forces interactive', () => {

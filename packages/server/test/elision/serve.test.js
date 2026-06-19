@@ -70,6 +70,39 @@ test('display-only import is stripped from the served page, interactive import k
   assert.match(code, /counter\.ts/, 'interactive counter import must survive');
 });
 
+// The same display-only component in the enforced declare-free factory DX
+// (#604): a state-only prop, no attribute / event / lifecycle. It must elide
+// through the real serve path exactly like the callless BADGE above, proving
+// the factory-form fix end to end (not just at the analyser).
+const FACTORY_BADGE = `
+import { WebComponent, html, prop } from '@webjsdev/core';
+class FactoryBadge extends WebComponent({ tone: prop({ state: true }) }) {
+  render() { return html\`<span class="badge">verified</span>\`; }
+}
+FactoryBadge.register('x-factory-badge');
+`;
+
+const FACTORY_PAGE = `
+import { html } from '@webjsdev/core';
+import '../components/factory-badge.ts';
+import '../components/counter.ts';
+export default () => html\`<x-factory-badge>hi</x-factory-badge><x-counter></x-counter>\`;
+`;
+
+test('a display-only FACTORY-form component is stripped from the served page (#604)', async () => {
+  const appDir = makeApp({
+    'app/page.ts': FACTORY_PAGE,
+    'components/factory-badge.ts': FACTORY_BADGE,
+    'components/counter.ts': COUNTER,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/app/page.ts'));
+  assert.equal(resp.status, 200, 'page module should be served');
+  const code = await resp.text();
+  assert.doesNotMatch(code, /factory-badge\.ts/, 'display-only factory component import must be elided');
+  assert.match(code, /counter\.ts/, 'interactive import must survive');
+});
+
 test('the elidable component module is still servable if requested directly', async () => {
   // Elision drops the import, not the file. A stray direct request still
   // resolves (harmless); nothing in the graph triggers it after stripping.
