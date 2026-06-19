@@ -918,7 +918,6 @@ export type ActionResult<T> =
 
   await writeFile(join(appDir, 'app', 'layout.ts'), `// webjs-scaffold-placeholder. This is the example app chrome (brand, nav, content-width container). Adapt it to your app, then delete this line. webjs check fails while the marker remains.
 import { html, cspNonce } from '@webjsdev/core';
-import '@webjsdev/core/client-router';
 import '#components/theme-toggle.ts';
 // Webjs UI components are tiered:
 //   - Tier 1 (button, card, input, label, alert, badge, separator, etc.) are

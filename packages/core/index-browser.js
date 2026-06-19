@@ -38,6 +38,15 @@ export {
   stringify, parse,
   serialize, deserialize,
 } from './src/serialize.js';
+// The client router auto-enables on bundle load: `router-client.js` calls
+// `enableClientRouter()` at module end (idempotent). This is INTENTIONAL, so
+// any page that loads `@webjsdev/core` (i.e. ships any component) gets client
+// navigation with no per-app opt-in. A layout no longer needs to
+// `import '@webjsdev/core/client-router'`. The bare side-effect import below
+// pins that contract even if the named re-export is later refactored away;
+// the re-export still also evaluates the module, so the two are belt-and-
+// suspenders, not a double-enable (ESM evaluates once, enable is idempotent).
+import './src/router-client.js';
 export { enableClientRouter, disableClientRouter, navigate, revalidate } from './src/router-client.js';
 export { WebjsFrame } from './src/webjs-frame.js';
 export { WebjsStream, renderStream } from './src/webjs-stream.js';

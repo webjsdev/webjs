@@ -1,5 +1,4 @@
 import { html, cspNonce } from '@webjsdev/core';
-import '@webjsdev/core/client-router';
 
 /**
  * Root layout for the docs site: Tailwind CSS browser runtime +

@@ -103,7 +103,7 @@ db/schema.server.ts          User, Session, Post, Comment (Drizzle)
 `app/error.ts` catches any unhandled error during page rendering. Receives `{ error }` and renders a user-friendly error card. Nested error boundaries are supported. Place `error.ts` deeper in the route tree to isolate failures.
 
 ### Client router
-The layout (`app/layout.ts`) imports `@webjsdev/core/client-router`. All `<a>` links navigate via fetch + DOM swap. Same-layout navigations keep the `<header>` and `<footer>` elements mounted (theme state, scroll context preserved). Only `<main>` content swaps.
+The client router auto-enables when `@webjsdev/core` loads (any page with a component, e.g. the layout's `theme-toggle`), so the layout needs no client-router import. All `<a>` links navigate via fetch + DOM swap. Same-layout navigations keep the `<header>` and `<footer>` elements mounted (theme state, scroll context preserved). Only `<main>` content swaps.
 
 ### Metadata
 Root `app/layout.ts` exports `generateMetadata(ctx)` that derives an absolute `og:image` URL from `ctx.url.origin`. Sets `openGraph` + `twitter: { card: 'summary_large_image' }` so social shares render the 1200×630 `public/og.png` card.
@@ -131,8 +131,9 @@ probes in `test/e2e/e2e.test.mjs` can assert that no dead JS ships.
   bare-import scan skips it, so `dayjs` never enters the importmap and is
   never fetched. The dayjs-formatted date is still SSR'd.
 - `app/static-info/page.ts`: a fully-static route whose inert page module
-  is dropped from the boot script, so it ships zero application page JS
-  (only the router-enabling root layout loads).
+  is dropped from the boot script. The import-only root layout is dropped
+  too (#620); the only module the boot emits is the layout's re-emitted
+  theme-toggle, which loads core and auto-enables the router.
 - `components/observed-badge.ts` + `components/observe-badge.ts` (rendered
   on `/observed`): a display-only component that WOULD elide, paired with a
   module that observes it via `customElements.whenDefined('observed-badge')`.

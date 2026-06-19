@@ -1,5 +1,4 @@
 import { html, cspNonce, type Metadata, type LayoutProps } from '@webjsdev/core';
-import '@webjsdev/core/client-router';
 import '#components/theme-toggle.ts';
 
 const navLink = (href: string, label: string) => html`

@@ -41,7 +41,6 @@ Counter)` works identically.
 Side-channel imports for optional features:
 
 ```js
-import '@webjsdev/core/client-router';            // SPA-style link interception
 import { unsafeHTML } from '@webjsdev/core/directives';
 import { createContext } from '@webjsdev/core/context';
 import { Task } from '@webjsdev/core/task';
