@@ -1,0 +1,89 @@
+/**
+ * Integration test for import-only route-module elision (#605), through the
+ * real `createRequestHandler` render path. A page / layout whose only client
+ * relevance is importing shipping components is dropped from the boot script
+ * and replaced by its component imports directly, so the browser fetches only
+ * the interactive leaves, never the page / layout module.
+ *
+ * The synthetic app lives in a temp dir with a `node_modules` symlink back to
+ * the repo, so the page module's `@webjsdev/core` import resolves during SSR
+ * (serve.test.js only requests served source, which never executes the import).
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { createRequestHandler } from '../../src/dev.js';
+
+const REPO_NODE_MODULES = join(process.cwd(), 'node_modules');
+
+function makeApp(files) {
+  const dir = mkdtempSync(join(tmpdir(), 'webjs-importonly-'));
+  symlinkSync(REPO_NODE_MODULES, join(dir, 'node_modules'), 'dir');
+  for (const [rel, body] of Object.entries(files)) {
+    const abs = join(dir, rel);
+    mkdirSync(dirname(abs), { recursive: true });
+    writeFileSync(abs, body);
+  }
+  return dir;
+}
+
+const COUNTER = `import { WebComponent, html } from '@webjsdev/core';
+class C extends WebComponent { render() { return html\`<button @click=\${() => {}}>+</button>\`; } }
+C.register('x-counter');`;
+
+const INERT_LAYOUT = `import { html } from '@webjsdev/core';
+export default ({ children }) => html\`<main>\${children}</main>\`;`;
+
+const ROUTER_LAYOUT = `import '@webjsdev/core/client-router';
+import { html } from '@webjsdev/core';
+export default ({ children }) => html\`<main>\${children}</main>\`;`;
+
+function bootOf(html) {
+  const m = html.match(/<script type="module">([\s\S]*?)<\/script>/);
+  return m ? m[1] : '';
+}
+
+test('an import-only page boots its component directly, not the page or inert layout module (#605)', async () => {
+  const dir = makeApp({
+    'app/layout.ts': INERT_LAYOUT,
+    'app/page.ts': `import { html } from '@webjsdev/core';
+import '../components/counter.ts';
+export default () => html\`<x-counter></x-counter>\`;`,
+    'components/counter.ts': COUNTER,
+  });
+  try {
+    const app = await createRequestHandler({ appDir: dir, dev: true });
+    if (app.warmup) await app.warmup();
+    const html = await (await app.handle(new Request('http://x/'))).text();
+    const boot = bootOf(html);
+    assert.match(boot, /\/components\/counter\.ts/, 'the interactive component is emitted');
+    assert.doesNotMatch(boot, /\/app\/page\.ts/, 'the import-only page module is dropped');
+    assert.doesNotMatch(boot, /\/app\/layout\.ts/, 'the inert layout module is dropped');
+    // Progressive enhancement is unaffected: the component is still SSR'd.
+    assert.match(html, /<x-counter>/, 'the component still renders server-side');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a layout importing the client router keeps its module in the boot (#605)', async () => {
+  const dir = makeApp({
+    'app/layout.ts': ROUTER_LAYOUT,
+    'app/page.ts': `import { html } from '@webjsdev/core';
+import '../components/counter.ts';
+export default () => html\`<x-counter></x-counter>\`;`,
+    'components/counter.ts': COUNTER,
+  });
+  try {
+    const app = await createRequestHandler({ appDir: dir, dev: true });
+    if (app.warmup) await app.warmup();
+    const html = await (await app.handle(new Request('http://x/'))).text();
+    const boot = bootOf(html);
+    assert.match(boot, /\/app\/layout\.ts/, 'the client-router layout module must ship');
+    assert.match(boot, /\/components\/counter\.ts/, 'the component still loads');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

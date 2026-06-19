@@ -148,10 +148,31 @@ export async function ssrPage(route, params, url, opts) {
     // zero application JS. The analysis is conservative (anything that
     // touches the client router, a signal, an event, an npm import, or a
     // shipping component keeps shipping).
+    //
+    // Import-only route modules (#605) go one step further: a page / layout
+    // whose only client relevance is importing shipping components is itself
+    // dead weight on the client (it never hydrates), so it is dropped and its
+    // component modules are emitted directly in its place. The component set is
+    // the STATIC closure the analyser computed (what loading the module would
+    // have registered), so a component imported but only conditionally rendered
+    // still registers. Dedup so a component shared across the page and a layout
+    // (or two layouts) is emitted once.
     const inert = opts.inertRouteModules;
-    const moduleUrls = [route.file, ...route.layouts]
-      .filter((f) => !(inert && inert.has(f)))
-      .map((f) => toUrlPath(f, opts.appDir));
+    const importOnly = opts.importOnlyRouteModules;
+    const moduleUrls = [];
+    {
+      const seen = new Set();
+      const push = (abs) => {
+        const u = toUrlPath(abs, opts.appDir);
+        if (!seen.has(u)) { seen.add(u); moduleUrls.push(u); }
+      };
+      for (const f of [route.file, ...route.layouts]) {
+        if (inert && inert.has(f)) continue;
+        const emit = importOnly && importOnly.get(f);
+        if (emit) emit.forEach(push);
+        else push(f);
+      }
+    }
     // Emit <link rel="modulepreload"> for every custom element that
     // actually rendered PLUS their transitive dependencies (from the
     // module graph). URLs are deduplicated so the browser never sees

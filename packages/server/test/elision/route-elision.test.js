@@ -230,3 +230,121 @@ test('client work reached only through a helper module keeps the route shipping'
   });
   assert.ok(!inertRouteModules.has('/app/page.js'), 'route reaching a dynamic import via a helper must ship');
 });
+
+// --- Import-only route modules (#605) ---------------------------------------
+// A page / layout whose ONLY client work is importing shipping components is
+// dropped from the boot and replaced by those component imports directly.
+
+const ROUTER = `
+import '@webjsdev/core/client-router';
+import { html } from '@webjsdev/core';
+export default ({ children }) => html\`<main>\${children}</main>\`;
+`;
+
+test('a page importing only an interactive component is IMPORT-ONLY (#605)', async () => {
+  const page = `
+    import { html } from '@webjsdev/core';
+    import './components/counter.js';
+    export default () => html\`<x-counter></x-counter>\`;
+  `;
+  const { inertRouteModules, importOnlyRouteModules } = await run({
+    files: { '/app/page.js': page, '/app/components/counter.js': INTERACTIVE },
+    components: [{ tag: 'x-counter', file: '/app/components/counter.js' }],
+    routeModules: ['/app/page.js'],
+    edges: { '/app/page.js': ['/app/components/counter.js'] },
+  });
+  assert.ok(!inertRouteModules.has('/app/page.js'), 'not inert (it reaches client work)');
+  assert.deepEqual(
+    importOnlyRouteModules.get('/app/page.js'),
+    ['/app/components/counter.js'],
+    'import-only: the page is replaced by the interactive component',
+  );
+});
+
+test('a page importing an interactive component but NOT rendering its tag still re-emits it (static, #605)', async () => {
+  // The re-emit is the STATIC import closure, not the rendered set, so a
+  // component revealed only by a later client interaction still registers.
+  const page = `
+    import { html } from '@webjsdev/core';
+    import './components/counter.js';
+    export default () => html\`<p>no tag rendered here</p>\`;
+  `;
+  const { importOnlyRouteModules } = await run({
+    files: { '/app/page.js': page, '/app/components/counter.js': INTERACTIVE },
+    components: [{ tag: 'x-counter', file: '/app/components/counter.js' }],
+    routeModules: ['/app/page.js'],
+    edges: { '/app/page.js': ['/app/components/counter.js'] },
+  });
+  assert.deepEqual(importOnlyRouteModules.get('/app/page.js'), ['/app/components/counter.js']);
+});
+
+test('a layout importing the client router SHIPS, never import-only (#605)', async () => {
+  const { inertRouteModules, importOnlyRouteModules } = await run({
+    files: { '/app/layout.js': ROUTER, '/app/components/counter.js': INTERACTIVE },
+    components: [{ tag: 'x-counter', file: '/app/components/counter.js' }],
+    routeModules: ['/app/layout.js'],
+    edges: { '/app/layout.js': ['/app/components/counter.js'] },
+  });
+  assert.ok(!importOnlyRouteModules.has('/app/layout.js'), 'client-router layout is not import-only');
+  assert.ok(!inertRouteModules.has('/app/layout.js'), 'and not inert');
+});
+
+test('a page importing a component AND a self-executing helper SHIPS, not import-only (#605)', async () => {
+  // The helper is a client-effecting NON-component in the closure, so dropping
+  // the page would lose its side effect. The whole module ships.
+  const page = `
+    import { html } from '@webjsdev/core';
+    import './components/counter.js';
+    import './analytics.js';
+    export default () => html\`<x-counter></x-counter>\`;
+  `;
+  const analytics = `window.analyticsBoot();`;
+  const { inertRouteModules, importOnlyRouteModules } = await run({
+    files: { '/app/page.js': page, '/app/components/counter.js': INTERACTIVE, '/app/analytics.js': analytics },
+    components: [{ tag: 'x-counter', file: '/app/components/counter.js' }],
+    routeModules: ['/app/page.js'],
+    edges: { '/app/page.js': ['/app/components/counter.js', '/app/analytics.js'] },
+  });
+  assert.ok(!importOnlyRouteModules.has('/app/page.js'), 'a self-executing helper keeps the whole module');
+  assert.ok(!inertRouteModules.has('/app/page.js'));
+});
+
+test('a lazy component is NOT eagerly re-emitted; a lazy-only page is inert (#605)', async () => {
+  const lazy = `
+    import { WebComponent, html } from '@webjsdev/core';
+    class Heavy extends WebComponent {
+      static lazy = true;
+      render() { return html\`<button @click=\${() => {}}>+</button>\`; }
+    }
+    Heavy.register('x-heavy');
+  `;
+  const page = `
+    import { html } from '@webjsdev/core';
+    import './components/heavy.js';
+    export default () => html\`<x-heavy></x-heavy>\`;
+  `;
+  const { inertRouteModules, importOnlyRouteModules } = await run({
+    files: { '/app/page.js': page, '/app/components/heavy.js': lazy },
+    components: [{ tag: 'x-heavy', file: '/app/components/heavy.js' }],
+    routeModules: ['/app/page.js'],
+    edges: { '/app/page.js': ['/app/components/heavy.js'] },
+  });
+  assert.ok(!importOnlyRouteModules.has('/app/page.js'), 'lazy component is excluded from the re-emit');
+  assert.ok(inertRouteModules.has('/app/page.js'), 'with only a lazy child, the page is inert for boot');
+});
+
+test('a page importing only a display-only (elided) component collapses to inert (#604 interaction)', async () => {
+  const page = `
+    import { html } from '@webjsdev/core';
+    import './components/badge.js';
+    export default () => html\`<x-badge></x-badge>\`;
+  `;
+  const { inertRouteModules, importOnlyRouteModules } = await run({
+    files: { '/app/page.js': page, '/app/components/badge.js': DISPLAY_ONLY },
+    components: [{ tag: 'x-badge', file: '/app/components/badge.js' }],
+    routeModules: ['/app/page.js'],
+    edges: { '/app/page.js': ['/app/components/badge.js'] },
+  });
+  assert.ok(inertRouteModules.has('/app/page.js'), 'every imported component elided -> inert');
+  assert.ok(!importOnlyRouteModules.has('/app/page.js'), 'not import-only (nothing ships to re-emit)');
+});
