@@ -146,10 +146,14 @@ export type InferProps<S> = {
   [K in keyof S]: S[K] extends PropertyDeclaration<infer T> ? T : Infer<S[K]>
 };
 
-export interface WebComponentConstructor {
-  new (): WebComponentBase;
-  prototype: WebComponentBase;
-
+/**
+ * The static surface every `WebComponent` constructor carries (the bare base,
+ * a factory-produced base, and a registered subclass alike). Declared ONCE
+ * here and referenced from both `WebComponentConstructor` and the factory-call
+ * return type below, so adding or changing a static can never let the two
+ * positions drift. Mirrors the `static` members on `WebComponentBase`.
+ */
+interface WebComponentStatics {
   shadow: boolean;
   hydrate: 'visible' | undefined;
   properties: Record<string, PropertyDeclaration>;
@@ -157,18 +161,15 @@ export interface WebComponentConstructor {
   lazy?: boolean;
   register(tag: string): void;
   readonly observedAttributes: string[];
+}
 
-  <S extends Record<string, any>>(shape: S): {
+export interface WebComponentConstructor extends WebComponentStatics {
+  new (): WebComponentBase;
+  prototype: WebComponentBase;
+
+  <S extends Record<string, any>>(shape: S): WebComponentStatics & {
     new (): WebComponentBase & InferProps<S>;
     prototype: WebComponentBase & InferProps<S>;
-
-    shadow: boolean;
-    hydrate: 'visible' | undefined;
-    properties: Record<string, PropertyDeclaration>;
-    styles: CSSResult | CSSResult[] | null;
-    lazy?: boolean;
-    register(tag: string): void;
-    readonly observedAttributes: string[];
   };
 }
 
