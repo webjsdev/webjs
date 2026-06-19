@@ -116,6 +116,31 @@ test('webjs-research-record routes on research/design phrases', () => {
   }
 });
 
+test('code-review routes on review phrases', () => {
+  for (const p of [
+    'review the PR',
+    'review my changes',
+    'can you do a code review',
+    'review the diff for bugs',
+    'review the branch',
+  ]) {
+    const { ctx } = run(p);
+    assert.ok(routed(ctx, 'code-review'), `expected code-review route for: ${p}`);
+  }
+});
+
+test('verify routes on verify / dogfood phrases', () => {
+  for (const p of [
+    'verify the fix works',
+    'confirm the change works',
+    'manually test the app',
+    'boot the dogfood apps',
+  ]) {
+    const { ctx } = run(p);
+    assert.ok(routed(ctx, 'verify'), `expected verify route for: ${p}`);
+  }
+});
+
 test('research-record stays quiet on a plain file-issue prompt', () => {
   // "add a new task to investigate the SSR race" is file-issue work, not a
   // research writeup; research-record must not steal it.
@@ -144,10 +169,14 @@ test('a single prompt routes each matched skill exactly once', () => {
 });
 
 test('every skill the hook can route to is committed in-repo (no dangling reference)', () => {
-  // The hook names skills it routes to; each MUST have a committed
-  // `.claude/skills/<name>/SKILL.md`, or a fresh clone routes a prompt at a
-  // skill that does not exist (the #543 portability bug). Extract the skill
-  // names from the hook source and assert each is present in the repo.
+  // The hook names skills it routes to; each PROJECT skill MUST have a
+  // committed `.claude/skills/<name>/SKILL.md`, or a fresh clone routes a
+  // prompt at a skill that does not exist (the #543 portability bug). The
+  // regex matches only project-skill names (webjs-* and use-railway);
+  // built-in Claude Code skills the hook also routes (code-review, verify)
+  // ship with the CLI for everyone, so they are intentionally exempt.
+  // Extract the project-skill names from the hook source and assert each is
+  // present in the repo.
   const hookSrc = readFileSync(HOOK, 'utf8');
   const names = [...new Set((hookSrc.match(/\b(?:webjs-[a-z-]+|use-railway)\b/g) || []))];
   assert.ok(names.length >= 4, `expected the hook to reference its skills; found ${names.join(', ')}`);

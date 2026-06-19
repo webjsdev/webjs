@@ -128,6 +128,30 @@ if has '(doc|documentation) (gap|drift|sync|coverage|debt)' \
   add_match "webjs-doc-sync: the request is about documentation sync, drift, or a doc gap. Invoke the webjs-doc-sync skill BEFORE editing any doc. It holds the authoritative map of EVERY surface (AGENTS.md + agent-docs/, README, the docs site under docs/app/docs/, the marketing website/, and the scaffold templates' per-agent rule files) and the change-type to surface mapping, so no surface is silently skipped. File each confirmed gap via webjs-file-issue."
 fi
 
+# --- code-review: review the diff before a PR is ready ------------------
+# Triggers: review the PR/diff/branch/changes, code review, look it over
+# for bugs. Reviewing every change before it is marked ready is a standing
+# expectation, and a review is a LOOP (re-review until a round is clean).
+# code-review is a built-in Claude Code skill (no in-repo SKILL.md, so the
+# portability test that guards project skills does not cover it).
+if has '(review|audit) (the |my |this )?(pr|diff|branch|change|changes|code|commit)' \
+   || has 'code ?review' \
+   || has '(review|look) .{0,20}(over )?for (bug|issue|correctness|regression)'; then
+  add_match "code-review: the request is to review code. Invoke the code-review skill (it reviews the diff for correctness bugs plus reuse and simplification). Treat review as a LOOP: after fixing findings, re-review until a round is clean. Never report done off a round that found something."
+fi
+
+# --- verify: prove the change works by running the app ------------------
+# Triggers: verify/confirm the fix works, does it work, manually test it,
+# boot or dogfood the apps. webjs's standing rule is to boot the four
+# dogfood apps (blog e2e plus website, docs, ui-website) on every framework
+# PR. verify is a built-in Claude Code skill (no in-repo SKILL.md).
+if has 'verify (the |this |that |it )?(change|fix|feature|pr|work|it works|behaviou?r)' \
+   || has '(confirm|prove|make sure) .{0,30}(works|working|fixed|fixes it)' \
+   || has '(manually|actually) (test|try|check) .{0,20}(it|the (fix|change|app|feature))' \
+   || has '(boot|dogfood|smoke).{0,20}(app|apps|blog|website|docs)'; then
+  add_match "verify: the request is to confirm a change actually works. Invoke the verify skill (run the app and observe the behaviour). For a framework change, boot all four dogfood apps (blog e2e plus website, docs, ui-website) and report the evidence, not just unit tests."
+fi
+
 # Assemble the additional context. The standing rule is always present; the
 # per-skill routing block appears only when something matched.
 read -r -d '' standing <<'EOF' || true
