@@ -57,21 +57,9 @@ export function generateMetadata(ctx: { url: string }): Metadata {
  * that can't live on a classable element, and selection/scrollbar
  * pseudo-elements.
  */
-export default function RootLayout({ children, url }: LayoutProps) {
+export default function RootLayout({ children }: LayoutProps) {
   // CSP nonce for inline scripts. Empty when no nonce in CSP.
   const nonce = cspNonce();
-  // #610 on-device isolation. The header is preserved across a soft nav, so
-  // the class set on the full page load persists through the forward nav under
-  // test. `?h=static` drops position:sticky to tell whether the flash is the
-  // sticky recalc or a page-level repaint. The router paint-timing flags
-  // (`?raf`, `?scrollfirst`) are read client-side into window.__webjsDiag by
-  // the inline script below.
-  const headerVariant = (() => {
-    try {
-      const v = new URL(String(url)).searchParams.get('h') || '';
-      return ['static', 'opaque', 'fixed'].includes(v) ? ' hv-' + v : '';
-    } catch { return ''; }
-  })();
   return html`
     <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
     <link rel="icon" href="/public/favicon.png" type="image/png">
@@ -91,13 +79,6 @@ export default function RootLayout({ children, url }: LayoutProps) {
           if (t === 'light' || t === 'dark') {
             document.documentElement.dataset.theme = t;
           }
-        } catch (_) {}
-        // #610 router paint-timing isolation. Read once on the full page load;
-        // the client router reads these flags on every soft nav (the flag is
-        // lost from the URL on the nav itself, so it must be captured here).
-        try {
-          var p = new URLSearchParams(location.search);
-          window.__webjsDiag = { raf: p.has('raf'), scrollfirst: p.has('scrollfirst') };
         } catch (_) {}
       })();
       // Mobile menu auto-close: close on link click (inside the panel)
@@ -187,6 +168,14 @@ export default function RootLayout({ children, url }: LayoutProps) {
       html, body { margin: 0; }
       html { scroll-behavior: smooth; }
       body {
+        /* #610: the header is position:fixed (NOT sticky). iOS WebKit (every
+           iOS browser) flickers a sticky header's background for one frame on a
+           client-router forward nav, because the scroll-to-top drives a sticky
+           stuck-to-static recompute WebKit mis-repaints. It is iOS-only (fine on
+           desktop and Android, invisible in emulation) and confirmed fixed by
+           switching to position:fixed on-device. fixed leaves normal flow, so
+           reserve the 61px header height here. */
+        padding-top: 61px;
         background: var(--bg);
         color: var(--fg);
         font: 16px/1.65 var(--font-sans);
@@ -220,30 +209,9 @@ export default function RootLayout({ children, url }: LayoutProps) {
       .mobile-menu > summary .close-icon { display: none; }
       .mobile-menu[open] > summary .open-icon { display: none; }
       .mobile-menu[open] > summary .close-icon { display: inline-block; }
-
-      /* #610 isolation: the h=static query param drops position:sticky
-         (overriding the Tailwind sticky utility) so an on-device test can tell
-         whether the flash is the sticky-position recalc or a page-level
-         repaint. The GPU compositor promotion was tried and made no difference
-         on-device, so it is intentionally NOT here. */
-      .site-header.hv-static {
-        position: static !important;
-      }
-      /* sticky kept, but no backdrop-filter (tests the sticky + backdrop combo) */
-      .site-header.hv-opaque {
-        background: var(--bg) !important;
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
-      }
-      /* fixed instead of sticky: always pinned, never does the stuck-to-static
-         recompute. Content overlap at the top is expected for this test. */
-      .site-header.hv-fixed {
-        position: fixed !important;
-        top: 0; left: 0; right: 0;
-      }
     </style>
 
-    <header class="site-header${headerVariant} sticky top-0 z-20 flex items-center justify-between gap-4 px-4 sm:px-6 py-3 border-b border-border bg-[color-mix(in_oklch,var(--bg)_75%,transparent)] backdrop-blur-[18px] backdrop-saturate-[180%]">
+    <header class="site-header fixed inset-x-0 top-0 z-20 flex items-center justify-between gap-4 px-4 sm:px-6 py-3 border-b border-border bg-[color-mix(in_oklch,var(--bg)_75%,transparent)] backdrop-blur-[18px] backdrop-saturate-[180%]">
       <a href="/" class="inline-flex items-center gap-2 no-underline text-fg font-semibold text-[15px] leading-none tracking-tight">
         <span class="inline-block w-[22px] h-[22px] rounded-md bg-gradient-to-br from-accent to-[color-mix(in_oklch,var(--accent)_55%,var(--fg))] shadow-[inset_0_0_0_1px_oklch(1_0_0/0.15),0_1px_4px_var(--accent-tint)]"></span>
         <span>webjs</span>
