@@ -67,8 +67,10 @@ export default function RootLayout({ children, url }: LayoutProps) {
   // (`?raf`, `?scrollfirst`) are read client-side into window.__webjsDiag by
   // the inline script below.
   const headerVariant = (() => {
-    try { return new URL(String(url)).searchParams.get('h') === 'static' ? ' hv-static' : ''; }
-    catch { return ''; }
+    try {
+      const v = new URL(String(url)).searchParams.get('h') || '';
+      return ['static', 'opaque', 'fixed'].includes(v) ? ' hv-' + v : '';
+    } catch { return ''; }
   })();
   return html`
     <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
@@ -226,6 +228,18 @@ export default function RootLayout({ children, url }: LayoutProps) {
          on-device, so it is intentionally NOT here. */
       .site-header.hv-static {
         position: static !important;
+      }
+      /* sticky kept, but no backdrop-filter (tests the sticky + backdrop combo) */
+      .site-header.hv-opaque {
+        background: var(--bg) !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+      }
+      /* fixed instead of sticky: always pinned, never does the stuck-to-static
+         recompute. Content overlap at the top is expected for this test. */
+      .site-header.hv-fixed {
+        position: fixed !important;
+        top: 0; left: 0; right: 0;
       }
     </style>
 
