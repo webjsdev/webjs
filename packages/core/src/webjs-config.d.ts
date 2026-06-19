@@ -15,7 +15,8 @@
  * LOCKSTEP: this file, the JSON Schema at
  * packages/server/webjs-config.schema.json, and the server reader
  * functions MUST stay in sync. The readers are: readElideEnabled
- * (dev.js, elide), compileHeaderRules (headers.js, headers),
+ * (dev.js, elide), readSeedEnabled (dev.js, seed), readClientRouterEnabled
+ * (dev.js, clientRouter), compileHeaderRules (headers.js, headers),
  * compileRedirectRules / readTrailingSlashPolicy (redirects.js,
  * redirects / trailingSlash), readBasePath (base-path.js, basePath),
  * readCspConfig (csp.js, csp), and
@@ -143,6 +144,15 @@ export interface WebjsConfig {
    * env override wins over this.
    */
   seed?: boolean;
+
+  /**
+   * Client-router switch (#629). Default `true`: the client router auto-enables
+   * in the browser whenever `@webjsdev/core` loads, so any page that ships a
+   * component gets SPA-style navigation with no import. Set to `false` to opt
+   * the whole app out (pure MPA, full-page navigation; `disableClientRouter()`
+   * stays the programmatic escape hatch).
+   */
+  clientRouter?: boolean;
 
   /**
    * Dev/start task orchestration (#550). `webjs dev` / `webjs start` run these

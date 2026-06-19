@@ -3273,7 +3273,13 @@ export function _isNonHtmlPath(pathname) {
   return NON_HTML_EXTENSIONS.test(pathname);
 }
 
-// Auto-enable on import (standard Turbo-Drive convention). Placed last so
-// every top-level binding the router touches (notably the prefetch state)
-// is initialised before enableClientRouter() runs.
-enableClientRouter();
+// Auto-enable on import (standard Turbo-Drive convention) UNLESS the app opted
+// out with `webjs.clientRouter: false` (#629), which the server signals by
+// setting `window.__WEBJS_CLIENT_ROUTER__ = false` in an inline script emitted
+// BEFORE this (deferred) bundle runs. On the server `window` is undefined, so
+// the call still runs and no-ops behind its own `typeof document` guard, as
+// before. Placed last so every top-level binding the router touches (notably
+// the prefetch state) is initialised before enableClientRouter() runs.
+if (typeof window === 'undefined' || window.__WEBJS_CLIENT_ROUTER__ !== false) {
+  enableClientRouter();
+}

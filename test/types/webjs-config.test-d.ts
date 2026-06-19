@@ -22,6 +22,7 @@ import type {
 
 const full: WebjsConfig = {
   elide: false,
+  clientRouter: false,
   headers: [
     { source: '/embed/:path*', headers: [{ key: 'X-Frame-Options', value: null }] },
     { source: '/app/:path*', headers: [{ key: 'X-Frame-Options', value: 'DENY' }] },

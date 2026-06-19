@@ -147,6 +147,7 @@ in THREE co-located places that MUST stay in lockstep:
    `@webjsdev/core`), the typed reference an agent or human authors against.
 3. **The reader functions** that consume each key: `readElideEnabled`
    (`dev.js`, `elide`), `readSeedEnabled` (`dev.js`, `seed`),
+   `readClientRouterEnabled` (`dev.js`, `clientRouter`),
    `compileHeaderRules` (`headers.js`, `headers`),
    `compileRedirectRules` / `readTrailingSlashPolicy` (`redirects.js`,
    `redirects` / `trailingSlash`), `readBasePath` (`base-path.js`,

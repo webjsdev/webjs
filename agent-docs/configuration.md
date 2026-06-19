@@ -1,6 +1,6 @@
 # Server configuration (the `package.json` `"webjs"` block) + observability
 
-The full reference for the `package.json` `"webjs"` config block (security headers, CSP, redirects, trailing-slash, basePath, ingress caps) plus the observability surfaces. Moved out of `AGENTS.md` to keep it lean. Env vars live in `agent-docs/built-ins.md`.
+The full reference for the `package.json` `"webjs"` config block (security headers, CSP, redirects, trailing-slash, basePath, client-router opt-out, ingress caps) plus the observability surfaces. Moved out of `AGENTS.md` to keep it lean. Env vars live in `agent-docs/built-ins.md`.
 
 ---
 
@@ -122,6 +122,20 @@ An app served under a sub-path (`example.com/app/`) behind a proxy that does NOT
 - **OUT OF SCOPE (a documented follow-up).** Author-written `<a href="/about">` links and client-router navigation are NOT auto-prefixed (the same boundary Next draws between basePath-prefixing its `<Link>` and a raw `<a href>`; webjs links are plain `<a href>`). The #256 acceptance covers framework-emitted URLs and request matching only.
 
 Mechanism: `normalizeBasePath` / `readBasePath` / `withBasePath` / `stripBasePath` in `packages/server/src/base-path.js`; the ingress strip is in `dev.js`'s `produce()` (before `applyRedirects`), the importmap-target prefix in `importmap.js` (`setBasePath`), the boot / preload / reload prefix in `ssr.js`.
+
+---
+
+## Client-router opt-out: `webjs.clientRouter` in package.json (#629)
+
+The client router is automatic: it auto-enables in the browser whenever `@webjsdev/core` loads (any page that ships a component), so SPA-style navigation needs no import (#620). `webjs.clientRouter: false` opts the WHOLE app out, for an app that genuinely wants plain full-page (MPA) navigation despite shipping interactive components.
+
+```jsonc
+{ "webjs": { "clientRouter": false } }   // pure MPA, full-page navigation
+```
+
+Default `true` (and any value other than the literal `false`), so an existing app is byte-identical. When off, the render path emits a tiny inline `<script>window.__WEBJS_CLIENT_ROUTER__=false</script>` BEFORE the deferred boot module; the core bundle's module-end auto-enable reads that flag and skips, so the components on the page still upgrade and stay interactive while link clicks and form submits fall back to native browser navigation. `disableClientRouter()` (from `@webjsdev/core`) stays the per-page programmatic escape hatch, and `enableClientRouter()` turns it back on.
+
+Mechanism: `readClientRouterEnabled` (`packages/server/src/dev.js`) reads the key at boot and on every rebuild and calls `setClientRouterEnabled` (`ssr.js`); `wrapHead` emits the flag; the module-end gate lives in `packages/core/src/router-client.js`.
 
 ---
 

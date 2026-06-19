@@ -868,6 +868,19 @@ export function publicEnvShim(opts) {
     + `</script>`;
 }
 
+// Client-router opt-out (#629). Default ON (the framework's automatic-nav
+// thesis): the router auto-enables in the browser when `@webjsdev/core` loads.
+// `webjs.clientRouter: false` flips this off app-wide; `dev.js` reads the
+// config at boot / each rebuild and calls `setClientRouterEnabled`, and
+// `wrapHead` then emits a `window.__WEBJS_CLIENT_ROUTER__=false` flag BEFORE
+// the deferred boot module so the bundle's module-end auto-enable skips. A
+// module-level switch (mirrors setBasePath / setElisionFingerprint) so no opt
+// has to thread through every render path; default true keeps every existing
+// app and test byte-identical.
+let _clientRouterEnabled = true;
+export function setClientRouterEnabled(enabled) { _clientRouterEnabled = enabled !== false; }
+function clientRouterEnabled() { return _clientRouterEnabled; }
+
 function wrapHead(opts) {
   // CSP nonce: if provided, all inline <script> tags get nonce="…" so they
   // pass strict Content-Security-Policy headers. The nonce is extracted from
@@ -1376,7 +1389,7 @@ function wrapHead(opts) {
 ${opts.nonce ? `<meta name="csp-nonce" content="${escapeAttr(opts.nonce)}">` : ''}
 ${metaTags.join('\n')}
 <title>${escapeHtml(title)}</title>
-${publicEnvShim({ dev: opts.dev, nonce: opts.nonce })}
+${publicEnvShim({ dev: opts.dev, nonce: opts.nonce })}${clientRouterEnabled() ? '' : `\n<script${n}>window.__WEBJS_CLIENT_ROUTER__=false;</script>`}
 ${importMapTag({ nonce: opts.nonce })}
 ${linkTags.join('\n')}
 ${scriptTags.length ? scriptTags.join('\n') + '\n' : ''}${boot}

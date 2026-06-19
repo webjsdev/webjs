@@ -13,7 +13,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { buildRouteTable, matchPage, matchApi } from './router.js';
 import { generateRouteTypes } from './route-types.js';
-import { ssrPage, ssrNotFound } from './ssr.js';
+import { ssrPage, ssrNotFound, setClientRouterEnabled } from './ssr.js';
 import { loadPageAction, runPageAction } from './page-action.js';
 import { handleApi } from './api.js';
 import {
@@ -268,6 +268,28 @@ export async function readSeedEnabled(appDir) {
 }
 
 /**
+ * Read the client-router switch (`webjs.clientRouter`) from the app's
+ * package.json (#629). Default `true`: the client router auto-enables in the
+ * browser whenever `@webjsdev/core` loads (the automatic-navigation thesis).
+ * `{ "webjs": { "clientRouter": false } }` opts the WHOLE app out (pure MPA,
+ * full-page navigation), which the render path signals to the browser so the
+ * core bundle's module-end auto-enable is skipped. Any other value, or an
+ * absent key, keeps the router on. Re-read on every rebuild (alongside elide)
+ * so toggling it takes effect without a server restart.
+ * @param {string} appDir
+ * @returns {Promise<boolean>}
+ */
+export async function readClientRouterEnabled(appDir) {
+  try {
+    const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
+    if (pkg && pkg.webjs && pkg.webjs.clientRouter === false) return false;
+  } catch {
+    // No package.json, malformed JSON, or unreadable. Keep the default.
+  }
+  return true;
+}
+
+/**
  * Read the per-path response-header config (`webjs.headers`) from the
  * app's package.json and compile it to URLPattern rules. A missing,
  * malformed, or unreadable config yields an empty rule set (the secure
@@ -472,6 +494,12 @@ export async function createRequestHandler(opts) {
   // is byte-identical to before this feature.
   const basePathValue = await readBasePathFromApp(appDir);
   await setBasePath(basePathValue);
+
+  // Client-router opt-out (#629): bind it eagerly at handler construction (the
+  // same timing as setBasePath above), so a handler's module-global is set
+  // before any render even if a request arrives before the first warm. The
+  // analysis pass re-reads it each rebuild so a dev toggle takes effect live.
+  setClientRouterEnabled(await readClientRouterEnabled(appDir));
 
   const coreDir = locateCoreDir(appDir);
   // Switch the importmap between dist/ bundles and src/ per-file
@@ -743,6 +771,9 @@ export async function createRequestHandler(opts) {
             t.actions = now() - m; m = now();
             state.middleware = await loadMiddleware(appDir, dev, logger);
             t.middleware = now() - m; m = now();
+            // Client-router opt-out (#629): re-read each pass so toggling
+            // `webjs.clientRouter` takes effect on rebuild without a restart.
+            setClientRouterEnabled(await readClientRouterEnabled(appDir));
             const r = (await readElideEnabled(appDir))
               ? await analyzeElision(components, collectRouteModules(state.routeTable),
                   state.moduleGraph, (f) => readFile(f, 'utf8'), appDir)
