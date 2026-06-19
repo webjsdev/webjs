@@ -169,18 +169,22 @@ export default function RootLayout({ children }: LayoutProps) {
       html, body { margin: 0; }
       html { scroll-behavior: smooth; }
       body {
+        position: relative;
         background: var(--bg);
         color: var(--fg);
         font: 16px/1.65 var(--font-sans);
         -webkit-font-smoothing: antialiased;
         text-rendering: optimizeLegibility;
         font-feature-settings: 'ss01', 'cv02';
+      }
+      .theme-transitioning,
+      .theme-transitioning body {
         transition: background var(--duration-slow) cubic-bezier(0.3, 0, 0.3, 1),
                     color var(--duration-slow) cubic-bezier(0.3, 0, 0.3, 1);
       }
       body::before {
         content: '';
-        position: fixed;
+        position: absolute;
         inset: 0;
         pointer-events: none;
         z-index: -1;
@@ -204,7 +208,7 @@ export default function RootLayout({ children }: LayoutProps) {
       .mobile-menu[open] > summary .close-icon { display: inline-block; }
     </style>
 
-    <header class="sticky top-0 z-20 flex items-center justify-between gap-4 px-4 sm:px-6 py-3 border-b border-border bg-[var(--bg)]">
+    <header class="sticky top-0 z-20 flex items-center justify-between gap-4 px-4 sm:px-6 py-3 border-b border-border bg-[color-mix(in_oklch,var(--bg)_75%,transparent)] backdrop-blur-[18px] backdrop-saturate-[180%]">
       <a href="/" class="inline-flex items-center gap-2 no-underline text-fg font-semibold text-[15px] leading-none tracking-tight">
         <span class="inline-block w-[22px] h-[22px] rounded-md bg-gradient-to-br from-accent to-[color-mix(in_oklch,var(--accent)_55%,var(--fg))] shadow-[inset_0_0_0_1px_oklch(1_0_0/0.15),0_1px_4px_var(--accent-tint)]"></span>
         <span>webjs</span>
