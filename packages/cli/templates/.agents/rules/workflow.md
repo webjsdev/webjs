@@ -137,6 +137,7 @@ self-review loop.
   `static styles = css\`...\`` for scoped CSS.
 - Custom-element tag names are passed to `.register('tag-name')`. They are NOT
   a static field on the class.
+- **Never extend raw HTMLElement directly for app components.** Always subclass `WebComponent` (or the factory form `WebComponent({...})`) to hook into SSR, lifecycle, elision, and the reactive property system. Extend raw HTMLElement only for rare native-API edge cases (like form-associated `ElementInternals` or customized built-in elements), and add a `webjs-allow-htmlelement: <reason>` comment to acknowledge the exception.
 - One function per server action file (`*.server.ts`).
 - Server-only code (a DB driver like `better-sqlite3`/`pg`, `node:*`, anything that needs Node APIs)
   goes only in `.server.{js,ts}` files, `route.ts` handlers, or

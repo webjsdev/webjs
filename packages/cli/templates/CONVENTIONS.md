@@ -678,6 +678,7 @@ Reactive properties are declared one way: pass the properties shape directly to 
 - **If a light-DOM component authors its own custom CSS (a `<style>` block in `render()` or an imported stylesheet), every class selector MUST be prefixed with the component's tag name.** Either pattern works. Pick one and stay consistent:
   - `.my-widget__body`, `.my-widget__title` (BEM-ish)
   - `my-widget .body`, `my-widget .title` (descendant selector)
+- **Never extend raw HTMLElement directly for app components.** Always subclass `WebComponent` (or the factory form `WebComponent({...})`) to hook into SSR, lifecycle, elision, and the reactive property system. Extend raw HTMLElement only for rare native-API edge cases (like form-associated `ElementInternals` or customized built-in elements), and add a `webjs-allow-htmlelement: <reason>` comment to acknowledge the exception.
 - Tag name must contain a hyphen (HTML spec)
 - Always call `Class.register('tag')`. That's the standard DOM API.
 - **Reactive props are declared via the base-class factory `WebComponent({ ... })`.** A hand-written `static properties = { ... }` throws at construction (`webjs check` flags it via `no-static-properties`). Never write `propName = value` or `propName: Type = value` as a class-field initializer on a reactive prop. It compiles to `Object.defineProperty(this, …)` after `super()` and clobbers the framework's reactive accessor, silently breaking re-renders (`webjs check` flags this via `reactive-props-no-class-field`). Set defaults via the `default` option or in the constructor.
