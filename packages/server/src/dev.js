@@ -495,6 +495,12 @@ export async function createRequestHandler(opts) {
   const basePathValue = await readBasePathFromApp(appDir);
   await setBasePath(basePathValue);
 
+  // Client-router opt-out (#629): bind it eagerly at handler construction (the
+  // same timing as setBasePath above), so a handler's module-global is set
+  // before any render even if a request arrives before the first warm. The
+  // analysis pass re-reads it each rebuild so a dev toggle takes effect live.
+  setClientRouterEnabled(await readClientRouterEnabled(appDir));
+
   const coreDir = locateCoreDir(appDir);
   // Switch the importmap between dist/ bundles and src/ per-file
   // URLs depending on whether the resolved @webjsdev/core install

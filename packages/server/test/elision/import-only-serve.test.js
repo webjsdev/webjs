@@ -204,6 +204,13 @@ export default () => html\`<x-counter></x-counter>\`;`;
     const html = await (await app.handle(new Request('http://x/'))).text();
     assert.match(html, /window\.__WEBJS_CLIENT_ROUTER__\s*=\s*false/, 'opt-out flag must be emitted when clientRouter:false');
     assert.match(html, /\/components\/counter\.ts/, 'the component still loads (only the router auto-enable is suppressed)');
+    // The flag is a classic inline script; it MUST appear before the deferred
+    // boot module that loads @webjsdev/core, or the bundle's module-end
+    // auto-enable would run before the flag is set. (Classic scripts run at
+    // parse, deferred module scripts after, so source order is the guarantee.)
+    const flagIdx = html.indexOf('__WEBJS_CLIENT_ROUTER__');
+    const bootIdx = html.indexOf('<script type="module"');
+    assert.ok(flagIdx !== -1 && bootIdx !== -1 && flagIdx < bootIdx, 'opt-out flag must precede the boot module');
   } finally {
     rmSync(off, { recursive: true, force: true });
   }
