@@ -5,6 +5,7 @@ import {
   redactStringsAndTemplates,
   extractWebComponentClassBodies,
   matchClosingBrace,
+  parsePropEntries,
 } from './js-scan.js';
 import { buildModuleGraph, transitiveDeps } from './module-graph.js';
 import { scanComponents } from './component-scanner.js';
@@ -82,6 +83,11 @@ export const RULES = [
     name: 'reactive-props-no-class-field',
     description:
       'A reactive property declared via the `extends WebComponent({ … })` factory must NOT also have a plain class-field initializer (`count = 0` or `count: number = 0`) in the class body. Under modern class-field semantics that initializer runs Object.defineProperty *after* super(), clobbering the framework\'s reactive accessor and silently breaking re-renders. Set the default via the `default` property option (`prop(Number, { default: 0 })`) or by assigning in the constructor after super().',
+  },
+  {
+    name: 'array-prop-uses-array-type',
+    description:
+      'An array-typed reactive property declared via the `extends WebComponent({ … })` factory must pass the `Array` runtime constructor, not `Object`: `count: prop<Tag[]>(Array)`, never `prop<Tag[]>(Object)`. The two share one converter (both JSON-encode the value), so the wrong one does not crash, but `Object` misstates the prop contract to the next reader and diverges from the documented built-in set (String/Number/Boolean/Object/Array). Fires only when the factory generic is itself an array type (`T[]`, `readonly T[]`, `Array<T>`, `ReadonlyArray<T>`) AND the constructor argument is `Object`; a bare `foo: Object` with no generic is never flagged. Fix: change the constructor to `Array`.',
   },
   {
     name: 'shell-in-non-root-layout',
@@ -184,6 +190,38 @@ function isComponentFile(relPath) {
  * @param {Set<string>} props
  * @returns {string[]}
  */
+/**
+ * True when a factory prop value is an array-typed `prop<…>(…)` whose
+ * runtime constructor argument is `Object`. The generic and the
+ * constructor sit in the same call, so it is decidable from the value
+ * text alone. The match is greedy on the generic so a nested generic
+ * (`prop<Array<X>>(Object)`) closes at the outer `>` that precedes the
+ * `(Object` call. A bare constructor (`Object`, with no generic) or a
+ * non-array generic (`prop<Foo>(Object)`) returns false.
+ *
+ * @param {string} value the raw prop value text, e.g. `prop<Tag[]>(Object)`
+ * @returns {boolean}
+ */
+function arrayPropUsesObject(value) {
+  const m = /^prop\s*<([\s\S]*)>\s*\(\s*Object\s*[,)]/.exec(value.trim());
+  if (!m) return false;
+  return isArrayTypeText(m[1]);
+}
+
+/**
+ * True when a TypeScript type expression denotes an array: `T[]`,
+ * `readonly T[]`, `T[][]`, `Array<T>`, or `ReadonlyArray<T>`.
+ *
+ * @param {string} type
+ * @returns {boolean}
+ */
+function isArrayTypeText(type) {
+  const bare = type.trim().replace(/^readonly\s+/, '');
+  if (/\[\s*\]$/.test(bare)) return true;
+  if (/^(?:Readonly)?Array\s*<[\s\S]*>$/.test(bare)) return true;
+  return false;
+}
+
 function findFieldInitializers(classBody, props) {
   /** @type {string[]} */
   const out = [];
@@ -434,6 +472,37 @@ export async function checkConventions(appDir) {
             file: rel,
             message: `Reactive prop \`${bad}\` uses a class-field initializer; this clobbers the framework's reactive accessor under modern class-field semantics.`,
             fix: `Remove the class-field initializer and set the default via the \`default\` option (\`prop(<Type>, { default: <value> })\`) or by assigning \`this.${bad} = <value>\` inside \`constructor()\` after \`super()\`.`,
+          });
+        }
+      }
+    }
+  }
+
+  // --- Rule: array-prop-uses-array-type ---
+  // An array-typed reactive prop declared via the factory should pass the
+  // `Array` runtime constructor, not `Object`. Both share one converter
+  // (JSON encode/decode), so `Object` does not crash, but it misstates the
+  // prop contract and diverges from the documented built-in set. Fires only
+  // when the factory generic is itself an array type AND the constructor is
+  // `Object`; a bare `foo: Object` (no generic to prove array-ness) is left
+  // alone to avoid false positives. Uses the redacted `scan`, so a
+  // `prop<X[]>(Object)` shown inside an html`` example string never fires.
+  {
+    for (const { rel, scan } of files) {
+      if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
+      for (const { factoryArg } of extractWebComponentClassBodies(scan)) {
+        const objStart = factoryArg.indexOf('{');
+        if (objStart === -1) continue;
+        const objEnd = matchClosingBrace(factoryArg, objStart + 1);
+        if (objEnd === -1) continue;
+        const objContent = factoryArg.slice(objStart + 1, objEnd);
+        for (const { key, value } of parsePropEntries(objContent)) {
+          if (!arrayPropUsesObject(value)) continue;
+          violations.push({
+            rule: 'array-prop-uses-array-type',
+            file: rel,
+            message: `Array-typed reactive prop \`${key}\` is declared with the \`Object\` constructor (\`prop<…[]>(Object)\`); use \`Array\` so the runtime converter matches the declared shape.`,
+            fix: `Change the constructor to \`Array\`: \`${key}: prop<…[]>(Array)\`. Object and Array share one converter so behaviour is unchanged, but \`Array\` states the prop's shape correctly.`,
           });
         }
       }

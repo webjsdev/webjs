@@ -421,6 +421,73 @@ export function parsePropsFromObjectLiteral(obj, names) {
   }
 }
 
+/**
+ * Like {@link parsePropsFromObjectLiteral} but captures each entry's raw
+ * VALUE text alongside its key, so a rule can inspect the declaration
+ * (`prop<CommentFormatted[]>(Object)`) rather than just the name.
+ *
+ * The value is read with balanced depth across `()`, `{}`, `[]`, `<>`,
+ * and string/template literals, so an entry is split only on a
+ * TOP-LEVEL comma. That keeps a value's own commas intact, whether they
+ * sit inside an options object (`prop(Object, { default: () => [] })`),
+ * an array literal, or a nested generic (`prop<Map<string, number>>(…)`).
+ * Angle-bracket depth is decremented only when already open, so a stray
+ * `=>` arrow or `>=` does not unbalance a value with no generic.
+ *
+ * @param {string} obj object-literal body (no enclosing braces)
+ * @returns {{ key: string, value: string }[]}
+ */
+export function parsePropEntries(obj) {
+  /** @type {{ key: string, value: string }[]} */
+  const entries = [];
+  const n = obj.length;
+  let i = 0;
+  while (i < n) {
+    while (i < n && /[\s,]/.test(obj[i])) i++;
+    if (i >= n) break;
+    let key = '';
+    if (obj[i] === '"' || obj[i] === "'") {
+      const quote = obj[i++];
+      while (i < n && obj[i] !== quote) { key += obj[i++]; }
+      i++; // closing quote
+    } else {
+      while (i < n && /[A-Za-z0-9_$]/.test(obj[i])) key += obj[i++];
+    }
+    while (i < n && /\s/.test(obj[i])) i++;
+    if (obj[i] !== ':') break;
+    i++;
+    while (i < n && /\s/.test(obj[i])) i++;
+    let round = 0, curly = 0, square = 0, angle = 0;
+    let value = '';
+    while (i < n) {
+      const c = obj[i];
+      if (c === '"' || c === "'" || c === '`') {
+        const quote = c;
+        value += c; i++;
+        while (i < n && obj[i] !== quote) {
+          if (obj[i] === '\\') { value += obj[i] + (obj[i + 1] || ''); i += 2; continue; }
+          value += obj[i++];
+        }
+        if (i < n) value += obj[i++];
+        continue;
+      }
+      if (c === ',' && round === 0 && curly === 0 && square === 0 && angle === 0) break;
+      if (c === '}' && curly === 0) break; // end of the enclosing object literal
+      if (c === '(') round++;
+      else if (c === ')') { if (round > 0) round--; }
+      else if (c === '{') curly++;
+      else if (c === '}') curly--;
+      else if (c === '[') square++;
+      else if (c === ']') { if (square > 0) square--; }
+      else if (c === '<') angle++;
+      else if (c === '>') { if (angle > 0) angle--; }
+      value += obj[i++];
+    }
+    if (key) entries.push({ key, value: value.trim() });
+  }
+  return entries;
+}
+
 
 /**
  * Walk forward from `start` (just after an opening `(`) and return the
