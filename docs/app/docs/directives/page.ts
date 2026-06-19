@@ -5,7 +5,7 @@ export const metadata = { title: 'Directives | webjs' };
 export default function Directives() {
   return html`
     <h1>Directives</h1>
-    <p>webjs ships the full lit-html directive set. AI agents writing lit-shaped directive code land on familiar names; the implementations live in <code>packages/core/src/directives.js</code> and the renderers (<code>render-server.js</code>, <code>render-client.js</code>).</p>
+    <p>webjs ships the lit-html directives that have no clean native equivalent, under their familiar lit names, so AI agents writing lit-shaped directive code land on what they expect. The directives that ARE just sugar over plain JavaScript (<code>classMap</code> / <code>styleMap</code> / <code>ifDefined</code> / <code>when</code> / <code>choose</code>) are deliberately not shipped (see below). The implementations live in <code>packages/core/src/directives.js</code> and the renderers (<code>render-server.js</code>, <code>render-client.js</code>).</p>
 
     <pre>import { html, repeat } from '@webjsdev/core';
 import {
