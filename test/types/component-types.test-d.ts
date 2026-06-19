@@ -61,6 +61,23 @@ type _Count = Assert<Equal<typeof counter.count, number>>;
 type _Label = Assert<Equal<typeof counter.label, string>>;
 type _Open = Assert<Equal<typeof counter.open, boolean>>;
 
+/* ------------- The factory-produced base carries the FULL static surface -------------
+ * Regression net for the de-duplicated `WebComponentStatics` (#602): both the
+ * constructor type and the factory-call return type reference the one shared
+ * declaration, so dropping any static from it must red this block. */
+const _shadow: boolean = Counter.shadow;
+const _hydrate: 'visible' | undefined = Counter.hydrate;
+const _properties: Record<string, PropertyDeclaration> = Counter.properties;
+const _styles = Counter.styles;
+const _lazy: boolean | undefined = Counter.lazy;
+const _observed: readonly string[] = Counter.observedAttributes;
+Counter.register('my-counter-instance');
+void _shadow; void _hydrate; void _properties; void _styles; void _lazy; void _observed;
+// `lazy` must stay OPTIONAL (`lazy?`), not merely `boolean | undefined`: an
+// empty object is assignable only when the key is optional, so this reds if the
+// modifier is ever dropped from the shared declaration.
+type _LazyStaysOptional = Assert<{} extends Pick<typeof Counter, 'lazy'> ? true : false>;
+
 /* ------------- prop() with options preserves the type ------------- */
 
 class Toggle extends WebComponent({ pressed: prop(Boolean, { reflect: true }) }) {}
