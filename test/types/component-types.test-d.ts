@@ -73,6 +73,10 @@ const _lazy: boolean | undefined = Counter.lazy;
 const _observed: readonly string[] = Counter.observedAttributes;
 Counter.register('my-counter-instance');
 void _shadow; void _hydrate; void _properties; void _styles; void _lazy; void _observed;
+// `lazy` must stay OPTIONAL (`lazy?`), not merely `boolean | undefined`: an
+// empty object is assignable only when the key is optional, so this reds if the
+// modifier is ever dropped from the shared declaration.
+type _LazyStaysOptional = Assert<{} extends Pick<typeof Counter, 'lazy'> ? true : false>;
 
 /* ------------- prop() with options preserves the type ------------- */
 
