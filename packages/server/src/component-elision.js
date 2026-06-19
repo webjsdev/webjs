@@ -42,6 +42,7 @@ import {
   matchClosingBrace,
   redactStringsAndTemplates,
   maskComments,
+  redactToPlaceholders,
 } from './js-scan.js';
 import { transitiveDeps, expandImportAlias } from './module-graph.js';
 
@@ -232,8 +233,13 @@ const PURE_DATA_CONSTRUCTORS = new Set([
   'BigInt64Array', 'BigUint64Array',
 ]);
 
-function hasModuleScopeSideEffect(src) {
-  const redacted = redactStringsAndTemplates(src);
+function hasModuleScopeSideEffect(src, literals) {
+  let redacted = src;
+  if (!literals) {
+    const r = redactToPlaceholders(src);
+    redacted = r.redacted;
+    literals = r.literals;
+  }
   // Keep only depth-0 text (outside every `{}`). Skip quoted-string bodies so
   // braces/parens inside a string neither desync the depth nor read as a call.
   let depth = 0;
@@ -327,26 +333,38 @@ const SIDE_EFFECT_BARE_IMPORT_RE = /^\s*import\s*(['"])([^'"]+)\1\s*;?\s*(?:\/\/
  * a router/nav API from the core main entry). A page or layout that does so
  * is enabling client-side navigation and must ship.
  * @param {string} src
+ * @param {string[]} [literals]
  * @returns {boolean}
  */
-function importsClientRouter(src) {
-  if (CLIENT_ROUTER_SUBPATH_RE.test(src)) return true;
-  for (const m of src.matchAll(CORE_IMPORT_RE)) {
+function importsClientRouter(src, literals) {
+  let redacted = src;
+  if (!literals) {
+    const r = redactToPlaceholders(src);
+    redacted = r.redacted;
+    literals = r.literals;
+  }
+  if (literals.includes('@webjsdev/core/client-router')) return true;
+  for (const m of redacted.matchAll(CORE_IMPORT_RE)) {
     const clause = m[1];
+    const spec = m[2];
+    const idx = m[3];
+    if (idx !== undefined) {
+      const resolved = literals[parseInt(idx, 10)];
+      if (!resolved || (!resolved.startsWith('@webjsdev/core') && !resolved.includes('/__webjs/core/'))) {
+        continue;
+      }
+    }
     if (clause.startsWith('{')) {
       const names = clause.slice(1, -1).split(',').map((s) => s.trim().split(/\s+as\s+/)[0].trim());
       if (names.some((n) => CLIENT_ROUTER_IMPORTS.includes(n))) return true;
     } else if (clause.startsWith('*')) {
-      // Namespace import: a router/nav member reached through `ns.member`,
-      // a destructure of `ns`, or computed access. Mirrors the reactive
-      // primitive detection so the two stay symmetric.
       const ns = clause.replace(/^\*\s+as\s+/, '').trim();
       if (!ns || !/^\w+$/.test(ns)) continue;
       for (const name of CLIENT_ROUTER_IMPORTS) {
-        if (new RegExp(`\\b${ns}\\.${name}\\b`).test(src)) return true;
+        if (new RegExp(`\\b${ns}\\.${name}\\b`).test(redacted)) return true;
       }
-      if (new RegExp(`(?:const|let|var)\\s*\\{[^}]*\\}\\s*=\\s*${ns}\\b`).test(src)) return true;
-      if (new RegExp(`\\b${ns}\\s*\\[`).test(src)) return true;
+      if (new RegExp(`(?:const|let|var)\\s*\\{[^}]*\\}\\s*=\\s*${ns}\\b`).test(redacted)) return true;
+      if (new RegExp(`\\b${ns}\\s*\\[`).test(redacted)) return true;
     }
   }
   return false;
@@ -388,11 +406,24 @@ function importsClientRouter(src) {
  * not a package.
  * @param {string} src
  * @param {string} [appDir] app root, used to expand `#` path aliases
+ * @param {string[]} [literals]
  * @returns {boolean}
  */
-function importsSideEffectNonCorePackage(src, appDir) {
-  for (const m of src.matchAll(SIDE_EFFECT_BARE_IMPORT_RE)) {
+function importsSideEffectNonCorePackage(src, appDir, literals) {
+  let redacted = src;
+  if (!literals) {
+    const r = redactToPlaceholders(src);
+    redacted = r.redacted;
+    literals = r.literals;
+  }
+  for (const m of redacted.matchAll(SIDE_EFFECT_BARE_IMPORT_RE)) {
     let spec = m[2];
+    const match = /^__STR_(\d+)__$/.exec(spec);
+    if (match) {
+      const idx = parseInt(match[1], 10);
+      spec = literals[idx];
+    }
+    if (!spec) continue;
     if (spec.startsWith('.') || spec.startsWith('/')) continue; // relative / absolute
     if (spec.startsWith('#')) {
       const expanded = appDir ? expandImportAlias(spec, appDir) : null;
@@ -407,9 +438,9 @@ function importsSideEffectNonCorePackage(src, appDir) {
   return false;
 }
 
-/** Match a named-import clause from a `@webjsdev/core` specifier. */
+/** Match a named-import clause from a `@webjsdev/core` specifier (or its placeholder). */
 const CORE_IMPORT_RE =
-  /import\s+(?:type\s+)?(\{[^}]*\}|\*\s+as\s+\w+|\w+)\s+from\s+['"](@webjsdev\/core[^'"]*|[^'"]*\/__webjs\/core\/[^'"]*)['"]/g;
+  /import\s+(?:type\s+)?(\{[^}]*\}|\*\s+as\s+\w+|\w+)\s+from\s+['"](@webjsdev\/core[^'"]*|[^'"]*\/__webjs\/core\/[^'"]*|__STR_(\d+)__)['"]/g;
 
 /**
  * Decide whether a component module is interactive (must ship) or
@@ -540,11 +571,26 @@ function declaresStaticTrue(classBody, name) {
 
 /**
  * @param {string} src
+ * @param {string[]} [literals]
  * @returns {string | null} the offending imported name, or null
  */
-function importsReactivePrimitive(src) {
-  for (const m of src.matchAll(CORE_IMPORT_RE)) {
+function importsReactivePrimitive(src, literals) {
+  let redacted = src;
+  if (!literals) {
+    const r = redactToPlaceholders(src);
+    redacted = r.redacted;
+    literals = r.literals;
+  }
+  for (const m of redacted.matchAll(CORE_IMPORT_RE)) {
     const clause = m[1];
+    const spec = m[2];
+    const idx = m[3];
+    if (idx !== undefined) {
+      const resolved = literals[parseInt(idx, 10)];
+      if (!resolved || (!resolved.startsWith('@webjsdev/core') && !resolved.includes('/__webjs/core/'))) {
+        continue;
+      }
+    }
     if (clause.startsWith('{')) {
       const names = clause
         .slice(1, -1)
@@ -562,14 +608,14 @@ function importsReactivePrimitive(src) {
       const ns = clause.replace(/^\*\s+as\s+/, '').trim();
       if (!ns || !/^\w+$/.test(ns)) continue;
       for (const name of REACTIVE_IMPORTS) {
-        if (new RegExp(`\\b${ns}\\.${name}\\b`).test(src)) return name;
+        if (new RegExp(`\\b${ns}\\.${name}\\b`).test(redacted)) return name;
       }
       // Destructuring the namespace (`const { signal } = core`) or computed
       // access (`core['signal']`) hides which members are pulled. Ship.
-      if (new RegExp(`(?:const|let|var)\\s*\\{[^}]*\\}\\s*=\\s*${ns}\\b`).test(src)) {
+      if (new RegExp(`(?:const|let|var)\\s*\\{[^}]*\\}\\s*=\\s*${ns}\\b`).test(redacted)) {
         return `${ns} (destructured namespace)`;
       }
-      if (new RegExp(`\\b${ns}\\s*\\[`).test(src)) {
+      if (new RegExp(`\\b${ns}\\s*\\[`).test(redacted)) {
         return `${ns} (computed namespace access)`;
       }
     }
@@ -859,21 +905,22 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
     // them on the comment-masked source just additionally drops comment prose.)
     const masked = maskComments(src);
     fileTags.set(file, extractRenderedTags(masked));
-    if (importsReactivePrimitive(masked)) reactiveFiles.add(file);
-    if (importsClientRouter(masked)) clientRouterFiles.add(file);
+    const { redacted, literals } = redactToPlaceholders(src);
+    if (importsReactivePrimitive(redacted, literals)) reactiveFiles.add(file);
+    if (importsClientRouter(redacted, literals)) clientRouterFiles.add(file);
     // A page/layout NEVER hydrates (#605), so its `html` TEMPLATE content is
     // SSR output, not module client work: an inline `<script>`'s browser
     // globals run from the rendered HTML, and a page-template `@event` is
     // dropped at SSR. For a route module, scan those two template-borne signals
     // on the template-redacted source so they do not pin the module, while a
     // genuine module-scope `document.x` OUTSIDE any template still flags (#623).
-    // The import-based checks stay on `masked`: a real `import 'pkg'` side
+    // The import-based checks stay on `redacted`: a real `import 'pkg'` side
     // effect DOES run when a page/layout module loads in the browser, and
     // `importsSideEffectNonCorePackage` itself skips local `#`-alias imports.
-    const templateScan = routeModuleSet.has(file) ? redactStringsAndTemplates(masked) : masked;
+    const templateScan = routeModuleSet.has(file) ? redacted : masked;
     if (EVENT_BINDING_RE.test(templateScan) || EVENT_PROP_RE.test(templateScan) ||
-        importsSideEffectNonCorePackage(masked, appDir) || CLIENT_GLOBAL_RE.test(templateScan) ||
-        hasModuleScopeSideEffect(masked)) {
+        importsSideEffectNonCorePackage(redacted, appDir, literals) || CLIENT_GLOBAL_RE.test(templateScan) ||
+        hasModuleScopeSideEffect(redacted, literals)) {
       clientGlobalOrBareFiles.add(file);
     }
     if (componentFiles.has(file) && analyzeComponentSource(masked).interactive) {

@@ -579,3 +579,144 @@ export function matchClosingBrace(s, start) {
   }
   return -1;
 }
+
+/**
+ * Return `src` with the BODY of every comment replaced by spaces, and the
+ * body of single-quoted, double-quoted, and template-literal segments
+ * replaced by placeholders like `__STR_index__`. Quote delimiters and template
+ * backticks are preserved so code structure is unchanged. Template holes
+ * `${...}` are left intact (and scanned recursively as code).
+ *
+ * Returns `{ redacted: string, literals: string[] }` where `literals` holds
+ * the original unquoted literal contents.
+ *
+ * @param {string} src
+ * @returns {{ redacted: string, literals: string[] }}
+ */
+export function redactToPlaceholders(src) {
+  const n = src.length;
+  let out = '';
+  let i = 0;
+  const literals = [];
+
+  let lastSig = '';
+  let lastWord = '';
+  let lastWordIsProp = false;
+  let lastWasIncDec = false;
+  const markValue = () => { lastSig = 'x'; lastWord = ''; lastWordIsProp = false; lastWasIncDec = false; };
+
+  const isRegex = () => {
+    if (lastSig === '') return true;
+    if (lastSig === ')' || lastSig === ']') return false;
+    if (lastSig === "'" || lastSig === '"' || lastSig === '`') return false;
+    if (lastWasIncDec) return false;
+    if (/[\w$]/.test(lastSig)) return !lastWordIsProp && REGEX_PRECEDING_KEYWORDS.has(lastWord);
+    return true;
+  };
+
+  const scanLineComment = () => {
+    i += 2;
+    while (i < n && src[i] !== '\n') { out += ' '; i++; }
+  };
+  const scanBlockComment = () => {
+    i += 2;
+    while (i < n) {
+      if (src[i] === '*' && src[i + 1] === '/') { i += 2; return; }
+      out += src[i] === '\n' ? '\n' : ' '; i++;
+    }
+  };
+  const scanRegex = () => {
+    out += '/'; i++;
+    let inClass = false;
+    while (i < n) {
+      const d = src[i];
+      if (d === '\\' && i + 1 < n) { out += '  '; i += 2; continue; }
+      if (d === '\n') break;
+      if (d === '[') inClass = true;
+      else if (d === ']') inClass = false;
+      else if (d === '/' && !inClass) { out += '/'; i++; break; }
+      out += ' '; i++;
+    }
+    markValue();
+  };
+
+  const scanString = (q) => {
+    i++;
+    let body = '';
+    while (i < n) {
+      if (src[i] === '\\' && i + 1 < n) { body += src[i] + src[i + 1]; i += 2; continue; }
+      if (src[i] === q) { i++; break; }
+      if (src[i] === '\n') { i++; break; }
+      body += src[i]; i++;
+    }
+    const idx = literals.length;
+    literals.push(body);
+    out += q + `__STR_${idx}__` + q;
+    markValue();
+  };
+
+  const scanTemplate = () => {
+    out += '`'; i++;
+    while (i < n) {
+      const c = src[i];
+      if (c === '\\' && i + 1 < n) {
+        let body = '\\' + src[i + 1];
+        i += 2;
+        while (i < n && src[i] !== '`' && !(src[i] === '$' && src[i + 1] === '{')) {
+          if (src[i] === '\\' && i + 1 < n) { body += src[i] + src[i + 1]; i += 2; continue; }
+          body += src[i]; i++;
+        }
+        const idx = literals.length;
+        literals.push(body);
+        out += `__STR_${idx}__`;
+        continue;
+      }
+      if (c === '`') { out += '`'; i++; break; }
+      if (c === '$' && src[i + 1] === '{') {
+        out += '${'; i += 2;
+        scanCode(true);
+        if (i < n && src[i] === '}') { out += '}'; i++; }
+        continue;
+      }
+      
+      let body = '';
+      while (i < n && src[i] !== '`' && !(src[i] === '$' && src[i + 1] === '{')) {
+        if (src[i] === '\\' && i + 1 < n) { body += src[i] + src[i + 1]; i += 2; continue; }
+        body += src[i]; i++;
+      }
+      const idx = literals.length;
+      literals.push(body);
+      out += `__STR_${idx}__`;
+    }
+    markValue();
+  };
+
+  function scanCode(stopHole) {
+    let brace = 0;
+    while (i < n) {
+      const c = src[i], next = src[i + 1];
+      if (stopHole && c === '}' && brace === 0) return;
+      if (c === '/' && next === '/') { scanLineComment(); continue; }
+      if (c === '/' && next === '*') { scanBlockComment(); continue; }
+      if (c === '/' && isRegex()) { scanRegex(); continue; }
+      if (c === "'" || c === '"') { scanString(c); continue; }
+      if (c === '`') { scanTemplate(); continue; }
+      if (c === '{') { brace++; lastSig = '{'; lastWord = ''; lastWasIncDec = false; out += c; i++; continue; }
+      if (c === '}') { brace--; lastSig = '}'; lastWord = ''; lastWasIncDec = false; out += c; i++; continue; }
+      if (/[A-Za-z_$]/.test(c)) {
+        const prop = lastSig === '.';
+        let w = '';
+        while (i < n && /[\w$]/.test(src[i])) { w += src[i]; out += src[i]; i++; }
+        lastWord = w; lastSig = w[w.length - 1]; lastWordIsProp = prop; lastWasIncDec = false;
+        continue;
+      }
+      if (/\s/.test(c)) { out += c; i++; continue; }
+      lastWasIncDec = (c === '+' || c === '-') && c === lastSig;
+      lastSig = c; lastWord = ''; out += c; i++;
+    }
+  }
+
+  scanCode(false);
+  return { redacted: out, literals };
+}
+

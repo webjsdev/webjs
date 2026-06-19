@@ -56,43 +56,37 @@ const STATS = [
 
 // Code samples. Plain strings so backticks and ${...} stay literal and never
 // enter an html`` body. The SSR highlighter colors them.
-const COMPONENT_SAMPLE = [
-  "import { WebComponent, html, signal } from '@webjsdev/core';",
-  "",
-  "class LikeButton extends WebComponent {",
-  "  likes = signal(0);",
-  "  render() {",
-  "    return html`<button @click=${() => this.likes.set(this.likes.get() + 1)}>",
-  "      ♥ ${this.likes.get()}",
-  "    </button>`;",
-  "  }",
-  "}",
-  "LikeButton.register('like-button');",
-].join('\n');
+const COMPONENT_SAMPLE = `import { WebComponent, html, signal } from '@webjsdev/core';
 
-const ACTION_SAMPLE = [
-  "'use server';",
-  "import { db } from '#db/connection.server.ts';",
-  "import { posts } from '#db/schema.server.ts';",
-  "",
-  "// Import this from a client component. webjs rewrites the",
-  "// import into a typed RPC stub. No fetch by hand.",
-  "export async function createPost(input) {",
-  "  const [post] = await db.insert(posts).values(input).returning();",
-  "  return { success: true, data: post };",
-  "}",
-].join('\n');
+class LikeButton extends WebComponent {
+  likes = signal(0);
+  render() {
+    return html\`<button @click=\${() => this.likes.set(this.likes.get() + 1)}>
+      ♥ \${this.likes.get()}
+    </button>\`;
+  }
+}
+LikeButton.register('like-button');`;
 
-const PAGE_SAMPLE = [
-  "export default async function Post({ params }) {",
-  "  const post = await getPost(params.id);",
-  "  if (!post) notFound();",
-  "  return html`<article>",
-  "    <h1>${post.title}</h1>",
-  "    <like-button></like-button>",
-  "  </article>`;",
-  "}",
-].join('\n');
+const ACTION_SAMPLE = `'use server';
+import { db } from '#db/connection.server.ts';
+import { posts } from '#db/schema.server.ts';
+
+// Import this from a client component. webjs rewrites the
+// import into a typed RPC stub. No fetch by hand.
+export async function createPost(input) {
+  const [post] = await db.insert(posts).values(input).returning();
+  return { success: true, data: post };
+}`;
+
+const PAGE_SAMPLE = `export default async function Post({ params }) {
+  const post = await getPost(params.id);
+  if (!post) notFound();
+  return html\`<article>
+    <h1>\${post.title}</h1>
+    <like-button></like-button>
+  </article>\`;
+}`;
 
 const AGENTS_MD = [
   { k: 'h', t: '# AGENTS.md' },
