@@ -614,12 +614,19 @@ function warnOnce(key, message) {
  * who set smooth expecting smooth nav scrolling would otherwise be puzzled.
  * Also flags the iOS sticky-`backdrop-filter` flash this combination can
  * cause (#610). Never warns in production, never throws.
+ *
+ * The `smoothScrollChecked` flag gates the `getComputedStyle` read (a forced
+ * style flush) to AT MOST ONCE per page, so a dev session does not pay a
+ * per-navigation reflow after the first forward nav.
  */
+let smoothScrollChecked = false;
 function warnIfSmoothScrollOnHtml() {
   if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production') return;
+  if (smoothScrollChecked) return;
   if (typeof document === 'undefined' || typeof getComputedStyle !== 'function') return;
   const root = document.documentElement;
   if (!root) return;
+  smoothScrollChecked = true;
   let behavior;
   try { behavior = getComputedStyle(root).scrollBehavior; } catch { return; }
   if (behavior !== 'smooth') return;
@@ -3233,8 +3240,8 @@ export function _bumpNavToken() { return ++currentNavigationToken; }
 export function _currentPageUrl() { return currentPageUrl; }
 /** Test-only: set the tracker (simulates being on a specific page). */
 export function _setCurrentPageUrl(u) { currentPageUrl = u; }
-/** Test-only: clear the fire-once warning guard so a case can be re-exercised. */
-export function _resetWarnOnce() { warnedKeys.clear(); }
+/** Test-only: clear the fire-once warning guards so a case can be re-exercised. */
+export function _resetWarnOnce() { warnedKeys.clear(); smoothScrollChecked = false; }
 
 /**
  * Predicate used by the onClick handler to decide whether a same-origin
