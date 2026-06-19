@@ -43,7 +43,7 @@ import {
   redactStringsAndTemplates,
   maskComments,
 } from './js-scan.js';
-import { transitiveDeps } from './module-graph.js';
+import { transitiveDeps, expandImportAlias } from './module-graph.js';
 
 /**
  * Named imports from a `@webjsdev/core` specifier that imply the
@@ -215,6 +215,23 @@ const COMPONENT_CLIENT_GLOBAL_RE = /\b(?:window|document|navigator|localStorage|
  *
  * @param {string} src raw module source
  */
+/**
+ * Constructors that produce inert DATA with no side effect, so a module-scope
+ * `export const X = new Set([...])` (a lookup table, a compiled RegExp, a
+ * parsed URL) is not client work and must not pin an importing page/layout
+ * (#623). Any constructor NOT in this set (`new WebSocket()`, `new Worker()`,
+ * `new EventSource()`, `new Audio()`) IS a side effect and still ships.
+ */
+const PURE_DATA_CONSTRUCTORS = new Set([
+  'Set', 'Map', 'WeakSet', 'WeakMap', 'Date', 'RegExp', 'Array', 'Object',
+  'Number', 'String', 'Boolean', 'BigInt', 'Symbol',
+  'Error', 'TypeError', 'RangeError', 'SyntaxError',
+  'URL', 'URLSearchParams', 'ArrayBuffer', 'DataView',
+  'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+  'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array',
+  'BigInt64Array', 'BigUint64Array',
+]);
+
 function hasModuleScopeSideEffect(src) {
   const redacted = redactStringsAndTemplates(src);
   // Keep only depth-0 text (outside every `{}`). Skip quoted-string bodies so
@@ -252,9 +269,16 @@ function hasModuleScopeSideEffect(src) {
   // Optional-chaining call/index: `foo?.()`, `x?.[i]()` (the `?.` defeats the
   // identifier-before-paren match below).
   if (/\?\.\s*[([]/.test(frame)) return true;
-  // Top-level `new` (a `new X()` constructor also trips the call check, but a
-  // `new X` without parens would not) and top-level `await`.
-  if (/(?<![.\w])(?:new|await)\s/.test(frame)) return true;
+  // Top-level `new X`: a pure-data builtin constructor (Set / Map / Date /
+  // RegExp / typed array / URL / ...) is inert module data, not client work, so
+  // it stays elidable (#623); any other constructor is a side effect. Catches
+  // both `new X` and `new X(...)` (the constructor's own `(`, if present, is
+  // then skipped in the call scan below).
+  for (const nm of frame.matchAll(/(?<![.\w])new\s+([A-Za-z_$][\w$]*)/g)) {
+    if (!PURE_DATA_CONSTRUCTORS.has(nm[1])) return true;
+  }
+  // Top-level `await`.
+  if (/(?<![.\w])await\s/.test(frame)) return true;
   // A call: `(` preceded (ignoring whitespace) by an identifier, `)`, or `]`.
   const CALL_RE = /(?:([A-Za-z_$][\w$]*)|[)\]])\s*\(/g;
   // Identifiers that precede a `(` WITHOUT it being a call (keywords + a
@@ -283,6 +307,10 @@ function hasModuleScopeSideEffect(src) {
     // position, so a top-level `WebComponent(...)` call used anywhere else
     // still counts as a side effect (#604).
     if (ident === 'WebComponent' && /\bextends\s+$/.test(frame.slice(0, m.index))) continue;
+    // A `new X(...)` constructor call: the `new`-prefixed cases were already
+    // vetted above (a non-pure constructor returned true; a pure-data one is
+    // inert), so its `(` here is not an independent side-effecting call.
+    if (ident && /(?<![.\w])new\s+$/.test(frame.slice(0, m.index))) continue;
     return true;                                         // any other top-level call
   }
   return false;
@@ -345,13 +373,33 @@ function importsClientRouter(src) {
  * the fix is `.server.{js,ts}` for genuinely server-only deps, or an
  * interactivity signal on the consumer. (It is not caught by an SSR crash:
  * the SSR `customElements` shim makes `define` a no-op server-side.)
+ *
+ * A `#` PATH-ALIAS specifier (#555, e.g. `import '#components/x.ts'`, the
+ * idiomatic way a page/layout registers a component) is NOT a bare npm
+ * package: Node's `package.json` "imports" resolves it, in the scaffold's
+ * catch-all `"#*": "./*"` to a LOCAL file. Expanding it through the same
+ * `expandImportAlias` the module graph uses, a local-resolving alias is
+ * treated like a relative import (skipped); only an alias mapped to a real
+ * bare package (`"#crypto": "crypto-browserify"`) falls through to the
+ * package check. Without this, every `#`-imported component side effect
+ * wrongly pinned its importing page/layout to the browser (#623). An
+ * unexpandable `#` (no `appDir`, or no matching key) is assumed local,
+ * since `#` is the local-subpath sigil and an unmapped `#` is a Node error,
+ * not a package.
  * @param {string} src
+ * @param {string} [appDir] app root, used to expand `#` path aliases
  * @returns {boolean}
  */
-function importsSideEffectNonCorePackage(src) {
+function importsSideEffectNonCorePackage(src, appDir) {
   for (const m of src.matchAll(SIDE_EFFECT_BARE_IMPORT_RE)) {
-    const spec = m[2];
+    let spec = m[2];
     if (spec.startsWith('.') || spec.startsWith('/')) continue; // relative / absolute
+    if (spec.startsWith('#')) {
+      const expanded = appDir ? expandImportAlias(spec, appDir) : null;
+      if (expanded == null) continue;                                   // unmapped alias: local
+      if (expanded.startsWith('.') || expanded.startsWith('/')) continue; // resolves to a local file
+      spec = expanded;                                                  // mapped to a bare spec: check it below
+    }
     if (spec === '@webjsdev/core' || spec.startsWith('@webjsdev/core/')) continue; // inert framework / router handled separately
     if (spec.startsWith('node:')) continue; // server-only builtins
     return true;
@@ -782,6 +830,8 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
 
   /** @type {Set<string>} */
   const allFiles = new Set(componentFiles);
+  /** @type {Set<string>} page/layout modules: never hydrate, so template content is SSR output. */
+  const routeModuleSet = new Set(routeModules);
   for (const f of routeModules) allFiles.add(f);
   for (const [k, vs] of moduleGraph) {
     if (!appDir || k.startsWith(appDir)) allFiles.add(k);
@@ -811,8 +861,18 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
     fileTags.set(file, extractRenderedTags(masked));
     if (importsReactivePrimitive(masked)) reactiveFiles.add(file);
     if (importsClientRouter(masked)) clientRouterFiles.add(file);
-    if (EVENT_BINDING_RE.test(masked) || EVENT_PROP_RE.test(masked) ||
-        importsSideEffectNonCorePackage(masked) || CLIENT_GLOBAL_RE.test(masked) ||
+    // A page/layout NEVER hydrates (#605), so its `html` TEMPLATE content is
+    // SSR output, not module client work: an inline `<script>`'s browser
+    // globals run from the rendered HTML, and a page-template `@event` is
+    // dropped at SSR. For a route module, scan those two template-borne signals
+    // on the template-redacted source so they do not pin the module, while a
+    // genuine module-scope `document.x` OUTSIDE any template still flags (#623).
+    // The import-based checks stay on `masked`: a real `import 'pkg'` side
+    // effect DOES run when a page/layout module loads in the browser, and
+    // `importsSideEffectNonCorePackage` itself skips local `#`-alias imports.
+    const templateScan = routeModuleSet.has(file) ? redactStringsAndTemplates(masked) : masked;
+    if (EVENT_BINDING_RE.test(templateScan) || EVENT_PROP_RE.test(templateScan) ||
+        importsSideEffectNonCorePackage(masked, appDir) || CLIENT_GLOBAL_RE.test(templateScan) ||
         hasModuleScopeSideEffect(masked)) {
       clientGlobalOrBareFiles.add(file);
     }

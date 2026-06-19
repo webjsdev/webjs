@@ -127,3 +127,61 @@ export default () => html\`<x-counter></x-counter>\`;`,
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// --- #623: route-module false positives no longer pin the boot --------------
+
+test('a page registering a component via a `#` alias is dropped from the boot (#623)', async () => {
+  const dir = makeApp({
+    'package.json': JSON.stringify({ name: 'fp-app', type: 'module', imports: { '#*': './*' } }),
+    'app/layout.ts': INERT_LAYOUT,
+    'app/page.ts': `import { html } from '@webjsdev/core';
+import '#components/counter.ts';
+export default () => html\`<x-counter></x-counter>\`;`,
+    'components/counter.ts': COUNTER,
+  });
+  try {
+    const app = await createRequestHandler({ appDir: dir, dev: true });
+    if (app.warmup) await app.warmup();
+    const html = await (await app.handle(new Request('http://x/'))).text();
+    const boot = bootOf(html);
+    assert.doesNotMatch(boot, /\/app\/page\.ts/, 'the page module must be dropped (the # import is local, not npm)');
+    assert.doesNotMatch(boot, /\/app\/layout\.ts/, 'the inert layout is dropped too');
+    assert.match(boot, /\/components\/counter\.ts/, 'only the interactive leaf is emitted');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a layout whose template has an inline <script> using document is dropped from the boot (#623)', async () => {
+  const dir = makeApp({
+    'package.json': JSON.stringify({ name: 'fp-app2', type: 'module', imports: { '#*': './*' } }),
+    'app/layout.ts': `import { html } from '@webjsdev/core';
+import '#components/counter.ts';
+export default ({ children }) => html\`
+  <script>
+    (function () {
+      var t = localStorage.getItem('theme');
+      if (t) document.documentElement.dataset.theme = t;
+      document.addEventListener('click', function () {});
+    })();
+  </script>
+  <x-counter></x-counter>
+  \${children}
+\`;`,
+    'app/page.ts': `import { html } from '@webjsdev/core';
+export default () => html\`<p>hello</p>\`;`,
+    'components/counter.ts': COUNTER,
+  });
+  try {
+    const app = await createRequestHandler({ appDir: dir, dev: true });
+    if (app.warmup) await app.warmup();
+    const html = await (await app.handle(new Request('http://x/'))).text();
+    const boot = bootOf(html);
+    assert.doesNotMatch(boot, /\/app\/layout\.ts/, 'inline-script globals in a template must not pin the layout');
+    assert.match(boot, /\/components\/counter\.ts/, 'the interactive leaf is emitted');
+    // The inline script itself must still be present in the served HTML (it runs from there).
+    assert.match(html, /localStorage\.getItem\('theme'\)/, 'the inline bootstrap script is still in the SSR HTML');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
