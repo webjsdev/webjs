@@ -131,8 +131,9 @@ probes in `test/e2e/e2e.test.mjs` can assert that no dead JS ships.
   bare-import scan skips it, so `dayjs` never enters the importmap and is
   never fetched. The dayjs-formatted date is still SSR'd.
 - `app/static-info/page.ts`: a fully-static route whose inert page module
-  is dropped from the boot script, so it ships zero application page JS
-  (only the router-enabling root layout loads).
+  is dropped from the boot script. The import-only root layout is dropped
+  too (#620); the only module the boot emits is the layout's re-emitted
+  theme-toggle, which loads core and auto-enables the router.
 - `components/observed-badge.ts` + `components/observe-badge.ts` (rendered
   on `/observed`): a display-only component that WOULD elide, paired with a
   module that observes it via `customElements.whenDefined('observed-badge')`.

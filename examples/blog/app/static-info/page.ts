@@ -9,11 +9,12 @@ export const metadata = {
  * `/static-info` is a fully-static route: no custom elements, no events,
  * no signals, no npm imports, no client work. It exists to e2e-pin the
  * inert-route elision claim. Because the page does nothing on the
- * client, the framework drops its module from the boot script, so the
- * served HTML references zero application module URLs (the page module
- * is never even downloaded). The router-enabling root layout still
- * ships, so SPA navigation away from this page keeps working. The
- * sentinel string below is what the e2e probe asserts on.
+ * client, the framework drops its page module from the boot script (it
+ * is never even downloaded). The root layout is import-only and dropped
+ * too (#620); the boot re-emits the layout's theme-toggle component,
+ * which loads @webjsdev/core and auto-enables the client router, so SPA
+ * navigation away from this page keeps working. The sentinel string
+ * below is what the e2e probe asserts on.
  */
 export default function StaticInfo() {
   return html`

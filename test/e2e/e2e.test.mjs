@@ -1915,10 +1915,11 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
   // Inert-route zero-JS probe (#170)
   //
   //   /static-info is a fully-static page (no custom elements, events,
-  //   signals, or npm imports). Its boot script must import ZERO application
-  //   module URLs: the inert page module is dropped, and the only remaining
-  //   import is the router-enabling root layout. Asserts on the served boot
-  //   script directly, complementing the request-log <about> probe above.
+  //   signals, or npm imports). Its inert page module is dropped from the
+  //   boot, and the import-only root layout is dropped too (#620); the only
+  //   remaining import is the layout's re-emitted theme-toggle component,
+  //   which loads core and auto-enables the router. Asserts on the served
+  //   boot script directly, complementing the request-log <about> probe above.
   // ---------------------------------------------------------------------------
 
   test('inert route /static-info ships zero application page JS (#170)', async () => {
