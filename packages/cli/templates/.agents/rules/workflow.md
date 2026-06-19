@@ -146,6 +146,17 @@ self-review loop.
   stub for the browser. `lib/` holds both server-only infra
   (the DB in `db/*.server.ts`) and browser-safe utilities (`lib/utils/cn.ts` with
   `cn`); follow the same rule per file.
+- Keep pages and layouts as pure carriers so their modules stay out of the
+  network tab. A page/layout never hydrates; the framework drops its module
+  from the browser as long as its only browser job is registering the
+  components it imports. It starts shipping its own module (invisible in tests,
+  an elision verdict) the moment its closure does any OTHER client work. So do
+  not give a page/layout module-scope client work (a top-level call, a
+  `window` / `document` / `customElements` access, a bare side-effect import,
+  or a `@webjsdev/core/client-router` import: routing is automatic), and do not
+  import a client-global-touching non-component util into it. Put client
+  behaviour in a component, server-only code in `.server.{js,ts}`. Self-check:
+  `page.ts` / `layout.ts` should not appear in the browser's network tab.
 - Directives: webjs exports the lit directives with no clean native equivalent
   (`repeat`, `unsafeHTML`, `live`, `keyed`, `guard`, `cache`, `until`, `ref` /
   `createRef`, `templateContent`, `asyncAppend` / `asyncReplace`, `watch`).

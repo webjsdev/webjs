@@ -243,6 +243,44 @@ which fails if a new `WebComponent` hook is added without teaching the
 analyser about it. If you add an interactivity feature to the framework,
 update that file.
 
+## Pages and layouts: keep them carriers, out of the network tab
+
+The same elision applies to whole routes, and it is what keeps `page.ts`
+and `layout.ts` out of the browser's network tab. A page/layout NEVER
+hydrates: it loads in the browser only to register the components it
+imports (so their tags upgrade). When that registration is its sole
+browser-relevant job, the framework drops the page/layout module and the
+boot script imports those components directly. It is **import-only** (the
+page/layout is dropped but reaches shipping components, #605) or **inert**
+(it reaches none, so zero application JS, #179).
+
+A page/layout starts SHIPPING its own module the moment its closure does
+any OTHER client work. Because that is an elision verdict, not a behaviour
+change, it is invisible in `npm test` and easy to introduce by accident
+(a code sample mistaken for real code, #634; a util that touches a client
+global, #619). To keep a route's modules out of the network tab:
+
+- Do not give a page/layout its own module-scope client work: no top-level
+  call, no `new SomethingNonData()`, no browser-global access
+  (`window` / `document` / `customElements`) at module scope, no bare
+  side-effect import of a non-component, and no
+  `import '@webjsdev/core/client-router'` (routing is automatic, #620). A
+  page-template `@event` or inline `<script>` is fine: it is SSR output,
+  never module client work (the analyser scans route-module template
+  content as inert, #623 / #634).
+- Do not import a client-effecting NON-component util into a page/layout
+  (or into a component chain a page reaches). A helper that touches a
+  client global or self-executes drags the whole page in. Put client-only
+  behaviour inside a component; put server-only work in `.server.{js,ts}`
+  (it never enters the client closure); and if a util MIXES a pure helper
+  with client-global code (the `cn.ts` shape, #619), split the client part
+  into its own module so the pure helper does not pin every importer.
+
+Self-check: `page.ts` / `layout.ts` should NOT appear in the network tab
+or the boot `<script type="module">`. If one does, something in its
+closure does client work and is not a component; that is the thing to move
+into a component or a `.server.{js,ts}` file.
+
 ### Elision is what keeps a server import off a display-only page (and `webjs check` guards the seam)
 
 Elision is also why a page can call a server-only utility and stay
