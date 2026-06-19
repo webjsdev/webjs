@@ -1186,7 +1186,23 @@ Use `data-no-router` for:
 
 ### Loading indicator
 
-Opt-in. Add `data-webjs-nav-progress` to `<html>`, then `<html>` gets `data-navigating` during a fetch (deferred 150ms) so you can style a progress bar off that attribute. It is off by default because toggling a root attribute re-resolves `oklch()` / `color-mix()` tokens on WebKit (every iOS browser) and repaints them for a frame, a visible flash on a token-driven theme (#610). Without the opt-in the attribute is never set. Alternatively drive a progress UI off the `webjs:navigate` event.
+**When to use it.** You want a CSS-only progress affordance (a top bar, a `cursor: progress`) while a client navigation is in flight, with no JavaScript. For a JS-driven indicator, skip this and listen for the `webjs:navigate` event (and `webjs:submit-start` for forms) instead, which always fires.
+
+**How to use it.** It is OPT-IN. Add `data-webjs-nav-progress` to your `<html>` element (once, in the root layout), and the router then sets a `data-navigating` attribute on `<html>` while a nav is in flight (deferred 150ms, so quick sub-150ms navs never trigger it). Style off that attribute:
+
+```html
+<html data-webjs-nav-progress>   <!-- opt in once -->
+```
+
+```css
+html[data-navigating] { cursor: progress; }
+html[data-navigating]::after {
+  content: ''; position: fixed; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--accent); animation: progress 1s ease-in-out infinite;
+}
+```
+
+**Why it is opt-in, not default (#610).** Toggling an attribute on `<html>` re-runs global style resolution, and on WebKit (so every iOS browser) that re-resolves the page's `oklch()` / `color-mix()` design tokens to an equivalent oklab representation and repaints them for one frame. On a token-driven theme that is a visible background flash, worst on a slow mobile forward nav (which exceeds the 150ms defer). So without the opt-in the attribute is never written and the flash cannot happen. Enable it only when your theme does not lean on wide-gamut color tokens, or use the event-based path above.
 
 ## WebSockets
 
