@@ -167,7 +167,6 @@ export default function RootLayout({ children }: LayoutProps) {
          be reached by utility classes. A tiny decorative overlay, scrollbar
          colours, and selection tint also live here (no utility equivalent). */
       html, body { margin: 0; }
-      html { scroll-behavior: smooth; }
       body {
         position: relative;
         background: var(--bg);
