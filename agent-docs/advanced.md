@@ -1186,7 +1186,7 @@ Use `data-no-router` for:
 
 ### Loading indicator
 
-`<html>` gets `data-navigating` during fetch. Style a progress bar off that attribute.
+Opt-in. Add `data-webjs-nav-progress` to `<html>`, then `<html>` gets `data-navigating` during a fetch (deferred 150ms) so you can style a progress bar off that attribute. It is off by default because toggling a root attribute re-resolves `oklch()` / `color-mix()` tokens on WebKit (every iOS browser) and repaints them for a frame, a visible flash on a token-driven theme (#610). Without the opt-in the attribute is never set. Alternatively drive a progress UI off the `webjs:navigate` event.
 
 ## WebSockets
 
