@@ -330,7 +330,7 @@ export default function Layout({ children }: { children: any }) {
       </a>
     </div>
 
-    <header class="sticky top-0 z-20 w-full border-b border-border bg-[color-mix(in_oklch,var(--bg)_78%,transparent)] backdrop-blur-md">
+    <header class="sticky top-0 z-20 w-full border-b border-border bg-[var(--bg)]">
       <div class="flex items-center justify-between gap-4 max-w-5xl mx-auto px-4 sm:px-6 py-4">
         <a class="flex items-center gap-2 no-underline text-fg font-bold text-base leading-none tracking-tight" href="/">
           <span class="w-[22px] h-[22px] rounded-md bg-gradient-to-br from-brand to-[color-mix(in_oklch,var(--accent)_55%,var(--fg))]"></span>
