@@ -100,12 +100,15 @@ export async function scanBareImports(dir, skipFiles) {
  * `'@tanstack/query'`   → `'@tanstack/query'`
  * `'@tanstack/query/x'` → `'@tanstack/query'`
  * `'./foo'`, `'../bar'`, `'/baz'` → `null` (relative/absolute)
+ * `'#components/x.ts'`, `'#lib/db'` → `null` (`#` path alias, #555: resolves to
+ *   a LOCAL file via `package.json` "imports", never an npm package, so it must
+ *   not be sent to the vendor resolver, #623)
  *
  * @param {string} spec
  * @returns {string | null}
  */
 export function extractPackageName(spec) {
-  if (!spec || spec.startsWith('.') || spec.startsWith('/') || spec.startsWith('__')) return null;
+  if (!spec || spec.startsWith('.') || spec.startsWith('/') || spec.startsWith('__') || spec.startsWith('#')) return null;
   if (/^[a-z]+:/.test(spec)) return null;
   if (spec.startsWith('@')) {
     const parts = spec.split('/');
