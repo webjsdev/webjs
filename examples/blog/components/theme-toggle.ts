@@ -25,20 +25,12 @@ export class ThemeToggle extends WebComponent {
       t === 'system' ? 'light'
       : t === 'light' ? 'dark' : 'system';
     this.theme.set(next);
-
-    // Temporarily enable theme transition styles
-    document.documentElement.classList.add('theme-transitioning');
-
     try {
       if (next === 'system') localStorage.removeItem('webjs_theme');
       else localStorage.setItem('webjs_theme', next);
     } catch {}
     if (next === 'system') delete document.documentElement.dataset.theme;
     else document.documentElement.dataset.theme = next;
-
-    setTimeout(() => {
-      document.documentElement.classList.remove('theme-transitioning');
-    }, 400);
   }
 
   render() {
