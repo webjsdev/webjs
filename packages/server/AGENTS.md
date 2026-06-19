@@ -325,8 +325,11 @@ and the reader key set never diverge (a counterfactual unknown key proves
    in the closure (a self-executing helper, a `client-router` import, a reactive
    helper) keeps the whole module, because dropping it would lose that side
    effect. The re-emit is the STATIC import closure (so a component imported but
-   only conditionally rendered still registers) MINUS lazy components (they load
-   via the IntersectionObserver lazy-loader, never the boot). The serving branch in
+   only conditionally rendered still registers). A `static lazy` component is not
+   special-cased: it is in the static closure only when imported directly, and
+   such an import already eager-loaded it before elision, so re-emitting it keeps
+   that exact behaviour; a normally-used lazy component is tag-referenced (never
+   in the static closure) and still loads via the IntersectionObserver path. The serving branch in
    `dev.js` strips side-effect imports of display-only components from the
    browser-served source; `ssr.js` drops inert page/layout modules from
    the boot script's `moduleUrls` entirely (and splices an import-only module's

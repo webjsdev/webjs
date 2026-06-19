@@ -740,10 +740,6 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
   /** @type {Set<string>} component files forced to ship because some module
    * observes their registration (whenDefined / :defined / instanceof). */
   const observedComponentFiles = new Set();
-  /** @type {Set<string>} component files declaring `static lazy = true`: they
-   * load via the IntersectionObserver lazy-loader, never the boot script, so a
-   * route that import-only re-emits its components must NOT eagerly emit them. */
-  const lazyComponentFiles = new Set();
 
   /** @type {Set<string>} */
   const allFiles = new Set(componentFiles);
@@ -781,11 +777,8 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
         hasModuleScopeSideEffect(masked)) {
       clientGlobalOrBareFiles.add(file);
     }
-    if (componentFiles.has(file)) {
-      if (analyzeComponentSource(masked).interactive) mustShip.add(file);
-      // `static lazy = true` (the value form declaresStaticTrue accepts), so a
-      // lazy component is recognised even when it carries no other ship signal.
-      if (/\bstatic\s+lazy\s*=\s*(?!false\b)\S/.test(masked)) lazyComponentFiles.add(file);
+    if (componentFiles.has(file) && analyzeComponentSource(masked).interactive) {
+      mustShip.add(file);
     }
     // Cross-module registration observation (#169): if THIS module observes
     // another component's tag, that component must register client-side, so
@@ -960,15 +953,18 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
     if (effecting.length === 0) { inertRouteModules.add(file); continue; }
     // Import-only iff EVERY client-effecting closure member is a (shipping)
     // component. isClientEffecting for a component already implies mustShip, so
-    // `effecting` is exactly the shipping components reachable from this module.
+    // `effecting` is exactly the shipping components reachable from this module:
+    // re-emit that STATIC set (what loading the module would have registered, so
+    // a component imported but only conditionally rendered still registers).
+    //
+    // A `static lazy` component is NOT special-cased here: it only appears in
+    // this STATIC closure when the route statically imports it, and in that case
+    // loading the module already eager-loaded it before elision, so emitting it
+    // directly preserves that exact behaviour. A normally-used lazy component is
+    // tag-referenced (never statically imported), so it is absent from this
+    // closure and still loads via the IntersectionObserver `observeLazy` path.
     if (effecting.every((f) => componentFiles.has(f))) {
-      // Re-emit the STATIC shipping-component set (what loading the module would
-      // have registered), excluding lazy components (IntersectionObserver-loaded,
-      // never eager on the boot). A lazy-only closure leaves nothing to emit, so
-      // the module is inert for boot purposes.
-      const emit = effecting.filter((f) => !lazyComponentFiles.has(f));
-      if (emit.length === 0) inertRouteModules.add(file);
-      else importOnlyRouteModules.set(file, emit);
+      importOnlyRouteModules.set(file, effecting);
     }
     // else: a client-effecting non-component is reachable; ship the whole module.
   }

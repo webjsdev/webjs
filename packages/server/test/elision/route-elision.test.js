@@ -309,7 +309,14 @@ test('a page importing a component AND a self-executing helper SHIPS, not import
   assert.ok(!inertRouteModules.has('/app/page.js'));
 });
 
-test('a lazy component is NOT eagerly re-emitted; a lazy-only page is inert (#605)', async () => {
+test('a statically-imported lazy component is re-emitted, even when not rendered (#605)', async () => {
+  // A `static lazy` component is in the STATIC closure only when imported
+  // directly, and pre-elision that import eager-loaded it via the page module
+  // (lazy was already defeated for a static import). Re-emitting it keeps that
+  // exact behaviour, so a tag revealed by a later client interaction still
+  // upgrades. EXCLUDING it would under-ship: the class would never be defined,
+  // and observeLazy only covers RENDERED tags, so an imported-not-rendered lazy
+  // component would silently never register.
   const lazy = `
     import { WebComponent, html } from '@webjsdev/core';
     class Heavy extends WebComponent {
@@ -321,7 +328,7 @@ test('a lazy component is NOT eagerly re-emitted; a lazy-only page is inert (#60
   const page = `
     import { html } from '@webjsdev/core';
     import './components/heavy.js';
-    export default () => html\`<x-heavy></x-heavy>\`;
+    export default () => html\`<p>revealed later, not rendered now</p>\`;
   `;
   const { inertRouteModules, importOnlyRouteModules } = await run({
     files: { '/app/page.js': page, '/app/components/heavy.js': lazy },
@@ -329,8 +336,12 @@ test('a lazy component is NOT eagerly re-emitted; a lazy-only page is inert (#60
     routeModules: ['/app/page.js'],
     edges: { '/app/page.js': ['/app/components/heavy.js'] },
   });
-  assert.ok(!importOnlyRouteModules.has('/app/page.js'), 'lazy component is excluded from the re-emit');
-  assert.ok(inertRouteModules.has('/app/page.js'), 'with only a lazy child, the page is inert for boot');
+  assert.deepEqual(
+    importOnlyRouteModules.get('/app/page.js'),
+    ['/app/components/heavy.js'],
+    'the statically-imported lazy component is re-emitted so it still registers',
+  );
+  assert.ok(!inertRouteModules.has('/app/page.js'), 'not inert: the lazy component is real client work');
 });
 
 test('a page importing only a display-only (elided) component collapses to inert (#604 interaction)', async () => {
