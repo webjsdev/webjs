@@ -46,21 +46,42 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
   exit 1
 fi
 
-# Gate 2: when a packages/<pkg>/package.json version bumped, auto-
-# generate the matching changelog/<pkg>/<version>.md and stage it so
-# the version-bump commit ships with its release notes in one shot.
-# Bumps are detected by scanning the staged diff for a `+ "version":`
-# line in any packages/*/package.json.
-STAGED_PKG_BUMPS=$(git diff --cached --unified=0 -- \
-    'packages/*/package.json' 'packages/editors/*/package.json' 'packages/wrappers/*/package.json' 2>/dev/null \
-  | awk '
-      # pkg = the directory immediately containing package.json, at any depth
-      # (so a grouped package like packages/editors/intellisense maps to "intellisense").
-      /^diff --git/ { match($0, /[A-Za-z0-9_-]+\/package\.json/); pkg = substr($0, RSTART, RLENGTH-13); next }
-      pkg && /^\+\s*"version":\s*"[^"]+"/ {
-        match($0, /"[0-9]+\.[0-9]+\.[0-9]+[^"]*"/); v = substr($0, RSTART+1, RLENGTH-2);
-        print pkg "@" v
-      }')
+# Gate 2/3 share this: detect packages/<pkg>/package.json files whose
+# "version" VALUE actually changed. We read the OLD (HEAD) value and the NEW
+# (staged) value for each changed manifest and register a bump only when they
+# DIFFER, emitting `<pkgdir>@<newversion>` (the shape gate 2 + gate 3 consume).
+#
+# The old heuristic scanned `git diff --unified=0` for an added `+ "version":`
+# line. With --unified=0, an edit ADJACENT to the version line can re-emit the
+# value-unchanged version line as a `+` (e.g. appending a field after a
+# last-position version line adds a trailing comma to it, so git re-emits the
+# whole line), which spuriously registered a bump and blocked a legit
+# non-version manifest edit on a feature branch (#592). Comparing values fixes
+# both gates at once.
+pkgjson_version() {
+  # read a package.json blob on stdin, print the top-level "version" value
+  # (empty when the manifest has no version line).
+  grep -E -m1 '^[[:space:]]*"version"[[:space:]]*:' \
+    | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/'
+}
+STAGED_PKG_BUMPS=""
+for pkgmanifest in $(git diff --cached --name-only -- \
+    'packages/*/package.json' 'packages/editors/*/package.json' 'packages/wrappers/*/package.json' 2>/dev/null); do
+  # pkg = the directory immediately containing package.json (so a grouped
+  # package like packages/editors/intellisense maps to "intellisense").
+  pkg=$(basename "$(dirname "$pkgmanifest")")
+  newver=$(git show ":$pkgmanifest" 2>/dev/null | pkgjson_version)
+  oldver=$(git show "HEAD:$pkgmanifest" 2>/dev/null | pkgjson_version)
+  # A brand-new manifest (no HEAD blob, so oldver is empty) is the initial add
+  # of a package, NOT a release bump: skip it, so adding a package on a feature
+  # branch is not mistaken for a wrong-branch release (#592).
+  [ -z "$oldver" ] && continue
+  if [ -n "$newver" ] && [ "$newver" != "$oldver" ]; then
+    STAGED_PKG_BUMPS="$STAGED_PKG_BUMPS $pkg@$newver"
+  fi
+done
+# Trim the leading separator so `[ -n "$STAGED_PKG_BUMPS" ]` is false when empty.
+STAGED_PKG_BUMPS=$(printf '%s' "$STAGED_PKG_BUMPS" | sed -E 's/^ +//')
 
 # Gate 3: a published-library version bump belongs on a chore/release-* branch.
 # A core/server/cli/mcp/ui/intellisense bump on a feature branch is almost always
