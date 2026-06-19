@@ -323,7 +323,7 @@ type ActionResult<T> =
 
 ## Styling: Tailwind-first
 
-**Tailwind is the strong default for pages AND light-DOM components.** The lit reflex to scope CSS in a shadow root with `static styles` is the habit to resist in light DOM. When a class bundle repeats, extract it into a `lib/utils/ui.ts` helper returning an `` html`...` `` fragment (SSR-time), NOT a CSS class (no `@apply`). Reserve raw CSS for what utilities cannot express (design tokens / `@theme`, `@property` + `@keyframes`, scrollbar, `prefers-reduced-motion`, complex `color-mix()` / gradients); in light DOM the tag-prefix invariant (#7) still holds, and shadow-DOM components legitimately use `static styles = css\`\``. See `agent-docs/styling.md`.
+**Tailwind is the strong default for pages AND light-DOM components.** The lit reflex to scope CSS in a shadow root with `static styles` is the habit to resist in light DOM. When a class bundle repeats, extract it into a `lib/utils/ui.ts` helper returning an `` html`...` `` fragment (SSR-time), NOT a CSS class (no `@apply`). Reserve raw CSS for what utilities cannot express (design tokens / `@theme`, `@property` + `@keyframes`, scrollbar, `prefers-reduced-motion`, complex `color-mix()` / gradients); in light DOM the tag-prefix invariant (#7) still holds, and shadow-DOM components legitimately use `static styles = css\`\``. **Pin a header with `position: fixed`, never `position: sticky`** (a sticky header flickers on iOS WebKit during a client-router nav, #610, because the preserved header plus the scroll-to-top trips a WebKit sticky-repaint bug that the GPU-promotion hacks do NOT fix, so reserve the header height on the content with a `--header-height` offset). See `agent-docs/styling.md`.
 
 ---
 
