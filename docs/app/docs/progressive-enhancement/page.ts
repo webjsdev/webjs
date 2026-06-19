@@ -70,7 +70,7 @@ export default function ProgressiveEnhancement() {
     </p>
 
     <p>
-      The same applies to whole routes. A <code>page</code> or <code>layout</code> that does no client work, even transitively (no event, signal, client router, npm import, client global, or interactive component anywhere in its subtree), is dropped from the boot script entirely, so a fully-static route ships <em>zero</em> application JavaScript and is pure server-rendered HTML. It still navigates and submits forms via native browser behavior, which is exactly the progressive-enhancement baseline. A layout that enables the client router does client work, so it keeps shipping; a static page rendered under it is still dropped on its own.
+      The same applies to whole routes. A <code>page</code> or <code>layout</code> that does no client work, even transitively (no event, signal, client router, npm import, client global, or interactive component anywhere in its subtree), is dropped from the boot script entirely, so a fully-static route ships <em>zero</em> application JavaScript and is pure server-rendered HTML. It still navigates and submits forms via native browser behavior, which is exactly the progressive-enhancement baseline. A layout that only carries interactive components is import-only, so it drops too and the boot emits those components directly; the client router rides along automatically when any of them loads <code>@webjsdev/core</code>.
     </p>
 
     <p>

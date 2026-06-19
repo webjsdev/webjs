@@ -27,11 +27,11 @@ const STREAM_MIME = 'text/vnd.webjs-stream.html';
  * children of that boundary. Outer layout DOM (header, sidenav, footer)
  * stays mounted: no re-render, no flicker, scroll positions preserved.
  *
- * To enable, import this module from a layout or boot script:
- *
- *   import '@webjsdev/core/client-router';
- *
- * Or call `enableClientRouter()` for programmatic control.
+ * Enablement is automatic: this module calls `enableClientRouter()` at its
+ * end (idempotent), and the `@webjsdev/core` browser entry loads it, so any
+ * page that ships a component gets the router with no import to add. Call
+ * `disableClientRouter()` to opt out, or `enableClientRouter()` for
+ * programmatic control.
  *
  * Mechanism: auto-derived from folder structure:
  *   1. SSR injects `<!--wj:children:<segment-path>-->...<!--/wj:children-->`
