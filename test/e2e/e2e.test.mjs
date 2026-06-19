@@ -1826,8 +1826,10 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
   test('a fully-static route (/about) drops its page module from the boot', async () => {
     // /about renders only static markup (no events, signals, or custom
     // elements), so its page module is inert and dropped from the boot
-    // script. The page still renders, and the router-enabling layout still
-    // ships (so SPA nav keeps working).
+    // script. The root layout is import-only too (it no longer imports the
+    // client router, #620), so layout.ts is ALSO dropped; the layout's
+    // theme-toggle component is re-emitted directly and loads @webjsdev/core,
+    // which auto-enables the client router, so SPA nav keeps working.
     /** @type {string[]} */
     const requested = [];
     const onRequest = (req) => requested.push(req.url());
@@ -1842,11 +1844,13 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     }
     const aboutPageFetched = requested.some((u) => /about\/page\.(ts|js)/.test(u));
     const aLayoutFetched = requested.some((u) => /\/layout\.(ts|js)/.test(u));
+    const themeToggleFetched = requested.some((u) => /theme-toggle\.(ts|js)/.test(u));
     const rendered = await page.evaluate(() => document.body.textContent || '');
 
     assert.match(rendered, /full-stack demo/i, '/about content is server-rendered');
     assert.equal(aboutPageFetched, false, 'inert /about page module must NOT be downloaded');
-    assert.equal(aLayoutFetched, true, 'the router-enabling layout still ships (SPA nav intact)');
+    assert.equal(aLayoutFetched, false, 'the import-only layout module is dropped too (#620)');
+    assert.equal(themeToggleFetched, true, 're-emitted component loads core, which auto-enables the router (SPA nav intact)');
   });
 
   // ---------------------------------------------------------------------------
@@ -1932,8 +1936,10 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     }
 
     // The inline boot script's import specifiers: the page module must be
-    // absent; the router-enabling layout is the only application module that
-    // legitimately ships (it enables SPA nav and registers the theme toggle).
+    // absent; the root layout is import-only and ALSO dropped (#620, it no
+    // longer imports the client router), so the only application module the
+    // boot emits is the layout's theme-toggle component, which loads
+    // @webjsdev/core and auto-enables the router (SPA nav intact).
     const bootImports = await page.evaluate(() => {
       const scripts = [...document.querySelectorAll('script[type="module"]:not([src])')];
       const specs = [];
@@ -1944,13 +1950,15 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     });
     const pageInBoot = bootImports.some((s) => /static-info\/page\.(ts|js)/.test(s));
     const layoutInBoot = bootImports.some((s) => /\/layout\.(ts|js)/.test(s));
+    const themeToggleInBoot = bootImports.some((s) => /theme-toggle\.(ts|js)/.test(s));
     const pageFetched = requested.some((u) => /static-info\/page\.(ts|js)/.test(u));
     const rendered = await page.evaluate(() => document.body.textContent || '');
 
     assert.match(rendered, /zero application JS/i, '/static-info content is server-rendered');
     assert.equal(pageInBoot, false, 'inert page module must NOT appear in the boot script');
     assert.equal(pageFetched, false, 'inert page module must NOT be downloaded');
-    assert.equal(layoutInBoot, true, 'the router-enabling layout still ships (SPA nav intact)');
+    assert.equal(layoutInBoot, false, 'the import-only layout module is dropped too (#620)');
+    assert.equal(themeToggleInBoot, true, 're-emitted component loads core, which auto-enables the router (SPA nav intact)');
   });
 
   test('a bare async-render leaf is elided: its module is never fetched, JS-off + JS-on render it (#474)', async () => {
