@@ -54,7 +54,7 @@ export function extractComponents(src) {
   const { redacted, literals } = redactToPlaceholders(src);
 
   // Pattern A: Class.register('tag') -> matches Class.register('__STR_idx__')
-  const registerRe = /\b([A-Z][A-Za-z0-9_$]*)\.register\s*\(\s*['"]__STR_(\d+)__['"]\s*\)/g;
+  const registerRe = /\b([A-Z][A-Za-z0-9_$]*)\.register\s*\(\s*['"`]__STR_(\d+)__['"`]\s*\)/g;
   let m;
   while ((m = registerRe.exec(redacted)) !== null) {
     const className = m[1];
@@ -65,7 +65,7 @@ export function extractComponents(src) {
     }
   }
   // Pattern B: customElements.define('tag', Class) -> matches customElements.define('__STR_idx__', Class)
-  const defineRe = /\bcustomElements\.define\s*\(\s*['"]__STR_(\d+)__['"]\s*,\s*([A-Z][A-Za-z0-9_$]*)\b/g;
+  const defineRe = /\bcustomElements\.define\s*\(\s*['"`]__STR_(\d+)__['"`]\s*,\s*([A-Z][A-Za-z0-9_$]*)\b/g;
   while ((m = defineRe.exec(redacted)) !== null) {
     const idx = parseInt(m[1], 10);
     const tag = literals[idx];

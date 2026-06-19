@@ -440,7 +440,7 @@ function importsSideEffectNonCorePackage(src, appDir, literals) {
 
 /** Match a named-import clause from a `@webjsdev/core` specifier (or its placeholder). */
 const CORE_IMPORT_RE =
-  /import\s+(?:type\s+)?(\{[^}]*\}|\*\s+as\s+\w+|\w+)\s+from\s+['"](@webjsdev\/core[^'"]*|[^'"]*\/__webjs\/core\/[^'"]*|__STR_(\d+)__)['"]/g;
+  /import\s+(?:type\s+)?(\{[^}]*\}|\*\s+as\s+\w+|\w+)\s+from\s+['"`](@webjsdev\/core[^'"`]*|[^'"`]*\/__webjs\/core\/[^'"`]*|__STR_(\d+)__)['"`]/g;
 
 /**
  * Decide whether a component module is interactive (must ship) or

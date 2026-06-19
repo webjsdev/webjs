@@ -615,13 +615,15 @@ export function redactToPlaceholders(src) {
   };
 
   const scanLineComment = () => {
+    out += '//';
     i += 2;
     while (i < n && src[i] !== '\n') { out += ' '; i++; }
   };
   const scanBlockComment = () => {
+    out += '/*';
     i += 2;
     while (i < n) {
-      if (src[i] === '*' && src[i + 1] === '/') { i += 2; return; }
+      if (src[i] === '*' && src[i + 1] === '/') { out += '*/'; i += 2; return; }
       out += src[i] === '\n' ? '\n' : ' '; i++;
     }
   };
