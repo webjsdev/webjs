@@ -55,8 +55,8 @@ const panelLink = 'text-fg-muted no-underline font-medium text-sm px-3 py-[10px]
 export default function RootLayout({ children }: { children: unknown }) {
   const nonce = cspNonce();
   return html`
-    <link rel="icon" href="/public/favicon.png" type="image/png" sizes="any">
-    <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="/public/favicon.svg" type="image/svg+xml" sizes="any">
+    <link rel="icon" href="/public/favicon.png" type="image/png" sizes="32x32">
     <link rel="apple-touch-icon" href="/public/favicon.png">
 
     <!-- Self-hosted fonts (declared via @font-face in input.css), preloaded so

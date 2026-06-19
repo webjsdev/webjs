@@ -56,8 +56,8 @@ export default function Layout({ children }: { children: any }) {
   // the real <head>. Other markup goes into <body>.
   const nonce = cspNonce();
   return html`
-    <link rel="icon" href="/public/favicon.png" type="image/png" sizes="any" />
-    <link rel="icon" href="/public/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/public/favicon.svg" type="image/svg+xml" sizes="any" />
+    <link rel="icon" href="/public/favicon.png" type="image/png" sizes="32x32" />
     <link rel="apple-touch-icon" href="/public/favicon.png" />
     <link rel="stylesheet" href="/public/tailwind.css" />
     <!-- Synchronous theme bootstrap: mirrors webjs.dev so saved themes
