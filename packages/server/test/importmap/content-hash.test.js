@@ -36,9 +36,11 @@ let tmpRoot;
 before(() => { tmpRoot = mkdtempSync(join(tmpdir(), 'webjs-conthash-')); });
 after(() => { rmSync(tmpRoot, { recursive: true, force: true }); });
 
-function makeApp({ basePath } = {}) {
+function makeApp({ basePath, elide } = {}) {
   const appDir = mkdtempSync(join(tmpRoot, 'app-'));
-  const webjs = basePath != null ? { basePath } : undefined;
+  const webjs = (basePath != null || elide != null)
+    ? { ...(basePath != null ? { basePath } : {}), ...(elide != null ? { elide } : {}) }
+    : undefined;
   const files = {
     'package.json': JSON.stringify({ name: 'fixture', type: 'module', webjs }),
     'app/layout.js':
@@ -229,14 +231,15 @@ test('DEV vs PROD HTML differs ONLY by the ?v query (dev is the un-fingerprinted
 
 /* ---------------- elision-verdict flip busts the importer's ?v ---------------- */
 
-test('ELISION-FLIP: a display-only -> interactive flip busts the IMPORTER ?v, not just the flipped module', async () => {
-  // page.js imports an always-interactive component (so page.js always ships +
-  // appears in the boot script) AND a `flip` component that starts DISPLAY-ONLY
-  // (elided, so its side-effect import is stripped from page.js's served body).
-  // When `flip` becomes interactive, page.js's served body changes (the import
-  // is restored) while its SOURCE is byte-identical. The importer's ?v MUST
-  // change, or a returning client holds the stale immutable page.js and the
-  // now-interactive component never imports / hydrates.
+test('ELISION-FLIP: a display-only -> interactive flip is reflected in the boot set (#605)', async () => {
+  // page.js imports an always-interactive component AND a `flip` component that
+  // starts DISPLAY-ONLY (elided). Since the page's only client work is importing
+  // components, it is import-only (#605): the page module is dropped and its
+  // SHIPPING components are emitted directly in the boot. When `flip` becomes
+  // interactive the boot set GAINS flip.js. Because that boot script rides the
+  // fresh (never-immutable) HTML, a returning client always picks up the new set,
+  // so the older importer-?v staleness concern is structurally moot once the page
+  // module is no longer a boot specifier.
   const appDir = mkdtempSync(join(tmpRoot, 'elide-'));
   const files = {
     'package.json': JSON.stringify({ name: 'fx', type: 'module' }),
@@ -271,15 +274,16 @@ test('ELISION-FLIP: a display-only -> interactive flip busts the IMPORTER ?v, no
   const app = await createRequestHandler({ appDir, dev: false });
   await app.warmup();
 
-  const pageV = async () => {
+  const bootPaths = async () => {
     const html = await (await app.handle(new Request('http://x/'))).text();
-    const u = [...bootImportSpecifiers(html), ...modulepreloadHrefs(html)]
-      .find((x) => x.includes('/app/page.js'));
-    assert.ok(u, 'page.js is emitted in the boot/preload set');
-    return (u.match(/\?v=([0-9a-f]+)/) || [])[1];
+    return new Set(
+      [...bootImportSpecifiers(html), ...modulepreloadHrefs(html)].map((u) => u.split('?')[0]),
+    );
   };
-  const vBefore = await pageV();
-  assert.ok(vBefore, 'page.js carries a ?v while x-flip is display-only');
+  const before = await bootPaths();
+  assert.ok(before.has('/app/always.js'), 'the always-interactive component is in the boot');
+  assert.ok(!before.has('/app/flip.js'), 'the display-only component is elided from the boot');
+  assert.ok(!before.has('/app/page.js'), 'the import-only page module is not a boot specifier');
 
   // Flip x-flip to interactive WITHOUT touching page.js's bytes.
   writeFileSync(
@@ -292,12 +296,12 @@ test('ELISION-FLIP: a display-only -> interactive flip busts the IMPORTER ?v, no
   );
   await app.rebuild();
 
-  const vAfter = await pageV();
-  assert.ok(vAfter, 'page.js still carries a ?v after the flip');
-  assert.notEqual(
-    vAfter, vBefore,
-    'the IMPORTER (page.js) ?v changed when its imported component flipped, even though page.js source is unchanged',
+  const after = await bootPaths();
+  assert.ok(
+    after.has('/app/flip.js'),
+    'the now-interactive component appears in the boot after the flip (the verdict change is reflected)',
   );
+  assert.ok(after.has('/app/always.js'), 'the always-interactive component is still in the boot');
 });
 
 /* ---------------- 103 Early Hints preload the SAME fingerprinted url ---------------- */
@@ -347,7 +351,13 @@ test('NESTED-IMPORTS: a served module versions its relative imports to the prelo
   // cache key from the `/app/widget.js?v=hash` modulepreload) -> wasted preload,
   // double download, 1h cache instead of immutable. The fix rewrites the served
   // specifier to carry widget.js's own ?v, collapsing both onto one URL.
-  const appDir = makeApp({});
+  //
+  // This exercises relative-import versioning (#369) on a page that is a BOOT
+  // specifier. With elision on, a page whose only client work is importing a
+  // component is import-only (#605) and the component, not the page, is the boot
+  // module; elision is disabled here to keep the page in the boot and isolate the
+  // #369 mechanism, which runs on any served module regardless of elision.
+  const appDir = makeApp({ elide: false });
   const app = await createRequestHandler({ appDir, dev: false });
   await app.warmup();
 

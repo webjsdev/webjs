@@ -638,6 +638,7 @@ export async function createRequestHandler(opts) {
     moduleGraph: null,
     elidableComponents: new Set(),
     inertRouteModules: new Set(),
+    importOnlyRouteModules: new Map(),
     browserBoundFiles: null,
     // Transformed-source cache (stripped TS + applied elision). Per-handler,
     // NOT module-global: the cached bytes bake in THIS handler's elision
@@ -745,9 +746,10 @@ export async function createRequestHandler(opts) {
             const r = (await readElideEnabled(appDir))
               ? await analyzeElision(components, collectRouteModules(state.routeTable),
                   state.moduleGraph, (f) => readFile(f, 'utf8'), appDir)
-              : { elidableComponents: new Set(), inertRouteModules: new Set() };
+              : { elidableComponents: new Set(), inertRouteModules: new Set(), importOnlyRouteModules: new Map() };
             state.elidableComponents = r.elidableComponents;
             state.inertRouteModules = r.inertRouteModules;
+            state.importOnlyRouteModules = r.importOnlyRouteModules;
             // Fold the elision verdict into app-module content hashes (#243): an
             // app module's served body is elision-transformed, so a verdict flip
             // must bust its `?v` even when its source is byte-identical. A stable
@@ -764,6 +766,10 @@ export async function createRequestHandler(opts) {
               const elidedPaths = [
                 ...state.elidableComponents,
                 ...state.inertRouteModules,
+                // An import-only module is dropped from the boot (replaced by its
+                // component imports), so a flip in / out of that class must bust
+                // the importer's `?v` too.
+                ...state.importOnlyRouteModules.keys(),
               ].map(rel).sort();
               setElisionFingerprint(elidedPaths.length ? elidedPaths.join('\n') : '');
             }
@@ -871,7 +877,7 @@ export async function createRequestHandler(opts) {
     if (vendorResolveInFlight) return vendorResolveInFlight;
     vendorResolveInFlight = (async () => {
       try {
-        const scan = () => scanBareImports(appDir, new Set([...state.elidableComponents, ...state.inertRouteModules]));
+        const scan = () => scanBareImports(appDir, new Set([...state.elidableComponents, ...state.inertRouteModules, ...state.importOnlyRouteModules.keys()]));
         const v = await resolveVendorImports(appDir, scan);
         let { imports, integrity } = v;
         if (bootVendorPinned) {
@@ -1303,7 +1309,21 @@ export async function createRequestHandler(opts) {
     if (matchPathname === null) return null;
     const page = matchPage(state.routeTable, matchPathname);
     if (!page) return null;
-    const moduleUrls = [page.route.file, ...page.route.layouts].map((f) => {
+    // Mirror ssr.js's boot assembly EXACTLY: drop inert route modules, and
+    // splice an import-only module's component imports in place of the module
+    // (#605). Otherwise the 103 Early Hints would preload the page / layout
+    // modules the body no longer imports (a wasted hint) and miss the component
+    // modules it actually fetches (a double-fetch on the real module).
+    const inert = state.inertRouteModules;
+    const importOnly = state.importOnlyRouteModules;
+    const files = [];
+    const seenFiles = new Set();
+    for (const f of [page.route.file, ...page.route.layouts]) {
+      if (inert && inert.has(f)) continue;
+      const emit = importOnly && importOnly.get(f);
+      for (const t of emit || [f]) if (!seenFiles.has(t)) { seenFiles.add(t); files.push(t); }
+    }
+    const moduleUrls = files.map((f) => {
       let rel = f.startsWith(appDir) ? f.slice(appDir.length) : f;
       const url = rel.split('\\').join('/').replace(/^\/?/, '/');
       // Mirror ssr.js's emit (basePath THEN `?v`) so the 103 Early Hints preload
@@ -1880,6 +1900,7 @@ async function handleCore(req, ctx) {
         serverFiles: state.actionIndex.fileToHash,
         elidableComponents: state.elidableComponents,
         inertRouteModules: state.inertRouteModules,
+        importOnlyRouteModules: state.importOnlyRouteModules,
         notFoundFile: state.routeTable.notFound,
         // Server HTML cache (#241): a CSP-enabled page emits a fresh
         // per-request nonce into its body, so its bytes vary per request and

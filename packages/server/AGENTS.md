@@ -308,16 +308,38 @@ and the reader key set never diverge (a counterfactual unknown key proves
    rules go there; tests in `test/check.test.js`.
 6. **No `node:*` imports in code reachable from the browser.** The
    browser bundle is built from `@webjsdev/core` only.
-7. **Display-only component AND inert-route elision is conservative.**
+7. **Display-only component, inert-route, AND import-only-route elision is
+   conservative.**
    `analyzeElision` in `component-elision.js` computes, lazily on the
    first request (inside `ensureReady()`) and again after each rebuild,
    (a) the set of component modules that are purely
-   display-only, and (b) the set of page/layout route modules that are
-   inert (do no client work even transitively). The serving branch in
+   display-only, (b) the set of page/layout route modules that are
+   inert (do no client work even transitively), and (c) the set of
+   **import-only** page/layout modules (#605): a module whose own code does no
+   client work and whose closure reaches ONLY shipping components, mapped to the
+   component files to emit in its place. Since a page/layout never hydrates, an
+   import-only module is just the import-graph carrier for its components, so the
+   boot emits those component modules directly and drops the module. The
+   condition is a positive subset test (every client-effecting closure member is
+   a component), NOT a hand-listed block list: any client-effecting NON-component
+   in the closure (a self-executing helper, a `client-router` import, a reactive
+   helper) keeps the whole module, because dropping it would lose that side
+   effect. The re-emit is the STATIC import closure (so a component imported but
+   only conditionally rendered still registers). A `static lazy` component is not
+   special-cased: it is in the static closure only when imported directly, and
+   such an import already eager-loaded it before elision, so re-emitting it keeps
+   that exact behaviour; a normally-used lazy component is tag-referenced (never
+   in the static closure) and still loads via the IntersectionObserver path. The serving branch in
    `dev.js` strips side-effect imports of display-only components from the
    browser-served source; `ssr.js` drops inert page/layout modules from
-   the boot script's `moduleUrls` entirely, so a fully-static route ships
-   zero application JS. Preload hints for elided modules drop too, and their
+   the boot script's `moduleUrls` entirely (and splices an import-only module's
+   component URLs in place of the module), so a fully-static route ships
+   zero application JS and an import-only route ships only its interactive leaves.
+   Import-only modules join the elision fingerprint (a verdict flip busts `?v`)
+   and the bare-import scan exclusion (an SSR-only page import is no longer
+   vendored), like inert modules. `collectRouteModules` (`dev.js`) feeds only
+   page + layout files to the analysis, so error / loading / not-found modules
+   are never inert / import-only and always ship. Preload hints for elided modules drop too, and their
    importmap entries drop too, for a live-resolved AND a pinned app alike. The
    live path excludes elided components from the bare-import scan; a committed
    `.webjs/vendor/importmap.json` is applied verbatim at boot (for a stable

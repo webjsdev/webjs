@@ -749,7 +749,7 @@ export async function computeElidableComponents(components, moduleGraph, readFil
  * @param {import('./module-graph.js').ModuleGraph} moduleGraph
  * @param {(file: string) => Promise<string>} readFileFn
  * @param {string} [appDir]
- * @returns {Promise<{ elidableComponents: Set<string>, inertRouteModules: Set<string> }>}
+ * @returns {Promise<{ elidableComponents: Set<string>, inertRouteModules: Set<string>, importOnlyRouteModules: Map<string, string[]> }>}
  */
 export async function analyzeElision(components, routeModules, moduleGraph, readFileFn, appDir) {
   /** @type {Set<string>} */
@@ -962,22 +962,53 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
     clientRouterFiles.has(file) ||
     clientGlobalOrBareFiles.has(file);
 
-  // Route modules: inert iff neither the module nor its effective client
-  // closure (skipping elided components and server stubs, which never load)
-  // is client-effecting.
+  // Route modules fall into three classes by their effective client closure
+  // (skipping elided components and server stubs, which never load on the
+  // client):
+  //   - INERT: neither the module nor its closure does any client work. Dropped
+  //     from the boot script entirely (#179).
+  //   - IMPORT-ONLY (#605): the module itself does no client work, and the ONLY
+  //     client work its closure reaches is SHIPPING COMPONENTS. Such a page /
+  //     layout module is just the import-graph carrier for its components; the
+  //     boot can emit those component modules directly and drop the module. The
+  //     condition is a positive subset test (every client-effecting closure
+  //     member is a component), NOT a hand-listed block list: any client-
+  //     effecting NON-component in the closure (a self-executing helper, a
+  //     client-router import, a reactive helper) keeps the whole module, since
+  //     dropping it would lose that side effect.
+  //   - SHIP: anything else (the module itself is client-effecting, or its
+  //     closure reaches a client-effecting non-component). Unchanged behaviour.
   /** @type {Set<string>} */
   const skip = new Set([...elidableComponents, ...serverFiles]);
   /** @type {Set<string>} */
   const inertRouteModules = new Set();
+  /** @type {Map<string, string[]>} route file -> component files to emit in its place */
+  const importOnlyRouteModules = new Map();
   for (const file of routeModules) {
-    if (!fileTags.has(file)) continue; // unreadable / not analysed: ship (omit from inert set)
-    if (isClientEffecting(file)) continue;
+    if (!fileTags.has(file)) continue; // unreadable / not analysed: ship (omit from both sets)
+    if (isClientEffecting(file)) continue; // the module itself ships whole
     const closure = appDir ? transitiveDeps(moduleGraph, [file], appDir, skip) : [];
-    if (closure.some(isClientEffecting)) continue;
-    inertRouteModules.add(file);
+    const effecting = closure.filter(isClientEffecting);
+    if (effecting.length === 0) { inertRouteModules.add(file); continue; }
+    // Import-only iff EVERY client-effecting closure member is a (shipping)
+    // component. isClientEffecting for a component already implies mustShip, so
+    // `effecting` is exactly the shipping components reachable from this module:
+    // re-emit that STATIC set (what loading the module would have registered, so
+    // a component imported but only conditionally rendered still registers).
+    //
+    // A `static lazy` component is NOT special-cased here: it only appears in
+    // this STATIC closure when the route statically imports it, and in that case
+    // loading the module already eager-loaded it before elision, so emitting it
+    // directly preserves that exact behaviour. A normally-used lazy component is
+    // tag-referenced (never statically imported), so it is absent from this
+    // closure and still loads via the IntersectionObserver `observeLazy` path.
+    if (effecting.every((f) => componentFiles.has(f))) {
+      importOnlyRouteModules.set(file, effecting);
+    }
+    // else: a client-effecting non-component is reachable; ship the whole module.
   }
 
-  return { elidableComponents, inertRouteModules };
+  return { elidableComponents, inertRouteModules, importOnlyRouteModules };
 }
 
 /** Match a whole-line side-effect import: `import './x.js';` (no bindings). */
