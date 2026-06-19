@@ -248,6 +248,32 @@ nor changing the swap paint timing fixes it.
 
 The fix is `position: fixed` instead of sticky. A fixed header is always pinned
 and never does the scroll-relative recompute, so the repaint bug never fires.
-Because fixed leaves normal flow, reserve the header height on the content below
-it (a `padding-top` on `body` equal to the header height). The example blog's
-root layout does exactly this (`examples/blog/app/layout.ts`).
+There is no reliable CSS-only fix that KEEPS `position: sticky` (the GPU-promotion
+hacks `translateZ(0)` / `translate3d` / `will-change` / a wrapper element are all
+variants that do NOT reliably work, confirmed on-device for #610). Preserving the
+header across nav is correct and standard (Next.js, Remix, SvelteKit all preserve
+nested layouts); only the `sticky` positioning is the problem.
+
+Because fixed leaves normal flow, reserve the header height on the content below.
+Use a single `--header-height` custom property as the source of truth rather than
+a hardcoded number, and keep it exact with a `ResizeObserver` so it tracks
+responsive / dynamic headers (degrades fine with no JS via the default):
+
+```css
+:root  { --header-h: 56px; }              /* sane SSR first-paint default */
+header { position: fixed; inset-inline: 0; top: 0; }
+body   { padding-top: var(--header-h); }
+```
+```js
+// refine the default to the header's real height (and on resize)
+const hdr = document.querySelector('header');
+const apply = () => document.documentElement.style.setProperty('--header-h', hdr.offsetHeight + 'px');
+apply();
+new ResizeObserver(apply).observe(hdr);
+```
+
+The example blog's root layout does exactly this (`examples/blog/app/layout.ts`).
+For an app/dashboard layout, an alternative is an app-shell scroll container (a
+non-scrolling `100dvh` flex column with `<main>` as the internal scroller), which
+needs no offset at all but changes the scroll model (the window no longer
+scrolls, so the iOS URL bar stays visible).

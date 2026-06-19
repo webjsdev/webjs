@@ -97,6 +97,23 @@ export default function RootLayout({ children }: { children: unknown }) {
           if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
         } catch (_) {}
       })();
+      // #610: the announcement banner + header are position:fixed together (not
+      // sticky, which flickers on iOS WebKit during a client-router nav).
+      // --header-h reserves the pinned bar's height; measured here so it tracks
+      // the real height, with a :root default for no-JS / first paint.
+      (function(){
+        function measure(){
+          try {
+            var bar = document.querySelector('.site-top');
+            if (!bar) return;
+            var apply = function(){ document.documentElement.style.setProperty('--header-h', bar.offsetHeight + 'px'); };
+            apply();
+            if (window.ResizeObserver) new ResizeObserver(apply).observe(bar);
+          } catch (_) {}
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', measure);
+        else measure();
+      })();
       document.addEventListener('click', function (e) {
         var t = e.target;
         if (!t || !t.closest) return;
@@ -177,7 +194,9 @@ export default function RootLayout({ children }: { children: unknown }) {
         *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
       }
       html, body { margin: 0; }
+      :root { --header-h: 88px; } /* #610 fixed banner+header offset, kept exact by the script above */
       body {
+        padding-top: var(--header-h);
         background: var(--bg); color: var(--fg);
         font: 400 16px/1.65 var(--font-sans);
         -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; overflow-x: hidden;
@@ -225,12 +244,13 @@ export default function RootLayout({ children }: { children: unknown }) {
 
     <div class="glow-layer" aria-hidden="true"></div>
 
+    <div class="site-top fixed inset-x-0 top-0 z-20">
     <div class="relative z-[3] text-center font-medium text-[13px] leading-[1.4] py-[9px] px-4 border-b border-border bg-accent-tint">
       <span class="font-mono font-bold text-[10px] leading-none tracking-[0.12em] uppercase text-accent-hover bg-bg-elev rounded-full px-2 py-[3px] mr-2 align-middle">New</span>
       <a href=${UI_URL} target="_blank" rel="noopener noreferrer" class="text-accent-hover font-semibold no-underline hover:underline">Introducing the AI-first component library <span aria-hidden="true">&rarr;</span>${NEW_TAB}</a>
     </div>
 
-    <header class="sticky top-0 z-20 backdrop-blur-md bg-[color-mix(in_oklch,var(--color-bg)_78%,transparent)] border-b border-border">
+    <header class="backdrop-blur-md bg-[color-mix(in_oklch,var(--color-bg)_78%,transparent)] border-b border-border">
       <div class="max-w-[1080px] mx-auto px-6 py-[13px] flex items-center gap-4">
         <a class="mr-auto inline-flex items-center gap-[9px] no-underline text-fg font-display font-extrabold text-[17px] leading-none tracking-[-0.02em]" href="/">
           <span class="w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-accent-live to-[color-mix(in_oklch,var(--accent-live)_55%,var(--fg))] shadow-[0_2px_10px_var(--accent-tint)]"></span>
@@ -255,6 +275,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         </div>
       </div>
     </header>
+    </div>
 
     <div class="relative z-[1]">
       ${children}

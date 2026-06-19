@@ -730,6 +730,17 @@ color (via the `@theme` tokens), typography, borders, radius, shadows,
 and interaction states (hover/focus/active/disabled, dark mode). Light
 DOM does not scope styles, so utilities apply directly.
 
+**Pin a header with `position: fixed`, never `position: sticky`.** A
+sticky header flickers its background for one frame on iOS WebKit (every
+iOS browser) during a client-router navigation, because the preserved
+header plus the scroll-to-top trips a WebKit sticky-repaint bug that the
+usual GPU-promotion hacks (`translateZ`, `will-change`) do NOT fix. Use
+`position: fixed` and reserve the header height on the content with a
+`--header-height` variable (the scaffolded `app/layout.ts` does exactly
+this, kept exact by a `ResizeObserver`). It is iOS-only, invisible on
+desktop, Android, and in DevTools emulation, so it shows only on a real
+device.
+
 **The lit muscle-memory trap.** If you have written lit, the habit is to
 scope CSS in a shadow root (`static styles = css\`\``) or write an inline
 `<style>` with semantic class names (`.hero`, `.feature`, `.card`) for

@@ -231,7 +231,7 @@ import { html, css } from '@webjsdev/core';
 
 const STYLES = css\`
   .layout-root {
-    .header { position: sticky; top: 0; }
+    .header { position: fixed; inset-inline: 0; top: 0; } /* fixed, NOT sticky (see note) */
     .nav    { display: flex; gap: 16px; }
   }
 \`;
@@ -247,6 +247,8 @@ export default function RootLayout({ children }: { children: unknown }) {
     &lt;/div&gt;
   \`;
 }</pre>
+
+    <p><strong>Pin a header with <code>position: fixed</code>, never <code>position: sticky</code>.</strong> A sticky header flickers its background for one frame on iOS WebKit (every iOS browser) during a client-router navigation: the preserved header plus the scroll-to-top trips a WebKit sticky-repaint bug, and the GPU-promotion hacks (<code>translateZ</code>, <code>will-change</code>) do not fix it. Use <code>position: fixed</code> and reserve the header height on the content with a <code>--header-height</code> CSS variable (kept exact by a <code>ResizeObserver</code>). It is iOS-only and invisible on desktop, Android, and in DevTools emulation, so it shows only on a real device.</p>
 
     <h3>Component scope</h3>
     <pre>// components/my-card.ts
