@@ -177,6 +177,7 @@ connectWS('/posts/' + id + '/feed', { onMessage: (m) =&gt; renderStream(m) });</
 
     <h2>Snapshot cache + back/forward</h2>
     <p>The router maintains a URL-keyed LRU cache of page snapshots (capacity 16). On back/forward via <code>popstate</code>, the cached DOM is applied instantly and the captured window-scroll position is restored. A background refetch then revalidates the snapshot quietly.</p>
+    <p>Nav scroll restoration (both the back/forward restore and the scroll-to-top on a forward nav) is forced <code>behavior: 'instant'</code>, so setting <code>html { scroll-behavior: smooth }</code> in your app does not make navigation visibly animate the scroll. It jumps like a native page load. A hash-anchor (<code>#section</code>) link still scrolls smoothly when you opt into it.</p>
     <p>After a server action mutates data that a cached page depends on, call <code>revalidate()</code>:</p>
     <pre>import { revalidate } from '@webjsdev/core';
 

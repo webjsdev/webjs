@@ -1255,6 +1255,124 @@ test('popstate cache restore clears the importmap-reload flag', async () => {
   }
 });
 
+test('popstate cache restore scrolls instantly, not animated (#601)', async () => {
+  // The restore previously used scrollTo(x, y) (the 2-arg form), which
+  // respects an app's `html { scroll-behavior: smooth }` and so ANIMATES
+  // the Back/Forward scroll instead of jumping the way native nav does.
+  // The fix passes behavior:'instant' to force the jump.
+  const origLoc = globalThis.location;
+  const origFetch = globalThis.fetch;
+  const prevPageUrl = _currentPageUrl();
+  _snapshotCache.set('/restore-here', {
+    html: '<!doctype html><html><head></head><body><!--wj:children:/-->cached<!--/wj:children--></body></html>',
+    scrollX: 0,
+    scrollY: 640,
+  });
+  globalThis.location = /** @type any */ ({
+    href: 'http://localhost/restore-here',
+    pathname: '/restore-here', origin: 'http://localhost', search: '', hash: '',
+  });
+  _setCurrentPageUrl('http://localhost/elsewhere');
+  globalThis.fetch = async () => new Response('<html></html>', {
+    status: 200, headers: { 'content-type': 'text/html' },
+  });
+  let arg;
+  const spy = (a) => { arg = a; };
+  const origGlobalScrollTo = globalThis.scrollTo;
+  const origWinScrollTo = globalThis.window?.scrollTo;
+  globalThis.scrollTo = /** @type any */ (spy);
+  if (globalThis.window) globalThis.window.scrollTo = /** @type any */ (spy);
+  document.head.innerHTML = '';
+  document.body.innerHTML = '<!--wj:children:/-->before-pop<!--/wj:children-->';
+  try {
+    _onPopState({});
+    assert.ok(arg && typeof arg === 'object',
+      'restore uses the scrollTo options form, not the 2-arg (x, y) form');
+    assert.equal(arg.behavior, 'instant',
+      'behavior:instant keeps an app scroll-behavior:smooth from animating the restore');
+    assert.equal(arg.top, 640, 'saved scrollY restored as top');
+    assert.equal(arg.left, 0, 'saved scrollX restored as left');
+    // Let the background revalidation settle (avoid an unhandled rejection).
+    await new Promise((r) => setTimeout(r, 5));
+  } finally {
+    _snapshotCache.delete('/restore-here');
+    _setCurrentPageUrl(prevPageUrl);
+    globalThis.location = origLoc;
+    globalThis.fetch = origFetch;
+    globalThis.scrollTo = origGlobalScrollTo;
+    if (globalThis.window) globalThis.window.scrollTo = origWinScrollTo;
+    document.head.innerHTML = '';
+    document.body.innerHTML = '';
+  }
+});
+
+test('navigate: forward-nav scroll-to-top is instant, not animated (#601)', async () => {
+  document.body.innerHTML = '<!--wj:children:/-->before<!--/wj:children-->';
+  const { restore } = installNavigationMocks({
+    contentType: 'text/html',
+    body:
+      '<!doctype html><html><head></head><body>' +
+      '<!--wj:children:/-->after<!--/wj:children--></body></html>',
+  });
+  let arg;
+  const spy = (a) => { arg = a; };
+  const origWinScrollTo = globalThis.window?.scrollTo;
+  globalThis.scrollTo = /** @type any */ (spy);
+  if (globalThis.window) globalThis.window.scrollTo = /** @type any */ (spy);
+  try {
+    await navigate('http://localhost/forward');
+    assert.ok(arg && typeof arg === 'object',
+      'forward nav uses the scrollTo options form, not (0, 0)');
+    assert.equal(arg.behavior, 'instant',
+      'forward-nav scroll-to-top jumps instantly even under scroll-behavior:smooth');
+    assert.equal(arg.top, 0);
+    assert.equal(arg.left, 0);
+  } finally {
+    restore();
+    if (globalThis.window) globalThis.window.scrollTo = origWinScrollTo;
+    document.body.innerHTML = '';
+  }
+});
+
+test('navigate: a found hash anchor stays SMOOTH, not forced instant (#601)', async () => {
+  // The carve-out for the instant-scroll fix: it must NOT touch the
+  // hash-anchor path. A `#section` link (e.g. a menu pointing at a section)
+  // should still animate under `scroll-behavior: smooth`, so a found anchor
+  // is scrolled via scrollIntoView (which honors the page CSS), NEVER via the
+  // forced-instant scrollTo. This guards against a later "tidy-up" that makes
+  // section links jump.
+  document.body.innerHTML =
+    '<!--wj:children:/--><section id="sec">S</section><!--/wj:children-->';
+  const { restore } = installNavigationMocks({
+    contentType: 'text/html',
+    body:
+      '<!doctype html><html><head></head><body>' +
+      '<!--wj:children:/--><section id="sec">S</section><!--/wj:children--></body></html>',
+  });
+  let intoViewCalls = 0;
+  const scrollToArgs = [];
+  const origInto = globalThis.HTMLElement.prototype.scrollIntoView;
+  globalThis.HTMLElement.prototype.scrollIntoView = function () { intoViewCalls++; };
+  const origWinScrollTo = globalThis.window?.scrollTo;
+  const spy = (...a) => { scrollToArgs.push(a); };
+  // Set the spies AFTER installNavigationMocks (which stubs globalThis.scrollTo).
+  globalThis.scrollTo = /** @type any */ (spy);
+  if (globalThis.window) globalThis.window.scrollTo = /** @type any */ (spy);
+  try {
+    await navigate('http://localhost/page#sec');
+    assert.equal(intoViewCalls, 1,
+      'a found hash anchor scrolls via scrollIntoView (honors scroll-behavior:smooth)');
+    const forcedInstant = scrollToArgs.some((a) => a.length === 1 && a[0] && a[0].behavior === 'instant');
+    assert.ok(!forcedInstant,
+      'the hash-anchor path must NOT force behavior:instant (that would kill smooth section scrolling)');
+  } finally {
+    restore();
+    globalThis.HTMLElement.prototype.scrollIntoView = origInto;
+    if (globalThis.window) globalThis.window.scrollTo = origWinScrollTo;
+    document.body.innerHTML = '';
+  }
+});
+
 test('navigate: clean swap clears reload flag so a later mismatch reloads again', async () => {
   // After "reload due to mismatch → clean nav → later mismatch", the
   // later mismatch must trigger its own fresh reload. Regression for
