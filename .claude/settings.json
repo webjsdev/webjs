@@ -12,6 +12,15 @@
     ],
     "PreToolUse": [
       {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/block-raw-htmlelement.sh"
+          }
+        ]
+      },
+      {
         "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
         "hooks": [
           {

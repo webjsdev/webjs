@@ -252,7 +252,7 @@ Import from auth/types.ts for ActionResult<T>.
 
 ### Add a component
 Create `modules/<feature>/components/<name>.ts` or `components/<name>.ts`.
-Extend the `WebComponent({ ... })` factory to declare reactive properties (e.g. `extends WebComponent({ count: Number })`; per-prop options via `prop(Number, { reflect: true })`), add `static styles` for shadow-DOM components, implement `render()`, then call `ClassName.register('tag-name')` at the bottom. Tag must contain a hyphen. A hand-written `static properties` throws at construction (`no-static-properties`); set defaults via the `default` option or the constructor, never a class-field initializer.
+Extend the `WebComponent({ ... })` factory to declare reactive properties (e.g. `extends WebComponent({ count: Number })`; per-prop options via `prop(Number, { reflect: true })`), add `static styles` for shadow-DOM components, implement `render()`, then call `ClassName.register('tag-name')` at the bottom. Tag must contain a hyphen. A hand-written `static properties` throws at construction (`no-static-properties`); set defaults via the `default` option or the constructor, never a class-field initializer. **Never extend raw HTMLElement directly for app components.** Always subclass `WebComponent` (or the factory form `WebComponent({...})`) to hook into SSR, lifecycle, elision, and the reactive property system. Extend raw HTMLElement only for rare native-API edge cases (like form-associated `ElementInternals` or customized built-in elements), and add a `webjs-allow-htmlelement: <reason>` comment to acknowledge the exception.
 
 ### Add a database model
 Edit `db/schema.server.ts`. Run `webjs db generate` then `webjs db migrate`.
