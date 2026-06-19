@@ -351,8 +351,11 @@ and the reader key set never diverge (a counterfactual unknown key proves
    if it does real client work). A module-scope pure-data constructor
    (`new Set([...])` / `Map` / `Date` / `RegExp` / typed array / `URL`) is inert
    data, not a side effect; any other constructor (`new WebSocket()` / `Worker()`)
-   still ships. The vendor bare-import scan (`extractPackageName`) likewise skips
-   `#`-alias specifiers so they are never sent to the resolver.
+   still ships. The vendor bare-import scan (`extractPackageName`) treats a
+   `#`-alias specifier as local and skips it outright (it does not expand the
+   map), so a `#` import is never sent to the resolver; the rare alias mapped to
+   a real package (`"#x": "some-pkg"`) is consequently not vendored, an accepted
+   limitation since the scaffold's catch-all `"#*": "./*"` is always local.
    Import-only modules join the elision fingerprint (a verdict flip busts `?v`)
    and the bare-import scan exclusion (an SSR-only page import is no longer
    vendored), like inert modules. `collectRouteModules` (`dev.js`) feeds only
