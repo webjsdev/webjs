@@ -619,6 +619,18 @@ function warnOnce(key, message) {
  * style flush) to AT MOST ONCE per page, so a dev session does not pay a
  * per-navigation reflow after the first forward nav.
  */
+/**
+ * #610 diagnostic, TEMPORARY. Reads a guarded paint-timing flag an app sets on
+ * `window.__webjsDiag` (e.g. `{ raf: true, scrollfirst: true }`) to A/B the iOS
+ * WebKit sticky-header flash + back-swipe-blank on-device. Default off, so the
+ * production nav path is byte-for-byte unchanged. Removed once the root fix
+ * lands.
+ */
+function diagFlag(name) {
+  try { return !!(typeof window !== 'undefined' && window.__webjsDiag && window.__webjsDiag[name]); }
+  catch { return false; }
+}
+
 let smoothScrollChecked = false;
 function warnIfSmoothScrollOnHtml() {
   if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production') return;
@@ -852,6 +864,12 @@ async function performNavigation(href, isPopState, frameId) {
       if (cached) {
         const cachedDoc = parseHTML(cached.html);
         if (cachedDoc) {
+          // #610 diagnostic: wait a frame before the popstate swap so WebKit
+          // paints at a frame boundary (candidate fix for the iOS back-swipe
+          // blank). Guarded; default path unchanged.
+          if (diagFlag('raf') && typeof requestAnimationFrame === 'function') {
+            await new Promise((r) => requestAnimationFrame(() => r(undefined)));
+          }
           applySwap(cachedDoc, frameId, /* revalidating */ true, /* href */ null);
           // Restore window scroll to where the user left it. Use
           // behavior:'instant' so an app-level `scroll-behavior: smooth`
@@ -1755,6 +1773,19 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   // recover in place rather than a destructive full reload.
   if (!doc) { restoreOptimistic(optimisticState); handleNavigationError(href, null, new Error('navigation response did not parse as HTML')); return { ok: false, status: respStatus, aborted: false }; }
 
+  // #610 diagnostic (guarded; default path unchanged). An app sets
+  // window.__webjsDiag to A/B the iOS forward-nav paint timing:
+  //  - scrollfirst: scroll-to-top BEFORE the swap, so a preserved sticky
+  //    header un-sticks against the OLD tall content and never sees a content
+  //    height change while it is stuck.
+  //  - raf: wait one frame before the swap, so WebKit paints at a frame
+  //    boundary (the timing Turbo uses for its render).
+  if (recordHistory && diagFlag('scrollfirst')) {
+    try { if (!new URL(finalUrl).hash) window.scrollTo({ left: 0, top: 0, behavior: 'instant' }); } catch { /* non-DOM */ }
+  }
+  if (diagFlag('raf') && typeof requestAnimationFrame === 'function') {
+    await new Promise((r) => requestAnimationFrame(() => r(undefined)));
+  }
   applySwap(doc, frameId, false, finalUrl, incomingBuild);
 
   if (recordHistory) history.pushState(null, '', finalUrl);
