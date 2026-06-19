@@ -974,6 +974,26 @@ export default function RootLayout({ children }: { children: unknown }) {
           mq.addEventListener('change', apply);
         } catch (_) {}
       })();
+      // The header is position:fixed (not sticky): a sticky header flickers on
+      // iOS WebKit during a client-router nav. fixed leaves normal flow, so
+      // --header-h reserves its height for the content below. Measured here so
+      // it tracks the real (responsive) height; degrades fine with no JS via
+      // the :root default.
+      (function(){
+        function measure(){
+          try {
+            var hdr = document.querySelector('header');
+            if (!hdr) return;
+            var apply = function(){
+              document.documentElement.style.setProperty('--header-h', hdr.offsetHeight + 'px');
+            };
+            apply();
+            if (window.ResizeObserver) new ResizeObserver(apply).observe(hdr);
+          } catch (_) {}
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', measure);
+        else measure();
+      })();
     </script>
     <script src="/public/tailwind-browser.js"></script>
     <!--
@@ -1063,7 +1083,9 @@ ${SHADCN_THEME}
       }
       /* Body + pseudo-elements utility classes can't reach. */
       html, body { margin: 0; }
+      :root { --header-h: 56px; } /* fixed-header offset, kept exact by the script above */
       body {
+        padding-top: var(--header-h);
         background: var(--bg);
         color: var(--fg);
         font: 16px/1.65 var(--font-sans);
@@ -1072,7 +1094,7 @@ ${SHADCN_THEME}
       ::selection { background: var(--accent-tint); color: var(--fg); }
     </style>
 
-    <header class="sticky top-0 z-20 flex items-center gap-6 px-4 sm:px-6 py-3 border-b border-border bg-[color-mix(in_oklch,var(--bg)_75%,transparent)] backdrop-blur-[18px]">
+    <header class="fixed inset-x-0 top-0 z-20 flex items-center gap-6 px-4 sm:px-6 py-3 border-b border-border bg-[color-mix(in_oklch,var(--bg)_75%,transparent)] backdrop-blur-[18px]">
       <a href="/" class="mr-auto inline-flex items-center gap-2 no-underline text-fg font-semibold text-[15px] leading-none tracking-tight">
         <span>${name}</span>
       </a>
