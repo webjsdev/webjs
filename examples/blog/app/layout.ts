@@ -81,6 +81,26 @@ export default function RootLayout({ children }: LayoutProps) {
           }
         } catch (_) {}
       })();
+      // #610: keep --header-h equal to the fixed header's real height. The
+      // :root default is a sane SSR first-paint value; this refines it once the
+      // header exists and on any resize, so the content offset never drifts
+      // (responsive headers, font swaps, a wrapped nav). Degrades fine with no
+      // JS (the :root default holds).
+      (function(){
+        function measure(){
+          try {
+            var hdr = document.querySelector('.site-header');
+            if (!hdr) return;
+            var apply = function(){
+              document.documentElement.style.setProperty('--header-h', hdr.offsetHeight + 'px');
+            };
+            apply();
+            if (window.ResizeObserver) new ResizeObserver(apply).observe(hdr);
+          } catch (_) {}
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', measure);
+        else measure();
+      })();
       // Mobile menu auto-close: close on link click (inside the panel)
       // AND on any click outside the menu. Delegated on document so
       // it survives client-router navigations without rebinding.
@@ -103,6 +123,7 @@ export default function RootLayout({ children }: LayoutProps) {
     <style>
       :root {
         color-scheme: light dark;
+        --header-h: 61px; /* #610 fixed-header offset, kept exact by the ResizeObserver below */
 
         /* ---------- dark (default) ---------- */
         --fg:            oklch(0.96 0.015 60);
@@ -168,14 +189,15 @@ export default function RootLayout({ children }: LayoutProps) {
       html, body { margin: 0; }
       html { scroll-behavior: smooth; }
       body {
-        /* #610: the header is position:fixed (NOT sticky). iOS WebKit (every
-           iOS browser) flickers a sticky header's background for one frame on a
-           client-router forward nav, because the scroll-to-top drives a sticky
-           stuck-to-static recompute WebKit mis-repaints. It is iOS-only (fine on
-           desktop and Android, invisible in emulation) and confirmed fixed by
-           switching to position:fixed on-device. fixed leaves normal flow, so
-           reserve the 61px header height here. */
-        padding-top: 61px;
+        /* #610: the header is position:fixed (NOT sticky), because iOS WebKit
+           (every iOS browser) flickers a sticky header's background for one
+           frame on a client-router forward nav (the scroll-to-top drives a
+           sticky stuck-to-static recompute WebKit mis-repaints, iOS-only, fine
+           on desktop and Android, confirmed on-device). fixed leaves normal
+           flow, so offset the content by the header height. --header-h is the
+           single source of truth: a sane SSR first-paint default in :root,
+           kept exact and responsive by the ResizeObserver inline script. */
+        padding-top: var(--header-h);
         background: var(--bg);
         color: var(--fg);
         font: 16px/1.65 var(--font-sans);
