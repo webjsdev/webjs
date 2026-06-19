@@ -177,7 +177,7 @@ connectWS('/posts/' + id + '/feed', { onMessage: (m) =&gt; renderStream(m) });</
 
     <h2>Snapshot cache + back/forward</h2>
     <p>The router maintains a URL-keyed LRU cache of page snapshots (capacity 16). On back/forward via <code>popstate</code>, the cached DOM is applied instantly and the captured window-scroll position is restored. A background refetch then revalidates the snapshot quietly.</p>
-    <p>Nav scroll restoration (both the back/forward restore and the scroll-to-top on a forward nav) is forced <code>behavior: 'instant'</code>, so setting <code>html { scroll-behavior: smooth }</code> in your app does not make navigation visibly animate the scroll. It jumps like a native page load. A hash-anchor (<code>#section</code>) link still scrolls smoothly when you opt into it.</p>
+    <p>Nav scroll restoration (both the back/forward restore and the scroll-to-top on a forward nav) is forced <code>behavior: 'instant'</code>, so setting <code>html { scroll-behavior: smooth }</code> in your app does not make navigation visibly animate the scroll. It jumps like a native page load. A hash-anchor (<code>#section</code>) link still scrolls smoothly when you opt into it. Because route transitions ignore <code>scroll-behavior: smooth</code> (it only affects in-page anchors), the router logs a one-time dev-only console hint if it detects that setting on <code>&lt;html&gt;</code>, and notes that combining it with a sticky <code>backdrop-filter</code> header can flash on iOS during navigation.</p>
     <p>After a server action mutates data that a cached page depends on, call <code>revalidate()</code>:</p>
     <pre>import { revalidate } from '@webjsdev/core';
 

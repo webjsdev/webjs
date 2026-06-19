@@ -30,7 +30,7 @@ let _collect, _longest, _keyOf, _diffEl, _reconcile,
   _snapshotCache, _LIVE_ATTRS, _blurOutgoingFocus,
   _onSubmit, _getSubmitMethod, _getSubmitAction, _buildSubmitFormData,
   _restoreOptimistic, _navToken, _bumpNavToken,
-  _currentPageUrl, _setCurrentPageUrl,
+  _currentPageUrl, _setCurrentPageUrl, _resetWarnOnce,
   _eligibleAnchorHref, _prefetchSuppressed, _prefetchMode, _prefetchHasHoverPointer, _prefetch, _prefetchTake,
   _prefetchSaysSaveData, _prefetchPeek, _prefetchInflightSize, _resetPrefetch,
   _viewTransitionsEnabled, _runWithTransition, _regraftPermanentElements,
@@ -97,6 +97,7 @@ before(async () => {
     _bumpNavToken,
     _currentPageUrl,
     _setCurrentPageUrl,
+    _resetWarnOnce,
     _eligibleAnchorHref,
     _prefetchSuppressed,
     _prefetchMode,
@@ -1369,6 +1370,53 @@ test('navigate: a found hash anchor stays SMOOTH, not forced instant (#601)', as
     restore();
     globalThis.HTMLElement.prototype.scrollIntoView = origInto;
     if (globalThis.window) globalThis.window.scrollTo = origWinScrollTo;
+    document.body.innerHTML = '';
+  }
+});
+
+test('warns once in dev when <html> has scroll-behavior: smooth, suppressed in prod (#613)', async () => {
+  const origGCS = globalThis.getComputedStyle;
+  const origWinScrollTo = globalThis.window?.scrollTo;
+  const origNodeEnv = process.env.NODE_ENV;
+  const origWarn = console.warn;
+  const warnings = [];
+  console.warn = (...a) => { warnings.push(a.join(' ')); };
+  if (globalThis.window) globalThis.window.scrollTo = () => {};
+  globalThis.scrollTo = () => {};
+  document.body.innerHTML = '<!--wj:children:/-->before<!--/wj:children-->';
+  const smoothWarns = () => warnings.filter((w) => /scroll-behavior: smooth/.test(w)).length;
+  const navMock = () => installNavigationMocks({
+    contentType: 'text/html',
+    body: '<!doctype html><html><head></head><body><!--wj:children:/-->after<!--/wj:children--></body></html>',
+  });
+  try {
+    // dev + smooth => warns exactly once across two navs (fire-once guard)
+    process.env.NODE_ENV = 'development';
+    globalThis.getComputedStyle = () => ({ scrollBehavior: 'smooth' });
+    _resetWarnOnce();
+    let m = navMock(); globalThis.scrollTo = () => {}; await navigate('http://localhost/p1'); m.restore();
+    assert.equal(smoothWarns(), 1, 'warns once on a smooth-scroll forward nav in dev');
+    m = navMock(); globalThis.scrollTo = () => {}; await navigate('http://localhost/p2'); m.restore();
+    assert.equal(smoothWarns(), 1, 'fire-once: a second nav does not warn again');
+
+    // scroll-behavior auto => no warn
+    _resetWarnOnce(); warnings.length = 0;
+    globalThis.getComputedStyle = () => ({ scrollBehavior: 'auto' });
+    m = navMock(); globalThis.scrollTo = () => {}; await navigate('http://localhost/p3'); m.restore();
+    assert.equal(smoothWarns(), 0, 'no warning when scroll-behavior is not smooth');
+
+    // production => suppressed even with smooth
+    _resetWarnOnce(); warnings.length = 0;
+    globalThis.getComputedStyle = () => ({ scrollBehavior: 'smooth' });
+    process.env.NODE_ENV = 'production';
+    m = navMock(); globalThis.scrollTo = () => {}; await navigate('http://localhost/p4'); m.restore();
+    assert.equal(smoothWarns(), 0, 'suppressed in production');
+  } finally {
+    console.warn = origWarn;
+    globalThis.getComputedStyle = origGCS;
+    if (globalThis.window) globalThis.window.scrollTo = origWinScrollTo;
+    if (origNodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = origNodeEnv;
+    _resetWarnOnce();
     document.body.innerHTML = '';
   }
 });

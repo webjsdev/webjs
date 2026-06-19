@@ -873,7 +873,11 @@ scroll-to-top on a forward nav) is issued with `behavior: 'instant'`, so
 an app-level `html { scroll-behavior: smooth }` does not animate it. The
 restore matches a native page load (an instant jump), not a visible
 slide. The one nav scroll left smooth is a hash-anchor (`#section`)
-target, where smooth scrolling is the intent.
+target, where smooth scrolling is the intent. So `scroll-behavior:
+smooth` on `<html>` only affects in-page anchors, not route
+transitions; in development the router logs a one-time console hint when
+it detects that setting (and notes that pairing it with a sticky
+`backdrop-filter` header can flash on iOS during navigation).
 
 Inner scroll containers (e.g. `.docs-sidenav`) are preserved
 automatically by the outer-layout-DOM-identity invariant. They stay
