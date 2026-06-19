@@ -335,6 +335,24 @@ and the reader key set never diverge (a counterfactual unknown key proves
    the boot script's `moduleUrls` entirely (and splices an import-only module's
    component URLs in place of the module), so a fully-static route ships
    zero application JS and an import-only route ships only its interactive leaves.
+   A page/layout NEVER hydrates, so its detection differs from a component's in
+   two ways the analyser must respect (#623), or a route module is wrongly pinned
+   to the browser by a false positive: (1) its `html` TEMPLATE content is SSR
+   output, not module client work, so the `@event` / client-global scans run on
+   the template-REDACTED source for route modules (an inline `<script>`'s
+   `document` / `localStorage` runs from the rendered HTML, never from loading
+   the module; a genuine module-scope `document.x` OUTSIDE any template still
+   flags), while COMPONENT detection keeps scanning template content (a
+   component's `@event` IS its signal); and (2) a `#`-alias side-effect import
+   (`import '#components/x.ts'`, the idiomatic component registration) resolves to
+   a LOCAL file via the app's `package.json` "imports", so it is expanded with
+   `expandImportAlias` and treated like a relative import, not a bare npm package
+   (the `#`-imported file still rides the closure and is flagged on its own merits
+   if it does real client work). A module-scope pure-data constructor
+   (`new Set([...])` / `Map` / `Date` / `RegExp` / typed array / `URL`) is inert
+   data, not a side effect; any other constructor (`new WebSocket()` / `Worker()`)
+   still ships. The vendor bare-import scan (`extractPackageName`) likewise skips
+   `#`-alias specifiers so they are never sent to the resolver.
    Import-only modules join the elision fingerprint (a verdict flip busts `?v`)
    and the bare-import scan exclusion (an SSR-only page import is no longer
    vendored), like inert modules. `collectRouteModules` (`dev.js`) feeds only
