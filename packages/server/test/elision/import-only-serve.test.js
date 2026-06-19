@@ -185,3 +185,41 @@ export default () => html\`<p>hello</p>\`;`,
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// --- #629: webjs.clientRouter opt-out ---------------------------------------
+
+test('webjs.clientRouter:false emits the opt-out flag; default does not (#629)', async () => {
+  const page = `import { html } from '@webjsdev/core';
+import '../components/counter.ts';
+export default () => html\`<x-counter></x-counter>\`;`;
+  const off = makeApp({
+    'package.json': JSON.stringify({ name: 'router-off', type: 'module', webjs: { clientRouter: false } }),
+    'app/layout.ts': INERT_LAYOUT,
+    'app/page.ts': page,
+    'components/counter.ts': COUNTER,
+  });
+  try {
+    const app = await createRequestHandler({ appDir: off, dev: true });
+    if (app.warmup) await app.warmup();
+    const html = await (await app.handle(new Request('http://x/'))).text();
+    assert.match(html, /window\.__WEBJS_CLIENT_ROUTER__\s*=\s*false/, 'opt-out flag must be emitted when clientRouter:false');
+    assert.match(html, /\/components\/counter\.ts/, 'the component still loads (only the router auto-enable is suppressed)');
+  } finally {
+    rmSync(off, { recursive: true, force: true });
+  }
+
+  const on = makeApp({
+    'package.json': JSON.stringify({ name: 'router-on', type: 'module' }),
+    'app/layout.ts': INERT_LAYOUT,
+    'app/page.ts': page,
+    'components/counter.ts': COUNTER,
+  });
+  try {
+    const app = await createRequestHandler({ appDir: on, dev: true });
+    if (app.warmup) await app.warmup();
+    const html = await (await app.handle(new Request('http://x/'))).text();
+    assert.doesNotMatch(html, /__WEBJS_CLIENT_ROUTER__/, 'no opt-out flag by default (router stays automatic)');
+  } finally {
+    rmSync(on, { recursive: true, force: true });
+  }
+});

@@ -17,6 +17,11 @@
       "type": "boolean",
       "default": true
     },
+    "clientRouter": {
+      "description": "Client-router switch (#629). Default true: the client router auto-enables in the browser whenever @webjsdev/core loads, so any page with a component gets SPA-style navigation with no import. Set to false to opt the whole app out (pure MPA, full-page navigation). Read by readClientRouterEnabled in dev.js.",
+      "type": "boolean",
+      "default": true
+    },
     "headers": {
       "description": "Per-path response-header rules, shaped like Next's. Each rule pairs a URLPattern source against header directives. Read by compileHeaderRules in headers.js.",
       "type": "array",

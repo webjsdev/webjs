@@ -145,6 +145,15 @@ export interface WebjsConfig {
   seed?: boolean;
 
   /**
+   * Client-router switch (#629). Default `true`: the client router auto-enables
+   * in the browser whenever `@webjsdev/core` loads, so any page that ships a
+   * component gets SPA-style navigation with no import. Set to `false` to opt
+   * the whole app out (pure MPA, full-page navigation; `disableClientRouter()`
+   * stays the programmatic escape hatch).
+   */
+  clientRouter?: boolean;
+
+  /**
    * Dev/start task orchestration (#550). `webjs dev` / `webjs start` run these
    * so a bare CLI invocation matches `npm run dev` / `start`. Read by the CLI
    * (`packages/cli/lib/app-tasks.js`), NOT the server readers.
