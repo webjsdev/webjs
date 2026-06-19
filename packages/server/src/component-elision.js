@@ -274,6 +274,15 @@ function hasModuleScopeSideEffect(src) {
     if (ident && /\bfunction\s*\*?\s*$/.test(frame.slice(0, m.index))) continue;
     // The component registration call is the one permitted top-level call.
     if (ident === 'register' || ident === 'define') continue;
+    // `extends WebComponent({ … })` is the declare-free reactive-prop DX (#597
+    // / #599): a class-declaration construct, not an independent side-effecting
+    // statement. Exempt it so a display-only factory-form component stays
+    // elidable; a genuinely interactive one still ships via the per-class and
+    // module-level signal checks below (events, slots, shadow, lifecycle, a
+    // non-state factory prop, a reactive import). Scoped to the `extends`
+    // position, so a top-level `WebComponent(...)` call used anywhere else
+    // still counts as a side effect (#604).
+    if (ident === 'WebComponent' && /\bextends\s+$/.test(frame.slice(0, m.index))) continue;
     return true;                                         // any other top-level call
   }
   return false;
@@ -572,8 +581,19 @@ function hasNonStateReactiveProperty(classBody) {
 }
 
 /**
- * True if the class factory argument declares any property that is NOT
- * marked `{ state: true }`.
+ * True if the class factory argument (`extends WebComponent({ … })`) declares
+ * any reactive property that is NOT `{ state: true }`. A non-state property
+ * rides an HTML attribute or a `.prop` hydration binding, the channel that
+ * forces the component to ship; a `state: true` property is component-local
+ * reactive state with no such channel, so a component whose only signal is
+ * state props stays elidable.
+ *
+ * A property value is treated as state ONLY when its text carries
+ * `state: true`, which covers both the bare descriptor `{ state: true }` and
+ * the `prop()` helper forms `prop({ state: true })` / `prop(Type, { state:
+ * true })`. Anything else (a bare type `Number`, `prop(Number)`, an options
+ * object without `state: true`) is non-state and ships. Conservative on a
+ * spread or an unbalanced brace (cannot prove every entry is state, so ship).
  *
  * @param {string} factoryArg
  * @returns {boolean}
@@ -582,21 +602,17 @@ function hasNonStateFactoryProperty(factoryArg) {
   if (!factoryArg) return false;
   const objStart = factoryArg.indexOf('{');
   if (objStart === -1) return false;
-  const objEnd = matchClosingBrace(factoryArg, objStart);
+  // matchClosingBrace starts at depth 1, so pass the index AFTER the brace.
+  const objEnd = matchClosingBrace(factoryArg, objStart + 1);
   if (objEnd === -1) return true;
   const obj = factoryArg.slice(objStart + 1, objEnd);
-  if (/\.\.\./.test(obj)) return true; // spread
+  if (/\.\.\./.test(obj)) return true; // spread: cannot prove all entries state
   for (const entry of topLevelPropertyValues(obj)) {
-    if (entry.startsWith('{')) {
-      const code = entry
-        .replace(/'[^'\n]*'/g, "''")
-        .replace(/"[^"\n]*"/g, '""')
-        .replace(/`[^`]*`/g, '``');
-      if (!/\bstate\s*:\s*true\b/.test(code)) return true;
-    } else {
-      // Shorthand like `count: Number` rides an attribute, not state
-      return true;
-    }
+    const code = entry
+      .replace(/'[^'\n]*'/g, "''")
+      .replace(/"[^"\n]*"/g, '""')
+      .replace(/`[^`]*`/g, '``');
+    if (!/\bstate\s*:\s*true\b/.test(code)) return true;
   }
   return false;
 }
