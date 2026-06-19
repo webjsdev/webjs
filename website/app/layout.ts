@@ -238,6 +238,9 @@ export default function RootLayout({ children }: { children: unknown }) {
          (wheel / touch / drag) and the copy button copies the full text. */
       .cmd-foot copy-cmd [data-copy-text] { overflow-x: auto; scrollbar-width: none; }
       .cmd-foot copy-cmd [data-copy-text]::-webkit-scrollbar { display: none; }
+      .site-top-banner {
+        background-color: color-mix(in oklch, var(--accent-live) 14%, var(--bg));
+      }
     </style>
 
     <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-accent focus:text-accent-fg focus:shadow-[var(--shadow)]">Skip to content</a>
@@ -245,7 +248,7 @@ export default function RootLayout({ children }: { children: unknown }) {
     <div class="glow-layer" aria-hidden="true"></div>
 
     <div class="site-top fixed inset-x-0 top-0 z-20">
-    <div class="relative z-[3] text-center font-medium text-[13px] leading-[1.4] py-[9px] px-4 border-b border-border bg-accent-tint">
+    <div class="relative z-[3] text-center font-medium text-[13px] leading-[1.4] py-[9px] px-4 border-b border-border site-top-banner">
       <span class="font-mono font-bold text-[10px] leading-none tracking-[0.12em] uppercase text-accent-hover bg-bg-elev rounded-full px-2 py-[3px] mr-2 align-middle">New</span>
       <a href=${UI_URL} target="_blank" rel="noopener noreferrer" class="text-accent-hover font-semibold no-underline hover:underline">Introducing the AI-first component library <span aria-hidden="true">&rarr;</span>${NEW_TAB}</a>
     </div>
