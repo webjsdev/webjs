@@ -99,6 +99,7 @@ class UserCard extends WebComponent({
   label:   prop(String, { attribute: 'aria-label' }), // renamed attribute
   open:    prop({ state: true }),                  // internal, no attribute
   student: prop&lt;Student&gt;(Object),                  // narrowed object type
+  tags:    prop&lt;string[]&gt;(Array),                  // array-typed: pass Array, not Object
   size:    prop&lt;'sm' | 'lg'&gt;(String, { default: 'sm' }), // narrowed + default
 }) {
   render() {
@@ -108,6 +109,8 @@ class UserCard extends WebComponent({
 UserCard.register('user-card');</pre>
 
     <p>Set a default declaratively via the <code>default</code> option (<code>prop(Number, { default: 0 })</code>); a function default is called per instance for fresh object / array defaults, and an applied attribute overrides it.</p>
+
+    <p>Declare an <strong>array-typed</strong> property with the <code>Array</code> constructor, not <code>Object</code> (<code>tags: prop&lt;string[]&gt;(Array)</code>). The default converter treats both the same (each JSON-encodes the value), so <code>Object</code> does not break anything, but <code>Array</code> states the property's shape correctly. The <code>array-prop-uses-array-type</code> rule in <code>webjs check</code> flags an array-typed generic declared with <code>Object</code>.</p>
 
     <h3>Attribute-to-Property Coercion</h3>
     <p>When an attribute changes on the DOM element, webjs coerces the string value to the declared type:</p>

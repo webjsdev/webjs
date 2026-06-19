@@ -20,6 +20,13 @@ Built-in constructors (`String`, `Number`, `Boolean`, `Array`, `Object`) feed
 the default attribute coercion. For anything the default can't parse correctly
 (Date, Map, Set, discriminated unions) supply a custom `converter`.
 
+For an array-typed prop, pass `Array`, not `Object` (`items: prop<Tag[]>(Array)`).
+The default converter handles both identically (each JSON-encodes the value), so
+`Object` does not break anything, but `Array` states the prop's shape to the next
+reader. The `array-prop-uses-array-type` `webjs check` rule flags an array-typed
+generic (`T[]`, `readonly T[]`, `Array<T>`, `ReadonlyArray<T>`) declared with the
+`Object` constructor.
+
 ## Declaring reactive properties: the base-class factory
 
 Reactive properties are declared by passing the property shape into the **base-class factory** `WebComponent({ ... })`. The types flow automatically to `this.<prop>`, so there is no `static properties` block and no `declare` line. A direct `static properties` block throws at runtime (caught statically by the `no-static-properties` rule).
