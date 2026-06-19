@@ -1,5 +1,4 @@
 import { html, cspNonce } from '@webjsdev/core';
-import '@webjsdev/core/client-router';
 import '#components/theme-toggle.ts';
 import { DOCS_URL, UI_URL, EXAMPLE_BLOG_URL, GH_URL, NEW_TAB } from '#lib/links.ts';
 
