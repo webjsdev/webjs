@@ -234,3 +234,20 @@ More files you write, more discipline required, slight rename cost (2
 textual edits when a route folder moves). In exchange: no browser-
 runtime script, no `@theme` block, idiomatic CSS, plain cascade you can
 debug with any tool.
+
+## Gotcha: a sticky header flickers on iOS, use `position: fixed`
+
+A `position: sticky` header (the common `sticky top-0` pattern) flickers its
+background for one frame on iOS WebKit (every iOS browser, since they all use
+WebKit) during a client-router FORWARD navigation. The scroll-to-top the router
+runs after the content swap drives a sticky stuck-to-static recompute that
+WebKit mis-repaints. It is iOS-only (fine on desktop and Android, and invisible
+in DevTools device emulation, so it shows only on a real device). #610 confirmed
+on-device that neither compositor promotion (`translateZ(0)` / `will-change`)
+nor changing the swap paint timing fixes it.
+
+The fix is `position: fixed` instead of sticky. A fixed header is always pinned
+and never does the scroll-relative recompute, so the repaint bug never fires.
+Because fixed leaves normal flow, reserve the header height on the content below
+it (a `padding-top` on `body` equal to the header height). The example blog's
+root layout does exactly this (`examples/blog/app/layout.ts`).
