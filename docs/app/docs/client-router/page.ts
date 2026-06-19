@@ -6,7 +6,7 @@ export default function ClientRouter() {
   return html`
     <h1>Client Router</h1>
     <p>webjs ships a nested-layout-aware client router that intercepts same-origin <code>&lt;a&gt;</code> clicks <strong>and</strong> <code>&lt;form&gt;</code> submissions, fetches the target HTML, and swaps only the deepest layout boundary the two pages don't share. Outer layout DOM is preserved: sidenav scroll, input values, <code>&lt;details&gt;</code> open state, mounted custom elements all survive navigation without authors writing anything.</p>
-    <p>The router auto-enables when <code>@webjsdev/core/client-router</code> is imported (the scaffold's root layout does this for you). For 99% of apps the contract is "write standard HTML, navigation gets faster." The advanced primitives below (frames, revalidation, programmatic navigation) exist for the cases where you need to take over.</p>
+    <p>The router is automatic and needs no import: it auto-enables whenever <code>@webjsdev/core</code> loads in the browser, which happens on any page that ships a component. For 99% of apps the contract is "write standard HTML, navigation gets faster." The advanced primitives below (frames, revalidation, programmatic navigation) exist for the cases where you need to take over.</p>
 
     <h2>How it works (auto-magic, no opt-in)</h2>
     <ol>

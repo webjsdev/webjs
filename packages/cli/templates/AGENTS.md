@@ -562,7 +562,6 @@ CI gate).
 
 ```ts
 import { html, css, WebComponent } from '@webjsdev/core';
-import '@webjsdev/core/client-router';              // enable SPA nav
 import { unsafeHTML, live } from '@webjsdev/core/directives';
 import { createContext } from '@webjsdev/core/context';
 import { Task } from '@webjsdev/core/task';
@@ -788,8 +787,9 @@ reference: https://docs.webjs.com/docs/server-actions
 
 ## Client navigation patterns (auto-magic)
 
-The client router enables itself when the scaffolded root layout imports
-`@webjsdev/core/client-router`. After that, **every `<a href>` and
+The client router enables itself automatically: it turns on whenever
+`@webjsdev/core` loads in the browser, which happens on any page that
+ships a component, so there is no import to add. **Every `<a href>` and
 `<form action>` on the page is enhanced into a partial-swap navigation
 or submission automatically**. You don't call a router API. Write
 standard HTML; the swap happens.
