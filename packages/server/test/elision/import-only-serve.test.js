@@ -68,6 +68,46 @@ export default () => html\`<x-counter></x-counter>\`;`,
   }
 });
 
+// Strip the parts elision is ALLOWED to change (the boot module script + the
+// modulepreload hints) so the rest of the document can be compared byte for byte.
+function maskJsSet(html) {
+  return html
+    .replace(/<script type="module">[\s\S]*?<\/script>/g, '<script type="module"></script>')
+    .replace(/<link[^>]+rel=["']modulepreload["'][^>]*>\s*/g, '');
+}
+
+test('import-only elision does not change the SSR body (on vs off, #605)', async () => {
+  const files = {
+    'app/layout.ts': INERT_LAYOUT,
+    'app/page.ts': `import { html } from '@webjsdev/core';
+import '../components/counter.ts';
+export default () => html\`<x-counter>seed</x-counter><p>static copy</p>\`;`,
+    'components/counter.ts': COUNTER,
+  };
+  const onDir = makeApp(files);
+  const offDir = makeApp(files);
+  const prev = process.env.WEBJS_ELIDE;
+  try {
+    const onApp = await createRequestHandler({ appDir: onDir, dev: false });
+    if (onApp.warmup) await onApp.warmup();
+    const onHtml = await (await onApp.handle(new Request('http://x/'))).text();
+
+    process.env.WEBJS_ELIDE = '0';
+    const offApp = await createRequestHandler({ appDir: offDir, dev: false });
+    if (offApp.warmup) await offApp.warmup();
+    const offHtml = await (await offApp.handle(new Request('http://x/'))).text();
+
+    // Sanity: the two really did diverge in the JS set (otherwise the mask is
+    // vacuous and the equality below proves nothing).
+    assert.notEqual(onHtml, offHtml, 'precondition: on and off differ in the JS set');
+    assert.equal(maskJsSet(onHtml), maskJsSet(offHtml), 'the SSR body is identical apart from the boot JS set');
+  } finally {
+    if (prev === undefined) delete process.env.WEBJS_ELIDE; else process.env.WEBJS_ELIDE = prev;
+    rmSync(onDir, { recursive: true, force: true });
+    rmSync(offDir, { recursive: true, force: true });
+  }
+});
+
 test('a layout importing the client router keeps its module in the boot (#605)', async () => {
   const dir = makeApp({
     'app/layout.ts': ROUTER_LAYOUT,
