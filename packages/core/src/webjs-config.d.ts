@@ -15,7 +15,8 @@
  * LOCKSTEP: this file, the JSON Schema at
  * packages/server/webjs-config.schema.json, and the server reader
  * functions MUST stay in sync. The readers are: readElideEnabled
- * (dev.js, elide), compileHeaderRules (headers.js, headers),
+ * (dev.js, elide), readSeedEnabled (dev.js, seed), readClientRouterEnabled
+ * (dev.js, clientRouter), compileHeaderRules (headers.js, headers),
  * compileRedirectRules / readTrailingSlashPolicy (redirects.js,
  * redirects / trailingSlash), readBasePath (base-path.js, basePath),
  * readCspConfig (csp.js, csp), and

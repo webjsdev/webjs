@@ -10,6 +10,8 @@ export default function ClientRouter() {
 
     <p>The one edge: a <strong>fully-static page with zero components</strong> ships no JavaScript at all, so it has no router and its links do a normal full-page navigation (correct progressive enhancement, and cheaper). This is invisible during a session, since a router started on any earlier interactive page stays active across soft navigations. It only shows on a cold direct load of such a page (a bare error or 404 screen). If you want soft navigation there too, render any component in the page or its layout, or add <code>import '@webjsdev/core/client-router'</code> to force the router on.</p>
 
+    <p><strong>Opting out app-wide.</strong> If you want plain full-page navigation everywhere (a classic multi-page app) even though you ship interactive components, set <code>&#123; "webjs": &#123; "clientRouter": false &#125; &#125;</code> in <code>package.json</code>. Components still hydrate and stay interactive; only the link / form interception is turned off, so every navigation is a full browser load. To turn it off for just one moment at runtime, call <code>disableClientRouter()</code> (and <code>enableClientRouter()</code> to turn it back on), both from <code>@webjsdev/core</code>.</p>
+
     <h2>How it works (auto-magic, no opt-in)</h2>
     <ol>
       <li>SSR emits <code>&lt;!--wj:children:&lt;segment-path&gt;--&gt;</code> comment markers around each layout's <code>\${children}</code> interpolation. One pair per layout in the chain. Derived from folder structure, with layout authors writing nothing.</li>
