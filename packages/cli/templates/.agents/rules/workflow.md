@@ -146,8 +146,11 @@ self-review loop.
   stub for the browser. `lib/` holds both server-only infra
   (the DB in `db/*.server.ts`) and browser-safe utilities (`lib/utils/cn.ts` with
   `cn`); follow the same rule per file.
-- Directives are deliberately minimal: only `unsafeHTML`, `live`, and `repeat`
-  ship. Use plain template-literal expressions
+- Directives: webjs exports the lit directives with no clean native equivalent
+  (`repeat`, `unsafeHTML`, `live`, `keyed`, `guard`, `cache`, `until`, `ref` /
+  `createRef`, `templateContent`, `asyncAppend` / `asyncReplace`, `watch`).
+  `classMap` / `styleMap` / `ifDefined` / `when` / `choose` are NOT exported.
+  For those, use plain template-literal expressions
   (`class=${active ? 'btn active' : 'btn'}`, `style=${'color:' + color}`,
   `${cond ? a : b}`) and lifecycle hooks (`this.query('#el')` in
   `firstUpdated`) instead of Lit's `classMap` / `styleMap` / `ref` / `when` /

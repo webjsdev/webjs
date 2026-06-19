@@ -5,7 +5,7 @@ export const metadata = { title: 'Directives | webjs' };
 export default function Directives() {
   return html`
     <h1>Directives</h1>
-    <p>webjs ships the full lit-html directive set. AI agents writing lit-shaped directive code land on familiar names; the implementations live in <code>packages/core/src/directives.js</code> and the renderers (<code>render-server.js</code>, <code>render-client.js</code>).</p>
+    <p>webjs ships the lit-html directives that have no clean native equivalent, under their familiar lit names, so AI agents writing lit-shaped directive code land on what they expect. The directives that ARE just sugar over plain JavaScript (<code>classMap</code> / <code>styleMap</code> / <code>ifDefined</code> / <code>when</code> / <code>choose</code>) are deliberately not shipped (see below). The implementations live in <code>packages/core/src/directives.js</code> and the renderers (<code>render-server.js</code>, <code>render-client.js</code>).</p>
 
     <pre>import { html, repeat } from '@webjsdev/core';
 import {
@@ -88,7 +88,7 @@ html\`&lt;ul&gt;\${asyncAppend(logTail(), (line, i) =&gt; html\`&lt;li&gt;\${i}:
     <p>On the server, both directives render empty (no iteration on a one-shot render). For page-level streaming, prefer <code>Suspense({ fallback, children })</code>.</p>
 
     <h2>Native patterns (no directive needed)</h2>
-    <p>For conditional classes, inline styles, optional attributes, conditional rendering, async data with full lifecycle, the lit-html directive set has classMap/styleMap/ifDefined/when/choose/until/etc. webjs ships these as runtime exports for parity, but the framework's preference for these specific cases is native JavaScript inside <code>render()</code>. AI agents emit either form correctly; the native form has no runtime overhead and shows up directly in the template.</p>
+    <p>For conditional classes, inline styles, optional attributes, and conditional rendering, lit reaches for the <code>classMap</code> / <code>styleMap</code> / <code>ifDefined</code> / <code>when</code> / <code>choose</code> directives. webjs deliberately does NOT ship those: native JavaScript inside <code>render()</code> expresses the same thing with no runtime overhead and shows up directly in the template, so it is the framework's preferred form (and what AI agents should emit). The directives webjs DOES export are the ones with no clean native equivalent, listed above (<code>repeat</code>, <code>unsafeHTML</code>, <code>live</code>, <code>keyed</code>, <code>guard</code>, <code>cache</code>, <code>until</code>, <code>ref</code>, the async directives, <code>watch</code>).</p>
 
     <h3>Conditional CSS classes</h3>
     <pre>html\`&lt;div class=\${[x &amp;&amp; 'active', y &amp;&amp; 'error'].filter(Boolean).join(' ')}&gt;\`;</pre>

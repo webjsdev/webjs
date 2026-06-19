@@ -38,7 +38,7 @@ So webjs picked off the exact API surface that an agent recognizes:
 - `static styles = css\`...\`` for shadow DOM
 - Lifecycle hooks named the same: `shouldUpdate`, `willUpdate`, `update`, `updated`, `firstUpdated`, `updateComplete`
 - `ReactiveController` with `hostConnected` / `hostDisconnected` / `hostUpdate` / `hostUpdated`
-- The full lit-html directive set: `repeat`, `unsafeHTML`, `live`, `keyed`, `guard`, `templateContent`, `ref`, `createRef`, `cache`, `until`, `asyncAppend`, `asyncReplace`
+- The lit-html directives that earn their place (the ones with no clean native equivalent): `repeat`, `unsafeHTML`, `live`, `keyed`, `guard`, `templateContent`, `ref`, `createRef`, `cache`, `until`, `asyncAppend`, `asyncReplace`, `watch`. The sugar-over-JS ones (`classMap`, `styleMap`, `ifDefined`, `when`, `choose`) are deliberately left out in favor of plain template expressions.
 
 [PR #31](https://github.com/webjsdev/webjs/pull/31) is where the full parity landed. It ported 127 lit tests verbatim and watched them pass on the webjs runtime. Same exit status. The behaviors that were undefined in lit got pinned down too, because the tests covered them.
 
