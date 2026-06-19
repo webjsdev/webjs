@@ -606,6 +606,39 @@ function warnOnce(key, message) {
   if (typeof console !== 'undefined' && console.warn) console.warn(message);
 }
 
+/**
+ * Dev-only, fire-once hint: the router forces an INSTANT scroll-to-top on a
+ * forward navigation (matching a native page load), so an app-level
+ * `scroll-behavior: smooth` on <html> does not affect route transitions (it
+ * still applies to in-page #anchor links via `scrollIntoView`). A developer
+ * who set smooth expecting smooth nav scrolling would otherwise be puzzled.
+ * Also flags the iOS sticky-`backdrop-filter` flash this combination can
+ * cause (#610). Never warns in production, never throws.
+ *
+ * The `smoothScrollChecked` flag gates the `getComputedStyle` read (a forced
+ * style flush) to AT MOST ONCE per page, so a dev session does not pay a
+ * per-navigation reflow after the first forward nav.
+ */
+let smoothScrollChecked = false;
+function warnIfSmoothScrollOnHtml() {
+  if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production') return;
+  if (smoothScrollChecked) return;
+  if (typeof document === 'undefined' || typeof getComputedStyle !== 'function') return;
+  const root = document.documentElement;
+  if (!root) return;
+  smoothScrollChecked = true;
+  let behavior;
+  try { behavior = getComputedStyle(root).scrollBehavior; } catch { return; }
+  if (behavior !== 'smooth') return;
+  warnOnce(
+    'scroll-behavior-smooth-html',
+    '[webjs] Detected `scroll-behavior: smooth` on <html>. The client router scrolls ' +
+    'to the top instantly on navigation (like a native page load), so route transitions ' +
+    'are not affected by it. It still applies to in-page #anchor links. Pairing it with a ' +
+    'sticky `backdrop-filter` header can also flash on iOS during navigation.'
+  );
+}
+
 /* ====================================================================
  * Marker discovery (the heart of the partial-swap mechanism)
  * ==================================================================== */
@@ -1725,10 +1758,11 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
       // `#section` link is exactly where an app's `scroll-behavior: smooth`
       // is wanted, and native browsers animate it too.
       if (t) t.scrollIntoView();
-      else window.scrollTo({ left: 0, top: 0, behavior: 'instant' });
+      else { warnIfSmoothScrollOnHtml(); window.scrollTo({ left: 0, top: 0, behavior: 'instant' }); }
     } else {
       // Scroll-to-top on a forward nav. behavior:'instant' so an app-level
       // `scroll-behavior: smooth` does not animate it (match native nav).
+      warnIfSmoothScrollOnHtml();
       window.scrollTo({ left: 0, top: 0, behavior: 'instant' });
     }
   }
@@ -3206,6 +3240,8 @@ export function _bumpNavToken() { return ++currentNavigationToken; }
 export function _currentPageUrl() { return currentPageUrl; }
 /** Test-only: set the tracker (simulates being on a specific page). */
 export function _setCurrentPageUrl(u) { currentPageUrl = u; }
+/** Test-only: clear the fire-once warning guards so a case can be re-exercised. */
+export function _resetWarnOnce() { warnedKeys.clear(); smoothScrollChecked = false; }
 
 /**
  * Predicate used by the onClick handler to decide whether a same-origin
