@@ -1309,7 +1309,21 @@ export async function createRequestHandler(opts) {
     if (matchPathname === null) return null;
     const page = matchPage(state.routeTable, matchPathname);
     if (!page) return null;
-    const moduleUrls = [page.route.file, ...page.route.layouts].map((f) => {
+    // Mirror ssr.js's boot assembly EXACTLY: drop inert route modules, and
+    // splice an import-only module's component imports in place of the module
+    // (#605). Otherwise the 103 Early Hints would preload the page / layout
+    // modules the body no longer imports (a wasted hint) and miss the component
+    // modules it actually fetches (a double-fetch on the real module).
+    const inert = state.inertRouteModules;
+    const importOnly = state.importOnlyRouteModules;
+    const files = [];
+    const seenFiles = new Set();
+    for (const f of [page.route.file, ...page.route.layouts]) {
+      if (inert && inert.has(f)) continue;
+      const emit = importOnly && importOnly.get(f);
+      for (const t of emit || [f]) if (!seenFiles.has(t)) { seenFiles.add(t); files.push(t); }
+    }
+    const moduleUrls = files.map((f) => {
       let rel = f.startsWith(appDir) ? f.slice(appDir.length) : f;
       const url = rel.split('\\').join('/').replace(/^\/?/, '/');
       // Mirror ssr.js's emit (basePath THEN `?v`) so the 103 Early Hints preload
