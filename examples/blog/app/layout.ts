@@ -61,8 +61,8 @@ export default function RootLayout({ children }: LayoutProps) {
   // CSP nonce for inline scripts. Empty when no nonce in CSP.
   const nonce = cspNonce();
   return html`
-    <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
     <link rel="icon" href="/public/favicon.png" type="image/png" sizes="any">
+    <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/public/favicon.png">
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-3RC87HXJ3P" nonce="${nonce}"></script>
