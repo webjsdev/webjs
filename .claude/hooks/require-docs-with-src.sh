@@ -1,33 +1,42 @@
 #!/usr/bin/env bash
 #
-# PreToolUse hook: when a `git commit` changes public-facing framework
-# source but stages NO documentation surface, inject a non-blocking
-# reminder naming every doc surface and the webjs-doc-sync skill.
+# PreToolUse hook: BLOCK a `git commit` that changes public-facing
+# framework source but stages NO documentation surface. In webjs,
+# documentation is part of the definition of done, not an afterthought:
+# the docs app PLUS every monorepo markdown surface (AGENTS.md / CLAUDE.md /
+# CONVENTIONS.md, agent-docs/, README, the docs site, the marketing
+# website, the scaffold templates' per-agent rule files). The recurring
+# failure was updating ONE surface (or none) and shipping the rest stale,
+# so the docs drift behind the framework. HTTP-verb server actions (#488)
+# shipped with AGENTS.md updated but the docs site untouched.
 #
-# Why this exists: webjs ships docs across many surfaces (AGENTS.md +
-# agent-docs/, README, the docs site under docs/app/docs/, the marketing
-# website/, and the scaffold templates' per-agent rule files). The
-# recurring failure is updating ONE (usually AGENTS.md) and silently
-# missing the rest, so the docs site and website drift behind the
-# framework. HTTP-verb server actions (#488) shipped with AGENTS.md updated
-# but the docs site untouched. This hook closes that gap the same way
-# require-tests-with-src.sh closes the test gap: it fires on every commit,
-# decides from the STAGED diff (not model judgement), and reminds.
+# This is the doc twin of require-tests-with-src.sh: it fires on every
+# commit, decides from the STAGED diff (not model judgement), and BLOCKS
+# (exit 2) when source is staged with no doc surface in the same commit.
+# Earlier this hook only reminded; it now gates, because a reminder was
+# routinely missed and docs shipped stale.
 #
-# Unlike the test gate this hook NEVER blocks (exit 2). Docs are
-# conditional: a genuinely internal change (refactor, CI, release, perf
-# with no behaviour change) correctly updates no doc surface, and the
-# "commit per logical unit" rule means code and its docs may land in
-# separate commits. So this informs; it does not gate. The substantive
-# decision (which surfaces actually apply) is the webjs-doc-sync skill.
+# What a hook CANNOT do: know WHICH surfaces a change needs (that is the
+# webjs-doc-sync skill's job). So it enforces the floor (a public-source
+# commit must stage SOME doc surface) and points at the skill for the
+# substantive, per-surface sync.
 #
-# Scope: only fires on `git commit` Bash calls. Inspects the STAGED diff.
-# Fires only when source is staged AND no doc surface is staged in the same
-# commit, so a commit that already touches docs stays quiet.
+# Scope: only fires on `git commit` Bash calls. Inspects the STAGED diff,
+# so `git add` choices drive it.
+#
+# Allowed (exit 0): commits touching no public src; commits that stage a
+# doc surface alongside source; and a genuinely internal change (refactor,
+# CI, release, perf with no behaviour change) via WEBJS_NO_DOC_GATE=1.
+# (`git commit --no-verify` skips git's own hooks, not this one, so the
+# message names the env escape hatch.)
+#
+# Rule: AGENTS.md "Code workflow" item 2 (Documentation) + the
+# webjs-doc-sync skill.
 
 set -euo pipefail
 
-if [ "${WEBJS_NO_DOC_REMINDER:-}" = "1" ]; then
+# WEBJS_NO_DOC_REMINDER kept for back-compat with the pre-gate name.
+if [ "${WEBJS_NO_DOC_GATE:-}" = "1" ] || [ "${WEBJS_NO_DOC_REMINDER:-}" = "1" ]; then
   exit 0
 fi
 
@@ -35,6 +44,7 @@ payload=$(cat)
 cmd=$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2>/dev/null || true)
 if [ -z "$cmd" ]; then exit 0; fi
 
+# Match `git commit` as a whole word (a real commit, not git commit-tree).
 if ! printf '%s' "$cmd" | grep -Eq '(^|[^[:alnum:]-])git commit([^[:alnum:]-]|$)'; then
   exit 0
 fi
@@ -44,21 +54,42 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then exit 0; fi
 staged=$(git diff --cached --name-only 2>/dev/null || true)
 if [ -z "$staged" ]; then exit 0; fi
 
-# Public-facing framework source: the runtime packages' src/ and the CLI
+# Public-facing framework source: each runtime package's src/ and the CLI
 # lib/. A change here is the kind that MAY change a documented surface.
 src_touched=$(printf '%s\n' "$staged" | grep -E '^packages/([^/]+/src|editors/[^/]+/src|cli/lib)/' || true)
 if [ -z "$src_touched" ]; then exit 0; fi
 
-# Any doc surface staged in the same commit? If so, the author is already
-# updating docs; stay quiet.
+# Any documentation surface staged in the same commit? The curated set of
+# real doc surfaces: AGENTS / CLAUDE / CONVENTIONS / README markdown at any
+# depth (root, per-package, per-example), agent-docs/, the docs site, the
+# marketing website, and the scaffold templates. NOT every *.md, so a stray
+# note cannot be staged to slip the gate.
 doc_staged=$(printf '%s\n' "$staged" | grep -E \
-  '^(AGENTS\.md|README\.md|CONVENTIONS\.md|agent-docs/|docs/|website/|packages/cli/templates/|examples/[^/]+/CONVENTIONS\.md)' || true)
+  '(^|/)(AGENTS|CLAUDE|CONVENTIONS|README)\.md$|^agent-docs/|^docs/|^website/|^packages/cli/templates/' || true)
 if [ -n "$doc_staged" ]; then exit 0; fi
 
-jq -n '{
-  hookSpecificOutput: {
-    hookEventName: "PreToolUse",
-    additionalContext: "Reminder: this commit changes framework source but stages no doc surface. If it changed a PUBLIC or AGENT-FACING surface (an export, a CLI flag, a package.json webjs.* key, an html hole, a lifecycle hook, a convention, or the behaviour of an already-documented feature), invoke the webjs-doc-sync skill and sync EVERY applicable surface: AGENTS.md + agent-docs/*.md, README.md, the docs site (docs/app/docs/<topic>), the marketing website/, and the scaffold templates (packages/cli/templates/ per-agent rule files). Update AGENTS.md only and you reproduce the #488 gap (docs site left stale). A genuinely internal change (refactor, CI, release, perf with no behaviour change) correctly needs no doc edit; ignore this then."
-  }
-}'
-exit 0
+cat >&2 <<'EOF'
+BLOCKED: this commit changes framework source but stages no documentation.
+
+Staged source under packages/*/src/** (or cli/lib) with no doc surface in
+the same commit. In webjs, documentation is part of the definition of done:
+a task is NOT done until every surface its change touches is in sync.
+
+If this changed a PUBLIC or AGENT-FACING surface (an export, a CLI flag, a
+package.json webjs.* key, an html hole, a lifecycle hook, a convention, or
+the behaviour of an already-documented feature), invoke the webjs-doc-sync
+skill, then `git add` EVERY applicable surface and commit again:
+  AGENTS.md + agent-docs/*.md            agent reference
+  docs/app/docs/<topic>                  the docs site
+  README.md                              if a headline capability
+  website/                               marketing copy, if headline
+  packages/cli/templates/                scaffold per-agent rule files
+  CONVENTIONS.md / per-package AGENTS.md if a convention changed
+Updating AGENTS.md alone reproduces the #488 gap (docs site left stale).
+
+Genuinely internal change (refactor, CI, release, perf with no behaviour
+change) that needs no doc edit? Re-run with WEBJS_NO_DOC_GATE=1.
+
+Hook: .claude/hooks/require-docs-with-src.sh
+EOF
+exit 2
