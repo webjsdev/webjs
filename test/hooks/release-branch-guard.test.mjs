@@ -38,6 +38,27 @@ function runHook(pkgPath, branch) {
   return { code: r.status, out: `${r.stdout}${r.stderr}` };
 }
 
+/** Stage an arbitrary old->new edit (raw file contents) for `pkgPath` on
+ * `branch`, run the hook. Lets a test reproduce a non-version manifest edit. */
+function runHookRaw(pkgPath, branch, oldContent, newContent) {
+  const dir = mkdtempSync(join(tmpdir(), 'webjs-hook-'));
+  const git = (...a) => spawnSync('git', a, { cwd: dir, encoding: 'utf8' });
+  git('init', '-q');
+  git('config', 'user.email', 't@t');
+  git('config', 'user.name', 't');
+  git('checkout', '-q', '-b', branch);
+  mkdirSync(join(dir, dirname(pkgPath)), { recursive: true });
+  writeFileSync(join(dir, pkgPath), oldContent);
+  git('add', '-A'); git('commit', '-q', '--no-verify', '-m', 'base');
+  writeFileSync(join(dir, pkgPath), newContent);
+  git('add', pkgPath);
+  const env = { ...process.env };
+  delete env.GITHUB_ACTIONS;
+  const r = spawnSync('bash', [hook], { cwd: dir, encoding: 'utf8', env });
+  rmSync(dir, { recursive: true, force: true });
+  return { code: r.status, out: `${r.stdout}${r.stderr}` };
+}
+
 const GUARD = /not a chore\/release-\* branch/;
 
 test('blocks a cli bump on a feature branch (the wrong-branch release symptom)', () => {
@@ -81,4 +102,25 @@ test('exempts lockstep wrappers (skipped by the changelog step, clean pass)', ()
     assert.doesNotMatch(r.out, GUARD, `${p} is not guarded`);
     assert.equal(r.code, 0, `${p} passes the hook (no changelog required)`);
   }
+});
+
+// A last-position "version" field that gains a trailing comma when a sibling
+// field is appended makes `git diff --unified=0` re-emit the value-unchanged
+// version line as a `+`. The old heuristic mistook that for a bump and blocked
+// a legit non-version manifest edit on a feature branch. (#592)
+const ADJACENT_BASE = '{\n  "name": "core",\n  "version": "1.0.0"\n}\n';
+
+test('does NOT block a non-version manifest edit adjacent to the version line (#592)', () => {
+  const edited = '{\n  "name": "core",\n  "version": "1.0.0",\n  "private": true\n}\n';
+  const r = runHookRaw('packages/core/package.json', 'feat/x', ADJACENT_BASE, edited);
+  assert.equal(r.code, 0, 'a non-version edit on a feature branch passes the hook');
+  assert.doesNotMatch(r.out, GUARD, 'the value did not change, so it is not a bump');
+});
+
+test('still detects a real version change with the same adjacent edit (#592 counterfactual)', () => {
+  // Identical adjacency, but the version VALUE actually changes: gate 3 must
+  // still catch it on a feature branch (proves the fix did not over-correct).
+  const bumped = '{\n  "name": "core",\n  "version": "1.0.1",\n  "private": true\n}\n';
+  const r = runHookRaw('packages/core/package.json', 'feat/x', ADJACENT_BASE, bumped);
+  assert.match(r.out, GUARD, 'a genuine version change is still detected');
 });
