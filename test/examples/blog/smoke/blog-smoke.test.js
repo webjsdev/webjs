@@ -124,6 +124,24 @@ describe('Blog smoke (Tier-1/Tier-2 migration)', { skip: skip && 'blog or its DB
     assert.equal(broken.length, 0, `modulepreload hints must all resolve; broken:\n${broken.join('\n')}`);
   });
 
+  test('homepage is import-only: app/page.ts is dropped from the boot (#619)', async () => {
+    // The home page does no client work of its own; it only imports interactive
+    // components. Its lib/utils/cn.ts dependency used to drag a customElements
+    // reference (dead Base/defineElement helpers) into the page closure, which
+    // pinned the whole page module. With that dead code removed, the page is
+    // import-only: the boot emits its interactive leaves directly and drops
+    // app/page.ts. Regression guard for the #619 dogfood fix.
+    const html = await (await fetch(baseUrl + '/')).text();
+    const boot = [...html.matchAll(/<script type="module">([\s\S]*?)<\/script>/g)]
+      .map((m) => m[1])
+      .join('\n');
+    const specs = [...boot.matchAll(/import\s+["']([^"']+)["']/g)].map((m) => m[1]);
+    const pageInBoot = specs.some((s) => /\/app\/page\.(ts|js)/.test(s));
+    const counterInBoot = specs.some((s) => /counter\.(ts|js)/.test(s));
+    assert.equal(pageInBoot, false, `app/page.ts must NOT be in the boot (import-only). boot specs: ${specs.join(', ')}`);
+    assert.ok(counterInBoot, 'the interactive leaves are emitted directly (counter present)');
+  });
+
   test('/login renders class-helper output, not stale <ui-X> tags', async () => {
     const html = await fetch(baseUrl + '/login').then((r) => r.text());
 
