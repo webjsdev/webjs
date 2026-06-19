@@ -330,43 +330,41 @@ export default function Layout({ children }: { children: any }) {
       </a>
     </div>
 
-    <header class="sticky top-0 z-20 w-full border-b border-border bg-[var(--bg)]">
-      <div class="flex items-center justify-between gap-4 max-w-5xl mx-auto px-4 sm:px-6 py-4">
-        <a class="flex items-center gap-2 no-underline text-fg font-bold text-base leading-none tracking-tight" href="/">
-          <span class="w-[22px] h-[22px] rounded-md bg-gradient-to-br from-brand to-[color-mix(in_oklch,var(--accent)_55%,var(--fg))]"></span>
-          Webjs UI
-        </a>
+    <header class="flex items-center justify-between gap-4 max-w-5xl mx-auto px-4 sm:px-6 py-4">
+      <a class="flex items-center gap-2 no-underline text-fg font-bold text-base leading-none tracking-tight" href="/">
+        <span class="w-[22px] h-[22px] rounded-md bg-gradient-to-br from-brand to-[color-mix(in_oklch,var(--accent)_55%,var(--fg))]"></span>
+        Webjs UI
+      </a>
 
-        <!-- Inline nav, md and up -->
-        <nav class="hidden md:flex items-center gap-4">
-          <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="/docs/components/accordion">Components</a>
-          <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="/docs">Docs</a>
-          <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href=${WEBSITE_URL} target="_blank">Webjs</a>
-          <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="https://github.com/webjsdev/webjs" target="_blank">GitHub</a>
-          <theme-toggle></theme-toggle>
-        </nav>
+      <!-- Inline nav, md and up -->
+      <nav class="hidden md:flex items-center gap-4">
+        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="/docs/components/accordion">Components</a>
+        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="/docs">Docs</a>
+        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href=${WEBSITE_URL} target="_blank">Webjs</a>
+        <a class="text-fg-muted no-underline font-medium text-[13px] leading-none transition-colors duration-fast hover:text-fg" href="https://github.com/webjsdev/webjs" target="_blank">GitHub</a>
+        <theme-toggle></theme-toggle>
+      </nav>
 
-        <!-- Mobile cluster: hamburger LEFT, theme-toggle RIGHT (uniform
-             with webjs.dev and the blog example). -->
-        <div class="flex items-center gap-2 md:hidden">
-          <details class="mobile-menu relative">
-            <summary class="list-none cursor-pointer w-9 h-9 inline-flex items-center justify-center rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" aria-label="Toggle navigation">
-              <svg class="open-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/>
-              </svg>
-              <svg class="close-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
-              </svg>
-            </summary>
-            <nav class="absolute right-0 top-[calc(100%+8px)] min-w-[200px] flex flex-col gap-1 bg-bg-elev border border-border rounded-lg shadow-lg p-2 z-50">
-              <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="/docs/components/accordion">Components</a>
-              <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="/docs">Docs</a>
-              <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href=${WEBSITE_URL} target="_blank">Webjs</a>
-              <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="https://github.com/webjsdev/webjs" target="_blank">GitHub</a>
-            </nav>
-          </details>
-          <theme-toggle></theme-toggle>
-        </div>
+      <!-- Mobile cluster: hamburger LEFT, theme-toggle RIGHT (uniform
+           with webjs.dev and the blog example). -->
+      <div class="flex items-center gap-2 md:hidden">
+        <details class="mobile-menu relative">
+          <summary class="list-none cursor-pointer w-9 h-9 inline-flex items-center justify-center rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" aria-label="Toggle navigation">
+            <svg class="open-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/>
+            </svg>
+            <svg class="close-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+            </svg>
+          </summary>
+          <nav class="absolute right-0 top-[calc(100%+8px)] min-w-[200px] flex flex-col gap-1 bg-bg-elev border border-border rounded-lg shadow-lg p-2 z-50">
+            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="/docs/components/accordion">Components</a>
+            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="/docs">Docs</a>
+            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href=${WEBSITE_URL} target="_blank">Webjs</a>
+            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="https://github.com/webjsdev/webjs" target="_blank">GitHub</a>
+          </nav>
+        </details>
+        <theme-toggle></theme-toggle>
       </div>
     </header>
 

@@ -238,8 +238,10 @@ await navigate('/login', { replace: true });</pre>
     </ul>
 
     <h2>Loading indicator</h2>
-    <p>During navigation, <code>&lt;html&gt;</code> gets a <code>data-navigating</code> attribute, deferred by 150ms so quick navs (sub-150ms) never trigger it. Use it for a subtle progress indicator:</p>
-    <pre>html[data-navigating] {
+    <p>The router can expose a <code>data-navigating</code> attribute on <code>&lt;html&gt;</code> during navigation (deferred 150ms, so quick sub-150ms navs never trigger it) for a subtle progress indicator. It is <strong>opt-in</strong>: add <code>data-webjs-nav-progress</code> to your <code>&lt;html&gt;</code> element to enable it. It stays off by default because toggling an attribute on the root re-resolves <code>oklch()</code> and <code>color-mix()</code> token values on WebKit (so every iOS browser), repainting them for one frame. On a token-driven theme that shows as a visible flash on a slow nav. Enable it only when your theme does not lean on wide-gamut color tokens, or drive your indicator off the <code>webjs:navigate</code> event instead.</p>
+    <pre>&lt;html data-webjs-nav-progress&gt; &lt;!-- opt in once, in your root layout --&gt;
+
+html[data-navigating] {
   cursor: progress;
 }
 html[data-navigating]::after {

@@ -639,6 +639,31 @@ function warnIfSmoothScrollOnHtml() {
   );
 }
 
+/**
+ * Nav-in-flight signalling. The router can expose `data-navigating` on <html>
+ * so an app may style a loading indicator with `html[data-navigating] { … }`.
+ *
+ * This is OPT-IN, set only when the app marks `<html data-webjs-nav-progress>`.
+ * The reason it is not unconditional: toggling ANY attribute on the root
+ * re-runs global style resolution, and on WebKit (so every iOS browser, since
+ * they all use it) that re-resolves `oklch()` / `color-mix(in oklch, …)` token
+ * values to an equivalent oklab representation and repaints them for one frame.
+ * On a token-driven theme that is a visible background flash on navigation
+ * (#610). The flash only shows on a nav slow enough to reach the deferred set
+ * below, which a desktop nav rarely is but a mobile forward fetch routinely is,
+ * so the symptom is iOS-and-forward-only. With no opt-in the attribute is never
+ * written, so the re-resolution never happens and the flash cannot occur.
+ */
+function setNavigating(on) {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  if (!root || !root.hasAttribute('data-webjs-nav-progress')) return;
+  try {
+    if (on) root.setAttribute('data-navigating', '');
+    else root.removeAttribute('data-navigating');
+  } catch { /* non-DOM environment */ }
+}
+
 /* ====================================================================
  * Marker discovery (the heart of the partial-swap mechanism)
  * ==================================================================== */
@@ -805,17 +830,11 @@ async function performNavigation(href, isPopState, frameId) {
   // about to read in the popstate-restore branch below.
   if (currentPageUrl) snapshotCurrent(currentPageUrl);
 
-  // Show a subtle loading indicator, but only if the nav takes long
-  // enough to be worth showing one. Setting an attribute on <html>
-  // invalidates global style computation: which forces CSS like
-  // `color-mix(in oklch, …)` to re-resolve. For values that use
-  // wide-gamut color spaces the re-resolution can switch between
-  // equivalent representations (oklch ↔ oklab) and fire any
-  // `transition` rules listening on that property, producing a
-  // visible flash on every nav. Defer the attribute set so quick
-  // navs (sub-150ms) never set it at all.
+  // Expose the opt-in `data-navigating` loading-indicator hook (see
+  // setNavigating), but only if the nav takes long enough to be worth showing
+  // one. Deferred so quick navs (sub-150ms) never set it at all.
   let navigatingFlagTimer = setTimeout(() => {
-    document.documentElement.setAttribute('data-navigating', '');
+    setNavigating(true);
     navigatingFlagTimer = null;
   }, 150);
 
@@ -863,7 +882,7 @@ async function performNavigation(href, isPopState, frameId) {
     // Only clear the navigating flag if WE are still the active nav.
     // A newer nav has its own flag lifecycle.
     if (myToken === currentNavigationToken) {
-      document.documentElement.removeAttribute('data-navigating');
+      setNavigating(false);
       // Record where the user is NOW so the next navigation can
       // snapshot under the right URL key.
       if (typeof location !== 'undefined') currentPageUrl = location.href;
@@ -930,7 +949,7 @@ async function performSubmission(href, method, body, frameId, form) {
   if (currentPageUrl) snapshotCurrent(currentPageUrl);
 
   let navigatingFlagTimer = setTimeout(() => {
-    document.documentElement.setAttribute('data-navigating', '');
+    setNavigating(true);
     navigatingFlagTimer = null;
   }, 150);
 
@@ -970,7 +989,7 @@ async function performSubmission(href, method, body, frameId, form) {
     if (busyForm) clearFormBusy(busyForm, myToken, url.href, outcomeOk);
     if (navigatingFlagTimer) clearTimeout(navigatingFlagTimer);
     if (myToken === currentNavigationToken) {
-      document.documentElement.removeAttribute('data-navigating');
+      setNavigating(false);
       if (typeof location !== 'undefined') currentPageUrl = location.href;
     }
   }
