@@ -560,18 +560,11 @@ function hasNonStateReactiveProperty(classBody) {
   // see; ship rather than guess they are all { state: true }.
   if (/\.\.\./.test(obj)) return true;
   for (const entry of topLevelPropertyValues(obj)) {
-    // Object-literal descriptor: inert only when it carries state: true.
+    // Object-literal descriptor: inert only when it carries `state: true` at
+    // its top level (descriptorDeclaresState blanks strings and ignores a
+    // nested state flag, e.g. inside a converter, so it cannot be forged).
     if (entry.startsWith('{')) {
-      // Blank string / template bodies first. Redaction keeps quoted
-      // string contents verbatim (so register('tag') stays readable), so
-      // a descriptor like `{ attribute: 'data-state: true' }` would
-      // otherwise forge the state flag. The real `state: true` is code,
-      // not a string, so it survives this blanking.
-      const code = entry
-        .replace(/'[^'\n]*'/g, "''")
-        .replace(/"[^"\n]*"/g, '""')
-        .replace(/`[^`]*`/g, '``');
-      if (!/\bstate\s*:\s*true\b/.test(code)) return true;
+      if (!descriptorDeclaresState(entry)) return true;
     } else {
       // Shorthand like `count: Number` rides an attribute, not state.
       return true;
@@ -588,12 +581,13 @@ function hasNonStateReactiveProperty(classBody) {
  * reactive state with no such channel, so a component whose only signal is
  * state props stays elidable.
  *
- * A property value is treated as state ONLY when its text carries
- * `state: true`, which covers both the bare descriptor `{ state: true }` and
- * the `prop()` helper forms `prop({ state: true })` / `prop(Type, { state:
- * true })`. Anything else (a bare type `Number`, `prop(Number)`, an options
- * object without `state: true`) is non-state and ships. Conservative on a
- * spread or an unbalanced brace (cannot prove every entry is state, so ship).
+ * A property value is treated as state ONLY when its descriptor declares
+ * `state: true` at the TOP LEVEL (see `descriptorDeclaresState`), which covers
+ * the bare descriptor `{ state: true }` and the `prop()` helper forms
+ * `prop({ state: true })` / `prop(Type, { state: true })`. Anything else (a bare
+ * type `Number`, `prop(Number)`, an options object without `state: true`) is
+ * non-state and ships. Conservative on a spread or an unbalanced brace (cannot
+ * prove every entry is state, so ship).
  *
  * @param {string} factoryArg
  * @returns {boolean}
@@ -608,13 +602,42 @@ function hasNonStateFactoryProperty(factoryArg) {
   const obj = factoryArg.slice(objStart + 1, objEnd);
   if (/\.\.\./.test(obj)) return true; // spread: cannot prove all entries state
   for (const entry of topLevelPropertyValues(obj)) {
-    const code = entry
-      .replace(/'[^'\n]*'/g, "''")
-      .replace(/"[^"\n]*"/g, '""')
-      .replace(/`[^`]*`/g, '``');
-    if (!/\bstate\s*:\s*true\b/.test(code)) return true;
+    if (!descriptorDeclaresState(entry)) return true;
   }
   return false;
+}
+
+/**
+ * True if a reactive-property descriptor declares `state: true` at the TOP
+ * LEVEL of its options object (brace-depth 1). Restricting to depth 1 is a
+ * direction-of-safety fix: a `state: true` buried deeper (a converter /
+ * hasChanged body that happens to return `{ state: true }`) must NOT forge the
+ * flag, because wrongly treating an attribute-riding property as state would
+ * ELIDE an interactive component and break the page. Strings / templates are
+ * blanked first, so `attribute: 'data-state: true'` does not match, and the
+ * `\b` word boundary keeps a key like `firstate: true` from matching. In every
+ * legitimate shape (`{ state: true }`, `prop({ state: true })`,
+ * `prop(Type, { state: true })`) the descriptor object is the only brace group,
+ * so its `state` key sits at depth 1.
+ *
+ * @param {string} entry  the property VALUE text
+ * @returns {boolean}
+ */
+function descriptorDeclaresState(entry) {
+  const code = entry
+    .replace(/'[^'\n]*'/g, "''")
+    .replace(/"[^"\n]*"/g, '""')
+    .replace(/`[^`]*`/g, '``');
+  // Keep only text at brace-depth <= 1 (the descriptor's own level); blank
+  // deeper nesting so a nested `state: true` cannot count.
+  let depth = 0;
+  let shallow = '';
+  for (const c of code) {
+    if (c === '{') { depth++; if (depth <= 1) shallow += c; continue; }
+    if (c === '}') { if (depth <= 1) shallow += c; if (depth > 0) depth--; continue; }
+    if (depth <= 1) shallow += c;
+  }
+  return /\bstate\s*:\s*true\b/.test(shallow);
 }
 
 /**

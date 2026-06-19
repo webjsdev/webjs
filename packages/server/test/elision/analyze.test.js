@@ -106,6 +106,18 @@ test('the WebComponent exemption is scoped: a top-level non-extends WebComponent
   assert.match(r.reason, /module scope/);
 });
 
+test('a non-state prop with a NESTED state:true (a converter) still ships (#604 direction-of-safety)', () => {
+  // The state flag counts only at the descriptor top level. A `state: true`
+  // buried in a converter body must NOT forge the flag, or an attribute-riding
+  // (interactive) prop would be wrongly elided and the page would break.
+  const r = analyzeComponentSource(factory(
+    'WebComponent({ n: prop(Number, { converter: { fromAttribute: () => ({ state: true }) } }) })',
+    'render() { return html`<span>${this.n}</span>`; }',
+  ));
+  assert.equal(r.interactive, true);
+  assert.match(r.reason, /reactive property/);
+});
+
 test('@event binding forces interactive', () => {
   const src = DISPLAY_ONLY.replace(
     '<p>${this.student.name}</p>',
