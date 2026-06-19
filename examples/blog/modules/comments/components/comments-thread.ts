@@ -10,7 +10,7 @@ import type { CommentFormatted } from '#modules/comments/types.ts';
  */
 export class CommentsThread extends WebComponent({
   postId:   String,
-  initial:  prop<CommentFormatted[]>(Object),
+  initial:  prop<CommentFormatted[]>(Array),
   signedIn: Boolean,
 }) {
   comments = signal<CommentFormatted[]>([]);
