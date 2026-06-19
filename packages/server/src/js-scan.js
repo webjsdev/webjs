@@ -81,9 +81,38 @@ const REGEX_PRECEDING_KEYWORDS = new Set([
  * @returns {string}
  */
 export function redactStringsAndTemplates(src, blankStrings = false) {
+  return scanLiterals(src, { placeholder: false, blankStrings }).out;
+}
+
+/**
+ * Core string / template / comment lexer shared by `redactStringsAndTemplates`
+ * (#179) and `redactToPlaceholders` (#634). ONE walker owns the
+ * regex-versus-division, tagged-template, and `${...}`-nesting disambiguation,
+ * so the two output modes can never drift apart.
+ *
+ * Two output modes, selected by `placeholder`:
+ *  - MASK (placeholder=false): position-preserving mask (same length, newlines
+ *    kept). Comment and regex bodies blank to spaces; template bodies blank,
+ *    recursing `${...}` holes as blanked code; plain-string bodies stay VERBATIM
+ *    so a caller can read `register('tag')`, UNLESS `blankStrings` is set (then
+ *    string bodies blank too and the verbatim-template fast path is disabled).
+ *    `literals` is empty.
+ *  - PLACEHOLDER (placeholder=true): each string / template-text body is
+ *    replaced by a `__STR_<idx>__` token (delimiters kept) and pushed to
+ *    `literals`, while `${...}` holes are scanned as REAL code. Lets a caller
+ *    tell a real top-level `register(...)` / `import` from one shown inside a
+ *    code-sample literal (resolve the token via `literals[idx]`). In this mode
+ *    code is never blanked, so the mask emit-formulas below reduce to verbatim.
+ *
+ * @param {string} src
+ * @param {{ placeholder?: boolean, blankStrings?: boolean }} [opts]
+ * @returns {{ out: string, literals: string[] }}
+ */
+function scanLiterals(src, { placeholder = false, blankStrings = false } = {}) {
   const n = src.length;
   let out = '';
   let i = 0;
+  const literals = [];
   // Previous significant token in code position, tracked as we walk (more
   // robust than scanning `out`, whose tail is blanked spaces inside a hole).
   // `lastSig` is the last non-whitespace source char; `lastWord` is the last
@@ -112,7 +141,7 @@ export function redactStringsAndTemplates(src, blankStrings = false) {
     if (/[\w$]/.test(lastSig)) return !lastWordIsProp && REGEX_PRECEDING_KEYWORDS.has(lastWord);
     return true;
   };
-  // A template is tagged when the previous token is a value.
+  // A template is tagged when the previous token is a value (mask mode only).
   const isTagged = () => /[\w$)\]'"`]/.test(lastSig);
 
   const scanLineComment = () => {
@@ -140,9 +169,25 @@ export function redactStringsAndTemplates(src, blankStrings = false) {
     }
     markValue();
   };
-  // Strings: KEEP the body verbatim at top level (so tag-name-has-hyphen can
+  // Strings. PLACEHOLDER: collect the body into `literals` and emit
+  // `q__STR_idx__q`. MASK: KEEP the body verbatim (so tag-name-has-hyphen can
   // read register('foo')); blank it when inside an already-blanked hole.
   const scanString = (q, blank) => {
+    if (placeholder) {
+      i++;
+      let body = '';
+      while (i < n) {
+        if (src[i] === '\\' && i + 1 < n) { body += src[i] + src[i + 1]; i += 2; continue; }
+        if (src[i] === q) { i++; break; }
+        if (src[i] === '\n') { i++; break; }
+        body += src[i]; i++;
+      }
+      const idx = literals.length;
+      literals.push(body);
+      out += q + `__STR_${idx}__` + q;
+      markValue();
+      return;
+    }
     out += q; i++;
     while (i < n) {
       if (src[i] === '\\' && i + 1 < n) { out += blank ? '  ' : src[i] + src[i + 1]; i += 2; continue; }
@@ -152,9 +197,47 @@ export function redactStringsAndTemplates(src, blankStrings = false) {
     }
     markValue();
   };
-  // Template literal. `forceBlank` is set when already inside a blanked hole
-  // (everything nested blanks regardless of tag/shape).
+  // Template literal. PLACEHOLDER: each text segment becomes a `__STR_idx__`
+  // token (collected) and each `${...}` hole is scanned as REAL code. MASK:
+  // verbatim fast path for a simple closed single-line untagged literal, else
+  // blank the text and recurse holes as blanked code (`forceBlank` is set when
+  // already inside a blanked hole, so everything nested blanks regardless).
   const scanTemplate = (forceBlank) => {
+    if (placeholder) {
+      out += '`'; i++;
+      while (i < n) {
+        const c = src[i];
+        if (c === '\\' && i + 1 < n) {
+          let body = '\\' + src[i + 1];
+          i += 2;
+          while (i < n && src[i] !== '`' && !(src[i] === '$' && src[i + 1] === '{')) {
+            if (src[i] === '\\' && i + 1 < n) { body += src[i] + src[i + 1]; i += 2; continue; }
+            body += src[i]; i++;
+          }
+          const idx = literals.length;
+          literals.push(body);
+          out += `__STR_${idx}__`;
+          continue;
+        }
+        if (c === '`') { out += '`'; i++; break; }
+        if (c === '$' && src[i + 1] === '{') {
+          out += '${'; i += 2;
+          scanCode(true, false);
+          if (i < n && src[i] === '}') { out += '}'; i++; }
+          continue;
+        }
+        let body = '';
+        while (i < n && src[i] !== '`' && !(src[i] === '$' && src[i + 1] === '{')) {
+          if (src[i] === '\\' && i + 1 < n) { body += src[i] + src[i + 1]; i += 2; continue; }
+          body += src[i]; i++;
+        }
+        const idx = literals.length;
+        literals.push(body);
+        out += `__STR_${idx}__`;
+      }
+      markValue();
+      return;
+    }
     const tagged = isTagged();
     let hasInterp = false, hasNewline = false, closed = false, depth = 0, k = i + 1;
     while (k < n) {
@@ -198,7 +281,9 @@ export function redactStringsAndTemplates(src, blankStrings = false) {
 
   // Scan code. `stopHole`: return at the `}` that closes the enclosing template
   // hole (the caller emits it). `blank`: emit spaces for code (inside a blanked
-  // hole). Literals are always lexed so braces/quotes inside them never count.
+  // hole; mask mode only, never set in placeholder mode so the formulas below
+  // reduce to verbatim). Literals are always lexed so braces/quotes inside them
+  // never count.
   function scanCode(stopHole, blank) {
     let brace = 0;
     while (i < n) {
@@ -228,7 +313,7 @@ export function redactStringsAndTemplates(src, blankStrings = false) {
   }
 
   scanCode(false, false);
-  return out;
+  return { out, literals };
 }
 
 /**
@@ -594,131 +679,7 @@ export function matchClosingBrace(s, start) {
  * @returns {{ redacted: string, literals: string[] }}
  */
 export function redactToPlaceholders(src) {
-  const n = src.length;
-  let out = '';
-  let i = 0;
-  const literals = [];
-
-  let lastSig = '';
-  let lastWord = '';
-  let lastWordIsProp = false;
-  let lastWasIncDec = false;
-  const markValue = () => { lastSig = 'x'; lastWord = ''; lastWordIsProp = false; lastWasIncDec = false; };
-
-  const isRegex = () => {
-    if (lastSig === '') return true;
-    if (lastSig === ')' || lastSig === ']') return false;
-    if (lastSig === "'" || lastSig === '"' || lastSig === '`') return false;
-    if (lastWasIncDec) return false;
-    if (/[\w$]/.test(lastSig)) return !lastWordIsProp && REGEX_PRECEDING_KEYWORDS.has(lastWord);
-    return true;
-  };
-
-  const scanLineComment = () => {
-    out += '//';
-    i += 2;
-    while (i < n && src[i] !== '\n') { out += ' '; i++; }
-  };
-  const scanBlockComment = () => {
-    out += '/*';
-    i += 2;
-    while (i < n) {
-      if (src[i] === '*' && src[i + 1] === '/') { out += '*/'; i += 2; return; }
-      out += src[i] === '\n' ? '\n' : ' '; i++;
-    }
-  };
-  const scanRegex = () => {
-    out += '/'; i++;
-    let inClass = false;
-    while (i < n) {
-      const d = src[i];
-      if (d === '\\' && i + 1 < n) { out += '  '; i += 2; continue; }
-      if (d === '\n') break;
-      if (d === '[') inClass = true;
-      else if (d === ']') inClass = false;
-      else if (d === '/' && !inClass) { out += '/'; i++; break; }
-      out += ' '; i++;
-    }
-    markValue();
-  };
-
-  const scanString = (q) => {
-    i++;
-    let body = '';
-    while (i < n) {
-      if (src[i] === '\\' && i + 1 < n) { body += src[i] + src[i + 1]; i += 2; continue; }
-      if (src[i] === q) { i++; break; }
-      if (src[i] === '\n') { i++; break; }
-      body += src[i]; i++;
-    }
-    const idx = literals.length;
-    literals.push(body);
-    out += q + `__STR_${idx}__` + q;
-    markValue();
-  };
-
-  const scanTemplate = () => {
-    out += '`'; i++;
-    while (i < n) {
-      const c = src[i];
-      if (c === '\\' && i + 1 < n) {
-        let body = '\\' + src[i + 1];
-        i += 2;
-        while (i < n && src[i] !== '`' && !(src[i] === '$' && src[i + 1] === '{')) {
-          if (src[i] === '\\' && i + 1 < n) { body += src[i] + src[i + 1]; i += 2; continue; }
-          body += src[i]; i++;
-        }
-        const idx = literals.length;
-        literals.push(body);
-        out += `__STR_${idx}__`;
-        continue;
-      }
-      if (c === '`') { out += '`'; i++; break; }
-      if (c === '$' && src[i + 1] === '{') {
-        out += '${'; i += 2;
-        scanCode(true);
-        if (i < n && src[i] === '}') { out += '}'; i++; }
-        continue;
-      }
-      
-      let body = '';
-      while (i < n && src[i] !== '`' && !(src[i] === '$' && src[i + 1] === '{')) {
-        if (src[i] === '\\' && i + 1 < n) { body += src[i] + src[i + 1]; i += 2; continue; }
-        body += src[i]; i++;
-      }
-      const idx = literals.length;
-      literals.push(body);
-      out += `__STR_${idx}__`;
-    }
-    markValue();
-  };
-
-  function scanCode(stopHole) {
-    let brace = 0;
-    while (i < n) {
-      const c = src[i], next = src[i + 1];
-      if (stopHole && c === '}' && brace === 0) return;
-      if (c === '/' && next === '/') { scanLineComment(); continue; }
-      if (c === '/' && next === '*') { scanBlockComment(); continue; }
-      if (c === '/' && isRegex()) { scanRegex(); continue; }
-      if (c === "'" || c === '"') { scanString(c); continue; }
-      if (c === '`') { scanTemplate(); continue; }
-      if (c === '{') { brace++; lastSig = '{'; lastWord = ''; lastWasIncDec = false; out += c; i++; continue; }
-      if (c === '}') { brace--; lastSig = '}'; lastWord = ''; lastWasIncDec = false; out += c; i++; continue; }
-      if (/[A-Za-z_$]/.test(c)) {
-        const prop = lastSig === '.';
-        let w = '';
-        while (i < n && /[\w$]/.test(src[i])) { w += src[i]; out += src[i]; i++; }
-        lastWord = w; lastSig = w[w.length - 1]; lastWordIsProp = prop; lastWasIncDec = false;
-        continue;
-      }
-      if (/\s/.test(c)) { out += c; i++; continue; }
-      lastWasIncDec = (c === '+' || c === '-') && c === lastSig;
-      lastSig = c; lastWord = ''; out += c; i++;
-    }
-  }
-
-  scanCode(false);
+  const { out, literals } = scanLiterals(src, { placeholder: true });
   return { redacted: out, literals };
 }
 
