@@ -149,7 +149,7 @@ if has 'verify (the |this |that |it )?(change|fix|feature|pr|work|it works|behav
    || has '(confirm|prove|make sure) .{0,30}(works|working|fixed|fixes it)' \
    || has '(manually|actually) (test|try|check) .{0,20}(it|the (fix|change|app|feature))' \
    || has '(boot|dogfood|smoke).{0,20}(app|apps|blog|website|docs)'; then
-  add_match "verify: the request is to confirm a change actually works. Invoke the verify skill (run the app and observe the behaviour). For a framework change, boot all four dogfood apps (blog e2e plus website, docs, ui-website) and report the evidence, not just unit tests."
+  add_match "verify: the request is to confirm a change actually works. Invoke the verify skill (run the app and observe the behaviour). For a change to a shared runtime surface (core/server SSR, client router, importmap, dist, elision), boot the AFFECTED dogfood apps and report evidence. CI covers blog and website, so the manual gap is mainly docs and ui-website (until #627 automates the full sweep). A docs-only, test-only, or tooling change needs no app boot."
 fi
 
 # Assemble the additional context. The standing rule is always present; the
