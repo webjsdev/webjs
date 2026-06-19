@@ -195,3 +195,28 @@ test('C counterfactual: a layout with a module-scope document access still ships
   });
   assert.equal(verdict(r, '/app/layout.js'), 'ships', 'a real module-scope document access must still pin the layout');
 });
+
+// ---------------------------------------------------------------------------
+// D. code samples containing framework imports / reactive primitives
+// ---------------------------------------------------------------------------
+
+test('D: a page with code samples containing framework imports/reactives is import-only', async () => {
+  const page = `
+    import { html } from '@webjsdev/core';
+    import '#components/counter.js';
+    const sample1 = "import { signal } from '@webjsdev/core';";
+    const sample2 = \`
+      import { signal } from '@webjsdev/core';
+      const c = signal(0);
+    \`;
+    export default () => html\`<x-counter></x-counter>\`;
+  `;
+  const r = await run({
+    files: { '/app/page.js': page, '/app/components/counter.js': INTERACTIVE },
+    components: [{ tag: 'x-counter', file: '/app/components/counter.js' }],
+    routeModules: ['/app/page.js'],
+    edges: { '/app/page.js': ['/app/components/counter.js'] },
+  });
+  assert.equal(verdict(r, '/app/page.js'), 'import-only', 'code samples must not pin the page');
+});
+

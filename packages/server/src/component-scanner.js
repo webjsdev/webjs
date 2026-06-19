@@ -22,6 +22,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { sep } from 'node:path';
 import { walk } from './fs-walk.js';
 import { primeModuleUrl } from '@webjsdev/core';
+import { redactToPlaceholders } from './js-scan.js';
 
 /**
  * mtime-keyed cache of extracted components per file, so a rebuild re-reads
@@ -50,22 +51,26 @@ export function _scanCacheHas(file) { return SCAN_CACHE.has(file); }
 export function extractComponents(src) {
   /** @type {Array<{ className: string, tag: string }>} */
   const results = [];
-  // Pattern A: Class.register('tag')
-  const registerRe = /\b([A-Z][A-Za-z0-9_$]*)\.register\s*\(\s*['"]([^'"\n]+)['"]\s*\)/g;
+  const { redacted, literals } = redactToPlaceholders(src);
+
+  // Pattern A: Class.register('tag') -> matches Class.register('__STR_idx__')
+  const registerRe = /\b([A-Z][A-Za-z0-9_$]*)\.register\s*\(\s*['"`]__STR_(\d+)__['"`]\s*\)/g;
   let m;
-  while ((m = registerRe.exec(src)) !== null) {
+  while ((m = registerRe.exec(redacted)) !== null) {
     const className = m[1];
-    const tag = m[2];
-    if (tag.includes('-')) {
+    const idx = parseInt(m[2], 10);
+    const tag = literals[idx];
+    if (tag && tag.includes('-')) {
       results.push({ className, tag });
     }
   }
-  // Pattern B: customElements.define('tag', Class)
-  const defineRe = /\bcustomElements\.define\s*\(\s*['"]([^'"\n]+)['"]\s*,\s*([A-Z][A-Za-z0-9_$]*)\b/g;
-  while ((m = defineRe.exec(src)) !== null) {
-    const tag = m[1];
+  // Pattern B: customElements.define('tag', Class) -> matches customElements.define('__STR_idx__', Class)
+  const defineRe = /\bcustomElements\.define\s*\(\s*['"`]__STR_(\d+)__['"`]\s*,\s*([A-Z][A-Za-z0-9_$]*)\b/g;
+  while ((m = defineRe.exec(redacted)) !== null) {
+    const idx = parseInt(m[1], 10);
+    const tag = literals[idx];
     const className = m[2];
-    if (tag.includes('-')) {
+    if (tag && tag.includes('-')) {
       results.push({ className, tag });
     }
   }
