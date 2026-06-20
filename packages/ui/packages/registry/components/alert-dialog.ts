@@ -32,8 +32,8 @@
  *     </ui-alert-dialog-trigger>
  *     <ui-alert-dialog-content>
  *       <div class=${alertDialogHeaderClass()}>
- *         <h2 class=${alertDialogTitleClass()}>Delete account?</h2>
- *         <p class=${alertDialogDescriptionClass()}>This cannot be undone.</p>
+ *         <h2 data-slot="alert-dialog-title" class=${alertDialogTitleClass()}>Delete account?</h2>
+ *         <p data-slot="alert-dialog-description" class=${alertDialogDescriptionClass()}>This cannot be undone.</p>
  *       </div>
  *       <div class=${alertDialogFooterClass()}>
  *         <ui-alert-dialog-cancel>Cancel</ui-alert-dialog-cancel>
@@ -65,6 +65,7 @@
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
 import { ref, createRef } from '@webjsdev/core/directives';
+import { ensureId } from '../lib/utils.ts';
 import { buttonClass, type ButtonVariant, type ButtonSize } from './button.ts';
 
 export const alertDialogContentClass = (): string =>
@@ -234,8 +235,31 @@ export class UiAlertDialogContent extends WebComponent({
   }
 
   showModal(): void {
+    this._wireLabels();
     const native = this.#dialog.value;
     if (native && !native.open) native.showModal();
+  }
+
+  // Wire the alertdialog's accessible name + description to its title /
+  // description nodes at open time (an alert dialog only ever appears via
+  // showModal(), so there is no SSR id-stability concern). The title is
+  // data-slot="alert-dialog-title" (falling back to the first heading); the
+  // description is data-slot="alert-dialog-description" (falling back to the
+  // first paragraph). Author-set ARIA always wins. Inlined rather than shared
+  // with dialog.ts so `webjs ui add alert-dialog` stays self-contained.
+  _wireLabels(): void {
+    const panel = this.querySelector('[data-slot="alert-dialog-content"]');
+    if (!panel) return;
+    const title =
+      this.querySelector('[data-slot="alert-dialog-title"]') ?? this.querySelector('h1, h2, h3');
+    const desc =
+      this.querySelector('[data-slot="alert-dialog-description"]') ?? this.querySelector('p');
+    if (title && !panel.hasAttribute('aria-labelledby')) {
+      panel.setAttribute('aria-labelledby', ensureId(title as HTMLElement, 'ui-alert-title'));
+    }
+    if (desc && !panel.hasAttribute('aria-describedby')) {
+      panel.setAttribute('aria-describedby', ensureId(desc as HTMLElement, 'ui-alert-desc'));
+    }
   }
 
   close(): void {

@@ -29,8 +29,8 @@
  *     </ui-dialog-trigger>
  *     <ui-dialog-content>
  *       <div class=${dialogHeaderClass()}>
- *         <h2 class=${dialogTitleClass()}>Edit profile</h2>
- *         <p class=${dialogDescriptionClass()}>Make changes and click save.</p>
+ *         <h2 data-slot="dialog-title" class=${dialogTitleClass()}>Edit profile</h2>
+ *         <p data-slot="dialog-description" class=${dialogDescriptionClass()}>Make changes and click save.</p>
  *       </div>
  *       <div class="grid gap-3">
  *         <label class=${labelClass()} for="dlg-name">Name</label>
@@ -65,7 +65,30 @@
  */
 import { WebComponent, html, unsafeHTML, prop } from '@webjsdev/core';
 import { ref, createRef } from '@webjsdev/core/directives';
+import { ensureId } from '../lib/utils.ts';
 import { buttonClass } from './button.ts';
+
+// Wires a dialog panel's accessible name + description to its title /
+// description nodes. A dialog only ever appears via showModal() (JS), so
+// resolving the relationship at open time is correct and avoids any
+// SSR id-stability concern. The title is the element marked
+// data-slot="dialog-title" (falling back to the first heading); the
+// description is data-slot="dialog-description" (falling back to the first
+// paragraph). Author-set aria-labelledby / aria-describedby always win.
+export function wireDialogLabels(host: Element, panelSelector: string): void {
+  const panel = host.querySelector(panelSelector);
+  if (!panel) return;
+  const title =
+    host.querySelector('[data-slot="dialog-title"]') ?? host.querySelector('h1, h2, h3');
+  const desc =
+    host.querySelector('[data-slot="dialog-description"]') ?? host.querySelector('p');
+  if (title && !panel.hasAttribute('aria-labelledby')) {
+    panel.setAttribute('aria-labelledby', ensureId(title as HTMLElement, 'ui-dialog-title'));
+  }
+  if (desc && !panel.hasAttribute('aria-describedby')) {
+    panel.setAttribute('aria-describedby', ensureId(desc as HTMLElement, 'ui-dialog-desc'));
+  }
+}
 
 // --------------------------------------------------------------------------
 // Class helpers for subparts.
@@ -268,6 +291,7 @@ export class UiDialogContent extends WebComponent({
   }
 
   showModal(): void {
+    wireDialogLabels(this, '[data-slot="dialog-content"]');
     const native = this.#dialog.value;
     if (native && !native.open) native.showModal();
   }
