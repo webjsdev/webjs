@@ -458,6 +458,21 @@ export declare function findOrphanComponents(
 ): Promise<Array<{ className: string; file: string }>>;
 
 // ---------------------------------------------------------------------------
+// elision-report.js (#646)
+// ---------------------------------------------------------------------------
+
+/**
+ * App-level elision report: the page/layout route modules that SHIP WHOLE to
+ * the browser instead of being elided as carriers, each with the first
+ * client-effecting blocker that pins it (or `null` when the module's own code
+ * is the cause) plus a human reason. A reporting layer over `analyzeElision`,
+ * consumed by the `webjs doctor` carrier-hygiene advisory (#646).
+ */
+export declare function analyzeAppElision(
+  appDir: string,
+): Promise<{ analysed: boolean; shipped: Array<{ file: string; blocker: string | null; reason: string }> }>;
+
+// ---------------------------------------------------------------------------
 // context.js (per-request context helpers)
 // ---------------------------------------------------------------------------
 

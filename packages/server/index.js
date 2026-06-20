@@ -42,6 +42,7 @@ export {
 } from './src/vendor.js';
 export { buildModuleGraph, transitiveDeps } from './src/module-graph.js';
 export { scanComponents, primeComponentRegistry, extractComponents, findOrphanComponents } from './src/component-scanner.js';
+export { analyzeAppElision } from './src/elision-report.js';
 export { headers, cookies, getRequest, withRequest, cspNonce, requestId } from './src/context.js';
 export { defaultLogger } from './src/logger.js';
 export { rateLimit, parseWindow, clientIp, stampRemoteIp } from './src/rate-limit.js';

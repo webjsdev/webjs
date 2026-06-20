@@ -843,7 +843,7 @@ export async function computeElidableComponents(components, moduleGraph, readFil
  * @param {import('./module-graph.js').ModuleGraph} moduleGraph
  * @param {(file: string) => Promise<string>} readFileFn
  * @param {string} [appDir]
- * @returns {Promise<{ elidableComponents: Set<string>, inertRouteModules: Set<string>, importOnlyRouteModules: Map<string, string[]> }>}
+ * @returns {Promise<{ elidableComponents: Set<string>, inertRouteModules: Set<string>, importOnlyRouteModules: Map<string, string[]>, shippedRouteModules: Map<string, { blocker: string|null, reason: string }> }>}
  */
 export async function analyzeElision(components, routeModules, moduleGraph, readFileFn, appDir) {
   /** @type {Set<string>} */
@@ -1069,6 +1069,17 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
     clientRouterFiles.has(file) ||
     clientGlobalOrBareFiles.has(file);
 
+  // A human reason for WHY a file does client work, for the advisory that
+  // names why a page/layout ships (#646). Mirrors the isClientEffecting
+  // branches, most specific first.
+  const clientEffectReason = (file) => {
+    if (componentFiles.has(file) && mustShip.has(file)) return 'is an interactive component';
+    if (clientRouterFiles.has(file)) return 'imports the client router';
+    if (reactiveFiles.has(file)) return 'imports a reactive primitive (signal / computed / watch)';
+    if (clientGlobalOrBareFiles.has(file)) return 'references a browser global at module scope, runs code at module scope, or has a bare side-effect import';
+    return 'does client work';
+  };
+
   // Route modules fall into three classes by their effective client closure
   // (skipping elided components and server stubs, which never load on the
   // client):
@@ -1091,9 +1102,18 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
   const inertRouteModules = new Set();
   /** @type {Map<string, string[]>} route file -> component files to emit in its place */
   const importOnlyRouteModules = new Map();
+  // Advisory (#646): for each route module that SHIPS WHOLE (neither inert nor
+  // import-only), record the first client-effecting blocker so a tool can name
+  // why it ships. blocker is null when the module's OWN code is the cause.
+  /** @type {Map<string, { blocker: string|null, reason: string }>} */
+  const shippedRouteModules = new Map();
   for (const file of routeModules) {
     if (!fileTags.has(file)) continue; // unreadable / not analysed: ship (omit from both sets)
-    if (isClientEffecting(file)) continue; // the module itself ships whole
+    if (isClientEffecting(file)) {
+      // The module itself ships whole; its own signal is the blocker.
+      shippedRouteModules.set(file, { blocker: null, reason: clientEffectReason(file) });
+      continue;
+    }
     const closure = appDir ? transitiveDeps(moduleGraph, [file], appDir, skip) : [];
     const effecting = closure.filter(isClientEffecting);
     if (effecting.length === 0) { inertRouteModules.add(file); continue; }
@@ -1111,11 +1131,15 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
     // closure and still loads via the IntersectionObserver `observeLazy` path.
     if (effecting.every((f) => componentFiles.has(f))) {
       importOnlyRouteModules.set(file, effecting);
+    } else {
+      // A client-effecting non-component is reachable; ship the whole module.
+      // Name the FIRST such non-component as the blocker for the advisory.
+      const blocker = effecting.find((f) => !componentFiles.has(f));
+      shippedRouteModules.set(file, { blocker, reason: clientEffectReason(blocker) });
     }
-    // else: a client-effecting non-component is reachable; ship the whole module.
   }
 
-  return { elidableComponents, inertRouteModules, importOnlyRouteModules };
+  return { elidableComponents, inertRouteModules, importOnlyRouteModules, shippedRouteModules };
 }
 
 /** Match a whole-line side-effect import: `import './x.js';` (no bindings). */

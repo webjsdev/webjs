@@ -47,7 +47,7 @@ const USAGE = `webjs commands:
   webjs test  [--server|--browser]                 Run server + browser tests
   webjs check [--json]                            Run correctness checks on the app (--json emits structured violations)
   webjs mcp                                       Start the read-only MCP server (routes / actions / components / check)
-  webjs doctor                                    Verify project health (Node, tsconfig, env, vendor pins, importmap coherence, @webjsdev versions, git hook)
+  webjs doctor                                    Verify project health (Node, tsconfig, env, vendor pins, importmap coherence, @webjsdev versions, git hook, page/layout elision)
   webjs types                                     Generate .webjs/routes.d.ts (typed Route union + per-route params)
   webjs typecheck [tsc args...]                   Type-check the app with the project's tsc --noEmit (non-zero on errors)
   webjs create <name> [--template full-stack|api|saas] [--db sqlite|postgres] [--runtime node|bun] [--no-install]  Scaffold a new webjs app
