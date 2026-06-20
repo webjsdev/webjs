@@ -18,7 +18,7 @@
  *
  * ```js
  * import { createRequestHandler } from '@webjsdev/server';
- * import { testRequest, getCsrf, invokeActionForTest } from '@webjsdev/server/testing';
+ * import { testRequest, invokeActionForTest } from '@webjsdev/server/testing';
  *
  * const app = await createRequestHandler({ appDir: process.cwd(), dev: true });
  *

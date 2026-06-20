@@ -83,7 +83,10 @@ function originAllowed(req, allowedOrigins) {
   const h = hostOf(origin);
   if (!h) return false;
   const allow = new Set(
-    allowedOrigins.map((o) => (o.includes('://') ? hostOf(o) : o.toLowerCase())),
+    // A full-origin entry (`https://x.example`) is host-parsed; a bare host
+    // (`x.example` or a copy-pasted `x.example/`) is lower-cased and stripped
+    // of a stray trailing slash so it still matches.
+    allowedOrigins.map((o) => (o.includes('://') ? hostOf(o) : o.toLowerCase().replace(/\/+$/, ''))),
   );
   return allow.has(h);
 }

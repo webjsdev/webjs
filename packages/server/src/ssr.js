@@ -315,7 +315,8 @@ export async function ssrNotFound(notFoundFile, opts) {
 }
 
 /**
- * Build an HTML Response and, if missing, attach the CSRF cookie.
+ * Build an HTML Response. Sets no cookie: action CSRF is an Origin /
+ * Sec-Fetch-Site check, so the page response is cookieless (CDN-cacheable).
  * @param {string} html
  * @param {number} status
  * @param {Request | undefined} req
@@ -345,10 +346,10 @@ function htmlResponse(html, status, req, url, metadata) {
 /**
  * Rebuild a Response from a cached HTML record (#241). The stored body is
  * the stable per-page HTML; the per-response varying bits are re-minted
- * here so a new visitor still gets them: the CSRF cookie is freshly issued
- * when the request lacks one (it is a Set-Cookie header, never part of the
- * cached body), and the published build id is re-read so a post-deploy
- * client sees the current id. The BUFFERED marker opts the cached body into
+ * here so a new visitor still gets them: the published build id is re-read so
+ * a post-deploy client sees the current id. No cookie is set (action CSRF is
+ * an Origin / Sec-Fetch-Site check), which is what keeps a cached page
+ * cookieless and shareable. The BUFFERED marker opts the cached body into
  * the conditional-GET funnel exactly as a fresh render does, so a cached
  * PUBLIC-cacheable page still 304s. Output is observably identical to the
  * fresh render of the same route within the window.

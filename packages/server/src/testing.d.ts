@@ -2,8 +2,8 @@
  * Type overlay for `@webjsdev/server/testing` (the handle() test harness, #267).
  *
  * The runtime is packages/server/src/testing.js (JSDoc-annotated JavaScript);
- * this overlay exists so a TypeScript app's `import { testRequest, getCsrf }
- * from '@webjsdev/server/testing'` resolves precise types instead of emitting
+ * this overlay exists so a TypeScript app's `import { testRequest,
+ * invokeActionForTest } from '@webjsdev/server/testing'` resolves precise types instead of emitting
  * TS7016. The same declarations are re-exported from the package's main
  * `index.d.ts` (the helpers ship from both entry points). Zero runtime cost.
  */

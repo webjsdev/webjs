@@ -314,8 +314,9 @@ const out = await invokeActionForTest(app, 'modules/posts/actions/create.server.
 
 `invokeActionForTest` serializes `args` with the webjs serializer (exactly as
 the generated client stub does), POSTs them to the REAL
-`/__webjs/action/<hash>/<fn>` endpoint with a valid CSRF cookie + header, and
-parses the response with the serializer. The action is addressed by the SHA-256
+`/__webjs/action/<hash>/<fn>` endpoint as a same-origin request (so it passes
+the Origin / Sec-Fetch-Site CSRF check), and parses the response with the
+serializer. The action is addressed by the SHA-256
 hash of its `.server.{js,ts}` file path (absolute or appDir-relative) plus the
 function name, the same scheme the stub uses (`actionEndpoint(appDir, file, fn)`
 returns that path if you need it directly).

@@ -42,6 +42,7 @@ test('a cross-site request from an allowlisted origin passes', () => {
   const req = reqWith({ 'sec-fetch-site': 'cross-site', origin: 'https://trusted.example' });
   assert.equal(verifyOrigin(req, ['trusted.example']).ok, true);
   assert.equal(verifyOrigin(req, ['https://trusted.example']).ok, true, 'full-origin form also accepted');
+  assert.equal(verifyOrigin(req, ['trusted.example/']).ok, true, 'a stray trailing slash is tolerated');
   assert.equal(verifyOrigin(req, ['other.example']).ok, false, 'a different allowlist does not help');
 });
 

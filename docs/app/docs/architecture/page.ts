@@ -109,7 +109,7 @@ import { listPosts } from '#modules/posts/queries/list-posts.server.ts';</pre>
       <li>For <strong>pages</strong>: SSR pipeline runs (load page + layouts, render to HTML, inject DSD, collect metadata, stream response with Suspense).</li>
       <li>For <strong>API routes</strong>: the matched handler function runs, returns a Response.</li>
       <li>For <strong>WebSocket upgrades</strong>: the WS handler is invoked with the ws object + Request.</li>
-      <li><strong>Response</strong> is sent (with compression in prod, CSRF cookie if needed, cache headers).</li>
+      <li><strong>Response</strong> is sent (with compression in prod and cache headers).</li>
     </ol>
 
     <h2>Progressive Enhancement</h2>
