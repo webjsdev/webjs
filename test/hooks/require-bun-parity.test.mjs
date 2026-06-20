@@ -72,6 +72,8 @@ test('the request path (ssr / actions / dev / auth) all trip the gate', () => {
     'packages/server/src/actions.js',
     'packages/server/src/dev.js',
     'packages/server/src/auth.js',
+    'packages/server/src/conditional-get.js',
+    'packages/server/src/json.js',
   ]) {
     const { dir, git } = makeRepo();
     try {
