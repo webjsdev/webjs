@@ -275,24 +275,24 @@ test('a CSP-enabled page is not HTML-cached (body varies per request)', async ()
   assert.ok(second.includes('render #2'), 'CSP page re-renders each request (never cached)');
 });
 
-/* ---------------- CSRF cookie is re-minted on a cache hit ---------------- */
+/* ---------------- a cached page carries no Set-Cookie (CDN-safe) ---------------- */
 
-test('a cache hit still issues the CSRF cookie to a new visitor', async () => {
+test('a cached page sets no cookie, so a cache hit is shareable', async () => {
   freshStore();
   const appDir = makeApp({ 'app/page.js': counterPage('csrf', { revalidate: 60 }) });
   const app = await createRequestHandler({ appDir, dev: true });
 
-  // Warm the cache with a first request (no cookie -> gets one).
+  // Warm the cache. SSR no longer issues a CSRF cookie (action CSRF is an
+  // Origin / Sec-Fetch-Site check), so the response is cookieless.
   const warm = await app.handle(new Request('http://x/'));
-  assert.ok(warm.headers.get('set-cookie'), 'first visitor is issued the CSRF cookie');
+  assert.ok(!warm.headers.get('set-cookie'), 'no Set-Cookie on the warm render');
 
-  // A SECOND, distinct new visitor (no cookie) hits the cache but must still
-  // be minted a fresh CSRF cookie: it is a response header, never part of the
-  // cached body.
+  // A second visitor hits the cache and gets the same cookieless body, which
+  // is exactly what makes the cached HTML safe to share at a CDN edge.
   const hit = await app.handle(new Request('http://x/'));
   const body = await hit.text();
   assert.ok(body.includes('render #1'), 'served from cache (#1)');
-  assert.ok(hit.headers.get('set-cookie')?.includes('webjs_csrf'), 'cache hit re-mints the CSRF cookie for a new visitor');
+  assert.ok(!hit.headers.get('set-cookie'), 'cache hit is cookieless');
 });
 
 /* ---------------- X-Webjs-Have partial nav is never cached ---------------- */
@@ -353,13 +353,9 @@ test('isCacheableResponse gates on status, streaming, CSP, and non-framework coo
 
   assert.equal(isCacheableResponse(ok, { cspEnabled: true }), false, 'CSP-on response is not cacheable');
 
-  const csrfOnly = new Response('x', { status: 200 });
-  csrfOnly.headers.append('set-cookie', 'webjs_csrf=abc; Path=/');
-  assert.equal(isCacheableResponse(csrfOnly), true, 'the framework CSRF cookie alone does not block caching');
-
   const sessionCookie = new Response('x', { status: 200 });
   sessionCookie.headers.append('set-cookie', 'sid=xyz; Path=/');
-  assert.equal(isCacheableResponse(sessionCookie), false, 'a non-framework Set-Cookie blocks caching');
+  assert.equal(isCacheableResponse(sessionCookie), false, 'any Set-Cookie blocks caching (per-user)');
 });
 
 /* ---------------- dynamicAccess defense: cookie-reading page (#241) ---------------- */
@@ -447,31 +443,18 @@ test('the cache key changes when the published build id changes (a deploy invali
   })();
 });
 
-/* ---------------- getSetCookie-absent fallback fails safe (#241) ---------------- */
+/* ---------------- any Set-Cookie blocks caching (#241 / #659) ---------------- */
 
-test('isCacheableResponse fails safe when getSetCookie is unavailable', () => {
-  // Simulate an older runtime lacking Headers.prototype.getSetCookie: a
-  // combined "webjs_csrf=..., sid=..." must be judged non-cacheable rather
-  // than parsing only the first cookie and wrongly passing.
-  const res = new Response('x', { status: 200 });
-  res.headers.set('set-cookie', 'webjs_csrf=abc, sid=xyz');
-  const orig = res.headers.getSetCookie;
-  // Remove the method on this instance to exercise the fallback branch.
-  res.headers.getSetCookie = undefined;
-  try {
-    assert.equal(
-      isCacheableResponse(res),
-      false,
-      'a response with a Set-Cookie is non-cacheable when getSetCookie is unavailable (fail safe)'
-    );
-  } finally {
-    res.headers.getSetCookie = orig;
-  }
+test('isCacheableResponse treats any Set-Cookie as per-user (non-cacheable)', () => {
+  // SSR responses no longer carry a framework cookie (action CSRF is an
+  // Origin / Sec-Fetch-Site check), so the guard is the simple presence of a
+  // Set-Cookie: any cookie means per-user output, do not cache.
+  const withCookie = new Response('x', { status: 200 });
+  withCookie.headers.set('set-cookie', 'sid=xyz');
+  assert.equal(isCacheableResponse(withCookie), false, 'any Set-Cookie is non-cacheable');
 
-  // And a response with NO Set-Cookie is still cacheable under the fallback.
   const clean = new Response('x', { status: 200, headers: { 'content-type': 'text/html' } });
-  clean.headers.getSetCookie = undefined;
-  assert.equal(isCacheableResponse(clean), true, 'no Set-Cookie stays cacheable under the fallback');
+  assert.equal(isCacheableResponse(clean), true, 'a cookieless 200 is cacheable');
 });
 
 test('#318: the app-source fingerprint re-keys the HTML cache on an app-only change', () => {

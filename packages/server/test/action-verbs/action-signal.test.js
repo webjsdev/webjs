@@ -68,10 +68,8 @@ before(async () => {
 after(() => { rmSync(tmpRoot, { recursive: true, force: true }); });
 
 test('the action sees the request AbortSignal through invokeAction', async () => {
-  const csrfRes = await handle(new Request('http://localhost/'));
-  const m = (csrfRes.headers.get('set-cookie') || '').match(/webjs_csrf=([^;]+)/);
-  const token = m ? decodeURIComponent(m[1]) : '';
-  const headers = { 'content-type': 'application/vnd.webjs+json', 'x-webjs-csrf': token, cookie: `webjs_csrf=${token}` };
+  // Action CSRF is an Origin / Sec-Fetch-Site check (#659): same-origin passes.
+  const headers = { 'content-type': 'application/vnd.webjs+json', 'sec-fetch-site': 'same-origin' };
 
   // A live (non-aborted) request: the action sees aborted=false.
   const live = await handle(new Request(`http://localhost/__webjs/action/${hash}/probe`, { method: 'POST', body: await stringify([]), headers }));

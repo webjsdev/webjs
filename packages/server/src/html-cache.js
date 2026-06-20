@@ -190,10 +190,10 @@ export async function writeHtmlCache(url, rec, revalidateSeconds) {
  *  - status 200 (an error / redirect / 404 is request-specific)
  *  - NOT a streamed Suspense body (it cannot be buffered cheaply, and an
  *    unflushed stream has no stable bytes to cache)
- *  - NO non-framework Set-Cookie. A page that sets a session / per-user
- *    cookie is per-user output and must not be shared. The framework's own
- *    CSRF cookie (`webjs_csrf`) is allowed and re-minted per response on a
- *    cache hit, so its presence does not block caching.
+ *  - NO Set-Cookie at all. A page that sets a session / per-user cookie is
+ *    per-user output and must not be shared. SSR responses no longer carry a
+ *    framework cookie (action CSRF is an Origin / Sec-Fetch-Site check, not a
+ *    token cookie), so ANY Set-Cookie means per-user, do not cache.
  *  - CSP is OFF. With CSP enabled the inline boot script carries a fresh
  *    per-request nonce, so the body varies per request and a cached body
  *    would replay a stale nonce that the response's CSP header rejects.
@@ -206,34 +206,8 @@ export function isCacheableResponse(res, guards = {}) {
   if (res.status !== 200) return false;
   if (res.headers.has(STREAM_MARKER)) return false;
   if (guards.cspEnabled) return false;
-  if (hasNonFrameworkSetCookie(res)) return false;
+  if (res.headers.has('set-cookie')) return false;
   return true;
-}
-
-/**
- * True when the response carries a Set-Cookie OTHER than the framework's
- * own CSRF cookie. Reads each cookie individually via `getSetCookie()`, the
- * only correct way to enumerate multiple Set-Cookie values (a combined
- * `get('set-cookie')` cannot be split safely, since a cookie value or an
- * Expires date can contain a comma). When `getSetCookie` is unavailable
- * (a runtime older than Node 24) this FAILS SAFE: it reports a
- * non-framework cookie (do not cache) rather than parsing only the first of
- * a combined header and wrongly judging it framework-only.
- *
- * @param {Response} res
- * @returns {boolean}
- */
-function hasNonFrameworkSetCookie(res) {
-  const h = res.headers;
-  if (typeof h.getSetCookie !== 'function') {
-    // No reliable per-cookie enumeration: fail safe (treat as per-user).
-    return h.has('set-cookie');
-  }
-  for (const c of h.getSetCookie()) {
-    const name = c.split('=', 1)[0].trim().toLowerCase();
-    if (name !== 'webjs_csrf') return true;
-  }
-  return false;
 }
 
 /**

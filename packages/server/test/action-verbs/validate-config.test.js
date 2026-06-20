@@ -69,11 +69,9 @@ before(async () => {
 });
 after(() => { rmSync(tmpRoot, { recursive: true, force: true }); });
 
+// Action CSRF is an Origin / Sec-Fetch-Site check (#659): same-origin passes.
 async function csrfHeaders() {
-  const res = await handle(new Request(url('/')));
-  const m = (res.headers.get('set-cookie') || '').match(/webjs_csrf=([^;]+)/);
-  const t = m ? decodeURIComponent(m[1]) : '';
-  return { 'content-type': 'application/vnd.webjs+json', 'x-webjs-csrf': t, cookie: `webjs_csrf=${t}` };
+  return { 'content-type': 'application/vnd.webjs+json', 'sec-fetch-site': 'same-origin' };
 }
 
 test('a structured validate failure is a NORMAL 200 RPC payload with fieldErrors', async () => {

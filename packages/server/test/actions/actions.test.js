@@ -37,8 +37,7 @@ test('webjs wire format round-trips Date / Map / BigInt across invokeAction', as
     const idx = await buildActionIndex(dir, true);
     const file = resolveServerModule(idx, '/actions/rich.server.js');
     const hash = idx.fileToHash.get(file);
-    const tok = 't';
-    const headers = { 'content-type': RPC_CONTENT_TYPE, cookie: `webjs_csrf=${tok}`, 'x-webjs-csrf': tok };
+    const headers = { 'content-type': RPC_CONTENT_TYPE, 'sec-fetch-site': 'same-origin' };
     const r1 = await invokeAction(idx, hash, 'now',
       new Request('http://x/__webjs/action/' + hash + '/now',
         { method: 'POST', headers, body: await wjStringify([]) }));
@@ -164,8 +163,7 @@ test('a pure-RPC server module is hashed at boot but NOT executed until first ca
     assert.equal(globalThis.__webjs_boot_probe, undefined, 'module must NOT execute at boot');
 
     const hash = idx.fileToHash.get(file);
-    const tok = 't';
-    const headers = { 'content-type': RPC_CONTENT_TYPE, cookie: `webjs_csrf=${tok}`, 'x-webjs-csrf': tok };
+    const headers = { 'content-type': RPC_CONTENT_TYPE, 'sec-fetch-site': 'same-origin' };
     const r = await invokeAction(idx, hash, 'ping',
       new Request('http://x/__webjs/action/' + hash + '/ping',
         { method: 'POST', headers, body: await wjStringify([]) }));

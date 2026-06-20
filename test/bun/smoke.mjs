@@ -60,14 +60,12 @@ try {
 
   // 3. A server action round-trips over RPC (the serializer + dispatch), with a
   // rich Date value, proving the action path works on this runtime.
-  const cookieRes = await app.handle(new Request('http://localhost/'));
-  const m = (cookieRes.headers.get('set-cookie') || '').match(/webjs_csrf=([^;]+)/);
-  const token = m ? decodeURIComponent(m[1]) : '';
   const hash = await hashFile(actionFile);
   const when = new Date('2021-02-03T04:05:06.000Z');
+  // Action CSRF is an Origin / Sec-Fetch-Site check (#659): same-origin passes.
   const rpc = await app.handle(new Request(`http://localhost/__webjs/action/${hash}/echo`, {
     method: 'POST',
-    headers: { 'content-type': 'application/vnd.webjs+json', 'x-webjs-csrf': token, cookie: `webjs_csrf=${token}` },
+    headers: { 'content-type': 'application/vnd.webjs+json', 'sec-fetch-site': 'same-origin' },
     body: await stringify([{ n: 21, at: when }]),
   }));
   assert.equal(rpc.status, 200, 'the action RPC should be 200');

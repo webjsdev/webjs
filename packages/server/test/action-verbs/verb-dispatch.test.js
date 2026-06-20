@@ -73,11 +73,10 @@ before(async () => {
   hashes.pub = await hashFile(pubFile);
 });
 
+// Action CSRF is an Origin / Sec-Fetch-Site check (#659): a same-origin
+// request needs only this header, no token or cookie.
 async function csrf() {
-  const res = await handle(new Request(url('/')));
-  const m = (res.headers.get('set-cookie') || '').match(/webjs_csrf=([^;]+)/);
-  const token = m ? decodeURIComponent(m[1]) : '';
-  return { 'x-webjs-csrf': token, cookie: `webjs_csrf=${token}` };
+  return { 'sec-fetch-site': 'same-origin' };
 }
 
 after(() => { rmSync(tmpRoot, { recursive: true, force: true }); });
@@ -107,29 +106,26 @@ test('a method mismatch is 405 + Allow (GET to a PUT action)', async () => {
   assert.match(res.headers.get('allow') || '', /PUT/);
 });
 
-test('a PUT mutation reports X-Webjs-Invalidate and requires CSRF', async () => {
-  // No CSRF -> 403.
+test('a PUT mutation reports X-Webjs-Invalidate and requires same-origin', async () => {
+  // A cross-site request -> 403.
   const body = await stringify([1, 'Renamed']);
-  const noCsrf = await handle(new Request(url(`/__webjs/action/${hashes.put}/replaceUser`), { method: 'PUT', body, headers: { 'content-type': 'application/vnd.webjs+json' } }));
-  assert.equal(noCsrf.status, 403);
+  const crossSite = await handle(new Request(url(`/__webjs/action/${hashes.put}/replaceUser`), { method: 'PUT', body, headers: { 'content-type': 'application/vnd.webjs+json', 'sec-fetch-site': 'cross-site' } }));
+  assert.equal(crossSite.status, 403);
 
-  // With CSRF -> 200 + X-Webjs-Invalidate.
-  const csrfRes = await handle(new Request(url('/')));
-  const cookie = (csrfRes.headers.get('set-cookie') || '').match(/webjs_csrf=([^;]+)/);
-  const token = cookie ? decodeURIComponent(cookie[1]) : '';
+  // Same-origin -> 200 + X-Webjs-Invalidate.
   const ok = await handle(new Request(url(`/__webjs/action/${hashes.put}/replaceUser`), {
     method: 'PUT', body,
-    headers: { 'content-type': 'application/vnd.webjs+json', 'x-webjs-csrf': token, cookie: `webjs_csrf=${token}` },
+    headers: { 'content-type': 'application/vnd.webjs+json', ...(await csrf()) },
   }));
   assert.equal(ok.status, 200, await ok.text());
   assert.equal(ok.headers.get('x-webjs-invalidate'), 'user:1');
 });
 
-test('a DELETE action rides the URL, requires CSRF, and invalidates', async () => {
+test('a DELETE action rides the URL, requires same-origin, and invalidates', async () => {
   const a = encodeURIComponent(await stringify([9]));
-  // No CSRF -> 403.
-  const noCsrf = await handle(new Request(url(`/__webjs/action/${hashes.del}/deleteThing?a=${a}`), { method: 'DELETE' }));
-  assert.equal(noCsrf.status, 403);
+  // A cross-site request -> 403.
+  const crossSite = await handle(new Request(url(`/__webjs/action/${hashes.del}/deleteThing?a=${a}`), { method: 'DELETE', headers: { 'sec-fetch-site': 'cross-site' } }));
+  assert.equal(crossSite.status, 403);
   // With CSRF -> 200 + X-Webjs-Invalidate, args read from the URL.
   const ok = await handle(new Request(url(`/__webjs/action/${hashes.del}/deleteThing?a=${a}`), { method: 'DELETE', headers: await csrf() }));
   const okBody = await ok.text();
@@ -157,12 +153,9 @@ test('a public GET action is served with a public Cache-Control', async () => {
 });
 
 test('a plain action with no method export still works as a POST', async () => {
-  const csrfRes = await handle(new Request(url('/')));
-  const cookie = (csrfRes.headers.get('set-cookie') || '').match(/webjs_csrf=([^;]+)/);
-  const token = cookie ? decodeURIComponent(cookie[1]) : '';
   const res = await handle(new Request(url(`/__webjs/action/${hashes.post}/logEvent`), {
     method: 'POST', body: await stringify(['hi']),
-    headers: { 'content-type': 'application/vnd.webjs+json', 'x-webjs-csrf': token, cookie: `webjs_csrf=${token}` },
+    headers: { 'content-type': 'application/vnd.webjs+json', ...(await csrf()) },
   }));
   assert.equal(res.status, 200);
   assert.deepEqual(parse(await res.text()), { ok: true, e: 'hi' });

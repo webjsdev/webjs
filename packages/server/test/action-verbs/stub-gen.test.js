@@ -45,12 +45,14 @@ test('a PUT action stub sends a body with CSRF (and still reads the SSR seed)', 
   assert.match(stub, /export const replace = /);
 });
 
-test('a DELETE action stub rides the URL with CSRF', async () => {
+test('a DELETE action stub rides the URL and sends no CSRF token', async () => {
   const stub = await stubFor('del.server.js',
     `'use server';\nexport const method='DELETE';\nexport async function del(id){return {ok:1};}\n`);
   assert.match(stub, /generated server-action stub \(DELETE\)/);
   assert.match(stub, /'\?a=' \+ encodeURIComponent/);
-  assert.match(stub, /__csrf\(\)/, 'DELETE carries CSRF');
+  // CSRF is enforced server-side by an Origin / Sec-Fetch-Site check (#659),
+  // so the stub reads no cookie and sends no x-webjs-csrf header.
+  assert.doesNotMatch(stub, /__csrf\(\)|x-webjs-csrf/);
 });
 
 test('config exports are excluded from the action function list', async () => {
