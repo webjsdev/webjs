@@ -87,10 +87,29 @@ npx webjsui add button card dialog</code></pre>
     &lt;button class={buttonClass({ variant: 'outline' })}&gt;Edit profile&lt;/button&gt;
   &lt;/ui-dialog-trigger&gt;
   &lt;ui-dialog-content&gt;
-    &lt;h2 class={dialogTitleClass()}&gt;Edit profile&lt;/h2&gt;
+    &lt;h2 data-slot="dialog-title" class={dialogTitleClass()}&gt;Edit profile&lt;/h2&gt;
     &lt;form action="/profile" method="post"&gt;&hellip;&lt;/form&gt;
   &lt;/ui-dialog-content&gt;
 &lt;/ui-dialog&gt;</code></pre>
+      <h2>Accessibility</h2>
+      <p>
+        Tier-2 elements are accessible out of the box. Each one wires its own
+        WAI-ARIA pattern, so you do not hand-add ARIA: tabs cross-links its triggers
+        and panels and reports orientation, toggle-group uses a roving tabindex with
+        Arrow / Home / End, dropdown-menu declares orientation and reflects
+        <code>aria-disabled</code>, dialog and alert-dialog name themselves from their
+        title (<code>data-slot="dialog-title"</code>) and description, tooltip wires
+        <code>aria-describedby</code>, hover-card exposes
+        <code>aria-haspopup</code> / <code>aria-expanded</code>, and sonner is a live region.
+      </p>
+      <p>
+        Tier-1 class helpers return only classes, so the semantic element and ARIA are
+        yours. Each helper's JSDoc carries an <code>A11y (required for accessible output)</code>
+        block naming exactly what to supply: a name on an icon-only button, a role on an
+        alert, <code>scope</code> on table headers, <code>alt</code> on an avatar image, a
+        labelled <code>&lt;nav&gt;</code> with <code>aria-current="page"</code> on pagination
+        and breadcrumb. Follow that block and the output is fully accessible.
+      </p>
       <h2>Framework support</h2>
       <p>
         Tier-1 helpers are pure functions, no runtime dependency. Tier-2 custom elements
