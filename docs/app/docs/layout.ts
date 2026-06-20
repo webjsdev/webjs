@@ -189,10 +189,14 @@ export default function DocsLayout({ children }: { children: unknown }) {
         }
         body[data-menu-open] .menu-backdrop { opacity: 1; pointer-events: auto; }
         body[data-menu-open] { overflow: hidden; }
+        /* #647: the mobile header is position:fixed (out of flow), so reserve its
+           height on the content plus the normal top breathing room. --header-h is
+           the measured bar height (set in the root layout). */
+        .docs-main { padding-top: calc(var(--header-h) + 1.5rem); }
       }
     </style>
 
-    <header class="hidden max-[860px]:flex sticky top-0 z-[25] items-center gap-4 px-4 py-3 border-b border-border bg-[color-mix(in_oklch,var(--bg)_85%,transparent)] backdrop-blur-[18px] backdrop-saturate-[180%]">
+    <header class="hidden max-[860px]:flex fixed inset-x-0 top-0 z-[25] items-center gap-4 px-4 py-3 border-b border-border bg-[color-mix(in_oklch,var(--bg)_85%,transparent)] backdrop-blur-[18px] backdrop-saturate-[180%]">
       <a href="/" class="mr-auto inline-flex items-center gap-2 no-underline text-fg font-semibold text-[15px] leading-none tracking-tight">
         <span class="inline-block w-[22px] h-[22px] rounded-md bg-gradient-to-br from-accent to-[color-mix(in_oklch,var(--accent)_55%,var(--fg))] shadow-[inset_0_0_0_1px_oklch(1_0_0/0.15),0_1px_4px_var(--accent-tint)]"></span>
         <span>webjs docs</span>
@@ -233,7 +237,7 @@ export default function DocsLayout({ children }: { children: unknown }) {
           `)}
         </nav>
       </aside>
-      <main class="min-w-0 max-w-[800px] px-6 pt-12 pb-16 max-[860px]:pt-6">
+      <main class="docs-main min-w-0 max-w-[800px] px-6 pt-12 pb-16">
         <div class="prose-docs">${children}</div>
       </main>
     </div>

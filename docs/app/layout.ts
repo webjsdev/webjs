@@ -63,6 +63,26 @@ export default function RootLayout({ children }: { children: unknown }) {
         } catch (_) {}
       })();
     </script>
+    <script nonce="${nonce}">
+      // #647: the docs mobile header is position:fixed; measure it so --header-h
+      // reserves the exact height. No-op when absent (the homepage has no header),
+      // which leaves the :root media-query default for the mobile first paint.
+      (function () {
+        function measure() {
+          try {
+            var bar = document.querySelector('header');
+            if (!bar) return;
+            var apply = function () {
+              document.documentElement.style.setProperty('--header-h', bar.offsetHeight + 'px');
+            };
+            apply();
+            if (window.ResizeObserver) new ResizeObserver(apply).observe(bar);
+          } catch (_) {}
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', measure);
+        else measure();
+      })();
+    </script>
     <link rel="stylesheet" href="/public/tailwind.css">
     <style>
       :root {
@@ -149,6 +169,13 @@ export default function RootLayout({ children }: { children: unknown }) {
       }
 
       html, body { margin: 0; }
+      /* #610/#647: the docs mobile header is position:fixed (sticky flickers on
+         iOS WebKit during a client-router nav). --header-h reserves the bar's
+         height on the /docs content. It is 0 by default (the homepage has no
+         header, and the bar is display:none on desktop), the mobile bar height
+         under the breakpoint, then measured exactly by the script in <head>. */
+      :root { --header-h: 0px; }
+      @media (max-width: 860px) { :root { --header-h: 61px; } }
       body {
         background: var(--bg);
         color: var(--fg);
