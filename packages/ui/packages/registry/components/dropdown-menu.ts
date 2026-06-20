@@ -55,6 +55,9 @@
  *   `type`:    omit (default) | "checkbox" | "radio".
  *   `checked`: boolean. Applies to checkbox / radio items.
  *   `value`:   string. Identifier for radio items.
+ *   `data-disabled`: boolean. Skips keyboard focus and activation, dims the
+ *                    item, and sets aria-disabled. Same attribute on a
+ *                    <ui-dropdown-menu-sub-trigger> disables the submenu.
  *
  * Events:
  *   `ui-open-change` on <ui-dropdown-menu>: `{ detail: { open } }` after a transition.
@@ -75,6 +78,7 @@
  * --accent-foreground, --destructive, --muted-foreground, --border.
  */
 import { WebComponent, html, unsafeHTML, signal, prop } from '@webjsdev/core';
+import { ensureId } from '../lib/utils.ts';
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
 // --------------------------------------------------------------------------
@@ -153,13 +157,56 @@ export class UiDropdownMenu extends WebComponent({
     queueMicrotask(() => this._afterRender());
   }
 
+  connectedCallback(): void {
+    super.connectedCallback?.();
+    // webjs projects slotted light-DOM children in a pass after the first
+    // render, so the trigger button and the menu are not in place at
+    // connect. Defer to the next frame, when the projection has run.
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => this._wireAria());
+    }
+  }
+
   _afterRender(): void {
     const content = this._content();
     if (content) {
       this._syncContentPopover(content);
     }
+    this._wireAria();
     if (this.open) this._setup();
     else this._teardown();
+  }
+
+  // The trigger wraps an author-supplied control (usually a <button>). Expose
+  // the menu relationship on that focusable control: aria-haspopup announces
+  // it opens a menu, aria-expanded tracks open state, aria-controls points at
+  // the menu, and the menu is labelled back by the trigger. Done at runtime
+  // because the menu is JS-driven (never shown without script).
+  _triggerControl(): HTMLElement | null {
+    const trigger = this.querySelector('ui-dropdown-menu-trigger');
+    if (!trigger) return null;
+    return (
+      trigger.querySelector<HTMLElement>('button, [role="button"], a[href], [tabindex]') ??
+      (trigger as HTMLElement)
+    );
+  }
+
+  _menuEl(): HTMLElement | null {
+    return this.querySelector('ui-dropdown-menu-content [role="menu"]');
+  }
+
+  _wireAria(): void {
+    const control = this._triggerControl();
+    if (!control) return;
+    control.setAttribute('aria-haspopup', 'menu');
+    control.setAttribute('aria-expanded', String(this.open));
+    const menu = this._menuEl();
+    if (!menu) return;
+    const menuId = ensureId(menu, 'ui-menu');
+    control.setAttribute('aria-controls', menuId);
+    if (!menu.hasAttribute('aria-label') && !menu.hasAttribute('aria-labelledby')) {
+      menu.setAttribute('aria-labelledby', ensureId(control, 'ui-menu-trigger'));
+    }
   }
 
   _content(): HTMLElement | null {
@@ -326,6 +373,7 @@ export class UiDropdownMenuContent extends WebComponent {
     return html`<div
       data-slot="dropdown-menu-content"
       role="menu"
+      aria-orientation="vertical"
       popover="manual"
       class=${dropdownMenuContentClass()}
     ><slot></slot></div>`;
@@ -354,12 +402,19 @@ export class UiDropdownMenuItem extends WebComponent({
   }
 
   render() {
+    // `data-disabled` on the host is the historical disabled marker (focus
+    // skips it, the click / pointer handlers bail on it). Mirror it onto the
+    // inner menuitem as both data-disabled (CSS) and aria-disabled, so the
+    // state also reaches assistive tech.
+    const disabled = typeof this.hasAttribute === 'function' && this.hasAttribute('data-disabled');
     return html`<div
       data-slot="dropdown-menu-item"
       role="menuitem"
       tabindex="-1"
       data-variant=${this.variant}
       ?data-inset=${this.inset}
+      ?data-disabled=${disabled}
+      aria-disabled=${disabled ? 'true' : 'false'}
       ?data-highlighted=${this.#highlighted.get()}
       class=${dropdownMenuItemClass()}
       @click=${this._onClick}
@@ -556,14 +611,17 @@ export class UiDropdownMenuSubTrigger extends WebComponent({ inset: Boolean }) {
 
   render() {
     const open = !!this._sub()?.open;
+    const disabled = typeof this.hasAttribute === 'function' && this.hasAttribute('data-disabled');
     return html`<div
       data-slot="dropdown-menu-sub-trigger"
       role="menuitem"
       tabindex="-1"
       aria-haspopup="menu"
       aria-expanded=${String(open)}
+      aria-disabled=${disabled ? 'true' : 'false'}
       data-state=${open ? 'open' : 'closed'}
       ?data-inset=${this.inset}
+      ?data-disabled=${disabled}
       class=${dropdownMenuSubTriggerClass()}
       @click=${this._onClick}
       @pointerenter=${this._onPointerEnter}
@@ -590,6 +648,7 @@ export class UiDropdownMenuSubContent extends WebComponent {
     return html`<div
       data-slot="dropdown-menu-sub-content"
       role="menu"
+      aria-orientation="vertical"
       popover="manual"
       class=${dropdownMenuSubContentClass()}
     ><slot></slot></div>`;

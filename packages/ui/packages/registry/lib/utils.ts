@@ -101,6 +101,33 @@ function variantPrefix(token: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Stable DOM ids for wiring ARIA relationships (aria-controls /
+// aria-labelledby / aria-describedby) between sibling light-DOM nodes.
+// A monotonic counter is fine for uniqueness within a document: the id is
+// only consumed as an attribute value, never persisted. When SSR emits an
+// id on a host element, the upgraded element reuses it (ensureId is a no-op
+// when an id is already present), so the server and client agree.
+// ---------------------------------------------------------------------------
+
+let _idSeq = 0;
+
+/** A fresh, document-unique id string with a readable prefix. */
+export function domId(prefix = 'ui'): string {
+  _idSeq += 1;
+  return `${prefix}-${_idSeq}`;
+}
+
+/**
+ * Returns `el.id`, assigning a generated one (prefix-based) when absent.
+ * Idempotent, so an id already present (author-set, or carried over from
+ * SSR) is reused unchanged.
+ */
+export function ensureId(el: { id: string }, prefix = 'ui'): string {
+  if (!el.id) el.id = domId(prefix);
+  return el.id;
+}
+
+// ---------------------------------------------------------------------------
 // Custom-element base: SSR-safe. In the browser `Base = HTMLElement`. On
 // the server (Node, during SSR) `HTMLElement` is undefined; we substitute
 // a stub class so that `class Foo extends Base { … }` doesn't throw at

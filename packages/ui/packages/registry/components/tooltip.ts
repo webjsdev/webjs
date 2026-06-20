@@ -41,6 +41,7 @@
  * Design tokens used: --foreground, --background.
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
+import { ensureId } from '../lib/utils.ts';
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
 // UA `[popover]` defaults paint a bordered, padded panel centered with
@@ -76,6 +77,36 @@ export class UiTooltip extends WebComponent({
     this.open = false;
     this.delayDuration = 700;
     this.skipDelayDuration = 300;
+  }
+
+  connectedCallback(): void {
+    super.connectedCallback?.();
+    // webjs projects slotted light-DOM children in a pass after the first
+    // render, so the trigger's focusable control is not in place yet at
+    // connect / firstUpdated. Defer to the next frame, by which point the
+    // projection has run and both the control and the tip content exist.
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => this._wireAria());
+    }
+  }
+
+  // APG tooltip wiring: the focusable trigger references the tip via
+  // aria-describedby, so a screen reader appends the tip text to the
+  // trigger's own name ("Help, button, Helpful tip"). The tip is JS-driven,
+  // so doing this at runtime is correct.
+  _wireAria(): void {
+    const triggerHost = this.querySelector('ui-tooltip-trigger');
+    const content = this.querySelector<HTMLElement>('ui-tooltip-content [role="tooltip"]');
+    if (!triggerHost || !content) return;
+    const control =
+      triggerHost.querySelector<HTMLElement>('button, a[href], [tabindex], [role="button"]') ??
+      (triggerHost as HTMLElement);
+    const id = ensureId(content, 'ui-tooltip');
+    const existing = control.getAttribute('aria-describedby');
+    if (!existing) control.setAttribute('aria-describedby', id);
+    else if (!existing.split(/\s+/).includes(id)) {
+      control.setAttribute('aria-describedby', `${existing} ${id}`);
+    }
   }
 
   // Back-compat getter for tests + external code that read `el.isOpen`

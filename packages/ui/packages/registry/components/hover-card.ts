@@ -39,6 +39,7 @@
  * Design tokens used: --popover, --popover-foreground, --border.
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
+import { ensureId } from '../lib/utils.ts';
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
 // `fixed m-0` opts out of the UA `[popover]` auto-centering margin so
@@ -69,6 +70,37 @@ export class UiHoverCard extends WebComponent({
     this.closeDelay = 300;
   }
 
+  connectedCallback(): void {
+    super.connectedCallback?.();
+    // webjs projects slotted light-DOM children after the first render, so
+    // the trigger control is not in place at connect. Defer to the next
+    // frame, when the projection has run.
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => this._wireAria());
+    }
+  }
+
+  // The trigger also opens on focus (see the @focusin handler), so it is
+  // keyboard-reachable: expose the popup relationship on the focusable
+  // control. aria-expanded is refreshed on every open transition.
+  _control(): HTMLElement | null {
+    const t = this.querySelector('ui-hover-card-trigger');
+    if (!t) return null;
+    return (
+      t.querySelector<HTMLElement>('a[href], button, [tabindex], [role="button"]') ??
+      (t as HTMLElement)
+    );
+  }
+
+  _wireAria(): void {
+    const control = this._control();
+    if (!control) return;
+    control.setAttribute('aria-haspopup', 'dialog');
+    control.setAttribute('aria-expanded', String(this.open));
+    const content = this.querySelector<HTMLElement>('ui-hover-card-content [role="dialog"]');
+    if (content) control.setAttribute('aria-controls', ensureId(content, 'ui-hovercard'));
+  }
+
   // Back-compat getter.
   get isOpen(): boolean { return this.open; }
 
@@ -93,8 +125,12 @@ export class UiHoverCard extends WebComponent({
     if (!changedProperties.has('open')) return;
     if (changedProperties.get('open') === undefined) return;
     // Wait one microtask for <ui-hover-card-content>'s inner [popover]
-    // element to commit; we drive its showPopover() / hidePopover().
-    queueMicrotask(() => this._syncContent());
+    // element to commit; we drive its showPopover() / hidePopover() and
+    // refresh the trigger's aria-expanded.
+    queueMicrotask(() => {
+      this._wireAria();
+      this._syncContent();
+    });
   }
 
   _syncContent(): void {

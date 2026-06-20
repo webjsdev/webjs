@@ -25,6 +25,11 @@
  *     </div>
  *   </div>
  *
+ * A11y (required for accessible output): put role="alert" on the container
+ * for an urgent, interrupting message, or role="status" for a polite,
+ * non-urgent update. The class helper sets no role, so without one the
+ * banner is silent to assistive tech.
+ *
  * Design tokens used: --card, --card-foreground, --destructive, --muted-foreground.
  */
 import { cn } from '../lib/utils.ts';

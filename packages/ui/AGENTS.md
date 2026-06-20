@@ -177,14 +177,48 @@ full per-directory breakdown.
 | 1b | `accordion` | `accordionClass`, `accordionItemClass`, `accordionTriggerClass`, `accordionContentClass`. Compose with `<details name="...">` + `<summary>`; `name` provides exclusive-open behavior natively. |
 | 1b | `collapsible` | `collapsibleClass`, `collapsibleTriggerClass`, `collapsibleContentClass`. Compose with `<details>` + `<summary>`. |
 | 1b | `progress` | `progressClass()`, apply to native `<progress value max>`. Browser draws the bar via `::-webkit-progress-value` and `::-moz-progress-bar`. Omit `value` for the indeterminate / pulse state. |
-| 2  | `toggle-group` | `<ui-toggle-group type value variant size>` + `<ui-toggle-group-item value>` |
-| 2  | `dialog` | `<ui-dialog>` + `<ui-dialog-trigger>` / `<ui-dialog-content>` / `<ui-dialog-close>`. Built on native `<dialog>.showModal()`, top-layer rendering, ::backdrop overlay, focus trap, Escape close, and focus restoration are all platform-provided. We add body-scroll lock + class helpers for `dialogHeader/Title/Description/Footer`. |
-| 2  | `alert-dialog` | Like dialog, role=alertdialog. Native Escape close is cancelled via the `cancel` event; no backdrop-click dismissal. `<ui-alert-dialog-action>` / `<ui-alert-dialog-cancel>`. |
-| 2  | `tooltip` | `<ui-tooltip delay-duration>`, hover/focus + delay. Content uses `popover="manual"` for top-layer rendering. |
-| 2  | `hover-card` | `<ui-hover-card open-delay close-delay>`, hover with linger-keep-open. Content uses `popover="manual"` for top-layer rendering. |
-| 2  | `tabs` | `<ui-tabs value orientation>` + List / Trigger / Content. Arrow-key keyboard nav. |
-| 2  | `dropdown-menu` | `<ui-dropdown-menu>` + Trigger / Content / Item (variant) / Label / Separator / Shortcut / Group. Content uses `popover="manual"` for top-layer rendering. ArrowUp/Down nav, Escape close. |
-| 2  | `sonner` | `<ui-sonner position>` + `toast()` / `toast.success` / `toast.error` / `toast.promise` API. |
+| 2  | `toggle-group` | `<ui-toggle-group type value variant size>` + `<ui-toggle-group-item value>`. Roving tabindex (one Tab stop) with Arrow / Home / End navigation, plus `aria-pressed` per item. |
+| 2  | `dialog` | `<ui-dialog>` + `<ui-dialog-trigger>` / `<ui-dialog-content>` / `<ui-dialog-close>`. Built on native `<dialog>.showModal()`, top-layer rendering, ::backdrop overlay, focus trap, Escape close, and focus restoration are all platform-provided. We add body-scroll lock + class helpers for `dialogHeader/Title/Description/Footer`. On open it wires `aria-labelledby` / `aria-describedby` to the `data-slot="dialog-title"` / `dialog-description` nodes (falling back to the first heading / paragraph). |
+| 2  | `alert-dialog` | Like dialog, role=alertdialog. Native Escape close is cancelled via the `cancel` event; no backdrop-click dismissal. `<ui-alert-dialog-action>` / `<ui-alert-dialog-cancel>`. Wires `aria-labelledby` / `aria-describedby` to its `alert-dialog-title` / `alert-dialog-description` the same way. |
+| 2  | `tooltip` | `<ui-tooltip delay-duration>`, hover/focus + delay. Content uses `popover="manual"` for top-layer rendering. The trigger references the tip via `aria-describedby` (APG tooltip wiring). |
+| 2  | `hover-card` | `<ui-hover-card open-delay close-delay>`, hover with linger-keep-open. Content uses `popover="manual"` for top-layer rendering. The trigger (focusable, also opens on focus) gets `aria-haspopup` / `aria-expanded` / `aria-controls`. |
+| 2  | `tabs` | `<ui-tabs value orientation>` + List / Trigger / Content. Arrow-key keyboard nav. Triggers carry `aria-controls`, panels `aria-labelledby` (cross-linked per group), the list `aria-orientation`, and an inactive panel is `inert`. |
+| 2  | `dropdown-menu` | `<ui-dropdown-menu>` + Trigger / Content / Item (variant) / Label / Separator / Shortcut / Group. Content uses `popover="manual"` for top-layer rendering. ArrowUp/Down nav, Escape close. Menu declares `aria-orientation`, a `data-disabled` item reflects `aria-disabled`, and the trigger gets `aria-haspopup` / `aria-expanded` / `aria-controls`. |
+| 2  | `sonner` | `<ui-sonner position>` + `toast()` / `toast.success` / `toast.error` / `toast.promise` API. The viewport is a persistent `aria-live` region so inserted toasts are announced (an `error` toast is `role=alert`). |
+
+## Accessibility
+
+The kit aims for 100% accessibility out of the box, but the responsibility
+splits by tier, and an agent MUST know which half it owns.
+
+**Tier-2 custom elements own their ARIA.** Because the element renders its own
+markup, it wires the WAI-ARIA pattern itself, with zero author effort: tabs
+cross-links triggers and panels (`aria-controls` / `aria-labelledby`), reports
+`aria-orientation`, and marks an inactive panel `inert`; toggle-group uses
+roving tabindex plus Arrow / Home / End; dropdown-menu declares
+`aria-orientation`, reflects `aria-disabled` on a `data-disabled` item, and
+gives the trigger `aria-haspopup` / `aria-expanded` / `aria-controls`; dialog
+and alert-dialog name themselves from their title and description on open;
+tooltip references its tip with `aria-describedby`; hover-card exposes the
+popup relationship on its (focus-openable) trigger; sonner is a persistent
+`aria-live` region. Do not hand-add these attributes; the element already has.
+
+**Tier-1 class helpers push their ARIA to YOU.** A helper returns only Tailwind
+classes, so the semantic element, role, and ARIA are the caller's job. Every
+Tier-1 component's JSDoc carries an `A11y (required for accessible output)`
+block stating exactly what to supply. The recurring obligations:
+
+- `button`: an icon-only button needs `aria-label`; an overlay trigger needs `aria-haspopup` + `aria-expanded`.
+- `alert`: choose `role="alert"` (urgent) or `role="status"` (polite).
+- `separator`: `role="separator"` + `aria-orientation`, or `role="none"` when decorative.
+- `skeleton`: `aria-hidden="true"` (or `aria-busy` on the region), since it is a placeholder.
+- `avatar`: an `alt` that names the person, plus the text fallback.
+- `table`: `scope="col"` / `scope="row"` on header cells, and a `<caption>`.
+- `pagination` / `breadcrumb`: a labelled `<nav>`, `aria-current="page"`, and hidden separators / icon-only control names.
+- `progress`: an `aria-label` (the native element supplies the role + value).
+
+Browser tests for the Tier-2 guarantees live in
+`test/components/browser/ui-a11y.test.js`.
 
 ## Public commands (binary: `webjsui`)
 

@@ -39,6 +39,23 @@ utility classes on authored children apply directly. The `webjsui add`
 CLI installs `@webjsdev/core` automatically when you add a Tier-2
 component.
 
+## Accessibility
+
+Tier-2 elements are accessible out of the box: they wire their own WAI-ARIA
+pattern, so you do not hand-add ARIA. Tabs cross-links triggers and panels and
+reports orientation, toggle-group uses roving tabindex with Arrow / Home / End,
+dropdown-menu declares orientation and reflects `aria-disabled`, dialog and
+alert-dialog name themselves from their title and description, tooltip wires
+`aria-describedby`, hover-card exposes `aria-haspopup` / `aria-expanded`, and
+sonner is a live region.
+
+Tier-1 class helpers return only classes, so the semantic element and ARIA are
+yours to supply. Each one's JSDoc carries an `A11y (required for accessible
+output)` block stating exactly what to add: a name on an icon-only button, a
+role on an alert, `scope` on table headers, `alt` on an avatar image, a
+labelled `<nav>` with `aria-current="page"` on pagination and breadcrumb, and
+so on. Follow that block and the markup is fully accessible.
+
 ## Install
 
 ### Option A : Webjs users (already have `@webjsdev/cli`)

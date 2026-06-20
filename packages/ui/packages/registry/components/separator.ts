@@ -13,6 +13,11 @@
  *        class=${separatorClass({ orientation: 'vertical' })}
  *        data-orientation="vertical"></div>
  *
+ * A11y (required for accessible output): a meaningful divider needs
+ * role="separator" plus aria-orientation. A purely decorative one needs
+ * role="none" (or aria-hidden="true") so assistive tech does not announce
+ * an empty separator.
+ *
  * Design tokens used: --border.
  */
 import { cn } from '../lib/utils.ts';

@@ -26,6 +26,11 @@
  *     </ol>
  *   </nav>
  *
+ * A11y (required for accessible output): wrap the list in <nav
+ * aria-label="breadcrumb">, set aria-current="page" on the current-page
+ * element, and mark each separator role="presentation" aria-hidden="true".
+ * The class helpers emit none of these.
+ *
  * Design tokens used: --muted-foreground, --foreground.
  */
 

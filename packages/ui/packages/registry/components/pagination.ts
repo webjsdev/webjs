@@ -23,6 +23,11 @@
  *     </ul>
  *   </nav>
  *
+ * A11y (required for accessible output): wrap the list in <nav
+ * aria-label="pagination">, set aria-current="page" on the active page
+ * link, give an icon-only Previous / Next control an aria-label, and mark
+ * the ellipsis aria-hidden="true". The class helpers emit none of these.
+ *
  * Design tokens used: inherited from buttonClass.
  */
 import { cn } from '../lib/utils.ts';

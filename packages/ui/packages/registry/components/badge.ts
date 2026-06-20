@@ -14,6 +14,10 @@
  * The `[a&]:hover:...` hover styles only apply when the element is an `<a>`,
  * so a static `<span>` doesn't pick up an unwanted hover.
  *
+ * A11y (required for accessible output): render a static badge as a plain
+ * <span> (not focusable, no tabindex). Only an interactive badge (an <a>
+ * or <button>) is focusable, and an icon-only one needs an aria-label.
+ *
  * Design tokens used: --primary, --secondary, --destructive, --foreground,
  * --accent, --border, --ring.
  */

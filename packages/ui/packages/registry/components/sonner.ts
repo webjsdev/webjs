@@ -188,8 +188,18 @@ export class UiSonner extends WebComponent({
 
   render() {
     const pos = POSITIONS[this.position] ?? POSITIONS['bottom-right'];
+    // The container is a persistent live region: it is in the DOM from the
+    // first render (even with zero toasts), so a screen reader announces
+    // each toast as it is inserted. It defaults to polite; an `error` toast
+    // carries its own role="alert" (assertive) and that innermost live
+    // region wins for that item.
     return html`<div
       data-slot="sonner"
+      role="region"
+      aria-label="Notifications"
+      aria-live="polite"
+      aria-relevant="additions text"
+      aria-atomic="false"
       class=${`pointer-events-none fixed z-[100] flex flex-col gap-2 ${pos}`}
     >
       ${repeat(
