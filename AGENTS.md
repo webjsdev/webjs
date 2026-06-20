@@ -370,7 +370,7 @@ webjs start  [--port N]            # prod server; source IS the runtime, plain H
 webjs test   [--server] [--browser] [--watch]
 webjs check  [--rules] [--json]    # correctness validator (report-only, no autofix); --json for an agent loop
 webjs mcp                          # read-only MCP: routes, actions (RPC hashes), components, check
-webjs doctor                       # project-health checklist; non-zero exit on a hard fail
+webjs doctor                       # project-health checklist (incl. a page/layout elision advisory, #646); non-zero exit on a hard fail
 webjs types                        # generate .webjs/routes.d.ts (typed Route union + per-route params, #258)
 webjs typecheck [tsc args...]      # the project's own tsc --noEmit
 webjs create <name> [--template api|saas]

@@ -281,6 +281,16 @@ or the boot `<script type="module">`. If one does, something in its
 closure does client work and is not a component; that is the thing to move
 into a component or a `.server.{js,ts}` file.
 
+`webjs doctor` names this for you (#646). Its "Page/layout elision (carrier
+hygiene)" check runs the same elision verdict and, for every page/layout
+that ships whole, prints the first client-effecting blocker by name, for
+example `app/page.ts ships whole because lib/track.ts references a browser
+global at module scope, or has a bare side-effect import and is not a
+component`. It is ADVISORY (a `warn`, never a hard fail): a page legitimately
+MAY ship, and the analyser is biased toward shipping by design, so this is a
+"you may not have intended this" hint. A blocker of the module itself prints
+`ships whole because it <reason>`.
+
 ### Elision is what keeps a server import off a display-only page (and `webjs check` guards the seam)
 
 Elision is also why a page can call a server-only utility and stay

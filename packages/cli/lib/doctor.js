@@ -36,7 +36,7 @@
 
 import { existsSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { checkNodeInline } from './node-preflight.js';
 
 /**
@@ -795,6 +795,51 @@ function checkGitHook(appDir) {
  *     instead of a real live resolve / node_modules read.
  * @returns {Promise<DoctorResult[]>}
  */
+/**
+ * Advisory (#646): name why a page/layout SHIPS its module to the browser
+ * instead of being elided. A page/layout that is a pure carrier (import-only
+ * #605 / inert #179) stays out of the browser; one that ships whole is pinned
+ * by a specific client-effecting NON-component in its closure (a util touching
+ * a client global, a module-scope side effect, a bare side-effect import) or by
+ * its own client work. This turns that invisible #605/#179 regression into a
+ * named line. WARN only: a page legitimately MAY ship, and the analyser is
+ * biased toward shipping by design (server AGENTS invariant 7), so this is a
+ * "you may not have intended this" hint, never a hard fail.
+ * @param {string} appDir
+ * @returns {Promise<DoctorResult>}
+ */
+async function checkElisionCarriers(appDir) {
+  const name = 'Page/layout elision (carrier hygiene)';
+  let report;
+  try {
+    const { analyzeAppElision } = await import('@webjsdev/server');
+    report = await analyzeAppElision(appDir);
+  } catch {
+    // Analysis unavailable (no app, malformed, server import failed): no advice.
+    return { name, status: 'pass', message: 'not analysed (no routable app or analysis unavailable)' };
+  }
+  if (!report.analysed) {
+    return { name, status: 'pass', message: 'not analysed (no routable app, or elision is disabled)' };
+  }
+  if (report.shipped.length === 0) {
+    return { name, status: 'pass', message: 'every page/layout is elided (a pure import-only or inert carrier)' };
+  }
+  const rel = (f) => relative(appDir, f) || f;
+  const lines = report.shipped.map(({ file, blocker, reason }) =>
+    blocker
+      ? `${rel(file)} ships whole because ${rel(blocker)} ${reason} and is not a component`
+      : `${rel(file)} ships whole because it ${reason}`,
+  );
+  return {
+    name,
+    status: 'warn',
+    message:
+      `${report.shipped.length} page/layout module(s) ship to the browser instead of being elided:\n` +
+      lines.map((l) => `    ${l}`).join('\n'),
+    fix: 'Move the client work out of the page/layout closure (into a component, or a .server module reached through an action) so the carrier can be elided, or accept that it ships. See agent-docs/components.md.',
+  };
+}
+
 export async function runDoctorChecks(appDir, opts = {}) {
   const cliDir = opts.cliDir || new URL('.', import.meta.url).pathname;
   const results = await Promise.all([
@@ -806,6 +851,7 @@ export async function runDoctorChecks(appDir, opts = {}) {
     checkWebjsVersions(appDir),
     checkImportmapCoherence(appDir, opts),
     Promise.resolve(checkGitHook(appDir)),
+    checkElisionCarriers(appDir),
   ]);
   return results;
 }
