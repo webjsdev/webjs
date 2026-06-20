@@ -60,6 +60,11 @@ try {
   await c.close();
 } finally {
   Bun.serve = realServe;
+  // startBunListener registers a process SIGINT/SIGTERM handler per call that
+  // its close() does not remove; drop them so the 3 calls leave no listeners
+  // behind (this short-lived script installs none of its own).
+  process.removeAllListeners('SIGINT');
+  process.removeAllListeners('SIGTERM');
 }
 
 console.log(`OK  webjs Bun.serve idleTimeout wiring passed on bun ${process.versions.bun} (#663)`);
