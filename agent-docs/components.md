@@ -283,13 +283,15 @@ into a component or a `.server.{js,ts}` file.
 
 `webjs doctor` names this for you (#646). Its "Page/layout elision (carrier
 hygiene)" check runs the same elision verdict and, for every page/layout
-that ships whole, prints the first client-effecting blocker by name, for
-example `app/page.ts ships whole because lib/track.ts references a browser
-global at module scope, or has a bare side-effect import and is not a
-component`. It is ADVISORY (a `warn`, never a hard fail): a page legitimately
-MAY ship, and the analyser is biased toward shipping by design, so this is a
-"you may not have intended this" hint. A blocker of the module itself prints
-`ships whole because it <reason>`.
+that ships whole, prints the FIRST client-effecting blocker by name, for
+example `app/page.ts ships whole. Its first client-effecting blocker is
+lib/track.ts, which references a browser global at module scope, runs code
+at module scope, or has a bare side-effect import and is not a component`.
+It names the first blocker only; if a module has several, it stays shipped
+until each is moved out. It is ADVISORY (a `warn`, never a hard fail): a page
+legitimately MAY ship, and the analyser is biased toward shipping by design,
+so this is a "you may not have intended this" hint. When the module's own
+code is the cause, it prints `ships whole because it <reason>`.
 
 ### Elision is what keeps a server import off a display-only page (and `webjs check` guards the seam)
 

@@ -825,9 +825,11 @@ async function checkElisionCarriers(appDir) {
     return { name, status: 'pass', message: 'every page/layout is elided (a pure import-only or inert carrier)' };
   }
   const rel = (f) => relative(appDir, f) || f;
+  // Name the FIRST client-effecting blocker (there may be more than one; the
+  // module stays shipped until every such blocker is moved out).
   const lines = report.shipped.map(({ file, blocker, reason }) =>
     blocker
-      ? `${rel(file)} ships whole because ${rel(blocker)} ${reason} and is not a component`
+      ? `${rel(file)} ships whole. Its first client-effecting blocker is ${rel(blocker)}, which ${reason} and is not a component`
       : `${rel(file)} ships whole because it ${reason}`,
   );
   return {

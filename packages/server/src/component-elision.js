@@ -1076,7 +1076,7 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
     if (componentFiles.has(file) && mustShip.has(file)) return 'is an interactive component';
     if (clientRouterFiles.has(file)) return 'imports the client router';
     if (reactiveFiles.has(file)) return 'imports a reactive primitive (signal / computed / watch)';
-    if (clientGlobalOrBareFiles.has(file)) return 'references a browser global at module scope, or has a bare side-effect import';
+    if (clientGlobalOrBareFiles.has(file)) return 'references a browser global at module scope, runs code at module scope, or has a bare side-effect import';
     return 'does client work';
   };
 
