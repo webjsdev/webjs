@@ -41,7 +41,9 @@
  * Events:
  *   `ui-value-change` on <ui-toggle-group>: `{ detail: { value } }` after selection changes.
  *
- * Keyboard: Enter / Space toggles the focused item (native button activation).
+ * Keyboard: Arrow keys move focus between items (roving tabindex, so the
+ * group is a single Tab stop), Home / End jump to the first / last item, and
+ * Enter / Space toggles the focused item.
  *
  * Design tokens used: inherited from toggleClass (--muted, --accent, --ring,
  * --input, --destructive).
@@ -109,9 +111,15 @@ export class UiToggleGroup extends WebComponent({
     queueMicrotask(() => this._reflectItems());
   }
 
+  _items(): UiToggleGroupItem[] {
+    return Array.from(this.querySelectorAll<UiToggleGroupItem>('ui-toggle-group-item'));
+  }
+
   _reflectItems(): void {
     const values = this._values;
-    this.querySelectorAll<UiToggleGroupItem>('ui-toggle-group-item').forEach((item) => {
+    const items = this._items();
+    const current = items.find((el) => el.tabIndex === 0);
+    items.forEach((item) => {
       const on = !!item.value && values.has(item.value);
       // Reflect both on the host (for CSS sibling selectors like
       // data-[spacing=0]:first:rounded-l-md that need to target the host
@@ -119,6 +127,31 @@ export class UiToggleGroup extends WebComponent({
       // item's render() refreshes its inner styling.
       item.pressed = on;
     });
+    this._roving(items, current);
+  }
+
+  // Roving tabindex (APG): exactly one item is in the tab order. Prefer the
+  // currently-focused item, then whichever was tabbable, then the first
+  // selected item, then the first item. Arrow keys move focus and shift the
+  // single tabbable slot via `focusItem`.
+  _roving(items: UiToggleGroupItem[], current?: UiToggleGroupItem): void {
+    if (!items.length) return;
+    const values = this._values;
+    const active =
+      typeof document !== 'undefined' ? (document.activeElement as Element | null) : null;
+    const focused = active ? items.find((i) => i === active) : undefined;
+    const selected = items.find((i) => !!i.value && values.has(i.value));
+    const tabbable = focused ?? current ?? selected ?? items[0];
+    items.forEach((item) => {
+      item.tabIndex = item === tabbable ? 0 : -1;
+    });
+  }
+
+  focusItem(item: UiToggleGroupItem): void {
+    this._items().forEach((el) => {
+      el.tabIndex = el === item ? 0 : -1;
+    });
+    item.focus();
   }
 
   _onItemClick = (e: Event): void => {
@@ -181,7 +214,10 @@ export class UiToggleGroupItem extends WebComponent({
   connectedCallback(): void {
     this.dataset.slot = 'toggle-group-item';
     this.role = 'button';
-    this.tabIndex = 0;
+    // Roving tabindex: start outside the tab order. The group promotes
+    // exactly one item to tabindex 0 in _reflectItems (runs after first
+    // render); Arrow keys move focus and the tabbable slot from there.
+    this.tabIndex = -1;
     this.addEventListener('click', this._onClick);
     this.addEventListener('keydown', this._onKeyDown);
     super.connectedCallback?.();
@@ -218,6 +254,24 @@ export class UiToggleGroupItem extends WebComponent({
     if (e.key === ' ' || e.key === 'Enter') {
       e.preventDefault();
       this._onClick();
+      return;
+    }
+    const group = this._group;
+    if (!group) return;
+    const horizontal = group.orientation !== 'vertical';
+    const nextKey = horizontal ? 'ArrowRight' : 'ArrowDown';
+    const prevKey = horizontal ? 'ArrowLeft' : 'ArrowUp';
+    const items = group._items();
+    const idx = items.indexOf(this);
+    if (idx === -1) return;
+    let target: UiToggleGroupItem | null = null;
+    if (e.key === nextKey) target = items[(idx + 1) % items.length] ?? null;
+    else if (e.key === prevKey) target = items[(idx - 1 + items.length) % items.length] ?? null;
+    else if (e.key === 'Home') target = items[0] ?? null;
+    else if (e.key === 'End') target = items[items.length - 1] ?? null;
+    if (target) {
+      e.preventDefault();
+      group.focusItem(target);
     }
   };
 }

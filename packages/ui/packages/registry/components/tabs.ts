@@ -44,7 +44,10 @@
  * --input, --ring.
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
-import { cn } from '../lib/utils.ts';
+import { cn, ensureId } from '../lib/utils.ts';
+
+// A tab `value` becomes part of an id, so reduce it to id-safe characters.
+const idSafe = (s: string): string => s.replace(/[^A-Za-z0-9_-]/g, '-');
 
 // --------------------------------------------------------------------------
 // Class helpers
@@ -102,6 +105,19 @@ export class UiTabs extends WebComponent({
     this.orientation = 'horizontal';
   }
 
+  // Stable per-instance scope so a trigger and its panel agree on the
+  // shared id stem (`<scope>-trigger-<value>` / `<scope>-panel-<value>`)
+  // even when several tab sets reuse the same `value` names on one page.
+  get scopeId(): string {
+    return ensureId(this, 'ui-tabs');
+  }
+
+  // Builds the trigger / panel id pair a child derives from its `value`.
+  idsFor(value: string): { trigger: string; panel: string } {
+    const v = idSafe(value);
+    return { trigger: `${this.scopeId}-trigger-${v}`, panel: `${this.scopeId}-panel-${v}` };
+  }
+
   render() {
     return html`<div
       data-slot="tabs"
@@ -126,7 +142,7 @@ export class UiTabs extends WebComponent({
 
   _broadcast(): void {
     this.querySelectorAll<WebComponent>(
-      'ui-tabs-trigger, ui-tabs-content',
+      'ui-tabs-list, ui-tabs-trigger, ui-tabs-content',
     ).forEach((el) => el.requestUpdate?.());
   }
 }
@@ -144,10 +160,17 @@ export class UiTabsList extends WebComponent({
     this.variant = 'default';
   }
 
+  get _tabs(): UiTabs | null {
+    if (typeof this.closest !== 'function') return null;
+    return this.closest('ui-tabs') as UiTabs | null;
+  }
+
   render() {
+    const orientation = this._tabs?.orientation ?? 'horizontal';
     return html`<div
       data-slot="tabs-list"
       role="tablist"
+      aria-orientation=${orientation}
       data-variant=${this.variant}
       class=${tabsListClass({ variant: this.variant })}
     ><slot></slot></div>`;
@@ -178,10 +201,13 @@ export class UiTabsTrigger extends WebComponent({
   render() {
     const tabs = this._tabs;
     const active = !!tabs && tabs.value === this.value && this.value !== '';
+    const ids = tabs && this.value ? tabs.idsFor(this.value) : null;
     return html`<button
       type="button"
       role="tab"
       data-slot="tabs-trigger"
+      id=${ids ? ids.trigger : ''}
+      aria-controls=${ids ? ids.panel : ''}
       data-state=${active ? 'active' : 'inactive'}
       aria-selected=${String(active)}
       tabindex=${active ? '0' : '-1'}
@@ -241,14 +267,20 @@ export class UiTabsContent extends WebComponent({
   render() {
     const tabs = this._tabs;
     const active = !!tabs && tabs.value === this.value && this.value !== '';
+    const ids = tabs && this.value ? tabs.idsFor(this.value) : null;
     // The host needs to be hidden when inactive so its rendered <section>
     // is removed from layout (light DOM has no :host CSS to scope this).
     // Use the native `hidden` IDL property rather than imperative
-    // setAttribute, so it reads as a property assignment.
+    // setAttribute, so it reads as a property assignment. `inert` on the
+    // host additionally pulls an inactive panel (and anything focusable
+    // inside it) out of the tab order and the accessibility tree.
     this.hidden = !active;
+    this.inert = !active;
     return html`<section
       data-slot="tabs-content"
       role="tabpanel"
+      id=${ids ? ids.panel : ''}
+      aria-labelledby=${ids ? ids.trigger : ''}
       tabindex="0"
       data-state=${active ? 'active' : 'inactive'}
       class=${TABS_CONTENT_CLASS}
