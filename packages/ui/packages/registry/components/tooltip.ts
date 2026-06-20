@@ -41,6 +41,7 @@
  * Design tokens used: --foreground, --background.
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
+import { ensureId } from '../lib/utils.ts';
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
 // UA `[popover]` defaults paint a bordered, padded panel centered with
@@ -76,6 +77,32 @@ export class UiTooltip extends WebComponent({
     this.open = false;
     this.delayDuration = 700;
     this.skipDelayDuration = 300;
+  }
+
+  connectedCallback(): void {
+    super.connectedCallback?.();
+    // Children upgrade after this host; defer so the trigger control and
+    // the tooltip content both exist before linking them.
+    queueMicrotask(() => this._wireAria());
+  }
+
+  // APG tooltip wiring: the focusable trigger references the tip via
+  // aria-describedby, so a screen reader appends the tip text to the
+  // trigger's own name ("Help, button, Helpful tip"). The tip is JS-driven,
+  // so doing this at runtime is correct.
+  _wireAria(): void {
+    const triggerHost = this.querySelector('ui-tooltip-trigger');
+    const content = this.querySelector<HTMLElement>('ui-tooltip-content [role="tooltip"]');
+    if (!triggerHost || !content) return;
+    const control =
+      triggerHost.querySelector<HTMLElement>('button, a[href], [tabindex], [role="button"]') ??
+      (triggerHost as HTMLElement);
+    const id = ensureId(content, 'ui-tooltip');
+    const existing = control.getAttribute('aria-describedby');
+    if (!existing) control.setAttribute('aria-describedby', id);
+    else if (!existing.split(/\s+/).includes(id)) {
+      control.setAttribute('aria-describedby', `${existing} ${id}`);
+    }
   }
 
   // Back-compat getter for tests + external code that read `el.isOpen`
