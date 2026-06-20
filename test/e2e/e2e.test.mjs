@@ -1334,15 +1334,16 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       'downloads should bypass the router (let the browser handle)');
   });
 
-  test('CSRF cookie is set on first GET response', async () => {
-    // Fresh context → clear cookies.
+  test('no CSRF cookie on a GET response (Origin-checked, so SSR is cacheable)', async () => {
+    // CSRF is an Origin / Sec-Fetch-Site check (#659), not a token cookie, so a
+    // page response must carry no webjs_csrf cookie. That cookielessness is
+    // exactly what lets a public-Cache-Control page be CDN-cached.
     await page.deleteCookie(...(await page.cookies()));
     const resp = await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
     assert.equal(resp.status(), 200);
     const cookies = await page.cookies();
     const csrf = cookies.find((c) => /csrf/i.test(c.name));
-    assert.ok(csrf, `expected a csrf cookie; got: ${cookies.map(c => c.name).join(', ')}`);
-    assert.ok(csrf.value && csrf.value.length > 10, 'csrf cookie should have a non-trivial value');
+    assert.ok(!csrf, `expected NO csrf cookie; got: ${cookies.map((c) => c.name).join(', ')}`);
   });
 
   test('theme toggle still works after navigations that test counter', async () => {
