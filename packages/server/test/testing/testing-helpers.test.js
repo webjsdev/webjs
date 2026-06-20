@@ -1,11 +1,12 @@
 /**
  * Tests for the handle() test-harness helpers (issue #267):
  *   - testRequest fires through the real pipeline and returns the Response;
- *   - getCsrf returns a usable {cookie, token} pair off the first SSR response;
+ *   - an SSR response sets no CSRF cookie (action CSRF is an Origin /
+ *     Sec-Fetch-Site check), so a public-Cache-Control page is CDN-cacheable;
  *   - actionEndpoint addresses an action by the same file-path hash the stub uses;
  *   - invokeActionForTest round-trips an action through /__webjs/action/<hash>/<fn>,
- *     including the serializer (a Date arg survives) and CSRF;
- *   - the CSRF-missing case is rejected (403) and a thrown action sanitizes in prod;
+ *     including the serializer (a Date arg survives) as a same-origin request;
+ *   - a cross-origin request is rejected (403) and a thrown action sanitizes in prod;
  *   - loginAndGetCookies drives the real auth flow against a fixture app and the
  *     captured cookie unlocks a protected route.
  *
