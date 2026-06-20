@@ -1,47 +1,36 @@
-// Use Web Crypto (globalThis.crypto) for random + hash: works on Node >=20,
-// Deno, Bun, Cloudflare Workers. Avoids the node:crypto import and keeps
-// CSRF portable across runtimes.
-const webCrypto = /** @type {Crypto} */ (globalThis.crypto);
-
 /**
- * Double-submit cookie CSRF protection for `/__webjs/action/*` RPC endpoints.
+ * Cross-origin (CSRF) protection for `/__webjs/action/*` RPC endpoints, via
+ * Fetch-Metadata + Origin verification. This is the model Remix 3's
+ * `cop-middleware` and Go 1.25's `http.CrossOriginProtection` use, and the
+ * spiritual sibling of Next.js / Astro's Origin-vs-Host check.
  *
- * Flow:
- *   1. Every SSR response that lacks the cookie issues a fresh `webjs_csrf`
- *      cookie with `SameSite=Lax; Path=/` (and `Secure` when over HTTPS).
- *      The cookie is readable by JS (not HttpOnly) so the auto-generated
- *      action stub can echo it.
- *   2. The action-stub `fetch` sends the token back in `x-webjs-csrf`.
- *   3. `invokeAction` compares the header to the cookie with constant-time
- *      equality; mismatch → 403.
+ * Why not a token cookie: webjs previously issued a per-request `webjs_csrf`
+ * double-submit cookie on every SSR response. That made SSR HTML
+ * un-cacheable at a CDN (a CDN skips a response with `Set-Cookie`, and a
+ * cached one would share / poison the token across visitors). A header check
+ * needs nothing on the page, so SSR HTML carries no `Set-Cookie` and a page
+ * that opts into a public `Cache-Control` is edge-cacheable.
  *
- * This protects against classic CSRF (a malicious site triggering a POST
- * from a victim browser): cross-origin requests cannot read the cookie, so
- * they cannot set the header to the matching value.
+ * The check, on every state-changing verb (a safe GET is exempt):
+ *   1. `Sec-Fetch-Site` is the primary signal. The browser sets it on every
+ *      request and page JS cannot forge it. `same-origin` / `none` (a direct
+ *      navigation with no initiator) pass; `same-site` / `cross-site` are
+ *      rejected unless the source origin is in `webjs.allowedOrigins`.
+ *   2. When `Sec-Fetch-Site` is absent (an older browser), fall back to
+ *      comparing the `Origin` host to the request host; an absent `Origin`
+ *      can't be checked so it passes (a handcrafted / non-browser request
+ *      can't carry a victim's SameSite cookies cross-site anyway).
  *
- * Notes on scope:
- *   - Applies to internal RPC only. A `route.ts` REST endpoint (hand-written
- *     or via the `route()` adapter) is *not* CSRF-protected because it is
- *     intended for external consumers; such an endpoint should carry its own
- *     auth (bearer token, signed request, API key) the app provides via
- *     middleware.
+ * Scope:
+ *   - Internal RPC only. A `route.ts` REST endpoint (hand-written or via the
+ *     `route()` adapter) is intentionally NOT covered here; it is for external
+ *     consumers and must carry its own auth.
+ *   - Session / auth cookies stay `SameSite=Lax` as defense-in-depth.
  */
 
-export const CSRF_COOKIE = 'webjs_csrf';
-export const CSRF_HEADER = 'x-webjs-csrf';
-const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
-
-/** @returns {string} a 128-bit hex token */
-export function newToken() {
-  const bytes = new Uint8Array(16);
-  webCrypto.getRandomValues(bytes);
-  let s = '';
-  for (const b of bytes) s += b.toString(16).padStart(2, '0');
-  return s;
-}
-
 /**
- * Parse cookies off a standard Request.
+ * Parse cookies off a standard Request. Retained as a general cookie reader
+ * (used by `context.js` for `cookies()`), independent of CSRF.
  * @param {Request} req
  * @returns {Record<string,string>}
  */
@@ -60,37 +49,78 @@ export function parseCookies(req) {
   return out;
 }
 
-/** @param {Request} req */
-export function readToken(req) {
-  return parseCookies(req)[CSRF_COOKIE] || null;
+/** Lower-cased host from a URL-or-origin string, or '' if unparseable. */
+function hostOf(value) {
+  if (!value) return '';
+  try { return new URL(value).host.toLowerCase(); } catch { return ''; }
 }
 
 /**
- * Serialise a Set-Cookie value for the CSRF token.
- * @param {string} token
- * @param {{ secure?: boolean }} [opts]
- */
-export function cookieHeader(token, opts = {}) {
-  const parts = [
-    `${CSRF_COOKIE}=${encodeURIComponent(token)}`,
-    'Path=/',
-    'SameSite=Lax',
-    `Max-Age=${COOKIE_MAX_AGE_SECONDS}`,
-  ];
-  if (opts.secure) parts.push('Secure');
-  return parts.join('; ');
-}
-
-/**
- * Constant-time verification of the double-submit.
+ * The host the request was addressed to. Honors `x-forwarded-host` first
+ * (set by a reverse proxy / CDN like the Cloudflare-in-front-of-Railway
+ * setup), then the `Host` header, then the request URL.
  * @param {Request} req
  */
-export function verify(req) {
-  const cookie = readToken(req);
-  const header = req.headers.get(CSRF_HEADER);
-  if (!cookie || !header) return false;
-  if (cookie.length !== header.length) return false;
-  let diff = 0;
-  for (let i = 0; i < cookie.length; i++) diff |= cookie.charCodeAt(i) ^ header.charCodeAt(i);
-  return diff === 0;
+export function requestHost(req) {
+  const xfh = req.headers.get('x-forwarded-host');
+  if (xfh) return xfh.split(',')[0].trim().toLowerCase();
+  const host = req.headers.get('host');
+  if (host) return host.toLowerCase();
+  return hostOf(req.url);
+}
+
+/** Is the request's `Origin` host in the configured allowlist? */
+function originAllowed(req, allowedOrigins) {
+  const origin = req.headers.get('origin');
+  if (!origin || origin === 'null') return false;
+  const h = hostOf(origin);
+  if (!h) return false;
+  const allow = new Set(
+    allowedOrigins.map((o) => (o.includes('://') ? hostOf(o) : o.toLowerCase())),
+  );
+  return allow.has(h);
+}
+
+/**
+ * Cross-origin (CSRF) verification for a state-changing action request.
+ * @param {Request} req
+ * @param {string[]} [allowedOrigins] hosts or full origins allowed cross-site
+ * @returns {{ ok: boolean, reason?: string }}
+ */
+export function verifyOrigin(req, allowedOrigins = []) {
+  // Primary: the Sec-Fetch-Site fetch-metadata header (browser-set, not
+  // forgeable by page JS, sent on every request).
+  const secFetchSite = (req.headers.get('sec-fetch-site') || '').toLowerCase();
+  if (secFetchSite === 'same-origin' || secFetchSite === 'none') return { ok: true };
+  if (secFetchSite) {
+    // 'same-site' or 'cross-site': reject unless the source origin is trusted.
+    return originAllowed(req, allowedOrigins)
+      ? { ok: true }
+      : { ok: false, reason: `cross-origin request (Sec-Fetch-Site: ${secFetchSite})` };
+  }
+  // Fallback (no Sec-Fetch-Site, older browser): compare Origin host to host.
+  const origin = req.headers.get('origin');
+  if (!origin) return { ok: true, reason: 'no-origin' };
+  const sourceHost = origin === 'null' ? 'null' : hostOf(origin);
+  const host = requestHost(req);
+  if (sourceHost && host && sourceHost === host) return { ok: true };
+  return originAllowed(req, allowedOrigins)
+    ? { ok: true }
+    : { ok: false, reason: `origin ${sourceHost || '(none)'} does not match host ${host || '(none)'}` };
+}
+
+/**
+ * Read `webjs.allowedOrigins` (string[]) from a parsed package.json. Pure;
+ * the caller supplies the package.json read (mirrors `readBasePath`).
+ * @param {unknown} pkg
+ * @returns {string[]}
+ */
+export function readAllowedOrigins(pkg) {
+  const raw =
+    pkg &&
+    typeof pkg === 'object' &&
+    /** @type {any} */ (pkg).webjs &&
+    /** @type {any} */ (pkg).webjs.allowedOrigins;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((x) => typeof x === 'string' && x.length > 0);
 }

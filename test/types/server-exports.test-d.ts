@@ -44,7 +44,7 @@ import {
   verifySignedUrl,
 } from '@webjsdev/server';
 import type { FileStore } from '@webjsdev/server';
-import { testRequest, getCsrf } from '@webjsdev/server/testing';
+import { testRequest } from '@webjsdev/server/testing';
 import { checkConventions } from '@webjsdev/server/check';
 
 // createRequestHandler resolves to the documented handler shape.
@@ -95,11 +95,8 @@ function useSession(s: Session) {
 // Testing helpers consume a handle.
 async function useTesting(handle: (r: Request) => Promise<Response>) {
   const res = await testRequest(handle, '/about');
-  const csrf = await getCsrf(handle);
   const _ok: boolean = res.ok;
-  const _t: string = csrf.token;
   void _ok;
-  void _t;
 }
 
 // checkConventions returns violations.
