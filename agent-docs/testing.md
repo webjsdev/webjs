@@ -116,6 +116,17 @@ runtime-sensitive suite under Bun to catch the long tail of cross-runtime
 incompatibilities (a `node:*` API Bun implements differently, a crypto/stream
 edge case, an error-message-format quirk).
 
+**Bun parity is part of the definition of done, not an afterthought.** A change
+to a runtime-sensitive surface (the serializer, the node:http vs `Bun.serve`
+listener + request path, SSR / action / CSRF dispatch, streams, `node:crypto`,
+the TS stripper, auth / session / cors) is NOT done until you have run the Bun
+matrix green AND added or updated a `test/bun/<feature>.mjs` cross-runtime
+assertion for the surface. This is enforced at commit time by
+`.claude/hooks/require-bun-parity-with-runtime-src.sh`, which BLOCKS a commit
+that stages runtime-sensitive `packages/*/src` with no `test/bun/**` test (the
+escape hatch `WEBJS_BUN_VERIFIED=1` is only for when an existing `test/bun`
+script already covers the surface AND you ran it under Bun).
+
 - `node scripts/run-bun-tests.js` (needs `bun` on PATH; `BUN=…` overrides) runs
   the `node:test` files under `test/`, `packages/core/test/`, and
   `packages/server/test/` (excluding `browser/`, `e2e/`, the network-bound

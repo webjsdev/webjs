@@ -126,7 +126,10 @@ fi
 # identity, the node:http vs Bun.serve listener shells, node stream/fs error
 # propagation, the TS stripper's error shape, JSC vs V8 error messages). A change
 # here MUST be proven on Bun, not just Node. The Bun matrix is a separate runner.
-runtime_sensitive=$(printf '%s\n' "$src_touched" | grep -E 'serialize|file-storage|listener-core|listener-bun|ts-strip|action-stream|render-server|websocket|node-version' || true)
+# Kept in sync with require-bun-parity-with-runtime-src.sh (the BLOCKING gate);
+# this is the matching non-blocking nudge, widened to the request path (csrf /
+# actions / ssr / dev handler / auth / session / cors), which diverges on Bun too.
+runtime_sensitive=$(printf '%s\n' "$src_touched" | grep -E 'serialize|file-storage|listener|ts-strip|action|render-server|/ssr\.js|websocket|node-version|csrf|/auth\.js|/session\.js|/cors\.js|crypto|compression|body-limit|/dev\.js|stream' || true)
 if [ -n "$runtime_sensitive" ]; then
   rlist=$(printf '%s' "$runtime_sensitive" | tr '\n' ' ')
   reminder="${reminder}Runtime-sensitive source changed ($rlist). webjs runs on Node AND Bun: run \`node scripts/run-bun-tests.js\` (needs bun installed) plus the test/bun/*.mjs scripts under Bun, and treat any divergence as a real framework bug to fix (not a skip). Add a test/bun/<feature>.mjs cross-runtime script for a new listener/serializer/streaming surface. See agent-docs/testing.md. "
