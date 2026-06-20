@@ -255,8 +255,8 @@ export const metadata = {
     </ul>
     <p>In development, unhandled errors show the full stack trace in the browser. In production, only a generic "Something went wrong" message is shown, with no stack traces leaked to the client.</p>
 
-    <h2>CSRF Cookie</h2>
-    <p>Every SSR response that lacks a CSRF cookie automatically sets one: <code>webjs_csrf</code> with <code>SameSite=Lax</code>. This cookie powers the double-submit CSRF protection for server actions. It is set during SSR so that the first client-side action call already has a token to send.</p>
+    <h2>No CSRF cookie: SSR responses are cacheable</h2>
+    <p>SSR responses set no per-request CSRF cookie. Server-action CSRF is enforced by an Origin / <code>Sec-Fetch-Site</code> check on the request itself (see <a href="/docs/security">Security</a>), so nothing has to ride the page. Because the HTML carries no <code>Set-Cookie</code>, a page that opts into a public <code>Cache-Control</code> (via <code>metadata.cacheControl</code>, e.g. on a root layout for a whole visitor-identical app) can be cached at a CDN edge. A per-user page simply leaves the default <code>no-store</code> in place.</p>
 
     <h2>Full SSR Example</h2>
     <pre>// app/layout.ts

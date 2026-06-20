@@ -32,6 +32,12 @@ export function generateMetadata(ctx: { url: string }) {
   const origin = new URL(ctx.url).origin;
   const image = `${origin}/public/og.png`;
   return {
+    // The marketing site is identical for every visitor (no per-user / session
+    // reads), so it is safe to cache at the CDN. Set on the root layout so it
+    // applies to every page (a per-user page could override with no-store).
+    // `s-maxage` is the edge cache; `max-age=0` keeps the browser revalidating;
+    // `stale-while-revalidate` serves instantly while refreshing.
+    cacheControl: 'public, max-age=0, s-maxage=600, stale-while-revalidate=86400',
     title: TITLE,
     description: DESCRIPTION,
     openGraph: {

@@ -14,6 +14,9 @@ export function generateMetadata(ctx: { url: string }) {
   const origin = new URL(ctx.url).origin;
   const image = `${origin}/public/og.png`;
   return {
+    // Docs pages are identical for every visitor, so cache at the CDN. Set on
+    // the root layout so it applies to every doc page (a page could override).
+    cacheControl: 'public, max-age=0, s-maxage=600, stale-while-revalidate=86400',
     title: TITLE,
     description: DESCRIPTION,
     openGraph: {

@@ -18,7 +18,7 @@
  *
  * ```js
  * import { createRequestHandler } from '@webjsdev/server';
- * import { testRequest, getCsrf, invokeActionForTest } from '@webjsdev/server/testing';
+ * import { testRequest, invokeActionForTest } from '@webjsdev/server/testing';
  *
  * const app = await createRequestHandler({ appDir: process.cwd(), dev: true });
  *
@@ -33,7 +33,6 @@
  */
 
 import { hashFile, RPC_CONTENT_TYPE } from './actions.js';
-import { CSRF_COOKIE, CSRF_HEADER } from './csrf.js';
 import { getSerializer } from './serializer.js';
 import { join, sep } from 'node:path';
 
@@ -84,24 +83,6 @@ export function testRequest(handle, input, init) {
 }
 
 /**
- * Read the `webjs_csrf` cookie value off a response's `Set-Cookie` header(s).
- * Returns null when the response set no CSRF cookie.
- *
- * @param {Response} res
- * @returns {string | null}
- */
-export function readCsrfCookie(res) {
-  const cookies = getSetCookies(res);
-  for (const c of cookies) {
-    const m = new RegExp(`(?:^|\\s)${CSRF_COOKIE}=([^;]+)`).exec(c);
-    if (m) {
-      try { return decodeURIComponent(m[1]); } catch { return m[1]; }
-    }
-  }
-  return null;
-}
-
-/**
  * Collect every `Set-Cookie` value off a `Response`, preferring the
  * structured `getSetCookie()` (which keeps multiple cookies separate) and
  * falling back to the single combined header.
@@ -132,32 +113,6 @@ export function cookiesToHeader(setCookies) {
     .map((c) => c.split(';', 1)[0].trim())
     .filter(Boolean)
     .join('; ');
-}
-
-/**
- * Do an initial GET to mint a CSRF token, returning the `{ cookie, token }`
- * pair so a test can send a CSRF-valid action request. `cookie` is a ready-made
- * `Cookie` request-header value; `token` is the bare value for the
- * `x-webjs-csrf` header. Reuses the REAL cookie / header names from `csrf.js`.
- *
- * @param {Handle} handle
- * @param {string} [path] the GET path used to issue the cookie (default `/`)
- * @returns {Promise<{ cookie: string, token: string, header: string }>}
- */
-export async function getCsrf(handle, path = '/') {
-  const res = await testRequest(handle, path);
-  const token = readCsrfCookie(res);
-  if (!token) {
-    throw new Error(
-      `getCsrf: GET ${path} issued no ${CSRF_COOKIE} cookie. The first SSR ` +
-      `response issues it; hit a real page route (or pass a path that renders).`,
-    );
-  }
-  return {
-    token,
-    header: CSRF_HEADER,
-    cookie: `${CSRF_COOKIE}=${encodeURIComponent(token)}`,
-  };
 }
 
 /**
@@ -301,7 +256,6 @@ function isAbsolutePath(p) {
  * @param {string} fnName the exported action function name
  * @param {unknown[]} [args] positional args (serialized as the stub sends an arg array)
  * @param {{
- *   csrf?: { cookie: string, token: string },
  *   appDir?: string,
  *   extraCookies?: string,
  *   throwOnError?: boolean,
@@ -320,23 +274,17 @@ export async function invokeActionForTest(app, serverFilePath, fnName, args = []
   const throwOnError = opts.throwOnError !== false;
 
   const endpoint = await actionEndpoint(appDir, serverFilePath, fnName);
-  const csrf = opts.csrf || (await getCsrf(handle));
 
   const serializer = getSerializer();
   const body = await serializer.serialize(args);
 
-  let cookie = csrf.cookie || `${CSRF_COOKIE}=${encodeURIComponent(csrf.token)}`;
-  if (opts.extraCookies) cookie = `${cookie}; ${opts.extraCookies}`;
+  // Model a same-origin browser POST (the action CSRF check reads
+  // `Sec-Fetch-Site`, no token / cookie needed).
+  /** @type {Record<string,string>} */
+  const headers = { 'content-type': RPC_CONTENT_TYPE, 'sec-fetch-site': 'same-origin' };
+  if (opts.extraCookies) headers.cookie = opts.extraCookies;
 
-  const res = await testRequest(handle, endpoint, {
-    method: 'POST',
-    headers: {
-      'content-type': RPC_CONTENT_TYPE,
-      [CSRF_HEADER]: csrf.token,
-      cookie,
-    },
-    body,
-  });
+  const res = await testRequest(handle, endpoint, { method: 'POST', headers, body });
 
   const text = await res.text();
   const ct = res.headers.get('content-type') || '';
@@ -357,17 +305,17 @@ export async function invokeActionForTest(app, serverFilePath, fnName, args = []
 
 /**
  * Lower-level variant of `invokeActionForTest` that returns the raw `Response`
- * (never throws on a non-2xx), so a test can assert on the status directly
- * (e.g. a CSRF-missing request returns 403). Send `opts.csrf = null` /
- * `opts.omitCsrf = true` to deliberately omit the CSRF header + cookie.
+ * (never throws on a non-2xx), so a test can assert on the status directly.
+ * By default it models a same-origin browser POST (passes the CSRF check); set
+ * `opts.crossOrigin` (true, or a specific origin string) to model a cross-site
+ * request and assert the 403.
  *
  * @param {{ handle: Handle, appDir: string } | Handle} app
  * @param {string} serverFilePath
  * @param {string} fnName
  * @param {unknown[]} [args]
  * @param {{
- *   csrf?: { cookie: string, token: string } | null,
- *   omitCsrf?: boolean,
+ *   crossOrigin?: boolean | string,
  *   appDir?: string,
  *   extraCookies?: string,
  *   contentType?: string,
@@ -386,15 +334,13 @@ export async function rawActionRequest(app, serverFilePath, fnName, args = [], o
 
   /** @type {Record<string,string>} */
   const headers = { 'content-type': opts.contentType || RPC_CONTENT_TYPE };
-  if (!opts.omitCsrf && opts.csrf !== null) {
-    const csrf = opts.csrf || (await getCsrf(handle));
-    headers[CSRF_HEADER] = csrf.token;
-    let cookie = csrf.cookie || `${CSRF_COOKIE}=${encodeURIComponent(csrf.token)}`;
-    if (opts.extraCookies) cookie = `${cookie}; ${opts.extraCookies}`;
-    headers.cookie = cookie;
-  } else if (opts.extraCookies) {
-    headers.cookie = opts.extraCookies;
+  if (opts.crossOrigin) {
+    headers['sec-fetch-site'] = 'cross-site';
+    headers.origin = typeof opts.crossOrigin === 'string' ? opts.crossOrigin : 'https://evil.example';
+  } else {
+    headers['sec-fetch-site'] = 'same-origin';
   }
+  if (opts.extraCookies) headers.cookie = opts.extraCookies;
 
   return testRequest(handle, endpoint, { method: 'POST', headers, body });
 }

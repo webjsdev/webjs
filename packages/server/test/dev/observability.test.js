@@ -208,14 +208,11 @@ test('onError: fires when a server action throws unexpectedly', async () => {
   // Discover the action hash + a CSRF token via the page + stub.
   const stub = await (await app.handle(new Request('http://x/modules/x/actions.server.js'))).text();
   const hash = /\/__webjs\/action\/([a-f0-9]+)\//.exec(stub)[1];
-  const pageResp = await app.handle(new Request('http://x/'));
-  const token = decodeURIComponent(/webjs_csrf=([^;]+)/.exec(pageResp.headers.get('set-cookie') || '')[1]);
   const resp = await app.handle(new Request(`http://x/__webjs/action/${hash}/boom`, {
     method: 'POST',
     headers: {
       'content-type': 'application/vnd.webjs+json',
-      'x-webjs-csrf': token,
-      cookie: `webjs_csrf=${encodeURIComponent(token)}`,
+      'sec-fetch-site': 'same-origin',
     },
     body: JSON.stringify([]),
   }));

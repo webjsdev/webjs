@@ -839,22 +839,15 @@ test('handle: POST to /__webjs/action/<hash>/<fn> invokes the action', async () 
   const wrong = await app.handle(new Request(rpcUrl));
   assert.equal(wrong.status, 405);
 
-  // Obtain a CSRF token pair by hitting the page route (which mints one).
-  const pageResp = await app.handle(new Request('http://x/'));
-  const setCookie = pageResp.headers.get('set-cookie') || '';
-  const tokMatch = /webjs_csrf=([^;]+)/.exec(setCookie);
-  assert.ok(tokMatch, `page should set csrf cookie; got: ${setCookie}`);
-  const token = decodeURIComponent(tokMatch[1]);
-
-  // POST with serialized args (webjs wire format + matching csrf). The
-  // serializer's tagged-inline format is plain JSON for primitive args:
+  // POST with serialized args (webjs wire format). Action CSRF is an Origin /
+  // Sec-Fetch-Site check (#659), so a same-origin POST needs only that header.
+  // The serializer's tagged-inline format is plain JSON for primitive args:
   // an array of values that double() will receive as positional args.
   const resp = await app.handle(new Request(rpcUrl, {
     method: 'POST',
     headers: {
       'content-type': 'application/vnd.webjs+json',
-      'x-webjs-csrf': token,
-      cookie: `webjs_csrf=${encodeURIComponent(token)}`,
+      'sec-fetch-site': 'same-origin',
     },
     body: JSON.stringify([21]),
   }));
@@ -891,7 +884,7 @@ test('handle: a server action exposed over REST via a route.ts route() adapter',
   assert.deepEqual(await resp.json(), { ok: true });
 });
 
-test('handle: POST /__webjs/action without CSRF → 403', async () => {
+test('handle: cross-origin POST /__webjs/action → 403', async () => {
   const appDir = makeApp({
     'app/page.js':
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
@@ -904,9 +897,10 @@ test('handle: POST /__webjs/action without CSRF → 403', async () => {
   const app = await createRequestHandler({ appDir, dev: true });
   const stub = await (await app.handle(new Request('http://x/modules/x/actions.server.js'))).text();
   const hash = /\/__webjs\/action\/([a-f0-9]+)\//.exec(stub)[1];
+  // A cross-site request (Sec-Fetch-Site) is rejected by the Origin CSRF check.
   const resp = await app.handle(new Request(`http://x/__webjs/action/${hash}/noop`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'sec-fetch-site': 'cross-site' },
     body: '{}',
   }));
   assert.equal(resp.status, 403);

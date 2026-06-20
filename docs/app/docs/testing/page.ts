@@ -103,7 +103,7 @@ suite('Client renderer', () =&gt; {
     <p><code>createRequestHandler({ appDir }).handle(request)</code> drives the FULL request pipeline (middleware, routing, SSR, page actions, server-action RPC, auth + CSRF) and returns a native <code>Response</code>. It is the same entry the framework's own suite uses, so the most realistic way to test an app is to fire a <code>Request</code> through it and assert on the <code>Response</code>, with no spawned process and no network.</p>
     <p><code>@webjsdev/server/testing</code> ships thin builders over that <code>handle()</code>. They are not a test framework. Each is a few lines over native <code>Request</code> / <code>Response</code>, and they reuse the REAL cookie / header names and the REAL wire serializer, so a test exercises the production contract, never a parallel fake.</p>
     <pre>import { createRequestHandler } from '@webjsdev/server';
-import { testRequest, getCsrf, invokeActionForTest, loginAndGetCookies, withSessionCookie }
+import { testRequest, invokeActionForTest, loginAndGetCookies, withSessionCookie }
   from '@webjsdev/server/testing';
 
 const app = await createRequestHandler({ appDir: process.cwd(), dev: true });</pre>
@@ -114,8 +114,8 @@ assert.equal(res.status, 200);
 assert.match(await res.text(), /About/);</pre>
     <p>A bare path (<code>/about</code>) is prefixed with a dummy origin (the pipeline only reads <code>pathname</code> + <code>search</code>). A full URL string or a pre-built <code>Request</code> works too. The optional third arg is a standard <code>RequestInit</code> (method, headers, body).</p>
 
-    <h3>getCsrf and the auth/session helpers</h3>
-    <p>The action RPC endpoint requires a <code>x-webjs-csrf</code> header matching the <code>webjs_csrf</code> cookie issued on the first SSR response. <code>getCsrf(handle)</code> does the initial GET and returns <code>{ token, cookie, header }</code> so a test can send a CSRF-valid request. <code>loginAndGetCookies(handle, { email, password })</code> drives the REAL credentials login through <code>handle()</code> (the <code>createAuth</code> route handler) and captures the genuine signed session <code>Set-Cookie</code>, so a follow-up request can hit a protected route as the logged-in user. <code>withSessionCookie(init, cookies)</code> merges those captured cookies onto a request init.</p>
+    <h3>The auth/session helpers</h3>
+    <p>Server-action CSRF is an Origin / <code>Sec-Fetch-Site</code> check, so a test needs no CSRF setup: <code>invokeActionForTest</code> models a same-origin browser POST and passes the check automatically (and <code>rawActionRequest(app, file, fn, args, { crossOrigin: true })</code> models a cross-site request to assert the 403). <code>loginAndGetCookies(handle, { email, password })</code> drives the REAL credentials login through <code>handle()</code> (the <code>createAuth</code> route handler) and captures the genuine signed session <code>Set-Cookie</code>, so a follow-up request can hit a protected route as the logged-in user. <code>withSessionCookie(init, cookies)</code> merges those captured cookies onto a request init.</p>
     <pre>// unauthenticated protected route is gated
 const gated = await testRequest(app.handle, '/dashboard');
 assert.equal(gated.status, 302);                     // -&gt; /login
@@ -130,7 +130,7 @@ assert.equal(dash.status, 200);</pre>
     <pre>// modules/posts/actions/create.server.ts exports createPost
 const out = await invokeActionForTest(
   app, 'modules/posts/actions/create.server.ts', 'createPost', [input]);</pre>
-    <p><code>invokeActionForTest</code> serializes <code>args</code> with the webjs serializer (exactly as the generated client stub does), POSTs them to the REAL <code>/__webjs/action/&lt;hash&gt;/&lt;fn&gt;</code> endpoint with a valid CSRF cookie + header, and parses the response with the serializer. The action is addressed by the SHA-256 hash of its <code>.server.{js,ts}</code> file path (absolute or appDir-relative) plus the function name, the same scheme the stub uses.</p>
+    <p><code>invokeActionForTest</code> serializes <code>args</code> with the webjs serializer (exactly as the generated client stub does), POSTs them to the REAL <code>/__webjs/action/&lt;hash&gt;/&lt;fn&gt;</code> endpoint as a same-origin request (so it passes the cross-origin CSRF check), and parses the response with the serializer. The action is addressed by the SHA-256 hash of its <code>.server.{js,ts}</code> file path (absolute or appDir-relative) plus the function name, the same scheme the stub uses.</p>
     <p><strong>Prefer this over a direct import of the action.</strong> A direct import calls the function in-process and bypasses three production concerns the endpoint enforces:</p>
     <ul>
       <li><strong>the wire serializer</strong> (a <code>Date</code> / <code>Map</code> / <code>BigInt</code> arg or return is genuinely encoded and decoded, not passed by reference),</li>

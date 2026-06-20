@@ -316,7 +316,7 @@ test('basePath unset is byte-identical to no feature (no // or stray prefix)', a
   }
 
   // The two HTML bodies (no-key vs empty-string) are identical modulo nothing:
-  // the build id + CSRF cookie ride headers, not the body, so the bodies match.
+  // the build id rides a header, not the body, so the bodies match.
   assert.equal(
     htmlB.replace(/app-[^/"]+/g, 'APP'),
     htmlA.replace(/app-[^/"]+/g, 'APP'),

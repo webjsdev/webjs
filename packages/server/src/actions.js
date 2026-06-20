@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { walk } from './fs-walk.js';
-import { verify as verifyCsrf, CSRF_COOKIE, CSRF_HEADER } from './csrf.js';
+import { verifyOrigin } from './csrf.js';
 import { getSerializer } from './serializer.js';
 import { readTextBounded, payloadTooLarge, DEFAULT_MAX_BODY_BYTES } from './body-limit.js';
 import {
@@ -311,7 +311,6 @@ export async function serveActionStub(idx, absFile) {
  */
 function buildStubBody({ hash, method, fnNames, actionUrl }) {
   const URL_ARG = URL_ARG_VERBS.has(method);
-  const SAFE = SAFE_VERBS.has(method);
   const J = JSON.stringify;
   const lines = [];
   lines.push(`// webjs: generated server-action stub (${method})`);
@@ -334,7 +333,8 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   lines.push(`const __METHOD = ${J(method)};`);
   lines.push(`const __MAX = ${MAX_URL_ARGS};`);
   lines.push(`const __CT = ${J(RPC_CONTENT_TYPE)};`);
-  lines.push(`function __csrf() { const m = document.cookie.match(/(?:^|;\\s*)${CSRF_COOKIE}=([^;]+)/); return m ? decodeURIComponent(m[1]) : ''; }`);
+  // CSRF is enforced server-side by an Origin-header check, so the stub sends
+  // nothing extra: the browser attaches `Origin` to a same-origin POST itself.
   // Shared: parse a response, surface invalidation, register a GET's tags
   // (stamped with the clock SAMPLED BEFORE the fetch, so a mutation in flight is
   // caught on the next read).
@@ -383,8 +383,8 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   // captured SYNCHRONOUSLY at __call entry (#492): the active render signal must
   // be read before the stub's first await (stringify), or the render's
   // synchronous window has already closed and cleared it.
-  lines.push(`async function __body(fn, body, m, csrf, sig) {`);
-  lines.push(`  const headers = { 'content-type': __CT }; if (csrf) headers[${J(CSRF_HEADER)}] = __csrf();`);
+  lines.push(`async function __body(fn, body, m, sig) {`);
+  lines.push(`  const headers = { 'content-type': __CT };`);
   lines.push(`  const res = await fetch(__URL + fn, { method: m, headers, credentials: 'same-origin', body, signal: sig });`);
   lines.push(`  return __handle(res, fn, null);`);
   lines.push(`}`);
@@ -394,14 +394,14 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
     lines.push(`  const sig = __sig();`); // sync capture before any await
     lines.push(`  const key = await __s(args);`);
     lines.push(`  const seeded = __seedTake(__HASH, fn, key); if (seeded !== __MISS) return seeded;`);
-    lines.push(`  if (key.length > __MAX) return __body(fn, key, 'POST', ${SAFE ? 'false' : 'true'}, sig);`);
+    lines.push(`  if (key.length > __MAX) return __body(fn, key, 'POST', sig);`);
     if (method === 'GET') {
       lines.push(`  const bypass = __stale(key);`);
       lines.push(`  const since = __mark();`);
       lines.push(`  const res = await fetch(__URL + fn + '?a=' + encodeURIComponent(key), { method: 'GET', credentials: 'same-origin', cache: bypass ? 'no-cache' : 'default', signal: sig });`);
       lines.push(`  return __handle(res, fn, key, since);`);
     } else {
-      lines.push(`  const res = await fetch(__URL + fn + '?a=' + encodeURIComponent(key), { method: __METHOD, headers: { ${J(CSRF_HEADER)}: __csrf() }, credentials: 'same-origin', signal: sig });`);
+      lines.push(`  const res = await fetch(__URL + fn + '?a=' + encodeURIComponent(key), { method: __METHOD, credentials: 'same-origin', signal: sig });`);
       lines.push(`  return __handle(res, fn, null);`);
     }
     lines.push(`}`);
@@ -413,7 +413,7 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
     lines.push(`  const sig = __sig();`); // sync capture before any await
     lines.push(`  const key = await __s(args);`);
     lines.push(`  const seeded = __seedTake(__HASH, fn, key); if (seeded !== __MISS) return seeded;`);
-    lines.push(`  return __body(fn, key, __METHOD, true, sig);`);
+    lines.push(`  return __body(fn, key, __METHOD, sig);`);
     lines.push(`}`);
   }
   for (const name of fnNames) {
@@ -436,8 +436,10 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
  *   invoked when the action throws unexpectedly, BEFORE the sanitized 500 is
  *   returned, so an APM integration sees the original error. The caller wraps
  *   it so a throwing sink can never affect the response.
+ * @param {string[]} [allowedOrigins] cross-site origins the CSRF check allows
+ *   (the app's `webjs.allowedOrigins`), for reverse-proxy / multi-domain setups.
  */
-export async function invokeAction(idx, hash, fnName, req, onError) {
+export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigins = []) {
   const file = idx.hashToFile.get(hash);
   if (!file) return rpcResponse({ error: 'Unknown action' }, { status: 404 });
   const mod = await loadModule(file, idx.dev);
@@ -459,10 +461,14 @@ export async function invokeAction(idx, hash, fnName, req, onError) {
       { status: 405, headers: { allow: [...allowed].join(', ') } },
     );
   }
-  // CSRF: required for every verb except a safe GET (a read with no state
-  // change, which is also browser-cacheable so it cannot carry a fresh token).
-  if (!SAFE_VERBS.has(method) && !verifyCsrf(req)) {
-    return rpcResponse({ error: 'CSRF validation failed' }, { status: 403 });
+  // CSRF: an Origin-header check on every state-changing verb (a safe GET is a
+  // read with no state change). A browser sets `Origin` on a cross-site POST to
+  // the ATTACKER's origin, so a forged request fails the host match. No token
+  // or cookie is involved, which keeps SSR HTML free of `Set-Cookie` and so
+  // CDN-cacheable. See csrf.js.
+  if (!SAFE_VERBS.has(method)) {
+    const v = verifyOrigin(req, allowedOrigins);
+    if (!v.ok) return rpcResponse({ error: 'CSRF validation failed' }, { status: 403 });
   }
 
   // Args ride the URL for a URL-arg request (GET / DELETE), else the body.

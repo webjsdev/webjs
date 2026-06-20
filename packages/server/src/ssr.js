@@ -5,7 +5,6 @@ import { importMapTag, vendorIntegrityFor, publishedBuildId, basePath, vendorPre
 import { withBasePath } from './base-path.js';
 import { withAssetHash } from './asset-hash.js';
 import { jsonForScriptTag } from './script-tag-json.js';
-import { readToken, newToken, cookieHeader } from './csrf.js';
 import { transitiveDeps } from './module-graph.js';
 import { seedingEnabled, collectSeeds, buildSeedScript } from './action-seed.js';
 import { BUFFERED_MARKER, STREAM_MARKER } from './conditional-get.js';
@@ -316,7 +315,8 @@ export async function ssrNotFound(notFoundFile, opts) {
 }
 
 /**
- * Build an HTML Response and, if missing, attach the CSRF cookie.
+ * Build an HTML Response. Sets no cookie: action CSRF is an Origin /
+ * Sec-Fetch-Site check, so the page response is cookieless (CDN-cacheable).
  * @param {string} html
  * @param {number} status
  * @param {Request | undefined} req
@@ -335,10 +335,6 @@ function htmlResponse(html, status, req, url, metadata) {
   // final, so a warming response is reload-safe. See router-client.js
   // applySwap and publishedBuildId() in importmap.js.
   headers.set('x-webjs-build', publishedBuildId());
-  if (req && !readToken(req)) {
-    const secure = url ? url.protocol === 'https:' : false;
-    headers.append('set-cookie', cookieHeader(newToken(), { secure }));
-  }
   // Buffered (string) body: opt into the conditional-GET funnel so a
   // PUBLIC-cacheable page (metadata.cacheControl) gets a weak ETag + 304.
   // The funnel still excludes the no-store default, so a private page is
@@ -350,10 +346,10 @@ function htmlResponse(html, status, req, url, metadata) {
 /**
  * Rebuild a Response from a cached HTML record (#241). The stored body is
  * the stable per-page HTML; the per-response varying bits are re-minted
- * here so a new visitor still gets them: the CSRF cookie is freshly issued
- * when the request lacks one (it is a Set-Cookie header, never part of the
- * cached body), and the published build id is re-read so a post-deploy
- * client sees the current id. The BUFFERED marker opts the cached body into
+ * here so a new visitor still gets them: the published build id is re-read so
+ * a post-deploy client sees the current id. No cookie is set (action CSRF is
+ * an Origin / Sec-Fetch-Site check), which is what keeps a cached page
+ * cookieless and shareable. The BUFFERED marker opts the cached body into
  * the conditional-GET funnel exactly as a fresh render does, so a cached
  * PUBLIC-cacheable page still 304s. Output is observably identical to the
  * fresh render of the same route within the window.
@@ -366,10 +362,6 @@ function cachedHtmlResponse(rec, req, url) {
   const headers = new Headers({ 'content-type': rec.contentType });
   headers.set('cache-control', rec.cacheControl);
   headers.set('x-webjs-build', publishedBuildId());
-  if (req && !readToken(req)) {
-    const secure = url ? url.protocol === 'https:' : false;
-    headers.append('set-cookie', cookieHeader(newToken(), { secure }));
-  }
   headers.set(BUFFERED_MARKER, '1');
   return new Response(rec.body, { status: rec.status, headers });
 }
@@ -1525,10 +1517,6 @@ function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, 
   // See htmlResponse: published build id on every response for the
   // client router's importmap-mismatch detection on partial swaps.
   headers.set('x-webjs-build', publishedBuildId());
-  if (req && !readToken(req)) {
-    const secure = url ? url.protocol === 'https:' : false;
-    headers.append('set-cookie', cookieHeader(newToken(), { secure }));
-  }
 
   if (!ctx.pending.length) {
     // No pending boundaries: this degrades to a single buffered (string)

@@ -1,11 +1,12 @@
 /**
  * Tests for the handle() test-harness helpers (issue #267):
  *   - testRequest fires through the real pipeline and returns the Response;
- *   - getCsrf returns a usable {cookie, token} pair off the first SSR response;
+ *   - an SSR response sets no CSRF cookie (action CSRF is an Origin /
+ *     Sec-Fetch-Site check), so a public-Cache-Control page is CDN-cacheable;
  *   - actionEndpoint addresses an action by the same file-path hash the stub uses;
  *   - invokeActionForTest round-trips an action through /__webjs/action/<hash>/<fn>,
- *     including the serializer (a Date arg survives) and CSRF;
- *   - the CSRF-missing case is rejected (403) and a thrown action sanitizes in prod;
+ *     including the serializer (a Date arg survives) as a same-origin request;
+ *   - a cross-origin request is rejected (403) and a thrown action sanitizes in prod;
  *   - loginAndGetCookies drives the real auth flow against a fixture app and the
  *     captured cookie unlocks a protected route.
  *
@@ -23,7 +24,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequestHandler } from '../../src/dev.js';
 import {
   testRequest,
-  getCsrf,
   actionEndpoint,
   invokeActionForTest,
   rawActionRequest,
@@ -79,15 +79,14 @@ test('testRequest fires a bare path through the real pipeline', async () => {
   assert.match(res.headers.get('content-type') || '', /text\/html/);
 });
 
-test('getCsrf returns a usable token off the first SSR response', async () => {
+test('SSR responses carry no CSRF Set-Cookie (so a page is CDN-cacheable)', async () => {
   const appDir = makeApp({
     'app/page.js': `import { html } from ${HTML_URL};\nexport default () => html\`<p>x</p>\`;\n`,
   });
   const app = await createRequestHandler({ appDir, dev: true });
-  const csrf = await getCsrf(app.handle);
-  assert.ok(csrf.token && csrf.token.length >= 16, 'token is a real value');
-  assert.match(csrf.cookie, /^webjs_csrf=/);
-  assert.equal(csrf.header, 'x-webjs-csrf');
+  const res = await testRequest(app.handle, '/');
+  const setCookie = res.headers.get('set-cookie') || '';
+  assert.ok(!/webjs_csrf/.test(setCookie), 'no webjs_csrf cookie is issued');
 });
 
 test('actionEndpoint matches the hash the generated stub uses', async () => {
@@ -121,11 +120,11 @@ test('invokeActionForTest accepts just (handle) when appDir is supplied', async 
   assert.equal(out.isDate, true);
 });
 
-test('a CSRF-missing action request is rejected with 403', async () => {
+test('a cross-origin action request is rejected with 403', async () => {
   const appDir = actionApp();
   const app = await createRequestHandler({ appDir, dev: true });
-  const res = await rawActionRequest(app, 'modules/m/act.server.js', 'roundtrip', [new Date()], { omitCsrf: true });
-  assert.equal(res.status, 403, 'no CSRF header/cookie -> 403 (the endpoint enforces it)');
+  const res = await rawActionRequest(app, 'modules/m/act.server.js', 'roundtrip', [new Date()], { crossOrigin: true });
+  assert.equal(res.status, 403, 'a cross-site request -> 403 (the endpoint enforces it)');
 });
 
 test('invokeActionForTest surfaces a thrown action as a throw with a status', async () => {

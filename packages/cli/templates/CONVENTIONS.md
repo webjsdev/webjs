@@ -506,7 +506,7 @@ SSR, page actions, server-action RPC, auth + CSRF), drive
 
 ```ts
 import { createRequestHandler } from '@webjsdev/server';
-import { testRequest, getCsrf, invokeActionForTest, loginAndGetCookies, withSessionCookie }
+import { testRequest, invokeActionForTest, loginAndGetCookies, withSessionCookie }
   from '@webjsdev/server/testing';
 
 const app = await createRequestHandler({ appDir: process.cwd(), dev: true });
@@ -524,8 +524,9 @@ const out = await invokeActionForTest(app, 'modules/posts/actions/create.server.
 
 Prefer `invokeActionForTest` over a direct import of the action when you want
 to verify the production contract: it exercises the wire serializer (a `Date` /
-`Map` arg survives), CSRF, and prod error sanitization, which a direct call
-bypasses. The saas template's `test/auth/auth.test.ts` is a worked example.
+`Map` arg survives), the Origin / Sec-Fetch-Site CSRF check (it models a
+same-origin POST), and prod error sanitization, which a direct call bypasses.
+The saas template's `test/auth/auth.test.ts` is a worked example.
 
 This is also why the auth test lives at `test/auth/auth.test.ts` (the
 feature-folder convention), NOT `test/unit/auth.test.ts`. Test KIND is a

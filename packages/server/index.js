@@ -68,8 +68,6 @@ export { createAuth, Credentials, Google, GitHub } from './src/auth.js';
 export {
   testRequest,
   toRequest,
-  getCsrf,
-  readCsrfCookie,
   getSetCookies,
   cookiesToHeader,
   withCookies,

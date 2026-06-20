@@ -52,11 +52,10 @@ async function drain(res) {
   return { chunks, ended, error };
 }
 
+// Action CSRF is an Origin / Sec-Fetch-Site check (#659): a same-origin POST
+// needs only this header, no token or cookie.
 async function csrfHeaders() {
-  const res = await handle(new Request(url('/')));
-  const m = (res.headers.get('set-cookie') || '').match(/webjs_csrf=([^;]+)/);
-  const t = m ? decodeURIComponent(m[1]) : '';
-  return { 'content-type': 'application/vnd.webjs+json', 'x-webjs-csrf': t, cookie: `webjs_csrf=${t}` };
+  return { 'content-type': 'application/vnd.webjs+json', 'sec-fetch-site': 'same-origin' };
 }
 
 before(async () => {

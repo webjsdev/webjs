@@ -1,66 +1,81 @@
+/**
+ * Cross-origin (CSRF) protection unit tests (#659).
+ *
+ * The action endpoint defends against CSRF with a `Sec-Fetch-Site` check
+ * (browser-set fetch metadata) and an `Origin`-vs-host fallback for older
+ * browsers, matching Remix 3's cop-middleware and Go 1.25's
+ * http.CrossOriginProtection. No token cookie is involved.
+ *
+ * The cross-origin-reject cases are the counterfactual: if `verifyOrigin`
+ * always returned ok, every `assert.equal(..., false)` here fails.
+ */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-  newToken,
-  parseCookies,
-  readToken,
-  cookieHeader,
-  verify,
-  CSRF_COOKIE,
-  CSRF_HEADER,
-} from '../../src/csrf.js';
+import { parseCookies, requestHost, verifyOrigin, readAllowedOrigins } from '../../src/csrf.js';
 
-test('newToken returns 32-char hex', () => {
-  const t = newToken();
-  assert.match(t, /^[0-9a-f]{32}$/);
-});
+const reqWith = (headers, url = 'http://app.example/__webjs/action/abc/fn') =>
+  new Request(url, { method: 'POST', headers });
 
 test('parseCookies handles multiple cookies and trimming', () => {
-  const req = new Request('http://x/', {
-    headers: { cookie: 'a=1; b=two%20words; c=3' },
-  });
+  const req = new Request('http://x/', { headers: { cookie: 'a=1; b=two%20words; c=3' } });
   assert.deepEqual(parseCookies(req), { a: '1', b: 'two words', c: '3' });
 });
 
-test('readToken extracts the webjs_csrf cookie', () => {
-  const req = new Request('http://x/', {
-    headers: { cookie: `other=1; ${CSRF_COOKIE}=tokvalue; trailing=x` },
-  });
-  assert.equal(readToken(req), 'tokvalue');
+test('requestHost prefers x-forwarded-host, then Host, then URL', () => {
+  assert.equal(requestHost(reqWith({ 'x-forwarded-host': 'fwd.example', host: 'app.example' })), 'fwd.example');
+  assert.equal(requestHost(reqWith({ host: 'app.example' })), 'app.example');
+  assert.equal(requestHost(reqWith({})), 'app.example');
 });
 
-test('cookieHeader includes Secure when requested', () => {
-  assert.match(cookieHeader('abc'), /^webjs_csrf=abc; Path=\/; SameSite=Lax; Max-Age=\d+$/);
-  assert.match(cookieHeader('abc', { secure: true }), /Secure$/);
+test('Sec-Fetch-Site same-origin / none pass', () => {
+  assert.equal(verifyOrigin(reqWith({ 'sec-fetch-site': 'same-origin' })).ok, true);
+  assert.equal(verifyOrigin(reqWith({ 'sec-fetch-site': 'none' })).ok, true);
 });
 
-test('verify passes when cookie matches header', () => {
-  const tok = newToken();
-  const req = new Request('http://x/', {
-    headers: { cookie: `${CSRF_COOKIE}=${tok}`, [CSRF_HEADER]: tok },
-  });
-  assert.equal(verify(req), true);
+test('Sec-Fetch-Site cross-site / same-site are rejected', () => {
+  assert.equal(verifyOrigin(reqWith({ 'sec-fetch-site': 'cross-site' })).ok, false);
+  assert.equal(verifyOrigin(reqWith({ 'sec-fetch-site': 'same-site' })).ok, false);
 });
 
-test('verify fails on missing/mismatched/empty tokens', () => {
-  // Missing header
-  const r1 = new Request('http://x/', { headers: { cookie: `${CSRF_COOKIE}=xyz` } });
-  assert.equal(verify(r1), false);
+test('a cross-site request from an allowlisted origin passes', () => {
+  const req = reqWith({ 'sec-fetch-site': 'cross-site', origin: 'https://trusted.example' });
+  assert.equal(verifyOrigin(req, ['trusted.example']).ok, true);
+  assert.equal(verifyOrigin(req, ['https://trusted.example']).ok, true, 'full-origin form also accepted');
+  assert.equal(verifyOrigin(req, ['trusted.example/']).ok, true, 'a stray trailing slash is tolerated');
+  assert.equal(verifyOrigin(req, ['other.example']).ok, false, 'a different allowlist does not help');
+});
 
-  // Missing cookie
-  const r2 = new Request('http://x/', { headers: { [CSRF_HEADER]: 'xyz' } });
-  assert.equal(verify(r2), false);
+test('fallback: no Sec-Fetch-Site, Origin host matches host -> ok', () => {
+  const req = reqWith({ origin: 'http://app.example', host: 'app.example' });
+  assert.equal(verifyOrigin(req).ok, true);
+});
 
-  // Length mismatch
-  const r3 = new Request('http://x/', {
-    headers: { cookie: `${CSRF_COOKIE}=aaaa`, [CSRF_HEADER]: 'aaaaa' },
-  });
-  assert.equal(verify(r3), false);
+test('fallback: no Sec-Fetch-Site, Origin host differs -> reject', () => {
+  const req = reqWith({ origin: 'https://evil.example', host: 'app.example' });
+  assert.equal(verifyOrigin(req).ok, false);
+});
 
-  // Same length, different content
-  const r4 = new Request('http://x/', {
-    headers: { cookie: `${CSRF_COOKIE}=aaaa`, [CSRF_HEADER]: 'bbbb' },
-  });
-  assert.equal(verify(r4), false);
+test('fallback honors x-forwarded-host (proxy / CDN)', () => {
+  const req = reqWith({ origin: 'https://app.example', 'x-forwarded-host': 'app.example', host: 'internal:8080' });
+  assert.equal(verifyOrigin(req).ok, true);
+});
+
+test('no Sec-Fetch-Site and no Origin is allowed (non-browser client)', () => {
+  assert.equal(verifyOrigin(reqWith({ host: 'app.example' })).ok, true);
+});
+
+test("Origin 'null' (sandboxed iframe) is treated as cross-origin", () => {
+  const req = reqWith({ origin: 'null', host: 'app.example' });
+  assert.equal(verifyOrigin(req).ok, false);
+});
+
+test('readAllowedOrigins reads + filters webjs.allowedOrigins', () => {
+  assert.deepEqual(
+    readAllowedOrigins({ webjs: { allowedOrigins: ['a.example', 'https://b.example', 1, ''] } }),
+    ['a.example', 'https://b.example'],
+  );
+  assert.deepEqual(readAllowedOrigins({}), []);
+  assert.deepEqual(readAllowedOrigins(null), []);
+  assert.deepEqual(readAllowedOrigins({ webjs: {} }), []);
 });

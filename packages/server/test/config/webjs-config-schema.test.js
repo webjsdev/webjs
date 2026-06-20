@@ -45,6 +45,7 @@ const KNOWN_KEYS = [
   'redirects', // compileRedirectRules (redirects.js)
   'trailingSlash', // readTrailingSlashPolicy (redirects.js)
   'basePath', // readBasePath (base-path.js)
+  'allowedOrigins', // readAllowedOrigins (csrf.js)
   'csp', // readCspConfig (csp.js)
   'maxBodyBytes', // readBodyLimits (body-limit.js)
   'maxMultipartBytes', // readBodyLimits (body-limit.js)

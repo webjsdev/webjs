@@ -76,13 +76,10 @@ test('action RPC endpoint: over-limit body is 413, under-limit runs', async () =
   const hash = hashMatch[1];
   const rpcUrl = `http://x/__webjs/action/${hash}/echo`;
 
-  // Mint a CSRF pair by hitting the page.
-  const pageResp = await app.handle(new Request('http://x/'));
-  const token = decodeURIComponent(/webjs_csrf=([^;]+)/.exec(pageResp.headers.get('set-cookie') || '')[1]);
+  // Action CSRF is an Origin / Sec-Fetch-Site check (#659): same-origin passes.
   const headers = {
     'content-type': 'application/vnd.webjs+json',
-    'x-webjs-csrf': token,
-    cookie: `webjs_csrf=${encodeURIComponent(token)}`,
+    'sec-fetch-site': 'same-origin',
   };
 
   // Under the limit: 200.
@@ -111,15 +108,12 @@ test('action RPC endpoint: chunked over-limit body without Content-Length is 413
   const app = await createRequestHandler({ appDir, dev: true });
   const stub = await (await app.handle(new Request('http://x/modules/m/act.server.js'))).text();
   const hash = /\/__webjs\/action\/([a-f0-9]+)\//.exec(stub)[1];
-  const pageResp = await app.handle(new Request('http://x/'));
-  const token = decodeURIComponent(/webjs_csrf=([^;]+)/.exec(pageResp.headers.get('set-cookie') || '')[1]);
 
   const resp = await app.handle(new Request(`http://x/__webjs/action/${hash}/sink`, {
     method: 'POST',
     headers: {
       'content-type': 'application/vnd.webjs+json',
-      'x-webjs-csrf': token,
-      cookie: `webjs_csrf=${encodeURIComponent(token)}`,
+      'sec-fetch-site': 'same-origin',
     },
     body: chunkedBody(8192),
     duplex: 'half',

@@ -1,6 +1,6 @@
 # Server configuration (the `package.json` `"webjs"` block) + observability
 
-The full reference for the `package.json` `"webjs"` config block (security headers, CSP, redirects, trailing-slash, basePath, client-router opt-out, ingress caps) plus the observability surfaces. Moved out of `AGENTS.md` to keep it lean. Env vars live in `agent-docs/built-ins.md`.
+The full reference for the `package.json` `"webjs"` config block (security headers, CSP, redirects, trailing-slash, basePath, allowedOrigins, client-router opt-out, ingress caps) plus the observability surfaces. Moved out of `AGENTS.md` to keep it lean. Env vars live in `agent-docs/built-ins.md`.
 
 ---
 
@@ -122,6 +122,20 @@ An app served under a sub-path (`example.com/app/`) behind a proxy that does NOT
 - **OUT OF SCOPE (a documented follow-up).** Author-written `<a href="/about">` links and client-router navigation are NOT auto-prefixed (the same boundary Next draws between basePath-prefixing its `<Link>` and a raw `<a href>`; webjs links are plain `<a href>`). The #256 acceptance covers framework-emitted URLs and request matching only.
 
 Mechanism: `normalizeBasePath` / `readBasePath` / `withBasePath` / `stripBasePath` in `packages/server/src/base-path.js`; the ingress strip is in `dev.js`'s `produce()` (before `applyRedirects`), the importmap-target prefix in `importmap.js` (`setBasePath`), the boot / preload / reload prefix in `ssr.js`.
+
+## Cross-origin allowlist: `webjs.allowedOrigins` in package.json (#659)
+
+Server-action RPC CSRF is an Origin / `Sec-Fetch-Site` check (the Remix 3 / Go 1.25 model, see `agent-docs/built-ins.md` and the docs-site Security page): a state-changing request passes when `Sec-Fetch-Site` is `same-origin` / `none`, or (older browsers) the `Origin` host equals the request host. A legitimate CROSS-site caller (a reverse proxy serving the app under several hostnames, an admin panel on a sibling domain) is rejected unless its origin is allowlisted:
+
+```json
+{ "webjs": { "allowedOrigins": ["admin.example.com", "https://studio.example.com"] } }
+```
+
+- A bare host (`admin.example.com`) or a full origin (`https://studio.example.com`) are both accepted; only the host is compared.
+- The check honors `x-forwarded-host`, so it works behind a CDN / reverse proxy (the Cloudflare-in-front-of-Railway setup) without extra config.
+- Default `[]` (same-origin only). This is the CSRF allowlist ONLY; it does not configure CORS (use the `cors()` middleware for cross-origin `route.ts` reads).
+
+Because the check needs nothing on the page (no token cookie), SSR HTML carries no `Set-Cookie`, so a visitor-identical page that opts into a public `Cache-Control` (via `metadata.cacheControl`, e.g. on a root layout) is CDN-edge-cacheable. Mechanism: `verifyOrigin` / `readAllowedOrigins` in `packages/server/src/csrf.js`, threaded through `invokeAction` (`actions.js`) from `dev.js`.
 
 ---
 

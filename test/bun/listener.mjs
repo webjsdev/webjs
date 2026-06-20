@@ -20,7 +20,8 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { startServer } from '@webjsdev/server';
+import { startServer, hashFile } from '@webjsdev/server';
+import { stringify } from '@webjsdev/core';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CORE = pathToFileURL(resolve(__dirname, '../../packages/core/index.js')).toString();
@@ -37,6 +38,10 @@ try {
   w('app/layout.ts', `import { html } from ${JSON.stringify(CORE)};\nexport default ({ children }: { children: unknown }) => html\`<!doctype html><html><head></head><body>\${children}</body></html>\`;\n`);
   w('app/page.ts', `import { html } from ${JSON.stringify(CORE)};\nexport default function Page() { return html\`<main><h1>hello listener</h1></main>\`; }\n`);
   w('app/api/echo/route.ts', `export async function GET(req: Request) {\n  return Response.json({ ok: true, ip: req.headers.get('x-webjs-remote-ip') ? 'stamped' : 'missing' });\n}\nexport function WS(ws: any) {\n  ws.on('message', (m: any) => ws.send('echo:' + m));\n}\n`);
+  // A server action, to exercise the Origin / Sec-Fetch-Site CSRF check (#659)
+  // over the REAL socket on this runtime.
+  const actionFile = join(dir, 'actions/ping.server.ts');
+  w('actions/ping.server.ts', `'use server';\nexport async function ping() { return { pong: true }; }\n`);
 
   ({ server, close } = await startServer({ appDir: dir, dev: true, port: 0, logger: quiet }));
   const port = server.port ?? server.address().port;
@@ -47,6 +52,19 @@ try {
   assert.equal(page.status, 200, 'GET / should be 200');
   const pageHtml = await page.text();
   assert.ok(pageHtml.includes('hello listener'), `SSR HTML should render; got:\n${pageHtml.slice(0, 200)}`);
+  // No CSRF cookie: the SSR response is cookieless, so it is CDN-cacheable.
+  assert.ok(!page.headers.get('set-cookie'), `SSR response must set no cookie; got: ${page.headers.get('set-cookie')}`);
+
+  // 1b. Action CSRF (Origin / Sec-Fetch-Site) over the REAL socket: the shell
+  //     must preserve the request headers so the check sees them.
+  const hash = await hashFile(actionFile);
+  const actionUrl = `${base}/__webjs/action/${hash}/ping`;
+  const body = await stringify([]);
+  const ct = { 'content-type': 'application/vnd.webjs+json' };
+  const sameOrigin = await fetch(actionUrl, { method: 'POST', headers: { ...ct, 'sec-fetch-site': 'same-origin' }, body });
+  assert.equal(sameOrigin.status, 200, 'a same-origin action POST passes the CSRF check');
+  const crossSite = await fetch(actionUrl, { method: 'POST', headers: { ...ct, 'sec-fetch-site': 'cross-site', origin: 'https://evil.example' }, body });
+  assert.equal(crossSite.status, 403, 'a cross-site action POST is rejected (403) over the socket');
 
   // 2. route.ts GET with the framework-stamped remote IP.
   const echo = await fetch(`${base}/api/echo`);

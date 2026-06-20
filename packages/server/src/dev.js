@@ -87,6 +87,7 @@ function shouldAccessLog(pathname) {
 }
 import { setVendorEntries, setCoreInstall, publishBuildId, setBasePath, basePath, setImportAliasEntries, importAliasBrowserEntries } from './importmap.js';
 import { readBasePath, stripBasePath, withBasePath } from './base-path.js';
+import { readAllowedOrigins } from './csrf.js';
 import { setAssetRoots, clearAssetHashCache, setElisionFingerprint, withAssetHash, assetHashFor, versionModuleImports } from './asset-hash.js';
 import { urlFromRequest } from './forwarded.js';
 import { compileHeaderRules, applySecurityHeaders, webRequestIsHttps } from './headers.js';
@@ -363,6 +364,24 @@ export async function readBasePathFromApp(appDir) {
 }
 
 /**
+ * Read the cross-origin allowlist (`webjs.allowedOrigins`) from the app's
+ * package.json. These hosts / origins are accepted by the action CSRF check
+ * even when cross-site (reverse-proxy / multi-domain setups). A missing or
+ * unreadable config yields `[]`.
+ *
+ * @param {string} appDir
+ * @returns {Promise<string[]>}
+ */
+export async function readAllowedOriginsFromApp(appDir) {
+  try {
+    const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
+    return readAllowedOrigins(pkg);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Read the CSP config (`webjs.csp`) from the app's package.json and
  * normalize it (issue #233). A missing, malformed, or unreadable config
  * yields a disabled config (no nonce minted, no CSP header), never a
@@ -494,6 +513,9 @@ export async function createRequestHandler(opts) {
   // is byte-identical to before this feature.
   const basePathValue = await readBasePathFromApp(appDir);
   await setBasePath(basePathValue);
+
+  // Cross-origin allowlist for the action CSRF check (#659), read once.
+  const allowedOriginsValue = await readAllowedOriginsFromApp(appDir);
 
   // Client-router opt-out (#629): bind it eagerly at handler construction (the
   // same timing as setBasePath above), so a handler's module-global is set
@@ -1306,7 +1328,7 @@ export async function createRequestHandler(opts) {
       // Build all whole-app analysis on the first request (memoized), before
       // any SSR, module serve, gate check, action dispatch, or middleware runs.
       await ensureReady();
-      const next = () => handleCore(req, { state, appDir, coreDir, dev, reportError, reportDevError, cspEnabled: cspConfig.enabled });
+      const next = () => handleCore(req, { state, appDir, coreDir, dev, reportError, reportDevError, cspEnabled: cspConfig.enabled, allowedOrigins: allowedOriginsValue });
       if (state.middleware) {
         try {
           return await state.middleware(req, next);
@@ -1740,7 +1762,7 @@ async function tryServeFrameworkStatic(path, method, ctx) {
 }
 
 async function handleCore(req, ctx) {
-  const { state, appDir, coreDir, dev, reportError, reportDevError, cspEnabled } = ctx;
+  const { state, appDir, coreDir, dev, reportError, reportDevError, cspEnabled, allowedOrigins } = ctx;
   const url = new URL(req.url);
   // Decode percent-encoded characters so filesystem lookups match real
   // filenames. Dynamic route segments like `[slug]` and route groups like
@@ -1778,7 +1800,7 @@ async function handleCore(req, ctx) {
     // Pass the onError sink (issue #239): a server action that throws
     // unexpectedly is reported to the APM hook before the sanitized 500.
     const onActionError = reportError ? (e) => reportError(e, req, 'action') : undefined;
-    return invokeAction(state.actionIndex, actMatch[1], actMatch[2], req, onActionError);
+    return invokeAction(state.actionIndex, actMatch[1], actMatch[2], req, onActionError, allowedOrigins);
   }
 
   // Static: /public/*

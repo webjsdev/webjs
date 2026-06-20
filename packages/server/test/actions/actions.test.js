@@ -37,8 +37,7 @@ test('webjs wire format round-trips Date / Map / BigInt across invokeAction', as
     const idx = await buildActionIndex(dir, true);
     const file = resolveServerModule(idx, '/actions/rich.server.js');
     const hash = idx.fileToHash.get(file);
-    const tok = 't';
-    const headers = { 'content-type': RPC_CONTENT_TYPE, cookie: `webjs_csrf=${tok}`, 'x-webjs-csrf': tok };
+    const headers = { 'content-type': RPC_CONTENT_TYPE, 'sec-fetch-site': 'same-origin' };
     const r1 = await invokeAction(idx, hash, 'now',
       new Request('http://x/__webjs/action/' + hash + '/now',
         { method: 'POST', headers, body: await wjStringify([]) }));
@@ -96,15 +95,11 @@ test('stubs server module and invokes action by hash/fn', async () => {
     assert.match(stub, /\/__webjs\/action\/[a-f0-9]+\//);
 
     const hash = idx.fileToHash.get(file);
-    // Action RPC is CSRF-protected: must present matching cookie + header.
-    const tok = 'test-csrf-token';
+    // Action RPC is CSRF-protected by a Sec-Fetch-Site / Origin check (#659).
+    // A same-origin request passes.
     const req = new Request('http://x/__webjs/action/' + hash + '/add', {
       method: 'POST',
-      headers: {
-        'content-type': RPC_CONTENT_TYPE,
-        cookie: `webjs_csrf=${tok}`,
-        'x-webjs-csrf': tok,
-      },
+      headers: { 'content-type': RPC_CONTENT_TYPE, 'sec-fetch-site': 'same-origin' },
       body: await wjStringify([2, 3]),
     });
     const res = await invokeAction(idx, hash, 'add', req);
@@ -112,27 +107,25 @@ test('stubs server module and invokes action by hash/fn', async () => {
     assert.equal(res.headers.get('content-type'), RPC_CONTENT_TYPE);
     assert.equal(wjParse(await res.text()), 5);
 
-    // Without CSRF token → 403
-    const unsafe = new Request('http://x/__webjs/action/' + hash + '/add', {
+    // A cross-site request (Sec-Fetch-Site) → 403
+    const crossSite = new Request('http://x/__webjs/action/' + hash + '/add', {
       method: 'POST',
-      headers: { 'content-type': RPC_CONTENT_TYPE },
+      headers: { 'content-type': RPC_CONTENT_TYPE, 'sec-fetch-site': 'cross-site' },
       body: await wjStringify([2, 3]),
     });
-    const rejected = await invokeAction(idx, hash, 'add', unsafe);
-    assert.equal(rejected.status, 403);
+    assert.equal((await invokeAction(idx, hash, 'add', crossSite)).status, 403);
 
-    // Mismatched header vs cookie → 403
-    const mismatched = new Request('http://x/__webjs/action/' + hash + '/add', {
+    // A cross-origin request via the Origin fallback (no Sec-Fetch-Site) → 403
+    const crossOrigin = new Request('http://x/__webjs/action/' + hash + '/add', {
       method: 'POST',
-      headers: {
-        'content-type': RPC_CONTENT_TYPE,
-        cookie: `webjs_csrf=${tok}`,
-        'x-webjs-csrf': 'different',
-      },
+      headers: { 'content-type': RPC_CONTENT_TYPE, origin: 'https://evil.example' },
       body: await wjStringify([2, 3]),
     });
-    const rejected2 = await invokeAction(idx, hash, 'add', mismatched);
-    assert.equal(rejected2.status, 403);
+    assert.equal((await invokeAction(idx, hash, 'add', crossOrigin)).status, 403);
+
+    // Allowlisting the origin lets the same cross-origin request through.
+    const allowed = await invokeAction(idx, hash, 'add', crossOrigin, undefined, ['evil.example']);
+    assert.equal(allowed.status, 200);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -170,8 +163,7 @@ test('a pure-RPC server module is hashed at boot but NOT executed until first ca
     assert.equal(globalThis.__webjs_boot_probe, undefined, 'module must NOT execute at boot');
 
     const hash = idx.fileToHash.get(file);
-    const tok = 't';
-    const headers = { 'content-type': RPC_CONTENT_TYPE, cookie: `webjs_csrf=${tok}`, 'x-webjs-csrf': tok };
+    const headers = { 'content-type': RPC_CONTENT_TYPE, 'sec-fetch-site': 'same-origin' };
     const r = await invokeAction(idx, hash, 'ping',
       new Request('http://x/__webjs/action/' + hash + '/ping',
         { method: 'POST', headers, body: await wjStringify([]) }));

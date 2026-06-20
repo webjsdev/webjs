@@ -103,10 +103,10 @@ test('CSRF: the endpoint rejects a request the direct call has no concept of', a
   const { sumMap } = await importAction(appDir);
   assert.ok(await sumMap(new Map()) instanceof Map, 'direct call ignores CSRF entirely');
 
-  // Through the endpoint with NO CSRF: 403. If the endpoint stopped enforcing
-  // CSRF, this would become 200 and the regression would be caught HERE, never
-  // by a direct-import test.
-  const res = await rawActionRequest(app, ACTION_REL, 'sumMap', [new Map()], { omitCsrf: true });
+  // Through the endpoint cross-origin: 403. If the endpoint stopped enforcing
+  // the cross-origin check, this would become 200 and the regression would be
+  // caught HERE, never by a direct-import test.
+  const res = await rawActionRequest(app, ACTION_REL, 'sumMap', [new Map()], { crossOrigin: true });
   assert.equal(res.status, 403, 'CSRF enforcement is observable only through the endpoint');
 });
 

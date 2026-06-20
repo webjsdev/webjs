@@ -2,8 +2,8 @@
  * Type overlay for `@webjsdev/server/testing` (the handle() test harness, #267).
  *
  * The runtime is packages/server/src/testing.js (JSDoc-annotated JavaScript);
- * this overlay exists so a TypeScript app's `import { testRequest, getCsrf }
- * from '@webjsdev/server/testing'` resolves precise types instead of emitting
+ * this overlay exists so a TypeScript app's `import { testRequest,
+ * invokeActionForTest } from '@webjsdev/server/testing'` resolves precise types instead of emitting
  * TS7016. The same declarations are re-exported from the package's main
  * `index.d.ts` (the helpers ship from both entry points). Zero runtime cost.
  */
@@ -13,16 +13,6 @@ export type Handle = (req: Request) => Promise<Response> | Response;
 
 /** A `createRequestHandler` return value, or a bare `handle` function. */
 export type AppOrHandle = { handle: Handle; appDir: string } | Handle;
-
-/** A CSRF token + cookie + header-name triple minted off the first SSR response. */
-export interface CsrfPair {
-  /** The bare token value for the `x-webjs-csrf` request header. */
-  token: string;
-  /** The header NAME (`x-webjs-csrf`). */
-  header: string;
-  /** The `name=value` cookie string for the `Cookie` request header. */
-  cookie: string;
-}
 
 /**
  * Coerce a bare path, full URL string, or pre-built `Request` into a `Request`.
@@ -40,20 +30,11 @@ export declare function testRequest(
   init?: RequestInit,
 ): Promise<Response>;
 
-/** Read the `webjs_csrf` cookie value off a response's `Set-Cookie` header(s). */
-export declare function readCsrfCookie(res: Response): string | null;
-
 /** Collect all `Set-Cookie` header values off a response. */
 export declare function getSetCookies(res: Response): string[];
 
 /** Reduce raw `Set-Cookie` strings to a single `name=value; name2=value2` `Cookie` header value. */
 export declare function cookiesToHeader(setCookies: string[]): string;
-
-/**
- * Mint a `{ token, header, cookie }` CSRF triple off the first SSR response.
- * `path` is the GET path used to issue the cookie (default `/`).
- */
-export declare function getCsrf(handle: Handle, path?: string): Promise<CsrfPair>;
 
 /** Merge an extra cookie string into a `RequestInit`'s `Cookie` header. */
 export declare function withCookies(init: RequestInit | undefined, cookieValue: string): RequestInit;
@@ -89,7 +70,8 @@ export declare function actionEndpoint(
 
 /**
  * Round-trip an action through its REAL RPC endpoint (serializer + CSRF + prod
- * error sanitization) and return the parsed return value.
+ * error sanitization) and return the parsed return value. Models a same-origin
+ * browser POST, so it passes the Origin / Sec-Fetch-Site CSRF check.
  */
 export declare function invokeActionForTest<T = unknown>(
   app: AppOrHandle,
@@ -97,7 +79,6 @@ export declare function invokeActionForTest<T = unknown>(
   fnName: string,
   args?: unknown[],
   opts?: {
-    csrf?: CsrfPair;
     appDir?: string;
     extraCookies?: string;
     throwOnError?: boolean;
@@ -106,7 +87,9 @@ export declare function invokeActionForTest<T = unknown>(
 
 /**
  * Lower-level variant of `invokeActionForTest` that returns the raw `Response`
- * (never throws on a non-2xx), so a test can assert the status directly.
+ * (never throws on a non-2xx), so a test can assert the status directly. Set
+ * `crossOrigin` (true or a specific origin) to model a cross-site request and
+ * assert the 403.
  */
 export declare function rawActionRequest(
   app: AppOrHandle,
@@ -114,8 +97,7 @@ export declare function rawActionRequest(
   fnName: string,
   args?: unknown[],
   opts?: {
-    csrf?: CsrfPair | null;
-    omitCsrf?: boolean;
+    crossOrigin?: boolean | string;
     appDir?: string;
     extraCookies?: string;
     contentType?: string;
