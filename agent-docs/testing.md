@@ -260,7 +260,7 @@ test exercises the production contract, never a parallel fake).
 
 ```js
 import { createRequestHandler } from '@webjsdev/server';
-import { testRequest, getCsrf, invokeActionForTest, loginAndGetCookies, withSessionCookie }
+import { testRequest, invokeActionForTest, rawActionRequest, loginAndGetCookies, withSessionCookie }
   from '@webjsdev/server/testing';
 
 const app = await createRequestHandler({ appDir: process.cwd(), dev: true });
@@ -278,12 +278,13 @@ A bare path (`/about`) is prefixed with a dummy origin (the pipeline only reads
 `pathname` + `search`); a full URL string or a pre-built `Request` works too.
 The optional third arg is a standard `RequestInit` (method, headers, body).
 
-### getCsrf + the auth/session helpers
+### The auth/session helpers
 
-The action RPC endpoint requires a `x-webjs-csrf` header matching the
-`webjs_csrf` cookie issued on the first SSR response. `getCsrf(handle)` does the
-initial GET and returns `{ token, cookie, header }` so a test can send a
-CSRF-valid request. `loginAndGetCookies(handle, { email, password })` drives the
+Server-action CSRF is an Origin / `Sec-Fetch-Site` check, so a test needs no
+CSRF setup: `invokeActionForTest` models a same-origin browser POST and passes
+the check automatically, and `rawActionRequest(app, file, fn, args, {
+crossOrigin: true })` models a cross-site request to assert the 403.
+`loginAndGetCookies(handle, { email, password })` drives the
 REAL credentials login through `handle()` (the `createAuth` route handler) and
 captures the genuine signed session `Set-Cookie`, so a follow-up request can hit
 a protected route as the logged-in user:

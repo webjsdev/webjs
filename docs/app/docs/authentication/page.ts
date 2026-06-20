@@ -112,8 +112,8 @@ export default rateLimit({ window: '10s', max: 5 });</pre>
     <p>Any request to <code>/api/auth/**</code> is rate-limited to 5 per 10 seconds per IP. This applies to signup, login, and logout equally.</p>
 
     <h2>CSRF Protection</h2>
-    <p>Server actions (called via the auto-generated RPC stub) are automatically CSRF-protected with a double-submit cookie. The SSR response sets a <code>webjs_csrf</code> cookie, and the stub echoes it in an <code>x-webjs-csrf</code> header. Mismatch → 403.</p>
-    <p>API routes (<code>route.ts</code>) are NOT automatically CSRF-protected, since they're intended for external consumers. If you need CSRF on a route handler, check the cookie/header manually in middleware.</p>
+    <p>Server actions (called via the auto-generated RPC stub) are automatically CSRF-protected by a cross-origin check: the server reads <code>Sec-Fetch-Site</code> (with an <code>Origin</code>-vs-host fallback for older browsers), and rejects a cross-site request with a 403 unless its origin is in <code>webjs.allowedOrigins</code>. No token or cookie is involved. See <a href="/docs/security">Security</a>.</p>
+    <p>API routes (<code>route.ts</code>) are NOT automatically protected, since they're intended for external consumers. Authenticate a mutating route handler yourself (bearer token, API key, or an explicit origin check in middleware).</p>
 
     <h2>Login Form Component</h2>
     <p>The blog's <code>&lt;auth-forms&gt;</code> component demonstrates a tabbed login/signup form that POSTs to the API routes, receives a Set-Cookie session header, and redirects to the dashboard. See <code>modules/auth/components/auth-forms.ts</code> in the blog example for the complete implementation.</p>

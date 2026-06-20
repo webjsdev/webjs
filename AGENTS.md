@@ -293,7 +293,7 @@ Server actions export named async functions whose args + returns round-trip thro
 
 ### RPC + REST endpoint security
 
-Client to action RPC posts `x-webjs-csrf` matching the cookie issued on first SSR (mismatch 403); prod errors are sanitized to `message` only. A `route.ts` REST endpoint (hand-written or via the `route()` adapter) is NOT CSRF-protected: authenticate every mutating endpoint, use `validate`, log without secrets, rate-limit. For CORS use the `cors()` middleware from `@webjsdev/server`; **`credentials: true` REQUIRES an explicit origin allowlist, never `'*'`.** See `agent-docs/advanced.md`.
+Action RPC CSRF is an **Origin / `Sec-Fetch-Site` check** (the Remix 3 / Go 1.25 model), NOT a token cookie: a state-changing verb passes only when `Sec-Fetch-Site` is `same-origin` / `none`, or (older browsers, no `Sec-Fetch-Site`) the `Origin` host matches the request host, or the source is in `webjs.allowedOrigins`; otherwise 403. **No `Set-Cookie` rides the SSR HTML**, which is why a page that opts into a public `Cache-Control` (via `metadata.cacheControl`, e.g. on a root layout for a whole visitor-identical app) is CDN-edge-cacheable. A safe GET action is CSRF-exempt. Prod errors are sanitized to `message` only. A `route.ts` REST endpoint (hand-written or via the `route()` adapter) is NOT covered by this check: authenticate every mutating endpoint, use `validate`, log without secrets, rate-limit. For CORS use the `cors()` middleware from `@webjsdev/server`; **`credentials: true` REQUIRES an explicit origin allowlist, never `'*'`.** See `agent-docs/advanced.md`.
 
 ### Components (`components/*.{js,ts}`)
 

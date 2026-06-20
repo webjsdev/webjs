@@ -137,10 +137,10 @@ The cache is keyed by the FULL URL (path + search) only, with no per-user
 keying, so a page that reads `cookies()` / a session / per-user data MUST
 NOT set `revalidate`. The framework also refuses to cache (defense in
 depth) any response that is not a `200`, is a streamed Suspense body,
-sets a non-framework `Set-Cookie` (the framework `webjs_csrf` cookie is
-re-minted per response on a hit and does not block), or runs under CSP
-(its body carries a per-request nonce). A cached page served to a brand
-new visitor still gets a fresh CSRF cookie, so it stays correct.
+sets any `Set-Cookie`, or runs under CSP (its body carries a per-request
+nonce). SSR responses no longer carry a CSRF cookie (action CSRF is an
+Origin / `Sec-Fetch-Site` check, not a token cookie), so a cacheable page
+is cookieless and safe to share.
 
 **Framework defense, not just the contract.** When the render reads
 per-user state through a framework helper (`cookies()`, `headers()`,
@@ -221,7 +221,7 @@ The ETag is WEAK (`W/"..."`). It hashes the UNCOMPRESSED body and the prod compr
 | A `route.{js,ts}` handler returning a `ReadableStream` (incl. an SSE `text/event-stream`) | The body is not marked buffered, so the funnel never reads it. Buffering a stream would blow up memory, and an SSE stream never ends so the read would hang forever |
 | Non-GET / non-HEAD, and any status other than 200 | A validator is only meaningful for a successful, replayable read |
 
-**Stable-body handling.** The ETag is computed over the response's OWN body bytes, so an identical body yields an identical ETag across requests. Per-response varying bits that ride RESPONSE HEADERS (the `x-webjs-build` id, the `set-cookie` CSRF token, the CSP nonce on the header) are NOT part of the body hash, so they do not destabilise the ETag. The one body-level varying input is the CSP nonce stamped INTO the inline boot script: with CSP enabled the HTML body changes every request, so its ETag changes every request and a 304 is simply never produced for that page (correct, not a bug). CSP is off by default, so the common cacheable-page case has a stable body and a stable ETag. The 304 preserves the validators and caching headers (`ETag`, `Cache-Control`, `Vary`, plus the framework's `X-Webjs-Build` / `X-Request-Id` and any `Set-Cookie`) and drops only the body-describing headers (`Content-Length`, `Content-Type`, `Content-Encoding`), so a shared cache and the client router behave identically to a 200.
+**Stable-body handling.** The ETag is computed over the response's OWN body bytes, so an identical body yields an identical ETag across requests. Per-response varying bits that ride RESPONSE HEADERS (the `x-webjs-build` id, the CSP nonce on the header) are NOT part of the body hash, so they do not destabilise the ETag. The one body-level varying input is the CSP nonce stamped INTO the inline boot script: with CSP enabled the HTML body changes every request, so its ETag changes every request and a 304 is simply never produced for that page (correct, not a bug). CSP is off by default, so the common cacheable-page case has a stable body and a stable ETag. The 304 preserves the validators and caching headers (`ETag`, `Cache-Control`, `Vary`, plus the framework's `X-Webjs-Build` / `X-Request-Id` and any `Set-Cookie`) and drops only the body-describing headers (`Content-Length`, `Content-Type`, `Content-Encoding`), so a shared cache and the client router behave identically to a 200.
 
 ## Sessions
 
