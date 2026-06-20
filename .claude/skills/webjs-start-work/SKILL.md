@@ -96,6 +96,8 @@ The user's request typically names an issue by number (e.g. `#112`) or by descri
 
 The PR is already open as a draft (step 6). "Done" here means the gate to flip it from draft to **ready for review** (`gh pr ready <N>`), NOT the gate to create it. Everything below must be addressed, and the self-review loop must have converged, before that flip.
 
+**Bun parity is part of the task, not an afterthought.** webjs runs on Node 24+ AND Bun (#508). If the change touches a runtime-sensitive surface (the serializer, the node:http vs `Bun.serve` listener + request path, SSR / action / CSRF dispatch, streams, `node:crypto`, the TS stripper, auth / session / cors), then BEFORE you mark the PR ready you MUST (1) run the Bun matrix and report it green (`node scripts/run-bun-tests.js` plus the touched `test/bun/*.mjs` under `bun`), and (2) add or update a `test/bun/<feature>.mjs` cross-runtime assertion for the surface. This is enforced: `.claude/hooks/require-bun-parity-with-runtime-src.sh` BLOCKS a commit that stages runtime-sensitive source with no `test/bun/**` test (escape hatch `WEBJS_BUN_VERIFIED=1` only when an existing Bun script already covers it AND you ran it). Treat the parity, not just the Node result, as the bar.
+
 Doc drift is the #1 way a framework rots. Documentation MUST stay in sync with code on the same PR that changes the code. Do NOT defer doc work to a follow-up issue, do NOT let the user have to ask. Before marking the draft PR ready for review, walk through every surface below and either update it OR write "N/A because <reason>" in the PR body so the omission is visible.
 
 ### Surfaces to consider on EVERY PR
