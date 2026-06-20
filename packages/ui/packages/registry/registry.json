@@ -188,7 +188,8 @@
       "name": "dialog",
       "type": "registry:ui",
       "registryDependencies": [
-        "lib-utils"
+        "lib-utils",
+        "button"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -203,6 +204,9 @@
     {
       "name": "dropdown-menu",
       "type": "registry:ui",
+      "registryDependencies": [
+        "popover"
+      ],
       "dependencies": [
         "@webjsdev/core"
       ],
@@ -216,6 +220,9 @@
     {
       "name": "hover-card",
       "type": "registry:ui",
+      "registryDependencies": [
+        "popover"
+      ],
       "dependencies": [
         "@webjsdev/core"
       ],
@@ -452,6 +459,9 @@
     {
       "name": "toggle-group",
       "type": "registry:ui",
+      "registryDependencies": [
+        "toggle"
+      ],
       "dependencies": [
         "@webjsdev/core"
       ],
@@ -465,6 +475,9 @@
     {
       "name": "tooltip",
       "type": "registry:ui",
+      "registryDependencies": [
+        "popover"
+      ],
       "dependencies": [
         "@webjsdev/core"
       ],
