@@ -38,8 +38,9 @@ test('every sibling-component import is declared in registryDependencies', () =>
     const name = fileToItem.get(relPath);
     if (!name) continue; // not a registry item (e.g. an internal helper)
     const src = readFileSync(join(COMPONENTS_DIR, file), 'utf8');
+    // Match a same-directory sibling import under either quote style.
     const siblings = new Set(
-      [...src.matchAll(/from '\.\/([a-z0-9-]+)\.ts'/g)].map((m) => m[1]),
+      [...src.matchAll(/from\s+['"]\.\/([a-z0-9-]+)\.ts['"]/g)].map((m) => m[1]),
     );
     const declared = new Set(
       (manifest.items.find((i) => i.name === name).registryDependencies) || [],
