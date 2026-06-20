@@ -12,6 +12,11 @@ const footerLink = (href: string, label: string) => html`
 const TITLE = 'webjs blog: live demo';
 const DESCRIPTION = 'A live, full-stack webjs example: posts, comments, auth, and WebSocket chat.';
 
+// NOTE: no `cacheControl` here on purpose. This app is per-user (pages read
+// `currentUser()` to render the signed-in state), so its HTML must NOT be
+// CDN-cached or one visitor's page would be served to another. It stays the
+// default `no-store`. The static sites (website / docs / ui) set a public
+// `cacheControl` on their root layout because they are visitor-identical.
 export function generateMetadata(ctx: { url: string }): Metadata {
   const origin = new URL(ctx.url).origin;
   const image = `${origin}/public/og.png`;

@@ -189,6 +189,16 @@ export interface WebjsConfig {
   basePath?: string;
 
   /**
+   * Cross-origin hosts (or full origins) the action CSRF check accepts even
+   * when the request is cross-site. The action endpoint defends against CSRF
+   * with a `Sec-Fetch-Site` check plus an `Origin`-vs-host fallback; list any
+   * additional origins a reverse-proxy / multi-domain setup must allow here,
+   * e.g. `['admin.example.com', 'https://studio.example.com']`. A bare host or
+   * a full origin are both accepted. Default `[]` (same-origin only).
+   */
+  allowedOrigins?: string[];
+
+  /**
    * Content-Security-Policy config. Off by default. `true` enables a
    * strict nonce-based default policy. An object customizes directives
    * and report-only mode.

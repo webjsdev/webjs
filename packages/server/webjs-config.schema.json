@@ -96,6 +96,12 @@
       "type": "string",
       "default": ""
     },
+    "allowedOrigins": {
+      "description": "Cross-origin hosts (or full origins) the action CSRF check accepts even when the request is cross-site. The action endpoint defends with a Sec-Fetch-Site check plus an Origin-vs-host fallback; list additional origins a reverse-proxy / multi-domain setup must allow here. A bare host or a full origin are both accepted. Read by readAllowedOrigins in csrf.js. Default [] (same-origin only).",
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
     "csp": {
       "description": "Content-Security-Policy config. Off by default. true enables a strict nonce-based default policy. An object customizes directives and report-only mode. Read by readCspConfig in csp.js.",
       "oneOf": [
