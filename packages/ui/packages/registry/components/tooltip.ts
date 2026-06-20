@@ -81,9 +81,13 @@ export class UiTooltip extends WebComponent({
 
   connectedCallback(): void {
     super.connectedCallback?.();
-    // Children upgrade after this host; defer so the trigger control and
-    // the tooltip content both exist before linking them.
-    queueMicrotask(() => this._wireAria());
+    // webjs projects slotted light-DOM children in a pass after the first
+    // render, so the trigger's focusable control is not in place yet at
+    // connect / firstUpdated. Defer to the next frame, by which point the
+    // projection has run and both the control and the tip content exist.
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => this._wireAria());
+    }
   }
 
   // APG tooltip wiring: the focusable trigger references the tip via

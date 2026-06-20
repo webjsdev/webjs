@@ -159,9 +159,12 @@ export class UiDropdownMenu extends WebComponent({
 
   connectedCallback(): void {
     super.connectedCallback?.();
-    // Children upgrade after this host; defer a microtask so the trigger
-    // button and the menu element exist before wiring ARIA between them.
-    queueMicrotask(() => this._wireAria());
+    // webjs projects slotted light-DOM children in a pass after the first
+    // render, so the trigger button and the menu are not in place at
+    // connect. Defer to the next frame, when the projection has run.
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => this._wireAria());
+    }
   }
 
   _afterRender(): void {
@@ -385,11 +388,6 @@ UiDropdownMenuContent.register('ui-dropdown-menu-content');
 export class UiDropdownMenuItem extends WebComponent({
   variant: prop<'default' | 'destructive'>(String, { reflect: true }),
   inset: Boolean,
-  // `data-disabled` is the historical attribute (focus skips it, the click /
-  // pointer handlers bail on it); making it a reflected prop keeps that wire
-  // intact while letting render() also emit `aria-disabled` so the disabled
-  // state reaches assistive tech, not just CSS.
-  disabled: prop(Boolean, { reflect: true, attribute: 'data-disabled' }),
 }) {
   // Keyboard / pointer highlight state for the own-rendered menuitem. A
   // local signal bound with ?data-highlighted keeps the highlight in the
@@ -401,18 +399,22 @@ export class UiDropdownMenuItem extends WebComponent({
     super();
     this.variant = 'default';
     this.inset = false;
-    this.disabled = false;
   }
 
   render() {
+    // `data-disabled` on the host is the historical disabled marker (focus
+    // skips it, the click / pointer handlers bail on it). Mirror it onto the
+    // inner menuitem as both data-disabled (CSS) and aria-disabled, so the
+    // state also reaches assistive tech.
+    const disabled = typeof this.hasAttribute === 'function' && this.hasAttribute('data-disabled');
     return html`<div
       data-slot="dropdown-menu-item"
       role="menuitem"
       tabindex="-1"
       data-variant=${this.variant}
       ?data-inset=${this.inset}
-      ?data-disabled=${this.disabled}
-      aria-disabled=${this.disabled ? 'true' : 'false'}
+      ?data-disabled=${disabled}
+      aria-disabled=${disabled ? 'true' : 'false'}
       ?data-highlighted=${this.#highlighted.get()}
       class=${dropdownMenuItemClass()}
       @click=${this._onClick}
@@ -595,14 +597,10 @@ export class UiDropdownMenuSub extends WebComponent({
 }
 UiDropdownMenuSub.register('ui-dropdown-menu-sub');
 
-export class UiDropdownMenuSubTrigger extends WebComponent({
-  inset: Boolean,
-  disabled: prop(Boolean, { reflect: true, attribute: 'data-disabled' }),
-}) {
+export class UiDropdownMenuSubTrigger extends WebComponent({ inset: Boolean }) {
   constructor() {
     super();
     this.inset = false;
-    this.disabled = false;
   }
 
   // SSR-safe: linkedom doesn't implement closest() on custom elements.
@@ -613,16 +611,17 @@ export class UiDropdownMenuSubTrigger extends WebComponent({
 
   render() {
     const open = !!this._sub()?.open;
+    const disabled = typeof this.hasAttribute === 'function' && this.hasAttribute('data-disabled');
     return html`<div
       data-slot="dropdown-menu-sub-trigger"
       role="menuitem"
       tabindex="-1"
       aria-haspopup="menu"
       aria-expanded=${String(open)}
-      aria-disabled=${this.disabled ? 'true' : 'false'}
+      aria-disabled=${disabled ? 'true' : 'false'}
       data-state=${open ? 'open' : 'closed'}
       ?data-inset=${this.inset}
-      ?data-disabled=${this.disabled}
+      ?data-disabled=${disabled}
       class=${dropdownMenuSubTriggerClass()}
       @click=${this._onClick}
       @pointerenter=${this._onPointerEnter}

@@ -72,7 +72,12 @@ export class UiHoverCard extends WebComponent({
 
   connectedCallback(): void {
     super.connectedCallback?.();
-    queueMicrotask(() => this._wireAria());
+    // webjs projects slotted light-DOM children after the first render, so
+    // the trigger control is not in place at connect. Defer to the next
+    // frame, when the projection has run.
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => this._wireAria());
+    }
   }
 
   // The trigger also opens on focus (see the @focusin handler), so it is
