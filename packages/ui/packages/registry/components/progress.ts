@@ -16,6 +16,11 @@
  *   <!-- Indeterminate (no `value` attribute): -->
  *   <progress class=${progressClass()}></progress>
  *
+ * A11y (required for accessible output): give the <progress> an accessible
+ * name with aria-label (or a <label for>), e.g. aria-label="Upload
+ * progress". The native element supplies the role and value; only the name
+ * is the author's responsibility.
+ *
  * Design tokens used: --primary.
  */
 

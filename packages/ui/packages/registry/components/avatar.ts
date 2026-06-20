@@ -23,6 +23,11 @@
  *     <div class=${avatarGroupCountClass()}>+3</div>
  *   </div>
  *
+ * A11y (required for accessible output): the <img> MUST have an alt that
+ * names the person (alt="Vivek Khandelwal"), or alt="" when a visible text
+ * fallback already names them. Always provide the fallback <span> so the
+ * avatar is still named if the image fails to load.
+ *
  * Design tokens used: --muted, --muted-foreground, --primary, --background.
  */
 import { cn } from '../lib/utils.ts';

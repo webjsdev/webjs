@@ -18,8 +18,8 @@
  *     <table class=${tableClass()}>
  *       <thead class=${tableHeaderClass()}>
  *         <tr class=${tableRowClass()}>
- *           <th class=${tableHeadClass()}>Name</th>
- *           <th class=${tableHeadClass()}>Status</th>
+ *           <th scope="col" class=${tableHeadClass()}>Name</th>
+ *           <th scope="col" class=${tableHeadClass()}>Status</th>
  *         </tr>
  *       </thead>
  *       <tbody class=${tableBodyClass()}>
@@ -31,6 +31,11 @@
  *       <caption class=${tableCaptionClass()}>Users</caption>
  *     </table>
  *   </div>
+ *
+ * A11y (required for accessible output): every header cell needs a scope
+ * (scope="col" on a column header, scope="row" on a row header) so screen
+ * readers map cells to their headers. Add a <caption> naming the table's
+ * purpose (it can be visually hidden if a heading already names it).
  *
  * Design tokens used: --muted, --muted-foreground, --foreground.
  */

@@ -17,6 +17,12 @@
  * shadcn React's `asChild` (Slot) prop has no equivalent here: just call
  * `buttonClass(...)` and spread the classes onto whatever element you want.
  *
+ * A11y (required for accessible output): an icon-only button (the `icon`,
+ * `icon-xs`, `icon-sm`, `icon-lg` sizes) has no visible text, so it MUST
+ * carry an accessible name via aria-label (or aria-labelledby). A button
+ * that opens an overlay should also set aria-haspopup and aria-expanded.
+ * Native <button> focus and keyboard activation are already correct.
+ *
  * Design tokens used: --primary, --primary-foreground, --destructive,
  * --secondary, --secondary-foreground, --accent, --accent-foreground,
  * --background, --input, --ring.
