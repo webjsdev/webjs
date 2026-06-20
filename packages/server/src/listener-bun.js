@@ -349,7 +349,7 @@ function maybeCompress(resp, req) {
  * on Bun too.
  * @param {{ requestTimeout?: number } | undefined} timeouts
  */
-function bunIdleTimeout(timeouts) {
+export function bunIdleTimeout(timeouts) {
   const reqMs = timeouts && timeouts.requestTimeout;
   if (reqMs === 0) return 0;
   let secs = Math.ceil((reqMs || 30_000) / 1000);

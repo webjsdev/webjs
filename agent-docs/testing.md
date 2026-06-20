@@ -138,8 +138,10 @@ script already covers the surface AND you ran it under Bun).
   **skip(env)** (needs Redis / a DOM), and **genuine fail** (a real Bun
   failure, which fails the job). Set `WEBJS_BUN_TESTS=<substr,…>` to scope a
   local run.
-- CI runs it in the `bun` job alongside `test/bun/smoke.mjs` (#508) and
-  `test/bun/listener.mjs` (#511, the listener-shell parity).
+- CI runs it in the `bun` job alongside `test/bun/smoke.mjs` (#508),
+  `test/bun/listener.mjs` (#511, the listener-shell parity), and
+  `test/bun/timeouts.mjs` (#663, the `Bun.serve` `idleTimeout` wiring; the pure
+  ms-to-seconds mapping is unit-tested under the matrix too).
 - Two cross-runtime test scripts also run under BOTH runtimes: `test/bun/smoke.mjs`
   (boot + SSR + TS strip + a server-action RPC) and `test/bun/listener.mjs`
   (`startServer` over a real socket: SSR + route + SSE + WebSocket). Plain assert
