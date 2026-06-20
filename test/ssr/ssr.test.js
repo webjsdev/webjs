@@ -1581,7 +1581,7 @@ test('ssrPage: loading.js that fails to load → page renders without Suspense',
   assert.ok(body.includes('<p>ok</p>'));
 });
 
-/* ------------ CSP nonce + CSRF cookie ------------ */
+/* ------------ CSP nonce + cookieless SSR ------------ */
 
 test('ssrPage: CSP nonce on request → nonce attribute on injected scripts', async () => {
   const { route, appDir } = await makeRoute({
@@ -1652,7 +1652,7 @@ test('ssrPage: CSP nonce propagates to error-page response (boot scripts on erro
     'error response must carry the meta csp-nonce tag');
 });
 
-test('ssrPage: response attaches a csrf set-cookie when request has no token', async () => {
+test('ssrPage: response sets no cookie (action CSRF is an Origin / Sec-Fetch-Site check, #659)', async () => {
   const { route, appDir } = await makeRoute({
     pageSrc:
       `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
@@ -1660,8 +1660,8 @@ test('ssrPage: response attaches a csrf set-cookie when request has no token', a
   });
   const req = new Request('http://localhost/');
   const resp = await ssrPage(route, {}, new URL('http://localhost/'), { dev: false, appDir, req });
-  const setCookie = resp.headers.get('set-cookie');
-  assert.ok(setCookie && /csrf/i.test(setCookie), `expected csrf cookie, got ${setCookie}`);
+  // No CSRF token cookie is issued, so the SSR response is cookieless (CDN-cacheable).
+  assert.equal(resp.headers.get('set-cookie'), null, 'SSR response must set no cookie');
 });
 
 test('ssrPage: WEBJS_PUBLIC_* env vars are injected into window.process.env', async () => {
