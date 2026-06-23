@@ -273,6 +273,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     throw new Error(`Unknown --runtime '${runtime}'. Only ${VALID_RUNTIMES.join(' / ')} are supported.`);
   }
   const isBun = runtime === 'bun';
+  // Zero-install Bun entry (#675): the app-local `webjs-bun.mjs` bootstrap, run
+  // under `bun --bun`, so the server resolves the CLI + deps via Bun auto-install
+  // (no `bun install` required). App-local so it is resolvable with no node_modules.
+  const bunBoot = 'bun --bun webjs-bun.mjs';
   const appDir = join(cwd, name);
   if (existsSync(appDir)) {
     console.error(`Error: directory '${name}' already exists.`);
@@ -318,18 +322,19 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // so `npm run start` (a thin alias) behaves identically. Drizzle has no
       // codegen, so there is no dev `before` step.
       //
-      // Bun runtime (#541): the long-running server scripts (`dev` / `start`)
-      // are prefixed `bun --bun` so the app SERVES on Bun. The `--bun` overrides
-      // the `webjs` bin's `#!/usr/bin/env node` shebang (without it `bun run dev`
+      // Bun runtime (#541, zero-install #675): the server + DB scripts run via
+      // the `webjs-bun.mjs` bootstrap under `bun --bun`. `--bun` overrides the
+      // `webjs` bin's `#!/usr/bin/env node` shebang (without it `bun run dev`
       // would exec webjs under Node, silently running the "bun" app on Node).
-      // Baking it into the script body means a plain `bun run dev` (or even
-      // `npm run dev`) starts on Bun, so a user never has to remember the flag.
-      // The runtime-neutral tooling scripts below (test / db / check / typecheck
+      // Routing through the bootstrap file (which imports the CLI by bare
+      // specifier) instead of the `webjs` bin means Bun's auto-install resolves
+      // `@webjsdev/*` and your deps ON DEMAND, so `bun run dev` / `start` work
+      // with NO `bun install` (install becomes optional, for editor types /
+      // offline). The runtime-neutral tooling scripts (test / check / typecheck
       // / doctor) stay plain `webjs ...`: they spawn node tooling (`node --test`,
-      // drizzle-kit, tsc) and forcing `--bun` there buys nothing (and `webjs
-      // test` shells `node --test`, which a `bun --test` would not be).
-      dev: isBun ? 'bun --bun webjs dev' : 'webjs dev',
-      start: isBun ? 'bun --bun webjs start' : 'webjs start',
+      // tsc), which needs an install, so they are not part of the zero-install path.
+      dev: isBun ? `${bunBoot} dev` : 'webjs dev',
+      start: isBun ? `${bunBoot} start` : 'webjs start',
       test: 'webjs test',
       'test:server': 'webjs test --server',
       'test:browser': 'webjs test --browser',
@@ -340,11 +345,11 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // vendor pins, @webjsdev versions, git hook). Local tool, NOT a CI gate
       // (its env-drift + network pin-freshness checks would make CI flaky).
       doctor: 'webjs doctor',
-      'db:generate': 'webjs db generate',
-      'db:migrate': 'webjs db migrate',
-      'db:push': 'webjs db push',
-      'db:studio': 'webjs db studio',
-      'db:seed': 'webjs db seed',
+      'db:generate': isBun ? `${bunBoot} db generate` : 'webjs db generate',
+      'db:migrate': isBun ? `${bunBoot} db migrate` : 'webjs db migrate',
+      'db:push': isBun ? `${bunBoot} db push` : 'webjs db push',
+      'db:studio': isBun ? `${bunBoot} db studio` : 'webjs db studio',
+      'db:seed': isBun ? `${bunBoot} db seed` : 'webjs db seed',
     },
     dependencies: {
       // Drizzle ORM (no codegen, no engine binary). Pinned to the 1.0 line
@@ -396,9 +401,27 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     webjs: {
       // Drizzle has no codegen, so there is no dev `before` step. Production
       // applies pending migrations at boot via `webjs db migrate` (drizzle-kit).
-      start: { before: ['webjs db migrate'] },
+      // On Bun this runs through the same zero-install bootstrap as `start`, so
+      // the boot-time migrate needs no `webjs` bin in node_modules (#675).
+      start: { before: [isBun ? `${bunBoot} db migrate` : 'webjs db migrate'] },
     },
   }, null, 2) + '\n');
+
+  // The zero-install Bun entry (#675). `bun run dev` / `start` invoke this via
+  // `bun --bun` (see the scripts above). Importing the webjs CLI by bare
+  // specifier lets Bun auto-install resolve `@webjsdev/*` and your deps on
+  // demand, so a fresh app serves with NO `bun install`. The CLI reads its
+  // command (dev / start / db ...) and flags straight from argv. Node apps do
+  // not get this file; they run the `webjs` bin directly.
+  if (isBun) {
+    await writeFile(join(appDir, 'webjs-bun.mjs'),
+      '// Zero-install Bun entry (webjs #675). Run via `bun --bun webjs-bun.mjs <cmd>`\n' +
+      '// (the dev / start / db npm scripts do this). Importing the CLI by bare\n' +
+      '// specifier lets Bun auto-install resolve @webjsdev/* and your deps on\n' +
+      '// demand, so the app serves with no `bun install` (install stays optional,\n' +
+      '// for editor types and offline runs). Args pass through to the CLI.\n' +
+      "await import('@webjsdev/cli/bin/webjs.js');\n");
+  }
 
   await writeFile(join(appDir, 'tsconfig.json'), JSON.stringify({
     compilerOptions: {

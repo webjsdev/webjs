@@ -32,12 +32,22 @@ test('bun scaffold: package.json scripts, trustedDependencies, lockfile flavor',
     const appDir = join(cwd, 'bunapp');
     const p = pkg(appDir);
 
-    // The long-running server scripts force --bun (the shebang gotcha).
-    assert.equal(p.scripts.dev, 'bun --bun webjs dev');
-    assert.equal(p.scripts.start, 'bun --bun webjs start');
-    // Runtime-neutral tooling stays plain webjs (runs on node via the shebang).
+    // Server + db scripts run through the zero-install webjs-bun.mjs bootstrap
+    // under --bun (#675): the bootstrap imports the CLI by bare specifier so Bun
+    // auto-install resolves deps on demand (no `bun install` needed), and --bun
+    // overrides the bin's node shebang.
+    assert.equal(p.scripts.dev, 'bun --bun webjs-bun.mjs dev');
+    assert.equal(p.scripts.start, 'bun --bun webjs-bun.mjs start');
+    assert.equal(p.scripts['db:migrate'], 'bun --bun webjs-bun.mjs db migrate');
+    assert.equal(p.scripts['db:generate'], 'bun --bun webjs-bun.mjs db generate');
+    // The start.before migrate also routes through the bootstrap, so the
+    // boot-time migrate needs no `webjs` bin in node_modules.
+    assert.equal(p.webjs.start.before[0], 'bun --bun webjs-bun.mjs db migrate');
+    // The bootstrap file is emitted and imports the CLI by bare specifier.
+    const boot = readFileSync(join(appDir, 'webjs-bun.mjs'), 'utf8');
+    assert.match(boot, /import\(['"]@webjsdev\/cli\/bin\/webjs\.js['"]\)/);
+    // Runtime-neutral tooling stays plain webjs (node tooling, needs an install).
     assert.equal(p.scripts.test, 'webjs test');
-    assert.equal(p.scripts['db:generate'], 'webjs db generate');
     // SQLite uses the built-in bun:sqlite (no native dependency), so there is
     // nothing to trust: trustedDependencies must be absent.
     assert.equal(p.trustedDependencies, undefined);
@@ -137,7 +147,7 @@ test('bun scaffold works across all three templates', async () => {
       await scaffoldApp('app', cwd, { template, runtime: 'bun' });
       const appDir = join(cwd, 'app');
       const p = pkg(appDir);
-      assert.equal(p.scripts.dev, 'bun --bun webjs dev', `${template}: dev script`);
+      assert.equal(p.scripts.dev, 'bun --bun webjs-bun.mjs dev', `${template}: dev script`);
       const df = read(appDir, 'Dockerfile');
       assert.match(df, /FROM oven\/bun:1/, `${template}: pure oven/bun base`);
       assert.match(df, /CMD \["bun", "--bun", "run", "start"\]/, `${template}: serves on bun`);
@@ -161,7 +171,7 @@ test('bun is auto-detected from npm_config_user_agent (no explicit flag)', async
   try {
     // No runtime opt: detection picks bun because the invoking PM is bun.
     await scaffoldApp('detected', cwd, { template: 'full-stack' });
-    assert.equal(pkg(join(cwd, 'detected')).scripts.dev, 'bun --bun webjs dev');
+    assert.equal(pkg(join(cwd, 'detected')).scripts.dev, 'bun --bun webjs-bun.mjs dev');
   } finally {
     if (prev === undefined) delete process.env.npm_config_user_agent;
     else process.env.npm_config_user_agent = prev;
@@ -182,6 +192,8 @@ test('node mode (default) is unchanged: no bun flavor leaks in', async () => {
     const p = pkg(appDir);
     assert.equal(p.scripts.dev, 'webjs dev');
     assert.equal(p.scripts.start, 'webjs start');
+    // Node apps run the webjs bin directly; no Bun bootstrap file.
+    assert.equal(existsSync(join(appDir, 'webjs-bun.mjs')), false);
     assert.equal(p.trustedDependencies, undefined);
     assert.match(read(appDir, 'Dockerfile'), /FROM node:24-alpine/);
     assert.match(read(appDir, 'compose.yaml'), /test: \["CMD", "node", "-e"/);
