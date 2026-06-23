@@ -149,6 +149,29 @@ test('resolves <my-counter> with base-class factory declare-free properties', ()
   assert.ok(entries.includes('count'), 'should complete attribute name "count"');
 });
 
+test('completes the custom `attribute` name, not the kebab of the property', () => {
+  const svc = makeService({
+    '/dialog.ts':
+      `import { WebComponent, prop, html } from '@webjsdev/core';\n` +
+      `export class Dialog extends WebComponent({ open: prop(Boolean, { attribute: 'is-open' }) }) {\n` +
+      `  render() { return html\`<div>\${this.open}</div>\`; }\n` +
+      `}\n` +
+      `Dialog.register('my-dialog');\n`,
+    '/page.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `import './dialog.ts';\n` +
+      `export default function Page() {\n` +
+      `  return html\`<my-dialog ></my-dialog>\`;\n` +
+      `}\n`,
+  });
+
+  const comp = svc.getCompletionsAtPosition('/page.ts', offsetOf('/page.ts', '<my-dialog ') + 11, undefined);
+  assert.ok(comp, 'should return completions');
+  const entries = comp.entries.map((e) => e.name);
+  assert.ok(entries.includes('is-open'), 'completes the custom attribute name "is-open"');
+  assert.ok(!entries.includes('open'), 'does NOT offer the kebab of the property name when a custom attribute is set');
+});
+
 test('resolves closing tag </my-counter> just like the opening tag', () => {
   const svc = makeService({
     '/counter.ts':
