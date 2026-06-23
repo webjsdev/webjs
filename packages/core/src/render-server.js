@@ -1052,8 +1052,19 @@ function appendReflectedAttrs(opening, instance, presentAttrNames) {
 function applyAttrsToInstance(instance, attrs, Cls) {
   const props = Cls.properties || {};
   for (const [key, raw] of Object.entries(attrs)) {
-    const rawDef = props[key] || props[camelCase(key)];
-    const propName = props[key] ? key : camelCase(key);
+    // Resolve the source attribute name to its property: a custom `attribute`
+    // option wins, else the kebab-cased property name, else the camelCase of
+    // the attribute (the common case). Mirrors the client attributeChangedCallback
+    // so a custom-attribute prop gets the right value in the SSR'd first paint.
+    let propName, rawDef;
+    for (const [k, decl] of Object.entries(props)) {
+      const d = typeof decl === 'object' ? decl : { type: decl };
+      if ((d.attribute || hyphenate(k)) === key) { propName = k; rawDef = decl; break; }
+    }
+    if (rawDef === undefined) {
+      rawDef = props[key] || props[camelCase(key)];
+      propName = props[key] ? key : camelCase(key);
+    }
     if (!rawDef) {
       instance[propName] = raw;
       continue;
@@ -1078,6 +1089,11 @@ function applyAttrsToInstance(instance, attrs, Cls) {
 /** @param {string} s */
 function camelCase(s) {
   return s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+}
+
+/** Kebab-case a property name for its default HTML attribute (matches component.js). @param {string} s */
+function hyphenate(s) {
+  return s.replace(/([A-Z])/g, '-$1').toLowerCase();
 }
 
 /**
