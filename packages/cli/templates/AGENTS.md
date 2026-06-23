@@ -404,14 +404,19 @@ an npm `prestart` hook.
 
 ### Running on Bun instead of Node
 
-webjs runs on **Node 24+ or Bun**. The same `package.json` scripts work on
-either; to run under Bun, force it with `--bun` so the server executes on Bun
-rather than the `webjs` bin's Node shebang:
+webjs runs on **Node 24+ or Bun**. A `--runtime bun` app routes its `dev` /
+`start` / `db` scripts through a `webjs-bun.mjs` bootstrap under `bun --bun`
+(which overrides the `webjs` bin's Node shebang so the server runs on Bun). The
+bootstrap imports the CLI by bare specifier, so Bun auto-install resolves deps on
+demand and **no `bun install` is needed**:
 
 ```sh
-bun install
-bun --bun run dev      # or: bun --bun run start
+bun run dev            # or: bun run start  (no install step required)
 ```
+
+`bun install` is optional here, run it for editor type intelligence or a pinned
+offline install. (To run a Node-flavored app on Bun instead, force `bun --bun run
+dev`, which still expects an install.)
 
 On Node the `.ts` type-stripping is the built-in `module.stripTypeScriptTypes`;
 on Bun (which has no built-in) it comes from `amaro` automatically, so the same
