@@ -482,8 +482,8 @@ class WebComponentBase extends Base {
   static get observedAttributes() {
     const props = this.properties || {};
     return Object.keys(props)
-      .filter((k) => !props[k].state)
-      .map(hyphenate);
+      .filter((k) => !(typeof props[k] === 'object' && props[k].state))
+      .map((k) => (typeof props[k] === 'object' && props[k].attribute) || hyphenate(k));
   }
 
   constructor() {
@@ -630,6 +630,13 @@ class WebComponentBase extends Base {
 
       if (initial !== undefined) {
         this.__propValues[propName] = initial;
+      } else if (d.default !== undefined) {
+        // Declarative `default` option (lit-parity). A function default is
+        // CALLED per instance, so an object / array default is a fresh value
+        // per element. Written straight to the backing store; an applied
+        // attribute (attributeChangedCallback runs later) overrides it.
+        this.__propValues[propName] =
+          typeof d.default === 'function' ? d.default() : d.default;
       }
     }
   }
@@ -645,7 +652,8 @@ class WebComponentBase extends Base {
    * @private
    */
   _reflectAttribute(propName, value, decl) {
-    const attrName = hyphenate(propName);
+    // A custom `attribute` option wins over the kebab-cased property name.
+    const attrName = decl.attribute || hyphenate(propName);
     // Guard against re-entrant loops: attributeChangedCallback fires when
     // we call setAttribute, which would call the setter again.
     if (this.__reflectingAttribute) return;
@@ -938,9 +946,17 @@ class WebComponentBase extends Base {
     if (this.__reflectingAttribute) return;
 
     const Ctor = /** @type any */ (this.constructor);
-    const propName = camelCase(name);
-    const raw = Ctor.properties && (Ctor.properties[propName] || Ctor.properties[name]);
-    if (!raw) return;
+    const allProps = (Ctor.properties || {});
+    // Resolve the incoming attribute name to its property. A custom
+    // `attribute` option wins; otherwise the kebab-cased property name. Falls
+    // back to the camelCase of the attribute for the common (kebab) case.
+    let propName, raw;
+    for (const [k, decl] of Object.entries(allProps)) {
+      const d = typeof decl === 'object' ? decl : { type: decl };
+      if ((d.attribute || hyphenate(k)) === name) { propName = k; raw = decl; break; }
+    }
+    if (raw === undefined) { propName = camelCase(name); raw = allProps[propName] || allProps[name]; }
+    if (raw === undefined) return;
     // A declaration is either a full descriptor (`{ type: Number, … }`) or the
     // bare-constructor shorthand the factory accepts (`count: Number`), in which
     // case the value IS the type. Normalise so type-based coercion fires either
