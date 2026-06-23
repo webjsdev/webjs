@@ -1,7 +1,7 @@
 /**
  * Run the cross-runtime blog Drizzle DB round-trip proof (#551 / #563) under
  * WHICHEVER runtime executes the suite. Picked up by the root `node --test`
- * runner (so `npm test` exercises the Node / better-sqlite3 path); the CI `bun`
+ * runner (so `npm test` exercises the Node / node:sqlite path); the CI `bun`
  * job also runs `bun test/bun/blog-db.mjs` for the Bun / bun:sqlite path. The
  * proof is a plain assert script (`blog-db.mjs`, not `*.test.mjs`, so the runner
  * does not double-run it); importing it runs it and throws on any failure.

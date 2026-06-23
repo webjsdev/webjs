@@ -104,8 +104,8 @@ export function bunifyProse(s) {
  * `node:24-alpine` base with a copied Bun binary, since the installed CLI could
  * still shell `npx`, which a pure Bun image lacks. #595 flipped it once the
  * npx-free CLI shipped.) `oven/bun:1` is Debian-based: `ca-certificates` ship in
- * the image and better-sqlite3 fetches its glibc prebuild on `bun install`
- * (gated by `trustedDependencies`), so no build toolchain is needed.
+ * the image, and SQLite uses the built-in bun:sqlite (no native module), so no
+ * build toolchain is needed.
  *
  * @param {string} s
  * @returns {string}
@@ -126,13 +126,13 @@ export function bunifyDockerfile(s) {
     .replace('FROM node:24-alpine', 'FROM oven/bun:1')
     // Debian base: ca-certificates already present, no `apk`. Drop the alpine line.
     .replace(
-      /# ca-certificates for outbound TLS \(e\.g\. a managed Postgres\)\. better-sqlite3\n# is a prebuilt native module, so no build toolchain is needed here\.\nRUN apk add --no-cache ca-certificates\n\n/,
-      '# The Debian-based oven/bun image ships ca-certificates for outbound TLS (e.g. a\n# managed Postgres). better-sqlite3 fetches its glibc prebuild on `bun install`\n# (gated by trustedDependencies), so no build toolchain is needed.\n\n',
+      /# ca-certificates for outbound TLS \(e\.g\. a managed Postgres\)\. SQLite uses the\n# built-in node:sqlite \(no native module, no build toolchain needed\)\.\nRUN apk add --no-cache ca-certificates\n\n/,
+      '# The Debian-based oven/bun image ships ca-certificates for outbound TLS (e.g. a\n# managed Postgres). SQLite uses the built-in bun:sqlite (no native module), so no\n# build toolchain is needed.\n\n',
     )
     // Lockfile + install (bun.lock, bun install).
     .replace(
       '# package-lock.json is optional (it\'s absent when the app was scaffolded with\n# --no-install); the glob keeps the COPY working with or without it.\nCOPY package.json package-lock.json* ./\nRUN npm install --no-audit --no-fund',
-      '# bun.lock is optional (absent when scaffolded with --no-install); the glob keeps\n# the COPY working with or without it. trustedDependencies in package.json lets\n# better-sqlite3\'s native-prebuild postinstall run (bun skips postinstalls).\nCOPY package.json bun.lock* ./\nRUN bun install',
+      '# bun.lock is optional (absent when scaffolded with --no-install); the glob keeps\n# the COPY working with or without it. SQLite uses the built-in bun:sqlite, so no\n# native dependency or postinstall is involved.\nCOPY package.json bun.lock* ./\nRUN bun install',
     )
     // Healthcheck: the pure Bun image has no node; use `bun -e`. Keep the
     // dependency-free-probe comment accurate (the probe runs under Bun now).

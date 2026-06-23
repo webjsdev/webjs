@@ -5,8 +5,8 @@
  * The blog is booted here via createRequestHandler (the embedded host shape:
  * Express / Fastify / Bun / Deno) from the REPO-ROOT working directory, NOT
  * from examples/blog. A cwd-relative `db/dev.db` resolves to <repo>/db/dev.db,
- * whose directory does not exist, so better-sqlite3 throws "Cannot open
- * database because the directory does not exist" and every DB-backed route
+ * whose directory does not exist, so the sqlite driver throws an "unable to
+ * open database" error and every DB-backed route
  * 500s. Prisma resolved `file:` URLs relative to the schema location, so it was
  * cwd-robust; the Drizzle connection restores that by resolving against the
  * module's own location (db/connection.server.ts -> app root).

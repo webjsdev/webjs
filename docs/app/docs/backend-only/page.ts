@@ -297,7 +297,6 @@ fastify.listen({ port: 8080 });</pre>
     "drizzle-orm": "^1.0.0-rc.3"
   },
   "devDependencies": {
-    "better-sqlite3": "^11.0.0",
     "drizzle-kit": "^1.0.0-rc.3",
     "typescript": "^5.7.0"
   }

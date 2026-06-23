@@ -134,7 +134,7 @@ jobs:
       - name: webjs action seeding on Bun
         run: bun test/bun/seed.mjs
       # Blog Drizzle DB round-trip on Bun (#551/#563): the connection picks
-      # bun:sqlite + drizzle-orm/bun-sqlite on Bun (vs better-sqlite3 on Node),
+      # bun:sqlite + drizzle-orm/bun-sqlite on Bun (vs node:sqlite on Node),
       # so prove the blog's real schema round-trips an insert().returning(), a
       # timestamp_ms Date column, and a relational read on the Bun driver. The
       # same script proves the Node path under `npm test`.

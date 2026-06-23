@@ -183,9 +183,9 @@ session?.user.role; // typed, no cast</pre>
     <p>If you prefer <code>.js</code> files, you can achieve the same type safety using JSDoc annotations with <code>checkJs: true</code> in your tsconfig:</p>
     <pre>// db/connection.server.js
 import * as schema from './schema.server.js';
-const { default: Database } = await import('better-sqlite3');
-const { drizzle } = await import('drizzle-orm/better-sqlite3');
-export const db = drizzle({ client: new Database('db/dev.db'), relations: schema.relations });
+const { DatabaseSync } = await import('node:sqlite');
+const { drizzle } = await import('drizzle-orm/node-sqlite');
+export const db = drizzle({ client: new DatabaseSync('db/dev.db'), relations: schema.relations });
 
 /**
  * @param {{ title: string, body: string }} input
