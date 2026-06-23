@@ -61,15 +61,13 @@ test('bunifyProse: rewrites the CMD prose and the node:24-alpine base claim to p
   );
 });
 
-test('bunifyProse: reframes the opt-in "Running on Bun" section as the default', () => {
+test('bunifyProse: reframes the "Running on Bun" heading for a bun app', () => {
+  // The section body already describes the webjs-bun.mjs bootstrap + zero-install
+  // in the template (#675), so only the heading is reframed for the bun flavor.
   assert.equal(
     bunifyProse('### Running on Bun instead of Node'),
     '### Runtime: this app runs on Bun',
   );
-  const optIn = 'The same `package.json` scripts work on\neither; to run under Bun, force it with `--bun` so the server executes on Bun\nrather than the `webjs` bin\'s Node shebang:';
-  const out = bunifyProse(optIn);
-  assert.match(out, /already force/);
-  assert.doesNotMatch(out, /to run under Bun, force it with/);
 });
 
 test('bunifyDockerfile: pure oven/bun base, bun install, bun -e healthcheck, bun start', () => {
