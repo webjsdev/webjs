@@ -35,6 +35,21 @@ test('default option: a function default runs per instance (fresh object/array)'
   assert.deepEqual(b.items, [], 'each instance gets a fresh array, no shared reference');
 });
 
+test('default option: a falsy default (0 / false / empty string) is applied', () => {
+  // The implementation guards on `!== undefined` precisely so falsy defaults
+  // land rather than being skipped as "no default".
+  class C extends WebComponent({
+    n: prop(Number, { default: 0 }),
+    b: prop(Boolean, { default: false }),
+    s: prop(String, { default: '' }),
+  }) {}
+  customElements.define('def-falsy', C);
+  const el = new C();
+  assert.equal(el.n, 0);
+  assert.equal(el.b, false);
+  assert.equal(el.s, '');
+});
+
 test('default option counterfactual: a prop WITHOUT default is undefined', () => {
   class C extends WebComponent({ count: prop(Number) }) {}
   customElements.define('def-none', C);
