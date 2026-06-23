@@ -655,15 +655,25 @@ const raw = process.env.DATABASE_URL?.replace(/^file:/, '') ?? 'db/dev.db';
 const url = raw === ':memory:' || isAbsolute(raw) ? raw : resolve(appRoot, raw);
 const g = globalThis as unknown as { __webjs_db?: unknown };
 
+// Both node:sqlite and bun:sqlite default \`busy_timeout\` to 0, so a concurrent
+// writer throws \`database is locked\` immediately. Restore a 5s wait (the old
+// better-sqlite3 default) so contended access waits, and WAL so readers proceed
+// alongside one writer.
+function tune<T extends { exec(sql: string): unknown }>(client: T): T {
+  client.exec('PRAGMA busy_timeout = 5000');
+  client.exec('PRAGMA journal_mode = WAL');
+  return client;
+}
+
 async function open() {
   if ((globalThis as { Bun?: unknown }).Bun) {
     const { Database } = await import('bun:sqlite');
     const { drizzle } = await import('drizzle-orm/bun-sqlite');
-    return drizzle({ client: new Database(url), relations: schema.relations });
+    return drizzle({ client: tune(new Database(url)), relations: schema.relations });
   }
   const { DatabaseSync } = await import('node:sqlite');
   const { drizzle } = await import('drizzle-orm/node-sqlite');
-  return drizzle({ client: new DatabaseSync(url), relations: schema.relations });
+  return drizzle({ client: tune(new DatabaseSync(url)), relations: schema.relations });
 }
 
 export const db = (g.__webjs_db ??= await open()) as Awaited<ReturnType<typeof open>>;
