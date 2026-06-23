@@ -59,14 +59,20 @@ class Dialog extends WebComponent({
 }
 ```
 
-Set defaults via the `default` option (a function default runs per instance for a fresh object / array) or in the constructor after `super()`. **Never** use a class-field initializer (e.g., `count = 0` or `student: Student = { ... }`): the framework installs reactive getter/setter on `this` inside the constructor via `Object.defineProperty`, and a class-field initializer compiles to an assignment after `super()` that uses `[[Define]]` to overwrite the accessor, silently breaking reactivity. The `reactive-props-no-class-field` rule catches this.
+Set defaults in the constructor after `super()`. A declarative `default` option also exists (lit-parity, a function default runs per instance for a fresh object / array), but the constructor is the recommended way. **Never** use a class-field initializer (e.g., `count = 0` or `student: Student = { ... }`): the framework installs reactive getter/setter on `this` inside the constructor via `Object.defineProperty`, and a class-field initializer compiles to an assignment after `super()` that uses `[[Define]]` to overwrite the accessor, silently breaking reactivity. The `reactive-props-no-class-field` rule catches this.
 
 ```ts
-// default via the option (no constructor needed)
+// set defaults in the constructor after super()
 class Counter extends WebComponent({
-  count: prop(Number, { default: 0 }),
-  items: prop(Array, { default: () => [] }), // function default = fresh array per instance
-}) {}
+  count: prop(Number, { reflect: true }),
+  items: prop(Array),
+}) {
+  constructor() {
+    super();
+    this.count = 0;
+    this.items = [];
+  }
+}
 ```
 
 ## Lifecycle hooks (lit-aligned)

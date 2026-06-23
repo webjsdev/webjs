@@ -944,7 +944,7 @@ function init(modules) {
         if (ts.isIdentifier(prop.name) || ts.isPrivateIdentifier(prop.name)) key = prop.name.text;
         else if (ts.isStringLiteralLike(prop.name)) key = prop.name.text;
         if (!key) continue;
-        out.push({ propName: key, attrName: hyphenate(key), state: propIsState(prop) });
+        out.push({ propName: key, attrName: propAttrName(prop, key), state: propIsState(prop) });
       }
     }
     if (cls.heritageClauses) {
@@ -963,7 +963,7 @@ function init(modules) {
                   if (ts.isIdentifier(prop.name) || ts.isPrivateIdentifier(prop.name)) key = prop.name.text;
                   else if (ts.isStringLiteralLike(prop.name)) key = prop.name.text;
                   if (!key) continue;
-                  out.push({ propName: key, attrName: hyphenate(key), state: propIsState(prop) });
+                  out.push({ propName: key, attrName: propAttrName(prop, key), state: propIsState(prop) });
                 }
               }
             }
@@ -1007,6 +1007,31 @@ function init(modules) {
       if (n === 'state' && o.initializer.kind === ts.SyntaxKind.TrueKeyword) return true;
     }
     return false;
+  }
+
+  // The HTML attribute name for a prop: a custom `attribute` option wins,
+  // else the kebab-cased property name (matches the runtime in component.js).
+  function propAttrName(prop, key) {
+    if (ts.isPropertyAssignment(prop)) {
+      let v = prop.initializer;
+      if (v && ts.isCallExpression(v)) {
+        const caller = v.expression;
+        if (ts.isIdentifier(caller) && caller.text === 'prop') {
+          const args = v.arguments;
+          if (args.length === 1 && ts.isObjectLiteralExpression(args[0])) v = args[0];
+          else if (args.length === 2 && ts.isObjectLiteralExpression(args[1])) v = args[1];
+          else v = undefined;
+        } else v = undefined;
+      }
+      if (v && ts.isObjectLiteralExpression(v)) {
+        for (const o of v.properties) {
+          if (!ts.isPropertyAssignment(o) || !o.name) continue;
+          const n = ts.isIdentifier(o.name) || ts.isStringLiteralLike(o.name) ? o.name.text : '';
+          if (n === 'attribute' && ts.isStringLiteralLike(o.initializer)) return o.initializer.text;
+        }
+      }
+    }
+    return hyphenate(key);
   }
 
   /**

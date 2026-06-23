@@ -136,9 +136,14 @@ handleSubmit(e) {
     <p>The <code>args</code> function is called on every host update. When the returned array differs from the previous one (shallow comparison per element), the task re-runs. This creates a reactive chain: property change triggers host update, host update evaluates <code>args</code>, changed args trigger the task.</p>
 
     <pre>class SearchResults extends WebComponent({
-  query: prop(String, { default: '' }),
-  page:  prop(Number, { default: 1 }),
+  query: prop(String),
+  page:  prop(Number),
 }) {
+  constructor() {
+    super();
+    this.query = '';
+    this.page = 1;
+  }
   // Re-runs whenever query OR page changes
   #results = new Task(this, {
     task: async ([q, p], { signal }) =&gt; {

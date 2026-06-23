@@ -632,7 +632,7 @@ the click handler is inert). Two consequences for how you write code:
    reactivity) and never in `connectedCallback` (which the server
    doesn't run). For reactive properties declared via the
    `WebComponent({ ... })` factory, set the default in the constructor
-   or pass the `default` option (e.g. `prop(Number, { default: 0 })`).
+   after `super()`.
 2. **`connectedCallback` is browser-only.** Use it for
    `localStorage`, viewport size, online status, or anything that
    genuinely can't be known on the server. Read the value, then

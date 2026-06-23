@@ -77,12 +77,12 @@ export const RULES = [
   {
     name: 'no-static-properties',
     description:
-      'Reactive properties must be declared via the `extends WebComponent({ … })` factory, never a hand-written `static properties = { … }` field in the class body. The factory types each field for you (no `declare` needed) and the runtime throws on a direct `static properties`. Migrate `class X extends WebComponent { static properties = { count: { type: Number } } }` to `class X extends WebComponent({ count: Number })`; use the `prop()` helper for options (`prop(Number, { reflect: true })`) and set defaults via the `default` option or in the constructor.',
+      'Reactive properties must be declared via the `extends WebComponent({ … })` factory, never a hand-written `static properties = { … }` field in the class body. The factory types each field for you (no `declare` needed) and the runtime throws on a direct `static properties`. Migrate `class X extends WebComponent { static properties = { count: { type: Number } } }` to `class X extends WebComponent({ count: Number })`; use the `prop()` helper for options (`prop(Number, { reflect: true })`) and set defaults in the constructor after super().',
   },
   {
     name: 'reactive-props-no-class-field',
     description:
-      'A reactive property declared via the `extends WebComponent({ … })` factory must NOT also have a plain class-field initializer (`count = 0` or `count: number = 0`) in the class body. Under modern class-field semantics that initializer runs Object.defineProperty *after* super(), clobbering the framework\'s reactive accessor and silently breaking re-renders. Set the default via the `default` property option (`prop(Number, { default: 0 })`) or by assigning in the constructor after super().',
+      'A reactive property declared via the `extends WebComponent({ … })` factory must NOT also have a plain class-field initializer (`count = 0` or `count: number = 0`) in the class body. Under modern class-field semantics that initializer runs Object.defineProperty *after* super(), clobbering the framework\'s reactive accessor and silently breaking re-renders. Set the default by assigning in the constructor after super().',
   },
   {
     name: 'array-prop-uses-array-type',
@@ -451,7 +451,7 @@ export async function checkConventions(appDir) {
           file: rel,
           message:
             '`static properties = { … }` is no longer supported; declare reactive properties via the `extends WebComponent({ … })` factory instead.',
-          fix: 'Move the properties into the factory call: `class X extends WebComponent({ count: Number })`. Use `prop(Number, { reflect: true })` for options and set defaults via the `default` option or the constructor. Delete the `static properties` block and any `declare` fields for those props.',
+          fix: 'Move the properties into the factory call: `class X extends WebComponent({ count: Number })`. Use `prop(Number, { reflect: true })` for options and set defaults in the constructor after super(). Delete the `static properties` block and any `declare` fields for those props.',
         });
       }
     }
@@ -471,7 +471,7 @@ export async function checkConventions(appDir) {
             rule: 'reactive-props-no-class-field',
             file: rel,
             message: `Reactive prop \`${bad}\` uses a class-field initializer; this clobbers the framework's reactive accessor under modern class-field semantics.`,
-            fix: `Remove the class-field initializer and set the default via the \`default\` option (\`prop(<Type>, { default: <value> })\`) or by assigning \`this.${bad} = <value>\` inside \`constructor()\` after \`super()\`.`,
+            fix: `Remove the class-field initializer and set the default by assigning \`this.${bad} = <value>\` inside \`constructor()\` after \`super()\`.`,
           });
         }
       }
