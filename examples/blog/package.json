@@ -31,7 +31,6 @@
     "@webjsdev/cli": "^0.10.0",
     "@webjsdev/core": "^0.7.0",
     "@webjsdev/server": "^0.8.0",
-    "better-sqlite3": "^12.11.1",
     "dayjs": "^1.11.21",
     "drizzle-orm": "^1.0.0-rc.3"
   },

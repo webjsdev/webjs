@@ -25,7 +25,7 @@ export default function AIFirst() {
     <ul>
       <li><strong>File conventions table</strong>: which filename means what (page.ts, route.ts, middleware.ts, .server.ts, etc.).</li>
       <li><strong>Public API surface</strong>: every exported function from <code>webjs</code> and <code>@webjsdev/server</code> with a one-line description.</li>
-      <li><strong>Invariants</strong>: rules that must never be broken ("never import better-sqlite3 from a component", "event holes must be unquoted").</li>
+      <li><strong>Invariants</strong>: rules that must never be broken ("never import node:sqlite from a component", "event holes must be unquoted").</li>
       <li><strong>Recipes</strong>: step-by-step instructions for "add a page", "add a server action", "add a component", "add a DB model".</li>
       <li><strong>What's deliberately deferred</strong>, so agents don't try to implement features that aren't supported yet.</li>
     </ul>

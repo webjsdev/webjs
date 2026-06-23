@@ -117,7 +117,7 @@ self-review loop.
 - Custom-element tag names are passed to `.register('tag-name')`. They are NOT
   a static field on the class.
 - One function per server action file (`*.server.ts`).
-- Server-only code (a DB driver like `better-sqlite3`/`pg`, `node:*`, anything that needs Node APIs)
+- Server-only code (a DB driver like `pg`, `node:*`, anything that needs Node APIs)
   goes only in `.server.{js,ts}` files, `route.ts` handlers, or
   `middleware.ts`. Never in pages, layouts, or components. Wrap the access in
   a `.server.{js,ts}` file; the framework rewrites that import into an RPC

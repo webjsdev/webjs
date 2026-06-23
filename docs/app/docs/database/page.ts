@@ -66,9 +66,9 @@ async function open() {
     const { drizzle } = await import('drizzle-orm/bun-sqlite');
     return drizzle({ client: new Database(url), relations: schema.relations });
   }
-  const { default: Database } = await import('better-sqlite3');
-  const { drizzle } = await import('drizzle-orm/better-sqlite3');
-  return drizzle({ client: new Database(url), relations: schema.relations });
+  const { DatabaseSync } = await import('node:sqlite');
+  const { drizzle } = await import('drizzle-orm/node-sqlite');
+  return drizzle({ client: new DatabaseSync(url), relations: schema.relations });
 }
 
 export const db = (g.__webjs_db ??= await open()) as Awaited&lt;ReturnType&lt;typeof open&gt;&gt;;</pre>
@@ -104,7 +104,7 @@ export default async function Home() {
   return html\`&lt;ul&gt;\${posts.map(p =&gt; html\`&lt;li&gt;\${p.title}&lt;/li&gt;\`)}&lt;/ul&gt;\`;
 }</pre>
 
-    <p><strong>Why the <code>.server.ts</code> boundary?</strong> Page modules (and layouts, loading, error, not-found, plus all components) load in the browser so transitively imported components register. A top-level import of <code>db/connection.server.ts</code> would pull the DB driver (<code>better-sqlite3</code> / <code>pg</code>, which need Node APIs) into the browser graph and crash. The <code>.server.{js,ts}</code> extension lets the framework rewrite the import into an RPC stub; the driver and your DB code never reach the client. The rule across the framework: server-only code goes in <code>.server.{js,ts}</code> files, <code>route.ts</code> handlers, or <code>middleware.ts</code>. Never in pages, layouts, or components.</p>
+    <p><strong>Why the <code>.server.ts</code> boundary?</strong> Page modules (and layouts, loading, error, not-found, plus all components) load in the browser so transitively imported components register. A top-level import of <code>db/connection.server.ts</code> would pull the DB driver (<code>pg</code>, or the built-in <code>node:sqlite</code>, which need Node APIs) into the browser graph and crash. The <code>.server.{js,ts}</code> extension lets the framework rewrite the import into an RPC stub; the driver and your DB code never reach the client. The rule across the framework: server-only code goes in <code>.server.{js,ts}</code> files, <code>route.ts</code> handlers, or <code>middleware.ts</code>. Never in pages, layouts, or components.</p>
 
     <h2>Type safety</h2>
     <p>Types are inferred from the schema, never hand-written. <code>typeof posts.$inferSelect</code> is the row type; a <code>.ts</code> server action's return type flows through the RPC boundary to the client, and webjs's rich-type serializer keeps a <code>Date</code> a <code>Date</code> on both sides.</p>

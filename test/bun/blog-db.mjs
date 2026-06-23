@@ -2,8 +2,8 @@
  * Cross-runtime proof that the blog's Drizzle DB layer round-trips under
  * WHICHEVER runtime runs it (#551 / #563). webjs runs on Node 24+ OR Bun, and
  * the connection (examples/blog/db/connection.server.ts) branches on the
- * runtime to pick a native driver + drizzle adapter: bun:sqlite +
- * drizzle-orm/bun-sqlite on Bun, better-sqlite3 + drizzle-orm/better-sqlite3 on
+ * runtime to pick the built-in SQLite + its drizzle adapter: bun:sqlite +
+ * drizzle-orm/bun-sqlite on Bun, node:sqlite + drizzle-orm/node-sqlite on
  * Node. That driver/adapter seam plus the relational query API are the surface
  * most likely to diverge across runtimes, so this script exercises them
  * directly against a throwaway DB built from the blog's REAL schema:
@@ -49,9 +49,9 @@ try {
     db = drizzle({ client, relations: schema.relations });
     close = () => client.close();
   } else {
-    const { default: Database } = await import('better-sqlite3');
-    const { drizzle } = await import('drizzle-orm/better-sqlite3');
-    const client = new Database(file);
+    const { DatabaseSync } = await import('node:sqlite');
+    const { drizzle } = await import('drizzle-orm/node-sqlite');
+    const client = new DatabaseSync(file);
     client.exec(ddl);
     db = drizzle({ client, relations: schema.relations });
     close = () => client.close();

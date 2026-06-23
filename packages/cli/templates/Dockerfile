@@ -21,8 +21,8 @@
 # framework AGENTS.md "Secure response headers" section.
 FROM node:24-alpine
 
-# ca-certificates for outbound TLS (e.g. a managed Postgres). better-sqlite3
-# is a prebuilt native module, so no build toolchain is needed here.
+# ca-certificates for outbound TLS (e.g. a managed Postgres). SQLite uses the
+# built-in node:sqlite (no native module, no build toolchain needed).
 RUN apk add --no-cache ca-certificates
 
 WORKDIR /app

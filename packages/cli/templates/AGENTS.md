@@ -1153,7 +1153,7 @@ composition, so a nested shell ends up dropped by the HTML parser.
 1. Custom element tags must contain a hyphen. Pass the tag to `.register('tag-name')` at the bottom of the file. The tag is not a static field.
 2. **Server-only code goes in `.server.{js,ts}` files, `route.ts`
    handlers, or `middleware.ts`. Never in pages, layouts, or
-   components.** Direct imports of a DB driver (`better-sqlite3` / `pg`),
+   components.** Direct imports of a DB driver (`pg`),
    `node:*`, or any server-only dependency from a page, layout, loading.ts,
    error.ts, not-found.ts, or component will crash the browser at module load.
    Wrap the access in a `.server.{js,ts}` file; the framework

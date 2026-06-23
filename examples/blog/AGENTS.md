@@ -230,7 +230,7 @@ holds its smoke + browser probes.
 
 ## Invariants
 
-1. Never import a DB driver (`better-sqlite3`) or `node:*` from components or pages.
+1. Never import a DB driver (`node:sqlite`) or `node:*` from components or pages.
 2. Custom element tags must contain a hyphen. Pass the tag to `ClassName.register('tag-name')` at the bottom of the file. The tag is not a static field.
 3. Event/property/boolean holes in `html` must be unquoted: `@click=${fn}`, not `@click="${fn}"`.
 4. Component state lives in signals from `@webjsdev/core`. Read with

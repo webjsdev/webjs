@@ -49,7 +49,7 @@ What this gets us is that an agent in autonomous mode (running with permission t
 `webjs check` runs a set of lint rules over the project:
 
 - `tests-exist`: every server action / query has a corresponding test
-- `no-server-imports-in-components`: components do not import `node:*` or a DB driver (`better-sqlite3` / `pg`)
+- `no-server-imports-in-components`: components do not import `node:*` or a DB driver (`pg`)
 - `use-server-needs-extension`: a `'use server'` directive requires a `.server.{js,ts}` filename
 - `no-static-properties`: reactive properties are declared via the `extends WebComponent({ … })` factory, not a hand-written `static properties`
 - `erasable-typescript-only`: `tsconfig.json` has `erasableSyntaxOnly: true`

@@ -348,9 +348,11 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     },
     dependencies: {
       // Drizzle ORM (no codegen, no engine binary). Pinned to the 1.0 line
-      // for relations v2. The SQLite/Postgres driver below is dialect-picked.
+      // for relations v2. SQLite needs NO driver dependency: the connection
+      // uses the built-in node:sqlite (Node) / bun:sqlite (Bun) via Drizzle's
+      // node-sqlite / bun-sqlite adapters. Postgres still needs the pg driver.
       'drizzle-orm': '^1.0.0-rc.3',
-      ...(dialect === 'postgres' ? { pg: '^8.13.0' } : { 'better-sqlite3': '^12.11.1' }),
+      ...(dialect === 'postgres' ? { pg: '^8.13.0' } : {}),
       '@webjsdev/cli': 'latest',
       '@webjsdev/core': 'latest',
       '@webjsdev/server': 'latest',
@@ -396,14 +398,6 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // applies pending migrations at boot via `webjs db migrate` (drizzle-kit).
       start: { before: ['webjs db migrate'] },
     },
-    // Bun runtime (#541): Bun does NOT run a dependency's postinstall by default
-    // (a security default); a package must be listed here for its install script
-    // to run on `bun install`. The sqlite driver `better-sqlite3` fetches its
-    // native prebuild in a postinstall, so without this the native binding is
-    // missing and the app crashes at first DB access. Postgres `pg` is pure JS
-    // (no postinstall), so the list is sqlite-only. Omitted entirely on Node
-    // (npm runs postinstalls), keeping the node-mode package.json byte-identical.
-    ...(isBun && dialect !== 'postgres' ? { trustedDependencies: ['better-sqlite3'] } : {}),
   }, null, 2) + '\n');
 
   await writeFile(join(appDir, 'tsconfig.json'), JSON.stringify({
@@ -650,8 +644,9 @@ export type User = typeof users.$inferSelect;
 import { fileURLToPath } from 'node:url';
 import * as schema from './schema.server.ts';
 
-// The only file that opens the driver. Runtime-neutral: native bun:sqlite on
-// Bun, better-sqlite3 on Node. Cached on globalThis across dev reloads.
+// The only file that opens the driver. Runtime-neutral and ZERO native deps:
+// built-in bun:sqlite on Bun, built-in node:sqlite on Node. Cached on
+// globalThis across dev reloads.
 // A relative SQLite path resolves against the app root (the parent of db/), not
 // process.cwd(), so the connection works under \`webjs dev\` AND when the app is
 // embedded via createRequestHandler from a different working directory.
@@ -666,9 +661,9 @@ async function open() {
     const { drizzle } = await import('drizzle-orm/bun-sqlite');
     return drizzle({ client: new Database(url), relations: schema.relations });
   }
-  const { default: Database } = await import('better-sqlite3');
-  const { drizzle } = await import('drizzle-orm/better-sqlite3');
-  return drizzle({ client: new Database(url), relations: schema.relations });
+  const { DatabaseSync } = await import('node:sqlite');
+  const { drizzle } = await import('drizzle-orm/node-sqlite');
+  return drizzle({ client: new DatabaseSync(url), relations: schema.relations });
 }
 
 export const db = (g.__webjs_db ??= await open()) as Awaited<ReturnType<typeof open>>;

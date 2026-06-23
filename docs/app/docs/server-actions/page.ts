@@ -56,9 +56,9 @@ async function open() {
     const { drizzle } = await import('drizzle-orm/bun-sqlite');
     return drizzle({ client: new Database(url), relations: schema.relations });
   }
-  const { default: Database } = await import('better-sqlite3');
-  const { drizzle } = await import('drizzle-orm/better-sqlite3');
-  return drizzle({ client: new Database(url), relations: schema.relations });
+  const { DatabaseSync } = await import('node:sqlite');
+  const { drizzle } = await import('drizzle-orm/node-sqlite');
+  return drizzle({ client: new DatabaseSync(url), relations: schema.relations });
 }
 
 export const db = (g.__webjs_db ??= await open()) as Awaited&lt;ReturnType&lt;typeof open&gt;&gt;;</pre>

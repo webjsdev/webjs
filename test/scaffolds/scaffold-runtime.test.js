@@ -38,8 +38,11 @@ test('bun scaffold: package.json scripts, trustedDependencies, lockfile flavor',
     // Runtime-neutral tooling stays plain webjs (runs on node via the shebang).
     assert.equal(p.scripts.test, 'webjs test');
     assert.equal(p.scripts['db:generate'], 'webjs db generate');
-    // Bun skips postinstalls; the sqlite driver's native prebuild must be trusted.
-    assert.deepEqual(p.trustedDependencies, ['better-sqlite3']);
+    // SQLite uses the built-in bun:sqlite (no native dependency), so there is
+    // nothing to trust: trustedDependencies must be absent.
+    assert.equal(p.trustedDependencies, undefined);
+    // The native better-sqlite3 driver is gone entirely.
+    assert.equal(p.dependencies['better-sqlite3'], undefined);
   } finally {
     restore();
     await rm(cwd, { recursive: true, force: true });

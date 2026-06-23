@@ -1,6 +1,7 @@
 /**
  * The Drizzle connection. The only file that opens the database driver.
- * Runtime-neutral: native bun:sqlite on Bun, better-sqlite3 on Node. Cached on
+ * Runtime-neutral, zero native deps: built-in bun:sqlite on Bun, built-in
+ * node:sqlite on Node. Cached on
  * globalThis so a dev-server reload reuses one connection. Imported only by
  * server-only code (queries, actions, route handlers, middleware, the seed).
  */
@@ -22,9 +23,9 @@ async function open() {
     const { drizzle } = await import('drizzle-orm/bun-sqlite');
     return drizzle({ client: new Database(url), relations: schema.relations });
   }
-  const { default: Database } = await import('better-sqlite3');
-  const { drizzle } = await import('drizzle-orm/better-sqlite3');
-  return drizzle({ client: new Database(url), relations: schema.relations });
+  const { DatabaseSync } = await import('node:sqlite');
+  const { drizzle } = await import('drizzle-orm/node-sqlite');
+  return drizzle({ client: new DatabaseSync(url), relations: schema.relations });
 }
 
 export const db = (g.__webjs_db ??= await open()) as Awaited<ReturnType<typeof open>>;
