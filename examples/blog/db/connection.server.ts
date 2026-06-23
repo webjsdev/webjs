@@ -21,11 +21,21 @@ async function open() {
   if ((globalThis as { Bun?: unknown }).Bun) {
     const { Database } = await import('bun:sqlite');
     const { drizzle } = await import('drizzle-orm/bun-sqlite');
-    return drizzle({ client: new Database(url), relations: schema.relations });
+    return drizzle({ client: tune(new Database(url)), relations: schema.relations });
   }
   const { DatabaseSync } = await import('node:sqlite');
   const { drizzle } = await import('drizzle-orm/node-sqlite');
-  return drizzle({ client: new DatabaseSync(url), relations: schema.relations });
+  return drizzle({ client: tune(new DatabaseSync(url)), relations: schema.relations });
+}
+
+// Both node:sqlite and bun:sqlite default `busy_timeout` to 0, so a concurrent
+// writer throws `database is locked` immediately. better-sqlite3 (used before
+// the built-in drivers) defaulted to 5000ms; restore that so contended access
+// waits instead of throwing. WAL lets readers proceed alongside one writer.
+function tune<T extends { exec(sql: string): unknown }>(client: T): T {
+  client.exec('PRAGMA busy_timeout = 5000');
+  client.exec('PRAGMA journal_mode = WAL');
+  return client;
 }
 
 export const db = (g.__webjs_db ??= await open()) as Awaited<ReturnType<typeof open>>;

@@ -153,6 +153,13 @@ jobs:
       # Bun.serve. The pure mapping is also unit-tested under the matrix below.
       - name: webjs server timeouts on Bun
         run: bun test/bun/timeouts.mjs
+      # SQLite busy_timeout on Bun (#673): bun:sqlite (like node:sqlite) defaults
+      # busy_timeout to 0, so a contended write throws `database is locked`; the
+      # connection tune sets busy_timeout=5000 + WAL. This asserts the bug
+      # condition and the fix on the Bun driver. The same script proves the Node
+      # path under `npm test`.
+      - name: webjs SQLite busy_timeout on Bun
+        run: bun test/bun/sqlite-busy-timeout.mjs
       # The Bun test MATRIX (#509): run the runtime-sensitive node:test suite
       # (core + server + cross-package test/) under Bun, file by file, classifying
       # each result. Documented Node-only files + Bun-test-runner-quirk files are

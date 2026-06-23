@@ -60,15 +60,23 @@ import * as schema from './schema.server.ts';
 const url = process.env.DATABASE_URL?.replace(/^file:/, '') ?? 'db/dev.db';
 const g = globalThis as unknown as { __webjs_db?: unknown };
 
+// node:sqlite and bun:sqlite default busy_timeout to 0, so a contended write
+// throws "database is locked". Set a 5s wait (+ WAL) so it waits instead.
+function tune&lt;T extends { exec(sql: string): unknown }&gt;(client: T): T {
+  client.exec('PRAGMA busy_timeout = 5000');
+  client.exec('PRAGMA journal_mode = WAL');
+  return client;
+}
+
 async function open() {
   if ((globalThis as { Bun?: unknown }).Bun) {
     const { Database } = await import('bun:sqlite');
     const { drizzle } = await import('drizzle-orm/bun-sqlite');
-    return drizzle({ client: new Database(url), relations: schema.relations });
+    return drizzle({ client: tune(new Database(url)), relations: schema.relations });
   }
   const { DatabaseSync } = await import('node:sqlite');
   const { drizzle } = await import('drizzle-orm/node-sqlite');
-  return drizzle({ client: new DatabaseSync(url), relations: schema.relations });
+  return drizzle({ client: tune(new DatabaseSync(url)), relations: schema.relations });
 }
 
 export const db = (g.__webjs_db ??= await open()) as Awaited&lt;ReturnType&lt;typeof open&gt;&gt;;</pre>
