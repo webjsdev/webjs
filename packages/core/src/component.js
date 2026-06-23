@@ -572,8 +572,8 @@ class WebComponentBase extends Base {
           `${name}: \`static properties\` is no longer supported. Declare reactive ` +
             `properties via the factory instead: \`class ${name} extends WebComponent({ ` +
             `count: Number })\`. Use the \`prop()\` helper for options ` +
-            `(\`prop(Number, { reflect: true })\`) and set defaults via the \`default\` ` +
-            `option or in the constructor. See https://docs.webjs.com/docs/components.`,
+            `(\`prop(Number, { reflect: true })\`) and set defaults in the ` +
+            `constructor after \`super()\`. See https://docs.webjs.com/docs/components.`,
         );
       }
       C = Object.getPrototypeOf(C);

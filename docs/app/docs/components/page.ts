@@ -57,7 +57,7 @@ UserCard.register('user-card');</pre>
     <p>Reactive properties that ride HTML attributes are declared in <strong>one</strong> place: the base-class factory. You pass the property shape directly into <code>WebComponent({ ... })</code>, the types flow to TypeScript automatically (no <code>declare</code> lines), and the runtime installs a reactive accessor for each key. A hand-written <code>static properties = { ... }</code> field in the class body is no longer supported and throws at construction.</p>
 
     <h3>The factory shape</h3>
-    <p>Map each property name to its type constructor. Default values are set with the <code>default</code> option or in the constructor after <code>super()</code> (never a class-field initializer, which runs after <code>super()</code> and clobbers the reactive accessor):</p>
+    <p>Map each property name to its type constructor. Default values are set in the constructor after <code>super()</code> (never a class-field initializer, which runs after <code>super()</code> and clobbers the reactive accessor):</p>
 
     <pre>import { WebComponent, html } from '@webjsdev/core';
 
@@ -100,15 +100,19 @@ class UserCard extends WebComponent({
   open:    prop({ state: true }),                  // internal, no attribute
   student: prop&lt;Student&gt;(Object),                  // narrowed object type
   tags:    prop&lt;string[]&gt;(Array),                  // array-typed: pass Array, not Object
-  size:    prop&lt;'sm' | 'lg'&gt;(String, { default: 'sm' }), // narrowed + default
+  size:    prop&lt;'sm' | 'lg'&gt;(String),              // narrowed enum type
 }) {
+  constructor() {
+    super();
+    this.size = 'sm';                              // default in the constructor
+  }
   render() {
     return html\`&lt;p&gt;\${this.student.name} (\${this.size})&lt;/p&gt;\`;
   }
 }
 UserCard.register('user-card');</pre>
 
-    <p>Set a default declaratively via the <code>default</code> option (<code>prop(Number, { default: 0 })</code>); a function default is called per instance for fresh object / array defaults, and an applied attribute overrides it.</p>
+    <p>Set a default by assigning in the <code>constructor()</code> after <code>super()</code> (never a class-field initializer, which clobbers the reactive accessor). An applied attribute overrides it.</p>
 
     <p>Declare an <strong>array-typed</strong> property with the <code>Array</code> constructor, not <code>Object</code> (<code>tags: prop&lt;string[]&gt;(Array)</code>). The default converter treats both the same (each JSON-encodes the value), so <code>Object</code> does not break anything, but <code>Array</code> states the property's shape correctly. The <code>array-prop-uses-array-type</code> rule in <code>webjs check</code> flags an array-typed generic declared with <code>Object</code>.</p>
 

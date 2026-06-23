@@ -280,15 +280,10 @@ connectedCallback() {
 
 In Lit, class-field initializers (like `student: Student = { name: '', email: '' }`) are commonly used. In webjs, the base class installs reactive accessors on `this` inside the constructor via `Object.defineProperty` (to support SSR property hydration and signals). Under modern V8 class-field semantics, a class-field initializer compiles to an assignment after `super()`, which uses `[[Define]]` and overwrites the accessor, silently breaking reactivity. The footgun is still live with factory-declared props, so it stays a gotcha.
 
-The fix is to declare the prop in the base-class factory `WebComponent({ ... })` (which types it automatically, no `declare` line) and set its default via the `default` option or in the constructor after `super()`, never as a class-field initializer:
+The fix is to declare the prop in the base-class factory `WebComponent({ ... })` (which types it automatically, no `declare` line) and set its default in the constructor after `super()`, never as a class-field initializer:
 
 ```ts
-// default via the option (a function default = fresh object per instance)
-class StudentCard extends WebComponent({
-  student: prop<Student>(Object, { default: () => ({ name: '', email: '' }) }),
-}) {}
-
-// or set the default in the constructor (fully typed, no declare needed)
+// set the default in the constructor (fully typed, no declare needed)
 class StudentCard extends WebComponent({
   student: prop<Student>(Object),
 }) {
@@ -457,7 +452,7 @@ must move with it, use `repeat()` with a stable key.
 | `Task` for client-time async | `Task` (no change, that's its job) |
 | `window.X` or `document.X` in constructor or `render()` | Move to `connectedCallback` |
 | Top-level `import` of browser-only library | Dynamic `import()` inside `connectedCallback` |
-| `student: Student = { ... }` field initializer | Base-class factory `WebComponent({ student: Object })`, default via the `default` option or the constructor |
+| `student: Student = { ... }` field initializer | Base-class factory `WebComponent({ student: Object })`, default in the constructor after `super()` |
 | `@property()` decorator / `static properties` block | Base-class factory `WebComponent({ ... })` (the `prop()` helper carries options) |
 | `static styles = css` / inline `<style>` with semantic class names in a light-DOM component | Tailwind utilities (the default); or `static shadow = true` for genuinely scoped CSS |
 | Plain `.map()` for an interactive/stateful list | Works (reconciles in place, keeps node identity); use `repeat(items, key, t)` only when the list **reorders** |
