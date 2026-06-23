@@ -56,6 +56,17 @@ test('default option counterfactual: a prop WITHOUT default is undefined', () =>
   assert.equal(new C().count, undefined, 'no default means no initial value (proves default is what sets it)');
 });
 
+test('default option precedence: a constructor assignment overrides the default', () => {
+  // `default` is applied inside super() (_initializeProperties); the subclass
+  // constructor body runs AFTER super(), so an explicit assignment wins. The
+  // default is the fallback, not an override.
+  class C extends WebComponent({ count: prop(Number, { default: 7 }) }) {
+    constructor() { super(); this.count = 5; }
+  }
+  customElements.define('def-ctor-precedence', C);
+  assert.equal(new C().count, 5, 'the constructor value (5) wins over the default (7)');
+});
+
 test('default option: an applied attribute overrides the default', () => {
   class C extends WebComponent({ count: prop(Number, { default: 7 }) }) {}
   customElements.define('def-attr-override', C);
