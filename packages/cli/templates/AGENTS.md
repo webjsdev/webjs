@@ -414,11 +414,12 @@ demand and **no `bun install` is needed**:
 bun run dev            # or: bun run start  (no install step required)
 ```
 
-webjs pins the versions: an `onLoad` transform rewrites each declared dep's bare
-specifier to its `package.json` / `bun.lock` version, so zero-install fetches the
-pinned version, not latest (opt out with `WEBJS_PIN=0` or `{ "webjs": { "pin":
-false } }`). `bun install` is optional here, run it for editor type intelligence
-or a pinned offline install. (To run a Node-flavored app on Bun instead, force `bun --bun run
+`bun create` does not run an install on Bun, so a fresh app serves immediately.
+Under zero-install, deps resolve to their LATEST version: ranges and any
+`bun.lock` are ignored by the runtime auto-install (only an exact `package.json`
+pin is honored, via an `onLoad` rewrite). Run `bun install` when you want pinned,
+reproducible versions (it materializes `node_modules` from the lockfile) or
+editor type intelligence. (To run a Node-flavored app on Bun instead, force `bun --bun run
 dev`, which still expects an install.)
 
 On Node the `.ts` type-stripping is the built-in `module.stripTypeScriptTypes`;
