@@ -55,9 +55,23 @@ intelligence (no `node_modules` means no local type files) or a pinned offline
 install. The Node-targeted tooling scripts (`test` / `check` / `typecheck`)
 stay plain `webjs` on Node and still expect an install.
 
-**Reproducibility tradeoff:** dev resolves on demand, but the scaffold's Bun
-Dockerfile keeps an explicit `bun install` on purpose so a prod image is
-immutable and self-contained with no registry fetch at boot.
+**Version pinning (#685).** Bun's auto-install fetches `latest` for a bare
+`import 'zod'`, ignoring package.json and `bun.lock` (it consults neither the
+manifest, the lockfile, nor an `onResolve` plugin, verified in #684). webjs
+closes that gap with an `onLoad` transform: it rewrites a declared dep's bare
+specifier to an inline-versioned one (`zod` to `zod@<pinned>`, the exact version
+from `bun.lock` when present, else the package.json range), which Bun's
+auto-install DOES honor. So zero-install runs the app's pinned versions, not
+latest. The rewrite is server-runtime only (it shapes what Bun fetches for SSR
+and server actions). The browser is still served bare specifiers resolved via
+the importmap / jspm, unchanged. Only declared deps are rewritten (a transitive
+dep follows from its pinned parent's manifest), and it is a no-op when
+`node_modules` exists (Bun uses the installed copy). Default on. Opt out with
+`WEBJS_PIN=0` or `{ "webjs": { "pin": false } }`.
+
+**Reproducibility:** dev resolves on demand (now at the pinned versions), and the
+scaffold's Bun Dockerfile still keeps an explicit `bun install` so a prod image
+is immutable and self-contained with no registry fetch at boot.
 
 ## SQLite busy_timeout (#674)
 
