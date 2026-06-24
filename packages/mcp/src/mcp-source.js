@@ -48,8 +48,15 @@ const MAX_FILES = 4000;
  * reliable. The source dir is `src/`, or `lib/` for the cli. A package that is
  * not installed is skipped (not every app depends on every `@webjsdev/*`).
  *
+ * Under Bun ZERO-INSTALL (no `node_modules`, #675) the packages live only in
+ * Bun's global install cache (`<bunCacheDir>/@webjsdev/<pkg>@<version>@@@<n>/`,
+ * which holds the full source). When the `node_modules` walk finds nothing and a
+ * `bunCacheDir` + `readdir` are supplied, fall back to scanning that scope dir
+ * for the package's versioned entry (highest version wins, best-effort), so the
+ * tool works whether the package is installed OR resolved from the Bun cache.
+ *
  * @param {string} cwd
- * @param {{ exists: (p: string) => boolean }} fsDeps
+ * @param {{ exists: (p: string) => boolean, readdir?: (d: string) => Array<{ name: string, isDir: boolean }>, bunCacheDir?: string | null }} fsDeps
  * @returns {Array<{ pkg: string, root: string, src: string }>}
  */
 export function resolveFrameworkRoots(cwd, fsDeps) {
@@ -69,6 +76,8 @@ export function resolveFrameworkRoots(cwd, fsDeps) {
       const cand = join(base, '@webjsdev', pkg);
       if (fsDeps.exists(join(cand, 'package.json'))) { root = cand; break; }
     }
+    // Zero-install fallback: no node_modules, so look in Bun's global cache.
+    if (!root) root = resolveFromBunCache(pkg, fsDeps);
     if (!root) continue;
     // Most packages keep source in `src/`; the cli keeps it in `lib/`. Use
     // whichever exists so every framework package's source is reachable.
@@ -80,6 +89,38 @@ export function resolveFrameworkRoots(cwd, fsDeps) {
     if (src) out.push({ pkg, root, src });
   }
   return out;
+}
+
+/**
+ * Locate `@webjsdev/<pkg>` in Bun's global install cache (the zero-install
+ * fallback). Bun caches a scoped package at `<bunCacheDir>/@webjsdev/<pkg>@<ver>@@@<n>/`
+ * (the versioned dir holds the full source; a sibling unversioned `<pkg>/` dir is
+ * metadata, skipped). Picks the lexically-highest versioned dir (best-effort:
+ * the latest cached version), and returns its path only if it carries a
+ * `package.json`. Returns '' when there is no cache dir, no `readdir`, or no
+ * matching entry.
+ *
+ * @param {string} pkg
+ * @param {{ exists: (p: string) => boolean, readdir?: (d: string) => Array<{ name: string, isDir: boolean }>, bunCacheDir?: string | null }} fsDeps
+ * @returns {string}
+ */
+function resolveFromBunCache(pkg, fsDeps) {
+  const { bunCacheDir, readdir, exists } = fsDeps;
+  if (!bunCacheDir || typeof readdir !== 'function') return '';
+  const scopeDir = join(bunCacheDir, '@webjsdev');
+  if (!exists(scopeDir)) return '';
+  let entries;
+  try { entries = readdir(scopeDir); } catch { return ''; }
+  const prefix = `${pkg}@`;
+  const versioned = entries
+    .filter((e) => e.isDir && e.name.startsWith(prefix) && e.name.includes('@@@'))
+    .map((e) => e.name)
+    .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0)); // descending, latest-ish first
+  for (const name of versioned) {
+    const cand = join(scopeDir, name);
+    if (exists(join(cand, 'package.json'))) return cand;
+  }
+  return '';
 }
 
 /**

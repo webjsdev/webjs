@@ -155,3 +155,33 @@ test('resolveFrameworkRoots: fail-soft when nothing resolves', () => {
   const roots = resolveFrameworkRoots('/nonexistent-xyz', { exists: () => false });
   assert.deepEqual(roots, []);
 });
+
+test('resolveFrameworkRoots: zero-install fallback finds a package in the Bun cache (#687)', () => {
+  // No node_modules anywhere (every search-path base is absent), but the Bun
+  // global cache holds @webjsdev/core@<ver>@@@<n>/ with its source.
+  const cache = join('/fakebun', 'cache');
+  const scope = join(cache, '@webjsdev');
+  const present = new Set([
+    scope,
+    join(scope, 'core@1.0.0@@@1', 'package.json'),
+    join(scope, 'core@1.0.0@@@1', 'src'),
+  ]);
+  const exists = (p) => present.has(p); // all node_modules bases absent
+  const readdir = (d) => (d === scope
+    ? [
+        { name: 'core@0.9.0@@@1', isDir: true },
+        { name: 'core@1.0.0@@@1', isDir: true },
+        { name: 'core', isDir: true }, // unversioned metadata dir, skipped
+      ]
+    : []);
+  const roots = resolveFrameworkRoots('/some/app', { exists, readdir, bunCacheDir: cache });
+  assert.deepEqual(roots.map((r) => r.pkg), ['core'], 'only core is in the cache');
+  assert.equal(roots[0].root, join(scope, 'core@1.0.0@@@1'), 'picks the highest cached version');
+  assert.match(roots[0].src, /core@1\.0\.0@@@1[/\\]src$/);
+});
+
+test('resolveFrameworkRoots: no cache fallback when bunCacheDir/readdir are absent', () => {
+  // Omitting the cache deps keeps the original node_modules-only behavior.
+  const roots = resolveFrameworkRoots('/nonexistent-xyz', { exists: () => false });
+  assert.deepEqual(roots, []);
+});

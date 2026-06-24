@@ -34,7 +34,9 @@ subcommand) delegates to this same server, so both routes run identical code.
   MCP `resources` (the `agent-docs/*` corpus + `AGENTS.md` as `webjs-docs://*`),
   and `prompts` (the recipes as guided workflows).
 - **`source` tool**: reads the framework's own no-build source from
-  `node_modules/@webjsdev/*/src` (read-only, traversal-guarded).
+  `node_modules/@webjsdev/*/src` (read-only, traversal-guarded). Under Bun
+  zero-install (no `node_modules`) it falls back to Bun's global cache, where the
+  packages live, so it works without an install.
 
 The docs corpus is bundled into the package at `prepack`, so `npx @webjsdev/mcp`
 is self-contained; in the monorepo it falls back to the live repo-root docs.
