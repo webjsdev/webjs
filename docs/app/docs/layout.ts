@@ -17,6 +17,7 @@ const NAV_SECTIONS = [
       { href: '/docs/ai-first', label: 'AI-First Development' },
       { href: '/docs/architecture', label: 'Architecture' },
       { href: '/docs/no-build', label: 'No-Build Model' },
+      { href: '/docs/runtime', label: 'Runtime (Node & Bun)' },
       { href: '/docs/configuration', label: 'Configuration' },
       { href: '/docs/migrating-from-nextjs', label: 'Migrating from Next.js' },
     ],
