@@ -126,28 +126,32 @@ function resolveFromBunCache(pkg, fsDeps) {
 }
 
 /**
- * Compare two semver-ish version strings numerically (so `0.10.0` > `0.9.0`).
- * Splits on `.`, `-`, `+` and compares segment by segment: numeric segments
- * numerically, others lexically; a missing segment (a release vs its
- * prerelease) sorts lower. Returns negative / 0 / positive like a comparator.
+ * Compare two semver-ish version strings numerically (so `0.10.0` > `0.9.0`),
+ * with a release ranking ABOVE its prerelease (`1.0.0` > `1.0.0-rc.1`). Compares
+ * the release core (`major.minor.patch`) segment by segment numerically; on a
+ * tie, a version WITHOUT a prerelease tag sorts higher, else the prerelease tags
+ * compare lexically. The build suffix (`+...`) is ignored, per semver. Returns
+ * negative / 0 / positive like a comparator.
  * @param {string} a
  * @param {string} b
  * @returns {number}
  */
 function compareVersions(a, b) {
-  const seg = (v) => v.split(/[.+-]/).map((s) => (/^\d+$/.test(s) ? Number(s) : s));
-  const pa = seg(a);
-  const pb = seg(b);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const x = pa[i];
-    const y = pb[i];
-    if (x === y) continue;
-    if (x === undefined) return -1;
-    if (y === undefined) return 1;
-    if (typeof x === 'number' && typeof y === 'number') return x - y;
-    return String(x) < String(y) ? -1 : 1;
+  const parse = (v) => {
+    const [core, pre = ''] = v.split('+')[0].split('-');
+    return { nums: core.split('.').map(Number), pre };
+  };
+  const A = parse(a);
+  const B = parse(b);
+  for (let i = 0; i < Math.max(A.nums.length, B.nums.length); i++) {
+    const x = A.nums[i] || 0;
+    const y = B.nums[i] || 0;
+    if (x !== y) return x - y;
   }
-  return 0;
+  if (A.pre === B.pre) return 0;
+  if (!A.pre) return 1; // a release outranks any prerelease of the same core
+  if (!B.pre) return -1;
+  return A.pre < B.pre ? -1 : 1;
 }
 
 /**

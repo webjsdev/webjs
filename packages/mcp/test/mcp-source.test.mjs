@@ -196,6 +196,22 @@ test('resolveFrameworkRoots: cache version pick is semver-aware (0.10.0 > 0.9.0)
   assert.equal(roots[0].root, join(scope, 'cli@0.10.0@@@1'), '0.10.0 beats 0.9.0 (numeric, not lexical)');
 });
 
+test('resolveFrameworkRoots: a release outranks its prerelease (1.0.0 > 1.0.0-rc.1)', () => {
+  const cache = join('/fakebun', 'cache');
+  const scope = join(cache, '@webjsdev');
+  const present = new Set([
+    scope,
+    join(scope, 'core@1.0.0@@@1', 'package.json'),
+    join(scope, 'core@1.0.0@@@1', 'src'),
+  ]);
+  const exists = (p) => present.has(p);
+  const readdir = (d) => (d === scope
+    ? [{ name: 'core@1.0.0-rc.1@@@1', isDir: true }, { name: 'core@1.0.0@@@1', isDir: true }]
+    : []);
+  const roots = resolveFrameworkRoots('/some/app', { exists, readdir, bunCacheDir: cache });
+  assert.equal(roots[0].root, join(scope, 'core@1.0.0@@@1'), 'the release wins over its prerelease');
+});
+
 test('resolveFrameworkRoots: bunCacheDir set but no @webjsdev scope yields nothing (no throw)', () => {
   // The cache dir exists but holds no @webjsdev packages: empty, not an error.
   const roots = resolveFrameworkRoots('/some/app', { exists: () => false, readdir: () => [], bunCacheDir: '/empty/cache' });
