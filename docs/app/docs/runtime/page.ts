@@ -23,7 +23,7 @@ export default function Runtime() {
         <tr><td>Install</td><td><code>npm install</code></td><td>optional (zero-install via auto-install)</td><td>planned</td></tr>
         <tr><td>Run</td><td><code>npm run dev</code> / <code>npm run start</code></td><td><code>bun run dev</code> / <code>bun run start</code></td><td>planned</td></tr>
         <tr><td>Listener</td><td><code>node:http</code> shell</td><td>native <code>Bun.serve</code> (about 1.9x req/s on the listening path)</td><td>planned</td></tr>
-        <tr><td>TypeScript stripping</td><td>built-in <code>module.stripTypeScriptTypes</code></td><td><code>amaro</code></td><td>built-in</td></tr>
+        <tr><td>TypeScript stripping</td><td>built-in <code>module.stripTypeScriptTypes</code></td><td><code>amaro</code></td><td>planned</td></tr>
         <tr><td>SQLite driver</td><td>built-in <code>node:sqlite</code></td><td>built-in <code>bun:sqlite</code></td><td>planned</td></tr>
         <tr><td>Hot reload</td><td><code>node --watch</code></td><td><code>bun --hot</code></td><td>planned</td></tr>
         <tr><td>WebSocket</td><td>the <code>ws</code> library</td><td>native <code>Bun.serve</code> (bridged to the same API)</td><td>planned</td></tr>
