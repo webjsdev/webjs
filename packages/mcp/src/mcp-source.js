@@ -95,8 +95,8 @@ export function resolveFrameworkRoots(cwd, fsDeps) {
  * Locate `@webjsdev/<pkg>` in Bun's global install cache (the zero-install
  * fallback). Bun caches a scoped package at `<bunCacheDir>/@webjsdev/<pkg>@<ver>@@@<n>/`
  * (the versioned dir holds the full source; a sibling unversioned `<pkg>/` dir is
- * metadata, skipped). Picks the lexically-highest versioned dir (best-effort:
- * the latest cached version), and returns its path only if it carries a
+ * metadata, skipped). Picks the highest cached version (semver-aware, so
+ * `0.10.0` beats `0.9.0`), and returns its path only if it carries a
  * `package.json`. Returns '' when there is no cache dir, no `readdir`, or no
  * matching entry.
  *
@@ -112,15 +112,42 @@ function resolveFromBunCache(pkg, fsDeps) {
   let entries;
   try { entries = readdir(scopeDir); } catch { return ''; }
   const prefix = `${pkg}@`;
+  // A cache dir is `<pkg>@<version>@@@<n>`; extract <version> (between the name
+  // and the `@@@` cache-key suffix) and sort by it, highest first.
   const versioned = entries
     .filter((e) => e.isDir && e.name.startsWith(prefix) && e.name.includes('@@@'))
-    .map((e) => e.name)
-    .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0)); // descending, latest-ish first
-  for (const name of versioned) {
+    .map((e) => ({ name: e.name, version: e.name.slice(prefix.length).split('@@@')[0] }))
+    .sort((a, b) => compareVersions(b.version, a.version));
+  for (const { name } of versioned) {
     const cand = join(scopeDir, name);
     if (exists(join(cand, 'package.json'))) return cand;
   }
   return '';
+}
+
+/**
+ * Compare two semver-ish version strings numerically (so `0.10.0` > `0.9.0`).
+ * Splits on `.`, `-`, `+` and compares segment by segment: numeric segments
+ * numerically, others lexically; a missing segment (a release vs its
+ * prerelease) sorts lower. Returns negative / 0 / positive like a comparator.
+ * @param {string} a
+ * @param {string} b
+ * @returns {number}
+ */
+function compareVersions(a, b) {
+  const seg = (v) => v.split(/[.+-]/).map((s) => (/^\d+$/.test(s) ? Number(s) : s));
+  const pa = seg(a);
+  const pb = seg(b);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i];
+    const y = pb[i];
+    if (x === y) continue;
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
+    if (typeof x === 'number' && typeof y === 'number') return x - y;
+    return String(x) < String(y) ? -1 : 1;
+  }
+  return 0;
 }
 
 /**

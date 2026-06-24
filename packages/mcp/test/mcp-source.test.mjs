@@ -180,8 +180,24 @@ test('resolveFrameworkRoots: zero-install fallback finds a package in the Bun ca
   assert.match(roots[0].src, /core@1\.0\.0@@@1[/\\]src$/);
 });
 
-test('resolveFrameworkRoots: no cache fallback when bunCacheDir/readdir are absent', () => {
-  // Omitting the cache deps keeps the original node_modules-only behavior.
-  const roots = resolveFrameworkRoots('/nonexistent-xyz', { exists: () => false });
+test('resolveFrameworkRoots: cache version pick is semver-aware (0.10.0 > 0.9.0)', () => {
+  const cache = join('/fakebun', 'cache');
+  const scope = join(cache, '@webjsdev');
+  const present = new Set([
+    scope,
+    join(scope, 'cli@0.10.0@@@1', 'package.json'),
+    join(scope, 'cli@0.10.0@@@1', 'lib'),
+  ]);
+  const exists = (p) => present.has(p);
+  const readdir = (d) => (d === scope
+    ? [{ name: 'cli@0.9.0@@@1', isDir: true }, { name: 'cli@0.10.0@@@1', isDir: true }]
+    : []);
+  const roots = resolveFrameworkRoots('/some/app', { exists, readdir, bunCacheDir: cache });
+  assert.equal(roots[0].root, join(scope, 'cli@0.10.0@@@1'), '0.10.0 beats 0.9.0 (numeric, not lexical)');
+});
+
+test('resolveFrameworkRoots: bunCacheDir set but no @webjsdev scope yields nothing (no throw)', () => {
+  // The cache dir exists but holds no @webjsdev packages: empty, not an error.
+  const roots = resolveFrameworkRoots('/some/app', { exists: () => false, readdir: () => [], bunCacheDir: '/empty/cache' });
   assert.deepEqual(roots, []);
 });
