@@ -46,6 +46,23 @@ test('anchors on the import form: an identical non-import string is NOT rewritte
   assert.equal(out, "import { z } from 'zod@1.0.0';\nconst label = 'zod';");
 });
 
+test('does NOT rewrite a method call or keyword-suffixed identifier (left-anchored)', () => {
+  // The real import is rewritten, but a `.from('zod')` method call, an
+  // `Array.from`-style member, and an `xfrom 'zod'` identifier must be left
+  // alone even though `zod` is a declared, scanned import.
+  const src = "import { z } from 'zod';\nconst rows = db.select().from('zod');\nconst a = arr.from('zod');\n";
+  const out = rewriteDepSpecifiers(src, imp('zod'), { zod: '1.0.0' });
+  assert.equal(out, "import { z } from 'zod@1.0.0';\nconst rows = db.select().from('zod');\nconst a = arr.from('zod');\n");
+});
+
+test('skips a non-version (protocol) dependency range', () => {
+  const pkg = JSON.stringify({ dependencies: { local: 'workspace:*', tool: 'file:../tool', zod: '^3.0.0' } });
+  const versions = resolveDepVersions(pkg);
+  assert.equal(versions.local, undefined, 'workspace: range left bare');
+  assert.equal(versions.tool, undefined, 'file: range left bare');
+  assert.equal(versions.zod, '^3.0.0', 'a real semver range is kept');
+});
+
 test('rewrites export ... from and bare import', () => {
   const src = "export { a } from 'pg';\nimport 'side-effect-pkg';";
   const out = rewriteDepSpecifiers(src, imp('pg', 'side-effect-pkg'), { pg: '8.13.0', 'side-effect-pkg': '1.2.3' });

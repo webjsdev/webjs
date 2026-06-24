@@ -40,7 +40,11 @@ export function resolveDepVersions(pkgJsonText, bunLockText) {
   let pkg;
   try { pkg = JSON.parse(pkgJsonText); } catch { return out; }
   for (const [name, range] of Object.entries({ ...pkg.dependencies, ...pkg.devDependencies })) {
-    if (typeof range === 'string' && range) out[name] = range;
+    // A semver range / dist-tag is a valid inline version (`zod@^3`, `zod@latest`).
+    // A protocol range (`workspace:`, `file:`, `link:`, `git+...`, `npm:alias@`,
+    // `github:`) is NOT: it would produce a malformed `name@workspace:*` specifier.
+    // Such a dep is left bare (it resolves via Bun's own workspace/file mechanism).
+    if (typeof range === 'string' && range && !range.includes(':')) out[name] = range;
   }
   if (bunLockText) {
     // bun.lock pins each package as `"name": ["name@<version>", ...]`. Extract
@@ -117,9 +121,12 @@ export function rewriteDepSpecifiers(src, imports, depVersions) {
     const q = from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     // Anchor on the import/export/require form so an identical non-import
     // string literal is not touched: `from 'x'`, `import 'x'`, `import('x')`,
-    // `require('x')`. The optional `(` covers dynamic import / require.
-    const re = new RegExp("((?:from|import|require)\\s*\\(?\\s*)(['\"])" + q + "\\2", 'g');
-    out = out.replace(re, (_m, lead, quote) => lead + quote + to + quote);
+    // `require('x')`. The optional `(` covers dynamic import / require. The
+    // leading `(^|[^\w.$])` boundary keeps a method call (`db.select().from('x')`,
+    // a `.import(...)` member) or a keyword-suffixed identifier (`xfrom 'x'`)
+    // from matching, which an unanchored keyword would wrongly rewrite.
+    const re = new RegExp("(^|[^\\w.$])((?:from|import|require)\\s*\\(?\\s*)(['\"])" + q + "\\3", 'g');
+    out = out.replace(re, (_m, pre, lead, quote) => pre + lead + quote + to + quote);
   }
   return out;
 }

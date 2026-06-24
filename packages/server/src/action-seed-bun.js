@@ -75,7 +75,10 @@ export function installBunSeedPlugin({ isSeedCandidate, buildSeedFacade, serverF
         // Read the real source. A genuine read failure (missing file) propagates,
         // which Bun reports as a load error exactly as it would without the plugin.
         let src = await Bun.file(absPath).text();
-        // Pin rewrite first, so a `.server` facade is built from pinned source.
+        // Pin rewrite. For a NON-`.server` module this is where its specifiers get
+        // pinned. A `.server` candidate's REAL module is pinned on its
+        // `?webjs-seed-orig` passthrough load (which re-enters this onLoad); the
+        // facade itself only reads export names, unaffected by the rewrite.
         if (pinTransform) {
           try { src = pinTransform(src, loader); } catch { /* fail-open: raw source */ }
         }
