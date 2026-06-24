@@ -69,14 +69,16 @@ class LikeButton extends WebComponent {
 LikeButton.register('like-button');`;
 
 const ACTION_SAMPLE = `'use server';
+import { eq } from 'drizzle-orm';
 import { db } from '#db/connection.server.ts';
 import { posts } from '#db/schema.server.ts';
 
-// Import this from a client component. webjs rewrites the
-// import into a typed RPC stub. No fetch by hand.
-export async function createPost(input) {
-  const [post] = await db.insert(posts).values(input).returning();
-  return { success: true, data: post };
+// Import this from a page or client component. webjs rewrites
+// the import into a typed RPC stub (the real call at SSR). No
+// fetch by hand.
+export async function getPost(id) {
+  const [post] = await db.select().from(posts).where(eq(posts.id, id));
+  return post;
 }`;
 
 const PAGE_SAMPLE = `export default async function Post({ params }) {
@@ -229,7 +231,7 @@ export default function LandingPage() {
           </div>
           <div class="flex flex-col min-w-0">
             <p class="font-mono font-semibold text-[11px] leading-[1.4] tracking-[0.12em] uppercase text-fg-subtle mb-[10px] ml-1">Server action (RPC)</p>
-            ${codeWindow('actions/create-post.server.ts', ACTION_SAMPLE)}
+            ${codeWindow('actions/get-post.server.ts', ACTION_SAMPLE)}
           </div>
           <div class="flex flex-col min-w-0">
             <p class="font-mono font-semibold text-[11px] leading-[1.4] tracking-[0.12em] uppercase text-fg-subtle mb-[10px] ml-1">SSR page</p>
