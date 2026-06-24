@@ -17,6 +17,11 @@
       "type": "boolean",
       "default": true
     },
+    "pin": {
+      "description": "Bun zero-install dependency version-pinning switch (#685). Default true, Bun only. When on, an onLoad transform rewrites a declared dep's bare import specifier to its package.json / bun.lock version so Bun auto-install fetches the pinned version instead of latest (#684). Set to false to leave specifiers bare (zero-install resolves to latest). Read by readPinEnabled in dev.js; the WEBJS_PIN env override wins over this. No effect on Node.",
+      "type": "boolean",
+      "default": true
+    },
     "clientRouter": {
       "description": "Client-router switch (#629). Default true: the client router auto-enables in the browser whenever @webjsdev/core loads, so any page with a component gets SPA-style navigation with no import. Set to false to opt the whole app out (pure MPA, full-page navigation). Read by readClientRouterEnabled in dev.js.",
       "type": "boolean",
