@@ -70,6 +70,15 @@ which Bun's auto-install honors (an exact inline version resolves; a range or
 dist-tag does not). So under zero-install: exact pins hold, while ranges and the
 lockfile go to latest. For pinned, reproducible installs run `bun install`
 (materialized `node_modules`), which is what the production Docker image does.
+
+The scaffold leans on this for cross-runtime consistency (#692): `webjs create`
+ships EXACT-pinned deps (`@webjsdev/*` pinned to the versions the scaffolding CLI
+ships with, `drizzle-orm` / `drizzle-kit` to the `1.0.0-rc.3` relations-v2 line,
+`pg` exact), so a fresh app resolves IDENTICAL versions on npm and bun, and a Bun
+zero-install app runs those exact versions (not latest). drizzle's npm `latest`
+tag is a 0.x line, so a `^` range would have pulled the wrong major under bun;
+the exact pin fixes that. A dep the user adds later with a `^` range follows the
+rule above (bun zero-install resolves it to latest).
 The rewrite is server-runtime only (it shapes what Bun fetches for SSR and server
 actions; the browser is served bare specifiers via the importmap / jspm), only
 touches declared deps, and is a no-op when `node_modules` exists (Bun uses the

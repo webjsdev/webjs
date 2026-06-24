@@ -14,7 +14,7 @@
 import { mkdir, writeFile, readFile, cp } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { bunifyProse, bunifyDockerfile, bunifyCompose, bunifyCi } from './runtime-rewrite.js';
@@ -55,6 +55,47 @@ export function resolveCreateInstall({ runtime, explicitInstall, noInstall } = {
   const isBun = runtime === 'bun' || (!runtime && detectPackageManager() === 'bun');
   return !isBun;
 }
+
+/**
+ * Read the EXACT version of `@webjsdev/<pkg>` the scaffolding CLI ships with, so
+ * the generated `package.json` pins it precisely and BOTH npm and bun resolve
+ * the same version (#692). Walks the `require.resolve` node_modules search paths
+ * and fs-reads `<pkg>/package.json` directly: `@webjsdev/server` (and `ui`) hide
+ * `./package.json` behind `exports`, so a bare `require('<pkg>/package.json')`
+ * fails (same constraint #687 hit). Falls back to `'latest'` when the package is
+ * not resolvable (defensive; the CLI's own dependency closure is normally
+ * present), which keeps the scaffold working rather than emitting a bad pin.
+ * @param {string} pkg  e.g. 'cli', 'core', 'server'
+ * @returns {string}  an exact version, or 'latest'
+ */
+function webjsdevVersion(pkg) {
+  const req = createRequire(import.meta.url);
+  for (const base of (req.resolve.paths(`@webjsdev/${pkg}`) || [])) {
+    const pj = join(base, '@webjsdev', pkg, 'package.json');
+    if (existsSync(pj)) {
+      try {
+        const v = JSON.parse(readFileSync(pj, 'utf8')).version;
+        if (v) return v;
+      } catch { /* unreadable; keep looking, then fall back */ }
+    }
+  }
+  return 'latest';
+}
+
+/**
+ * Exact third-party dep versions the scaffold pins (#692). These are template
+ * deps the CLI does NOT itself depend on, so they cannot be read from the CLI's
+ * closure (unlike `@webjsdev/*`). Pinned EXACT so npm and bun resolve identically
+ * (a `^` range diverges: npm takes latest-in-range, bun zero-install takes
+ * absolute latest, #690). Drizzle is the 1.0 relations-v2 RC the scaffold's db
+ * code targets (its npm `latest` tag is a 0.x line, so a range would resolve the
+ * wrong major under bun). Refresh on a deliberate bump, same as the old ranges.
+ */
+const SCAFFOLD_DEP_VERSIONS = {
+  'drizzle-orm': '1.0.0-rc.3',
+  'drizzle-kit': '1.0.0-rc.3',
+  pg: '8.22.0',
+};
 
 /**
  * Run `<pm> install` inside the scaffolded app. Returns true on success.
@@ -377,14 +418,22 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // for relations v2. SQLite needs NO driver dependency: the connection
       // uses the built-in node:sqlite (Node) / bun:sqlite (Bun) via Drizzle's
       // node-sqlite / bun-sqlite adapters. Postgres still needs the pg driver.
-      'drizzle-orm': '^1.0.0-rc.3',
-      ...(dialect === 'postgres' ? { pg: '^8.13.0' } : {}),
-      '@webjsdev/cli': 'latest',
-      '@webjsdev/core': 'latest',
-      '@webjsdev/server': 'latest',
+      // Exact pins (#692): npm and bun must resolve identical versions. A `^`
+      // range diverges (npm = latest-in-range; bun zero-install = absolute
+      // latest, #690), and drizzle's npm `latest` tag is a 0.x line, so a range
+      // would pull the wrong major under bun. @webjsdev/* are pinned to the
+      // versions the scaffolding CLI itself ships with.
+      'drizzle-orm': SCAFFOLD_DEP_VERSIONS['drizzle-orm'],
+      ...(dialect === 'postgres' ? { pg: SCAFFOLD_DEP_VERSIONS.pg } : {}),
+      '@webjsdev/cli': webjsdevVersion('cli'),
+      '@webjsdev/core': webjsdevVersion('core'),
+      '@webjsdev/server': webjsdevVersion('server'),
     },
     devDependencies: {
-      'drizzle-kit': '^1.0.0-rc.3',
+      // Exact pin (#692): drizzle-kit is resolved under bun zero-install via
+      // `bun run db:generate` / `db:migrate`, so it must match drizzle-orm's
+      // exact version across runtimes (a range would diverge, #690).
+      'drizzle-kit': SCAFFOLD_DEP_VERSIONS['drizzle-kit'],
       ...(dialect === 'postgres' ? { '@types/pg': '^8.11.0' } : {}),
       // The TypeScript compiler, for `npm run typecheck` (webjs typecheck runs
       // tsc --noEmit). Not needed at runtime (Node strips types in place), only
