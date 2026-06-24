@@ -4,7 +4,7 @@
 // exercised without Bun.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rewriteDepSpecifiers, packageNameOf } from '../../src/bun-pin-rewrite.js';
+import { rewriteDepSpecifiers, packageNameOf, resolveDepVersions } from '../../src/bun-pin-rewrite.js';
 
 const imp = (...paths) => paths.map((path) => ({ kind: 'import-statement', path }));
 
@@ -55,6 +55,27 @@ test('rewrites export ... from and bare import', () => {
 test('no matching deps returns the source unchanged (identity)', () => {
   const src = "import { z } from 'zod';";
   assert.equal(rewriteDepSpecifiers(src, imp('zod'), {}), src);
+});
+
+test('resolveDepVersions: reads dependencies + devDependencies from package.json', () => {
+  const pkg = JSON.stringify({ dependencies: { zod: '^3.22.0' }, devDependencies: { drizzle: '1.0.0' } });
+  assert.deepEqual(resolveDepVersions(pkg), { zod: '^3.22.0', drizzle: '1.0.0' });
+});
+
+test('resolveDepVersions: bun.lock exact version overrides the package.json range', () => {
+  const pkg = JSON.stringify({ dependencies: { zod: '^3.22.0' } });
+  const lock = '{\n  "packages": {\n    "zod": ["zod@3.22.4", "", {}, "sha512-abc=="],\n  }\n}';
+  assert.deepEqual(resolveDepVersions(pkg, lock), { zod: '3.22.4' });
+});
+
+test('resolveDepVersions: only declared deps are pinned (a lock-only transitive is ignored)', () => {
+  const pkg = JSON.stringify({ dependencies: { zod: '^3.22.0' } });
+  const lock = '{ "packages": { "zod": ["zod@3.22.4"], "left-pad": ["left-pad@1.3.0"] } }';
+  assert.deepEqual(resolveDepVersions(pkg, lock), { zod: '3.22.4' }); // left-pad not declared
+});
+
+test('resolveDepVersions: malformed package.json yields an empty map (fail-open)', () => {
+  assert.deepEqual(resolveDepVersions('{ not json'), {});
 });
 
 test('packageNameOf: scoped, subpath, bare', () => {

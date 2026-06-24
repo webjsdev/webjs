@@ -21,6 +21,41 @@
  */
 
 /**
+ * Resolve the version to pin each DECLARED dependency to: the exact version from
+ * `bun.lock` when present (precise), else the package.json range/value as-is
+ * (Bun resolves a range in an inline specifier). Only declared deps are
+ * returned, so the rewrite never pins a transitive dep through an app import
+ * (those follow from the pinned direct deps' own manifests).
+ *
+ * Runtime-neutral: takes the two file contents (the Bun glue reads them via
+ * `Bun.file`), so this stays unit-testable on Node.
+ *
+ * @param {string} pkgJsonText  package.json contents
+ * @param {string | null} [bunLockText]  bun.lock contents, when present
+ * @returns {Record<string, string>}  package name -> version
+ */
+export function resolveDepVersions(pkgJsonText, bunLockText) {
+  /** @type {Record<string, string>} */
+  const out = {};
+  let pkg;
+  try { pkg = JSON.parse(pkgJsonText); } catch { return out; }
+  for (const [name, range] of Object.entries({ ...pkg.dependencies, ...pkg.devDependencies })) {
+    if (typeof range === 'string' && range) out[name] = range;
+  }
+  if (bunLockText) {
+    // bun.lock pins each package as `"name": ["name@<version>", ...]`. Extract
+    // the exact version for each DECLARED dep, anchored on its name so a
+    // substring match cannot cross to another package.
+    for (const name of Object.keys(out)) {
+      const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const m = bunLockText.match(new RegExp('"' + esc + '"\\s*:\\s*\\[\\s*"' + esc + '@([^"]+)"'));
+      if (m) out[name] = m[1];
+    }
+  }
+  return out;
+}
+
+/**
  * The npm package name a specifier belongs to: `@scope/name[/sub]` or
  * `name[/sub]`. Returns null for a bare scope with no name.
  * @param {string} p
