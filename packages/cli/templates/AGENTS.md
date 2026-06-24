@@ -414,8 +414,11 @@ demand and **no `bun install` is needed**:
 bun run dev            # or: bun run start  (no install step required)
 ```
 
-`bun install` is optional here, run it for editor type intelligence or a pinned
-offline install. (To run a Node-flavored app on Bun instead, force `bun --bun run
+webjs pins the versions: an `onLoad` transform rewrites each declared dep's bare
+specifier to its `package.json` / `bun.lock` version, so zero-install fetches the
+pinned version, not latest (opt out with `WEBJS_PIN=0` or `{ "webjs": { "pin":
+false } }`). `bun install` is optional here, run it for editor type intelligence
+or a pinned offline install. (To run a Node-flavored app on Bun instead, force `bun --bun run
 dev`, which still expects an install.)
 
 On Node the `.ts` type-stripping is the built-in `module.stripTypeScriptTypes`;
