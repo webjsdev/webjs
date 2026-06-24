@@ -39,24 +39,44 @@ export function resolveDepVersions(pkgJsonText, bunLockText) {
   const out = {};
   let pkg;
   try { pkg = JSON.parse(pkgJsonText); } catch { return out; }
-  for (const [name, range] of Object.entries({ ...pkg.dependencies, ...pkg.devDependencies })) {
-    // A semver range / dist-tag is a valid inline version (`zod@^3`, `zod@latest`).
-    // A protocol range (`workspace:`, `file:`, `link:`, `git+...`, `npm:alias@`,
-    // `github:`) is NOT: it would produce a malformed `name@workspace:*` specifier.
-    // Such a dep is left bare (it resolves via Bun's own workspace/file mechanism).
-    if (typeof range === 'string' && range && !range.includes(':')) out[name] = range;
-  }
+  const declared = { ...pkg.dependencies, ...pkg.devDependencies };
+
+  // bun.lock pins each package as `"name": ["name@<exact>", ...]`. Extract the
+  // exact version for each DECLARED dep, anchored on its name so a substring
+  // match cannot cross to another package. This is the precise source.
+  /** @type {Record<string, string>} */
+  const lockExact = {};
   if (bunLockText) {
-    // bun.lock pins each package as `"name": ["name@<version>", ...]`. Extract
-    // the exact version for each DECLARED dep, anchored on its name so a
-    // substring match cannot cross to another package.
-    for (const name of Object.keys(out)) {
+    for (const name of Object.keys(declared)) {
       const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const m = bunLockText.match(new RegExp('"' + esc + '"\\s*:\\s*\\[\\s*"' + esc + '@([^"]+)"'));
-      if (m) out[name] = m[1];
+      if (m && isExactVersion(m[1])) lockExact[name] = m[1];
     }
   }
+
+  for (const [name, range] of Object.entries(declared)) {
+    // ONLY an EXACT version can be an inline specifier: Bun zero-install
+    // auto-install resolves `name@1.2.3` but ENOENTs on a range or dist-tag
+    // (`name@^1.2`, `name@latest`) and on a protocol range (`workspace:`,
+    // `file:`, ...). So pin to the bun.lock exact when present, else an exact
+    // package.json pin; a range without a lock is left BARE (it resolves to
+    // latest, exactly as before this feature, never to a broken specifier).
+    if (lockExact[name]) out[name] = lockExact[name];
+    else if (isExactVersion(range)) out[name] = range;
+  }
   return out;
+}
+
+/**
+ * Whether a version string is an EXACT semver (the only form valid as a Bun
+ * inline specifier): `1.2.3`, with an optional prerelease / build suffix
+ * (`1.2.3-rc.1`, `1.2.3+build`). Rejects any range operator (`^ ~ > < = * x | -`
+ * space), a dist-tag (`latest`), and a protocol range (`workspace:` etc.).
+ * @param {unknown} v
+ * @returns {boolean}
+ */
+function isExactVersion(v) {
+  return typeof v === 'string' && /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(v);
 }
 
 /**
