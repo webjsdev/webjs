@@ -50,12 +50,12 @@ const USAGE = `webjs commands:
   webjs doctor                                    Verify project health (Node, tsconfig, env, vendor pins, importmap coherence, @webjsdev versions, git hook, page/layout elision)
   webjs types                                     Generate .webjs/routes.d.ts (typed Route union + per-route params)
   webjs typecheck [tsc args...]                   Type-check the app with the project's tsc --noEmit (non-zero on errors)
-  webjs create <name> [--template full-stack|api|saas] [--db sqlite|postgres] [--runtime node|bun] [--no-install]  Scaffold a new webjs app
+  webjs create <name> [--template full-stack|api|saas] [--db sqlite|postgres] [--runtime node|bun] [--install|--no-install]  Scaffold a new webjs app
                                                   (only 3 templates exist. default: full-stack, Drizzle, --db sqlite, --runtime node)
                                                   --runtime bun emits a Bun-flavored app (bun.lock, bun Dockerfile/CI, bun docs);
                                                   also auto-detected when run via "bun create webjs".
-                                                  Auto-runs the detected package manager's install in the new dir
-                                                  unless --no-install is passed.
+                                                  Install default is per runtime: Node installs; Bun skips (zero-install,
+                                                  "bun run dev" resolves deps on the fly). --install / --no-install override.
   webjs db generate                               Generate a SQL migration from the schema (drizzle-kit generate)
   webjs db migrate                                Apply pending migrations (drizzle-kit migrate)
   webjs db push                                   Push the schema straight to the dev DB (drizzle-kit push)
@@ -521,7 +521,11 @@ files.
 Full docs: https://docs.webjs.com`);
         process.exit(1);
       }
+      // Install policy (#682). Default per runtime: Node installs (needs
+      // node_modules to run); Bun skips (zero-install, `bun run dev` resolves
+      // on the fly). `--install` / `--no-install` override either way.
       const noInstall = rest.includes('--no-install');
+      const explicitInstall = rest.includes('--install');
       // --db picks the database dialect: sqlite (default) or postgres.
       const db = flag(rest, '--db', 'sqlite');
       // --runtime picks the target runtime: node (default) or bun. Orthogonal
@@ -532,8 +536,9 @@ Full docs: https://docs.webjs.com`);
         console.error(`Error: unknown --runtime '${runtime}'. Only node / bun are supported.`);
         process.exit(1);
       }
-      const { scaffoldApp } = await import('../lib/create.js');
-      await scaffoldApp(name, process.cwd(), { template, db, runtime, install: !noInstall });
+      const { scaffoldApp, resolveCreateInstall } = await import('../lib/create.js');
+      const install = resolveCreateInstall({ runtime, explicitInstall, noInstall });
+      await scaffoldApp(name, process.cwd(), { template, db, runtime, install });
       break;
     }
     case 'vendor': {

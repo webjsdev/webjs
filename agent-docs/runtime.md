@@ -50,26 +50,30 @@ is `bun` here), so the server stays on Bun once the CLI does. `bunx
 @webjsdev/cli` is deliberately NOT used (it runs on Node via the shebang AND
 eager-installs the whole tree). The `start.before` migrate also routes through
 the bootstrap, so the boot-time `webjs db migrate` needs no `webjs` bin in
-`node_modules`. `bun install` stays optional: run it for editor type
-intelligence (no `node_modules` means no local type files) or a pinned offline
-install. The Node-targeted tooling scripts (`test` / `check` / `typecheck`)
-stay plain `webjs` on Node and still expect an install.
+`node_modules`. `bun create` does NOT run an install on Bun (#682): the scaffold skips it
+(zero-install by default), so `bun run dev` starts immediately. `bun install` is
+optional. Run it when you want pinned, reproducible versions (it materializes
+`node_modules` from the lockfile) or editor type intelligence (no `node_modules`
+means no local type files). Pass `--install` to `bun create` to opt into the
+create-time install. The Node-targeted tooling scripts (`test` / `check` /
+`typecheck`) stay plain `webjs` on Node and still expect an install.
 
-**Version pinning (#685).** Bun's auto-install fetches `latest` for a bare
-`import 'zod'`, ignoring package.json and `bun.lock` (it consults neither the
-manifest, the lockfile, nor an `onResolve` plugin, verified in #684). webjs
-closes that gap with an `onLoad` transform: it rewrites a declared dep's bare
-specifier to an inline-versioned one (`zod` to `zod@3.22.4`), which Bun's
-auto-install DOES honor. The version is the EXACT one from `bun.lock` when
-present, else an exact `package.json` pin. Bun resolves an exact inline version
-but ENOENTs on a range or dist-tag (`zod@^3`, `zod@latest`), so a dep declared
-as a RANGE without a `bun.lock` is left bare and resolves to latest as before:
-commit a `bun.lock` (or pin exact versions) to get pinned zero-install. The
-rewrite is server-runtime only (it shapes what Bun fetches for SSR and server
-actions). The browser is still served bare specifiers resolved via the importmap
-/ jspm, unchanged. Only declared deps are rewritten (a transitive dep follows
-from its pinned parent's manifest), and it is a no-op when `node_modules` exists
-(Bun uses the installed copy). Default on. Opt out with `WEBJS_PIN=0` or
+**Version resolution under zero-install (#684, #690).** With no `node_modules`,
+Bun's runtime auto-install resolves each bare import to the dependency's
+**absolute latest** version. It IGNORES the `package.json` semver range AND any
+committed `bun.lock` (both apply only to `bun install`, not the on-the-fly
+runtime path). Verified on Bun 1.3.14: `^3.20.0`, even with a `bun.lock` pinning
+an older version, resolves to the latest major. The ONE exception is an EXACT
+`package.json` pin (`"zod": "3.22.4"`): the #685 `onLoad` transform rewrites a
+declared dep's bare specifier to an inline-versioned one (`zod` to `zod@3.22.4`),
+which Bun's auto-install honors (an exact inline version resolves; a range or
+dist-tag does not). So under zero-install: exact pins hold, while ranges and the
+lockfile go to latest. For pinned, reproducible installs run `bun install`
+(materialized `node_modules`), which is what the production Docker image does.
+The rewrite is server-runtime only (it shapes what Bun fetches for SSR and server
+actions; the browser is served bare specifiers via the importmap / jspm), only
+touches declared deps, and is a no-op when `node_modules` exists (Bun uses the
+installed copy). Default on. Opt out with `WEBJS_PIN=0` or
 `{ "webjs": { "pin": false } }`.
 
 **Reproducibility:** dev resolves on demand (now at the pinned versions), and the

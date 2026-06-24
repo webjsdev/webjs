@@ -50,7 +50,7 @@ bun create webjs my-app
 bunx create-webjs@latest my-app
 # or via the installed CLI, on any package manager
 webjs create my-app --runtime bun</pre>
-    <p>A Bun app serves with no <code>bun install</code> (<code>bun create webjs my-app</code> then <code>bun run dev</code> just works), runs on Bun's native <code>Bun.serve</code>, and ships a pure <code>oven/bun:1</code> Dockerfile. See <a href="/docs/runtime">Runtime</a> for the full Node vs Bun reference: the commands, the zero-install model, and every difference. One flag-forwarding note: Bun forwards flags directly (<code>bun create webjs my-app --template api</code>), while npm needs the <code>--</code> separator (<code>npm create webjs@latest my-app -- --template api</code>). <code>--runtime node</code> (the default) is unchanged.</p>
+    <p>A Bun app serves with no <code>bun install</code>: <code>bun create webjs my-app</code> skips the install and <code>bun run dev</code> just works (deps resolve on the fly at their latest version, and <code>bun install</code> gives pinned, reproducible versions). It runs on Bun's native <code>Bun.serve</code> and ships a pure <code>oven/bun:1</code> Dockerfile. See <a href="/docs/runtime">Runtime</a> for the full Node vs Bun reference: the commands, the zero-install model, and every difference. One flag-forwarding note: Bun forwards flags directly (<code>bun create webjs my-app --template api</code>), while npm needs the <code>--</code> separator (<code>npm create webjs@latest my-app -- --template api</code>). <code>--runtime node</code> (the default) is unchanged.</p>
 
     <h3>Manual setup</h3>
     <p>To start from scratch without the scaffold, create a directory with this structure:</p>

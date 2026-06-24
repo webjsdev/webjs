@@ -36,6 +36,27 @@ function detectPackageManager() {
 }
 
 /**
+ * Decide whether `webjs create` runs the post-scaffold install, per target
+ * runtime (#682). Node installs by default (it needs `node_modules` to run);
+ * Bun SKIPS by default (zero-install: `bun run dev` resolves deps on the fly,
+ * #675). Under Bun zero-install deps resolve to their LATEST version (ranges
+ * and any lockfile are ignored at runtime, #690), so `bun install` is the path
+ * to pinned, reproducible versions. Explicit flags win: `--install` forces it
+ * on, `--no-install` forces it off. The CLI entry points call this and pass an
+ * explicit boolean to `scaffoldApp`, so the library default (no install unless
+ * `install: true`) is unchanged for programmatic callers.
+ *
+ * @param {{ runtime?: string, explicitInstall?: boolean, noInstall?: boolean }} [o]
+ * @returns {boolean}
+ */
+export function resolveCreateInstall({ runtime, explicitInstall, noInstall } = {}) {
+  if (explicitInstall) return true;
+  if (noInstall) return false;
+  const isBun = runtime === 'bun' || (!runtime && detectPackageManager() === 'bun');
+  return !isBun;
+}
+
+/**
  * Run `<pm> install` inside the scaffolded app. Returns true on success.
  * Inherits stdio so the user sees the install progress live. Caller decides
  * whether to call this (skipped when --no-install).
@@ -1404,6 +1425,12 @@ For AI agents, read this before editing scaffolded files:
     if (!installed) {
       console.log(`\n[warn] ${pm} install failed. Run '${pm} install' manually in ${name}/ to finish setup.\n`);
     }
+  } else if (isBun) {
+    // Bun zero-install (#675): no install needed; `bun run dev` resolves deps on
+    // the fly. They resolve to LATEST (ranges + lockfile ignored at runtime,
+    // #690), so point at `bun install` for pinned, reproducible versions.
+    console.log(`Skipped install. Bun resolves dependencies on the fly, so 'bun run dev' and 'bun run start' work as-is (no node_modules).`);
+    console.log(`These resolve to each dependency's LATEST version. Run 'bun install' in ${name}/ when you want pinned, reproducible versions (and editor type intelligence).\n`);
   }
 
   // Next-steps banner prints LAST so the actionable command is the
@@ -1415,7 +1442,10 @@ For AI agents, read this before editing scaffolded files:
   // generate + migrate before the first run (the example User model wants
   // its table to exist). Drizzle splits Prisma's `migrate dev` into
   // `db:generate` (schema to SQL) then `db:migrate` (apply).
-  const installSegment = installed ? '' : `${pm} install && `;
+  // Omit the install step from the next-steps line for a deliberate Bun
+  // zero-install (#682): `bun run dev` resolves deps on the fly, so it works
+  // without an install. Otherwise (Node, or an install that did not run) keep it.
+  const installSegment = (installed || (isBun && !shouldInstall)) ? '' : `${pm} install && `;
   const dbSegment = isSaas ? `${pm} run db:generate && ${pm} run db:migrate && ` : '';
   const runCommand = `cd ${name} && ${installSegment}${dbSegment}${pm} run dev`;
   // Use `npx webjsdev ui ...` here, not `npx webjs ui ...`. The bare

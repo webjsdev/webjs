@@ -33,7 +33,7 @@ npx @webjsdev/cli create my-app
 cd my-app && npm run dev
 ```
 
-Both `webjs create` and `create-webjs-app` auto-install dependencies in the new directory using your detected package manager (npm / pnpm / yarn / bun). Pass `--no-install` to opt out.
+`webjs create` installs dependencies in the new directory by default on **Node** (it needs `node_modules` to run). On **Bun** it **skips** the install (zero-install: `bun run dev` resolves deps on the fly). Pass `--install` to force the install, or `--no-install` to skip it, on either runtime.
 
 ## Commands
 

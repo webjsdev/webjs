@@ -18,7 +18,7 @@
  * is npm's documented shorthand for `npx create-<suffix>`; both routes
  * resolve to this same package and bin.
  */
-import { scaffoldApp } from '@webjsdev/cli/lib/create.js';
+import { scaffoldApp, resolveCreateInstall } from '@webjsdev/cli/lib/create.js';
 
 const TEMPLATES = ['full-stack', 'api', 'saas'];
 
@@ -91,6 +91,10 @@ if (runtime && !['node', 'bun'].includes(runtime)) {
 // sqlite for `npm create webjs my-app -- --db postgres`). scaffoldApp validates.
 const db = flagValue('--db');
 
+// Install default is per runtime (#682): Node installs, Bun skips (zero-install).
+// --install / --no-install override.
 const noInstall = args.includes('--no-install');
+const explicitInstall = args.includes('--install');
+const install = resolveCreateInstall({ runtime, explicitInstall, noInstall });
 
-await scaffoldApp(name, process.cwd(), { template, db, runtime, install: !noInstall });
+await scaffoldApp(name, process.cwd(), { template, db, runtime, install });
