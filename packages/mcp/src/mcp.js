@@ -21,7 +21,8 @@
  */
 
 import { createInterface } from 'node:readline';
-import { relative } from 'node:path';
+import { relative, join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 import {
   resolveDocsLocation,
@@ -35,6 +36,29 @@ import {
 import { resolveFrameworkRoots, runSourceTool } from './mcp-source.js';
 
 const PROTOCOL_VERSION = '2024-11-05';
+
+/**
+ * Best-effort path to Bun's global install cache, for the zero-install `source`
+ * fallback (#687): under Bun zero-install an app has no `node_modules`, so
+ * `@webjsdev/*` lives only in this cache. Prefers `bun pm cache` (authoritative),
+ * then `$BUN_INSTALL/install/cache`, then `~/.bun/install/cache`. Returns null
+ * when none exists (e.g. Bun is not installed), which leaves the tool on the
+ * node_modules path with no behavior change.
+ * @param {(p: string) => boolean} exists
+ * @returns {string | null}
+ */
+function resolveBunCacheDir(exists) {
+  try {
+    const out = spawnSync('bun', ['pm', 'cache'], { encoding: 'utf8' });
+    const dir = out && out.status === 0 && out.stdout ? out.stdout.trim() : '';
+    if (dir && exists(dir)) return dir;
+  } catch { /* bun not on PATH */ }
+  const candidates = [];
+  if (process.env.BUN_INSTALL) candidates.push(join(process.env.BUN_INSTALL, 'install', 'cache'));
+  if (process.env.HOME) candidates.push(join(process.env.HOME, '.bun', 'install', 'cache'));
+  for (const c of candidates) { if (exists(c)) return c; }
+  return null;
+}
 
 // Mirrors packages/server/src/action-config.js. A drift test in
 // packages/mcp/test/mcp.test.mjs asserts these stay in sync with the source.
@@ -485,7 +509,7 @@ export async function runMcpServer(opts) {
     const { readdirSync, existsSync, realpathSync } = await import('node:fs');
     const readdir = (d) => readdirSync(d, { withFileTypes: true }).map((e) => ({ name: e.name, isDir: e.isDirectory() }));
     sourceDeps = {
-      roots: resolveFrameworkRoots(cwd, { exists: existsSync }),
+      roots: resolveFrameworkRoots(cwd, { exists: existsSync, readdir, bunCacheDir: resolveBunCacheDir(existsSync) }),
       readFile,
       readdir,
       realpath: realpathSync,
