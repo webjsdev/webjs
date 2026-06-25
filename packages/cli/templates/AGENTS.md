@@ -427,6 +427,12 @@ you want versions frozen identically across machines (it materializes
 Node-flavored app on Bun instead, force `bun --bun run dev`, which still expects
 an install.)
 
+`webjs db` and `webjs typecheck` also run with no install: they spawn the tool
+(drizzle-kit, tsc) via Bun auto-install at the version your `package.json`
+declares. `webjs test` is the one exception, because Bun's `test` runner does
+not auto-install (unlike `bun run`), so run `bun install` once before `bun run
+test` on Bun.
+
 On Node the `.ts` type-stripping is the built-in `module.stripTypeScriptTypes`;
 on Bun (which has no built-in) it comes from `amaro` automatically, so the same
 source serves identically. SSR action-result seeding (an internal hydration

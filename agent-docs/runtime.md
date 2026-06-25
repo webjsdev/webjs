@@ -55,8 +55,19 @@ the bootstrap, so the boot-time `webjs db migrate` needs no `webjs` bin in
 optional. Run it when you want pinned, reproducible versions (it materializes
 `node_modules` from the lockfile) or editor type intelligence (no `node_modules`
 means no local type files). Pass `--install` to `bun create` to opt into the
-create-time install. The Node-targeted tooling scripts (`test` / `check` /
-`typecheck`) stay plain `webjs` on Node and still expect an install.
+create-time install.
+
+**Spawned tooling under zero-install (#704).** `webjs db` and `webjs typecheck`
+ALSO run with no install: instead of resolving a bin from a `node_modules` that
+does not exist, they spawn the tool via Bun auto-install at the app-declared
+version (`bun --preload <pin> <runner> drizzle-kit@<v>/bin.cjs ...`), and the
+spawn pin preload rewrites the user schema's transitive bare imports to the
+app's versions (app files only, so a cached CommonJS dep is untouched). The
+exception is `webjs test`: Bun's `test` runner does NOT auto-install (unlike
+`bun run`, which powers db / typecheck), so a zero-install `webjs test` cannot
+resolve its deps and prints actionable guidance to run `bun install` once. The
+gate is `node_modules` absence on Bun, so an installed app or Node is unchanged.
+`webjs check` is webjs's own analysis (no spawned tool), so it has no such gate.
 
 **Version resolution under zero-install (#684, #690, #697).** With no
 `node_modules`, Bun's runtime auto-install resolves each BARE import to the

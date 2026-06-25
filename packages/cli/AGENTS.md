@@ -108,9 +108,14 @@ lib/
                          under zero-install (`importWebjsdev`, #709), since a bare
                          `import('@webjsdev/server')` would otherwise ENOENT
                          (Bun's auto-install ignores the cli's range and flakily
-                         fetches latest). The test/check/typecheck tooling stays
-                         plain `webjs` on Node (spawns `node --test` / tsc) and
-                         still expects an install.
+                         fetches latest). `webjs db` and `webjs typecheck` also
+                         run zero-install (#704): they spawn the tool
+                         (drizzle-kit, tsc) via Bun auto-install at the
+                         app-pinned version with a spawn pin preload, instead of
+                         resolveBin. `webjs test` is the one exception (Bun's
+                         `test` runner does not auto-install, so it needs a
+                         `bun install`); `webjs check` is webjs's own analysis,
+                         no spawned tool.
                          No parallel bun template, so no drift. compose.yaml is
                          not transformed (it inherits the Dockerfile CMD). Tests:
                          `test/runtime-rewrite/`.
@@ -137,7 +142,7 @@ README.md                npm-facing package readme.
 | `webjs types` | `generateRouteTypes()` from `@webjsdev/server`, writes `.webjs/routes.d.ts` (typed `Route` union + per-route params, #258). Also auto-emitted at `webjs dev` startup |
 | `webjs typecheck [tsc args]` | Resolves the project's own `typescript/bin/tsc` (via `createRequire` from the app cwd) and spawns it with `--noEmit`, passing extra args through. Exits non-zero on a type error (a CI gate). A clear message + non-zero exit when typescript is not installed (#265). The framework runs the standard compiler, it does not embed one |
 | `webjs create <name> [--template …] [--db …] [--runtime node\|bun]` | `scaffoldApp()` from `lib/create.js`. `--runtime bun` (or `bun create webjs`, auto-detected) emits a Bun-flavored app (#541): `dev`/`start`/`db` scripts run through a generated `webjs-bun.mjs` bootstrap under `bun --bun` so the app serves with no `bun install` (Bun auto-install, #675), `bun.lock`, a pure `oven/bun:1` Dockerfile + bun-install CI, and bun-command agent docs. Orthogonal to `--template` (invariant 1 stays exactly 3 templates). |
-| `webjs db <generate\|migrate\|push\|studio>` | Runs the app's resolved `drizzle-kit` bin via `process.execPath` (no codegen step; `generate` is schema-to-SQL). Resolves the bin from the app's node_modules + spawns it with the current runtime (no `npx`, #570), so it works on Node and Bun, including a Node-less `oven/bun` image. `webjs db seed` runs the app's `db/seed.server.ts` directly. |
+| `webjs db <generate\|migrate\|push\|studio>` | Runs the app's resolved `drizzle-kit` bin via `process.execPath` (no codegen step; `generate` is schema-to-SQL). Resolves the bin from the app's node_modules + spawns it with the current runtime (no `npx`, #570), so it works on Node and Bun, including a Node-less `oven/bun` image. Under **Bun zero-install** (no node_modules) `resolveBin` would fail, so it instead spawns `bun --preload <server pin> <runner> drizzle-kit@<app-version>/bin.cjs ...` (`lib/bun-zeroinstall.js`): Bun auto-install fetches the pinned tool, and the preload rewrites the user schema's transitive bare deps to the app's versions (#704). `webjs db seed` runs the app's `db/seed.server.ts` directly. |
 | `webjs ui <init\|add\|list\|view\|diff\|info>` | Proxies to `@webjsdev/ui` (see "UI subcommand" below) |
 
 ## UI subcommand: proxies to `@webjsdev/ui`
