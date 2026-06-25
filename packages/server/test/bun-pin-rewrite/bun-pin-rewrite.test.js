@@ -92,6 +92,22 @@ test('resolveDepVersions: keeps exact + single-token ranges, drops wildcard/dist
   });
 });
 
+test('resolveDepVersions: drops a range-operator + prerelease, keeps the exact prerelease (#703)', () => {
+  // Bun zero-install ENOENTs on `name@^1.0.0-rc.3` (a caret over a prerelease)
+  // while the exact `name@1.0.0-rc.3` resolves, so a range-operator-plus-suffix
+  // must be left bare. Counterfactual: the pre-#703 regex KEEPS b/c/d (this fails).
+  const pkg = JSON.stringify({ dependencies: {
+    a: '1.0.0-rc.3',     // exact prerelease: kept (bun resolves it)
+    b: '^1.0.0-rc.3',    // caret + prerelease: dropped (bun ENOENTs)
+    c: '~1.0.0-beta.1',  // tilde + prerelease: dropped
+    d: '>=1.0.0-rc.1',   // comparator + prerelease: dropped
+    e: '^2.0.0+build',   // caret + build metadata: dropped (operator + suffix)
+    f: '^1.2.3',         // caret, no suffix: kept
+    g: '2.0.0+build',    // exact + build, no operator: kept
+  } });
+  assert.deepEqual(resolveDepVersions(pkg), { a: '1.0.0-rc.3', f: '^1.2.3', g: '2.0.0+build' });
+});
+
 test('resolveDepVersions: bun.lock exact version overrides the package.json range', () => {
   const pkg = JSON.stringify({ dependencies: { zod: '^3.22.0' } });
   const lock = '{\n  "packages": {\n    "zod": ["zod@3.22.4", "", {}, "sha512-abc=="],\n  }\n}';

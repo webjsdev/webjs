@@ -21,7 +21,7 @@ import { resolveDepVersions, rewriteDepSpecifiers } from '../../packages/server/
 //    keeps its package.json value (exact OR an inline-safe range); only declared
 //    deps are returned; a protocol range is left bare.
 const PKG = JSON.stringify({
-  dependencies: { zod: '^3.0.0', 'date-fns': '^3.0.0' },
+  dependencies: { zod: '^3.0.0', 'date-fns': '^3.0.0', 'rc-exact': '1.0.0-rc.3', 'rc-range': '^1.0.0-rc.3' },
   devDependencies: { 'drizzle-orm': '0.44.0', local: 'workspace:*' },
 });
 const LOCK = '{\n  "packages": {\n    "zod": ["zod@3.22.4", "", {}, "sha512-x"],\n    "left-pad": ["left-pad@1.3.0"]\n  }\n}';
@@ -30,6 +30,8 @@ assert.equal(versions.zod, '3.22.4', 'bun.lock exact version pins zod (lock wins
 assert.equal(versions['date-fns'], '^3.0.0', 'a caret range with no lock entry forwards as-is (Bun resolves it inline)');
 assert.equal(versions['drizzle-orm'], '0.44.0', 'package.json exact value for a dep not in the lock');
 assert.equal(versions.local, undefined, 'a workspace: protocol range is left bare (not inline-safe)');
+assert.equal(versions['rc-exact'], '1.0.0-rc.3', 'an exact prerelease forwards (Bun resolves it inline)');
+assert.equal(versions['rc-range'], undefined, 'a caret-prerelease is left bare (Bun ENOENTs on it, #703)');
 assert.equal(versions['left-pad'], undefined, 'a lock-only transitive dep is not pinned');
 
 const SRC = "import { z } from 'zod';\nimport { sql } from 'drizzle-orm';\nimport { addDays } from 'date-fns';\nimport rel from './local.ts';\nconst label = 'zod';\n";
