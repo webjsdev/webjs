@@ -77,15 +77,16 @@ reproducible installs across machines, commit a `bun.lock` (its exact pin wins
 over a floating range) or run `bun install` (materialized `node_modules`), which
 is what the production Docker image does.
 
-The scaffold leans on this for cross-runtime consistency (#692): `webjs create`
-ships EXACT-pinned deps (`@webjsdev/*` pinned to the versions the scaffolding CLI
-ships with, `drizzle-orm` / `drizzle-kit` to the `1.0.0-rc.3` relations-v2 line,
-`pg` exact), so a fresh app resolves IDENTICAL versions on npm and bun, and a Bun
-zero-install app runs those exact versions. drizzle's npm `latest` tag is a 0.x
-line, so a `^` range would have pulled the wrong major under bun, and the exact
-pin fixes that. A dep the user adds later with a `^` range now resolves to the
-highest match WITHIN that range under bun zero-install (correct semver), not the
-latest major.
+The scaffold ships idiomatic ranges (#700): `webjs create` writes `@webjsdev/*`
+and `pg` as caret ranges (`^<version>`), since #698 makes a normal caret resolve
+correctly under bun zero-install (the highest match, not absolute latest), so a
+fresh app picks up patch updates the way an npm user expects. `drizzle-orm` /
+`drizzle-kit` stay EXACT at the `1.0.0-rc.3` relations-v2 line: that line is a
+PRERELEASE, and bun zero-install ENOENTs on a caret-prerelease inline specifier
+(`drizzle-orm@^1.0.0-rc.3`, verified) while the exact prerelease resolves, so a
+range would break the scaffold under bun until the 1.0 stable ships. A dep the
+user adds later with a `^` range resolves to the highest match WITHIN that range
+under bun zero-install (correct semver), not the latest major.
 The rewrite is server-runtime only (it shapes what Bun fetches for SSR and server
 actions; the browser is served bare specifiers via the importmap / jspm), only
 touches declared deps, and is a no-op when `node_modules` exists (Bun uses the
