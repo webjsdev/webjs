@@ -7,6 +7,7 @@ import { checkNodeInline, nodeInlineMessage } from '../lib/node-preflight.js';
 import { loadAppEnv, resolvePort } from '../lib/port.js';
 import { planDevSupervisor } from '../lib/dev-supervisor.js';
 import { importWebjsdev } from '../lib/import-webjsdev.js';
+import { isBunZeroInstall, runBunTool } from '../lib/bun-zeroinstall.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const [cmd, ...rest] = process.argv.slice(2);
@@ -220,6 +221,16 @@ async function main() {
       const map = { generate: ['generate'], migrate: ['migrate'], push: ['push'], studio: ['studio'] };
       const kitArgs = map[sub];
       if (!kitArgs) { console.error('Unknown db subcommand.\n' + USAGE); process.exit(1); }
+      // Bun zero-install (no node_modules): resolveBin cannot find the bin, so
+      // run drizzle-kit via Bun auto-install at its app-pinned version, with the
+      // server pin preload rewriting the schema's transitive deps (#704).
+      if (isBunZeroInstall()) {
+        const code = await runBunTool({
+          pkg: 'drizzle-kit', binSubpath: 'bin.cjs', argv0: 'drizzle-kit',
+          args: [...kitArgs, ...args],
+        });
+        process.exit(code);
+      }
       // Resolve the app's own drizzle-kit bin and spawn it with the CURRENT
       // runtime (process.execPath). This drops the hard `npx` dependency (#570):
       // `npx` is absent in a pure oven/bun image, which broke `webjs db migrate`

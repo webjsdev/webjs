@@ -11,11 +11,14 @@
  * `onLoad` that rewrites a declared dep's bare specifier to its pinned inline
  * version, the same `resolveDepVersions` + `rewriteDepSpecifiers` the server uses.
  *
- * Unlike the server transform (app files only), this DELIBERATELY rewrites the
- * tool's own cached files too: drizzle-kit's internal `import 'drizzle-orm'` must
- * resolve to the app's pinned ORM, not drizzle-kit's own floating range. Only
- * specifiers for packages the APP declares are rewritten (the version map is the
- * app's `package.json` / `bun.lock`), so a tool-only transitive dep is untouched.
+ * APP files only: the onLoad filter EXCLUDES `node_modules` / Bun's global
+ * install cache, so a cached dependency is loaded by Bun normally. This matters
+ * for two reasons: (1) returning `{ contents }` from an onLoad forces ESM parsing,
+ * which BREAKS a CommonJS dep (drizzle-kit's `bin.cjs` is CJS), and (2) it is not
+ * needed, since Bun resolves a tool's OWN transitive deps from the tool's
+ * manifest. The user `db/schema.server.ts`'s `import 'drizzle-orm'` IS an app
+ * file, so it is pinned; the tool bin itself is pinned by the cli (the spec it
+ * passes is already `<tool>@<version>`), so the cache never needs rewriting.
  *
  * Bun-only: it references `Bun.plugin` / `Bun.Transpiler`, and is never loaded on
  * Node (only a Bun spawn preloads it). The pure rewrite core stays unit-testable
@@ -47,14 +50,25 @@ if (typeof Bun !== 'undefined') {
     Bun.plugin({
       name: 'webjs-pin-spawn',
       setup(build) {
-        build.onLoad({ filter: /\.[mc]?[jt]sx?(\?|$)/ }, async (args) => {
-          const loader = /\.tsx?($|\?)/.test(args.path) ? 'tsx' : (/\.[mc]?ts($|\?)/.test(args.path) ? 'ts' : 'js');
-          let src;
-          try { src = await Bun.file(args.path).text(); } catch { return undefined; }
-          const imports = new Bun.Transpiler({ loader: loader === 'tsx' ? 'tsx' : loader }).scanImports(src);
-          const out = rewriteDepSpecifiers(src, imports, versions);
-          if (out === src) return undefined;
-          return { contents: out, loader };
+        // Exclude node_modules / Bun's global cache: only APP files are
+        // rewritten, so a cached (possibly CommonJS) dep loads normally.
+        build.onLoad({ filter: /^(?!.*[\/\\](?:node_modules|install[\/\\]cache|\.bun)[\/\\]).*\.[mc]?[jt]sx?(\?|$)/ }, async (args) => {
+          const path = args.path.split('?')[0];
+          const loader = /\.[mc]?tsx$/.test(path) ? 'tsx'
+            : /\.[mc]?ts$/.test(path) ? 'ts'
+            : /\.[mc]?jsx$/.test(path) ? 'jsx'
+            : 'js';
+          // Bun's onLoad MUST return an object for EVERY matched file (returning
+          // undefined to defer to the default loader is an error), so we always
+          // read and return the source, rewritten when a declared-dep specifier
+          // matched. A genuine read failure (missing file) propagates, so Bun
+          // reports it exactly as it would without the plugin.
+          let src = await Bun.file(args.path).text();
+          try {
+            const imports = new Bun.Transpiler({ loader }).scanImports(src);
+            src = rewriteDepSpecifiers(src, imports, versions);
+          } catch { /* fail-open: serve the raw source, never break the load (#715) */ }
+          return { contents: src, loader };
         });
       },
     });

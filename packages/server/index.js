@@ -1,4 +1,5 @@
 export { startServer, createRequestHandler } from './src/dev.js';
+export { bunPinPreloadPath } from './src/bun-pin-preload-path.js';
 export { assertNodeVersion, checkNodeVersion, requiredNodeMajor, parseMajor, parseRequiredMajor } from './src/node-version.js';
 export { validateEnv, formatEnvErrors, loadEnvSchema, applyEnvValidation } from './src/env-schema.js';
 export { buildRouteTable, matchPage, matchApi } from './src/router.js';
