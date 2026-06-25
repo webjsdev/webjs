@@ -159,6 +159,36 @@ test('scanBareImports: skips route.ts and middleware.ts (file-router server-only
   await rm(dir, { recursive: true, force: true });
 });
 
+test('scanBareImports: skips the webjs-bun.mjs bootstrap + server-only @webjsdev pkgs (#713)', async () => {
+  const dir = join(tmpdir(), `webjs-test-vendor-bun-boot-${Date.now()}`);
+  await mkdir(join(dir, 'app'), { recursive: true });
+  // The #675 zero-install bootstrap: imports the server-only CLI. Must NOT be
+  // scanned. It also imports a NON-framework specifier, so this locks in the
+  // file-level exclusion independently of FRAMEWORK_SERVER_ONLY: if the
+  // webjs-bun.mjs skip is removed, `boot-only-vendor` leaks into the scan.
+  await writeFile(join(dir, 'webjs-bun.mjs'),
+    `await import('@webjsdev/cli/bin/webjs.js');\nimport 'boot-only-vendor';`);
+  // A page that legitimately imports a server-only framework pkg name directly
+  // (defensive: even if surfaced, it must not reach the jspm path).
+  await writeFile(
+    join(dir, 'app', 'page.ts'),
+    `import dayjs from 'dayjs';
+     import '@webjsdev/server/some';
+     import '@webjsdev/mcp';`,
+  );
+
+  const found = await scanBareImports(dir);
+
+  assert.ok(found.has('dayjs'), 'a real browser vendor is still scanned');
+  assert.ok(!found.has('boot-only-vendor'), 'webjs-bun.mjs is skipped at the file level, even for a non-framework import (#713)');
+  assert.ok(!found.has('@webjsdev/cli/bin/webjs.js'), 'webjs-bun.mjs bootstrap must not be scanned (#713)');
+  assert.ok(![...found].some((s) => s.startsWith('@webjsdev/cli')), 'no @webjsdev/cli specifier leaks');
+  assert.ok(![...found].some((s) => s.startsWith('@webjsdev/server')), 'server-only @webjsdev/server excluded');
+  assert.ok(![...found].some((s) => s.startsWith('@webjsdev/mcp')), 'server-only @webjsdev/mcp excluded');
+
+  await rm(dir, { recursive: true, force: true });
+});
+
 test('scanBareImports: skips test/ and tests/ directories', async () => {
   const dir = join(tmpdir(), `webjs-test-vendor-test-skip-${Date.now()}`);
   await mkdir(join(dir, 'test'), { recursive: true });
@@ -624,7 +654,7 @@ test('jspmGenerate #446 fallback: an unresolvable install does not collapse the 
   // are still coherent and the good packages keep their entries.
   /** @type {Array<string[]>} */
   const calls = [];
-  const BAD = '@webjsdev/server@0.1.0';
+  const BAD = '@acme/private@0.1.0';
   const mock = async (_url, opts) => {
     const { install } = JSON.parse(opts.body);
     calls.push(install);
@@ -645,7 +675,7 @@ test('jspmGenerate #446 fallback: an unresolvable install does not collapse the 
     const map = await jspmGenerate(['picocolors@1.1.1', 'clsx@2.1.1', BAD]);
     assert.ok(map['picocolors'], 'good package survives despite the bad neighbour');
     assert.ok(map['clsx'], 'second good package survives too');
-    assert.equal(map['@webjsdev/server'], undefined, 'the unresolvable install dropped out');
+    assert.equal(map['@acme/private'], undefined, 'the unresolvable install dropped out');
     // The survivors were re-resolved together (coherence restored): there is
     // a final unified call carrying exactly the two good installs.
     const reunified = calls.find(c => !c.includes(BAD) && c.length === 2);
@@ -671,12 +701,12 @@ test('jspmGenerate #446 fallback: a GOOD package whose probe blips transiently i
   await writeFile(join(dir, 'node_modules', 'clsx', 'package.json'),
     JSON.stringify({ name: 'clsx', version: '2.1.1', main: 'index.js' }));
   await writeFile(join(dir, 'node_modules', 'clsx', 'index.js'), 'export default 1;\n');
-  await mkdir(join(dir, 'node_modules', '@webjsdev', 'server'), { recursive: true });
-  await writeFile(join(dir, 'node_modules', '@webjsdev', 'server', 'package.json'),
-    JSON.stringify({ name: '@webjsdev/server', version: '0.1.0', main: 'index.js' }));
-  await writeFile(join(dir, 'node_modules', '@webjsdev', 'server', 'index.js'), 'export default 1;\n');
+  await mkdir(join(dir, 'node_modules', '@acme', 'private'), { recursive: true });
+  await writeFile(join(dir, 'node_modules', '@acme', 'private', 'package.json'),
+    JSON.stringify({ name: '@acme/private', version: '0.1.0', main: 'index.js' }));
+  await writeFile(join(dir, 'node_modules', '@acme', 'private', 'index.js'), 'export default 1;\n');
 
-  const BAD = '@webjsdev/server@0.1.0';
+  const BAD = '@acme/private@0.1.0';
   let blipPicocolors = true; // the first picocolors probe 503s, later ones succeed
   const mock = async (url, opts) => {
     const u = String(url);
@@ -701,7 +731,7 @@ test('jspmGenerate #446 fallback: a GOOD package whose probe blips transiently i
   };
   try {
     await withMockedFetch(mock, async () => {
-      const thunk = async () => new Set(['picocolors', 'clsx', '@webjsdev/server']);
+      const thunk = async () => new Set(['picocolors', 'clsx', '@acme/private']);
       clearVendorCache();
       const first = await resolveVendorImports(dir, thunk);
       // picocolors must NOT be permanently dropped: it is served from the
@@ -709,7 +739,7 @@ test('jspmGenerate #446 fallback: a GOOD package whose probe blips transiently i
       // probe flags the resolve for retry rather than evicting it.
       assert.equal(first.ok, false,
         'a transient probe failure flags the whole resolve for retry, not a silent drop');
-      assert.equal(first.imports['@webjsdev/server'], undefined,
+      assert.equal(first.imports['@acme/private'], undefined,
         'the genuinely unresolvable install is still absent');
 
       // The retry (blip cleared) must surface picocolors coherently.
