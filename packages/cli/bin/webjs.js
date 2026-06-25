@@ -326,6 +326,20 @@ async function main() {
 
         if (testFiles.length > 0) {
           console.log(`webjs test: running ${testFiles.length} server test file(s)…\n`);
+          // Bun's `test` runner does NOT auto-install (unlike `bun run`, which
+          // powers `webjs db` / `typecheck` zero-install): even an inline-pinned
+          // import is unresolved under `bun test` with no node_modules (#704,
+          // verified). So a zero-install `webjs test` can only fail cryptically;
+          // surface a clear, actionable message instead. db / typecheck stay
+          // zero-install.
+          if (process.versions.bun && isBunZeroInstall(cwd)) {
+            console.error(
+              'webjs test: Bun\'s test runner does not auto-install dependencies, so it\n' +
+              'cannot run under zero-install. Run `bun install` once in this app, then\n' +
+              're-run `webjs test`. (`webjs db` and `webjs typecheck` work zero-install.)',
+            );
+            process.exit(1);
+          }
           // Dispatch to the current runtime's test runner (#570). Node uses
           // `node --test <files>`; Bun's runner is the `bun test <files>`
           // subcommand (`bun --test` is invalid). process.execPath is the
