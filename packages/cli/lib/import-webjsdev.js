@@ -8,7 +8,12 @@
 // only when the bare import fails, so Node and installed apps are unaffected.
 
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// The cli's OWN package.json (one level up from this lib), used as the fallback
+// pin source for `@webjsdev/*` packages the app does not declare (mcp, ui).
+const CLI_PKG = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json');
 
 /**
  * Whether a declared version is a Bun inline-safe specifier: an exact version or
@@ -25,15 +30,15 @@ export function inlineSafeVersion(v) {
 }
 
 /**
- * The version the app's `package.json` (in `cwd`) declares for `name`, when it
- * is inline-safe; else null.
+ * The version a `package.json` at `pkgPath` declares for `name`, when it is
+ * inline-safe; else null.
  * @param {string} name
- * @param {string} [cwd]
+ * @param {string} pkgPath  absolute path to a package.json
  * @returns {string | null}
  */
-export function appDeclaredVersion(name, cwd = process.cwd()) {
+function declaredIn(name, pkgPath) {
   try {
-    const pkg = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'));
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
     const v = { ...pkg.dependencies, ...pkg.devDependencies }[name];
     if (inlineSafeVersion(v)) return v;
   } catch { /* no readable package.json */ }
@@ -41,10 +46,37 @@ export function appDeclaredVersion(name, cwd = process.cwd()) {
 }
 
 /**
+ * The inline-safe version to pin `name` to: the app's `package.json` (in `cwd`)
+ * first (it declares `@webjsdev/server` etc.), else the cli's OWN package.json
+ * (for `@webjsdev/*` the app does not declare, like `mcp` / `ui`). Null if
+ * neither has an inline-safe declaration.
+ * @param {string} name
+ * @param {string} [cwd]
+ * @returns {string | null}
+ */
+export function appDeclaredVersion(name, cwd = process.cwd()) {
+  return declaredIn(name, join(cwd, 'package.json')) || declaredIn(name, CLI_PKG);
+}
+
+/**
+ * Whether an import error is a resolution / not-found failure (so a version
+ * retry is warranted), vs a genuine load-time throw from the module's own code
+ * (which we must NOT retry, to avoid masking it and re-running side effects).
+ * @param {unknown} err
+ * @returns {boolean}
+ */
+function isResolutionError(err) {
+  if (err && /** @type {any} */ (err).code === 'ERR_MODULE_NOT_FOUND') return true;
+  const msg = err && String(/** @type {any} */ (err).message || err);
+  return !!msg && /ENOENT|cannot find|cannot resolve|resolving package|module not found/i.test(msg);
+}
+
+/**
  * Import an `@webjsdev/*` module, pinning the version under Bun zero-install. On
  * Node or an installed app the bare specifier resolves from `node_modules` (no
- * retry). On a bare-import failure (Bun zero-install), retry with the app's
- * declared version inline. A subpath (`/check`) is preserved across the rewrite.
+ * retry). On a RESOLUTION failure (Bun zero-install), retry with the app's (else
+ * the cli's own) declared version inline. A real load-time throw is rethrown,
+ * not retried. A subpath (`/check`) is preserved across the rewrite.
  * @param {string} spec  e.g. `@webjsdev/server` or `@webjsdev/server/check`
  * @param {(s: string) => Promise<any>} [importer]  injectable for tests
  * @returns {Promise<any>}
@@ -53,6 +85,7 @@ export async function importWebjsdev(spec, importer = (s) => import(s)) {
   try {
     return await importer(spec);
   } catch (err) {
+    if (!isResolutionError(err)) throw err;
     const m = /^(@webjsdev\/[^/]+)(\/.*)?$/.exec(spec);
     const pkg = m && m[1];
     const sub = (m && m[2]) || '';

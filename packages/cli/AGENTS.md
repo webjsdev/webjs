@@ -104,8 +104,8 @@ lib/
                          `webjs-bun.mjs` bootstrap under `--bun` (#675), so Bun
                          auto-install resolves deps and a Bun app serves with no
                          `bun install`. The cli pins its own `@webjsdev/*`
-                         imports to the app-declared version under zero-install
-                         (`importWebjsdev`, #709), since a bare
+                         imports to the app-declared (else the cli's own) version
+                         under zero-install (`importWebjsdev`, #709), since a bare
                          `import('@webjsdev/server')` would otherwise ENOENT
                          (Bun's auto-install ignores the cli's range and flakily
                          fetches latest). The test/check/typecheck tooling stays
