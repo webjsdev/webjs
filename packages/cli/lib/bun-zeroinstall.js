@@ -51,9 +51,10 @@ export function bunToolArgv({ preloadPath, binSpec, argv0, args }) {
 }
 
 /**
- * Spawn a CLI tool under Bun zero-install and resolve with its exit code. Reads
- * the server's spawn pin preload path off the already-loaded `@webjsdev/server`
- * (no extra resolution under zero-install).
+ * Spawn a CLI tool under Bun zero-install and resolve with its exit code. The
+ * preload path comes off `@webjsdev/server` (imported via `importWebjsdev`,
+ * which resolves under zero-install). Spawns through `process.execPath`, which
+ * here IS the running `bun` binary (this only runs on Bun), so it cannot ENOENT.
  * @param {{ pkg: string, binSubpath: string, argv0: string, args: string[], cwd?: string }} o
  * @returns {Promise<number>}
  */
@@ -63,7 +64,8 @@ export async function runBunTool({ pkg, binSubpath, argv0, args, cwd = process.c
   if (!preloadPath) throw new Error('@webjsdev/server did not expose bunPinPreloadPath');
   const argv = bunToolArgv({ preloadPath, binSpec: pinnedBinSpec(pkg, binSubpath, cwd), argv0, args });
   return new Promise((resolve) => {
-    const child = spawn('bun', argv, { stdio: 'inherit', cwd });
+    const child = spawn(process.execPath, argv, { stdio: 'inherit', cwd });
     child.on('exit', (code) => resolve(code ?? 0));
+    child.on('error', () => resolve(1)); // never hang if the spawn fails
   });
 }

@@ -1,10 +1,11 @@
 /**
  * Standalone Bun preload that pins a SPAWNED tool's deps under zero-install (#704).
  *
- * `webjs db` / `test` / `typecheck` spawn a tool (drizzle-kit, the test runner,
- * tsc) as a SEPARATE Bun process. The server's #685 onLoad does NOT run there, so
- * the tool's bare imports (and the user-authored `db/schema.server.ts`'s
- * `import 'drizzle-orm'`) would hit raw auto-install and get the wrong version.
+ * `webjs db` / `typecheck` spawn a tool (drizzle-kit, tsc) as a SEPARATE Bun
+ * process. The server's #685 onLoad does NOT run there, so the tool's bare
+ * imports (and the user-authored `db/schema.server.ts`'s `import 'drizzle-orm'`)
+ * would hit raw auto-install and get the wrong version. (`webjs test` does not
+ * use this: Bun's `test` runner has no auto-install, so it needs `bun install`.)
  *
  * This module is referenced from a `bunfig.toml` `preload` (or `bun --preload`)
  * on the spawn, so it loads in the tool process FIRST and installs a `Bun.plugin`
