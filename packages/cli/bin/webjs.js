@@ -482,6 +482,15 @@ async function main() {
       // pass through (e.g. `webjs typecheck --watch`). Exits non-zero on a type
       // error, so it works as a CI gate and the scaffolded `typecheck` script.
       const cwd = process.cwd();
+      // Bun zero-install (no node_modules): run tsc via Bun auto-install at the
+      // app-pinned version (#704). tsc is a plain bin, the same path as db.
+      if (isBunZeroInstall(cwd)) {
+        const code = await runBunTool({
+          pkg: 'typescript', binSubpath: 'bin/tsc', argv0: 'tsc',
+          args: ['--noEmit', ...rest], cwd,
+        });
+        process.exit(code);
+      }
       const { createRequire } = await import('node:module');
       let tscPath;
       try {
