@@ -649,7 +649,7 @@ test('jspmGenerate #446 fallback: an unresolvable install does not collapse the 
   // are still coherent and the good packages keep their entries.
   /** @type {Array<string[]>} */
   const calls = [];
-  const BAD = '@webjsdev/server@0.1.0';
+  const BAD = '@acme/private@0.1.0';
   const mock = async (_url, opts) => {
     const { install } = JSON.parse(opts.body);
     calls.push(install);
@@ -670,7 +670,7 @@ test('jspmGenerate #446 fallback: an unresolvable install does not collapse the 
     const map = await jspmGenerate(['picocolors@1.1.1', 'clsx@2.1.1', BAD]);
     assert.ok(map['picocolors'], 'good package survives despite the bad neighbour');
     assert.ok(map['clsx'], 'second good package survives too');
-    assert.equal(map['@webjsdev/server'], undefined, 'the unresolvable install dropped out');
+    assert.equal(map['@acme/private'], undefined, 'the unresolvable install dropped out');
     // The survivors were re-resolved together (coherence restored): there is
     // a final unified call carrying exactly the two good installs.
     const reunified = calls.find(c => !c.includes(BAD) && c.length === 2);
@@ -696,12 +696,12 @@ test('jspmGenerate #446 fallback: a GOOD package whose probe blips transiently i
   await writeFile(join(dir, 'node_modules', 'clsx', 'package.json'),
     JSON.stringify({ name: 'clsx', version: '2.1.1', main: 'index.js' }));
   await writeFile(join(dir, 'node_modules', 'clsx', 'index.js'), 'export default 1;\n');
-  await mkdir(join(dir, 'node_modules', '@webjsdev', 'server'), { recursive: true });
-  await writeFile(join(dir, 'node_modules', '@webjsdev', 'server', 'package.json'),
-    JSON.stringify({ name: '@webjsdev/server', version: '0.1.0', main: 'index.js' }));
-  await writeFile(join(dir, 'node_modules', '@webjsdev', 'server', 'index.js'), 'export default 1;\n');
+  await mkdir(join(dir, 'node_modules', '@acme', 'private'), { recursive: true });
+  await writeFile(join(dir, 'node_modules', '@acme', 'private', 'package.json'),
+    JSON.stringify({ name: '@acme/private', version: '0.1.0', main: 'index.js' }));
+  await writeFile(join(dir, 'node_modules', '@acme', 'private', 'index.js'), 'export default 1;\n');
 
-  const BAD = '@webjsdev/server@0.1.0';
+  const BAD = '@acme/private@0.1.0';
   let blipPicocolors = true; // the first picocolors probe 503s, later ones succeed
   const mock = async (url, opts) => {
     const u = String(url);
@@ -726,7 +726,7 @@ test('jspmGenerate #446 fallback: a GOOD package whose probe blips transiently i
   };
   try {
     await withMockedFetch(mock, async () => {
-      const thunk = async () => new Set(['picocolors', 'clsx', '@webjsdev/server']);
+      const thunk = async () => new Set(['picocolors', 'clsx', '@acme/private']);
       clearVendorCache();
       const first = await resolveVendorImports(dir, thunk);
       // picocolors must NOT be permanently dropped: it is served from the
@@ -734,7 +734,7 @@ test('jspmGenerate #446 fallback: a GOOD package whose probe blips transiently i
       // probe flags the resolve for retry rather than evicting it.
       assert.equal(first.ok, false,
         'a transient probe failure flags the whole resolve for retry, not a silent drop');
-      assert.equal(first.imports['@webjsdev/server'], undefined,
+      assert.equal(first.imports['@acme/private'], undefined,
         'the genuinely unresolvable install is still absent');
 
       // The retry (blip cleared) must surface picocolors coherently.
