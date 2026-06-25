@@ -68,7 +68,10 @@ export function appDeclaredVersion(name, cwd = process.cwd()) {
 function isResolutionError(err) {
   if (err && /** @type {any} */ (err).code === 'ERR_MODULE_NOT_FOUND') return true;
   const msg = err && String(/** @type {any} */ (err).message || err);
-  return !!msg && /ENOENT|cannot find|cannot resolve|resolving package|module not found/i.test(msg);
+  // Narrow on purpose: Node sets the code above; Bun's auto-install miss is
+  // `ENOENT while resolving package '...'`. A broad "cannot find" would match
+  // ordinary runtime errors ("Cannot find user") and wrongly trigger a retry.
+  return !!msg && /ENOENT|resolving package|module not found/i.test(msg);
 }
 
 /**

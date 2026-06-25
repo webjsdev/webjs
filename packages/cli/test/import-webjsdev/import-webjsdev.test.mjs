@@ -58,6 +58,18 @@ test('importWebjsdev: a non-resolution (load-time) throw is rethrown WITHOUT a r
   assert.equal(calls, 1, 'no retry on a non-resolution error');
 });
 
+test('importWebjsdev: a runtime "Cannot find ..." error is NOT mistaken for a resolution miss', async (t) => {
+  const cwd = mkdtempSync(join(tmpdir(), 'webjs-iw5-'));
+  writeFileSync(join(cwd, 'package.json'), JSON.stringify({ dependencies: { '@webjsdev/server': '^0.8.0' } }));
+  t.mock.method(process, 'cwd', () => cwd);
+  let calls = 0;
+  await assert.rejects(
+    importWebjsdev('@webjsdev/server', () => { calls++; return Promise.reject(new Error('Cannot find user in the database')); }),
+    /Cannot find user/,
+  );
+  assert.equal(calls, 1, 'a top-level "Cannot find ..." throw must not trigger a version retry');
+});
+
 test('importWebjsdev: a resolution error for a dep NEITHER app nor cli declares rethrows', async (t) => {
   const cwd = mkdtempSync(join(tmpdir(), 'webjs-iw4-'));
   writeFileSync(join(cwd, 'package.json'), JSON.stringify({ dependencies: {} }));
