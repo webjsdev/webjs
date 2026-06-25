@@ -68,6 +68,18 @@ import { resolveDepVersions } from './bun-pin-rewrite.js';
 const BUILTIN = new Set(['@webjsdev/core', '@webjsdev/core/']);
 
 /**
+ * Server-only framework packages that must NEVER be vendored to the browser.
+ * Unlike `@webjsdev/core` (browser-bound, served locally via `/__webjs/core/*`),
+ * these are pure server packages: the CLI (and its `webjs-bun.mjs` bootstrap
+ * import, #675), the SSR runtime, the MCP server. A stray browser-graph scan
+ * that surfaces one of them must not push it onto the jspm path (#713). Matched
+ * on the extracted package name, so subpaths (`@webjsdev/cli/bin/webjs.js`) are
+ * covered. `@webjsdev/ui` is intentionally absent: its components ARE
+ * browser-bound, so it stays vendorable.
+ */
+const FRAMEWORK_SERVER_ONLY = new Set(['@webjsdev/cli', '@webjsdev/server', '@webjsdev/mcp']);
+
+/**
  * Scan source files under `dir` for bare import specifiers reachable
  * from the browser. Returns a Set of package names.
  *
@@ -91,6 +103,12 @@ export async function scanBareImports(dir, skipFiles) {
   const found = new Set();
   await walk(dir, found, skipFiles);
   for (const b of BUILTIN) found.delete(b);
+  // Drop server-only framework packages (and their subpaths) so they never
+  // reach the importmap / jspm path (#713).
+  for (const spec of found) {
+    const p = extractPackageName(spec);
+    if (p && FRAMEWORK_SERVER_ONLY.has(p)) found.delete(spec);
+  }
   return found;
 }
 
@@ -140,6 +158,10 @@ function isServerOnlyFile(name) {
   if (/\.server\.(js|ts|mjs|mts)$/.test(name)) return true;
   if (/^route\.(js|ts|mjs|mts)$/.test(name)) return true;
   if (/^middleware\.(js|ts|mjs|mts)$/.test(name)) return true;
+  // The zero-install Bun bootstrap (#675): a server-only entry that imports
+  // `@webjsdev/cli`. It never loads in the browser, so keep it out of the
+  // vendor scan, else the CLI would be pushed onto the jspm path (#713).
+  if (name === 'webjs-bun.mjs') return true;
   return false;
 }
 
@@ -667,7 +689,7 @@ export async function vendorImportMapEntries(bareImports, appDir) {
   for (const spec of bareImports) {
     if (BUILTIN.has(spec)) continue;
     const pkg = extractPackageName(spec);
-    if (!pkg || BUILTIN.has(pkg)) continue;
+    if (!pkg || BUILTIN.has(pkg) || FRAMEWORK_SERVER_ONLY.has(pkg)) continue;
     const version = getPackageVersion(pkg, appDir) || declared[pkg];
     if (!version) continue;
     // Splice the version into the specifier: 'dayjs/plugin/utc' with
@@ -1236,7 +1258,7 @@ export async function pinAll(appDir, opts = {}) {
   for (const spec of bare) {
     if (BUILTIN.has(spec)) continue;
     const pkg = extractPackageName(spec);
-    if (!pkg || BUILTIN.has(pkg)) continue;
+    if (!pkg || BUILTIN.has(pkg) || FRAMEWORK_SERVER_ONLY.has(pkg)) continue;
     const version = getPackageVersion(pkg, appDir);
     if (!version) continue;
     const subpath = spec.slice(pkg.length);
