@@ -41,3 +41,17 @@ test('npm and bun scaffolds emit identical specifiers; @webjsdev/* ranged, drizz
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('postgres scaffold ships pg as a caret range, identical across npm/bun (#700)', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'webjs-vc-pg-'));
+  try {
+    await scaffoldApp('node-pg', root, { template: 'api', runtime: 'node', install: false, db: 'postgres' });
+    await scaffoldApp('bun-pg', root, { template: 'api', runtime: 'bun', install: false, db: 'postgres' });
+    const node = JSON.parse(readFileSync(join(root, 'node-pg', 'package.json'), 'utf8'));
+    const bun = JSON.parse(readFileSync(join(root, 'bun-pg', 'package.json'), 'utf8'));
+    assert.ok(isCaret(node.dependencies.pg), `pg should be a caret range, got "${node.dependencies.pg}"`);
+    assert.equal(node.dependencies.pg, bun.dependencies.pg, 'pg specifier identical across npm/bun');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

@@ -58,9 +58,9 @@ export function resolveCreateInstall({ runtime, explicitInstall, noInstall } = {
 }
 
 /**
- * Read the EXACT version of `@webjsdev/<pkg>` the scaffolding CLI ships with, so
- * the generated `package.json` pins it precisely and BOTH npm and bun resolve
- * the same version (#692). Walks the `require.resolve` node_modules search paths
+ * Read the EXACT version of `@webjsdev/<pkg>` the scaffolding CLI ships with.
+ * `webjsdevRange` carets over this for the generated `package.json` (#700), so a
+ * fresh app tracks the line the CLI shipped. Walks the `require.resolve` node_modules search paths
  * and fs-reads `<pkg>/package.json` directly: `@webjsdev/server` (and `ui`) hide
  * `./package.json` behind `exports`, so a bare `require('<pkg>/package.json')`
  * fails (same constraint #687 hit). Falls back to `'latest'` when the package is
@@ -103,7 +103,7 @@ function webjsdevRange(pkg) {
  * the CLI does NOT itself depend on, so they cannot be read from the CLI's
  * closure (unlike `@webjsdev/*`). Since #698, Bun zero-install resolves a normal
  * caret range correctly (highest match, not absolute latest), so `pg` is an
- * idiomatic `^` range. Drizzle is the PINNED to an exact RC: its 1.0 line is a
+ * idiomatic `^` range. Drizzle is PINNED to an exact RC: its 1.0 line is a
  * PRERELEASE (`1.0.0-rc.3`), and Bun zero-install ENOENTs on a caret-prerelease
  * inline specifier (`drizzle-orm@^1.0.0-rc.3`, verified on Bun 1.3.14) while the
  * exact prerelease resolves, so drizzle must stay exact until the 1.0 stable
