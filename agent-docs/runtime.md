@@ -71,8 +71,9 @@ inline range the standard way (`zod@^3.20.0` picks the highest matching `3.x`,
 verified on Bun 1.3.14), so a caret, tilde, or comparator range now resolves
 correctly under zero-install, NOT to the latest major. Left BARE (so still
 latest) are a protocol range (`workspace:`, `file:`, `link:`, git / URL), a bare
-wildcard (`*`, `x`, empty), a multi-token range (a space or a `||` union), and a
-dist-tag (`latest`, `next`, which auto-install resolves unreliably). For fully
+wildcard (`*`, `x`, empty), a multi-token range (a space or a `||` union), a
+range over a prerelease (`^1.0.0-rc.3`, which bun cannot resolve inline, #703),
+and a dist-tag (`latest`, `next`, which auto-install resolves unreliably). For fully
 reproducible installs across machines, commit a `bun.lock` (its exact pin wins
 over a floating range) or run `bun install` (materialized `node_modules`), which
 is what the production Docker image does.

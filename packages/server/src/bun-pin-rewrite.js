@@ -91,23 +91,32 @@ function isExactVersion(v) {
 /**
  * Whether a declared package.json version is safe to forward verbatim as a Bun
  * inline specifier (`name@<v>`). Accepts a single-token semver: an exact version
- * or a caret / tilde / comparator range over a numeric core (`1.2.3`, `^1.2.3`,
- * `~1.2`, `>=1.2.3`, `^3`), with an optional prerelease / build suffix. Bun
- * resolves these the standard way (highest match) at auto-install time.
+ * (with an optional prerelease / build suffix, `1.2.3`, `1.0.0-rc.3`) or a caret
+ * / tilde / comparator range over a numeric core WITHOUT a suffix (`^1.2.3`,
+ * `~1.2`, `>=1.2.3`, `^3`). Bun resolves these the standard way (highest match)
+ * at auto-install time.
  *
- * Rejects, so they are left BARE: a protocol range (`workspace:`, `file:`,
- * `link:`, `git+...`, an `http(s)://` URL, any value with a `:`), a bare
- * wildcard (`*`, `x`, `X`, empty), a multi-token range (a space, a `||` union,
- * a hyphen `1 - 2` range, which would break the specifier string), and a
- * dist-tag (`latest`, `next`, which auto-install resolves unreliably). A
- * rejected value resolves to latest, the pre-feature behaviour, never a broken
- * specifier.
+ * Rejects, so they are left BARE: a RANGE OPERATOR combined with a prerelease /
+ * build suffix (`^1.0.0-rc.3`, `~1.0.0-beta.1`, #703): Bun zero-install ENOENTs
+ * on a caret-prerelease inline specifier (verified, `drizzle-orm@^1.0.0-rc.3`
+ * errors while the exact `drizzle-orm@1.0.0-rc.3` resolves). Also a protocol
+ * range (`workspace:`, `file:`, `link:`, `git+...`, an `http(s)://` URL, any
+ * value with a `:`), a bare wildcard (`*`, `x`, `X`, empty), a multi-token range
+ * (a space, a `||` union, a hyphen `1 - 2` range, which would break the
+ * specifier string), and a dist-tag (`latest`, `next`, which auto-install
+ * resolves unreliably). A rejected value resolves to latest, the pre-feature
+ * behaviour, never a broken specifier.
  * @param {unknown} v
  * @returns {boolean}
  */
 function isInlineableVersion(v) {
-  return typeof v === 'string'
-    && /^(?:>=|<=|>|<|=|\^|~)?\d+(?:\.\d+){0,2}(?:[-+][0-9A-Za-z.-]+)?$/.test(v);
+  if (typeof v !== 'string') return false;
+  const m = /^(>=|<=|>|<|=|\^|~)?(\d+(?:\.\d+){0,2})([-+][0-9A-Za-z.-]+)?$/.exec(v);
+  if (!m) return false;
+  // A range operator (group 1) plus a prerelease / build suffix (group 3) is not
+  // inline-resolvable under Bun zero-install (#703). An exact version with a
+  // suffix, or a range with no suffix, is fine.
+  return !(m[1] && m[3]);
 }
 
 /**
