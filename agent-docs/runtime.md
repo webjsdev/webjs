@@ -100,8 +100,8 @@ and 404 in the browser. So when the on-disk read finds nothing, the importmap
 falls back to the SAME `bun.lock` exact else `package.json` declared semver the
 server pin uses (jspm resolves a range), so the server and the browser resolve a
 vendor from one source. A committed `bun.lock` keeps the two on the exact same
-version (no skew); a floating range can resolve independently on each side, the
-same determinism caveat as the server pin, which a `bun.lock` removes.
+version (no skew). A floating range can resolve independently on each side, the
+same determinism caveat as the server pin that a `bun.lock` removes.
 
 **Reproducibility:** dev resolves on demand (now at the pinned versions), and the
 scaffold's Bun Dockerfile still keeps an explicit `bun install` so a prod image
