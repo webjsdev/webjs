@@ -267,9 +267,10 @@ export function getPackageVersion(pkgName, appDir) {
  * SAME source the Bun server pin uses (`resolveDepVersions`), so the browser
  * importmap and the server resolve a vendor from one source. Returns a map of
  * package name to the bun.lock exact (when present) else the package.json
- * declared semver (an exact or an inline-safe range). Empty when there is no
- * readable package.json. Used only as a fallback when `getPackageVersion`
- * (require.resolve against node_modules) finds nothing.
+ * declared semver (an exact or an inline-safe range). Covers `dependencies` and
+ * `devDependencies` (what `resolveDepVersions` reads), NOT `peerDependencies`.
+ * Empty when there is no readable package.json. Used only as a fallback when
+ * `getPackageVersion` (require.resolve against node_modules) finds nothing.
  * @param {string} appDir
  * @returns {Record<string, string>}
  */

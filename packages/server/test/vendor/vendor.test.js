@@ -2305,3 +2305,29 @@ test('declaredVendorVersions fills the gap getPackageVersion leaves under zero-i
   assert.equal(declaredVendorVersions(dir).dayjs, '^1.11.0', 'the fallback supplies the declared version');
   await rm(dir, { recursive: true, force: true });
 });
+
+test('vendorImportMapEntries: zero-install falls back to the declared version (integration, #699)', async () => {
+  const dir = join(tmpdir(), `webjs-imap-zi-${Date.now()}`);
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, 'package.json'), JSON.stringify({ dependencies: { dayjs: '^1.11.0' } }));
+  // No node_modules here, so getPackageVersion returns null. Without the
+  // declared fallback, dayjs is dropped and the browser import 404s. This drives
+  // the actual fix site (vendorImportMapEntries) through the zero-install path.
+  // Counterfactual: revert `|| declared[pkg]` and `sentInstall` becomes [].
+  assert.equal(getPackageVersion('dayjs', dir), null, 'no node_modules -> on-disk resolution finds nothing');
+  let sentInstall = null;
+  const mock = async (_url, opts) => {
+    const { install } = JSON.parse(opts.body);
+    sentInstall = install;
+    const imports = {};
+    for (const i of install) imports[i.replace(/@[^@]*$/, '')] = `https://ga.jspm.io/npm:${i}/mock.js`;
+    return { ok: true, status: 200, json: async () => ({ map: { imports } }) };
+  };
+  await withMockedFetch(mock, async () => {
+    clearVendorCache();
+    const map = await vendorImportMapEntries(new Set(['dayjs']), dir);
+    assert.deepEqual(sentInstall, ['dayjs@^1.11.0'], 'the declared range reaches the jspm install (the fallback fired)');
+    assert.equal(map.dayjs, 'https://ga.jspm.io/npm:dayjs@^1.11.0/mock.js', 'the importmap gets a dayjs entry');
+  });
+  await rm(dir, { recursive: true, force: true });
+});
