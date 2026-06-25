@@ -39,9 +39,10 @@ function detectPackageManager() {
  * Decide whether `webjs create` runs the post-scaffold install, per target
  * runtime (#682). Node installs by default (it needs `node_modules` to run);
  * Bun SKIPS by default (zero-install: `bun run dev` resolves deps on the fly,
- * #675). Under Bun zero-install deps resolve to their LATEST version (ranges
- * and any lockfile are ignored at runtime, #690), so `bun install` is the path
- * to pinned, reproducible versions. Explicit flags win: `--install` forces it
+ * #675). Under Bun zero-install webjs pins a declared dep to its package.json
+ * version via the #685/#698 onLoad rewrite (a caret range now resolves the
+ * highest match, not absolute latest), so `bun install` is the path to a frozen
+ * lockfile, not a correctness fix. Explicit flags win: `--install` forces it
  * on, `--no-install` forces it off. The CLI entry points call this and pass an
  * explicit boolean to `scaffoldApp`, so the library default (no install unless
  * `install: true`) is unchanged for programmatic callers.
@@ -57,9 +58,9 @@ export function resolveCreateInstall({ runtime, explicitInstall, noInstall } = {
 }
 
 /**
- * Read the EXACT version of `@webjsdev/<pkg>` the scaffolding CLI ships with, so
- * the generated `package.json` pins it precisely and BOTH npm and bun resolve
- * the same version (#692). Walks the `require.resolve` node_modules search paths
+ * Read the EXACT version of `@webjsdev/<pkg>` the scaffolding CLI ships with.
+ * `webjsdevRange` carets over this for the generated `package.json` (#700), so a
+ * fresh app tracks the line the CLI shipped. Walks the `require.resolve` node_modules search paths
  * and fs-reads `<pkg>/package.json` directly: `@webjsdev/server` (and `ui`) hide
  * `./package.json` behind `exports`, so a bare `require('<pkg>/package.json')`
  * fails (same constraint #687 hit). Falls back to `'latest'` when the package is
@@ -83,18 +84,35 @@ function webjsdevVersion(pkg) {
 }
 
 /**
- * Exact third-party dep versions the scaffold pins (#692). These are template
- * deps the CLI does NOT itself depend on, so they cannot be read from the CLI's
- * closure (unlike `@webjsdev/*`). Pinned EXACT so npm and bun resolve identically
- * (a `^` range diverges: npm takes latest-in-range, bun zero-install takes
- * absolute latest, #690). Drizzle is the 1.0 relations-v2 RC the scaffold's db
- * code targets (its npm `latest` tag is a 0.x line, so a range would resolve the
- * wrong major under bun). Refresh on a deliberate bump, same as the old ranges.
+ * The `@webjsdev/<pkg>` specifier for the generated `package.json` (#700): a
+ * caret range over the version the scaffolding CLI ships with, so a fresh app
+ * picks up patch updates the way an npm user expects (a `^0.x` caret stays
+ * within the minor). Bun zero-install resolves a normal caret range correctly
+ * since #698, so this no longer diverges from npm. Falls back to `'latest'` when
+ * the version is not resolvable (keeps `^latest` from ever being emitted).
+ * @param {string} pkg  e.g. 'cli', 'core', 'server'
+ * @returns {string}
+ */
+function webjsdevRange(pkg) {
+  const v = webjsdevVersion(pkg);
+  return v === 'latest' ? 'latest' : '^' + v;
+}
+
+/**
+ * Third-party dep specifiers the scaffold ships (#700). These are template deps
+ * the CLI does NOT itself depend on, so they cannot be read from the CLI's
+ * closure (unlike `@webjsdev/*`). Since #698, Bun zero-install resolves a normal
+ * caret range correctly (highest match, not absolute latest), so `pg` is an
+ * idiomatic `^` range. Drizzle is PINNED to an exact RC: its 1.0 line is a
+ * PRERELEASE (`1.0.0-rc.3`), and Bun zero-install ENOENTs on a caret-prerelease
+ * inline specifier (`drizzle-orm@^1.0.0-rc.3`, verified on Bun 1.3.14) while the
+ * exact prerelease resolves, so drizzle must stay exact until the 1.0 stable
+ * ships. Refresh on a deliberate bump.
  */
 const SCAFFOLD_DEP_VERSIONS = {
   'drizzle-orm': '1.0.0-rc.3',
   'drizzle-kit': '1.0.0-rc.3',
-  pg: '8.22.0',
+  pg: '^8.22.0',
 };
 
 /**
@@ -418,21 +436,19 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // for relations v2. SQLite needs NO driver dependency: the connection
       // uses the built-in node:sqlite (Node) / bun:sqlite (Bun) via Drizzle's
       // node-sqlite / bun-sqlite adapters. Postgres still needs the pg driver.
-      // Exact pins (#692): npm and bun must resolve identical versions. A `^`
-      // range diverges (npm = latest-in-range; bun zero-install = absolute
-      // latest, #690), and drizzle's npm `latest` tag is a 0.x line, so a range
-      // would pull the wrong major under bun. @webjsdev/* are pinned to the
-      // versions the scaffolding CLI itself ships with.
+      // Since #698 a normal caret range resolves correctly under bun
+      // zero-install, so @webjsdev/* and pg are idiomatic `^` ranges (#700).
+      // Drizzle stays EXACT: its 1.0 line is a prerelease RC, and bun ENOENTs
+      // on a caret-prerelease inline specifier, so a range would break it.
       'drizzle-orm': SCAFFOLD_DEP_VERSIONS['drizzle-orm'],
       ...(dialect === 'postgres' ? { pg: SCAFFOLD_DEP_VERSIONS.pg } : {}),
-      '@webjsdev/cli': webjsdevVersion('cli'),
-      '@webjsdev/core': webjsdevVersion('core'),
-      '@webjsdev/server': webjsdevVersion('server'),
+      '@webjsdev/cli': webjsdevRange('cli'),
+      '@webjsdev/core': webjsdevRange('core'),
+      '@webjsdev/server': webjsdevRange('server'),
     },
     devDependencies: {
-      // Exact pin (#692): drizzle-kit is resolved under bun zero-install via
-      // `bun run db:generate` / `db:migrate`, so it must match drizzle-orm's
-      // exact version across runtimes (a range would diverge, #690).
+      // Exact pin: drizzle-kit shares drizzle-orm's prerelease 1.0 RC, which bun
+      // cannot resolve as a caret-prerelease range, so it stays exact (#700).
       'drizzle-kit': SCAFFOLD_DEP_VERSIONS['drizzle-kit'],
       ...(dialect === 'postgres' ? { '@types/pg': '^8.11.0' } : {}),
       // The TypeScript compiler, for `npm run typecheck` (webjs typecheck runs
@@ -1476,10 +1492,11 @@ For AI agents, read this before editing scaffolded files:
     }
   } else if (isBun) {
     // Bun zero-install (#675): no install needed; `bun run dev` resolves deps on
-    // the fly. They resolve to LATEST (ranges + lockfile ignored at runtime,
-    // #690), so point at `bun install` for pinned, reproducible versions.
+    // the fly. Since #698 they resolve to their package.json versions (a caret
+    // range to its highest match), so point at `bun install` for a frozen
+    // lockfile and editor type intelligence, not a correctness fix.
     console.log(`Skipped install. Bun resolves dependencies on the fly, so 'bun run dev' and 'bun run start' work as-is (no node_modules).`);
-    console.log(`These resolve to each dependency's LATEST version. Run 'bun install' in ${name}/ when you want pinned, reproducible versions (and editor type intelligence).\n`);
+    console.log(`These resolve to the versions in package.json. Run 'bun install' in ${name}/ to freeze a lockfile and get editor type intelligence.\n`);
   }
 
   // Next-steps banner prints LAST so the actionable command is the

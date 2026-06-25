@@ -1,8 +1,10 @@
 /**
- * #692: a Node scaffold and a Bun scaffold must resolve IDENTICAL dependency
- * versions, and the runtime-critical deps must be EXACT-pinned (a `^` range
- * diverges across runtimes: npm takes latest-in-range, bun zero-install takes
- * absolute latest, #690). Scaffolds both runtimes (no install) and compares.
+ * #700: the scaffold ships `@webjsdev/*` (and `pg`) as idiomatic caret ranges.
+ * Bun zero-install resolves a normal caret range correctly since #698, so the
+ * #692 exact-pin is no longer needed for them. Drizzle stays EXACT: its 1.0 line
+ * is a prerelease RC (`1.0.0-rc.3`), and bun ENOENTs on a caret-prerelease inline
+ * specifier (`drizzle-orm@^1.0.0-rc.3`), so a range would break it. A Node and a
+ * Bun scaffold still emit IDENTICAL specifiers (only the run scripts differ).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,8 +14,9 @@ import { join } from 'node:path';
 import { scaffoldApp } from '../../lib/create.js';
 
 const isExact = (v) => typeof v === 'string' && /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(v);
+const isCaret = (v) => typeof v === 'string' && /^\^\d/.test(v);
 
-test('npm and bun scaffolds resolve identical dependency versions, exact-pinned (#692)', async () => {
+test('npm and bun scaffolds emit identical specifiers; @webjsdev/* ranged, drizzle exact (#700)', async () => {
   const root = mkdtempSync(join(tmpdir(), 'webjs-vc-'));
   try {
     await scaffoldApp('node-app', root, { template: 'api', runtime: 'node', install: false });
@@ -21,17 +24,33 @@ test('npm and bun scaffolds resolve identical dependency versions, exact-pinned 
     const node = JSON.parse(readFileSync(join(root, 'node-app', 'package.json'), 'utf8'));
     const bun = JSON.parse(readFileSync(join(root, 'bun-app', 'package.json'), 'utf8'));
 
-    // Identical versions across runtimes (only the run scripts differ by runtime).
+    // Identical specifiers across runtimes (only the run scripts differ by runtime).
     assert.deepEqual(node.dependencies, bun.dependencies, 'dependencies identical across npm/bun scaffolds');
     assert.deepEqual(node.devDependencies, bun.devDependencies, 'devDependencies identical across npm/bun scaffolds');
 
-    // Runtime-critical deps are EXACT (so bun zero-install resolves the same as npm).
-    for (const d of ['drizzle-orm', '@webjsdev/core', '@webjsdev/server', '@webjsdev/cli']) {
-      assert.ok(isExact(node.dependencies[d]), `${d} must be exact-pinned, got "${node.dependencies[d]}"`);
+    // @webjsdev/* are caret ranges now (#700): bun resolves a normal caret correctly since #698.
+    for (const d of ['@webjsdev/core', '@webjsdev/server', '@webjsdev/cli']) {
+      assert.ok(isCaret(node.dependencies[d]), `${d} should be a caret range, got "${node.dependencies[d]}"`);
     }
-    assert.ok(isExact(node.devDependencies['drizzle-kit']), `drizzle-kit must be exact-pinned, got "${node.devDependencies['drizzle-kit']}"`);
-    // drizzle is the 1.0 relations-v2 RC the db code targets, not the 0.x `latest` tag.
+
+    // Drizzle stays EXACT: a caret-prerelease (drizzle-orm@^1.0.0-rc.3) ENOENTs under bun zero-install.
+    assert.ok(isExact(node.dependencies['drizzle-orm']), `drizzle-orm must stay exact, got "${node.dependencies['drizzle-orm']}"`);
+    assert.ok(isExact(node.devDependencies['drizzle-kit']), `drizzle-kit must stay exact, got "${node.devDependencies['drizzle-kit']}"`);
     assert.match(node.dependencies['drizzle-orm'], /^1\.0\.0-rc\./, 'drizzle-orm pinned to the 1.0 RC line');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('postgres scaffold ships pg as a caret range, identical across npm/bun (#700)', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'webjs-vc-pg-'));
+  try {
+    await scaffoldApp('node-pg', root, { template: 'api', runtime: 'node', install: false, db: 'postgres' });
+    await scaffoldApp('bun-pg', root, { template: 'api', runtime: 'bun', install: false, db: 'postgres' });
+    const node = JSON.parse(readFileSync(join(root, 'node-pg', 'package.json'), 'utf8'));
+    const bun = JSON.parse(readFileSync(join(root, 'bun-pg', 'package.json'), 'utf8'));
+    assert.ok(isCaret(node.dependencies.pg), `pg should be a caret range, got "${node.dependencies.pg}"`);
+    assert.equal(node.dependencies.pg, bun.dependencies.pg, 'pg specifier identical across npm/bun');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
