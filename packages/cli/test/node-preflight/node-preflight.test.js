@@ -35,13 +35,16 @@ test('webjs.js imports @webjsdev/server dynamically, never statically (the guard
   // defeat the inline check on Node below 24.
   const { readFile } = await import('node:fs/promises');
   const { fileURLToPath } = await import('node:url');
-  const binPath = fileURLToPath(new URL('../../bin/webjs.js', import.meta.url));
-  const src = await readFile(binPath, 'utf8');
+  const src = await readFile(fileURLToPath(new URL('../../bin/webjs.js', import.meta.url)), 'utf8');
   // No static `import ... from '@webjsdev/server...'` (a dynamic await import is fine).
   const staticServerImport = /(^|\n)\s*import\b[^\n]*\bfrom\s*['"]@webjsdev\/server/;
   assert.equal(staticServerImport.test(src), false, 'webjs.js must not statically import @webjsdev/server');
-  // It DOES reach the server via a dynamic import.
-  assert.ok(/await\s+import\(\s*['"]@webjsdev\/server/.test(src), 'webjs.js should dynamically import @webjsdev/server');
+  // It reaches the server via the dynamic `importWebjsdev` helper (#709).
+  assert.ok(/await\s+importWebjsdev\(\s*['"]@webjsdev\/server/.test(src), 'webjs.js should reach @webjsdev/server via importWebjsdev');
+  // The guard moved into the helper, so it must NOT statically import the server
+  // either (a static import there would link-fail on old Node before the guard).
+  const helper = await readFile(fileURLToPath(new URL('../../lib/import-webjsdev.js', import.meta.url)), 'utf8');
+  assert.equal(staticServerImport.test(helper), false, 'import-webjsdev.js must not statically import @webjsdev/server');
 });
 
 test('checkNodeInline sources the minimum from the engines range', () => {

@@ -6,6 +6,7 @@ import { resolveBin } from '../lib/resolve-bin.js';
 import { checkNodeInline, nodeInlineMessage } from '../lib/node-preflight.js';
 import { loadAppEnv, resolvePort } from '../lib/port.js';
 import { planDevSupervisor } from '../lib/dev-supervisor.js';
+import { importWebjsdev } from '../lib/import-webjsdev.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const [cmd, ...rest] = process.argv.slice(2);
@@ -121,7 +122,7 @@ async function main() {
   // instead of crashing cryptically later. `help` is exempt so a user on an
   // old Node can still read usage.
   if (cmd !== 'help' && cmd !== undefined) {
-    const { assertNodeVersion } = await import('@webjsdev/server');
+    const { assertNodeVersion } = await importWebjsdev('@webjsdev/server');
     assertNodeVersion({ onFail: 'exit' });
   }
   switch (cmd) {
@@ -129,7 +130,7 @@ async function main() {
       // If we're already inside the reload child (node --watch or bun --hot),
       // start the server directly.
       if (process.env.__WEBJS_DEV_CHILD === '1') {
-        const { startServer } = await import('@webjsdev/server');
+        const { startServer } = await importWebjsdev('@webjsdev/server');
         // Load `.env` BEFORE resolving the port so a `PORT` set there is in
         // process.env at resolution time (#447). The server loads `.env`
         // too, but that runs too late to affect the port the CLI computes.
@@ -165,7 +166,7 @@ async function main() {
       });
 
       if (plan.mode === 'inline') {
-        const { startServer } = await import('@webjsdev/server');
+        const { startServer } = await importWebjsdev('@webjsdev/server');
         loadAppEnv(process.cwd());
         const port = resolvePort(flag(rest, '--port'));
         await startServer({ appDir: process.cwd(), port, dev: true });
@@ -182,7 +183,7 @@ async function main() {
       break;
     }
     case 'start': {
-      const { startServer } = await import('@webjsdev/server');
+      const { startServer } = await importWebjsdev('@webjsdev/server');
       // Load `.env` BEFORE resolving the port so a `PORT` set there wins over
       // the 8080 default (#447), same as for `dev`.
       loadAppEnv(process.cwd());
@@ -364,7 +365,7 @@ async function main() {
       break;
     }
     case 'check': {
-      const { checkConventions, RULES } = await import('@webjsdev/server/check');
+      const { checkConventions, RULES } = await importWebjsdev('@webjsdev/server/check');
 
       if (rest.includes('--rules')) {
         console.log('webjs check, correctness rules:');
@@ -390,7 +391,7 @@ async function main() {
       if (rest.includes('--json')) {
         // The projector lives in @webjsdev/mcp (the MCP `check` tool's home),
         // so `check --json` and the MCP tool stay byte-identical (#415).
-        const { projectCheck } = await import('@webjsdev/mcp/check-report');
+        const { projectCheck } = await importWebjsdev('@webjsdev/mcp/check-report');
         console.log(JSON.stringify(projectCheck(violations)));
         if (violations.length > 0) process.exit(1);
         break;
@@ -447,7 +448,7 @@ async function main() {
       // narrowing the @webjsdev/core `Route` href union + per-route `params`.
       // Opt-in codegen: the static types in @webjsdev/core work without it
       // (un-generated apps see `Route = string`).
-      const { generateRouteTypes } = await import('@webjsdev/server');
+      const { generateRouteTypes } = await importWebjsdev('@webjsdev/server');
       const { mkdir, writeFile } = await import('node:fs/promises');
       const appDir = process.cwd();
       const text = await generateRouteTypes(appDir);
@@ -545,7 +546,7 @@ Full docs: https://docs.webjs.com`);
       const sub = rest[0];
       const args = rest.slice(1);
       const appDir = process.cwd();
-      const { pinAll, unpinPackage, listPinned, auditPinned, findOutdated, updatePinned, readPinFile, ensureVendorCommittable, SUPPORTED_PROVIDERS } = await import('@webjsdev/server');
+      const { pinAll, unpinPackage, listPinned, auditPinned, findOutdated, updatePinned, readPinFile, ensureVendorCommittable, SUPPORTED_PROVIDERS } = await importWebjsdev('@webjsdev/server');
 
       // Parse `--from <provider>` once at the top so subcommands share it.
       // Mirrors importmap-rails's `bin/importmap pin foo --from jsdelivr`.
@@ -808,7 +809,7 @@ Full docs: https://docs.webjs.com`);
       // runnable directly as `npx @webjsdev/mcp`); `webjs mcp` delegates to it
       // for back-compat. The version advertised in the initialize handshake is
       // @webjsdev/mcp's own, resolved by its bin, so this passes none.
-      const { runMcpServer } = await import('@webjsdev/mcp');
+      const { runMcpServer } = await importWebjsdev('@webjsdev/mcp');
       const { createRequire } = await import('node:module');
       const require = createRequire(import.meta.url);
       let version = '0.0.0';
