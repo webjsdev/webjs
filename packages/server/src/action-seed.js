@@ -50,7 +50,7 @@
 
 import * as nodeModule from 'node:module';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stringify } from '@webjsdev/core';
@@ -307,7 +307,14 @@ function seedLoadHook(url, context, nextLoad) {
  * @param {string} appDir
  * @returns {((src: string, loader: 'ts' | 'js') => string) | null}
  */
-function buildBunPinTransform(appDir) {
+export function buildBunPinTransform(appDir) {
+  // Pinning is for TRUE zero-install only. When `node_modules` exists (an
+  // installed app, or a workspace member like this repo's own examples), Bun
+  // resolves bare specifiers from it, so injecting an inline version would
+  // bypass that. Worse, for a workspace-linked dep it would swap the local
+  // package for the published one (the #698 blog-on-Bun regression). So skip
+  // pinning entirely when node_modules is present; Bun uses the installed copy.
+  if (existsSync(join(appDir, 'node_modules'))) return null;
   let pkgText;
   try { pkgText = readFileSync(join(appDir, 'package.json'), 'utf8'); } catch { return null; }
   let lockText = null;

@@ -22,10 +22,19 @@
 
 /**
  * Resolve the version to pin each DECLARED dependency to: the exact version from
- * `bun.lock` when present (precise), else the package.json range/value as-is
- * (Bun resolves a range in an inline specifier). Only declared deps are
- * returned, so the rewrite never pins a transitive dep through an app import
- * (those follow from the pinned direct deps' own manifests).
+ * `bun.lock` when present (precise and reproducible), else the package.json
+ * declared value passed through as-is when it is an inline-safe semver. Bun's
+ * inline specifier resolves a range the standard way (`zod@^3.20.0` picks the
+ * highest matching `3.x`, verified), so passing the declared range through is
+ * the correct semver behaviour, the same a fresh `bun install` would pick. Only
+ * declared deps are returned, so the rewrite never pins a transitive dep through
+ * an app import (those follow from the pinned direct deps' own manifests).
+ *
+ * A protocol range (`workspace:`, `file:`, `link:`, git / URL) and a bare
+ * wildcard (`*`, `x`, empty) are NOT valid inline specifiers, so they are left
+ * BARE (resolving to latest, exactly as before this feature, never to a broken
+ * specifier). For reproducibility across machines, commit a `bun.lock` (its
+ * exact pin then wins over a floating range).
  *
  * Runtime-neutral: takes the two file contents (the Bun glue reads them via
  * `Bun.file`), so this stays unit-testable on Node.
@@ -55,14 +64,14 @@ export function resolveDepVersions(pkgJsonText, bunLockText) {
   }
 
   for (const [name, range] of Object.entries(declared)) {
-    // ONLY an EXACT version can be an inline specifier: Bun zero-install
-    // auto-install resolves `name@1.2.3` but ENOENTs on a range or dist-tag
-    // (`name@^1.2`, `name@latest`) and on a protocol range (`workspace:`,
-    // `file:`, ...). So pin to the bun.lock exact when present, else an exact
-    // package.json pin; a range without a lock is left BARE (it resolves to
-    // latest, exactly as before this feature, never to a broken specifier).
+    // bun.lock exact wins (precise and reproducible). Otherwise pass the
+    // declared semver through as an inline specifier: Bun resolves an exact,
+    // caret, tilde, or comparator range the standard way (highest match), so
+    // `name@^1.2.3` is correct, not broken. A protocol range (`workspace:`,
+    // `file:`, git / URL) and a bare wildcard (`*`, `x`, empty) are NOT
+    // inline-safe, so they are left BARE (latest, as before).
     if (lockExact[name]) out[name] = lockExact[name];
-    else if (isExactVersion(range)) out[name] = range;
+    else if (isInlineableVersion(range)) out[name] = range;
   }
   return out;
 }
@@ -77,6 +86,28 @@ export function resolveDepVersions(pkgJsonText, bunLockText) {
  */
 function isExactVersion(v) {
   return typeof v === 'string' && /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(v);
+}
+
+/**
+ * Whether a declared package.json version is safe to forward verbatim as a Bun
+ * inline specifier (`name@<v>`). Accepts a single-token semver: an exact version
+ * or a caret / tilde / comparator range over a numeric core (`1.2.3`, `^1.2.3`,
+ * `~1.2`, `>=1.2.3`, `^3`), with an optional prerelease / build suffix. Bun
+ * resolves these the standard way (highest match) at auto-install time.
+ *
+ * Rejects, so they are left BARE: a protocol range (`workspace:`, `file:`,
+ * `link:`, `git+...`, an `http(s)://` URL, any value with a `:`), a bare
+ * wildcard (`*`, `x`, `X`, empty), a multi-token range (a space, a `||` union,
+ * a hyphen `1 - 2` range, which would break the specifier string), and a
+ * dist-tag (`latest`, `next`, which auto-install resolves unreliably). A
+ * rejected value resolves to latest, the pre-feature behaviour, never a broken
+ * specifier.
+ * @param {unknown} v
+ * @returns {boolean}
+ */
+function isInlineableVersion(v) {
+  return typeof v === 'string'
+    && /^(?:>=|<=|>|<|=|\^|~)?\d+(?:\.\d+){0,2}(?:[-+][0-9A-Za-z.-]+)?$/.test(v);
 }
 
 /**

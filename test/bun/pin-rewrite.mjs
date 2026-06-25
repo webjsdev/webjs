@@ -18,25 +18,33 @@ import assert from 'node:assert/strict';
 import { resolveDepVersions, rewriteDepSpecifiers } from '../../packages/server/src/bun-pin-rewrite.js';
 
 // 1. resolveDepVersions: bun.lock exact pin wins; a dep absent from the lock
-//    keeps its package.json value; only declared deps are returned.
-const PKG = JSON.stringify({ dependencies: { zod: '^3.0.0' }, devDependencies: { 'drizzle-orm': '0.44.0' } });
+//    keeps its package.json value (exact OR an inline-safe range); only declared
+//    deps are returned; a protocol range is left bare.
+const PKG = JSON.stringify({
+  dependencies: { zod: '^3.0.0', 'date-fns': '^3.0.0' },
+  devDependencies: { 'drizzle-orm': '0.44.0', local: 'workspace:*' },
+});
 const LOCK = '{\n  "packages": {\n    "zod": ["zod@3.22.4", "", {}, "sha512-x"],\n    "left-pad": ["left-pad@1.3.0"]\n  }\n}';
 const versions = resolveDepVersions(PKG, LOCK);
-assert.equal(versions.zod, '3.22.4', 'bun.lock exact version pins zod');
-assert.equal(versions['drizzle-orm'], '0.44.0', 'package.json value for a dep not in the lock');
+assert.equal(versions.zod, '3.22.4', 'bun.lock exact version pins zod (lock wins over the range)');
+assert.equal(versions['date-fns'], '^3.0.0', 'a caret range with no lock entry forwards as-is (Bun resolves it inline)');
+assert.equal(versions['drizzle-orm'], '0.44.0', 'package.json exact value for a dep not in the lock');
+assert.equal(versions.local, undefined, 'a workspace: protocol range is left bare (not inline-safe)');
 assert.equal(versions['left-pad'], undefined, 'a lock-only transitive dep is not pinned');
 
-const SRC = "import { z } from 'zod';\nimport { sql } from 'drizzle-orm';\nimport rel from './local.ts';\nconst label = 'zod';\n";
+const SRC = "import { z } from 'zod';\nimport { sql } from 'drizzle-orm';\nimport { addDays } from 'date-fns';\nimport rel from './local.ts';\nconst label = 'zod';\n";
 
 // 2. The runtime-agnostic core, with a hand-built scanImports-shaped list.
 const handBuilt = [
   { kind: 'import-statement', path: 'zod' },
   { kind: 'import-statement', path: 'drizzle-orm' },
+  { kind: 'import-statement', path: 'date-fns' },
   { kind: 'import-statement', path: './local.ts' },
 ];
 const out = rewriteDepSpecifiers(SRC, handBuilt, versions);
 assert.match(out, /from 'zod@3\.22\.4'/, 'zod pinned to the bun.lock version');
 assert.match(out, /from 'drizzle-orm@0\.44\.0'/, 'drizzle-orm pinned to the package.json version');
+assert.match(out, /from 'date-fns@\^3\.0\.0'/, 'a caret range forwards into the inline specifier');
 assert.match(out, /from '\.\/local\.ts'/, 'a relative import is left alone');
 assert.match(out, /const label = 'zod';/, 'a non-import string literal is left alone');
 

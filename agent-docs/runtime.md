@@ -58,27 +58,34 @@ means no local type files). Pass `--install` to `bun create` to opt into the
 create-time install. The Node-targeted tooling scripts (`test` / `check` /
 `typecheck`) stay plain `webjs` on Node and still expect an install.
 
-**Version resolution under zero-install (#684, #690).** With no `node_modules`,
-Bun's runtime auto-install resolves each bare import to the dependency's
-**absolute latest** version. It IGNORES the `package.json` semver range AND any
-committed `bun.lock` (both apply only to `bun install`, not the on-the-fly
-runtime path). Verified on Bun 1.3.14: `^3.20.0`, even with a `bun.lock` pinning
-an older version, resolves to the latest major. The ONE exception is an EXACT
-`package.json` pin (`"zod": "3.22.4"`): the #685 `onLoad` transform rewrites a
-declared dep's bare specifier to an inline-versioned one (`zod` to `zod@3.22.4`),
-which Bun's auto-install honors (an exact inline version resolves; a range or
-dist-tag does not). So under zero-install: exact pins hold, while ranges and the
-lockfile go to latest. For pinned, reproducible installs run `bun install`
-(materialized `node_modules`), which is what the production Docker image does.
+**Version resolution under zero-install (#684, #690, #697).** With no
+`node_modules`, Bun's runtime auto-install resolves each BARE import to the
+dependency's **absolute latest** version. It IGNORES the `package.json` semver
+range AND any committed `bun.lock` (both apply only to `bun install`, not the
+on-the-fly runtime path). webjs closes that gap with the #685 `onLoad` transform,
+which rewrites a declared dep's bare specifier to an inline-versioned one that
+Bun's auto-install DOES honor. The pinned version is chosen in order: the
+`bun.lock` exact when present (precise and reproducible), else the `package.json`
+declared value forwarded as-is when it is an inline-safe semver. Bun resolves an
+inline range the standard way (`zod@^3.20.0` picks the highest matching `3.x`,
+verified on Bun 1.3.14), so a caret, tilde, or comparator range now resolves
+correctly under zero-install, NOT to the latest major. Left BARE (so still
+latest) are a protocol range (`workspace:`, `file:`, `link:`, git / URL), a bare
+wildcard (`*`, `x`, empty), a multi-token range (a space or a `||` union), and a
+dist-tag (`latest`, `next`, which auto-install resolves unreliably). For fully
+reproducible installs across machines, commit a `bun.lock` (its exact pin wins
+over a floating range) or run `bun install` (materialized `node_modules`), which
+is what the production Docker image does.
 
 The scaffold leans on this for cross-runtime consistency (#692): `webjs create`
 ships EXACT-pinned deps (`@webjsdev/*` pinned to the versions the scaffolding CLI
 ships with, `drizzle-orm` / `drizzle-kit` to the `1.0.0-rc.3` relations-v2 line,
 `pg` exact), so a fresh app resolves IDENTICAL versions on npm and bun, and a Bun
-zero-install app runs those exact versions (not latest). drizzle's npm `latest`
-tag is a 0.x line, so a `^` range would have pulled the wrong major under bun;
-the exact pin fixes that. A dep the user adds later with a `^` range follows the
-rule above (bun zero-install resolves it to latest).
+zero-install app runs those exact versions. drizzle's npm `latest` tag is a 0.x
+line, so a `^` range would have pulled the wrong major under bun, and the exact
+pin fixes that. A dep the user adds later with a `^` range now resolves to the
+highest match WITHIN that range under bun zero-install (correct semver), not the
+latest major.
 The rewrite is server-runtime only (it shapes what Bun fetches for SSR and server
 actions; the browser is served bare specifiers via the importmap / jspm), only
 touches declared deps, and is a no-op when `node_modules` exists (Bun uses the

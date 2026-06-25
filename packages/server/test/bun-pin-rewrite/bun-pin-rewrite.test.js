@@ -55,9 +55,11 @@ test('does NOT rewrite a method call or keyword-suffixed identifier (left-anchor
   assert.equal(out, "import { z } from 'zod@1.0.0';\nconst rows = db.select().from('zod');\nconst a = arr.from('zod');\n");
 });
 
-test('skips protocol ranges and caret ranges alike (only the exact pin survives)', () => {
+test('keeps an inline-safe caret range AND an exact pin, drops protocol ranges', () => {
   const pkg = JSON.stringify({ dependencies: { local: 'workspace:*', tool: 'file:../tool', zod: '^3.0.0', exact: '2.0.0' } });
-  assert.deepEqual(resolveDepVersions(pkg), { exact: '2.0.0' });
+  // workspace:/file: are not valid inline specifiers -> dropped; the caret
+  // range and the exact pin both forward (Bun resolves `zod@^3.0.0` inline).
+  assert.deepEqual(resolveDepVersions(pkg), { zod: '^3.0.0', exact: '2.0.0' });
 });
 
 test('rewrites export ... from and bare import', () => {
@@ -71,19 +73,23 @@ test('no matching deps returns the source unchanged (identity)', () => {
   assert.equal(rewriteDepSpecifiers(src, imp('zod'), {}), src);
 });
 
-test('resolveDepVersions: keeps an EXACT package.json pin, drops a range (Bun cannot fetch a range inline)', () => {
+test('resolveDepVersions: forwards a caret range AND an exact pin (Bun resolves the range inline)', () => {
   const pkg = JSON.stringify({ dependencies: { zod: '^3.22.0' }, devDependencies: { drizzle: '1.0.0' } });
-  // zod is a caret range -> not an inline-resolvable version -> dropped (stays bare).
-  // drizzle is an exact pin -> kept.
-  assert.deepEqual(resolveDepVersions(pkg), { drizzle: '1.0.0' });
+  // zod is a caret range -> inline-safe -> forwarded (Bun picks the highest 3.x).
+  // drizzle is an exact pin -> forwarded.
+  assert.deepEqual(resolveDepVersions(pkg), { zod: '^3.22.0', drizzle: '1.0.0' });
 });
 
-test('resolveDepVersions: keeps exact prerelease/build, drops dist-tag and every range form', () => {
+test('resolveDepVersions: keeps exact + single-token ranges, drops wildcard/dist-tag/multi-token', () => {
   const pkg = JSON.stringify({ dependencies: {
-    a: '1.2.3', b: '1.2.3-rc.1', c: '1.2.3+build', // exact: kept
-    d: '^1.0.0', e: '~1.2', f: '1.x', g: '*', h: 'latest', i: '>=1 <2', j: '1 || 2', // not exact: dropped
+    a: '1.2.3', b: '1.2.3-rc.1', c: '1.2.3+build',          // exact: kept
+    d: '^1.0.0', e: '~1.2', k: '>=1.2.3', l: '^3',          // single-token range: kept
+    f: '1.x', g: '*', h: 'latest', i: '>=1 <2', j: '1 || 2', // not inline-safe: dropped
   } });
-  assert.deepEqual(resolveDepVersions(pkg), { a: '1.2.3', b: '1.2.3-rc.1', c: '1.2.3+build' });
+  assert.deepEqual(resolveDepVersions(pkg), {
+    a: '1.2.3', b: '1.2.3-rc.1', c: '1.2.3+build',
+    d: '^1.0.0', e: '~1.2', k: '>=1.2.3', l: '^3',
+  });
 });
 
 test('resolveDepVersions: bun.lock exact version overrides the package.json range', () => {
