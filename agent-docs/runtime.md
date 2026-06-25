@@ -92,6 +92,17 @@ touches declared deps, and is a no-op when `node_modules` exists (Bun uses the
 installed copy). Default on. Opt out with `WEBJS_PIN=0` or
 `{ "webjs": { "pin": false } }`.
 
+The **browser importmap shares that version source under zero-install (#699).**
+The jspm importmap normally reads a vendor's version off `node_modules`, which is
+absent under Bun zero-install, so a non-elided component importing a vendor (a
+browser-bound `import dayjs from 'dayjs'`) would otherwise get no importmap entry
+and 404 in the browser. So when the on-disk read finds nothing, the importmap
+falls back to the SAME `bun.lock` exact else `package.json` declared semver the
+server pin uses (jspm resolves a range), so the server and the browser resolve a
+vendor from one source. A committed `bun.lock` keeps the two on the exact same
+version (no skew). A floating range can resolve independently on each side, the
+same determinism caveat as the server pin that a `bun.lock` removes.
+
 **Reproducibility:** dev resolves on demand (now at the pinned versions), and the
 scaffold's Bun Dockerfile still keeps an explicit `bun install` so a prod image
 is immutable and self-contained with no registry fetch at boot.
