@@ -1492,10 +1492,11 @@ For AI agents, read this before editing scaffolded files:
     }
   } else if (isBun) {
     // Bun zero-install (#675): no install needed; `bun run dev` resolves deps on
-    // the fly. They resolve to LATEST (ranges + lockfile ignored at runtime,
-    // #690), so point at `bun install` for pinned, reproducible versions.
+    // the fly. Since #698 they resolve to their package.json versions (a caret
+    // range to its highest match), so point at `bun install` for a frozen
+    // lockfile and editor type intelligence, not a correctness fix.
     console.log(`Skipped install. Bun resolves dependencies on the fly, so 'bun run dev' and 'bun run start' work as-is (no node_modules).`);
-    console.log(`These resolve to each dependency's LATEST version. Run 'bun install' in ${name}/ when you want pinned, reproducible versions (and editor type intelligence).\n`);
+    console.log(`These resolve to the versions in package.json. Run 'bun install' in ${name}/ to freeze a lockfile and get editor type intelligence.\n`);
   }
 
   // Next-steps banner prints LAST so the actionable command is the
