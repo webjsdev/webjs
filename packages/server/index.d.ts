@@ -204,6 +204,35 @@ export declare function applyEnvValidation(
 ): Promise<void>;
 
 // ---------------------------------------------------------------------------
+// bun-bg-install.js / bun-pin-rewrite.js (Bun transparent auto-install)
+// ---------------------------------------------------------------------------
+
+/**
+ * Run a transparent `bun install` in the app dir. `blocking` awaits to completion
+ * (true on exit 0 + node_modules present); `detached` spawns in the background
+ * (true when spawned). Fail-open: returns false on contention / missing bun /
+ * offline, never throws. Bun-only by caller contract.
+ */
+export declare function startTransparentInstall(
+  appDir: string,
+  opts?: {
+    mode?: 'blocking' | 'detached';
+    log?: (msg: string) => void;
+  },
+): Promise<boolean>;
+/** Build the `bun install` argv (`--frozen-lockfile` iff lock; reduced concurrency when detached). */
+export declare function buildBunInstallArgs(opts: { hasLock: boolean; detached?: boolean }): string[];
+/**
+ * Classify an app's declared deps for the Bun boot decision (no network):
+ * `inlineable` (servable zero-install), `needsInstall` (prerelease / non-inline-safe,
+ * provably not zero-installable), and `hasLock` (a reproducibility request).
+ */
+export declare function classifyBunDeps(
+  pkgJsonText: string,
+  bunLockText?: string | null,
+): { inlineable: string[]; needsInstall: string[]; hasLock: boolean };
+
+// ---------------------------------------------------------------------------
 // router.js
 // ---------------------------------------------------------------------------
 

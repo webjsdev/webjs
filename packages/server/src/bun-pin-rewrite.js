@@ -21,29 +21,47 @@
  */
 
 /**
- * Resolve the version to pin each DECLARED dependency to: the exact version from
- * `bun.lock` when present (precise and reproducible), else the package.json
- * declared value passed through as-is when it is an inline-safe semver. Bun's
- * inline specifier resolves a range the standard way (`zod@^3.20.0` picks the
- * highest matching `3.x`, verified), so passing the declared range through is
- * the correct semver behaviour, the same a fresh `bun install` would pick. Only
- * declared deps are returned, so the rewrite never pins a transitive dep through
- * an app import (those follow from the pinned direct deps' own manifests).
+ * Resolve the version to pin each DECLARED dependency to.
+ *
+ * Two callers, two needs, selected by `prefer`:
+ *
+ * - `prefer: 'exact'` (default): the `bun.lock` exact wins when present (precise
+ *   and reproducible), else the inline-safe declared range. This is the right
+ *   source for `vendor.js` `declaredVendorVersions` (#699) and `resolveBin`
+ *   pinning, which want the reproducible exact, and it is also what an INSTALLED
+ *   app would resolve from disk.
+ *
+ * - `prefer: 'range'`: the ZERO-INSTALL serve path. Bun's RUNTIME auto-install is
+ *   latest-only: an inline EXACT, NON-LATEST specifier ENOENTs on a cold cache
+ *   (proven; e.g. `is-odd@2.0.0`, `drizzle-orm@1.0.0-rc.3`), so emitting the
+ *   `bun.lock` exact would break the moment the exact is no longer `latest`. An
+ *   inline RANGE (`zod@^3.20.0`), by contrast, resolves latest-in-range
+ *   correctly. So for the auto-install serve path we forward the DECLARED range
+ *   for an inline-safe range, and fall back to the lock exact only for a dep
+ *   whose declared value is itself exact (nothing better to emit). Reproducibility
+ *   on this path is NOT achievable on Bun (it would require the latest-only
+ *   auto-install to fetch a non-latest version); a reproducible dep is served via
+ *   the transparent `bun install` + installed mode instead (see `classifyBunDeps`
+ *   and `bun-bg-install.js`).
+ *
+ * Only declared deps are returned, so the rewrite never pins a transitive dep
+ * through an app import (those follow from the pinned direct deps' own manifests).
  *
  * A protocol range (`workspace:`, `file:`, `link:`, git / URL) and a bare
  * wildcard (`*`, `x`, empty) are NOT valid inline specifiers, so they are left
  * BARE (resolving to latest, exactly as before this feature, never to a broken
- * specifier). For reproducibility across machines, commit a `bun.lock` (its
- * exact pin then wins over a floating range).
+ * specifier).
  *
  * Runtime-neutral: takes the two file contents (the Bun glue reads them via
  * `Bun.file`), so this stays unit-testable on Node.
  *
  * @param {string} pkgJsonText  package.json contents
  * @param {string | null} [bunLockText]  bun.lock contents, when present
+ * @param {{ prefer?: 'exact' | 'range' }} [opts]  source preference (default `'exact'`)
  * @returns {Record<string, string>}  package name -> version
  */
-export function resolveDepVersions(pkgJsonText, bunLockText) {
+export function resolveDepVersions(pkgJsonText, bunLockText, opts) {
+  const prefer = (opts && opts.prefer) || 'exact';
   /** @type {Record<string, string>} */
   const out = {};
   let pkg;
@@ -64,16 +82,92 @@ export function resolveDepVersions(pkgJsonText, bunLockText) {
   }
 
   for (const [name, range] of Object.entries(declared)) {
-    // bun.lock exact wins (precise and reproducible). Otherwise pass the
-    // declared semver through as an inline specifier: Bun resolves an exact,
-    // caret, tilde, or comparator range the standard way (highest match), so
-    // `name@^1.2.3` is correct, not broken. A protocol range (`workspace:`,
-    // `file:`, git / URL) and a bare wildcard (`*`, `x`, empty) are NOT
-    // inline-safe, so they are left BARE (latest, as before).
-    if (lockExact[name]) out[name] = lockExact[name];
-    else if (isInlineableVersion(range)) out[name] = range;
+    if (prefer === 'range') {
+      // Zero-install serve path. Forward the DECLARED range (resolves
+      // latest-in-range under Bun auto-install) when inline-safe; only fall
+      // back to the lock exact for a dep whose declared value is itself exact.
+      if (isInlineableVersion(range)) out[name] = range;
+      else if (lockExact[name] && isExactVersion(range)) out[name] = lockExact[name];
+    } else {
+      // Reproducible / installed-equivalent source. bun.lock exact wins,
+      // otherwise the inline-safe declared range.
+      if (lockExact[name]) out[name] = lockExact[name];
+      else if (isInlineableVersion(range)) out[name] = range;
+    }
   }
   return out;
+}
+
+/**
+ * Classify the app's DECLARED deps for the Bun boot decision, WITHOUT any
+ * network (so it runs on the latency-sensitive boot path). Bun runtime
+ * auto-install is latest-only, so a dep can be served zero-install ONLY when an
+ * inline RANGE that resolves latest-in-range is acceptable. A prerelease, a
+ * protocol / wildcard / multi-token / dist-tag value, or a reproducibility
+ * request (a committed `bun.lock`) cannot be served correctly that way and needs
+ * a real `bun install`.
+ *
+ * Returns:
+ * - `inlineable`: deps the zero-install pin can emit as an inline specifier (an
+ *   inline-safe range, or a plain exact). A plain exact MIGHT still be non-latest
+ *   and ENOENT, which we cannot detect without the network; the detached
+ *   background install (`bun-bg-install.js`) is the reactive net that heals the
+ *   next boot.
+ * - `needsInstall`: deps that PROVABLY cannot be served zero-install:
+ *   - a prerelease (an exact non-latest prerelease ENOENTs; a caret-prerelease
+ *     ENOENTs too, #703);
+ *   - a value that is not inline-safe (protocol / wildcard / multi-token /
+ *     dist-tag), which today resolves to latest and is not reproducible.
+ * - `hasLock`: a non-empty `bun.lock` is present, i.e. a reproducibility request.
+ *   The boot path treats this as a reason to install proactively (so the
+ *   undetectable non-latest-exact case is handled before the first request).
+ *
+ * The boot decision (in `dev.js`) installs proactively when `needsInstall` is
+ * non-empty OR `hasLock` is true; otherwise it serves on the fast path and fires
+ * a detached install.
+ *
+ * @param {string} pkgJsonText  package.json contents
+ * @param {string | null} [bunLockText]  bun.lock contents, when present
+ * @returns {{ inlineable: string[], needsInstall: string[], hasLock: boolean }}
+ */
+export function classifyBunDeps(pkgJsonText, bunLockText) {
+  /** @type {string[]} */ const inlineable = [];
+  /** @type {string[]} */ const needsInstall = [];
+  let pkg;
+  try { pkg = JSON.parse(pkgJsonText); } catch { return { inlineable, needsInstall, hasLock: false }; }
+  const declared = { ...pkg.dependencies, ...pkg.devDependencies };
+
+  /** @type {Record<string, string>} */
+  const lockExact = {};
+  if (bunLockText) {
+    for (const name of Object.keys(declared)) {
+      const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const m = bunLockText.match(new RegExp('"' + esc + '"\\s*:\\s*\\[\\s*"' + esc + '@([^"]+)"'));
+      if (m && isExactVersion(m[1])) lockExact[name] = m[1];
+    }
+  }
+
+  for (const [name, range] of Object.entries(declared)) {
+    const effective = lockExact[name] || range;
+    if (isPrereleaseVersion(effective) || !isInlineableVersion(range)) needsInstall.push(name);
+    else inlineable.push(name);
+  }
+  const hasLock = !!(bunLockText && bunLockText.trim().length);
+  return { inlineable, needsInstall, hasLock };
+}
+
+/**
+ * Whether a single-token semver (exact or a caret / tilde / comparator range)
+ * carries a `-prerelease` suffix (`1.0.0-rc.3`, `^1.0.0-rc.3`). Returns false
+ * for a multi-token / protocol / wildcard value (which the caller already routes
+ * to `needsInstall` via the inline-safety check).
+ * @param {unknown} v
+ * @returns {boolean}
+ */
+function isPrereleaseVersion(v) {
+  if (typeof v !== 'string') return false;
+  const m = /^(?:>=|<=|>|<|=|\^|~)?\d+(?:\.\d+){0,2}(-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.exec(v);
+  return !!(m && m[1]);
 }
 
 /**

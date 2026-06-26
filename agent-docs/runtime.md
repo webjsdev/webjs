@@ -32,7 +32,7 @@ correctness (the modulepreload hints still ship in the document head).
 bun-install CI, bun-command agent docs, and the zero-install bootstrap below.
 `--runtime` is orthogonal to `--template`.
 
-## Bun zero-install (#675)
+## Bun install model: zero-install fast path + transparent install (#675)
 
 A Bun app's `dev` / `start` / `db` scripts run through a generated app-local
 `webjs-bun.mjs` bootstrap under `bun --bun`:
@@ -42,56 +42,71 @@ A Bun app's `dev` / `start` / `db` scripts run through a generated app-local
 await import('@webjsdev/cli/bin/webjs.js');
 ```
 
-`bun --bun` overrides the `webjs` bin's Node shebang so the server runs on Bun;
-importing the CLI by bare specifier lets Bun auto-install resolve `@webjsdev/*`
-and the app's deps on demand, so a fresh app serves with **no `bun install`**.
+`bun --bun` overrides the `webjs` bin's Node shebang so the server runs on Bun,
+and importing the CLI by bare specifier lets Bun auto-install resolve
+`@webjsdev/*` and the app's deps on demand. So a fresh app serves with **no
+MANUAL `bun install`** (webjs runs one for you when a dep needs it, see below).
 The CLI's `start` is in-process and `dev` re-execs via `process.execPath` (which
 is `bun` here), so the server stays on Bun once the CLI does. `bunx
 @webjsdev/cli` is deliberately NOT used (it runs on Node via the shebang AND
-eager-installs the whole tree). The `start.before` migrate also routes through
-the bootstrap, so the boot-time `webjs db migrate` needs no `webjs` bin in
-`node_modules`. `bun create` does NOT run an install on Bun (#682): the scaffold skips it
-(zero-install by default), so `bun run dev` starts immediately. `bun install` is
-optional. Run it when you want pinned, reproducible versions (it materializes
-`node_modules` from the lockfile) or editor type intelligence (no `node_modules`
-means no local type files). Pass `--install` to `bun create` to opt into the
-create-time install. The Node-targeted tooling scripts (`test` / `check` /
-`typecheck`) stay plain `webjs` on Node and still expect an install.
+eager-installs the whole tree). `bun create` does NOT run an install on Bun
+(#682). The Node-targeted tooling scripts (`test` / `check` / `typecheck`) stay
+plain `webjs` on Node and still expect an install.
 
-**Version resolution under zero-install (#684, #690, #697).** With no
-`node_modules`, Bun's runtime auto-install resolves each BARE import to the
-dependency's **absolute latest** version. It IGNORES the `package.json` semver
-range AND any committed `bun.lock` (both apply only to `bun install`, not the
-on-the-fly runtime path). webjs closes that gap with the #685 `onLoad` transform,
-which rewrites a declared dep's bare specifier to an inline-versioned one that
-Bun's auto-install DOES honor. The pinned version is chosen in order: the
-`bun.lock` exact when present (precise and reproducible), else the `package.json`
-declared value forwarded as-is when it is an inline-safe semver. Bun resolves an
-inline range the standard way (`zod@^3.20.0` picks the highest matching `3.x`,
-verified on Bun 1.3.14), so a caret, tilde, or comparator range now resolves
-correctly under zero-install, NOT to the latest major. Left BARE (so still
-latest) are a protocol range (`workspace:`, `file:`, `link:`, git / URL), a bare
-wildcard (`*`, `x`, empty), a multi-token range (a space or a `||` union), a
-range over a prerelease (`^1.0.0-rc.3`, which bun cannot resolve inline, #703),
-and a dist-tag (`latest`, `next`, which auto-install resolves unreliably). For fully
-reproducible installs across machines, commit a `bun.lock` (its exact pin wins
-over a floating range) or run `bun install` (materialized `node_modules`), which
-is what the production Docker image does.
+**Why a transparent install exists: Bun auto-install is latest-only.** With no
+`node_modules`, Bun's runtime auto-install resolves a BARE import to the
+dependency's **latest** version (latest-in-range for an inline range), and it
+IGNORES the `package.json` range AND any committed `bun.lock` (both apply only to
+`bun install`, not the runtime path). webjs's #685 `onLoad` transform rewrites a
+declared dep's bare specifier to an inline-versioned one Bun DOES honor, but only
+a RANGE is safe: an inline EXACT, NON-LATEST specifier (`is-odd@2.0.0` when latest
+is 3.x, `drizzle-orm@1.0.0-rc.3` while latest is on the 0.4x line) **ENOENTs on a
+cold cache** (Bun will not fetch a non-latest exact on the fly, verified many ways
+including with a committed lock, and the cache is a closed format only `bun
+install` populates). So the serve-path rewrite forwards the declared RANGE
+(`zod@^3.20.0` resolves the highest matching `3.x`), NOT the `bun.lock` exact.
 
-The scaffold ships idiomatic ranges (#700): `webjs create` writes `@webjsdev/*`
-and `pg` as caret ranges (`^<version>`), since #698 makes a normal caret resolve
-correctly under bun zero-install (the highest match, not absolute latest), so a
-fresh app picks up patch updates the way an npm user expects. `drizzle-orm` /
-`drizzle-kit` stay EXACT at the `1.0.0-rc.3` relations-v2 line: that line is a
-PRERELEASE, and bun zero-install ENOENTs on a caret-prerelease inline specifier
-(`drizzle-orm@^1.0.0-rc.3`, verified) while the exact prerelease resolves, so a
-range would break the scaffold under bun until the 1.0 stable ships. A dep the
-user adds later with a `^` range resolves to the highest match WITHIN that range
-under bun zero-install (correct semver), not the latest major.
-The rewrite is server-runtime only (it shapes what Bun fetches for SSR and server
-actions; the browser is served bare specifiers via the importmap / jspm), only
-touches declared deps, and is a no-op when `node_modules` exists (Bun uses the
-installed copy). Default on. Opt out with `WEBJS_PIN=0` or
+**Consequence: zero-install is latest-in-range, not reproducible.** A reproducible
+or non-latest version cannot be served zero-install on Bun. The honest path for
+those is a real `bun install` (it creates `node_modules`, which Bun then resolves
+from, in "installed mode"), so webjs runs one **transparently** (never asking):
+
+- On boot with no `node_modules`, `classifyBunDeps` (no network) splits the
+  declared deps. A **prerelease**, a value that is **not inline-safe** (a protocol
+  range / wildcard / multi-token range / dist-tag), or a **committed `bun.lock`**
+  (a reproducibility request) means webjs BLOCKS on a one-time `bun install`
+  before serving (a logged ~1s cost, strictly better than a guaranteed
+  first-request ENOENT 500), then serves in installed mode. The next boot reuses
+  `node_modules` and is fast.
+- An app whose deps are all latest-in-range with no lock has no ENOENT hazard, so
+  it serves immediately on the zero-install fast path AND fires a DETACHED
+  background `bun install` that converges the box to installed mode (for editor
+  types / `typecheck`) and self-heals an undetectable non-latest exact on the
+  next boot.
+
+The install is serialized by a `.webjs/.bun-install.lock` marker (concurrent
+boots / `bun --hot` restarts never double-install), uses `--frozen-lockfile` when
+a lock is present (reproducible), and is fail-open (offline / no `bun` degrades to
+the zero-install fast path, never a crash). It NEVER uses `--lockfile-only` (that
+writes no `node_modules`, so it cannot reach installed mode). Run `bun install`
+yourself anytime for pinned versions + editor types; the production Docker image
+does a real `bun install`.
+
+The scaffold ships idiomatic ranges (#700): `@webjsdev/*` and `pg` as caret
+ranges (`^<version>`, served zero-install at latest-in-range), and `drizzle-orm`
+/ `drizzle-kit` EXACT at the `1.0.0-rc.3` relations-v2 line. That line is a
+PRERELEASE, so it is the canonical transparent-install trigger: it cannot be
+served zero-install at all (a caret-prerelease ENOENTs inline, #703, and so does
+the exact prerelease, since it is not latest), so the scaffold's committed
+`bun.lock` + the boot's blocking install serve it reproducibly in installed mode.
+`webjs db` (drizzle-kit) and `webjs test --browser` likewise run the transparent
+install first on a zero-install box, since `resolveBin` resolves the tool's bin
+from `node_modules`.
+
+The serve-path rewrite is server-runtime only (it shapes what Bun fetches for SSR
+and server actions; the browser is served bare specifiers via the importmap /
+jspm), only touches declared deps, and is a no-op when `node_modules` exists (Bun
+uses the installed copy). Default on. Opt out with `WEBJS_PIN=0` or
 `{ "webjs": { "pin": false } }`.
 
 The **browser importmap shares that version source under zero-install (#699).**

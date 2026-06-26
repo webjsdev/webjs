@@ -4,7 +4,7 @@
 // exercised without Bun.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rewriteDepSpecifiers, packageNameOf, resolveDepVersions } from '../../src/bun-pin-rewrite.js';
+import { rewriteDepSpecifiers, packageNameOf, resolveDepVersions, classifyBunDeps } from '../../src/bun-pin-rewrite.js';
 
 const imp = (...paths) => paths.map((path) => ({ kind: 'import-statement', path }));
 
@@ -129,4 +129,60 @@ test('packageNameOf: scoped, subpath, bare', () => {
   assert.equal(packageNameOf('lodash/fp'), 'lodash');
   assert.equal(packageNameOf('@scope/pkg/sub'), '@scope/pkg');
   assert.equal(packageNameOf('@scope'), null);
+});
+
+// --- prefer:'range' (the zero-install serve path) -------------------------
+// Bun auto-install is latest-only: an inline EXACT, non-latest specifier
+// ENOENTs. So the serve path forwards the declared RANGE (resolves
+// latest-in-range), NOT the bun.lock exact. The default 'exact' is unchanged
+// (the vendor / resolveBin source), proven by the counterfactual.
+test("resolveDepVersions prefer:'range' forwards the declared range, NOT the lock exact", () => {
+  const pkg = JSON.stringify({ dependencies: { zod: '^3.0.0' } });
+  const lock = '{ "packages": { "zod": ["zod@3.22.4"] } }';
+  // counterfactual (default 'exact'): the lock exact wins -> the proven-ENOENT form.
+  assert.deepEqual(resolveDepVersions(pkg, lock), { zod: '3.22.4' });
+  // the fix: the serve path emits the range so Bun resolves latest-in-range.
+  assert.deepEqual(resolveDepVersions(pkg, lock, { prefer: 'range' }), { zod: '^3.0.0' });
+});
+
+test("resolveDepVersions prefer:'range' keeps an exact when the declared value is itself exact", () => {
+  const pkg = JSON.stringify({ dependencies: { a: '1.2.3', b: 'workspace:*' } });
+  const lock = '{ "packages": { "a": ["a@1.2.3"] } }';
+  // 'a' is declared exact (nothing better to emit); 'b' is not inline-safe -> bare.
+  assert.deepEqual(resolveDepVersions(pkg, lock, { prefer: 'range' }), { a: '1.2.3' });
+});
+
+// --- classifyBunDeps (the no-network boot decision) -----------------------
+test('classifyBunDeps routes prereleases + non-inline-safe to needsInstall, ranges to inlineable', () => {
+  const pkg = JSON.stringify({
+    dependencies: { zod: '^3.0.0', 'date-fns': '~3.0.0', exact: '1.2.3' },
+    devDependencies: { 'drizzle-orm': '1.0.0-rc.3', 'rc-range': '^1.0.0-rc.3', local: 'workspace:*', star: '*' },
+  });
+  const lock = '{ "packages": { "zod": ["zod@3.22.4"] } }';
+  const c = classifyBunDeps(pkg, lock);
+  assert.deepEqual([...c.inlineable].sort(), ['date-fns', 'exact', 'zod']);
+  assert.deepEqual([...c.needsInstall].sort(), ['drizzle-orm', 'local', 'rc-range', 'star']);
+  assert.equal(c.hasLock, true, 'a committed lock is a reproducibility request');
+});
+
+test('classifyBunDeps: a lock-exact prerelease still routes to needsInstall', () => {
+  // drizzle declared as a caret over a stable line, but the LOCK pins a prerelease:
+  // the effective version is the prerelease, which ENOENTs zero-install.
+  const pkg = JSON.stringify({ dependencies: { drizzle: '^1.0.0' } });
+  const lock = '{ "packages": { "drizzle": ["drizzle@1.0.0-rc.3"] } }';
+  const c = classifyBunDeps(pkg, lock);
+  assert.deepEqual(c.needsInstall, ['drizzle']);
+  assert.deepEqual(c.inlineable, []);
+});
+
+test('classifyBunDeps: all-caret, no lock -> fast path (nothing needsInstall, hasLock false)', () => {
+  const pkg = JSON.stringify({ dependencies: { zod: '^3.0.0', a: '~1.2.3' } });
+  const c = classifyBunDeps(pkg, null);
+  assert.deepEqual([...c.inlineable].sort(), ['a', 'zod']);
+  assert.deepEqual(c.needsInstall, []);
+  assert.equal(c.hasLock, false);
+});
+
+test('classifyBunDeps: malformed package.json fails open (empty, no lock)', () => {
+  assert.deepEqual(classifyBunDeps('{ not json', null), { inlineable: [], needsInstall: [], hasLock: false });
 });

@@ -40,6 +40,8 @@ export {
   extractPinnedVersions,
   satisfiesSemverRange,
 } from './src/vendor.js';
+export { startTransparentInstall, buildBunInstallArgs } from './src/bun-bg-install.js';
+export { classifyBunDeps } from './src/bun-pin-rewrite.js';
 export { buildModuleGraph, transitiveDeps } from './src/module-graph.js';
 export { scanComponents, primeComponentRegistry, extractComponents, findOrphanComponents } from './src/component-scanner.js';
 export { analyzeAppElision } from './src/elision-report.js';

@@ -319,7 +319,14 @@ export function buildBunPinTransform(appDir) {
   try { pkgText = readFileSync(join(appDir, 'package.json'), 'utf8'); } catch { return null; }
   let lockText = null;
   try { lockText = readFileSync(join(appDir, 'bun.lock'), 'utf8'); } catch { /* optional */ }
-  const versions = resolveDepVersions(pkgText, lockText);
+  // Zero-install serve path: prefer the declared RANGE (resolves latest-in-range
+  // under Bun's latest-only auto-install), NOT the bun.lock exact (a non-latest
+  // exact ENOENTs on a cold cache). A dep that needs a reproducible / non-latest
+  // version is served via the transparent `bun install` + installed mode instead
+  // (the boot path runs the install proactively before reaching this point; see
+  // `classifyBunDeps` + `bun-bg-install.js`), and once node_modules exists the
+  // guard above returns null so this pin path is bypassed entirely.
+  const versions = resolveDepVersions(pkgText, lockText, { prefer: 'range' });
   if (Object.keys(versions).length === 0) return null;
   return (src, loader) => {
     const imports = new Bun.Transpiler({ loader }).scanImports(src);

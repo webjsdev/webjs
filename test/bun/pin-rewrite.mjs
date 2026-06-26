@@ -15,7 +15,7 @@
  * from the repo root.
  */
 import assert from 'node:assert/strict';
-import { resolveDepVersions, rewriteDepSpecifiers } from '../../packages/server/src/bun-pin-rewrite.js';
+import { resolveDepVersions, rewriteDepSpecifiers, classifyBunDeps } from '../../packages/server/src/bun-pin-rewrite.js';
 
 // 1. resolveDepVersions: bun.lock exact pin wins; a dep absent from the lock
 //    keeps its package.json value (exact OR an inline-safe range); only declared
@@ -33,6 +33,29 @@ assert.equal(versions.local, undefined, 'a workspace: protocol range is left bar
 assert.equal(versions['rc-exact'], '1.0.0-rc.3', 'an exact prerelease forwards (Bun resolves it inline)');
 assert.equal(versions['rc-range'], undefined, 'a caret-prerelease is left bare (Bun ENOENTs on it, #703)');
 assert.equal(versions['left-pad'], undefined, 'a lock-only transitive dep is not pinned');
+
+// 1b. prefer:'range' (the zero-install SERVE path). Bun auto-install is
+//     latest-only, so an inline EXACT non-latest specifier ENOENTs; the serve
+//     path forwards the declared RANGE instead so Bun resolves latest-in-range.
+//     This is the corrected premise: lock-exact is NOT emitted for a range dep.
+const rangeVersions = resolveDepVersions(PKG, LOCK, { prefer: 'range' });
+assert.equal(rangeVersions.zod, '^3.0.0', "prefer:'range' forwards the declared range, NOT the lock exact (the proven-ENOENT regression guard)");
+assert.equal(rangeVersions['date-fns'], '^3.0.0', "prefer:'range' forwards a caret range");
+assert.equal(rangeVersions['drizzle-orm'], '0.44.0', "prefer:'range' keeps an exact when the declared value is itself exact");
+assert.equal(rangeVersions.local, undefined, "prefer:'range' leaves a protocol range bare");
+
+// 1c. classifyBunDeps: the no-network boot decision. Prereleases (exact or
+//     caret) and non-inline-safe values can't be served zero-install, so they
+//     route to needsInstall (a transparent `bun install`); ranges are inlineable.
+const cls = classifyBunDeps(PKG, LOCK);
+assert.ok(cls.inlineable.includes('zod') && cls.inlineable.includes('date-fns') && cls.inlineable.includes('drizzle-orm'), 'caret/exact non-prerelease deps are inlineable');
+assert.ok(cls.needsInstall.includes('rc-exact'), 'an exact prerelease needs a transparent install (non-latest exact ENOENTs)');
+assert.ok(cls.needsInstall.includes('rc-range'), 'a caret-prerelease needs a transparent install (#703)');
+assert.ok(cls.needsInstall.includes('local'), 'a protocol range needs an install');
+assert.equal(cls.hasLock, true, 'a committed bun.lock is a reproducibility request');
+const noLock = classifyBunDeps(JSON.stringify({ dependencies: { zod: '^3.0.0' } }), null);
+assert.deepEqual(noLock.needsInstall, [], 'all-caret + no lock -> fast path');
+assert.equal(noLock.hasLock, false, 'no lock -> hasLock false');
 
 const SRC = "import { z } from 'zod';\nimport { sql } from 'drizzle-orm';\nimport { addDays } from 'date-fns';\nimport rel from './local.ts';\nconst label = 'zod';\n";
 
