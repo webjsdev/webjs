@@ -33,7 +33,7 @@ npx @webjsdev/cli create my-app
 cd my-app && npm run dev
 ```
 
-`webjs create` installs dependencies in the new directory by default on **Node** (it needs `node_modules` to run). On **Bun** it **skips** the install (zero-install: `bun run dev` resolves deps on the fly). Pass `--install` to force the install, or `--no-install` to skip it, on either runtime.
+`webjs create` installs dependencies in the new directory by default on **Node** (it needs `node_modules` to run). On **Bun** it **skips** the install: `bun run dev` resolves latest-in-range deps on the fly via Bun auto-install. For a dep Bun's latest-only auto-install cannot resolve (a prerelease, an exact pin, or a committed `bun.lock`), webjs runs a one-time `bun install` for you on first boot, no manual step. Pass `--install` to force the install, or `--no-install` to skip it, on either runtime.
 
 ## Commands
 

@@ -26,8 +26,7 @@ import {
   hashFile,
 } from './actions.js';
 import { registerSeedHooks } from './action-seed.js';
-import { classifyBunDeps } from './bun-pin-rewrite.js';
-import { startTransparentInstall } from './bun-bg-install.js';
+import { prepareBunZeroInstall } from './bun-zeroinstall-boot.js';
 import { stripTypeScript, ensureStripper } from './ts-strip.js';
 import { defaultLogger } from './logger.js';
 import { assertNodeVersion } from './node-version.js';
@@ -310,28 +309,6 @@ export async function readPinEnabled(appDir) {
  * @param {string} appDir
  * @returns {Promise<boolean>} whether to register the zero-install pin hook
  */
-async function prepareBunZeroInstall(appDir) {
-  // Already installed (or a workspace member): the #698 gate disables pinning;
-  // Bun resolves from node_modules.
-  if (existsSync(join(appDir, 'node_modules'))) return false;
-  let pkgText;
-  try { pkgText = readFileSync(join(appDir, 'package.json'), 'utf8'); } catch { return true; }
-  let lockText = null;
-  try { lockText = readFileSync(join(appDir, 'bun.lock'), 'utf8'); } catch { /* optional */ }
-  const { needsInstall, hasLock } = classifyBunDeps(pkgText, lockText);
-
-  if (needsInstall.length > 0 || hasLock) {
-    // Proactive blocking install (before the first request can ENOENT).
-    const ok = await startTransparentInstall(appDir, { mode: 'blocking' });
-    if (ok && existsSync(join(appDir, 'node_modules'))) return false; // installed mode
-    return true; // install failed (offline / no bun): fail-open to the zero-install pin
-  }
-
-  // Fast path: serve zero-install now, converge the box in the background.
-  void startTransparentInstall(appDir, { mode: 'detached' });
-  return true;
-}
-
 /**
  * Read the client-router switch (`webjs.clientRouter`) from the app's
  * package.json (#629). Default `true`: the client router auto-enables in the
