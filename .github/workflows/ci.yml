@@ -160,6 +160,17 @@ jobs:
       # path under `npm test`.
       - name: webjs SQLite busy_timeout on Bun
         run: bun test/bun/sqlite-busy-timeout.mjs
+      # Bun pin rewrite + transparent install (#704). The pin rewrite uses
+      # Bun.Transpiler.scanImports (Bun-only), and the transparent install is the
+      # Bun-only path for a non-latest dep Bun auto-install cannot resolve.
+      - name: webjs Bun pin rewrite on Bun
+        run: bun test/bun/pin-rewrite.mjs
+      - name: webjs Bun transparent install on Bun
+        run: bun test/bun/transparent-install.mjs
+      # E2e proof: a non-latest dep (which ENOENTs on Bun's latest-only
+      # auto-install) is served via the one-time transparent install.
+      - name: webjs Bun transparent install e2e
+        run: bun test/bun/transparent-install-e2e.mjs
       # The Bun test MATRIX (#509): run the runtime-sensitive node:test suite
       # (core + server + cross-package test/) under Bun, file by file, classifying
       # each result. Documented Node-only files + Bun-test-runner-quirk files are
