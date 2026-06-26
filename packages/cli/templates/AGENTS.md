@@ -408,24 +408,26 @@ webjs runs on **Node 24+ or Bun**. A `--runtime bun` app routes its `dev` /
 `start` / `db` scripts through a `webjs-bun.mjs` bootstrap under `bun --bun`
 (which overrides the `webjs` bin's Node shebang so the server runs on Bun). The
 bootstrap imports the CLI by bare specifier, so Bun auto-install resolves deps on
-demand and **no `bun install` is needed**:
+demand and **no MANUAL `bun install` is needed**:
 
 ```sh
-bun run dev            # or: bun run start  (no install step required)
+bun run dev            # or: bun run start  (no manual install step)
 ```
 
-`bun create` does not run an install on Bun, so a fresh app serves immediately.
-Under zero-install, Bun's runtime auto-install resolves a BARE import to LATEST
-(it ignores `package.json` and `bun.lock`), so webjs rewrites each declared dep's
-specifier to an inline-versioned one via an `onLoad` transform. The version is the
-`bun.lock` exact when present, else the `package.json` value when it is an
-inline-safe semver (an exact pin, or a caret / tilde / comparator range, which
-Bun resolves to the highest match). A protocol range (`workspace:`, `file:`), a
-wildcard (`*`), and a dist-tag (`latest`) stay at latest. Run `bun install` when
-you want versions frozen identically across machines (it materializes
-`node_modules` from the lockfile) or editor type intelligence. (To run a
-Node-flavored app on Bun instead, force `bun --bun run dev`, which still expects
-an install.)
+`bun create` does not run an install on Bun. Bun's runtime auto-install is
+LATEST-only: a bare import resolves to LATEST (ignoring `package.json` and
+`bun.lock`), so webjs's `onLoad` transform rewrites each declared dep to an inline
+RANGE that resolves latest-in-range (a caret / tilde / comparator picks the
+highest match). An inline EXACT non-latest specifier ENOENTs, so a non-latest dep
+(a prerelease like the scaffold's `drizzle-orm` / `drizzle-kit` RC, an exact pin,
+or anything a committed `bun.lock` pins) CANNOT be served zero-install. webjs
+serves those by running a one-time TRANSPARENT `bun install` at boot (and `webjs
+db` runs it before drizzle-kit), then resolving from `node_modules` in installed
+mode. So zero-install means latest-in-range, not reproducible: for versions frozen
+identically across machines, the committed `bun.lock` plus that install (or your
+own `bun install`) is the path, and the production Docker image does a real
+`bun install`. (To run a Node-flavored app on Bun instead, force `bun --bun run
+dev`, which still expects an install.)
 
 On Node the `.ts` type-stripping is the built-in `module.stripTypeScriptTypes`;
 on Bun (which has no built-in) it comes from `amaro` automatically, so the same
