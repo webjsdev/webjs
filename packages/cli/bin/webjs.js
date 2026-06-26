@@ -115,6 +115,27 @@ async function startDevParallelTasks(commands, cwd) {
   });
 }
 
+/**
+ * On Bun with no `node_modules`, run a transparent `bun install` before resolving
+ * a tool's bin from `node_modules`. Bun's runtime auto-install is latest-only and
+ * `resolveBin` is a bare `createRequire().resolve` OUTSIDE the onLoad pin rewrite,
+ * so a zero-install box cannot find a pinned / prerelease tool (the scaffold's
+ * drizzle-kit prerelease, which made `webjs db` fail under pure zero-install). A
+ * no-op on Node or when `node_modules` already exists; fail-open (the `resolveBin`
+ * fallback then reports the missing tool with install guidance).
+ *
+ * @param {string} cwd
+ */
+async function ensureBunDepsInstalled(cwd) {
+  if (!process.versions.bun) return;
+  const { existsSync } = await import('node:fs');
+  if (existsSync(join(cwd, 'node_modules'))) return;
+  try {
+    const { startTransparentInstall } = await importWebjsdev('@webjsdev/server');
+    await startTransparentInstall(cwd, { mode: 'blocking' });
+  } catch { /* fail-open: resolveBin then reports the missing tool */ }
+}
+
 async function main() {
   // Preflight: webjs needs Node 24+ (built-in TS strip + recursive fs.watch).
   // Run before any subcommand so an older Node fails fast with a clear,
@@ -199,6 +220,11 @@ async function main() {
     case 'db': {
       const sub = rest[0];
       const args = rest.slice(1);
+      // On a zero-install Bun box, materialize node_modules so the seed script
+      // (which imports drizzle) and drizzle-kit's bin resolve. Bun auto-install
+      // is latest-only and resolveBin is outside the pin rewrite, so the
+      // scaffold's drizzle-kit prerelease would otherwise not resolve.
+      await ensureBunDepsInstalled(process.cwd());
       // `webjs db seed` runs the app's own seed script directly (not a
       // drizzle-kit command); Drizzle has no codegen, so there is no
       // `generate`-the-client step, only schema-to-SQL `generate`.
@@ -339,6 +365,9 @@ async function main() {
         // Only resolve + run when there is actually something to run, so a
         // `webjs test` with no browser tests stays a no-op (not a hard error).
         if (hasConfig || useBrowserDir) {
+          // On a zero-install Bun box, materialize node_modules so @web/test-runner
+          // resolves (its bin is resolved outside the pin rewrite).
+          await ensureBunDepsInstalled(cwd);
           // Resolve the app's @web/test-runner bin and spawn it with the current
           // runtime, dropping `npx` (#570; absent in a pure oven/bun image).
           let wtrPath;

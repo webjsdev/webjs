@@ -38,11 +38,11 @@ function detectPackageManager() {
 /**
  * Decide whether `webjs create` runs the post-scaffold install, per target
  * runtime (#682). Node installs by default (it needs `node_modules` to run);
- * Bun SKIPS by default (zero-install: `bun run dev` resolves deps on the fly,
- * #675). Under Bun zero-install webjs pins a declared dep to its package.json
- * version via the #685/#698 onLoad rewrite (a caret range now resolves the
- * highest match, not absolute latest), so `bun install` is the path to a frozen
- * lockfile, not a correctness fix. Explicit flags win: `--install` forces it
+ * Bun SKIPS by default (#675): a latest-in-range dep is served zero-install via
+ * the #685/#698 onLoad rewrite (a caret resolves the highest match), and a
+ * non-latest dep (the drizzle prerelease) rides the boot's one-time TRANSPARENT
+ * `bun install`, so no MANUAL `bun install` is ever required at create time.
+ * Explicit flags win: `--install` forces it
  * on, `--no-install` forces it off. The CLI entry points call this and pass an
  * explicit boolean to `scaffoldApp`, so the library default (no install unless
  * `install: true`) is unchanged for programmatic callers.
@@ -103,11 +103,14 @@ function webjsdevRange(pkg) {
  * the CLI does NOT itself depend on, so they cannot be read from the CLI's
  * closure (unlike `@webjsdev/*`). Since #698, Bun zero-install resolves a normal
  * caret range correctly (highest match, not absolute latest), so `pg` is an
- * idiomatic `^` range. Drizzle is PINNED to an exact RC: its 1.0 line is a
- * PRERELEASE (`1.0.0-rc.3`), and Bun zero-install ENOENTs on a caret-prerelease
- * inline specifier (`drizzle-orm@^1.0.0-rc.3`, verified on Bun 1.3.14) while the
- * exact prerelease resolves, so drizzle must stay exact until the 1.0 stable
- * ships. Refresh on a deliberate bump.
+ * idiomatic `^` range served zero-install. Drizzle stays PINNED to its exact RC:
+ * its 1.0 line is a PRERELEASE (`1.0.0-rc.3`), which CANNOT be served zero-install
+ * at all (Bun auto-install is latest-only, so both the caret-prerelease AND the
+ * non-latest exact ENOENT inline). So a prerelease is the canonical TRANSPARENT-
+ * INSTALL trigger: the scaffold's committed `bun.lock` plus the boot's one-time
+ * `bun install` serve drizzle reproducibly in installed mode (no manual install).
+ * Keeping the exact pin (over a caret) keeps the lock and package.json in step.
+ * Refresh on a deliberate bump.
  */
 const SCAFFOLD_DEP_VERSIONS = {
   'drizzle-orm': '1.0.0-rc.3',
@@ -354,8 +357,9 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   }
   const isBun = runtime === 'bun';
   // Zero-install Bun entry (#675): the app-local `webjs-bun.mjs` bootstrap, run
-  // under `bun --bun`, so the server resolves the CLI + deps via Bun auto-install
-  // (no `bun install` required). App-local so it is resolvable with no node_modules.
+  // under `bun --bun`, so the server resolves the CLI + latest-in-range deps via
+  // Bun auto-install (no MANUAL `bun install`; a non-latest dep rides the boot's
+  // transparent install). App-local so it is resolvable with no node_modules.
   const bunBoot = 'bun --bun webjs-bun.mjs';
   const appDir = join(cwd, name);
   if (existsSync(appDir)) {
@@ -408,9 +412,12 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // would exec webjs under Node, silently running the "bun" app on Node).
       // Routing through the bootstrap file (which imports the CLI by bare
       // specifier) instead of the `webjs` bin means Bun's auto-install resolves
-      // `@webjsdev/*` and your deps ON DEMAND, so `bun run dev` / `start` work
-      // with NO `bun install` (install becomes optional, for editor types /
-      // offline). The runtime-neutral tooling scripts (test / check / typecheck
+      // `@webjsdev/*` and latest-in-range deps ON DEMAND, so `bun run dev` /
+      // `start` work with NO MANUAL `bun install`. A non-latest dep (the drizzle
+      // prerelease) cannot be served zero-install (Bun auto-install is
+      // latest-only), so the boot runs a one-time transparent `bun install` for
+      // it and serves in installed mode (see agent-docs/runtime.md). The
+      // runtime-neutral tooling scripts (test / check / typecheck
       // / doctor) stay plain `webjs ...`: they spawn node tooling (`node --test`,
       // tsc), which needs an install, so they are not part of the zero-install path.
       dev: isBun ? `${bunBoot} dev` : 'webjs dev',
@@ -437,9 +444,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // uses the built-in node:sqlite (Node) / bun:sqlite (Bun) via Drizzle's
       // node-sqlite / bun-sqlite adapters. Postgres still needs the pg driver.
       // Since #698 a normal caret range resolves correctly under bun
-      // zero-install, so @webjsdev/* and pg are idiomatic `^` ranges (#700).
-      // Drizzle stays EXACT: its 1.0 line is a prerelease RC, and bun ENOENTs
-      // on a caret-prerelease inline specifier, so a range would break it.
+      // zero-install, so @webjsdev/* and pg are idiomatic `^` ranges (#700)
+      // served zero-install at latest-in-range. Drizzle stays EXACT: its 1.0
+      // line is a prerelease RC, which cannot be served zero-install at all, so
+      // it rides the transparent install + committed lock (installed mode).
       'drizzle-orm': SCAFFOLD_DEP_VERSIONS['drizzle-orm'],
       ...(dialect === 'postgres' ? { pg: SCAFFOLD_DEP_VERSIONS.pg } : {}),
       '@webjsdev/cli': webjsdevRange('cli'),
@@ -447,8 +455,9 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       '@webjsdev/server': webjsdevRange('server'),
     },
     devDependencies: {
-      // Exact pin: drizzle-kit shares drizzle-orm's prerelease 1.0 RC, which bun
-      // cannot resolve as a caret-prerelease range, so it stays exact (#700).
+      // Exact pin: drizzle-kit shares drizzle-orm's prerelease 1.0 RC, which
+      // cannot be served zero-install, so it rides the transparent install
+      // (`webjs db` runs it first on a zero-install box) + the committed lock.
       'drizzle-kit': SCAFFOLD_DEP_VERSIONS['drizzle-kit'],
       ...(dialect === 'postgres' ? { '@types/pg': '^8.11.0' } : {}),
       // The TypeScript compiler, for `npm run typecheck` (webjs typecheck runs
@@ -495,17 +504,19 @@ export async function scaffoldApp(name, cwd, opts = {}) {
 
   // The zero-install Bun entry (#675). `bun run dev` / `start` invoke this via
   // `bun --bun` (see the scripts above). Importing the webjs CLI by bare
-  // specifier lets Bun auto-install resolve `@webjsdev/*` and your deps on
-  // demand, so a fresh app serves with NO `bun install`. The CLI reads its
-  // command (dev / start / db ...) and flags straight from argv. Node apps do
+  // specifier lets Bun auto-install resolve `@webjsdev/*` and latest-in-range
+  // deps on demand, so a fresh app serves with NO MANUAL `bun install` (a
+  // non-latest dep rides the boot's one-time transparent install). The CLI reads
+  // its command (dev / start / db ...) and flags straight from argv. Node apps do
   // not get this file; they run the `webjs` bin directly.
   if (isBun) {
     await writeFile(join(appDir, 'webjs-bun.mjs'),
       '// Zero-install Bun entry (webjs #675). Run via `bun --bun webjs-bun.mjs <cmd>`\n' +
       '// (the dev / start / db npm scripts do this). Importing the CLI by bare\n' +
-      '// specifier lets Bun auto-install resolve @webjsdev/* and your deps on\n' +
-      '// demand, so the app serves with no `bun install` (install stays optional,\n' +
-      '// for editor types and offline runs). Args pass through to the CLI.\n' +
+      '// specifier lets Bun auto-install resolve @webjsdev/* and latest-in-range\n' +
+      '// deps on demand, so the app serves with no MANUAL `bun install` (a\n' +
+      '// non-latest dep, e.g. the drizzle prerelease, rides a one-time transparent\n' +
+      '// install at boot). Args pass through to the CLI.\n' +
       "await import('@webjsdev/cli/bin/webjs.js');\n");
   }
 
