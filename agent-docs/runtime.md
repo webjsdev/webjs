@@ -11,7 +11,7 @@ user-facing reference is the docs-site page `/docs/runtime`; keep the two in syn
 
 | Area | Node 24+ | Bun |
 |---|---|---|
-| Install | `npm install` (required) | optional (zero-install via Bun auto-install) |
+| Install | `npm install` (required) | `bun install` (required, like Node) |
 | Run | `npm run dev` / `npm run start` | `bun run dev` / `bun run start` |
 | Listener | `node:http` shell | native `Bun.serve` (about 1.9x req/s on the listening path) |
 | TS strip | built-in `module.stripTypeScriptTypes` | `amaro` (byte-identical, position-preserving) |
@@ -29,35 +29,26 @@ correctness (the modulepreload hints still ship in the document head).
 `webjs create <name>` defaults to Node. `webjs create <name> --runtime bun` (or
 `bun create webjs <name>`, auto-detected from the invoking package manager,
 #541) emits a Bun-flavored app: `bun.lock`, a pure `oven/bun:1` Dockerfile +
-bun-install CI, bun-command agent docs, and the zero-install bootstrap below.
-`--runtime` is orthogonal to `--template`.
+bun-install CI, and bun-command agent docs. `--runtime` is orthogonal to
+`--template`.
 
-## Bun zero-install (#675)
+## Bun
 
-A Bun app's `dev` / `start` / `db` scripts run through a generated app-local
-`webjs-bun.mjs` bootstrap under `bun --bun`:
+A Bun app installs with `bun install` (like Node), then its `dev` / `start` /
+`db` scripts force `bun --bun` so the server runs on Bun:
 
-```js
-// webjs-bun.mjs
-await import('@webjsdev/cli/bin/webjs.js');
+```sh
+bun install
+bun run dev      # or: bun run start
 ```
 
-`bun --bun` overrides the `webjs` bin's Node shebang so the server runs on Bun;
-importing the CLI by bare specifier lets Bun auto-install resolve `@webjsdev/*`
-and the app's deps on demand, so a fresh app serves with **no `bun install`**.
-The CLI's `start` is in-process and `dev` re-execs via `process.execPath` (which
-is `bun` here), so the server stays on Bun once the CLI does. `bunx
-@webjsdev/cli` is deliberately NOT used (it runs on Node via the shebang AND
-eager-installs the whole tree). The `start.before` migrate also routes through
-the bootstrap, so the boot-time `webjs db migrate` needs no `webjs` bin in
-`node_modules`. `bun install` stays optional: run it for editor type
-intelligence (no `node_modules` means no local type files) or a pinned offline
-install. The Node-targeted tooling scripts (`test` / `check` / `typecheck`)
-stay plain `webjs` on Node and still expect an install.
-
-**Reproducibility tradeoff:** dev resolves on demand, but the scaffold's Bun
-Dockerfile keeps an explicit `bun install` on purpose so a prod image is
-immutable and self-contained with no registry fetch at boot.
+`bun --bun` overrides the `webjs` bin's Node shebang so the server runs on Bun
+(selecting the native `Bun.serve` listener and `amaro` type stripping); the app's
+deps resolve from `node_modules`, the same as Node. The `start.before` migrate
+(`webjs db migrate`) runs under Bun too. Commit a `bun.lock` (the Bun analog of
+`package-lock.json`) for reproducible, offline installs; the scaffold's Bun
+Dockerfile runs `bun install` and serves via `CMD ["bun", "--bun", "run",
+"start"]`.
 
 ## SQLite busy_timeout (#674)
 
