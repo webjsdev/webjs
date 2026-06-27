@@ -386,16 +386,16 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // into components/ui/ (they import @webjsdev/core, not the kit), and the
       // CLI resolves @webjsdev/ui from its own install.
     },
-    // Start task orchestration (#550). `webjs start` reads `start.before` and
-    // runs it in-process, so `npm run start` (a thin alias above) behaves
-    // identically. Drizzle has no codegen, so there is no dev `before` step;
-    // production applies pending migrations via `webjs db migrate`. The scaffold
+    // Dev + start task orchestration (#550). `webjs dev` / `webjs start` read
+    // `before` and run it in-process, so `npm run dev` / `start` (thin aliases
+    // above) behave identically. Both apply pending migrations via `webjs db
+    // migrate` (idempotent, a no-op when the db is current), so a freshly
+    // generated migration is applied without a manual step (#725). The scaffold
     // uses the Tailwind browser runtime (no CSS build step), so there is no dev
     // `parallel` watcher here; an app that adds the Tailwind CLI puts its
     // `--watch` command under `webjs.dev.parallel`.
     webjs: {
-      // Drizzle has no codegen, so there is no dev `before` step. Production
-      // applies pending migrations at boot via `webjs db migrate` (drizzle-kit).
+      dev: { before: ['webjs db migrate'] },
       start: { before: ['webjs db migrate'] },
     },
   }, null, 2) + '\n');
@@ -1383,17 +1383,37 @@ For AI agents, read this before editing scaffolded files:
     }
   }
 
+  // After a successful install, author + apply the initial migration so the
+  // example schema is a real, queryable table on first boot (#725): the app
+  // ships a committed `drizzle/0000_*.sql` and a migrated `db/dev.db`, with no
+  // manual `db generate`/`migrate` step. drizzle-kit (CJS) needs `node_modules`,
+  // so this is gated on the install having run; `--no-install` skips it (the
+  // next-steps banner tells the user to run install + the db setup by hand).
+  // Dialect-correct by construction (drizzle-kit reads the scaffolded
+  // drizzle.config.ts), so `--db sqlite|postgres` needs no special-casing here.
+  if (installed) {
+    console.log(`Generating + applying the initial migration ...\n`);
+    const gen = spawnSync(pm, ['run', 'db:generate'], { cwd: appDir, stdio: 'inherit' });
+    if (gen.status === 0) {
+      spawnSync(pm, ['run', 'db:migrate'], { cwd: appDir, stdio: 'inherit' });
+    } else {
+      console.log(`\n[warn] 'db:generate' failed. Run '${pm} run db:generate && ${pm} run db:migrate' manually in ${name}/.\n`);
+    }
+  }
+
   // Next-steps banner prints LAST so the actionable command is the
   // final thing on screen, never buried above the AI-agent guidance.
   // Single copy-paste line so the user can move from "scaffold done"
   // to "dev server up" in one command. The full-stack and saas
   // templates ship with @webjsdev/ui already initialised; the api
-  // template has no UI but may add one later. Saas needs a one-time
-  // generate + migrate before the first run (the example User model wants
-  // its table to exist). Drizzle splits Prisma's `migrate dev` into
-  // `db:generate` (schema to SQL) then `db:migrate` (apply).
+  // template has no UI but may add one later. When the create-time install
+  // ran, the initial migration was generated + applied for you (#725), so
+  // the next-steps line is just `run dev`. Under `--no-install` there is no
+  // node_modules, so the user does install + the one-time db setup first
+  // (the example model wants its table to exist). Drizzle splits Prisma's
+  // `migrate dev` into `db:generate` (schema to SQL) then `db:migrate` (apply).
   const installSegment = installed ? '' : `${pm} install && `;
-  const dbSegment = isSaas ? `${pm} run db:generate && ${pm} run db:migrate && ` : '';
+  const dbSegment = installed ? '' : `${pm} run db:generate && ${pm} run db:migrate && `;
   const runCommand = `cd ${name} && ${installSegment}${dbSegment}${pm} run dev`;
   // Use `npx webjsdev ui ...` here, not `npx webjs ui ...`. The bare
   // `webjs` npm name is owned by an unrelated package; `npx webjs
