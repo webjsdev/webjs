@@ -132,12 +132,14 @@ Counter.register('my-counter');</pre>
 
     <p>
       <strong><code>npm run dev</code> and a bare <code>webjs dev</code> are
-      equivalent.</strong> The scaffold puts <code>webjs db generate</code> under
+      equivalent.</strong> The scaffold puts <code>webjs db migrate</code> under
       <code>webjs.dev.before</code> in the <code>webjs</code> block of
       package.json, and <code>webjs dev</code> runs it (and any
-      <code>webjs.dev.parallel</code> watcher) before serving. So
+      <code>webjs.dev.parallel</code> watcher) before serving, so a pending
+      migration is applied before the first request. (<code>webjs create</code>
+      already generated + applied the initial migration for you.) So
       <code>npm run dev</code> is a thin alias and either command boots a
-      correctly-generated database app.
+      correctly-migrated database app.
     </p>
 
     <h2>How It Works</h2>

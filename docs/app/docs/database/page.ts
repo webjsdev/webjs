@@ -51,7 +51,7 @@ export type Post = typeof posts.$inferSelect;</pre>
     <p>Drizzle has no client to generate. <code>generate</code> turns your schema into SQL; <code>migrate</code> applies it.</p>
     <pre>npm run db:generate     # webjs db generate -> drizzle-kit generate (schema to SQL)
 npm run db:migrate      # webjs db migrate  -> drizzle-kit migrate (apply)</pre>
-    <p>In production, <code>webjs start</code> runs <code>webjs db migrate</code> for you (the <code>webjs.start.before</code> step), so a deploy applies pending migrations before serving. There is no dev <code>before</code> step, because there is no codegen.</p>
+    <p><code>webjs create</code> generates + applies the initial migration for you, so a fresh app has a real, queryable database with no manual step. After that, both <code>webjs dev</code> and <code>webjs start</code> run <code>webjs db migrate</code> before serving (the <code>webjs.dev.before</code> / <code>webjs.start.before</code> steps, idempotent), so a migration you generate later is applied on the next boot, and a deploy applies pending migrations before serving. <code>generate</code> stays a deliberate, manual step (it authors migration files from a schema diff), never auto-run on boot.</p>
 
     <h2>The connection</h2>
     <pre>// db/connection.server.ts (SQLite, runtime-neutral)
