@@ -20,7 +20,7 @@ export default function Runtime() {
         <tr><th>Area</th><th>Node 24+</th><th>Bun</th><th>Deno</th></tr>
       </thead>
       <tbody>
-        <tr><td>Install</td><td><code>npm install</code></td><td>optional (zero-install via auto-install)</td><td>planned</td></tr>
+        <tr><td>Install</td><td><code>npm install</code></td><td><code>bun install</code> (required, like Node)</td><td>planned</td></tr>
         <tr><td>Run</td><td><code>npm run dev</code> / <code>npm run start</code></td><td><code>bun run dev</code> / <code>bun run start</code></td><td>planned</td></tr>
         <tr><td>Listener</td><td><code>node:http</code> shell</td><td>native <code>Bun.serve</code> (about 1.9x req/s on the listening path)</td><td>planned</td></tr>
         <tr><td>TypeScript stripping</td><td>built-in <code>module.stripTypeScriptTypes</code></td><td><code>amaro</code></td><td>planned</td></tr>
@@ -40,12 +40,13 @@ npm run dev      # or: npm run start</pre>
 
     <h2>Bun</h2>
     <p>Scaffold with <code>webjs create my-app --runtime bun</code>, or <code>bun create webjs my-app</code> (the runtime is auto-detected from the invoking package manager). Then:</p>
-    <pre>bun run dev      # or: bun run start  (no install step required)</pre>
-    <p>A Bun app is <strong>zero-install</strong>: its <code>dev</code> / <code>start</code> / <code>db</code> scripts run through a generated <code>webjs-bun.mjs</code> bootstrap under <code>bun --bun</code>. The bootstrap imports the CLI by bare specifier, so Bun's auto-install resolves <code>@webjsdev/*</code> and your dependencies on demand. <code>bun --bun</code> overrides the <code>webjs</code> bin's Node shebang so the server runs on Bun, where it selects the native <code>Bun.serve</code> listener and strips types via <code>amaro</code>.</p>
-    <p><code>bun install</code> stays optional. Run it when you want editor type intelligence (without a local <code>node_modules</code> the editor has no type files) or a pinned, offline install. The Node-targeted tooling scripts (<code>test</code> / <code>check</code> / <code>typecheck</code>) still expect an install.</p>
+    <pre>bun install
+bun run dev      # or: bun run start</pre>
+    <p>A Bun app installs with <code>bun install</code> (like Node), then runs on Bun: its <code>dev</code> / <code>start</code> / <code>db</code> scripts force <code>bun --bun</code>, which overrides the <code>webjs</code> bin's Node shebang so the server runs on Bun, where it selects the native <code>Bun.serve</code> listener and strips types via <code>amaro</code>. The dependencies resolve from <code>node_modules</code>, the same as Node.</p>
+    <p>The install also gives editor type intelligence (the editor reads the <code>.d.ts</code> files in <code>node_modules</code>).</p>
 
     <h3>Install model and reproducibility</h3>
-    <p>The zero-install path resolves dependencies on demand and caches them, so a fresh dev session needs no install command. For a production container the scaffold's Bun Dockerfile keeps an explicit <code>bun install</code> on purpose: an image should be immutable and self-contained, with no registry fetch at boot. That is the deliberate tradeoff, dev resolves on demand while a prod image pins.</p>
+    <p>A Bun app commits a <code>bun.lock</code> (the Bun analog of <code>package-lock.json</code>) for reproducible, offline installs. The scaffold's Bun Dockerfile runs <code>bun install</code> and serves on Bun via <code>CMD ["bun", "--bun", "run", "start"]</code>.</p>
 
     <h2>Future runtimes</h2>
     <p>The server's listener selection is a runtime-neutral seam: <code>startServer</code> chooses the <code>Bun.serve</code> shell on Bun and the <code>node:http</code> shell on Node through the same seam, which is designed to also host a <code>Deno.serve</code> or an embedded adapter later. When Deno support lands it will appear here. Edge runtimes with no filesystem are a separate, later target.</p>

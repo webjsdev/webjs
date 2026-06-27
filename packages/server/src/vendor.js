@@ -69,8 +69,8 @@ const BUILTIN = new Set(['@webjsdev/core', '@webjsdev/core/']);
 /**
  * Server-only framework packages that must NEVER be vendored to the browser.
  * Unlike `@webjsdev/core` (browser-bound, served locally via `/__webjs/core/*`),
- * these are pure server packages: the CLI (and its `webjs-bun.mjs` bootstrap
- * import, #675), the SSR runtime, the MCP server. A stray browser-graph scan
+ * these are pure server packages: the CLI, the SSR runtime, the MCP server. A
+ * stray browser-graph scan
  * that surfaces one of them must not push it onto the jspm path (#713). Matched
  * on the extracted package name, so subpaths (`@webjsdev/cli/bin/webjs.js`) are
  * covered. `@webjsdev/ui` is intentionally absent: its components ARE
@@ -157,10 +157,6 @@ function isServerOnlyFile(name) {
   if (/\.server\.(js|ts|mjs|mts)$/.test(name)) return true;
   if (/^route\.(js|ts|mjs|mts)$/.test(name)) return true;
   if (/^middleware\.(js|ts|mjs|mts)$/.test(name)) return true;
-  // The zero-install Bun bootstrap (#675): a server-only entry that imports
-  // `@webjsdev/cli`. It never loads in the browser, so keep it out of the
-  // vendor scan, else the CLI would be pushed onto the jspm path (#713).
-  if (name === 'webjs-bun.mjs') return true;
   return false;
 }
 
