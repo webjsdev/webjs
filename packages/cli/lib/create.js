@@ -314,9 +314,9 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     },
     scripts: {
       // No `predev` / `prestart` hooks (#550): the `webjs` block below holds
-      // the start orchestration (`webjs db migrate`), run INSIDE `webjs start`,
-      // so `npm run start` (a thin alias) behaves identically. Drizzle has no
-      // codegen, so there is no dev `before` step.
+      // the dev + start orchestration (`webjs db migrate`), run INSIDE `webjs
+      // dev` / `webjs start`, so `npm run dev` / `start` (thin aliases) behave
+      // identically. Both apply pending migrations before serving (#725).
       //
       // Bun runtime (#541): the long-running server scripts (`dev` / `start`)
       // are prefixed `bun --bun` so the app SERVES on Bun. The `--bun` overrides
@@ -1383,21 +1383,24 @@ For AI agents, read this before editing scaffolded files:
     }
   }
 
-  // After a successful install, author + apply the initial migration so the
-  // example schema is a real, queryable table on first boot (#725): the app
-  // ships a committed `drizzle/0000_*.sql` and a migrated `db/dev.db`, with no
-  // manual `db generate`/`migrate` step. drizzle-kit (CJS) needs `node_modules`,
-  // so this is gated on the install having run; `--no-install` skips it (the
-  // next-steps banner tells the user to run install + the db setup by hand).
-  // Dialect-correct by construction (drizzle-kit reads the scaffolded
-  // drizzle.config.ts), so `--db sqlite|postgres` needs no special-casing here.
+  // After a successful install, author the initial migration so the example
+  // schema is a real table on first boot (#725): the app ships a committed
+  // `db/migrations/0000_*.sql`. drizzle-kit (CJS) needs `node_modules`, so this
+  // is gated on the install having run; `--no-install` skips it (the next-steps
+  // banner restores the manual db setup). `db:generate` (schema to SQL) needs
+  // no database connection, so it runs for either dialect. The create-time
+  // `db:migrate` runs ONLY for sqlite: its drizzle.config falls back to a local
+  // `db/dev.db` file with no `.env`, so it applies offline. Postgres needs a
+  // reachable DATABASE_URL (no server exists at create time), so we only author
+  // its migration here; the user sets DATABASE_URL and `dev` / `start` apply it
+  // (the banner reminds them).
   if (installed) {
-    console.log(`Generating + applying the initial migration ...\n`);
+    console.log(`Generating the initial migration ...\n`);
     const gen = spawnSync(pm, ['run', 'db:generate'], { cwd: appDir, stdio: 'inherit' });
-    if (gen.status === 0) {
+    if (gen.status !== 0) {
+      console.log(`\n[warn] 'db:generate' failed. Run '${pm} run db:generate' manually in ${name}/.\n`);
+    } else if (dialect === 'sqlite') {
       spawnSync(pm, ['run', 'db:migrate'], { cwd: appDir, stdio: 'inherit' });
-    } else {
-      console.log(`\n[warn] 'db:generate' failed. Run '${pm} run db:generate && ${pm} run db:migrate' manually in ${name}/.\n`);
     }
   }
 
@@ -1413,8 +1416,21 @@ For AI agents, read this before editing scaffolded files:
   // (the example model wants its table to exist). Drizzle splits Prisma's
   // `migrate dev` into `db:generate` (schema to SQL) then `db:migrate` (apply).
   const installSegment = installed ? '' : `${pm} install && `;
-  const dbSegment = installed ? '' : `${pm} run db:generate && ${pm} run db:migrate && `;
+  // sqlite gets a working db at create (when installed) and via dev.before, so
+  // the happy path is just `run dev`. Under --no-install nothing ran, so sqlite
+  // needs generate + migrate first. Postgres always needs the user to point
+  // DATABASE_URL at a running database, so its setup is the separate pgNote.
+  const dbSegment = (installed || dialect === 'postgres')
+    ? ''
+    : `${pm} run db:generate && ${pm} run db:migrate && `;
   const runCommand = `cd ${name} && ${installSegment}${dbSegment}${pm} run dev`;
+  // Postgres has no database at create time, so its migration is authored but
+  // not applied; the user points DATABASE_URL at a running database and `dev` /
+  // `start` (webjs.*.before) apply it. The initial `db:generate` already ran at
+  // create when installed; under --no-install it is part of the setup.
+  const pgNote = dialect === 'postgres'
+    ? `\nPostgres: copy .env.example to .env and set DATABASE_URL to a running database${installed ? '' : `, then \`${pm} install && ${pm} run db:generate\``}. \`${pm} run dev\` then applies the migration.\n`
+    : '';
   // Use `npx webjsdev ui ...` here, not `npx webjs ui ...`. The bare
   // `webjs` npm name is owned by an unrelated package; `npx webjs
   // <cmd>` would fetch THAT package instead of ours when run outside
@@ -1430,7 +1446,7 @@ For AI agents, read this before editing scaffolded files:
 Next steps:
   ${runCommand}
   # → http://localhost:8080
-
+${pgNote}
 Optional:
   ${uiNote}
 `);

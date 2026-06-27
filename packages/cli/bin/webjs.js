@@ -147,6 +147,12 @@ async function main() {
       // down on exit so a watcher cannot outlive the server.
       const { readAppTasks } = await import('../lib/app-tasks.js');
       const devTasks = readAppTasks(process.cwd());
+      // Load `.env` BEFORE the before-steps (same as `start`, L188), so a
+      // `dev.before` `webjs db migrate` sees DATABASE_URL from `.env`. Without
+      // this a Postgres dev migrate runs with no connection string and fails
+      // (sqlite survives via its `?? 'db/dev.db'` config fallback). The watch
+      // child / inline server load `.env` again later (idempotent).
+      loadAppEnv(process.cwd());
       await runPhaseBeforeSteps('dev', devTasks.dev.before, process.cwd());
       const killTasks = await startDevParallelTasks(devTasks.dev.parallel, process.cwd());
       process.on('SIGINT', () => { killTasks(); process.exit(0); });
