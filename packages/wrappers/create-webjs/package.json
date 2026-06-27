@@ -1,6 +1,6 @@
 {
   "name": "create-webjs",
-  "version": "0.9.1",
+  "version": "0.10.28",
   "type": "module",
   "description": "Scaffold a new webjs app. `npm create webjs@latest my-app`.",
   "bin": {
