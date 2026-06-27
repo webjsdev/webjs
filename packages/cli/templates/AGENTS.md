@@ -329,7 +329,7 @@ db/
   columns.server.ts      column helpers (dialect-specific; the only file to swap for Postgres)
   connection.server.ts   opens the driver, exports the \`db\` singleton (import \`db\` from here)
   seed.server.ts         optional seed (run via \`webjs db seed\`)
-  dev.db                 SQLite file (gitignored); run \`npm run db:migrate\` to create
+  dev.db                 SQLite file (gitignored); created when migrations apply (\`dev\`/\`start\` run \`webjs db migrate\`)
   migrations/            generated migration SQL (committed)
 drizzle.config.ts        drizzle-kit config (root; SQLite by default, --db postgres to switch)
 public/                  static assets, served at /public/*
@@ -387,13 +387,16 @@ lives in the `webjs` block of `package.json` and runs INSIDE
 
 ```jsonc
 "webjs": {
+  "dev": { "before": ["webjs db migrate"] },
   "start": { "before": ["webjs db migrate"] }
 }
 ```
 
-Drizzle has no codegen, so there is no dev `before` step. An app that
-adds the Tailwind CLI puts its `--watch` command under
-`webjs.dev.parallel` and it runs alongside the server, torn down on exit.
+Both `dev` and `start` apply pending migrations via `webjs db migrate`
+(idempotent, a no-op when the db is current), so a freshly generated
+migration is applied without a manual step. An app that adds the Tailwind
+CLI puts its `--watch` command under `webjs.dev.parallel` and it runs
+alongside the server, torn down on exit.
 `before` steps run to completion first; a failed `webjs db migrate`
 aborts the boot with a clear message rather than serving a stale schema.
 
@@ -457,7 +460,7 @@ Scripts (all wrap `drizzle-kit`):
 - `npm run db:push`: `webjs db push` (push the schema straight to the dev DB)
 - `npm run db:studio`: `webjs db studio` (visual DB browser)
 - `npm run db:seed`: `webjs db seed` (run `db/seed.server.ts`)
-- `webjs.start.before` runs `webjs db migrate` inside `webjs start` (idempotent; replaces the old `prestart` hook). No dev `before` step (no codegen).
+- `webjs.dev.before` and `webjs.start.before` both run `webjs db migrate` inside `webjs dev` / `webjs start` (idempotent; replaces the old `prestart` hook), so after you `db:generate` a migration it is applied on the next boot with no manual `db:migrate` step.
 
 Always import `db` from `db/connection.server.ts` (the globalThis-cached
 singleton avoids opening a new connection on every dev-server reload), and

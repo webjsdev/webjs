@@ -314,9 +314,9 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     },
     scripts: {
       // No `predev` / `prestart` hooks (#550): the `webjs` block below holds
-      // the start orchestration (`webjs db migrate`), run INSIDE `webjs start`,
-      // so `npm run start` (a thin alias) behaves identically. Drizzle has no
-      // codegen, so there is no dev `before` step.
+      // the dev + start orchestration (`webjs db migrate`), run INSIDE `webjs
+      // dev` / `webjs start`, so `npm run dev` / `start` (thin aliases) behave
+      // identically. Both apply pending migrations before serving (#725).
       //
       // Bun runtime (#541): the long-running server scripts (`dev` / `start`)
       // are prefixed `bun --bun` so the app SERVES on Bun. The `--bun` overrides
@@ -386,16 +386,16 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // into components/ui/ (they import @webjsdev/core, not the kit), and the
       // CLI resolves @webjsdev/ui from its own install.
     },
-    // Start task orchestration (#550). `webjs start` reads `start.before` and
-    // runs it in-process, so `npm run start` (a thin alias above) behaves
-    // identically. Drizzle has no codegen, so there is no dev `before` step;
-    // production applies pending migrations via `webjs db migrate`. The scaffold
+    // Dev + start task orchestration (#550). `webjs dev` / `webjs start` read
+    // `before` and run it in-process, so `npm run dev` / `start` (thin aliases
+    // above) behave identically. Both apply pending migrations via `webjs db
+    // migrate` (idempotent, a no-op when the db is current), so a freshly
+    // generated migration is applied without a manual step (#725). The scaffold
     // uses the Tailwind browser runtime (no CSS build step), so there is no dev
     // `parallel` watcher here; an app that adds the Tailwind CLI puts its
     // `--watch` command under `webjs.dev.parallel`.
     webjs: {
-      // Drizzle has no codegen, so there is no dev `before` step. Production
-      // applies pending migrations at boot via `webjs db migrate` (drizzle-kit).
+      dev: { before: ['webjs db migrate'] },
       start: { before: ['webjs db migrate'] },
     },
   }, null, 2) + '\n');
@@ -1388,13 +1388,22 @@ For AI agents, read this before editing scaffolded files:
   // Single copy-paste line so the user can move from "scaffold done"
   // to "dev server up" in one command. The full-stack and saas
   // templates ship with @webjsdev/ui already initialised; the api
-  // template has no UI but may add one later. Saas needs a one-time
-  // generate + migrate before the first run (the example User model wants
-  // its table to exist). Drizzle splits Prisma's `migrate dev` into
-  // `db:generate` (schema to SQL) then `db:migrate` (apply).
+  // template has no UI but may add one later.
   const installSegment = installed ? '' : `${pm} install && `;
-  const dbSegment = isSaas ? `${pm} run db:generate && ${pm} run db:migrate && ` : '';
+  // The saas example queries the users table on its first request (auth), so it
+  // needs a migration authored first: `db:generate` writes it and the
+  // `webjs.dev.before` migrate applies it on `run dev` (Drizzle splits Prisma's
+  // `migrate dev` into generate-then-migrate). The full-stack / api examples do
+  // not query the db on first paint, so they boot with just `run dev`; once you
+  // add a db route, `db:generate` then `run dev` is the loop (dev auto-migrates).
+  const dbSegment = isSaas ? `${pm} run db:generate && ` : '';
   const runCommand = `cd ${name} && ${installSegment}${dbSegment}${pm} run dev`;
+  // Postgres needs a reachable DATABASE_URL before any migrate (sqlite uses a
+  // local file with no .env). Point it at a running database; `dev` / `start`
+  // then apply pending migrations via webjs.*.before.
+  const pgNote = dialect === 'postgres'
+    ? `\nPostgres: copy .env.example to .env and set DATABASE_URL to a running database before \`${pm} run dev\`.\n`
+    : '';
   // Use `npx webjsdev ui ...` here, not `npx webjs ui ...`. The bare
   // `webjs` npm name is owned by an unrelated package; `npx webjs
   // <cmd>` would fetch THAT package instead of ours when run outside
@@ -1410,7 +1419,7 @@ For AI agents, read this before editing scaffolded files:
 Next steps:
   ${runCommand}
   # → http://localhost:8080
-
+${pgNote}
 Optional:
   ${uiNote}
 `);

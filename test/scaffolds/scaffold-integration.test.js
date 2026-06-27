@@ -210,6 +210,12 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.equal(pkg.type, 'module');
     assert.equal(pkg.scripts.dev, 'webjs dev');
     assert.equal(pkg.scripts.start, 'webjs start');
+    // Both dev and start apply pending migrations before serving (#725), so a
+    // generated migration is applied on the next boot with no manual step.
+    assert.deepEqual(pkg.webjs?.dev?.before, ['webjs db migrate'],
+      'webjs.dev.before runs db migrate (#725)');
+    assert.deepEqual(pkg.webjs?.start?.before, ['webjs db migrate'],
+      'webjs.start.before runs db migrate');
     assert.ok(pkg.dependencies['@webjsdev/core']);
     assert.ok(pkg.dependencies['@webjsdev/server']);
     assert.ok(pkg.dependencies['drizzle-orm'], 'drizzle-orm dep present');
