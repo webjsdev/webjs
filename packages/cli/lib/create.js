@@ -1383,53 +1383,26 @@ For AI agents, read this before editing scaffolded files:
     }
   }
 
-  // After a successful install, author the initial migration so the example
-  // schema is a real table on first boot (#725): the app ships a committed
-  // `db/migrations/0000_*.sql`. drizzle-kit (CJS) needs `node_modules`, so this
-  // is gated on the install having run; `--no-install` skips it (the next-steps
-  // banner restores the manual db setup). `db:generate` (schema to SQL) needs
-  // no database connection, so it runs for either dialect. The create-time
-  // `db:migrate` runs ONLY for sqlite: its drizzle.config falls back to a local
-  // `db/dev.db` file with no `.env`, so it applies offline. Postgres needs a
-  // reachable DATABASE_URL (no server exists at create time), so we only author
-  // its migration here; the user sets DATABASE_URL and `dev` / `start` apply it
-  // (the banner reminds them).
-  if (installed) {
-    console.log(`Generating the initial migration ...\n`);
-    const gen = spawnSync(pm, ['run', 'db:generate'], { cwd: appDir, stdio: 'inherit' });
-    if (gen.status !== 0) {
-      console.log(`\n[warn] 'db:generate' failed. Run '${pm} run db:generate' manually in ${name}/.\n`);
-    } else if (dialect === 'sqlite') {
-      spawnSync(pm, ['run', 'db:migrate'], { cwd: appDir, stdio: 'inherit' });
-    }
-  }
-
   // Next-steps banner prints LAST so the actionable command is the
   // final thing on screen, never buried above the AI-agent guidance.
   // Single copy-paste line so the user can move from "scaffold done"
   // to "dev server up" in one command. The full-stack and saas
   // templates ship with @webjsdev/ui already initialised; the api
-  // template has no UI but may add one later. When the create-time install
-  // ran, the initial migration was generated + applied for you (#725), so
-  // the next-steps line is just `run dev`. Under `--no-install` there is no
-  // node_modules, so the user does install + the one-time db setup first
-  // (the example model wants its table to exist). Drizzle splits Prisma's
-  // `migrate dev` into `db:generate` (schema to SQL) then `db:migrate` (apply).
+  // template has no UI but may add one later.
   const installSegment = installed ? '' : `${pm} install && `;
-  // sqlite gets a working db at create (when installed) and via dev.before, so
-  // the happy path is just `run dev`. Under --no-install nothing ran, so sqlite
-  // needs generate + migrate first. Postgres always needs the user to point
-  // DATABASE_URL at a running database, so its setup is the separate pgNote.
-  const dbSegment = (installed || dialect === 'postgres')
-    ? ''
-    : `${pm} run db:generate && ${pm} run db:migrate && `;
+  // The saas example queries the users table on its first request (auth), so it
+  // needs a migration authored first: `db:generate` writes it and the
+  // `webjs.dev.before` migrate applies it on `run dev` (Drizzle splits Prisma's
+  // `migrate dev` into generate-then-migrate). The full-stack / api examples do
+  // not query the db on first paint, so they boot with just `run dev`; once you
+  // add a db route, `db:generate` then `run dev` is the loop (dev auto-migrates).
+  const dbSegment = isSaas ? `${pm} run db:generate && ` : '';
   const runCommand = `cd ${name} && ${installSegment}${dbSegment}${pm} run dev`;
-  // Postgres has no database at create time, so its migration is authored but
-  // not applied; the user points DATABASE_URL at a running database and `dev` /
-  // `start` (webjs.*.before) apply it. The initial `db:generate` already ran at
-  // create when installed; under --no-install it is part of the setup.
+  // Postgres needs a reachable DATABASE_URL before any migrate (sqlite uses a
+  // local file with no .env). Point it at a running database; `dev` / `start`
+  // then apply pending migrations via webjs.*.before.
   const pgNote = dialect === 'postgres'
-    ? `\nPostgres: copy .env.example to .env and set DATABASE_URL to a running database${installed ? '' : `, then \`${pm} install && ${pm} run db:generate\``}. \`${pm} run dev\` then applies the migration.\n`
+    ? `\nPostgres: copy .env.example to .env and set DATABASE_URL to a running database before \`${pm} run dev\`.\n`
     : '';
   // Use `npx webjsdev ui ...` here, not `npx webjs ui ...`. The bare
   // `webjs` npm name is owned by an unrelated package; `npx webjs

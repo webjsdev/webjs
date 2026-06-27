@@ -329,7 +329,7 @@ db/
   columns.server.ts      column helpers (dialect-specific; the only file to swap for Postgres)
   connection.server.ts   opens the driver, exports the \`db\` singleton (import \`db\` from here)
   seed.server.ts         optional seed (run via \`webjs db seed\`)
-  dev.db                 SQLite file (gitignored); created + migrated on \`webjs create\`, re-applied by \`dev\`/\`start\`
+  dev.db                 SQLite file (gitignored); created when migrations apply (\`dev\`/\`start\` run \`webjs db migrate\`)
   migrations/            generated migration SQL (committed)
 drizzle.config.ts        drizzle-kit config (root; SQLite by default, --db postgres to switch)
 public/                  static assets, served at /public/*
@@ -460,7 +460,7 @@ Scripts (all wrap `drizzle-kit`):
 - `npm run db:push`: `webjs db push` (push the schema straight to the dev DB)
 - `npm run db:studio`: `webjs db studio` (visual DB browser)
 - `npm run db:seed`: `webjs db seed` (run `db/seed.server.ts`)
-- `webjs.dev.before` and `webjs.start.before` both run `webjs db migrate` inside `webjs dev` / `webjs start` (idempotent; replaces the old `prestart` hook), so a generated migration is applied on the next boot with no manual step. `webjs create` also generates + applies the initial migration for you.
+- `webjs.dev.before` and `webjs.start.before` both run `webjs db migrate` inside `webjs dev` / `webjs start` (idempotent; replaces the old `prestart` hook), so after you `db:generate` a migration it is applied on the next boot with no manual `db:migrate` step.
 
 Always import `db` from `db/connection.server.ts` (the globalThis-cached
 singleton avoids opening a new connection on every dev-server reload), and

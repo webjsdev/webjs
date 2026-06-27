@@ -271,10 +271,9 @@ scaffold ships the `db/` folder (`schema.server.ts`, `columns.server.ts`,
 `connection.server.ts`), the `webjs.dev.before` + `webjs.start.before` steps
 that run `webjs db migrate` inside `webjs dev` / `webjs start` (#550), and the
 `npm run db:generate` / `db:migrate` / `db:push` / `db:studio` / `db:seed`
-scripts (which route through `webjs db` to drizzle-kit). `webjs create`
-generates + applies the initial migration, so the database is real and
-queryable on the first boot; `db:generate` stays a manual step (it authors a
-migration from a schema change), never auto-run on boot.
+scripts (which route through `webjs db` to drizzle-kit). The loop after a
+schema change is `db:generate` (authors the migration) then `webjs dev` (the
+`dev.before` step applies it); `db:generate` is never auto-run on boot.
 
 **AI agents: these rules are absolute.**
 

@@ -186,10 +186,10 @@ export async function writeSaasFiles(appDir, opts = {}) {
   //     ALWAYS once the app modules import: auth() only reads a cookie, no DB
   //     query. This is the headline security assertion and it is REAL.
   //   The signup, login, and protected-route flow writes + reads a user, so it
-  //   needs the migrated users table. `webjs create` generates + applies the
-  //   initial migration, so it is normally ready; under `--no-install` it is
-  //   not, so the suite probes readiness and skips with a clear message instead
-  //   of crashing, then runs for real once the db is set up.
+  //   needs the migrated users table (`npm run db:generate`, then `npm run dev`
+  //   applies it via webjs.dev.before). Until then those flows error, so the
+  //   suite probes readiness and skips with a clear message instead of crashing,
+  //   then runs for real once the db is set up.
   await mkdir(join(appDir, 'test', 'auth'), { recursive: true });
   // The generated comments reference `npm run db:*` setup; bun-ify them so a
   // bun-flavored saas app reads `bun run db:*` (#541; db is Node tooling, so a
@@ -206,12 +206,11 @@ export async function writeSaasFiles(appDir, opts = {}) {
     "const appDir = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');",
     "",
     "// The auth pages + dashboard middleware query the users table via Drizzle.",
-    "// `webjs create` generates + applies the initial migration, so the table",
-    "// normally exists. Under `--no-install` it does not, so a request hitting",
-    "// those modules 500s; we detect that at the RESPONSE level (a 5xx on the",
-    "// dashboard) and SKIP with a clear message rather than report a misleading",
-    "// failure. After `npm install && npm run db:generate && npm run db:migrate`",
-    "// every assertion below runs for real.",
+    "// Until `npm run db:generate` has authored the migration (then `npm run dev`",
+    "// applies it via webjs.dev.before, or `npm run db:migrate` directly), a",
+    "// request hitting those modules 500s; we detect that at the RESPONSE level",
+    "// (a 5xx on the dashboard) and SKIP with a clear message rather than report",
+    "// a misleading failure. After the db is set up every assertion runs for real.",
     "process.env.DATABASE_URL ||= 'file:./dev.db';",
     "process.env.AUTH_SECRET ||= 'test-secret-at-least-32-characters-long!!';",
     "",
