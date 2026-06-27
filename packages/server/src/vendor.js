@@ -47,7 +47,6 @@ import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { digestBase64 } from './crypto-utils.js';
 import { BUFFERED_MARKER } from './conditional-get.js';
-import { resolveDepVersions } from './bun-pin-rewrite.js';
 
 /**
  * Set of package names whose importmap entries are populated by the
@@ -282,26 +281,6 @@ export function getPackageVersion(pkgName, appDir) {
   } catch {
     return null;
   }
-}
-
-/**
- * Declared dep versions for the zero-install importmap fallback (#699): the
- * SAME source the Bun server pin uses (`resolveDepVersions`), so the browser
- * importmap and the server resolve a vendor from one source. Returns a map of
- * package name to the bun.lock exact (when present) else the package.json
- * declared semver (an exact or an inline-safe range). Covers `dependencies` and
- * `devDependencies` (what `resolveDepVersions` reads), NOT `peerDependencies`.
- * Empty when there is no readable package.json. Used only as a fallback when
- * `getPackageVersion` (require.resolve against node_modules) finds nothing.
- * @param {string} appDir
- * @returns {Record<string, string>}
- */
-export function declaredVendorVersions(appDir) {
-  let pkgText;
-  try { pkgText = readFileSync(join(appDir, 'package.json'), 'utf8'); } catch { return {}; }
-  let lockText = null;
-  try { lockText = readFileSync(join(appDir, 'bun.lock'), 'utf8'); } catch { /* optional */ }
-  return resolveDepVersions(pkgText, lockText);
 }
 
 /**
@@ -679,18 +658,11 @@ function mergePerInstall(fragments) {
  */
 export async function vendorImportMapEntries(bareImports, appDir) {
   const installs = [];
-  // Zero-install fallback (#699). When node_modules is absent (Bun
-  // zero-install), `getPackageVersion` (require.resolve) finds nothing, so the
-  // entry would be dropped and the browser bare import would 404. Fall back to
-  // the SAME source the Bun server pin uses, so the importmap and the server
-  // resolve a vendor from one source: bun.lock exact when present, else the
-  // package.json declared semver (jspm resolves a range, so a range works).
-  const declared = declaredVendorVersions(appDir);
   for (const spec of bareImports) {
     if (BUILTIN.has(spec)) continue;
     const pkg = extractPackageName(spec);
     if (!pkg || BUILTIN.has(pkg) || FRAMEWORK_SERVER_ONLY.has(pkg)) continue;
-    const version = getPackageVersion(pkg, appDir) || declared[pkg];
+    const version = getPackageVersion(pkg, appDir);
     if (!version) continue;
     // Splice the version into the specifier: 'dayjs/plugin/utc' with
     // version 1.11.13 becomes 'dayjs@1.11.13/plugin/utc'. jspm.io's

@@ -50,14 +50,12 @@
 
 import * as nodeModule from 'node:module';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { stringify } from '@webjsdev/core';
 import { hashFile } from './actions.js';
 import { isStreamable } from './action-stream.js';
 import { serverRuntime } from './listener-core.js';
-import { resolveDepVersions, rewriteDepSpecifiers } from './bun-pin-rewrite.js';
 
 /** Ambient per-render seed collector. `Map<key, value>` or undefined. */
 const als = new AsyncLocalStorage();
@@ -298,72 +296,26 @@ function seedLoadHook(url, context, nextLoad) {
 }
 
 /**
- * Build the per-file pin transform for Bun (#685): read the app's declared dep
- * versions (package.json, with `bun.lock` exact pins preferred) and return a
- * function that rewrites a module's bare dep specifiers to inline-versioned ones
- * so Bun zero-install fetches the pinned version, not latest. Returns null when
- * there is nothing to pin (no package.json, or no declared deps). Bun-only: it
- * references `Bun.Transpiler`, so it is invoked only on the Bun branch.
- * @param {string} appDir
- * @returns {((src: string, loader: 'ts' | 'js') => string) | null}
- */
-export function buildBunPinTransform(appDir) {
-  // Pinning is for TRUE zero-install only. When `node_modules` exists (an
-  // installed app, or a workspace member like this repo's own examples), Bun
-  // resolves bare specifiers from it, so injecting an inline version would
-  // bypass that. Worse, for a workspace-linked dep it would swap the local
-  // package for the published one (the #698 blog-on-Bun regression). So skip
-  // pinning entirely when node_modules is present; Bun uses the installed copy.
-  if (existsSync(join(appDir, 'node_modules'))) return null;
-  let pkgText;
-  try { pkgText = readFileSync(join(appDir, 'package.json'), 'utf8'); } catch { return null; }
-  let lockText = null;
-  try { lockText = readFileSync(join(appDir, 'bun.lock'), 'utf8'); } catch { /* optional */ }
-  const versions = resolveDepVersions(pkgText, lockText);
-  if (Object.keys(versions).length === 0) return null;
-  return (src, loader) => {
-    const imports = new Bun.Transpiler({ loader }).scanImports(src);
-    return rewriteDepSpecifiers(src, imports, versions);
-  };
-}
-
-/**
- * Install the boot-time load hook(s) (idempotent). Called once from `dev.js`,
- * BEFORE any app module is imported (a module loaded before the hook would
- * already be cached untransformed). Two concerns ride here:
- *
- *   - **Seeding (#472)** when `seedEnabled`: facet `'use server'` modules into
- *     the SSR action-result seed facade. Node uses `module.registerHooks`; Bun a
- *     `Bun.plugin` `onLoad`.
- *   - **Pinning (#685)** when `pinEnabled` (Bun only): rewrite bare dep
- *     specifiers to the package.json/bun.lock version so zero-install fetches the
- *     pinned version, not latest. Independent of seeding, so the Bun plugin is
- *     installed when EITHER is on (they share the one first-match-wins onLoad).
- *
- * No-op on a second call. Async because the Bun path dynamically imports
- * `action-seed-bun.js` (so the `Bun.*` global is never referenced on Node).
- *
- * @param {{ appDir?: string | null, seedEnabled?: boolean, pinEnabled?: boolean }} [opts]
+ * Install the seed load hook (idempotent). Called once at boot from `dev.js`
+ * when seeding is enabled, BEFORE any action module is imported (a module loaded
+ * before the hook would already be cached unwrapped). The install mechanism is
+ * chosen by `serverRuntime()` (#529): Node's synchronous `module.registerHooks`,
+ * or a `Bun.plugin` `onLoad` on Bun. A no-op on a second call. Async because the
+ * Bun path dynamically imports `action-seed-bun.js` (so the `Bun.*` global is
+ * never referenced on Node); the Node path resolves synchronously.
  * @returns {Promise<void>}
  */
-export async function registerSeedHooks({ appDir = null, seedEnabled = true, pinEnabled = false } = {}) {
+export async function registerSeedHooks() {
   if (_registered) return;
   _registered = true;
 
   if (serverRuntime() === 'bun') {
-    // Bun has no module.registerHooks; install the facade + pin rewrite via one
-    // Bun.plugin onLoad (first-match-wins, so the two transforms must share it).
+    // Bun has no module.registerHooks; install the same facade via Bun.plugin.
     const { installBunSeedPlugin } = await import('./action-seed-bun.js');
-    const pinTransform = (pinEnabled && appDir) ? buildBunPinTransform(appDir) : null;
-    installBunSeedPlugin({ isSeedCandidate, buildSeedFacade, serverFileRe: SERVER_FILE_RE, seedEnabled, pinTransform });
-    if (seedEnabled) _enabled = true;
+    installBunSeedPlugin({ isSeedCandidate, buildSeedFacade, serverFileRe: SERVER_FILE_RE });
+    _enabled = true;
     return;
   }
-
-  // Node: seeding only (Bun-specific inline-version pinning does not apply; the
-  // Node zero-install resolve-hook is #669's separate concern). Nothing to
-  // install when seeding is off.
-  if (!seedEnabled) return;
 
   // A runtime that is neither Node-with-registerHooks nor Bun: seeding stays
   // OFF (fail-open). `seedingEnabled()` is false, ssr.js emits no seed block,

@@ -55,9 +55,7 @@ src/
                          source from node_modules/@webjsdev/*/src (read-only,
                          traversal-guarded via realpath, loads no module).
                          resolveFrameworkRoots locates each package by probing
-                         the require.resolve node_modules dirs, then (when none
-                         is found) Bun's global cache (#687), so the tool works
-                         under Bun zero-install where there is no node_modules.
+                         the require.resolve node_modules dirs.
   check-report.js        projectCheck(violations) -> { violations, summary }.
                          The shared shape returned by BOTH the MCP `check` tool
                          and `webjs check --json` (the CLI imports it from

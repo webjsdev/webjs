@@ -8,7 +8,7 @@ cd my-app && npm run dev
 # → http://localhost:8080
 ```
 
-`npm create webjs@latest` is npm's documented shorthand for `npx create-webjs@latest`; both routes dispatch to this same package. Under the hood it calls [`@webjsdev/cli`](https://www.npmjs.com/package/@webjsdev/cli)'s `scaffoldApp()`. It runs the install in the new directory by default on Node; on Bun it skips the install (zero-install). Use `--install` / `--no-install` to override.
+`npm create webjs@latest` is npm's documented shorthand for `npx create-webjs@latest`; both routes dispatch to this same package. Under the hood it calls [`@webjsdev/cli`](https://www.npmjs.com/package/@webjsdev/cli)'s `scaffoldApp()` and auto-runs the detected package manager's install in the new directory.
 
 ## Templates
 

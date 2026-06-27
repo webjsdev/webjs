@@ -40,7 +40,6 @@ const schemaPath = fileURLToPath(
 const KNOWN_KEYS = [
   'elide', // readElideEnabled (dev.js)
   'seed', // readSeedEnabled (dev.js)
-  'pin', // readPinEnabled (dev.js), Bun zero-install version pinning (#685)
   'clientRouter', // readClientRouterEnabled (dev.js)
   'headers', // compileHeaderRules (headers.js)
   'redirects', // compileRedirectRules (redirects.js)

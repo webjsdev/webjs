@@ -26,73 +26,39 @@
  * same module Bun would have loaded.
  */
 
-/** Bun's global install cache + node_modules: a dep, never an app file to rewrite. */
-const DEP_PATH_RE = /[\\/](?:node_modules|install[\\/]cache|\.bun)[\\/]/;
-
 /**
- * Install the webjs `Bun.plugin` `onLoad`. It carries two independent transforms
- * on ONE handler (Bun `onLoad` is first-match-wins, so a second overlapping
- * plugin would starve one of them):
- *
- *   - **Pin rewrite (#685)**, when `pinTransform` is supplied: rewrite bare
- *     specifiers of declared deps to inline-versioned ones so Bun zero-install
- *     fetches the pinned version, not latest. Applies to APP files only (a dep
- *     in `node_modules` / the global cache is returned raw). This broadens the
- *     filter to all JS/TS; without it the filter stays the cheap `*.server.*`
- *     pre-screen.
- *   - **Seed facade (#472)**, when `seedEnabled`: facet a `'use server'`
- *     candidate into the SSR action-result seed facade, built from the
- *     (already pin-rewritten) source.
- *
- * Idempotency is the caller's responsibility (`registerSeedHooks` guards on
- * `_registered`).
+ * Install the `Bun.plugin` seed `onLoad`. Idempotency is the caller's
+ * responsibility (`registerSeedHooks` guards on `_registered`).
  *
  * @param {{
  *   isSeedCandidate: (specifier: string) => boolean,
  *   buildSeedFacade: (origSpec: string, absPath: string, src: string) => (string | null),
  *   serverFileRe: RegExp,
- *   seedEnabled?: boolean,
- *   pinTransform?: ((src: string, loader: 'ts' | 'js') => string) | null,
  * }} helpers
  */
-export function installBunSeedPlugin({ isSeedCandidate, buildSeedFacade, serverFileRe, seedEnabled = true, pinTransform = null }) {
-  // Pinning needs to see every app module's imports, so broaden the filter when
-  // it is active; otherwise keep the narrow `*.server.*` seed pre-screen.
-  const filter = pinTransform ? /\.m?[jt]s(\?|$)/ : serverFileRe;
+export function installBunSeedPlugin({ isSeedCandidate, buildSeedFacade, serverFileRe }) {
   Bun.plugin({
-    name: 'webjs-onload',
+    name: 'webjs-action-seed',
     setup(build) {
-      build.onLoad({ filter }, async (args) => {
+      // The filter is a cheap path pre-screen (`*.server.*`, optional query).
+      build.onLoad({ filter: serverFileRe }, async (args) => {
         const absPath = args.path.split('?')[0];
         // `.ts` / `.mts` strip via the `ts` loader; `.js` / `.mjs` via `js`.
         const loader = /\.m?ts$/.test(absPath) ? 'ts' : 'js';
-        // A dependency (node_modules or Bun's global cache): never rewrite it
-        // (the app's package.json does not pin transitive deps; they follow from
-        // the pinned direct deps' own manifests). Return the raw source unchanged.
-        if (pinTransform && DEP_PATH_RE.test(absPath)) {
-          return { contents: await Bun.file(absPath).text(), loader };
-        }
         // Read the real source. A genuine read failure (missing file) propagates,
         // which Bun reports as a load error exactly as it would without the plugin.
-        let src = await Bun.file(absPath).text();
-        // Pin rewrite. For a NON-`.server` module this is where its specifiers get
-        // pinned. A `.server` candidate's REAL module is pinned on its
-        // `?webjs-seed-orig` passthrough load (which re-enters this onLoad); the
-        // facade itself only reads export names, unaffected by the rewrite.
-        if (pinTransform) {
-          try { src = pinTransform(src, loader); } catch { /* fail-open: raw source */ }
-        }
+        const src = await Bun.file(absPath).text();
         try {
           // Facet only a `'use server'` candidate (not the `?webjs-seed-orig`
           // passthrough); a non-candidate or a passthrough falls through to the
-          // (possibly pin-rewritten) source below.
-          if (seedEnabled && isSeedCandidate(args.path)) {
+          // raw source below.
+          if (isSeedCandidate(args.path)) {
             const source = buildSeedFacade(args.path, absPath, src);
             if (source != null) return { contents: source, loader: 'js' };
           }
         } catch {
-          // Fail-open: any faceting error serves the source (no seeding for this
-          // module), the Bun analog of the Node hook's `nextLoad` fallback.
+          // Fail-open: any faceting error serves the raw source (no seeding for
+          // this module), the Bun analog of the Node hook's `nextLoad` fallback.
         }
         return { contents: src, loader };
       });

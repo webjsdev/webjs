@@ -6,7 +6,6 @@ import { resolveBin } from '../lib/resolve-bin.js';
 import { checkNodeInline, nodeInlineMessage } from '../lib/node-preflight.js';
 import { loadAppEnv, resolvePort } from '../lib/port.js';
 import { planDevSupervisor } from '../lib/dev-supervisor.js';
-import { importWebjsdev } from '../lib/import-webjsdev.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const [cmd, ...rest] = process.argv.slice(2);
@@ -51,12 +50,12 @@ const USAGE = `webjs commands:
   webjs doctor                                    Verify project health (Node, tsconfig, env, vendor pins, importmap coherence, @webjsdev versions, git hook, page/layout elision)
   webjs types                                     Generate .webjs/routes.d.ts (typed Route union + per-route params)
   webjs typecheck [tsc args...]                   Type-check the app with the project's tsc --noEmit (non-zero on errors)
-  webjs create <name> [--template full-stack|api|saas] [--db sqlite|postgres] [--runtime node|bun] [--install|--no-install]  Scaffold a new webjs app
+  webjs create <name> [--template full-stack|api|saas] [--db sqlite|postgres] [--runtime node|bun] [--no-install]  Scaffold a new webjs app
                                                   (only 3 templates exist. default: full-stack, Drizzle, --db sqlite, --runtime node)
                                                   --runtime bun emits a Bun-flavored app (bun.lock, bun Dockerfile/CI, bun docs);
                                                   also auto-detected when run via "bun create webjs".
-                                                  Install default is per runtime: Node installs; Bun skips (zero-install,
-                                                  "bun run dev" resolves deps on the fly). --install / --no-install override.
+                                                  Auto-runs the detected package manager's install in the new dir
+                                                  unless --no-install is passed.
   webjs db generate                               Generate a SQL migration from the schema (drizzle-kit generate)
   webjs db migrate                                Apply pending migrations (drizzle-kit migrate)
   webjs db push                                   Push the schema straight to the dev DB (drizzle-kit push)
@@ -122,7 +121,7 @@ async function main() {
   // instead of crashing cryptically later. `help` is exempt so a user on an
   // old Node can still read usage.
   if (cmd !== 'help' && cmd !== undefined) {
-    const { assertNodeVersion } = await importWebjsdev('@webjsdev/server');
+    const { assertNodeVersion } = await import('@webjsdev/server');
     assertNodeVersion({ onFail: 'exit' });
   }
   switch (cmd) {
@@ -130,7 +129,7 @@ async function main() {
       // If we're already inside the reload child (node --watch or bun --hot),
       // start the server directly.
       if (process.env.__WEBJS_DEV_CHILD === '1') {
-        const { startServer } = await importWebjsdev('@webjsdev/server');
+        const { startServer } = await import('@webjsdev/server');
         // Load `.env` BEFORE resolving the port so a `PORT` set there is in
         // process.env at resolution time (#447). The server loads `.env`
         // too, but that runs too late to affect the port the CLI computes.
@@ -166,7 +165,7 @@ async function main() {
       });
 
       if (plan.mode === 'inline') {
-        const { startServer } = await importWebjsdev('@webjsdev/server');
+        const { startServer } = await import('@webjsdev/server');
         loadAppEnv(process.cwd());
         const port = resolvePort(flag(rest, '--port'));
         await startServer({ appDir: process.cwd(), port, dev: true });
@@ -183,7 +182,7 @@ async function main() {
       break;
     }
     case 'start': {
-      const { startServer } = await importWebjsdev('@webjsdev/server');
+      const { startServer } = await import('@webjsdev/server');
       // Load `.env` BEFORE resolving the port so a `PORT` set there wins over
       // the 8080 default (#447), same as for `dev`.
       loadAppEnv(process.cwd());
@@ -365,7 +364,7 @@ async function main() {
       break;
     }
     case 'check': {
-      const { checkConventions, RULES } = await importWebjsdev('@webjsdev/server/check');
+      const { checkConventions, RULES } = await import('@webjsdev/server/check');
 
       if (rest.includes('--rules')) {
         console.log('webjs check, correctness rules:');
@@ -391,7 +390,7 @@ async function main() {
       if (rest.includes('--json')) {
         // The projector lives in @webjsdev/mcp (the MCP `check` tool's home),
         // so `check --json` and the MCP tool stay byte-identical (#415).
-        const { projectCheck } = await importWebjsdev('@webjsdev/mcp/check-report');
+        const { projectCheck } = await import('@webjsdev/mcp/check-report');
         console.log(JSON.stringify(projectCheck(violations)));
         if (violations.length > 0) process.exit(1);
         break;
@@ -448,7 +447,7 @@ async function main() {
       // narrowing the @webjsdev/core `Route` href union + per-route `params`.
       // Opt-in codegen: the static types in @webjsdev/core work without it
       // (un-generated apps see `Route = string`).
-      const { generateRouteTypes } = await importWebjsdev('@webjsdev/server');
+      const { generateRouteTypes } = await import('@webjsdev/server');
       const { mkdir, writeFile } = await import('node:fs/promises');
       const appDir = process.cwd();
       const text = await generateRouteTypes(appDir);
@@ -522,11 +521,7 @@ files.
 Full docs: https://docs.webjs.com`);
         process.exit(1);
       }
-      // Install policy (#682). Default per runtime: Node installs (needs
-      // node_modules to run); Bun skips (zero-install, `bun run dev` resolves
-      // on the fly). `--install` / `--no-install` override either way.
       const noInstall = rest.includes('--no-install');
-      const explicitInstall = rest.includes('--install');
       // --db picks the database dialect: sqlite (default) or postgres.
       const db = flag(rest, '--db', 'sqlite');
       // --runtime picks the target runtime: node (default) or bun. Orthogonal
@@ -537,16 +532,15 @@ Full docs: https://docs.webjs.com`);
         console.error(`Error: unknown --runtime '${runtime}'. Only node / bun are supported.`);
         process.exit(1);
       }
-      const { scaffoldApp, resolveCreateInstall } = await import('../lib/create.js');
-      const install = resolveCreateInstall({ runtime, explicitInstall, noInstall });
-      await scaffoldApp(name, process.cwd(), { template, db, runtime, install });
+      const { scaffoldApp } = await import('../lib/create.js');
+      await scaffoldApp(name, process.cwd(), { template, db, runtime, install: !noInstall });
       break;
     }
     case 'vendor': {
       const sub = rest[0];
       const args = rest.slice(1);
       const appDir = process.cwd();
-      const { pinAll, unpinPackage, listPinned, auditPinned, findOutdated, updatePinned, readPinFile, ensureVendorCommittable, SUPPORTED_PROVIDERS } = await importWebjsdev('@webjsdev/server');
+      const { pinAll, unpinPackage, listPinned, auditPinned, findOutdated, updatePinned, readPinFile, ensureVendorCommittable, SUPPORTED_PROVIDERS } = await import('@webjsdev/server');
 
       // Parse `--from <provider>` once at the top so subcommands share it.
       // Mirrors importmap-rails's `bin/importmap pin foo --from jsdelivr`.
@@ -809,7 +803,7 @@ Full docs: https://docs.webjs.com`);
       // runnable directly as `npx @webjsdev/mcp`); `webjs mcp` delegates to it
       // for back-compat. The version advertised in the initialize handshake is
       // @webjsdev/mcp's own, resolved by its bin, so this passes none.
-      const { runMcpServer } = await importWebjsdev('@webjsdev/mcp');
+      const { runMcpServer } = await import('@webjsdev/mcp');
       const { createRequire } = await import('node:module');
       const require = createRequire(import.meta.url);
       let version = '0.0.0';

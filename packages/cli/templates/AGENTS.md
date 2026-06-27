@@ -404,28 +404,14 @@ an npm `prestart` hook.
 
 ### Running on Bun instead of Node
 
-webjs runs on **Node 24+ or Bun**. A `--runtime bun` app routes its `dev` /
-`start` / `db` scripts through a `webjs-bun.mjs` bootstrap under `bun --bun`
-(which overrides the `webjs` bin's Node shebang so the server runs on Bun). The
-bootstrap imports the CLI by bare specifier, so Bun auto-install resolves deps on
-demand and **no `bun install` is needed**:
+webjs runs on **Node 24+ or Bun**. The same `package.json` scripts work on
+either; to run under Bun, force it with `--bun` so the server executes on Bun
+rather than the `webjs` bin's Node shebang:
 
 ```sh
-bun run dev            # or: bun run start  (no install step required)
+bun install
+bun --bun run dev      # or: bun --bun run start
 ```
-
-`bun create` does not run an install on Bun, so a fresh app serves immediately.
-Under zero-install, Bun's runtime auto-install resolves a BARE import to LATEST
-(it ignores `package.json` and `bun.lock`), so webjs rewrites each declared dep's
-specifier to an inline-versioned one via an `onLoad` transform. The version is the
-`bun.lock` exact when present, else the `package.json` value when it is an
-inline-safe semver (an exact pin, or a caret / tilde / comparator range, which
-Bun resolves to the highest match). A protocol range (`workspace:`, `file:`), a
-wildcard (`*`), and a dist-tag (`latest`) stay at latest. Run `bun install` when
-you want versions frozen identically across machines (it materializes
-`node_modules` from the lockfile) or editor type intelligence. (To run a
-Node-flavored app on Bun instead, force `bun --bun run dev`, which still expects
-an install.)
 
 On Node the `.ts` type-stripping is the built-in `module.stripTypeScriptTypes`;
 on Bun (which has no built-in) it comes from `amaro` automatically, so the same
