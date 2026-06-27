@@ -269,32 +269,6 @@ export async function readSeedEnabled(appDir) {
 }
 
 /**
- * Read the Bun zero-install version-pinning switch (#685). The `WEBJS_PIN` env
- * override wins (same grammar as `WEBJS_SEED`), otherwise
- * `{ "webjs": { "pin": false } }` disables it. Default ON (opt-out). Consulted
- * only on Bun: the rewrite injects inline-version specifiers that Bun's
- * auto-install honors so zero-install fetches the pinned version, not latest
- * (#684). Node zero-install pinning is #669's separate concern.
- * @param {string} appDir
- * @returns {Promise<boolean>}
- */
-export async function readPinEnabled(appDir) {
-  const raw = process.env.WEBJS_PIN;
-  if (raw != null && raw !== '') {
-    const v = String(raw).trim().toLowerCase();
-    if (v === '0' || v === 'false' || v === 'off' || v === 'no') return false;
-    if (v === '1' || v === 'true' || v === 'on' || v === 'yes') return true;
-  }
-  try {
-    const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
-    if (pkg && pkg.webjs && pkg.webjs.pin === false) return false;
-  } catch {
-    // No package.json, malformed JSON, or unreadable. Keep the default.
-  }
-  return true;
-}
-
-/**
  * Read the client-router switch (`webjs.clientRouter`) from the app's
  * package.json (#629). Default `true`: the client router auto-enables in the
  * browser whenever `@webjsdev/core` loads (the automatic-navigation thesis).
@@ -594,11 +568,7 @@ export async function createRequestHandler(opts) {
   // Read once (not per-rebuild): the hook is global and cannot be cleanly
   // un-installed, so toggling needs a restart. Disabled -> no hook, no ambient
   // collector wrap in ssr.js, and module loading stays byte-identical.
-  // Pinning (#685) is Bun-only and independent of seeding, so install the hook
-  // when EITHER is on (on Bun they share one onLoad).
-  const seedEnabled = await readSeedEnabled(appDir);
-  const pinEnabled = serverRuntime() === 'bun' && await readPinEnabled(appDir);
-  if (seedEnabled || pinEnabled) await registerSeedHooks({ appDir, seedEnabled, pinEnabled });
+  if (await readSeedEnabled(appDir)) await registerSeedHooks();
 
   // When an app commits a vendor pin (.webjs/vendor/importmap.json) it carries a
   // deterministic vendor map that is cheap to read (one file, no analysis, no

@@ -58,10 +58,14 @@ export function bunifyProse(s) {
       'Dockerfile pins `node:24-alpine` (the same Node major CI uses), installs\ndeps (no build step, since Drizzle has no codegen), and starts via',
       'Dockerfile is a pure `oven/bun:1` image (no Node, since `webjs db migrate`\nresolves drizzle-kit and runs under Bun with no `npx`, #570), installs deps\nwith `bun install` (no build step, since Drizzle has no codegen), and starts via',
     )
-    // The "Running on Bun" section heading is reframed for a bun-flavored app.
-    // Its body already describes the webjs-bun.mjs bootstrap + zero-install in the
-    // template (#675), so only the heading needs the runtime reframe.
+    // The "Running on Bun" section frames Bun as opt-in ("force it with --bun").
+    // In a bun-flavored app the dev/start scripts ALREADY embed --bun, so reframe
+    // it as the configured default.
     .replaceAll('### Running on Bun instead of Node', '### Runtime: this app runs on Bun')
+    .replaceAll(
+      'The same `package.json` scripts work on\neither; to run under Bun, force it with `--bun` so the server executes on Bun\nrather than the `webjs` bin\'s Node shebang:',
+      'This app is configured for Bun. Its `dev` / `start` scripts already force\n`--bun` (which overrides the `webjs` bin\'s Node shebang), so a plain `bun run dev`\nserves on Bun. The other scripts (test / db / check) run on Node, the runtime\nthe `webjs` tooling targets:',
+    )
     // Invocation styles first, so "npm create webjs@latest" does not get
     // mangled by the generic "npm <x>" rules below.
     .replaceAll('npm create webjs@latest', 'bun create webjs')

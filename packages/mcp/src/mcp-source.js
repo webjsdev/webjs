@@ -48,15 +48,8 @@ const MAX_FILES = 4000;
  * reliable. The source dir is `src/`, or `lib/` for the cli. A package that is
  * not installed is skipped (not every app depends on every `@webjsdev/*`).
  *
- * Under Bun ZERO-INSTALL (no `node_modules`, #675) the packages live only in
- * Bun's global install cache (`<bunCacheDir>/@webjsdev/<pkg>@<version>@@@<n>/`,
- * which holds the full source). When the `node_modules` walk finds nothing and a
- * `bunCacheDir` + `readdir` are supplied, fall back to scanning that scope dir
- * for the package's versioned entry (highest version wins, best-effort), so the
- * tool works whether the package is installed OR resolved from the Bun cache.
- *
  * @param {string} cwd
- * @param {{ exists: (p: string) => boolean, readdir?: (d: string) => Array<{ name: string, isDir: boolean }>, bunCacheDir?: string | null }} fsDeps
+ * @param {{ exists: (p: string) => boolean }} fsDeps
  * @returns {Array<{ pkg: string, root: string, src: string }>}
  */
 export function resolveFrameworkRoots(cwd, fsDeps) {
@@ -76,8 +69,6 @@ export function resolveFrameworkRoots(cwd, fsDeps) {
       const cand = join(base, '@webjsdev', pkg);
       if (fsDeps.exists(join(cand, 'package.json'))) { root = cand; break; }
     }
-    // Zero-install fallback: no node_modules, so look in Bun's global cache.
-    if (!root) root = resolveFromBunCache(pkg, fsDeps);
     if (!root) continue;
     // Most packages keep source in `src/`; the cli keeps it in `lib/`. Use
     // whichever exists so every framework package's source is reachable.
@@ -89,69 +80,6 @@ export function resolveFrameworkRoots(cwd, fsDeps) {
     if (src) out.push({ pkg, root, src });
   }
   return out;
-}
-
-/**
- * Locate `@webjsdev/<pkg>` in Bun's global install cache (the zero-install
- * fallback). Bun caches a scoped package at `<bunCacheDir>/@webjsdev/<pkg>@<ver>@@@<n>/`
- * (the versioned dir holds the full source; a sibling unversioned `<pkg>/` dir is
- * metadata, skipped). Picks the highest cached version (semver-aware, so
- * `0.10.0` beats `0.9.0`), and returns its path only if it carries a
- * `package.json`. Returns '' when there is no cache dir, no `readdir`, or no
- * matching entry.
- *
- * @param {string} pkg
- * @param {{ exists: (p: string) => boolean, readdir?: (d: string) => Array<{ name: string, isDir: boolean }>, bunCacheDir?: string | null }} fsDeps
- * @returns {string}
- */
-function resolveFromBunCache(pkg, fsDeps) {
-  const { bunCacheDir, readdir, exists } = fsDeps;
-  if (!bunCacheDir || typeof readdir !== 'function') return '';
-  const scopeDir = join(bunCacheDir, '@webjsdev');
-  if (!exists(scopeDir)) return '';
-  let entries;
-  try { entries = readdir(scopeDir); } catch { return ''; }
-  const prefix = `${pkg}@`;
-  // A cache dir is `<pkg>@<version>@@@<n>`; extract <version> (between the name
-  // and the `@@@` cache-key suffix) and sort by it, highest first.
-  const versioned = entries
-    .filter((e) => e.isDir && e.name.startsWith(prefix) && e.name.includes('@@@'))
-    .map((e) => ({ name: e.name, version: e.name.slice(prefix.length).split('@@@')[0] }))
-    .sort((a, b) => compareVersions(b.version, a.version));
-  for (const { name } of versioned) {
-    const cand = join(scopeDir, name);
-    if (exists(join(cand, 'package.json'))) return cand;
-  }
-  return '';
-}
-
-/**
- * Compare two semver-ish version strings numerically (so `0.10.0` > `0.9.0`),
- * with a release ranking ABOVE its prerelease (`1.0.0` > `1.0.0-rc.1`). Compares
- * the release core (`major.minor.patch`) segment by segment numerically; on a
- * tie, a version WITHOUT a prerelease tag sorts higher, else the prerelease tags
- * compare lexically. The build suffix (`+...`) is ignored, per semver. Returns
- * negative / 0 / positive like a comparator.
- * @param {string} a
- * @param {string} b
- * @returns {number}
- */
-function compareVersions(a, b) {
-  const parse = (v) => {
-    const [core, pre = ''] = v.split('+')[0].split('-');
-    return { nums: core.split('.').map(Number), pre };
-  };
-  const A = parse(a);
-  const B = parse(b);
-  for (let i = 0; i < Math.max(A.nums.length, B.nums.length); i++) {
-    const x = A.nums[i] || 0;
-    const y = B.nums[i] || 0;
-    if (x !== y) return x - y;
-  }
-  if (A.pre === B.pre) return 0;
-  if (!A.pre) return 1; // a release outranks any prerelease of the same core
-  if (!B.pre) return -1;
-  return A.pre < B.pre ? -1 : 1;
 }
 
 /**

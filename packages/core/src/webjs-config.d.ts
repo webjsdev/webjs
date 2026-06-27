@@ -146,16 +146,6 @@ export interface WebjsConfig {
   seed?: boolean;
 
   /**
-   * Bun zero-install dependency version-pinning switch (#685). Default `true`,
-   * Bun only. When on, an `onLoad` transform rewrites a declared dep's bare
-   * import specifier to its package.json / `bun.lock` version, so Bun's
-   * auto-install fetches the pinned version instead of latest (#684). Set to
-   * `false` to leave specifiers bare (zero-install resolves to latest). The
-   * `WEBJS_PIN` env override wins over this. No effect on Node.
-   */
-  pin?: boolean;
-
-  /**
    * Client-router switch (#629). Default `true`: the client router auto-enables
    * in the browser whenever `@webjsdev/core` loads, so any page that ships a
    * component gets SPA-style navigation with no import. Set to `false` to opt

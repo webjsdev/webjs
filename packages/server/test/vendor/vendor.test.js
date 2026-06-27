@@ -9,7 +9,6 @@ import {
   scanBareImports,
   vendorImportMapEntries,
   getPackageVersion,
-  declaredVendorVersions,
   jspmGenerate,
   clearVendorCache,
   pinAll,
@@ -159,20 +158,15 @@ test('scanBareImports: skips route.ts and middleware.ts (file-router server-only
   await rm(dir, { recursive: true, force: true });
 });
 
-test('scanBareImports: skips the webjs-bun.mjs bootstrap + server-only @webjsdev pkgs (#713)', async () => {
-  const dir = join(tmpdir(), `webjs-test-vendor-bun-boot-${Date.now()}`);
+test('scanBareImports: skips server-only @webjsdev pkgs (#713)', async () => {
+  const dir = join(tmpdir(), `webjs-test-vendor-server-only-${Date.now()}`);
   await mkdir(join(dir, 'app'), { recursive: true });
-  // The #675 zero-install bootstrap: imports the server-only CLI. Must NOT be
-  // scanned. It also imports a NON-framework specifier, so this locks in the
-  // file-level exclusion independently of FRAMEWORK_SERVER_ONLY: if the
-  // webjs-bun.mjs skip is removed, `boot-only-vendor` leaks into the scan.
-  await writeFile(join(dir, 'webjs-bun.mjs'),
-    `await import('@webjsdev/cli/bin/webjs.js');\nimport 'boot-only-vendor';`);
   // A page that legitimately imports a server-only framework pkg name directly
   // (defensive: even if surfaced, it must not reach the jspm path).
   await writeFile(
     join(dir, 'app', 'page.ts'),
     `import dayjs from 'dayjs';
+     import '@webjsdev/cli/bin/webjs.js';
      import '@webjsdev/server/some';
      import '@webjsdev/mcp';`,
   );
@@ -180,8 +174,6 @@ test('scanBareImports: skips the webjs-bun.mjs bootstrap + server-only @webjsdev
   const found = await scanBareImports(dir);
 
   assert.ok(found.has('dayjs'), 'a real browser vendor is still scanned');
-  assert.ok(!found.has('boot-only-vendor'), 'webjs-bun.mjs is skipped at the file level, even for a non-framework import (#713)');
-  assert.ok(!found.has('@webjsdev/cli/bin/webjs.js'), 'webjs-bun.mjs bootstrap must not be scanned (#713)');
   assert.ok(![...found].some((s) => s.startsWith('@webjsdev/cli')), 'no @webjsdev/cli specifier leaks');
   assert.ok(![...found].some((s) => s.startsWith('@webjsdev/server')), 'server-only @webjsdev/server excluded');
   assert.ok(![...found].some((s) => s.startsWith('@webjsdev/mcp')), 'server-only @webjsdev/mcp excluded');
@@ -2294,70 +2286,4 @@ test('resolveVendorImports: ok=false on a transient failure, ok=true on a perman
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
-});
-
-// --- declaredVendorVersions: the zero-install importmap fallback (#699) ---
-
-test('declaredVendorVersions: forwards a package.json range and an exact pin', async () => {
-  const dir = join(tmpdir(), `webjs-decl-${Date.now()}`);
-  await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, 'package.json'), JSON.stringify({
-    dependencies: { dayjs: '^1.11.0', zod: '3.22.4', local: 'workspace:*' },
-  }));
-  const v = declaredVendorVersions(dir);
-  // The range and the exact forward (jspm resolves a range); workspace: is dropped.
-  assert.deepEqual(v, { dayjs: '^1.11.0', zod: '3.22.4' });
-  await rm(dir, { recursive: true, force: true });
-});
-
-test('declaredVendorVersions: bun.lock exact wins over the package.json range', async () => {
-  const dir = join(tmpdir(), `webjs-decl-lock-${Date.now()}`);
-  await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, 'package.json'), JSON.stringify({ dependencies: { dayjs: '^1.11.0' } }));
-  await writeFile(join(dir, 'bun.lock'), '{\n  "packages": {\n    "dayjs": ["dayjs@1.11.13", "", {}, "sha512-x"]\n  }\n}');
-  const v = declaredVendorVersions(dir);
-  assert.deepEqual(v, { dayjs: '1.11.13' }, 'lock exact is shared with the server pin, so no skew');
-  await rm(dir, { recursive: true, force: true });
-});
-
-test('declaredVendorVersions: empty when there is no package.json', () => {
-  const dir = join(tmpdir(), `webjs-decl-none-${Date.now()}`);
-  assert.deepEqual(declaredVendorVersions(dir), {});
-});
-
-test('declaredVendorVersions fills the gap getPackageVersion leaves under zero-install', async () => {
-  // The whole point of #699: with no node_modules, getPackageVersion (require.resolve)
-  // finds nothing, so the importmap would drop the entry. The declared fallback supplies it.
-  const dir = join(tmpdir(), `webjs-decl-gap-${Date.now()}`);
-  await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, 'package.json'), JSON.stringify({ dependencies: { dayjs: '^1.11.0' } }));
-  assert.equal(getPackageVersion('dayjs', dir), null, 'no node_modules -> require.resolve finds nothing');
-  assert.equal(declaredVendorVersions(dir).dayjs, '^1.11.0', 'the fallback supplies the declared version');
-  await rm(dir, { recursive: true, force: true });
-});
-
-test('vendorImportMapEntries: zero-install falls back to the declared version (integration, #699)', async () => {
-  const dir = join(tmpdir(), `webjs-imap-zi-${Date.now()}`);
-  await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, 'package.json'), JSON.stringify({ dependencies: { dayjs: '^1.11.0' } }));
-  // No node_modules here, so getPackageVersion returns null. Without the
-  // declared fallback, dayjs is dropped and the browser import 404s. This drives
-  // the actual fix site (vendorImportMapEntries) through the zero-install path.
-  // Counterfactual: revert `|| declared[pkg]` and `sentInstall` becomes [].
-  assert.equal(getPackageVersion('dayjs', dir), null, 'no node_modules -> on-disk resolution finds nothing');
-  let sentInstall = null;
-  const mock = async (_url, opts) => {
-    const { install } = JSON.parse(opts.body);
-    sentInstall = install;
-    const imports = {};
-    for (const i of install) imports[i.replace(/@[^@]*$/, '')] = `https://ga.jspm.io/npm:${i}/mock.js`;
-    return { ok: true, status: 200, json: async () => ({ map: { imports } }) };
-  };
-  await withMockedFetch(mock, async () => {
-    clearVendorCache();
-    const map = await vendorImportMapEntries(new Set(['dayjs']), dir);
-    assert.deepEqual(sentInstall, ['dayjs@^1.11.0'], 'the declared range reaches the jspm install (the fallback fired)');
-    assert.equal(map.dayjs, 'https://ga.jspm.io/npm:dayjs@^1.11.0/mock.js', 'the importmap gets a dayjs entry');
-  });
-  await rm(dir, { recursive: true, force: true });
 });

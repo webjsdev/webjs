@@ -14,7 +14,7 @@
 import { mkdir, writeFile, readFile, cp } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { bunifyProse, bunifyDockerfile, bunifyCompose, bunifyCi } from './runtime-rewrite.js';
@@ -34,86 +34,6 @@ function detectPackageManager() {
   if (ua.startsWith('bun/')) return 'bun';
   return 'npm';
 }
-
-/**
- * Decide whether `webjs create` runs the post-scaffold install, per target
- * runtime (#682). Node installs by default (it needs `node_modules` to run);
- * Bun SKIPS by default (zero-install: `bun run dev` resolves deps on the fly,
- * #675). Under Bun zero-install webjs pins a declared dep to its package.json
- * version via the #685/#698 onLoad rewrite (a caret range now resolves the
- * highest match, not absolute latest), so `bun install` is the path to a frozen
- * lockfile, not a correctness fix. Explicit flags win: `--install` forces it
- * on, `--no-install` forces it off. The CLI entry points call this and pass an
- * explicit boolean to `scaffoldApp`, so the library default (no install unless
- * `install: true`) is unchanged for programmatic callers.
- *
- * @param {{ runtime?: string, explicitInstall?: boolean, noInstall?: boolean }} [o]
- * @returns {boolean}
- */
-export function resolveCreateInstall({ runtime, explicitInstall, noInstall } = {}) {
-  if (explicitInstall) return true;
-  if (noInstall) return false;
-  const isBun = runtime === 'bun' || (!runtime && detectPackageManager() === 'bun');
-  return !isBun;
-}
-
-/**
- * Read the EXACT version of `@webjsdev/<pkg>` the scaffolding CLI ships with.
- * `webjsdevRange` carets over this for the generated `package.json` (#700), so a
- * fresh app tracks the line the CLI shipped. Walks the `require.resolve` node_modules search paths
- * and fs-reads `<pkg>/package.json` directly: `@webjsdev/server` (and `ui`) hide
- * `./package.json` behind `exports`, so a bare `require('<pkg>/package.json')`
- * fails (same constraint #687 hit). Falls back to `'latest'` when the package is
- * not resolvable (defensive; the CLI's own dependency closure is normally
- * present), which keeps the scaffold working rather than emitting a bad pin.
- * @param {string} pkg  e.g. 'cli', 'core', 'server'
- * @returns {string}  an exact version, or 'latest'
- */
-function webjsdevVersion(pkg) {
-  const req = createRequire(import.meta.url);
-  for (const base of (req.resolve.paths(`@webjsdev/${pkg}`) || [])) {
-    const pj = join(base, '@webjsdev', pkg, 'package.json');
-    if (existsSync(pj)) {
-      try {
-        const v = JSON.parse(readFileSync(pj, 'utf8')).version;
-        if (v) return v;
-      } catch { /* unreadable; keep looking, then fall back */ }
-    }
-  }
-  return 'latest';
-}
-
-/**
- * The `@webjsdev/<pkg>` specifier for the generated `package.json` (#700): a
- * caret range over the version the scaffolding CLI ships with, so a fresh app
- * picks up patch updates the way an npm user expects (a `^0.x` caret stays
- * within the minor). Bun zero-install resolves a normal caret range correctly
- * since #698, so this no longer diverges from npm. Falls back to `'latest'` when
- * the version is not resolvable (keeps `^latest` from ever being emitted).
- * @param {string} pkg  e.g. 'cli', 'core', 'server'
- * @returns {string}
- */
-function webjsdevRange(pkg) {
-  const v = webjsdevVersion(pkg);
-  return v === 'latest' ? 'latest' : '^' + v;
-}
-
-/**
- * Third-party dep specifiers the scaffold ships (#700). These are template deps
- * the CLI does NOT itself depend on, so they cannot be read from the CLI's
- * closure (unlike `@webjsdev/*`). Since #698, Bun zero-install resolves a normal
- * caret range correctly (highest match, not absolute latest), so `pg` is an
- * idiomatic `^` range. Drizzle is PINNED to an exact RC: its 1.0 line is a
- * PRERELEASE (`1.0.0-rc.3`), and Bun zero-install ENOENTs on a caret-prerelease
- * inline specifier (`drizzle-orm@^1.0.0-rc.3`, verified on Bun 1.3.14) while the
- * exact prerelease resolves, so drizzle must stay exact until the 1.0 stable
- * ships. Refresh on a deliberate bump.
- */
-const SCAFFOLD_DEP_VERSIONS = {
-  'drizzle-orm': '1.0.0-rc.3',
-  'drizzle-kit': '1.0.0-rc.3',
-  pg: '^8.22.0',
-};
 
 /**
  * Run `<pm> install` inside the scaffolded app. Returns true on success.
@@ -353,10 +273,6 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     throw new Error(`Unknown --runtime '${runtime}'. Only ${VALID_RUNTIMES.join(' / ')} are supported.`);
   }
   const isBun = runtime === 'bun';
-  // Zero-install Bun entry (#675): the app-local `webjs-bun.mjs` bootstrap, run
-  // under `bun --bun`, so the server resolves the CLI + deps via Bun auto-install
-  // (no `bun install` required). App-local so it is resolvable with no node_modules.
-  const bunBoot = 'bun --bun webjs-bun.mjs';
   const appDir = join(cwd, name);
   if (existsSync(appDir)) {
     console.error(`Error: directory '${name}' already exists.`);
@@ -402,19 +318,18 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // so `npm run start` (a thin alias) behaves identically. Drizzle has no
       // codegen, so there is no dev `before` step.
       //
-      // Bun runtime (#541, zero-install #675): the server + DB scripts run via
-      // the `webjs-bun.mjs` bootstrap under `bun --bun`. `--bun` overrides the
-      // `webjs` bin's `#!/usr/bin/env node` shebang (without it `bun run dev`
+      // Bun runtime (#541): the long-running server scripts (`dev` / `start`)
+      // are prefixed `bun --bun` so the app SERVES on Bun. The `--bun` overrides
+      // the `webjs` bin's `#!/usr/bin/env node` shebang (without it `bun run dev`
       // would exec webjs under Node, silently running the "bun" app on Node).
-      // Routing through the bootstrap file (which imports the CLI by bare
-      // specifier) instead of the `webjs` bin means Bun's auto-install resolves
-      // `@webjsdev/*` and your deps ON DEMAND, so `bun run dev` / `start` work
-      // with NO `bun install` (install becomes optional, for editor types /
-      // offline). The runtime-neutral tooling scripts (test / check / typecheck
+      // Baking it into the script body means a plain `bun run dev` (or even
+      // `npm run dev`) starts on Bun, so a user never has to remember the flag.
+      // The runtime-neutral tooling scripts below (test / db / check / typecheck
       // / doctor) stay plain `webjs ...`: they spawn node tooling (`node --test`,
-      // tsc), which needs an install, so they are not part of the zero-install path.
-      dev: isBun ? `${bunBoot} dev` : 'webjs dev',
-      start: isBun ? `${bunBoot} start` : 'webjs start',
+      // drizzle-kit, tsc) and forcing `--bun` there buys nothing (and `webjs
+      // test` shells `node --test`, which a `bun --test` would not be).
+      dev: isBun ? 'bun --bun webjs dev' : 'webjs dev',
+      start: isBun ? 'bun --bun webjs start' : 'webjs start',
       test: 'webjs test',
       'test:server': 'webjs test --server',
       'test:browser': 'webjs test --browser',
@@ -425,31 +340,25 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // vendor pins, @webjsdev versions, git hook). Local tool, NOT a CI gate
       // (its env-drift + network pin-freshness checks would make CI flaky).
       doctor: 'webjs doctor',
-      'db:generate': isBun ? `${bunBoot} db generate` : 'webjs db generate',
-      'db:migrate': isBun ? `${bunBoot} db migrate` : 'webjs db migrate',
-      'db:push': isBun ? `${bunBoot} db push` : 'webjs db push',
-      'db:studio': isBun ? `${bunBoot} db studio` : 'webjs db studio',
-      'db:seed': isBun ? `${bunBoot} db seed` : 'webjs db seed',
+      'db:generate': 'webjs db generate',
+      'db:migrate': 'webjs db migrate',
+      'db:push': 'webjs db push',
+      'db:studio': 'webjs db studio',
+      'db:seed': 'webjs db seed',
     },
     dependencies: {
       // Drizzle ORM (no codegen, no engine binary). Pinned to the 1.0 line
       // for relations v2. SQLite needs NO driver dependency: the connection
       // uses the built-in node:sqlite (Node) / bun:sqlite (Bun) via Drizzle's
       // node-sqlite / bun-sqlite adapters. Postgres still needs the pg driver.
-      // Since #698 a normal caret range resolves correctly under bun
-      // zero-install, so @webjsdev/* and pg are idiomatic `^` ranges (#700).
-      // Drizzle stays EXACT: its 1.0 line is a prerelease RC, and bun ENOENTs
-      // on a caret-prerelease inline specifier, so a range would break it.
-      'drizzle-orm': SCAFFOLD_DEP_VERSIONS['drizzle-orm'],
-      ...(dialect === 'postgres' ? { pg: SCAFFOLD_DEP_VERSIONS.pg } : {}),
-      '@webjsdev/cli': webjsdevRange('cli'),
-      '@webjsdev/core': webjsdevRange('core'),
-      '@webjsdev/server': webjsdevRange('server'),
+      'drizzle-orm': '^1.0.0-rc.3',
+      ...(dialect === 'postgres' ? { pg: '^8.13.0' } : {}),
+      '@webjsdev/cli': 'latest',
+      '@webjsdev/core': 'latest',
+      '@webjsdev/server': 'latest',
     },
     devDependencies: {
-      // Exact pin: drizzle-kit shares drizzle-orm's prerelease 1.0 RC, which bun
-      // cannot resolve as a caret-prerelease range, so it stays exact (#700).
-      'drizzle-kit': SCAFFOLD_DEP_VERSIONS['drizzle-kit'],
+      'drizzle-kit': '^1.0.0-rc.3',
       ...(dialect === 'postgres' ? { '@types/pg': '^8.11.0' } : {}),
       // The TypeScript compiler, for `npm run typecheck` (webjs typecheck runs
       // tsc --noEmit). Not needed at runtime (Node strips types in place), only
@@ -487,27 +396,9 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     webjs: {
       // Drizzle has no codegen, so there is no dev `before` step. Production
       // applies pending migrations at boot via `webjs db migrate` (drizzle-kit).
-      // On Bun this runs through the same zero-install bootstrap as `start`, so
-      // the boot-time migrate needs no `webjs` bin in node_modules (#675).
-      start: { before: [isBun ? `${bunBoot} db migrate` : 'webjs db migrate'] },
+      start: { before: ['webjs db migrate'] },
     },
   }, null, 2) + '\n');
-
-  // The zero-install Bun entry (#675). `bun run dev` / `start` invoke this via
-  // `bun --bun` (see the scripts above). Importing the webjs CLI by bare
-  // specifier lets Bun auto-install resolve `@webjsdev/*` and your deps on
-  // demand, so a fresh app serves with NO `bun install`. The CLI reads its
-  // command (dev / start / db ...) and flags straight from argv. Node apps do
-  // not get this file; they run the `webjs` bin directly.
-  if (isBun) {
-    await writeFile(join(appDir, 'webjs-bun.mjs'),
-      '// Zero-install Bun entry (webjs #675). Run via `bun --bun webjs-bun.mjs <cmd>`\n' +
-      '// (the dev / start / db npm scripts do this). Importing the CLI by bare\n' +
-      '// specifier lets Bun auto-install resolve @webjsdev/* and your deps on\n' +
-      '// demand, so the app serves with no `bun install` (install stays optional,\n' +
-      '// for editor types and offline runs). Args pass through to the CLI.\n' +
-      "await import('@webjsdev/cli/bin/webjs.js');\n");
-  }
 
   await writeFile(join(appDir, 'tsconfig.json'), JSON.stringify({
     compilerOptions: {
@@ -1490,13 +1381,6 @@ For AI agents, read this before editing scaffolded files:
     if (!installed) {
       console.log(`\n[warn] ${pm} install failed. Run '${pm} install' manually in ${name}/ to finish setup.\n`);
     }
-  } else if (isBun) {
-    // Bun zero-install (#675): no install needed; `bun run dev` resolves deps on
-    // the fly. Since #698 they resolve to their package.json versions (a caret
-    // range to its highest match), so point at `bun install` for a frozen
-    // lockfile and editor type intelligence, not a correctness fix.
-    console.log(`Skipped install. Bun resolves dependencies on the fly, so 'bun run dev' and 'bun run start' work as-is (no node_modules).`);
-    console.log(`These resolve to the versions in package.json. Run 'bun install' in ${name}/ to freeze a lockfile and get editor type intelligence.\n`);
   }
 
   // Next-steps banner prints LAST so the actionable command is the
@@ -1508,10 +1392,7 @@ For AI agents, read this before editing scaffolded files:
   // generate + migrate before the first run (the example User model wants
   // its table to exist). Drizzle splits Prisma's `migrate dev` into
   // `db:generate` (schema to SQL) then `db:migrate` (apply).
-  // Omit the install step from the next-steps line for a deliberate Bun
-  // zero-install (#682): `bun run dev` resolves deps on the fly, so it works
-  // without an install. Otherwise (Node, or an install that did not run) keep it.
-  const installSegment = (installed || (isBun && !shouldInstall)) ? '' : `${pm} install && `;
+  const installSegment = installed ? '' : `${pm} install && `;
   const dbSegment = isSaas ? `${pm} run db:generate && ${pm} run db:migrate && ` : '';
   const runCommand = `cd ${name} && ${installSegment}${dbSegment}${pm} run dev`;
   // Use `npx webjsdev ui ...` here, not `npx webjs ui ...`. The bare
