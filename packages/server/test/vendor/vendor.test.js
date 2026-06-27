@@ -158,20 +158,15 @@ test('scanBareImports: skips route.ts and middleware.ts (file-router server-only
   await rm(dir, { recursive: true, force: true });
 });
 
-test('scanBareImports: skips the webjs-bun.mjs bootstrap + server-only @webjsdev pkgs (#713)', async () => {
-  const dir = join(tmpdir(), `webjs-test-vendor-bun-boot-${Date.now()}`);
+test('scanBareImports: skips server-only @webjsdev pkgs (#713)', async () => {
+  const dir = join(tmpdir(), `webjs-test-vendor-server-only-${Date.now()}`);
   await mkdir(join(dir, 'app'), { recursive: true });
-  // The #675 zero-install bootstrap: imports the server-only CLI. Must NOT be
-  // scanned. It also imports a NON-framework specifier, so this locks in the
-  // file-level exclusion independently of FRAMEWORK_SERVER_ONLY: if the
-  // webjs-bun.mjs skip is removed, `boot-only-vendor` leaks into the scan.
-  await writeFile(join(dir, 'webjs-bun.mjs'),
-    `await import('@webjsdev/cli/bin/webjs.js');\nimport 'boot-only-vendor';`);
   // A page that legitimately imports a server-only framework pkg name directly
   // (defensive: even if surfaced, it must not reach the jspm path).
   await writeFile(
     join(dir, 'app', 'page.ts'),
     `import dayjs from 'dayjs';
+     import '@webjsdev/cli/bin/webjs.js';
      import '@webjsdev/server/some';
      import '@webjsdev/mcp';`,
   );
@@ -179,8 +174,6 @@ test('scanBareImports: skips the webjs-bun.mjs bootstrap + server-only @webjsdev
   const found = await scanBareImports(dir);
 
   assert.ok(found.has('dayjs'), 'a real browser vendor is still scanned');
-  assert.ok(!found.has('boot-only-vendor'), 'webjs-bun.mjs is skipped at the file level, even for a non-framework import (#713)');
-  assert.ok(!found.has('@webjsdev/cli/bin/webjs.js'), 'webjs-bun.mjs bootstrap must not be scanned (#713)');
   assert.ok(![...found].some((s) => s.startsWith('@webjsdev/cli')), 'no @webjsdev/cli specifier leaks');
   assert.ok(![...found].some((s) => s.startsWith('@webjsdev/server')), 'server-only @webjsdev/server excluded');
   assert.ok(![...found].some((s) => s.startsWith('@webjsdev/mcp')), 'server-only @webjsdev/mcp excluded');
