@@ -32,6 +32,7 @@ DiagSlotBtn.register('diag-slot-btn');
 
 const EARLY = `<script>
 window.__wjd={e:[],probeBClicked:false};
+window.__WEBJS_DIAG=[];
 addEventListener('error',function(ev){__wjd.e.push((ev.message||ev.type)+' @@ '+String(ev.filename||'').split('/').slice(-2).join('/')+':'+(ev.lineno||0))});
 addEventListener('unhandledrejection',function(ev){var r=ev.reason;__wjd.e.push('reject: '+((r&&r.message)||String(r)))});
 </script>`;
@@ -43,6 +44,7 @@ setTimeout(function(){
   __wjd.probeBClicked=false;
   if(bBtn) bBtn.click();
   rep.PROBE_B_minimal_slot_click={ buttonFound:bBtn?'Y':'n', clickFired:__wjd.probeBClicked?'Y':'n' };
+  rep.CORE_TRACE=window.__WEBJS_DIAG;
   var tb=document.getElementById('tb');
   var aBtn=tb?tb.querySelector('ui-tabs-trigger[value=\"password\"] button'):null;
   if(aBtn) aBtn.click();
@@ -55,7 +57,7 @@ export default function Diag() {
   return html`
     ${unsafeHTML(EARLY)}
     <main style="padding:1rem;font-family:system-ui;max-width:100%">
-      <h1 style="font-size:1.1rem">webjs Tier-2 iOS diagnostic v9 (#730)</h1>
+      <h1 style="font-size:1.1rem">webjs Tier-2 iOS diagnostic v10 (#730)</h1>
       <p style="font-size:.85rem;color:#666">Wait about 2s, then copy the whole readout and send it to me. The page stays scrollable.</p>
       <button onclick="location.reload()" style="margin-bottom:.75rem" class=${buttonClass({ variant: 'outline', size: 'sm' })}>Re-run</button>
       <pre id="wjdiag" style="white-space:pre-wrap;word-break:break-word;font:12px/1.5 monospace;background:#f4f4f5;color:#111;padding:1rem;border-radius:8px;border:1px solid #ccc">collecting (wait about 2s)...</pre>

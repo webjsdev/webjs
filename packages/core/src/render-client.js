@@ -89,9 +89,15 @@ export function render(value, container) {
   const host = /** @type any */ (container);
   const prev = host[INSTANCE];
 
+  // TEMP #730 diagnostic: trace the binding path for the <diag-slot-btn>
+  // probe only, gated on globalThis.__WEBJS_DIAG (set by the /diag page).
+  const __D = (typeof globalThis !== 'undefined' && /** @type any */ (globalThis).__WEBJS_DIAG && host && host.tagName === 'DIAG-SLOT-BTN') ? /** @type any */ (globalThis).__WEBJS_DIAG : null;
+
   if (isTemplate(value)) {
     const tr = /** @type {import('./html.js').TemplateResult} */ (value);
+    if (__D) __D.push('render prev=' + (prev ? 'Y' : 'n'));
     if (prev && prev.strings === tr.strings) {
+      if (__D) __D.push('-> updateInstance (no rebind)');
       updateInstance(prev, tr.values);
       return;
     }
@@ -102,6 +108,7 @@ export function render(value, container) {
     // rendering. The content will be replaced with identical output -
     // no visible flash because SSR and client render produce the same HTML.
     const firstChild = container.firstChild;
+    if (__D) __D.push('-> createInstance (firstChild=' + (firstChild ? (firstChild.nodeType === 8 ? 'comment:' + /** @type any */ (firstChild).data : firstChild.nodeName) : 'none') + ')');
     if (firstChild && firstChild.nodeType === 8 && /** @type {Comment} */ (firstChild).data === 'webjs-hydrate') {
       firstChild.remove();
     }
@@ -462,6 +469,14 @@ function createInstance(tr, container) {
   const endNode = document.createComment(`${MARKER}e`);
 
   const bound = parts.map((p) => bindPart(p, frag));
+
+  // TEMP #730 diagnostic for the <diag-slot-btn> probe only.
+  const __D = (typeof globalThis !== 'undefined' && /** @type any */ (globalThis).__WEBJS_DIAG && /** @type any */ (container).tagName === 'DIAG-SLOT-BTN') ? /** @type any */ (globalThis).__WEBJS_DIAG : null;
+  if (__D) {
+    __D.push('createInstance parts=[' + parts.map((p) => p.kind).join(',') + ']');
+    __D.push('eventBinds=[' + bound.filter((b) => b.kind === 'event').map((b) => (b.el && /** @type any */ (b.el).tagName) + (b.el && /** @type any */ (b.el).isConnected ? ':conn' : ':frag')).join(',') + ']');
+  }
+
   const lastValues = [];
   for (let i = 0; i < tr.values.length; i++) {
     applyPart(bound[i], tr.values[i], undefined, tr.values);
@@ -469,6 +484,10 @@ function createInstance(tr, container) {
   }
 
   /** @type any */ (container).replaceChildren(startNode, ...frag.childNodes, endNode);
+  if (__D) {
+    const lb = /** @type any */ (container).querySelector('button');
+    __D.push('afterReplace liveBtn=' + (lb ? 'Y' : 'n') + ' liveBtnIsBoundEl=' + (lb && bound.some((b) => b.kind === 'event' && b.el === lb) ? 'Y' : 'n'));
+  }
 
   // Slot parts have no value-hole to drive applyPart from the loop above.
   // Apply them once now that the fragment is inserted into the live
