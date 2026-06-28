@@ -1,18 +1,19 @@
 /**
- * TEMPORARY on-device diagnostic route for #730 (Tier-2 components dead on
- * iOS). Not linked from anywhere; removed once the root cause is confirmed.
+ * TEMPORARY on-device diagnostic route for #730 (Tier-2 components on iOS).
+ * Not linked from anywhere; removed once the fix is confirmed.
  *
- * v2: the user reported "can't scroll, especially after the diagnostic runs."
- * That is the dialog's body-scroll-lock firing, which means the dialog DOES
- * open on iOS (interactivity fires) but renders invisibly. So this version
- * opens the dialog, MEASURES whether its content panel is actually visible
- * (rect / display / on-screen) and whether the native <dialog> + scroll lock
- * engaged, then CLOSES it and confirms scroll is unlocked, so the page is
- * never left scroll-locked. Plain inline scripts (not a webjs component).
+ * v4: confirmed root cause is the 0x0 native <dialog> collapsing its
+ * position:fixed content panel on WebKit (now fixed: the host fills the
+ * viewport). This version VERIFIES the dialog fix and also probes the two
+ * other Tier-2 mechanisms on-device so we know whether they share the bug:
+ *   - dialog (showModal top-layer)  -> measure the content panel is visible
+ *   - tooltip (Popover API top-layer) -> open + measure the popover is visible
+ *   - tabs (no overlay, reactive re-render) -> switch tab + measure the panel
+ * Plain inline scripts; opens then closes everything so scroll is never left
+ * locked.
  */
 import { html, unsafeHTML } from '@webjsdev/core';
 import { buttonClass } from '#components/ui/button.ts';
-// Load every Tier-2 module so it registers (or throws at load, caught below).
 import '#components/ui/dialog.ts';
 import '#components/ui/alert-dialog.ts';
 import '#components/ui/tabs.ts';
@@ -30,63 +31,31 @@ addEventListener('unhandledrejection',function(ev){var r=ev.reason;__wjd.e.push(
 </script>`;
 
 const REPORT = `<script>
+function rct(el){if(!el)return 'noEl';var r=el.getBoundingClientRect();var on=(r.width>0&&r.height>0&&r.top<innerHeight&&r.bottom>0&&r.left<innerWidth&&r.right>0);return Math.round(r.width)+'x'+Math.round(r.height)+' @'+Math.round(r.left)+','+Math.round(r.top)+(on?' ON-SCREEN':' off-screen');}
 setTimeout(function(){
-  var T=['ui-dialog','ui-dialog-trigger','ui-dialog-content','ui-alert-dialog','ui-tabs','ui-tabs-trigger','ui-tooltip','ui-tooltip-trigger','ui-hover-card','ui-dropdown-menu','ui-toggle','ui-toggle-group','ui-sonner'];
-  function g(t){try{return customElements.get(t)?'Y':'n'}catch(e){return 'E'}}
-  var dlg=document.querySelector('ui-dialog');
-  var anchor;try{anchor=(window.CSS&&CSS.supports)?(CSS.supports('anchor-name','--x')?'Y':'n'):'noCSS'}catch(e){anchor='E'}
-  var rep={
-    ua:navigator.userAgent,
-    ERRORS:__wjd.e.length?__wjd.e:'(none)',
-    registered:T.map(function(t){return t+':'+g(t)}).join('  '),
-    dialogUpgraded: dlg?(typeof dlg.show==='function'?'Y':'n'):'noEl',
-    slotPatchName:(window.HTMLSlotElement&&HTMLSlotElement.prototype.assignedNodes)?HTMLSlotElement.prototype.assignedNodes.name:'noSlotProto',
-    feat_showPopover:('showPopover' in HTMLElement.prototype)?'Y':'n',
-    feat_showModal:(window.HTMLDialogElement&&HTMLDialogElement.prototype.showModal)?'Y':'n',
-    feat_anchorPos:anchor
-  };
-  function measure(){
-    var native=document.querySelector('ui-dialog-content dialog');
-    var panel=document.querySelector('ui-dialog-content [data-slot="dialog-content"]');
-    var pr=panel?panel.getBoundingClientRect():null;
-    var nr=native?native.getBoundingClientRect():null;
-    var pcs=panel?getComputedStyle(panel):null;
-    var ncs=native?getComputedStyle(native):null;
-    return {
-      dialogOpenAttr: dlg?(dlg.hasAttribute('open')?'Y':'n'):null,
-      bodyOverflow: document.body.style.overflow||'(unset)',
-      nativeDialogOpenProp: native?(native.open?'Y':'n'):'noNative',
-      nativeRect: nr?(Math.round(nr.width)+'x'+Math.round(nr.height)+' @'+Math.round(nr.left)+','+Math.round(nr.top)):'noNative',
-      nativeDisplay: ncs?ncs.display:null,
-      panelRect: pr?(Math.round(pr.width)+'x'+Math.round(pr.height)+' @'+Math.round(pr.left)+','+Math.round(pr.top)):'noPanel',
-      panelDisplay: pcs?pcs.display:null,
-      panelVisibility: pcs?pcs.visibility:null,
-      panelOpacity: pcs?pcs.opacity:null,
-      panelPosition: pcs?pcs.position:null,
-      viewport: innerWidth+'x'+innerHeight,
-      panelOnScreen: pr?((pr.width>0&&pr.height>0&&pr.top<innerHeight&&pr.bottom>0&&pr.left<innerWidth&&pr.right>0)?'Y':'n'):'noPanel'
-    };
-  }
-  try{ if(dlg&&dlg.show) dlg.show(); else rep.showMissing=true; }catch(e){rep.showThrew=e.message;}
+  var rep={ua:navigator.userAgent, ERRORS:__wjd.e.length?__wjd.e:'(none)'};
+  var d=document.getElementById('d');
+  try{ if(d&&d.show) d.show(); }catch(e){rep.dialogShowErr=e.message;}
   setTimeout(function(){
-    rep.WHEN_OPEN=measure();
-    try{ if(dlg&&dlg.hide) dlg.hide(); }catch(e){rep.hideThrew=e.message;}
-    var nd=document.querySelector('ui-dialog-content dialog');
-    rep.DIRECT={found: nd?'Y':'NO'};
-    if(nd){
-      rep.DIRECT.connected=nd.isConnected;
-      rep.DIRECT.parentTag=nd.parentElement?nd.parentElement.tagName.toLowerCase():'none';
-      rep.DIRECT.displayBefore=getComputedStyle(nd).display;
-      try{ nd.showModal(); rep.DIRECT.threw='no'; }catch(e){ rep.DIRECT.threw=e.name+': '+e.message; }
-      rep.DIRECT.openAfter=nd.open?'Y':'n';
-      rep.DIRECT.displayAfter=getComputedStyle(nd).display;
-      var dr=nd.getBoundingClientRect(); rep.DIRECT.nativeRectAfter=Math.round(dr.width)+'x'+Math.round(dr.height)+' @'+Math.round(dr.left)+','+Math.round(dr.top);
-      var pnl=nd.querySelector('[data-slot="dialog-content"]'); if(pnl){var prr=pnl.getBoundingClientRect(); rep.DIRECT.panelRectAfter=Math.round(prr.width)+'x'+Math.round(prr.height)+' @'+Math.round(prr.left)+','+Math.round(prr.top);}
-      try{ if(nd.open) nd.close(); }catch(e){}
-    }
+    rep.DIALOG={ nativeOpen:((document.querySelector('#d dialog')||{}).open?'Y':'n'), nativeRect:rct(document.querySelector('#d dialog')), panel:rct(document.querySelector('#d [data-slot=\"dialog-content\"]')) };
+    try{ if(d&&d.hide) d.hide(); }catch(e){}
+    var tt=document.getElementById('tt');
+    try{ if(tt&&tt.show) tt.show(); }catch(e){rep.ttShowErr=e.message;}
     setTimeout(function(){
-      rep.afterClose_bodyOverflow=document.body.style.overflow||'(unset)';
-      document.getElementById('wjdiag').textContent=JSON.stringify(rep,null,2);
+      var pop=document.querySelector('#tt [popover]');
+      rep.TOOLTIP={ openAttr:(tt&&tt.hasAttribute('open'))?'Y':'n', popoverShown: pop?(pop.matches(':popover-open')?'Y':'n'):'noPop', popoverRect:rct(pop) };
+      try{ if(tt&&tt.hide) tt.hide(); }catch(e){}
+      var tb=document.getElementById('tb');
+      var pBefore=rct(tb?tb.querySelector('ui-tabs-content[value=\"password\"]'):null);
+      var trig=tb?tb.querySelector('ui-tabs-trigger[value=\"password\"]'):null;
+      var clk=trig?(trig.querySelector('button')||trig):null;
+      try{ if(clk) clk.click(); }catch(e){rep.tabsClickErr=e.message;}
+      setTimeout(function(){
+        var pPanel=tb?tb.querySelector('ui-tabs-content[value=\"password\"]'):null;
+        rep.TABS={ tabsValue: tb?tb.getAttribute('value'):'noTabs', passwordPanel_before:pBefore, passwordPanel_after:rct(pPanel), passwordPanel_inert: pPanel?(pPanel.hasAttribute('inert')?'inert(hidden)':'active(shown)'):'noPanel' };
+        rep.bodyOverflowEnd=document.body.style.overflow||'(unset)';
+        document.getElementById('wjdiag').textContent=JSON.stringify(rep,null,2);
+      },350);
     },350);
   },450);
 },1200);
@@ -96,14 +65,26 @@ export default function Diag() {
   return html`
     ${unsafeHTML(EARLY)}
     <main style="padding:1rem;font-family:system-ui;max-width:100%">
-      <h1 style="font-size:1.1rem">webjs Tier-2 iOS diagnostic v3 (#730)</h1>
-      <p style="font-size:.85rem;color:#666">Wait about 2 seconds, then copy the whole readout and send it to me. The page stays scrollable (the diagnostic opens then auto-closes the probe dialog).</p>
+      <h1 style="font-size:1.1rem">webjs Tier-2 iOS diagnostic v4 (#730)</h1>
+      <p style="font-size:.85rem;color:#666">Wait about 2s, then copy the whole readout and send it to me. The page stays scrollable.</p>
       <button onclick="location.reload()" style="margin-bottom:.75rem" class=${buttonClass({ variant: 'outline', size: 'sm' })}>Re-run</button>
       <pre id="wjdiag" style="white-space:pre-wrap;word-break:break-word;font:12px/1.5 monospace;background:#f4f4f5;color:#111;padding:1rem;border-radius:8px;border:1px solid #ccc">collecting (wait about 2s)...</pre>
-      <div style="height:60vh"></div>
-      <ui-dialog style="position:absolute;width:0;height:0;overflow:hidden">
-        <ui-dialog-content><p style="padding:1rem">probe dialog content</p></ui-dialog-content>
+      <div style="height:50vh"></div>
+      <ui-dialog id="d" style="position:absolute;width:0;height:0;overflow:hidden">
+        <ui-dialog-content><p style="padding:1rem">dialog probe content</p></ui-dialog-content>
       </ui-dialog>
+      <ui-tooltip id="tt" delay-duration="0" skip-delay-duration="0" style="position:absolute;width:0;height:0;overflow:hidden">
+        <ui-tooltip-trigger><button class=${buttonClass({ size: 'sm' })} aria-label="probe">?</button></ui-tooltip-trigger>
+        <ui-tooltip-content>tooltip probe</ui-tooltip-content>
+      </ui-tooltip>
+      <ui-tabs id="tb" value="account" style="position:absolute;width:0;height:0;overflow:hidden">
+        <ui-tabs-list>
+          <ui-tabs-trigger value="account">Account</ui-tabs-trigger>
+          <ui-tabs-trigger value="password">Password</ui-tabs-trigger>
+        </ui-tabs-list>
+        <ui-tabs-content value="account">Account panel</ui-tabs-content>
+        <ui-tabs-content value="password">Password panel</ui-tabs-content>
+      </ui-tabs>
     </main>
     ${unsafeHTML(REPORT)}
   `;
