@@ -105,6 +105,16 @@ export class UiTabs extends WebComponent({
     this.orientation = 'horizontal';
   }
 
+  // Assign the scope id BEFORE render so it is serialized onto this host's
+  // opening tag at SSR (willUpdate now runs server-side). Without this, the id
+  // was minted lazily during a CHILD trigger's render, AFTER this host's tag
+  // was already serialized without an id, so the host shipped no id; on
+  // hydration the client re-minted a DIFFERENT counter id and the trigger /
+  // panel ids mismatched SSR vs client, breaking hydration (#730).
+  willUpdate(): void {
+    ensureId(this, 'ui-tabs');
+  }
+
   // Stable per-instance scope so a trigger and its panel agree on the
   // shared id stem (`<scope>-trigger-<value>` / `<scope>-panel-<value>`)
   // even when several tab sets reuse the same `value` names on one page.
