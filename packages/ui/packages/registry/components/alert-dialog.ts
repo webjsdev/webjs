@@ -87,7 +87,10 @@ ui-alert-dialog:not([open]) ui-alert-dialog-content { display: none !important; 
 ui-alert-dialog-content { display: grid; }
 `;
 
-const NATIVE_DIALOG_CLASS = 'border-0 bg-transparent p-0 m-0 w-0 h-0 max-w-none max-h-none overflow-visible text-inherit backdrop:bg-black/50';
+// Fills the viewport (fixed inset-0), NOT 0x0 (#730): WebKit makes a
+// top-layer <dialog> the containing block for its position:fixed descendants,
+// so a 0x0 host collapsed the fixed content panel to 0x0 (invisible on iOS).
+const NATIVE_DIALOG_CLASS = 'fixed inset-0 border-0 bg-transparent p-0 m-0 max-w-none max-h-none overflow-visible text-inherit backdrop:bg-black/50';
 
 function installStyles(): void {
   if (typeof document === 'undefined') return;

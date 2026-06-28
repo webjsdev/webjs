@@ -133,7 +133,16 @@ ui-dialog-content { display: grid; }
 // Clears the UA defaults on <dialog> so it becomes an invisible top-layer
 // host. The visible box is rendered by <ui-dialog-content>. The
 // backdrop: variant styles the ::backdrop pseudo-element.
-const NATIVE_DIALOG_CLASS = 'border-0 bg-transparent p-0 m-0 w-0 h-0 max-w-none max-h-none overflow-visible text-inherit backdrop:bg-black/50';
+//
+// The host FILLS THE VIEWPORT (fixed inset-0) rather than collapsing to
+// 0x0 (#730): WebKit makes a top-layer <dialog> the containing block for
+// its position:fixed descendants, so a 0x0 host collapsed the fixed content
+// panel (w-full) to 0x0 and the dialog was invisible on iOS (Blink resolves
+// the same fixed panel against the viewport, so it worked on Android). A
+// viewport-sized transparent host gives the panel a correct containing block
+// on both engines; the panel still centers itself and the ::backdrop covers
+// the screen.
+const NATIVE_DIALOG_CLASS = 'fixed inset-0 border-0 bg-transparent p-0 m-0 max-w-none max-h-none overflow-visible text-inherit backdrop:bg-black/50';
 
 function installStyles(): void {
   if (typeof document === 'undefined') return;
