@@ -2,12 +2,15 @@
  * TEMPORARY on-device diagnostic route for #730 (Tier-2 components on iOS).
  * Not linked from anywhere; removed once the fixes are confirmed.
  *
- * v5: verifies the DIALOG fix (ref -> querySelector + viewport host) actually
- * opens + is visible, and DISSECTS the tabs failure (does a trigger click, a
- * direct setAttribute('value'), or a direct property set switch the panel?) to
- * find the exact failing sub-step for the non-overlay components on WebKit.
- * Plain inline scripts; opens then closes the dialog so scroll is never left
- * locked.
+ * v6: the tabs dissection (v5) showed @click on a slot-containing element does
+ * not fire on iOS WebKit (afterClick no-op, afterSetAttr works). This isolates
+ * the mechanism:
+ *   - TABS.freshListenerFired: does the button RECEIVE a click at all (then only
+ *     the @click BINDING is missing) vs not (a deeper click/pointer issue)?
+ *   - TABS.atClickSwitched: does the component @click (_onClick) fire?
+ *   - DIALOG_TRIGGER: tapping a real <ui-dialog-trigger><button> (slot + @click)
+ *     -> does the dialog open? (the real user flow, post showModal fix)
+ *   - THEME: clicking the theme-toggle (@click, NO slot) -> control that works.
  */
 import { html, unsafeHTML } from '@webjsdev/core';
 import { buttonClass } from '#components/ui/button.ts';
@@ -28,49 +31,49 @@ addEventListener('unhandledrejection',function(ev){var r=ev.reason;__wjd.e.push(
 </script>`;
 
 const REPORT = `<script>
-function rct(el){if(!el)return 'noEl';var r=el.getBoundingClientRect();var on=(r.width>0&&r.height>0&&r.top<innerHeight&&r.bottom>0&&r.left<innerWidth&&r.right>0);return Math.round(r.width)+'x'+Math.round(r.height)+(on?' ON-SCREEN':' off-screen');}
 function ist(el){return el?(el.hasAttribute('inert')?'inert(hidden)':'active(shown)'):'noPanel';}
 setTimeout(function(){
   var rep={ua:navigator.userAgent, ERRORS:__wjd.e.length?__wjd.e:'(none)'};
-  var d=document.getElementById('d');
-  try{ if(d&&d.show) d.show(); }catch(e){rep.dialogShowErr=e.message;}
+  // --- TABS: does the button receive clicks at all? does @click fire? ---
+  var tb=document.getElementById('tb');
+  var btn=tb?tb.querySelector('ui-tabs-trigger[value=\"password\"] button'):null;
+  var fresh=false;
+  if(btn){ try{ btn.addEventListener('click',function(){fresh=true;},{once:true}); btn.click(); }catch(e){rep.tabsErr=e.message;} }
+  rep.TABS={ buttonCount: tb?tb.querySelectorAll('ui-tabs-trigger[value=\"password\"] button').length:'noTb', freshListenerFired: btn?(fresh?'Y':'n'):'noBtn', atClickSwitchedValue: tb?tb.getAttribute('value'):'noTb', passwordPanel: ist(tb?tb.querySelector('ui-tabs-content[value=\"password\"]'):null) };
+  // --- DIALOG TRIGGER tap (real flow) ---
+  var dt=document.querySelector('#d2 ui-dialog-trigger button');
+  rep.DIALOG_TRIGGER={ triggerBtnFound: dt?'Y':'n' };
+  try{ if(dt) dt.click(); }catch(e){rep.DIALOG_TRIGGER.err=e.message;}
   setTimeout(function(){
-    rep.DIALOG={ nativeOpen:((document.querySelector('#d dialog')||{}).open?'Y':'n'), panel:rct(document.querySelector('#d [data-slot=\"dialog-content\"]')) };
-    try{ if(d&&d.hide) d.hide(); }catch(e){}
-    var tb=document.getElementById('tb');
-    function pw(){return tb?tb.querySelector('ui-tabs-content[value=\"password\"]'):null;}
-    rep.TABS={ startAttr: tb?tb.getAttribute('value'):'?', startProp: tb?String(tb.value):'?', panelStart: ist(pw()) };
-    var trig=tb?tb.querySelector('ui-tabs-trigger[value=\"password\"] button'):null;
-    rep.TABS.triggerBtnFound=trig?'Y':'n';
-    try{ if(trig) trig.click(); }catch(e){rep.TABS.clickErr=e.message;}
+    var d2=document.getElementById('d2');
+    rep.DIALOG_TRIGGER.dialogOpenedAfterTriggerTap = d2?(d2.hasAttribute('open')?'Y':'n'):'noDlg';
+    try{ if(d2&&d2.hide) d2.hide(); }catch(e){}
+    // --- THEME TOGGLE control (@click, no slot) ---
+    var th=document.querySelector('[data-theme-toggle] button, theme-toggle button, button[aria-label*=\"theme\" i], button[title*=\"theme\" i]');
+    var before = document.documentElement.getAttribute('data-theme') || document.documentElement.className || '(none)';
+    rep.THEME={ toggleBtnFound: th?'Y':'n', rootBefore:before };
+    try{ if(th) th.click(); }catch(e){rep.THEME.err=e.message;}
     setTimeout(function(){
-      rep.TABS.afterClick={attr:tb?tb.getAttribute('value'):'?',prop:tb?String(tb.value):'?',panel:ist(pw())};
-      try{ tb.setAttribute('value','password'); }catch(e){rep.TABS.setAttrErr=e.message;}
-      setTimeout(function(){
-        rep.TABS.afterSetAttr={panel:ist(pw()),prop:tb?String(tb.value):'?'};
-        try{ tb.value='account'; tb.value='password'; }catch(e){rep.TABS.setPropErr=e.message;}
-        setTimeout(function(){
-          rep.TABS.afterSetProp={panel:ist(pw()),attr:tb?tb.getAttribute('value'):'?'};
-          rep.bodyOverflowEnd=document.body.style.overflow||'(unset)';
-          document.getElementById('wjdiag').textContent=JSON.stringify(rep,null,2);
-        },200);
-      },200);
-    },250);
-  },450);
-},1200);
+      rep.THEME.rootAfter = document.documentElement.getAttribute('data-theme') || document.documentElement.className || '(none)';
+      rep.THEME.changed = (rep.THEME.rootAfter!==rep.THEME.rootBefore)?'Y':'n';
+      document.getElementById('wjdiag').textContent=JSON.stringify(rep,null,2);
+    },300);
+  },350);
+},1300);
 </script>`;
 
 export default function Diag() {
   return html`
     ${unsafeHTML(EARLY)}
     <main style="padding:1rem;font-family:system-ui;max-width:100%">
-      <h1 style="font-size:1.1rem">webjs Tier-2 iOS diagnostic v5 (#730)</h1>
+      <h1 style="font-size:1.1rem">webjs Tier-2 iOS diagnostic v6 (#730)</h1>
       <p style="font-size:.85rem;color:#666">Wait about 2s, then copy the whole readout and send it to me. The page stays scrollable.</p>
       <button onclick="location.reload()" style="margin-bottom:.75rem" class=${buttonClass({ variant: 'outline', size: 'sm' })}>Re-run</button>
       <pre id="wjdiag" style="white-space:pre-wrap;word-break:break-word;font:12px/1.5 monospace;background:#f4f4f5;color:#111;padding:1rem;border-radius:8px;border:1px solid #ccc">collecting (wait about 2s)...</pre>
       <div style="height:50vh"></div>
-      <ui-dialog id="d" style="position:absolute;width:0;height:0;overflow:hidden">
-        <ui-dialog-content><p style="padding:1rem">dialog probe content</p></ui-dialog-content>
+      <ui-dialog id="d2" style="position:absolute;width:0;height:0;overflow:hidden">
+        <ui-dialog-trigger><button class=${buttonClass()}>open</button></ui-dialog-trigger>
+        <ui-dialog-content><p style="padding:1rem">dialog probe via trigger</p></ui-dialog-content>
       </ui-dialog>
       <ui-tabs id="tb" value="account" style="position:absolute;width:0;height:0;overflow:hidden">
         <ui-tabs-list>
