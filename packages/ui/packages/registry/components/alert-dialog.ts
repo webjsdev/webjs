@@ -237,9 +237,17 @@ export class UiAlertDialogContent extends WebComponent({
     this.size = 'default';
   }
 
+  // Query the native <dialog> rather than the #dialog ref: the ref's `.value`
+  // came back null on iOS WebKit (the binding did not populate through SSR
+  // hydration), so showModal() never ran (#730). querySelector is robust on
+  // every engine.
+  _native(): HTMLDialogElement | null {
+    return this.querySelector<HTMLDialogElement>('dialog[data-slot="alert-dialog-native"]');
+  }
+
   showModal(): void {
     this._wireLabels();
-    const native = this.#dialog.value;
+    const native = this._native();
     if (native && !native.open) native.showModal();
   }
 
@@ -266,7 +274,7 @@ export class UiAlertDialogContent extends WebComponent({
   }
 
   close(): void {
-    const native = this.#dialog.value;
+    const native = this._native();
     if (native?.open) native.close();
   }
 

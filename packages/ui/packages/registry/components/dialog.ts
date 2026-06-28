@@ -299,14 +299,23 @@ export class UiDialogContent extends WebComponent({
     this.showCloseButton = 'true';
   }
 
+  // Resolve the native <dialog> by query, NOT the #dialog ref: on iOS WebKit
+  // the ref's `.value` came back null (the ref binding did not populate through
+  // SSR hydration), so showModal() was never called and the dialog never opened
+  // (#730). A direct querySelector is robust on every engine, and matches what
+  // the tooltip / popover components already do.
+  _native(): HTMLDialogElement | null {
+    return this.querySelector<HTMLDialogElement>('dialog[data-slot="dialog-native"]');
+  }
+
   showModal(): void {
     wireDialogLabels(this, '[data-slot="dialog-content"]');
-    const native = this.#dialog.value;
+    const native = this._native();
     if (native && !native.open) native.showModal();
   }
 
   close(): void {
-    const native = this.#dialog.value;
+    const native = this._native();
     if (native?.open) native.close();
   }
 
