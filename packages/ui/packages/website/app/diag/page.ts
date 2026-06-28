@@ -71,6 +71,19 @@ setTimeout(function(){
   setTimeout(function(){
     rep.WHEN_OPEN=measure();
     try{ if(dlg&&dlg.hide) dlg.hide(); }catch(e){rep.hideThrew=e.message;}
+    var nd=document.querySelector('ui-dialog-content dialog');
+    rep.DIRECT={found: nd?'Y':'NO'};
+    if(nd){
+      rep.DIRECT.connected=nd.isConnected;
+      rep.DIRECT.parentTag=nd.parentElement?nd.parentElement.tagName.toLowerCase():'none';
+      rep.DIRECT.displayBefore=getComputedStyle(nd).display;
+      try{ nd.showModal(); rep.DIRECT.threw='no'; }catch(e){ rep.DIRECT.threw=e.name+': '+e.message; }
+      rep.DIRECT.openAfter=nd.open?'Y':'n';
+      rep.DIRECT.displayAfter=getComputedStyle(nd).display;
+      var dr=nd.getBoundingClientRect(); rep.DIRECT.nativeRectAfter=Math.round(dr.width)+'x'+Math.round(dr.height)+' @'+Math.round(dr.left)+','+Math.round(dr.top);
+      var pnl=nd.querySelector('[data-slot="dialog-content"]'); if(pnl){var prr=pnl.getBoundingClientRect(); rep.DIRECT.panelRectAfter=Math.round(prr.width)+'x'+Math.round(prr.height)+' @'+Math.round(prr.left)+','+Math.round(prr.top);}
+      try{ if(nd.open) nd.close(); }catch(e){}
+    }
     setTimeout(function(){
       rep.afterClose_bodyOverflow=document.body.style.overflow||'(unset)';
       document.getElementById('wjdiag').textContent=JSON.stringify(rep,null,2);
@@ -83,7 +96,7 @@ export default function Diag() {
   return html`
     ${unsafeHTML(EARLY)}
     <main style="padding:1rem;font-family:system-ui;max-width:100%">
-      <h1 style="font-size:1.1rem">webjs Tier-2 iOS diagnostic v2 (#730)</h1>
+      <h1 style="font-size:1.1rem">webjs Tier-2 iOS diagnostic v3 (#730)</h1>
       <p style="font-size:.85rem;color:#666">Wait about 2 seconds, then copy the whole readout and send it to me. The page stays scrollable (the diagnostic opens then auto-closes the probe dialog).</p>
       <button onclick="location.reload()" style="margin-bottom:.75rem" class=${buttonClass({ variant: 'outline', size: 'sm' })}>Re-run</button>
       <pre id="wjdiag" style="white-space:pre-wrap;word-break:break-word;font:12px/1.5 monospace;background:#f4f4f5;color:#111;padding:1rem;border-radius:8px;border:1px solid #ccc">collecting (wait about 2s)...</pre>
