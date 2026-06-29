@@ -219,13 +219,19 @@ suite('copy-cmd', () => {
     document.body.removeChild(el);
   });
 
-  test('a copy with gtag absent is a safe no-op (still copies, no throw)', async () => {
+  test('a copy with gtag absent is a safe no-op (no throw, still copies)', async () => {
     restoreGtag(); delete window.gtag; restoreGtag = null;
     const el = await mount('npm create webjs@latest my-app');
-    el.querySelector('[data-copy-text]').click();
-    await tick(10);
-    await el.updateComplete;
+    // Await the handler DIRECTLY (not a fire-and-forget click): the gtag
+    // call now sits outside the clipboard try, so with the `?.` removed an
+    // absent gtag makes _copy reject, failing this await. That is the real
+    // counterfactual the click-based version could not provide (a throw
+    // there was swallowed by the clipboard catch after the copy succeeded).
+    let threw = false;
+    try { await el._copy(); } catch { threw = true; }
+    assert.ok(!threw, '_copy resolves (does not throw) when gtag is absent');
     assert.equal(written, 'npm create webjs@latest my-app', 'the copy still succeeds without gtag');
+    await el.updateComplete;
     assert.ok(el.querySelector('button polyline'), 'icon still flips without gtag');
     document.body.removeChild(el);
   });
