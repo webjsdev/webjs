@@ -210,14 +210,25 @@ test('an unused/elided vendor is NOT preloaded (no over-fetch)', async () => {
   assert.ok(!links.some((l) => l.includes('left-pad')), 'the unused vendor is NOT preloaded (no over-fetch)');
 });
 
-test('an inert page\'s SSR-only binding vendor import is NOT preloaded (#754 review MUST-FIX)', async () => {
-  // A display-only page imports dayjs as a BINDING used only in SSR and renders
-  // no interactive component, so its module is inert and dropped from the boot:
-  // the browser never loads the page module, dayjs never ships, and it must NOT
-  // be preloaded. Without the inert/import-only filter this vendor leaks.
+test('an inert page does not preload an SSR-only vendor a SIBLING route ships (#754 review MUST-FIX)', async () => {
+  // The real over-fetch (the single-route case is masked by app-wide importmap
+  // pruning, which drops a wholly-unreached vendor anyway). A SIBLING route
+  // `/live` ships dayjs via an interactive widget, so dayjs STAYS in the
+  // app-wide importmap. The tested route `/` is an inert page that imports dayjs
+  // as a binding used ONLY in SSR: its module is dropped from the boot, dayjs is
+  // never fetched on `/`, so `/` must NOT preload it. Without the inert/import-only
+  // filter, `/` would collect dayjs from the dropped page and over-fetch it.
   const appDir = makeApp({
     pin: { imports: { dayjs: DAYJS_URL }, integrity: { [DAYJS_URL]: DAYJS_INTEGRITY } },
   });
+  writeVendorWidget(appDir); // app/widget.js: interactive (@click), imports dayjs
+  mkdirSync(join(appDir, 'app', 'live'), { recursive: true });
+  writeFileSync(
+    join(appDir, 'app', 'live', 'page.js'),
+    `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+    `import '../widget.js';\n` +
+    `export default () => html\`<x-widget></x-widget>\`;\n`,
+  );
   writeFileSync(
     join(appDir, 'app', 'page.js'),
     `import { html } from ${JSON.stringify(HTML_URL)};\n` +
@@ -226,15 +237,22 @@ test('an inert page\'s SSR-only binding vendor import is NOT preloaded (#754 rev
   );
   const app = await createRequestHandler({ appDir, dev: false });
   await app.warmup();
-  const res = await app.handle(new Request('http://x/'));
-  assert.equal(res.status, 200, 'the page renders (SSR resolved the stub, not a vacuous 500)');
-  const html = await res.text();
-  assert.ok(html.includes('built ('), 'the page SSR output is present');
-  // The page module is dropped from the boot (inert), proving the scenario.
-  assert.ok(!modulepreloadLinks(html).some((l) => l.includes('/app/page.js')),
-    'the inert page module is dropped from the boot (scenario precondition)');
-  assert.ok(!modulepreloadLinks(html).some((l) => l.includes('dayjs')),
-    'an inert page\'s SSR-only binding vendor is NOT preloaded (no over-fetch)');
+
+  const homeHtml = await (await app.handle(new Request('http://x/'))).text();
+  // Precondition: dayjs IS in the app-wide importmap (the sibling /live keeps it
+  // reachable, so it is not pruned). This is what makes the over-fetch possible.
+  assert.ok(/"dayjs"/.test(homeHtml), 'dayjs stays in the app-wide importmap (sibling /live ships it)');
+  // Precondition: the inert page module is dropped from the boot.
+  assert.ok(!modulepreloadLinks(homeHtml).some((l) => l.includes('/app/page.js')),
+    'the inert page module is dropped from the boot');
+  // The fix: `/` must NOT preload dayjs (its only importer on `/` is the dropped page).
+  assert.ok(!modulepreloadLinks(homeHtml).some((l) => l.includes('dayjs')),
+    'the inert page\'s SSR-only vendor is NOT preloaded on / (no over-fetch)');
+
+  // Sanity: the sibling route that actually SHIPS dayjs does preload it.
+  const liveHtml = await (await app.handle(new Request('http://x/live'))).text();
+  assert.ok(modulepreloadLinks(liveHtml).some((l) => l.includes('dayjs')),
+    '/live preloads dayjs (it ships the widget that uses it)');
   await setCoreInstall(CORE_DIR, true);
 });
 
