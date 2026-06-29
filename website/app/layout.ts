@@ -162,6 +162,8 @@ export default function RootLayout({ children }: { children: unknown }) {
         --accent-live:   oklch(0.63 0.17 50);
         --glow-a:        oklch(0.63 0.17 44);
         --accent-tint:   color-mix(in oklch, var(--accent-live) 14%, transparent);
+        --logo-from:     oklch(0.63 0.17 50);
+        --logo-to:       oklch(0.44 0.11 52);
         --glow-strength: 0.16;
         --font-display: 'Inter Tight', 'Inter', system-ui, -apple-system, sans-serif;
         --font-sans:    'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -178,7 +180,7 @@ export default function RootLayout({ children }: { children: unknown }) {
           --fg: oklch(0.96 0 0); --fg-muted: oklch(0.74 0 0); --fg-subtle: oklch(0.62 0 0);
           --bg: oklch(0 0 0); --bg-elev: oklch(0.135 0 0); --bg-subtle: oklch(0.09 0 0); --bg-sunken: oklch(0 0 0);
           --border: oklch(0.32 0 0 / 0.9); --border-strong: oklch(0.44 0 0 / 0.92);
-          --accent: oklch(0.55 0.16 52); --accent-hover: oklch(0.5 0.16 52); --accent-fg: oklch(1 0 0);
+          --accent: oklch(0.71 0.19 42); --accent-hover: oklch(0.76 0.19 42); --accent-fg: oklch(0.16 0.02 42); --logo-from: oklch(0.8 0.17 55); --logo-to: oklch(0.6 0.2 38);
           --glow-strength: 0;
           --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.4);
           --shadow: 0 10px 40px oklch(0 0 0 / 0.5), 0 2px 6px oklch(0 0 0 / 0.35);
@@ -190,7 +192,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         --fg: oklch(0.96 0 0); --fg-muted: oklch(0.74 0 0); --fg-subtle: oklch(0.62 0 0);
         --bg: oklch(0 0 0); --bg-elev: oklch(0.135 0 0); --bg-subtle: oklch(0.09 0 0); --bg-sunken: oklch(0 0 0);
         --border: oklch(0.32 0 0 / 0.9); --border-strong: oklch(0.44 0 0 / 0.92);
-        --accent: oklch(0.55 0.16 52); --accent-hover: oklch(0.5 0.16 52); --accent-fg: oklch(1 0 0);
+        --accent: oklch(0.71 0.19 42); --accent-hover: oklch(0.76 0.19 42); --accent-fg: oklch(0.16 0.02 42); --logo-from: oklch(0.8 0.17 55); --logo-to: oklch(0.6 0.2 38);
         --glow-strength: 0;
         --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.4);
         --shadow: 0 10px 40px oklch(0 0 0 / 0.5), 0 2px 6px oklch(0 0 0 / 0.35);
@@ -257,7 +259,7 @@ export default function RootLayout({ children }: { children: unknown }) {
     <header class="backdrop-blur-md bg-[color-mix(in_oklch,var(--color-bg)_78%,transparent)] border-b border-border">
       <div class="max-w-[1240px] mx-auto px-6 py-[11px] flex items-center justify-between gap-4">
         <a class="inline-flex items-center gap-[9px] no-underline text-fg font-display font-extrabold text-[17px] leading-none tracking-[-0.02em] shrink-0" href="/">
-          <span class="w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-accent-live to-[color-mix(in_oklch,var(--accent-live)_55%,oklch(0.20_0.018_60))] shadow-[0_2px_10px_var(--accent-tint)]"></span>
+          <span class="w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-[var(--logo-from)] to-[var(--logo-to)] shadow-[0_2px_10px_var(--accent-tint)]"></span>
           webjs
         </a>
 

@@ -137,7 +137,7 @@ export default function LandingPage() {
         The web framework for AI agents
       </h1>
       <p class="text-lede leading-[1.6] text-fg-muted max-w-[56ch] mx-auto mb-8 text-pretty">
-        webjs is a full-stack framework built on web components, real SSR, and
+        WebJs is a full-stack framework built on web components, real SSR, and
         progressive enhancement, with zero build step. Standards that outlast
         frameworks. Runs on Node 24+ or Bun.
       </p>
@@ -204,7 +204,7 @@ export default function LandingPage() {
         </div>
         <div class="grid gap-px overflow-hidden rounded-2xl border border-border bg-border grid-cols-1 min-[560px]:grid-cols-2 min-[900px]:grid-cols-3 shadow-[var(--shadow-sm)]">
 
-          <div class="group p-6 bg-bg-elev hover:bg-bg-subtle transition-colors duration-200 flex flex-col justify-between h-full">
+          <div class="group p-6 bg-bg-elev hover:bg-[color-mix(in_oklch,var(--bg-elev)_92%,var(--fg))] transition-colors duration-200 flex flex-col justify-between h-full">
             <div class="mb-6">
               <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.02em] mt-0 mb-2">Zero build step</h3>
               <p class="m-0 text-sm leading-[1.6] text-fg-muted">Source files run directly in Node or Bun. Save a file, refresh the browser instantly. No compilation, no bundler overhead.</p>
@@ -217,7 +217,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div class="group p-6 bg-bg-elev hover:bg-bg-subtle transition-colors duration-200 flex flex-col justify-between h-full">
+          <div class="group p-6 bg-bg-elev hover:bg-[color-mix(in_oklch,var(--bg-elev)_92%,var(--fg))] transition-colors duration-200 flex flex-col justify-between h-full">
             <div class="mb-6">
               <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.02em] mt-0 mb-2">Light DOM web components</h3>
               <p class="m-0 text-sm leading-[1.6] text-fg-muted">A lit-style component lifecycle that renders to light DOM, so Tailwind and global CSS just work, no shadow plumbing.</p>
@@ -231,7 +231,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div class="group p-6 bg-bg-elev hover:bg-bg-subtle transition-colors duration-200 flex flex-col justify-between h-full">
+          <div class="group p-6 bg-bg-elev hover:bg-[color-mix(in_oklch,var(--bg-elev)_92%,var(--fg))] transition-colors duration-200 flex flex-col justify-between h-full">
             <div class="mb-6">
               <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.02em] mt-0 mb-2">Server actions (RPC)</h3>
               <p class="m-0 text-sm leading-[1.6] text-fg-muted">Mark a file <code class="font-mono text-[0.9em]">'use server'</code> and import it. Date, Map, Set, BigInt, and Blob all round-trip across the wire.</p>
@@ -243,7 +243,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div class="group p-6 bg-bg-elev hover:bg-bg-subtle transition-colors duration-200 flex flex-col justify-between h-full">
+          <div class="group p-6 bg-bg-elev hover:bg-[color-mix(in_oklch,var(--bg-elev)_92%,var(--fg))] transition-colors duration-200 flex flex-col justify-between h-full">
             <div class="mb-6">
               <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.02em] mt-0 mb-2">Streaming Suspense</h3>
               <p class="m-0 text-sm leading-[1.6] text-fg-muted">Stream slow regions progressively. The shell paints instantly, fallbacks render, and async data fills in as it resolves.</p>
@@ -256,7 +256,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div class="group p-6 bg-bg-elev hover:bg-bg-subtle transition-colors duration-200 flex flex-col justify-between h-full">
+          <div class="group p-6 bg-bg-elev hover:bg-[color-mix(in_oklch,var(--bg-elev)_92%,var(--fg))] transition-colors duration-200 flex flex-col justify-between h-full">
             <div class="mb-6">
               <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.02em] mt-0 mb-2">Progressive enhancement</h3>
               <p class="m-0 text-sm leading-[1.6] text-fg-muted">Real HTML first. Links navigate, forms submit, and pages read before JavaScript loads. No hydration overhead.</p>
@@ -267,7 +267,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div class="group p-6 bg-bg-elev hover:bg-bg-subtle transition-colors duration-200 flex flex-col justify-between h-full">
+          <div class="group p-6 bg-bg-elev hover:bg-[color-mix(in_oklch,var(--bg-elev)_92%,var(--fg))] transition-colors duration-200 flex flex-col justify-between h-full">
             <div class="mb-6">
               <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.02em] mt-0 mb-2">Built-in essentials</h3>
               <p class="m-0 text-sm leading-[1.6] text-fg-muted">Auth, sessions, cache, rate limits, and websockets are built right in. Pluggable adapters, zero glue.</p>
@@ -291,7 +291,7 @@ export default function LandingPage() {
         </div>
         <div class="grid gap-px bg-border grid-cols-1 min-[560px]:grid-cols-2 min-[900px]:grid-cols-4 rounded-2xl border border-border overflow-hidden shadow-[var(--shadow-sm)]">
           ${STATS.map(s => html`
-            <div class="p-8 text-center bg-bg-elev hover:bg-bg-subtle transition-colors">
+            <div class="p-8 text-center bg-bg-elev hover:bg-[color-mix(in_oklch,var(--bg-elev)_92%,var(--fg))] transition-colors">
               <div class="font-display font-extrabold leading-none tracking-[-0.03em] text-[clamp(1.9rem,1.3rem+1.6vw,2.7rem)] text-fg">${s.big}</div>
               <div class="mt-3 font-semibold text-[0.95rem]">${s.label}</div>
               <p class="mt-1.5 m-0 text-[13px] leading-[1.55] text-fg-muted">${s.sub}</p>
@@ -344,7 +344,7 @@ lib/session.server.ts</pre>
 
     <section class="py-16 text-center" id="get-started">
       <div class="max-w-[1080px] mx-auto px-6">
-        <div class="max-w-[760px] mx-auto p-[clamp(32px,5vw,64px)] rounded-[22px] border border-border bg-bg-subtle shadow-[var(--shadow)]">
+        <div class="max-w-[760px] mx-auto p-[clamp(32px,5vw,64px)] rounded-[22px] border border-border-strong bg-[color-mix(in_oklch,var(--accent-live)_7%,var(--color-bg-elev))] shadow-[var(--shadow-glow)]">
           <h2 class="font-display font-extrabold text-h2 leading-[1.1] tracking-[-0.03em] mt-0 mb-3">Start building on web standards</h2>
           <p class="text-fg-muted mx-auto mb-8 max-w-[46ch]">Scaffold a full-stack app in one command, with pages, an API, components, and a database wired up.</p>
           <div class=${INSTALL}>
