@@ -16,8 +16,8 @@ import { DOCS_URL, UI_URL, EXAMPLE_BLOG_URL, GH_URL, NEW_TAB } from '#lib/links.
  * lib/links.ts, imported here and by app/page.ts.
  */
 
-const TITLE = 'webjs: the framework your AI agent already knows how to use';
-const DESCRIPTION = 'AI-first, web-components-first, no-build full-stack framework. File-based routing, server actions, streaming SSR, on web standards. Runs on Node 24+ or Bun. Built for AI agents to read, write, and ship.';
+const TITLE = 'webjs: build on the platform, not against it';
+const DESCRIPTION = 'A full-stack web framework built on web components, real SSR, and progressive enhancement, with zero build step. File-based routing, server actions, and streaming SSR on web standards. Runs on Node 24+ or Bun.';
 
 const NAV = [
   { label: 'Docs', href: DOCS_URL + '/docs/getting-started', ext: true },
@@ -256,7 +256,7 @@ export default function RootLayout({ children }: { children: unknown }) {
     <div class="site-top fixed inset-x-0 top-0 z-20">
     <div class="relative z-[3] text-center font-medium text-[13px] leading-[1.4] py-[9px] px-4 border-b border-border site-top-banner">
       <span class="font-mono font-bold text-[10px] leading-none tracking-[0.12em] uppercase text-accent-hover bg-bg-elev rounded-full px-2 py-[3px] mr-2 align-middle">New</span>
-      <a href=${UI_URL} target="_blank" rel="noopener noreferrer" class="text-accent-hover font-semibold no-underline hover:underline">Introducing the AI-first component library <span aria-hidden="true">&rarr;</span>${NEW_TAB}</a>
+      <a href=${UI_URL} target="_blank" rel="noopener noreferrer" class="text-accent-hover font-semibold no-underline hover:underline">Introducing the webjs component library <span aria-hidden="true">&rarr;</span>${NEW_TAB}</a>
     </div>
 
     <header class="backdrop-blur-md bg-[color-mix(in_oklch,var(--color-bg)_78%,transparent)] border-b border-border">

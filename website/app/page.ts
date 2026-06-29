@@ -19,8 +19,6 @@ import { highlight } from '#lib/highlight.ts';
 // win for <title> but leave og:/twitter: showing the layout's title, splitting
 // the canonical share target's name across the tab and the social card).
 
-const AGENTS = ['Claude Code', 'Cursor', 'Copilot', 'Antigravity', 'Codex', 'OpenCode'];
-
 const ICON = {
   bolt: html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>`,
   cube: html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7.5 12 3 3 7.5 12 12l9-4.5z"/><path d="M3 7.5v9L12 21V12"/><path d="M21 7.5v9L12 21"/></svg>`,
@@ -48,9 +46,9 @@ const GRADTEXT = 'bg-[linear-gradient(105deg,var(--accent),color-mix(in_oklch,va
 // alone is ~44 KB. The ~99 KB is the full Next baseline, react + react-dom
 // plus the Next runtime plus the app-router client).
 const STATS = [
-  { big: '~22 KB', label: 'Client runtime, gzipped', sub: 'A Next.js app ships ~99 KB on first load. WebJs core is about 4.5x lighter on the wire.' },
+  { big: '~22 KB', label: 'Client runtime, gzipped', sub: 'A Next.js app ships ~99 KB on first load. webjs core is about 4.5x lighter on the wire.' },
   { big: '0', label: 'Runtime dependencies', sub: '@webjsdev/core has none. The whole stack adds only ws, for WebSockets.' },
-  { big: '~15k', label: 'Lines of framework code', sub: 'Small enough that an AI agent can read and grep the whole framework, not guess.' },
+  { big: '~15k', label: 'Lines of framework code', sub: 'Small enough to read and grep end to end, instead of guessing about it.' },
   { big: 'No build', label: 'Source is the runtime', sub: 'What you read in node_modules is what runs. No bundler, no compile step.' },
 ];
 
@@ -90,30 +88,32 @@ const PAGE_SAMPLE = `export default async function Post({ params }) {
   </article>\`;
 }`;
 
-const AGENTS_MD = [
-  { k: 'h', t: '# AGENTS.md' },
-  { k: 'b', t: 'The machine-readable contract every webjs app ships.' },
-  { k: 'b', t: '' },
-  { k: 'h', t: '## Invariants' },
-  { k: 'b', t: '1. Server-only code lives in .server.ts files.' },
-  { k: 'b', t: '2. Components register with a hyphenated tag name.' },
-  { k: 'b', t: '3. Signals are the default state primitive.' },
-  { k: 'b', t: '' },
-  { k: 'h', t: '## Code workflow (mandatory)' },
-  { k: 'b', t: 'Every change ships with tests, across every layer' },
-  { k: 'b', t: 'it touches, plus a webjs check run. Always.' },
-];
+// Chips for the progressive-enhancement section: the concrete things that
+// keep working with JavaScript disabled, because the server sends real HTML.
+const PE_CHIPS = ['No hydration runtime', 'Content reads', 'Links navigate', 'Forms submit', 'Display components ship 0 KB'];
 
-const TRANSCRIPT = [
-  { k: 'cmd', t: 'claude "add a like button to posts"' },
-  { k: 'ok', t: 'wrote modules/posts/components/like-button.ts' },
-  { k: 'ok', t: 'wrote modules/posts/actions/like.server.ts' },
-  { k: 'ok', t: 'wrote modules/posts/actions/like.server.test.ts' },
-  { k: 'cmd', t: 'webjs check' },
-  { k: 'ok', t: '0 problems' },
-  { k: 'cmd', t: 'webjs test' },
-  { k: 'ok', t: '7 passing (3 unit, 2 browser, 2 e2e)' },
-];
+// A self-contained component for the progressive-enhancement pair. The
+// reactive `count` prop reflects to an attribute, which is why the rendered
+// output below carries count="3". Plain strings keep backticks / ${...}
+// literal so the SSR highlighter colors them.
+const PE_COMPONENT = `class LikeButton extends WebComponent({ count: Number }) {
+  render() {
+    return html\`<button @click=\${() => this.count++}>
+      ♥ \${this.count}
+    </button>\`;
+  }
+}
+LikeButton.register('like-button');`;
+
+const SSR_OUTPUT = `<!-- what the browser receives, before any JS -->
+<like-button count="3">
+  <button>♥ 3</button>
+</like-button>
+
+<!-- The count reads. A plain link navigates, a
+     form submits to a server action. JavaScript
+     then upgrades the click in place, only where
+     an interaction actually needs it. -->`;
 
 const WIN = 'flex flex-col flex-1 m-0 min-w-0 max-w-full rounded-2xl overflow-hidden border border-border bg-bg-elev shadow-[var(--shadow)]';
 const WINBAR = 'flex items-center gap-[7px] px-[14px] py-[10px] border-b border-border bg-[color-mix(in_oklch,var(--color-bg-sunken)_60%,var(--color-bg-elev))]';
@@ -161,26 +161,26 @@ export default function LandingPage() {
     <main id="main" tabindex="-1" class="focus:outline-none">
     <section class="text-center px-6 pt-[clamp(48px,7vw,96px)] pb-10 md:pb-18">
       <div class=${KICKER}>
-        <span>AI-first</span><span class="text-fg-subtle">/</span>
-        <span>web-components-first</span><span class="text-fg-subtle">/</span>
-        <span>no build</span>
+        <span>Web standards</span><span class="text-fg-subtle">/</span>
+        <span>No build</span><span class="text-fg-subtle">/</span>
+        <span>Node &amp; Bun</span>
       </div>
-      <h1 class="font-display font-extrabold text-display leading-[1.04] tracking-[-0.035em] mx-auto mt-6 mb-4 max-w-[16ch] text-balance">
-        The framework your <span class=${GRADTEXT}>AI agent</span> already knows how to use
+      <h1 class="font-display font-extrabold text-display leading-[1.04] tracking-[-0.035em] mx-auto mt-6 mb-4 max-w-[15ch] text-balance">
+        Build on the platform, not <span class=${GRADTEXT}>against it</span>
       </h1>
-      <p class="text-lede leading-[1.6] text-fg-muted max-w-[58ch] mx-auto mb-8 text-pretty">
-        WebJs is built for AI agents from the ground up. Native web components,
-        server actions, and streaming SSR, all on web standards. Runs on Node 24+
-        or Bun. No bundler, no config, no guesswork.
+      <p class="text-lede leading-[1.6] text-fg-muted max-w-[56ch] mx-auto mb-8 text-pretty">
+        webjs is a full-stack framework built on web components, real SSR, and
+        progressive enhancement, with zero build step. Standards that outlast
+        frameworks. Runs on Node 24+ or Bun.
       </p>
       <div class="flex gap-3 justify-center flex-wrap mb-8">
         <a class="${BTN} bg-accent text-accent-fg border-transparent shadow-[var(--shadow-glow)] hover:bg-accent-hover hover:-translate-y-0.5" href=${DOCS_URL + '/docs/getting-started'} target="_blank" rel="noopener noreferrer">
           Get started
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>${NEW_TAB}
         </a>
-        <a class="${BTN} text-fg border-border-strong bg-[color-mix(in_oklch,var(--color-bg-elev)_60%,transparent)] hover:border-fg-muted hover:-translate-y-0.5" href=${GH_URL} target="_blank" rel="noopener noreferrer">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.37.5 0 5.78 0 12.29c0 5.2 3.44 9.6 8.21 11.16.6.11.82-.25.82-.58l-.01-2.03c-3.34.71-4.04-1.58-4.04-1.58-.55-1.36-1.34-1.72-1.34-1.72-1.09-.73.08-.72.08-.72 1.2.08 1.84 1.22 1.84 1.22 1.07 1.8 2.81 1.28 3.5.98.11-.76.42-1.28.76-1.58-2.67-.3-5.47-1.31-5.47-5.83 0-1.29.47-2.34 1.23-3.17-.12-.3-.53-1.51.12-3.15 0 0 1-.32 3.3 1.21a11.5 11.5 0 0 1 6 0c2.3-1.53 3.3-1.21 3.3-1.21.65 1.64.24 2.85.12 3.15.77.83 1.23 1.88 1.23 3.17 0 4.53-2.81 5.53-5.49 5.82.43.37.81 1.1.81 2.22l-.01 3.29c0 .33.22.7.83.58A12.01 12.01 0 0 0 24 12.29C24 5.78 18.63.5 12 .5z"/></svg>
-          Star on GitHub${NEW_TAB}
+        <a class="${BTN} text-fg border-border-strong bg-[color-mix(in_oklch,var(--color-bg-elev)_60%,transparent)] hover:border-fg-muted hover:-translate-y-0.5" href=${DOCS_URL + '/docs/components'} target="_blank" rel="noopener noreferrer">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7.5 12 3 3 7.5 12 12l9-4.5z"/><path d="M3 7.5v9L12 21V12"/><path d="M21 7.5v9L12 21"/></svg>
+          Why web components${NEW_TAB}
         </a>
       </div>
       <div class=${INSTALL}>
@@ -191,28 +191,27 @@ export default function LandingPage() {
     <section class="py-16">
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
-          <div class=${KICKER}>Built for agents</div>
-          <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">Your AI writes the code. WebJs writes the rules.</h2>
+          <div class=${KICKER}>Progressive enhancement</div>
+          <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">Real HTML first. JavaScript only when it earns it.</h2>
           <p class="text-fg-muted text-[1.05rem] leading-[1.6] m-0">
-            Every app ships a machine-readable contract and cross-agent guardrails,
-            so the model produces production-quality code without guessing. Tests and
-            docs come with every change, enforced, not requested.
+            Pages and components render to real HTML on the server, so the page
+            reads, links navigate, and forms submit before a single script loads.
+            There is no hydration runtime to pay for, and dead JavaScript is
+            statically elided, never shipped.
           </p>
         </div>
         <div class="grid grid-cols-1 min-[900px]:grid-cols-2 gap-4 items-stretch">
-          <figure class=${WIN}>
-            <figcaption class=${WINBAR}>${DOTS}<span class=${WINNAME}>AGENTS.md</span></figcaption>
-            <pre class="m-0 p-[18px] flex-1 font-mono text-[13px] leading-[1.7] whitespace-pre-wrap [overflow-wrap:anywhere]"><code>${AGENTS_MD.map(l => html`<div class=${l.k === 'h' ? 'text-accent font-semibold' : 'text-fg-muted'}>${l.t || ' '}</div>`)}</code></pre>
-          </figure>
-          <figure class=${WIN}>
-            <figcaption class=${WINBAR}>${DOTS}<span class=${WINNAME}>agent session</span></figcaption>
-            <pre class="m-0 p-[18px] flex-1 font-mono text-[13px] leading-[1.7] whitespace-pre-wrap [overflow-wrap:anywhere]"><code>${TRANSCRIPT.map(l => l.k === 'cmd'
-              ? html`<div class="text-fg"><span class="text-accent">$ </span>${l.t}</div>`
-              : html`<div class="text-fg-muted"><span class="t-ok">✓ </span>${l.t}</div>`)}</code></pre>
-          </figure>
+          <div class="flex flex-col min-w-0">
+            <p class="font-mono font-semibold text-[11px] leading-[1.4] tracking-[0.12em] uppercase text-fg-subtle mb-[10px] ml-1">The component you write</p>
+            ${codeWindow('components/like-button.ts', PE_COMPONENT)}
+          </div>
+          <div class="flex flex-col min-w-0">
+            <p class="font-mono font-semibold text-[11px] leading-[1.4] tracking-[0.12em] uppercase text-fg-subtle mb-[10px] ml-1">What the browser receives (JS off)</p>
+            ${codeWindow('view-source', SSR_OUTPUT)}
+          </div>
         </div>
         <div class="flex flex-wrap gap-[10px] justify-center mt-8">
-          ${AGENTS.map(a => html`<span class="font-mono font-semibold text-[12px] leading-none tracking-[0.04em] uppercase text-accent-hover px-[14px] py-[9px] rounded-full border border-accent-tint bg-accent-tint">${a}</span>`)}
+          ${PE_CHIPS.map(c => html`<span class="font-mono font-semibold text-[12px] leading-none tracking-[0.04em] uppercase text-accent-hover px-[14px] py-[9px] rounded-full border border-accent-tint bg-accent-tint">${c}</span>`)}
         </div>
       </div>
     </section>
@@ -276,7 +275,7 @@ export default function LandingPage() {
             </div>
           `)}
         </div>
-        <p class="mt-8 mx-auto max-w-[680px] text-center text-[1.02rem] leading-[1.6] text-fg-muted">Familiar from day one. WebJs uses Next.js-style file routing and lit-style web components, the proven DX AI agents already have the muscle memory for.</p>
+        <p class="mt-8 mx-auto max-w-[680px] text-center text-[1.02rem] leading-[1.6] text-fg-muted">Familiar from day one. webjs uses file-based routing and standards-based web components, conventions you already know, with no new abstraction layer to learn.</p>
         <p class="mt-6 mx-auto max-w-[680px] text-center text-fg-subtle text-[12px] leading-[1.5]">Gzipped production sizes. <code class="font-mono">@webjsdev/core</code> is ~0.9 MB unpacked vs ~7.5 MB for react + react-dom, and the framework source is about 5% of Next.js. JSDoc-typed JavaScript, no build step.</p>
       </div>
     </section>
@@ -323,8 +322,8 @@ lib/session.server.ts</pre>
     <section class="py-16 text-center" id="get-started">
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[760px] mx-auto p-[clamp(32px,5vw,64px)] rounded-[22px] border border-border-strong bg-[color-mix(in_oklch,var(--accent-live)_7%,var(--color-bg-elev))] shadow-[var(--shadow-glow)]">
-          <h2 class="font-display font-extrabold text-h2 leading-[1.1] tracking-[-0.03em] mt-0 mb-3">Ship a feature with the tests already written</h2>
-          <p class="text-fg-muted mx-auto mb-8 max-w-[46ch]">Scaffold a full-stack app in one command, point your agent at it, and go.</p>
+          <h2 class="font-display font-extrabold text-h2 leading-[1.1] tracking-[-0.03em] mt-0 mb-3">Start building on the platform</h2>
+          <p class="text-fg-muted mx-auto mb-8 max-w-[46ch]">Scaffold a full-stack app in one command, with pages, an API, components, and a database wired up.</p>
           <div class=${INSTALL}>
             <span class="text-accent select-none" aria-hidden="true">$</span><copy-cmd>npm create webjs@latest my-app</copy-cmd>
           </div>
@@ -352,7 +351,7 @@ lib/session.server.ts</pre>
           <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href="/changelog">Changelog</a>
         </nav>
       </div>
-      <div class="w-full text-center mt-6 md:mt-0 text-fg-subtle text-sm">Built with WebJs <svg class="heart" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div>
+      <div class="w-full text-center mt-6 md:mt-0 text-fg-subtle text-sm">Built with webjs <svg class="heart" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div>
     </footer>
   `;
 }
