@@ -41,10 +41,13 @@ On a client-router navigation to a streamed page, the router applies the respons
 
 Five stacked zero-build optimizations:
 
-1. **`<link rel="modulepreload">` per used component + transitive deps.**
+1. **`<link rel="modulepreload">` per used component + transitive deps + reached vendors.**
    The SSR pass knows every custom element in the final HTML. A startup
-   module-graph scan adds their transitive import dependencies too. All
-   preload hints are deduplicated and emitted in `<head>`.
+   module-graph scan adds their transitive import dependencies too, AND the
+   npm vendor URLs those shipped modules import (#754, flattening the
+   cross-origin CDN waterfall one level; see the no-build model below for the
+   shallow-dependency caveat). All preload hints are deduplicated and emitted
+   in `<head>`, vendor hints carrying their SRI `integrity` + `crossorigin`.
 2. **HTTP/2 multiplex at the edge.** The production server (`npm run start`) speaks plain
    HTTP/1.1. PaaS edges (Railway, Fly, Render, Vercel, Cloudflare Pages,
    Heroku) and reverse proxies (nginx, Caddy, Traefik) speak
@@ -132,9 +135,23 @@ production. The Rails 7+ / Hotwire pattern:
   resource. The browser walks the import graph and fetches each module
   on demand.
 - **`<link rel="modulepreload">` hints at SSR time**: for every component
-  the route uses + its transitive deps from the module graph. The
-  browser parallelizes fetches instead of waterfalling through nested
-  imports. This is what eliminates the perceived gap vs a bundle.
+  the route uses + its transitive deps from the module graph, AND for the
+  npm **vendor** URLs those shipped modules reach (#754). The browser
+  parallelizes fetches instead of waterfalling through nested imports. This
+  is what closes most of the perceived gap vs a bundle. **The honest caveat:**
+  a bundle still wins on a DEEP vendor tree. webjs flattens the FIRST level
+  (the vendor entries your code imports are hinted up front, with their SRI
+  `integrity`, byte-identical to the importmap target so there is no double
+  fetch), but a vendor's OWN transitive deps are still discovered by parsing
+  each fetched CDN module in turn, level by level, over the cross-origin CDN
+  connection. So the complementary mitigation is **shallow-dependency
+  discipline**: prefer few, shallow ESM dependencies (a library with a flat
+  or one-level graph fully benefits; a deep tree still waterfalls past level
+  one). Only REACHED vendors are hinted: a vendor imported solely by an
+  elided display-only component, by a page/layout module dropped from the boot
+  (an inert or import-only page whose binding vendor import is used only during
+  SSR, the canonical SSR-only-dependency case), by a `.server.*` file, or
+  pinned-but-unimported, is never preloaded (no over-fetch).
 - **HTTP/2 multiplex** is what makes per-file serving competitive: one
   TCP+TLS handshake, many module fetches in parallel over the same
   connection. The production server (`npm run start`) speaks plain HTTP/1.1.

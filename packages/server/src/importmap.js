@@ -460,6 +460,42 @@ export function buildImportMap(opts = {}) {
 }
 
 /**
+ * Resolve a set of bare vendor specifiers to `modulepreload` targets (#754), so
+ * SSR can flatten the vendor CDN waterfall: instead of discovering each vendor
+ * module level by level (fetch app module -> parse -> fetch vendor -> parse ...),
+ * the reached vendor URLs are hinted up front and fetched in parallel.
+ *
+ * The href is taken DIRECTLY from `buildImportMap().imports[spec]`, so it is
+ * BYTE-IDENTICAL to the importmap target (same base-path + `?v` rewrite): a
+ * differing href would make the browser treat the preload and the import as two
+ * resources and double-fetch. The matching `integrity` comes from the same map.
+ * A specifier NOT in the importmap (an unpinned / unreached / elided vendor)
+ * yields nothing, so this never over-fetches. Duplicate hrefs are collapsed.
+ *
+ * Framework runtime specifiers (`@webjsdev/core`...) are excluded: core is
+ * served same-origin and already on the boot path, not a CDN-waterfall vendor.
+ *
+ * @param {Iterable<string>} specifiers  bare specifiers reached by the page
+ * @returns {Array<{ href: string, integrity?: string }>}
+ */
+export function vendorPreloadTargets(specifiers) {
+  const specs = [...(specifiers || [])];
+  if (!specs.length) return [];
+  const map = buildImportMap();
+  /** @type {Array<{ href: string, integrity?: string }>} */
+  const out = [];
+  const seen = new Set();
+  for (const spec of specs) {
+    if (spec === '@webjsdev/core' || spec.startsWith('@webjsdev/core/')) continue;
+    const href = map.imports[spec];
+    if (!href || seen.has(href)) continue;
+    seen.add(href);
+    out.push({ href, integrity: map.integrity ? map.integrity[href] : undefined });
+  }
+  return out;
+}
+
+/**
  * Derive the cross-origin vendor CDN origins from the resolved vendor
  * importmap, most-common first (issue #243, auto vendor preconnect). For an
  * UNPINNED app resolving vendors live from a cross-origin CDN (ga.jspm.io,

@@ -1,11 +1,11 @@
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { renderToString, isNotFound, isRedirect, lookupModuleUrl, isLazy, cspNonce } from '@webjsdev/core';
-import { importMapTag, vendorIntegrityFor, publishedBuildId, basePath, vendorPreconnectOrigins } from './importmap.js';
+import { importMapTag, vendorIntegrityFor, publishedBuildId, basePath, vendorPreconnectOrigins, vendorPreloadTargets } from './importmap.js';
 import { withBasePath } from './base-path.js';
 import { withAssetHash } from './asset-hash.js';
 import { jsonForScriptTag } from './script-tag-json.js';
-import { transitiveDeps } from './module-graph.js';
+import { transitiveDeps, bareImports } from './module-graph.js';
 import { seedingEnabled, collectSeeds, buildSeedScript } from './action-seed.js';
 import { BUFFERED_MARKER, STREAM_MARKER } from './conditional-get.js';
 import {
@@ -189,6 +189,26 @@ export async function ssrPage(route, params, url, opts) {
       opts.serverFiles,
       opts.elidableComponents,
     );
+    // Vendor modulepreload (#754): flatten the npm CDN waterfall by hinting the
+    // vendor URLs the page's SHIPPED modules actually import, fetched in parallel
+    // instead of discovered level by level. The walk roots are the BOOT's shipped
+    // module set (`moduleUrls`, which already drops inert page/layout modules and
+    // substitutes an import-only page with its components) plus the rendered
+    // components, so a vendor reached ONLY through a dropped module (a page's
+    // SSR-only direct import OR its SSR-only relative helper) is never preloaded
+    // (no over-fetch).
+    const shippedRoots = moduleUrls.map((u) =>
+      resolve(opts.appDir, u.startsWith('/') ? u.slice(1) : u));
+    const vendorPreloads = vendorPreloadTargets(
+      reachedVendorSpecifiers(
+        opts.moduleGraph,
+        shippedRoots,
+        eagerComponents,
+        opts.appDir,
+        opts.elidableComponents,
+        opts.serverFiles,
+      ),
+    );
     // Extract CSP nonce from request headers (if present).
     const nonce = opts.req ? getNonce(opts.req) : undefined;
     const wrapOpts = {
@@ -197,6 +217,7 @@ export async function ssrPage(route, params, url, opts) {
       dev: opts.dev,
       streaming: suspenseCtx.pending.length > 0,
       preloads,
+      vendorPreloads,
       lazyComponents,
       nonce,
     };
@@ -1232,6 +1253,26 @@ function wrapHead(opts) {
       `${preloadCrossOriginAttr(url)}${integrityAttr(url)}${noncePreload}>`,
     );
   }
+  // Vendor modulepreload (#754): the npm CDN dependencies the page reaches,
+  // hinted up front to flatten the cross-origin waterfall. The href comes
+  // straight from the importmap target (byte-identical, no `fp()` rewrite, so
+  // the browser does not double-fetch) and carries the importmap's `integrity`.
+  // `preloadCrossOriginAttr` adds `crossorigin` for a cross-origin CDN url (a
+  // same-origin pinned `/__webjs/vendor/*` url gets none). Deduped against the
+  // app module/component preloads already emitted above.
+  const emittedPreloadHrefs = new Set([
+    ...opts.moduleUrls.map((u) => fp(u)),
+    ...(opts.preloads || []).map((u) => fp(u)),
+  ]);
+  for (const v of opts.vendorPreloads || []) {
+    if (emittedPreloadHrefs.has(v.href)) continue;
+    emittedPreloadHrefs.add(v.href);
+    const integrity = v.integrity ? ` integrity="${escapeAttr(v.integrity)}"` : '';
+    linkTags.push(
+      `<link rel="modulepreload" href="${escapeAttr(v.href)}"` +
+      `${preloadCrossOriginAttr(v.href)}${integrity}${noncePreload}>`,
+    );
+  }
   if (Array.isArray(m.preload)) {
     for (const p of m.preload) {
       if (!p || !p.href) continue;
@@ -1491,6 +1532,63 @@ function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFiles, appD
   }
 
   return result;
+}
+
+/**
+ * Collect the bare npm vendor specifiers the page's SHIPPED modules import
+ * (#754). The walk ROOTS are the boot's actually-shipped module set: the caller
+ * passes `entryFiles` = the absolute paths of `moduleUrls` (which already drops
+ * inert page/layout modules and substitutes an import-only page with its
+ * components), plus `componentUrls` = the rendered components. From those roots
+ * it walks the transitive app-graph closure (elidable components and the subtree
+ * reachable only through them excluded), and collects each reached file's bare
+ * imports, excluding server files. The specifiers are resolved to `modulepreload`
+ * targets via the vendor importmap; a specifier not in the map (unpinned /
+ * unreached) drops out there.
+ *
+ * Because the roots are the SHIPPED set, a vendor reached ONLY through a module
+ * dropped from the boot, whether a dropped page's SSR-only DIRECT vendor import
+ * or its SSR-only RELATIVE HELPER's vendor, is never collected: the dropped
+ * module is not a root, and nothing that ships imports it (pages/layouts are not
+ * importable). So the canonical SSR-only-dependency pattern (which elision keeps
+ * off the client) is never preloaded (no over-fetch).
+ *
+ * @param {import('./module-graph.js').ModuleGraph | undefined} graph
+ * @param {string[]} entryFiles  absolute paths of the SHIPPED page/layout modules (from `moduleUrls`)
+ * @param {string[]} componentUrls  rendered eager component URL paths
+ * @param {string} appDir
+ * @param {Set<string>} [elidableComponents]
+ * @param {Set<string>} [serverFiles]  the action / server-file index (`'use server'`, incl. no-`.server.` files)
+ * @returns {Set<string>}
+ */
+function reachedVendorSpecifiers(graph, entryFiles, componentUrls, appDir, elidableComponents, serverFiles) {
+  /** @type {Set<string>} */
+  const specs = new Set();
+  if (!graph) return specs;
+  const bare = bareImports(graph);
+  if (!bare.size) return specs;
+  // Roots = the SHIPPED page/layout modules (already inert-dropped + import-only
+  // expanded by the caller) + the rendered components, keyed by the graph's own
+  // absolute paths. Walk their non-elided transitive closure.
+  const allEntries = [...entryFiles];
+  for (const url of componentUrls) {
+    allEntries.push(resolve(appDir, url.startsWith('/') ? url.slice(1) : url));
+  }
+  const files = new Set(allEntries);
+  for (const dep of transitiveDeps(graph, allEntries, appDir, elidableComponents)) files.add(dep);
+  for (const file of files) {
+    // A server file is never served to the browser (its source is an RPC /
+    // throw-at-load stub), so a vendor it imports never ships and must NOT be
+    // preloaded. `transitiveDeps` stops AT a server-file boundary but still
+    // returns the boundary file itself, so filter it: the `.server.*` suffix
+    // AND the action index (a `'use server'` file without the suffix), matching
+    // `deduplicatedPreloads`' `byIndex` filter.
+    if (/\.server\.m?[jt]s$/.test(file)) continue;
+    if (serverFiles && serverFiles.has && serverFiles.has(file)) continue;
+    const fileBare = bare.get(file);
+    if (fileBare) for (const spec of fileBare) specs.add(spec);
+  }
+  return specs;
 }
 
 /**
