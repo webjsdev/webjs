@@ -39,7 +39,7 @@
  * Design tokens used: --popover, --popover-foreground, --border.
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
-import { ensureId } from '../lib/utils.ts';
+import { ensureId, onBeforeCache } from '../lib/utils.ts';
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
 // `fixed m-0` opts out of the UA `[popover]` auto-centering margin so
@@ -70,6 +70,8 @@ export class UiHoverCard extends WebComponent({
     this.closeDelay = 300;
   }
 
+  _disposeBeforeCache?: () => void;
+
   connectedCallback(): void {
     super.connectedCallback?.();
     // webjs projects slotted light-DOM children after the first render, so
@@ -78,6 +80,14 @@ export class UiHoverCard extends WebComponent({
     if (typeof requestAnimationFrame === 'function') {
       requestAnimationFrame(() => this._wireAria());
     }
+    // Close before the page is cached for back/forward so a restored snapshot
+    // does not come back frozen open (#766).
+    this._disposeBeforeCache = onBeforeCache(() => { this.open = false; });
+  }
+
+  disconnectedCallback(): void {
+    this._disposeBeforeCache?.();
+    super.disconnectedCallback?.();
   }
 
   // The trigger also opens on focus (see the @focusin handler), so it is

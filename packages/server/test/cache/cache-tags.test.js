@@ -13,11 +13,10 @@ test('cache() with tags stores the tag -> key index', async () => {
   setStore(store);
   const fn = cache(async () => ({ ok: 1 }), { key: 'tag-index', ttl: 60, tags: ['posts'] });
   await fn();
-  const raw = await store.get('cache:tag:posts');
-  assert.ok(raw, 'tag index entry exists');
-  const keys = JSON.parse(raw);
-  // The recorded cache key carries the value-format version segment.
-  assert.deepEqual(keys, ['cache:r1:tag-index']);
+  // The tag index is now a native SET on the memory store (#752); read it via
+  // the SET primitive. The recorded cache key carries the value-format segment.
+  const keys = await store.setMembers('cache:tag:posts');
+  assert.deepEqual(keys, ['cache:r1:tag-index'], 'tag index holds the cache key as a set member');
 });
 
 test('revalidateTag evicts every cached key under that tag (cross-module)', async () => {

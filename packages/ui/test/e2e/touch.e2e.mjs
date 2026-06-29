@@ -105,6 +105,44 @@ await page.waitForTimeout(700); // > SUB_CLOSE_DELAY (200ms): proves it STAYS op
 const subOpen = await page.evaluate(() => !!document.querySelector('ui-dropdown-menu-sub')?.hasAttribute('open'));
 results.push(['dropdown submenu opens and stays open on tap', subOpen]);
 
+// 4) before-cache (#766): open a hover-card, then fire the event the router
+// fires when it snapshots the page for back/forward. The card must close.
+await page.goto(BASE + '/docs/components/hover-card', { waitUntil: 'domcontentloaded' });
+await page.waitForTimeout(1500);
+await (await page.$('ui-hover-card-trigger'))?.tap();
+await page.waitForTimeout(500);
+const openedBC = await page.evaluate(() => !!document.querySelector('ui-hover-card')?.hasAttribute('open'));
+await page.evaluate(() => document.dispatchEvent(new CustomEvent('webjs:before-cache')));
+await page.waitForTimeout(200);
+const closedBC = await page.evaluate(() => !document.querySelector('ui-hover-card')?.hasAttribute('open'));
+results.push(['hover-card closes on webjs:before-cache', openedBC && closedBC]);
+
+// 5) real round-trip: open a hover-card, soft-nav away via an internal link,
+// then Back. The restored snapshot must show the card closed (the router fired
+// before-cache when it snapshotted the page being left).
+await page.goto(BASE + '/docs/components/hover-card', { waitUntil: 'domcontentloaded' });
+await page.waitForTimeout(1500);
+await (await page.$('ui-hover-card-trigger'))?.tap();
+await page.waitForTimeout(400);
+const navHref = await page.evaluate(() => {
+  const a = [...document.querySelectorAll('a[href^="/docs/components/"]')]
+    .find((x) => x.getAttribute('href') !== location.pathname);
+  if (a) { a.click(); return a.getAttribute('href'); }
+  return null;
+});
+if (navHref) {
+  await page.waitForTimeout(900);
+  await page.goBack();
+  await page.waitForTimeout(900);
+  const closedAfterBack = await page.evaluate(() => {
+    const c = document.querySelector('ui-hover-card');
+    return !c || !c.hasAttribute('open');
+  });
+  results.push(['hover-card closed after soft-nav + Back (clean snapshot)', closedAfterBack]);
+} else {
+  console.log('NOTE: no internal link found for the back/forward round-trip check');
+}
+
 await browser.close();
 teardown();
 

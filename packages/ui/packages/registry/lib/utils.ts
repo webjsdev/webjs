@@ -266,3 +266,19 @@ export const helpClass = () => 'text-xs text-muted-foreground';
 
 /** Validation error text: replaces hint when the field is invalid. */
 export const errorClass = () => 'text-sm font-medium text-destructive';
+
+/**
+ * Run `reset` just before the webjs client router snapshots the page into its
+ * back/forward cache (the `webjs:before-cache` event). Transient overlays use
+ * this to close themselves so a restored snapshot is clean rather than, say, a
+ * hover-card frozen open after Back then Forward (#766). Wire it in
+ * `connectedCallback` and call the returned disposer in `disconnectedCallback`
+ * so the listener never leaks across soft navigations.
+ *
+ * SSR-safe: a no-op when there is no `document` (server / no client router).
+ */
+export function onBeforeCache(reset: () => void): () => void {
+  if (typeof document === 'undefined') return () => {};
+  document.addEventListener('webjs:before-cache', reset);
+  return () => document.removeEventListener('webjs:before-cache', reset);
+}

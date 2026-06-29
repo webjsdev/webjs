@@ -332,12 +332,16 @@ component, and `error.{ts,js}` / `loading.{ts,js}` / `not-found.{ts,js}`
 modules, are checked too. Those three boundaries always ship and are
 never elided (only an elidable component import is ever stripped), so a
 personalized 404 that does `await auth()` is the same throw-at-load crash
-and is flagged. One known gap: a DYNAMIC `import('./x.server.ts')` is not
-caught, because the framework's import scanner tracks only static
-`import` / `export … from`, not the `import(` call form. That is
-consistent with the rest of the framework (a dynamic import is also not
-elided framework-wide, and its crash is deferred to call time, not module
-load), so the rule leaves it to the runtime.
+and is flagged. Scope note for dynamic imports: a string-literal
+`import('./widget.ts')` IS tracked by the authorization gate (#751), so a
+lazily-imported app module is servable instead of 404ing, but it is kept
+out of elision and the modulepreload set (a dynamic import is lazy by
+author intent, fetched at call time). The `no-server-import-in-browser-module`
+rule still operates on STATIC edges only, so a dynamic
+`import('./x.server.ts')` of a no-`'use server'` utility is not flagged at
+check time, its throw-at-load is deferred to call time; and a computed
+`import(expr)` cannot be resolved statically, so `webjs check` warns on it
+in a shipping module (it would 404 if it targets an app module).
 
 ### Turning elision off
 
