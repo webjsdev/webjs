@@ -148,8 +148,10 @@ production. The Rails 7+ / Hotwire pattern:
   discipline**: prefer few, shallow ESM dependencies (a library with a flat
   or one-level graph fully benefits; a deep tree still waterfalls past level
   one). Only REACHED vendors are hinted: a vendor imported solely by an
-  elided display-only component, or pinned-but-unimported, is never preloaded
-  (no over-fetch).
+  elided display-only component, by a page/layout module dropped from the boot
+  (an inert or import-only page whose binding vendor import is used only during
+  SSR, the canonical SSR-only-dependency case), by a `.server.*` file, or
+  pinned-but-unimported, is never preloaded (no over-fetch).
 - **HTTP/2 multiplex** is what makes per-file serving competitive: one
   TCP+TLS handshake, many module fetches in parallel over the same
   connection. The production server (`npm run start`) speaks plain HTTP/1.1.

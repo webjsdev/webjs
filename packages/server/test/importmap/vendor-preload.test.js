@@ -210,6 +210,34 @@ test('an unused/elided vendor is NOT preloaded (no over-fetch)', async () => {
   assert.ok(!links.some((l) => l.includes('left-pad')), 'the unused vendor is NOT preloaded (no over-fetch)');
 });
 
+test('an inert page\'s SSR-only binding vendor import is NOT preloaded (#754 review MUST-FIX)', async () => {
+  // A display-only page imports dayjs as a BINDING used only in SSR and renders
+  // no interactive component, so its module is inert and dropped from the boot:
+  // the browser never loads the page module, dayjs never ships, and it must NOT
+  // be preloaded. Without the inert/import-only filter this vendor leaks.
+  const appDir = makeApp({
+    pin: { imports: { dayjs: DAYJS_URL }, integrity: { [DAYJS_URL]: DAYJS_INTEGRITY } },
+  });
+  writeFileSync(
+    join(appDir, 'app', 'page.js'),
+    `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+    `import dayjs from 'dayjs';\n` +
+    `export default () => html\`<main>built (\${typeof dayjs})</main>\`;\n`,
+  );
+  const app = await createRequestHandler({ appDir, dev: false });
+  await app.warmup();
+  const res = await app.handle(new Request('http://x/'));
+  assert.equal(res.status, 200, 'the page renders (SSR resolved the stub, not a vacuous 500)');
+  const html = await res.text();
+  assert.ok(html.includes('built ('), 'the page SSR output is present');
+  // The page module is dropped from the boot (inert), proving the scenario.
+  assert.ok(!modulepreloadLinks(html).some((l) => l.includes('/app/page.js')),
+    'the inert page module is dropped from the boot (scenario precondition)');
+  assert.ok(!modulepreloadLinks(html).some((l) => l.includes('dayjs')),
+    'an inert page\'s SSR-only binding vendor is NOT preloaded (no over-fetch)');
+  await setCoreInstall(CORE_DIR, true);
+});
+
 test('a vendor imported ONLY by an elided (display-only) component is NOT preloaded', async () => {
   // A display-only component (no interactivity signal) is elided, so its bare
   // import is stripped from the served source and must not be preloaded.

@@ -101,6 +101,25 @@ test('a bare import inside an html template is masked out', async () => {
   assert.ok(!set.has('left-pad'), 'the templated example import is masked out');
 });
 
+test('a real top-level export...from spanning a template body is not a phantom vendor edge', async () => {
+  // The EXPORT_FROM_RE counterfactual: here the REAL `export const tpl` keyword
+  // is top-level code (NOT blanked), and its lazy `[^'";]+?` reaches a `from
+  // 'phantom-pkg'` written INSIDE the template body. The keyword-position mask
+  // check does not catch this (the keyword is real); only the specifier
+  // opening-quote check does. Reverting that guard re-introduces the phantom
+  // `phantom-pkg` vendor edge (and a spurious modulepreload), which this asserts.
+  const dir = await makeApp({
+    'components/doc.ts': `import { html } from '@webjsdev/core';
+      export const tpl = html\`<aside>export { y } from 'phantom-pkg';</aside>\`;`,
+  });
+  const graph = await buildModuleGraph(dir);
+  const doc = join(dir, 'components/doc.ts');
+  const set = bareImports(graph).get(doc) || new Set();
+  assert.ok(set.has('@webjsdev/core'), 'the real top-level import is a bare edge');
+  assert.ok(!set.has('phantom-pkg'),
+    'a from-spec reached by EXPORT_FROM_RE spanning into a template is NOT an edge');
+});
+
 test('bare edges survive the parse cache on rebuild', async () => {
   const dir = await makeApp({
     'components/clock.ts': `import dayjs from 'dayjs'; export const n = dayjs;`,
