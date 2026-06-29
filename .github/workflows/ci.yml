@@ -244,6 +244,11 @@ jobs:
         env:
           WEBJS_E2E: '1'
         run: node --test test/e2e/e2e.test.mjs
+      # Touch-emulation e2e for interactive Tier-2 ui components (#745/#747):
+      # boots the ui-website and taps hover-card / dropdown-submenu / sonner
+      # under a Chromium iPhone context (faithful touch events, no real device).
+      - name: Run ui touch e2e
+        run: npm run test:e2e:touch --workspace=@webjsdev/ui
       # Cross-runtime e2e (#523): re-run the SAME suite under node --test (its
       # node:test hook lifecycle does not survive `bun test`) but with the blog
       # SERVED on Bun (WEBJS_E2E_RUNTIME=bun spawns the blog under the bun binary).
