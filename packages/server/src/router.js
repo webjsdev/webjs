@@ -158,7 +158,7 @@ export async function buildRouteTable(appDir) {
     a.middlewares = chainDirs.map((d) => middlewares.get(d)).filter(Boolean);
   }
 
-  pages.sort((a, b) => dynScore(a) - dynScore(b));
+  pages.sort(compareSpecificity);
   return { pages, apis, notFound, notFounds, metadataRoutes, appDir };
 }
 
@@ -191,11 +191,68 @@ function isUrlSegment(seg) {
   return true;
 }
 
-/** @param {PageRoute} r */
-function dynScore(r) {
-  if (r.isCatchAll) return 3;
-  if (r.paramNames.length) return 2;
-  return 1;
+/**
+ * Per-URL-segment specificity kind: 0 = static literal, 1 = dynamic `[x]`,
+ * 2 = catch-all `[...x]` / `[[...x]]`. Lower is MORE specific. Checks the
+ * catch-all forms before the bare `[` (a `[[...x]]` also starts with `[`).
+ * @param {string} seg
+ * @returns {0 | 1 | 2}
+ */
+function segKind(seg) {
+  if (seg.startsWith('[[...') || seg.startsWith('[...')) return 2;
+  if (seg.startsWith('[') && seg.endsWith(']')) return 1;
+  return 0;
+}
+
+/**
+ * The ordered URL segments of a route (route groups + private folders removed),
+ * which is the basis for positional specificity.
+ * @param {string} routeDir
+ * @returns {string[]}
+ */
+function urlSegmentsOf(routeDir) {
+  return (routeDir === '.' ? [] : routeDir.split('/')).filter(isUrlSegment);
+}
+
+/**
+ * Deterministic route specificity ordering (#750). Replaces the old coarse
+ * 3-bucket score (static=1 / dynamic=2 / catch-all=3) whose same-bucket ties
+ * resolved by filesystem walk order, so two overlapping dynamic routes
+ * (`/[org]/[repo]` vs `/[user]/settings`) could match the WRONG page depending
+ * on traversal order. Specificity is fully POSITIONAL, like Next.js's router:
+ * compare segment by segment, and the catch-all kind is just the lowest-priority
+ * kind AT ITS POSITION, NOT a global "always last" bucket. The contract, most
+ * specific first:
+ *   1. Compare segment by segment: at the same position a static literal (kind 0)
+ *      outranks a dynamic `[x]` (kind 1), which outranks a catch-all
+ *      `[...x]` / `[[...x]]` (kind 2). So `/[user]/settings` beats `/[org]/[repo]`
+ *      (static tail wins), AND `/docs/[[...slug]]` beats `/[org]/[repo]` (a
+ *      literal first segment outranks a dynamic one, even though the former ends
+ *      in a catch-all). A global catch-all-last rule would wrongly shadow the
+ *      literal-prefixed catch-all behind every all-dynamic route.
+ *   2. With an identical kind prefix, the SHORTER (prefix) route ranks first, so
+ *      an explicit `/docs` beats the optional-catch-all base `/docs/[[...slug]]`
+ *      for `/docs` (the optional catch-all also matches zero trailing segments,
+ *      so the shorter exact route is the more specific match). Standard
+ *      lexicographic order on the kind arrays.
+ *   3. A genuine tie (identical kinds + length, e.g. `/[a]/[b]` vs `/[c]/[d]`)
+ *      resolves by an alphabetical `routeDir` key, NOT walk order, so the match
+ *      is deterministic across environments.
+ *
+ * The result is a valid total order (lexicographic on kind arrays with a unique
+ * final tiebreak), so `Array.sort` is correct and deterministic regardless of
+ * the filesystem traversal order.
+ * @param {PageRoute} a
+ * @param {PageRoute} b
+ * @returns {number}
+ */
+export function compareSpecificity(a, b) {
+  const sa = urlSegmentsOf(a.routeDir).map(segKind);
+  const sb = urlSegmentsOf(b.routeDir).map(segKind);
+  const n = Math.min(sa.length, sb.length);
+  for (let i = 0; i < n; i++) if (sa[i] !== sb[i]) return sa[i] - sb[i];
+  if (sa.length !== sb.length) return sa.length - sb.length; // shorter (prefix) first
+  return a.routeDir < b.routeDir ? -1 : a.routeDir > b.routeDir ? 1 : 0;
 }
 
 /**
