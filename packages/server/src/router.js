@@ -158,7 +158,7 @@ export async function buildRouteTable(appDir) {
     a.middlewares = chainDirs.map((d) => middlewares.get(d)).filter(Boolean);
   }
 
-  pages.sort((a, b) => dynScore(a) - dynScore(b));
+  pages.sort(compareSpecificity);
   return { pages, apis, notFound, notFounds, metadataRoutes, appDir };
 }
 
@@ -191,11 +191,57 @@ function isUrlSegment(seg) {
   return true;
 }
 
-/** @param {PageRoute} r */
-function dynScore(r) {
-  if (r.isCatchAll) return 3;
-  if (r.paramNames.length) return 2;
-  return 1;
+/**
+ * Per-URL-segment specificity kind: 0 = static literal, 1 = dynamic `[x]`,
+ * 2 = catch-all `[...x]` / `[[...x]]`. Lower is MORE specific. Checks the
+ * catch-all forms before the bare `[` (a `[[...x]]` also starts with `[`).
+ * @param {string} seg
+ * @returns {0 | 1 | 2}
+ */
+function segKind(seg) {
+  if (seg.startsWith('[[...') || seg.startsWith('[...')) return 2;
+  if (seg.startsWith('[') && seg.endsWith(']')) return 1;
+  return 0;
+}
+
+/**
+ * The ordered URL segments of a route (route groups + private folders removed),
+ * which is the basis for positional specificity.
+ * @param {string} routeDir
+ * @returns {string[]}
+ */
+function urlSegmentsOf(routeDir) {
+  return (routeDir === '.' ? [] : routeDir.split('/')).filter(isUrlSegment);
+}
+
+/**
+ * Deterministic route specificity ordering (#750). Replaces the old coarse
+ * 3-bucket score (static=1 / dynamic=2 / catch-all=3) whose same-bucket ties
+ * resolved by filesystem walk order, so two overlapping dynamic routes
+ * (`/[org]/[repo]` vs `/[user]/settings`) could match the WRONG page depending
+ * on traversal order. The contract, most specific first:
+ *   1. A catch-all route (`[...x]` / `[[...x]]`) is always LEAST specific.
+ *   2. Otherwise compare segment by segment: a static literal outranks a
+ *      dynamic `[x]` at the same position (so `/[user]/settings` beats
+ *      `/[org]/[repo]`).
+ *   3. With an identical kind prefix, more segments rank first (more
+ *      constraints); anchored non-overlapping patterns are order-independent
+ *      anyway, so this only makes the order stable.
+ *   4. A genuine tie (identical kinds + length, e.g. `/[a]/[b]` vs `/[c]/[d]`)
+ *      resolves by an alphabetical `routeDir` key, NOT walk order, so the match
+ *      is deterministic across environments.
+ * @param {PageRoute} a
+ * @param {PageRoute} b
+ * @returns {number}
+ */
+export function compareSpecificity(a, b) {
+  if (a.isCatchAll !== b.isCatchAll) return a.isCatchAll ? 1 : -1;
+  const sa = urlSegmentsOf(a.routeDir).map(segKind);
+  const sb = urlSegmentsOf(b.routeDir).map(segKind);
+  const n = Math.min(sa.length, sb.length);
+  for (let i = 0; i < n; i++) if (sa[i] !== sb[i]) return sa[i] - sb[i];
+  if (sa.length !== sb.length) return sb.length - sa.length;
+  return a.routeDir < b.routeDir ? -1 : a.routeDir > b.routeDir ? 1 : 0;
 }
 
 /**

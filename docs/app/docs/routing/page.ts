@@ -219,8 +219,13 @@ export default function FilesPage({ params }: { params: { path: string } }) {
 }</pre>
 
     <p>
-      Static routes are matched before dynamic routes, and dynamic routes are matched
-      before catch-all routes, so you can safely mix them.
+      Route precedence is positional and deterministic. Segment by segment, a static
+      literal outranks a dynamic <code>[param]</code>, which outranks a catch-all, and a
+      catch-all route is always matched last. So <code>/[user]/settings</code> (a static
+      tail) correctly wins over <code>/[org]/[repo]</code> for <code>/acme/settings</code>,
+      and you can safely mix static, dynamic, and catch-all routes. A genuine tie between
+      two equally specific routes resolves by a stable alphabetical key, never by file
+      order, so the match is the same across machines and deploys.
     </p>
 
     <!-- ===== ROUTE GROUPS ===== -->
@@ -619,7 +624,7 @@ export default function Loading() {
     <ul>
       <li><strong>1. Static file</strong>: if a file exists in the project's public/static directory, it is served directly.</li>
       <li><strong>2. API route</strong>: <code>route.ts</code> handlers are matched against the URL. WebSocket upgrades also match here.</li>
-      <li><strong>3. Page route</strong>: <code>page.ts</code> files are matched. Static routes take priority over dynamic, and dynamic over catch-all.</li>
+      <li><strong>3. Page route</strong>: <code>page.ts</code> files are matched by positional specificity (a static segment beats a dynamic one beats a catch-all, segment by segment; catch-all last), with ties broken by a stable alphabetical key rather than file order.</li>
       <li><strong>4. Not found</strong>: if nothing matches, <code>not-found.ts</code> is rendered with a <code>404</code> status.</li>
     </ul>
 
