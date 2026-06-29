@@ -4,7 +4,7 @@ import { COMPONENT_SAMPLE, ACTION_SAMPLE, PAGE_SAMPLE } from '#lib/samples.ts';
 
 const FILES = [
   { name: 'like-button.ts', path: 'components/like-button.ts', folder: 'components', label: 'Interactive component', code: COMPONENT_SAMPLE },
-  { name: 'get-post.server.ts', path: 'actions/get-post.server.ts', folder: 'actions', label: 'Server action (RPC)', code: ACTION_SAMPLE },
+  { name: 'get-post.server.ts', path: 'queries/get-post.server.ts', folder: 'queries', label: 'Server query', code: ACTION_SAMPLE },
   { name: 'page.ts', path: 'app/posts/[id]/page.ts', folder: 'app/posts/[id]', label: 'SSR page', code: PAGE_SAMPLE },
 ];
 
@@ -36,7 +36,7 @@ export class CodeShowcase extends WebComponent {
     this.copied.set(true);
     if (this._resetTimer) clearTimeout(this._resetTimer);
     this._resetTimer = (setTimeout(() => this.copied.set(false), 1500) as unknown as number);
-    
+
     (window as unknown as { gtag?: (...a: unknown[]) => void }).gtag?.(
       'event',
       'copy_showcase_code',
@@ -48,8 +48,7 @@ export class CodeShowcase extends WebComponent {
     const activeIdx = this.activeTab.get();
     const isCopied = this.copied.get();
     const activeFile = FILES[activeIdx];
-    
-    // Split code by newline to generate matching line numbers
+
     const codeLines = activeFile.code.replace(/^\n+|\n+$/g, '').split('\n');
     const lineNumbers = Array.from({ length: codeLines.length }, (_, i) => i + 1);
 
@@ -69,19 +68,19 @@ export class CodeShowcase extends WebComponent {
             <span>Explorer</span>
             <span class="text-[9px] px-1 py-0.5 bg-fg/5 rounded text-fg-subtle">workspace</span>
           </div>
-          
+
           <div class="p-3 flex flex-col gap-2">
             <div class="flex items-center gap-1.5 text-fg font-semibold px-1">
               ${ICONS.folderOpen}
               <span>my-app</span>
             </div>
-            
+
             <div class="pl-3 flex flex-col gap-1.5">
-              <!-- Folder actions -->
+              <!-- Folder queries -->
               <div>
                 <div class="flex items-center gap-1.5 text-fg-subtle py-0.5 px-1">
                   ${ICONS.folder}
-                  <span>actions</span>
+                  <span>queries</span>
                 </div>
                 <div class="pl-5 mt-0.5">
                   <button
@@ -93,7 +92,7 @@ export class CodeShowcase extends WebComponent {
                   </button>
                 </div>
               </div>
-              
+
               <!-- Folder app/posts/[id] -->
               <div>
                 <div class="flex items-center gap-1.5 text-fg-subtle py-0.5 px-1">
