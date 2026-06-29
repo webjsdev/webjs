@@ -31,7 +31,33 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { connect } from 'node:net';
 import { startServer } from '@webjsdev/server';
+
+/**
+ * Fetch the RAW HTTP/1.1 response head for a path WITHOUT decompressing (unlike
+ * `fetch`, which strips `content-length` when it transparently decodes a
+ * compressed body). Lets the proof discriminate the Bun sync buffered-compress
+ * fast path (which SETS `content-length`) from the stream bridge (which DELETES
+ * it). Resolves the lowercased header lines of the status+header block.
+ * @param {number} port @param {string} path @param {Record<string,string>} headers
+ * @returns {Promise<string>} the raw header block, lowercased
+ */
+function rawHead(port, path, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const sock = connect(port, 'localhost', () => {
+      const lines = [`GET ${path} HTTP/1.1`, `Host: localhost:${port}`, 'Connection: close'];
+      for (const [k, v] of Object.entries(headers)) lines.push(`${k}: ${v}`);
+      sock.write(lines.join('\r\n') + '\r\n\r\n');
+    });
+    let buf = '';
+    const done = (out) => { try { sock.destroy(); } catch {} resolve(out); };
+    sock.setTimeout(4000, () => { sock.destroy(); reject(new Error('rawHead timeout')); });
+    sock.on('data', (d) => { buf += d.toString('latin1'); const i = buf.indexOf('\r\n\r\n'); if (i !== -1) done(buf.slice(0, i).toLowerCase()); });
+    sock.on('error', reject);
+    sock.on('end', () => done(buf.toLowerCase()));
+  });
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CORE = pathToFileURL(resolve(__dirname, '../../packages/core/index.js')).toString();
@@ -72,6 +98,19 @@ try {
     assert.equal(r.headers.get('content-encoding'), enc, `[${runtime}] served ${enc}`);
     const body = await r.text(); // fetch transparently decompresses
     assert.ok(body.includes(MARKER.trim()), `[${runtime}] ${enc} body decodes to the original page`);
+  }
+
+  // (1b) On Bun, prove the BUFFERED sync-compress fast path is actually TAKEN
+  // (not silently falling back to the stream bridge): the sync path SETS
+  // `content-length` on the fully-compressed buffer, the bridge DELETES it. A raw
+  // probe is required because `fetch` strips `content-length` when it
+  // decompresses. Bun-only: the node shell stream-compresses a buffered page too,
+  // so it carries no content-length (the classifier is a Bun-shell optimization).
+  if (process.versions.bun) {
+    const head = await rawHead(port, '/', { 'accept-encoding': 'gzip' });
+    assert.ok(/content-encoding:\s*gzip/.test(head), `[${runtime}] buffered page served gzip (raw head)`);
+    assert.ok(/content-length:\s*\d+/.test(head),
+      `[${runtime}] the Bun buffered fast path set content-length (sync compress, not the stream bridge)`);
   }
 
   // (2) The trusted remote IP reaches clientIp; a spoofed header does not win.

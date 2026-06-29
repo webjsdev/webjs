@@ -108,6 +108,13 @@ jobs:
       # so this is the cross-shell parity proof.
       - name: webjs listener parity on Bun
         run: bun test/bun/listener.mjs
+      # Listener overhead reductions on Bun (#756): the out-of-band IP stamp (no
+      # Request clone), the buffered sync-compression fast path, the streamed-head
+      # non-blocking classifier, and the basePath rebuild spoof guard. Run as the
+      # plain `.mjs` script (not via `bun test`) so it is not subject to bun test's
+      # per-test timeout while it boots two servers + does a deliberate 400ms stall.
+      - name: webjs listener overhead on Bun
+        run: bun test/bun/listener-overhead.mjs
       # FileStore streaming on Bun (#509): put/get round-trip + the
       # no-orphan-on-mid-stream-error invariant (the Readable.fromWeb->reader-loop
       # fix, which Readable.fromWeb hangs on under Bun).
