@@ -102,9 +102,45 @@ const IMPORT_RE = /\bimport\s+(?:(?:[\w*{}\s,]+)\s+from\s+)?['"]([^'"]+)['"]/g;
 const EXPORT_FROM_RE = /\bexport\b[^'";]+?\sfrom\s+['"]([^'"]+)['"]/g;
 
 /**
- * @typedef {Map<string, Set<string>>} ModuleGraph
- * A map of absolute file path → Set of absolute file paths it imports.
+ * @type {RegExp} match a dynamic `import('…')` with a STRING-LITERAL specifier
+ * only (`import('./x.ts')`, `await import("#lib/y.ts")`). A computed specifier
+ * (`import(expr)`) cannot be captured and is intentionally left out: it stays a
+ * documented limitation (and `webjs check` warns on it), not a phantom edge.
+ *
+ * Unlike the static `IMPORT_RE` (which requires `\s+` after `import`), this
+ * matches `import` immediately or with whitespace before the `(`, so the two
+ * never overlap. `m.index` is the `import` keyword start, so the same
+ * redaction-mask guard (keyword-in-code-position) applies.
  */
+const DYNAMIC_IMPORT_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+
+/**
+ * @typedef {Map<string, Set<string>>} ModuleGraph
+ * A map of absolute file path → Set of absolute file paths it STATICALLY imports.
+ */
+
+/**
+ * Dynamic-import edges (string-literal `import('…')` only), kept SEPARATE from
+ * the static graph and keyed by it in a WeakMap. The authorization gate
+ * (`reachableFromEntries`) unions these in so a lazily-imported app module is
+ * servable instead of 404ing, but the preload walk (`transitiveDeps`) and the
+ * elision analysis stay on the static graph ONLY: a dynamic import is lazy by
+ * author intent, so eagerly preloading its target would over-fetch on every
+ * page load, and feeding dynamic edges into elision could flip a verdict. The
+ * module is fetched at call time, now served correctly by the gate.
+ * @type {WeakMap<ModuleGraph, ModuleGraph>}
+ */
+const DYNAMIC_EDGES = new WeakMap();
+
+/**
+ * The dynamic-import edges discovered for a built graph (string-literal targets
+ * only), or an empty map if none. Exposed for tests/ops.
+ * @param {ModuleGraph} graph
+ * @returns {ModuleGraph}
+ */
+export function dynamicEdges(graph) {
+  return DYNAMIC_EDGES.get(graph) || new Map();
+}
 
 /**
  * Build the module graph for all source files under `appDir`.
@@ -118,10 +154,13 @@ export async function buildModuleGraph(appDir) {
   IMPORTS_CACHE.delete(appDir);
   /** @type {ModuleGraph} */
   const graph = new Map();
+  /** @type {ModuleGraph} dynamic-import edges, keyed to `graph` below */
+  const dynamic = new Map();
   /** @type {Set<string>} every file walked this build (graph holds only files
    * with deps, so a separate set is needed to know what is still live). */
   const seen = new Set();
-  await walk(appDir, appDir, graph, seen);
+  await walk(appDir, appDir, graph, seen, dynamic);
+  if (dynamic.size) DYNAMIC_EDGES.set(graph, dynamic);
   // Evict parse-cache entries for files no longer in the tree (a rebuild after
   // a rename or delete), so a long dev session does not accumulate dead
   // entries. Scoped to appDir so a multi-app process (tests, dogfood smoke)
@@ -226,6 +265,13 @@ const SERVER_FILE_RE = /\.server\.m?[jt]s$/;
  * @returns {Set<string>}
  */
 export function reachableFromEntries(graph, entryFiles, appDir) {
+  // The gate unions in dynamic-import edges (#751) so a lazily-imported app
+  // module (`await import('./widget.ts')`) is servable instead of 404ing. A
+  // dynamically-imported module's OWN static imports are then walked normally
+  // (it joins the queue), so its subtree is servable too. The `.server.*`
+  // boundary still holds: a dynamic `import('./x.server.ts')` is admitted (a
+  // stub is served) but, like any server file, not traversed into.
+  const dynamic = DYNAMIC_EDGES.get(graph);
   /** @type {Set<string>} */
   const visited = new Set();
   /** @type {string[]} */
@@ -242,13 +288,17 @@ export function reachableFromEntries(graph, entryFiles, appDir) {
     // time), but we don't add its imports because the browser never
     // sees them.
     if (SERVER_FILE_RE.test(file)) continue;
-    const deps = graph.get(file);
-    if (!deps) continue;
-    for (const dep of deps) {
-      if (visited.has(dep)) continue;
-      if (!dep.startsWith(appDir)) continue;
-      visited.add(dep);
-      queue.push(dep);
+    const staticDeps = graph.get(file);
+    const dynDeps = dynamic && dynamic.get(file);
+    if (!staticDeps && !dynDeps) continue;
+    for (const set of [staticDeps, dynDeps]) {
+      if (!set) continue;
+      for (const dep of set) {
+        if (visited.has(dep)) continue;
+        if (!dep.startsWith(appDir)) continue;
+        visited.add(dep);
+        queue.push(dep);
+      }
     }
   }
   return visited;
@@ -260,7 +310,7 @@ export function reachableFromEntries(graph, entryFiles, appDir) {
  * @param {string} appDir
  * @param {ModuleGraph} graph
  */
-async function walk(dir, appDir, graph, seen) {
+async function walk(dir, appDir, graph, seen, dynamic) {
   let entries;
   try { entries = await readdir(dir, { withFileTypes: true }); }
   catch { return; }
@@ -278,9 +328,9 @@ async function walk(dir, appDir, graph, seen) {
     if (e.name.startsWith('.')) continue;
     const full = join(dir, e.name);
     if (e.isDirectory()) {
-      await walk(full, appDir, graph, seen);
+      await walk(full, appDir, graph, seen, dynamic);
     } else if (/\.(js|ts|mjs|mts)$/.test(e.name)) {
-      await parseFile(full, appDir, graph, seen);
+      await parseFile(full, appDir, graph, seen, dynamic);
     }
   }
 }
@@ -308,7 +358,7 @@ export function _parseCacheHas(file) { return PARSE_CACHE.has(file); }
  * @param {string} appDir
  * @param {ModuleGraph} graph
  */
-async function parseFile(file, appDir, graph, seen) {
+async function parseFile(file, appDir, graph, seen, dynamic) {
   let mtimeMs, size;
   try { const st = await stat(file); mtimeMs = st.mtimeMs; size = st.size; }
   catch { return; }
@@ -316,6 +366,7 @@ async function parseFile(file, appDir, graph, seen) {
   const cached = PARSE_CACHE.get(file);
   if (cached && cached.mtimeMs === mtimeMs && cached.size === size) {
     if (cached.deps.size) graph.set(file, cached.deps);
+    if (cached.dynDeps && cached.dynDeps.size && dynamic) dynamic.set(file, cached.dynDeps);
     return;
   }
 
@@ -359,8 +410,21 @@ async function parseFile(file, appDir, graph, seen) {
       if (resolved) deps.add(resolved);
     }
   }
-  PARSE_CACHE.set(file, { mtimeMs, size, deps });
+  // Dynamic `import('…')` with a string-literal specifier (#751): a separate
+  // edge class so the gate admits the lazily-loaded module (no 404) without
+  // preloading it. Same redaction-mask + alias rules as the static scan. A
+  // target already statically imported is not duplicated as a dynamic edge.
+  const dynDeps = new Set();
+  for (const m of src.matchAll(DYNAMIC_IMPORT_RE)) {
+    if (masked[m.index] === ' ') continue;
+    const spec = m[1];
+    if (!spec.startsWith('.') && !spec.startsWith('/') && !expandImportAlias(spec, appDir)) continue;
+    const resolved = resolveImport(spec, file, appDir);
+    if (resolved && !deps.has(resolved)) dynDeps.add(resolved);
+  }
+  PARSE_CACHE.set(file, { mtimeMs, size, deps, dynDeps });
   if (deps.size) graph.set(file, deps);
+  if (dynDeps.size && dynamic) dynamic.set(file, dynDeps);
 }
 
 /**
