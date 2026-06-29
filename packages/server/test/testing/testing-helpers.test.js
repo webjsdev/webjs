@@ -135,9 +135,12 @@ test('invokeActionForTest surfaces a thrown action as a throw with a status', as
     () => invokeActionForTest(app, 'modules/m/act.server.js', 'boom', []),
     (err) => {
       assert.equal(err.status, 500, 'the thrown action surfaces as a 500');
-      // Prod sanitization exposes only the message (author-controlled), never
-      // the stack. The direct import would NOT exercise this branch.
-      assert.match(err.message, /secret stack detail/);
+      // Prod sanitization (#749): the raw thrown message is NEVER exposed; the
+      // client gets a generic message + a correlation digest. The direct import
+      // would NOT exercise this branch.
+      assert.equal(err.message, 'Internal server error', 'generic message, not the raw throw');
+      assert.doesNotMatch(err.message, /secret stack detail/, 'raw message not leaked');
+      assert.ok(typeof err.digest === 'string' && err.digest.length >= 6, 'digest surfaced');
       return true;
     },
   );

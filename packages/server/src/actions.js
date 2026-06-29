@@ -15,6 +15,7 @@ import { revalidateTags } from './cache-tags.js';
 import { runWithActionSignal } from './action-signal.js';
 import { runActionChain } from './action-middleware.js';
 import { isStreamable, streamActionResponse } from './action-stream.js';
+import { isControlFlowThrow, errorDigest, GENERIC_ERROR_MESSAGE } from './action-error.js';
 import { ifNoneMatchSatisfied } from './conditional-get.js';
 import { getBodyLimits } from './context.js';
 import { basePath } from './importmap.js';
@@ -349,7 +350,7 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
   lines.push(`  if (ct.includes(__STREAM_CT)) return __readStream(res, fn);`);
   lines.push(`  const text = await res.text();`);
   lines.push(`  const parsed = ct.includes(__CT) ? __p(text) : (ct.includes('application/json') ? JSON.parse(text) : text);`);
-  lines.push(`  if (!res.ok) throw new Error((parsed && parsed.error) || ('webjs action ' + fn + ' -> ' + res.status));`);
+  lines.push(`  if (!res.ok) { const __e = new Error((parsed && parsed.error) || ('webjs action ' + fn + ' -> ' + res.status)); if (parsed && parsed.digest) __e.digest = parsed.digest; throw __e; }`);
   lines.push(`  return parsed;`);
   lines.push(`}`);
   // Decode a framed streamed body into an async generator of rich-deserialized
@@ -533,7 +534,7 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
         const inv = resolveTags(actionConfigFn(mod, 'invalidates'), args);
         if (inv.length) { await revalidateTags(inv); headers['x-webjs-invalidate'] = inv.join(','); }
       }
-      return streamActionResponse(result, { signal: req.signal, onError, headers });
+      return streamActionResponse(result, { signal: req.signal, onError, headers, dev: idx.dev });
     }
     if (method === 'GET') {
       // A short-circuit (the action did not run, e.g. an auth denial) is NEVER
@@ -588,27 +589,38 @@ async function getActionResponse(result, mod, args, req) {
 }
 
 /**
- * Return a JSON error response with dev-vs-prod sanitization.
- * In prod we return only the error message (not the stack), and we log the
- * full error server-side. Internal errors with no message become a generic
- * 500.
+ * Return a JSON error response with dev-vs-prod sanitization (#749).
+ *
+ * Dev returns the real message + stack. PROD returns a GENERIC message plus a
+ * short `digest`, and logs the full error server-side keyed by that digest, so
+ * a raw error (a DB driver message with a constraint name, an `ECONNREFUSED`
+ * with an internal IP, an fs path) never reaches the client while staying
+ * diagnosable from the logs. `redirect()` / `notFound()` control-flow sentinels
+ * pass through unchanged (not errors, message not sensitive). An author-facing
+ * user-safe message belongs on the `ActionResult` `{ success: false, error }`
+ * envelope, not on a throw.
  *
  * @param {unknown} err
  * @param {boolean} dev
+ * @returns {Promise<Response>}
  */
-function actionErrorResponse(err, dev) {
-  console.error('[webjs] action threw:', err);
+async function actionErrorResponse(err, dev) {
   if (dev) {
+    console.error('[webjs] action threw:', err);
     const msg = err instanceof Error ? err.message : String(err);
     const stack = err instanceof Error ? err.stack : undefined;
     return rpcResponse({ error: msg, stack }, { status: 500 });
   }
-  // Prod: only expose the thrown message (author-controlled), never the stack.
-  const msg =
-    err instanceof Error && typeof err.message === 'string' && err.message
-      ? err.message
-      : 'Internal server error';
-  return rpcResponse({ error: msg }, { status: 500 });
+  // Control-flow sentinels (redirect/notFound) are not errors to sanitize.
+  if (isControlFlowThrow(err)) {
+    console.error('[webjs] action threw:', err);
+    const msg = err instanceof Error ? err.message : String(err);
+    return rpcResponse({ error: msg }, { status: 500 });
+  }
+  // Prod genuine error: generic message + correlation digest, full error logged.
+  const digest = await errorDigest(err);
+  console.error(`[webjs] action threw [digest=${digest}]:`, err);
+  return rpcResponse({ error: GENERIC_ERROR_MESSAGE, digest }, { status: 500 });
 }
 
 /**

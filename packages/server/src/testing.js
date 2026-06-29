@@ -295,9 +295,13 @@ export async function invokeActionForTest(app, serverFilePath, fnName, args = []
 
   if (!res.ok && throwOnError) {
     const msg = (parsed && parsed.error) || `webjs action ${fnName} -> ${res.status}`;
-    const err = /** @type {Error & { status?: number, response?: Response }} */ (new Error(msg));
+    const err = /** @type {Error & { status?: number, response?: Response, digest?: string }} */ (new Error(msg));
     err.status = res.status;
     err.response = res;
+    // Prod sanitization (#749) returns a generic message + a correlation digest;
+    // surface the digest on the thrown error so a test (or a caller) can map it
+    // to the server log line, mirroring the generated client stub.
+    if (parsed && parsed.digest) err.digest = parsed.digest;
     throw err;
   }
   return parsed;

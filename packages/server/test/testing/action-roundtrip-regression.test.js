@@ -125,14 +125,16 @@ test('ERROR SANITIZATION: prod hides the thrown error stack/extra fields the dir
     return true;
   });
 
-  // Through the endpoint in prod: the wire payload is sanitized to just the
-  // message. No stack, no secretField. This is the production guarantee the
-  // direct call cannot observe.
+  // Through the endpoint in prod: the wire payload is sanitized to a GENERIC
+  // message plus a correlation digest (#749). No raw message, no stack, no
+  // secretField. This is the production guarantee the direct call cannot observe.
   const res = await rawActionRequest(app, ACTION_REL, 'leak', []);
   assert.equal(res.status, 500);
   const text = await res.text();
   const payload = JSON.parse(text);
-  assert.equal(payload.error, 'boom message', 'prod exposes only the author message');
+  assert.equal(payload.error, 'Internal server error', 'prod returns a generic message, not the raw throw');
+  assert.ok(typeof payload.digest === 'string' && payload.digest.length >= 6, 'prod returns a correlation digest');
   assert.equal(payload.stack, undefined, 'prod NEVER sends the stack');
+  assert.ok(!/boom message/.test(text), 'the raw thrown message is not leaked');
   assert.ok(!/hunter2|secretField|DB_PASSWORD/.test(text), 'no secret field leaks over the wire');
 });

@@ -196,7 +196,7 @@ export async function* streamTokens(n: number) {
 for await (const chunk of await streamTokens(8)) {
   this.text.set(this.text.get() + chunk);
 }</pre>
-    <p>Each chunk is rich-serialized as it is yielded (back-pressure is respected, and the source generator is cancelled on a client disconnect or a superseded render). Detection is purely on the return value, so there is no config export. A streamed result is never cached, ETagged, or seeded; a mutation still emits <code>X-Webjs-Invalidate</code>. A mid-stream throw surfaces as an error from the iterable (the production message only, since the 200 status is already sent).</p>
+    <p>Each chunk is rich-serialized as it is yielded (back-pressure is respected, and the source generator is cancelled on a client disconnect or a superseded render). Detection is purely on the return value, so there is no config export. A streamed result is never cached, ETagged, or seeded; a mutation still emits <code>X-Webjs-Invalidate</code>. A mid-stream throw surfaces as an error from the iterable, sanitized the same way as a buffered throw (a generic message + a digest in production, never the raw message, since the 200 status is already sent).</p>
 
     <h3>Cancellation</h3>
     <p>An action reads the request's <code>AbortSignal</code> via <code>actionSignal()</code> (from <code>@webjsdev/server</code>) to stop work on a client disconnect or abort. On the client, a superseded <code>async render()</code> automatically ABORTS the previous render's in-flight action fetch, so a fast-typing user does not pile up stale requests. Outside an action, <code>actionSignal()</code> returns a never-aborting signal, so a direct server-to-server call stays safe.</p>
@@ -325,7 +325,7 @@ export async function createPost(input: unknown): Promise&lt;ActionResult&lt;Pos
     <p>When a server action throws (rather than returning an error envelope), webjs catches the exception and returns a JSON error response:</p>
     <ul>
       <li><strong>Development:</strong> the response includes both the error message and the full stack trace, making debugging easy.</li>
-      <li><strong>Production:</strong> only the error message is included. Stack traces are never sent to the client. If the thrown error has no message, a generic "Internal server error" is returned. The full error is always logged server-side.</li>
+      <li><strong>Production:</strong> the client gets a generic <code>"Internal server error"</code> message plus a short <code>digest</code>, never the raw thrown message (a DB-driver message, an internal IP, or a file path is not author-controlled) and never the stack. The full error is logged server-side keyed by the same digest, so a client report maps to the server log. A <code>redirect()</code> / <code>notFound()</code> control-flow throw passes through. To show the user a specific message, return an <code>ActionResult</code> <code>{ success: false, error }</code> envelope instead of throwing.</li>
     </ul>
     <p>This prevents accidental leakage of file paths, database schemas, or other implementation details to end users.</p>
 

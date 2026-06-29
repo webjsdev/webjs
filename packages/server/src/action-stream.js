@@ -21,6 +21,7 @@
  */
 import { encodeFrame, FRAME_CHUNK, FRAME_END, FRAME_ERROR, STREAM_CONTENT_TYPE } from '@webjsdev/core';
 import { getSerializer } from './serializer.js';
+import { isControlFlowThrow, errorDigest, GENERIC_ERROR_MESSAGE } from './action-error.js';
 
 /**
  * Whether an action's return value should stream over the RPC wire rather than
@@ -73,11 +74,11 @@ function toAsyncIterator(source) {
  * iterator, stopping a server generator.
  *
  * @param {any} source the streamable action return value
- * @param {{ signal?: AbortSignal, onError?: (e: unknown) => void, headers?: Record<string,string> }} [opts]
+ * @param {{ signal?: AbortSignal, onError?: (e: unknown) => void, headers?: Record<string,string>, dev?: boolean }} [opts]
  * @returns {Response}
  */
 export function streamActionResponse(source, opts = {}) {
-  const { signal, onError, headers } = opts;
+  const { signal, onError, headers, dev } = opts;
   const s = getSerializer();
   const enc = new TextEncoder();
   const iter = toAsyncIterator(source);
@@ -125,8 +126,23 @@ export function streamActionResponse(source, opts = {}) {
         // like the buffered error path, then ship the author-controlled message
         // on the frame channel (the status is already 200, mid-stream).
         if (typeof onError === 'function') { try { onError(e); } catch {} }
-        console.error('[webjs] streaming action threw:', e);
-        const msg = e instanceof Error && e.message ? e.message : 'Internal server error';
+        // Sanitize like the buffered path (#749): dev ships the real message,
+        // prod ships a generic message + correlation digest (logged with the
+        // full error), never the raw message. A redirect()/notFound() sentinel
+        // passes through. The status is already 200 here, so the error rides the
+        // frame channel; the client stub throws Error(frame text).
+        let msg;
+        if (dev) {
+          msg = e instanceof Error && e.message ? e.message : GENERIC_ERROR_MESSAGE;
+          console.error('[webjs] streaming action threw:', e);
+        } else if (isControlFlowThrow(e)) {
+          msg = e instanceof Error ? e.message : String(e);
+          console.error('[webjs] streaming action threw:', e);
+        } else {
+          const digest = await errorDigest(e);
+          msg = `${GENERIC_ERROR_MESSAGE} [digest=${digest}]`;
+          console.error(`[webjs] streaming action threw [digest=${digest}]:`, e);
+        }
         try { controller.enqueue(encodeFrame(FRAME_ERROR, enc.encode(msg))); } catch {}
         await releaseSource(e);
         detach();
