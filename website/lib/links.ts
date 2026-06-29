@@ -12,7 +12,7 @@ import { html } from '@webjsdev/core';
  */
 const env = (globalThis as any).process?.env ?? {};
 
-export const DOCS_URL = env.DOCS_URL || 'https://docs.webjs.com';
+export const DOCS_URL = env.DOCS_URL || 'https://docs.webjs.dev';
 export const UI_URL = env.UI_URL || 'https://ui.webjs.dev';
 // EXAMPLE_BLOG_URL points at the live example-blog app (a real webjs app), surfaced as
 // the "Demo" nav link.
