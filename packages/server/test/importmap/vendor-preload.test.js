@@ -286,6 +286,41 @@ test('a vendor imported ONLY by an elided (display-only) component is NOT preloa
   await setCoreInstall(CORE_DIR, true);
 });
 
+test('a dropped page\'s SSR-only RELATIVE HELPER vendor is NOT preloaded (#754 round-2)', async () => {
+  // Round-2 finding: the walk reached a dropped page's relative helper, whose
+  // vendor was collected even though the helper never ships. An inert page
+  // imports `./fmt.js` (a pure SSR helper) which imports dayjs as a binding; the
+  // page module is dropped, so neither fmt.js nor dayjs ships. dayjs must NOT be
+  // preloaded, EVEN THOUGH it stays in the app-wide importmap (the helper's bare
+  // import is scanned regardless of the dropped page), which is what makes this
+  // the walk-roots fix and not importmap pruning.
+  const appDir = makeApp({
+    pin: { imports: { dayjs: DAYJS_URL }, integrity: { [DAYJS_URL]: DAYJS_INTEGRITY } },
+  });
+  writeFileSync(
+    join(appDir, 'app', 'fmt.js'),
+    `import dayjs from 'dayjs';\nexport const fmt = () => typeof dayjs;\n`,
+  );
+  writeFileSync(
+    join(appDir, 'app', 'page.js'),
+    `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+    `import { fmt } from './fmt.js';\n` +
+    `export default () => html\`<main>built (\${fmt()})</main>\`;\n`,
+  );
+  const app = await createRequestHandler({ appDir, dev: false });
+  await app.warmup();
+  const html = await (await app.handle(new Request('http://x/'))).text();
+  // Precondition: dayjs stays in the app-wide importmap (the helper's import is
+  // scanned), so excluding it from the preload set is the fix, not importmap pruning.
+  assert.ok(/"dayjs"/.test(html), 'dayjs is in the app-wide importmap (helper import scanned)');
+  // Precondition: the inert page module is dropped from the boot.
+  assert.ok(!modulepreloadLinks(html).some((l) => l.includes('/app/page.js')), 'the inert page is dropped');
+  // The fix: the SSR-only helper's vendor is NOT preloaded.
+  assert.ok(!modulepreloadLinks(html).some((l) => l.includes('dayjs')),
+    'a dropped page\'s SSR-only relative-helper vendor is NOT preloaded (no over-fetch)');
+  await setCoreInstall(CORE_DIR, true);
+});
+
 test('import-only page: skipping the dropped page module does NOT drop its shipping component\'s vendor (no under-fetch)', async () => {
   // The under-fetch guard for the round-1 fix: an IMPORT-ONLY page imports its
   // interactive widget (which ships and imports dayjs) AND imports dayjs itself

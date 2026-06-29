@@ -191,18 +191,21 @@ export async function ssrPage(route, params, url, opts) {
     );
     // Vendor modulepreload (#754): flatten the npm CDN waterfall by hinting the
     // vendor URLs the page's SHIPPED modules actually import, fetched in parallel
-    // instead of discovered level by level. Reachability mirrors the preload walk
-    // (entries + components + their non-elided closure), so an elided/unused
-    // vendor is never preloaded (no over-fetch).
+    // instead of discovered level by level. The walk roots are the BOOT's shipped
+    // module set (`moduleUrls`, which already drops inert page/layout modules and
+    // substitutes an import-only page with its components) plus the rendered
+    // components, so a vendor reached ONLY through a dropped module (a page's
+    // SSR-only direct import OR its SSR-only relative helper) is never preloaded
+    // (no over-fetch).
+    const shippedRoots = moduleUrls.map((u) =>
+      resolve(opts.appDir, u.startsWith('/') ? u.slice(1) : u));
     const vendorPreloads = vendorPreloadTargets(
       reachedVendorSpecifiers(
         opts.moduleGraph,
-        [route.file, ...route.layouts],
+        shippedRoots,
         eagerComponents,
         opts.appDir,
         opts.elidableComponents,
-        inert,
-        importOnly,
         opts.serverFiles,
       ),
     );
@@ -1533,43 +1536,40 @@ function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFiles, appD
 
 /**
  * Collect the bare npm vendor specifiers the page's SHIPPED modules import
- * (#754). Reachability mirrors the `moduleUrls` boot builder + `deduplicatedPreloads`:
- * the entry (page + layout) files THAT ACTUALLY SHIP, plus the rendered component
- * files, plus their transitive app-graph closure, with elidable components (and
- * the subtree reachable only through them) and server files excluded. The
- * returned specifiers are resolved to `modulepreload` targets via the vendor
- * importmap; a specifier not in the map (unpinned / unreached) drops out there,
- * so the set is conservative (no over-fetch).
+ * (#754). The walk ROOTS are the boot's actually-shipped module set: the caller
+ * passes `entryFiles` = the absolute paths of `moduleUrls` (which already drops
+ * inert page/layout modules and substitutes an import-only page with its
+ * components), plus `componentUrls` = the rendered components. From those roots
+ * it walks the transitive app-graph closure (elidable components and the subtree
+ * reachable only through them excluded), and collects each reached file's bare
+ * imports, excluding server files. The specifiers are resolved to `modulepreload`
+ * targets via the vendor importmap; a specifier not in the map (unpinned /
+ * unreached) drops out there.
  *
- * Critically, a page/layout whose MODULE is dropped from the boot does NOT
- * contribute its bare imports: an INERT module ships nothing, and an IMPORT-ONLY
- * module is dropped in favour of its components (which arrive via `componentUrls`).
- * So a binding vendor import used ONLY during SSR in a dropped page (the canonical
- * SSR-only-dependency pattern, which elision keeps off the client) is never
- * preloaded. Without this filter such a vendor would be fetched cross-origin for
- * nothing.
+ * Because the roots are the SHIPPED set, a vendor reached ONLY through a module
+ * dropped from the boot, whether a dropped page's SSR-only DIRECT vendor import
+ * or its SSR-only RELATIVE HELPER's vendor, is never collected: the dropped
+ * module is not a root, and nothing that ships imports it (pages/layouts are not
+ * importable). So the canonical SSR-only-dependency pattern (which elision keeps
+ * off the client) is never preloaded (no over-fetch).
  *
  * @param {import('./module-graph.js').ModuleGraph | undefined} graph
- * @param {string[]} entryFiles  absolute page + layout paths
+ * @param {string[]} entryFiles  absolute paths of the SHIPPED page/layout modules (from `moduleUrls`)
  * @param {string[]} componentUrls  rendered eager component URL paths
  * @param {string} appDir
  * @param {Set<string>} [elidableComponents]
- * @param {Set<string>} [inert]  page/layout modules dropped from the boot (#605)
- * @param {Map<string, unknown>} [importOnly]  page/layout modules emitted as their components (#605)
  * @param {Set<string>} [serverFiles]  the action / server-file index (`'use server'`, incl. no-`.server.` files)
  * @returns {Set<string>}
  */
-function reachedVendorSpecifiers(graph, entryFiles, componentUrls, appDir, elidableComponents, inert, importOnly, serverFiles) {
+function reachedVendorSpecifiers(graph, entryFiles, componentUrls, appDir, elidableComponents, serverFiles) {
   /** @type {Set<string>} */
   const specs = new Set();
   if (!graph) return specs;
   const bare = bareImports(graph);
   if (!bare.size) return specs;
-  // Walk the SAME reachable file set the preload walk uses (entries + component
-  // files + their non-elided transitive closure), keyed by the graph's own
-  // absolute paths, so reachability is reliable. Keeping the page/layout entry
-  // in the WALK is what reaches an import-only page's components (which ship);
-  // the per-file collection below then skips the dropped MODULE's own imports.
+  // Roots = the SHIPPED page/layout modules (already inert-dropped + import-only
+  // expanded by the caller) + the rendered components, keyed by the graph's own
+  // absolute paths. Walk their non-elided transitive closure.
   const allEntries = [...entryFiles];
   for (const url of componentUrls) {
     allEntries.push(resolve(appDir, url.startsWith('/') ? url.slice(1) : url));
@@ -1585,14 +1585,6 @@ function reachedVendorSpecifiers(graph, entryFiles, componentUrls, appDir, elida
     // `deduplicatedPreloads`' `byIndex` filter.
     if (/\.server\.m?[jt]s$/.test(file)) continue;
     if (serverFiles && serverFiles.has && serverFiles.has(file)) continue;
-    // A page/layout MODULE that is dropped from the boot ships nothing of its
-    // own: an INERT module is elided entirely, and an IMPORT-ONLY module is
-    // replaced by its components (already walked above). So a binding vendor
-    // import used ONLY during SSR in such a module is never fetched client-side
-    // and must NOT be preloaded (no over-fetch). The module's COMPONENTS still
-    // contribute, because they are separate files in `files` (not skipped here).
-    if (inert && inert.has(file)) continue;
-    if (importOnly && importOnly.has(file)) continue;
     const fileBare = bare.get(file);
     if (fileBare) for (const spec of fileBare) specs.add(spec);
   }
