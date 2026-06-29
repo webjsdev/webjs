@@ -111,9 +111,12 @@ export const MAX_SYNC_COMPRESS_BYTES = 256 * 1024;
 
 /**
  * Compress an already-buffered body synchronously, byte-for-byte identical to
- * the streaming `createCompressor` (same algorithm + params: brotli quality 4,
- * gzip / deflate level 6), so a buffered fast path and a streamed slow path
- * produce the same wire bytes across Node and Bun (#756). For a buffered body
+ * the streaming `createCompressor` ON THE SAME RUNTIME (same algorithm + params:
+ * brotli quality 4, gzip / deflate level 6, over the same `node:zlib`), so a
+ * buffered fast path and a streamed slow path produce the same wire bytes within
+ * a runtime (#756). Across runtimes the exact gzip / deflate bytes can differ
+ * (Bun's bundled zlib is not Node's build; brotli matches), which is fine since
+ * each response is self-describing via `content-encoding`. For a buffered body
  * (one that cannot error mid-stream) this skips the per-response
  * web -> node -> web stream bridge entirely. Returns null for an unknown / empty
  * encoding so the caller leaves the body uncompressed.

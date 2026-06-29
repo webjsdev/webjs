@@ -25,6 +25,7 @@ import { stringify } from '@webjsdev/core';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CORE = pathToFileURL(resolve(__dirname, '../../packages/core/index.js')).toString();
+const SERVER = pathToFileURL(resolve(__dirname, '../../packages/server/index.js')).toString();
 const runtime = process.versions.bun ? `bun ${process.versions.bun}` : `node ${process.versions.node}`;
 // A silent logger so the parity run does not spam request logs.
 const quiet = { info() {}, warn() {}, error() {}, debug() {} };
@@ -37,7 +38,12 @@ try {
   writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'parity', type: 'module', webjs: {} }));
   w('app/layout.ts', `import { html } from ${JSON.stringify(CORE)};\nexport default ({ children }: { children: unknown }) => html\`<!doctype html><html><head></head><body>\${children}</body></html>\`;\n`);
   w('app/page.ts', `import { html } from ${JSON.stringify(CORE)};\nexport default function Page() { return html\`<main><h1>hello listener</h1></main>\`; }\n`);
-  w('app/api/echo/route.ts', `export async function GET(req: Request) {\n  return Response.json({ ok: true, ip: req.headers.get('x-webjs-remote-ip') ? 'stamped' : 'missing' });\n}\nexport function WS(ws: any) {\n  ws.on('message', (m: any) => ws.send('echo:' + m));\n}\n`);
+  // Read the framework-trusted remote IP via `clientIp` (NOT the raw header):
+  // the node shell stamps `x-webjs-remote-ip` on the request, but the Bun shell
+  // stamps it OUT OF BAND via a WeakMap (#756, no per-request Request clone), so
+  // the header is intentionally absent on Bun and `clientIp` is the canonical
+  // cross-runtime accessor that reads whichever the runtime used.
+  w('app/api/echo/route.ts', `import { clientIp } from ${JSON.stringify(SERVER)};\nexport async function GET(req: Request) {\n  const ip = clientIp(req);\n  return Response.json({ ok: true, ip: ip && ip !== '_anon_' ? 'stamped' : 'missing' });\n}\nexport function WS(ws: any) {\n  ws.on('message', (m: any) => ws.send('echo:' + m));\n}\n`);
   // A server action, to exercise the Origin / Sec-Fetch-Site CSRF check (#659)
   // over the REAL socket on this runtime.
   const actionFile = join(dir, 'actions/ping.server.ts');
@@ -66,7 +72,8 @@ try {
   const crossSite = await fetch(actionUrl, { method: 'POST', headers: { ...ct, 'sec-fetch-site': 'cross-site', origin: 'https://evil.example' }, body });
   assert.equal(crossSite.status, 403, 'a cross-site action POST is rejected (403) over the socket');
 
-  // 2. route.ts GET with the framework-stamped remote IP.
+  // 2. route.ts GET reads the framework-trusted remote IP via clientIp (header on
+  //    node, out-of-band WeakMap on Bun, #756).
   const echo = await fetch(`${base}/api/echo`);
   assert.equal(echo.status, 200, 'route GET should be 200');
   const j = await echo.json();

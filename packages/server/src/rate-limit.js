@@ -125,6 +125,23 @@ function trustedRemoteIp(req) {
 }
 
 /**
+ * Carry the trusted remote IP from `src` to a freshly-rebuilt `dst` Request
+ * (#756). When the framework re-wraps a request (the page-action body rebuild in
+ * `page-action.js`), the out-of-band WeakMap key is a new object, so the trusted
+ * IP would be lost and `clientIp(dst)` would fall back to the (spoofable) header
+ * the rebuild copied over. Propagating the trusted value via the WeakMap keeps
+ * `dst` authoritative on BOTH runtimes (it reads `trustedRemoteIp(src)`, which is
+ * the WeakMap value on Bun and the framework-stamped header on Node). The caller
+ * must ALSO strip the inbound `x-webjs-remote-ip` header from `dst` so a client
+ * copy can never win. Idempotent and safe to call on any rebuild.
+ * @param {Request} src
+ * @param {Request} dst
+ */
+export function propagateTrustedRemoteIp(src, dst) {
+  setTrustedRemoteIp(dst, trustedRemoteIp(src));
+}
+
+/**
  * Resolve the client IP for rate-limit bucket keying.
  *
  * `trustProxy: false` (default, safe everywhere): read ONLY the

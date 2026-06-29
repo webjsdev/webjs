@@ -328,9 +328,15 @@ function stampRemoteIp(req, srv) {
  * (`Readable.from(peeked.stream)` -> `compressor` -> `Readable.toWeb`, driven by
  * `pipeline`; NOT `Readable.fromWeb`, which does not propagate a mid-stream
  * source error through `pipeline` on Bun, the #509 hang). The sync and streamed
- * outputs are byte-identical (same algo + params), so the node and Bun paths
- * stay byte-for-byte equal. Skips an already-encoded body and a non-compressible
- * media type (`isCompressible` already excludes `text/event-stream`).
+ * paths use the SAME algo + params, so WITHIN a runtime the buffered fast path
+ * and the streaming bridge produce identical bytes (a buffered body is not
+ * served differently from a streamed one). Across runtimes the exact bytes can
+ * differ for gzip / deflate (Bun's bundled zlib is not the same build as Node's,
+ * so the compressed output is not guaranteed identical, byte-for-byte; brotli
+ * does match), which is fine since each response is self-describing via
+ * `content-encoding` and a client just decodes it. Skips an already-encoded body
+ * and a non-compressible media type (`isCompressible` already excludes
+ * `text/event-stream`).
  * @param {Response} resp
  * @param {Request} req
  */
@@ -350,9 +356,10 @@ async function maybeCompress(resp, req) {
   // streamed body (Suspense, an action / route stream) WITHOUT buffering a real
   // stream. A buffered body cannot error mid-stream, so compress it synchronously
   // and skip the per-response web -> node -> web stream bridge entirely. The sync
-  // output is byte-identical to the streamed compressor (same algo + params), so
-  // the node (streaming) and Bun (sync-for-buffered) paths stay byte-for-byte
-  // identical. A streamed / oversized body falls through to the bridge below.
+  // path and the streaming bridge share the SAME algo + params, so within this
+  // runtime a buffered body and a streamed one compress identically (the wire is
+  // self-describing via content-encoding either way). A streamed / oversized body
+  // falls through to the bridge below.
   const peeked = await readBufferedOrStream(resp.body, MAX_SYNC_COMPRESS_BYTES);
   if (peeked.buffered !== undefined) {
     const out = compressBufferSync(encoding, peeked.buffered);
