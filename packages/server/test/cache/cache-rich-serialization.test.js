@@ -9,9 +9,26 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { cache } from '../../src/cache-fn.js';
-import { setStore, memoryStore } from '../../src/cache.js';
+import { setStore, memoryStore, getStore } from '../../src/cache.js';
 
 setStore(memoryStore());
+
+test('a pre-upgrade old-format (unversioned JSON) entry is NOT served stale', async () => {
+  // Before the fix, values were JSON at the unversioned key `cache:<prefix>`.
+  // Such an entry is still valid JSON, so parse() would accept it as a lossy
+  // value (a Date as a string) without recomputing. The version segment in the
+  // key (cache:<format>:<prefix>) makes the old entry a guaranteed miss.
+  const when = new Date('2023-03-04T05:06:07.000Z');
+  // Seed an old-format lossy entry at the legacy unversioned key.
+  await getStore().set('cache:legacy-date', JSON.stringify({ when }), 60000);
+  let calls = 0;
+  const fn = cache(async () => { calls++; return { when }; }, { key: 'legacy-date', ttl: 60 });
+
+  const r = await fn();
+  assert.equal(calls, 1, 'the legacy entry was a miss, so fn recomputed');
+  assert.ok(r.when instanceof Date, 'recomputed value is a real Date, not the legacy string');
+  assert.equal(r.when.getTime(), when.getTime());
+});
 
 test('Date survives a warm hit with identical shape (counterfactual: JSON would return a string)', async () => {
   const when = new Date('2024-01-02T03:04:05.678Z');
