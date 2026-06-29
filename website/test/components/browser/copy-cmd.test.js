@@ -23,6 +23,16 @@ const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 suite('copy-cmd', () => {
   let written;
   let restoreClipboard;
+  let gtagCalls;
+  let restoreGtag;
+
+  const stubGtag = () => {
+    gtagCalls = [];
+    const had = 'gtag' in window;
+    const prev = window.gtag;
+    window.gtag = (...args) => { gtagCalls.push(args); };
+    restoreGtag = () => { if (had) window.gtag = prev; else delete window.gtag; };
+  };
 
   const stubClipboard = () => {
     written = null;
@@ -46,8 +56,8 @@ suite('copy-cmd', () => {
     return el;
   };
 
-  setup(() => stubClipboard());
-  teardown(() => restoreClipboard && restoreClipboard());
+  setup(() => { stubClipboard(); stubGtag(); });
+  teardown(() => { restoreClipboard && restoreClipboard(); restoreGtag && restoreGtag(); });
 
   test('renders the slotted command and a copy affordance', async () => {
     const el = await mount('npm create webjs@latest my-app');
@@ -181,6 +191,42 @@ suite('copy-cmd', () => {
     assert.ok(el.querySelector('button rect'), 'copy icon stays (no flip) when the write is rejected');
     assert.equal(el.querySelector('button polyline'), null, 'no checkmark on a rejected write');
     assert.equal(el.querySelector('[role="status"]').textContent.trim(), '', 'the live region stays empty');
+    document.body.removeChild(el);
+  });
+
+  test('a successful copy fires a gtag copy_command event with the command', async () => {
+    const el = await mount('   npm create webjs@latest my-app   ');
+    el.querySelector('[data-copy-text]').click();
+    await tick(10);
+    await el.updateComplete;
+    const ev = gtagCalls.find((a) => a[0] === 'event' && a[1] === 'copy_command');
+    assert.ok(ev, 'a copy_command event was sent to gtag');
+    assert.equal(ev[2].command, 'npm create webjs@latest my-app', 'the trimmed command rides the event');
+    document.body.removeChild(el);
+  });
+
+  test('a rejected clipboard write fires no gtag event (counterfactual)', async () => {
+    navigator.clipboard.writeText = async () => { throw new Error('denied'); };
+    const el = await mount('npm create webjs@latest my-app');
+    el.querySelector('[data-copy-text]').click();
+    await tick(10);
+    await el.updateComplete;
+    assert.equal(
+      gtagCalls.filter((a) => a[1] === 'copy_command').length,
+      0,
+      'no copy_command event when the clipboard write failed',
+    );
+    document.body.removeChild(el);
+  });
+
+  test('a copy with gtag absent is a safe no-op (still copies, no throw)', async () => {
+    restoreGtag(); delete window.gtag; restoreGtag = null;
+    const el = await mount('npm create webjs@latest my-app');
+    el.querySelector('[data-copy-text]').click();
+    await tick(10);
+    await el.updateComplete;
+    assert.equal(written, 'npm create webjs@latest my-app', 'the copy still succeeds without gtag');
+    assert.ok(el.querySelector('button polyline'), 'icon still flips without gtag');
     document.body.removeChild(el);
   });
 

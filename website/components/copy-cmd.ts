@@ -51,6 +51,16 @@ export class CopyCmd extends WebComponent {
       this._copies.set(this._copies.get() + 1);
       if (this._resetTimer) clearTimeout(this._resetTimer);
       this._resetTimer = (setTimeout(() => this.copied.set(false), 1500) as unknown as number);
+      // Record install-intent. A copied command (almost always the
+      // `npm create webjs@latest` line) is the cleanest human-adoption
+      // signal we have, far more trustworthy than npm download counts.
+      // gtag is loaded by the root layout; optional-chain it so a blocked
+      // or absent tag is a silent no-op (consistent with the catch below).
+      (window as unknown as { gtag?: (...a: unknown[]) => void }).gtag?.(
+        'event',
+        'copy_command',
+        { command: text },
+      );
     } catch {
       // Clipboard API blocked (insecure context, perms denied). Fail
       // silently. The whole feature is progressive enhancement.
