@@ -65,7 +65,7 @@
  */
 import { WebComponent, html, unsafeHTML, prop } from '@webjsdev/core';
 import { ref, createRef } from '@webjsdev/core/directives';
-import { ensureId } from '../lib/utils.ts';
+import { ensureId, onBeforeCache } from '../lib/utils.ts';
 import { buttonClass } from './button.ts';
 
 // Wires a dialog panel's accessible name + description to its title /
@@ -197,16 +197,22 @@ export class UiDialog extends WebComponent({
     this.open = false;
   }
 
+  _disposeBeforeCache?: () => void;
+
   connectedCallback(): void {
     installStyles();
     // Legacy <ui-dialog-overlay> isn't supported anymore; the native
     // ::backdrop pseudo replaces it. Strip it if a stale doc uses it.
     this.querySelector<HTMLElement>(':scope > ui-dialog-overlay')?.remove();
     super.connectedCallback?.();
+    // Close before a back/forward snapshot: a modal restored half-open (the
+    // `open` attr without the native showModal top-layer state) is broken (#766).
+    this._disposeBeforeCache = onBeforeCache(() => { this.open = false; });
   }
 
   disconnectedCallback(): void {
     if (this.open) this._teardown();
+    this._disposeBeforeCache?.();
     super.disconnectedCallback?.();
   }
 

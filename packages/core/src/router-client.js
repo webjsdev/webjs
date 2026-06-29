@@ -765,6 +765,14 @@ const snapshotCache = new Map();
  */
 function snapshotCurrent(url) {
   const key = cacheKey(url);
+  // Let components and app code strip transient state (open overlays, toasts,
+  // in-progress wizard steps) from the page BEFORE it is serialized into the
+  // back/forward cache, so a later popstate restore shows a clean page rather
+  // than, say, a hover-card frozen open (#766, Turbo's `before-cache` contract).
+  // Fires SYNCHRONOUSLY on the live DOM right before the outerHTML read, so a
+  // handler's mutations are captured; the live edits are invisible because the
+  // page is being navigated away from.
+  document.dispatchEvent(new CustomEvent('webjs:before-cache', { detail: { url } }));
   // Move-to-front for LRU.
   if (snapshotCache.has(key)) snapshotCache.delete(key);
   /** @type {Snapshot} */

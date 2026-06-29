@@ -44,6 +44,7 @@
  * Design tokens used: --popover, --popover-foreground, --border, --radius.
  */
 import { WebComponent, html, repeat, unsafeHTML, signal, prop } from '@webjsdev/core';
+import { onBeforeCache } from '../lib/utils.ts';
 
 type ToastType = 'default' | 'success' | 'error' | 'info' | 'warning' | 'loading';
 
@@ -154,9 +155,23 @@ export class UiSonner extends WebComponent({
 }) {
   items = signal<ToastItem[]>([]);
 
+  _disposeBeforeCache?: () => void;
+
   constructor() {
     super();
     this.position = 'bottom-right';
+  }
+
+  connectedCallback(): void {
+    super.connectedCallback?.();
+    // Clear pending toasts before a back/forward snapshot so a restored page
+    // does not show stale toasts that should have auto-dismissed (#766).
+    this._disposeBeforeCache = onBeforeCache(() => this.items.set([]));
+  }
+
+  disconnectedCallback(): void {
+    this._disposeBeforeCache?.();
+    super.disconnectedCallback?.();
   }
 
   // Routing the global toast() function to this viewport. Runs in

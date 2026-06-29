@@ -642,6 +642,28 @@ document.addEventListener('webjs:prefetch', (e) => {
 });
 ```
 
+### `webjs:before-cache` (strip transient state before a back/forward snapshot)
+
+The router keeps a URL-keyed snapshot cache (Turbo's SnapshotCache pattern) so
+Back/Forward restores instantly. Because a snapshot is a raw `outerHTML` clone of
+the live page, anything OPEN at navigate-away time (a hover-card, a dropdown, a
+toast) is captured open and **restored open** on Forward. To prevent that, the
+router dispatches `webjs:before-cache` on `document` **synchronously, on the page
+being cached, immediately before the `outerHTML` read** (detail `{ url }`). A
+handler's DOM mutations are captured in the snapshot; the live edits are
+invisible because the page is being navigated away from (Turbo's
+`turbo:before-cache` contract). Reset transient state here:
+
+```ts
+document.addEventListener('webjs:before-cache', () => {
+  document.querySelectorAll('[data-transient]').forEach((el) => el.remove());
+  // close open menus, clear in-progress toasts, reset a wizard step, ...
+});
+```
+
+The kit's overlays (hover-card, tooltip, dropdown-menu, dialog, alert-dialog,
+sonner) already listen and reset their open state, so they come back closed.
+
 ### View Transitions (opt-in, all three swap paths)
 
 The router can wrap a client navigation's DOM mutation in the native

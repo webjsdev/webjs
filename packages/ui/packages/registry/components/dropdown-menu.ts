@@ -78,7 +78,7 @@
  * --accent-foreground, --destructive, --muted-foreground, --border.
  */
 import { WebComponent, html, unsafeHTML, signal, prop } from '@webjsdev/core';
-import { ensureId } from '../lib/utils.ts';
+import { ensureId, onBeforeCache } from '../lib/utils.ts';
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
 // --------------------------------------------------------------------------
@@ -135,8 +135,11 @@ export class UiDropdownMenu extends WebComponent({
     this.open = false;
   }
 
+  _disposeBeforeCache?: () => void;
+
   disconnectedCallback(): void {
     if (this.open) this._teardown();
+    this._disposeBeforeCache?.();
     super.disconnectedCallback?.();
   }
 
@@ -165,6 +168,9 @@ export class UiDropdownMenu extends WebComponent({
     if (typeof requestAnimationFrame === 'function') {
       requestAnimationFrame(() => this._wireAria());
     }
+    // Close (and tear down) before a back/forward snapshot so the menu does not
+    // restore open (#766). Closing the root also hides any open submenu.
+    this._disposeBeforeCache = onBeforeCache(() => { this.open = false; });
   }
 
   _afterRender(): void {
