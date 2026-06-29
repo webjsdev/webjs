@@ -164,6 +164,9 @@ export default function RootLayout({ children }: { children: unknown }) {
         --accent-tint:   color-mix(in oklch, var(--accent-live) 14%, transparent);
         --logo-from:     oklch(0.63 0.17 50);
         --logo-to:       oklch(0.44 0.11 52);
+        --accent-text:    var(--accent);
+        --accent-surface: color-mix(in oklch, var(--accent-live) 12%, transparent);
+        --accent-border:  color-mix(in oklch, var(--accent-live) 28%, transparent);
         --glow-strength: 0.16;
         --font-display: 'Inter Tight', 'Inter', system-ui, -apple-system, sans-serif;
         --font-sans:    'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -180,7 +183,7 @@ export default function RootLayout({ children }: { children: unknown }) {
           --fg: oklch(0.96 0 0); --fg-muted: oklch(0.74 0 0); --fg-subtle: oklch(0.62 0 0);
           --bg: oklch(0 0 0); --bg-elev: oklch(0.135 0 0); --bg-subtle: oklch(0.09 0 0); --bg-sunken: oklch(0 0 0);
           --border: oklch(0.32 0 0 / 0.9); --border-strong: oklch(0.44 0 0 / 0.92);
-          --accent: oklch(0.71 0.19 42); --accent-hover: oklch(0.76 0.19 42); --accent-fg: oklch(0.16 0.02 42); --logo-from: oklch(0.8 0.17 55); --logo-to: oklch(0.6 0.2 38);
+          --accent: oklch(0.7 0.16 52); --accent-hover: oklch(0.75 0.16 52); --accent-fg: oklch(0.17 0.02 52); --logo-from: oklch(0.8 0.16 58); --logo-to: oklch(0.62 0.18 44);
           --glow-strength: 0;
           --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.4);
           --shadow: 0 10px 40px oklch(0 0 0 / 0.5), 0 2px 6px oklch(0 0 0 / 0.35);
@@ -192,7 +195,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         --fg: oklch(0.96 0 0); --fg-muted: oklch(0.74 0 0); --fg-subtle: oklch(0.62 0 0);
         --bg: oklch(0 0 0); --bg-elev: oklch(0.135 0 0); --bg-subtle: oklch(0.09 0 0); --bg-sunken: oklch(0 0 0);
         --border: oklch(0.32 0 0 / 0.9); --border-strong: oklch(0.44 0 0 / 0.92);
-        --accent: oklch(0.71 0.19 42); --accent-hover: oklch(0.76 0.19 42); --accent-fg: oklch(0.16 0.02 42); --logo-from: oklch(0.8 0.17 55); --logo-to: oklch(0.6 0.2 38);
+        --accent: oklch(0.7 0.16 52); --accent-hover: oklch(0.75 0.16 52); --accent-fg: oklch(0.17 0.02 52); --logo-from: oklch(0.8 0.16 58); --logo-to: oklch(0.62 0.18 44);
         --glow-strength: 0;
         --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.4);
         --shadow: 0 10px 40px oklch(0 0 0 / 0.5), 0 2px 6px oklch(0 0 0 / 0.35);
@@ -202,7 +205,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
       }
       html, body { margin: 0; }
-      :root { --header-h: 88px; } /* #610 fixed banner+header offset, kept exact by the script above */
+      :root { --header-h: 59px; } /* #610 fixed header offset (no banner); kept exact by the script above */
       body {
         padding-top: var(--header-h);
         background: var(--bg); color: var(--fg);
