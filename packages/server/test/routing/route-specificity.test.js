@@ -33,7 +33,7 @@ test('a static segment outranks a dynamic one at the same position', async () =>
   assert.equal(m.route.routeDir, '[user]/settings', 'the static-tail route wins over the all-dynamic one');
 });
 
-test('explicit static beats an optional catch-all base, and catch-all is last', async () => {
+test('explicit static beats an optional catch-all base; the root catch-all is the fallback', async () => {
   const dir = await scaffold([
     'app/docs/page.js',
     'app/docs/[[...slug]]/page.js',
@@ -45,6 +45,50 @@ test('explicit static beats an optional catch-all base, and catch-all is last', 
   assert.equal(matchPage(table, '/docs/intro').route.routeDir, 'docs/intro', 'explicit static beats the catch-all');
   assert.equal(matchPage(table, '/docs/a/b').route.routeDir, 'docs/[[...slug]]', 'the scoped catch-all takes the deep path');
   assert.equal(matchPage(table, '/random').route.routeDir, '[...all]', 'the root catch-all takes the leftover');
+});
+
+test('a literal-prefixed catch-all outranks an all-dynamic route (specificity is positional, not catch-all-last)', async () => {
+  // The catch-all kind is the lowest priority AT ITS POSITION, not a global
+  // "always last" bucket: a literal first segment (`docs`) outranks a dynamic
+  // one (`[org]`), so `/docs/x` must resolve to the scoped catch-all, NOT bind
+  // org=docs, repo=x on the all-dynamic route.
+  const dir = await scaffold([
+    'app/[org]/[repo]/page.js',
+    'app/docs/[[...slug]]/page.js',
+  ]);
+  const table = await buildRouteTable(dir);
+  assert.equal(matchPage(table, '/docs/x').route.routeDir, 'docs/[[...slug]]', 'literal-prefixed catch-all wins over all-dynamic');
+  assert.equal(matchPage(table, '/docs').route.routeDir, 'docs/[[...slug]]', 'the optional catch-all also takes /docs');
+  const acme = matchPage(table, '/acme/repo');
+  assert.equal(acme.route.routeDir, '[org]/[repo]', 'an unrelated 2-seg path still hits the all-dynamic route');
+  assert.deepEqual(acme.params, { org: 'acme', repo: 'repo' }, 'and binds its params');
+});
+
+test('counterfactual: a global catch-all-last rule would shadow the literal-prefixed catch-all', () => {
+  // The OLD coarse score bucketed every catch-all to 3 globally, so
+  // `docs/[[...slug]]` (a catch-all) lost to `[org]/[repo]` (not a catch-all)
+  // regardless of the literal `docs` prefix. The new positional comparator must
+  // rank the literal-prefixed catch-all FIRST.
+  const globalCatchAllLast = (r) => (r.isCatchAll ? 3 : (/\[/.test(r.routeDir) ? 2 : 1));
+  const literalCatchAll = { routeDir: 'docs/[[...slug]]', isCatchAll: true };
+  const allDynamic = { routeDir: '[org]/[repo]', isCatchAll: false };
+  assert.ok(globalCatchAllLast(literalCatchAll) > globalCatchAllLast(allDynamic), 'the old rule wrongly ranked the catch-all last');
+  assert.ok(compareSpecificity(literalCatchAll, allDynamic) < 0, 'the new comparator ranks the literal-prefixed catch-all first');
+});
+
+test('route groups and private folders do not affect specificity', () => {
+  // `(group)` and `_private` segments are not URL segments, so they must be
+  // stripped before comparing: a grouped/nested-private route sorts identically
+  // to its bare URL-segment equivalent.
+  const grouped = { routeDir: '(marketing)/[id]', isCatchAll: false };
+  const bare = { routeDir: '[id]', isCatchAll: false };
+  assert.equal(compareSpecificity(grouped, bare), grouped.routeDir < bare.routeDir ? -1 : 1,
+    'grouped [id] ties bare [id] on specificity, falling to the alphabetical routeDir key only');
+  // A static-tail grouped route still outranks an all-dynamic one positionally.
+  const groupedStatic = { routeDir: '(app)/_internal/users/settings', isCatchAll: false };
+  const allDynamic = { routeDir: '[a]/[b]', isCatchAll: false };
+  assert.ok(compareSpecificity(groupedStatic, allDynamic) < 0,
+    'users/settings (static after stripping the group + private) beats [a]/[b]');
 });
 
 test('ordering is deterministic regardless of input order (no fs-walk dependence)', () => {

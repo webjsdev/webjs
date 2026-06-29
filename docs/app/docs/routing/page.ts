@@ -219,11 +219,16 @@ export default function FilesPage({ params }: { params: { path: string } }) {
 }</pre>
 
     <p>
-      Route precedence is positional and deterministic. Segment by segment, a static
-      literal outranks a dynamic <code>[param]</code>, which outranks a catch-all, and a
-      catch-all route is always matched last. So <code>/[user]/settings</code> (a static
-      tail) correctly wins over <code>/[org]/[repo]</code> for <code>/acme/settings</code>,
-      and you can safely mix static, dynamic, and catch-all routes. A genuine tie between
+      Route precedence is positional and deterministic, the same model as Next.js.
+      Segment by segment, a static literal outranks a dynamic <code>[param]</code>, which
+      outranks a catch-all, so the catch-all kind is the lowest priority
+      <strong>at its position</strong>, not a blanket "always last" rule. So
+      <code>/[user]/settings</code> (a static tail) correctly wins over
+      <code>/[org]/[repo]</code> for <code>/acme/settings</code>, and
+      <code>/docs/[[...slug]]</code> (a literal first segment) correctly wins over
+      <code>/[org]/[repo]</code> for <code>/docs/x</code> even though it ends in a
+      catch-all. An explicit <code>/docs</code> still beats the optional-catch-all base
+      <code>/docs/[[...slug]]</code> for <code>/docs</code> itself. A genuine tie between
       two equally specific routes resolves by a stable alphabetical key, never by file
       order, so the match is the same across machines and deploys.
     </p>
@@ -624,7 +629,7 @@ export default function Loading() {
     <ul>
       <li><strong>1. Static file</strong>: if a file exists in the project's public/static directory, it is served directly.</li>
       <li><strong>2. API route</strong>: <code>route.ts</code> handlers are matched against the URL. WebSocket upgrades also match here.</li>
-      <li><strong>3. Page route</strong>: <code>page.ts</code> files are matched by positional specificity (a static segment beats a dynamic one beats a catch-all, segment by segment; catch-all last), with ties broken by a stable alphabetical key rather than file order.</li>
+      <li><strong>3. Page route</strong>: <code>page.ts</code> files are matched by positional specificity (segment by segment, a static segment beats a dynamic one beats a catch-all, so the catch-all kind is lowest at its position rather than blanket-last), with ties broken by a stable alphabetical key rather than file order.</li>
       <li><strong>4. Not found</strong>: if nothing matches, <code>not-found.ts</code> is rendered with a <code>404</code> status.</li>
     </ul>
 

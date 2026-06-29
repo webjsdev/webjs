@@ -219,28 +219,39 @@ function urlSegmentsOf(routeDir) {
  * 3-bucket score (static=1 / dynamic=2 / catch-all=3) whose same-bucket ties
  * resolved by filesystem walk order, so two overlapping dynamic routes
  * (`/[org]/[repo]` vs `/[user]/settings`) could match the WRONG page depending
- * on traversal order. The contract, most specific first:
- *   1. A catch-all route (`[...x]` / `[[...x]]`) is always LEAST specific.
- *   2. Otherwise compare segment by segment: a static literal outranks a
- *      dynamic `[x]` at the same position (so `/[user]/settings` beats
- *      `/[org]/[repo]`).
- *   3. With an identical kind prefix, more segments rank first (more
- *      constraints); anchored non-overlapping patterns are order-independent
- *      anyway, so this only makes the order stable.
- *   4. A genuine tie (identical kinds + length, e.g. `/[a]/[b]` vs `/[c]/[d]`)
+ * on traversal order. Specificity is fully POSITIONAL, like Next.js's router:
+ * compare segment by segment, and the catch-all kind is just the lowest-priority
+ * kind AT ITS POSITION, NOT a global "always last" bucket. The contract, most
+ * specific first:
+ *   1. Compare segment by segment: at the same position a static literal (kind 0)
+ *      outranks a dynamic `[x]` (kind 1), which outranks a catch-all
+ *      `[...x]` / `[[...x]]` (kind 2). So `/[user]/settings` beats `/[org]/[repo]`
+ *      (static tail wins), AND `/docs/[[...slug]]` beats `/[org]/[repo]` (a
+ *      literal first segment outranks a dynamic one, even though the former ends
+ *      in a catch-all). A global catch-all-last rule would wrongly shadow the
+ *      literal-prefixed catch-all behind every all-dynamic route.
+ *   2. With an identical kind prefix, the SHORTER (prefix) route ranks first, so
+ *      an explicit `/docs` beats the optional-catch-all base `/docs/[[...slug]]`
+ *      for `/docs` (the optional catch-all also matches zero trailing segments,
+ *      so the shorter exact route is the more specific match). Standard
+ *      lexicographic order on the kind arrays.
+ *   3. A genuine tie (identical kinds + length, e.g. `/[a]/[b]` vs `/[c]/[d]`)
  *      resolves by an alphabetical `routeDir` key, NOT walk order, so the match
  *      is deterministic across environments.
+ *
+ * The result is a valid total order (lexicographic on kind arrays with a unique
+ * final tiebreak), so `Array.sort` is correct and deterministic regardless of
+ * the filesystem traversal order.
  * @param {PageRoute} a
  * @param {PageRoute} b
  * @returns {number}
  */
 export function compareSpecificity(a, b) {
-  if (a.isCatchAll !== b.isCatchAll) return a.isCatchAll ? 1 : -1;
   const sa = urlSegmentsOf(a.routeDir).map(segKind);
   const sb = urlSegmentsOf(b.routeDir).map(segKind);
   const n = Math.min(sa.length, sb.length);
   for (let i = 0; i < n; i++) if (sa[i] !== sb[i]) return sa[i] - sb[i];
-  if (sa.length !== sb.length) return sb.length - sa.length;
+  if (sa.length !== sb.length) return sa.length - sb.length; // shorter (prefix) first
   return a.routeDir < b.routeDir ? -1 : a.routeDir > b.routeDir ? 1 : 0;
 }
 
