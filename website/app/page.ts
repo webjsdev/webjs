@@ -179,7 +179,7 @@ export default function LandingPage() {
           </div>
         </div>
         <div class="flex flex-wrap gap-[10px] justify-center mt-8">
-          ${PE_CHIPS.map(c => html`<span class="font-mono font-semibold text-[11px] leading-none tracking-[0.04em] uppercase text-[var(--accent-text)] px-[14px] py-[9px] rounded-full border border-[var(--accent-border)] bg-[var(--accent-surface)] backdrop-blur-sm shadow-[var(--shadow-sm)] hover:border-[var(--accent)] transition-all duration-[140ms]">${c}</span>`)}
+          ${PE_CHIPS.map(c => html`<span class="font-mono font-semibold text-[11px] leading-none tracking-[0.04em] uppercase text-fg px-[14px] py-[9px] rounded-full border border-border bg-bg-elev/40 backdrop-blur-sm shadow-[var(--shadow-sm)] hover:border-border-strong hover:bg-bg-subtle transition-all duration-[140ms]">${c}</span>`)}
         </div>
       </div>
     </section>
@@ -292,7 +292,7 @@ export default function LandingPage() {
         <div class="grid gap-px bg-border grid-cols-1 min-[560px]:grid-cols-2 min-[900px]:grid-cols-4 rounded-2xl border border-border overflow-hidden shadow-[var(--shadow-sm)]">
           ${STATS.map(s => html`
             <div class="p-8 text-center bg-bg-elev hover:bg-[color-mix(in_oklch,var(--bg-elev)_92%,var(--fg))] transition-colors">
-              <div class="font-display font-extrabold leading-none tracking-[-0.03em] text-[clamp(1.9rem,1.3rem+1.6vw,2.7rem)] text-[var(--accent-text)]">${s.big}</div>
+              <div class="font-display font-extrabold leading-none tracking-[-0.03em] text-[clamp(1.9rem,1.3rem+1.6vw,2.7rem)] text-fg">${s.big}</div>
               <div class="mt-3 font-semibold text-[0.95rem]">${s.label}</div>
               <p class="mt-1.5 m-0 text-[13px] leading-[1.55] text-fg-muted">${s.sub}</p>
             </div>
