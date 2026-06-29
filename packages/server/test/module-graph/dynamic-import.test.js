@@ -124,6 +124,25 @@ test('a computed dynamic import is not captured (stays out)', async () => {
   assert.ok(!dyn.get(host), 'a computed specifier yields no dynamic edge');
 });
 
+test('the import-attributes form is captured; a computed concat is not', async () => {
+  const dir = await makeApp({
+    'components/host.ts': `export const load = {
+      data: () => import('./data.json', { with: { type: 'json' } }),
+      page: (name) => import('./pages/' + name + '.ts'),
+    };`,
+    'components/data.json': `{"x":1}`,
+    'components/pages/a.ts': `export const a = 1;`,
+  });
+  const graph = await buildModuleGraph(dir);
+  const host = join(dir, 'components/host.ts');
+  const dyn = dynamicEdges(graph);
+  assert.ok(dyn.get(host)?.has(join(dir, 'components/data.json')),
+    'import-attributes (with {type:json}) string-literal target is a dynamic edge');
+  // The computed `'./pages/' + name` cannot be resolved statically.
+  assert.ok(![...(dyn.get(host) || [])].some((d) => d.includes('pages')),
+    'a computed concat specifier is not captured');
+});
+
 test('a dynamic import written inside an html template literal is not an edge', async () => {
   const dir = await makeApp({
     'components/host.ts': `import { html } from '@webjsdev/core';

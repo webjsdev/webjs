@@ -111,8 +111,14 @@ const EXPORT_FROM_RE = /\bexport\b[^'";]+?\sfrom\s+['"]([^'"]+)['"]/g;
  * matches `import` immediately or with whitespace before the `(`, so the two
  * never overlap. `m.index` is the `import` keyword start, so the same
  * redaction-mask guard (keyword-in-code-position) applies.
+ *
+ * The specifier may be followed by `)` OR `,` so the import-attributes form
+ * `import('./data.json', { with: { type: 'json' } })` (a JSON / CSS module
+ * import) is captured too. A computed specifier still falls out: in
+ * `import('./pages/' + name)` the char after the closing quote is `+`, neither
+ * `,` nor `)`, so it does not match.
  */
-const DYNAMIC_IMPORT_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+const DYNAMIC_IMPORT_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*[,)]/g;
 
 /**
  * @typedef {Map<string, Set<string>>} ModuleGraph
