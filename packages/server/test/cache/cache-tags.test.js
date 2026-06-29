@@ -16,7 +16,8 @@ test('cache() with tags stores the tag -> key index', async () => {
   const raw = await store.get('cache:tag:posts');
   assert.ok(raw, 'tag index entry exists');
   const keys = JSON.parse(raw);
-  assert.deepEqual(keys, ['cache:tag-index']);
+  // The recorded cache key carries the value-format version segment.
+  assert.deepEqual(keys, ['cache:r1:tag-index']);
 });
 
 test('revalidateTag evicts every cached key under that tag (cross-module)', async () => {

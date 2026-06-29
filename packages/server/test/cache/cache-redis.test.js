@@ -89,3 +89,21 @@ test('redisStore: operations reuse the same client across calls', async () => {
   assert.equal(await s.get('a'), '1');
   assert.equal(await s.get('b'), '2');
 });
+
+test('cache() over redisStore preserves a Date on a warm hit (#748)', async () => {
+  const { cache } = await import('../../src/cache-fn.js');
+  const { setStore, memoryStore } = await import('../../src/cache.js');
+  setStore(redisStore({ url: 'redis://rich' }));
+  try {
+    const when = new Date('2022-09-10T11:12:13.000Z');
+    let calls = 0;
+    const fn = cache(async () => { calls++; return { when }; }, { key: 'redis-rich-date', ttl: 60 });
+    await fn();              // cold miss, stored as the rich string
+    const hit = await fn();  // warm hit, decoded from redis
+    assert.equal(calls, 1);
+    assert.ok(hit.when instanceof Date, 'Date survives the redis round-trip');
+    assert.equal(hit.when.getTime(), when.getTime());
+  } finally {
+    setStore(memoryStore());
+  }
+});

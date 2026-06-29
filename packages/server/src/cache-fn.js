@@ -23,8 +23,20 @@
  * @module cache-fn
  */
 
+import { stringify, parse } from '@webjsdev/core';
 import { getStore } from './cache.js';
 import { addKeyToTags } from './cache-tags.js';
+
+// Cache value/key encoding version. Entries written by an older encoding used
+// a DIFFERENT key namespace, so a reader never deserializes them with the new
+// format. Before this segment existed, values were JSON and keys were the
+// unversioned `cache:<prefix>`; a JSON-format entry is still valid JSON that
+// `parse` would silently accept as a lossy value (a Date as a string) without
+// recomputing, so the version segment forces those pre-upgrade entries to miss
+// and expire by their own TTL instead of being served stale. Bump it whenever
+// the value/key encoding changes. Distinct from the `cache:tag:` tag-index
+// namespace in cache-tags.js.
+const CACHE_FORMAT = 'r1';
 
 /**
  * Wrap an async function with server-side caching.
@@ -70,17 +82,28 @@ export function cache(fn, opts) {
   const wrapped = /** @type {T & { invalidate: () => Promise<void> }} */ (
     async function (...args) {
       const store = getStore();
+      // Both the key fingerprint and the stored value go through the same
+      // rich serializer the RPC wire uses (@webjsdev/core stringify/parse),
+      // NOT JSON. JSON collapses Date to a string and Map/Set to {} / [], so
+      // (a) a cached value would change shape between a cold miss (the real
+      // value) and a warm hit (the lossy JSON value), and (b) two distinct
+      // Map/Set args would collide to the same key. Going through core's
+      // serializer makes a hit byte-faithful to a miss and keys collision-safe.
+      // We use core stringify/parse DIRECTLY rather than getSerializer() so the
+      // cache preserves full fidelity even when an app swaps the wire format to
+      // a lossy one (e.g. plain JSON); cache fidelity is a storage concern, not
+      // a wire concern.
       const cacheKey = args.length
-        ? `cache:${prefix}:${JSON.stringify(args)}`
-        : `cache:${prefix}`;
+        ? `cache:${CACHE_FORMAT}:${prefix}:${await stringify(args)}`
+        : `cache:${CACHE_FORMAT}:${prefix}`;
 
       const hit = await store.get(cacheKey);
       if (hit !== null) {
-        try { return JSON.parse(hit); } catch { /* corrupted: recompute */ }
+        try { return parse(hit); } catch { /* corrupted: recompute */ }
       }
 
       const result = await fn(...args);
-      await store.set(cacheKey, JSON.stringify(result), ttlMs);
+      await store.set(cacheKey, await stringify(result), ttlMs);
       // Record tag -> cacheKey in the thin tag index so a later
       // revalidateTag can find and evict this entry (including
       // arg-specific keys the no-args invalidate() cannot reach).
@@ -115,7 +138,7 @@ export function cache(fn, opts) {
   wrapped.invalidate = async function () {
     const store = getStore();
     // Delete the base key (no-args call)
-    await store.delete(`cache:${prefix}`);
+    await store.delete(`cache:${CACHE_FORMAT}:${prefix}`);
     // Note: arg-specific keys are not tracked. If the cached function
     // is called with different arguments, those entries expire via TTL.
     // For full invalidation of arg-specific keys, use a short TTL.

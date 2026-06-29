@@ -52,8 +52,10 @@ test('a corrupted stored entry recomputes instead of throwing', async () => {
   let calls = 0;
   const f = cache(async () => { calls++; return { ok: true }; }, { key: 'corrupt', ttl: 60 });
   assert.deepEqual(await f(), { ok: true }); // calls = 1, stores valid JSON
-  // Corrupt the stored value out from under the cache.
-  await getStore().set('cache:corrupt', '{not valid json', 60000);
+  // Corrupt the stored value out from under the cache. The key carries the
+  // value-format version segment (cache:<format>:<prefix>), so this targets
+  // the same key the cache reads.
+  await getStore().set('cache:r1:corrupt', '{not valid json', 60000);
   assert.deepEqual(await f(), { ok: true }, 'a non-JSON entry must trigger recompute, not throw');
   assert.equal(calls, 2, 'the corrupted read recomputed');
 });
