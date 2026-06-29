@@ -24,7 +24,13 @@ export function isTemplate(x) {
 }
 
 /**
- * Marker used in the DOM to find hydration points.
- * Same marker emitted by server and client so hydration can align.
+ * Marker used in the DOM to find hydration points. It is interpolated into
+ * BOTH comment markers (`<!--${MARKER}0-->`) and part-sentinel ATTRIBUTE names
+ * (`data-${MARKER}0`), so it MUST contain only characters valid in an XML
+ * qualified name. A `$` (the original value `'w$'`) is NOT valid in an
+ * attribute name: most engines tolerate it, but iOS WebKit's `setAttribute`
+ * enforces the spec and throws `InvalidCharacterError: Invalid qualified name`,
+ * which crashed `createInstance` for every slot template on iOS (#730). Keep it
+ * to `[a-z][a-z0-9-]*`. Enforced by `test/rendering/marker-valid-attr-name.test.js`.
  */
-export const MARKER = 'w$';
+export const MARKER = 'wjm-';
