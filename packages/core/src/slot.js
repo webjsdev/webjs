@@ -436,7 +436,7 @@ export function attachSlotObservers(host) {
       // Skip records produced by the framework's own renderer. Each
       // top-level TemplateInstance commit (`createInstance`) and each
       // child-part template swap (`applyChildPart`) inserts and removes
-      // its content as a unit bounded by `w$s`/`w$e` comment markers
+      // its content as a unit bounded by `wjm-s`/`wjm-e` comment markers
       // (see render-client.js). When such a record reaches the host's
       // childList observer, treating its addedNodes as authored
       // children pollutes assignedByName with the renderer's own

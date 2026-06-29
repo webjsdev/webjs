@@ -27,7 +27,13 @@ const assert = {
 function normalize(s) {
   return String(s)
     .replace(/<!--webjs-hydrate-->/g, '')
+    // Strip lit-html-style part markers the live client render leaves in the
+    // DOM but the clean SSR string does not have. The marker name was renamed
+    // from `w$` to `wjm-` in #744 (a `$` is invalid in an XML qualified name,
+    // which broke slot components on iOS); strip both forms so this comparison
+    // stays marker-agnostic. New form: <!--wjm-s-->, <!--wjm-e-->, <!--wjm-N-->.
     .replace(/<!--\/?w\$[^>]*-->/g, '')
+    .replace(/<!--\/?wjm-[^>]*-->/g, '')
     .replace(/\s+data-webjs-prop-[a-z0-9-]+="[^"]*"/g, '')
     .replace(/=""/g, '')
     .replace(/>\s+</g, '><')
