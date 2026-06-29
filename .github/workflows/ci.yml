@@ -249,15 +249,44 @@ jobs:
       # under a Chromium iPhone context (faithful touch events, no real device).
       - name: Run ui touch e2e
         run: npm run test:e2e:touch --workspace=@webjsdev/ui
-      # Cross-runtime e2e (#523): re-run the SAME suite under node --test (its
-      # node:test hook lifecycle does not survive `bun test`) but with the blog
-      # SERVED on Bun (WEBJS_E2E_RUNTIME=bun spawns the blog under the bun binary).
-      # This proves the Bun.serve shell + Drizzle-on-Bun in a real browser. The few
-      # node-only assertions (SSR seeding, #472/#488) and the #528-blocked abort
-      # test skip themselves on Bun.
+
+  # Cross-runtime e2e (#523), split into its OWN job (#774) so it runs in
+  # PARALLEL with the Node-served e2e above instead of as a trailing step
+  # (which serialized the two and ~doubled the e2e critical path). Re-runs the
+  # SAME suite under node --test (its node:test hook lifecycle does not survive
+  # `bun test`) but with the blog SERVED on Bun (WEBJS_E2E_RUNTIME=bun spawns
+  # the blog under the bun binary), proving the Bun.serve shell + Drizzle-on-Bun
+  # in a real browser. The few node-only assertions (SSR seeding, #472/#488) and
+  # the #528-blocked abort test skip themselves on Bun.
+  #
+  # NOTE: the required-status-check gate on `main` is the Node job above
+  # ("E2E (Puppeteer against the blog example)"); this Bun job is an additional
+  # parallel signal. To also gate merges on it, add its name to
+  # branches/main/protection required_status_checks (admin op, see
+  # scripts/protect-main.sh).
+  e2e-bun:
+    name: E2E (blog served on Bun)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Install Chromium for Puppeteer
+        run: npx playwright install --with-deps chromium
+      - name: Resolve the Chromium binary path
+        run: echo "CHROMIUM_PATH=$(node -e "console.log(require('playwright-core').chromium.executablePath())")" >> "$GITHUB_ENV"
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+      - name: Prepare the blog example database
+        working-directory: examples/blog
+        run: |
+          cp .env.example .env
+          npm run db:migrate
+          npm run db:seed
       - name: Run e2e with the blog served on Bun
         env:
           WEBJS_E2E: '1'
