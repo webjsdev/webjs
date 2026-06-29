@@ -59,9 +59,16 @@ export default {
   ],
   nodeResolve: true,
   plugins: [stripTypesPlugin()],
-  browsers: [
-    playwrightLauncher({ product: 'chromium' }),
-  ],
+  // Run the browser suite on all three engines Playwright ships (#774).
+  // Chromium alone left WebKit-only repaint/layout bugs (the iOS sticky-header
+  // class behind #610) uncaught in CI; webjs avoids browser-specific APIs so the
+  // same tests run on each. WTR runs the browsers concurrently, and an engine
+  // can be narrowed for a fast local loop with WEBJS_BROWSERS, e.g.
+  // `WEBJS_BROWSERS=chromium npx wtr`.
+  browsers: (process.env.WEBJS_BROWSERS
+    ? process.env.WEBJS_BROWSERS.split(',').map((s) => s.trim()).filter(Boolean)
+    : ['chromium', 'firefox', 'webkit']
+  ).map((product) => playwrightLauncher({ product })),
   testFramework: {
     config: {
       ui: 'tdd',
