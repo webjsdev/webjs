@@ -175,11 +175,11 @@ export default function RootLayout({ children }: { children: unknown }) {
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme='light']) {
           --heart: oklch(0.74 0.18 6);
-          --fg: oklch(0.95 0.012 70); --fg-muted: oklch(0.74 0.02 65); --fg-subtle: oklch(0.66 0.02 60);
-          --bg: oklch(0.155 0.012 55); --bg-elev: oklch(0.20 0.014 55); --bg-subtle: oklch(0.18 0.013 55); --bg-sunken: oklch(0.12 0.01 55);
-          --border: oklch(0.30 0.016 58 / 0.85); --border-strong: oklch(0.42 0.018 58 / 0.9);
-          --accent: oklch(0.74 0.15 55); --accent-hover: oklch(0.82 0.15 55); --accent-fg: oklch(0.16 0.02 55);
-          --glow-strength: 0.32;
+          --fg: oklch(0.96 0 0); --fg-muted: oklch(0.74 0 0); --fg-subtle: oklch(0.62 0 0);
+          --bg: oklch(0 0 0); --bg-elev: oklch(0.135 0 0); --bg-subtle: oklch(0.09 0 0); --bg-sunken: oklch(0 0 0);
+          --border: oklch(0.32 0 0 / 0.9); --border-strong: oklch(0.44 0 0 / 0.92);
+          --accent: oklch(0.55 0.16 52); --accent-hover: oklch(0.5 0.16 52); --accent-fg: oklch(1 0 0);
+          --glow-strength: 0;
           --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.4);
           --shadow: 0 10px 40px oklch(0 0 0 / 0.5), 0 2px 6px oklch(0 0 0 / 0.35);
         }
@@ -187,11 +187,11 @@ export default function RootLayout({ children }: { children: unknown }) {
       :root[data-theme='dark'] {
         color-scheme: dark;
         --heart: oklch(0.74 0.18 6);
-        --fg: oklch(0.95 0.012 70); --fg-muted: oklch(0.74 0.02 65); --fg-subtle: oklch(0.66 0.02 60);
-        --bg: oklch(0.155 0.012 55); --bg-elev: oklch(0.20 0.014 55); --bg-subtle: oklch(0.18 0.013 55); --bg-sunken: oklch(0.12 0.01 55);
-        --border: oklch(0.30 0.016 58 / 0.85); --border-strong: oklch(0.42 0.018 58 / 0.9);
-        --accent: oklch(0.74 0.15 55); --accent-hover: oklch(0.82 0.15 55); --accent-fg: oklch(0.16 0.02 55);
-        --glow-strength: 0.32;
+        --fg: oklch(0.96 0 0); --fg-muted: oklch(0.74 0 0); --fg-subtle: oklch(0.62 0 0);
+        --bg: oklch(0 0 0); --bg-elev: oklch(0.135 0 0); --bg-subtle: oklch(0.09 0 0); --bg-sunken: oklch(0 0 0);
+        --border: oklch(0.32 0 0 / 0.9); --border-strong: oklch(0.44 0 0 / 0.92);
+        --accent: oklch(0.55 0.16 52); --accent-hover: oklch(0.5 0.16 52); --accent-fg: oklch(1 0 0);
+        --glow-strength: 0;
         --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.4);
         --shadow: 0 10px 40px oklch(0 0 0 / 0.5), 0 2px 6px oklch(0 0 0 / 0.35);
       }
@@ -254,24 +254,20 @@ export default function RootLayout({ children }: { children: unknown }) {
     <div class="glow-layer" aria-hidden="true"></div>
 
     <div class="site-top fixed inset-x-0 top-0 z-20">
-    <div class="relative z-[3] text-center font-medium text-[13px] leading-[1.4] py-[9px] px-4 border-b border-border site-top-banner">
-      <span class="font-mono font-bold text-[10px] leading-none tracking-[0.12em] uppercase text-accent-hover bg-bg-elev rounded-full px-2 py-[3px] mr-2 align-middle">New</span>
-      <a href=${UI_URL} target="_blank" rel="noopener noreferrer" class="text-accent-hover font-semibold no-underline hover:underline">Introducing the webjs component library <span aria-hidden="true">&rarr;</span>${NEW_TAB}</a>
-    </div>
-
     <header class="backdrop-blur-md bg-[color-mix(in_oklch,var(--color-bg)_78%,transparent)] border-b border-border">
-      <div class="max-w-[1080px] mx-auto px-6 py-[13px] flex items-center gap-4">
-        <a class="mr-auto inline-flex items-center gap-[9px] no-underline text-fg font-display font-extrabold text-[17px] leading-none tracking-[-0.02em]" href="/">
-          <span class="w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-accent-live to-[color-mix(in_oklch,var(--accent-live)_55%,var(--fg))] shadow-[0_2px_10px_var(--accent-tint)]"></span>
+      <div class="max-w-[1240px] mx-auto px-6 py-[11px] flex items-center justify-between gap-4">
+        <a class="inline-flex items-center gap-[9px] no-underline text-fg font-display font-extrabold text-[17px] leading-none tracking-[-0.02em] shrink-0" href="/">
+          <span class="w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-accent-live to-[color-mix(in_oklch,var(--accent-live)_55%,oklch(0.20_0.018_60))] shadow-[0_2px_10px_var(--accent-tint)]"></span>
           webjs
         </a>
 
-        <nav class="hidden md:flex items-center gap-0.5" aria-label="Primary">
+        <nav class="hidden md:flex items-center gap-0.5 justify-center flex-1 mx-4" aria-label="Primary">
           ${NAV.map(n => html`<a class=${navLink} href=${n.href} target=${n.ext ? '_blank' : '_self'} rel=${n.ext ? 'noopener noreferrer' : ''}>${n.label}${n.ext ? NEW_TAB : ''}</a>`)}
         </nav>
 
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2.5 shrink-0">
           <theme-toggle></theme-toggle>
+
           <details class="mobile-menu relative md:hidden">
             <summary class="cursor-pointer w-[38px] h-[38px] inline-flex items-center justify-center rounded-[9px] text-fg-muted hover:bg-bg-subtle hover:text-fg" aria-label="Toggle navigation">
               <svg class="open-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>

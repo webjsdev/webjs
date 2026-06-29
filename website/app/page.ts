@@ -20,9 +20,6 @@ import { highlight } from '#lib/highlight.ts';
 // win for <title> but leave og:/twitter: showing the layout's title, splitting
 // the canonical share target's name across the tab and the social card).
 
-// Reusable warm-gradient text (matches the hero headline accent word).
-const GRADTEXT = 'bg-[linear-gradient(105deg,var(--accent),color-mix(in_oklch,var(--accent-live)_72%,var(--fg)))] bg-clip-text text-transparent';
-
 // Framework-weight stats. Measured: gzipped production browser bundle,
 // npm package metadata, and framework source line counts. Kept honest
 // and comparative against a Next.js app's first-load JS (react + react-dom
@@ -31,7 +28,7 @@ const GRADTEXT = 'bg-[linear-gradient(105deg,var(--accent),color-mix(in_oklch,va
 const STATS = [
   { big: '~29 KB', label: 'Client runtime, gzipped', sub: 'A minimal Next.js client bundle is ~99 KB gzipped including React. webjs is self-sufficient at ~29 KB, 3.4x lighter on the wire.' },
   { big: '0 build', label: 'Instant agent loops', sub: 'No compilation, no bundler. Agents edit, run tests, and verify in the browser in milliseconds.' },
-  { big: 'Standards', label: 'Web components', sub: 'Models write components reliably because they target standard-aligned Web Component lifecycles.' },
+  { big: '100%', label: 'Web standards', sub: 'Standard-aligned Web Component lifecycles, so models write components reliably.' },
   { big: '~16k', label: 'LLM-context friendly', sub: 'Under 6.5k lines of client runtime, ~16k for the whole stack, small enough to fit an LLM context window.' },
 ];
 
@@ -69,7 +66,7 @@ const WIN = 'flex flex-col flex-1 m-0 min-w-0 max-w-full rounded-2xl overflow-hi
 const WINBAR = 'flex items-center gap-[7px] px-[14px] py-[10px] border-b border-border bg-[color-mix(in_oklch,var(--color-bg-sunken)_60%,var(--color-bg-elev))]';
 const WINNAME = 'ml-2 font-mono font-medium text-[12px] leading-none text-fg-subtle';
 const DOTS = html`<span class="w-[11px] h-[11px] rounded-full bg-[#ff5f57]"></span><span class="w-[11px] h-[11px] rounded-full bg-[#febc2e]"></span><span class="w-[11px] h-[11px] rounded-full bg-[#28c840]"></span>`;
-const KICKER = 'inline-flex flex-wrap justify-center gap-[10px] font-mono font-semibold text-[12px] leading-[1.4] tracking-[0.18em] uppercase text-accent';
+const KICKER = 'inline-flex flex-wrap justify-center gap-[10px] font-mono font-semibold text-[12px] leading-[1.4] tracking-[0.18em] uppercase text-fg-subtle';
 const BTN = 'inline-flex items-center gap-2 px-[22px] py-[13px] rounded-full font-semibold text-[15px] leading-none no-underline border cursor-pointer transition-all duration-[140ms]';
 const INSTALL = 'flex items-center gap-2 w-fit max-w-full mx-auto px-[18px] py-[14px] text-left font-mono text-sm leading-[1.6] text-fg-muted rounded-2xl border border-border bg-[color-mix(in_oklch,var(--color-bg-sunken)_70%,transparent)] backdrop-blur-sm shadow-[var(--shadow-sm)]';
 
@@ -136,18 +133,13 @@ export default function LandingPage() {
 
     <main id="main" tabindex="-1" class="focus:outline-none">
     <section class="text-center px-6 pt-[clamp(48px,7vw,96px)] pb-10 md:pb-18">
-      <div class=${KICKER}>
-        <span>Web standards</span><span class="text-fg-subtle">/</span>
-        <span>No build</span><span class="text-fg-subtle">/</span>
-        <span>Node &amp; Bun</span>
-      </div>
-      <h1 class="font-display font-extrabold text-display leading-[1.04] tracking-[-0.035em] mx-auto mt-6 mb-4 max-w-[15ch] text-balance">
-        The web framework for <span class=${GRADTEXT}>AI agents</span>
+      <h1 class="font-display font-extrabold text-display leading-[1.04] tracking-[-0.035em] mx-auto mt-2 mb-4 max-w-[15ch] text-balance">
+        The web framework for AI agents
       </h1>
       <p class="text-lede leading-[1.6] text-fg-muted max-w-[56ch] mx-auto mb-8 text-pretty">
         webjs is a full-stack framework built on web components, real SSR, and
-        progressive enhancement, with zero build step. A stack lean enough for
-        AI agents to read end to end. Runs on Node 24+ or Bun.
+        progressive enhancement, with zero build step. Standards that outlast
+        frameworks. Runs on Node 24+ or Bun.
       </p>
       <div class="flex gap-3 justify-center flex-wrap mb-8">
         <a class="${BTN} bg-accent text-accent-fg border-transparent shadow-[var(--shadow-glow)] hover:bg-accent-hover hover:-translate-y-0.5" href=${DOCS_URL + '/docs/getting-started'} target="_blank" rel="noopener noreferrer">
@@ -187,7 +179,7 @@ export default function LandingPage() {
           </div>
         </div>
         <div class="flex flex-wrap gap-[10px] justify-center mt-8">
-          ${PE_CHIPS.map(c => html`<span class="font-mono font-semibold text-[12px] leading-none tracking-[0.04em] uppercase text-accent-hover px-[14px] py-[9px] rounded-full border border-accent-tint bg-accent-tint">${c}</span>`)}
+          ${PE_CHIPS.map(c => html`<span class="font-mono font-semibold text-[11px] leading-none tracking-[0.04em] uppercase text-fg px-[14px] py-[9px] rounded-full border border-border bg-bg-elev/40 backdrop-blur-sm shadow-[var(--shadow-sm)] hover:border-border-strong hover:bg-bg-subtle transition-all duration-[140ms]">${c}</span>`)}
         </div>
       </div>
     </section>
@@ -221,7 +213,7 @@ export default function LandingPage() {
               <div class="flex items-center gap-1.5 text-fg-subtle mb-2 border-b border-[var(--editor-border)] pb-1.5 select-none">
                 <span class="w-2 h-2 rounded-full bg-[#28c840]"></span><span>bun dev</span>
               </div>
-              <div><span class="text-fg-subtle">$</span> bun run dev<br><span class="text-fg-subtle">Ready on http://localhost:5001</span><br><span class="text-accent">page.ts reloaded in 3ms</span></div>
+              <div><span class="text-fg-subtle">$</span> bun run dev<br><span class="text-fg-subtle">Ready on http://localhost:5001</span><br><span class="text-fg-muted">page.ts reloaded in 3ms</span></div>
             </div>
           </div>
 
@@ -246,7 +238,7 @@ export default function LandingPage() {
             </div>
             <div class="bg-[var(--editor-sidebar-bg)] border border-[var(--editor-border)] rounded-xl p-3.5 flex items-center justify-between text-[10px] font-mono select-none text-[var(--editor-fg)]">
               <div class="text-fg-subtle px-2 py-1 bg-[var(--editor-bg)] rounded border border-[var(--editor-border)]">Client</div>
-              <div class="flex-1 flex items-center justify-center relative"><span class="h-px bg-[var(--editor-border)] flex-1 mx-2"></span><span class="absolute text-[8px] bg-[var(--editor-sidebar-bg)] text-accent px-1 border border-[var(--editor-border)] rounded">RPC</span></div>
+              <div class="flex-1 flex items-center justify-center relative"><span class="h-px bg-[var(--editor-border)] flex-1 mx-2"></span><span class="absolute text-[8px] bg-[var(--editor-sidebar-bg)] text-fg-subtle px-1 border border-[var(--editor-border)] rounded">RPC</span></div>
               <div class="text-fg-subtle px-2 py-1 bg-[var(--editor-bg)] rounded border border-[var(--editor-border)]">Server action</div>
             </div>
           </div>
@@ -259,7 +251,7 @@ export default function LandingPage() {
             <div class="bg-[var(--editor-sidebar-bg)] border border-[var(--editor-border)] rounded-xl p-3.5 flex flex-col gap-2 text-[var(--editor-fg)]">
               <div class="h-3 w-1/3 bg-[var(--editor-border)] rounded"></div>
               <div class="h-8 w-full bg-[var(--editor-bg)] rounded border border-[var(--editor-border)] flex items-center px-3 gap-2 select-none">
-                <span class="w-1.5 h-1.5 rounded-full bg-accent"></span><span class="text-[9px] font-mono text-fg-subtle">streaming data chunk...</span>
+                <span class="w-1.5 h-1.5 rounded-full bg-fg-subtle"></span><span class="text-[9px] font-mono text-fg-subtle">streaming data chunk...</span>
               </div>
             </div>
           </div>
@@ -270,7 +262,7 @@ export default function LandingPage() {
               <p class="m-0 text-sm leading-[1.6] text-fg-muted">Real HTML first. Links navigate, forms submit, and pages read before JavaScript loads. No hydration overhead.</p>
             </div>
             <div class="bg-[var(--editor-sidebar-bg)] border border-[var(--editor-border)] rounded-xl p-3.5 flex flex-wrap gap-1.5 justify-center select-none text-[var(--editor-fg)]">
-              <span class="px-2 py-1 bg-accent-tint border border-accent-tint text-accent-hover text-[9px] font-mono rounded">No hydration lock</span>
+              <span class="px-2 py-1 bg-bg-subtle border border-border text-fg-muted text-[9px] font-mono rounded">No hydration lock</span>
               <span class="px-2 py-1 bg-[var(--editor-bg)] border border-[var(--editor-border)] text-fg-subtle text-[9px] font-mono rounded">Static elision</span>
             </div>
           </div>
@@ -281,8 +273,8 @@ export default function LandingPage() {
               <p class="m-0 text-sm leading-[1.6] text-fg-muted">Auth, sessions, cache, rate limits, and websockets are built right in. Pluggable adapters, zero glue.</p>
             </div>
             <div class="bg-[var(--editor-sidebar-bg)] border border-[var(--editor-border)] rounded-xl p-2.5 flex flex-col gap-1.5 font-mono text-[9px] text-[var(--editor-fg)] select-none">
-              <div class="flex justify-between items-center px-2 py-1 bg-[var(--editor-bg)] border border-[var(--editor-border)] rounded"><span>Auth &amp; sessions</span> <span class="text-accent">&check;</span></div>
-              <div class="flex justify-between items-center px-2 py-1 bg-[var(--editor-bg)] border border-[var(--editor-border)] rounded"><span>Rate limiting</span> <span class="text-accent">&check;</span></div>
+              <div class="flex justify-between items-center px-2 py-1 bg-[var(--editor-bg)] border border-[var(--editor-border)] rounded"><span>Auth &amp; sessions</span> <span class="text-fg-subtle">&check;</span></div>
+              <div class="flex justify-between items-center px-2 py-1 bg-[var(--editor-bg)] border border-[var(--editor-border)] rounded"><span>Rate limiting</span> <span class="text-fg-subtle">&check;</span></div>
             </div>
           </div>
 
@@ -297,10 +289,10 @@ export default function LandingPage() {
           <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">Light enough for AI</h2>
           <p class="text-fg-muted text-[1.05rem] leading-[1.6] m-0">A zero build step means the source you read is what runs. Because the framework ships without compilation layers, an AI agent can read and reason about the entire webjs source end to end, straight from node_modules.</p>
         </div>
-        <div class="grid gap-4 grid-cols-1 min-[560px]:grid-cols-2 min-[900px]:grid-cols-4">
+        <div class="grid gap-px bg-border grid-cols-1 min-[560px]:grid-cols-2 min-[900px]:grid-cols-4 rounded-2xl border border-border overflow-hidden shadow-[var(--shadow-sm)]">
           ${STATS.map(s => html`
-            <div class="p-6 text-center rounded-2xl border border-border bg-[color-mix(in_oklch,var(--color-bg-elev)_70%,transparent)] transition-[border-color,box-shadow] duration-[240ms] hover:border-border-strong hover:shadow-[var(--shadow)]">
-              <div class="font-display font-extrabold leading-none tracking-[-0.03em] text-[clamp(1.9rem,1.3rem+1.6vw,2.7rem)] ${GRADTEXT}">${s.big}</div>
+            <div class="p-8 text-center bg-bg-elev hover:bg-bg-subtle transition-colors">
+              <div class="font-display font-extrabold leading-none tracking-[-0.03em] text-[clamp(1.9rem,1.3rem+1.6vw,2.7rem)] text-fg">${s.big}</div>
               <div class="mt-3 font-semibold text-[0.95rem]">${s.label}</div>
               <p class="mt-1.5 m-0 text-[13px] leading-[1.55] text-fg-muted">${s.sub}</p>
             </div>
@@ -319,7 +311,7 @@ export default function LandingPage() {
         </div>
         <div class="grid gap-4 grid-cols-1 max-w-[560px] mx-auto min-[900px]:grid-cols-3 min-[900px]:max-w-none">
           <div class="flex flex-col gap-3 p-6 min-w-0 rounded-2xl border border-border bg-bg-elev">
-            <span class="font-mono font-semibold text-[10px] leading-none tracking-[0.16em] uppercase text-accent">Full-stack</span>
+            <span class="font-mono font-semibold text-[10px] leading-none tracking-[0.16em] uppercase text-fg-subtle">Full-stack</span>
             <h3 class="font-display font-bold text-[1.15rem] leading-[1.25] m-0">Pages + API + components</h3>
             <p class="m-0 text-[13.5px] leading-[1.6] text-fg-muted">SSR pages, web components, server actions, Drizzle, auth, and streaming. The default.</p>
             <pre class="scroll-thin m-0 px-[14px] py-3 overflow-x-auto rounded-[10px] border border-border bg-bg-sunken font-mono text-[12px] leading-[1.6] text-fg-muted" tabindex="0" aria-label="Example files">app/page.ts
@@ -328,7 +320,7 @@ actions/posts.server.ts</pre>
             <div class="cmd-foot pt-2 mt-auto font-mono text-[12.5px] leading-[1.6] text-fg-muted max-w-full min-w-0"><copy-cmd>npm create webjs@latest my-app</copy-cmd></div>
           </div>
           <div class="flex flex-col gap-3 p-6 min-w-0 rounded-2xl border border-border bg-bg-elev">
-            <span class="font-mono font-semibold text-[10px] leading-none tracking-[0.16em] uppercase text-accent">API only</span>
+            <span class="font-mono font-semibold text-[10px] leading-none tracking-[0.16em] uppercase text-fg-subtle">API only</span>
             <h3 class="font-display font-bold text-[1.15rem] leading-[1.25] m-0">Just route handlers</h3>
             <p class="m-0 text-[13.5px] leading-[1.6] text-fg-muted">Skip pages. File-based routing, middleware, rate limiting, and WebSockets. Zero frontend.</p>
             <pre class="scroll-thin m-0 px-[14px] py-3 overflow-x-auto rounded-[10px] border border-border bg-bg-sunken font-mono text-[12px] leading-[1.6] text-fg-muted" tabindex="0" aria-label="Example files">app/api/users/route.ts
@@ -337,7 +329,7 @@ middleware.ts</pre>
             <div class="cmd-foot pt-2 mt-auto font-mono text-[12.5px] leading-[1.6] text-fg-muted max-w-full min-w-0"><copy-cmd>npm create webjs@latest my-api -- --template api</copy-cmd></div>
           </div>
           <div class="flex flex-col gap-3 p-6 min-w-0 rounded-2xl border border-border bg-bg-elev">
-            <span class="font-mono font-semibold text-[10px] leading-none tracking-[0.16em] uppercase text-accent">SaaS</span>
+            <span class="font-mono font-semibold text-[10px] leading-none tracking-[0.16em] uppercase text-fg-subtle">SaaS</span>
             <h3 class="font-display font-bold text-[1.15rem] leading-[1.25] m-0">Auth + dashboard</h3>
             <p class="m-0 text-[13.5px] leading-[1.6] text-fg-muted">Login, signup, sessions, a protected dashboard, and a User model wired up out of the box.</p>
             <pre class="scroll-thin m-0 px-[14px] py-3 overflow-x-auto rounded-[10px] border border-border bg-bg-sunken font-mono text-[12px] leading-[1.6] text-fg-muted" tabindex="0" aria-label="Example files">app/(auth)/login/page.ts
@@ -352,8 +344,8 @@ lib/session.server.ts</pre>
 
     <section class="py-16 text-center" id="get-started">
       <div class="max-w-[1080px] mx-auto px-6">
-        <div class="max-w-[760px] mx-auto p-[clamp(32px,5vw,64px)] rounded-[22px] border border-border-strong bg-[color-mix(in_oklch,var(--accent-live)_7%,var(--color-bg-elev))] shadow-[var(--shadow-glow)]">
-          <h2 class="font-display font-extrabold text-h2 leading-[1.1] tracking-[-0.03em] mt-0 mb-3">Start building on the platform</h2>
+        <div class="max-w-[760px] mx-auto p-[clamp(32px,5vw,64px)] rounded-[22px] border border-border bg-bg-subtle shadow-[var(--shadow)]">
+          <h2 class="font-display font-extrabold text-h2 leading-[1.1] tracking-[-0.03em] mt-0 mb-3">Start building on web standards</h2>
           <p class="text-fg-muted mx-auto mb-8 max-w-[46ch]">Scaffold a full-stack app in one command, with pages, an API, components, and a database wired up.</p>
           <div class=${INSTALL}>
             <span class="text-accent select-none" aria-hidden="true">$</span><copy-cmd>npm create webjs@latest my-app</copy-cmd>
@@ -371,18 +363,37 @@ lib/session.server.ts</pre>
 
     </main>
 
-    <footer class="mt-16 border-t border-border py-12 px-6">
+    <footer class="mt-24 border-t border-border py-16 px-6 bg-bg-subtle/30">
       <div class="max-w-[1080px] mx-auto">
-        <nav class="flex md:hidden gap-4 flex-wrap justify-center" aria-label="Footer">
-          <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${GH_URL} target="_blank" rel="noopener noreferrer">GitHub${NEW_TAB}</a>
-          <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${DOCS_URL + '/docs/getting-started'} target="_blank" rel="noopener noreferrer">Docs${NEW_TAB}</a>
-          <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${UI_URL} target="_blank" rel="noopener noreferrer">UI${NEW_TAB}</a>
-          <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${EXAMPLE_BLOG_URL} target="_blank" rel="noopener noreferrer">Demo${NEW_TAB}</a>
-          <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href="/blog">Blog</a>
-          <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href="/changelog">Changelog</a>
+        <nav class="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12" aria-label="Footer">
+          <div class="flex flex-col gap-3">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-fg">Product</h4>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${DOCS_URL + '/docs/getting-started'} target="_blank" rel="noopener noreferrer">Docs${NEW_TAB}</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${UI_URL} target="_blank" rel="noopener noreferrer">UI components${NEW_TAB}</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="#templates">Templates</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${EXAMPLE_BLOG_URL} target="_blank" rel="noopener noreferrer">Showcase${NEW_TAB}</a>
+          </div>
+          <div class="flex flex-col gap-3">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-fg">Resources</h4>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/blog">Blog</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/changelog">Changelog</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${GH_URL + '/releases'} target="_blank" rel="noopener noreferrer">Releases${NEW_TAB}</a>
+          </div>
+          <div class="flex flex-col gap-3">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-fg">Community</h4>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${GH_URL} target="_blank" rel="noopener noreferrer">GitHub${NEW_TAB}</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${GH_URL + '/discussions'} target="_blank" rel="noopener noreferrer">Discussions${NEW_TAB}</a>
+          </div>
+          <div class="flex flex-col gap-3">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-fg">webjs</h4>
+            <p class="m-0 text-xs text-fg-muted leading-relaxed">The web framework for AI agents. Full-stack web components, real SSR, zero build step.</p>
+          </div>
         </nav>
+        <div class="pt-8 border-t border-border flex flex-col md:flex-row justify-between items-center gap-4 text-fg-subtle text-xs">
+          <div>&copy; 2026 webjs. All rights reserved.</div>
+          <div class="flex items-center gap-1">Built with webjs <svg class="heart" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div>
+        </div>
       </div>
-      <div class="w-full text-center mt-6 md:mt-0 text-fg-subtle text-sm">Built with webjs <svg class="heart" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div>
     </footer>
   `;
 }
