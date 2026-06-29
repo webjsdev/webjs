@@ -330,8 +330,9 @@ enforces:
 - **the wire serializer** (a `Date` / `Map` / `BigInt` arg or return is
   genuinely encoded + decoded, not passed by reference),
 - **CSRF** (a missing token is a 403),
-- **prod error sanitization** (a thrown error surfaces as a sanitized
-  message-only payload, never the stack or extra error fields).
+- **prod error sanitization** (#749: a thrown error surfaces as a GENERIC
+  message plus a correlation `digest`, never the raw message, stack, or extra
+  error fields; the thrown error carries `.digest`).
 
 So `invokeActionForTest` catches a serializer / CSRF / error-sanitization
 regression a direct import cannot see. For the negative cases (assert a 403 on

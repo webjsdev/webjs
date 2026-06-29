@@ -79,7 +79,7 @@ export default function Security() {
     <ol>
       <li>Authenticate every mutating endpoint (bearer or API key, an explicit CSRF scheme, or an origin allow-list). A <code>route.ts</code> REST endpoint is NOT CSRF-protected.</li>
       <li>Validate input with the <code>validate</code> config export (or the <code>route()</code> adapter's <code>validate</code> option). Never trust a merged <code>{...query, ...params, ...body}</code>.</li>
-      <li>Log responsibly. No user input or secrets in error messages (production responses are already sanitized to the message only, never the stack).</li>
+      <li>Log responsibly. No user input or secrets in error messages (in production a thrown server action returns a generic message plus a correlation digest, never the raw message or the stack; the full error is logged server-side).</li>
       <li>Configure CORS narrowly with the <code>cors()</code> middleware. A credentialed endpoint requires an explicit origin list, never <code>'*'</code>.</li>
       <li>Rate-limit at the edge with <code>rateLimit()</code>.</li>
     </ol>
