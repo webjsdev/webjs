@@ -113,6 +113,20 @@ export function render(value, container) {
       firstChild.remove();
     }
 
+    if (__D) {
+      // TEMP #730: capture the exact throw + stack frame for the probe.
+      try {
+        const inst = createInstance(tr, container);
+        host[INSTANCE] = inst;
+        __D.push('createInstance OK');
+      } catch (e) {
+        __D.push('THREW msg=' + (e && /** @type any */ (e).message));
+        __D.push('stack=' + (e && /** @type any */ (e).stack ? String(/** @type any */ (e).stack).split('\n').slice(0, 5).join(' || ') : 'none'));
+        throw e;
+      }
+      return;
+    }
+
     const inst = createInstance(tr, container);
     host[INSTANCE] = inst;
     return;
