@@ -200,8 +200,20 @@ export class UiHoverCardTrigger extends WebComponent {
     ><slot></slot></div>`;
   }
 
-  _onEnter = (): void => (this.closest('ui-hover-card') as UiHoverCard | null)?.show();
-  _onLeave = (): void => (this.closest('ui-hover-card') as UiHoverCard | null)?.hide();
+  // Hover/focus open + close are MOUSE affordances. On a no-hover (touch)
+  // device, iOS Safari still fires SYNTHETIC mouseenter/mouseleave (and
+  // focusin/focusout from the inner link) around a tap, which would otherwise
+  // immediately re-close a tap-opened card. Gate the hover handlers to pointer
+  // devices so on touch the card is driven only by the tap path (#745).
+  _noHover = (): boolean => !!window.matchMedia?.('(hover: none)').matches;
+  _onEnter = (): void => {
+    if (this._noHover()) return;
+    (this.closest('ui-hover-card') as UiHoverCard | null)?.show();
+  };
+  _onLeave = (): void => {
+    if (this._noHover()) return;
+    (this.closest('ui-hover-card') as UiHoverCard | null)?.hide();
+  };
 
   // Touch path. A touch device has no `mouseenter`, so a tap would fall
   // through to the inner `<a href>` and navigate (the card never opens). On a
@@ -238,7 +250,19 @@ export class UiHoverCardContent extends WebComponent {
     ><slot></slot></div>`;
   }
 
-  _onEnter = (): void => (this.closest('ui-hover-card') as UiHoverCard | null)?.show();
-  _onLeave = (): void => (this.closest('ui-hover-card') as UiHoverCard | null)?.hide();
+  // Hover/focus open + close are MOUSE affordances. On a no-hover (touch)
+  // device, iOS Safari still fires SYNTHETIC mouseenter/mouseleave (and
+  // focusin/focusout from the inner link) around a tap, which would otherwise
+  // immediately re-close a tap-opened card. Gate the hover handlers to pointer
+  // devices so on touch the card is driven only by the tap path (#745).
+  _noHover = (): boolean => !!window.matchMedia?.('(hover: none)').matches;
+  _onEnter = (): void => {
+    if (this._noHover()) return;
+    (this.closest('ui-hover-card') as UiHoverCard | null)?.show();
+  };
+  _onLeave = (): void => {
+    if (this._noHover()) return;
+    (this.closest('ui-hover-card') as UiHoverCard | null)?.hide();
+  };
 }
 UiHoverCardContent.register('ui-hover-card-content');
