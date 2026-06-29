@@ -346,6 +346,12 @@ async function maybeCompress(resp, req) {
   if (!isCompressible(resp.headers.get('content-type'))) return resp;
   const encoding = negotiateEncoding(req.headers.get('accept-encoding'));
   if (!encoding) return resp;
+  // Resolve the streaming compressor BEFORE peeking/locking the body, so a
+  // (defensive) null backend leaves `resp.body` untouched rather than returning
+  // a half-drained, locked Response. `encoding` is already one of br/gzip/deflate
+  // here, so this never fires in practice, but order matters for safety.
+  const compressor = createCompressor(encoding);
+  if (!compressor) return resp;
 
   const headers = new Headers(resp.headers);
   headers.set('content-encoding', encoding);
@@ -367,8 +373,6 @@ async function maybeCompress(resp, req) {
     return new Response(out, { status: resp.status, statusText: resp.statusText, headers });
   }
 
-  const compressor = createCompressor(encoding);
-  if (!compressor) return resp;
   headers.delete('content-length');
   // Feed the (peeked + drained) web body into the compressor through the reader
   // loop (NOT Readable.fromWeb, which does not propagate a mid-stream source

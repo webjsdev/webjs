@@ -86,6 +86,31 @@ test('readBufferedOrStream: an empty body is buffered (zero bytes)', async () =>
   assert.ok(r.buffered !== undefined && r.buffered.length === 0, 'empty buffered body');
 });
 
+test('readBufferedOrStream: a slow second chunk does NOT block classification (streaming TTFB, #756 review)', async () => {
+  // The regression this guards: classifying buffered-vs-streamed by awaiting the
+  // SECOND read would withhold a streamed body's first byte until its second
+  // chunk arrives (a Suspense boundary resolving), so a compressed streamed page
+  // on Bun would lose progressive first paint. Here the first chunk is immediate
+  // but the second is delayed; classification must return PROMPTLY as a stream.
+  const DELAY = 300;
+  const web = new ReadableStream({
+    start(c) { c.enqueue(new TextEncoder().encode('shell;')); }, // first byte: immediate
+    async pull(c) {
+      await new Promise((r) => setTimeout(r, DELAY)); // a far-off boundary
+      c.enqueue(new TextEncoder().encode('boundary;'));
+      c.close();
+    },
+  });
+  const t0 = Date.now();
+  const r = await readBufferedOrStream(web, MAX_SYNC_COMPRESS_BYTES);
+  const classifyMs = Date.now() - t0;
+  assert.ok(r.stream !== undefined, 'a slow-second-chunk body is classified as streamed, not buffered');
+  assert.ok(classifyMs < DELAY,
+    `classification returned in ${classifyMs}ms, before the ${DELAY}ms second chunk (did not block first paint)`);
+  // The full body still streams in order afterwards (no chunk lost in the handoff).
+  assert.equal((await collect(r.stream)).toString(), 'shell;boundary;', 'both chunks stream in order');
+});
+
 test('readBufferedOrStream: a mid-stream source error propagates through the replay stream (no hang)', async () => {
   const boom = new Error('source failed mid-stream');
   const web = new ReadableStream({

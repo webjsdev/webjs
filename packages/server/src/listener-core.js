@@ -205,17 +205,55 @@ async function* drainAfter(prefix, reader, pendingError) {
   }
 }
 
+/** Sentinel: the classifying second read has not settled within a macrotask, so
+ * the body is genuinely streaming and must not be withheld (#756). */
+const STREAM_PENDING = Symbol('webjs.stream-pending');
+
+/**
+ * Drain a reader for a STREAMED body whose classifying second read is still
+ * in flight (`secondP`, a settled-shape promise `{ r }` | `{ e }`). Yields the
+ * already-peeked `firstChunk`, then CONSUMES the in-flight second read (never
+ * issuing a duplicate `reader.read()`), then drains the rest. Same error +
+ * early-cancel teardown as `drainAfter` / `webStreamChunks` (the #509 fix).
+ * @param {Uint8Array} firstChunk
+ * @param {ReadableStreamDefaultReader} reader
+ * @param {Promise<{ r?: ReadableStreamReadResult<Uint8Array>, e?: unknown }>} secondP
+ */
+async function* drainAfterPending(firstChunk, reader, secondP) {
+  let finished = false;
+  try {
+    yield firstChunk;
+    const settled = await secondP;
+    if (settled.e !== undefined) { finished = true; throw settled.e; }
+    if (settled.r.done) { finished = true; return; }
+    yield settled.r.value;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) { finished = true; return; }
+      yield value;
+    }
+  } finally {
+    if (!finished) { try { await reader.cancel(); } catch {} }
+    try { reader.releaseLock(); } catch {}
+  }
+}
+
 /**
  * Decide whether a web body is a single bounded buffered chunk (the common SSR
  * page / JSON / file response) or a genuinely streamed body (Suspense, an action
- * / route `ReadableStream`), WITHOUT buffering a real stream (#756). It peeks at
- * most two reads: if the FIRST chunk is the whole body (the second read is
- * `done`) and within `maxBytes`, the body is buffered and returned as bytes so
- * the caller can compress it synchronously and skip the stream bridge. Otherwise
- * (multi-chunk, oversized, empty-after-peek, or a mid-stream error) it returns
- * an async iterable that replays the peeked chunk(s) then drains the rest, with
- * the same error + cancel semantics as `webStreamChunks`. A streamed body only
- * ever has its first chunk pulled eagerly (one extra in-flight chunk, negligible).
+ * / route `ReadableStream`), WITHOUT buffering a real stream and WITHOUT
+ * withholding a streamed body's first byte (#756). It peeks the first chunk, then
+ * classifies on the SECOND read, but does NOT block on it: a buffered Response
+ * (built from a string / Uint8Array) has an already-closed underlying stream, so
+ * its second read settles on the next microtask; a streamed body's second chunk
+ * may be arbitrarily far in the future (a Suspense boundary resolving), and
+ * awaiting it would stall the status line + first byte until then. So the second
+ * read is RACED against a macrotask sentinel: if it settles first AND is `done`
+ * (single chunk) within `maxBytes`, the body is buffered and returned as bytes so
+ * the caller can sync-compress and skip the stream bridge; otherwise (still
+ * pending = streaming, or multi-chunk, oversized, empty, or a mid-stream error)
+ * it returns an async iterable that replays the peeked chunk(s) then drains the
+ * rest, with the same error + cancel semantics as `webStreamChunks`.
  *
  * @param {ReadableStream} web
  * @param {number} maxBytes
@@ -236,14 +274,28 @@ export async function readBufferedOrStream(web, maxBytes) {
     return { buffered: new Uint8Array(0) };
   }
   const firstChunk = first.value;
-  let second;
-  let secondError;
-  try {
-    second = await reader.read();
-  } catch (e) {
-    secondError = e;
+
+  // Issue the classifying second read but DO NOT await it directly: race it
+  // against a macrotask sentinel so a streamed body (whose second chunk is far
+  // off) is handed back immediately as a stream instead of stalling first paint.
+  const secondP = reader.read().then((r) => ({ r }), (e) => ({ e }));
+  const settled = await Promise.race([
+    secondP,
+    new Promise((res) => { setImmediate(() => res(STREAM_PENDING)); }),
+  ]);
+  if (settled === STREAM_PENDING) {
+    // Still in flight after a macrotask: a genuinely streamed body. Emit the
+    // first chunk now and continue from the in-flight second read (consumed by
+    // the generator, never re-issued).
+    return { stream: drainAfterPending(firstChunk, reader, secondP) };
   }
-  if (!secondError && second.done) {
+  if (settled.e !== undefined) {
+    // The second read errored on a short body (a mid-stream source error):
+    // replay the first chunk then rethrow, matching webStreamChunks teardown.
+    return { stream: drainAfter([firstChunk], reader, settled.e) };
+  }
+  const second = settled.r;
+  if (second.done) {
     try { reader.releaseLock(); } catch {}
     if (firstChunk.byteLength <= maxBytes) return { buffered: firstChunk };
     // One chunk but too large to block the event loop on a sync compress: stream
@@ -251,9 +303,10 @@ export async function readBufferedOrStream(web, maxBytes) {
     // replay the single chunk with no further reads.
     return { stream: justChunks([firstChunk]) };
   }
-  const prefix = [firstChunk];
-  if (!secondError && !second.done) prefix.push(second.value);
-  return { stream: drainAfter(prefix, reader, secondError) };
+  // Two quick chunks (a small multi-chunk buffered body): not a single buffer,
+  // so stream it (replay both, then drain the rest). The second read is already
+  // consumed, so drainAfter continues from the third chunk.
+  return { stream: drainAfter([firstChunk, second.value], reader, null) };
 }
 
 /**

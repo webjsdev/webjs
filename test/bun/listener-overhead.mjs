@@ -17,7 +17,14 @@
  *     content-encoding, and
  * (2) the framework-trusted remote IP reaches `clientIp` (stamped out of band on
  *     Bun without a Request clone, via the header on node), and a client-spoofed
- *     `x-webjs-remote-ip` does NOT override it.
+ *     `x-webjs-remote-ip` does NOT override it,
+ * (3) the spoof does not survive the page-action body rebuild (`parseFormBody`),
+ * (4) a STREAMED compressible body does not have its response head withheld until
+ *     its slow second chunk (the buffered-vs-streamed classifier must not block on
+ *     the second read, #756 review MUST-FIX 2), and
+ * (5) a `webjs.basePath` request rebuild does not re-open the IP spoof on Bun
+ *     (the fresh Request loses the WeakMap stamp + copies the inbound header, so
+ *     it must strip + propagate, #773 round-2 MUST-FIX 1).
  */
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
@@ -49,6 +56,9 @@ try {
   // so this proves the trusted IP survives the rebuild and a spoofed header
   // does not win (#756 review must-fix).
   w('app/ipcheck/page.ts', `import { html, redirect } from ${JSON.stringify(CORE)};\nimport { clientIp } from ${JSON.stringify(SERVER)};\nexport const action = async ({ request }: { request: Request }) => { throw redirect('/?seenip=' + encodeURIComponent(clientIp(request))); };\nexport default () => html\`<main>ipcheck</main>\`;`);
+  // A genuinely STREAMED, compressible body whose SECOND chunk is far off. The
+  // compression classifier must not block the response head on it (#756 review).
+  w('app/api/slow/route.ts', `export async function GET() {\n  const enc = new TextEncoder();\n  let pulled = 0;\n  const stream = new ReadableStream({\n    start(c) { c.enqueue(enc.encode('shell-chunk-' + 'a'.repeat(64) + ';')); },\n    async pull(c) { if (pulled++) { c.close(); return; } await new Promise((r) => setTimeout(r, 400)); c.enqueue(enc.encode('boundary-chunk;')); c.close(); },\n  });\n  return new Response(stream, { headers: { 'content-type': 'text/html; charset=utf-8' } });\n}`);
 
   let server;
   ({ server, close } = await startServer({ appDir: dir, dev: true, compress: true, port: 0, logger: quiet }));
@@ -83,9 +93,57 @@ try {
   assert.ok(!/seenip=6\.6\.6\.6/.test(loc), `[${runtime}] a spoofed header must NOT survive the page-action rebuild`);
   assert.ok(!/seenip=_anon_/.test(loc), `[${runtime}] the trusted IP survived the rebuild (not anon)`);
 
+  // (4) A STREAMED compressible body must not have its response head withheld
+  // until its slow second chunk (#756 review MUST-FIX 2): the buffered-vs-streamed
+  // classifier must not block on the second read. `fetch` resolves when the head
+  // arrives (before the body), so time-to-head measures the regression directly.
+  const t0 = Date.now();
+  const slow = await fetch(`${base}/api/slow`, { headers: { 'accept-encoding': 'gzip' } });
+  const headMs = Date.now() - t0;
+  assert.equal(slow.status, 200, `[${runtime}] slow stream is 200`);
+  assert.ok(headMs < 300, `[${runtime}] response head arrived in ${headMs}ms, not blocked on the 400ms second chunk`);
+  const slowBody = await slow.text(); // fetch transparently decompresses
+  assert.ok(slowBody.includes('shell-chunk') && slowBody.includes('boundary-chunk'),
+    `[${runtime}] the streamed body still decodes in full under compression`);
+
   await close();
   close = null;
-  console.log(`OK  listener-overhead #756 passed on ${runtime} (buffered compress decodes + trusted IP stamped, ip=${ip})`);
+
+  // (5) basePath rebuild must not re-open the IP spoof on Bun (#773 round-2
+  // MUST-FIX 1). When `webjs.basePath` is set, dev.js rebuilds the Request with
+  // the stripped path; that fresh object is not in the listener's trusted-IP
+  // WeakMap and copies the inbound headers, so without the strip+propagate fix
+  // `clientIp` would fall back to the spoofable `x-webjs-remote-ip` on Bun.
+  const bpDir = mkdtempSync(join(tmpdir(), 'webjs-756bp-'));
+  const bw = (rel, body) => { const abs = join(bpDir, rel); mkdirSync(dirname(abs), { recursive: true }); writeFileSync(abs, body); };
+  writeFileSync(join(bpDir, 'package.json'), JSON.stringify({ name: 'bp', type: 'module', webjs: { basePath: '/mnt' } }));
+  bw('app/layout.ts', `import { html } from ${JSON.stringify(CORE)};\nexport default ({ children }: { children: unknown }) => html\`<!doctype html><html><head></head><body>\${children}</body></html>\`;`);
+  bw('app/page.ts', `import { html } from ${JSON.stringify(CORE)};\nexport default () => html\`<main>bp</main>\`;`);
+  bw('app/api/ip/route.ts', `import { clientIp } from ${JSON.stringify(SERVER)};\nexport async function GET(req: Request) {\n  return new Response(clientIp(req), { headers: { 'content-type': 'text/plain' } });\n}`);
+  bw('app/ipcheck/page.ts', `import { html, redirect } from ${JSON.stringify(CORE)};\nimport { clientIp } from ${JSON.stringify(SERVER)};\nexport const action = async ({ request }: { request: Request }) => { throw redirect('/?seenip=' + encodeURIComponent(clientIp(request))); };\nexport default () => html\`<main>ipcheck</main>\`;`);
+  let bpClose;
+  try {
+    const { server: bpServer, close: c2 } = await startServer({ appDir: bpDir, dev: true, compress: true, port: 0, logger: quiet });
+    bpClose = c2;
+    const bpPort = typeof bpServer.port === 'number' ? bpServer.port : bpServer.address().port;
+    const bpBase = `http://localhost:${bpPort}`;
+    const bpIp = (await (await fetch(`${bpBase}/mnt/api/ip`, { headers: { 'x-webjs-remote-ip': '6.6.6.6' } })).text()).trim();
+    assert.notEqual(bpIp, '6.6.6.6', `[${runtime}] a basePath rebuild must NOT trust a spoofed x-webjs-remote-ip`);
+    assert.notEqual(bpIp, '_anon_', `[${runtime}] the trusted IP survived the basePath rebuild`);
+    const bpAct = await fetch(`${bpBase}/mnt/ipcheck`, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-webjs-remote-ip': '6.6.6.6' },
+      body: 'x=1',
+    });
+    const bpLoc = bpAct.headers.get('location') || '';
+    assert.ok(!/seenip=6\.6\.6\.6/.test(bpLoc), `[${runtime}] spoof must not survive basePath + page-action rebuild (loc=${bpLoc})`);
+  } finally {
+    try { if (bpClose) await bpClose(); } catch {}
+    rmSync(bpDir, { recursive: true, force: true });
+  }
+
+  console.log(`OK  listener-overhead #756 passed on ${runtime} (buffered compress decodes + trusted IP stamped + streamed head not blocked + basePath spoof closed, ip=${ip})`);
 } catch (err) {
   // Report failures EXPLICITLY rather than letting them propagate as an
   // unhandled top-level-await rejection: Bun exits 0 without flushing the error

@@ -87,6 +87,7 @@ function shouldAccessLog(pathname) {
 }
 import { setVendorEntries, setCoreInstall, publishBuildId, setBasePath, basePath, setImportAliasEntries, importAliasBrowserEntries } from './importmap.js';
 import { readBasePath, stripBasePath, withBasePath } from './base-path.js';
+import { propagateTrustedRemoteIp } from './rate-limit.js';
 import { readAllowedOrigins } from './csrf.js';
 import { setAssetRoots, clearAssetHashCache, setElisionFingerprint, withAssetHash, assetHashFor, versionModuleImports } from './asset-hash.js';
 import { urlFromRequest } from './forwarded.js';
@@ -1221,18 +1222,31 @@ export async function createRequestHandler(opts) {
             // Rewrite the Request with the stripped URL, preserving method,
             // headers, and body. `duplex: 'half'` is required by the spec when
             // a body stream is present on a non-GET/HEAD request.
+            //
+            // SECURITY (#756): this is a fresh Request object, so it is NOT in
+            // the listener's out-of-band trusted-IP WeakMap (the Bun shell
+            // stamps the IP there instead of cloning the Request to set the
+            // header). Without carrying it forward, `clientIp` would fall back
+            // to the inbound `x-webjs-remote-ip` header that the copied
+            // `req.headers` still carries, which a client can spoof. So strip
+            // that header on the rebuild and propagate the framework-trusted IP
+            // across the new object, the same pattern page-action.js uses.
+            const headers = new Headers(req.headers);
+            headers.delete('x-webjs-remote-ip');
             const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
-            req = new Request(
+            const next = new Request(
               reqUrl.toString(),
               /** @type {any} */ ({
                 method: req.method,
-                headers: req.headers,
+                headers,
                 body: hasBody ? req.body : undefined,
                 duplex: hasBody ? 'half' : undefined,
                 redirect: req.redirect,
                 signal: req.signal,
               }),
             );
+            propagateTrustedRemoteIp(req, next);
+            req = next;
           }
         }
       }
