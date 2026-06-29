@@ -6,6 +6,7 @@
  * Matches the subset of ioredis's API that cache.js uses:
  *   new Redis(url)
  *   .get(key), .set(key, val, 'PX', ms), .del(key), .incr(key), .pexpire(key, ms)
+ *   .sadd(key, member), .smembers(key)   <- atomic tag-index set ops (#752)
  */
 
 export default class FakeRedis {
@@ -56,6 +57,23 @@ export default class FakeRedis {
     if (!e) return 0;
     e.expiresAt = Date.now() + ms;
     return 1;
+  }
+
+  // Atomic set ops. The value is a `Set` (Redis stores a true set); SADD is an
+  // atomic insert, the property the tag index relies on (#752).
+  async sadd(key, member) {
+    const e = this.store.get(key);
+    const set = e && !this._expired(e) && e.value instanceof Set ? e.value : new Set();
+    const had = set.has(member);
+    set.add(member);
+    this.store.set(key, { value: set, expiresAt: e && !this._expired(e) ? e.expiresAt : null });
+    return had ? 0 : 1;
+  }
+
+  async smembers(key) {
+    const e = this.store.get(key);
+    if (!e || this._expired(e)) return [];
+    return e.value instanceof Set ? [...e.value] : [];
   }
 
   async quit() { this.store.clear(); return 'OK'; }

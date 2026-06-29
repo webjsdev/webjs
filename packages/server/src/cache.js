@@ -23,6 +23,15 @@
  * @property {(key: string, ttlMs?: number) => Promise<number>} increment
  *   Atomically increment a counter. Returns the new value. Creates the
  *   key with value 1 if it doesn't exist. TTL is set on creation only.
+ * @property {((key: string, member: string, ttlMs?: number) => Promise<void>)} [setAdd]
+ *   OPTIONAL. Atomically add `member` to the SET stored at `key`, refreshing the
+ *   key's TTL. Eliminates the lost-update race of a read-modify-write JSON array
+ *   (the tag index in `cache-tags.js`, #752). A store WITHOUT this method makes
+ *   the tag index fall back to the non-atomic JSON path (the documented caveat).
+ *   Paired with `setMembers`; implement both or neither.
+ * @property {((key: string) => Promise<string[]>)} [setMembers]
+ *   OPTIONAL. Return the members of the SET stored at `key` (empty array on a
+ *   miss). The read counterpart of `setAdd`.
  */
 
 /**
@@ -98,6 +107,28 @@ export function memoryStore(opts = {}) {
       map.set(key, entry);
       return next;
     },
+    // Atomic SET ops (#752). The entry value for a set key is a native `Set`
+    // (not a JSON string), so the add is a single synchronous mutation with no
+    // read-modify-write await gap: concurrent `setAdd` calls in one process
+    // cannot lose an entry. Only the tag index uses these keys, so the mixed
+    // value type (string for normal keys, Set for set keys) never collides with
+    // `get`/`increment`. The key still rides the same LRU + TTL machinery.
+    async setAdd(key, member, ttlMs) {
+      const entry = map.get(key);
+      const set = entry && !isExpired(entry) && entry.value instanceof Set
+        ? entry.value
+        : new Set();
+      set.add(member);
+      map.delete(key); // re-insert at the end (LRU) + refresh TTL like Redis EXPIRE
+      map.set(key, { value: set, expiresAt: expiresAtFrom(ttlMs) });
+      evict();
+    },
+    async setMembers(key) {
+      const entry = map.get(key);
+      if (!entry) return [];
+      if (isExpired(entry)) { map.delete(key); return []; }
+      return entry.value instanceof Set ? [...entry.value] : [];
+    },
   };
 }
 
@@ -171,6 +202,28 @@ export function redisStore(opts = {}) {
         await c.pexpire(key, ttlMs);
       }
       return val;
+    },
+    // Atomic SET ops (#752): SADD is an atomic set insert across instances, so
+    // the tag index no longer loses a concurrent append the way a JSON-array
+    // read-modify-write did. A per-member TTL is not native to a Redis set, so
+    // refresh the whole key's expiry on each add (PEXPIRE), keeping the
+    // short-TTL floor as defense-in-depth. ioredis uses lowercase command names
+    // (`sadd`); node-redis v4 uses camelCase (`sAdd`), so probe both.
+    async setAdd(key, member, ttlMs) {
+      const c = await getClient();
+      if (typeof c.sadd === 'function') await c.sadd(key, member);
+      else await c.sAdd(key, member);
+      if (ttlMs) {
+        if (typeof c.pexpire === 'function') await c.pexpire(key, ttlMs);
+        else await c.pExpire(key, ttlMs);
+      }
+    },
+    async setMembers(key) {
+      const c = await getClient();
+      const members = typeof c.smembers === 'function'
+        ? await c.smembers(key)
+        : await c.sMembers(key);
+      return Array.isArray(members) ? members : [];
     },
   };
 }

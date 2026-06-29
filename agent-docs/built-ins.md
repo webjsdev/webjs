@@ -112,13 +112,16 @@ exact id by tag. An untagged `cache()` is untouched by any `revalidateTag`.
 evicts cached HTML. Together they are the **server cache invalidation
 surface**, both imported from `@webjsdev/server`.
 
-**Multi-instance note.** The tag index is a thin, non-atomic
-read-modify-write of a JSON array in the store. With a shared Redis store,
-`revalidateTag` reaches every instance for the keys it can see, but two
-instances appending to one tag concurrently can lose an append, so a
-freshly-stored key on a peer might miss eviction and live until its TTL.
-The index entry carries the cache TTL so it self-prunes. For strict
-cross-instance invalidation, prefer a short `ttl` as the floor.
+**Multi-instance note.** On the built-in memory and Redis stores the tag
+index is a real set (a native `Set` in memory, a Redis `SADD` set), so
+adding a cache key to a tag is an atomic insert. Two mutations appending to
+the same tag concurrently (across Redis instances, or interleaved in one
+process) no longer lose an entry, so `revalidateTag` reliably evicts every
+tagged key (#752). A custom store that does not implement the optional
+atomic-set methods (`setAdd` / `setMembers`) falls back to the older
+non-atomic JSON path, where a concurrent append can be lost; there, prefer a
+short `ttl` as the cross-instance floor. The index entry carries the cache
+TTL so it self-prunes either way.
 
 ### Server HTML response cache (`export const revalidate`, ISR for no-build)
 
