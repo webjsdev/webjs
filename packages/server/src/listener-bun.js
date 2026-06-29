@@ -346,12 +346,6 @@ async function maybeCompress(resp, req) {
   if (!isCompressible(resp.headers.get('content-type'))) return resp;
   const encoding = negotiateEncoding(req.headers.get('accept-encoding'));
   if (!encoding) return resp;
-  // Resolve the streaming compressor BEFORE peeking/locking the body, so a
-  // (defensive) null backend leaves `resp.body` untouched rather than returning
-  // a half-drained, locked Response. `encoding` is already one of br/gzip/deflate
-  // here, so this never fires in practice, but order matters for safety.
-  const compressor = createCompressor(encoding);
-  if (!compressor) return resp;
 
   const headers = new Headers(resp.headers);
   headers.set('content-encoding', encoding);
@@ -374,6 +368,12 @@ async function maybeCompress(resp, req) {
   }
 
   headers.delete('content-length');
+  // Allocate the streaming compressor ONLY on the streamed path: the buffered
+  // fast path above used `compressBufferSync` and never needs a Transform, so
+  // hoisting this would waste a native zlib/brotli handle on the common case.
+  // `encoding` is guaranteed br/gzip/deflate (negotiateEncoding), so
+  // `createCompressor` never returns null here.
+  const compressor = createCompressor(encoding);
   // Feed the (peeked + drained) web body into the compressor through the reader
   // loop (NOT Readable.fromWeb, which does not propagate a mid-stream source
   // error through `pipeline` on Bun, the #509 hang) and drive it with `pipeline`
