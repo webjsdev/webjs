@@ -564,7 +564,13 @@ export class UiDropdownMenuSub extends WebComponent({
   }
 
   _cancelCloseHandler = (): void => this._cancelClose();
-  _scheduleCloseHandler = (): void => this._scheduleClose();
+  // Hover-close is a mouse affordance. On touch, lifting the finger fires
+  // pointerleave; without this guard a tap-opened submenu would close itself
+  // ~200ms after the tap. On touch the submenu stays open until tapped again.
+  _scheduleCloseHandler = (e: Event): void => {
+    if ((e as PointerEvent).pointerType === 'touch') return;
+    this._scheduleClose();
+  };
 
   _scheduleClose(): void {
     this._cancelClose();
@@ -635,6 +641,10 @@ export class UiDropdownMenuSubTrigger extends WebComponent({ inset: Boolean }) {
   };
 
   _onPointerEnter = (e: Event): void => {
+    // Hover-open is a mouse affordance. On touch there is no hover: a tap
+    // fires pointerenter on finger-down, which would open the submenu only for
+    // the following click to toggle it shut. On touch, @click is the opener.
+    if ((e as PointerEvent).pointerType === 'touch') return;
     const el = e.currentTarget as HTMLElement;
     if (el.hasAttribute('data-disabled')) return;
     el.focus();
