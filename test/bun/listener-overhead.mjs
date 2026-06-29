@@ -197,5 +197,12 @@ try {
 }
 if (failed) {
   console.error(`FAIL listener-overhead #756 on ${runtime}: ${failed?.stack || failed?.message || failed}`);
-  process.exit(1);
+  // Hard-exit ONLY when run as a standalone script (`node`/`bun
+  // test/bun/listener-overhead.mjs`): Bun swallows a top-level-await rejection
+  // inside try/finally, so a plain throw would exit 0. When IMPORTED by the
+  // `.test.mjs` wrapper under `node --test`, a `process.exit(1)` would kill the
+  // whole single-process run and hide every other file's results, so throw
+  // instead and let the test harness report one failed test.
+  if (import.meta.main) process.exit(1);
+  else throw failed;
 }
