@@ -18,6 +18,7 @@
  * @module action-error
  */
 
+import { isRedirect, isNotFound } from '@webjsdev/core';
 import { digestHex } from './crypto-utils.js';
 
 /** The generic client-facing message for a sanitized prod action error. */
@@ -25,14 +26,19 @@ export const GENERIC_ERROR_MESSAGE = 'Internal server error';
 
 /**
  * `redirect()` / `notFound()` throw `Error` sentinels tagged with a `__webjs`
- * symbol. They are control flow, not errors to sanitize, and their message is
- * not sensitive, so the error path passes them through unchanged.
+ * SYMBOL VALUE. They are control flow, not errors to sanitize, and their
+ * message is not sensitive, so the error path passes them through unchanged.
+ *
+ * Reuses core's authoritative `isRedirect` / `isNotFound`, which match the exact
+ * sentinel symbol value (`__webjs === REDIRECT` / `=== NOT_FOUND`), NOT mere
+ * property presence: a genuine error that happens to carry a `__webjs` property
+ * must still be sanitized, never passed through.
  *
  * @param {unknown} err
  * @returns {boolean}
  */
 export function isControlFlowThrow(err) {
-  return !!(err && typeof err === 'object' && '__webjs' in /** @type {object} */ (err));
+  return isRedirect(err) || isNotFound(err);
 }
 
 /**

@@ -38,6 +38,13 @@ const ACTIONS = {
       e.__webjs = Symbol.for('webjs.notFound');
       throw e;
     }
+    export async function fakeCf() {
+      // A genuine error that merely CARRIES a __webjs property (not the sentinel
+      // symbol value). It must still be sanitized, never passed through.
+      const e = new Error(${JSON.stringify(SECRET)});
+      e.__webjs = 'not-a-sentinel';
+      throw e;
+    }
   `,
 };
 
@@ -97,6 +104,20 @@ test('prod: a redirect()/notFound() control-flow throw passes through (not gener
     assert.equal(res.status, 500);
     assert.equal(body.error, 'webjs: notFound()', 'control-flow message preserved');
     assert.equal(body.digest, undefined, 'no digest for a control-flow sentinel');
+  } finally {
+    console.error = orig;
+  }
+});
+
+test('prod: a genuine error merely carrying a __webjs property is STILL sanitized', async () => {
+  const dir = await scaffold(ACTIONS);
+  const orig = console.error; console.error = () => {};
+  try {
+    const { res, body } = await callBoom(dir, false, 'fakeCf');
+    assert.equal(res.status, 500);
+    assert.equal(body.error, 'Internal server error', 'a non-sentinel __webjs is not a control-flow pass-through');
+    assert.ok(typeof body.digest === 'string', 'sanitized with a digest');
+    assert.ok(!JSON.stringify(body).includes('users_email_key'), 'raw message not leaked');
   } finally {
     console.error = orig;
   }
