@@ -67,6 +67,20 @@ if (!files.length) {
   process.exit(0);
 }
 
-const args = ['--test', ...files];
+// Opt-in coverage (#774): `WEBJS_COVERAGE=1 npm test` (or `npm run
+// test:coverage`) turns on Node's built-in coverage reporter. Kept off the
+// default run so the common `npm test` stays fast and its output uncluttered;
+// it is purely an observability lever, no new dependency. Test files and the
+// scripts/ harness are excluded so the numbers reflect shipped source only.
+const coverageArgs = process.env.WEBJS_COVERAGE
+  ? [
+      '--experimental-test-coverage',
+      '--test-coverage-exclude=**/test/**',
+      '--test-coverage-exclude=**/*.test.*',
+      '--test-coverage-exclude=scripts/**',
+    ]
+  : [];
+
+const args = ['--test', ...coverageArgs, ...files];
 const child = spawn(process.execPath, args, { stdio: 'inherit' });
 child.on('exit', (code) => process.exit(code ?? 1));
