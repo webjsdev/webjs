@@ -30,6 +30,8 @@ const posts = await listPosts();</pre>
       <li><code>tags</code> (optional) attaches tags for cross-module invalidation. Either a static <code>string[]</code> or a function <code>(...args) =&gt; string[]</code>, so a per-entity read can tag itself with the id. Evict by tag with <code>revalidateTag</code> / <code>revalidateTags</code> (see below).</li>
     </ul>
 
+    <p><strong>Rich values are preserved.</strong> Both the cached value and the argument key go through the same rich serializer as the RPC wire (<code>Date</code>, <code>Map</code>, <code>Set</code>, <code>BigInt</code>, typed arrays, cycles), not JSON. So a warm cache hit returns the same value shape as a cold miss (a row's <code>createdAt</code> stays a <code>Date</code>), and a <code>Map</code> or <code>Set</code> argument is a distinct key per value rather than collapsing to one. Cached values do not need to be JSON-plain.</p>
+
     <h3>Invalidation</h3>
     <p>The cached function has an <code>invalidate()</code> method. Call it after mutations to clear the cache:</p>
 

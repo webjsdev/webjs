@@ -59,6 +59,13 @@ export const listPosts = cache(
 );
 ```
 
+Cached values round-trip through the same rich serializer as the RPC wire
+(`Date` / `Map` / `Set` / `BigInt` / typed arrays / cycles), so a warm cache
+hit returns the exact same value shape as a cold miss (a row's `createdAt`
+stays a `Date`, never degrades to a string). Cache keys are rich-serialized
+too, so a `Map` / `Set` argument is a distinct key per value instead of
+colliding. You do not need cached values to be JSON-plain.
+
 To invalidate a read from an UNRELATED mutation (without importing the
 wrapper), add `tags`. It is either a static `string[]` or a function
 `(...args) => string[]` so a per-entity read tags with the id:
