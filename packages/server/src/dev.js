@@ -1903,6 +1903,20 @@ async function handleCore(req, ctx) {
       }
       return fileResponse(abs, { dev, immutable: versioned });
     }
+    // Dev hint (#751): the request is for a real app source module that EXISTS
+    // on disk but is NOT in the browser-bound graph, so the gate 404s it. The
+    // most common cause is a dynamic `import()` the static scanner cannot
+    // track: a string-literal `import('./x.ts')` IS tracked and servable, but a
+    // computed `import(expr)` / `import('./' + name)` cannot be resolved
+    // statically and falls through here. Surface the likely cause instead of a
+    // bare 404 so the author is not left guessing. Dev-only and diagnostic; it
+    // does not change the 404 status, only the body + a server log line.
+    if (dev && abs.startsWith(appDir) && /\.m?[jt]s$/.test(abs) && (await exists(abs))) {
+      const rel = relative(appDir, abs);
+      const hint = `[webjs] 404: ${rel} exists but is not reachable from any browser-bound entry, so it is not servable. If you load it via a dynamic import(), use a STRING-LITERAL specifier (e.g. import('./x.ts')) so the scanner can track it; a computed import(expr) cannot be resolved statically and will 404. Otherwise this module is simply unreferenced by client code.`;
+      console.warn(hint);
+      return new Response(hint, { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+    }
   }
 
   // Metadata routes: /sitemap.xml, /robots.txt, /icon, /opengraph-image, etc.

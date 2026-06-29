@@ -1030,14 +1030,18 @@ export async function checkConventions(appDir) {
  * `middleware.ts` / `route.ts` (server-only, never page/layout/component
  * entries, so they are not in the candidate set to begin with).
  *
- * Known limitation: a DYNAMIC `import('./x.server.ts')` is invisible to this
- * rule. The framework's import scanner (`IMPORT_RE` in module-graph.js) matches
- * only static `import`/`export … from`, not the `import(` call form, so a
- * dynamic server import is not a graph edge here. This is deliberate and
- * consistent with the framework-wide graph: a dynamic import is also not elided
- * framework-wide, and its crash is deferred to call time (when the chunk is
- * fetched), not module load. Catching it would mean teaching the shared scanner
- * about `import(`, which is out of scope for this rule.
+ * Scope note for dynamic imports: a string-literal `import('./widget.ts')` IS
+ * tracked by the module graph now (#751), but only as a GATE edge (so the
+ * lazily-imported module is servable); this rule's server-import detection
+ * still runs over STATIC edges only (`transitiveDeps`), so a dynamic
+ * `import('./x.server.ts')` of a no-`'use server'` utility is not flagged here.
+ * That is deliberate: the throw-at-load crash is deferred to call time (when
+ * the module is actually fetched), not module load, and a dynamic import is
+ * also not elided framework-wide. A computed `import(expr)` cannot be resolved
+ * statically at all; rather than a false-positive-prone check rule (a computed
+ * import of an npm specifier or an otherwise-reachable app module is perfectly
+ * valid, so it fails the check-is-correctness-only dividing line), the dev
+ * server surfaces it with a 404 hint when the target 404s (see dev.js #751).
  *
  * @param {string} appDir
  * @param {Violation[]} violations  appended to in place
