@@ -16,7 +16,11 @@
  * and its own `closeServer` thunk, and reuses everything else verbatim.
  */
 import { pathToFileURL } from 'node:url';
-import { createBrotliCompress, createGzip, createDeflate, constants as zlibConstants } from 'node:zlib';
+import {
+  createBrotliCompress, createGzip, createDeflate,
+  brotliCompressSync, gzipSync, deflateSync,
+  constants as zlibConstants,
+} from 'node:zlib';
 import { stripBasePath } from './base-path.js';
 
 /** The dev live-reload SSE path (matched after base-path stripping). */
@@ -97,6 +101,34 @@ export function createCompressor(encoding) {
 }
 
 /**
+ * The largest buffered body that takes the SYNCHRONOUS compression fast path
+ * (#756). Sync `node:zlib` blocks the event loop, whereas the streaming
+ * compressor offloads to the libuv threadpool, so the sync path is a win ONLY
+ * for small bodies (a typical SSR HTML page) where the per-response stream
+ * bridge dominates; a larger buffered body keeps the non-blocking stream path.
+ */
+export const MAX_SYNC_COMPRESS_BYTES = 256 * 1024;
+
+/**
+ * Compress an already-buffered body synchronously, byte-for-byte identical to
+ * the streaming `createCompressor` (same algorithm + params: brotli quality 4,
+ * gzip / deflate level 6), so a buffered fast path and a streamed slow path
+ * produce the same wire bytes across Node and Bun (#756). For a buffered body
+ * (one that cannot error mid-stream) this skips the per-response
+ * web -> node -> web stream bridge entirely. Returns null for an unknown / empty
+ * encoding so the caller leaves the body uncompressed.
+ * @param {'br' | 'gzip' | 'deflate' | ''} encoding
+ * @param {Uint8Array} buf
+ * @returns {Buffer | null}
+ */
+export function compressBufferSync(encoding, buf) {
+  if (encoding === 'br') return brotliCompressSync(buf, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 4 } });
+  if (encoding === 'gzip') return gzipSync(buf, { level: 6 });
+  if (encoding === 'deflate') return deflateSync(buf, { level: 6 });
+  return null;
+}
+
+/**
  * Merge `Accept-Encoding` into an existing `Vary` header (or create it) without
  * duplicating, so compressing a response that already varies (on `Cookie`, an
  * `Origin`, etc.) does not clobber that. Shared so both shells behave identically.
@@ -133,6 +165,92 @@ export async function* webStreamChunks(web) {
     if (!finished) { try { await reader.cancel(); } catch {} }
     try { reader.releaseLock(); } catch {}
   }
+}
+
+/** An async generator that throws on first pull (a source that errored before
+ * any output), so the caller's `pipeline` tears down exactly as it would for a
+ * mid-stream error. @param {unknown} err */
+async function* failingStream(err) { throw err; }
+
+/** Yield a fixed set of already-read chunks with no further reads (the source is
+ * already exhausted). @param {Uint8Array[]} chunks */
+async function* justChunks(chunks) { for (const c of chunks) yield c; }
+
+/**
+ * Drain a reader after replaying already-peeked `prefix` chunks, mirroring
+ * `webStreamChunks`' error + early-cancel semantics (so the #509 hang fix is
+ * preserved for the reconstructed stream). If `pendingError` is set (the peek's
+ * second read rejected, a mid-stream source error), the prefix is replayed and
+ * then the error is rethrown.
+ * @param {Uint8Array[]} prefix
+ * @param {ReadableStreamDefaultReader} reader
+ * @param {unknown} pendingError
+ */
+async function* drainAfter(prefix, reader, pendingError) {
+  let finished = false;
+  try {
+    for (const c of prefix) yield c;
+    if (pendingError) { finished = true; throw pendingError; }
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) { finished = true; return; }
+      yield value;
+    }
+  } finally {
+    if (!finished) { try { await reader.cancel(); } catch {} }
+    try { reader.releaseLock(); } catch {}
+  }
+}
+
+/**
+ * Decide whether a web body is a single bounded buffered chunk (the common SSR
+ * page / JSON / file response) or a genuinely streamed body (Suspense, an action
+ * / route `ReadableStream`), WITHOUT buffering a real stream (#756). It peeks at
+ * most two reads: if the FIRST chunk is the whole body (the second read is
+ * `done`) and within `maxBytes`, the body is buffered and returned as bytes so
+ * the caller can compress it synchronously and skip the stream bridge. Otherwise
+ * (multi-chunk, oversized, empty-after-peek, or a mid-stream error) it returns
+ * an async iterable that replays the peeked chunk(s) then drains the rest, with
+ * the same error + cancel semantics as `webStreamChunks`. A streamed body only
+ * ever has its first chunk pulled eagerly (one extra in-flight chunk, negligible).
+ *
+ * @param {ReadableStream} web
+ * @param {number} maxBytes
+ * @returns {Promise<{ buffered: Uint8Array } | { stream: AsyncIterable<Uint8Array> }>}
+ */
+export async function readBufferedOrStream(web, maxBytes) {
+  const reader = web.getReader();
+  let first;
+  try {
+    first = await reader.read();
+  } catch (e) {
+    // Source errored before any output: hand back a stream that rethrows it.
+    try { reader.releaseLock(); } catch {}
+    return { stream: failingStream(e) };
+  }
+  if (first.done) {
+    try { reader.releaseLock(); } catch {}
+    return { buffered: new Uint8Array(0) };
+  }
+  const firstChunk = first.value;
+  let second;
+  let secondError;
+  try {
+    second = await reader.read();
+  } catch (e) {
+    secondError = e;
+  }
+  if (!secondError && second.done) {
+    try { reader.releaseLock(); } catch {}
+    if (firstChunk.byteLength <= maxBytes) return { buffered: firstChunk };
+    // One chunk but too large to block the event loop on a sync compress: stream
+    // it. The source is already exhausted (second read was `done`), so just
+    // replay the single chunk with no further reads.
+    return { stream: justChunks([firstChunk]) };
+  }
+  const prefix = [firstChunk];
+  if (!secondError && !second.done) prefix.push(second.value);
+  return { stream: drainAfter(prefix, reader, secondError) };
 }
 
 /**

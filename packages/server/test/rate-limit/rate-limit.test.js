@@ -180,6 +180,33 @@ test('clientIp(req, {trustProxy:false}) ignores x-forwarded-for entirely', async
     'default trustProxy:false must NOT fall back to XFF when stamped IP is missing');
 });
 
+test('setTrustedRemoteIp: out-of-band IP is authoritative and ignores the inbound header (#756)', async () => {
+  const { clientIp, setTrustedRemoteIp } = await import('../../src/rate-limit.js');
+  // A client spoofs x-webjs-remote-ip on the wire; the Bun listener stamps the
+  // real socket IP out of band. clientIp must return the trusted (WeakMap) value
+  // and ignore the spoofed header, with NO Request clone.
+  const req = new Request('http://x/', { headers: { 'x-webjs-remote-ip': '6.6.6.6' } });
+  setTrustedRemoteIp(req, '5.5.5.5');
+  assert.equal(clientIp(req), '5.5.5.5', 'trusted out-of-band IP wins over the spoofed header');
+});
+
+test('setTrustedRemoteIp(req, "") marks the request stamped-with-no-IP so the header is never trusted (#756)', async () => {
+  const { clientIp, setTrustedRemoteIp } = await import('../../src/rate-limit.js');
+  // When the listener could not resolve an IP it still stamps (empty), so a
+  // spoofed inbound header does not leak through as the client IP.
+  const req = new Request('http://x/', { headers: { 'x-webjs-remote-ip': '6.6.6.6' } });
+  setTrustedRemoteIp(req, '');
+  assert.equal(clientIp(req), '_anon_', 'an empty trusted stamp resolves to anon, not the spoofed header');
+});
+
+test('setTrustedRemoteIp: trusted IP also wins under trustProxy:true (below XFF) (#756)', async () => {
+  const { clientIp, setTrustedRemoteIp } = await import('../../src/rate-limit.js');
+  const req = new Request('http://x/', { headers: { 'x-webjs-remote-ip': '6.6.6.6' } });
+  setTrustedRemoteIp(req, '5.5.5.5');
+  // No XFF/CF/real-ip, so the trusted remote IP is the chosen fallback.
+  assert.equal(clientIp(req, { trustProxy: true }), '5.5.5.5', 'trusted IP used as the remote-IP fallback, not the header');
+});
+
 test('stampRemoteIp: strips any inbound x-webjs-remote-ip and sets the new value', async () => {
   const { stampRemoteIp } = await import('../../src/rate-limit.js');
   const inbound = new Request('http://x/api', {

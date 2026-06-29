@@ -90,12 +90,50 @@ export function rateLimit(opts = {}) {
 const REMOTE_IP_HEADER = 'x-webjs-remote-ip';
 
 /**
+ * Out-of-band trusted remote IP (#756). A listener shell that already holds the
+ * socket IP can stamp it here instead of reallocating a whole `Request` just to
+ * set the `x-webjs-remote-ip` header (the Bun hot path). When an entry exists
+ * for a request it is AUTHORITATIVE: `trustedRemoteIp` returns it and ignores
+ * the inbound header entirely, so a client-spoofed `x-webjs-remote-ip` is never
+ * trusted even though the original (unmodified) request still carries it.
+ * @type {WeakMap<Request, string>}
+ */
+const trustedIpMap = new WeakMap();
+
+/**
+ * Stamp the trusted remote IP for a request out-of-band (no Request clone).
+ * Pass `''` (or a falsy value) to mark the request as listener-stamped with no
+ * known IP, which still makes the inbound header untrusted (resolves to the
+ * anon fallback rather than a spoofable header value).
+ * @param {Request} req
+ * @param {string | null | undefined} ip
+ */
+export function setTrustedRemoteIp(req, ip) {
+  trustedIpMap.set(req, ip || '');
+}
+
+/**
+ * The framework-trusted remote IP for a request: the out-of-band WeakMap value
+ * when a listener stamped it (authoritative, header ignored), else the
+ * framework-stamped `x-webjs-remote-ip` header (the node / embedded path).
+ * @param {Request} req
+ * @returns {string}
+ */
+function trustedRemoteIp(req) {
+  if (trustedIpMap.has(req)) return trustedIpMap.get(req) || '';
+  return req.headers.get(REMOTE_IP_HEADER) || '';
+}
+
+/**
  * Resolve the client IP for rate-limit bucket keying.
  *
  * `trustProxy: false` (default, safe everywhere): read ONLY the
- * framework-stamped `x-webjs-remote-ip` header. Under `startServer`
- * the framework derives it from the actual TCP socket and strips
- * any inbound copy via `toWebRequest`, so clients cannot spoof it.
+ * framework-trusted remote IP. Under `startServer` the framework derives it from
+ * the actual TCP socket: the node shell stamps the `x-webjs-remote-ip` header
+ * (stripping any inbound copy via `toWebRequest`), and the Bun shell stamps it
+ * OUT OF BAND via `setTrustedRemoteIp` (a WeakMap, no per-request Request clone,
+ * #756) which `trustedRemoteIp` reads in preference to (and to the exclusion of)
+ * the header, so a client cannot spoof it either way.
  * Under `createRequestHandler` (embedded use) the host adapter MUST
  * call `stampRemoteIp(req, remoteAddress)` first, otherwise the
  * adapter may pass forged inbound headers straight through and the
@@ -122,11 +160,11 @@ export function clientIp(req, opts = {}) {
       req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
       req.headers.get('cf-connecting-ip') ||
       req.headers.get('x-real-ip') ||
-      req.headers.get(REMOTE_IP_HEADER) ||
+      trustedRemoteIp(req) ||
       '_anon_'
     );
   }
-  return req.headers.get(REMOTE_IP_HEADER) || '_anon_';
+  return trustedRemoteIp(req) || '_anon_';
 }
 
 /**
