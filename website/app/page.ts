@@ -109,24 +109,26 @@ export default function LandingPage() {
         :root:not([data-theme='light']) { --code-tag: oklch(0.78 0.13 250); --code-attr: oklch(0.66 0.16 150); --code-str: oklch(0.80 0.15 145); }
       }
       .t-com { color: var(--fg-subtle); font-style: italic; }
-      .t-str { color: oklch(0.55 0.13 145); }
-      .t-kw  { color: oklch(0.55 0.18 25); font-weight: 600; }
-      .t-fn  { color: var(--accent); }
-      .t-type{ color: oklch(0.55 0.13 250); }
-      .t-num { color: oklch(0.55 0.14 70); }
+      .t-str { color: oklch(0.52 0.13 150); }
+      .t-kw  { color: oklch(0.52 0.16 295); font-weight: 600; }
+      .t-fn  { color: oklch(0.52 0.15 250); }
+      .t-type{ color: oklch(0.52 0.10 200); }
+      .t-num { color: oklch(0.55 0.12 215); }
       .t-ok  { color: oklch(0.52 0.16 150); }
       .t-punc{ color: var(--fg-muted); }
       .t-id  { color: var(--fg); }
-      :root[data-theme='dark'] .t-str { color: oklch(0.80 0.15 145); }
-      :root[data-theme='dark'] .t-kw  { color: oklch(0.78 0.16 25); }
-      :root[data-theme='dark'] .t-type{ color: oklch(0.78 0.13 250); }
-      :root[data-theme='dark'] .t-num { color: oklch(0.82 0.14 80); }
+      :root[data-theme='dark'] .t-str { color: oklch(0.80 0.14 150); }
+      :root[data-theme='dark'] .t-kw  { color: oklch(0.76 0.14 295); }
+      :root[data-theme='dark'] .t-fn  { color: oklch(0.75 0.13 250); }
+      :root[data-theme='dark'] .t-type{ color: oklch(0.80 0.10 200); }
+      :root[data-theme='dark'] .t-num { color: oklch(0.82 0.12 215); }
       :root[data-theme='dark'] .t-ok  { color: oklch(0.66 0.16 150); }
       @media (prefers-color-scheme: dark) {
-        :root:not([data-theme='light']) .t-str { color: oklch(0.80 0.15 145); }
-        :root:not([data-theme='light']) .t-kw  { color: oklch(0.78 0.16 25); }
-        :root:not([data-theme='light']) .t-type{ color: oklch(0.78 0.13 250); }
-        :root:not([data-theme='light']) .t-num { color: oklch(0.82 0.14 80); }
+        :root:not([data-theme='light']) .t-str { color: oklch(0.80 0.14 150); }
+        :root:not([data-theme='light']) .t-kw  { color: oklch(0.76 0.14 295); }
+        :root:not([data-theme='light']) .t-fn  { color: oklch(0.75 0.13 250); }
+        :root:not([data-theme='light']) .t-type{ color: oklch(0.80 0.10 200); }
+        :root:not([data-theme='light']) .t-num { color: oklch(0.82 0.12 215); }
         :root:not([data-theme='light']) .t-ok  { color: oklch(0.66 0.16 150); }
       }
     </style>
