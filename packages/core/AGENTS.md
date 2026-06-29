@@ -184,7 +184,8 @@ organised by feature: `signals/`, `rendering/`, `directives/`,
 `slots/`, `lifecycle/`, `context/`, `task/`, `suspense/`,
 `routing/`, `serializer/`, `styling/`, `registry/`, `nav/`,
 `websocket-client/`, `rich-fetch/`, `seed/`. Each feature folder has a
-`browser/` subfolder when there are real-Chromium tests for it.
+`browser/` subfolder when there are real-browser tests for it (run on
+Chromium, Firefox, and WebKit via web-test-runner).
 
 Cross-package tests that exercise core through the SSR pipeline
 or scaffolds live at the repo root in `test/ssr/`,

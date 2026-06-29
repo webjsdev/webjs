@@ -24,7 +24,7 @@ app work.
 | Kind | Location | What it does | Runner |
 |---|---|---|---|
 | **unit + integration** (node) | `test/<feature>/<name>.test.{js,ts,mjs}` | Imports modules and asserts. No spawned process, no network. Includes both true unit tests and in-process integration. | `node --test` |
-| **browser** | `test/<feature>/browser/<name>.test.js` | Runs in real Chromium with Playwright. Real DOM, events, `adoptedStyleSheets`, `IntersectionObserver`, shadow / light DOM. | web-test-runner (`wtr`) |
+| **browser** | `test/<feature>/browser/<name>.test.js` | Runs in real Chromium, Firefox, AND WebKit via Playwright (#774). Real DOM, events, `adoptedStyleSheets`, `IntersectionObserver`, shadow / light DOM. WebKit is the engine behind the iOS-only repaint bugs (the #610 class), so it runs in CI now, not just by hand on-device. | web-test-runner (`wtr`) |
 | **e2e** | `test/<feature>/e2e/<name>.test.{ts,mjs}` | Boots a real process (dev server, CLI binary) and drives it through its public interface (HTTP, browser, stdout). Opt in with `WEBJS_E2E=1`. | `node --test` (driver) |
 | **smoke** | `test/<feature>/smoke/<name>.test.{js,ts}` | Fast deploy-time sanity check. A subset of e2e in spirit, kept separate so it runs on every deploy. | `node --test` |
 
@@ -99,8 +99,18 @@ package, it goes in that package's `test/`.
 - `npm run test:browser` → `wtr`: globs
   `packages/*/test/**/browser/**/*.test.js` and
   `test/**/browser/**/*.test.js`. The blog browser e2e is
-  excluded (it needs the blog dev server up first).
-- `npm run test:e2e` → `WEBJS_E2E=1 node --test test/e2e/e2e.test.mjs`.
+  excluded (it needs the blog dev server up first). Runs on Chromium,
+  Firefox, and WebKit concurrently; narrow to one engine for a fast local
+  loop with `WEBJS_BROWSERS=chromium npx wtr` (comma-separate for a subset).
+- `npm run test:e2e` → `WEBJS_E2E=1 node --test test/e2e/e2e.test.mjs`. In CI
+  this runs as two PARALLEL jobs (#774): the Node-served suite (the required
+  merge-gate check) and a Bun-served run (`WEBJS_E2E_RUNTIME=bun`) in a
+  separate `e2e-bun` job, so the cross-runtime e2e no longer serializes behind
+  the Node run.
+- `npm run test:coverage` → `WEBJS_COVERAGE=1 npm test`: the node suite with
+  Node's built-in coverage reporter (#774). Opt-in, kept off the default
+  `npm test` so the common path stays fast; excludes test files and the
+  `scripts/` harness so the numbers reflect shipped source.
 - `npm run test:all` runs node + browser (not e2e).
 
 The root drivers above ONLY discover the framework packages and the root
@@ -195,7 +205,7 @@ ui-website ship no test suite yet, so they are not in the job.
 
 ## Component test helpers (`@webjsdev/core/testing`)
 
-`import { fixture, ssrFixture, waitForUpdate, assertNoA11yViolations, click, shadowQuery, shadowQueryAll } from '@webjsdev/core/testing'`. The mount + hydrate + a11y helpers run in the WTR Chromium session (real DOM), thin wrappers over the browser already running.
+`import { fixture, ssrFixture, waitForUpdate, assertNoA11yViolations, click, shadowQuery, shadowQueryAll } from '@webjsdev/core/testing'`. The mount + hydrate + a11y helpers run in the WTR browser session (real DOM, on each of Chromium / Firefox / WebKit), thin wrappers over the browser already running.
 
 ### `fixture()` vs `ssrFixture()`
 
