@@ -59,6 +59,15 @@ export interface CacheStore {
   delete(key: string): Promise<void>;
   /** Atomically increment a counter; returns the new value (TTL set on creation only). */
   increment(key: string, ttlMs?: number): Promise<number>;
+  /**
+   * OPTIONAL atomic set insert for the tag index (#752): add `member` to the set
+   * at `key`, refreshing the key TTL. Eliminates the lost-update race of the
+   * read-modify-write JSON path. A store omitting it falls back to that path.
+   * Paired with `setMembers` (implement both or neither).
+   */
+  setAdd?(key: string, member: string, ttlMs?: number): Promise<void>;
+  /** OPTIONAL set read, the counterpart of `setAdd` (empty array on a miss). */
+  setMembers?(key: string): Promise<string[]>;
 }
 
 /** The pluggable logger interface. */

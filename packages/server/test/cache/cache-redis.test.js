@@ -107,3 +107,35 @@ test('cache() over redisStore preserves a Date on a warm hit (#748)', async () =
     setStore(memoryStore());
   }
 });
+
+test('redisStore: setAdd + setMembers atomic set round-trip (#752)', async () => {
+  const s = redisStore({ url: 'redis://sets' });
+  await s.setAdd('cache:tag:posts', 'cache:a');
+  await s.setAdd('cache:tag:posts', 'cache:b');
+  await s.setAdd('cache:tag:posts', 'cache:a'); // SADD dedups
+  const members = await s.setMembers('cache:tag:posts');
+  assert.deepEqual([...members].sort(), ['cache:a', 'cache:b']);
+  assert.deepEqual(await s.setMembers('cache:tag:none'), [], 'missing set is empty');
+});
+
+test('tag index over redisStore: concurrent adds + revalidateTag evict all (#752)', async () => {
+  const { addKeyToTags, revalidateTag } = await import('../../src/cache-tags.js');
+  const { setStore, memoryStore } = await import('../../src/cache.js');
+  setStore(redisStore({ url: 'redis://tagatomic' }));
+  try {
+    const N = 30;
+    await Promise.all(Array.from({ length: N }, async (_, i) => {
+      await getStoreSet(`v-${i}`, `${i}`);
+      await addKeyToTags(['grp'], `v-${i}`, 60_000);
+    }));
+    // SADD is atomic, so every concurrent key is indexed.
+    for (let i = 0; i < N; i++) assert.equal(await getStoreGet(`v-${i}`), `${i}`);
+    await revalidateTag('grp');
+    for (let i = 0; i < N; i++) assert.equal(await getStoreGet(`v-${i}`), null, `v-${i} evicted`);
+  } finally {
+    setStore(memoryStore());
+  }
+
+  async function getStoreSet(k, v) { const { getStore } = await import('../../src/cache.js'); return getStore().set(k, v, 60_000); }
+  async function getStoreGet(k) { const { getStore } = await import('../../src/cache.js'); return getStore().get(k); }
+});

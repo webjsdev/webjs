@@ -16,20 +16,22 @@
  * clears the index entry. A mutation in ANY module can therefore evict every
  * read tagged `'posts'` across modules with one explicit call.
  *
- * It stays a thin index over `store.get/set/delete`: no new store method, a
- * plain JSON array (a Set is trivial in the memory store; the same get/set of
- * a JSON array works for Redis). The cohesive companion for HTML paths is
- * `revalidatePath` in `html-cache.js`; together they are the server cache
- * invalidation surface (this one for `cache()` DATA, that one for cached HTML).
+ * The cohesive companion for HTML paths is `revalidatePath` in
+ * `html-cache.js`; together they are the server cache invalidation surface
+ * (this one for `cache()` DATA, that one for cached HTML).
  *
- * MULTI-INSTANCE CAVEAT (mirrors #241): the index is a plain read-modify-write
- * of a JSON array, NOT atomic across processes. With a shared Redis store,
- * `revalidateTag` deletes the keys it can see and reaches every instance for
- * those keys, but two instances appending to the same tag concurrently can
- * lose an append (last write wins), so a freshly-stored key on a peer might
- * miss eviction and live until its TTL. The tag index entry itself also
- * carries the cache TTL, so the index self-prunes and never grows unbounded.
- * For strict cross-instance invalidation, prefer a short `ttl` as the floor.
+ * ATOMICITY (#752): when the store exposes the optional `setAdd` / `setMembers`
+ * primitives, the tag index is a real SET, so adding a cache key is an atomic
+ * insert (`SADD` on Redis, a native `Set` in the single-process memory store).
+ * This eliminates the lost-update race the previous JSON-array read-modify-write
+ * had: two concurrent mutations appending to the same tag (whether across Redis
+ * instances or interleaved in one process at the read/write await gap) no longer
+ * drop an entry, so `revalidateTag` reliably evicts every tagged key. The index
+ * key carries the cache TTL (refreshed on each add), so it self-prunes. A custom
+ * store WITHOUT the primitives falls back to the old JSON-array path, which keeps
+ * the documented non-atomic caveat (prefer a short `ttl` as the cross-instance
+ * floor there). The HTML-side analog `revalidatePath` (#241) still carries the
+ * older caveat and is a separate follow-up.
  *
  * @module cache-tags
  */
@@ -44,16 +46,30 @@ function tagKey(tag) {
   return `${TAG_PREFIX}${tag}`;
 }
 
+/** @param {import('./cache.js').CacheStore} store */
+function supportsAtomicSets(store) {
+  return typeof store.setAdd === 'function' && typeof store.setMembers === 'function';
+}
+
 /**
  * Read the cache-key set stored under one tag. Returns a plain array (empty
- * on a miss / parse error, failing open). The store holds a JSON array.
+ * on a miss / parse error, failing open). Reads via the store's SET primitive
+ * when available (the atomic path), else parses the legacy JSON array.
  *
  * @param {string} tag
  * @returns {Promise<string[]>}
  */
 async function readTagKeys(tag) {
+  const store = getStore();
+  if (supportsAtomicSets(store)) {
+    try {
+      return await store.setMembers(tagKey(tag));
+    } catch {
+      return [];
+    }
+  }
   try {
-    const raw = await getStore().get(tagKey(tag));
+    const raw = await store.get(tagKey(tag));
     if (!raw) return [];
     const arr = JSON.parse(raw);
     return Array.isArray(arr) ? arr : [];
@@ -79,13 +95,21 @@ async function readTagKeys(tag) {
 export async function addKeyToTags(tags, cacheKey, ttlMs) {
   if (!Array.isArray(tags) || tags.length === 0) return;
   const store = getStore();
+  const atomic = supportsAtomicSets(store);
   for (const tag of tags) {
     if (typeof tag !== 'string' || !tag) continue;
     try {
-      const keys = await readTagKeys(tag);
-      if (keys.includes(cacheKey)) continue;
-      keys.push(cacheKey);
-      await store.set(tagKey(tag), JSON.stringify(keys), ttlMs);
+      if (atomic) {
+        // Atomic set insert: no read-modify-write, so a concurrent add to the
+        // same tag (across instances or interleaved in-process) cannot lose
+        // this key. SADD dedups, so no membership pre-check is needed.
+        await store.setAdd(tagKey(tag), cacheKey, ttlMs);
+      } else {
+        const keys = await readTagKeys(tag);
+        if (keys.includes(cacheKey)) continue;
+        keys.push(cacheKey);
+        await store.set(tagKey(tag), JSON.stringify(keys), ttlMs);
+      }
     } catch {
       /* a tag-index write failure must never affect the cached value */
     }

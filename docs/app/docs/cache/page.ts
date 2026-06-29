@@ -81,7 +81,7 @@ export async function createComment(input) {
 
     <p><strong>Tag invalidation evicts cached DATA, <code>revalidatePath</code> evicts cached HTML.</strong> Together they are the server cache invalidation surface, both imported from <code>@webjsdev/server</code>.</p>
 
-    <p><strong>Multi-instance note.</strong> The tag index is a thin, non-atomic read-modify-write of a JSON array in the store. With a shared Redis store, <code>revalidateTag</code> reaches every instance for the keys it can see, but two instances appending to one tag concurrently can lose an append, so a freshly-stored key on a peer might miss eviction and live until its TTL. The index entry carries the cache TTL so it self-prunes. For strict cross-instance invalidation, prefer a short <code>ttl</code> as the floor.</p>
+    <p><strong>Multi-instance note.</strong> On the built-in memory and Redis stores the tag index is a real set (a native <code>Set</code> in memory, a Redis <code>SADD</code> set), so adding a cache key to a tag is an atomic insert. Two mutations appending to the same tag concurrently (across Redis instances, or interleaved in one process) no longer lose an entry, so <code>revalidateTag</code> reliably evicts every tagged key. A custom store that does not implement the optional atomic-set methods falls back to the older non-atomic JSON path, where a concurrent append can be lost; there, prefer a short <code>ttl</code> as the cross-instance floor. The index entry carries the cache TTL so it self-prunes either way.</p>
 
     <h2>HTTP Cache-Control: Page-Level Caching</h2>
     <p>For page-level caching served to browsers and CDNs, use the <code>metadata.cacheControl</code> export in any <code>page.ts</code>:</p>
