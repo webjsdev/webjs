@@ -18,8 +18,109 @@ import {
   createCompressor,
   varyWithAcceptEncoding,
   webStreamChunks,
+  compressBufferSync,
+  readBufferedOrStream,
+  MAX_SYNC_COMPRESS_BYTES,
 } from '../../src/listener-core.js';
 import { setBasePath } from '../../src/importmap.js';
+import { Readable } from 'node:stream';
+
+/* ---------------- buffered-compress fast path (#756) ---------------- */
+
+/** Drain an async iterable of Uint8Array into one Buffer. */
+async function collect(iter) {
+  const parts = [];
+  for await (const c of iter) parts.push(Buffer.from(c));
+  return Buffer.concat(parts);
+}
+
+/** Stream a node Transform (the streaming compressor) to a Buffer. */
+function streamCompress(encoding, buf) {
+  const c = createCompressor(encoding);
+  c.end(buf);
+  return collect(Readable.toWeb(c));
+}
+
+for (const encoding of ['br', 'gzip', 'deflate']) {
+  test(`compressBufferSync(${encoding}) is byte-identical to the streaming compressor`, async () => {
+    const input = Buffer.from('hello compressible world '.repeat(200));
+    const sync = compressBufferSync(encoding, input);
+    const streamed = await streamCompress(encoding, input);
+    assert.ok(Buffer.isBuffer(sync) && sync.length > 0, 'produces bytes');
+    assert.deepEqual(sync, streamed, 'sync output equals streamed output (parity)');
+  });
+}
+
+test('compressBufferSync returns null for an empty encoding', () => {
+  assert.equal(compressBufferSync('', Buffer.from('x')), null);
+});
+
+test('readBufferedOrStream: a single-chunk body is returned as buffered bytes', async () => {
+  const data = new TextEncoder().encode('a buffered body in one chunk');
+  const web = new ReadableStream({ start(c) { c.enqueue(data); c.close(); } });
+  const r = await readBufferedOrStream(web, MAX_SYNC_COMPRESS_BYTES);
+  assert.ok(r.buffered !== undefined, 'classified as buffered');
+  assert.deepEqual(Buffer.from(r.buffered), Buffer.from(data));
+});
+
+test('readBufferedOrStream: a multi-chunk body is returned as a replayable stream', async () => {
+  const a = new TextEncoder().encode('chunk-1;');
+  const b = new TextEncoder().encode('chunk-2;');
+  const web = new ReadableStream({ start(c) { c.enqueue(a); c.enqueue(b); c.close(); } });
+  const r = await readBufferedOrStream(web, MAX_SYNC_COMPRESS_BYTES);
+  assert.ok(r.stream !== undefined, 'classified as streamed');
+  assert.equal((await collect(r.stream)).toString(), 'chunk-1;chunk-2;', 'no chunk lost in replay');
+});
+
+test('readBufferedOrStream: an oversized single chunk falls back to streaming', async () => {
+  const big = new Uint8Array(MAX_SYNC_COMPRESS_BYTES + 1);
+  const web = new ReadableStream({ start(c) { c.enqueue(big); c.close(); } });
+  const r = await readBufferedOrStream(web, MAX_SYNC_COMPRESS_BYTES);
+  assert.ok(r.stream !== undefined, 'oversized body is streamed, not sync-compressed');
+  assert.equal((await collect(r.stream)).length, big.length, 'full body preserved');
+});
+
+test('readBufferedOrStream: an empty body is buffered (zero bytes)', async () => {
+  const web = new ReadableStream({ start(c) { c.close(); } });
+  const r = await readBufferedOrStream(web, MAX_SYNC_COMPRESS_BYTES);
+  assert.ok(r.buffered !== undefined && r.buffered.length === 0, 'empty buffered body');
+});
+
+test('readBufferedOrStream: a slow second chunk does NOT block classification (streaming TTFB, #756 review)', async () => {
+  // The regression this guards: classifying buffered-vs-streamed by awaiting the
+  // SECOND read would withhold a streamed body's first byte until its second
+  // chunk arrives (a Suspense boundary resolving), so a compressed streamed page
+  // on Bun would lose progressive first paint. Here the first chunk is immediate
+  // but the second is delayed; classification must return PROMPTLY as a stream.
+  const DELAY = 300;
+  const web = new ReadableStream({
+    start(c) { c.enqueue(new TextEncoder().encode('shell;')); }, // first byte: immediate
+    async pull(c) {
+      await new Promise((r) => setTimeout(r, DELAY)); // a far-off boundary
+      c.enqueue(new TextEncoder().encode('boundary;'));
+      c.close();
+    },
+  });
+  const t0 = Date.now();
+  const r = await readBufferedOrStream(web, MAX_SYNC_COMPRESS_BYTES);
+  const classifyMs = Date.now() - t0;
+  assert.ok(r.stream !== undefined, 'a slow-second-chunk body is classified as streamed, not buffered');
+  assert.ok(classifyMs < DELAY,
+    `classification returned in ${classifyMs}ms, before the ${DELAY}ms second chunk (did not block first paint)`);
+  // The full body still streams in order afterwards (no chunk lost in the handoff).
+  assert.equal((await collect(r.stream)).toString(), 'shell;boundary;', 'both chunks stream in order');
+});
+
+test('readBufferedOrStream: a mid-stream source error propagates through the replay stream (no hang)', async () => {
+  const boom = new Error('source failed mid-stream');
+  const web = new ReadableStream({
+    start(c) { c.enqueue(new TextEncoder().encode('first;')); },
+    pull(c) { c.error(boom); },
+  });
+  const r = await readBufferedOrStream(web, MAX_SYNC_COMPRESS_BYTES);
+  assert.ok(r.stream !== undefined, 'classified as streamed (the second read errored)');
+  await assert.rejects(collect(r.stream), /source failed mid-stream/, 'the error surfaces, not a hang');
+});
 
 /* ---------------- SseHub: registry + fanout ---------------- */
 

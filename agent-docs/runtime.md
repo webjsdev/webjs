@@ -13,7 +13,7 @@ user-facing reference is the docs-site page `/docs/runtime`; keep the two in syn
 |---|---|---|
 | Install | `npm install` (required) | `bun install` (required, like Node) |
 | Run | `npm run dev` / `npm run start` | `bun run dev` / `bun run start` |
-| Listener | `node:http` shell | native `Bun.serve` (about 1.9x req/s on the listening path) |
+| Listener | `node:http` shell | native `Bun.serve` (about 1.9x req/s on the LISTENING PATH only, a trivial-handler microbenchmark, NOT end-to-end: for a real SSR page the render dominates and the delta is small, see `scripts/bench-listener.mjs`) |
 | TS strip | built-in `module.stripTypeScriptTypes` | `amaro` (byte-identical, position-preserving) |
 | SQLite | built-in `node:sqlite` + `drizzle-orm/node-sqlite` | built-in `bun:sqlite` + `drizzle-orm/bun-sqlite` |
 | Hot reload | `node --watch` | `bun --hot` |

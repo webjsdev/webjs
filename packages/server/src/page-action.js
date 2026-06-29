@@ -2,6 +2,7 @@ import { isNotFound, isRedirect } from '@webjsdev/core';
 import { ssrPage, ssrNotFound, loadModule } from './ssr.js';
 import { readBytesBounded, payloadTooLarge, DEFAULT_MAX_MULTIPART_BYTES } from './body-limit.js';
 import { getBodyLimits } from './context.js';
+import { propagateTrustedRemoteIp } from './rate-limit.js';
 
 /**
  * Page server actions: a `page.{js,ts}` may export an `action` function that
@@ -133,12 +134,20 @@ async function parseFormBody(req) {
   if (tooLarge) return { tooLarge: true, formData: new FormData(), request: req };
 
   // Rebuild a fresh Request from the bytes so the action can re-read the body.
+  // SECURITY (#756): strip any inbound `x-webjs-remote-ip` the copy carried so a
+  // client cannot spoof it through the rebuild, and carry the FRAMEWORK-trusted
+  // remote IP forward out of band (the rebuild is a new object, so the listener's
+  // WeakMap stamp on `req` does not follow it). Without this, `clientIp` inside a
+  // page `action` (the no-JS form write path, e.g. login throttling) would read
+  // the spoofable header on Bun.
   const headers = new Headers(req.headers);
+  headers.delete('x-webjs-remote-ip');
   const rebuilt = new Request(req.url, {
     method: req.method,
     headers,
     body: bytes && bytes.byteLength ? bytes : undefined,
   });
+  propagateTrustedRemoteIp(req, rebuilt);
 
   const isForm = /multipart\/form-data|application\/x-www-form-urlencoded/i.test(ct);
   let formData = new FormData();

@@ -3,9 +3,15 @@
  * selected when the host runtime is Bun. Bun's server is `Request`/`Response`
  * native, so this path skips the node:http `toWebRequest` / `sendWebResponse`
  * bridge entirely and hands the app's `handle(req): Response` straight to
- * `Bun.serve({ fetch })`. A benchmark on the full listening path (node:http
- * compat on Bun vs `Bun.serve`) measured ~1.9x more req/s, which is what justifies
- * a second shell rather than running the node compat path on Bun.
+ * `Bun.serve({ fetch })`. A microbenchmark of the LISTENING PATH ONLY (a trivial
+ * handler: node:http compat on Bun vs `Bun.serve`) measured ~1.9x more req/s,
+ * which is what justifies a second shell rather than running the node compat path
+ * on Bun. That figure is the listening-path delta, NOT end-to-end throughput: for
+ * a real SSR page the render cost dominates and the listener delta is small (see
+ * the end-to-end benchmark in `scripts/bench-listener.mjs`, #756). The hot path
+ * is kept allocation-lean: the remote IP is stamped out of band (no per-request
+ * `Request` clone, #756) and a buffered response is compressed synchronously (no
+ * per-response stream bridge).
  *
  * Feature parity with the node shell, routed through the shared
  * `listener-core.js` so the two cannot drift:
@@ -39,6 +45,7 @@ import { EventEmitter } from 'node:events';
 import { Readable, pipeline } from 'node:stream';
 import { matchApi } from './router.js';
 import { registerClient } from './broadcast.js';
+import { setTrustedRemoteIp } from './rate-limit.js';
 import {
   isCompressible,
   isEventsPath,
@@ -47,8 +54,10 @@ import {
   makeShutdown,
   negotiateEncoding,
   createCompressor,
+  compressBufferSync,
+  MAX_SYNC_COMPRESS_BYTES,
   varyWithAcceptEncoding,
-  webStreamChunks,
+  readBufferedOrStream,
 } from './listener-core.js';
 
 /* global Bun */
@@ -93,9 +102,9 @@ export function startBunListener(ctx) {
         // hints still ship in the rendered <head>, so the only loss is the
         // head-start during SSR compute, not the preloads themselves.
 
-        const webReq = stampRemoteIp(req, srv);
-        const resp = await app.handle(webReq);
-        return compress ? maybeCompress(resp, req) : resp;
+        stampRemoteIp(req, srv);
+        const resp = await app.handle(req);
+        return compress ? await maybeCompress(resp, req) : resp;
       } catch (e) {
         logger.error('request pipeline threw', { err: e instanceof Error ? e.stack : String(e) });
         return new Response(
@@ -287,20 +296,21 @@ function bunSseResponse(req, hub, app) {
 }
 
 /**
- * Stamp the framework-trusted remote IP from Bun's `server.requestIP`, after
- * stripping any spoofed inbound `x-webjs-remote-ip` (the node `toWebRequest`
- * equivalent, which reads `req.socket.remoteAddress`). Re-wraps the request with
- * the adjusted headers, preserving method + body.
+ * Stamp the framework-trusted remote IP from Bun's `server.requestIP`,
+ * out-of-band via `setTrustedRemoteIp` (#756). The previous implementation
+ * cloned the whole `Request` (`new Request(req, { headers })`) on EVERY request
+ * just to set one header; the WeakMap channel avoids that hot-path reallocation.
+ * The stamp is authoritative (`clientIp` reads it and ignores the inbound
+ * `x-webjs-remote-ip` header), so a client cannot spoof it even though the
+ * unmodified request still carries any inbound copy. Always stamps (with `''`
+ * when no IP is available) so the inbound header is never trusted on Bun.
  * @param {Request} req
  * @param {any} srv
  */
 function stampRemoteIp(req, srv) {
-  const headers = new Headers(req.headers);
-  headers.delete('x-webjs-remote-ip');
   let ip;
   try { ip = srv.requestIP(req)?.address; } catch {}
-  if (ip) headers.set('x-webjs-remote-ip', ip);
-  return new Request(req, { headers });
+  setTrustedRemoteIp(req, ip || '');
 }
 
 /**
@@ -308,35 +318,70 @@ function stampRemoteIp(req, srv) {
  * negotiation + compressor factory the node shell uses (shared in
  * `listener-core.js`). `node:zlib` runs natively on Bun, so this gives **brotli
  * on Bun** (the web `CompressionStream` used before had no brotli) and full
- * compression parity with the node shell. The body is bridged web -> node ->
- * web (`Readable.from(webStreamChunks(...))` -> `compressor` -> `Readable.toWeb`,
- * driven by `pipeline`; NOT `Readable.fromWeb`, which does not propagate a
- * mid-stream source error through `pipeline` on Bun, the #509 hang). Skips an
- * already-encoded body and a non-compressible media type (`isCompressible`
- * already excludes `text/event-stream`).
+ * compression parity with the node shell.
+ *
+ * A BUFFERED body (the common SSR page / JSON / file response, detected by
+ * `readBufferedOrStream` peeking a single bounded chunk) is compressed
+ * SYNCHRONOUSLY (`compressBufferSync`), skipping the per-response
+ * web -> node -> web stream bridge entirely (#756). A genuinely STREAMED body
+ * (Suspense, an action / route stream) or an oversized one keeps the bridge
+ * (`Readable.from(peeked.stream)` -> `compressor` -> `Readable.toWeb`, driven by
+ * `pipeline`; NOT `Readable.fromWeb`, which does not propagate a mid-stream
+ * source error through `pipeline` on Bun, the #509 hang). The sync and streamed
+ * paths use the SAME algo + params, so WITHIN a runtime the buffered fast path
+ * and the streaming bridge produce identical bytes (a buffered body is not
+ * served differently from a streamed one). Across runtimes the exact bytes can
+ * differ for gzip / deflate (Bun's bundled zlib is not the same build as Node's,
+ * so the compressed output is not guaranteed identical, byte-for-byte; brotli
+ * does match), which is fine since each response is self-describing via
+ * `content-encoding` and a client just decodes it. Skips an already-encoded body
+ * and a non-compressible media type (`isCompressible` already excludes
+ * `text/event-stream`).
  * @param {Response} resp
  * @param {Request} req
  */
-function maybeCompress(resp, req) {
+async function maybeCompress(resp, req) {
   if (!resp.body) return resp;
   if (resp.headers.has('content-encoding')) return resp;
   if (!isCompressible(resp.headers.get('content-type'))) return resp;
   const encoding = negotiateEncoding(req.headers.get('accept-encoding'));
-  const compressor = createCompressor(encoding);
-  if (!compressor) return resp;
+  if (!encoding) return resp;
 
   const headers = new Headers(resp.headers);
   headers.set('content-encoding', encoding);
-  headers.delete('content-length');
   headers.set('vary', varyWithAcceptEncoding(headers.get('vary')));
-  // Feed the web body into the compressor through the reader-loop generator (NOT
-  // Readable.fromWeb, which does not propagate a mid-stream source error through
-  // `pipeline` on Bun, the #509 hang) and drive it with `pipeline` so a source
-  // error (or a client disconnect destroying the output) tears down the whole
-  // chain instead of leaking/hanging the compressor. Backpressure is preserved:
-  // a slow client stalls `toWeb`, which stalls the compressor, which pauses the
-  // source.
-  const source = Readable.from(webStreamChunks(resp.body));
+
+  // Buffered-body fast path (#756): peek the body to tell a single bounded
+  // buffered chunk (the common SSR page / JSON / file response) from a genuinely
+  // streamed body (Suspense, an action / route stream) WITHOUT buffering a real
+  // stream. A buffered body cannot error mid-stream, so compress it synchronously
+  // and skip the per-response web -> node -> web stream bridge entirely. The sync
+  // path and the streaming bridge share the SAME algo + params, so within this
+  // runtime a buffered body and a streamed one compress identically (the wire is
+  // self-describing via content-encoding either way). A streamed / oversized body
+  // falls through to the bridge below.
+  const peeked = await readBufferedOrStream(resp.body, MAX_SYNC_COMPRESS_BYTES);
+  if (peeked.buffered !== undefined) {
+    const out = compressBufferSync(encoding, peeked.buffered);
+    headers.set('content-length', String(out.length));
+    return new Response(out, { status: resp.status, statusText: resp.statusText, headers });
+  }
+
+  headers.delete('content-length');
+  // Allocate the streaming compressor ONLY on the streamed path: the buffered
+  // fast path above used `compressBufferSync` and never needs a Transform, so
+  // hoisting this would waste a native zlib/brotli handle on the common case.
+  // `encoding` is guaranteed br/gzip/deflate (negotiateEncoding), so
+  // `createCompressor` never returns null here.
+  const compressor = createCompressor(encoding);
+  // Feed the (peeked + drained) web body into the compressor through the reader
+  // loop (NOT Readable.fromWeb, which does not propagate a mid-stream source
+  // error through `pipeline` on Bun, the #509 hang) and drive it with `pipeline`
+  // so a source error (or a client disconnect destroying the output) tears down
+  // the whole chain instead of leaking/hanging the compressor. Backpressure is
+  // preserved: a slow client stalls `toWeb`, which stalls the compressor, which
+  // pauses the source.
+  const source = Readable.from(peeked.stream);
   pipeline(source, compressor, () => {});
   const body = Readable.toWeb(compressor);
   return new Response(body, { status: resp.status, statusText: resp.statusText, headers });
