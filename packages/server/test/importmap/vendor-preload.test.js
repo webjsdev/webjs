@@ -1,0 +1,241 @@
+/**
+ * Vendor modulepreload (#754): flatten the npm CDN waterfall by hinting the
+ * vendor URLs a page's SHIPPED modules actually import, so the browser fetches
+ * the vendor graph in parallel instead of discovering it level by level.
+ *
+ *  - `vendorPreloadTargets` (unit): maps reached bare specifiers to
+ *    `{ href, integrity }` taken DIRECTLY from the importmap (byte-identical, so
+ *    no double-fetch), excludes `@webjsdev/core`, dedups, and drops a specifier
+ *    not in the importmap (an unpinned / unreached / elided vendor -> no
+ *    over-fetch).
+ *  - the HTTP layer: a page rendering an interactive component that imports a
+ *    cross-origin vendor emits `<link rel="modulepreload" href integrity
+ *    crossorigin>` for the reached vendor URL; an elided/unused vendor is NOT
+ *    preloaded; the modulepreload href is byte-identical to the importmap target.
+ */
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+import { createRequestHandler } from '../../src/dev.js';
+import {
+  setVendorEntries,
+  setCoreInstall,
+  vendorPreloadTargets,
+  buildImportMap,
+} from '../../src/importmap.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const CORE_SRC = resolve(__dirname, '../../../core/src');
+const CORE_DIR = resolve(__dirname, '../../../core');
+const HTML_URL = pathToFileURL(join(CORE_SRC, 'html.js')).toString();
+const COMPONENT_URL = pathToFileURL(join(CORE_SRC, 'component.js')).toString();
+
+/* ---------------- vendorPreloadTargets (unit) ---------------- */
+
+test('vendorPreloadTargets maps reached specifiers to importmap href + integrity', async () => {
+  const DAYJS = 'https://ga.jspm.io/npm:dayjs@1.11.21/dayjs.min.js';
+  const UTC = 'https://ga.jspm.io/npm:dayjs@1.11.21/plugin/utc.js';
+  await setVendorEntries(
+    { dayjs: DAYJS, 'dayjs/plugin/utc': UTC },
+    { [DAYJS]: 'sha384-dayjsHASH', [UTC]: 'sha384-utcHASH' },
+  );
+  const targets = vendorPreloadTargets(['dayjs', 'dayjs/plugin/utc']);
+  assert.deepEqual(
+    targets.sort((a, b) => a.href.localeCompare(b.href)),
+    [
+      { href: DAYJS, integrity: 'sha384-dayjsHASH' },
+      { href: UTC, integrity: 'sha384-utcHASH' },
+    ],
+    'each reached specifier yields its importmap href + matching integrity',
+  );
+  // Byte-identity: the href is EXACTLY the importmap target (no rewrite).
+  assert.equal(targets.find((t) => t.href === DAYJS).href, buildImportMap().imports.dayjs);
+  await setVendorEntries({});
+});
+
+test('vendorPreloadTargets excludes @webjsdev/core and dedups', async () => {
+  const LIT = 'https://ga.jspm.io/npm:lit@3.1.0/index.js';
+  await setVendorEntries({
+    'lit': LIT,
+    'lit-also': LIT, // two specifiers, same URL -> one preload
+    '@webjsdev/core': 'https://cdn.example/core.js',
+    '@webjsdev/core/directives': 'https://cdn.example/directives.js',
+  });
+  const targets = vendorPreloadTargets(['lit', 'lit-also', '@webjsdev/core', '@webjsdev/core/directives']);
+  assert.deepEqual(targets, [{ href: LIT, integrity: undefined }],
+    'core specifiers excluded; the shared URL is emitted once');
+  await setVendorEntries({});
+});
+
+test('vendorPreloadTargets drops a specifier not in the importmap (no over-fetch)', async () => {
+  await setVendorEntries({ dayjs: 'https://ga.jspm.io/npm:dayjs@1.11.21/dayjs.min.js' });
+  const targets = vendorPreloadTargets(['dayjs', 'left-pad', 'not-pinned']);
+  assert.equal(targets.length, 1, 'only the pinned/reached specifier is a target');
+  assert.ok(targets[0].href.includes('dayjs'));
+  await setVendorEntries({});
+});
+
+test('vendorPreloadTargets returns [] for an empty specifier set', async () => {
+  await setVendorEntries({ dayjs: 'https://ga.jspm.io/npm:dayjs@1/dayjs.js' });
+  assert.deepEqual(vendorPreloadTargets([]), []);
+  assert.deepEqual(vendorPreloadTargets(undefined), []);
+  await setVendorEntries({});
+  await setCoreInstall(CORE_DIR, true); // restore shared core install for later files
+});
+
+/* ---------------- HTTP layer ---------------- */
+
+let tmpRoot;
+before(() => { tmpRoot = mkdtempSync(join(tmpdir(), 'webjs-vendorpreload-')); });
+after(() => { rmSync(tmpRoot, { recursive: true, force: true }); });
+
+/** Write a trivial local node_modules stub for a bare specifier so the SSR
+ * render (which Node resolves from disk) does not crash on a missing package.
+ * The importmap target stays the pinned CDN URL (that is what drives the
+ * browser-side modulepreload href); the stub only lets SSR import the widget
+ * module so a successful render populates the used-component set. Without it the
+ * page 500s and a "no modulepreload" assertion would pass VACUOUSLY. */
+function writeVendorStub(appDir, name) {
+  const pkgDir = join(appDir, 'node_modules', name);
+  mkdirSync(pkgDir, { recursive: true });
+  writeFileSync(join(pkgDir, 'package.json'),
+    JSON.stringify({ name, version: '1.0.0', type: 'module', main: 'index.js' }));
+  writeFileSync(join(pkgDir, 'index.js'), `export default function stub() { return {}; }\n`);
+}
+
+function makeApp({ pin = null, stubs = ['dayjs'] } = {}) {
+  const appDir = mkdtempSync(join(tmpRoot, 'app-'));
+  const files = {
+    'package.json': JSON.stringify({ name: 'fixture', type: 'module' }),
+    'app/layout.js':
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export default ({ children }) => html\`<main>\${children}</main>\`;\n`,
+  };
+  for (const [rel, body] of Object.entries(files)) {
+    const abs = join(appDir, rel);
+    mkdirSync(dirname(abs), { recursive: true });
+    writeFileSync(abs, body);
+  }
+  for (const s of stubs) writeVendorStub(appDir, s);
+  if (pin) {
+    const dir = join(appDir, '.webjs', 'vendor');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'importmap.json'), JSON.stringify(pin));
+  }
+  return appDir;
+}
+
+/** An INTERACTIVE component (a `@click`, so elision keeps it) that imports the
+ * bare `dayjs` specifier, so dayjs stays reachable in the pruned vendor map. */
+function writeVendorWidget(appDir) {
+  writeFileSync(
+    join(appDir, 'app', 'widget.js'),
+    `import { WebComponent } from ${JSON.stringify(COMPONENT_URL)};\n` +
+    `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+    `import dayjs from 'dayjs';\n` +
+    `export class XWidget extends WebComponent {\n` +
+    `  render() { return html\`<button @click=\${() => dayjs()}>hi</button>\`; }\n` +
+    `}\n` +
+    `XWidget.register('x-widget');\n`,
+  );
+}
+
+function modulepreloadLinks(html) {
+  return [...html.matchAll(/<link rel="modulepreload"[^>]*>/g)].map((m) => m[0]);
+}
+function importmapTarget(html, spec) {
+  const m = html.match(/<script type="importmap"[^>]*>([\s\S]*?)<\/script>/);
+  if (!m) return null;
+  return JSON.parse(m[1]).imports[spec] || null;
+}
+
+const DAYJS_URL = 'https://ga.jspm.io/npm:dayjs@1.11.21/dayjs.min.js';
+const DAYJS_INTEGRITY = 'sha384-TESTdayjsINTEGRITY0000000000000000000000000000000000000000000';
+
+test('a page reaching a cross-origin vendor emits a modulepreload (with integrity)', async () => {
+  const appDir = makeApp({
+    pin: { imports: { dayjs: DAYJS_URL }, integrity: { [DAYJS_URL]: DAYJS_INTEGRITY } },
+  });
+  writeVendorWidget(appDir);
+  writeFileSync(
+    join(appDir, 'app', 'page.js'),
+    `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+    `import './widget.js';\n` +
+    `export default () => html\`<x-widget></x-widget>\`;\n`,
+  );
+  const app = await createRequestHandler({ appDir, dev: false });
+  await app.warmup();
+  const html = await (await app.handle(new Request('http://x/'))).text();
+
+  const links = modulepreloadLinks(html);
+  const dayjs = links.filter((l) => l.includes(DAYJS_URL));
+  assert.equal(dayjs.length, 1, 'exactly one modulepreload for the reached vendor URL');
+  assert.match(dayjs[0], /integrity="sha384-TESTdayjsINTEGRITY/, 'carries the importmap integrity');
+  assert.match(dayjs[0], /crossorigin(=|>|\s)/, 'cross-origin vendor preload carries crossorigin');
+
+  // Byte-identity: the preload href is EXACTLY the importmap target, else the
+  // browser treats them as two resources and double-fetches.
+  const target = importmapTarget(html, 'dayjs');
+  assert.ok(target, 'dayjs is in the served importmap');
+  assert.ok(dayjs[0].includes(`href="${target}"`), 'preload href === importmap target (no double fetch)');
+});
+
+test('an unused/elided vendor is NOT preloaded (no over-fetch)', async () => {
+  // Pin TWO vendors but the page reaches only dayjs. `left-pad` is pinned yet
+  // never imported by a shipped module, so it must not be preloaded.
+  const LEFTPAD = 'https://ga.jspm.io/npm:left-pad@1.3.0/index.js';
+  const appDir = makeApp({
+    pin: {
+      imports: { dayjs: DAYJS_URL, 'left-pad': LEFTPAD },
+      integrity: { [DAYJS_URL]: DAYJS_INTEGRITY },
+    },
+  });
+  writeVendorWidget(appDir);
+  writeFileSync(
+    join(appDir, 'app', 'page.js'),
+    `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+    `import './widget.js';\n` +
+    `export default () => html\`<x-widget></x-widget>\`;\n`,
+  );
+  const app = await createRequestHandler({ appDir, dev: false });
+  await app.warmup();
+  const html = await (await app.handle(new Request('http://x/'))).text();
+
+  const links = modulepreloadLinks(html);
+  assert.ok(links.some((l) => l.includes('dayjs')), 'the reached vendor IS preloaded');
+  assert.ok(!links.some((l) => l.includes('left-pad')), 'the unused vendor is NOT preloaded (no over-fetch)');
+});
+
+test('a vendor imported ONLY by an elided (display-only) component is NOT preloaded', async () => {
+  // A display-only component (no interactivity signal) is elided, so its bare
+  // import is stripped from the served source and must not be preloaded.
+  const appDir = makeApp({
+    pin: { imports: { dayjs: DAYJS_URL }, integrity: { [DAYJS_URL]: DAYJS_INTEGRITY } },
+  });
+  writeFileSync(
+    join(appDir, 'app', 'badge.js'),
+    `import { WebComponent } from ${JSON.stringify(COMPONENT_URL)};\n` +
+    `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+    `import dayjs from 'dayjs';\n` +
+    `export class XBadge extends WebComponent {\n` +
+    `  render() { return html\`<span>\${dayjs ? 'static' : 'x'}</span>\`; }\n` +
+    `}\n` +
+    `XBadge.register('x-badge');\n`,
+  );
+  writeFileSync(
+    join(appDir, 'app', 'page.js'),
+    `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+    `import './badge.js';\n` +
+    `export default () => html\`<x-badge></x-badge>\`;\n`,
+  );
+  const app = await createRequestHandler({ appDir, dev: false });
+  await app.warmup();
+  const html = await (await app.handle(new Request('http://x/'))).text();
+  assert.ok(!modulepreloadLinks(html).some((l) => l.includes('dayjs')),
+    'an elided component\'s vendor is not preloaded');
+  await setCoreInstall(CORE_DIR, true);
+});

@@ -149,6 +149,41 @@ export function dynamicEdges(graph) {
 }
 
 /**
+ * Bare (npm vendor) import specifiers per file, kept SEPARATE from the static
+ * app graph (which only tracks relative + `#`-alias edges) and keyed by the
+ * graph in a WeakMap. Records the EXACT specifier as written (`dayjs`,
+ * `dayjs/plugin/utc`) so SSR can look it up in the vendor importmap and emit a
+ * `modulepreload` for the reached vendor URL (#754), flattening the vendor CDN
+ * waterfall. Excludes `node:` builtins and protocol specifiers.
+ * @type {WeakMap<ModuleGraph, Map<string, Set<string>>>}
+ */
+const BARE_EDGES = new WeakMap();
+
+/**
+ * The bare (npm vendor) import specifiers per file for a built graph, or an
+ * empty map if none. The values are specifiers (not resolved URLs); the caller
+ * maps them through the vendor importmap.
+ * @param {ModuleGraph} graph
+ * @returns {Map<string, Set<string>>}
+ */
+export function bareImports(graph) {
+  return BARE_EDGES.get(graph) || new Map();
+}
+
+/**
+ * True for a bare npm vendor specifier (`dayjs`, `@scope/pkg/sub`), excluding
+ * relative / absolute / `#`-alias paths and `node:` / protocol specifiers.
+ * Inlined here (not imported from vendor.js) to avoid a module cycle.
+ * @param {string} spec
+ * @returns {boolean}
+ */
+function isVendorSpecifier(spec) {
+  if (!spec || spec.startsWith('.') || spec.startsWith('/') || spec.startsWith('#') || spec.startsWith('__')) return false;
+  if (spec.startsWith('node:') || /^[a-z][a-z0-9+.-]*:/.test(spec)) return false;
+  return true;
+}
+
+/**
  * Build the module graph for all source files under `appDir`.
  *
  * @param {string} appDir
@@ -162,11 +197,14 @@ export async function buildModuleGraph(appDir) {
   const graph = new Map();
   /** @type {ModuleGraph} dynamic-import edges, keyed to `graph` below */
   const dynamic = new Map();
+  /** @type {Map<string, Set<string>>} bare vendor specifiers per file (#754) */
+  const bare = new Map();
   /** @type {Set<string>} every file walked this build (graph holds only files
    * with deps, so a separate set is needed to know what is still live). */
   const seen = new Set();
-  await walk(appDir, appDir, graph, seen, dynamic);
+  await walk(appDir, appDir, graph, seen, dynamic, bare);
   if (dynamic.size) DYNAMIC_EDGES.set(graph, dynamic);
+  if (bare.size) BARE_EDGES.set(graph, bare);
   // Evict parse-cache entries for files no longer in the tree (a rebuild after
   // a rename or delete), so a long dev session does not accumulate dead
   // entries. Scoped to appDir so a multi-app process (tests, dogfood smoke)
@@ -316,7 +354,7 @@ export function reachableFromEntries(graph, entryFiles, appDir) {
  * @param {string} appDir
  * @param {ModuleGraph} graph
  */
-async function walk(dir, appDir, graph, seen, dynamic) {
+async function walk(dir, appDir, graph, seen, dynamic, bare) {
   let entries;
   try { entries = await readdir(dir, { withFileTypes: true }); }
   catch { return; }
@@ -334,9 +372,9 @@ async function walk(dir, appDir, graph, seen, dynamic) {
     if (e.name.startsWith('.')) continue;
     const full = join(dir, e.name);
     if (e.isDirectory()) {
-      await walk(full, appDir, graph, seen, dynamic);
+      await walk(full, appDir, graph, seen, dynamic, bare);
     } else if (/\.(js|ts|mjs|mts)$/.test(e.name)) {
-      await parseFile(full, appDir, graph, seen, dynamic);
+      await parseFile(full, appDir, graph, seen, dynamic, bare);
     }
   }
 }
@@ -364,7 +402,7 @@ export function _parseCacheHas(file) { return PARSE_CACHE.has(file); }
  * @param {string} appDir
  * @param {ModuleGraph} graph
  */
-async function parseFile(file, appDir, graph, seen, dynamic) {
+async function parseFile(file, appDir, graph, seen, dynamic, bare) {
   let mtimeMs, size;
   try { const st = await stat(file); mtimeMs = st.mtimeMs; size = st.size; }
   catch { return; }
@@ -373,6 +411,7 @@ async function parseFile(file, appDir, graph, seen, dynamic) {
   if (cached && cached.mtimeMs === mtimeMs && cached.size === size) {
     if (cached.deps.size) graph.set(file, cached.deps);
     if (cached.dynDeps && cached.dynDeps.size && dynamic) dynamic.set(file, cached.dynDeps);
+    if (cached.bareDeps && cached.bareDeps.size && bare) bare.set(file, cached.bareDeps);
     return;
   }
 
@@ -400,6 +439,8 @@ async function parseFile(file, appDir, graph, seen, dynamic) {
   // code-example `import` string never becomes an edge.
   const masked = redactStringsAndTemplates(src, true);
   const deps = new Set();
+  /** @type {Set<string>} bare npm vendor specifiers imported by this file (#754) */
+  const bareDeps = new Set();
   for (const re of [IMPORT_RE, EXPORT_FROM_RE]) {
     for (const m of src.matchAll(re)) {
       // m.index is the keyword start (`\bimport` / `\bexport`). If that
@@ -407,11 +448,25 @@ async function parseFile(file, appDir, graph, seen, dynamic) {
       // and is not a real import edge.
       if (masked[m.index] === ' ') continue;
       const spec = m[1];
+      // Guard a match whose `from '<spec>'` tail reaches INTO a blanked literal:
+      // EXPORT_FROM_RE's lazy `[^'";]+?` can span a template body to a `from`
+      // written inside example code (`export const t = html\`...import x from
+      // 'left-pad'\``), so the KEYWORD is real but the SPECIFIER is not. A real
+      // string keeps its delimiters in the mask (only the body blanks), while a
+      // template body blanks whole, so a blanked opening quote means the
+      // specifier is inside a literal and the match is spurious.
+      const quoteAt = m.index + m[0].length - spec.length - 2;
+      if (masked[quoteAt] === ' ') continue;
       // Only resolve relative imports + `#`-style subpath aliases (#555)
       // within the project. A bare npm specifier (dayjs) has no alias match
-      // and is skipped; an aliased `#lib/x.server.ts` IS followed so the
-      // graph / auth gate / elision see the real path through the alias.
-      if (!spec.startsWith('.') && !spec.startsWith('/') && !expandImportAlias(spec, appDir)) continue;
+      // and is skipped FROM THE GRAPH, but recorded as a vendor edge so SSR
+      // can emit a modulepreload for the reached vendor URL (#754); an aliased
+      // `#lib/x.server.ts` IS followed so the graph / auth gate / elision see
+      // the real path through the alias.
+      if (!spec.startsWith('.') && !spec.startsWith('/') && !expandImportAlias(spec, appDir)) {
+        if (isVendorSpecifier(spec)) bareDeps.add(spec);
+        continue;
+      }
       const resolved = resolveImport(spec, file, appDir);
       if (resolved) deps.add(resolved);
     }
@@ -428,9 +483,10 @@ async function parseFile(file, appDir, graph, seen, dynamic) {
     const resolved = resolveImport(spec, file, appDir);
     if (resolved && !deps.has(resolved)) dynDeps.add(resolved);
   }
-  PARSE_CACHE.set(file, { mtimeMs, size, deps, dynDeps });
+  PARSE_CACHE.set(file, { mtimeMs, size, deps, dynDeps, bareDeps });
   if (deps.size) graph.set(file, deps);
   if (dynDeps.size && dynamic) dynamic.set(file, dynDeps);
+  if (bareDeps.size && bare) bare.set(file, bareDeps);
 }
 
 /**
