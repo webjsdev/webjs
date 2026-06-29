@@ -461,19 +461,33 @@ function assignPaths(root, parts) {
  * @param {Element | DocumentFragment | ShadowRoot} container
  */
 function createInstance(tr, container) {
+  // TEMP #730 diagnostic for the <diag-slot-btn> probe only.
+  const __D = (typeof globalThis !== 'undefined' && /** @type any */ (globalThis).__WEBJS_DIAG && /** @type any */ (container).tagName === 'DIAG-SLOT-BTN') ? /** @type any */ (globalThis).__WEBJS_DIAG : null;
+
   const { templateEl, parts } = compile(tr);
+  if (__D) __D.push('compiled parts=[' + parts.map((p) => p.kind + ':' + JSON.stringify(p.path)).join(' ') + ']');
   const frag = /** @type DocumentFragment */ (templateEl.content.cloneNode(true));
+  if (__D) {
+    const top = Array.from(frag.childNodes).map((n) => n.nodeName).join(',');
+    const c0 = frag.childNodes[0];
+    const kids = c0 ? Array.from(c0.childNodes).map((n) => n.nodeName).join(',') : 'NO-firstChild';
+    __D.push('frag top=[' + top + '] firstChildKids=[' + kids + ']');
+  }
 
   // Bookend markers bound the instance so we can tear it down cleanly.
   const startNode = document.createComment(`${MARKER}s`);
   const endNode = document.createComment(`${MARKER}e`);
 
-  const bound = parts.map((p) => bindPart(p, frag));
+  const bound = parts.map((p) => {
+    try {
+      return bindPart(p, frag);
+    } catch (e) {
+      if (__D) __D.push('bindPart THREW kind=' + p.kind + ' path=' + JSON.stringify(p.path) + ' err=' + (e && /** @type any */ (e).message));
+      throw e;
+    }
+  });
 
-  // TEMP #730 diagnostic for the <diag-slot-btn> probe only.
-  const __D = (typeof globalThis !== 'undefined' && /** @type any */ (globalThis).__WEBJS_DIAG && /** @type any */ (container).tagName === 'DIAG-SLOT-BTN') ? /** @type any */ (globalThis).__WEBJS_DIAG : null;
   if (__D) {
-    __D.push('createInstance parts=[' + parts.map((p) => p.kind).join(',') + ']');
     __D.push('eventBinds=[' + bound.filter((b) => b.kind === 'event').map((b) => (b.el && /** @type any */ (b.el).tagName) + (b.el && /** @type any */ (b.el).isConnected ? ':conn' : ':frag')).join(',') + ']');
   }
 
