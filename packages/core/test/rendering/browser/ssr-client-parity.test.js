@@ -16,7 +16,7 @@
  * The counterfactual (a component whose render() is non-deterministic across
  * the two calls) must FAIL the parity check, proving the guard has teeth.
  */
-import { html } from '../../../src/html.js';
+import { html, MARKER } from '../../../src/html.js';
 import { css } from '../../../src/css.js';
 import { WebComponent, prop } from '../../../src/component.js';
 import { signal } from '../../../src/signal.js';
@@ -33,17 +33,25 @@ const assert = {
  * live client DOM (none of which is a render divergence) and collapse
  * whitespace, leaving only the rendered template structure to compare:
  *   - the `<!--webjs-hydrate-->` light-DOM hydration marker (SSR only);
- *   - the client renderer's fine-grained part markers `<!--w$s/e/0/1...-->`
- *     (client only) that mark the instance and dynamic interpolation points;
+ *   - the client renderer's fine-grained part markers `<!--${MARKER}s/e/0/1...-->`
+ *     (client only) that mark the instance and dynamic interpolation points,
+ *     derived from the MARKER constant so this stays correct if it changes;
  *   - `data-webjs-prop-*` hydration attributes (SSR only, stripped on connect);
  *   - a shadow component's `<style>` block, which SSR inlines into the DSD
  *     but the client delivers via adoptedStyleSheets (same styling, different
  *     transport, not part of render()'s output).
  */
+// Match the client part markers `<!--${MARKER}...-->`, derived from the MARKER
+// constant (regex-escaped) so a marker change never silently breaks this guard.
+const MARKER_COMMENT_RE = new RegExp(
+  '<!--/?' + MARKER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[^>]*-->',
+  'g'
+);
+
 function normalize(htmlStr) {
   return String(htmlStr)
     .replace(/<!--webjs-hydrate-->/g, '')
-    .replace(/<!--\/?w\$[^>]*-->/g, '')
+    .replace(MARKER_COMMENT_RE, '')
     .replace(/\s+data-webjs-prop-[a-z0-9-]+="[^"]*"/g, '')
     .replace(/<style[^>]*>[\s\S]*?<\/style>/g, '')
     // Boolean/empty attributes serialise as bare `attr` in the SSR string but

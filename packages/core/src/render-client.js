@@ -89,15 +89,9 @@ export function render(value, container) {
   const host = /** @type any */ (container);
   const prev = host[INSTANCE];
 
-  // TEMP #730 diagnostic: trace the binding path for the <diag-slot-btn>
-  // probe only, gated on globalThis.__WEBJS_DIAG (set by the /diag page).
-  const __D = (typeof globalThis !== 'undefined' && /** @type any */ (globalThis).__WEBJS_DIAG && host && host.tagName === 'DIAG-SLOT-BTN') ? /** @type any */ (globalThis).__WEBJS_DIAG : null;
-
   if (isTemplate(value)) {
     const tr = /** @type {import('./html.js').TemplateResult} */ (value);
-    if (__D) __D.push('render prev=' + (prev ? 'Y' : 'n'));
     if (prev && prev.strings === tr.strings) {
-      if (__D) __D.push('-> updateInstance (no rebind)');
       updateInstance(prev, tr.values);
       return;
     }
@@ -108,23 +102,8 @@ export function render(value, container) {
     // rendering. The content will be replaced with identical output -
     // no visible flash because SSR and client render produce the same HTML.
     const firstChild = container.firstChild;
-    if (__D) __D.push('-> createInstance (firstChild=' + (firstChild ? (firstChild.nodeType === 8 ? 'comment:' + /** @type any */ (firstChild).data : firstChild.nodeName) : 'none') + ')');
     if (firstChild && firstChild.nodeType === 8 && /** @type {Comment} */ (firstChild).data === 'webjs-hydrate') {
       firstChild.remove();
-    }
-
-    if (__D) {
-      // TEMP #730: capture the exact throw + stack frame for the probe.
-      try {
-        const inst = createInstance(tr, container);
-        host[INSTANCE] = inst;
-        __D.push('createInstance OK');
-      } catch (e) {
-        __D.push('THREW msg=' + (e && /** @type any */ (e).message));
-        __D.push('stack=' + (e && /** @type any */ (e).stack ? String(/** @type any */ (e).stack).split('\n').slice(0, 5).join(' || ') : 'none'));
-        throw e;
-      }
-      return;
     }
 
     const inst = createInstance(tr, container);
@@ -475,36 +454,14 @@ function assignPaths(root, parts) {
  * @param {Element | DocumentFragment | ShadowRoot} container
  */
 function createInstance(tr, container) {
-  // TEMP #730 diagnostic for the <diag-slot-btn> probe only.
-  const __D = (typeof globalThis !== 'undefined' && /** @type any */ (globalThis).__WEBJS_DIAG && /** @type any */ (container).tagName === 'DIAG-SLOT-BTN') ? /** @type any */ (globalThis).__WEBJS_DIAG : null;
-
   const { templateEl, parts } = compile(tr);
-  if (__D) __D.push('compiled parts=[' + parts.map((p) => p.kind + ':' + JSON.stringify(p.path)).join(' ') + ']');
   const frag = /** @type DocumentFragment */ (templateEl.content.cloneNode(true));
-  if (__D) {
-    const top = Array.from(frag.childNodes).map((n) => n.nodeName).join(',');
-    const c0 = frag.childNodes[0];
-    const kids = c0 ? Array.from(c0.childNodes).map((n) => n.nodeName).join(',') : 'NO-firstChild';
-    __D.push('frag top=[' + top + '] firstChildKids=[' + kids + ']');
-  }
 
   // Bookend markers bound the instance so we can tear it down cleanly.
   const startNode = document.createComment(`${MARKER}s`);
   const endNode = document.createComment(`${MARKER}e`);
 
-  const bound = parts.map((p) => {
-    try {
-      return bindPart(p, frag);
-    } catch (e) {
-      if (__D) __D.push('bindPart THREW kind=' + p.kind + ' path=' + JSON.stringify(p.path) + ' err=' + (e && /** @type any */ (e).message));
-      throw e;
-    }
-  });
-
-  if (__D) {
-    __D.push('eventBinds=[' + bound.filter((b) => b.kind === 'event').map((b) => (b.el && /** @type any */ (b.el).tagName) + (b.el && /** @type any */ (b.el).isConnected ? ':conn' : ':frag')).join(',') + ']');
-  }
-
+  const bound = parts.map((p) => bindPart(p, frag));
   const lastValues = [];
   for (let i = 0; i < tr.values.length; i++) {
     applyPart(bound[i], tr.values[i], undefined, tr.values);
@@ -512,10 +469,6 @@ function createInstance(tr, container) {
   }
 
   /** @type any */ (container).replaceChildren(startNode, ...frag.childNodes, endNode);
-  if (__D) {
-    const lb = /** @type any */ (container).querySelector('button');
-    __D.push('afterReplace liveBtn=' + (lb ? 'Y' : 'n') + ' liveBtnIsBoundEl=' + (lb && bound.some((b) => b.kind === 'event' && b.el === lb) ? 'Y' : 'n'));
-  }
 
   // Slot parts have no value-hole to drive applyPart from the loop above.
   // Apply them once now that the fragment is inserted into the live
