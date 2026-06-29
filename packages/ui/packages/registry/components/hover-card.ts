@@ -114,6 +114,23 @@ export class UiHoverCard extends WebComponent({
     this._hideTimer = window.setTimeout(() => { this.open = false; }, this.closeDelay);
   }
 
+  // Touch open: there is no hover delay and no mouseleave to close it, so open
+  // immediately and arm a one-shot outside-tap dismiss (a tap anywhere outside
+  // this card closes it). Deferred a tick so the opening tap itself does not
+  // immediately dismiss it.
+  openByTouch(): void {
+    clearTimeout(this._showTimer);
+    clearTimeout(this._hideTimer);
+    this.open = true;
+    const onOutside = (ev: Event): void => {
+      if (!this.contains(ev.target as Node)) {
+        this.open = false;
+        document.removeEventListener('pointerdown', onOutside, true);
+      }
+    };
+    setTimeout(() => document.addEventListener('pointerdown', onOutside, true), 0);
+  }
+
   render() {
     return html`<div
       data-slot="hover-card"
@@ -179,11 +196,26 @@ export class UiHoverCardTrigger extends WebComponent {
       @mouseleave=${this._onLeave}
       @focusin=${this._onEnter}
       @focusout=${this._onLeave}
+      @click=${this._onClick}
     ><slot></slot></div>`;
   }
 
   _onEnter = (): void => (this.closest('ui-hover-card') as UiHoverCard | null)?.show();
   _onLeave = (): void => (this.closest('ui-hover-card') as UiHoverCard | null)?.hide();
+
+  // Touch path. A touch device has no `mouseenter`, so a tap would fall
+  // through to the inner `<a href>` and navigate (the card never opens). On a
+  // no-hover device the FIRST tap opens the card and is prevented from
+  // navigating; once open, a second tap follows the link as usual.
+  _onClick = (e: Event): void => {
+    if (!window.matchMedia?.('(hover: none)').matches) return;
+    const card = this.closest('ui-hover-card') as UiHoverCard | null;
+    if (card && !card.open) {
+      e.preventDefault();
+      e.stopPropagation();
+      card.openByTouch();
+    }
+  };
 }
 UiHoverCardTrigger.register('ui-hover-card-trigger');
 

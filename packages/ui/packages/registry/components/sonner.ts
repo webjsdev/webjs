@@ -61,13 +61,28 @@ interface ToastItem extends ToastOptions {
 }
 
 let nextId = 1;
-const toaster: { add(t: ToastItem): void; remove(id: string | number): void } = {
-  add() {},
-  remove() {},
-};
+
+interface ToastBus {
+  add(t: ToastItem): void;
+  remove(id: string | number): void;
+}
+
+// The toast bus lives on `globalThis`, NOT in module scope, so the global
+// `toast()` still reaches a mounted <ui-sonner> when the module is loaded
+// under two different URLs. The app registers the element from the
+// version-hashed `sonner.ts?v=<hash>` (asset-hash, #243), while a caller may
+// do a bare `import('/components/ui/sonner.ts')`: those are distinct module
+// instances with distinct module-scope state, but they share one `window`.
+// Last-mounted viewport wins (it overwrites `bus().add`), matching the prior
+// singleton semantics. Without this, toasts published from a different module
+// instance silently went to a no-op bus (#745).
+function bus(): ToastBus {
+  const g = globalThis as unknown as { __webjsSonnerBus?: ToastBus };
+  return (g.__webjsSonnerBus ??= { add() {}, remove() {} });
+}
 
 function publish(item: ToastItem): string | number {
-  toaster.add(item);
+  bus().add(item);
   return item.id;
 }
 
@@ -92,7 +107,7 @@ toast.warning = (msg: string, o?: ToastOptions) => makeToast(msg, o, 'warning');
 toast.loading = (msg: string, o?: ToastOptions) => makeToast(msg, o, 'loading');
 toast.dismiss = (id?: string | number) => {
   if (id == null) return;
-  toaster.remove(id);
+  bus().remove(id);
 };
 toast.promise = <T,>(p: Promise<T>, opts: { loading: string; success: string; error: string }) => {
   const id = toast.loading(opts.loading);
@@ -147,16 +162,18 @@ export class UiSonner extends WebComponent({
   // Routing the global toast() function to this viewport. Runs in
   // firstUpdated rather than the constructor because tests can mount
   // multiple <ui-sonner> instances and the most recently mounted wins
-  // (matches the existing semantics).
+  // (matches the existing semantics). The bus lives on globalThis so this
+  // routing is visible to a toast() called from another module instance.
   firstUpdated(): void {
-    toaster.add = (t) => this._add(t);
-    toaster.remove = (id) => this._remove(id);
+    const b = bus();
+    b.add = (t) => this._add(t);
+    b.remove = (id) => this._remove(id);
   }
 
   /**
    * Publish a toast directly to THIS viewport. Use when you have a
-   * specific <ui-sonner> reference and want to bypass the singleton
-   * `toaster.add` routing (which always points to the last-mounted
+   * specific <ui-sonner> reference and want to bypass the global
+   * `bus().add` routing (which always points to the last-mounted
    * viewport). Primary use case: docs demos that mount one viewport
    * per position and want each demo button to fire into its own
    * viewport. App code should normally call the global `toast()` /
