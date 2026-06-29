@@ -213,7 +213,7 @@ export default function LandingPage() {
               <div class="flex items-center gap-1.5 text-fg-subtle mb-2 border-b border-[var(--editor-border)] pb-1.5 select-none">
                 <span class="w-2 h-2 rounded-full bg-[#28c840]"></span><span>bun dev</span>
               </div>
-              <div><span class="text-fg-subtle">$</span> bun run dev<br><span class="text-fg-subtle">Ready on http://localhost:5001</span><br><span class="text-[var(--accent-text)]">page.ts reloaded in 3ms</span></div>
+              <div><span class="text-fg-subtle">$</span> bun run dev<br><span class="text-fg-subtle">Ready on http://localhost:5001</span><br><span class="text-fg-muted">page.ts reloaded in 3ms</span></div>
             </div>
           </div>
 
@@ -262,7 +262,7 @@ export default function LandingPage() {
               <p class="m-0 text-sm leading-[1.6] text-fg-muted">Real HTML first. Links navigate, forms submit, and pages read before JavaScript loads. No hydration overhead.</p>
             </div>
             <div class="bg-[var(--editor-sidebar-bg)] border border-[var(--editor-border)] rounded-xl p-3.5 flex flex-wrap gap-1.5 justify-center select-none text-[var(--editor-fg)]">
-              <span class="px-2 py-1 bg-[var(--accent-surface)] border border-[var(--accent-border)] text-[var(--accent-text)] text-[9px] font-mono rounded">No hydration lock</span>
+              <span class="px-2 py-1 bg-bg-subtle border border-border text-fg-muted text-[9px] font-mono rounded">No hydration lock</span>
               <span class="px-2 py-1 bg-[var(--editor-bg)] border border-[var(--editor-border)] text-fg-subtle text-[9px] font-mono rounded">Static elision</span>
             </div>
           </div>
