@@ -57,7 +57,7 @@ export default function Diag() {
   return html`
     ${unsafeHTML(EARLY)}
     <main style="padding:1rem;font-family:system-ui;max-width:100%">
-      <h1 style="font-size:1.1rem">webjs Tier-2 iOS diagnostic v11 (#730)</h1>
+      <h1 style="font-size:1.1rem">webjs Tier-2 iOS diagnostic v12 (#730)</h1>
       <p style="font-size:.85rem;color:#666">Wait about 2s, then copy the whole readout and send it to me. The page stays scrollable.</p>
       <button onclick="location.reload()" style="margin-bottom:.75rem" class=${buttonClass({ variant: 'outline', size: 'sm' })}>Re-run</button>
       <pre id="wjdiag" style="white-space:pre-wrap;word-break:break-word;font:12px/1.5 monospace;background:#f4f4f5;color:#111;padding:1rem;border-radius:8px;border:1px solid #ccc">collecting (wait about 2s)...</pre>
