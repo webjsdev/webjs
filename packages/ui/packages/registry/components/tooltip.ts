@@ -41,7 +41,7 @@
  * Design tokens used: --foreground, --background.
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
-import { ensureId } from '../lib/utils.ts';
+import { ensureId, onBeforeCache } from '../lib/utils.ts';
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
 // UA `[popover]` defaults paint a bordered, padded panel centered with
@@ -79,6 +79,8 @@ export class UiTooltip extends WebComponent({
     this.skipDelayDuration = 300;
   }
 
+  _disposeBeforeCache?: () => void;
+
   connectedCallback(): void {
     super.connectedCallback?.();
     // webjs projects slotted light-DOM children in a pass after the first
@@ -88,6 +90,13 @@ export class UiTooltip extends WebComponent({
     if (typeof requestAnimationFrame === 'function') {
       requestAnimationFrame(() => this._wireAria());
     }
+    // Close before a back/forward snapshot so it does not restore open (#766).
+    this._disposeBeforeCache = onBeforeCache(() => { this.open = false; });
+  }
+
+  disconnectedCallback(): void {
+    this._disposeBeforeCache?.();
+    super.disconnectedCallback?.();
   }
 
   // APG tooltip wiring: the focusable trigger references the tip via

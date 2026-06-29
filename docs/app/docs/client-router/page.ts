@@ -97,6 +97,13 @@ const result = await optimistic(liked, true, () =&gt; likePost(postId));
   showToast(\`Could not load \${e.detail.url} (status \${e.detail.status})\`);
 });</pre>
 
+    <h2>Strip transient state before back/forward (<code>webjs:before-cache</code>)</h2>
+    <p>Back/Forward restores from a URL-keyed snapshot cache (Turbo's SnapshotCache pattern) for instant navigation. Because a snapshot is a raw <code>outerHTML</code> clone of the live page, anything <em>open</em> when you navigate away (a hover-card, a dropdown, a toast) is captured open and <strong>restored open</strong> on Forward. The router dispatches <code>webjs:before-cache</code> on <code>document</code> synchronously, on the page being cached, right before the snapshot is read, so a handler can reset that state and edits land in the snapshot. The kit's overlays already do this, so they come back closed.</p>
+    <pre>document.addEventListener('webjs:before-cache', () =&gt; {
+  document.querySelectorAll('[data-transient]').forEach((el) =&gt; el.remove());
+  // close open menus, clear in-progress toasts, reset a wizard step, ...
+});</pre>
+
     <h2><code>&lt;webjs-frame&gt;</code>: escape hatch for non-layout regions</h2>
     <p><code>&lt;webjs-frame&gt;</code> is webjs's take on <strong>Turbo Frames</strong> (from Hotwire Turbo), so if you know <code>&lt;turbo-frame&gt;</code> the model transfers directly: a lazy, URL-addressable region that swaps on its own, driven by a link or form that targets its id. See <a href="/docs/data-fetching">Data fetching</a> for when to reach for a frame versus async render, <code>&lt;webjs-suspense&gt;</code>, or <code>&lt;webjs-stream&gt;</code>, and for combining a lazy frame with streamed content inside it.</p>
     <p>The marker mechanism scopes swaps to the deepest shared <strong>layout</strong>. When you need a swap region <em>smaller</em> than the deepest layout (typically a widget inside a page that should swap independently of the rest of the page) wrap it in <code>&lt;webjs-frame id="..."&gt;</code>.</p>
