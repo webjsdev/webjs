@@ -46,24 +46,34 @@ test('dropdown sub pointerleave schedules close on mouse, not on touch (#745)', 
   assert.equal(scheduled, 1, 'mouse pointerleave still schedules close');
 });
 
-test('hover-card tap opens + blocks nav on a no-hover device; no-op on hover (#745)', () => {
+test('hover-card tap toggles + ALWAYS blocks nav on touch; no-op on hover (#745)', () => {
   const t = new UiHoverCardTrigger();
-  let opened = 0, prevented = 0;
-  const card = { open: false, openByTouch: () => { opened++; } };
+  let opened = 0;
+  const card = { open: false, openByTouch: () => { opened++; card.open = true; } };
   t.closest = () => /** @type {any} */ (card);
-  const mkEvt = () => ({ preventDefault: () => { prevented++; }, stopPropagation() {} });
+  const mkEvt = () => { const e = { p: 0, preventDefault() { e.p++; }, stopPropagation() {} }; return e; };
 
-  // No-hover device (touch): the tap opens the card and is prevented from
-  // navigating the inner link.
   /** @type {any} */ (globalThis).window = { matchMedia: () => ({ matches: true }) };
-  t._onClick(/** @type {any} */ (mkEvt()));
-  assert.equal(opened, 1, 'tap on a no-hover device opens the card');
-  assert.equal(prevented, 1, 'tap on a no-hover device blocks the link navigation');
+
+  // Closed -> first tap opens the card and blocks the link navigation.
+  const e1 = mkEvt();
+  t._onClick(/** @type {any} */ (e1));
+  assert.equal(card.open, true, 'tap opens a closed card');
+  assert.equal(opened, 1);
+  assert.equal(e1.p, 1, 'blocks the link navigation when opening');
+
+  // Open -> a re-tap toggles it closed and STILL preventsDefault, so the inner
+  // <a>'s click never reaches the client router (no pushState, no history
+  // pollution that needs N Back presses) (#745).
+  const e2 = mkEvt();
+  t._onClick(/** @type {any} */ (e2));
+  assert.equal(card.open, false, 'a re-tap toggles the card closed (never navigates)');
+  assert.equal(e2.p, 1, 'still blocks nav while open, so the router never pushState');
 
   // Hover device (desktop): handler is a no-op, the link navigates normally.
-  opened = 0; prevented = 0;
+  card.open = false;
   /** @type {any} */ (globalThis).window = { matchMedia: () => ({ matches: false }) };
-  t._onClick(/** @type {any} */ (mkEvt()));
-  assert.equal(opened, 0, 'on a hover device the tap handler is a no-op');
-  assert.equal(prevented, 0, 'on a hover device the inner link still navigates');
+  const e3 = mkEvt();
+  t._onClick(/** @type {any} */ (e3));
+  assert.equal(e3.p, 0, 'on a hover device the inner link still navigates');
 });

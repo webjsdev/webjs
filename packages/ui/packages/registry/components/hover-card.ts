@@ -123,7 +123,9 @@ export class UiHoverCard extends WebComponent({
     clearTimeout(this._hideTimer);
     this.open = true;
     const onOutside = (ev: Event): void => {
-      if (!this.contains(ev.target as Node)) {
+      // Close on an outside tap; also self-remove if the card was already
+      // closed by other means (a re-tap toggle), so the listener never lingers.
+      if (!this.open || !this.contains(ev.target as Node)) {
         this.open = false;
         document.removeEventListener('pointerdown', onOutside, true);
       }
@@ -215,18 +217,21 @@ export class UiHoverCardTrigger extends WebComponent {
     (this.closest('ui-hover-card') as UiHoverCard | null)?.hide();
   };
 
-  // Touch path. A touch device has no `mouseenter`, so a tap would fall
-  // through to the inner `<a href>` and navigate (the card never opens). On a
-  // no-hover device the FIRST tap opens the card and is prevented from
-  // navigating; once open, a second tap follows the link as usual.
+  // Touch path. A touch device has no `mouseenter`, so a tap would fall through
+  // to the inner `<a href>` and navigate. On a no-hover device the trigger tap
+  // TOGGLES the card and NEVER navigates (the real link is reachable inside the
+  // opened card). It must ALWAYS preventDefault, including while open: the
+  // client router pushState()s on any bubble-phase `<a>` click that is not
+  // defaultPrevented, so a re-tap that fell through would push a history entry
+  // every time and Back would need N presses (#745).
   _onClick = (e: Event): void => {
     if (!window.matchMedia?.('(hover: none)').matches) return;
     const card = this.closest('ui-hover-card') as UiHoverCard | null;
-    if (card && !card.open) {
-      e.preventDefault();
-      e.stopPropagation();
-      card.openByTouch();
-    }
+    if (!card) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (card.open) card.open = false;
+    else card.openByTouch();
   };
 }
 UiHoverCardTrigger.register('ui-hover-card-trigger');
