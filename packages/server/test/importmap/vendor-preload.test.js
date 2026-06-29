@@ -285,3 +285,35 @@ test('a vendor imported ONLY by an elided (display-only) component is NOT preloa
     'an elided component\'s vendor is not preloaded');
   await setCoreInstall(CORE_DIR, true);
 });
+
+test('import-only page: skipping the dropped page module does NOT drop its shipping component\'s vendor (no under-fetch)', async () => {
+  // The under-fetch guard for the round-1 fix: an IMPORT-ONLY page imports its
+  // interactive widget (which ships and imports dayjs) AND imports dayjs itself
+  // as an SSR-only binding. The page module is dropped, so the fix skips the
+  // PAGE's own bare imports, but it must KEEP the page in the reachability WALK
+  // so the widget (which ships) is still reached and its dayjs collected. dayjs
+  // must therefore still be preloaded. (The pure over-fetch of an SSR-only vendor
+  // is proven load-bearingly by the multi-route inert test above.)
+  const appDir = makeApp({
+    pin: { imports: { dayjs: DAYJS_URL }, integrity: { [DAYJS_URL]: DAYJS_INTEGRITY } },
+  });
+  writeVendorWidget(appDir); // app/widget.js: interactive, imports dayjs (ships)
+  writeFileSync(
+    join(appDir, 'app', 'page.js'),
+    `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+    `import './widget.js';\n` +
+    `import dayjs from 'dayjs';\n` +
+    `export default () => html\`<main>\${typeof dayjs}<x-widget></x-widget></main>\`;\n`,
+  );
+  const app = await createRequestHandler({ appDir, dev: false });
+  await app.warmup();
+  const html = await (await app.handle(new Request('http://x/'))).text();
+  const links = modulepreloadLinks(html);
+  // Precondition: the page is import-only (its module dropped; the widget ships).
+  assert.ok(!links.some((l) => l.includes('/app/page.js')), 'the import-only page module is dropped');
+  assert.ok(links.some((l) => l.includes('/app/widget.js')), 'the widget ships (component preload)');
+  // No under-fetch: the shipping widget's dayjs IS still preloaded.
+  assert.ok(links.some((l) => l.includes('dayjs')),
+    'the shipping component\'s vendor IS preloaded (skipping the dropped page did not drop it)');
+  await setCoreInstall(CORE_DIR, true);
+});
