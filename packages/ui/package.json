@@ -19,7 +19,8 @@
     "README.md"
   ],
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "test:e2e:touch": "node test/e2e/touch.e2e.mjs"
   },
   "dependencies": {
     "commander": "^14.0.0",
