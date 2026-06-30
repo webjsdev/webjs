@@ -25,16 +25,17 @@ import { join, resolve } from 'node:path';
 const OUT = resolve(process.argv[2] || 'public/og.png');
 
 // Dark-theme tokens, copied from the :root[data-theme='dark'] block in
-// app/layout.ts so the card and the site stay in lockstep.
+// app/layout.ts so the card and the site stay in lockstep (pure-black
+// surfaces, warm hue-52 accent).
 const T = {
-  bg: 'oklch(0.155 0.012 55)',
-  bgDeep: 'oklch(0.115 0.01 55)',
-  fg: 'oklch(0.95 0.012 70)',
-  fgMuted: 'oklch(0.74 0.02 65)',
-  fgSubtle: 'oklch(0.66 0.02 60)',
-  accent: 'oklch(0.74 0.15 55)',
+  bg: 'oklch(0 0 0)',
+  bgDeep: 'oklch(0.135 0 0)',
+  fg: 'oklch(0.96 0 0)',
+  fgMuted: 'oklch(0.74 0 0)',
+  fgSubtle: 'oklch(0.62 0 0)',
+  accent: 'oklch(0.7 0.16 52)',
   accentLive: 'oklch(0.63 0.17 50)',
-  border: 'oklch(0.30 0.016 58 / 0.85)',
+  border: 'oklch(0.32 0 0 / 0.9)',
 };
 
 const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -101,8 +102,8 @@ const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
   <div class="frame">
     <div class="brand"><div class="mark"></div><div class="word">webjs</div></div>
     <div class="mid">
-      <h1>The framework your <span class="accent">AI agent</span> already knows how to use</h1>
-      <p class="lede">AI-first, web-components-first, no-build. Native web components, server actions, streaming SSR, on web standards.</p>
+      <h1>The <span class="accent">web framework</span> for AI agents</h1>
+      <p class="lede">A full-stack framework built on web components, SSR, and progressive enhancement, with zero build step. Standards that outlast frameworks.</p>
     </div>
     <div>
       <hr>
