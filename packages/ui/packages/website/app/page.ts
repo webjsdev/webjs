@@ -194,7 +194,7 @@ webjs ui add button card dialog</code></pre>
 
       <!-- Tier 1 -->
       <div class="flex flex-col gap-1 mb-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
-        <div class="flex items-baseline gap-3">
+        <div class="flex items-baseline gap-4">
           <span class="text-xs font-mono uppercase tracking-widest text-brand shrink-0">Tier 1</span>
           <h3 class="text-lg font-semibold">Class‑helper functions</h3>
         </div>
@@ -221,7 +221,7 @@ webjs ui add button card dialog</code></pre>
 
       <!-- Tier 2 -->
       <div class="flex flex-col gap-1 mb-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
-        <div class="flex items-baseline gap-3">
+        <div class="flex items-baseline gap-4">
           <span class="text-xs font-mono uppercase tracking-widest text-brand shrink-0">Tier 2</span>
           <h3 class="text-lg font-semibold">Stateful custom elements</h3>
         </div>

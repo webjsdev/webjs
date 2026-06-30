@@ -379,7 +379,7 @@ export default function Layout({ children }: { children: any }) {
       </a>
     </div>
 
-    <header class="flex items-center justify-between gap-4 max-w-5xl mx-auto px-4 sm:px-6 py-4">
+    <header class="flex items-center justify-between gap-4 max-w-5xl mx-auto px-4 sm:px-8 py-4">
       <a class="flex items-center gap-2 no-underline text-fg font-bold text-base leading-none tracking-tight" href="/">
         <span class="w-[22px] h-[22px] rounded-md bg-gradient-to-br from-brand to-[color-mix(in_oklch,var(--accent)_55%,var(--fg))]"></span>
         Webjs UI
@@ -417,10 +417,10 @@ export default function Layout({ children }: { children: any }) {
       </div>
     </header>
 
-    <main class="max-w-5xl mx-auto px-6 py-10">${children}</main>
+    <main class="max-w-5xl mx-auto px-6 sm:px-8 py-10">${children}</main>
 
     <footer class="border-t mt-20 py-8 text-center" style="color: var(--fg-subtle); font-size: 13px">
-      <div class="max-w-5xl mx-auto px-6">
+      <div class="max-w-5xl mx-auto px-6 sm:px-8">
         <a class="text-brand no-underline hover:underline" href=${WEBSITE_URL} target="_blank">Webjs</a> ·
         <a class="text-brand no-underline hover:underline" href=${DOCS_URL} target="_blank">Docs</a> ·
         <a class="text-brand no-underline hover:underline" href="https://github.com/webjsdev/webjs" target="_blank">GitHub</a>
