@@ -160,6 +160,12 @@ jobs:
       # Bun.serve. The pure mapping is also unit-tested under the matrix below.
       - name: webjs server timeouts on Bun
         run: bun test/bun/timeouts.mjs
+      # Template binding-prefix dispatch on Bun (#784): the renderers now read
+      # the prefix set from core's single-sourced BINDING_PREFIXES and dispatch
+      # on kind; this asserts @event drops and .prop / ?bool round-trip the same
+      # on the Bun SSR path (buffered and streamed) as on Node.
+      - name: webjs binding-prefix dispatch on Bun
+        run: bun test/bun/binding-prefixes.mjs
       # SQLite busy_timeout on Bun (#673): bun:sqlite (like node:sqlite) defaults
       # busy_timeout to 0, so a contended write throws `database is locked`; the
       # connection tune sets busy_timeout=5000 + WAL. This asserts the bug
