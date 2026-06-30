@@ -39,7 +39,7 @@ export class ThemeToggle extends WebComponent {
     const icon = t === 'light' ? ICONS.sun : t === 'dark' ? ICONS.moon : ICONS.system;
     return html`
       <button
-        class="inline-flex items-center justify-center w-8.5 h-8.5 p-0 rounded-lg border border-border text-fg-muted cursor-pointer transition-all duration-150 hover:text-fg hover:bg-bg-subtle hover:border-border-strong active:scale-[0.94] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20"
+        class="inline-flex items-center justify-center w-8.5 h-8.5 p-0 rounded-full border border-border text-fg-muted cursor-pointer transition-all duration-150 hover:text-fg hover:bg-bg-subtle hover:border-border-strong active:scale-[0.94] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20"
         @click=${() => this.cycle()}
         aria-label="Cycle theme (currently ${label})"
         title="Theme: ${label.toLowerCase()}"
