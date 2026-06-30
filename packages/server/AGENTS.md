@@ -403,8 +403,13 @@ and the reader key set never diverge (a counterfactual unknown key proves
    "display-only" verdict breaks the page, a false "interactive" verdict
    only misses an optimization, so anything ambiguous ships. The signal
    lists in `component-elision.js` are the single source of truth and
-   must grow whenever core adds an interactivity surface (enforced by
-   `test/elision/lifecycle-coverage.test.js`). Only side-effect imports
+   must grow whenever core adds an interactivity surface, enforced by two
+   guard tests: `test/elision/lifecycle-coverage.test.js` (prototype hooks
+   and methods, via prototype introspection) and
+   `test/elision/sigil-coverage.test.js` (template binding sigils, which
+   are single-sourced in core's `BINDING_PREFIXES` and classified here as
+   `SSR_DROPPED_PREFIXES` or `ROUND_TRIP_PREFIXES`, plus the
+   `INTERACTIVITY_STATIC_FIELDS` registry). Only side-effect imports
    are stripped; binding imports are always preserved. Tests live in
    `test/elision/`. Cross-module observation of an elided element's
    registration (a shipping `whenDefined('tag')`, a CSS `tag:defined`
