@@ -48,18 +48,28 @@
       }
       if (c === "'" || c === '"' || c === '`') {
         var j4 = i + 1;
-        while (j4 < n && src[j4] !== c) { if (src[j4] === '\\') j4++; j4++; }
-        j4 = Math.min(n, j4 + 1);
-        push('str', src.slice(i, j4)); i = j4; continue;
+        var closed4 = false;
+        while (j4 < n) {
+          if (src[j4] === '\\') { j4 += 2; continue; }
+          if (src[j4] === '\n' && c !== '`') break; // ' and " do not span lines
+          if (src[j4] === c) { closed4 = true; j4++; break; }
+          j4++;
+        }
+        // A backtick template spans lines; a ' or " that never closes on its
+        // own line is not a string (e.g. an apostrophe in prose), so emit the
+        // quote as punctuation and keep tokenizing the rest of the line.
+        if (c === '`' || closed4) { push('str', src.slice(i, j4)); i = j4; continue; }
+        push('punc', c); i++; continue;
       }
       if (c >= '0' && c <= '9') {
         var j5 = i + 1;
         while (j5 < n && numChar.test(src[j5])) j5++;
         push('num', src.slice(i, j5)); i = j5; continue;
       }
-      if (c === '#') {
-        // Shell-style line comment, only when '#' starts the line (so a CSS
-        // hex like #fff mid-expression is not swallowed).
+      if (c === '#' && src[i + 1] === ' ') {
+        // Shell-style line comment: '#' starts the line AND is followed by a
+        // space, so a CSS id selector (#app), a JS private field (#count), or a
+        // hex color (#fff) is not swallowed, only a real "# comment".
         var bk = i - 1;
         while (bk >= 0 && (src[bk] === ' ' || src[bk] === '\t')) bk--;
         if (bk < 0 || src[bk] === '\n') {
@@ -87,8 +97,12 @@
 
   function highlight(pre) {
     if (pre.dataset.hl) return;
-    pre.dataset.hl = '1';
     var code = pre.querySelector('code') || pre;
+    // Only highlight plain-text blocks. If the code already contains element
+    // markup (server-rendered spans, links, emphasis), leave it untouched
+    // rather than flatten it.
+    if (code.children.length) return;
+    pre.dataset.hl = '1';
     var toks = tokenize(code.textContent.replace(/^\n+|\n+$/g, ''));
     var frag = document.createDocumentFragment();
     for (var i = 0; i < toks.length; i++) {
