@@ -16,9 +16,9 @@ const env = (globalThis as any).process?.env ?? {};
 const WEBSITE_URL = env.WEBSITE_URL || 'http://localhost:5001';
 const DOCS_URL = env.DOCS_URL || 'http://localhost:5002';
 
-const TITLE = 'Webjs UI: AI-first component library';
+const TITLE = 'Webjs UI: the AI-first component library for WebJs';
 const DESCRIPTION =
-  'An AI-first component library. Two-tier composition: class-helper functions for visuals, custom elements only where state matters. Source-copied into your project. Works in webjs, Next, Astro, Vite, vanilla: any project with Tailwind v4.';
+  'The AI-first component library for WebJs. Two-tier composition: class-helper functions for visuals, custom elements only where state matters. Source-copied into your project, styled with Tailwind v4.';
 
 // Per-request metadata so the OG image URL can be absolute (scrapers
 // require http(s)). Mirrors website/app/layout.ts's generateMetadata

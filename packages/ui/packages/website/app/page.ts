@@ -26,7 +26,7 @@ export default async function Home() {
       >
         ${ui.length} primitives designed for the agent era: copy‑paste source code,
         full native HTML semantics, shadcn API parity, zero third‑party dependencies.
-        Works in WebJs, Next, Astro, Vite, Lit, vanilla, any project with Tailwind v4.
+        Built for WebJs, styled with Tailwind v4.
       </p>
       <div class="mt-8 flex flex-wrap gap-3">
         <a
@@ -96,20 +96,11 @@ export default async function Home() {
     <!-- Install -->
     <section class="py-16">
       <h2 class="text-2xl font-semibold mb-6">Install</h2>
-      <div class="grid md:grid-cols-2 gap-4">
-        <div class="rounded-lg border border-border bg-bg-elev p-5">
-          <div class="text-xs font-mono uppercase tracking-widest text-fg-muted mb-3">Webjs users</div>
-          <pre class="text-sm font-mono pre-bare"><code># shipped with @webjsdev/cli
+      <div class="max-w-xl rounded-lg border border-border bg-bg-elev p-5">
+        <div class="text-xs font-mono uppercase tracking-widest text-fg-muted mb-3">In any webjs app</div>
+        <pre class="text-sm font-mono pre-bare"><code># shipped with @webjsdev/cli, already in every webjs app
 webjs ui init
 webjs ui add button card dialog</code></pre>
-        </div>
-        <div class="rounded-lg border border-border bg-bg-elev p-5">
-          <div class="text-xs font-mono uppercase tracking-widest text-fg-muted mb-3">Next · Astro · Vite · Lit · vanilla</div>
-          <pre class="text-sm font-mono pre-bare"><code>npm install -D @webjsdev/ui
-npm install @webjsdev/core
-npx webjsui init
-npx webjsui add button card dialog</code></pre>
-        </div>
       </div>
     </section>
 
