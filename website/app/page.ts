@@ -148,7 +148,7 @@ export default function LandingPage() {
         The web framework for AI agents
       </h1>
       <p class="text-lede leading-[1.6] text-fg-muted max-w-[56ch] mx-auto mb-8 text-pretty">
-        WebJs is a full-stack framework built on web components, real SSR, and
+        WebJs is a full-stack framework built on web components, SSR, and
         progressive enhancement, with zero build step. Standards that outlast
         frameworks. Runs on Node 24+ or Bun.
       </p>
