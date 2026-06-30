@@ -59,7 +59,11 @@ assert.match(buffered, BOOL, `buffered: ?bool must round-trip as a boolean attri
 const streamed = await drain(renderToStream(tpl(), { ssr: false }));
 assert.match(streamed, /<my-el/, `streamed: the element must render, got ${streamed}`);
 assert.ok(!EVENT.test(streamed), `streamed: @event must drop, got ${streamed}`);
-assert.ok(!PROP.test(streamed), `streamed: .prop is grouped with @event as a drop here, got ${streamed}`);
+// A genuine .prop DROP leaves no `label` token at all. Assert that directly,
+// not the absence of `data-webjs-prop-*` (streamTemplate never emits that form,
+// so a `!PROP` check would pass even if .prop leaked through as a plain
+// `label="x"` attribute). `label` appears nowhere else in this template.
+assert.ok(!/label/.test(streamed), `streamed: .prop must drop (no label token), got ${streamed}`);
 assert.match(streamed, BOOL, `streamed: ?bool must round-trip, got ${streamed}`);
 
 console.log(`[binding-prefixes] OK on ${runtime}: buffered (@event drop, .prop + ?bool round-trip) and streamed (@event + .prop drop, ?bool round-trip) dispatch correctly`);

@@ -124,14 +124,20 @@ test('the renderers route binding recognition through BINDING_PREFIXES (no stray
   }
 });
 
-test('every interactivity static field is honoured as a ship signal', () => {
+test('every interactivity static field is honoured as a ship signal with a reason', () => {
   for (const field of INTERACTIVITY_STATIC_FIELDS) {
     const src = `class C extends WebComponent({}) {
       static ${field} = true;
       render() { return html\`<div>x</div>\`; }
     }`;
-    const { interactive } = analyzeComponentSource(src);
+    const { interactive, reason } = analyzeComponentSource(src);
     assert.equal(interactive, true, `static ${field} = true must force the component to ship`);
+    // A field added to INTERACTIVITY_STATIC_FIELDS without a matching
+    // STATIC_FIELD_REASONS entry would ship with reason `undefined` (a
+    // diagnostics gap). Require a real reason so the registry and the reasons
+    // map cannot drift apart.
+    assert.equal(typeof reason, 'string', `static ${field} must carry a string reason, got ${reason}`);
+    assert.ok(reason.length > 0, `static ${field} reason must be non-empty`);
   }
 });
 
