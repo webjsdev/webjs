@@ -238,7 +238,7 @@ export default function LandingPage() {
           <div class="group p-6 bg-bg-elev hover:bg-[color-mix(in_oklch,var(--bg-elev)_92%,var(--fg))] transition-colors duration-200 flex flex-col justify-between h-full">
             <div class="mb-6">
               <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.02em] mt-0 mb-2">Zero build step</h3>
-              <p class="m-0 text-sm leading-[1.6] text-fg-muted">Source files run directly in Node or Bun, so what you write is exactly what the browser serves. An AI agent debugs against the real served code, never a bundled or minified artifact. The framework ships zero-build too, so it can read all of <code class="font-mono text-[0.9em]">@webjsdev</code> straight from <code class="font-mono text-[0.9em]">node_modules</code> and pull it into context.</p>
+              <p class="m-0 text-sm leading-[1.6] text-fg-muted">Source files run as-is, so what you write is exactly what the browser serves. An AI agent debugs against the real served code, never a bundled or minified artifact. The framework ships zero-build too, so it can read all of <code class="font-mono text-[0.9em]">@webjsdev</code> straight from <code class="font-mono text-[0.9em]">node_modules</code> and pull it into context.</p>
             </div>
             <div class="bg-[var(--editor-sidebar-bg)] border border-[var(--editor-border)] rounded-xl p-3.5 font-mono text-[11px] leading-[1.6] text-[var(--editor-fg)]">
               <div class="flex items-center gap-1.5 text-fg-subtle mb-2 border-b border-[var(--editor-border)] pb-1.5 select-none">
