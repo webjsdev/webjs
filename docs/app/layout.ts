@@ -201,8 +201,31 @@ export default function RootLayout({ children }: { children: unknown }) {
           radial-gradient(58% 44% at 50% -4%, color-mix(in oklch, var(--glow-a) calc(var(--glow-strength) * 100%), transparent), transparent 72%),
           radial-gradient(40% 36% at 88% 8%, color-mix(in oklch, var(--glow-a) calc(var(--glow-strength) * 60%), transparent), transparent 70%);
       }
+
+      /* Cool, theme-aware syntax-highlight palette (matches the website).
+         Applied on the client by /public/code-highlight.js, which tokenizes
+         each server-rendered <pre> and wraps tokens in these classes. */
+      .t-com { color: var(--fg-subtle); font-style: italic; }
+      .t-str { color: oklch(0.52 0.13 150); }
+      .t-kw  { color: oklch(0.52 0.16 295); font-weight: 600; }
+      .t-fn  { color: oklch(0.52 0.15 250); }
+      .t-type{ color: oklch(0.52 0.10 200); }
+      .t-num { color: oklch(0.55 0.12 215); }
+      :root[data-theme='dark'] .t-str { color: oklch(0.80 0.14 150); }
+      :root[data-theme='dark'] .t-kw  { color: oklch(0.76 0.14 295); }
+      :root[data-theme='dark'] .t-fn  { color: oklch(0.75 0.13 250); }
+      :root[data-theme='dark'] .t-type{ color: oklch(0.80 0.10 200); }
+      :root[data-theme='dark'] .t-num { color: oklch(0.82 0.12 215); }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) .t-str { color: oklch(0.80 0.14 150); }
+        :root:not([data-theme='light']) .t-kw  { color: oklch(0.76 0.14 295); }
+        :root:not([data-theme='light']) .t-fn  { color: oklch(0.75 0.13 250); }
+        :root:not([data-theme='light']) .t-type{ color: oklch(0.80 0.10 200); }
+        :root:not([data-theme='light']) .t-num { color: oklch(0.82 0.12 215); }
+      }
     </style>
     <div class="glow-layer" aria-hidden="true"></div>
     ${children}
+    <script src="/public/code-highlight.js" defer></script>
   `;
 }
