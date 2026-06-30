@@ -417,11 +417,11 @@ lib/session.server.ts</pre>
           </div>
           <div class="flex flex-col gap-3">
             <h4 class="text-xs font-bold uppercase tracking-wider text-fg">webjs</h4>
-            <p class="m-0 text-xs text-fg-muted leading-relaxed">The web framework for AI agents. Full-stack web components, real SSR, zero build step.</p>
+            <p class="m-0 text-xs text-fg-muted leading-relaxed">The web framework for AI agents. Full-stack web components, SSR, zero build step.</p>
           </div>
         </nav>
         <div class="pt-8 border-t border-border flex flex-col md:flex-row justify-between items-center gap-4 text-fg-subtle text-xs">
-          <div>&copy; 2026 webjs. All rights reserved.</div>
+          <div><a class="no-underline hover:text-accent transition-colors" href=${GH_URL + '/blob/main/LICENSE'} target="_blank" rel="noopener noreferrer">MIT License${NEW_TAB}</a></div>
           <div class="flex items-center gap-1">Built with webjs <svg class="heart" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div>
         </div>
       </div>
