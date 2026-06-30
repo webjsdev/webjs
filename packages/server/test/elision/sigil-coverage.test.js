@@ -85,12 +85,17 @@ test('an SSR-dropped sigil is honoured as a ship signal', () => {
   }
 });
 
-test('a round-trip sigil alone keeps a component elidable', () => {
+test('a round-trip sigil does not force a component to ship', () => {
   for (const p of ROUND_TRIP_PREFIXES) {
-    // `.prop` / `?bool` survive into SSR HTML, so a component whose only
-    // non-render content is such a binding stays display-only. Use a custom
-    // element target so `.prop` is the data-webjs-prop round-trip (not a
-    // dropped native prop), and a non-`on` name so it is not EVENT_PROP_RE.
+    // `.prop` / `?bool` survive into SSR HTML, so they must NOT be ship signals
+    // on their own: a component whose only non-render content is such a binding
+    // stays elidable. This does not by itself prove ROUND_TRIP membership (the
+    // partition test does), but it IS load-bearing against the misclassification
+    // it guards: if `.` or `?` were moved into SSR_DROPPED_PREFIXES, the derived
+    // EVENT_BINDING_RE would match this binding and flip the verdict to ship,
+    // reding this test. Use a custom-element target so `.prop` is the
+    // data-webjs-prop round-trip (not a dropped native prop), and a non-`on`
+    // name so it is not EVENT_PROP_RE.
     const src = `class C extends WebComponent({}) {
       render() { return html\`<my-badge ${p}label=\${'x'}></my-badge>\`; }
     }`;
@@ -108,9 +113,13 @@ test('the renderers route binding recognition through BINDING_PREFIXES (no stray
     const src = readFileSync(resolve(coreSrc, file), 'utf8');
     assert.match(src, /binding-prefixes\.js/, `${file} must import the shared BINDING_PREFIXES`);
     for (const p of Object.keys(BINDING_PREFIXES)) {
-      const stray = new RegExp(`prefix\\s*===\\s*['"\`]\\${p}['"\`]`);
+      const lit = `['"\`]\\${p}['"\`]`;
+      // Forbid an `=== '<sigil>'` compare in EITHER operand order (`prefix ===
+      // '@'` and the Yoda `'@' === prefix`), so a reintroduced hardcoded branch
+      // cannot slip past on operand order.
+      const stray = new RegExp(`(===\\s*${lit})|(${lit}\\s*===)`);
       assert.ok(!stray.test(src),
-        `${file} hardcodes \`prefix === '${p}'\`; route it through BINDING_PREFIXES instead`);
+        `${file} hardcodes an \`=== '${p}'\` compare; route it through BINDING_PREFIXES instead`);
     }
   }
 });

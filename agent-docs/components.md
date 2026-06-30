@@ -258,8 +258,9 @@ classifies each sigil as a client-behaviour ship signal (`SSR_DROPPED_PREFIXES`,
 classification partitions `BINDING_PREFIXES` exactly, so a new sigil cannot be
 added without a deliberate ship-or-round-trip decision. Interactivity static
 fields live in the `INTERACTIVITY_STATIC_FIELDS` registry (`shadow`, `refresh`).
-If you add an interactivity feature to the framework, update that file (and add
-a new static convention to both the registry and this lifecycle table).
+If you add an interactivity feature to the framework, update the matching list
+in `component-elision.js` (and add a new static convention to both the
+`INTERACTIVITY_STATIC_FIELDS` registry and this lifecycle table).
 
 ## Pages and layouts: keep them carriers, out of the network tab
 
