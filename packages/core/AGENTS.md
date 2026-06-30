@@ -148,24 +148,35 @@ them per app.
    webjs elides display-only component modules from the browser by
    static analysis (`packages/server/src/component-elision.js`). It is a
    conservative denylist of interactivity signals. When you add a new
-   overridable lifecycle hook, reactive primitive, client-only
-   directive, or event-binding syntax to core, add its marker to the
-   matching exported list in `component-elision.js`
-   (`CLIENT_LIFECYCLE_HOOKS`, `CLIENT_METHOD_CALLS`, or
-   `REACTIVE_IMPORTS`). Skipping this lets the analyser wrongly elide a
-   component that now does client work. The guard test
-   (`packages/server/test/elision/lifecycle-coverage.test.js`) fails on
-   any new prototype method until it is classified.
+   overridable lifecycle hook, reactive primitive, or client-only
+   directive to core, add its marker to the matching exported list in
+   `component-elision.js` (`CLIENT_LIFECYCLE_HOOKS`, `CLIENT_METHOD_CALLS`,
+   or `REACTIVE_IMPORTS`). When you add a new template binding SIGIL,
+   register it in core's `BINDING_PREFIXES`
+   (`packages/core/src/binding-prefixes.js`, the single source both
+   renderers read) and classify it in `component-elision.js` as a
+   client-behaviour ship signal (`SSR_DROPPED_PREFIXES`, like `@event`,
+   which drops at SSR) or an SSR-safe round-trip (`ROUND_TRIP_PREFIXES`,
+   like `.prop` / `?bool`, which survives into the served HTML). When you
+   add an interactivity STATIC field, add it to
+   `INTERACTIVITY_STATIC_FIELDS`. Skipping any of these lets the analyser
+   wrongly elide a component that now does client work. Two guard tests
+   fail until the new surface is classified:
+   `packages/server/test/elision/lifecycle-coverage.test.js` (prototype
+   methods and hooks) and `.../sigil-coverage.test.js` (binding sigils and
+   static fields, asserting the classification partitions `BINDING_PREFIXES`
+   exactly).
    Note (#474): an `async render()` is NOT, by itself, a ship signal. A
    bare async leaf (no other client signal, light DOM) is elided like any
    display-only component, since SSR bakes its data into the first paint.
    It ships only on an independent signal (the lists above, an `@event`, a
    non-`state` prop, a `<slot>`, cross-module observation, an interactive
-   child) or one of the two static carve-outs `analyzeComponentSource`
-   checks inline: `static shadow = true` (Declarative Shadow DOM must
-   re-attach on a client-side DOM insertion) and `static refresh = true`
-   (the explicit opt-in to keep the on-load re-fetch). `renderFallback`
-   stays a ship signal via `CLIENT_LIFECYCLE_HOOKS`.
+   child) or one of the two static carve-outs in the
+   `INTERACTIVITY_STATIC_FIELDS` registry: `static shadow = true`
+   (Declarative Shadow DOM must re-attach on a client-side DOM insertion)
+   and `static refresh = true` (the explicit opt-in to keep the on-load
+   re-fetch). `renderFallback` stays a ship signal via
+   `CLIENT_LIFECYCLE_HOOKS`.
 
 7. **`<slot>` works identically in light and shadow DOM.** Light-DOM
    slots get the same `assignedNodes` / `assignedElements` /

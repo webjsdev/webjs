@@ -1,4 +1,5 @@
 import { html, isTemplate } from './html.js';
+import { BINDING_PREFIXES } from './binding-prefixes.js';
 import { escapeText, escapeAttr } from './escape.js';
 import { lookup, lookupModuleUrl, allTags } from './registry.js';
 import { stylesToString, isCSS } from './css.js';
@@ -256,12 +257,13 @@ async function renderTemplate(tr, ctx) {
       } else if (state === 'after-eq') {
         const prefix = attrName[0];
         const name = attrName.slice(1);
-        if (prefix === '@') {
+        const kind = BINDING_PREFIXES[prefix];
+        if (kind === 'event') {
           // Event listener. Client-only behaviour, drop at SSR.
           out = out.slice(0, attrStart);
           state = 'in-tag';
           attrName = '';
-        } else if (prefix === '.') {
+        } else if (kind === 'prop') {
           // Property binding. Only meaningful on custom elements (which
           // have a hyphen in the tag name and a WebComponent subclass
           // that knows how to apply + strip data-webjs-prop-* on
@@ -315,7 +317,7 @@ async function renderTemplate(tr, ctx) {
           }
           state = 'in-tag';
           attrName = '';
-        } else if (prefix === '?') {
+        } else if (kind === 'bool') {
           out = out.slice(0, attrStart);
           if (val) out += `${name}=""`;
           state = 'in-tag';
@@ -1422,11 +1424,12 @@ async function streamTemplate(tr, ctx, controller) {
       } else if (state === 'after-eq') {
         const prefix = attrName[0];
         const name = attrName.slice(1);
-        if (prefix === '@' || prefix === '.') {
+        const kind = BINDING_PREFIXES[prefix];
+        if (kind === 'event' || kind === 'prop') {
           buf = buf.slice(0, attrStart);
           state = 'in-tag';
           attrName = '';
-        } else if (prefix === '?') {
+        } else if (kind === 'bool') {
           buf = buf.slice(0, attrStart);
           if (val) buf += `${name}=""`;
           state = 'in-tag';
