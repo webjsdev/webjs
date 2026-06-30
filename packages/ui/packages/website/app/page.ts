@@ -202,8 +202,8 @@ npx webjsui add button card dialog</code></pre>
       </p>
 
       <!-- Tier 1 -->
-      <div class="flex items-baseline justify-between mb-3">
-        <div class="flex items-baseline gap-3">
+      <div class="flex flex-col gap-1 mb-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+        <div class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
           <span class="text-xs font-mono uppercase tracking-widest text-brand">Tier 1</span>
           <h3 class="text-lg font-semibold">Class‑helper functions</h3>
         </div>
@@ -229,8 +229,8 @@ npx webjsui add button card dialog</code></pre>
       </div>
 
       <!-- Tier 2 -->
-      <div class="flex items-baseline justify-between mb-3">
-        <div class="flex items-baseline gap-3">
+      <div class="flex flex-col gap-1 mb-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+        <div class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
           <span class="text-xs font-mono uppercase tracking-widest text-brand">Tier 2</span>
           <h3 class="text-lg font-semibold">Stateful custom elements</h3>
         </div>
