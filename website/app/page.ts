@@ -176,8 +176,8 @@ export default function LandingPage() {
               <pre class="scroll-thin m-0 p-[18px] overflow-x-auto font-mono text-[13px] leading-[1.7] [tab-size:2] flex-1" tabindex="0" aria-label="server-rendered HTML"><code>${highlight(SSR_OUTPUT)}</code></pre>
               <div class="flex items-center gap-3 px-[18px] py-[14px] border-t border-border bg-[color-mix(in_oklch,var(--color-bg-sunken)_50%,transparent)]">
                 <span class="font-mono text-[10px] uppercase tracking-[0.12em] text-fg-subtle shrink-0">Renders as</span>
-                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-bg-elev text-[13px] font-medium leading-none text-fg"><span aria-hidden="true">♥</span> 3</span>
-                <span class="text-[11px] leading-snug text-fg-subtle">readable and styled with JavaScript off</span>
+                <button type="button" style="all:revert;cursor:pointer">♥ 3</button>
+                <span class="text-[11px] leading-snug text-fg-subtle">the browser's own button, no JavaScript</span>
               </div>
             </figure>
           </div>
