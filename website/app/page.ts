@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 import '#components/copy-cmd.ts';
-import '#components/code-showcase.ts';
+import { COMPONENT_SAMPLE, ACTION_SAMPLE, PAGE_SAMPLE } from '#lib/samples.ts';
 import { DOCS_URL, UI_URL, EXAMPLE_BLOG_URL, GH_URL, NEW_TAB } from '#lib/links.ts';
 // highlight() runs only at SSR (codeWindow renders its output into the served
 // HTML), but it does ship to the client as a small dead module: the page loads
@@ -32,8 +32,8 @@ const STATS = [
   { big: '~16k', label: 'LLM-context friendly', sub: 'Under 6.5k lines of client runtime, ~16k for the whole stack, small enough to fit an LLM context window.' },
 ];
 
-// The interactive component / server action / page samples now live in
-// #lib/samples.ts, consumed by the <code-showcase> IDE element.
+// The interactive component / server action / page samples live in
+// #lib/samples.ts and render through codeWindow() in "Show, don't tell".
 
 // Chips for the progressive-enhancement section: the concrete things that
 // keep working with JavaScript disabled, because the server sends real HTML.
@@ -52,15 +52,9 @@ const PE_COMPONENT = `class LikeButton extends WebComponent({ count: Number }) {
 }
 LikeButton.register('like-button');`;
 
-const SSR_OUTPUT = `<!-- what the browser receives, before any JS -->
-<like-button count="3">
+const SSR_OUTPUT = `<like-button count="3">
   <button>♥ 3</button>
-</like-button>
-
-<!-- The count reads. A plain link navigates, a
-     form submits to a server action. JavaScript
-     then upgrades the click in place, only where
-     an interaction actually needs it. -->`;
+</like-button>`;
 
 const WIN = 'flex flex-col flex-1 m-0 min-w-0 max-w-full rounded-2xl overflow-hidden border border-border bg-bg-elev shadow-[var(--shadow)]';
 const WINBAR = 'flex items-center gap-[7px] px-[14px] py-[10px] border-b border-border bg-[color-mix(in_oklch,var(--color-bg-sunken)_60%,var(--color-bg-elev))]';
@@ -82,7 +76,7 @@ function codeWindow(title: string, sample: string) {
 export default function LandingPage() {
   return html`
     <style>
-      /* Editor + code tokens for the code-showcase IDE element and the
+      /* Editor + code tokens for the Show-dont-tell code windows and the
          Why-webjs code cards. The editor surfaces reference the theme's own
          semantic tokens, so they track light/dark with no duplication; only
          the three syntax hues need a dark override. */
@@ -177,7 +171,15 @@ export default function LandingPage() {
           </div>
           <div class="flex flex-col min-w-0">
             <p class="font-mono font-semibold text-[11px] leading-[1.4] tracking-[0.12em] uppercase text-fg-subtle mb-[10px] ml-1">What the browser receives (JS off)</p>
-            ${codeWindow('view-source', SSR_OUTPUT)}
+            <figure class=${WIN}>
+              <figcaption class=${WINBAR}>${DOTS}<span class=${WINNAME}>view-source</span></figcaption>
+              <pre class="scroll-thin m-0 p-[18px] overflow-x-auto font-mono text-[13px] leading-[1.7] [tab-size:2] flex-1" tabindex="0" aria-label="server-rendered HTML"><code>${highlight(SSR_OUTPUT)}</code></pre>
+              <div class="flex items-center gap-3 px-[18px] py-[14px] border-t border-border bg-[color-mix(in_oklch,var(--color-bg-sunken)_50%,transparent)]">
+                <span class="font-mono text-[10px] uppercase tracking-[0.12em] text-fg-subtle shrink-0">Renders as</span>
+                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-bg-elev text-[13px] font-medium leading-none text-fg"><span aria-hidden="true">♥</span> 3</span>
+                <span class="text-[11px] leading-snug text-fg-subtle">readable and styled with JavaScript off</span>
+              </div>
+            </figure>
           </div>
         </div>
         <div class="flex flex-wrap gap-[10px] justify-center mt-8">
@@ -187,13 +189,26 @@ export default function LandingPage() {
     </section>
 
     <section class="py-16">
-      <div class="max-w-[1000px] mx-auto px-6">
+      <div class="max-w-[1320px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Show, don't tell</div>
           <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">The whole stack, in three files</h2>
           <p class="text-fg-muted text-[1.05rem] leading-[1.6] m-0">A component, a server action, and a page. No build, no boilerplate, all web standards.</p>
         </div>
-        <code-showcase></code-showcase>
+        <div class="grid gap-4 grid-cols-1 max-w-[560px] mx-auto min-[900px]:grid-cols-3 min-[900px]:max-w-none">
+          <div class="flex flex-col min-w-0">
+            <p class="font-mono font-semibold text-[11px] leading-[1.4] tracking-[0.12em] uppercase text-fg-subtle mb-[10px] ml-1">Interactive component</p>
+            ${codeWindow('components/like-button.ts', COMPONENT_SAMPLE)}
+          </div>
+          <div class="flex flex-col min-w-0">
+            <p class="font-mono font-semibold text-[11px] leading-[1.4] tracking-[0.12em] uppercase text-fg-subtle mb-[10px] ml-1">Server action (RPC)</p>
+            ${codeWindow('actions/get-post.server.ts', ACTION_SAMPLE)}
+          </div>
+          <div class="flex flex-col min-w-0">
+            <p class="font-mono font-semibold text-[11px] leading-[1.4] tracking-[0.12em] uppercase text-fg-subtle mb-[10px] ml-1">SSR page</p>
+            ${codeWindow('app/posts/[id]/page.ts', PAGE_SAMPLE)}
+          </div>
+        </div>
       </div>
     </section>
 
