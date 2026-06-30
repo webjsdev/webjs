@@ -1,5 +1,6 @@
 import { html } from '@webjsdev/core';
 import '#components/copy-cmd.ts';
+import '#components/like-button.ts';
 import { COMPONENT_SAMPLE, ACTION_SAMPLE, PAGE_SAMPLE } from '#lib/samples.ts';
 import { DOCS_URL, UI_URL, EXAMPLE_BLOG_URL, GH_URL, NEW_TAB } from '#lib/links.ts';
 // highlight() runs only at SSR (codeWindow renders its output into the served
@@ -125,6 +126,20 @@ export default function LandingPage() {
         :root:not([data-theme='light']) .t-num { color: oklch(0.82 0.12 215); }
         :root:not([data-theme='light']) .t-ok  { color: oklch(0.66 0.16 150); }
       }
+      /* The live like-button demo: a bare light-DOM button the page styles
+         into a pill (tag-prefixed, per the light-DOM CSS rule). */
+      like-button button {
+        display: inline-flex; align-items: center; gap: 0.375rem;
+        padding: 0.375rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        background: var(--bg-elev);
+        color: var(--fg);
+        font-size: 13px; font-weight: 500; line-height: 1;
+        cursor: pointer;
+        transition: border-color 140ms, background-color 140ms;
+      }
+      like-button button:hover { border-color: var(--border-strong); }
     </style>
 
     <main id="main" tabindex="-1" class="focus:outline-none">
@@ -174,10 +189,9 @@ export default function LandingPage() {
             <figure class=${WIN}>
               <figcaption class=${WINBAR}>${DOTS}<span class=${WINNAME}>view-source</span></figcaption>
               <pre class="scroll-thin m-0 p-[18px] overflow-x-auto font-mono text-[13px] leading-[1.7] [tab-size:2] flex-1" tabindex="0" aria-label="server-rendered HTML"><code>${highlight(SSR_OUTPUT)}</code></pre>
-              <div class="flex items-center gap-3 px-[18px] py-[14px] border-t border-border bg-[color-mix(in_oklch,var(--color-bg-sunken)_50%,transparent)]">
-                <span class="font-mono text-[10px] uppercase tracking-[0.12em] text-fg-subtle shrink-0">Renders as</span>
-                <button type="button" style="all:revert;cursor:pointer">♥ 3</button>
-                <span class="text-[11px] leading-snug text-fg-subtle">the browser's own button, no JavaScript</span>
+              <div class="flex items-center justify-between gap-3 px-[18px] py-[14px] border-t border-border bg-[color-mix(in_oklch,var(--color-bg-sunken)_50%,transparent)]">
+                <span class="font-mono text-[11px] tracking-[0.04em] text-fg-subtle">Renders as a real component, click to count</span>
+                <like-button count="3"></like-button>
               </div>
             </figure>
           </div>
