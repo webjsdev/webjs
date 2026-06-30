@@ -63,7 +63,17 @@ const ports = {
 // Use each workspace's `npm run dev` so the concurrently-spawned
 // tailwind CLI watcher (and, for the blog, the db migrate; for the UI
 // site, the predev copy-registry step) runs too.
-start('website', resolve(root, 'website'), 'npm', ['run', 'dev'], { PORT: ports.website });
+// Point the website's nav + footer cross-links at the sibling dev servers.
+// lib/links.ts reads DOCS_URL / UI_URL / EXAMPLE_BLOG_URL and otherwise falls
+// back to the production domains, which is why a local UI link would otherwise
+// open ui.webjs.dev. Derived from the resolved ports so a DOCS_PORT / UI_PORT /
+// BLOG_PORT override flows through automatically.
+start('website', resolve(root, 'website'), 'npm', ['run', 'dev'], {
+  PORT: ports.website,
+  DOCS_URL: `http://localhost:${ports.docs}`,
+  UI_URL: `http://localhost:${ports.ui}`,
+  EXAMPLE_BLOG_URL: `http://localhost:${ports.blog}`,
+});
 start('docs',    resolve(root, 'docs'),    'npm', ['run', 'dev'], { PORT: ports.docs });
 start('ui',      resolve(root, 'packages', 'ui', 'packages', 'website'), 'npm', ['run', 'dev'], { PORT: ports.ui });
 start('blog',    resolve(root, 'examples', 'blog'), 'npm', ['run', 'dev'], { PORT: ports.blog });
