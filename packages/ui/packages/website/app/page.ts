@@ -26,7 +26,7 @@ export default async function Home() {
       >
         ${ui.length} primitives designed for the agent era: copy‑paste source code,
         full native HTML semantics, shadcn API parity, zero third‑party dependencies.
-        Works in webjs, Next, Astro, Vite, Lit, vanilla, any project with Tailwind v4.
+        Works in WebJs, Next, Astro, Vite, Lit, vanilla, any project with Tailwind v4.
       </p>
       <div class="mt-8 flex flex-wrap gap-3">
         <a
