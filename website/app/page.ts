@@ -64,6 +64,8 @@ const DOTS = html`<span class="w-[11px] h-[11px] rounded-full bg-[#ff5f57]"></sp
 const KICKER = 'inline-flex flex-wrap justify-center gap-[10px] font-mono font-semibold text-[12px] leading-[1.4] tracking-[0.18em] uppercase text-[var(--accent-text)]';
 const BTN = 'inline-flex items-center gap-2 px-[22px] py-[13px] rounded-full font-semibold text-[15px] leading-none no-underline border cursor-pointer transition-all duration-[140ms]';
 const INSTALL = 'flex items-center gap-2 w-fit max-w-full mx-auto px-[18px] py-[14px] text-left font-mono text-sm leading-[1.6] text-fg-muted rounded-2xl border border-border bg-[color-mix(in_oklch,var(--color-bg-sunken)_70%,transparent)] backdrop-blur-sm shadow-[var(--shadow-sm)]';
+// Bento-grid card wrapper, shared by the "Why webjs" and "Small by design" cells.
+const CARD = 'p-6 bg-bg-elev hover:bg-[color-mix(in_oklch,var(--bg-elev)_92%,var(--fg))] transition-colors duration-200 flex flex-col justify-between h-full';
 
 function codeWindow(title: string, sample: string) {
   return html`
@@ -109,7 +111,6 @@ export default function LandingPage() {
       .t-fn  { color: oklch(0.52 0.15 250); }
       .t-type{ color: oklch(0.52 0.10 200); }
       .t-num { color: oklch(0.55 0.12 215); }
-      .t-ok  { color: oklch(0.52 0.16 150); }
       .t-punc{ color: var(--fg-muted); }
       .t-id  { color: var(--fg); }
       :root[data-theme='dark'] .t-str { color: oklch(0.80 0.14 150); }
@@ -117,14 +118,12 @@ export default function LandingPage() {
       :root[data-theme='dark'] .t-fn  { color: oklch(0.75 0.13 250); }
       :root[data-theme='dark'] .t-type{ color: oklch(0.80 0.10 200); }
       :root[data-theme='dark'] .t-num { color: oklch(0.82 0.12 215); }
-      :root[data-theme='dark'] .t-ok  { color: oklch(0.66 0.16 150); }
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme='light']) .t-str { color: oklch(0.80 0.14 150); }
         :root:not([data-theme='light']) .t-kw  { color: oklch(0.76 0.14 295); }
         :root:not([data-theme='light']) .t-fn  { color: oklch(0.75 0.13 250); }
         :root:not([data-theme='light']) .t-type{ color: oklch(0.80 0.10 200); }
         :root:not([data-theme='light']) .t-num { color: oklch(0.82 0.12 215); }
-        :root:not([data-theme='light']) .t-ok  { color: oklch(0.66 0.16 150); }
       }
       /* The live like-button demo: a bare light-DOM button the page styles
          into a pill (tag-prefixed, per the light-DOM CSS rule). */
@@ -235,7 +234,7 @@ export default function LandingPage() {
         </div>
         <div class="grid gap-px overflow-hidden rounded-2xl border border-border bg-border grid-cols-1 min-[560px]:grid-cols-2 min-[900px]:grid-cols-3 shadow-[var(--shadow-sm)]">
 
-          <div class="group p-6 bg-bg-elev hover:bg-[color-mix(in_oklch,var(--bg-elev)_92%,var(--fg))] transition-colors duration-200 flex flex-col justify-between h-full">
+          <div class="${CARD}">
             <div class="mb-6">
               <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.02em] mt-0 mb-2">Zero build step</h3>
               <p class="m-0 text-sm leading-[1.6] text-fg-muted">Source files run as-is, so what you write is exactly what the browser serves. An AI agent debugs against the real served code, never a bundled or minified artifact.</p>
@@ -248,7 +247,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div class="group p-6 bg-bg-elev hover:bg-[color-mix(in_oklch,var(--bg-elev)_92%,var(--fg))] transition-colors duration-200 flex flex-col justify-between h-full">
+          <div class="${CARD}">
             <div class="mb-6">
               <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.02em] mt-0 mb-2">Light DOM web components</h3>
               <p class="m-0 text-sm leading-[1.6] text-fg-muted">Web components that render to light DOM, so Tailwind and global CSS just work, no shadow plumbing.</p>
@@ -262,7 +261,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div class="group p-6 bg-bg-elev hover:bg-[color-mix(in_oklch,var(--bg-elev)_92%,var(--fg))] transition-colors duration-200 flex flex-col justify-between h-full">
+          <div class="${CARD}">
             <div class="mb-6">
               <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.02em] mt-0 mb-2">Server actions (RPC)</h3>
               <p class="m-0 text-sm leading-[1.6] text-fg-muted">Mark a file <code class="font-mono text-[0.9em]">'use server'</code> and import it. Date, Map, Set, BigInt, and Blob all round-trip across the wire with real http verbs (GET, POST, PUT, PATCH, DELETE).</p>
@@ -274,7 +273,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div class="group p-6 bg-bg-elev hover:bg-[color-mix(in_oklch,var(--bg-elev)_92%,var(--fg))] transition-colors duration-200 flex flex-col justify-between h-full">
+          <div class="${CARD}">
             <div class="mb-6">
               <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.02em] mt-0 mb-2">Streaming Suspense</h3>
               <p class="m-0 text-sm leading-[1.6] text-fg-muted">Stream slow regions progressively. The shell paints instantly, fallbacks render, and async data fills in as it resolves.</p>
@@ -287,7 +286,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div class="group p-6 bg-bg-elev hover:bg-[color-mix(in_oklch,var(--bg-elev)_92%,var(--fg))] transition-colors duration-200 flex flex-col justify-between h-full">
+          <div class="${CARD}">
             <div class="mb-6">
               <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.02em] mt-0 mb-2">Progressive enhancement</h3>
               <p class="m-0 text-sm leading-[1.6] text-fg-muted">Real HTML first. Links navigate, forms submit, and pages read before JavaScript loads. No hydration overhead.</p>
@@ -298,7 +297,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div class="group p-6 bg-bg-elev hover:bg-[color-mix(in_oklch,var(--bg-elev)_92%,var(--fg))] transition-colors duration-200 flex flex-col justify-between h-full">
+          <div class="${CARD}">
             <div class="mb-6">
               <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.02em] mt-0 mb-2">Built-in essentials</h3>
               <p class="m-0 text-sm leading-[1.6] text-fg-muted">Auth, sessions, cache, rate limits, and websockets are built right in. Pluggable adapters, zero glue.</p>
@@ -334,7 +333,7 @@ export default function LandingPage() {
       </div>
     </section>
 
-    <section class="py-16">
+    <section id="templates" class="scroll-mt-24 py-16">
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>One framework, three templates</div>

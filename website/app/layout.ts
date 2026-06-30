@@ -103,10 +103,10 @@ export default function RootLayout({ children }: { children: unknown }) {
           if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
         } catch (_) {}
       })();
-      // #610: the announcement banner + header are position:fixed together (not
-      // sticky, which flickers on iOS WebKit during a client-router nav).
-      // --header-h reserves the pinned bar's height; measured here so it tracks
-      // the real height, with a :root default for no-JS / first paint.
+      // #610: the header uses position fixed (not sticky, which flickers on iOS
+      // WebKit during a client-router nav). --header-h reserves the header
+      // height, measured here so it tracks the real height, with a :root
+      // default for no-JS / first paint.
       (function(){
         function measure(){
           try {
@@ -249,9 +249,6 @@ export default function RootLayout({ children }: { children: unknown }) {
          (wheel / touch / drag) and the copy button copies the full text. */
       .cmd-foot copy-cmd [data-copy-text] { overflow-x: auto; scrollbar-width: none; }
       .cmd-foot copy-cmd [data-copy-text]::-webkit-scrollbar { display: none; }
-      .site-top-banner {
-        background-color: color-mix(in oklch, var(--accent-live) 14%, var(--bg));
-      }
     </style>
 
     <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-accent focus:text-accent-fg focus:shadow-[var(--shadow)]">Skip to content</a>
