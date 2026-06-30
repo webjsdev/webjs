@@ -63,10 +63,21 @@ const ports = {
 // Use each workspace's `npm run dev` so the concurrently-spawned
 // tailwind CLI watcher (and, for the blog, the db migrate; for the UI
 // site, the predev copy-registry step) runs too.
-start('website', resolve(root, 'website'), 'npm', ['run', 'dev'], { PORT: ports.website });
-start('docs',    resolve(root, 'docs'),    'npm', ['run', 'dev'], { PORT: ports.docs });
-start('ui',      resolve(root, 'packages', 'ui', 'packages', 'website'), 'npm', ['run', 'dev'], { PORT: ports.ui });
-start('blog',    resolve(root, 'examples', 'blog'), 'npm', ['run', 'dev'], { PORT: ports.blog });
+// Point every app's nav + footer cross-links at the sibling dev servers. Each
+// app's lib/links.ts reads these and otherwise falls back to the production
+// domains, which is why a local cross-link would otherwise open the live site.
+// Derived from the resolved ports so a WEBSITE_PORT / DOCS_PORT / UI_PORT /
+// BLOG_PORT override flows through to every app, not just the website.
+const links = {
+  WEBSITE_URL: `http://localhost:${ports.website}`,
+  DOCS_URL: `http://localhost:${ports.docs}`,
+  UI_URL: `http://localhost:${ports.ui}`,
+  EXAMPLE_BLOG_URL: `http://localhost:${ports.blog}`,
+};
+start('website', resolve(root, 'website'), 'npm', ['run', 'dev'], { PORT: ports.website, ...links });
+start('docs',    resolve(root, 'docs'),    'npm', ['run', 'dev'], { PORT: ports.docs, ...links });
+start('ui',      resolve(root, 'packages', 'ui', 'packages', 'website'), 'npm', ['run', 'dev'], { PORT: ports.ui, ...links });
+start('blog',    resolve(root, 'examples', 'blog'), 'npm', ['run', 'dev'], { PORT: ports.blog, ...links });
 
 function cleanup() {
   console.log('\n▲ shutting down...');

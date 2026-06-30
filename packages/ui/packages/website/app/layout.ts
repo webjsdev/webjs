@@ -16,9 +16,9 @@ const env = (globalThis as any).process?.env ?? {};
 const WEBSITE_URL = env.WEBSITE_URL || 'http://localhost:5001';
 const DOCS_URL = env.DOCS_URL || 'http://localhost:5002';
 
-const TITLE = 'Webjs UI: AI-first component library';
+const TITLE = 'Webjs UI: the AI-first component library for WebJs';
 const DESCRIPTION =
-  'An AI-first component library. Two-tier composition: class-helper functions for visuals, custom elements only where state matters. Source-copied into your project. Works in webjs, Next, Astro, Vite, vanilla: any project with Tailwind v4.';
+  'The AI-first component library for WebJs. Two-tier composition: class-helper functions for visuals, custom elements only where state matters. Source-copied into your project, styled with Tailwind v4.';
 
 // Per-request metadata so the OG image URL can be absolute (scrapers
 // require http(s)). Mirrors website/app/layout.ts's generateMetadata
@@ -96,24 +96,31 @@ export default function Layout({ children }: { children: any }) {
       :root {
         color-scheme: light dark;
 
-        /* Light theme (default): matched to webjs.dev */
-        --fg:            oklch(0.18 0.015 60);
-        --fg-muted:      oklch(0.42 0.02 65);
-        --fg-subtle:     oklch(0.62 0.015 70);
-        --bg:            oklch(0.985 0.008 80);
+        /* Light theme (default): canonical webjs design-system tokens */
+        --fg:            oklch(0.20 0.018 60);
+        --fg-muted:      oklch(0.44 0.02 60);
+        --fg-subtle:     oklch(0.50 0.02 65);
+        --bg:            oklch(0.985 0.008 75);
         --bg-elev:       oklch(1 0 0);
-        --bg-subtle:     oklch(0.96 0.008 80);
-        --bg-sunken:     oklch(0.94 0.008 80);
-        --border:        oklch(0.88 0.01 75 / 0.95);
-        --border-strong: oklch(0.78 0.01 75 / 0.95);
-        --accent:        oklch(0.58 0.15 55);
-        --accent-hover:  oklch(0.5 0.15 55);
+        --bg-subtle:     oklch(0.96 0.008 75);
+        --bg-sunken:     oklch(0.93 0.01 70);
+        --border:        oklch(0.88 0.012 70 / 0.9);
+        --border-strong: oklch(0.78 0.014 70 / 0.95);
+        --accent:        oklch(0.54 0.16 52);
+        --accent-hover:  oklch(0.5 0.16 52);
         --accent-fg:     oklch(1 0 0);
-        --accent-tint:   oklch(0.58 0.15 55 / 0.08);
+        --accent-live:   oklch(0.63 0.17 50);
+        --accent-tint:   color-mix(in oklch, var(--accent-live) 14%, transparent);
+        --accent-text:    var(--accent);
+        --accent-surface: color-mix(in oklch, var(--accent-live) 12%, transparent);
+        --accent-border:  color-mix(in oklch, var(--accent-live) 28%, transparent);
+        --glow-a:        oklch(0.63 0.17 44);
+        --glow-strength: 0.16;
 
-        --font-sans:  -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        --font-display: 'Inter Tight', 'Inter', system-ui, -apple-system, sans-serif;
+        --font-sans:    'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
         --font-serif: ui-serif, 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, Cambria, serif;
-        --font-mono:  ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+        --font-mono:    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
         /* Spacing + radii + shadows: same scale as webjs.dev */
         --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
@@ -133,19 +140,19 @@ export default function Layout({ children }: { children: any }) {
       }
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme='light']) {
-          --fg:            oklch(0.96 0.015 60);
-          --fg-muted:      oklch(0.72 0.02 60);
-          --fg-subtle:     oklch(0.55 0.02 60);
-          --bg:            oklch(0.14 0.01 55);
-          --bg-elev:       oklch(0.18 0.01 55);
-          --bg-subtle:     oklch(0.16 0.01 55);
-          --bg-sunken:     oklch(0.11 0.008 55);
-          --border:        oklch(0.26 0.012 55 / 0.9);
-          --border-strong: oklch(0.38 0.012 55 / 0.9);
-          --accent:        oklch(0.78 0.14 55);
-          --accent-hover:  oklch(0.85 0.14 55);
-          --accent-fg:     oklch(0.15 0.01 55);
-          --accent-tint:   oklch(0.78 0.14 55 / 0.12);
+          --fg:            oklch(0.96 0 0);
+          --fg-muted:      oklch(0.74 0 0);
+          --fg-subtle:     oklch(0.62 0 0);
+          --bg:            oklch(0 0 0);
+          --bg-elev:       oklch(0.135 0 0);
+          --bg-subtle:     oklch(0.09 0 0);
+          --bg-sunken:     oklch(0 0 0);
+          --border:        oklch(0.32 0 0 / 0.9);
+          --border-strong: oklch(0.44 0 0 / 0.92);
+          --accent:        oklch(0.7 0.16 52);
+          --accent-hover:  oklch(0.75 0.16 52);
+          --accent-fg:     oklch(0.17 0.02 52);
+          --glow-strength: 0.16;
           --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
           --shadow:    0 4px 24px oklch(0 0 0 / 0.4);
         }
@@ -162,19 +169,19 @@ export default function Layout({ children }: { children: any }) {
          only when the OS preference disagrees with the explicit toggle. */
       :root[data-theme='dark'] {
         color-scheme: dark;
-        --fg:            oklch(0.96 0.015 60);
-        --fg-muted:      oklch(0.72 0.02 60);
-        --fg-subtle:     oklch(0.55 0.02 60);
-        --bg:            oklch(0.14 0.01 55);
-        --bg-elev:       oklch(0.18 0.01 55);
-        --bg-subtle:     oklch(0.16 0.01 55);
-        --bg-sunken:     oklch(0.11 0.008 55);
-        --border:        oklch(0.26 0.012 55 / 0.9);
-        --border-strong: oklch(0.38 0.012 55 / 0.9);
-        --accent:        oklch(0.78 0.14 55);
-        --accent-hover:  oklch(0.85 0.14 55);
-        --accent-fg:     oklch(0.15 0.01 55);
-        --accent-tint:   oklch(0.78 0.14 55 / 0.12);
+        --fg:            oklch(0.96 0 0);
+        --fg-muted:      oklch(0.74 0 0);
+        --fg-subtle:     oklch(0.62 0 0);
+        --bg:            oklch(0 0 0);
+        --bg-elev:       oklch(0.135 0 0);
+        --bg-subtle:     oklch(0.09 0 0);
+        --bg-sunken:     oklch(0 0 0);
+        --border:        oklch(0.32 0 0 / 0.9);
+        --border-strong: oklch(0.44 0 0 / 0.92);
+        --accent:        oklch(0.7 0.16 52);
+        --accent-hover:  oklch(0.75 0.16 52);
+        --accent-fg:     oklch(0.17 0.02 52);
+        --glow-strength: 0.16;
         --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
         --shadow:    0 4px 24px oklch(0 0 0 / 0.4);
       }
@@ -195,6 +202,15 @@ export default function Layout({ children }: { children: any }) {
         -webkit-font-smoothing: antialiased;
         transition: background var(--t) cubic-bezier(0.3, 0, 0.3, 1),
                     color var(--t) cubic-bezier(0.3, 0, 0.3, 1);
+      }
+      /* A single static gradient glow layer, the warm top-edge wash that
+         matches webjs.dev. Faint by design; page content sits above it. */
+      .glow-layer { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+      .glow-layer::before {
+        content: ''; position: absolute; inset: 0;
+        background:
+          radial-gradient(58% 44% at 50% -4%, color-mix(in oklch, var(--glow-a) calc(var(--glow-strength) * 100%), transparent), transparent 72%),
+          radial-gradient(40% 36% at 88% 8%, color-mix(in oklch, var(--glow-a) calc(var(--glow-strength) * 60%), transparent), transparent 70%);
       }
       /* Global selection: warm orange tint on chrome. Note we DO NOT
          force a color here. The earlier rule forced selected text to
@@ -250,6 +266,11 @@ export default function Layout({ children }: { children: any }) {
         overflow-x: auto;
       }
       pre code { color: inherit; font-family: var(--font-mono); font-size: 12.5px; }
+
+      /* Homepage Install + "How agents write it" samples sit flush on their
+         card surface (no nested code-block tint). Higher specificity than the
+         unlayered pre rule above so it wins without a cascade-layer fight. */
+      pre.pre-bare { background: transparent; color: var(--fg); border: 0; padding: 0; }
 
       /* Default border-color for chrome-level .border / .border-b / .border-t
          elements. Wrapped in @layer base so it sits BELOW Tailwind v4's
@@ -321,8 +342,33 @@ export default function Layout({ children }: { children: any }) {
       .mobile-menu > summary .close-icon { display: none; }
       .mobile-menu[open] > summary .open-icon { display: none; }
       .mobile-menu[open] > summary .close-icon { display: inline-block; }
+
+      /* Cool, theme-aware syntax-highlight palette (matches the website).
+         Applied on the client by /public/code-highlight.js, which tokenizes
+         each server-rendered <pre> and wraps tokens in these classes. */
+      .t-com { color: var(--fg-subtle); font-style: italic; }
+      .t-str { color: oklch(0.52 0.13 150); }
+      .t-kw  { color: oklch(0.52 0.16 295); font-weight: 600; }
+      .t-fn  { color: oklch(0.52 0.15 250); }
+      .t-type{ color: oklch(0.52 0.10 200); }
+      .t-num { color: oklch(0.55 0.12 215); }
+      :root[data-theme='dark'] .t-str { color: oklch(0.80 0.14 150); }
+      :root[data-theme='dark'] .t-kw  { color: oklch(0.76 0.14 295); }
+      :root[data-theme='dark'] .t-fn  { color: oklch(0.75 0.13 250); }
+      :root[data-theme='dark'] .t-type{ color: oklch(0.80 0.10 200); }
+      :root[data-theme='dark'] .t-num { color: oklch(0.82 0.12 215); }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) .t-str { color: oklch(0.80 0.14 150); }
+        :root:not([data-theme='light']) .t-kw  { color: oklch(0.76 0.14 295); }
+        :root:not([data-theme='light']) .t-fn  { color: oklch(0.75 0.13 250); }
+        :root:not([data-theme='light']) .t-type{ color: oklch(0.80 0.10 200); }
+        :root:not([data-theme='light']) .t-num { color: oklch(0.82 0.12 215); }
+      }
     </style>
 
+    <div class="glow-layer" aria-hidden="true"></div>
+
+    <div class="relative z-[1]">
     <div class="announce">
       <span class="tag">v1</span>
       <a href=${WEBSITE_URL} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5">
@@ -333,7 +379,7 @@ export default function Layout({ children }: { children: any }) {
       </a>
     </div>
 
-    <header class="flex items-center justify-between gap-4 max-w-5xl mx-auto px-4 sm:px-6 py-4">
+    <header class="flex items-center justify-between gap-4 max-w-5xl mx-auto px-4 sm:px-8 py-4">
       <a class="flex items-center gap-2 no-underline text-fg font-bold text-base leading-none tracking-tight" href="/">
         <span class="w-[22px] h-[22px] rounded-md bg-gradient-to-br from-brand to-[color-mix(in_oklch,var(--accent)_55%,var(--fg))]"></span>
         Webjs UI
@@ -371,15 +417,17 @@ export default function Layout({ children }: { children: any }) {
       </div>
     </header>
 
-    <main class="max-w-5xl mx-auto px-6 py-10">${children}</main>
+    <main class="max-w-5xl mx-auto px-6 sm:px-8 py-10">${children}</main>
 
     <footer class="border-t mt-20 py-8 text-center" style="color: var(--fg-subtle); font-size: 13px">
-      <div class="max-w-5xl mx-auto px-6">
+      <div class="max-w-5xl mx-auto px-6 sm:px-8">
         <a class="text-brand no-underline hover:underline" href=${WEBSITE_URL} target="_blank">Webjs</a> ·
         <a class="text-brand no-underline hover:underline" href=${DOCS_URL} target="_blank">Docs</a> ·
         <a class="text-brand no-underline hover:underline" href="https://github.com/webjsdev/webjs" target="_blank">GitHub</a>
       </div>
     </footer>
+    </div>
+    <script src="/public/code-highlight.js" defer></script>
   `;
 }
 

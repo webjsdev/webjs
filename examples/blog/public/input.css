@@ -29,10 +29,12 @@
   --color-accent-hover:  var(--accent-hover);
   --color-accent-fg:     var(--accent-fg);
   --color-accent-tint:   var(--accent-tint);
+  --color-accent-live:   var(--accent-live);
 
   --color-success:       var(--success);
   --color-danger:        var(--danger);
 
+  --font-display: var(--font-display);
   --font-sans:  var(--font-sans);
   --font-serif: var(--font-serif);
   --font-mono:  var(--font-mono);
@@ -47,3 +49,14 @@
   --duration-fast: 140ms;
   --duration-slow: 380ms;
 }
+
+/*
+ * Self-hosted fonts (latin subset woff2 in public/fonts/). One VARIABLE file
+ * per family covers its whole weight range, so a font-weight range here means
+ * every used weight resolves from a single download. No Google Fonts CDN: no
+ * render-blocking third-party stylesheet and no third-party request.
+ * font-display:swap paints immediately with the fallback, then swaps.
+ */
+@font-face{font-family:'Inter Tight';font-style:normal;font-weight:100 900;font-display:swap;src:url('/public/fonts/inter-tight.woff2') format('woff2');}
+@font-face{font-family:'Inter';font-style:normal;font-weight:100 900;font-display:swap;src:url('/public/fonts/inter.woff2') format('woff2');}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:100 800;font-display:swap;src:url('/public/fonts/jetbrains-mono.woff2') format('woff2');}

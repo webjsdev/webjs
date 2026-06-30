@@ -16,8 +16,8 @@ import { DOCS_URL, UI_URL, EXAMPLE_BLOG_URL, GH_URL, NEW_TAB } from '#lib/links.
  * lib/links.ts, imported here and by app/page.ts.
  */
 
-const TITLE = 'webjs: the framework your AI agent already knows how to use';
-const DESCRIPTION = 'AI-first, web-components-first, no-build full-stack framework. File-based routing, server actions, streaming SSR, on web standards. Runs on Node 24+ or Bun. Built for AI agents to read, write, and ship.';
+const TITLE = 'webjs: the web framework for AI agents';
+const DESCRIPTION = 'A full-stack web framework built on web components, SSR, and progressive enhancement, with zero build step. Lean enough for AI agents to read end to end. File-based routing, server actions, and streaming SSR on web standards. Runs on Node 24+ or Bun.';
 
 const NAV = [
   { label: 'Docs', href: DOCS_URL + '/docs/getting-started', ext: true },
@@ -103,10 +103,10 @@ export default function RootLayout({ children }: { children: unknown }) {
           if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
         } catch (_) {}
       })();
-      // #610: the announcement banner + header are position:fixed together (not
-      // sticky, which flickers on iOS WebKit during a client-router nav).
-      // --header-h reserves the pinned bar's height; measured here so it tracks
-      // the real height, with a :root default for no-JS / first paint.
+      // #610: the header uses position fixed (not sticky, which flickers on iOS
+      // WebKit during a client-router nav). --header-h reserves the header
+      // height, measured here so it tracks the real height, with a :root
+      // default for no-JS / first paint.
       (function(){
         function measure(){
           try {
@@ -162,6 +162,11 @@ export default function RootLayout({ children }: { children: unknown }) {
         --accent-live:   oklch(0.63 0.17 50);
         --glow-a:        oklch(0.63 0.17 44);
         --accent-tint:   color-mix(in oklch, var(--accent-live) 14%, transparent);
+        --logo-from:     oklch(0.63 0.17 50);
+        --logo-to:       oklch(0.44 0.11 52);
+        --accent-text:    var(--accent);
+        --accent-surface: color-mix(in oklch, var(--accent-live) 12%, transparent);
+        --accent-border:  color-mix(in oklch, var(--accent-live) 28%, transparent);
         --glow-strength: 0.16;
         --font-display: 'Inter Tight', 'Inter', system-ui, -apple-system, sans-serif;
         --font-sans:    'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -175,11 +180,11 @@ export default function RootLayout({ children }: { children: unknown }) {
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme='light']) {
           --heart: oklch(0.74 0.18 6);
-          --fg: oklch(0.95 0.012 70); --fg-muted: oklch(0.74 0.02 65); --fg-subtle: oklch(0.66 0.02 60);
-          --bg: oklch(0.155 0.012 55); --bg-elev: oklch(0.20 0.014 55); --bg-subtle: oklch(0.18 0.013 55); --bg-sunken: oklch(0.12 0.01 55);
-          --border: oklch(0.30 0.016 58 / 0.85); --border-strong: oklch(0.42 0.018 58 / 0.9);
-          --accent: oklch(0.74 0.15 55); --accent-hover: oklch(0.82 0.15 55); --accent-fg: oklch(0.16 0.02 55);
-          --glow-strength: 0.32;
+          --fg: oklch(0.96 0 0); --fg-muted: oklch(0.74 0 0); --fg-subtle: oklch(0.62 0 0);
+          --bg: oklch(0 0 0); --bg-elev: oklch(0.135 0 0); --bg-subtle: oklch(0.09 0 0); --bg-sunken: oklch(0 0 0);
+          --border: oklch(0.32 0 0 / 0.9); --border-strong: oklch(0.44 0 0 / 0.92);
+          --accent: oklch(0.7 0.16 52); --accent-hover: oklch(0.75 0.16 52); --accent-fg: oklch(0.17 0.02 52); --logo-from: oklch(0.8 0.16 58); --logo-to: oklch(0.62 0.18 44);
+          --glow-strength: 0.16;
           --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.4);
           --shadow: 0 10px 40px oklch(0 0 0 / 0.5), 0 2px 6px oklch(0 0 0 / 0.35);
         }
@@ -187,11 +192,11 @@ export default function RootLayout({ children }: { children: unknown }) {
       :root[data-theme='dark'] {
         color-scheme: dark;
         --heart: oklch(0.74 0.18 6);
-        --fg: oklch(0.95 0.012 70); --fg-muted: oklch(0.74 0.02 65); --fg-subtle: oklch(0.66 0.02 60);
-        --bg: oklch(0.155 0.012 55); --bg-elev: oklch(0.20 0.014 55); --bg-subtle: oklch(0.18 0.013 55); --bg-sunken: oklch(0.12 0.01 55);
-        --border: oklch(0.30 0.016 58 / 0.85); --border-strong: oklch(0.42 0.018 58 / 0.9);
-        --accent: oklch(0.74 0.15 55); --accent-hover: oklch(0.82 0.15 55); --accent-fg: oklch(0.16 0.02 55);
-        --glow-strength: 0.32;
+        --fg: oklch(0.96 0 0); --fg-muted: oklch(0.74 0 0); --fg-subtle: oklch(0.62 0 0);
+        --bg: oklch(0 0 0); --bg-elev: oklch(0.135 0 0); --bg-subtle: oklch(0.09 0 0); --bg-sunken: oklch(0 0 0);
+        --border: oklch(0.32 0 0 / 0.9); --border-strong: oklch(0.44 0 0 / 0.92);
+        --accent: oklch(0.7 0.16 52); --accent-hover: oklch(0.75 0.16 52); --accent-fg: oklch(0.17 0.02 52); --logo-from: oklch(0.8 0.16 58); --logo-to: oklch(0.62 0.18 44);
+        --glow-strength: 0.16;
         --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.4);
         --shadow: 0 10px 40px oklch(0 0 0 / 0.5), 0 2px 6px oklch(0 0 0 / 0.35);
       }
@@ -200,7 +205,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
       }
       html, body { margin: 0; }
-      :root { --header-h: 88px; } /* #610 fixed banner+header offset, kept exact by the script above */
+      :root { --header-h: 59px; } /* #610 fixed header offset (no banner); kept exact by the script above */
       body {
         padding-top: var(--header-h);
         background: var(--bg); color: var(--fg);
@@ -244,9 +249,6 @@ export default function RootLayout({ children }: { children: unknown }) {
          (wheel / touch / drag) and the copy button copies the full text. */
       .cmd-foot copy-cmd [data-copy-text] { overflow-x: auto; scrollbar-width: none; }
       .cmd-foot copy-cmd [data-copy-text]::-webkit-scrollbar { display: none; }
-      .site-top-banner {
-        background-color: color-mix(in oklch, var(--accent-live) 14%, var(--bg));
-      }
     </style>
 
     <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-accent focus:text-accent-fg focus:shadow-[var(--shadow)]">Skip to content</a>
@@ -254,24 +256,20 @@ export default function RootLayout({ children }: { children: unknown }) {
     <div class="glow-layer" aria-hidden="true"></div>
 
     <div class="site-top fixed inset-x-0 top-0 z-20">
-    <div class="relative z-[3] text-center font-medium text-[13px] leading-[1.4] py-[9px] px-4 border-b border-border site-top-banner">
-      <span class="font-mono font-bold text-[10px] leading-none tracking-[0.12em] uppercase text-accent-hover bg-bg-elev rounded-full px-2 py-[3px] mr-2 align-middle">New</span>
-      <a href=${UI_URL} target="_blank" rel="noopener noreferrer" class="text-accent-hover font-semibold no-underline hover:underline">Introducing the AI-first component library <span aria-hidden="true">&rarr;</span>${NEW_TAB}</a>
-    </div>
-
     <header class="backdrop-blur-md bg-[color-mix(in_oklch,var(--color-bg)_78%,transparent)] border-b border-border">
-      <div class="max-w-[1080px] mx-auto px-6 py-[13px] flex items-center gap-4">
-        <a class="mr-auto inline-flex items-center gap-[9px] no-underline text-fg font-display font-extrabold text-[17px] leading-none tracking-[-0.02em]" href="/">
-          <span class="w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-accent-live to-[color-mix(in_oklch,var(--accent-live)_55%,var(--fg))] shadow-[0_2px_10px_var(--accent-tint)]"></span>
+      <div class="max-w-[1240px] mx-auto px-6 py-[11px] flex items-center justify-between gap-4">
+        <a class="inline-flex items-center gap-[9px] no-underline text-fg font-display font-extrabold text-[17px] leading-none tracking-[-0.02em] shrink-0" href="/">
+          <span class="w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-[var(--logo-from)] to-[var(--logo-to)] shadow-[0_2px_10px_var(--accent-tint)]"></span>
           webjs
         </a>
 
-        <nav class="hidden md:flex items-center gap-0.5" aria-label="Primary">
+        <nav class="hidden md:flex items-center gap-0.5 justify-center flex-1 mx-4" aria-label="Primary">
           ${NAV.map(n => html`<a class=${navLink} href=${n.href} target=${n.ext ? '_blank' : '_self'} rel=${n.ext ? 'noopener noreferrer' : ''}>${n.label}${n.ext ? NEW_TAB : ''}</a>`)}
         </nav>
 
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2.5 shrink-0">
           <theme-toggle></theme-toggle>
+
           <details class="mobile-menu relative md:hidden">
             <summary class="cursor-pointer w-[38px] h-[38px] inline-flex items-center justify-center rounded-[9px] text-fg-muted hover:bg-bg-subtle hover:text-fg" aria-label="Toggle navigation">
               <svg class="open-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>

@@ -58,8 +58,6 @@ test('external new-tab links announce the context change and hide decorative gly
   const out = await renderToString(RootLayout({ children: LandingPage() }));
   // Every target="_blank" link carries a visually-hidden new-tab cue.
   assert.ok(out.includes('class="sr-only"> (opens in a new tab)'), 'external links carry an sr-only new-tab cue');
-  // The banner's decorative arrow is hidden from the accessible name.
-  assert.ok(out.includes('aria-hidden="true">&rarr;</span>'), 'the banner arrow glyph is aria-hidden');
   // The cue rides multiple external links (nav + CTAs + footer), not a single one.
   const count = (out.match(/\(opens in a new tab\)/g) || []).length;
   assert.ok(count >= 5, `the new-tab cue appears on multiple external links (saw ${count})`);

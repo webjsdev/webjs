@@ -26,7 +26,7 @@ export default async function Home() {
       >
         ${ui.length} primitives designed for the agent era: copy‑paste source code,
         full native HTML semantics, shadcn API parity, zero third‑party dependencies.
-        Works in webjs, Next, Astro, Vite, Lit, vanilla, any project with Tailwind v4.
+        Built for WebJs, styled with Tailwind v4.
       </p>
       <div class="mt-8 flex flex-wrap gap-3">
         <a
@@ -96,20 +96,11 @@ export default async function Home() {
     <!-- Install -->
     <section class="py-16">
       <h2 class="text-2xl font-semibold mb-6">Install</h2>
-      <div class="grid md:grid-cols-2 gap-4">
-        <div class="rounded-lg border border-border bg-bg-elev p-5">
-          <div class="text-xs font-mono uppercase tracking-widest text-fg-muted mb-3">Webjs users</div>
-          <pre class="text-sm font-mono"><code><span class="text-fg-subtle"># shipped with @webjsdev/cli</span>
+      <div class="max-w-xl rounded-lg border border-border bg-bg-elev p-5">
+        <div class="text-xs font-mono uppercase tracking-widest text-fg-muted mb-3">In any webjs app</div>
+        <pre class="text-sm font-mono pre-bare"><code># shipped with @webjsdev/cli, already in every webjs app
 webjs ui init
 webjs ui add button card dialog</code></pre>
-        </div>
-        <div class="rounded-lg border border-border bg-bg-elev p-5">
-          <div class="text-xs font-mono uppercase tracking-widest text-fg-muted mb-3">Next · Astro · Vite · Lit · vanilla</div>
-          <pre class="text-sm font-mono"><code>npm install -D @webjsdev/ui
-npm install @webjsdev/core
-npx webjsui init
-npx webjsui add button card dialog</code></pre>
-        </div>
       </div>
     </section>
 
@@ -122,29 +113,29 @@ npx webjsui add button card dialog</code></pre>
       <div class="grid md:grid-cols-2 gap-4">
         <div class="min-w-0 flex flex-col rounded-lg border border-border bg-bg-elev p-5">
           <div class="text-xs font-mono uppercase tracking-widest text-fg-muted mb-3">A form field</div>
-          <pre class="scrollbar-thin flex-1 min-h-0 text-xs font-mono overflow-x-auto leading-relaxed"><code><span class="text-fg-subtle">&lt;form</span> class<span class="text-fg-subtle">=</span>\${stackClass({ gap: <span class="text-accent">'sm'</span> })}<span class="text-fg-subtle">&gt;</span>
-  <span class="text-fg-subtle">&lt;div</span> class<span class="text-fg-subtle">=</span>\${fieldClass()}<span class="text-fg-subtle">&gt;</span>
-    <span class="text-fg-subtle">&lt;label</span> class<span class="text-fg-subtle">=</span>\${labelClass()} <span class="text-fg-subtle">for="email"&gt;</span>Email<span class="text-fg-subtle">&lt;/label&gt;</span>
-    <span class="text-fg-subtle">&lt;input</span> class<span class="text-fg-subtle">=</span>\${inputClass()} <span class="text-fg-subtle">id="email" type="email" required /&gt;</span>
-    <span class="text-fg-subtle">&lt;p</span> class<span class="text-fg-subtle">=</span>\${hintClass()}<span class="text-fg-subtle">&gt;</span>We'll send a link.<span class="text-fg-subtle">&lt;/p&gt;</span>
-  <span class="text-fg-subtle">&lt;/div&gt;</span>
-  <span class="text-fg-subtle">&lt;button</span> class<span class="text-fg-subtle">=</span>\${buttonClass({ <span class="text-accent">size</span>: <span class="text-accent">'sm'</span> })} <span class="text-fg-subtle">type="submit"&gt;</span>Subscribe<span class="text-fg-subtle">&lt;/button&gt;</span>
-<span class="text-fg-subtle">&lt;/form&gt;</span></code></pre>
+          <pre class="scrollbar-thin flex-1 min-h-0 text-xs font-mono overflow-x-auto leading-relaxed pre-bare"><code>&lt;form class=\${stackClass({ gap: 'sm' })}&gt;
+  &lt;div class=\${fieldClass()}&gt;
+    &lt;label class=\${labelClass()} for="email"&gt;Email&lt;/label&gt;
+    &lt;input class=\${inputClass()} id="email" type="email" required /&gt;
+    &lt;p class=\${hintClass()}&gt;We'll send a link.&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;button class=\${buttonClass({ size: 'sm' })} type="submit"&gt;Subscribe&lt;/button&gt;
+&lt;/form&gt;</code></pre>
         </div>
         <div class="min-w-0 flex flex-col rounded-lg border border-border bg-bg-elev p-5">
           <div class="text-xs font-mono uppercase tracking-widest text-fg-muted mb-3">A dialog</div>
-          <pre class="scrollbar-thin flex-1 min-h-0 text-xs font-mono overflow-x-auto leading-relaxed"><code><span class="text-fg-subtle">&lt;ui-dialog&gt;</span>
-  <span class="text-fg-subtle">&lt;ui-dialog-trigger&gt;</span>
-    <span class="text-fg-subtle">&lt;button</span> class<span class="text-fg-subtle">=</span>\${buttonClass({ <span class="text-accent">variant</span>: <span class="text-accent">'outline'</span> })}<span class="text-fg-subtle">&gt;</span>Edit<span class="text-fg-subtle">&lt;/button&gt;</span>
-  <span class="text-fg-subtle">&lt;/ui-dialog-trigger&gt;</span>
-  <span class="text-fg-subtle">&lt;ui-dialog-content&gt;</span>
-    <span class="text-fg-subtle">&lt;h2</span> class<span class="text-fg-subtle">=</span>\${dialogTitleClass()}<span class="text-fg-subtle">&gt;</span>Delete project?<span class="text-fg-subtle">&lt;/h2&gt;</span>
-    <span class="text-fg-subtle">&lt;div</span> class<span class="text-fg-subtle">=</span>\${dialogFooterClass()}<span class="text-fg-subtle">&gt;</span>
-      <span class="text-fg-subtle">&lt;ui-dialog-close&gt;&lt;button</span> class<span class="text-fg-subtle">=</span>\${buttonClass({ <span class="text-accent">variant</span>: <span class="text-accent">'ghost'</span> })}<span class="text-fg-subtle">&gt;</span>Cancel<span class="text-fg-subtle">&lt;/button&gt;&lt;/ui-dialog-close&gt;</span>
-      <span class="text-fg-subtle">&lt;button</span> class<span class="text-fg-subtle">=</span>\${buttonClass({ <span class="text-accent">variant</span>: <span class="text-accent">'destructive'</span> })}<span class="text-fg-subtle">&gt;</span>Delete<span class="text-fg-subtle">&lt;/button&gt;</span>
-    <span class="text-fg-subtle">&lt;/div&gt;</span>
-  <span class="text-fg-subtle">&lt;/ui-dialog-content&gt;</span>
-<span class="text-fg-subtle">&lt;/ui-dialog&gt;</span></code></pre>
+          <pre class="scrollbar-thin flex-1 min-h-0 text-xs font-mono overflow-x-auto leading-relaxed pre-bare"><code>&lt;ui-dialog&gt;
+  &lt;ui-dialog-trigger&gt;
+    &lt;button class=\${buttonClass({ variant: 'outline' })}&gt;Edit&lt;/button&gt;
+  &lt;/ui-dialog-trigger&gt;
+  &lt;ui-dialog-content&gt;
+    &lt;h2 class=\${dialogTitleClass()}&gt;Delete project?&lt;/h2&gt;
+    &lt;div class=\${dialogFooterClass()}&gt;
+      &lt;ui-dialog-close&gt;&lt;button class=\${buttonClass({ variant: 'ghost' })}&gt;Cancel&lt;/button&gt;&lt;/ui-dialog-close&gt;
+      &lt;button class=\${buttonClass({ variant: 'destructive' })}&gt;Delete&lt;/button&gt;
+    &lt;/div&gt;
+  &lt;/ui-dialog-content&gt;
+&lt;/ui-dialog&gt;</code></pre>
         </div>
       </div>
     </section>
@@ -202,9 +193,9 @@ npx webjsui add button card dialog</code></pre>
       </p>
 
       <!-- Tier 1 -->
-      <div class="flex items-baseline justify-between mb-3">
-        <div class="flex items-baseline gap-3">
-          <span class="text-xs font-mono uppercase tracking-widest text-brand">Tier 1</span>
+      <div class="flex flex-col gap-1 mb-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+        <div class="flex items-baseline gap-4">
+          <span class="text-xs font-mono uppercase tracking-widest text-brand shrink-0">Tier 1</span>
           <h3 class="text-lg font-semibold">Class‑helper functions</h3>
         </div>
         <span class="text-xs text-fg-muted">${tier1.length} components</span>
@@ -229,9 +220,9 @@ npx webjsui add button card dialog</code></pre>
       </div>
 
       <!-- Tier 2 -->
-      <div class="flex items-baseline justify-between mb-3">
-        <div class="flex items-baseline gap-3">
-          <span class="text-xs font-mono uppercase tracking-widest text-brand">Tier 2</span>
+      <div class="flex flex-col gap-1 mb-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+        <div class="flex items-baseline gap-4">
+          <span class="text-xs font-mono uppercase tracking-widest text-brand shrink-0">Tier 2</span>
           <h3 class="text-lg font-semibold">Stateful custom elements</h3>
         </div>
         <span class="text-xs text-fg-muted">${tier2.length} components</span>

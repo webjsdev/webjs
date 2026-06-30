@@ -27,7 +27,7 @@ test('home metadata is single-source and consistent across title, og, and twitte
   // layout still supplied the whole og/twitter objects, exactly the gap this
   // guards). The home page IS the canonical share target.
   assert.equal(PageModule.metadata, undefined, 'the home page declares no diverging static metadata');
-  const m = generateMetadata({ url: 'https://webjs.com/' });
+  const m = generateMetadata({ url: 'https://webjs.dev/' });
   assert.equal(m.openGraph.title, m.title, 'og:title matches the <title>');
   assert.equal(m.twitter.title, m.title, 'twitter:title matches the <title>');
   assert.equal(m.openGraph.description, m.description, 'og:description matches the meta description');

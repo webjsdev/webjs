@@ -191,9 +191,7 @@ export default async function ComponentDoc({ params }: { params: { name: string 
 
     <section class="mb-12">
       <h2 class="text-base font-medium mb-3 text-fg-muted">Installation</h2>
-      <pre class="rounded-lg p-4 overflow-x-auto"><code>npx webjsui add ${item.name}</code></pre>
-      <p class="mt-3 text-sm text-muted-foreground">Webjs users, also available as:</p>
-      <pre class="rounded-lg p-4 overflow-x-auto mt-1"><code>webjs ui add ${item.name}</code></pre>
+      <pre class="rounded-lg p-4 overflow-x-auto"><code>webjs ui add ${item.name}</code></pre>
     </section>
 
     ${

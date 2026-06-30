@@ -18,7 +18,9 @@
   --color-accent-hover:  var(--accent-hover);
   --color-accent-fg:     var(--accent-fg);
   --color-accent-tint:   var(--accent-tint);
+  --color-accent-live:   var(--accent-live);
 
+  --font-display: var(--font-display);
   --font-sans:  var(--font-sans);
   --font-serif: var(--font-serif);
   --font-mono:  var(--font-mono);
@@ -31,3 +33,15 @@
   --duration-fast: 140ms;
   --duration-slow: 220ms;
 }
+
+/*
+ * Self-hosted Inter set (latin subset woff2 in public/fonts/), matching the
+ * marketing website. One VARIABLE file per family covers its whole weight
+ * range, so a font-weight range here means every used weight resolves from a
+ * single download. No Google Fonts CDN, so no render-blocking third-party
+ * stylesheet. font-display:swap paints immediately with the fallback, then
+ * swaps.
+ */
+@font-face{font-family:'Inter Tight';font-style:normal;font-weight:100 900;font-display:swap;src:url('/public/fonts/inter-tight.woff2') format('woff2');}
+@font-face{font-family:'Inter';font-style:normal;font-weight:100 900;font-display:swap;src:url('/public/fonts/inter.woff2') format('woff2');}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:100 800;font-display:swap;src:url('/public/fonts/jetbrains-mono.woff2') format('woff2');}

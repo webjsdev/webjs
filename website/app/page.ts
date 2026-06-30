@@ -1,5 +1,7 @@
 import { html } from '@webjsdev/core';
 import '#components/copy-cmd.ts';
+import '#components/like-button.ts';
+import { COMPONENT_SAMPLE, ACTION_SAMPLE, PAGE_SAMPLE } from '#lib/samples.ts';
 import { DOCS_URL, UI_URL, EXAMPLE_BLOG_URL, GH_URL, NEW_TAB } from '#lib/links.ts';
 // highlight() runs only at SSR (codeWindow renders its output into the served
 // HTML), but it does ship to the client as a small dead module: the page loads
@@ -19,109 +21,51 @@ import { highlight } from '#lib/highlight.ts';
 // win for <title> but leave og:/twitter: showing the layout's title, splitting
 // the canonical share target's name across the tab and the social card).
 
-const AGENTS = ['Claude Code', 'Cursor', 'Copilot', 'Antigravity', 'Codex', 'OpenCode'];
-
-const ICON = {
-  bolt: html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>`,
-  cube: html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7.5 12 3 3 7.5 12 12l9-4.5z"/><path d="M3 7.5v9L12 21V12"/><path d="M21 7.5v9L12 21"/></svg>`,
-  layers: html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/></svg>`,
-  plug: html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6m6-6v6M7 8h10v3a5 5 0 0 1-10 0V8zm5 8v6"/></svg>`,
-  wave: html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 8c2.5-4 5-4 7.5 0s5 4 7.5 0 3-2 5 0"/><path d="M2 16c2.5-4 5-4 7.5 0s5 4 7.5 0 3-2 5 0"/></svg>`,
-  shield: html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.5 7.5 8 9 4.5-1.5 8-4 8-9V6l-8-3z"/><path d="m9 12 2 2 4-4"/></svg>`,
-};
-
-const PILLARS = [
-  { icon: ICON.bolt, title: 'No build step', desc: 'Source files are served as native ES modules. Edit, refresh, see it. TypeScript is stripped by the runtime, no bundler, no compile. Runs on Node 24+ or Bun (scaffold a Bun app with bun create webjs, run it with bun --bun run dev).' },
-  { icon: ICON.cube, title: 'Web components, light DOM', desc: 'A thin reactive base class with html and css tagged templates, signals, and the full lit lifecycle. Light DOM by default so Tailwind just works.' },
-  { icon: ICON.layers, title: 'Progressive enhancement', desc: 'Everything renders to real HTML on the server. JavaScript is opt-in per interactive behavior. Dead JS is statically elided and never shipped.' },
-  { icon: ICON.plug, title: 'Server actions, rich types', desc: 'Mark a file with use server and import it from the client. Date, Map, Set, BigInt, Blob, and cycles all round-trip through the wire.' },
-  { icon: ICON.wave, title: 'Async render + streaming Suspense', desc: 'A component awaits its own server data into the first paint, co-located, no prop-drilling. Wrap a slow region in webjs-suspense to stream it, fallback first, data after, progressively on navigation too.' },
-  { icon: ICON.shield, title: 'Built-in essentials', desc: 'Auth, sessions, cache, rate limiting, and WebSockets, with pluggable adapters. The building blocks every app needs, no third-party glue.' },
-];
-
-// Reusable warm-gradient text (matches the hero headline accent word).
-const GRADTEXT = 'bg-[linear-gradient(105deg,var(--accent),color-mix(in_oklch,var(--accent-live)_72%,var(--fg)))] bg-clip-text text-transparent';
-
 // Framework-weight stats. Measured: gzipped production browser bundle,
 // npm package metadata, and framework source line counts. Kept honest
 // and comparative against a Next.js app's first-load JS (react + react-dom
 // alone is ~44 KB. The ~99 KB is the full Next baseline, react + react-dom
 // plus the Next runtime plus the app-router client).
 const STATS = [
-  { big: '~22 KB', label: 'Client runtime, gzipped', sub: 'A Next.js app ships ~99 KB on first load. WebJs core is about 4.5x lighter on the wire.' },
-  { big: '0', label: 'Runtime dependencies', sub: '@webjsdev/core has none. The whole stack adds only ws, for WebSockets.' },
-  { big: '~15k', label: 'Lines of framework code', sub: 'Small enough that an AI agent can read and grep the whole framework, not guess.' },
-  { big: 'No build', label: 'Source is the runtime', sub: 'What you read in node_modules is what runs. No bundler, no compile step.' },
+  { big: '~29 KB', label: 'Client runtime, gzipped', sub: 'A minimal Next.js client bundle is ~99 KB gzipped including React. webjs is self-sufficient at ~29 KB, 3.4x lighter on the wire.' },
+  { big: '0 build', label: 'Instant agent loops', sub: 'No compilation, no bundler. Agents edit, run tests, and verify in the browser in milliseconds.' },
+  { big: '100%', label: 'Web standards', sub: 'Standard-aligned Web Component lifecycles, so models write components reliably.' },
+  { big: '~16k', label: 'LLM-context friendly', sub: 'Under 6.5k lines of client runtime, ~16k for the whole stack, small enough to fit an LLM context window.' },
 ];
 
-// Code samples. Plain strings so backticks and ${...} stay literal and never
-// enter an html`` body. The SSR highlighter colors them.
-const COMPONENT_SAMPLE = `import { WebComponent, html, signal } from '@webjsdev/core';
+// The interactive component / server action / page samples live in
+// #lib/samples.ts and render through codeWindow() in "Show, don't tell".
 
-class LikeButton extends WebComponent {
-  likes = signal(0);
+// Chips for the progressive-enhancement section: the concrete things that
+// keep working with JavaScript disabled, because the server sends real HTML.
+const PE_CHIPS = ['No hydration runtime', 'Content reads', 'Links navigate', 'Forms submit', 'Display components ship 0 KB'];
+
+// A self-contained component for the progressive-enhancement pair. The
+// reactive `count` prop reflects to an attribute, which is why the rendered
+// output below carries count="3". Plain strings keep backticks / ${...}
+// literal so the SSR highlighter colors them.
+const PE_COMPONENT = `class LikeButton extends WebComponent({ count: Number }) {
   render() {
-    return html\`<button @click=\${() => this.likes.set(this.likes.get() + 1)}>
-      ♥ \${this.likes.get()}
+    return html\`<button @click=\${() => this.count++}>
+      ♥ \${this.count}
     </button>\`;
   }
 }
 LikeButton.register('like-button');`;
 
-const ACTION_SAMPLE = `'use server';
-import { eq } from 'drizzle-orm';
-import { db } from '#db/connection.server.ts';
-import { posts } from '#db/schema.server.ts';
-
-// Import this from a page or client component. webjs rewrites
-// the import into a typed RPC stub (the real call at SSR). No
-// fetch by hand.
-export async function getPost(id) {
-  const [post] = await db.select().from(posts).where(eq(posts.id, id));
-  return post;
-}`;
-
-const PAGE_SAMPLE = `export default async function Post({ params }) {
-  const post = await getPost(params.id);
-  if (!post) notFound();
-  return html\`<article>
-    <h1>\${post.title}</h1>
-    <like-button></like-button>
-  </article>\`;
-}`;
-
-const AGENTS_MD = [
-  { k: 'h', t: '# AGENTS.md' },
-  { k: 'b', t: 'The machine-readable contract every webjs app ships.' },
-  { k: 'b', t: '' },
-  { k: 'h', t: '## Invariants' },
-  { k: 'b', t: '1. Server-only code lives in .server.ts files.' },
-  { k: 'b', t: '2. Components register with a hyphenated tag name.' },
-  { k: 'b', t: '3. Signals are the default state primitive.' },
-  { k: 'b', t: '' },
-  { k: 'h', t: '## Code workflow (mandatory)' },
-  { k: 'b', t: 'Every change ships with tests, across every layer' },
-  { k: 'b', t: 'it touches, plus a webjs check run. Always.' },
-];
-
-const TRANSCRIPT = [
-  { k: 'cmd', t: 'claude "add a like button to posts"' },
-  { k: 'ok', t: 'wrote modules/posts/components/like-button.ts' },
-  { k: 'ok', t: 'wrote modules/posts/actions/like.server.ts' },
-  { k: 'ok', t: 'wrote modules/posts/actions/like.server.test.ts' },
-  { k: 'cmd', t: 'webjs check' },
-  { k: 'ok', t: '0 problems' },
-  { k: 'cmd', t: 'webjs test' },
-  { k: 'ok', t: '7 passing (3 unit, 2 browser, 2 e2e)' },
-];
+const SSR_OUTPUT = `<like-button count="3">
+  <button>♥ 3</button>
+</like-button>`;
 
 const WIN = 'flex flex-col flex-1 m-0 min-w-0 max-w-full rounded-2xl overflow-hidden border border-border bg-bg-elev shadow-[var(--shadow)]';
 const WINBAR = 'flex items-center gap-[7px] px-[14px] py-[10px] border-b border-border bg-[color-mix(in_oklch,var(--color-bg-sunken)_60%,var(--color-bg-elev))]';
 const WINNAME = 'ml-2 font-mono font-medium text-[12px] leading-none text-fg-subtle';
 const DOTS = html`<span class="w-[11px] h-[11px] rounded-full bg-[#ff5f57]"></span><span class="w-[11px] h-[11px] rounded-full bg-[#febc2e]"></span><span class="w-[11px] h-[11px] rounded-full bg-[#28c840]"></span>`;
-const KICKER = 'inline-flex flex-wrap justify-center gap-[10px] font-mono font-semibold text-[12px] leading-[1.4] tracking-[0.18em] uppercase text-accent';
+const KICKER = 'inline-flex flex-wrap justify-center gap-[10px] font-mono font-semibold text-[12px] leading-[1.4] tracking-[0.18em] uppercase text-[var(--accent-text)]';
 const BTN = 'inline-flex items-center gap-2 px-[22px] py-[13px] rounded-full font-semibold text-[15px] leading-none no-underline border cursor-pointer transition-all duration-[140ms]';
 const INSTALL = 'flex items-center gap-2 w-fit max-w-full mx-auto px-[18px] py-[14px] text-left font-mono text-sm leading-[1.6] text-fg-muted rounded-2xl border border-border bg-[color-mix(in_oklch,var(--color-bg-sunken)_70%,transparent)] backdrop-blur-sm shadow-[var(--shadow-sm)]';
+// Bento-grid card wrapper, shared by the "Why webjs" and "Small by design" cells.
+const CARD = 'p-6 bg-bg-elev hover:bg-[color-mix(in_oklch,var(--bg-elev)_92%,var(--fg))] transition-colors duration-200 flex flex-col justify-between h-full';
 
 function codeWindow(title: string, sample: string) {
   return html`
@@ -135,43 +79,77 @@ function codeWindow(title: string, sample: string) {
 export default function LandingPage() {
   return html`
     <style>
+      /* Editor + code tokens for the Show-dont-tell code windows and the
+         Why-webjs code cards. The editor surfaces reference the theme's own
+         semantic tokens, so they track light/dark with no duplication; only
+         the three syntax hues need a dark override. */
+      :root {
+        --editor-bg: var(--bg-elev);
+        --editor-sidebar-bg: var(--bg-sunken);
+        --editor-tab-bg: var(--bg-sunken);
+        --editor-active-tab-bg: var(--bg-elev);
+        --editor-status-bg: var(--bg-sunken);
+        --editor-border: var(--border);
+        --editor-fg: var(--fg);
+        --editor-gutter-fg: var(--fg-subtle);
+        --editor-gutter-border: var(--border);
+        --code-tag: oklch(0.55 0.13 250);
+        --code-attr: oklch(0.52 0.16 150);
+        --code-str: oklch(0.55 0.13 145);
+        --code-text: var(--fg);
+        --code-punc: var(--fg-muted);
+      }
+      :root[data-theme='dark'] {
+        --code-tag: oklch(0.78 0.13 250); --code-attr: oklch(0.66 0.16 150); --code-str: oklch(0.80 0.15 145);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) { --code-tag: oklch(0.78 0.13 250); --code-attr: oklch(0.66 0.16 150); --code-str: oklch(0.80 0.15 145); }
+      }
       .t-com { color: var(--fg-subtle); font-style: italic; }
-      .t-str { color: oklch(0.55 0.13 145); }
-      .t-kw  { color: oklch(0.55 0.18 25); font-weight: 600; }
-      .t-fn  { color: var(--accent); }
-      .t-type{ color: oklch(0.55 0.13 250); }
-      .t-num { color: oklch(0.55 0.14 70); }
-      .t-ok  { color: oklch(0.52 0.16 150); }
+      .t-str { color: oklch(0.52 0.13 150); }
+      .t-kw  { color: oklch(0.52 0.16 295); font-weight: 600; }
+      .t-fn  { color: oklch(0.52 0.15 250); }
+      .t-type{ color: oklch(0.52 0.10 200); }
+      .t-num { color: oklch(0.55 0.12 215); }
       .t-punc{ color: var(--fg-muted); }
       .t-id  { color: var(--fg); }
-      :root[data-theme='dark'] .t-str { color: oklch(0.80 0.15 145); }
-      :root[data-theme='dark'] .t-kw  { color: oklch(0.78 0.16 25); }
-      :root[data-theme='dark'] .t-type{ color: oklch(0.78 0.13 250); }
-      :root[data-theme='dark'] .t-num { color: oklch(0.82 0.14 80); }
-      :root[data-theme='dark'] .t-ok  { color: oklch(0.66 0.16 150); }
+      :root[data-theme='dark'] .t-str { color: oklch(0.80 0.14 150); }
+      :root[data-theme='dark'] .t-kw  { color: oklch(0.76 0.14 295); }
+      :root[data-theme='dark'] .t-fn  { color: oklch(0.75 0.13 250); }
+      :root[data-theme='dark'] .t-type{ color: oklch(0.80 0.10 200); }
+      :root[data-theme='dark'] .t-num { color: oklch(0.82 0.12 215); }
       @media (prefers-color-scheme: dark) {
-        :root:not([data-theme='light']) .t-str { color: oklch(0.80 0.15 145); }
-        :root:not([data-theme='light']) .t-kw  { color: oklch(0.78 0.16 25); }
-        :root:not([data-theme='light']) .t-type{ color: oklch(0.78 0.13 250); }
-        :root:not([data-theme='light']) .t-num { color: oklch(0.82 0.14 80); }
-        :root:not([data-theme='light']) .t-ok  { color: oklch(0.66 0.16 150); }
+        :root:not([data-theme='light']) .t-str { color: oklch(0.80 0.14 150); }
+        :root:not([data-theme='light']) .t-kw  { color: oklch(0.76 0.14 295); }
+        :root:not([data-theme='light']) .t-fn  { color: oklch(0.75 0.13 250); }
+        :root:not([data-theme='light']) .t-type{ color: oklch(0.80 0.10 200); }
+        :root:not([data-theme='light']) .t-num { color: oklch(0.82 0.12 215); }
       }
+      /* The live like-button demo: a bare light-DOM button the page styles
+         into a pill (tag-prefixed, per the light-DOM CSS rule). */
+      like-button button {
+        display: inline-flex; align-items: center; gap: 0.375rem;
+        padding: 0.375rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        background: var(--bg-elev);
+        color: var(--fg);
+        font-size: 13px; font-weight: 500; line-height: 1;
+        cursor: pointer;
+        transition: border-color 140ms, background-color 140ms;
+      }
+      like-button button:hover { border-color: var(--border-strong); }
     </style>
 
     <main id="main" tabindex="-1" class="focus:outline-none">
     <section class="text-center px-6 pt-[clamp(48px,7vw,96px)] pb-10 md:pb-18">
-      <div class=${KICKER}>
-        <span>AI-first</span><span class="text-fg-subtle">/</span>
-        <span>web-components-first</span><span class="text-fg-subtle">/</span>
-        <span>no build</span>
-      </div>
-      <h1 class="font-display font-extrabold text-display leading-[1.04] tracking-[-0.035em] mx-auto mt-6 mb-4 max-w-[16ch] text-balance">
-        The framework your <span class=${GRADTEXT}>AI agent</span> already knows how to use
+      <h1 class="font-display font-extrabold text-display leading-[1.04] tracking-[-0.035em] mx-auto mt-2 mb-4 max-w-[15ch] text-balance">
+        The web framework for AI agents
       </h1>
-      <p class="text-lede leading-[1.6] text-fg-muted max-w-[58ch] mx-auto mb-8 text-pretty">
-        WebJs is built for AI agents from the ground up. Native web components,
-        server actions, and streaming SSR, all on web standards. Runs on Node 24+
-        or Bun. No bundler, no config, no guesswork.
+      <p class="text-lede leading-[1.6] text-fg-muted max-w-[56ch] mx-auto mb-8 text-pretty">
+        WebJs is a full-stack framework built on web components, SSR, and
+        progressive enhancement, with zero build step. Standards that outlast
+        frameworks. Runs on Node 24+ or Bun.
       </p>
       <div class="flex gap-3 justify-center flex-wrap mb-8">
         <a class="${BTN} bg-accent text-accent-fg border-transparent shadow-[var(--shadow-glow)] hover:bg-accent-hover hover:-translate-y-0.5" href=${DOCS_URL + '/docs/getting-started'} target="_blank" rel="noopener noreferrer">
@@ -191,28 +169,34 @@ export default function LandingPage() {
     <section class="py-16">
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
-          <div class=${KICKER}>Built for agents</div>
-          <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">Your AI writes the code. WebJs writes the rules.</h2>
+          <div class=${KICKER}>Progressive enhancement</div>
+          <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">Real HTML first. JavaScript only when it earns it.</h2>
           <p class="text-fg-muted text-[1.05rem] leading-[1.6] m-0">
-            Every app ships a machine-readable contract and cross-agent guardrails,
-            so the model produces production-quality code without guessing. Tests and
-            docs come with every change, enforced, not requested.
+            Pages and components render to real HTML on the server, so the page
+            reads, links navigate, and forms submit before a single script loads.
+            There is no hydration runtime to pay for, and dead JavaScript is
+            statically elided, never shipped.
           </p>
         </div>
         <div class="grid grid-cols-1 min-[900px]:grid-cols-2 gap-4 items-stretch">
-          <figure class=${WIN}>
-            <figcaption class=${WINBAR}>${DOTS}<span class=${WINNAME}>AGENTS.md</span></figcaption>
-            <pre class="m-0 p-[18px] flex-1 font-mono text-[13px] leading-[1.7] whitespace-pre-wrap [overflow-wrap:anywhere]"><code>${AGENTS_MD.map(l => html`<div class=${l.k === 'h' ? 'text-accent font-semibold' : 'text-fg-muted'}>${l.t || ' '}</div>`)}</code></pre>
-          </figure>
-          <figure class=${WIN}>
-            <figcaption class=${WINBAR}>${DOTS}<span class=${WINNAME}>agent session</span></figcaption>
-            <pre class="m-0 p-[18px] flex-1 font-mono text-[13px] leading-[1.7] whitespace-pre-wrap [overflow-wrap:anywhere]"><code>${TRANSCRIPT.map(l => l.k === 'cmd'
-              ? html`<div class="text-fg"><span class="text-accent">$ </span>${l.t}</div>`
-              : html`<div class="text-fg-muted"><span class="t-ok">✓ </span>${l.t}</div>`)}</code></pre>
-          </figure>
+          <div class="flex flex-col min-w-0">
+            <p class="font-mono font-semibold text-[11px] leading-[1.4] tracking-[0.12em] uppercase text-fg-subtle mb-[10px] ml-1">The component you write</p>
+            ${codeWindow('components/like-button.ts', PE_COMPONENT)}
+          </div>
+          <div class="flex flex-col min-w-0">
+            <p class="font-mono font-semibold text-[11px] leading-[1.4] tracking-[0.12em] uppercase text-fg-subtle mb-[10px] ml-1">What the browser receives</p>
+            <figure class=${WIN}>
+              <figcaption class=${WINBAR}>${DOTS}<span class=${WINNAME}>view-source</span></figcaption>
+              <pre class="scroll-thin m-0 p-[18px] overflow-x-auto font-mono text-[13px] leading-[1.7] [tab-size:2] flex-1" tabindex="0" aria-label="server-rendered HTML"><code>${highlight(SSR_OUTPUT)}</code></pre>
+              <div class="flex items-center justify-between gap-3 px-[18px] py-[14px] border-t border-border bg-[color-mix(in_oklch,var(--color-bg-sunken)_50%,transparent)]">
+                <span class="font-mono text-[11px] tracking-[0.04em] text-fg-subtle">Renders as a real component, click to count</span>
+                <like-button count="3"></like-button>
+              </div>
+            </figure>
+          </div>
         </div>
         <div class="flex flex-wrap gap-[10px] justify-center mt-8">
-          ${AGENTS.map(a => html`<span class="font-mono font-semibold text-[12px] leading-none tracking-[0.04em] uppercase text-accent-hover px-[14px] py-[9px] rounded-full border border-accent-tint bg-accent-tint">${a}</span>`)}
+          ${PE_CHIPS.map(c => html`<span class="font-mono font-semibold text-[11px] leading-none tracking-[0.04em] uppercase text-fg px-[14px] py-[9px] rounded-full border border-border bg-bg-elev/40 backdrop-blur-sm shadow-[var(--shadow-sm)] hover:border-border-strong hover:bg-bg-subtle transition-all duration-[140ms]">${c}</span>`)}
         </div>
       </div>
     </section>
@@ -248,14 +232,82 @@ export default function LandingPage() {
           <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">Modern full-stack, on web standards</h2>
           <p class="text-fg-muted text-[1.05rem] leading-[1.6] m-0">Everything you need to ship, none of the build toolchain you don't.</p>
         </div>
-        <div class="grid gap-4 grid-cols-1 min-[560px]:grid-cols-2 min-[900px]:grid-cols-3">
-          ${PILLARS.map(p => html`
-            <div class="p-6 rounded-2xl border border-border bg-[color-mix(in_oklch,var(--color-bg-elev)_70%,transparent)] transition-[border-color,box-shadow,transform] duration-[240ms] hover:border-border-strong hover:shadow-[var(--shadow)] hover:-translate-y-[3px]">
-              <div class="w-10 h-10 grid place-items-center mb-4 rounded-[11px] text-accent bg-accent-tint border border-accent-tint">${p.icon}</div>
-              <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.01em] mt-0 mb-2">${p.title}</h3>
-              <p class="m-0 text-sm leading-[1.6] text-fg-muted">${p.desc}</p>
+        <div class="grid gap-px overflow-hidden rounded-2xl border border-border bg-border grid-cols-1 min-[560px]:grid-cols-2 min-[900px]:grid-cols-3 shadow-[var(--shadow-sm)]">
+
+          <div class="${CARD}">
+            <div class="mb-6">
+              <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.02em] mt-0 mb-2">Zero build step</h3>
+              <p class="m-0 text-sm leading-[1.6] text-fg-muted">Source files run as-is, so what you write is exactly what the browser serves. An AI agent debugs against the real served code, never a bundled or minified artifact.</p>
             </div>
-          `)}
+            <div class="bg-[var(--editor-sidebar-bg)] border border-[var(--editor-border)] rounded-xl p-3.5 font-mono text-[11px] leading-[1.6] text-[var(--editor-fg)]">
+              <div class="flex items-center gap-1.5 text-fg-subtle mb-2 border-b border-[var(--editor-border)] pb-1.5 select-none">
+                <span class="w-2 h-2 rounded-full bg-[#28c840]"></span><span>bun dev</span>
+              </div>
+              <div><span class="text-fg-subtle">$</span> bun run dev<br><span class="text-fg-subtle">Ready on http://localhost:5001</span><br><span class="text-fg-muted">page.ts reloaded in 3ms</span></div>
+            </div>
+          </div>
+
+          <div class="${CARD}">
+            <div class="mb-6">
+              <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.02em] mt-0 mb-2">Light DOM web components</h3>
+              <p class="m-0 text-sm leading-[1.6] text-fg-muted">Web components that render to light DOM, so Tailwind and global CSS just work, no shadow plumbing.</p>
+            </div>
+            <div class="bg-[var(--editor-sidebar-bg)] border border-[var(--editor-border)] rounded-xl p-3.5 font-mono text-[11px] leading-[1.5] select-none text-[var(--editor-fg)]">
+              <div class="text-[var(--code-punc)]">&lt;<span class="text-[var(--code-tag)]">like-button</span>&gt;</div>
+              <div class="pl-4 text-[var(--code-punc)]">&lt;<span class="text-[var(--code-tag)]">button</span> <span class="text-[var(--code-attr)]">class</span>=<span class="text-[var(--code-str)]">"px-3 rounded bg-accent"</span>&gt;</div>
+              <div class="pl-8 text-[var(--code-text)]">&hearts; Like</div>
+              <div class="pl-4 text-[var(--code-punc)]">&lt;/<span class="text-[var(--code-tag)]">button</span>&gt;</div>
+              <div class="text-[var(--code-punc)]">&lt;/<span class="text-[var(--code-tag)]">like-button</span>&gt;</div>
+            </div>
+          </div>
+
+          <div class="${CARD}">
+            <div class="mb-6">
+              <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.02em] mt-0 mb-2">Server actions (RPC)</h3>
+              <p class="m-0 text-sm leading-[1.6] text-fg-muted">Mark a file <code class="font-mono text-[0.9em]">'use server'</code> and import it. Date, Map, Set, BigInt, and Blob all round-trip across the wire with real http verbs (GET, POST, PUT, PATCH, DELETE).</p>
+            </div>
+            <div class="bg-[var(--editor-sidebar-bg)] border border-[var(--editor-border)] rounded-xl p-3.5 flex items-center justify-between text-[10px] font-mono select-none text-[var(--editor-fg)]">
+              <div class="text-fg-subtle px-2 py-1 bg-[var(--editor-bg)] rounded border border-[var(--editor-border)]">Client</div>
+              <div class="flex-1 flex items-center justify-center relative"><span class="h-px bg-[var(--editor-border)] flex-1 mx-2"></span><span class="absolute text-[8px] bg-[var(--editor-sidebar-bg)] text-[var(--accent-text)] px-1 border border-[var(--editor-border)] rounded">RPC</span></div>
+              <div class="text-fg-subtle px-2 py-1 bg-[var(--editor-bg)] rounded border border-[var(--editor-border)]">Server action</div>
+            </div>
+          </div>
+
+          <div class="${CARD}">
+            <div class="mb-6">
+              <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.02em] mt-0 mb-2">Streaming Suspense</h3>
+              <p class="m-0 text-sm leading-[1.6] text-fg-muted">Stream slow regions progressively. The shell paints instantly, fallbacks render, and async data fills in as it resolves.</p>
+            </div>
+            <div class="bg-[var(--editor-sidebar-bg)] border border-[var(--editor-border)] rounded-xl p-3.5 flex flex-col gap-2 text-[var(--editor-fg)]">
+              <div class="h-3 w-1/3 bg-[var(--editor-border)] rounded"></div>
+              <div class="h-8 w-full bg-[var(--editor-bg)] rounded border border-[var(--editor-border)] flex items-center px-3 gap-2 select-none">
+                <span class="w-1.5 h-1.5 rounded-full bg-[var(--accent-text)]"></span><span class="text-[9px] font-mono text-fg-subtle">streaming data chunk...</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="${CARD}">
+            <div class="mb-6">
+              <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.02em] mt-0 mb-2">Progressive enhancement</h3>
+              <p class="m-0 text-sm leading-[1.6] text-fg-muted">Real HTML first. Links navigate, forms submit, and pages read before JavaScript loads. No hydration overhead.</p>
+            </div>
+            <div class="bg-[var(--editor-sidebar-bg)] border border-[var(--editor-border)] rounded-xl p-3.5 flex flex-wrap gap-1.5 justify-center select-none text-[var(--editor-fg)]">
+              <span class="px-2 py-1 bg-bg-subtle border border-border text-fg-muted text-[9px] font-mono rounded">No hydration lock</span>
+              <span class="px-2 py-1 bg-[var(--editor-bg)] border border-[var(--editor-border)] text-fg-subtle text-[9px] font-mono rounded">Static elision</span>
+            </div>
+          </div>
+
+          <div class="${CARD}">
+            <div class="mb-6">
+              <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.02em] mt-0 mb-2">Built-in essentials</h3>
+              <p class="m-0 text-sm leading-[1.6] text-fg-muted">Auth, sessions, cache, rate limits, and websockets are built right in. Pluggable adapters, zero glue.</p>
+            </div>
+            <div class="bg-[var(--editor-sidebar-bg)] border border-[var(--editor-border)] rounded-xl p-2.5 flex flex-col gap-1.5 font-mono text-[9px] text-[var(--editor-fg)] select-none">
+              <div class="flex justify-between items-center px-2 py-1 bg-[var(--editor-bg)] border border-[var(--editor-border)] rounded"><span>Auth &amp; sessions</span> <span class="text-[var(--accent-text)]">&check;</span></div>
+              <div class="flex justify-between items-center px-2 py-1 bg-[var(--editor-bg)] border border-[var(--editor-border)] rounded"><span>Rate limiting</span> <span class="text-[var(--accent-text)]">&check;</span></div>
+            </div>
+          </div>
+
         </div>
       </div>
     </section>
@@ -264,24 +316,24 @@ export default function LandingPage() {
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Small by design</div>
-          <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">Light enough to read, fast enough to ship</h2>
-          <p class="text-fg-muted text-[1.05rem] leading-[1.6] m-0">No bundler and no React runtime mean a tiny payload on the wire and a framework you can read end to end. The full source sits in your node_modules, and the browser loads a small, pre-minified core.</p>
+          <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">Light enough for AI</h2>
+          <p class="text-fg-muted text-[1.05rem] leading-[1.6] m-0">A zero build step means the source you read is what runs. Because the framework ships without compilation layers, an AI agent can read and reason about the entire webjs source end to end, straight from node_modules.</p>
         </div>
-        <div class="grid gap-4 grid-cols-1 min-[560px]:grid-cols-2 min-[900px]:grid-cols-4">
+        <div class="grid gap-px bg-border grid-cols-1 min-[560px]:grid-cols-2 min-[900px]:grid-cols-4 rounded-2xl border border-border overflow-hidden shadow-[var(--shadow-sm)]">
           ${STATS.map(s => html`
-            <div class="p-6 text-center rounded-2xl border border-border bg-[color-mix(in_oklch,var(--color-bg-elev)_70%,transparent)] transition-[border-color,box-shadow] duration-[240ms] hover:border-border-strong hover:shadow-[var(--shadow)]">
-              <div class="font-display font-extrabold leading-none tracking-[-0.03em] text-[clamp(1.9rem,1.3rem+1.6vw,2.7rem)] ${GRADTEXT}">${s.big}</div>
+            <div class="p-8 text-center bg-bg-elev hover:bg-[color-mix(in_oklch,var(--bg-elev)_92%,var(--fg))] transition-colors">
+              <div class="font-display font-extrabold leading-none tracking-[-0.03em] text-[clamp(1.9rem,1.3rem+1.6vw,2.7rem)] text-fg">${s.big}</div>
               <div class="mt-3 font-semibold text-[0.95rem]">${s.label}</div>
               <p class="mt-1.5 m-0 text-[13px] leading-[1.55] text-fg-muted">${s.sub}</p>
             </div>
           `)}
         </div>
-        <p class="mt-8 mx-auto max-w-[680px] text-center text-[1.02rem] leading-[1.6] text-fg-muted">Familiar from day one. WebJs uses Next.js-style file routing and lit-style web components, the proven DX AI agents already have the muscle memory for.</p>
-        <p class="mt-6 mx-auto max-w-[680px] text-center text-fg-subtle text-[12px] leading-[1.5]">Gzipped production sizes. <code class="font-mono">@webjsdev/core</code> is ~0.9 MB unpacked vs ~7.5 MB for react + react-dom, and the framework source is about 5% of Next.js. JSDoc-typed JavaScript, no build step.</p>
+        <p class="mt-8 mx-auto max-w-[680px] text-center text-[1.02rem] leading-[1.6] text-fg-muted">Familiar from day one. webjs uses Next.js-style file-based routing and lit-style web components, conventions both people and agents already know.</p>
+        <p class="mt-6 mx-auto max-w-[680px] text-center text-fg-subtle text-[12px] leading-[1.5]">Gzipped production sizes. A Next.js app ships a client bundle around ~99 KB gzipped (react, react-dom, and the Next runtime); <code class="font-mono">@webjsdev/core</code> is self-sufficient at ~29 KB gzipped with zero runtime dependencies and no build step.</p>
       </div>
     </section>
 
-    <section class="py-16">
+    <section id="templates" class="scroll-mt-24 py-16">
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>One framework, three templates</div>
@@ -289,7 +341,7 @@ export default function LandingPage() {
         </div>
         <div class="grid gap-4 grid-cols-1 max-w-[560px] mx-auto min-[900px]:grid-cols-3 min-[900px]:max-w-none">
           <div class="flex flex-col gap-3 p-6 min-w-0 rounded-2xl border border-border bg-bg-elev">
-            <span class="font-mono font-semibold text-[10px] leading-none tracking-[0.16em] uppercase text-accent">Full-stack</span>
+            <span class="font-mono font-semibold text-[10px] leading-none tracking-[0.16em] uppercase text-fg-subtle">Full-stack</span>
             <h3 class="font-display font-bold text-[1.15rem] leading-[1.25] m-0">Pages + API + components</h3>
             <p class="m-0 text-[13.5px] leading-[1.6] text-fg-muted">SSR pages, web components, server actions, Drizzle, auth, and streaming. The default.</p>
             <pre class="scroll-thin m-0 px-[14px] py-3 overflow-x-auto rounded-[10px] border border-border bg-bg-sunken font-mono text-[12px] leading-[1.6] text-fg-muted" tabindex="0" aria-label="Example files">app/page.ts
@@ -298,7 +350,7 @@ actions/posts.server.ts</pre>
             <div class="cmd-foot pt-2 mt-auto font-mono text-[12.5px] leading-[1.6] text-fg-muted max-w-full min-w-0"><copy-cmd>npm create webjs@latest my-app</copy-cmd></div>
           </div>
           <div class="flex flex-col gap-3 p-6 min-w-0 rounded-2xl border border-border bg-bg-elev">
-            <span class="font-mono font-semibold text-[10px] leading-none tracking-[0.16em] uppercase text-accent">API only</span>
+            <span class="font-mono font-semibold text-[10px] leading-none tracking-[0.16em] uppercase text-fg-subtle">API only</span>
             <h3 class="font-display font-bold text-[1.15rem] leading-[1.25] m-0">Just route handlers</h3>
             <p class="m-0 text-[13.5px] leading-[1.6] text-fg-muted">Skip pages. File-based routing, middleware, rate limiting, and WebSockets. Zero frontend.</p>
             <pre class="scroll-thin m-0 px-[14px] py-3 overflow-x-auto rounded-[10px] border border-border bg-bg-sunken font-mono text-[12px] leading-[1.6] text-fg-muted" tabindex="0" aria-label="Example files">app/api/users/route.ts
@@ -307,7 +359,7 @@ middleware.ts</pre>
             <div class="cmd-foot pt-2 mt-auto font-mono text-[12.5px] leading-[1.6] text-fg-muted max-w-full min-w-0"><copy-cmd>npm create webjs@latest my-api -- --template api</copy-cmd></div>
           </div>
           <div class="flex flex-col gap-3 p-6 min-w-0 rounded-2xl border border-border bg-bg-elev">
-            <span class="font-mono font-semibold text-[10px] leading-none tracking-[0.16em] uppercase text-accent">SaaS</span>
+            <span class="font-mono font-semibold text-[10px] leading-none tracking-[0.16em] uppercase text-fg-subtle">SaaS</span>
             <h3 class="font-display font-bold text-[1.15rem] leading-[1.25] m-0">Auth + dashboard</h3>
             <p class="m-0 text-[13.5px] leading-[1.6] text-fg-muted">Login, signup, sessions, a protected dashboard, and a User model wired up out of the box.</p>
             <pre class="scroll-thin m-0 px-[14px] py-3 overflow-x-auto rounded-[10px] border border-border bg-bg-sunken font-mono text-[12px] leading-[1.6] text-fg-muted" tabindex="0" aria-label="Example files">app/(auth)/login/page.ts
@@ -323,8 +375,8 @@ lib/session.server.ts</pre>
     <section class="py-16 text-center" id="get-started">
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[760px] mx-auto p-[clamp(32px,5vw,64px)] rounded-[22px] border border-border-strong bg-[color-mix(in_oklch,var(--accent-live)_7%,var(--color-bg-elev))] shadow-[var(--shadow-glow)]">
-          <h2 class="font-display font-extrabold text-h2 leading-[1.1] tracking-[-0.03em] mt-0 mb-3">Ship a feature with the tests already written</h2>
-          <p class="text-fg-muted mx-auto mb-8 max-w-[46ch]">Scaffold a full-stack app in one command, point your agent at it, and go.</p>
+          <h2 class="font-display font-extrabold text-h2 leading-[1.1] tracking-[-0.03em] mt-0 mb-3">Start building on web standards</h2>
+          <p class="text-fg-muted mx-auto mb-8 max-w-[46ch]">Scaffold a full-stack app in one command, with pages, an API, components, and a database wired up.</p>
           <div class=${INSTALL}>
             <span class="text-accent select-none" aria-hidden="true">$</span><copy-cmd>npm create webjs@latest my-app</copy-cmd>
           </div>
@@ -341,18 +393,37 @@ lib/session.server.ts</pre>
 
     </main>
 
-    <footer class="mt-16 border-t border-border py-12 px-6">
+    <footer class="mt-24 border-t border-border py-16 px-6 bg-bg-subtle/30">
       <div class="max-w-[1080px] mx-auto">
-        <nav class="flex md:hidden gap-4 flex-wrap justify-center" aria-label="Footer">
-          <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${GH_URL} target="_blank" rel="noopener noreferrer">GitHub${NEW_TAB}</a>
-          <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${DOCS_URL + '/docs/getting-started'} target="_blank" rel="noopener noreferrer">Docs${NEW_TAB}</a>
-          <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${UI_URL} target="_blank" rel="noopener noreferrer">UI${NEW_TAB}</a>
-          <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href=${EXAMPLE_BLOG_URL} target="_blank" rel="noopener noreferrer">Demo${NEW_TAB}</a>
-          <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href="/blog">Blog</a>
-          <a class="text-fg-muted no-underline text-[13.5px] hover:text-accent" href="/changelog">Changelog</a>
+        <nav class="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12" aria-label="Footer">
+          <div class="flex flex-col gap-3">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-fg">Product</h4>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${DOCS_URL + '/docs/getting-started'} target="_blank" rel="noopener noreferrer">Docs${NEW_TAB}</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${UI_URL} target="_blank" rel="noopener noreferrer">UI components${NEW_TAB}</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="#templates">Templates</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${EXAMPLE_BLOG_URL} target="_blank" rel="noopener noreferrer">Showcase${NEW_TAB}</a>
+          </div>
+          <div class="flex flex-col gap-3">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-fg">Resources</h4>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/blog">Blog</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/changelog">Changelog</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${GH_URL + '/releases'} target="_blank" rel="noopener noreferrer">Releases${NEW_TAB}</a>
+          </div>
+          <div class="flex flex-col gap-3">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-fg">Community</h4>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${GH_URL} target="_blank" rel="noopener noreferrer">GitHub${NEW_TAB}</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${GH_URL + '/discussions'} target="_blank" rel="noopener noreferrer">Discussions${NEW_TAB}</a>
+          </div>
+          <div class="flex flex-col gap-3">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-fg">webjs</h4>
+            <p class="m-0 text-xs text-fg-muted leading-relaxed">The web framework for AI agents. Full-stack web components, SSR, zero build step.</p>
+          </div>
         </nav>
+        <div class="pt-8 border-t border-border flex flex-col md:flex-row justify-between items-center gap-4 text-fg-subtle text-xs">
+          <div><a class="no-underline hover:text-accent transition-colors" href=${GH_URL + '/blob/main/LICENSE'} target="_blank" rel="noopener noreferrer">MIT License${NEW_TAB}</a></div>
+          <div class="flex items-center gap-1">Built with webjs <svg class="heart" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div>
+        </div>
       </div>
-      <div class="w-full text-center mt-6 md:mt-0 text-fg-subtle text-sm">Built with WebJs <svg class="heart" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div>
     </footer>
   `;
 }

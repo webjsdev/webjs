@@ -130,61 +130,71 @@ export default function RootLayout({ children }: LayoutProps) {
         color-scheme: light dark;
         --header-h: 61px; /* #610 fixed-header offset, kept exact by the ResizeObserver below */
 
-        /* ---------- dark (default) ---------- */
-        --fg:            oklch(0.96 0.015 60);
-        --fg-muted:      oklch(0.72 0.02 60);
-        --fg-subtle:     oklch(0.55 0.02 60);
-        --bg:            oklch(0.14 0.01 55);
-        --bg-elev:       oklch(0.18 0.01 55);
-        --bg-subtle:     oklch(0.16 0.01 55);
-        --bg-sunken:     oklch(0.11 0.008 55);
-        --border:        oklch(0.26 0.012 55 / 0.9);
-        --border-strong: oklch(0.38 0.012 55 / 0.9);
-        --accent:        oklch(0.78 0.14 55);
-        --accent-hover:  oklch(0.85 0.14 55);
-        --accent-fg:     oklch(0.15 0.01 55);
-        --accent-tint:   oklch(0.78 0.14 55 / 0.14);
+        /* dark (default) */
+        --fg:            oklch(0.96 0 0);
+        --fg-muted:      oklch(0.74 0 0);
+        --fg-subtle:     oklch(0.62 0 0);
+        --bg:            oklch(0 0 0);
+        --bg-elev:       oklch(0.135 0 0);
+        --bg-subtle:     oklch(0.09 0 0);
+        --bg-sunken:     oklch(0 0 0);
+        --border:        oklch(0.32 0 0 / 0.9);
+        --border-strong: oklch(0.44 0 0 / 0.92);
+        --accent:        oklch(0.7 0.16 52);
+        --accent-hover:  oklch(0.75 0.16 52);
+        --accent-fg:     oklch(0.17 0.02 52);
         --danger:        oklch(0.7 0.19 25);
         --success:       oklch(0.72 0.15 145);
 
-        --font-sans:   -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        /* Accent-derived tokens + glow. Declared once: they reference
+           --accent / --accent-live, which resolve per scope, so they flow to
+           both modes. --glow-strength is 0.16 everywhere, so the glow shows in
+           light and dark alike. */
+        --accent-live:    oklch(0.63 0.17 50);
+        --accent-tint:    color-mix(in oklch, var(--accent-live) 14%, transparent);
+        --accent-text:    var(--accent);
+        --accent-surface: color-mix(in oklch, var(--accent-live) 12%, transparent);
+        --accent-border:  color-mix(in oklch, var(--accent-live) 28%, transparent);
+        --glow-a:         oklch(0.63 0.17 44);
+        --glow-strength:  0.16;
+
+        --font-display: 'Inter Tight', 'Inter', system-ui, -apple-system, sans-serif;
+        --font-sans:    'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
         --font-serif:  ui-serif, 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, Cambria, serif;
-        --font-mono:   ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+        --font-mono:    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
       }
 
-      /* ---------- light: explicit toggle ---------- */
+      /* light: explicit toggle */
       :root[data-theme='light'] {
-        --fg:            oklch(0.18 0.015 60);
-        --fg-muted:      oklch(0.42 0.02 65);
-        --fg-subtle:     oklch(0.62 0.015 70);
-        --bg:            oklch(0.985 0.008 80);
+        --fg:            oklch(0.20 0.018 60);
+        --fg-muted:      oklch(0.44 0.02 60);
+        --fg-subtle:     oklch(0.50 0.02 65);
+        --bg:            oklch(0.985 0.008 75);
         --bg-elev:       oklch(1 0 0);
-        --bg-subtle:     oklch(0.96 0.008 80);
-        --bg-sunken:     oklch(0.94 0.008 80);
-        --border:        oklch(0.88 0.01 75 / 0.95);
-        --border-strong: oklch(0.78 0.01 75 / 0.95);
-        --accent:        oklch(0.58 0.15 55);
-        --accent-hover:  oklch(0.5 0.15 55);
+        --bg-subtle:     oklch(0.96 0.008 75);
+        --bg-sunken:     oklch(0.93 0.01 70);
+        --border:        oklch(0.88 0.012 70 / 0.9);
+        --border-strong: oklch(0.78 0.014 70 / 0.95);
+        --accent:        oklch(0.54 0.16 52);
+        --accent-hover:  oklch(0.5 0.16 52);
         --accent-fg:     oklch(1 0 0);
-        --accent-tint:   oklch(0.58 0.15 55 / 0.1);
       }
 
-      /* ---------- light: OS preference ---------- */
+      /* light: OS preference */
       @media (prefers-color-scheme: light) {
         :root:not([data-theme='dark']) {
-          --fg:            oklch(0.18 0.015 60);
-          --fg-muted:      oklch(0.42 0.02 65);
-          --fg-subtle:     oklch(0.62 0.015 70);
-          --bg:            oklch(0.985 0.008 80);
+          --fg:            oklch(0.20 0.018 60);
+          --fg-muted:      oklch(0.44 0.02 60);
+          --fg-subtle:     oklch(0.50 0.02 65);
+          --bg:            oklch(0.985 0.008 75);
           --bg-elev:       oklch(1 0 0);
-          --bg-subtle:     oklch(0.96 0.008 80);
-          --bg-sunken:     oklch(0.94 0.008 80);
-          --border:        oklch(0.88 0.01 75 / 0.95);
-          --border-strong: oklch(0.78 0.01 75 / 0.95);
-          --accent:        oklch(0.58 0.15 55);
-          --accent-hover:  oklch(0.5 0.15 55);
+          --bg-subtle:     oklch(0.96 0.008 75);
+          --bg-sunken:     oklch(0.93 0.01 70);
+          --border:        oklch(0.88 0.012 70 / 0.9);
+          --border-strong: oklch(0.78 0.014 70 / 0.95);
+          --accent:        oklch(0.54 0.16 52);
+          --accent-hover:  oklch(0.5 0.16 52);
           --accent-fg:     oklch(1 0 0);
-          --accent-tint:   oklch(0.58 0.15 55 / 0.1);
         }
       }
 
@@ -212,16 +222,15 @@ export default function RootLayout({ children }: LayoutProps) {
         transition: background var(--duration-slow) cubic-bezier(0.3, 0, 0.3, 1),
                     color var(--duration-slow) cubic-bezier(0.3, 0, 0.3, 1);
       }
-      body::before {
-        content: '';
-        position: fixed;
-        inset: 0;
-        pointer-events: none;
-        z-index: -1;
+      /* A single static gradient glow layer, a faint warm top-edge wash.
+         Fixed at z-0; the page content sits above it at z-1 so text and
+         cards stay crisp. --glow-strength is 0.16 in both modes. */
+      .glow-layer { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+      .glow-layer::before {
+        content: ''; position: absolute; inset: 0;
         background:
-          radial-gradient(ellipse 80% 60% at 50% -10%, var(--accent-tint), transparent 60%),
-          radial-gradient(ellipse 50% 40% at 100% 100%, var(--accent-tint), transparent 70%);
-        opacity: 0.7;
+          radial-gradient(58% 44% at 50% -4%, color-mix(in oklch, var(--glow-a) calc(var(--glow-strength) * 100%), transparent), transparent 72%),
+          radial-gradient(40% 36% at 88% 8%, color-mix(in oklch, var(--glow-a) calc(var(--glow-strength) * 60%), transparent), transparent 70%);
       }
       ::selection { background: var(--accent-tint); color: var(--fg); }
       ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -237,6 +246,8 @@ export default function RootLayout({ children }: LayoutProps) {
       .mobile-menu[open] > summary .open-icon { display: none; }
       .mobile-menu[open] > summary .close-icon { display: inline-block; }
     </style>
+
+    <div class="glow-layer" aria-hidden="true"></div>
 
     <header class="site-header fixed inset-x-0 top-0 z-20 flex items-center justify-between gap-4 px-4 sm:px-6 py-3 border-b border-border bg-[color-mix(in_oklch,var(--bg)_75%,transparent)] backdrop-blur-[18px] backdrop-saturate-[180%]">
       <a href="/" class="inline-flex items-center gap-2 no-underline text-fg font-semibold text-[15px] leading-none tracking-tight">
@@ -283,22 +294,24 @@ export default function RootLayout({ children }: LayoutProps) {
       </div>
     </header>
 
-    <div class="max-w-[760px] mx-auto px-4 sm:px-6 pt-4 text-[11px] leading-snug text-fg-subtle font-mono tracking-wide">
-      Demo app. Data will be wiped between redeploys.
+    <div class="relative z-[1]">
+      <div class="max-w-[760px] mx-auto px-4 sm:px-6 pt-4 text-[11px] leading-snug text-fg-subtle font-mono tracking-wide">
+        Demo app. Data will be wiped between redeploys.
+      </div>
+
+      <main class="block max-w-[760px] mx-auto px-4 sm:px-6 pt-4 pb-12 min-h-screen">
+        ${children}
+      </main>
+
+      <footer class="max-w-[760px] mx-auto px-4 sm:px-6 pt-12 pb-[72px] border-t border-border flex justify-between flex-wrap gap-3 text-fg-subtle font-mono text-[11px] leading-[1.4] tracking-[0.12em] uppercase">
+        <span><span class="text-accent">&#9679;</span>&nbsp; webjs / demo</span>
+        <span>
+          ${footerLink('/api/posts', 'api')}
+          &nbsp;&middot;&nbsp;
+          ${footerLink('/__webjs/health', 'health')}
+        </span>
+      </footer>
     </div>
-
-    <main class="block max-w-[760px] mx-auto px-4 sm:px-6 pt-4 pb-12 min-h-screen">
-      ${children}
-    </main>
-
-    <footer class="max-w-[760px] mx-auto px-4 sm:px-6 pt-12 pb-[72px] border-t border-border flex justify-between flex-wrap gap-3 text-fg-subtle font-mono text-[11px] leading-[1.4] tracking-[0.12em] uppercase">
-      <span><span class="text-accent">&#9679;</span>&nbsp; webjs / demo</span>
-      <span>
-        ${footerLink('/api/posts', 'api')}
-        &nbsp;&middot;&nbsp;
-        ${footerLink('/__webjs/health', 'health')}
-      </span>
-    </footer>
   `;
 }
 
