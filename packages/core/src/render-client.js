@@ -1,4 +1,5 @@
 import { isTemplate, MARKER } from './html.js';
+import { BINDING_PREFIXES, isBindingPrefix } from './binding-prefixes.js';
 import { escapeAttr } from './escape.js';
 import { isRepeat } from './repeat.js';
 import { isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace, isWatch } from './directives.js';
@@ -307,10 +308,10 @@ function compile(tr) {
       } else if (state === 'after-eq') {
         const prefix = attrName[0];
         const name = attrName.slice(1);
-        if (prefix === '@' || prefix === '.' || prefix === '?') {
+        if (isBindingPrefix(prefix)) {
           // Strip the attribute name+"=" from html and add a sentinel attr.
           html = html.slice(0, attrStart);
-          const kind = prefix === '@' ? 'event' : prefix === '.' ? 'prop' : 'bool';
+          const kind = BINDING_PREFIXES[prefix];
           const sentinel = `data-${MARKER}${partIdx}`;
           html += `${sentinel}=""`;
           parts.push({ kind, path: [], name });

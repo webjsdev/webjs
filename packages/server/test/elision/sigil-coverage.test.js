@@ -1,0 +1,136 @@
+/**
+ * GUARD TEST for the elision analyser's template-sigil + static-field
+ * coverage, the sibling of lifecycle-coverage.test.js.
+ *
+ * lifecycle-coverage introspects WebComponent.prototype and fails if a new
+ * method ships without the analyser being taught about it. But two
+ * interactivity surfaces are NOT prototype methods or named exports, so that
+ * guard cannot see them:
+ *
+ *   1. Template binding sigils (`@` / `.` / `?`). A new client-behaviour sigil
+ *      added to the renderers without teaching the analyser would let it
+ *      wrongly elide a component whose only interactivity is that sigil, and
+ *      the failure would be silent in production.
+ *   2. Interactivity-signal static fields (`static shadow` / `static refresh`).
+ *
+ * This test makes that drift LOUD. The renderers' sigil set lives in core's
+ * BINDING_PREFIXES (single source of truth); the analyser classifies each as a
+ * ship signal (SSR_DROPPED_PREFIXES) or an SSR-safe round-trip
+ * (ROUND_TRIP_PREFIXES). The partition assertion below fails the moment a sigil
+ * is added to BINDING_PREFIXES without being classified, so the fix is forced:
+ * decide whether the new sigil ships and add it to the matching analyser list.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+import { BINDING_PREFIXES } from '../../../core/src/binding-prefixes.js';
+import {
+  analyzeComponentSource,
+  SSR_DROPPED_PREFIXES,
+  ROUND_TRIP_PREFIXES,
+  INTERACTIVITY_STATIC_FIELDS,
+} from '../../src/component-elision.js';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const coreSrc = resolve(here, '../../../core/src');
+
+/**
+ * Pure partition check, reused so the counterfactual can prove it is sensitive:
+ * `dropped` and `roundTrip` must together cover `prefixes` exactly, disjointly.
+ */
+function partitionGaps(prefixes, dropped, roundTrip) {
+  const classified = new Set([...dropped, ...roundTrip]);
+  const unclassified = prefixes.filter((p) => !classified.has(p));
+  const overlap = dropped.filter((p) => roundTrip.includes(p));
+  const stray = [...classified].filter((p) => !prefixes.includes(p));
+  return { unclassified, overlap, stray };
+}
+
+test('every renderer binding sigil is classified by the analyser (partition)', () => {
+  const prefixes = Object.keys(BINDING_PREFIXES);
+  const { unclassified, overlap, stray } = partitionGaps(
+    prefixes, SSR_DROPPED_PREFIXES, ROUND_TRIP_PREFIXES,
+  );
+  assert.deepEqual(unclassified, [],
+    `binding sigil(s) ${JSON.stringify(unclassified)} are in core's BINDING_PREFIXES `
+    + 'but not classified in component-elision.js. Add each to SSR_DROPPED_PREFIXES '
+    + '(it drops at SSR / implies client work, so the component must ship) or '
+    + 'ROUND_TRIP_PREFIXES (it survives into the served HTML, stays elidable).');
+  assert.deepEqual(overlap, [], `sigil(s) ${JSON.stringify(overlap)} are in BOTH lists`);
+  assert.deepEqual(stray, [],
+    `sigil(s) ${JSON.stringify(stray)} are classified but not a renderer prefix`);
+});
+
+test('counterfactual: the partition check fires on an unclassified new sigil', () => {
+  // A hypothetical new client-behaviour sigil `&` added to the renderers but
+  // NOT classified in the analyser is exactly the silent over-elision this
+  // guard exists to catch. Prove the check would red.
+  const drifted = partitionGaps(['@', '.', '?', '&'], SSR_DROPPED_PREFIXES, ROUND_TRIP_PREFIXES);
+  assert.deepEqual(drifted.unclassified, ['&']);
+});
+
+test('an SSR-dropped sigil is honoured as a ship signal', () => {
+  for (const p of SSR_DROPPED_PREFIXES) {
+    // `@event` is the canonical case; build a minimal display-only component
+    // whose ONLY interactivity is a binding with this prefix.
+    const src = `class C extends WebComponent({}) {
+      render() { return html\`<button ${p}click=\${() => {}}>x</button>\`; }
+    }`;
+    const { interactive } = analyzeComponentSource(src);
+    assert.equal(interactive, true,
+      `a component using only the '${p}' binding must ship (it is an SSR-dropped client behaviour)`);
+  }
+});
+
+test('a round-trip sigil alone keeps a component elidable', () => {
+  for (const p of ROUND_TRIP_PREFIXES) {
+    // `.prop` / `?bool` survive into SSR HTML, so a component whose only
+    // non-render content is such a binding stays display-only. Use a custom
+    // element target so `.prop` is the data-webjs-prop round-trip (not a
+    // dropped native prop), and a non-`on` name so it is not EVENT_PROP_RE.
+    const src = `class C extends WebComponent({}) {
+      render() { return html\`<my-badge ${p}label=\${'x'}></my-badge>\`; }
+    }`;
+    const { interactive } = analyzeComponentSource(src);
+    assert.equal(interactive, false,
+      `a component using only the '${p}' (round-trip) binding should stay elidable`);
+  }
+});
+
+test('the renderers route binding recognition through BINDING_PREFIXES (no stray literals)', () => {
+  // Both renderers must consume the shared set, not re-hardcode a prefix. A
+  // future hand-added `prefix === '<sigil>'` branch would bypass the single
+  // source of truth and dodge the partition guard, so forbid it.
+  for (const file of ['render-client.js', 'render-server.js']) {
+    const src = readFileSync(resolve(coreSrc, file), 'utf8');
+    assert.match(src, /binding-prefixes\.js/, `${file} must import the shared BINDING_PREFIXES`);
+    for (const p of Object.keys(BINDING_PREFIXES)) {
+      const stray = new RegExp(`prefix\\s*===\\s*['"\`]\\${p}['"\`]`);
+      assert.ok(!stray.test(src),
+        `${file} hardcodes \`prefix === '${p}'\`; route it through BINDING_PREFIXES instead`);
+    }
+  }
+});
+
+test('every interactivity static field is honoured as a ship signal', () => {
+  for (const field of INTERACTIVITY_STATIC_FIELDS) {
+    const src = `class C extends WebComponent({}) {
+      static ${field} = true;
+      render() { return html\`<div>x</div>\`; }
+    }`;
+    const { interactive } = analyzeComponentSource(src);
+    assert.equal(interactive, true, `static ${field} = true must force the component to ship`);
+  }
+});
+
+test('the interactivity static-field registry is the known set (change-detector)', () => {
+  // A deliberate change-detector: there is no enumerable runtime source for
+  // "all static conventions" (unlike prototype methods), so adding a new
+  // interactivity static field must be a conscious edit here AND in
+  // agent-docs/components.md. If this assertion fails because you added a real
+  // convention, update both, then update this expected set.
+  assert.deepEqual([...INTERACTIVITY_STATIC_FIELDS].sort(), ['refresh', 'shadow']);
+});

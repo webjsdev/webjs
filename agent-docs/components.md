@@ -244,10 +244,22 @@ patterns, treat the component as interactive.
 
 The detection lists live in `packages/server/src/component-elision.js`
 and are the single source of truth. They are kept in lockstep with the
-lifecycle table above by `packages/server/test/elision/lifecycle-coverage.test.js`,
-which fails if a new `WebComponent` hook is added without teaching the
-analyser about it. If you add an interactivity feature to the framework,
-update that file.
+framework's interactivity surface by two drift guards, which fail the build
+if a new interactivity feature ships without teaching the analyser about it
+(a silent over-elision otherwise). `packages/server/test/elision/lifecycle-coverage.test.js`
+introspects the live `WebComponent` prototype and covers hooks and methods.
+`packages/server/test/elision/sigil-coverage.test.js` covers the two surfaces
+that are not prototype members: template binding sigils and interactivity
+static fields. The renderers' sigil set is single-sourced in core's
+`BINDING_PREFIXES` (`packages/core/src/binding-prefixes.js`); the analyser
+classifies each sigil as a client-behaviour ship signal (`SSR_DROPPED_PREFIXES`,
+`@event`, drops at SSR) or an SSR-safe round-trip (`ROUND_TRIP_PREFIXES`,
+`.prop` / `?bool`, survives into the served HTML). The guard asserts that
+classification partitions `BINDING_PREFIXES` exactly, so a new sigil cannot be
+added without a deliberate ship-or-round-trip decision. Interactivity static
+fields live in the `INTERACTIVITY_STATIC_FIELDS` registry (`shadow`, `refresh`).
+If you add an interactivity feature to the framework, update that file (and add
+a new static convention to both the registry and this lifecycle table).
 
 ## Pages and layouts: keep them carriers, out of the network tab
 

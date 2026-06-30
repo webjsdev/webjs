@@ -127,6 +127,35 @@ export const CLIENT_LIFECYCLE_HOOKS = [
 export const CLIENT_METHOD_CALLS = ['addController', 'removeController', 'requestUpdate'];
 
 /**
+ * Static class fields whose declaration (to a non-`false` value) marks a
+ * component interactive (must ship). Kept as ONE registry so a new
+ * interactivity-relevant static convention is added in a single place; the
+ * per-class analysis loops over it. Unlike prototype methods (guarded by
+ * `lifecycle-coverage.test.js` via prototype introspection), there is no
+ * enumerable runtime source of "all static conventions", so the contract is
+ * a documented one: a new interactivity static field MUST be added here AND
+ * to the lifecycle table in agent-docs/components.md. `sigil-coverage.test.js`
+ * asserts each entry is honoured as a ship signal.
+ *
+ *   - `shadow`: Declarative Shadow DOM attaches ONLY during HTML parsing, so a
+ *     component that arrives via a client DOM insertion (a soft-nav swap, a
+ *     streamed <webjs-suspense> boundary's replaceWith) would never re-attach
+ *     its shadow root if elided. Context-free, so any shadow component ships.
+ *   - `refresh`: `static refresh = true` is the explicit opt-in to ship a bare
+ *     async component so its stale-while-revalidate refresh runs after SSR;
+ *     eliding drops that on-load re-fetch (moot for request-stable data).
+ *
+ * @type {readonly string[]}
+ */
+export const INTERACTIVITY_STATIC_FIELDS = ['shadow', 'refresh'];
+
+/** Why each INTERACTIVITY_STATIC_FIELDS entry forces a ship (analyser reason). */
+const STATIC_FIELD_REASONS = {
+  shadow: 'declares static shadow (DSD must re-attach on a client swap)',
+  refresh: 'declares static refresh = true (keeps the on-load re-fetch)',
+};
+
+/**
  * A bare `async render()` is NOT a standalone ship signal (#474). Its SSR
  * pass bakes the resolved data into the first paint, so a light-DOM async
  * component with no OTHER client signal renders identical HTML with or
@@ -144,8 +173,37 @@ export const CLIENT_METHOD_CALLS = ['addController', 'removeController', 'reques
  * re-fetch that eliding would drop).
  */
 
-/** Match a `@event=${...}` binding inside a template (unquoted per invariant 4). */
-const EVENT_BINDING_RE = /@[A-Za-z][\w-]*\s*=\s*\$\{/;
+/**
+ * Template binding-prefix classification, the anchor for the elision drift
+ * guard. Every prefix core's renderers recognise (core's `BINDING_PREFIXES`)
+ * is one of two kinds:
+ *   - SSR_DROPPED_PREFIXES: a CLIENT-BEHAVIOUR ship signal. The binding drops
+ *     at SSR and is wired only after hydration (`@event`), so a component whose
+ *     only interactivity is such a binding MUST ship.
+ *   - ROUND_TRIP_PREFIXES: an SSR-SAFE binding that survives into the served
+ *     HTML (`.prop` via `data-webjs-prop-*`, `?bool` as a boolean attribute),
+ *     so it is NOT a ship signal on its own and stays elidable.
+ * `sigil-coverage.test.js` asserts these two lists PARTITION `BINDING_PREFIXES`
+ * exactly (union equal, disjoint), so a new sigil cannot be added to the
+ * renderers without being classified here. That closes the one interactivity
+ * surface the prototype-introspection guard (`lifecycle-coverage.test.js`)
+ * cannot see, because a sigil is template syntax, not a method or an export.
+ */
+export const SSR_DROPPED_PREFIXES = ['@'];
+export const ROUND_TRIP_PREFIXES = ['.', '?'];
+
+/** Escape a single char for safe inclusion in a regex character class. */
+const escapeForCharClass = (c) => c.replace(/[\\\]^-]/g, '\\$&');
+
+/**
+ * Match a client-behaviour binding (`@event=${...}`), a ship signal. The
+ * prefix set is DERIVED from SSR_DROPPED_PREFIXES (not hardcoded), so a new
+ * client-behaviour sigil added to core is detected here automatically once it
+ * is classified above. (unquoted per invariant 4)
+ */
+const EVENT_BINDING_RE = new RegExp(
+  `[${SSR_DROPPED_PREFIXES.map(escapeForCharClass).join('')}][A-Za-z][\\w-]*\\s*=\\s*\\$\\{`,
+);
 
 /** Match a `.onclick=${...}` (native event-handler property) binding. */
 const EVENT_PROP_RE = /\.on[a-z]+\s*=\s*\$\{/;
@@ -505,22 +563,13 @@ export function analyzeComponentSource(src) {
   }
 
   for (const { body, factoryArg } of bodies) {
-    // Shadow DOM always ships (#474). Declarative Shadow DOM attaches ONLY
-    // during HTML parsing; an elided component that arrives via a client DOM
-    // insertion (a soft-nav swap, a streamed <webjs-suspense> boundary's
-    // replaceWith) would never re-attach its shadow root, because eliding
-    // drops the module that runs `attachShadow`. The analyser is context-free
-    // (it cannot tell whether a given component will be streamed or
-    // navigated to), so any shadow component is shipped.
-    if (declaresStaticTrue(body, 'shadow')) {
-      return { interactive: true, reason: 'declares static shadow (DSD must re-attach on a client swap)' };
-    }
-    // `static refresh = true` is the explicit opt-in to ship a bare async
-    // component so its stale-while-revalidate refresh runs ~after SSR; eliding
-    // a bare async component drops that on-load re-fetch (moot for request-
-    // stable data, the default), so an author who wants fresh-on-load opts in.
-    if (declaresStaticTrue(body, 'refresh')) {
-      return { interactive: true, reason: 'declares static refresh = true (keeps the on-load re-fetch)' };
+    // Interactivity-signal static conventions (`static shadow` / `static
+    // refresh = true`), driven by the INTERACTIVITY_STATIC_FIELDS registry so a
+    // new convention is added in one place (see its doc for why each ships).
+    for (const field of INTERACTIVITY_STATIC_FIELDS) {
+      if (declaresStaticTrue(body, field)) {
+        return { interactive: true, reason: STATIC_FIELD_REASONS[field] };
+      }
     }
     for (const hook of CLIENT_LIFECYCLE_HOOKS) {
       // A client lifecycle hook as a method (`hook(`) OR as an arrow class
