@@ -267,6 +267,11 @@ export default function Layout({ children }: { children: any }) {
       }
       pre code { color: inherit; font-family: var(--font-mono); font-size: 12.5px; }
 
+      /* Homepage Install + "How agents write it" samples sit flush on their
+         card surface (no nested code-block tint). Higher specificity than the
+         unlayered pre rule above so it wins without a cascade-layer fight. */
+      pre.pre-bare { background: transparent; color: var(--fg); border: 0; padding: 0; }
+
       /* Default border-color for chrome-level .border / .border-b / .border-t
          elements. Wrapped in @layer base so it sits BELOW Tailwind v4's
          @layer utilities, so any Tailwind color utility (border-transparent,

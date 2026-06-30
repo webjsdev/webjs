@@ -99,13 +99,13 @@ export default async function Home() {
       <div class="grid md:grid-cols-2 gap-4">
         <div class="rounded-lg border border-border bg-bg-elev p-5">
           <div class="text-xs font-mono uppercase tracking-widest text-fg-muted mb-3">Webjs users</div>
-          <pre class="text-sm font-mono"><code># shipped with @webjsdev/cli
+          <pre class="text-sm font-mono pre-bare"><code># shipped with @webjsdev/cli
 webjs ui init
 webjs ui add button card dialog</code></pre>
         </div>
         <div class="rounded-lg border border-border bg-bg-elev p-5">
           <div class="text-xs font-mono uppercase tracking-widest text-fg-muted mb-3">Next · Astro · Vite · Lit · vanilla</div>
-          <pre class="text-sm font-mono"><code>npm install -D @webjsdev/ui
+          <pre class="text-sm font-mono pre-bare"><code>npm install -D @webjsdev/ui
 npm install @webjsdev/core
 npx webjsui init
 npx webjsui add button card dialog</code></pre>
@@ -122,7 +122,7 @@ npx webjsui add button card dialog</code></pre>
       <div class="grid md:grid-cols-2 gap-4">
         <div class="min-w-0 flex flex-col rounded-lg border border-border bg-bg-elev p-5">
           <div class="text-xs font-mono uppercase tracking-widest text-fg-muted mb-3">A form field</div>
-          <pre class="scrollbar-thin flex-1 min-h-0 text-xs font-mono overflow-x-auto leading-relaxed"><code>&lt;form class=\${stackClass({ gap: 'sm' })}&gt;
+          <pre class="scrollbar-thin flex-1 min-h-0 text-xs font-mono overflow-x-auto leading-relaxed pre-bare"><code>&lt;form class=\${stackClass({ gap: 'sm' })}&gt;
   &lt;div class=\${fieldClass()}&gt;
     &lt;label class=\${labelClass()} for="email"&gt;Email&lt;/label&gt;
     &lt;input class=\${inputClass()} id="email" type="email" required /&gt;
@@ -133,7 +133,7 @@ npx webjsui add button card dialog</code></pre>
         </div>
         <div class="min-w-0 flex flex-col rounded-lg border border-border bg-bg-elev p-5">
           <div class="text-xs font-mono uppercase tracking-widest text-fg-muted mb-3">A dialog</div>
-          <pre class="scrollbar-thin flex-1 min-h-0 text-xs font-mono overflow-x-auto leading-relaxed"><code>&lt;ui-dialog&gt;
+          <pre class="scrollbar-thin flex-1 min-h-0 text-xs font-mono overflow-x-auto leading-relaxed pre-bare"><code>&lt;ui-dialog&gt;
   &lt;ui-dialog-trigger&gt;
     &lt;button class=\${buttonClass({ variant: 'outline' })}&gt;Edit&lt;/button&gt;
   &lt;/ui-dialog-trigger&gt;
