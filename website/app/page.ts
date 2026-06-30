@@ -185,7 +185,7 @@ export default function LandingPage() {
             ${codeWindow('components/like-button.ts', PE_COMPONENT)}
           </div>
           <div class="flex flex-col min-w-0">
-            <p class="font-mono font-semibold text-[11px] leading-[1.4] tracking-[0.12em] uppercase text-fg-subtle mb-[10px] ml-1">What the browser receives (JS off)</p>
+            <p class="font-mono font-semibold text-[11px] leading-[1.4] tracking-[0.12em] uppercase text-fg-subtle mb-[10px] ml-1">What the browser receives</p>
             <figure class=${WIN}>
               <figcaption class=${WINBAR}>${DOTS}<span class=${WINNAME}>view-source</span></figcaption>
               <pre class="scroll-thin m-0 p-[18px] overflow-x-auto font-mono text-[13px] leading-[1.7] [tab-size:2] flex-1" tabindex="0" aria-label="server-rendered HTML"><code>${highlight(SSR_OUTPUT)}</code></pre>
