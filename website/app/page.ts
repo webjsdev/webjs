@@ -251,7 +251,7 @@ export default function LandingPage() {
           <div class="group p-6 bg-bg-elev hover:bg-[color-mix(in_oklch,var(--bg-elev)_92%,var(--fg))] transition-colors duration-200 flex flex-col justify-between h-full">
             <div class="mb-6">
               <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.02em] mt-0 mb-2">Light DOM web components</h3>
-              <p class="m-0 text-sm leading-[1.6] text-fg-muted">A lit-style component lifecycle that renders to light DOM, so Tailwind and global CSS just work, no shadow plumbing.</p>
+              <p class="m-0 text-sm leading-[1.6] text-fg-muted">Web components that render to light DOM, so Tailwind and global CSS just work, no shadow plumbing.</p>
             </div>
             <div class="bg-[var(--editor-sidebar-bg)] border border-[var(--editor-border)] rounded-xl p-3.5 font-mono text-[11px] leading-[1.5] select-none text-[var(--editor-fg)]">
               <div class="text-[var(--code-punc)]">&lt;<span class="text-[var(--code-tag)]">like-button</span>&gt;</div>
@@ -265,7 +265,7 @@ export default function LandingPage() {
           <div class="group p-6 bg-bg-elev hover:bg-[color-mix(in_oklch,var(--bg-elev)_92%,var(--fg))] transition-colors duration-200 flex flex-col justify-between h-full">
             <div class="mb-6">
               <h3 class="font-display font-bold text-[1.05rem] leading-[1.3] tracking-[-0.02em] mt-0 mb-2">Server actions (RPC)</h3>
-              <p class="m-0 text-sm leading-[1.6] text-fg-muted">Mark a file <code class="font-mono text-[0.9em]">'use server'</code> and import it. Date, Map, Set, BigInt, and Blob all round-trip across the wire.</p>
+              <p class="m-0 text-sm leading-[1.6] text-fg-muted">Mark a file <code class="font-mono text-[0.9em]">'use server'</code> and import it. Date, Map, Set, BigInt, and Blob all round-trip across the wire with real http verbs (GET, POST, PUT, PATCH, DELETE).</p>
             </div>
             <div class="bg-[var(--editor-sidebar-bg)] border border-[var(--editor-border)] rounded-xl p-3.5 flex items-center justify-between text-[10px] font-mono select-none text-[var(--editor-fg)]">
               <div class="text-fg-subtle px-2 py-1 bg-[var(--editor-bg)] rounded border border-[var(--editor-border)]">Client</div>
