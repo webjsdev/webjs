@@ -17,13 +17,18 @@
   },
   "webjs": {
     "dev": {
+      "before": [
+        "webjs db migrate",
+        "npm run css:build"
+      ],
       "parallel": [
         "tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch"
       ]
     },
     "start": {
       "before": [
-        "webjs db migrate"
+        "webjs db migrate",
+        "npm run css:build"
       ]
     }
   },
