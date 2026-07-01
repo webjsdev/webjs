@@ -1,6 +1,6 @@
 ---
 title: "Full-Stack Type Safety With No Build Step"
-date: 2026-06-13T10:30:00+05:30
+date: 2026-06-09T10:30:00+05:30
 slug: full-stack-type-safety-no-build
 description: "End-to-end type safety in WebJs with no build TypeScript. Typed server actions flow the real function signature across the network boundary, so full-stack types are just a normal import, with no codegen and no compile step."
 tags: typescript, type-safety, server-actions, no-build, dx

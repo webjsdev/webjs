@@ -1,6 +1,6 @@
 ---
 title: "How to Fix Those Ugly ../../../ Import Paths"
-date: 2026-06-16T09:30:00+05:30
+date: 2026-06-11T09:30:00+05:30
 slug: fix-relative-import-paths
 description: "Fix relative import paths for good using a path alias backed by the Node package.json imports field. WebJs aliases every top-level folder with no webpack and no tsconfig paths, resolved at runtime by Node 24+ and Bun with no build step."
 tags: imports, path-alias, no-build, dx, nodejs

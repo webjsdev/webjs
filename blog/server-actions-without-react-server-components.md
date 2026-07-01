@@ -1,6 +1,6 @@
 ---
 title: "Server Actions Without React Server Components"
-date: 2026-06-20T11:00:00+05:30
+date: 2026-06-18T10:00:00+05:30
 slug: server-actions-without-react-server-components
 description: "WebJs has no server/client component split, no Flight protocol, and no use client boundary. It gets await-data-in-the-leaf and typed server mutations from one RPC boundary instead. How the execution model works and why it drops the RSC machinery."
 tags: server-actions, rsc, execution-model, rpc, data-fetching

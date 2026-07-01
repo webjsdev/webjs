@@ -1,6 +1,6 @@
 ---
 title: "Async Data Fetching in Web Components (await Right in render())"
-date: 2026-06-03T10:00:00+05:30
+date: 2026-05-29T10:00:00+05:30
 slug: async-render-in-web-components
 description: "Web component data fetching without useEffect or a first-paint spinner. WebJs lets you await server data right inside async render(), so SSR bakes the data into the first paint, the client stays stale-while-revalidate, and there is no request waterfall."
 tags: web-components, data-fetching, async-render, ssr, suspense

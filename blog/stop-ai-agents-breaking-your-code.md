@@ -1,6 +1,6 @@
 ---
 title: "How WebJs Stops AI Coding Agents From Breaking Your Code"
-date: 2026-06-30T10:00:00+05:30
+date: 2026-06-29T10:00:00+05:30
 slug: stop-ai-agents-breaking-your-code
 description: "AI coding agents write a lot of your code now, and left unsupervised they commit to main, skip tests, and ignore your conventions. WebJs is an AI-first framework that bakes agent guardrails into tooling, so drift gets caught at the seam instead of buried in a doc nobody reads."
 tags: ai-first, ai-agents, guardrails, tooling, dx

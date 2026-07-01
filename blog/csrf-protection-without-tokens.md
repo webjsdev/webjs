@@ -1,6 +1,6 @@
 ---
 title: "CSRF Protection Without Tokens, Cookies, or Config"
-date: 2026-06-10T11:00:00+05:30
+date: 2026-06-04T11:00:00+05:30
 slug: csrf-protection-without-tokens
 description: "How WebJs does CSRF protection with a Sec-Fetch-Site and Origin check instead of a token cookie. CSRF without a token keeps your SSR pages same-origin safe and CDN-edge-cacheable, the modern browser-native approach explained for beginners."
 tags: security, csrf, sec-fetch-site, server-actions, caching

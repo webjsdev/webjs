@@ -1,6 +1,6 @@
 ---
 title: "Prisma vs Drizzle: Why We Chose Drizzle as Our Default ORM"
-date: 2026-06-28T12:00:00+05:30
+date: 2026-06-27T12:00:00+05:30
 slug: prisma-vs-drizzle-default-orm
 description: "Prisma vs Drizzle for a no-build framework. Why WebJs picked Drizzle ORM as the scaffold's default ORM, how the buildless, source-is-the-runtime model made the decision, and how to bring your own if you prefer Prisma."
 tags: orm, drizzle, prisma, database, defaults

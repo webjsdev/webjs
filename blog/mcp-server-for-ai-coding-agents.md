@@ -1,6 +1,6 @@
 ---
 title: "Give AI Coding Assistants Live Access to Your App"
-date: 2026-06-19T15:00:00+05:30
+date: 2026-06-16T15:00:00+05:30
 slug: mcp-server-for-ai-coding-agents
 description: "WebJs ships a read-only MCP server for AI coding agents. Learn how the Model Context Protocol lets Claude, Cursor, and other AI assistants read your app's real routes, actions, and components instead of guessing them."
 tags: mcp, ai-first, ai-agents, tooling, dx
