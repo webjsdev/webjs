@@ -1,5 +1,5 @@
 ---
-title: "webjs vs Lit: a Lit-Shaped Runtime Without the Dependency"
+title: "WebJs vs Lit: a Lit-Shaped Runtime Without the Dependency"
 date: 2026-02-08T11:00:00+05:30
 slug: betting-on-lits-mental-model
 description: "webjs ships its own web-component runtime whose public API mirrors Lit (reactive properties, the Lit lifecycle, lit-html directives), so Lit knowledge transfers with no Lit dependency. What that buys and what it costs."
