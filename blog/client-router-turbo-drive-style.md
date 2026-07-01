@@ -1,19 +1,19 @@
 ---
-title: "The client router (or: how Turbo Drive ate my white flash)"
+title: "Client-Side Routing Without the Full-Page Reload (or: Goodbye, White Flash)"
 date: 2026-02-22T10:30:00+05:30
 slug: client-router-turbo-drive-style
-description: "Why webjs ships a Hotwire-style nested-layout-aware client router by default, what the X-Webjs-Have optimization is, and how layouts stay mounted across navigations."
+description: "How WebJs does client-side routing by default. SPA navigation with no full-page reload and no white flash, keeping nested layouts mounted across page changes."
 tags: client-router, navigation, ssr, layouts
 author: Vivek
 ---
 
-The first version of webjs had no client router. Each `<a>` click did a full page navigation. The HTML came back fast (SSR is quick), the page rendered, life was fine. Except for one thing.
+You know the quick white blink when you click a link and the whole page reloads? WebJs did not always avoid it. The first version had no client router (the bit of code that swaps pages in place instead of reloading the whole document), so each `<a>` click did a full page navigation. The HTML came back fast (SSR, or server-side rendering, is quick), the page rendered, life was fine. Except for one thing.
 
 The page flickered white between navigations.
 
 That white flash is the browser repainting between document loads. Chromium has the "paint holding" feature, but it still happens noticeably for ~100ms on most navigations. On a slow connection it is longer. The page feels janky even when the server is fast.
 
-The fix is to intercept link clicks, fetch the next page over fetch(), and patch the DOM in place. Hotwire calls this Turbo Drive. webjs's version is at `packages/core/src/router-client.js`. The docstring at the top spells out the design; the rest of this post is the commentary.
+The fix is to intercept link clicks, fetch the next page over fetch(), and patch the DOM in place. Hotwire calls this Turbo Drive. WebJs's version is at `packages/core/src/router-client.js`. The docstring at the top spells out the design; the rest of this post is the commentary.
 
 
 # The mechanism
@@ -86,16 +86,16 @@ No nested-route data deduplication. Each navigation re-fetches the page from scr
 
 The router handles rapid clicks correctly. Click link A, then click link B before A's response arrives. The router aborts A's fetch and proceeds with B. The DOM never patches A's content. A nav-token mechanism ensures that an out-of-order resolution (B resolves before A) does not accidentally revert to A's state.
 
-This took two bug reports to get right. Race conditions in click-driven SPA navigation are subtle.
+This took two bug reports to get right. Race conditions in click-driven SPA navigation (a single-page app that swaps content in place instead of reloading) are subtle.
 
 
 # Comparing to lit and Hotwire
 
 lit ships no built-in router. You bring your own (vaadin-router, lit-router, etc.). Each has a different API.
 
-Stencil ships a router closer in spirit to webjs's, but it does not have the layouts-stay-mounted optimization. Every navigation re-mounts the full component tree.
+Stencil ships a router closer in spirit to WebJs's, but it does not have the layouts-stay-mounted optimization. Every navigation re-mounts the full component tree.
 
-Hotwire's Turbo Drive is the closest precedent. Same DOM-swap philosophy, same scroll-restoration logic, similar form integration. webjs's version is implemented from scratch in TypeScript with web-component awareness (it walks `composedPath()` for shadow-DOM-piercing link detection), but the design borrows heavily.
+Hotwire's Turbo Drive is the closest precedent. Same DOM-swap philosophy, same scroll-restoration logic, similar form integration. WebJs's version is implemented from scratch in TypeScript with web-component awareness (it walks `composedPath()` for shadow-DOM-piercing link detection), but the design borrows heavily.
 
 
 # Why I shipped this in core

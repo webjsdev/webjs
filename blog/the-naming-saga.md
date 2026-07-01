@@ -1,11 +1,13 @@
 ---
-title: "The npm naming saga (wjs, webjscli, and how we ended up at webjsdev)"
+title: "Publishing an npm Package: The Naming Saga (wjs, webjscli, and how we ended up at webjsdev)"
 date: 2026-05-22T20:00:00+05:30
 slug: the-naming-saga
-description: "How an attempt to publish a short CLI alias on npm turned into a tour of the typosquatting filter, the create-* convention, and what we shipped instead."
+description: "Publishing an npm package taught me how the typosquatting similarity filter blocks names like wjs and webjscli, plus the create-* convention and what we shipped."
 tags: npm, packages, scaffold, naming
 author: Vivek
 ---
+
+Publishing a package on npm sounds like a single command. Then the registry rejects your chosen name for being "too similar" to a package you have never heard of, and a quick two-package afternoon turns into an hour of rolling releases back and forth. This is that story.
 
 The plan was simple. Ship `npx create-webjs-app@latest my-app` as the homepage hero. Ship a short `wjs` alias for the CLI so people who installed it globally would not have to type `webjs` everywhere. Two packages, one PR, done.
 
@@ -31,7 +33,7 @@ npm error 403 Forbidden - PUT https://registry.npmjs.org/wjs
 - Package name too similar to existing packages w-js, w.js
 ```
 
-npm's naming policy treats `-` and `.` as equivalent to nothing for the similarity check. `wjs`, `w-js`, and `w.js` are all the same name to the filter. Both `w-js` and `w.js` existed (different projects, low download counts), so `wjs` got flagged as typosquatting.
+npm's naming policy treats `-` and `.` as equivalent to nothing for the similarity check. `wjs`, `w-js`, and `w.js` are all the same name to the filter. Both `w-js` and `w.js` existed (different projects, low download counts), so `wjs` got flagged as typosquatting (registering a name close to a popular one to catch people's typos).
 
 I had not planned for this. The 24-hour tombstone-after-unpublish window I knew about. The similarity filter was new to me.
 
@@ -39,7 +41,7 @@ I had not planned for this. The 24-hour tombstone-after-unpublish window I knew 
 
 OK, scrap `wjs`. Pick a different short name.
 
-`webjscli` was the obvious next try. It is descriptive ("webjs cli"), matches the scoped `@webjsdev/cli` minus the scope, eight characters. I built the package, tried `npm publish`.
+`webjscli` was the obvious next try. It is descriptive ("WebJs cli"), matches the scoped `@webjsdev/cli` minus the scope, eight characters. I built the package, tried `npm publish`.
 
 ```
 npm error code E403
@@ -51,7 +53,7 @@ Same filter. `webjs-cli` already existed (yet another low-traffic project). The 
 
 # What I tried third
 
-`webjsdev` was the next name on my list. It matches the existing `@webjsdev` npm org (which I already own), reads as "webjs developer," and is far enough from any neighbor that the filter should not block it.
+`webjsdev` was the next name on my list. It matches the existing `@webjsdev` npm org (which I already own), reads as "WebJs developer," and is far enough from any neighbor that the filter should not block it.
 
 It published. Cleanly. Took thirty seconds.
 

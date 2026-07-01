@@ -1,15 +1,15 @@
 ---
-title: "Strip types, not esbuild"
+title: "Buildless TypeScript: Strip Types, Not esbuild"
 date: 2026-01-12T09:30:00+05:30
 slug: strip-types-not-esbuild
-description: "Why webjs switched from esbuild type-stripping to Node 24's built-in module.stripTypeScriptTypes, and what the dev-server cache looks like now."
+description: "How WebJs serves buildless TypeScript by stripping types at runtime with Node 24's module.stripTypeScriptTypes instead of esbuild, with no sourcemaps needed."
 tags: typescript, no-build, runtime, performance
 author: Vivek
 ---
 
-For the early months of webjs, every `.ts` file in your project went through esbuild before it reached the browser. esbuild is fast (about 1ms per file on warm cache), and we ran it as an ESM loader hook so the server-side and the client-bound transforms shared one code path. It worked.
+You write a `.ts` file, and it runs. No build step, no bundler warming up, no generated output to chase when a stack trace lands somewhere you did not write. That is what a WebJs app feels like today, and it took some work to get here. For the early months of WebJs, every `.ts` file in your project went through esbuild (a fast JavaScript and TypeScript build tool) before it reached the browser. esbuild is fast (about 1ms per file on warm cache), and we ran it as an ESM loader hook so the server-side and the client-bound transforms shared one code path. It worked.
 
-It worked, but it produced sourcemaps. And the sourcemaps were the thing that kept biting me.
+It worked, but it produced sourcemaps (files that map the generated code back to the source you wrote). And the sourcemaps were the thing that kept biting me.
 
 
 # What the sourcemap layer cost
@@ -42,7 +42,7 @@ What it gets you:
 
 The catch: the stripper only supports erasable TypeScript. `enum`, `namespace` with values, constructor parameter properties, legacy decorators with `emitDecoratorMetadata`, and `import = require` are all rejected. The TypeScript team added `erasableSyntaxOnly: true` in `tsconfig.json` to make the editor flag those at edit time.
 
-webjs's scaffolded `tsconfig.json` turns the flag on by default. If you write `enum Status { ... }` in a webjs project, your editor underlines it and the framework's `webjs check` lint catches it before commit. We made the trade: less TypeScript surface area, no sourcemap layer, smaller wire bytes, exact stack traces.
+WebJs's scaffolded `tsconfig.json` turns the flag on by default. If you write `enum Status { ... }` in a WebJs project, your editor underlines it and the framework's `webjs check` lint catches it before commit. We made the trade: less TypeScript surface area, no sourcemap layer, smaller wire bytes, exact stack traces.
 
 
 # The migration
@@ -68,7 +68,7 @@ A few things got simpler once we stopped emitting sourcemaps.
 
 The HTTP layer no longer had to negotiate content types or worry about source-content delivery. Every `.ts` response is just JS bytes with the type annotations whitespace-erased.
 
-The 103 Early Hints flow got cleaner. We emit `<link rel="modulepreload">` headers before SSR begins. The preload references the canonical URL with the `.ts` extension. The browser fetches that URL, gets stripped JS back, runs it. No content-type fight.
+The 103 Early Hints flow got cleaner. We emit `<link rel="modulepreload">` headers before SSR (server-side rendering) begins. The preload references the canonical URL with the `.ts` extension. The browser fetches that URL, gets stripped JS back, runs it. No content-type fight.
 
 The dev-mode live reload got cheaper. The watcher signals "file changed at this path." The cache evicts that entry by mtime mismatch. The next browser fetch returns the freshly-stripped output. Total work per change: stat the file, strip the bytes, write to the cache.
 
@@ -84,9 +84,9 @@ The other limit: the agent has to know about `erasableSyntaxOnly`. When it reach
 
 # What changed in the user-facing story
 
-For someone writing a webjs app today: nothing visible. The `.ts` file you write is the file that runs. There is no build step to remember, no sourcemap to chase. Stack traces point at the file you opened. The TypeScript you write must be erasable, but the editor flags non-erasable syntax at edit time so you never get surprised in production.
+For someone writing a WebJs app today: nothing visible. The `.ts` file you write is the file that runs. There is no build step to remember, no sourcemap to chase. Stack traces point at the file you opened. The TypeScript you write must be erasable, but the editor flags non-erasable syntax at edit time so you never get surprised in production.
 
-For someone debugging a webjs app today: noticeably better. Open DevTools. Hit a breakpoint at `app/components/foo.ts:42`. Open the same file in your editor. Same line. Same column. No translation layer in the way.
+For someone debugging a WebJs app today: noticeably better. Open DevTools. Hit a breakpoint at `app/components/foo.ts:42`. Open the same file in your editor. Same line. Same column. No translation layer in the way.
 
 That is the whole pitch for this PR. A new Node version shipped a feature that obviated 80% of what our build step did. We removed the build step. The rest is downstream cleanup.
 
