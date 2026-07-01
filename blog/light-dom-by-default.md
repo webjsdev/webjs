@@ -1,8 +1,8 @@
 ---
-title: "Light DOM vs Shadow DOM: Why webjs Defaults to Light DOM"
+title: "Light DOM vs Shadow DOM: Why WebJs Defaults to Light DOM"
 date: 2025-12-22T10:00:00+05:30
 slug: light-dom-by-default
-description: "Why webjs keeps the light-DOM default for web components. Tailwind and global CSS cascade in, DOM queries work, accessibility behaves, and tests need no shadow-piercing helpers. Shadow DOM stays an opt-in."
+description: "Why WebJs keeps the light-DOM default for web components. Tailwind and global CSS cascade in, DOM queries work, accessibility behaves, and tests need no shadow-piercing helpers. Shadow DOM stays an opt-in."
 tags: components, light-dom, shadow-dom, defaults, tailwind, ssr
 author: Vivek
 ---
@@ -11,9 +11,9 @@ Native web components default to light DOM. If you write a custom element that d
 
 The two libraries most developers and most AI training data treat as canonical for web components picked a different default. lit's [`LitElement` attaches a shadow root](https://lit.dev/docs/components/shadow-dom/) in its constructor unless you override `createRenderRoot()` to return `this`. [Microsoft's FAST automatically attaches a `ShadowRoot`](https://fast.design/docs/1.x/fast-element/working-with-shadow-dom/) and renders the template into it. Because these are the libraries most developers learn from, the perception has shifted: people assume shadow DOM is the web-components default. It is not. It is a library convention that the platform itself does not share.
 
-For what it is worth, [Stencil's `@Component` decorator defaults to light DOM](https://stenciljs.com/docs/styling) (`shadow: false`); you opt into shadow by writing `@Component({ shadow: true })`. The `stencil generate` CLI scaffolds shadow-enabled components, which is where the "Stencil defaults to shadow" line you sometimes see comes from, but that is the scaffolder template, not the framework's default. webjs sits in the same camp as Stencil's underlying default: light DOM unless you ask for shadow.
+For what it is worth, [Stencil's `@Component` decorator defaults to light DOM](https://stenciljs.com/docs/styling) (`shadow: false`); you opt into shadow by writing `@Component({ shadow: true })`. The `stencil generate` CLI scaffolds shadow-enabled components, which is where the "Stencil defaults to shadow" line you sometimes see comes from, but that is the scaffolder template, not the framework's default. WebJs sits in the same camp as Stencil's underlying default: light DOM unless you ask for shadow.
 
-webjs aligns with the platform default and treats light DOM as the everyday case. Every component renders in light DOM unless the class declares `static shadow = true`. The shadow path still works and is the right choice for a few specific situations. But the framework leans on what the platform itself defaults to.
+WebJs aligns with the platform default and treats light DOM as the everyday case. Every component renders in light DOM unless the class declares `static shadow = true`. The shadow path still works and is the right choice for a few specific situations. But the framework leans on what the platform itself defaults to.
 
 This post is about why that choice is the right one, not just for spec-alignment, but for the practical things you do every day in an app.
 
@@ -53,7 +53,7 @@ If `Card` were a shadow-DOM component, every one of those classes would silently
 
 With light DOM as the default, the same components that get composed into pages share the same styling story as the rest of the app. There is no "the page uses Tailwind but the components do not" cognitive split.
 
-A note before going further: **webjs does not require Tailwind.** The scaffold defaults to Tailwind because it pairs well with the rest of the stack, but the framework itself is agnostic about how you write CSS. Vanilla stylesheets, CSS modules, BEM, plain hand-written CSS, a different utility framework, any of them work. The benefit in this section is general: any external CSS strategy you bring cascades into light-DOM components without escape hatches. Tailwind is the concrete example throughout this post because it is the scaffold default and the most-used styling story in webjs apps. The argument is about light DOM, not about Tailwind specifically.
+A note before going further: **WebJs does not require Tailwind.** The scaffold defaults to Tailwind because it pairs well with the rest of the stack, but the framework itself is agnostic about how you write CSS. Vanilla stylesheets, CSS modules, BEM, plain hand-written CSS, a different utility framework, any of them work. The benefit in this section is general: any external CSS strategy you bring cascades into light-DOM components without escape hatches. Tailwind is the concrete example throughout this post because it is the scaffold default and the most-used styling story in WebJs apps. The argument is about light DOM, not about Tailwind specifically.
 
 
 ## 2. CSS stays cache-friendly
@@ -112,7 +112,7 @@ For most application code, this is not the problem you have. You control the pag
 
 Tailwind sidesteps the scoping question entirely: utility classes are atomic, intentional, and unique by construction. There is nothing to leak. If you author components with Tailwind utilities, scoping is a non-issue. The same applies to other naming-discipline approaches like BEM or scoped class prefixes; the framework's `webjs check` ships a `light-dom-css-prefix` rule that flags unprefixed class selectors in vanilla CSS for light-DOM components, so the linter helps you keep selectors uniquely scoped if you choose that route.
 
-webjs's recommendation: use Tailwind (or your chosen styling story) in light DOM by default. If a specific component needs strict isolation (third-party embed, design-system component meant to drop into hostile pages), opt into shadow DOM for that one component:
+WebJs's recommendation: use Tailwind (or your chosen styling story) in light DOM by default. If a specific component needs strict isolation (third-party embed, design-system component meant to drop into hostile pages), opt into shadow DOM for that one component:
 
 ```ts
 class IsolatedWidget extends WebComponent {
@@ -130,7 +130,7 @@ Both modes coexist on the same page without trouble.
 
 # What about slots?
 
-`<slot>` projection is sometimes described as "a shadow DOM feature." It is technically what the spec defines, but webjs ships its own light-DOM `<slot>` runtime with full parity to the shadow-DOM semantics: named slots, default content, fallback, `assignedNodes()`, `slotchange` events, SSR-time projection. The whole story is in [Light-DOM slots with full shadow-DOM parity](/blog/light-dom-slots-with-full-parity).
+`<slot>` projection is sometimes described as "a shadow DOM feature." It is technically what the spec defines, but WebJs ships its own light-DOM `<slot>` runtime with full parity to the shadow-DOM semantics: named slots, default content, fallback, `assignedNodes()`, `slotchange` events, SSR-time projection. The whole story is in [Light-DOM slots with full shadow-DOM parity](/blog/light-dom-slots-with-full-parity).
 
 This means choosing light DOM does not cost you slot projection. The agent can write:
 
@@ -152,7 +152,7 @@ And it works in light DOM. Tailwind classes apply. The slotted children project 
 
 # When shadow DOM is the right call
 
-Three situations where webjs recommends `static shadow = true`:
+Three situations where WebJs recommends `static shadow = true`:
 
 - **Third-party embeds.** A widget you ship for other people's sites. You cannot trust the host page's CSS, so you isolate.
 - **Design-system primitives that must look identical regardless of host context.** A `<ui-button>` shipped as a standalone package, dropped into a Shopify theme or a WordPress site. Shadow DOM is the protection layer.
@@ -174,6 +174,6 @@ Light DOM as default trades style isolation for everything else:
 
 The cost is style scoping, which is usually not a problem in app code and is fully addressable for the cases where it is (Tailwind utilities by construction, BEM or class-prefix discipline for vanilla CSS, shadow opt-in for isolated widgets).
 
-The shape webjs settled on: light DOM by default, with Tailwind as the scaffold default but no framework-level requirement to use it. Shadow DOM is an opt-in for the specific cases that need it. Same `<slot>` semantics in both. The agent writes one style of component and the framework picks the right rendering mode based on the `static shadow` flag.
+The shape WebJs settled on: light DOM by default, with Tailwind as the scaffold default but no framework-level requirement to use it. Shadow DOM is an opt-in for the specific cases that need it. Same `<slot>` semantics in both. The agent writes one style of component and the framework picks the right rendering mode based on the `static shadow` flag.
 
 That is the everyday case for app code. The framework handles the rest.

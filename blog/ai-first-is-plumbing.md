@@ -2,18 +2,18 @@
 title: "AI-first is plumbing, not a marketing tag"
 date: 2026-04-18T12:00:00+05:30
 slug: ai-first-is-plumbing
-description: "What 'AI-first' actually means for webjs: the AGENTS.md contract, the hooks, the lint rules, and the small operational details that make a framework agent-readable."
+description: "What 'AI-first' actually means for WebJs: the AGENTS.md contract, the hooks, the lint rules, and the small operational details that make a framework agent-readable."
 tags: ai-first, agents, conventions, tooling
 author: Vivek
 ---
 
-When I say webjs is AI-first, I do not mean it has an AI-generated landing page or a chat widget on the docs. I mean a list of dull operational decisions, each of which makes the difference between an agent that writes correct code on the first try and one that produces a plausible-looking file in the wrong directory.
+When I say WebJs is AI-first, I do not mean it has an AI-generated landing page or a chat widget on the docs. I mean a list of dull operational decisions, each of which makes the difference between an agent that writes correct code on the first try and one that produces a plausible-looking file in the wrong directory.
 
 Here is the actual list, ordered roughly by how much each thing pays back.
 
 # AGENTS.md (and its siblings)
 
-Every scaffolded webjs app ships with these files at the root:
+Every scaffolded WebJs app ships with these files at the root:
 
 ```
 AGENTS.md                                  agent contract (this is the load-bearing one)
@@ -28,7 +28,7 @@ CLAUDE.md                                  Claude Code import file (points at AG
 
 The trick is that all of them say the same thing. AGENTS.md is the source of truth; CLAUDE.md is just `@AGENTS.md` (Claude Code's import syntax). Cursor and Antigravity (formerly Windsurf) use their own formats that load equivalent content. The PR template carries the convention checklist into every code review.
 
-Most agents read whichever file matches their tool first. AGENTS.md is the cross-tool standard ([emerging spec, FYI](https://agents.md/)). Every webjs scaffold ships it.
+Most agents read whichever file matches their tool first. AGENTS.md is the cross-tool standard ([emerging spec, FYI](https://agents.md/)). Every WebJs scaffold ships it.
 
 Concretely, the AGENTS.md file is around 40k characters. It covers: file conventions (where every kind of file goes), the public API of each package, framework invariants (the things that crash in production if you violate them), recipes for common tasks, and a list of `Deliberately deferred` items (so the agent does not try to add a bundler or a build command).
 
@@ -85,21 +85,21 @@ Why this is AI-first: the agent reading the doc sees the convention name and kno
 
 # The `Deliberately deferred` list
 
-Inside AGENTS.md there is a section called `Deliberately deferred`. It lists things webjs does not do and will not do in v1:
+Inside AGENTS.md there is a section called `Deliberately deferred`. It lists things WebJs does not do and will not do in v1:
 
-- Bundling (webjs is no-build; do not propose `webjs build`)
+- Bundling (WebJs is no-build; do not propose `webjs build`)
 - Per-route code splitting (downstream of no-build)
 - Vite-grade HMR with state preservation
 - React Server Components Flight
 - i18n / image optimization (layer libraries on top)
 
-The reason this is here is that agents will otherwise try to add these things. They see Next.js doing them and assume webjs should too. The doc says no, here are the trade-offs, do not propose this.
+The reason this is here is that agents will otherwise try to add these things. They see Next.js doing them and assume WebJs should too. The doc says no, here are the trade-offs, do not propose this.
 
 This list is read at the start of every long-running session. Saves cycles.
 
 # What this does not look like
 
-It does not look like a chat box. It does not look like a code-suggestion popup. It does not look like a marketing message. It is a stack of operational decisions that, together, mean an agent dropped into a webjs project writes correct code without asking what the framework wants.
+It does not look like a chat box. It does not look like a code-suggestion popup. It does not look like a marketing message. It is a stack of operational decisions that, together, mean an agent dropped into a WebJs project writes correct code without asking what the framework wants.
 
 Each individual piece is unsexy. The pre-commit hook is 100 lines of bash. The lint rules are short string-matching predicates. AGENTS.md is a wall of text. None of this is exciting on its own.
 

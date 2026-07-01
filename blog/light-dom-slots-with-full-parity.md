@@ -2,12 +2,12 @@
 title: "Light-DOM slots with full shadow-DOM parity"
 date: 2025-12-30T16:00:00+05:30
 slug: light-dom-slots-with-full-parity
-description: "Why webjs ships named slots, fallback content, assignedNodes, and slotchange in light DOM, not just shadow DOM, what the runtime looks like, and where the polyfill fits."
+description: "Why WebJs ships named slots, fallback content, assignedNodes, and slotchange in light DOM, not just shadow DOM, what the runtime looks like, and where the polyfill fits."
 tags: components, slots, light-dom, shadow-dom
 author: Vivek
 ---
 
-When you read web-components docs anywhere on the internet, `<slot>` is described as a shadow-DOM thing. The browser only resolves slots inside a shadow root. If you write a custom element with `static shadow = false` (the webjs default), the `<slot>` tag is just a meaningless element. Children dropped between the tags sit there as plain DOM. There is no projection.
+When you read web-components docs anywhere on the internet, `<slot>` is described as a shadow-DOM thing. The browser only resolves slots inside a shadow root. If you write a custom element with `static shadow = false` (the WebJs default), the `<slot>` tag is just a meaningless element. Children dropped between the tags sit there as plain DOM. There is no projection.
 
 This is correct as the platform stands. It is also limiting in a specific way that hurts an AI-first framework where pages and components are written in the same light-DOM Tailwind idiom.
 
@@ -41,7 +41,7 @@ The module is import-safe in Node. Polyfill setup is guarded on `typeof HTMLSlot
 
 # How a render flows through it
 
-The framework owns the lifecycle of a slot host. When a webjs component connects:
+The framework owns the lifecycle of a slot host. When a WebJs component connects:
 
 1. `captureAuthoredChildren(host)` snapshots the original children before render fires.
 2. `render()` produces a template that may contain `<slot>` elements (or `<slot name="x">`).
@@ -55,7 +55,7 @@ The framework owns the lifecycle of a slot host. When a webjs component connects
 
 Because slot resolution runs in the renderer, server-side rendering produces the final DOM tree directly. No hydration step is required to fix the slot projection. The HTML that arrives in the browser already has slotted children in their final positions.
 
-This matters for progressive enhancement. If a user has JavaScript disabled, a webjs component with light-DOM slots still displays its slotted content correctly. The component is just a styled wrapper with the slotted nodes projected into the right place. No JS required for the layout to be correct.
+This matters for progressive enhancement. If a user has JavaScript disabled, a WebJs component with light-DOM slots still displays its slotted content correctly. The component is just a styled wrapper with the slotted nodes projected into the right place. No JS required for the layout to be correct.
 
 In shadow DOM that win exists too (via Declarative Shadow DOM), but DSD has uneven browser support and serializes differently. The light-DOM path just produces HTML the browser already knows how to display.
 

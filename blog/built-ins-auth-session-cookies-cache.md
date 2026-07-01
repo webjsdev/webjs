@@ -2,14 +2,14 @@
 title: "Built-ins: auth, sessions, cookies, cache, and rate limiting (sharing one store)"
 date: 2026-03-08T15:00:00+05:30
 slug: built-ins-auth-session-cookies-cache
-description: "The five cross-cutting concerns webjs ships in @webjsdev/server: how they share a pluggable cache store, what the four-method store interface looks like, and what swapping to Redis looks like."
+description: "The five cross-cutting concerns WebJs ships in @webjsdev/server: how they share a pluggable cache store, what the four-method store interface looks like, and what swapping to Redis looks like."
 tags: server, auth, sessions, cache, redis, rate-limit
 author: Vivek
 ---
 
 Most frameworks make you assemble the cross-cutting server-side concerns from libraries. Auth from passport or lucia. Sessions from express-session or iron-session. Cache from node-cache or ioredis. Rate-limiting from express-rate-limit. The pieces work, but they all want their own store, their own config, and their own version of "where do I plug in Redis?"
 
-webjs ships all of them built-in. They share one cache store. The shape feels obvious once you see it; getting there took some non-obvious choices.
+WebJs ships all of them built-in. They share one cache store. The shape feels obvious once you see it; getting there took some non-obvious choices.
 
 
 # The concerns and the one store
@@ -61,7 +61,7 @@ Cross-cutting features are easy to build. The keyspace is one namespace; the mod
 
 # The auth model
 
-`createAuth()` matches the NextAuth / Auth.js shape so an agent that has seen NextAuth writes correct webjs auth. Three providers in v1: Google, GitHub, and Credentials. The implementation uses Web Crypto HMAC-SHA256, so no external crypto dependency.
+`createAuth()` matches the NextAuth / Auth.js shape so an agent that has seen NextAuth writes correct WebJs auth. Three providers in v1: Google, GitHub, and Credentials. The implementation uses Web Crypto HMAC-SHA256, so no external crypto dependency.
 
 Two cookie names from the source (`AUTH_COOKIE = 'webjs.auth'`, `STATE_COOKIE = 'webjs.auth.state'`). Default session lifetime is 30 days. Sessions can be JWT (opaque token, no server lookup) or database-backed (token is a key into the cache store).
 
@@ -70,7 +70,7 @@ The credentials provider's `verify` callback returns the user object (or null on
 
 # The session model
 
-webjs's `Session` class is Remix-shaped: `get`, `set`, `has`, `unset`, `flash`, `destroy`, `regenerateId`. From the source:
+WebJs's `Session` class is Remix-shaped: `get`, `set`, `has`, `unset`, `flash`, `destroy`, `regenerateId`. From the source:
 
 ```ts
 class Session {
@@ -135,7 +135,7 @@ Internally it computes the current windowed key (e.g. `ratelimit:<bucket>:<windo
 
 # What this is not
 
-webjs's built-ins are intentionally minimal. We do not ship:
+WebJs's built-ins are intentionally minimal. We do not ship:
 
 - Magic-link email auth (use a third-party provider).
 - 2FA / WebAuthn (later).
@@ -143,7 +143,7 @@ webjs's built-ins are intentionally minimal. We do not ship:
 - A migration tool for sessions (you write your own when you outgrow cookies).
 - Pluggable encryption algorithms (Web Crypto HMAC-SHA256 only).
 
-Each has a clean third-party answer if you need it. webjs covers the 80% case in a way the agent can write without reading docs. The 20% case is a library install away.
+Each has a clean third-party answer if you need it. WebJs covers the 80% case in a way the agent can write without reading docs. The 20% case is a library install away.
 
 
 # How this looks from the user's perspective
@@ -172,6 +172,6 @@ The same code that worked locally now scales horizontally. No store migration. N
 
 A pluggable store with a small interface is more valuable than a separate library per concern. Adding cross-cutting features later was straightforward because everything routed through one place. Adding "purge all data for this user" for compliance was a few lines, because the four-method interface already had everything we needed.
 
-Matching the Remix Session class and the NextAuth provider shape saved a lot of doc-writing. Agents already know the surface from the other frameworks. The few users who have written webjs apps with custom OAuth providers used the same argument shapes they would have used elsewhere. The mental model transferred.
+Matching the Remix Session class and the NextAuth provider shape saved a lot of doc-writing. Agents already know the surface from the other frameworks. The few users who have written WebJs apps with custom OAuth providers used the same argument shapes they would have used elsewhere. The mental model transferred.
 
 If you read the implementation, the modules live at `packages/server/src/{auth,session,cache,cache-fn,rate-limit}.js`. The Session class is the largest at ~340 lines; the cache and rate-limit modules are 200 lines each. About 1500 lines total for the five concerns combined.

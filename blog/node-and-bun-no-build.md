@@ -2,16 +2,16 @@
 title: "Running One Web Framework on Node and Bun Found Five Bugs"
 date: 2026-06-09T10:00:00+05:30
 slug: node-and-bun-no-build
-description: "webjs runs the same buildless source on Node 24+ and Bun. Adding the second runtime meant a runtime-neutral listener seam, two TypeScript strippers, and a parity test matrix that surfaced five genuine Node-versus-Bun divergences."
+description: "WebJs runs the same buildless source on Node 24+ and Bun. Adding the second runtime meant a runtime-neutral listener seam, two TypeScript strippers, and a parity test matrix that surfaced five genuine Node-versus-Bun divergences."
 tags: bun, node, runtime, no-build, cross-runtime
 author: Vivek
 ---
 
-webjs runs on Node 24+ and on Bun, from the same source, with no build step. You start a Bun app with `bun --bun run dev` and the server runs on Bun. Same files, same routes, same components. The interesting part was not making it start on both. It was the five real bugs the parity work surfaced, each one a place where Node and Bun disagree about something I had assumed was standard.
+WebJs runs on Node 24+ and on Bun, from the same source, with no build step. You start a Bun app with `bun --bun run dev` and the server runs on Bun. Same files, same routes, same components. The interesting part was not making it start on both. It was the five real bugs the parity work surfaced, each one a place where Node and Bun disagree about something I had assumed was standard.
 
 # Why two runtimes at all
 
-The honest reason is that Bun is fast and a lot of people want to use it, and a no-build framework is exactly the kind of thing that should not care which runtime executes it. There is no bundler output that bakes in a target. The source IS the runtime. So the only thing standing between webjs and Bun was the set of places where the framework touches a runtime API directly, and those places turned out to be worth mapping carefully.
+The honest reason is that Bun is fast and a lot of people want to use it, and a no-build framework is exactly the kind of thing that should not care which runtime executes it. There is no bundler output that bakes in a target. The source IS the runtime. So the only thing standing between WebJs and Bun was the set of places where the framework touches a runtime API directly, and those places turned out to be worth mapping carefully.
 
 The work landed under #508. Node 24+ is the floor because that is where the built-in TypeScript stripper and a few other primitives arrived. A boot-time preflight enforces the floor and admits Bun.
 
@@ -27,7 +27,7 @@ There is exactly one feature that does not cross: 103 Early Hints. `Bun.serve` h
 
 # Two strippers for the same TypeScript
 
-webjs serves `.ts` files by stripping the types at request time, buildless. On Node that is the built-in `module.stripTypeScriptTypes`. Bun does not have that function, so on Bun the framework uses `amaro`, the same stripper Node's own implementation is built on.
+WebJs serves `.ts` files by stripping the types at request time, buildless. On Node that is the built-in `module.stripTypeScriptTypes`. Bun does not have that function, so on Bun the framework uses `amaro`, the same stripper Node's own implementation is built on.
 
 The requirement is that both produce byte-identical, position-preserving output, because the stripped source is what the browser fetches and what stack traces point into. If the two strippers disagreed by even a character, a line number in an error would be wrong on one runtime. They match, and there is a forced-amaro parity test on Node that keeps them matching.
 

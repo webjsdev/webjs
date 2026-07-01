@@ -2,18 +2,18 @@
 title: "The client router (or: how Turbo Drive ate my white flash)"
 date: 2026-02-22T10:30:00+05:30
 slug: client-router-turbo-drive-style
-description: "Why webjs ships a Hotwire-style nested-layout-aware client router by default, what the X-Webjs-Have optimization is, and how layouts stay mounted across navigations."
+description: "Why WebJs ships a Hotwire-style nested-layout-aware client router by default, what the X-Webjs-Have optimization is, and how layouts stay mounted across navigations."
 tags: client-router, navigation, ssr, layouts
 author: Vivek
 ---
 
-The first version of webjs had no client router. Each `<a>` click did a full page navigation. The HTML came back fast (SSR is quick), the page rendered, life was fine. Except for one thing.
+The first version of WebJs had no client router. Each `<a>` click did a full page navigation. The HTML came back fast (SSR is quick), the page rendered, life was fine. Except for one thing.
 
 The page flickered white between navigations.
 
 That white flash is the browser repainting between document loads. Chromium has the "paint holding" feature, but it still happens noticeably for ~100ms on most navigations. On a slow connection it is longer. The page feels janky even when the server is fast.
 
-The fix is to intercept link clicks, fetch the next page over fetch(), and patch the DOM in place. Hotwire calls this Turbo Drive. webjs's version is at `packages/core/src/router-client.js`. The docstring at the top spells out the design; the rest of this post is the commentary.
+The fix is to intercept link clicks, fetch the next page over fetch(), and patch the DOM in place. Hotwire calls this Turbo Drive. WebJs's version is at `packages/core/src/router-client.js`. The docstring at the top spells out the design; the rest of this post is the commentary.
 
 
 # The mechanism
@@ -93,9 +93,9 @@ This took two bug reports to get right. Race conditions in click-driven SPA navi
 
 lit ships no built-in router. You bring your own (vaadin-router, lit-router, etc.). Each has a different API.
 
-Stencil ships a router closer in spirit to webjs's, but it does not have the layouts-stay-mounted optimization. Every navigation re-mounts the full component tree.
+Stencil ships a router closer in spirit to WebJs's, but it does not have the layouts-stay-mounted optimization. Every navigation re-mounts the full component tree.
 
-Hotwire's Turbo Drive is the closest precedent. Same DOM-swap philosophy, same scroll-restoration logic, similar form integration. webjs's version is implemented from scratch in TypeScript with web-component awareness (it walks `composedPath()` for shadow-DOM-piercing link detection), but the design borrows heavily.
+Hotwire's Turbo Drive is the closest precedent. Same DOM-swap philosophy, same scroll-restoration logic, similar form integration. WebJs's version is implemented from scratch in TypeScript with web-component awareness (it walks `composedPath()` for shadow-DOM-piercing link detection), but the design borrows heavily.
 
 
 # Why I shipped this in core

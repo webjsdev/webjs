@@ -2,12 +2,12 @@
 title: "TC39 Signals vs setState in Web Components"
 date: 2026-05-21T16:57:26+05:30
 slug: signals-replaced-setstate
-description: "Why webjs deleted its setState/this.state API and went all-in on TC39 Stage 1 Signals. What it broke, what shipped instead, and the breaking-change recipe."
+description: "Why WebJs deleted its setState/this.state API and went all-in on TC39 Stage 1 Signals. What it broke, what shipped instead, and the breaking-change recipe."
 tags: signals, reactive, breaking-change, components
 author: Vivek
 ---
 
-The most disruptive change to webjs since launch was the signals migration, in commit `6e50ae6` (PR #43). It removed an entire framework-custom API surface. Every component using `this.state` or `this.setState({ ... })` had to be rewritten. I would not normally take a swing this big.
+The most disruptive change to WebJs since launch was the signals migration, in commit `6e50ae6` (PR #43). It removed an entire framework-custom API surface. Every component using `this.state` or `this.setState({ ... })` had to be rewritten. I would not normally take a swing this big.
 
 I did it anyway because the platform is shipping signals, and building a custom reactivity model that we would have to migrate away from later was paying technical debt twice.
 
@@ -39,7 +39,7 @@ const doubled = computed(() => count.get() * 2);
 count.set(count.get() + 1);
 ```
 
-The implementation lives in `packages/core/src/signal.js`. It is a hand-rolled push-pull hybrid that matches the [TC39 Signals proposal](https://github.com/tc39/proposal-signals) Stage 1 shape, including `Signal.subtle.untrack`, `Signal.State`, `Signal.Computed`, and the `Watcher` class. When the proposal lands in browsers, the webjs `signal()` is intended to become a one-line re-export of `globalThis.Signal.State`.
+The implementation lives in `packages/core/src/signal.js`. It is a hand-rolled push-pull hybrid that matches the [TC39 Signals proposal](https://github.com/tc39/proposal-signals) Stage 1 shape, including `Signal.subtle.untrack`, `Signal.State`, `Signal.Computed`, and the `Watcher` class. When the proposal lands in browsers, the WebJs `signal()` is intended to become a one-line re-export of `globalThis.Signal.State`.
 
 The algorithm is what the spec-shaped signal-polyfill uses. Each producer (State or Computed) carries a `version` that bumps when the value actually changes (`Object.is` comparison). Consumers record the version they saw at read time. On the next read, the consumer polls each producer's version: same number means no recompute needed. This is what makes diamond dependencies glitch-free and memoizes the common case where a computed's output is unchanged.
 
@@ -151,6 +151,6 @@ Two things stand out.
 
 The first is that the SignalWatcher trick (auto-subscribe inside render, auto-cleanup on disconnect) was the missing piece that made signals feel as ergonomic as the React-style setState. Without it, every component would have to manually create an effect that calls `requestUpdate`. With it, you just read the signal in render and the framework handles the wiring. That part is at the top of `component.js`'s update path.
 
-The second is that platform-tracking pays. The TC39 proposal was Stage 1 when this work landed. It is still Stage 1. But the shape has not changed in the relevant ways. The signal-polyfill that the proposal authors maintain is what webjs's algorithm mirrors. When the proposal lands in V8, our `signal.js` shrinks to a re-export and every user keeps working.
+The second is that platform-tracking pays. The TC39 proposal was Stage 1 when this work landed. It is still Stage 1. But the shape has not changed in the relevant ways. The signal-polyfill that the proposal authors maintain is what WebJs's algorithm mirrors. When the proposal lands in V8, our `signal.js` shrinks to a re-export and every user keeps working.
 
-The breaking change was worth it. We carry one API now, not two. The agent does not have to model both setState's behavior and signal's behavior, just one. And when someone asks "what is the reactivity primitive in webjs?" the answer is "signals, the TC39 shape." Anyone who has read about the proposal already knows how it works.
+The breaking change was worth it. We carry one API now, not two. The agent does not have to model both setState's behavior and signal's behavior, just one. And when someone asks "what is the reactivity primitive in WebJs?" the answer is "signals, the TC39 shape." Anyone who has read about the proposal already knows how it works.

@@ -39,7 +39,7 @@ I had not planned for this. The 24-hour tombstone-after-unpublish window I knew 
 
 OK, scrap `wjs`. Pick a different short name.
 
-`webjscli` was the obvious next try. It is descriptive ("webjs cli"), matches the scoped `@webjsdev/cli` minus the scope, eight characters. I built the package, tried `npm publish`.
+`webjscli` was the obvious next try. It is descriptive ("WebJs cli"), matches the scoped `@webjsdev/cli` minus the scope, eight characters. I built the package, tried `npm publish`.
 
 ```
 npm error code E403
@@ -51,7 +51,7 @@ Same filter. `webjs-cli` already existed (yet another low-traffic project). The 
 
 # What I tried third
 
-`webjsdev` was the next name on my list. It matches the existing `@webjsdev` npm org (which I already own), reads as "webjs developer," and is far enough from any neighbor that the filter should not block it.
+`webjsdev` was the next name on my list. It matches the existing `@webjsdev` npm org (which I already own), reads as "WebJs developer," and is far enough from any neighbor that the filter should not block it.
 
 It published. Cleanly. Took thirty seconds.
 

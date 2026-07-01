@@ -1,8 +1,8 @@
 ---
-title: "How webjs Ships Zero JavaScript for Display-Only Components"
+title: "How WebJs Ships Zero JavaScript for Display-Only Components"
 date: 2026-07-01T10:00:00+05:30
 slug: ship-zero-javascript-display-only-components
-description: "webjs strips the JavaScript for any component it can prove is display-only, so an islands app ships only its interactive leaves. How the elision analyser works, why it is conservative by construction, and how the invariant is enforced in code."
+description: "WebJs strips the JavaScript for any component it can prove is display-only, so an islands app ships only its interactive leaves. How the elision analyser works, why it is conservative by construction, and how the invariant is enforced in code."
 tags: elision, islands, no-build, performance, web-components
 author: Vivek
 ---
@@ -11,11 +11,11 @@ Write a `<price-tag>` component in webjs. It reads a number, formats it, renders
 
 It is not there. The framework served the component's HTML and then deleted its JavaScript from the page, because it could prove the component does the same thing with or without its script. The browser downloads nothing for it.
 
-This is elision, and it is the mechanism that lets a webjs app ship only its interactive leaves instead of its whole component tree. It landed properly in #474 and I have been sharpening it since. Here is how it works.
+This is elision, and it is the mechanism that lets a WebJs app ship only its interactive leaves instead of its whole component tree. It landed properly in #474 and I have been sharpening it since. Here is how it works.
 
 # The idea
 
-A webjs component is an isomorphic module. It runs on the server to produce SSR HTML, and it runs again in the browser to upgrade the custom element and wire up interactivity. That second run is the only reason the module ships to the client.
+A WebJs component is an isomorphic module. It runs on the server to produce SSR HTML, and it runs again in the browser to upgrade the custom element and wire up interactivity. That second run is the only reason the module ships to the client.
 
 But a lot of components have nothing to do on that second run. A badge, a formatted date, a card, a static icon. Their `render()` produces the same HTML in the browser that it already produced during SSR. Loading the module client-side re-registers the element and re-renders identical output. The download buys you nothing.
 
@@ -75,6 +75,6 @@ The other open question is how aggressive to be about the transitive cases. A co
 
 # The takeaway
 
-Islands architecture usually asks you to mark the islands. webjs inverts that. You write plain components, and the framework proves which ones are display-only and strips their JavaScript, conservatively, verified differentially, and guarded against drift by tests that fail the build. The result is that a mostly-static page ships almost no component code without you thinking about it.
+Islands architecture usually asks you to mark the islands. WebJs inverts that. You write plain components, and the framework proves which ones are display-only and strips their JavaScript, conservatively, verified differentially, and guarded against drift by tests that fail the build. The result is that a mostly-static page ships almost no component code without you thinking about it.
 
 If you are designing a system that decides what to include or exclude automatically, spend your effort on the direction of the failure, not the cleverness of the detection. Make the safe direction the default for everything ambiguous, then write the test that refuses to let the rule rot. The detection can be simple if the failure is always harmless.

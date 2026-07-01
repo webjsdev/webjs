@@ -2,12 +2,12 @@
 title: "File-based routing the Next.js way (because the agent already knows it)"
 date: 2026-01-28T11:30:00+05:30
 slug: file-based-routing
-description: "Why webjs copies Next.js's app-router conventions verbatim, what each file type does, and where webjs's routing diverges."
+description: "Why WebJs copies Next.js's app-router conventions verbatim, what each file type does, and where WebJs's routing diverges."
 tags: routing, conventions, next-js, ai-first
 author: Vivek
 ---
 
-When I was sketching webjs's routing layer, I had two options. Invent something custom. Or copy Next.js's app router, which is the routing model I personally enjoy using.
+When I was sketching WebJs's routing layer, I had two options. Invent something custom. Or copy Next.js's app router, which is the routing model I personally enjoy using.
 
 I went with Next.js. Same `page.ts`, `layout.ts`, `route.ts`, `[param]`, `(group)`, `_private`. Two reasons: it is the shape I want to work in day to day, and it is the shape the agent has already read ten thousand examples of. Reproduce that shape and the agent writes correct code immediately.
 
@@ -96,7 +96,7 @@ Named async functions per HTTP method. Each receives `(Request, { params })`. Ea
 A folder cannot have both `page.js` and `route.js`. The router enforces it at scan time.
 
 
-# How webjs's routing is different from Next.js
+# How WebJs's routing is different from Next.js
 
 A few things are not the same.
 
@@ -106,7 +106,7 @@ Server actions are explicit, file-based. A `*.server.{js,ts}` file with `'use se
 
 WebSockets ride the same route file. If you export `WS(ws, req, { params })` from `route.ts`, the URL becomes a WebSocket endpoint. No separate file type.
 
-No metadata API for fetch caching. webjs uses HTTP `Cache-Control` headers for response caching and the framework's `cache()` function for query memoization. There is no `fetch(...).cache(...)` extension on the global fetch.
+No metadata API for fetch caching. WebJs uses HTTP `Cache-Control` headers for response caching and the framework's `cache()` function for query memoization. There is no `fetch(...).cache(...)` extension on the global fetch.
 
 Streaming uses Suspense directly. Wrap a slow part of your tree in `<Suspense fallback=${...}>`. The framework streams the response, flushes the fallback, then patches in the resolved content when the promise lands. No special exports.
 
