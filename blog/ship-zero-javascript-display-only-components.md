@@ -1,6 +1,6 @@
 ---
 title: "How webjs Ships Zero JavaScript for Display-Only Components"
-date: 2026-07-01T11:00:00+05:30
+date: 2026-07-01T10:00:00+05:30
 slug: ship-zero-javascript-display-only-components
 description: "webjs strips the JavaScript for any component it can prove is display-only, so an islands app ships only its interactive leaves. How the elision analyser works, why it is conservative by construction, and how the invariant is enforced in code."
 tags: elision, islands, no-build, performance, web-components

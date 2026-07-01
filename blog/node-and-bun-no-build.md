@@ -1,6 +1,6 @@
 ---
 title: "Running One Web Framework on Node and Bun Found Five Bugs"
-date: 2026-07-01T18:00:00+05:30
+date: 2026-06-09T10:00:00+05:30
 slug: node-and-bun-no-build
 description: "webjs runs the same buildless source on Node 24+ and Bun. Adding the second runtime meant a runtime-neutral listener seam, two TypeScript strippers, and a parity test matrix that surfaced five genuine Node-versus-Bun divergences."
 tags: bun, node, runtime, no-build, cross-runtime
