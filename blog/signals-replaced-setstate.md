@@ -1,5 +1,5 @@
 ---
-title: "Signals replaced setState across the stack"
+title: "TC39 Signals vs setState in Web Components"
 date: 2026-05-21T16:57:26+05:30
 slug: signals-replaced-setstate
 description: "Why webjs deleted its setState/this.state API and went all-in on TC39 Stage 1 Signals. What it broke, what shipped instead, and the breaking-change recipe."

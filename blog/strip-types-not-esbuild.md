@@ -1,8 +1,8 @@
 ---
-title: "Strip types, not esbuild"
+title: "Buildless TypeScript: Strip Types, Not esbuild"
 date: 2026-01-12T09:30:00+05:30
 slug: strip-types-not-esbuild
-description: "Why webjs switched from esbuild type-stripping to Node 24's built-in module.stripTypeScriptTypes, and what the dev-server cache looks like now."
+description: "Why webjs serves TypeScript by stripping types at runtime with Node 24's built-in module.stripTypeScriptTypes instead of esbuild, and how the buildless dev-server cache works."
 tags: typescript, no-build, runtime, performance
 author: Vivek
 ---

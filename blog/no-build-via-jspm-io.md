@@ -1,5 +1,5 @@
 ---
-title: "Removing the last bundler: vendor packages via jspm.io"
+title: "No-Build npm Packages with Import Maps and jspm"
 date: 2026-05-27T11:00:00+05:30
 slug: no-build-via-jspm-io
 description: "Why webjs replaced its on-the-fly esbuild vendor pipeline with jspm.io direct CDN URLs in the importmap, matching Rails 7's importmap-rails posture. The research notes on esm.sh vs jspm.io, plus the SRI and CSP hardening that fell out."

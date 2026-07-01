@@ -1,8 +1,8 @@
 ---
-title: "Lit-shaped, without depending on lit"
+title: "webjs vs Lit: a Lit-Shaped Runtime Without the Dependency"
 date: 2026-02-08T11:00:00+05:30
 slug: betting-on-lits-mental-model
-description: "Why webjs ships a custom component runtime with a public API that mirrors lit's, what that buys, and what it would have cost to just depend on lit instead."
+description: "webjs ships its own web-component runtime whose public API mirrors Lit (reactive properties, the Lit lifecycle, lit-html directives), so Lit knowledge transfers with no Lit dependency. What that buys and what it costs."
 tags: components, lit-parity, runtime, ssr, ai-first
 author: Vivek
 ---

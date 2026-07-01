@@ -1,8 +1,8 @@
 ---
-title: "Light DOM by default, shadow DOM by choice"
+title: "Light DOM vs Shadow DOM: Why webjs Defaults to Light DOM"
 date: 2025-12-22T10:00:00+05:30
 slug: light-dom-by-default
-description: "Why webjs keeps the platform's light-DOM default for web components: Tailwind classes cascade in, CSS stays cache-friendly, DOM queries work, accessibility behaves, and tests do not need shadow-piercing helpers. Shadow DOM stays available as an opt-in."
+description: "Why webjs keeps the light-DOM default for web components. Tailwind and global CSS cascade in, DOM queries work, accessibility behaves, and tests need no shadow-piercing helpers. Shadow DOM stays an opt-in."
 tags: components, light-dom, shadow-dom, defaults, tailwind, ssr
 author: Vivek
 ---

@@ -1,8 +1,8 @@
 ---
-title: "Introducing webjs: a full-stack framework for the AI era"
+title: "What Is webjs? A No-Build Full-Stack Web Framework"
 date: 2025-12-15T10:00:00+05:30
 slug: why-webjs
-description: "Why I built webjs: a full-stack framework that stays close to web standards while keeping the Next.js-style developer experience I enjoy. Built from scratch, naturally AI-first."
+description: "Why I built webjs, a no-build, web-components-first full-stack framework that stays close to web standards while keeping a Next.js-style developer experience. AI-first from the ground up."
 tags: webjs, origin, frameworks, ai-first, web-components
 author: Vivek
 ---
