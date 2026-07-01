@@ -83,9 +83,9 @@ So the accessibility expectations are encoded where the agent reads them. The ti
 There is one more agent-friendly detail. The variant names, sizes, and data-attribute conventions mirror shadcn/ui. An agent's existing knowledge of shadcn maps directly onto these components, so it reaches for the right API on the first try.
 
 
-# A note on what I did not claim
+# What the defaults do and do not cover
 
-I deliberately did not put a WCAG conformance badge on this post. WCAG (the Web Content Accessibility Guidelines, the standard that defines what "accessible" means on the web) has graded levels, and I found no audit in the repo stating the library hits a specific one, so I am not going to invent a number. What I can say, because I read the source, is that the components are keyboard navigable, screen-reader labelled, and focus-managed by default, and the tier-2 elements follow the published ARIA Authoring Practices patterns. Your own app still has to do its part (real content, real labels, sensible color contrast), and you should test with a keyboard and a screen reader like anyone else. The library gives you a floor that is a long way above blank.
+Accessible out of the box is a floor, not a certification. The library does not come with a WCAG conformance grade (WCAG, the Web Content Accessibility Guidelines, is the standard that defines web accessibility, with graded levels A, AA, and AAA), and no component library can earn that grade for you. What the defaults give you is concrete: keyboard navigation, screen-reader labels, and focus management, with the tier-2 elements following the published ARIA Authoring Practices patterns. The rest is still your app's job, meaning real content, meaningful labels, sensible color contrast, and testing with a keyboard and a screen reader. Starting from these defaults means you begin well above blank instead of retrofitting accessibility after the fact.
 
 
 # The takeaway
