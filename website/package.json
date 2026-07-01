@@ -14,7 +14,7 @@
     "css:build": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify"
   },
   "webjs": {
-    "dev": { "parallel": ["tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch"] },
+    "dev": { "before": ["npm run css:build"], "parallel": ["tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch"] },
     "start": { "before": ["npm run css:build"] }
   },
   "dependencies": {
