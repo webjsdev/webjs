@@ -1,11 +1,13 @@
 ---
-title: "AI-first is plumbing, not a marketing tag"
+title: "What an AI-First Framework Actually Means (It's Plumbing, Not a Marketing Tag)"
 date: 2026-04-18T12:00:00+05:30
 slug: ai-first-is-plumbing
-description: "What 'AI-first' actually means for WebJs: the AGENTS.md contract, the hooks, the lint rules, and the small operational details that make a framework agent-readable."
+description: "What an AI-first framework actually means for WebJs: the AGENTS.md contract, hooks, lint rules, and operational details that make a codebase agent-readable."
 tags: ai-first, agents, conventions, tooling
 author: Vivek
 ---
+
+You have probably watched an AI coding agent produce something that looks right and is quietly wrong: a broken convention, a config it could not have known about, code dropped in the wrong place. "AI-first framework" is the label everyone reaches for as the cure, and most of the time it means nothing at all.
 
 When I say WebJs is AI-first, I do not mean it has an AI-generated landing page or a chat widget on the docs. I mean a list of dull operational decisions, each of which makes the difference between an agent that writes correct code on the first try and one that produces a plausible-looking file in the wrong directory.
 
@@ -13,7 +15,7 @@ Here is the actual list, ordered roughly by how much each thing pays back.
 
 # AGENTS.md (and its siblings)
 
-Every scaffolded WebJs app ships with these files at the root:
+Every scaffolded WebJs app (the starter project `webjs create` generates for you) ships with these files at the root:
 
 ```
 AGENTS.md                                  agent contract (this is the load-bearing one)
@@ -79,7 +81,7 @@ The interesting bit is that the framework ships hooks for multiple agents in the
 
 # WEBJS_PUBLIC_* environment shim
 
-This is a tiny detail but it pays for itself constantly. Variables named `WEBJS_PUBLIC_*` (matching the `NEXT_PUBLIC_*` convention) get injected into the browser as `window.process.env.WEBJS_PUBLIC_X`. The shim is one inline `<script>` in the SSR head.
+This is a tiny detail but it pays for itself constantly. Variables named `WEBJS_PUBLIC_*` (matching the `NEXT_PUBLIC_*` convention) get injected into the browser as `window.process.env.WEBJS_PUBLIC_X`. The shim is one inline `<script>` in the SSR (server-rendered HTML) head.
 
 Why this is AI-first: the agent reading the doc sees the convention name and knows immediately what is browser-safe and what is server-only. The naming scheme is the API. Other variables (`DATABASE_URL`, `AUTH_SECRET`) silently return `undefined` in the browser, so a write of `process.env.DATABASE_URL` from a component fails closed instead of leaking the secret.
 
@@ -89,7 +91,7 @@ Inside AGENTS.md there is a section called `Deliberately deferred`. It lists thi
 
 - Bundling (WebJs is no-build; do not propose `webjs build`)
 - Per-route code splitting (downstream of no-build)
-- Vite-grade HMR with state preservation
+- Vite-grade HMR (hot module replacement) with state preservation
 - React Server Components Flight
 - i18n / image optimization (layer libraries on top)
 

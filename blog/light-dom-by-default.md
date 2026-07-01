@@ -7,7 +7,7 @@ tags: components, light-dom, shadow-dom, defaults, tailwind, ssr
 author: Vivek
 ---
 
-Native web components default to light DOM. If you write a custom element that does not call `this.attachShadow(...)`, there is no shadow root. The element's children are regular DOM. That is what the platform spec gives you out of the box.
+Drop a web component into your page, style it with your usual CSS, and sometimes those styles simply refuse to show up. The usual culprit is shadow DOM (an isolation boundary that seals a component's internals off from the rest of the page), which many component libraries wrap around your markup by default. WebJs goes the other way and defaults to light DOM (the component's rendered output living as ordinary page DOM, with no such boundary). Native web components default to light DOM too. If you write a custom element that does not call `this.attachShadow(...)`, there is no shadow root. The element's children are regular DOM. That is what the platform spec gives you out of the box.
 
 The two libraries most developers and most AI training data treat as canonical for web components picked a different default. lit's [`LitElement` attaches a shadow root](https://lit.dev/docs/components/shadow-dom/) in its constructor unless you override `createRenderRoot()` to return `this`. [Microsoft's FAST automatically attaches a `ShadowRoot`](https://fast.design/docs/1.x/fast-element/working-with-shadow-dom/) and renders the template into it. Because these are the libraries most developers learn from, the perception has shifted: people assume shadow DOM is the web-components default. It is not. It is a library convention that the platform itself does not share.
 

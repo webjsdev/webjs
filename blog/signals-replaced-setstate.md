@@ -7,7 +7,9 @@ tags: signals, reactive, breaking-change, components
 author: Vivek
 ---
 
-The most disruptive change to WebJs since launch was the signals migration, in commit `6e50ae6` (PR #43). It removed an entire framework-custom API surface. Every component using `this.state` or `this.setState({ ... })` had to be rewritten. I would not normally take a swing this big.
+If you have written React, you know the ritual. You call `setState` (or a `useState` setter), and the component re-renders. WebJs used to work the same way, with `this.state` and `this.setState({ ... })`. Then it deleted that whole API and replaced it with signals (wrapped values you read with `.get()` and write with `.set()`, and the UI updates itself). Here is why I made that call, what it broke, and how the migration went.
+
+The most disruptive change to WebJs since launch was that signals migration, in commit `6e50ae6` (PR #43). It removed an entire framework-custom API surface. Every component using `this.state` or `this.setState({ ... })` had to be rewritten. I would not normally take a swing this big.
 
 I did it anyway because the platform is shipping signals, and building a custom reactivity model that we would have to migrate away from later was paying technical debt twice.
 
@@ -39,7 +41,7 @@ const doubled = computed(() => count.get() * 2);
 count.set(count.get() + 1);
 ```
 
-The implementation lives in `packages/core/src/signal.js`. It is a hand-rolled push-pull hybrid that matches the [TC39 Signals proposal](https://github.com/tc39/proposal-signals) Stage 1 shape, including `Signal.subtle.untrack`, `Signal.State`, `Signal.Computed`, and the `Watcher` class. When the proposal lands in browsers, the WebJs `signal()` is intended to become a one-line re-export of `globalThis.Signal.State`.
+The implementation lives in `packages/core/src/signal.js`. It is a hand-rolled push-pull hybrid that matches the [TC39 Signals proposal](https://github.com/tc39/proposal-signals) (TC39 is the committee that standardizes JavaScript) Stage 1 shape, including `Signal.subtle.untrack`, `Signal.State`, `Signal.Computed`, and the `Watcher` class. When the proposal lands in browsers, the WebJs `signal()` is intended to become a one-line re-export of `globalThis.Signal.State`.
 
 The algorithm is what the spec-shaped signal-polyfill uses. Each producer (State or Computed) carries a `version` that bumps when the value actually changes (`Object.is` comparison). Consumers record the version they saw at read time. On the next read, the consumer polls each producer's version: same number means no recompute needed. This is what makes diamond dependencies glitch-free and memoizes the common case where a computed's output is unchanged.
 
@@ -84,7 +86,7 @@ class Counter extends WebComponent {
 
 When `count.set(...)` fires, only the text inside the `<p>` updates. No `render()` invocation, no lifecycle hooks, no diff over the rest of the template. The directive owns a per-part `Signal.subtle.Watcher` that maintains the subscription.
 
-SSR inlines the signal's current value once. Subscription is a client-only concern.
+SSR (server-side rendering) inlines the signal's current value once. Subscription is a client-only concern.
 
 
 # What the migration looked like in the framework's own code

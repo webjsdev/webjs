@@ -2,14 +2,14 @@
 title: "Buildless TypeScript: Strip Types, Not esbuild"
 date: 2026-01-12T09:30:00+05:30
 slug: strip-types-not-esbuild
-description: "Why WebJs serves TypeScript by stripping types at runtime with Node 24's built-in module.stripTypeScriptTypes instead of esbuild, and how the buildless dev-server cache works."
+description: "How WebJs serves buildless TypeScript by stripping types at runtime with Node 24's module.stripTypeScriptTypes instead of esbuild, with no sourcemaps needed."
 tags: typescript, no-build, runtime, performance
 author: Vivek
 ---
 
-For the early months of WebJs, every `.ts` file in your project went through esbuild before it reached the browser. esbuild is fast (about 1ms per file on warm cache), and we ran it as an ESM loader hook so the server-side and the client-bound transforms shared one code path. It worked.
+You write a `.ts` file, and it runs. No build step, no bundler warming up, no generated output to chase when a stack trace lands somewhere you did not write. That is what a WebJs app feels like today, and it took some work to get here. For the early months of WebJs, every `.ts` file in your project went through esbuild (a fast JavaScript and TypeScript build tool) before it reached the browser. esbuild is fast (about 1ms per file on warm cache), and we ran it as an ESM loader hook so the server-side and the client-bound transforms shared one code path. It worked.
 
-It worked, but it produced sourcemaps. And the sourcemaps were the thing that kept biting me.
+It worked, but it produced sourcemaps (files that map the generated code back to the source you wrote). And the sourcemaps were the thing that kept biting me.
 
 
 # What the sourcemap layer cost
@@ -68,7 +68,7 @@ A few things got simpler once we stopped emitting sourcemaps.
 
 The HTTP layer no longer had to negotiate content types or worry about source-content delivery. Every `.ts` response is just JS bytes with the type annotations whitespace-erased.
 
-The 103 Early Hints flow got cleaner. We emit `<link rel="modulepreload">` headers before SSR begins. The preload references the canonical URL with the `.ts` extension. The browser fetches that URL, gets stripped JS back, runs it. No content-type fight.
+The 103 Early Hints flow got cleaner. We emit `<link rel="modulepreload">` headers before SSR (server-side rendering) begins. The preload references the canonical URL with the `.ts` extension. The browser fetches that URL, gets stripped JS back, runs it. No content-type fight.
 
 The dev-mode live reload got cheaper. The watcher signals "file changed at this path." The cache evicts that entry by mtime mismatch. The next browser fetch returns the freshly-stripped output. Total work per change: stat the file, strip the bytes, write to the cache.
 

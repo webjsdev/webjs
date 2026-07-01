@@ -1,11 +1,13 @@
 ---
-title: "File-based routing the Next.js way (because the agent already knows it)"
+title: "File-based routing the Next.js way, built for AI coding agents"
 date: 2026-01-28T11:30:00+05:30
 slug: file-based-routing
-description: "Why WebJs copies Next.js's app-router conventions verbatim, what each file type does, and where WebJs's routing diverges."
+description: "File-based routing in WebJs copies Next.js app-router conventions verbatim: page, layout, route, and dynamic params, plus where WebJs diverges from it."
 tags: routing, conventions, next-js, ai-first
 author: Vivek
 ---
+
+Here is the good news up front. If you have ever built a page in Next.js, you already know how to build one in WebJs, because the folders in your app/ directory are your URLs. This is file-based routing (your folder layout defines your routes, with no separate route config to maintain), and WebJs copies the Next.js version of it almost verbatim.
 
 When I was sketching WebJs's routing layer, I had two options. Invent something custom. Or copy Next.js's app router, which is the routing model I personally enjoy using.
 
@@ -100,9 +102,9 @@ A folder cannot have both `page.js` and `route.js`. The router enforces it at sc
 
 A few things are not the same.
 
-No server components vs. client components split. Pages and components are not divided into "RSC" and "client" categories. A page is server-only (returns HTML). A component is universal (renders identically server-side for first paint and client-side for hydration). There is no `"use client"` directive.
+No server components vs. client components split. Pages and components are not divided into "RSC" (React Server Components) and "client" categories. A page is server-only (returns HTML). A component is universal (renders identically server-side for first paint and client-side for hydration). There is no `"use client"` directive.
 
-Server actions are explicit, file-based. A `*.server.{js,ts}` file with `'use server'` exports functions that the browser imports as RPC stubs. The dev server rewrites the import. The split is path-level (the `.server.` infix is the boundary) and directive-level (the `'use server'` makes exports RPC-callable).
+Server actions are explicit, file-based. A `*.server.{js,ts}` file with `'use server'` exports functions that the browser imports as RPC stubs (client-side proxies that call the server function over the network). The dev server rewrites the import. The split is path-level (the `.server.` infix is the boundary) and directive-level (the `'use server'` makes exports RPC-callable).
 
 WebSockets ride the same route file. If you export `WS(ws, req, { params })` from `route.ts`, the URL becomes a WebSocket endpoint. No separate file type.
 

@@ -2,16 +2,16 @@
 title: "No-Build npm Packages with Import Maps and jspm"
 date: 2026-05-27T11:00:00+05:30
 slug: no-build-via-jspm-io
-description: "Why WebJs replaced its on-the-fly esbuild vendor pipeline with jspm.io direct CDN URLs in the importmap, matching Rails 7's importmap-rails posture. The research notes on esm.sh vs jspm.io, plus the SRI and CSP hardening that fell out."
+description: "How WebJs loads no-build npm packages by putting jspm.io CDN URLs directly in the import map, no esbuild bundler, matching Rails 7's importmap-rails, plus the SRI and CSP hardening that fell out."
 tags: no-build, importmap, jspm, vendor, csp, sri
 author: Vivek
 ---
 
-The earlier post on stripping types removed the build step for user code. The dev server picks up your `.ts` file, runs `module.stripTypeScriptTypes`, and serves the result. Stack traces line up with the source on disk. No sourcemap layer. That covered every file under `app/`, `components/`, `modules/`, and `lib/`.
+WebJs makes one big promise. No build step. The `.ts` files you write are the files that run, with nothing compiling them in between. The earlier post on stripping types is where that promise started for user code. The dev server picks up your `.ts` file, runs `module.stripTypeScriptTypes`, and serves the result. Stack traces line up with the source on disk. No sourcemap layer. That covered every file under `app/`, `components/`, `modules/`, and `lib/`.
 
 It did not cover npm packages.
 
-For a long stretch, every `import x from 'pkg'` in a client file went through an on-the-fly esbuild bundle. The server scanned bare imports at boot, resolved each to a node_modules entry, ran esbuild over the resulting graph, and cached the bundle under `/__webjs/vendor/<hash>.js`. The browser fetched the bundle and ran it. From the user's perspective the import "just worked." From the framework's perspective there was still a bundler hidden inside the server.
+For a long stretch, every `import x from 'pkg'` in a client file went through an on-the-fly esbuild bundle (esbuild is a fast JavaScript bundler). The server scanned bare imports (an import by package name like `dayjs`, not a file path) at boot, resolved each to a node_modules entry, ran esbuild over the resulting graph, and cached the bundle under `/__webjs/vendor/<hash>.js`. The browser fetched the bundle and ran it. From the user's perspective the import "just worked." From the framework's perspective there was still a bundler hidden inside the server.
 
 It worked. It was fast (esbuild does 10MB/s). But the framework was no longer no-build. It was no-build-for-your-code-but-secretly-bundles-vendor. Every blog post about WebJs being no-build had a footnote in my head.
 
@@ -23,11 +23,11 @@ Three options were on the table when I started.
 
 **Keep on-the-fly esbuild.** Familiar. Already worked. But it conceded the no-build claim and kept esbuild as a runtime dependency, which is a 30MB native binary that has to match the server's CPU architecture and Node ABI. Every CI matrix and every deploy target had to ship the right esbuild for the platform.
 
-**Switch to esm.sh.** I started here because esm.sh is the obvious "free CDN that serves npm as ESM" answer when you type the question into a search box. The shape is similar to what I wanted. You write a URL like `https://esm.sh/dayjs@1.11.13` and the browser fetches a working ESM module.
+**Switch to esm.sh.** I started here because esm.sh is the obvious "free CDN that serves npm as ESM" answer (ESM is the native JavaScript module format browsers load directly) when you type the question into a search box. The shape is similar to what I wanted. You write a URL like `https://esm.sh/dayjs@1.11.13` and the browser fetches a working ESM module.
 
 The problem is that esm.sh builds packages on the fly. When your browser hits a URL it has not seen before, esm.sh's server pulls the package from npm, runs its own build pipeline, and streams the result back. The output is cached for subsequent requests, but the first hit is a build. This shows up as latency spikes, and more visibly as availability incidents. esm.sh has had multiple production-visible outages over its lifetime. The maintainers post recovery notes on GitHub and Twitter when they happen. The combination of "build on the fly" + "free service" + "one maintainer" is real, and the incidents are public.
 
-**Switch to jspm.io.** jspm.io pre-builds every npm package and parks the result on its CDN. There is no on-the-fly anything at request time. When the browser fetches `https://ga.jspm.io/npm:dayjs@1.11.13/dayjs.min.js`, the bytes are already on disk at the edge. Zero reported incidents in years. Zero maintenance downtime. The maintainer is Guy Bedford, a TC39 member who championed import maps and contributed to the HTML spec for ESM. Rails 7's `importmap-rails` uses jspm.io for the same reason: it is the boring, battle-tested choice.
+**Switch to jspm.io.** jspm.io pre-builds every npm package and parks the result on its CDN. There is no on-the-fly anything at request time. When the browser fetches `https://ga.jspm.io/npm:dayjs@1.11.13/dayjs.min.js`, the bytes are already on disk at the edge. Zero reported incidents in years. Zero maintenance downtime. The maintainer is Guy Bedford, a TC39 member (TC39 is the committee that standardizes JavaScript) who championed import maps (the browser-native map from a bare package name to a URL) and contributed to the HTML spec for ESM. Rails 7's `importmap-rails` uses jspm.io for the same reason: it is the boring, battle-tested choice.
 
 I went with jspm.io.
 
@@ -66,7 +66,7 @@ Pin is intentionally manual. There is no auto-pin in `predev` or `prestart` beca
 
 # `webjs vendor pin --download` for air-gapped deploys
 
-Some deploys cannot reach a third-party CDN at runtime. Compliance-locked environments, air-gapped corporate networks, or strict-CSP setups with `script-src 'self'` only. For those, the `--download` flag also pulls the bundle bytes to `.webjs/vendor/<pkg>@<version>.js` and rewrites the importmap to local `/__webjs/vendor/` paths.
+Some deploys cannot reach a third-party CDN at runtime. Compliance-locked environments, air-gapped corporate networks, or strict-CSP setups (Content Security Policy, the browser rules for which scripts are allowed to run) with `script-src 'self'` only. For those, the `--download` flag also pulls the bundle bytes to `.webjs/vendor/<pkg>@<version>.js` and rewrites the importmap to local `/__webjs/vendor/` paths.
 
 ```sh
 $ webjs vendor pin --download
@@ -80,7 +80,7 @@ The bundle files go in git alongside the pin manifest. At runtime the server ser
 
 # SHA-384 integrity end-to-end
 
-Once the resolution is committed, the SRI story falls into place. Both pin modes compute a `sha384-<base64>` integrity hash for every URL the importmap emits. In default mode the hash is computed by fetching the jspm.io URL once at pin time and hashing the raw response bytes. In `--download` mode the hash is computed from the downloaded bundle, which is also what the browser later fetches from `/__webjs/vendor/`.
+Once the resolution is committed, the SRI story (Subresource Integrity, the browser check that a downloaded file matches an expected hash) falls into place. Both pin modes compute a `sha384-<base64>` integrity hash for every URL the importmap emits. In default mode the hash is computed by fetching the jspm.io URL once at pin time and hashing the raw response bytes. In `--download` mode the hash is computed from the downloaded bundle, which is also what the browser later fetches from `/__webjs/vendor/`.
 
 Hashes land in three places:
 

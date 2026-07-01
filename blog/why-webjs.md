@@ -2,14 +2,14 @@
 title: "What Is WebJs? A No-Build Full-Stack Web Framework"
 date: 2025-12-15T10:00:00+05:30
 slug: why-webjs
-description: "Why I built WebJs, a no-build, web-components-first full-stack framework that stays close to web standards while keeping a Next.js-style developer experience. AI-first from the ground up."
+description: "WebJs is a no-build, web-components-first full-stack framework that stays close to web standards, with a Next.js-style developer experience. AI-first."
 tags: webjs, origin, frameworks, ai-first, web-components
 author: Vivek
 ---
 
-I wanted a full-stack framework that stayed close to web standards. The kind where the things you learn carry over to the platform, where the source you read in `node_modules` is the source that runs, where there is no mystery layer of compiled output between you and the runtime.
+Most web frameworks put a compile step between you and the browser, so the code you read is not the code that runs, and every few years you relearn a new proprietary runtime. I wanted the opposite. I wanted a full-stack framework that stayed close to web standards. The kind where the things you learn carry over to the platform, where the source you read in `node_modules` is the source that runs, where there is no mystery layer of compiled output between you and the runtime.
 
-I also wanted the developer experience I enjoy in Next.js. File-based routing. Server actions importable from the client. SSR that just works. Sensible defaults. The good parts of the Rails-style "you do not need to make 30 decisions before your first feature."
+I also wanted the developer experience I enjoy in Next.js. File-based routing. Server actions importable from the client. SSR (server-side rendering) that just works. Sensible defaults. The good parts of the Rails-style "you do not need to make 30 decisions before your first feature."
 
 I tried to find one that hit both. I did not find one I personally enjoyed using. So I built one for myself.
 
@@ -32,7 +32,7 @@ By leaning on the platform, the framework code stays small. The full WebJs frame
 The features are comparable. WebJs ships:
 
 - File-based routing (`page.ts`, `layout.ts`, `route.ts`, `[param]`, `(group)`, `_private`, the full Next.js app-router shape)
-- Server actions with full type safety across the network boundary (a `.server.ts` file with `'use server'`, imported from client code, gets rewritten to a typed RPC stub at request time)
+- Server actions with full type safety across the network boundary (a `.server.ts` file with `'use server'`, imported from client code, gets rewritten to a typed RPC stub, a remote-procedure-call proxy, at request time)
 - SSR with streaming Suspense boundaries
 - Client router that preserves layout DOM across navigations (no white flash)
 - Built-in auth, sessions, cookies, cache, and rate limiting, all sharing one pluggable store

@@ -7,7 +7,7 @@ tags: components, lit-parity, runtime, ssr, ai-first
 author: Vivek
 ---
 
-The most-asked question I get about WebJs is some version of "if you wanted lit's API, why didn't you just use lit?"
+Lit (a popular library for building web components) has an API that a lot of developers already know by heart. So the most-asked question I get about WebJs is some version of "if you wanted lit's API, why didn't you just use lit?"
 
 It is a reasonable question. The WebJs `WebComponent` class has reactive properties, `render() { return html\`\` }`, `ReactiveController`, the full directive set. It looks like lit. The minimal version of "just use lit" would be:
 
@@ -47,13 +47,13 @@ So WebJs picked off the exact API surface that an agent recognizes:
 
 Four reasons, in order of how load-bearing each one is.
 
-## 1. SSR
+## 1. SSR (server-side rendering)
 
 lit-ssr exists. It is a separate package (`@lit-labs/ssr`) that takes a lit template and renders it to an HTML string. It works for most cases and the lit team maintains it.
 
 But it has structural limits that matter for WebJs:
 
-- **It does not share a code path with the client.** lit-ssr's renderer is a separate implementation that processes the same `html\`\`` templates. There is duplication, and in edge cases the server-side output and the client-side hydration disagree.
+- **It does not share a code path with the client.** lit-ssr's renderer is a separate implementation that processes the same `html\`\`` templates. There is duplication, and in edge cases the server-side output and the client-side hydration (the browser wiring up interactivity on the server-rendered HTML) disagree.
 
 - **It does not handle light-DOM `<slot>` projection.** lit-ssr renders shadow-DOM `<slot>` correctly via Declarative Shadow DOM. Light-DOM `<slot>` projection (where the framework manually inserts projected children into the host's slot markers) is not part of lit's model. WebJs wanted this to be a first-class feature ([its own blog post here](/blog/light-dom-slots-with-full-parity)).
 
