@@ -2,7 +2,7 @@
 title: "No-Build Frontend Performance: Flattening the CDN Waterfall"
 date: 2026-06-06T16:00:00+05:30
 slug: no-build-frontend-performance
-description: "A no-build framework serves modules over the network instead of bundling them, which risks a request waterfall. How WebJs keeps it fast with modulepreload over the reached vendor graph, HTTP/2 multiplexing, and a lean listener path."
+description: "A no-build framework serves modules instead of bundling them, which risks a request waterfall. How WebJs stays fast with modulepreload over the vendor graph and HTTP/2."
 tags: no-build, performance, modulepreload, importmap, http2
 author: Vivek
 ---

@@ -2,7 +2,7 @@
 title: "A Web Framework That Works Without JavaScript"
 date: 2026-06-23T10:00:00+05:30
 slug: works-without-javascript
-description: "In WebJs, progressive enhancement is the default architecture, not a feature you fight for. Pages SSR and never hydrate, forms submit through server actions with JavaScript off, and interactivity is opt-in per behavior. How that works and why it is the floor."
+description: "In WebJs, progressive enhancement is the default architecture. Pages SSR and never hydrate, forms submit through server actions with JS off, and interactivity is opt-in."
 tags: progressive-enhancement, ssr, forms, server-actions, accessibility
 author: Vivek
 ---

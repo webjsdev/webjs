@@ -2,7 +2,7 @@
 title: "Server-Side Caching for Beginners (ETags, Tags, and 304s)"
 date: 2026-06-25T11:00:00+05:30
 slug: server-side-caching-explained
-description: "A beginner-friendly guide to server-side caching in webjs: HTTP Cache-Control, the cache() query helper, tag-based cache invalidation, conditional GET with ETags and HTTP 304 Not Modified, and the export const revalidate HTML cache. Plus the safety rule for per-user data."
+description: "A beginner guide to server-side caching in WebJs. Learn HTTP Cache-Control, the cache() helper, tag-based invalidation, and conditional GET with ETags and 304s."
 tags: caching, performance, etag, http, no-build
 author: Vivek
 ---

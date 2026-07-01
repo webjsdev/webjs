@@ -1,8 +1,8 @@
 ---
-title: "GET Is a Server Action Too: Cacheable Actions with ETags"
+title: "Cacheable Server Actions With GET, ETags, and 304s"
 date: 2026-06-13T11:00:00+05:30
 slug: get-server-actions-caching
-description: "In WebJs a server action can declare its HTTP verb. A GET action rides its args in the URL, is CSRF-exempt, carries Cache-Control and a weak ETag, and answers 304. Why a framework with no RSC split needs verb-aware actions and how it works."
+description: "Make a server action cacheable in WebJs by declaring it a GET. Args ride the URL, it is CSRF-exempt, and a weak ETag answers 304 so repeat reads are nearly free."
 tags: server-actions, caching, etag, http, rpc
 author: Vivek
 ---

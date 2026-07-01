@@ -2,7 +2,7 @@
 title: "Accessible Web Components Out of the Box"
 date: 2026-06-20T10:00:00+05:30
 slug: accessible-web-components-by-default
-description: "How WebJs ships accessible web components by default through @webjsdev/ui. An a11y-by-default component library where keyboard navigation, screen-reader labels, and focus management come wired in, plus accessibility contracts AI agents read so their edits do not silently break your WCAG-aligned UI."
+description: "How @webjsdev/ui ships accessible web components by default, with keyboard navigation, screen-reader labels, and focus management wired in from the start."
 tags: accessibility, a11y, web-components, ui, wcag
 author: Vivek
 ---
