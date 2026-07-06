@@ -850,6 +850,52 @@ export async function login() {
   }
 });
 
+// #809: the rule previously only saw a NAMED `import { redirect }`. A namespace
+// import + member call (`import * as core; core.redirect(...)`) reaches the same
+// uncaught-500 sentinel and must be flagged too.
+test('no-redirect-in-api-route: flags a namespace `core.redirect()` in route.ts (#809)', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app', 'api', 'ns'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', 'api', 'ns', 'route.ts'),
+      `import * as core from '@webjsdev/core';
+export async function GET() {
+  core.redirect('https://example.com');
+}
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
+    assert.ok(v, 'a namespace member call core.redirect() in a route must be flagged');
+    assert.ok(v.file.includes('ns/route.ts'), 'names the offending route file');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+// The counterpart: a namespace import whose `redirect` is never called must NOT
+// be flagged (proves the member-call matcher, not the mere import, drives it).
+test('no-redirect-in-api-route: a namespace import without a redirect call is NOT flagged (#809)', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app', 'api', 'ns2'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', 'api', 'ns2', 'route.ts'),
+      `import * as core from '@webjsdev/core';
+export async function GET() {
+  return core.json({ ok: true });
+}
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
+    assert.equal(v, undefined, 'a namespace import that never calls redirect must not be flagged');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 
 test('shell-in-non-root-layout: passes when root layout owns the shell', async () => {
   const appDir = await makeTempApp();
