@@ -667,6 +667,7 @@ function tune<T extends { exec(sql: string): unknown }>(client: T): T {
 
 async function open() {
   if ((globalThis as { Bun?: unknown }).Bun) {
+    // @ts-expect-error bun:sqlite is a Bun builtin with no Node typings
     const { Database } = await import('bun:sqlite');
     const { drizzle } = await import('drizzle-orm/bun-sqlite');
     return drizzle({ client: tune(new Database(url)), relations: schema.relations });

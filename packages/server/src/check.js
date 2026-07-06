@@ -82,7 +82,7 @@ export const RULES = [
   {
     name: 'reactive-props-no-class-field',
     description:
-      'A reactive property declared via the `extends WebComponent({ … })` factory must NOT also have a plain class-field initializer (`count = 0` or `count: number = 0`) in the class body. Under modern class-field semantics that initializer runs Object.defineProperty *after* super(), clobbering the framework\'s reactive accessor and silently breaking re-renders. Set the default by assigning in the constructor after super().',
+      'A reactive property declared via the `extends WebComponent({ … })` factory must NOT also have a plain class-field declaration (`count = 0`, `count: number = 0`, `count!: number`, or `count?: number`) in the class body. Under modern class-field semantics (including `erasableSyntaxOnly: true`) every class-field declaration compiles to Object.defineProperty *after* super(), clobbering the framework\'s reactive accessor and silently breaking re-renders. Set the default by assigning in the constructor after super().',
   },
   {
     name: 'array-prop-uses-array-type',
@@ -133,6 +133,11 @@ export const RULES = [
     name: 'no-scaffold-placeholder',
     description:
       'The one sentinel-based check, and the deliberate exception to the "objectively broken code" framing of the other rules: it flags scaffold example content that has not been replaced, so a delivered app contains only what the user intended and never leftover scaffold code. `webjs create` marks its example/demo files (the example homepage in app/page.ts, the example app chrome in app/layout.ts) with a one-line marker comment carrying the literal token `webjs-scaffold-placeholder`. The rule scans raw source (the marker lives in a comment, which the redacted scan view would hide) and fails for every file that still carries the token. A freshly scaffolded app fails this rule BY DESIGN until its placeholders are addressed: replace the example content, or deliberately keep it, and in either case delete the marker line. No finished app legitimately ships a literal remove-me marker, so this still qualifies as a check rather than a convention. The marker is acknowledge-and-remove, so keeping a piece is a one-line deletion rather than a forced rewrite.',
+  },
+  {
+    name: 'no-redirect-in-api-route',
+    description:
+      'API route handlers (`route.{js,ts}`) must NOT call `redirect()` from `@webjsdev/core`. That function throws a control-flow signal designed for the SSR page renderer; in a route handler it goes uncaught and produces a 500. Use `Response.redirect(url, 303)` for external redirects or return a 3xx Response directly. Page functions, layouts, and server actions may still use `redirect()` (caught by the SSR pipeline).',
   },
 ];
 
@@ -268,12 +273,20 @@ function findFieldInitializers(classBody, props) {
       let j = lineStart;
       while (j < classBody.length && classBody[j] !== '\n') j++;
       const line = classBody.slice(lineStart, j);
-      // Match: optional whitespace, optional `public/private/protected/readonly`,
-      // an identifier, optional `: <type>`, then `=`.
-      const fieldRe = /^\s*(?:(public|private|protected|readonly)\s+)?([A-Za-z_$][\w$]*)\s*(?::\s*[^=;]+)?\s*=\s*[^=>]/;
-      const m = fieldRe.exec(line);
-      if (m) {
-        const name = m[2];
+      // Match class-field declarations. Two shapes:
+      // 1. With initializer: `count = 0`, `count: number = 0`, `public count = 0`
+      // 2. Type-only (no initializer): `count!: number`, `count?: number`, `count: number`
+      // Both compile to Object.defineProperty after super() under modern class-field
+      // semantics, clobbering the reactive accessor.
+      // The initializer regex: optional modifier, identifier, optional type, then `=`.
+      const initRe = /^\s*(?:(public|private|protected|readonly)\s+)?([A-Za-z_$][\w$]*)\s*(?::\s*[^=;]+)?\s*=\s*[^=>]/;
+      // The type-only regex: optional modifier, identifier, then `!:` or `?:` or `:` with a type.
+      const typeOnlyRe = /^\s*(?:(public|private|protected|readonly)\s+)?([A-Za-z_$][\w$]*)\s*[!?]?\s*:\s*\S/;
+      const initM = initRe.exec(line);
+      const typeM = typeOnlyRe.exec(line);
+      // Prefer the initializer match; if neither, skip.
+      const name = initM ? initM[2] : (typeM ? typeM[2] : null);
+      if (name) {
         // `declare`, `static`, and `this.` patterns shouldn't reach here
         // (declare/static start with their keyword, this.x has the dot in
         // the regex group), but guard against matching keywords as names:
@@ -459,8 +472,11 @@ export async function checkConventions(appDir) {
 
   // --- Rule: reactive-props-no-class-field ---
   // A reactive property declared via the factory must not also carry a plain
-  // class-field initializer: it runs Object.defineProperty after super() and
-  // clobbers the framework's reactive accessor (silent broken re-renders).
+  // class-field declaration (initializer OR type-only): under modern class-field
+  // semantics (including `erasableSyntaxOnly: true`) every class-field declaration
+  // compiles to Object.defineProperty after super() and clobbers the framework's
+  // reactive accessor (silent broken re-renders). Catches `count = 0`,
+  // `count: number = 0`, `count!: number`, and `count?: number`.
   {
     for (const { rel, scan } of files) {
       if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
@@ -470,8 +486,8 @@ export async function checkConventions(appDir) {
           violations.push({
             rule: 'reactive-props-no-class-field',
             file: rel,
-            message: `Reactive prop \`${bad}\` uses a class-field initializer; this clobbers the framework's reactive accessor under modern class-field semantics.`,
-            fix: `Remove the class-field initializer and set the default by assigning \`this.${bad} = <value>\` inside \`constructor()\` after \`super()\`.`,
+            message: `Reactive prop \`${bad}\` uses a class-field declaration (initializer or type-only); this clobbers the framework's reactive accessor under modern class-field semantics.`,
+            fix: `Delete the class-field declaration and set the default by assigning \`this.${bad} = <value>\` inside \`constructor()\` after \`super()\`.`,
           });
         }
       }
@@ -554,6 +570,44 @@ export async function checkConventions(appDir) {
           'Scaffold placeholder marker still present. This file is unmodified example content from `webjs create`, and the delivered app should contain only what the user intended, not leftover scaffold code.',
         fix: `Replace the example content (or deliberately keep it), then delete the marker comment line carrying the ${MARKER} token.`,
       });
+    }
+  }
+
+  // --- Rule: no-redirect-in-api-route ---
+  // `redirect()` from `@webjsdev/core` throws a control-flow signal designed
+  // for the SSR page renderer. In a `route.ts` API handler it goes uncaught
+  // and produces a 500. API handlers must use `Response.redirect(url, 303)`
+  // instead. Page functions, layouts, and server actions may still use
+  // `redirect()` (caught by the SSR / action pipeline).
+  {
+    const ROUTE_FILE = /(?:^|\/)route\.m?[jt]s$/;
+    for (const { rel, scan } of files) {
+      if (!ROUTE_FILE.test(rel)) continue;
+      // Import of `redirect` from `@webjsdev/core` (named or aliased).
+      // We look for the imported name being CALLED (not `Response.redirect`).
+      // Patterns: `import { redirect }`, `import { redirect as r }`,
+      // `import { ..., redirect, ... }`.
+      const importM = /\bimport\s+\{[^}]*\bredirect\b(?:\s+as\s+(\w+))?\s*[^}]*\}\s+from\s+['"]@webjsdev\/core['"]/.exec(scan);
+      if (!importM) continue;
+      const localName = importM[1] || 'redirect';
+      // Find calls to the local name that are NOT `Response.redirect` / `res.redirect`.
+      // A bare `redirect(` call (possibly preceded by `throw ` or `return `) is the
+      // framework sentinel. `Response.redirect(` is the standard API and is fine.
+      const callRe = new RegExp(`(?<!\\.)\\b${localName}\\s*\\(`, 'g');
+      let m;
+      while ((m = callRe.exec(scan)) !== null) {
+        // Make sure it's not `Response.redirect(` or `someObj.redirect(`.
+        const before = scan.slice(Math.max(0, m.index - 20), m.index);
+        if (/\w\.$/.test(before)) continue; // method call on an object, not the import
+        violations.push({
+          rule: 'no-redirect-in-api-route',
+          file: rel,
+          message:
+            `\`redirect()\` from \`@webjsdev/core\` throws a control-flow signal for the SSR page renderer; in a \`route.ts\` handler it goes uncaught and returns a 500.`,
+          fix: `Use \`Response.redirect(url, 303)\` for external redirects, or return a 3xx Response directly. The \`redirect()\` sentinel is only valid in page functions, layouts, and server actions (where the SSR pipeline catches it).`,
+        });
+        break; // one violation per file is enough
+      }
     }
   }
 
