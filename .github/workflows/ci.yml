@@ -257,6 +257,14 @@ jobs:
         env:
           WEBJS_E2E: '1'
         run: node --test test/e2e/e2e.test.mjs
+      # Browser-test harness (#806): spawns real wtr with the shipped scaffold
+      # config against a fixture app whose browser test imports a real .ts
+      # component that imports a 'use server' action, and asserts it loads in
+      # Chromium. Verifies webjs test --browser end to end.
+      - name: Run browser-harness e2e (#806)
+        env:
+          WEBJS_E2E: '1'
+        run: node --test test/e2e/browser-harness.test.mjs
       # Touch-emulation e2e for interactive Tier-2 ui components (#745/#747):
       # boots the ui-website and taps hover-card / dropdown-submenu / sonner
       # under a Chromium iPhone context (faithful touch events, no real device).

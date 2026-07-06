@@ -56,6 +56,10 @@ export default {
     // It runs via `npm run test:browser:blog` (separate orchestrator),
     // not the default `wtr` run.
     '!test/examples/blog/browser/**/*.test.js',
+    // The browser-test-harness fixture (#806) is run by its OWN scaffold config
+    // (via `wtr --config` in test/e2e/browser-harness.test.mjs), NOT this root
+    // config, since it exercises the harness middleware + importmap.
+    '!test/e2e/fixtures/**/*.test.js',
   ],
   nodeResolve: true,
   plugins: [stripTypesPlugin()],
