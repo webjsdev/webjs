@@ -198,7 +198,7 @@ The bare `@webjsdev/core` specifier resolves to a BROWSER bundle dropping server
 | `<webjs-suspense .fallback=${html\`…\`}>` | Component-level streaming boundary element (#471): wraps one or more components, flushes `.fallback` on the first byte, streams the resolved content in (concurrently across boundaries, progressively on soft nav). The renderer-recognized opt-in for SLOW async-render data. |
 | `connectWS(url, handlers)` / `richFetch<T>` | Client WebSocket (auto-reconnect, queued sends); content-negotiated rich-type fetch. |
 | `navigate(url, opts?)` / `revalidate(url?)` | Programmatic client-router nav; evict the BROWSER snapshot cache. |
-| `optimistic(signal, value, action)` / `optimistic(host, options)` | Set `signal` immediately, run `action`, roll back on error or `{ success: false }`. Declarative form: `optimistic(host, { source, update })` returns `OptimisticState` with `.value` getter and `.add(payload, promise?)` for React 19 `useOptimistic` parity. |
+| `optimistic(signal, value, action)` / `optimistic(host, { source, update })` | Imperative: set `signal` immediately, run `action`, roll back on error. Declarative (preferred): queue optimistic updates with auto-release via `.add(payload, promise?)`. See `agent-docs/advanced.md`. |
 | `renderStream(payload)` / `WebjsFrame` | `<webjs-stream>` element-level updates (#248); `<webjs-frame>` partial-swap regions (#253). See `agent-docs/advanced.md`. |
 | `Metadata` / `PageProps<R>` / `LayoutProps<R>` / `RouteHandlerContext<R>` / `WebjsConfig` (type-only) | Types for metadata, page/layout/route args (`R` narrows `params` against the `webjs types` route union), and the `webjs` config block. See `agent-docs/metadata.md` + `agent-docs/configuration.md`. |
 
@@ -331,6 +331,83 @@ type ActionResult<T> =
 The router auto-enables when `@webjsdev/core` loads (any page with a component), so there is nothing to opt INTO. An app that wants plain full-page (MPA) navigation can opt OUT app-wide with `{ "webjs": { "clientRouter": false } }` (#629), or per-moment at runtime with `disableClientRouter()`. Nested layouts auto-emit `<!--wj:children:<segment-path>-->` markers; the client router walks both DOMs and replaces only the deepest shared layout's children slot, preserving outer-layout DOM identity. Form submissions ride the same pipeline (`data-no-router` opts out). Wire bytes are minimized via the `X-Webjs-Have` header (the server returns only the divergent fragment); scroll is restored on back/forward. A non-GET `<form>` whose target page exports an `action` is the no-JS write-path (with JS the router applies the response in place: a `422` swaps without reload, a `303` is followed via fetch). A failed navigation recovers in place (a cancelable `webjs:navigation-error` event, else a minimal in-place alert), never a destructive full reload.
 
 The advanced client-router surface is in `agent-docs/advanced.md`: **link prefetch** (on by default, device-adaptive default: `intent` on a hover pointer, `viewport` (dwell-gated, cancel-on-scroll-out) on touch, per-link `data-prefetch` override), **`<webjs-frame>`** partial-swap regions, **View Transitions** (opt-in via `<meta name="view-transition">`, plus `data-webjs-permanent` to persist a live element), **stream actions** (`<webjs-stream>` element-level updates, #248), and the **opt-in nav-loading indicator** (`<html data-webjs-nav-progress>` exposes a `data-navigating` attribute during a nav so you can style a CSS-only progress affordance, off by default because toggling a root attribute re-resolves `oklch()` tokens to a one-frame repaint flash on iOS WebKit, #610). Production benefits from HTTP/2 at the edge; `npm run start` speaks plain HTTP/1.1 (put a reverse proxy in front for TLS + HTTP/2).
+
+---
+
+## Mutations: default to optimistic UI
+
+**Use `optimistic()` from `@webjsdev/core` for every user-facing mutation** (create, update, delete, like, toggle, reorder) where the client can predict the result. The UI should feel instant; roll back automatically on failure.
+
+### Preferred: declarative API
+
+```ts
+import { WebComponent, prop, optimistic, html } from '@webjsdev/core';
+import { createTodo } from '#modules/todos/actions/create-todo.server.ts';
+
+class TodoList extends WebComponent({
+  todos: prop<Todo[]>(Array),
+}) {
+  private optimisticTodos = optimistic(this, {
+    source: () => this.todos,
+    update: (state, title: string) => [
+      ...state,
+      { id: crypto.randomUUID() as any, title, completed: false, pending: true },
+    ],
+  });
+
+  async handleSubmit(e: SubmitEvent) {
+    e.preventDefault();
+    const title = new FormData(e.target as HTMLFormElement).get('title') as string;
+    if (!title) return;
+    (e.target as HTMLFormElement).reset();
+
+    const promise = createTodo({ title });
+    this.optimisticTodos.add(title, promise);
+
+    const result = await promise;
+    if (result.success && result.data) {
+      this.todos = [...this.todos.filter(t => t.pending), result.data, ...this.todos.filter(t => !t.pending)];
+    }
+  }
+
+  render() {
+    return html`<ul>${this.optimisticTodos.value.map(todo => html`
+      <li class=${todo.pending ? 'opacity-50' : ''}>${todo.title}</li>
+    `)}</ul>`;
+  }
+}
+TodoList.register('todo-list');
+```
+
+`.add(payload, promise)` auto-releases when the promise settles (resolve or reject). No try-catch, no manual rollback, no temp-ID bookkeeping.
+
+### Simple flips: imperative API
+
+For boolean toggles where the value itself is the mutation:
+
+```ts
+import { signal, optimistic } from '@webjsdev/core';
+import { likePost } from '#actions/like-post.server.ts';
+
+const liked = signal(false);
+// in an @click handler:
+const result = await optimistic(liked, true, () => likePost(postId));
+```
+
+### When to skip optimistic UI
+
+- The result is unpredictable (AI-generated content, server-computed values the client cannot guess).
+- The mutation has side effects the user must wait for (payment processing, email sending, OAuth).
+- The action validates against data that may have changed server-side (unique constraints, race conditions).
+- The mutation is destructive and irreversible with no undo (confirm-first UX is better).
+
+### When optimistic UI is appropriate
+
+- Todo items, comments, posts, likes, follows, toggles, reorders, renames, status changes.
+- Any mutation where the client can construct the expected result from the input.
+- CRUD operations where the server returns the same shape the client already has.
+
+**Never write manual try-catch / cache-and-restore / temp-ID reconciliation** when `optimistic()` covers the pattern. See `agent-docs/advanced.md` for the full reference and `agent-docs/recipes.md` for complete examples.
 
 ---
 
