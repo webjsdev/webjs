@@ -686,6 +686,14 @@ export async function createRequestHandler(opts) {
     middleware: null,
     bodyLimits,
     logger,
+    // Test-mode serve gate (#806). Set ONLY by the browser-test harness
+    // (`@webjsdev/server/testing`'s `createBrowserTestHandler`), NEVER by
+    // `webjs dev` / `webjs start`. When true the source-serve gate is relaxed
+    // so ANY app file under appDir is servable (a component a browser test
+    // imports is not route-reachable, so it is absent from `browserBoundFiles`
+    // and would 404). The `.server.*` guardrail (source -> RPC/throw stub) and
+    // the core / vendor serving are unchanged, so no server source is exposed.
+    testMode: opts.testMode === true,
     moduleGraph: null,
     elidableComponents: new Set(),
     inertRouteModules: new Set(),
@@ -1864,8 +1872,16 @@ async function handleCore(req, ctx) {
     // files (.server.{js,ts}) get a stub via the guardrail below; they
     // ARE included in browserBoundFiles because client code imports
     // them by path (the import rewrites to an RPC stub at request time).
-    const inGraph = state.browserBoundFiles && state.browserBoundFiles.has(abs);
-    if (abs.startsWith(appDir) && inGraph && (await exists(abs))) {
+    // In test mode any app file is servable (see the `state.testMode` note
+    // above); otherwise the file must be in the browser-bound module graph.
+    const inGraph = state.testMode || (state.browserBoundFiles && state.browserBoundFiles.has(abs));
+    // Containment: `abs` must be appDir itself or genuinely UNDER it. The
+    // trailing `sep` (matching the public-asset branch) stops a `..` path that
+    // resolves to a sibling sharing the appDir name-prefix (`/x/app` ->
+    // `/x/app-secrets/...`) from passing in test mode, where graph membership
+    // is not the gate.
+    const underAppDir = abs === appDir || abs.startsWith(appDir + sep);
+    if (underAppDir && inGraph && (await exists(abs))) {
       // Server-file guardrail: a file matching `.server.{js,ts,mjs,mts}`
       // MUST NEVER be served as source to the browser. The extension is
       // the path-level boundary; we re-verify it on every request (not

@@ -51,11 +51,17 @@ suite('Example browser tests', () => {
     await assertNoA11yViolations(el);
   });
 
-  // Replace with your component tests:
-  // test('my-widget renders correctly', async () => {
-  //   await import('../../components/my-widget.ts');
-  //   const el = await ssrFixture(html`<my-widget></my-widget>`);
-  //   assert.ok(el.shadowRoot ?? el.firstElementChild);
-  //   await assertNoA11yViolations(el);   // opt-in a11y check
+  // Your REAL `.ts` app components load here. `webjs test --browser` serves
+  // them through the webjs dev pipeline (TypeScript stripped, any `.server.ts`
+  // action import rewritten to an RPC stub, `#` aliases resolved), so a
+  // component that talks to the server works in a real browser, not just a
+  // node test. Point the import at a component your app actually has:
+  //
+  // test('todo-list adds a row optimistically', async () => {
+  //   await import('../../../components/todo-list.ts');  // imports create-todo.server.ts
+  //   const el = await ssrFixture(html`<todo-list></todo-list>`);
+  //   el.querySelector('button')?.click();               // fires the action RPC
+  //   // assert on the DOM, then optionally:
+  //   await assertNoA11yViolations(el);
   // });
 });

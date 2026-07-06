@@ -103,3 +103,13 @@ export declare function rawActionRequest(
     contentType?: string;
   },
 ): Promise<Response>;
+
+/** Browser-test harness (#806): a webjs handler a web-test-runner config
+ * proxies module requests to, so a browser test can import a real `.ts`
+ * component that imports a `'use server'` action. `importmapHtml()` is the
+ * `<script type="importmap">` to inject into the test page (call after warmup). */
+export declare function createBrowserTestHandler(appDir: string): Promise<{
+  handle: Handle;
+  warmup: () => Promise<void>;
+  importmapHtml: () => string;
+}>;

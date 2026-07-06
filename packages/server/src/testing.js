@@ -348,3 +348,38 @@ export async function rawActionRequest(app, serverFilePath, fnName, args = [], o
 
   return testRequest(handle, endpoint, { method: 'POST', headers, body });
 }
+
+/**
+ * Browser-test harness (#806): build a webjs handler that a `web-test-runner`
+ * config can proxy module requests to, so a `test/**​/browser/*.test.js` file
+ * can import a real `.ts` component that imports a `'use server'` action and it
+ * loads + hydrates in a real browser. Plain WTR serves raw TS with no webjs
+ * transform, so the component (and its `#`-alias / `.server.ts` imports) never
+ * resolves; this handler runs the SAME dev pipeline (TS strip, `.server.ts` ->
+ * RPC stub, `#` alias, `/__webjs/core/*`, the importmap) as `webjs dev`.
+ *
+ * Uses `testMode` so ANY app file under appDir is servable (a component a test
+ * imports is not route-reachable, so it is absent from the browser-bound graph
+ * the normal serve gate requires). The `.server.*` source guardrail is
+ * unchanged, so no server source is exposed. `importmapHtml()` returns the
+ * `<script type="importmap">` to inject into the test page (call after warmup,
+ * so the map is final).
+ *
+ * The dev handler + importmap builder are LAZILY imported so importing the rest
+ * of `@webjsdev/server/testing` stays light (they pull the full server + the
+ * `ws` WebSocket subsystem).
+ *
+ * @param {string} appDir  the webjs app root (usually `process.cwd()`)
+ * @returns {Promise<{ handle: Handle, warmup: () => Promise<void>, importmapHtml: () => string }>}
+ */
+export async function createBrowserTestHandler(appDir) {
+  const { createRequestHandler } = await import('./dev.js');
+  const { importMapTag } = await import('./importmap.js');
+  const app = await createRequestHandler({ appDir, dev: true, testMode: true });
+  if (app.warmup) await app.warmup();
+  return {
+    handle: app.handle,
+    warmup: app.warmup || (async () => {}),
+    importmapHtml: () => importMapTag(),
+  };
+}
