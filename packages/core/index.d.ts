@@ -113,11 +113,33 @@ export { stringify, parse, serialize, deserialize } from './src/serialize.js';
 export { WebjsFrame } from './src/webjs-frame.js';
 export { WebjsStream, renderStream } from './src/webjs-stream.js';
 
-// Optimistic-mutation helper: set a signal to an expected value immediately,
-// run the action, roll back on a thrown error or a `{ success: false }`
-// ActionResult, keep the value on success. Returns the action's result.
+export interface OptimisticState<State, Action> {
+  readonly value: State;
+  add(payload: Action, promise?: Promise<any> | any): () => void;
+}
+
+// Declarative Signature with custom update reducer
+export function optimistic<State, Action>(
+  host: { requestUpdate?(): void },
+  options: {
+    source: () => State;
+    update: (state: State, action: Action) => State;
+  }
+): OptimisticState<State, Action>;
+
+// Declarative Signature with default replace reducer (Action = State)
+export function optimistic<State>(
+  host: { requestUpdate?(): void },
+  options: {
+    source: () => State;
+  }
+): OptimisticState<State, State>;
+
+
+// Legacy Imperative Signature (Signal-based rollback)
 export function optimistic<T, R>(
   signal: { get(): T; set(v: T): void },
   value: T,
   action: () => Promise<R> | R,
 ): Promise<R>;
+
