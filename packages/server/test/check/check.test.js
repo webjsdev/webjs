@@ -574,6 +574,72 @@ Methods.register('methods-prop');
   }
 });
 
+test('reactive-props-no-class-field: flags a type-only declaration (`count!: number`)', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'type-only.ts'),
+      `import { WebComponent } from '@webjsdev/core';
+class TypeOnly extends WebComponent({ count: Number }) {
+  count!: number;
+}
+TypeOnly.register('type-only-prop');
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'reactive-props-no-class-field');
+    assert.ok(v, 'expected reactive-props-no-class-field violation for type-only declaration');
+    assert.ok(v.message.includes('count'));
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('reactive-props-no-class-field: flags an optional type declaration (`count?: number`)', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'optional-type.ts'),
+      `import { WebComponent } from '@webjsdev/core';
+class OptionalType extends WebComponent({ count: Number }) {
+  count?: number;
+}
+OptionalType.register('optional-type-prop');
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'reactive-props-no-class-field');
+    assert.ok(v, 'expected reactive-props-no-class-field violation for optional type declaration');
+    assert.ok(v.message.includes('count'));
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('reactive-props-no-class-field: flags a plain type declaration (`count: number`)', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'plain-type.ts'),
+      `import { WebComponent } from '@webjsdev/core';
+class PlainType extends WebComponent({ count: Number }) {
+  count: number;
+}
+PlainType.register('plain-type-prop');
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'reactive-props-no-class-field');
+    assert.ok(v, 'expected reactive-props-no-class-field violation for plain type declaration');
+    assert.ok(v.message.includes('count'));
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 test('no violations for empty app', async () => {
   const appDir = await makeTempApp();
   try {
@@ -694,6 +760,91 @@ test('no-server-env-in-components: does not fire outside components/', async () 
     );
     const violations = await checkConventions(appDir);
     assert.equal(violations.find((v) => v.rule === 'no-server-env-in-components'), undefined);
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+/* -------------------- no-redirect-in-api-route -------------------- */
+
+test('no-redirect-in-api-route: flags `redirect()` in route.ts', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app', 'api', 'redirect'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', 'api', 'redirect', 'route.ts'),
+      `import { redirect } from '@webjsdev/core';
+export async function GET() {
+  redirect('https://example.com');
+}
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
+    assert.ok(v, 'expected no-redirect-in-api-route violation');
+    assert.ok(v.message.includes('redirect()'));
+    assert.ok(v.fix.includes('Response.redirect'));
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-redirect-in-api-route: does not flag `Response.redirect()` in route.ts', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app', 'api', 'ok'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', 'api', 'ok', 'route.ts'),
+      `export async function GET() {
+  return Response.redirect('https://example.com', 303);
+}
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
+    assert.equal(v, undefined, 'Response.redirect() should not be flagged');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-redirect-in-api-route: does not flag `redirect()` in page.ts', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app', 'old-page'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', 'old-page', 'page.ts'),
+      `import { html, redirect } from '@webjsdev/core';
+export default function OldPage() {
+  redirect('/new-page');
+  return html\`<p>unreachable</p>\`;
+}
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
+    assert.equal(v, undefined, 'redirect() in a page is allowed (SSR pipeline catches it)');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+test('no-redirect-in-api-route: does not flag `redirect()` in a server action', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'modules', 'auth', 'actions'), { recursive: true });
+    await writeFile(
+      join(appDir, 'modules', 'auth', 'actions', 'login.server.ts'),
+      `'use server';
+import { redirect } from '@webjsdev/core';
+export async function login() {
+  redirect('/dashboard');
+}
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
+    assert.equal(v, undefined, 'redirect() in a server action is allowed');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
