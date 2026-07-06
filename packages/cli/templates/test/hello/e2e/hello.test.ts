@@ -1,12 +1,14 @@
-/**
- * Example E2E test: replace with tests for your user flows.
- *
- * Run:  WEBJS_E2E=1 webjs test
- * Or:   WEBJS_E2E=1 node --test test/**/e2e/**/*.test.ts
- *
- * Requires: puppeteer-core + chromium installed.
- *   npm i -D puppeteer-core
- */
+// Example E2E test: replace with tests for your user flows.
+//
+// Run:  WEBJS_E2E=1 webjs test
+//       (or point node --test at your e2e test files directly)
+//
+// Requires: puppeteer-core + chromium installed.
+//   npm i -D puppeteer-core
+//
+// Note: this header uses line comments on purpose. A JSDoc block comment
+// here cannot contain a glob like test/**/e2e/ because the ** followed by /
+// closes the block comment early and breaks TypeScript stripping.
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
