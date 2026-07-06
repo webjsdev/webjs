@@ -89,7 +89,12 @@ export default {
       // A 404 means webjs does not own this path; let web-test-runner try.
       if (res.status === 404) return next();
       ctx.status = res.status;
-      res.headers.forEach((value, key) => ctx.set(key, value));
+      // Copy headers, but handle Set-Cookie separately: `Headers.forEach`
+      // comma-joins multiple Set-Cookie into one malformed value, so use
+      // `getSetCookie()` and append each (an action driving a multi-cookie auth
+      // flow would otherwise lose a cookie in the browser).
+      res.headers.forEach((value, key) => { if (key.toLowerCase() !== 'set-cookie') ctx.set(key, value); });
+      for (const cookie of res.headers.getSetCookie?.() ?? []) ctx.append('set-cookie', cookie);
       ctx.body = Buffer.from(await res.arrayBuffer());
     },
   ],
