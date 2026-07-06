@@ -595,35 +595,41 @@ export async function checkConventions(appDir) {
       // cross-file analysis and is left to the AST rework (#753).
       const namedM = /\bimport\s+\{[^}]*\bredirect\b(?:\s+as\s+(\w+))?\s*[^}]*\}\s+from\s+['"]@webjsdev\/core['"]/.exec(scan);
       const nsM = /\bimport\s+\*\s+as\s+(\w+)\s+from\s+['"]@webjsdev\/core['"]/.exec(scan);
-      // Build the call matcher for whichever form is present. A `redirect` named
-      // import wins; otherwise a namespace import looks for `<ns>.redirect(`.
-      let callRe = null;
+      // A file can carry BOTH a named `redirect` import AND a namespace import,
+      // so check every matcher independently (not mutually exclusive): a named
+      // import means a bare `<localName>(`, a namespace import means
+      // `<ns>.redirect(`. The `member` flag distinguishes the two so a bare
+      // named call can screen out `Response.redirect(` / `obj.redirect(`.
+      /** @type {Array<{ re: RegExp, member: boolean }>} */
+      const matchers = [];
       if (namedM) {
         const localName = namedM[1] || 'redirect';
-        // A bare `<localName>(` NOT preceded by a member access `.`.
-        callRe = new RegExp(`(?<!\\.)\\b${localName}\\s*\\(`, 'g');
-      } else if (nsM) {
-        const ns = nsM[1];
-        // `<ns>.redirect(` is the namespace member call.
-        callRe = new RegExp(`\\b${ns}\\.redirect\\s*\\(`, 'g');
+        matchers.push({ re: new RegExp(`(?<!\\.)\\b${localName}\\s*\\(`, 'g'), member: false });
       }
-      if (!callRe) continue;
-      let m;
-      while ((m = callRe.exec(scan)) !== null) {
-        if (namedM) {
-          // Guard against `Response.redirect(` / `someObj.redirect(` sharing the
-          // local name: a preceding member-access dot means it is not the import.
-          const before = scan.slice(Math.max(0, m.index - 20), m.index);
-          if (/\w\.$/.test(before)) continue;
+      if (nsM) {
+        matchers.push({ re: new RegExp(`\\b${nsM[1]}\\.redirect\\s*\\(`, 'g'), member: true });
+      }
+      let flagged = false;
+      for (const { re, member } of matchers) {
+        if (flagged) break;
+        let m;
+        while ((m = re.exec(scan)) !== null) {
+          if (!member) {
+            // Screen out `Response.redirect(` / `someObj.redirect(` sharing the
+            // local name: a preceding member-access dot means it is not the import.
+            const before = scan.slice(Math.max(0, m.index - 20), m.index);
+            if (/\w\.$/.test(before)) continue;
+          }
+          violations.push({
+            rule: 'no-redirect-in-api-route',
+            file: rel,
+            message:
+              `\`redirect()\` from \`@webjsdev/core\` throws a control-flow signal for the SSR page renderer; in a \`route.ts\` handler it goes uncaught and returns a 500.`,
+            fix: `Use \`Response.redirect(url, 303)\` for external redirects, or return a 3xx Response directly. The \`redirect()\` sentinel is only valid in page functions, layouts, and server actions (where the SSR pipeline catches it).`,
+          });
+          flagged = true; // one violation per file is enough
+          break;
         }
-        violations.push({
-          rule: 'no-redirect-in-api-route',
-          file: rel,
-          message:
-            `\`redirect()\` from \`@webjsdev/core\` throws a control-flow signal for the SSR page renderer; in a \`route.ts\` handler it goes uncaught and returns a 500.`,
-          fix: `Use \`Response.redirect(url, 303)\` for external redirects, or return a 3xx Response directly. The \`redirect()\` sentinel is only valid in page functions, layouts, and server actions (where the SSR pipeline catches it).`,
-        });
-        break; // one violation per file is enough
       }
     }
   }

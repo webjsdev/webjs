@@ -874,6 +874,30 @@ export async function GET() {
   }
 });
 
+// A route can carry BOTH a named and a namespace import and call only the
+// namespace form; the matchers run independently so the uncaught 500 is still
+// caught (a regression guard for the mutually-exclusive-branch hole).
+test('no-redirect-in-api-route: flags namespace `core.redirect()` even when a named import is also present (#809)', async () => {
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'app', 'api', 'both'), { recursive: true });
+    await writeFile(
+      join(appDir, 'app', 'api', 'both', 'route.ts'),
+      `import { json } from '@webjsdev/core';
+import * as core from '@webjsdev/core';
+export async function GET() {
+  core.redirect('https://example.com');
+}
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
+    assert.ok(v, 'core.redirect() must be flagged even when a named import is also present');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 // The counterpart: a namespace import whose `redirect` is never called must NOT
 // be flagged (proves the member-call matcher, not the mere import, drives it).
 test('no-redirect-in-api-route: a namespace import without a redirect call is NOT flagged (#809)', async () => {

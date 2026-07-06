@@ -447,15 +447,24 @@ async function parseFile(file, appDir, graph, seen, dynamic, bare) {
       // position is blanked in the mask, the match lives inside a literal
       // and is not a real import edge.
       if (masked[m.index] === ' ') continue;
-      // A statement-leading `import type { X } from '...'` /
-      // `export type { X } from '...'` is fully erased by the TS stripper, so
-      // it never becomes a browser fetch or a runtime edge. Skip it, so a
-      // type-only import of a `.server.ts` (a common, correct way to share a
-      // derived row type) is not mistaken for a runtime dependency by the
-      // gate / elision / the no-server-import check. A MIXED
-      // `import { type A, b }` does NOT lead with `type`, so it is kept (its
-      // `b` binding is a real runtime edge). #805
-      if (/^(?:import|export)\s+type\b/.test(m[0])) continue;
+      // A statement-leading `import type { X }` / `import type * as X` /
+      // `import type Foo` (default type import) / `export type { X }` /
+      // `export type *` is fully erased by the TS stripper, so it never becomes
+      // a browser fetch or a runtime edge. Skip it, so a type-only import of a
+      // `.server.ts` (a common, correct way to share a derived row type) is not
+      // mistaken for a runtime dependency by the gate / elision / the
+      // no-server-import check. Two carve-outs keep this from over-dropping:
+      //   - `import type from '...'` is a VALUE default import whose binding is
+      //     literally named `type` (the stripper keeps it), so `type` directly
+      //     followed by `from` is NOT type-only.
+      //   - a MIXED `import { type A, b }` does NOT lead with `type`, so it is
+      //     kept (its `b` binding is a real runtime edge).
+      // #805
+      const lead = m[0];
+      const typeOnly =
+        /^(?:import|export)\s+type\s*[{*]/.test(lead) ||
+        (/^import\s+type\s+[A-Za-z_$]/.test(lead) && !/^import\s+type\s+from\b/.test(lead));
+      if (typeOnly) continue;
       const spec = m[1];
       // Guard a match whose `from '<spec>'` tail reaches INTO a blanked literal:
       // EXPORT_FROM_RE's lazy `[^'";]+?` can span a template body to a `from`
