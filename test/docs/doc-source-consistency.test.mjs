@@ -58,8 +58,8 @@ async function dtsExports(absDts) {
   let src;
   try { src = await readFile(absDts, 'utf8'); } catch { return new Set(); }
   const names = new Set();
-  // export { A, B as C } (with or without `from '...'`)
-  for (const m of src.matchAll(/export\s*\{([^}]*)\}/g)) {
+  // export [type] { A, B as C } (with or without `from '...'`)
+  for (const m of src.matchAll(/export\s+(?:type\s+)?\{([^}]*)\}/g)) {
     for (const part of m[1].split(',')) {
       const name = part.trim().split(/\s+as\s+/).pop()?.trim().replace(/^type\s+/, '');
       if (name && /^[A-Za-z_$][\w$]*$/.test(name)) names.add(name);
@@ -119,9 +119,13 @@ async function walkFiles(dir, re, out = []) {
  *    of the shipped surface (the external documentation the user asked about).
  */
 async function docCorpus() {
-  const files = [join(ROOT, 'AGENTS.md'), join(ROOT, 'packages/cli/templates/AGENTS.md')];
+  const files = [join(ROOT, 'AGENTS.md'), join(ROOT, 'README.md'), join(ROOT, 'packages/cli/templates/AGENTS.md')];
   await walkFiles(join(ROOT, 'agent-docs'), /\.md$/, files);
   await walkFiles(join(ROOT, 'docs', 'app'), /\.(ts|md|mdx)$/, files);
+  // Marketing site (its sample-code strings + its own components import the
+  // framework) and every package README are first-class doc surfaces too.
+  await walkFiles(join(ROOT, 'website'), /\.(ts|md|mdx)$/, files);
+  await walkFiles(join(ROOT, 'packages'), /^README\.md$/, files);
   return files;
 }
 
