@@ -59,7 +59,7 @@ class Dialog extends WebComponent({
 }
 ```
 
-Set defaults in the constructor after `super()`. A declarative `default` option also exists (lit-parity, a function default runs per instance for a fresh object / array), but the constructor is the recommended way. **Never** use a class-field initializer (e.g., `count = 0` or `student: Student = { ... }`): the framework installs reactive getter/setter on `this` inside the constructor via `Object.defineProperty`, and a class-field initializer compiles to an assignment after `super()` that uses `[[Define]]` to overwrite the accessor, silently breaking reactivity. The `reactive-props-no-class-field` rule catches this.
+Set defaults in the constructor after `super()`. A declarative `default` option also exists (lit-parity, a function default runs per instance for a fresh object / array), but the constructor is the recommended way. **Never** use a class-field declaration OR initializer (e.g., `count = 0`, `student: Student = { ... }`, or `todos!: Todo[]`): even a type-only declaration like `todos!: Todo[]` compiles under modern TS configurations (with `useDefineForClassFields: true`) to define a property on the instance after `super()`, which shadows and clobbers the prototype's reactive accessor, silently breaking reactivity. Only declare properties in the factory, and read/write them directly off `this`. The `reactive-props-no-class-field` rule catches this.
 
 ```ts
 // set defaults in the constructor after super()

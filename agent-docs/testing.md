@@ -417,6 +417,7 @@ a feature, the test is probably testing too many things at once.
   Kind is a child of feature, not the other way around.
 - **Don't create empty kind folders.** If `e2e/` has no tests
   yet, leave it absent.
+- **Don't attempt to run full browser-based tests (WTR/Playwright) inside headless VM sandboxes** if they lack compiler transformation plugins (e.g. for TypeScript components or RPC action stubbing) or have missing native browser OS libraries. Instead, extract components' reconciliation or optimistic UI update logic into pure, browser-safe utilities and cover them using server-side Node.js unit tests.
 - **Don't put package-only tests under root `test/`.** It hurts
   the per-package `npm test --workspace=…` workflow.
 - **Don't import from another package's `test/` directory.**

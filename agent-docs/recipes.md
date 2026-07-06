@@ -407,6 +407,117 @@ for `fetch` + a JS submit handler would break the no-JS baseline. Use a
 See `agent-docs/advanced.md` for the client-router side (how the enhanced
 303/422 swap works) and the rest of the form-submission behavior.
 
+## Snappy UX: Form mutation with Optimistic UI updates
+
+When building interactive applications (like a Todo app, chat app, or likes toggle), using Optimistic UI creates a Snappy UX by immediately updating the UI state in the browser before the server confirms the operation. 
+
+To support progressive enhancement, write a baseline `<form>` that works without JS, then enhance the component in the browser using JS.
+
+### Optimistic UI Recipe
+
+1. **The Server Action**:
+   Create a standard server action that performs the database write and returns the new database entity.
+
+   ```ts
+   // modules/todos/actions/create-todo.server.ts
+   'use server';
+   import { db } from '../../../db/connection.server.ts';
+   import { todos } from '../../../db/schema.server.ts';
+
+   export async function createTodo(input: { title: string }) {
+     const title = String(input.title || '').trim();
+     if (!title) return { success: false, error: 'Title is required', status: 400 };
+     
+     const [todo] = await db.insert(todos).values({ title, completed: false }).returning();
+     return { success: true, data: todo };
+   }
+   ```
+
+2. **The Component with Optimistic UI**:
+   - Declare a reactive property (e.g. `todos` of type `Array`) to hold the list of items.
+   - Listen to `@submit` on the `<form>`.
+   - Prevent default form submission via `e.preventDefault()`.
+   - Generate a temporary ID (like `crypto.randomUUID()`), construct the optimistic item, and update the reactive state immediately.
+   - Run the server action asynchronously.
+   - Reconcile the state: replace the optimistic item with the confirmed server item on success, or revert the state on failure.
+
+   ```ts
+   // components/todo-list.ts
+   import { html, WebComponent, prop } from '@webjsdev/core';
+   import { createTodo } from '../modules/todos/actions/create-todo.server.ts';
+   import { Todo } from '../modules/todos/types.ts';
+
+   export class TodoList extends WebComponent({
+     todos: prop<Todo[]>(Array),
+   }) {
+     constructor() {
+       super();
+       this.todos = []; // Set reactive property default here, never as class field!
+     }
+
+     async handleSubmit(e: SubmitEvent) {
+       e.preventDefault();
+       const form = e.target as HTMLFormElement;
+       const data = new FormData(form);
+       const title = String(data.get('title') || '').trim();
+       if (!title) return;
+
+       form.reset();
+
+       // 1. Generate a temporary ID and create the optimistic item
+       const tempId = `temp-${crypto.randomUUID()}`;
+       const optimisticTodo: Todo = {
+         id: tempId as any, // Cast since DB IDs are numbers/UUID strings
+         title,
+         completed: false,
+         pending: true, // Flag to style it differently in the UI (e.g., opacity)
+       };
+
+       // 2. Update UI state immediately (Optimistic render)
+       const previousTodos = this.todos;
+       this.todos = [optimisticTodo, ...this.todos];
+
+       try {
+         // 3. Fire the server action asynchronously
+         const result = await createTodo({ title });
+
+         if (result.success && result.data) {
+           // 4. On success: Reconcile state by swapping the temp ID with the database ID
+           this.todos = this.todos.map((t) => (t.id === tempId ? result.data! : t));
+         } else {
+           // 5. On validation error: Revert the UI state
+           this.todos = previousTodos;
+           alert(result.error || 'Failed to create todo');
+         }
+       } catch (error) {
+         // 6. On network/system error: Revert the UI state
+         this.todos = previousTodos;
+         alert('Network error, please try again.');
+       }
+     }
+
+     render() {
+       return html`
+         <form @submit=${this.handleSubmit}>
+           <input type="text" name="title" placeholder="New todo..." required />
+           <button type="submit">Add</button>
+         </form>
+
+         <ul>
+           ${this.todos.map(
+             (todo) => html`
+               <li class=${todo.pending ? 'opacity-50 pointer-events-none' : ''}>
+                 ${todo.title} ${todo.pending ? html`<span>(Saving...)</span>` : ''}
+               </li>
+             `
+           )}
+         </ul>
+       `;
+     }
+   }
+   TodoList.register('todo-list');
+   ```
+
 ## Receive and persist an uploaded file
 
 A file upload is just a `<form enctype="multipart/form-data">` posting to a page
