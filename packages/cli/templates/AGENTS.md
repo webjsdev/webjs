@@ -1166,7 +1166,11 @@ composition, so a nested shell ends up dropped by the HTML parser.
    `lib/utils/cn.ts` with `cn`, design-
    system helpers). Server-only `lib/*` files must only be imported
    from `.server.ts`/`route.ts`/`middleware.ts`; browser-safe `lib/*`
-   files (like `lib/utils/cn.ts`) can be imported anywhere.
+   files (like `lib/utils/cn.ts`) can be imported anywhere. A TYPE-ONLY
+   import is the exception: `import type { Todo } from
+   '#db/schema.server.ts'` is fine in a page or component, because the
+   TypeScript stripper erases it before it reaches the browser, so
+   sharing a derived row type is safe and is not flagged.
 3. Event / property / boolean holes in `` html`` `` are unquoted:
    `@click=${fn}`, not `@click="${fn}"`.
 4. Component state lives in signals. Import `signal` from
