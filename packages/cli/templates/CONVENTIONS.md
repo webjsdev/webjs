@@ -45,6 +45,28 @@ enforced by `webjs check`; follow them by judgment.
   `data/todos.json` or `db.json` used as a database resets on reload and
   cannot scale; define a Drizzle table instead.
 
+### Resolve framework-API questions from source, not memory (grep-first)
+
+webjs is no-build, so the code that runs IS the code you read in
+`node_modules/@webjsdev/*/src`. Before you write any framework API you are
+not certain about (an export, a signature, an option, a lifecycle hook, a
+`webjs.*` config key), confirm it against that real source or the read-only
+`webjs` MCP server FIRST, rather than recalling it from training data (which
+drifts across versions and is the single biggest cause of a wrong first
+draft). Two equivalent ways, use whichever fits:
+
+- `grep` / `cat` the file, for example
+  `grep -rn "export function optimistic" node_modules/@webjsdev/core/src`,
+  or read `node_modules/@webjsdev/core/index.d.ts` for the exported surface.
+- Query the `webjs` MCP server (`list_actions`, `list_components`, `docs`,
+  `source`) for live, version-accurate facts about this app and the framework.
+
+The greppable source is authoritative. When a memory or even a doc disagrees
+with it, the source wins. Checking first is the difference between a correct
+first draft and a check-fail-then-rewrite loop, which matters most for a
+smaller or local model that has fewer iterations to spare. Reach for the
+source before guessing, and before asking the user.
+
 ---
 
 ## AI agent workflow (non-negotiable)
