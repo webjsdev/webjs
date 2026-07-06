@@ -409,7 +409,7 @@ See `agent-docs/advanced.md` for the client-router side (how the enhanced
 
 ## Snappy UX: Form mutation with Optimistic UI updates
 
-When building interactive applications (like a Todo app, chat app, or likes toggle), using Optimistic UI creates a Snappy UX by immediately updating the UI state in the browser before the server confirms the operation. 
+When building interactive applications (like a Todo app, chat app, or likes toggle), using Optimistic UI creates a Snappy UX by immediately updating the UI state in the browser before the server confirms the operation. **Default to `optimistic()` from `@webjsdev/core` for every mutation where the client can predict the result.** Only skip it when the result is unpredictable (AI-generated content), the user must wait for side effects (payment, email), or the mutation is destructive with no undo.
 
 To support progressive enhancement, write a baseline `<form>` that works without JS, then enhance the component in the browser using JS.
 
@@ -433,97 +433,115 @@ To support progressive enhancement, write a baseline `<form>` that works without
    }
    ```
 
- 2. **The Component with Optimistic UI** (declarative, recommended):
-    - Use `optimistic(this, { source, update })` to declare a wrapper with a custom reducer.
-    - Listen to `@submit` on the `<form>`.
-    - Call `.add(payload, promise)` to push the optimistic update and auto-release when the server action settles.
-    - Reconcile the source state on success.
+2. **The Component with `optimistic()` (preferred)**:
+   Use the declarative `optimistic(host, { source, update })` API. It tracks a queue of pending updates, computes the combined value via a reducer, and auto-releases when the promise settles. No try-catch, no manual rollback, no temp-ID bookkeeping.
 
-    ```ts
-    // components/todo-list.ts
-    import { html, WebComponent, prop, optimistic } from '@webjsdev/core';
-    import { createTodo } from '../modules/todos/actions/create-todo.server.ts';
-    import { Todo } from '../modules/todos/types.ts';
+   ```ts
+   // components/todo-list.ts
+   import { html, WebComponent, prop, optimistic } from '@webjsdev/core';
+   import { createTodo } from '../modules/todos/actions/create-todo.server.ts';
+   import { Todo } from '../modules/todos/types.ts';
 
-    export class TodoList extends WebComponent({
-      todos: prop<Todo[]>(Array),
-    }) {
-      constructor() {
-        super();
-        this.todos = [];
-        // Declarative optimistic wrapper with a custom reducer
-        this.optimisticTodos = optimistic(this, {
-          source: () => this.todos,
-          update: (state, title) => [
-            ...state,
-            { id: 'tmp' as any, title, completed: false, pending: true },
-          ],
-        });
-      }
+   export class TodoList extends WebComponent({
+     todos: prop<Todo[]>(Array),
+   }) {
+     private optimisticTodos = optimistic(this, {
+       source: () => this.todos,
+       update: (state, title: string) => [
+         ...state,
+         { id: crypto.randomUUID() as any, title, completed: false, pending: true },
+       ],
+     });
 
-      async handleSubmit(e: SubmitEvent) {
-        e.preventDefault();
-        const form = e.target as HTMLFormElement;
-        const data = new FormData(form);
-        const title = String(data.get('title') || '').trim();
-        if (!title) return;
+     async handleSubmit(e: SubmitEvent) {
+       e.preventDefault();
+       const form = e.target as HTMLFormElement;
+       const title = String(new FormData(form).get('title') || '').trim();
+       if (!title) return;
 
-        form.reset();
+       form.reset();
 
-        // Push optimistic update; auto-releases when the promise settles
-        const promise = createTodo({ title });
-        this.optimisticTodos.add(title, promise);
+       const promise = createTodo({ title });
+       this.optimisticTodos.add(title, promise);
 
-        const result = await promise;
-        if (result.success && result.data) {
-          // Reconcile: replace the optimistic temp with the real DB item
-          this.todos = [...this.todos, result.data];
-        }
-      }
+       const result = await promise;
+       if (result.success && result.data) {
+         this.todos = [
+           ...this.todos.filter(t => t.pending),
+           result.data,
+           ...this.todos.filter(t => !t.pending),
+         ];
+       }
+     }
 
-      render() {
-        return html`
-          <form @submit=${this.handleSubmit}>
-            <input type="text" name="title" placeholder="New todo..." required />
-            <button type="submit">Add</button>
-          </form>
+     render() {
+       return html`
+         <form @submit=${this.handleSubmit}>
+           <input type="text" name="title" placeholder="New todo..." required />
+           <button type="submit">Add</button>
+         </form>
 
-          <ul>
-            ${this.optimisticTodos.value.map((todo) => html`
-              <li class=${todo.pending ? 'opacity-50 pointer-events-none' : ''}>
-                ${todo.title} ${todo.pending ? html`<span>(Saving...)</span>` : ''}
-              </li>
-            `)}
-          </ul>
-        `;
-      }
-    }
-    TodoList.register('todo-list');
-    ```
+         <ul>
+           ${this.optimisticTodos.value.map(
+             (todo) => html`
+               <li class=${todo.pending ? 'opacity-50 pointer-events-none' : ''}>
+                 ${todo.title}
+               </li>
+             `
+           )}
+         </ul>
+       `;
+     }
+   }
+   TodoList.register('todo-list');
+   ```
 
-    **Manual release (no promise).** When you need explicit control, `.add(payload)` returns a `release()` function:
+   For simple boolean flips, the imperative `optimistic(signal, value, action)` is cleaner:
 
-    ```ts
-    const release = this.optimisticTodos.add(title);
-    try {
-      const result = await createTodo({ title });
-      if (result.success) this.todos = [...this.todos, result.data];
-    } finally {
-      release();  // removes the optimistic overlay
-    }
-    ```
+   ```ts
+   import { signal, optimistic } from '@webjsdev/core';
+   import { likePost } from '#actions/like-post.server.ts';
 
-    **Legacy imperative pattern (signal-based rollback).** For single-value toggles like a like button, the signal-based API is simpler:
+   const liked = signal(false);
+   // in an @click handler:
+   await optimistic(liked, true, () => likePost(postId));
+   ```
 
-    ```ts
-    import { signal, optimistic } from '@webjsdev/core';
-    const liked = signal(false);
-    // In an @click handler:
-    await optimistic(liked, true, () => likePost(postId));
-    // liked flips to true instantly; rolls back on throw or { success: false }
-    ```
+3. **Manual optimistic (when you cannot use `optimistic()`)**:
+   If you need fine-grained control (custom loading states, partial rollbacks, multi-step reconciliation), write the manual pattern:
 
-    The imperative pattern captures the previous value, sets the optimistic value immediately, awaits the action, and rolls back on failure. See `agent-docs/advanced.md` for the full reference.
+   - Declare a reactive property to hold the list.
+   - Generate a temporary ID, construct the optimistic item, update state immediately.
+   - Run the server action.
+   - Reconcile: replace the optimistic item on success, revert on failure.
+
+   ```ts
+   async handleSubmit(e: SubmitEvent) {
+     e.preventDefault();
+     const form = e.target as HTMLFormElement;
+     const title = String(new FormData(form).get('title') || '').trim();
+     if (!title) return;
+     form.reset();
+
+     const tempId = `temp-${crypto.randomUUID()}`;
+     const previousTodos = this.todos;
+     this.todos = [
+       { id: tempId as any, title, completed: false, pending: true },
+       ...this.todos,
+     ];
+
+     try {
+       const result = await createTodo({ title });
+       if (result.success && result.data) {
+         this.todos = this.todos.map((t) => (t.id === tempId ? result.data! : t));
+       } else {
+         this.todos = previousTodos;
+       }
+     } catch {
+       this.todos = previousTodos;
+     }
+   }
+   ```
 
 ## Receive and persist an uploaded file
 

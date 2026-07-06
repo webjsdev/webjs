@@ -503,71 +503,56 @@ the events + `aria-busy` are a client-only enhancement.
 
 ### Optimistic mutations (`optimistic()`)
 
-WebJs ships two signatures for optimistic UI: a **declarative** React 19-style
-state wrapper (the recommended path for list / collection mutations) and a
-**legacy imperative** signal-based helper (ideal for single-value toggles).
+`optimistic()` from `@webjsdev/core` shows a mutation's expected result IMMEDIATELY (the UI feels instant), runs the real server action, and ROLLS BACK on failure. **Use it for every user-facing mutation where the client can predict the result** (create, update, delete, like, toggle, reorder). See `agent-docs/recipes.md` for complete examples.
 
-#### Declarative: `optimistic(host, options)` (React 19 `useOptimistic` parity)
+#### Declarative API (preferred)
 
-The declarative API manages a queue of pending optimistic updates, computes
-the combined value through an optional reducer, and auto-releases when a
-passed promise settles. No try/catch, no manual cache-and-revert.
+`optimistic(host, { source, update })` returns an `OptimisticState<State, Action>` with a `.value` getter and `.add(payload, promise?)` method. The reducer transforms the current state with each payload; `.add()` pushes an update and schedules a re-render. When a `promise` is passed, the update auto-releases on settlement (`.finally()` or a `.then()` fallback for thenables lacking `.finally`).
 
 ```ts
 import { WebComponent, prop, optimistic, html } from '@webjsdev/core';
-import { createTodo } from '../modules/todos/actions/create-todo.server.js';
+import { createTodo } from '#modules/todos/actions/create-todo.server.ts';
 
-export class TodoList extends WebComponent({
-  todos: prop(Array),
+class TodoList extends WebComponent({
+  todos: prop<Todo[]>(Array),
 }) {
-  constructor() {
-    super();
-    this.todos = [];
-    // Declare the wrapper with a custom reducer
-    this.optimisticTodos = optimistic(this, {
-      source: () => this.todos,
-      update: (state, title) => [...state, { id: 'tmp', title, pending: true }],
-    });
-  }
+  private optimisticTodos = optimistic(this, {
+    source: () => this.todos,
+    update: (state, title: string) => [
+      ...state,
+      { id: crypto.randomUUID() as any, title, completed: false, pending: true },
+    ],
+  });
 
-  async handleSubmit(e) {
+  async handleSubmit(e: SubmitEvent) {
     e.preventDefault();
-    const title = e.target.querySelector('input').value;
+    const title = new FormData(e.target as HTMLFormElement).get('title') as string;
+    if (!title) return;
+    (e.target as HTMLFormElement).reset();
+
     const promise = createTodo({ title });
-    // Auto-releases when the promise settles; no try/finally needed
     this.optimisticTodos.add(title, promise);
+
     const result = await promise;
     if (result.success && result.data) {
-      this.todos = [...this.todos, result.data];
+      this.todos = [...this.todos.filter(t => t.pending), result.data, ...this.todos.filter(t => !t.pending)];
     }
   }
 
   render() {
-    return html`<ul>${this.optimisticTodos.value.map(t =>
-      html`<li class=${t.pending ? 'opacity-50' : ''}>${t.title}</li>`)}</ul>`;
+    return html`<ul>${this.optimisticTodos.value.map(todo => html`
+      <li class=${todo.pending ? 'opacity-50' : ''}>${todo.title}</li>
+    `)}</ul>`;
   }
 }
+TodoList.register('todo-list');
 ```
 
-**`.add(payload, promise?)`** pushes an optimistic update and calls
-`host.requestUpdate()` to re-render. When a `promise` is provided, the
-update is automatically released on settlement (via `.finally()` or a
-`.then()` fallback for thenables lacking `.finally`). Multiple `.add()`
-calls stack; each release removes only its own entry by ID, so concurrent
-optimistic operations resolve independently.
+Multiple `.add()` calls stack independently; each `release()` removes its own update by ID. When `update` is omitted, the payload replaces the state directly (`Action = State`), matching the simple `useOptimistic(setState)` pattern.
 
-**Optional reducer.** When `update` is omitted, the payload replaces the
-state directly (`Action = State`), matching the simple `useOptimistic(setState)`
-pattern:
+#### Imperative API (simple flips)
 
-```ts
-this.optCount = optimistic(this, { source: () => this.count });
-this.optCount.add(42);  // value is now 42
-```
-
-#### Imperative: `optimistic(signal, value, action)` (signal-based rollback)
-
-For single-value toggles the legacy signal-based helper remains:
+`optimistic(signal, value, action)` is a thin wrapper over the signal primitive for simple boolean flips:
 
 ```ts
 import { signal, optimistic } from '@webjsdev/core';
@@ -583,10 +568,7 @@ const result = await optimistic(liked, true, () => likePost(postId));
 // to the authoritative value from `result` if you need it.
 ```
 
-Both signatures roll back on a thrown error OR an `ActionResult`
-`{ success: false }` envelope, and never on success. Client-only (they
-call `host.requestUpdate()` or mutate a signal), so a component importing
-`optimistic` is never elided as display-only.
+It rolls back on a thrown error OR an `ActionResult` `{ success: false }` envelope, and never on success. Client-only (it mutates a signal), so a component importing it is never elided as display-only.
 
 ### Wire-byte optimization
 
