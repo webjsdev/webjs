@@ -6,13 +6,14 @@
  * action rejects or returns a `{ success: false }` envelope.
  */
 import { html } from '../../../src/html.js';
-import { WebComponent } from '../../../src/component.js';
+import { WebComponent, prop } from '../../../src/component.js';
 import { signal } from '../../../src/signal.js';
 import { optimistic } from '../../../src/optimistic.js';
 
 const assert = {
   ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
   equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); },
+  deepEqual: (a, b, msg) => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(msg || `Expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); },
 };
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
@@ -77,17 +78,33 @@ suite('optimistic() + WebComponent UI (#246)', () => {
   test('a successful action keeps the optimistic UI', async () => {
     const liked = signal(false);
     const T = newTag();
-    class C extends WebComponent {
-      render() { return html`<span>${liked.get() ? 'liked' : 'not'}</span>`; }
+    class C extends WebComponent({
+      todos: prop(Array),
+    }) {
+      constructor() {
+        super();
+        this.todos = [];
+        this.optTodos = optimistic(this, {
+          source: () => this.todos,
+          update: (state, title) => [...state, { title, pending: true }],
+        });
+      }
+      render() {
+        return html`<ul>${this.optTodos.value.map(t => html`<li class=${t.pending ? 'pending' : ''}>${t.title}</li>`)}</ul>`;
+      }
     }
     customElements.define(T, C);
     const el = document.createElement(T);
     document.body.appendChild(el);
     try {
       await el.updateComplete;
-      await optimistic(liked, true, async () => ({ success: true }));
+      assert.equal(el.querySelectorAll('li').length, 0, 'initial empty list');
+
+      el.optTodos.add('hello');
       await el.updateComplete;
-      assert.equal(el.querySelector('span').textContent, 'liked', 'optimistic UI kept on success');
+      const items = el.querySelectorAll('li');
+      assert.equal(items.length, 1, 'optimistic item rendered');
+      assert.ok(items[0].classList.contains('pending'), 'pending class applied');
     } finally {
       el.remove();
     }
