@@ -883,7 +883,12 @@ test('no-redirect-in-api-route: flags namespace `core.redirect()` even when a na
     await mkdir(join(appDir, 'app', 'api', 'both'), { recursive: true });
     await writeFile(
       join(appDir, 'app', 'api', 'both', 'route.ts'),
-      `import { json } from '@webjsdev/core';
+      // A NAMED `redirect` import (so namedM is truthy) that is never called
+      // bare, PLUS a namespace import whose `core.redirect()` is the only call.
+      // Under the old mutually-exclusive `else if (nsM)` the named branch won,
+      // found no bare `redirect(`, and missed the 500; the independent matchers
+      // catch it.
+      `import { redirect } from '@webjsdev/core';
 import * as core from '@webjsdev/core';
 export async function GET() {
   core.redirect('https://example.com');
@@ -892,7 +897,7 @@ export async function GET() {
     );
     const violations = await checkConventions(appDir);
     const v = violations.find((v) => v.rule === 'no-redirect-in-api-route');
-    assert.ok(v, 'core.redirect() must be flagged even when a named import is also present');
+    assert.ok(v, 'core.redirect() must be flagged even when a named redirect import is also present but never called bare');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
