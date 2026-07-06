@@ -304,3 +304,31 @@ test('buildModuleGraph: evicts the parse-cache entry for a deleted file on rebui
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// #805: a FULLY type-only import/export is erased by the TS stripper, so it is
+// not a runtime edge. A MIXED import and the pathological value-default named
+// `type` ARE runtime edges and must be kept.
+test('buildModuleGraph: type-only imports are not edges, value imports (incl. default named `type`) are', async () => {
+  const dir = join(tmpdir(), `webjs-test-typeonly-${Date.now()}`);
+  await mkdir(join(dir, 'app'), { recursive: true });
+  await writeFile(join(dir, 'helper.ts'), `export const x = 1; export type T = { a: number }; export default 1;\n`);
+  const cases = [
+    ["import type { T } from '../helper.ts';", false],
+    ["import type * as H from '../helper.ts';", false],
+    ["import type Foo from '../helper.ts';", false],
+    ["export type { T } from '../helper.ts';", false],
+    ["import type from '../helper.ts';", true],   // value default binding named `type`
+    ["import { x } from '../helper.ts';", true],
+    ["import { type T, x } from '../helper.ts';", true], // mixed keeps the runtime binding
+  ];
+  try {
+    for (const [imp, shouldEdge] of cases) {
+      await writeFile(join(dir, 'app', 'page.ts'), `${imp}\nexport default () => '<h1/>';\n`);
+      const graph = await buildModuleGraph(dir);
+      const edge = transitiveDeps(graph, [join(dir, 'app', 'page.ts')], dir).some((f) => f.endsWith('helper.ts'));
+      assert.equal(edge, shouldEdge, `edge for \`${imp}\` should be ${shouldEdge}`);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

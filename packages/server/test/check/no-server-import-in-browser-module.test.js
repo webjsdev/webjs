@@ -541,3 +541,77 @@ export default async function DashboardPage() {
     await rm(appDir, { recursive: true, force: true });
   }
 });
+
+// #805: a TYPE-ONLY import of a `.server.ts` from a SHIPPING module is fully
+// erased by the TS stripper (module.stripTypeScriptTypes), so it never becomes a
+// browser fetch or a runtime crash. It must NOT be flagged. Three independent
+// agents hit this false positive writing `import type { Todo } from
+// '#db/schema.server.ts'` in a shipping component: the greppable source confirms
+// the import is safe, yet the check fired, sending them into a needless
+// `types.ts`-duplication rewrite. The component ships (reactive `signal` import),
+// so this is NOT an elision pass, it is the type-only edge being correctly
+// dropped from the module graph.
+test('a TYPE-ONLY import of a server module from a shipping component is NOT flagged (#805)', async () => {
+  const appDir = await makeApp({
+    'db/schema.server.ts': `export type Todo = { id: number; title: string; completed: boolean };
+export const todos = { findMany() { return []; } };
+`,
+    'components/todo-list.ts': `import { WebComponent } from '@webjsdev/core';
+import { signal } from '@webjsdev/core';
+import type { Todo } from '../db/schema.server.ts';
+
+class TodoList extends WebComponent {
+  static properties = { items: { state: true } };
+  declare items: Todo[];
+  constructor() { super(); this.items = []; }
+  render() { return this.html\`<ul>\${this.items.length}</ul>\`; }
+}
+TodoList.register('todo-list');
+`,
+    'app/page.ts': `import '../components/todo-list.ts';
+export default function Home() { return '<todo-list></todo-list>'; }
+`,
+  });
+  try {
+    const violations = await checkConventions(appDir);
+    assert.equal(find(violations).length, 0,
+      'a type-only import is erased at strip time and must not be flagged as a server import');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+// The counterpart proving the #805 fix did not OVER-skip: a MIXED
+// `import { type Todo, todos }` pulls a real runtime binding (`todos`), so it is
+// a genuine value edge to the server module and MUST still fire. The statement
+// does not lead with `type`, so the graph keeps it.
+test('a MIXED value+type import of a server module on a shipping component IS still flagged (#805)', async () => {
+  const appDir = await makeApp({
+    'db/schema.server.ts': `export type Todo = { id: number };
+export const todos = { findMany() { return []; } };
+`,
+    'components/todo-list.ts': `import { WebComponent } from '@webjsdev/core';
+import { signal } from '@webjsdev/core';
+import { type Todo, todos } from '../db/schema.server.ts';
+
+class TodoList extends WebComponent {
+  static properties = { items: { state: true } };
+  declare items: Todo[];
+  constructor() { super(); this.items = todos.findMany(); }
+  render() { return this.html\`<ul>\${this.items.length}</ul>\`; }
+}
+TodoList.register('todo-list');
+`,
+    'app/page.ts': `import '../components/todo-list.ts';
+export default function Home() { return '<todo-list></todo-list>'; }
+`,
+  });
+  try {
+    const violations = await checkConventions(appDir);
+    const hits = find(violations, 'todo-list.ts');
+    assert.equal(hits.length, 1, 'a mixed value+type import is a real runtime edge and must still be flagged');
+    assert.ok(hits[0].message.includes('schema.server.ts'), 'names the server import');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});

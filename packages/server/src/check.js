@@ -583,30 +583,53 @@ export async function checkConventions(appDir) {
     const ROUTE_FILE = /(?:^|\/)route\.m?[jt]s$/;
     for (const { rel, scan } of files) {
       if (!ROUTE_FILE.test(rel)) continue;
-      // Import of `redirect` from `@webjsdev/core` (named or aliased).
-      // We look for the imported name being CALLED (not `Response.redirect`).
-      // Patterns: `import { redirect }`, `import { redirect as r }`,
-      // `import { ..., redirect, ... }`.
-      const importM = /\bimport\s+\{[^}]*\bredirect\b(?:\s+as\s+(\w+))?\s*[^}]*\}\s+from\s+['"]@webjsdev\/core['"]/.exec(scan);
-      if (!importM) continue;
-      const localName = importM[1] || 'redirect';
-      // Find calls to the local name that are NOT `Response.redirect` / `res.redirect`.
-      // A bare `redirect(` call (possibly preceded by `throw ` or `return `) is the
-      // framework sentinel. `Response.redirect(` is the standard API and is fine.
-      const callRe = new RegExp(`(?<!\\.)\\b${localName}\\s*\\(`, 'g');
-      let m;
-      while ((m = callRe.exec(scan)) !== null) {
-        // Make sure it's not `Response.redirect(` or `someObj.redirect(`.
-        const before = scan.slice(Math.max(0, m.index - 20), m.index);
-        if (/\w\.$/.test(before)) continue; // method call on an object, not the import
-        violations.push({
-          rule: 'no-redirect-in-api-route',
-          file: rel,
-          message:
-            `\`redirect()\` from \`@webjsdev/core\` throws a control-flow signal for the SSR page renderer; in a \`route.ts\` handler it goes uncaught and returns a 500.`,
-          fix: `Use \`Response.redirect(url, 303)\` for external redirects, or return a 3xx Response directly. The \`redirect()\` sentinel is only valid in page functions, layouts, and server actions (where the SSR pipeline catches it).`,
-        });
-        break; // one violation per file is enough
+      // `redirect` reaches the route file in one of two statically-visible ways:
+      //   1. A NAMED import from `@webjsdev/core` (possibly aliased):
+      //      `import { redirect }`, `import { redirect as r }`, `import { …, redirect, … }`.
+      //   2. A NAMESPACE import then a member call:
+      //      `import * as core from '@webjsdev/core'` then `core.redirect(...)`.
+      // The named case flags a bare `redirect(` call; the namespace case flags
+      // `<ns>.redirect(`. `Response.redirect(` and any other `obj.redirect(` are
+      // the standard API and stay fine. A `redirect()` thrown inside a
+      // '`use server`' action the route calls DIRECTLY (an uncaught 500) needs
+      // cross-file analysis and is left to the AST rework (#753).
+      const namedM = /\bimport\s+\{[^}]*\bredirect\b(?:\s+as\s+(\w+))?\s*[^}]*\}\s+from\s+['"]@webjsdev\/core['"]/.exec(scan);
+      const nsM = /\bimport\s+\*\s+as\s+(\w+)\s+from\s+['"]@webjsdev\/core['"]/.exec(scan);
+      // A file can carry BOTH a named `redirect` import AND a namespace import,
+      // so check every matcher independently (not mutually exclusive): a named
+      // import means a bare `<localName>(`, a namespace import means
+      // `<ns>.redirect(`. The `member` flag distinguishes the two so a bare
+      // named call can screen out `Response.redirect(` / `obj.redirect(`.
+      /** @type {Array<{ re: RegExp, member: boolean }>} */
+      const matchers = [];
+      if (namedM) {
+        const localName = namedM[1] || 'redirect';
+        matchers.push({ re: new RegExp(`(?<!\\.)\\b${localName}\\s*\\(`, 'g'), member: false });
+      }
+      if (nsM) {
+        matchers.push({ re: new RegExp(`\\b${nsM[1]}\\.redirect\\s*\\(`, 'g'), member: true });
+      }
+      let flagged = false;
+      for (const { re, member } of matchers) {
+        if (flagged) break;
+        let m;
+        while ((m = re.exec(scan)) !== null) {
+          if (!member) {
+            // Screen out `Response.redirect(` / `someObj.redirect(` sharing the
+            // local name: a preceding member-access dot means it is not the import.
+            const before = scan.slice(Math.max(0, m.index - 20), m.index);
+            if (/\w\.$/.test(before)) continue;
+          }
+          violations.push({
+            rule: 'no-redirect-in-api-route',
+            file: rel,
+            message:
+              `\`redirect()\` from \`@webjsdev/core\` throws a control-flow signal for the SSR page renderer; in a \`route.ts\` handler it goes uncaught and returns a 500.`,
+            fix: `Use \`Response.redirect(url, 303)\` for external redirects, or return a 3xx Response directly. The \`redirect()\` sentinel is only valid in page functions, layouts, and server actions (where the SSR pipeline catches it).`,
+          });
+          flagged = true; // one violation per file is enough
+          break;
+        }
       }
     }
   }

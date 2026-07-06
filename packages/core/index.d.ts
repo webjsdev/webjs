@@ -65,6 +65,10 @@ export type {
 } from './src/serializable.d.ts';
 
 export { html, isTemplate, MARKER } from './src/html.js';
+// The `html\`\`` return type. A JSDoc typedef in html.js used across the
+// component / route / testing type surfaces; re-exported so an app or the
+// docs/website can annotate a value as `TemplateResult` (#772).
+export type { TemplateResult } from './src/html.js';
 export { css, isCSS, adoptStyles, stylesToString } from './src/css.js';
 export { register, lookup, lookupModuleUrl, isLazy, allTags, primeModuleUrl, tagOf } from './src/registry.js';
 export { renderToString, renderToStream } from './src/render-server.js';

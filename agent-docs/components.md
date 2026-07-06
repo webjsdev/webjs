@@ -338,7 +338,12 @@ suggests is the three legitimate shapes: gate the route in
 `'use server'` ACTION (its browser stub is a working RPC, so it is
 exempt), or register the component in a `layout.{ts,js}` so the page
 elides again. Server-to-server imports (`.server.ts` importing
-`.server.ts`) and `middleware.ts` / `route.ts` are never flagged.
+`.server.ts`) and `middleware.ts` / `route.ts` are never flagged. A
+TYPE-ONLY `import type { Row } from './x.server.ts'` is exempt too,
+because the stripper erases it before it reaches the browser, so sharing
+a derived row type from a `.server.ts` is safe (a mixed
+`import { type Row, value }` still ships the runtime `value` binding, so
+it is still flagged).
 
 The rule covers every module the build ships, not just pages: a shipping
 component, and `error.{ts,js}` / `loading.{ts,js}` / `not-found.{ts,js}`

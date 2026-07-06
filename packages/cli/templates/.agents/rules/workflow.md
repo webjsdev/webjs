@@ -145,7 +145,9 @@ self-review loop.
   a `.server.{js,ts}` file; the framework rewrites that import into an RPC
   stub for the browser. `lib/` holds both server-only infra
   (the DB in `db/*.server.ts`) and browser-safe utilities (`lib/utils/cn.ts` with
-  `cn`); follow the same rule per file.
+  `cn`); follow the same rule per file. A TYPE-ONLY `import type { Todo } from
+  '#db/schema.server.ts'` is the exception, fine in a page or component because
+  the stripper erases it before it reaches the browser.
 - Keep pages and layouts as pure carriers so their modules stay out of the
   network tab. A page/layout never hydrates; the framework drops its module
   from the browser as long as its only browser job is registering the
