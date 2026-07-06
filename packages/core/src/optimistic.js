@@ -1,64 +1,120 @@
-/**
- * `optimistic(signal, value, action)`, a thin optimistic-mutation helper.
- *
- * The optimistic-UI pattern: show the expected result of a mutation
- * IMMEDIATELY (so the interface feels instant), run the real server action,
- * and roll the optimistic value back if the action fails. This wrapper does
- * exactly that and nothing more, no state machine, no extra reactivity, just
- * the existing signal primitive plus a try / envelope check.
- *
- *   import { signal, optimistic } from '@webjsdev/core';
- *   import { likePost } from '../actions/like-post.server.js';
- *
- *   const liked = signal(false);
- *   // In an @click handler:
- *   await optimistic(liked, true, () => likePost(postId));
- *   // `liked` flips to true instantly; if likePost throws or returns
- *   // { success: false }, it rolls back to its prior value.
- *
- * Behaviour:
- *   1. Capture `prev = signal.get()`.
- *   2. `signal.set(value)` so the UI updates before the round-trip.
- *   3. `await action()`.
- *   4a. The action THROWS  -> `signal.set(prev)` (rollback) + re-throw.
- *   4b. The action returns an ActionResult FAILURE envelope
- *       (`result && result.success === false`) -> `signal.set(prev)`
- *       (rollback) + return the result (the caller reads its
- *       `error` / `fieldErrors`).
- *   4c. SUCCESS (anything else) -> keep the optimistic value + return the
- *       result. The caller can reconcile to the authoritative value from the
- *       returned result if it wants to (e.g. `signal.set(result.data.count)`).
- *
- * It rolls back on a thrown error OR a `{ success: false }` ActionResult, and
- * never rolls back on success. Client-only: it mutates a signal (client work),
- * so a component importing it is never elided as display-only.
- *
- * @template T
- * @param {{ get: () => T, set: (v: T) => void }} signal  A webjs signal.
- * @param {T} value  The optimistic value to show immediately.
- * @param {() => Promise<any> | any} action  The server-action call (or any
- *   thunk returning a Promise / value).
- * @returns {Promise<any>}  The action's result. On a `{ success: false }`
- *   envelope the rolled-back result is returned (not thrown); a thrown action
- *   re-throws after rollback.
- */
-export async function optimistic(signal, value, action) {
+class OptimisticState {
+  constructor(host, options) {
+    this.host = host;
+    this.options = options;
+    this.updates = [];
+    this._nextId = 0;
+  }
+
+  get value() {
+    let current = this.options.source();
+    if (!this.options.update) {
+      return this.updates.length > 0
+        ? this.updates[this.updates.length - 1].payload
+        : current;
+    }
+    for (const update of this.updates) {
+      current = this.options.update(current, update.payload);
+    }
+    return current;
+  }
+
+  add(payload, promise) {
+    const id = `opt-${++this._nextId}`;
+    this.updates.push({ id, payload });
+    this.host?.requestUpdate?.();
+
+    const release = () => {
+      const idx = this.updates.findIndex(u => u.id === id);
+      if (idx !== -1) {
+        this.updates.splice(idx, 1);
+        this.host?.requestUpdate?.();
+      }
+    };
+
+    if (promise && typeof promise.then === 'function') {
+      if (typeof promise.finally === 'function') {
+        promise.finally(() => release()).catch(() => {});
+      } else {
+        promise.then(() => release(), () => release());
+      }
+    }
+
+    return release;
+  }
+}
+
+async function runLegacyOptimistic(signal, value, action) {
   const prev = signal.get();
   signal.set(value);
   let result;
   try {
     result = await action();
   } catch (err) {
-    // The action rejected: roll the optimistic value back and let the caller
-    // handle the error (re-throw, do not swallow).
     signal.set(prev);
     throw err;
   }
-  // ActionResult FAILURE envelope: a `{ success: false }` is a handled
-  // failure, not a throw. Roll back and hand the result back so the caller
-  // can read its `error` / `fieldErrors`.
   if (result && result.success === false) {
     signal.set(prev);
   }
   return result;
+}
+
+/**
+ * `optimistic(host, options)`, a React 19 / Next.js-style declarative
+ * optimistic-state wrapper for Web Components.
+ *
+ * The optimistic-UI pattern: show the expected result of a mutation
+ * IMMEDIATELY (so the interface feels instant), run the real server action,
+ * and release the optimistic overlay when the action settles. This wrapper
+ * manages a queue of pending updates, computes the combined value through
+ * an optional reducer, and auto-releases when a passed promise resolves.
+ *
+ *   import { WebComponent, prop, optimistic, html } from '@webjsdev/core';
+ *   import { createTodo } from '../actions/create-todo.server.js';
+ *
+ *   class TodoList extends WebComponent({ todos: prop(Array) }) {
+ *     optimisticTodos = optimistic(this, {
+ *       source: () => this.todos,
+ *       update: (state, title) => [...state, { id: 'tmp', title, pending: true }]
+ *     });
+ *
+ *     async handleSubmit(e) {
+ *       const title = e.target.querySelector('input').value;
+ *       const promise = createTodo({ title });
+ *       this.optimisticTodos.add(title, promise);
+ *       const result = await promise;
+ *       if (result.success) this.todos = [...this.todos, result.data];
+ *     }
+ *
+ *     render() {
+ *       return html`<ul>${this.optimisticTodos.value.map(t =>
+ *         html`<li class=${t.pending ? 'opacity-50' : ''}>${t.title}</li>`)}</ul>`;
+ *     }
+ *   }
+ *
+ * Behaviour:
+ *   1. `.value` reads `source()` and folds all queued updates through `update`.
+ *   2. `.add(payload)` pushes an update and calls `host.requestUpdate()`.
+ *   3. `.add(payload, promise)` auto-releases on promise settlement.
+ *   4. The returned `release()` fn removes the update by ID and re-renders.
+ *   5. Concurrent updates stack; each release removes only its own entry.
+ *
+ * Backward-compatible imperative API (signal-based rollback):
+ *   await optimistic(signal, value, () => likePost(postId));
+ *
+ * Client-only: it calls `host.requestUpdate()` (client work), so a component
+ * importing it is never elided as display-only.
+ *
+ * @template State
+ * @template Action
+ * @param {{ requestUpdate?: () => void }} host  A WebComponent instance.
+ * @param {{ source: () => State, update?: (state: State, action: Action) => State }} options
+ * @returns {OptimisticState<State, Action>}
+ */
+export function optimistic(first, second, third) {
+  if (first && typeof first.get === 'function' && typeof first.set === 'function') {
+    return runLegacyOptimistic(first, second, third);
+  }
+  return new OptimisticState(first, second);
 }

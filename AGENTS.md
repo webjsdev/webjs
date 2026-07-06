@@ -198,7 +198,7 @@ The bare `@webjsdev/core` specifier resolves to a BROWSER bundle dropping server
 | `<webjs-suspense .fallback=${html\`…\`}>` | Component-level streaming boundary element (#471): wraps one or more components, flushes `.fallback` on the first byte, streams the resolved content in (concurrently across boundaries, progressively on soft nav). The renderer-recognized opt-in for SLOW async-render data. |
 | `connectWS(url, handlers)` / `richFetch<T>` | Client WebSocket (auto-reconnect, queued sends); content-negotiated rich-type fetch. |
 | `navigate(url, opts?)` / `revalidate(url?)` | Programmatic client-router nav; evict the BROWSER snapshot cache. |
-| `optimistic(signal, value, action)` | Set `signal` immediately, run `action`, roll back on error or `{ success: false }`. |
+| `optimistic(signal, value, action)` / `optimistic(host, options)` | Set `signal` immediately, run `action`, roll back on error or `{ success: false }`. Declarative form: `optimistic(host, { source, update })` returns `OptimisticState` with `.value` getter and `.add(payload, promise?)` for React 19 `useOptimistic` parity. |
 | `renderStream(payload)` / `WebjsFrame` | `<webjs-stream>` element-level updates (#248); `<webjs-frame>` partial-swap regions (#253). See `agent-docs/advanced.md`. |
 | `Metadata` / `PageProps<R>` / `LayoutProps<R>` / `RouteHandlerContext<R>` / `WebjsConfig` (type-only) | Types for metadata, page/layout/route args (`R` narrows `params` against the `webjs types` route union), and the `webjs` config block. See `agent-docs/metadata.md` + `agent-docs/configuration.md`. |
 
