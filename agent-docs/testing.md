@@ -33,6 +33,35 @@ Some packages will only have one or two of these kinds (e.g.
 a kind subfolder when there's at least one test of that kind.
 Empty `e2e/` folders are anti-patterns.
 
+### App browser tests import your REAL components (#806)
+
+In a scaffolded app, a browser test (`test/<feature>/browser/<name>.test.js`)
+can `import` your real `.ts` components, **including ones that call a
+`'use server'` action**, and they load in a real browser. `webjs test --browser`
+runs each test through the same pipeline as `webjs dev`: the `.ts` is type-
+stripped, a `.server.ts` action import is rewritten to its RPC stub, `#` aliases
+and `@webjsdev/core` resolve via the injected importmap. So you write:
+
+```js
+// test/todos/browser/todo-list.test.js
+import { ssrFixture } from '@webjsdev/core/testing';
+import { html } from '@webjsdev/core';
+
+suite('todo-list', () => {
+  test('adds a row', async () => {
+    await import('../../../components/todo-list.ts'); // imports create-todo.server.ts
+    const el = await ssrFixture(html`<todo-list></todo-list>`);
+    el.querySelector('button')?.click();              // fires the action RPC
+    // assert on the DOM...
+  });
+});
+```
+
+The wiring lives in the scaffolded `web-test-runner.config.js` (you don't set it
+up). Keep the browser test file itself `.js`; the components + modules it imports
+are `.ts` and are served transformed. This is why a component that talks to the
+server can be tested in a real browser, not just in a node test.
+
 ---
 
 ## Framework layout (this repo)

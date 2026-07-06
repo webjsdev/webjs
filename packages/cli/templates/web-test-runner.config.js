@@ -49,11 +49,15 @@ export default {
 </html>`,
   middleware: [
     async (ctx, next) => {
-      // web-test-runner owns its own internals and the TEST FILES themselves
-      // (it wraps each test module for the test framework); let those through.
+      // web-test-runner / web-dev-server own their own internals and the TEST
+      // FILES themselves (WTR wraps each test module for the test framework);
+      // let those through. NOTE: match the WTR/WDS prefixes specifically, NOT a
+      // broad `/__web`, because webjs's own paths are `/__webjs/...` (core,
+      // vendor) and MUST be proxied to the handler below, not handed to WTR.
       if (
-        ctx.path.startsWith('/__web') ||
-        ctx.path.startsWith('/__wtr') ||
+        ctx.path.startsWith('/__web-test-runner') ||
+        ctx.path.startsWith('/__web-dev-server') ||
+        ctx.path.startsWith('/__wds') ||
         /\.test\.(js|mjs)$/.test(ctx.path)
       ) {
         return next();
