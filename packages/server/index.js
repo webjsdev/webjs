@@ -77,4 +77,5 @@ export {
   actionEndpoint,
   invokeActionForTest,
   rawActionRequest,
+  createBrowserTestHandler,
 } from './src/testing.js';

@@ -464,6 +464,14 @@ export async function createRequestHandler(opts) {
   // a missing-amaro error at boot rather than on the first `.ts` request.
   await ensureStripper();
   const appDir = resolve(opts.appDir);
+  // Test-mode serve gate (#806). Set ONLY by the browser-test harness
+  // (`@webjsdev/server/testing`'s `createBrowserTestHandler`), NEVER by
+  // `webjs dev` / `webjs start`. It relaxes the source-serve gate so ANY app
+  // file under appDir is servable (a component a browser test imports is not
+  // route-reachable, so it is absent from `browserBoundFiles` and would 404).
+  // The `.server.*` guardrail (source -> RPC/throw stub) and the core / vendor
+  // serving are unchanged, so no server source is ever exposed by this.
+  const testMode = opts.testMode === true;
   // Load <appDir>/.env into process.env BEFORE anything else.
   // buildActionIndex below imports server-only files (lib/*.server.ts,
   // modules/**/*.server.ts), some of which read process.env at module
@@ -1864,7 +1872,9 @@ async function handleCore(req, ctx) {
     // files (.server.{js,ts}) get a stub via the guardrail below; they
     // ARE included in browserBoundFiles because client code imports
     // them by path (the import rewrites to an RPC stub at request time).
-    const inGraph = state.browserBoundFiles && state.browserBoundFiles.has(abs);
+    // In test mode any app file is servable (see the `testMode` note above);
+    // otherwise the file must be in the browser-bound module graph.
+    const inGraph = testMode || (state.browserBoundFiles && state.browserBoundFiles.has(abs));
     if (abs.startsWith(appDir) && inGraph && (await exists(abs))) {
       // Server-file guardrail: a file matching `.server.{js,ts,mjs,mts}`
       // MUST NEVER be served as source to the browser. The extension is
