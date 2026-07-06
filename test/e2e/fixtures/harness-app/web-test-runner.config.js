@@ -23,6 +23,7 @@
 import { playwrightLauncher } from '@web/test-runner-playwright';
 import { createBrowserTestHandler } from '@webjsdev/server/testing';
 import { resolve } from 'node:path';
+import { Readable } from 'node:stream';
 
 // One webjs handler for the app, warmed once and shared. Top-level await so the
 // importmap is ready before `testRunnerHtml` is called for the first test file.
@@ -73,10 +74,15 @@ export default {
       }
       // Everything else (a `.ts` component, a `.server.ts` action, the `#`
       // alias, `/__webjs/core/*`, vendors) goes through the webjs dev pipeline.
+      // A GET/HEAD has no body; a POST (a browser test firing an action RPC)
+      // carries one. `ctx.req` is a Node IncomingMessage, so wrap it in a web
+      // ReadableStream (the same `Readable.toWeb` the server's own request
+      // bridge uses), NOT pass the raw Node stream.
+      const hasBody = ctx.method !== 'GET' && ctx.method !== 'HEAD';
       const req = new Request(`http://localhost${ctx.originalUrl || ctx.url}`, {
         method: ctx.method,
         headers: ctx.headers,
-        body: ctx.method === 'GET' || ctx.method === 'HEAD' ? undefined : ctx.req,
+        body: hasBody ? Readable.toWeb(ctx.req) : undefined,
         duplex: 'half',
       });
       const res = await webjs.handle(req);

@@ -1875,7 +1875,13 @@ async function handleCore(req, ctx) {
     // In test mode any app file is servable (see the `state.testMode` note
     // above); otherwise the file must be in the browser-bound module graph.
     const inGraph = state.testMode || (state.browserBoundFiles && state.browserBoundFiles.has(abs));
-    if (abs.startsWith(appDir) && inGraph && (await exists(abs))) {
+    // Containment: `abs` must be appDir itself or genuinely UNDER it. The
+    // trailing `sep` (matching the public-asset branch) stops a `..` path that
+    // resolves to a sibling sharing the appDir name-prefix (`/x/app` ->
+    // `/x/app-secrets/...`) from passing in test mode, where graph membership
+    // is not the gate.
+    const underAppDir = abs === appDir || abs.startsWith(appDir + sep);
+    if (underAppDir && inGraph && (await exists(abs))) {
       // Server-file guardrail: a file matching `.server.{js,ts,mjs,mts}`
       // MUST NEVER be served as source to the browser. The extension is
       // the path-level boundary; we re-verify it on every request (not
