@@ -507,7 +507,7 @@ WebJs ships two signatures for optimistic UI: a **declarative** React 19-style
 state wrapper (the recommended path for list / collection mutations) and a
 **legacy imperative** signal-based helper (ideal for single-value toggles).
 
-#### Declarative: `optimistic(host, options)` — React 19 `useOptimistic` parity
+#### Declarative: `optimistic(host, options)` (React 19 `useOptimistic` parity)
 
 The declarative API manages a queue of pending optimistic updates, computes
 the combined value through an optional reducer, and auto-releases when a
@@ -565,7 +565,7 @@ this.optCount = optimistic(this, { source: () => this.count });
 this.optCount.add(42);  // value is now 42
 ```
 
-#### Imperative: `optimistic(signal, value, action)` — signal-based rollback
+#### Imperative: `optimistic(signal, value, action)` (signal-based rollback)
 
 For single-value toggles the legacy signal-based helper remains:
 

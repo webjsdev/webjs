@@ -79,8 +79,8 @@ class TodoList extends WebComponent({ todos: prop(Array) }) {
     if (result.success) this.todos = [...this.todos, result.data];
   }
   render() {
-    return html`&lt;ul&gt;${this.optTodos.value.map(t =>
-      html`&lt;li class=${t.pending ? 'opacity-50' : ''}&gt;${t.title}&lt;/li&gt;`)}`;
+    return html\`&lt;ul&gt;\${this.optTodos.value.map(t =>
+      html\`&lt;li class=\${t.pending ? 'opacity-50' : ''}&gt;\${t.title}&lt;/li&gt;\`)\}\`;
   }
 }</pre>
     <p><strong>Imperative:</strong> <code>optimistic(signal, value, action)</code> sets the signal to <code>value</code> immediately, runs <code>action()</code>, and rolls back on a thrown error or <code>{ success: false }</code> envelope.</p>
