@@ -2607,14 +2607,39 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       const h = req.headers();
       if (h['x-webjs-frame']) frameRequests.push(h['x-webjs-frame']);
     };
-    const onResp = async (resp) => {
-      const h = resp.request().headers();
-      if (h['x-webjs-frame'] === 'deferred') {
-        try { frameResponses.push({ url: resp.url(), body: await resp.text() }); } catch { /* ignore */ }
-      }
-    };
     page.on('request', onReq);
-    page.on('response', onResp);
+
+    // Capture the deferred self-load's RESPONSE BODY deterministically over CDP.
+    // A page.on('response') + `await resp.text()` races the browser: loadFrame()
+    // (packages/core/src/router-client.js) reads the fetch body to apply the
+    // subtree, and once the renderer has consumed it the browser is free to evict
+    // it, so Puppeteer's getResponseBody can throw "Could not load body" (#811).
+    // Instead, pause each request at the RESPONSE stage and read the body from
+    // the browser's buffer BEFORE it is delivered to the page, so there is no
+    // consumer to race. A capture failure is recorded (never silently swallowed)
+    // so the assertion below fails loudly and diagnosably rather than flaking.
+    const findHeader = (headers, name) => {
+      const key = Object.keys(headers).find((k) => k.toLowerCase() === name);
+      return key ? headers[key] : undefined;
+    };
+    const client = await page.target().createCDPSession();
+    await client.send('Fetch.enable', { patterns: [{ requestStage: 'Response' }] });
+    client.on('Fetch.requestPaused', async (evt) => {
+      const { requestId, request } = evt;
+      try {
+        if (findHeader(request.headers, 'x-webjs-frame') === 'deferred') {
+          const { body, base64Encoded } = await client.send('Fetch.getResponseBody', { requestId });
+          const decoded = base64Encoded ? Buffer.from(body, 'base64').toString('utf8') : body;
+          frameResponses.push({ url: request.url, body: decoded });
+        }
+      } catch (err) {
+        // Do NOT swallow: record it so the assertion below is diagnosable.
+        frameResponses.push({ url: request.url, body: `__CAPTURE_ERROR__: ${err && err.message}` });
+      } finally {
+        await client.send('Fetch.continueRequest', { requestId }).catch(() => {});
+      }
+    });
+
     try {
       await page.goto(`${baseUrl}/frame-demo`, { waitUntil: 'domcontentloaded', timeout: 15000 });
       await sleep(1500);
@@ -2653,10 +2678,16 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       // frame subtree, NOT the full /frame-demo/deferred document.
       assert.ok(frameResponses.length >= 1, 'captured the deferred self-load response');
       const respBody = frameResponses[frameResponses.length - 1].body;
+      assert.ok(!respBody.startsWith('__CAPTURE_ERROR__'),
+        `the deferred self-load response body must be captured cleanly, got: ${respBody}`);
       assert.match(respBody, /<webjs-frame id="deferred"/, 'the response carries the requested frame subtree');
       assert.ok(!/<html|<head\b|importmap/i.test(respBody),
         'the self-load response is the frame subtree only (no full document shell), the server subtree-render optimization');
-    } finally { page.off('request', onReq); page.off('response', onResp); }
+    } finally {
+      page.off('request', onReq);
+      await client.send('Fetch.disable').catch(() => {});
+      await client.detach().catch(() => {});
+    }
   });
 
   // --- Progressive enhancement: the no-JS baseline must hold (#183) ---
