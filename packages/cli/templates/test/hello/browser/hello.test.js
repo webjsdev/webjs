@@ -51,11 +51,26 @@ suite('Example browser tests', () => {
     await assertNoA11yViolations(el);
   });
 
-  // Replace with your component tests:
-  // test('my-widget renders correctly', async () => {
-  //   await import('../../components/my-widget.ts');
-  //   const el = await ssrFixture(html`<my-widget></my-widget>`);
-  //   assert.ok(el.shadowRoot ?? el.firstElementChild);
-  //   await assertNoA11yViolations(el);   // opt-in a11y check
+  // A REAL `.ts` app component loads here. `webjs test --browser` serves it
+  // through the webjs dev pipeline (TypeScript stripped, any `.server.ts`
+  // action import rewritten to an RPC stub, `#` aliases resolved), so a
+  // component that talks to the server works in a real browser, not just a
+  // node test. Point the import at your own component + assert its behaviour.
+  test('a real .ts app component loads through the browser harness (#806)', async () => {
+    await import('../../../components/theme-toggle.ts');
+    const el = document.createElement('theme-toggle');
+    document.body.appendChild(el);
+    await customElements.whenDefined('theme-toggle');
+    assert.ok(el instanceof customElements.get('theme-toggle'), 'the component module loaded and upgraded the element');
+    el.remove();
+  });
+
+  // Replace with your own component tests, e.g. a component that imports a
+  // 'use server' action:
+  // test('todo-list adds a row optimistically', async () => {
+  //   await import('../../../components/todo-list.ts');  // imports create-todo.server.ts
+  //   const el = await ssrFixture(html`<todo-list></todo-list>`);
+  //   el.shadowRoot?.querySelector('button')?.click();   // triggers the action RPC
+  //   await assertNoA11yViolations(el);
   // });
 });
