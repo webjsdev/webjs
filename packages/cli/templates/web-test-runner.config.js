@@ -49,18 +49,27 @@ export default {
 </html>`,
   middleware: [
     async (ctx, next) => {
-      // web-test-runner / web-dev-server own their own internals and the TEST
-      // FILES themselves (WTR wraps each test module for the test framework);
-      // let those through. NOTE: match the WTR/WDS prefixes specifically, NOT a
-      // broad `/__web`, because webjs's own paths are `/__webjs/...` (core,
-      // vendor) and MUST be proxied to the handler below, not handed to WTR.
+      // web-test-runner owns: its own internals (/__web-test-runner,
+      // /__web-dev-server, /__wds), the TEST FILES themselves (it wraps each
+      // for the test framework), and the DOCUMENT navigation (the test-runner
+      // HTML page, `Sec-Fetch-Dest: document`). If webjs served the page, WTR's
+      // test bootstrap would never load and the session would time out. NOTE:
+      // match the WTR/WDS prefixes specifically, NOT a broad `/__web`, because
+      // webjs's own paths are `/__webjs/...` and MUST be proxied below.
       if (
         ctx.path.startsWith('/__web-test-runner') ||
         ctx.path.startsWith('/__web-dev-server') ||
         ctx.path.startsWith('/__wds') ||
-        /\.test\.(js|mjs)$/.test(ctx.path)
+        /\.test\.(js|mjs)$/.test(ctx.path) ||
+        (ctx.get('sec-fetch-dest') || '') === 'document'
       ) {
         return next();
+      }
+      // The dev live-reload SSE has no meaning in a test run; short-circuit it
+      // so it neither hangs nor logs a 404.
+      if (ctx.path === '/__webjs/events') {
+        ctx.status = 204;
+        return;
       }
       // Everything else (a `.ts` component, a `.server.ts` action, the `#`
       // alias, `/__webjs/core/*`, vendors) goes through the webjs dev pipeline.
