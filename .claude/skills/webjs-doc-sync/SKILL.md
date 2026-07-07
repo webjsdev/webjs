@@ -59,7 +59,13 @@ applies, then update or consciously skip each.
    `.gemini` / `.opencode` / `.claude` rule files. These per-agent files all carry
    the SAME rules in each agent's format; a workflow/convention change must land in
    ALL of them in lockstep (the #134 / #136 divergence lesson). The CLI help text
-   in `packages/cli/` is part of this surface for a new command or flag.
+   in `packages/cli/` is part of this surface for a new command or flag. When the
+   change is to what `webjs create` GENERATES (a gallery/showcase demo, a
+   template, the generated layout/home/theme/schema, a scaffold convention),
+   this surface has more parts (the `packages/cli/lib/*` generators, the scaffold
+   tests, the framework template-matrix docs, the preview apps) and a mandatory
+   "generate + boot + check" step: use the dedicated **`webjs-scaffold-sync`**
+   skill for those, and treat this doc-sync entry as the docs-only slice.
 6. **Example / dogfood apps** (`examples/blog/CONVENTIONS.md` and friends). Update
    when a convention the example demonstrates changes.
 
