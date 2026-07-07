@@ -132,6 +132,27 @@ async function copyUiComponents(appDir, names) {
 }
 
 /**
+ * Copy the example gallery (idiomatic, densely-commented working examples) into
+ * the scaffolded app. Merges `templates/gallery/{app,modules}` over the app so
+ * the example routes land under `app/examples/<feature>/` and their logic under
+ * `modules/<feature>/`, the app-thin + modules-logic split webjs prescribes.
+ *
+ * Ships verbatim (no `{{APP_NAME}}` substitution): the examples are self-
+ * contained and reference only `@webjsdev/*`, drizzle, `#db/*`, and each other.
+ * The scaffold's own `app/page.ts` / `app/layout.ts` are written AFTER this and
+ * the gallery ships neither, so there is no clobber. `cp` merges into existing
+ * `app/` and `modules/` dirs rather than replacing them.
+ *
+ * @param {string} appDir
+ */
+async function copyGallery(appDir) {
+  const galleryDir = join(TEMPLATES, 'gallery');
+  for (const sub of ['app', 'modules']) {
+    await cp(join(galleryDir, sub), join(appDir, sub), { recursive: true });
+  }
+}
+
+/**
  * Write `lib/utils/cn.ts` (the `cn()` helper) and `components.json` so the
  * scaffolded app is pre-initialised for `webjs ui add`. Reads the registry's
  * `lib/utils.ts` verbatim and writes it under `lib/utils/cn.ts` in the
@@ -154,11 +175,13 @@ async function writeUiBootstrap(appDir) {
   // 2) components.json: the same shape `webjsui init` writes for webjs
   // projects (see packages/ui/src/utils/detect-project.js). The utils alias
   // is lib/utils/cn so get-config.js's `+ '.ts'` resolves to lib/utils/cn.ts.
+  // The theme CSS lives at styles/globals.css, NOT app/globals.css: app/ is
+  // routing-only, so a non-routing stylesheet does not belong there.
   const componentsJson = {
     $schema: 'https://ui.webjs.dev/schema.json',
     style: 'default',
     tailwind: {
-      css: 'app/globals.css',
+      css: 'styles/globals.css',
       baseColor: 'neutral',
       cssVariables: true,
     },
@@ -175,13 +198,16 @@ async function writeUiBootstrap(appDir) {
     JSON.stringify(componentsJson, null, 2) + '\n',
   );
 
-  // 3) app/globals.css: copy the neutral theme verbatim. components.json
-  // references this path, and future `webjs ui add` calls append to it.
+  // 3) styles/globals.css: copy the neutral theme verbatim. components.json
+  // references this path, and future `webjs ui add` calls append to it. It
+  // lives OUTSIDE app/ because app/ is routing-only; the layout inlines the
+  // same tokens into a <style type="text/tailwindcss"> block so the browser
+  // Tailwind runtime resolves them with no build step.
   const css = await readFile(
     join(UI_REGISTRY_ROOT, 'themes', 'index.css'), 'utf8',
   );
-  await mkdir(join(appDir, 'app'), { recursive: true });
-  await writeFile(join(appDir, 'app', 'globals.css'), css);
+  await mkdir(join(appDir, 'styles'), { recursive: true });
+  await writeFile(join(appDir, 'styles', 'globals.css'), css);
 }
 
 /**
@@ -251,6 +277,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   }
   const isApi = template === 'api';
   const isSaas = template === 'saas';
+  // The example gallery ships in the DEFAULT full-stack scaffold only: api has no
+  // UI, and saas overwrites db/schema.server.ts (users-only, so the gallery's
+  // todos table would vanish) and already carries its own idiomatic auth example.
+  const isFullStack = !isApi && !isSaas;
 
   // Database dialect (#563): sqlite (default) or postgres. Drizzle is the ORM;
   // the schema/queries/actions are identical across dialects, only db/columns
@@ -622,7 +652,7 @@ export const index = (...cols: PgColumn[]) =>
 
   // Example schema (dialect-agnostic). Replace the User model with your own.
   await writeFile(join(appDir, 'db', 'schema.server.ts'), `import { defineRelations } from 'drizzle-orm';
-import { table, pk, text, createdAt } from './columns.server.ts';
+import { table, pk, ${isFullStack ? 'uuidPk, ' : ''}text, ${isFullStack ? 'bool, ' : ''}createdAt } from './columns.server.ts';
 
 // Example model. Feel free to delete or extend.
 export const users = table('users', {
@@ -631,10 +661,19 @@ export const users = table('users', {
   name: text(),
   createdAt: createdAt(),
 });
-
+${isFullStack ? `
+// Backs the example-gallery /examples/todo route (modules/todo). Delete it with
+// the gallery when you prune the examples you do not use.
+export const todos = table('todos', {
+  id: uuidPk(),
+  title: text().notNull(),
+  completed: bool().notNull().default(false),
+  createdAt: createdAt(),
+});
+` : ''}
 // Relations live here (one defineRelations for the whole schema). Empty
 // for now; add per-model relations as your schema grows.
-export const relations = defineRelations({ users }, () => ({}));
+export const relations = defineRelations({ users${isFullStack ? ', todos' : ''} }, () => ({}));
 
 // Derived types, never hand-written.
 export type User = typeof users.$inferSelect;
@@ -905,7 +944,7 @@ export type ActionResult<T> =
 
     // Pre-initialise @webjsdev/ui so the scaffold boots ready for
     // `webjs ui add <name>`: writes components.json + lib/utils/cn.ts +
-    // app/globals.css (the shadcn theme).
+    // styles/globals.css (the shadcn theme).
     await writeUiBootstrap(appDir);
 
     // Copy the standard ui-* component kit the scaffold's example pages
@@ -915,11 +954,19 @@ export type ActionResult<T> =
       'button', 'card', 'alert', 'badge', 'separator', 'label', 'input',
     ]);
 
+    // The example gallery: idiomatic, densely-commented working examples of
+    // webjs features (app-thin routes under app/examples/ + modules/<feature>/
+    // logic), linked from the home page. Shipped in the default full-stack
+    // scaffold so an agent gains context by browsing real code; prune
+    // per-feature (delete the route + its module) for what the app does not
+    // use. See CONVENTIONS.md "prune what the app does not use".
+    if (isFullStack) await copyGallery(appDir);
+
     // The shadcn theme tokens (`--color-primary`, `--color-card`, …) the
     // ui-* components consume. We read the registry's themes/index.css at
     // create time and inline it into the layout's
     // `<style type="text/tailwindcss">` block so the Tailwind browser
-    // runtime picks it up. Same content also lives at app/globals.css for
+    // runtime picks it up. Same content also lives at styles/globals.css for
     // `webjsui` tooling.
     const SHADCN_THEME = (await readThemeCss())
       // Escape backticks + ${} so the CSS survives interpolation into the
@@ -1011,7 +1058,7 @@ export default function RootLayout({ children }: { children: unknown }) {
     <!--
       Webjs UI theme. Design tokens (--color-primary,
       --color-card, --radius, etc.) the ui-* components consume.
-      The same content is also at app/globals.css; we inline it here so
+      The same content is also at styles/globals.css. We inline it here so
       the Tailwind browser runtime resolves the tokens without a build step.
       Edit base palette via the :root / .dark blocks below.
     -->
@@ -1141,65 +1188,59 @@ import {
   cardHeaderClass,
   cardTitleClass,
   cardDescriptionClass,
-  cardContentClass,
 } from '#components/ui/card.ts';
-import { alertClass, alertTitleClass, alertDescriptionClass } from '#components/ui/alert.ts';
-import { separatorClass } from '#components/ui/separator.ts';
 
 export const metadata = {
   title: '${name}: built with webjs',
 };
 
+// The example routes this scaffold ships, each a small idiomatic webjs app.
+// Prune the ones you do not need (delete the app/examples/<name> route AND its
+// modules/<name> folder), then reshape this page into your app's real home.
+const examples = [
+  { href: '/examples/todo', title: 'Optimistic todo', blurb: 'Optimistic UI with instant updates and auto-rollback, progressive-enhancement forms, accessible labels, and the app-thin plus modules split, backed by SQLite.' },
+  { href: '/examples/tic-tac-toe', title: 'Tic-tac-toe', blurb: 'Client-only state with signals. No server and no database, so all interactivity lives in the component.' },
+  { href: '/examples/components', title: 'Components', blurb: 'The WebComponent factory, reactive props, instance signals, and slot projection in light DOM.' },
+  { href: '/examples/routing', title: 'Routing', blurb: 'A static route plus a dynamic [id] segment that reads params. The file-based router in miniature.' },
+  { href: '/examples/server-actions', title: 'Server actions', blurb: 'A use-server RPC action next to a server-only .server.ts utility, and why the boundary matters.' },
+];
+
 export default function Home() {
   return html\`
-    <section class="mb-18">
+    <section class="mb-14">
       \${rubric('welcome')}
       \${displayH1(html\`Hello from <span class="text-accent italic">${name}</span>.\`)}
       <p class="text-lede leading-[1.5] text-fg-muted max-w-[56ch] m-0 mb-6">
-        Edit <code class="font-mono text-[0.9em]">app/page.ts</code> to get started.
-        Run \${accentLink('#', 'webjs test')} to run tests and
-        \${accentLink('#', 'webjs check')} to catch correctness issues.
+        This scaffold ships an example gallery below: small, idiomatic, heavily
+        commented webjs apps. Browse them for context, then replace this page
+        with your own. See \${accentLink('https://docs.webjs.com', 'the docs')}
+        for the full reference.
       </p>
       <div class="flex gap-3 items-center">
-        <button class=\${buttonClass()}>Get started</button>
-        <button class=\${buttonClass({ variant: 'outline' })}>View docs</button>
+        <a href="/examples/todo" class=\${buttonClass()}>Open the todo example</a>
         <span class=\${badgeClass({ variant: 'secondary' })}>v0.1</span>
       </div>
     </section>
 
-    <div class=\${cardClass()} style="margin-bottom: 3rem">
-      <div class=\${cardHeaderClass()}>
-        <h3 class=\${cardTitleClass()}>Web Components + Server Actions</h3>
-        <p class=\${cardDescriptionClass()}>
-          Drop a custom element anywhere. Call a server action like a local
-          function. webjs rewrites the import into a typed RPC stub.
-        </p>
-      </div>
-      <div class=\${cardContentClass()}>
-        <div class=\${alertClass()}>
-          <h5 class=\${alertTitleClass()}>AI-first component kit included</h5>
-          <div class=\${alertDescriptionClass()}>
-            button, card, alert, badge, separator, label, input are already
-            in <code class="font-mono text-[0.9em]">components/ui/</code> as
-            class-helper functions you call from a native element. Add more
-            with <code class="font-mono text-[0.9em]">webjs ui add &lt;name&gt;</code>.
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class=\${separatorClass()} style="margin: 2.5rem 0"></div>
-
-    <section class="mt-10">
-      <h2 class="font-serif text-[1.6rem] tracking-[-0.02em] font-bold m-0 mb-2">Light DOM + Tailwind</h2>
-      <p class="text-fg-muted text-sm m-0 mb-4">
-        Components render into light DOM by default. Tailwind utility classes
-        apply directly. Set <code class="font-mono text-[0.9em]">static shadow = true</code>
-        on a component when you need scoped styles or third-party-embed
-        isolation. &lt;slot&gt; projection works identically in both modes,
-        including named slots, fallback content, and the full
-        assignedNodes / slotchange API.
+    <section>
+      <h2 class="font-serif text-[1.6rem] tracking-[-0.02em] font-bold m-0 mb-1">Example gallery</h2>
+      <p class="text-fg-muted text-sm m-0 mb-5">
+        Each route lives under <code class="font-mono text-[0.9em]">app/examples/</code>
+        with its logic in <code class="font-mono text-[0.9em]">modules/</code>.
+        Delete the ones you do not need.
       </p>
+      <div class="grid gap-4 sm:grid-cols-2">
+        \${examples.map((ex) => html\`
+          <a href=\${ex.href} class="block no-underline">
+            <div class="\${cardClass()} h-full transition-colors hover:border-border-strong">
+              <div class=\${cardHeaderClass()}>
+                <h3 class=\${cardTitleClass()}>\${ex.title}</h3>
+                <p class=\${cardDescriptionClass()}>\${ex.blurb}</p>
+              </div>
+            </div>
+          </a>
+        \`)}
+      </div>
     </section>
   \`;
 }
@@ -1308,7 +1349,7 @@ ThemeToggle.register('theme-toggle');
     app/layout.ts, page.ts, login/, signup/
     app/dashboard/{page,settings,middleware}.ts  ← protected
     app/api/auth/[...path]/route.ts      ← auth API
-    app/globals.css                      ← @webjsdev/ui theme tokens
+    styles/globals.css                   ← @webjsdev/ui theme tokens
     components.json                      ← preconfigured for \`webjs ui add\`
     components/ui/{button,card,alert,badge,separator,label,input,
                     dialog,form,field,switch,checkbox}.ts
@@ -1321,15 +1362,19 @@ ThemeToggle.register('theme-toggle');
 `);
   } else {
     console.log(`  ${name}/
-    app/layout.ts, page.ts       ← light DOM + Tailwind + @theme tokens
-    app/globals.css              ← @webjsdev/ui theme tokens
+    app/layout.ts, page.ts       ← home links to the example gallery
+    app/examples/{todo,tic-tac-toe,components,routing,server-actions}/
+                                 ← thin routes for the gallery
+    styles/globals.css           ← @webjsdev/ui theme tokens
     components.json              ← preconfigured for \`webjs ui add\`
     components/ui/{button,card,alert,badge,separator,label,input}.ts
     components/theme-toggle.ts   ← light DOM web component
     lib/utils/cn.ts              ← cn() helper for ui-* components
     lib/utils/ui.ts              ← Tailwind class-bundle helpers
     public/tailwind-browser.js   ← Tailwind runtime
-    modules/
+    modules/{todo,tic-tac-toe,components,routing,server-actions}/
+                                 ← gallery logic (prune what you skip)
+    db/{schema,columns,connection}.server.ts  ← Drizzle (User + Todo)
     CONVENTIONS.md, AGENTS.md, CLAUDE.md
 `);
   }
@@ -1391,13 +1436,14 @@ For AI agents, read this before editing scaffolded files:
   // templates ship with @webjsdev/ui already initialised; the api
   // template has no UI but may add one later.
   const installSegment = installed ? '' : `${pm} install && `;
-  // The saas example queries the users table on its first request (auth), so it
-  // needs a migration authored first: `db:generate` writes it and the
-  // `webjs.dev.before` migrate applies it on `run dev` (Drizzle splits Prisma's
-  // `migrate dev` into generate-then-migrate). The full-stack / api examples do
-  // not query the db on first paint, so they boot with just `run dev`; once you
-  // add a db route, `db:generate` then `run dev` is the loop (dev auto-migrates).
-  const dbSegment = isSaas ? `${pm} run db:generate && ` : '';
+  // Some examples query the db on their first request, so a migration must be
+  // authored first: `db:generate` writes it and the `webjs.dev.before` migrate
+  // applies it on `run dev` (Drizzle splits Prisma's `migrate dev` into
+  // generate-then-migrate). The saas example queries users (auth); the
+  // full-stack scaffold ships the gallery's /examples/todo route (queries todos).
+  // The api template has no such first-request query, so it boots with just
+  // `run dev`; once you add a db route, `db:generate` then `run dev` is the loop.
+  const dbSegment = isApi ? '' : `${pm} run db:generate && `;
   const runCommand = `cd ${name} && ${installSegment}${dbSegment}${pm} run dev`;
   // Postgres needs a reachable DATABASE_URL before any migrate (sqlite uses a
   // local file with no .env). Point it at a running database; `dev` / `start`
