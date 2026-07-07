@@ -41,7 +41,8 @@
  * Design tokens used: --foreground, --background.
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
-import { ensureId, onBeforeCache } from '../lib/utils.ts';
+import { ensureId } from '../lib/utils.ts';
+import { onBeforeCache } from '../lib/dom.ts';
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
 // UA `[popover]` defaults paint a bordered, padded panel centered with

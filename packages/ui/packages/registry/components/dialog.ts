@@ -65,7 +65,8 @@
  */
 import { WebComponent, html, unsafeHTML, prop } from '@webjsdev/core';
 import { ref, createRef } from '@webjsdev/core/directives';
-import { ensureId, onBeforeCache } from '../lib/utils.ts';
+import { ensureId } from '../lib/utils.ts';
+import { onBeforeCache } from '../lib/dom.ts';
 import { buttonClass } from './button.ts';
 
 // Wires a dialog panel's accessible name + description to its title /
