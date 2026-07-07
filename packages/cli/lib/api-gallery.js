@@ -79,10 +79,12 @@ export async function writeApiGallery(appDir) {
   await mkdir(feat('stream'), { recursive: true });
   await writeFile(feat('stream', 'route.ts'), [
     "// webjs-scaffold-placeholder. API backend-features demo. Keep and adapt it, or prune it (delete this app/api/features/stream route), then delete this marker line. webjs check fails while the marker remains.",
-    "// Streams NDJSON chunks as they are produced, so a slow or large result is",
-    "// delivered incrementally instead of buffered whole. A hand-written route.ts",
-    "// returns a ReadableStream for full control; `curl -N` shows the lines arrive",
-    "// one at a time.",
+    "// Streams JSON-per-line chunks as they are produced, so a slow or large",
+    "// result is delivered incrementally instead of buffered whole. A hand-written",
+    "// route.ts returns a ReadableStream for full control. Served as text/plain so",
+    "// it renders INLINE and incrementally in a browser (application/x-ndjson would",
+    "// make the browser download a file instead); `curl -N` shows the same lines",
+    "// arrive one at a time.",
     "export async function GET() {",
     "  const encoder = new TextEncoder();",
     "  const stream = new ReadableStream({",
@@ -94,7 +96,7 @@ export async function writeApiGallery(appDir) {
     "      controller.close();",
     "    },",
     "  });",
-    "  return new Response(stream, { headers: { 'content-type': 'application/x-ndjson' } });",
+    "  return new Response(stream, { headers: { 'content-type': 'text/plain; charset=utf-8', 'x-content-type-options': 'nosniff' } });",
     "}",
     "",
   ].join('\n'));
