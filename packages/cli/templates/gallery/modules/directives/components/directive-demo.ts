@@ -5,6 +5,7 @@
 // the signal changes, without re-running the whole template.
 import { WebComponent, signal, html } from '@webjsdev/core';
 import { repeat, watch } from '@webjsdev/core/directives';
+import { buttonClass } from '#components/ui/button.ts';
 
 interface Item { id: number; label: string }
 
@@ -30,8 +31,8 @@ export class DirectiveDemo extends WebComponent {
     return html`
       <div class="grid gap-4 max-w-[420px]">
         <div class="flex gap-2">
-          <button @click=${() => this.reverse()} class="px-3 py-1.5 rounded bg-accent text-accent-fg">Reverse</button>
-          <button @click=${() => this.add()} class="px-3 py-1.5 rounded border border-border">Add</button>
+          <button @click=${() => this.reverse()} class=${buttonClass({ size: 'sm' })}>Reverse</button>
+          <button @click=${() => this.add()} class=${buttonClass({ variant: 'outline', size: 'sm' })}>Add</button>
         </div>
         <!-- repeat keyed by item.id: reversing reuses the existing <li> nodes. -->
         <ul class="grid gap-1 list-none m-0 p-0">
