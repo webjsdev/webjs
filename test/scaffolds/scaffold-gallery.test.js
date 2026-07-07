@@ -129,6 +129,30 @@ test('todo query uses rc.3 object-form orderBy (regression guard)', async () => 
   }
 });
 
+test('feature pages have no stale /examples/ links after the features refactor', async () => {
+  // Regression guard: moving the demos from app/examples/ to app/features/ must
+  // update the in-page hrefs too, not just the marker text. The ONLY valid
+  // /examples/* link anywhere is the todo app (app/examples/todo).
+  const cwd = await tempCwd();
+  try {
+    await scaffoldApp('demo', cwd, { template: 'full-stack' });
+    const featuresDir = join(cwd, 'demo', 'app', 'features');
+    const pages = [
+      ...FEATURES.map((n) => join(featuresDir, n, 'page.ts')),
+      join(featuresDir, 'routing', '[id]', 'page.ts'),
+      join(featuresDir, 'route-handler', 'data', 'route.ts'),
+    ];
+    for (const p of pages) {
+      const src = await readFile(p, 'utf8');
+      for (const m of src.matchAll(/\/examples\/[a-z-]+/g)) {
+        assert.equal(m[0], '/examples/todo', `${p}: stale link ${m[0]} (todo is the only /examples/ route)`);
+      }
+    }
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
 test('api and saas do NOT ship the gallery (full-stack only)', async () => {
   for (const template of ['api', 'saas']) {
     const cwd = await tempCwd();
