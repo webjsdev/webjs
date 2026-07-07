@@ -1114,6 +1114,8 @@ ${UI_THEME}
         --border-strong: oklch(0.38 0.012 55 / 0.9);
         --input: oklch(0.26 0.012 55 / 0.9);
         --ring: oklch(0.7 0.16 52);
+        --logo-from: oklch(0.8 0.16 58);
+        --logo-to: oklch(0.62 0.18 44);
       }
       /* light (explicit via the toggle) */
       :root[data-theme='light'] {
@@ -1136,6 +1138,8 @@ ${UI_THEME}
         --border-strong: oklch(0.78 0.01 75 / 0.95);
         --input: oklch(0.88 0.01 75 / 0.95);
         --ring: oklch(0.54 0.16 52);
+        --logo-from: oklch(0.63 0.17 50);
+        --logo-to: oklch(0.44 0.11 52);
       }
       /* light (OS preference, when the user has made no explicit choice) */
       @media (prefers-color-scheme: light) {
@@ -1159,6 +1163,8 @@ ${UI_THEME}
           --border-strong: oklch(0.78 0.01 75 / 0.95);
           --input: oklch(0.88 0.01 75 / 0.95);
           --ring: oklch(0.54 0.16 52);
+          --logo-from: oklch(0.63 0.17 50);
+          --logo-to: oklch(0.44 0.11 52);
         }
       }
       @theme inline {
@@ -1208,9 +1214,22 @@ ${UI_THEME}
       drop the cap and mx-auto for an edge-to-edge layout. A wide layout left
       inside the 760px reading column overflows into a horizontal scrollbar.
     -->
-    <main class="block max-w-[760px] mx-auto px-4 sm:px-6 pt-[72px] pb-12 min-h-[calc(100dvh-var(--header-h))]">
-      \${children}
-    </main>
+    <div class="flex flex-col min-h-[calc(100dvh-var(--header-h))]">
+      <main class="flex-1 w-full max-w-[760px] mx-auto px-4 sm:px-6 pt-[72px] pb-12">
+        \${children}
+      </main>
+      <!-- "Built with webjs" attribution. Keep it or replace it with your own
+           footer; the gradient mark uses the --logo-from/--logo-to tokens. -->
+      <footer class="border-t border-border">
+        <div class="max-w-[760px] mx-auto px-4 sm:px-6 py-6 flex items-center justify-center">
+          <a href="https://webjs.dev" class="inline-flex items-center gap-2 no-underline text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <span>Built with</span>
+            <span class="w-[18px] h-[18px] rounded-[6px] bg-gradient-to-br from-[var(--logo-from)] to-[var(--logo-to)] shadow-[0_2px_10px_var(--accent-tint)]"></span>
+            <span class="font-semibold text-foreground">webjs</span>
+          </a>
+        </div>
+      </footer>
+    </div>
   \`;
 }
 `);
