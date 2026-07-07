@@ -23,7 +23,7 @@ export default function RoutingExample() {
       <code class="font-mono">PageProps&lt;'/features/routing/[id]'&gt;</code>
       so <code class="font-mono">params</code> is checked against the real routes.
     </p>
-    <p class="text-muted-foreground text-sm">
+    <p class="text-muted-foreground text-sm mb-2">
       Programmatic navigation is checked too:
       <code class="font-mono">navigate(url)</code> takes that
       <code class="font-mono">Route</code> union, so
@@ -32,6 +32,16 @@ export default function RoutingExample() {
       <code class="font-mono">&lt;a href&gt;</code> strings are not checked, so
       prefer <code class="font-mono">navigate()</code> for internal links you want
       verified.)
+    </p>
+    <p class="text-muted-foreground text-sm">
+      Changing route in code, two sides:
+      <code class="font-mono">navigate(url)</code> runs in the browser (a soft,
+      in-place client-router nav from an event handler, no reload), while
+      <code class="font-mono">redirect(url)</code> runs on the server (throw it in
+      a page or an <code class="font-mono">action</code> to bail before render and
+      return an HTTP 3xx). Throw
+      <code class="font-mono">redirect()</code> on the server, call
+      <code class="font-mono">navigate()</code> on the client.
     </p>
   `;
 }
