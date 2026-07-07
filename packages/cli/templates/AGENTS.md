@@ -801,6 +801,31 @@ globally. Prefer Tailwind. When a utility bundle repeats, extract it into
 a `lib/utils/ui.ts` helper returning an `` html`...` `` fragment, not a
 CSS class.
 
+#### Design tokens: ONE theme, shadcn-canonical
+
+The app has a SINGLE theme, defined once in `app/layout.ts`. It uses the
+standard `@webjsdev/ui` (shadcn-compatible) semantic tokens, set to this app's
+brand palette. Use the canonical utility names everywhere, in the page chrome
+AND inside components: `bg-background`, `text-foreground`, `bg-card`, `bg-muted`,
+`text-muted-foreground`, `bg-primary`, `text-primary-foreground`, `bg-accent`,
+`text-accent-foreground`, `border-border`, `ring-ring`. These are exactly the
+tokens the components copied in by `webjs ui add <name>` read, so a scaffolded
+page and a later-added ui component share one coherent theme automatically.
+
+- **Never invent a parallel token vocabulary** (`--fg`, `--bg`, `text-fg`,
+  `bg-elev`, a separate `--brand`). It collides with the ui tokens (the accent
+  once flipped to neutral on navigation for exactly this reason) and diverges
+  from the shadcn conventions the ui kit and AI agents both expect.
+- **Reach for opacity modifiers before a new token**: `bg-accent/10` for a
+  tint, `hover:bg-accent/90` for a hover, `text-muted-foreground/70` for a
+  subtler text level.
+- **Edit the palette in one place** (`app/layout.ts`). To ADD a token, do it
+  the canonical way: a `--x` variable in the `:root` / `.dark` blocks plus a
+  `--color-x: var(--x)` line in the `@theme inline` block, then use it as
+  `bg-x` / `text-x`.
+- Dark mode is a `.dark` class the theme toggle sets. Tokens switch by theme
+  automatically, so a component written with these names works in both.
+
 Reserve raw CSS for what utilities cannot express: design-token `:root` /
 `@theme` definitions, `@property` + `@keyframes` animations,
 `::-webkit-scrollbar`, `prefers-reduced-motion` blocks, and complex

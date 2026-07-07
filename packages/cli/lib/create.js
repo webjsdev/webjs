@@ -1215,6 +1215,10 @@ ${UI_THEME}
 }
 `);
 
+  // The gallery-index home (links every feature demo + the example app) ships
+  // only in the full-stack scaffold, which is the only one that ships the
+  // gallery. saas gets its own landing below.
+  if (isFullStack) {
   await writeFile(join(appDir, 'app', 'page.ts'), `// webjs-scaffold-placeholder. This is the example homepage. Replace it with your app's real page, then delete this line. webjs check fails while the marker remains.
 import { html } from '@webjsdev/core';
 import { rubric, displayH1, accentLink } from '#lib/utils/ui.ts';
@@ -1300,6 +1304,37 @@ export default function Home() {
   \`;
 }
 `);
+  } else {
+    // saas landing: the app has auth + a dashboard, so link those instead of a
+    // gallery it does not ship.
+    await writeFile(join(appDir, 'app', 'page.ts'), `// webjs-scaffold-placeholder. This is the example homepage. Replace it with your app's real landing page, then delete this line. webjs check fails while the marker remains.
+import { html } from '@webjsdev/core';
+import { rubric, displayH1, accentLink } from '#lib/utils/ui.ts';
+
+export const metadata = {
+  title: '${displayName}: built with webjs',
+};
+
+export default function Home() {
+  return html\`
+    <section class="mb-14">
+      \${rubric('welcome')}
+      \${displayH1(html\`Hello from <span class="text-accent italic">${displayName}</span>.\`)}
+      <p class="text-lede leading-[1.5] text-muted-foreground max-w-[56ch] m-0 mb-6">
+        The saas starter: email and password auth, a protected dashboard, and a
+        User model, all wired up. Replace this page with your product's landing.
+        See \${accentLink('https://docs.webjs.dev', 'the docs')} for the full reference.
+      </p>
+      <div class="flex gap-3 items-center">
+        <a href="/login" class="inline-flex items-center px-4 py-2 rounded-xl bg-accent text-accent-foreground font-semibold text-sm no-underline transition-all hover:bg-accent/90 active:scale-[0.97]">Log in</a>
+        <a href="/signup" class="text-accent no-underline font-medium text-sm">Create an account</a>
+        <a href="/dashboard" class="text-muted-foreground no-underline font-medium text-sm hover:text-foreground transition-colors">Dashboard</a>
+      </div>
+    </section>
+  \`;
+}
+`);
+  }
 
   // AGENTS.md is copied via the `templateFiles` loop above, from
   // `packages/cli/templates/AGENTS.md` with `{{APP_NAME}}` substitution.
