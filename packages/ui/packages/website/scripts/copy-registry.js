@@ -19,9 +19,12 @@ const REGISTRY_ROOT = resolve(__dirname, '..', '..', 'registry');
 
 const COMPONENTS_SRC = join(REGISTRY_ROOT, 'components');
 const LIB_SRC = join(REGISTRY_ROOT, 'lib', 'utils.ts');
+// onBeforeCache lives in its own client-only module since the #819 split.
+const LIB_DOM_SRC = join(REGISTRY_ROOT, 'lib', 'dom.ts');
 
 const COMPONENTS_DST = join(WEBSITE_ROOT, 'components', 'ui');
 const LIB_DST = join(WEBSITE_ROOT, 'lib', 'utils.ts');
+const LIB_DOM_DST = join(WEBSITE_ROOT, 'lib', 'dom.ts');
 
 if (!existsSync(COMPONENTS_SRC)) {
   console.error(`[ui-website] registry components not found at ${COMPONENTS_SRC}`);
@@ -38,21 +41,24 @@ for (const name of readdirSync(COMPONENTS_DST)) {
   if (name.endsWith('.ts')) rmSync(join(COMPONENTS_DST, name));
 }
 
-// 2. Copy lib/utils.ts verbatim.
+// 2. Copy lib/utils.ts (pure cn helpers) and lib/dom.ts (onBeforeCache) verbatim.
 copyFileSync(LIB_SRC, LIB_DST);
+copyFileSync(LIB_DOM_SRC, LIB_DOM_DST);
 
-// 3. Copy each component, rewriting the `../lib/utils.ts` import path so it
-//    points to the website's `lib/utils.ts` (two levels up from
-//    `components/ui/<name>.ts`).
+// 3. Copy each component, rewriting the `../lib/utils.ts` and `../lib/dom.ts`
+//    import paths so they point at the website's `lib/` (two levels up from
+//    `components/ui/<name>.ts`). Missing the dom.ts rewrite 500s SSR (#819).
 let copied = 0;
 for (const name of readdirSync(COMPONENTS_SRC)) {
   if (!name.endsWith('.ts')) continue;
   const raw = readFileSync(join(COMPONENTS_SRC, name), 'utf8');
   const rewritten = raw
     .replaceAll("'../lib/utils.ts'", "'../../lib/utils.ts'")
-    .replaceAll('"../lib/utils.ts"', '"../../lib/utils.ts"');
+    .replaceAll('"../lib/utils.ts"', '"../../lib/utils.ts"')
+    .replaceAll("'../lib/dom.ts'", "'../../lib/dom.ts'")
+    .replaceAll('"../lib/dom.ts"', '"../../lib/dom.ts"');
   writeFileSync(join(COMPONENTS_DST, name), rewritten);
   copied++;
 }
 
-console.log(`[ui-website] copied ${copied} components + lib/utils.ts from registry`);
+console.log(`[ui-website] copied ${copied} components + lib/utils.ts + lib/dom.ts from registry`);
