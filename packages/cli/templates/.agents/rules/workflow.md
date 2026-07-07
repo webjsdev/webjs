@@ -19,6 +19,12 @@ cover what you need, the full hosted docs are at **https://docs.webjs.com**.
   the example `User` model, the example users module, etc. with the app the
   user actually asked for. Do not ship "Hello from <app-name>" as the
   deliverable.
+- **Use a unique design (UI apps).** When the app has a UI, give it a design of
+  your own (palette, layout, typography, chrome) that fits what the user asked
+  for. Do NOT mimic the scaffold's example look (its warm colors, the 760px
+  reading column, the example header/nav). The `api` template has no UI, so this
+  does not apply there. Keep the design tokens and theme setup in
+  `app/layout.ts`, those are infrastructure, and restyle on top of them.
 - **Only three templates exist:** `webjs create <name>` (default full-stack),
   `--template api`, `--template saas`. The CLI rejects any other `--template`
   value. Pick:

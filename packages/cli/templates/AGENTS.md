@@ -20,7 +20,13 @@ example `Home` nav, and pick a content-width container that fits. The
 default `<main class="max-w-[760px]">` is a reading column for prose and
 forms, so for a full-bleed app, dashboard, or board, widen the cap or
 remove it (keep the theme tokens). A wide layout left in the 760px
-reading column overflows into a horizontal scrollbar. This is ENFORCED:
+reading column overflows into a horizontal scrollbar. **Give the app a
+unique design.** When it has a UI, choose its palette, layout, typography,
+and chrome to fit what the user asked for, rather than mimicking the
+scaffold's example look (the warm accent, the reading column, the serif
+display, the example header/nav) or just recoloring the same layout. The
+`api` template has no UI, so this does not apply there. The design tokens
+and theme wiring are infrastructure to keep and restyle on top of. This is ENFORCED:
 the example `app/page.ts` and `app/layout.ts` carry a
 `webjs-scaffold-placeholder` marker comment, and `webjs check` fails
 while any marker remains, so this freshly scaffolded app fails the check

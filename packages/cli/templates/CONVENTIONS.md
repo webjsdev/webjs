@@ -333,7 +333,15 @@ When the user asks the agent to build their actual app:
    dashboard, or board, or a wide layout overflows into an unnecessary
    horizontal scrollbar. Keep the design tokens and theme setup, those
    are infrastructure.
-6. **Keep:** the Drizzle setup, the test config, the agent config files
+6. **Use a unique design (UI apps).** Give the app a look of its own that
+   fits what the user asked for. Choose the palette, layout, typography,
+   spacing, and chrome deliberately. Do NOT mimic the scaffold's example
+   look (its warm accent, the 760px reading column, the serif display, the
+   example header/nav), and do not just recolor the same layout. The
+   `api` template has no UI, so this does not apply there. The design
+   tokens and theme wiring in `app/layout.ts` are infrastructure to keep
+   and restyle on top of, not the example look to preserve.
+7. **Keep:** the Drizzle setup, the test config, the agent config files
    (`AGENTS.md`, `CONVENTIONS.md`, `CLAUDE.md`, `.cursorrules`, etc.),
    `db/connection.server.ts` + `db/columns.server.ts`, the directory
    conventions, the design tokens in `app/layout.ts`. These are the
