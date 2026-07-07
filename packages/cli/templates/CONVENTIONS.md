@@ -321,14 +321,26 @@ demos, one webjs concept each (routing, components, server-actions,
 optimistic-ui, async-render, directives, route-handler). `app/examples/<name>/`
 are whole example apps that compose several features (todo: optimistic UI
 + progressive enhancement + a11y + db + modules). Both keep their logic in
-`modules/`, are small and heavily commented, and are REFERENCE, not the
-app: keep and adapt the ones you need, and **prune the rest**. Pruning a
-route means deleting its `app/features/<name>` or `app/examples/<name>`
-folder AND its `modules/<name>` folder (for the todo app, also the `todos`
-table in `db/schema.server.ts` and its link in `app/page.ts`). Each route
-page carries a `webjs-scaffold-placeholder` marker, so `webjs check` fails
-until you consciously keep-and-adapt or prune it. After pruning, delete
-any now-empty directories, an empty `lib/utils/` or `modules/<name>/` is
+`modules/`, are small and heavily commented, and are the PRIMARY reference
+for how webjs works.
+
+**Study the whole gallery FIRST, prune SECOND.** Before writing or deleting
+anything, read every feature demo and the example app end to end (code AND
+comments) to absorb the idioms you will reuse. Only AFTER you have
+internalised the patterns should you prune. Never delete the examples
+blindly up front (that discards your context before you have read it), and
+never prune the durable knowledge surfaces (`AGENTS.md`, `CONVENTIONS.md`,
+the per-agent rule files), which stay as context for every future
+iteration.
+
+Then prune: the examples are REFERENCE, not the app, so keep and adapt the
+ones you need and **delete the rest**. Pruning a route means deleting its
+`app/features/<name>` or `app/examples/<name>` folder AND its
+`modules/<name>` folder (for the todo app, also the `todos` table in
+`db/schema.server.ts` and its link in `app/page.ts`). Each route page
+carries a `webjs-scaffold-placeholder` marker, so `webjs check` fails until
+you consciously keep-and-adapt or prune it. After pruning, delete any
+now-empty directories, an empty `lib/utils/` or `modules/<name>/` is
 leftover scaffolding, not structure.
 
 **`app/` is routing-only.** Only routing files belong in `app/` (page,

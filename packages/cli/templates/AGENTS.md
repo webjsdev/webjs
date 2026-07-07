@@ -368,15 +368,28 @@ not mixed:
   (todo: optimistic UI + progressive enhancement + a11y + db + modules).
 
 Both keep their logic in `modules/<name>/`. Each route is small, idiomatic, and
-heavily commented, so read them to learn the webjs patterns. They are REFERENCE,
-not your app: keep and adapt the ones you need, and prune the rest. Pruning a
-route means deleting its `app/features/<name>` or `app/examples/<name>` folder
-AND its `modules/<name>` folder (and, for the todo app, the `todos` table in
-`db/schema.server.ts`), then removing its link from `app/page.ts`. Each route
-page carries a `webjs-scaffold-placeholder` marker so `webjs check` fails until
-you have consciously kept-and-adapted or pruned it. After pruning, delete any
-now-empty directories (an empty `lib/utils/` or `modules/<name>/` is leftover
-scaffolding, not structure).
+heavily commented, and the gallery is your PRIMARY reference for how webjs works.
+
+**Study the whole gallery FIRST, prune SECOND.** Before you write or delete
+anything, read every feature demo and the example app end to end (the code AND
+the comments) to absorb the idioms you will reuse: the modules split, signals,
+the `optimistic()` API, `async render()`, the `.server.ts` vs `'use server'`
+boundary, progressive-enhancement forms, `<label for>` a11y, dynamic routes, and
+`route.ts` handlers. Only AFTER you have internalised the patterns should you
+prune. Never delete the examples blindly up front (that throws away your context
+before you have read it), and never prune the durable knowledge surfaces
+(`AGENTS.md`, `CONVENTIONS.md`, the per-agent rule files), which stay as context
+for every future iteration.
+
+Then prune: the examples are REFERENCE, not your app, so keep and adapt the ones
+you need and delete the rest. Pruning a route means deleting its
+`app/features/<name>` or `app/examples/<name>` folder AND its `modules/<name>`
+folder (and, for the todo app, the `todos` table in `db/schema.server.ts`), then
+removing its link from `app/page.ts`. Each route page carries a
+`webjs-scaffold-placeholder` marker so `webjs check` fails until you have
+consciously kept-and-adapted or pruned it. After pruning, delete any now-empty
+directories (an empty `lib/utils/` or `modules/<name>/` is leftover scaffolding,
+not structure).
 
 ### Typed page / layout / route-handler props
 

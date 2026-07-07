@@ -19,14 +19,16 @@ cover what you need, the full hosted docs are at **https://docs.webjs.com**.
   the example `User` model, the example users module, etc. with the app the
   user actually asked for. Do not ship "Hello from <app-name>" as the
   deliverable.
-- **The gallery is reference too, prune it.** The full-stack scaffold ships
+- **Study the gallery first, prune it second.** The full-stack scaffold ships
   single-feature demos under `app/features/` plus one whole example app under
-  `app/examples/` (logic in `modules/`). Read it to learn the patterns, keep and
-  adapt what you need, and delete the rest (the `app/features/<name>` or
-  `app/examples/<name>` route AND its `modules/<name>`; for the todo app, also
-  the `todos` table). Each route page has a `webjs-scaffold-placeholder` marker
-  so `webjs check` fails until you resolve it. Delete now-empty directories after
-  pruning.
+  `app/examples/` (logic in `modules/`). It is your PRIMARY webjs reference: read
+  every demo end to end (code AND comments) to learn the idioms BEFORE you write
+  or delete anything. Only after internalising the patterns should you prune,
+  keeping and adapting what you need and deleting the rest (the
+  `app/features/<name>` or `app/examples/<name>` route AND its `modules/<name>`;
+  for the todo app, also the `todos` table). Never delete blindly up front. Each
+  route page has a `webjs-scaffold-placeholder` marker so `webjs check` fails
+  until you resolve it. Delete now-empty directories after pruning.
 - **`app/` is routing-only.** Only routing files live in `app/` (page, layout,
   route, middleware, metadata routes). CSS, helpers, and constants do NOT:
   `globals.css` is at `styles/`, browser-safe helpers at `lib/utils/`, feature
