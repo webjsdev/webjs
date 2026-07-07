@@ -22,7 +22,8 @@ export default function ServiceWorkerExample() {
     <pre class="bg-card border border-border rounded-xl p-4 overflow-x-auto text-sm font-mono mb-4"><code>connectedCallback() {
   super.connectedCallback();
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/public/sw.js');
+    // Register at the site root so the worker's scope is the whole origin.
+    navigator.serviceWorker.register('/sw.js');
   }
 }</code></pre>
     <p class="text-muted-foreground text-sm">
