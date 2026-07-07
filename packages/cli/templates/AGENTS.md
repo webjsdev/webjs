@@ -312,7 +312,8 @@ app/                     ROUTING ONLY: thin route adapters (import from modules/
   page.ts                → / (the scaffold home links to the gallery)
   features/<name>/       single-feature demos (routing, components,
                          server-actions, optimistic-ui, async-render,
-                         directives, route-handler); prune what you skip
+                         directives, route-handler, forms, metadata, caching,
+                         env, client-router, service-worker); prune what you skip
   examples/<name>/       whole example apps that compose features (todo);
                          prune what you skip
   layout.ts              root layout, wraps every page
@@ -363,7 +364,8 @@ The scaffold ships a gallery organized by KIND, so features and whole apps are
 not mixed:
 - `app/features/<name>/` are single-feature demos, one webjs concept each
   (routing, components, server-actions, optimistic-ui, async-render, directives,
-  route-handler).
+  route-handler, forms, metadata, caching, env, client-router, service-worker,
+  plus the infra demos websockets, file-storage, rate-limit, broadcast).
 - `app/examples/<name>/` are whole example apps that compose several features
   (todo: optimistic UI + progressive enhancement + a11y + db + modules).
 

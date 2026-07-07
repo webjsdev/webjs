@@ -27,12 +27,14 @@ import { scaffoldApp } from '../../packages/cli/lib/create.js';
 const FEATURES = [
   'routing', 'components', 'server-actions', 'optimistic-ui',
   'async-render', 'directives', 'route-handler', 'forms',
+  'metadata', 'caching', 'env', 'client-router', 'service-worker',
+  'websockets', 'broadcast', 'rate-limit', 'file-storage',
 ];
 // Whole example apps under app/examples/<name>.
 const EXAMPLE_APPS = ['todo'];
 // Routes whose logic lives in a modules/<name> folder (routing and
 // route-handler are app-only: a pages-only route and a route.ts handler).
-const MODULE_ROUTES = ['components', 'server-actions', 'optimistic-ui', 'async-render', 'directives', 'todo'];
+const MODULE_ROUTES = ['components', 'server-actions', 'optimistic-ui', 'async-render', 'directives', 'todo', 'websockets', 'broadcast', 'rate-limit', 'file-storage'];
 
 async function tempCwd() {
   return mkdtemp(join(tmpdir(), 'webjs-scaffold-gallery-'));
@@ -56,6 +58,14 @@ test('full-stack scaffold ships feature demos and one example app', async () => 
     // Dynamic route param example + the route.ts handler.
     assert.ok(await exists(join(appDir, 'app', 'features', 'routing', '[id]', 'page.ts')));
     assert.ok(await exists(join(appDir, 'app', 'features', 'route-handler', 'data', 'route.ts')));
+    // Client-router soft-nav target subpage.
+    assert.ok(await exists(join(appDir, 'app', 'features', 'client-router', 'second', 'page.ts')));
+    // Infra features ship their server endpoints alongside the page.
+    assert.ok(await exists(join(appDir, 'app', 'features', 'websockets', 'echo', 'route.ts')));
+    assert.ok(await exists(join(appDir, 'app', 'features', 'broadcast', 'feed', 'route.ts')));
+    assert.ok(await exists(join(appDir, 'app', 'features', 'rate-limit', 'ping', 'route.ts')));
+    assert.ok(await exists(join(appDir, 'app', 'features', 'rate-limit', 'ping', 'middleware.ts')));
+    assert.ok(await exists(join(appDir, 'app', 'features', 'file-storage', 'file', '[key]', 'route.ts')));
     // Feature/app logic lives in modules/, not app/.
     for (const name of MODULE_ROUTES) {
       assert.ok(await exists(join(appDir, 'modules', name)), `modules/${name}`);

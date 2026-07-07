@@ -1,0 +1,34 @@
+// webjs-scaffold-placeholder. Feature gallery route. Keep and adapt it, or prune it (delete this app/features/service-worker route), then delete this marker line. webjs check fails while the marker remains.
+// Service worker: opt-in progressive enhancement. webjs does NOT register one by
+// default (an active SW caches aggressively and would confuse dev). You opt in
+// by adding public/sw.js and registering it from a component's connectedCallback
+// (browser-only). This page is a guided reference, not an active registration,
+// so the scaffold stays predictable until you deliberately turn it on. See
+// agent-docs/service-worker.md for the full recipe.
+import { html } from '@webjsdev/core';
+import type { Metadata } from '@webjsdev/core';
+
+export const metadata: Metadata = { title: 'Service worker (opt-in) | features' };
+
+export default function ServiceWorkerExample() {
+  return html`
+    <h1 class="text-h2 font-bold mb-4">Service worker</h1>
+    <p class="text-muted-foreground mb-4">
+      Opt-in offline/caching enhancement. Nothing is registered until you add
+      <code class="font-mono">public/sw.js</code> and register it from a
+      browser-only lifecycle hook.
+    </p>
+    <p class="mb-2 text-sm font-medium">Register inside a component (never in a page or layout):</p>
+    <pre class="bg-card border border-border rounded-xl p-4 overflow-x-auto text-sm font-mono mb-4"><code>connectedCallback() {
+  super.connectedCallback();
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/public/sw.js');
+  }
+}</code></pre>
+    <p class="text-muted-foreground text-sm">
+      Registration lives in a component because it is browser-only work.
+      A page or layout never hydrates, so it is the wrong home for it. Full
+      recipe: <code class="font-mono">agent-docs/service-worker.md</code>.
+    </p>
+  `;
+}
