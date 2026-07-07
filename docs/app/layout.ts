@@ -106,6 +106,12 @@ export default function RootLayout({ children }: { children: unknown }) {
         --accent-text:   var(--accent);
         --accent-surface: color-mix(in oklch, var(--accent-live) 12%, transparent);
         --accent-border:  color-mix(in oklch, var(--accent-live) 28%, transparent);
+        /* Dedicated logo-mark gradient stops, shared with website/app/layout.ts.
+           Do NOT derive the mark from --accent mixed toward --fg: in dark mode
+           --fg is near-white so the top stop washes out and diverges from the
+           website mark. Keep these two orange stops per theme instead. */
+        --logo-from:     oklch(0.63 0.17 50);
+        --logo-to:       oklch(0.44 0.11 52);
         --glow-a:        oklch(0.63 0.17 44);
         --glow-strength: 0.16;
 
@@ -143,6 +149,8 @@ export default function RootLayout({ children }: { children: unknown }) {
           --accent:        oklch(0.7 0.16 52);
           --accent-hover:  oklch(0.75 0.16 52);
           --accent-fg:     oklch(0.17 0.02 52);
+          --logo-from:     oklch(0.8 0.16 58);
+          --logo-to:       oklch(0.62 0.18 44);
           --glow-strength: 0.16;
         }
       }
@@ -166,6 +174,8 @@ export default function RootLayout({ children }: { children: unknown }) {
         --accent:        oklch(0.7 0.16 52);
         --accent-hover:  oklch(0.75 0.16 52);
         --accent-fg:     oklch(0.17 0.02 52);
+        --logo-from:     oklch(0.8 0.16 58);
+        --logo-to:       oklch(0.62 0.18 44);
         --glow-strength: 0.16;
       }
 
