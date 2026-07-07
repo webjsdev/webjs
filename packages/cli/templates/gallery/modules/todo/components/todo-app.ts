@@ -53,7 +53,9 @@ export class TodoApp extends WebComponent({
     if (r.success && r.data) { const d = r.data; this.todos = (this.todos ?? []).map((t) => (t.id === todo.id ? d : t)); }
   }
 
-  async remove(e: Event, todo: Todo) {
+  // NOT named `remove`: Element.remove() is a built-in DOM method, so a method
+  // named `remove` with a different signature would clash (TS2416).
+  async removeTodo(e: Event, todo: Todo) {
     e.preventDefault();
     if (todo.pending) return;
     const promise = deleteTodo({ id: todo.id });
@@ -88,7 +90,7 @@ export class TodoApp extends WebComponent({
                      the task (works on JS and no-JS paths, and screen readers). -->
                 <label for="t-${todo.id}" class="flex-1 cursor-pointer ${todo.completed ? 'line-through opacity-60' : ''}">${todo.title}</label>
                 <button type="submit" name="intent" value="delete" aria-label="Delete"
-                  @click=${(e: Event) => this.remove(e, todo)} class="text-fg-subtle">x</button>
+                  @click=${(e: Event) => this.removeTodo(e, todo)} class="text-fg-subtle">x</button>
               </form>
             </li>
           `)}

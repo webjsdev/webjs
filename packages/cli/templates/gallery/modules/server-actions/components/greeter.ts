@@ -9,7 +9,8 @@ export class Greeter extends WebComponent {
     e.preventDefault();
     const name = String(new FormData(e.target as HTMLFormElement).get('name') ?? '');
     const r = await greet({ name });
-    this.msg.set(r.success && r.data ? r.data.message : (r.error ?? 'error'));
+    // Narrow on r.success so TS knows `data` (success) vs `error` (failure).
+    this.msg.set(r.success ? (r.data?.message ?? '') : (r.error ?? 'error'));
   }
   render() {
     return html`
