@@ -1227,7 +1227,7 @@ export default function Home() {
   return html\`
     <section class="mb-14">
       \${rubric('welcome')}
-      \${displayH1(html\`Hello from <span class="text-accent italic">${name}</span>.\`)}
+      \${displayH1(html\`Hello from <span class="italic" style="color:var(--accent)">${name}</span>.\`)}
       <p class="text-lede leading-[1.5] text-fg-muted max-w-[56ch] m-0 mb-6">
         This scaffold ships a gallery below: single-feature demos and one whole
         example app, all small, idiomatic, and heavily commented. Browse them for
