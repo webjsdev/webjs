@@ -1108,10 +1108,12 @@ ${SHADCN_THEME}
         --bg-subtle:     oklch(0.16 0.01 55);
         --border:        oklch(0.26 0.012 55 / 0.9);
         --border-strong: oklch(0.38 0.012 55 / 0.9);
-        --accent:        oklch(0.78 0.14 55);
-        --accent-hover:  oklch(0.85 0.14 55);
-        --accent-fg:     oklch(0.15 0.01 55);
-        --accent-tint:   oklch(0.78 0.14 55 / 0.14);
+        /* Accent matches the webjs website (warm orange, hue 52). */
+        --accent:        oklch(0.7 0.16 52);
+        --accent-hover:  oklch(0.75 0.16 52);
+        --accent-fg:     oklch(0.17 0.02 52);
+        --accent-live:   oklch(0.63 0.17 50);
+        --accent-tint:   color-mix(in oklch, var(--accent-live) 14%, transparent);
         --font-sans:   -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         --font-serif:  ui-serif, 'Iowan Old Style', Palatino, Georgia, serif;
         --font-mono:   ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -1125,10 +1127,11 @@ ${SHADCN_THEME}
         --bg-subtle:     oklch(0.96 0.008 80);
         --border:        oklch(0.88 0.01 75 / 0.95);
         --border-strong: oklch(0.78 0.01 75 / 0.95);
-        --accent:        oklch(0.58 0.15 55);
-        --accent-hover:  oklch(0.5 0.15 55);
+        --accent:        oklch(0.54 0.16 52);
+        --accent-hover:  oklch(0.5 0.16 52);
         --accent-fg:     oklch(1 0 0);
-        --accent-tint:   oklch(0.58 0.15 55 / 0.1);
+        --accent-live:   oklch(0.63 0.17 50);
+        --accent-tint:   color-mix(in oklch, var(--accent-live) 14%, transparent);
       }
       @media (prefers-color-scheme: light) {
         :root:not([data-theme='dark']) {
@@ -1140,10 +1143,11 @@ ${SHADCN_THEME}
           --bg-subtle:     oklch(0.96 0.008 80);
           --border:        oklch(0.88 0.01 75 / 0.95);
           --border-strong: oklch(0.78 0.01 75 / 0.95);
-          --accent:        oklch(0.58 0.15 55);
-          --accent-hover:  oklch(0.5 0.15 55);
+          --accent:        oklch(0.54 0.16 52);
+          --accent-hover:  oklch(0.5 0.16 52);
           --accent-fg:     oklch(1 0 0);
-          --accent-tint:   oklch(0.58 0.15 55 / 0.1);
+          --accent-live:   oklch(0.63 0.17 50);
+          --accent-tint:   color-mix(in oklch, var(--accent-live) 14%, transparent);
         }
       }
       /* Body + pseudo-elements utility classes can't reach. */
@@ -1232,7 +1236,7 @@ export default function Home() {
   return html\`
     <section class="mb-14">
       \${rubric('welcome')}
-      \${displayH1(html\`Hello from <span class="italic" style="color:var(--accent)">${displayName}</span>.\`)}
+      \${displayH1(html\`Hello from <span class="text-accent italic">${displayName}</span>.\`)}
       <p class="text-lede leading-[1.5] text-fg-muted max-w-[56ch] m-0 mb-6">
         This scaffold ships a gallery below: single-feature demos and one whole
         example app, all small, idiomatic, and heavily commented. Browse them for
