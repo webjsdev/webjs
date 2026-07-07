@@ -155,6 +155,21 @@ self-review loop.
   gradients); when unavoidable in a light-DOM component, prefix every class
   selector with the component tag. Shadow-DOM components legitimately use
   `static styles = css\`...\`` for scoped CSS.
+- **One theme, canonical tokens.** The app has a SINGLE theme, defined once in
+  `app/layout.ts` using the standard `@webjsdev/ui` (shadcn-compatible)
+  semantic tokens set to the brand palette. Use the canonical utility names
+  everywhere, in the page chrome AND inside components: `bg-background`,
+  `text-foreground`, `bg-card`, `bg-muted`, `text-muted-foreground`,
+  `bg-primary`, `text-primary-foreground`, `bg-accent`, `text-accent-foreground`,
+  `border-border`, `ring-ring`. These are exactly the tokens a component copied
+  in by `webjs ui add <name>` reads, so a scaffolded page and a later-added ui
+  component share one theme with no wiring. NEVER invent a parallel token
+  vocabulary (`--fg`, `--bg`, `text-fg`, `bg-elev`, a separate `--brand`): it
+  collides with the ui tokens (the accent once flipped to neutral on navigation
+  for exactly this reason) and diverges from the shadcn conventions the kit and
+  AI agents expect. Reach for opacity modifiers (`bg-accent/10`,
+  `hover:bg-accent/90`) before adding a token; add one the canonical way (a
+  `--x` var plus a `--color-x: var(--x)` line in `@theme inline`).
 - Custom-element tag names are passed to `.register('tag-name')`. They are NOT
   a static field on the class.
 - **Never extend raw HTMLElement directly for app components.** Always subclass `WebComponent` (or the factory form `WebComponent({...})`) to hook into SSR, lifecycle, elision, and the reactive property system. Extend raw HTMLElement only for rare native-API edge cases (like form-associated `ElementInternals` or customized built-in elements), and add a `webjs-allow-htmlelement: <reason>` comment to acknowledge the exception.

@@ -714,7 +714,7 @@ export class MyWidget extends WebComponent({
   render() {
     return html`
       <div class="p-4 border border-border rounded-lg">
-        <p class="font-serif text-fg">${this.label}: ${this.count}</p>
+        <p class="font-serif text-foreground">${this.label}: ${this.count}</p>
       </div>
     `;
   }
@@ -774,8 +774,27 @@ Both hydrate without flash on the client.
 The scaffold ships with the **Tailwind CSS browser runtime** + `@theme`
 design tokens defined in the root layout. Every colour, font family,
 fluid type scale value, and motion duration is declared once in `@theme`
-and available everywhere via utility classes (`text-fg`, `bg-bg-elev`,
-`font-serif`, `duration-fast`, `text-display`).
+and available everywhere via utility classes (`text-foreground`,
+`bg-card`, `font-serif`, `duration-fast`, `text-display`).
+
+**One theme, canonical tokens.** The app has a SINGLE theme, defined
+once in `app/layout.ts` using the standard `@webjsdev/ui`
+(shadcn-compatible) semantic tokens set to the brand palette. Use the
+canonical utility names everywhere, in the page chrome AND inside
+components: `bg-background`, `text-foreground`, `bg-card`, `bg-muted`,
+`text-muted-foreground`, `bg-primary`, `text-primary-foreground`,
+`bg-accent`, `text-accent-foreground`, `border-border`, `ring-ring`.
+These are exactly the tokens a component copied in by
+`webjs ui add <name>` reads, so a scaffolded page and a later-added ui
+component share one coherent theme with no extra wiring. **Never invent a
+parallel token vocabulary** (`--fg`, `--bg`, `text-fg`, `bg-elev`, a
+separate `--brand`): it collides with the ui tokens (the accent once
+flipped to neutral on navigation for exactly this reason) and diverges
+from the shadcn conventions the kit and AI agents both expect. Reach for
+opacity modifiers (`bg-accent/10`, `hover:bg-accent/90`,
+`text-muted-foreground/70`) before adding a token; to ADD one, do it the
+canonical way (a `--x` variable in the `:root` / `.dark` blocks plus a
+`--color-x: var(--x)` line in `@theme inline`, then `bg-x` / `text-x`).
 
 **Tailwind-first is the strong default for pages AND light-DOM
 components (the default DOM mode).** Use utilities for layout, spacing,
