@@ -11,6 +11,7 @@
 // bg-primary/90) over ad-hoc colors.
 import { WebComponent, prop, optimistic, html } from '@webjsdev/core';
 import { buttonClass } from '#components/ui/button.ts';
+import { inputClass } from '#components/ui/input.ts';
 import { createTodo } from '../actions/create-todo.server.ts';
 import { toggleTodo } from '../actions/toggle-todo.server.ts';
 import { deleteTodo } from '../actions/delete-todo.server.ts';
@@ -93,16 +94,16 @@ export class TodoApp extends WebComponent({
         </header>
 
         <!-- Add: a real <form> so it works with JS off (posts to the page action);
-             with JS, @submit intercepts and runs the optimistic path. -->
+             with JS, @submit intercepts and runs the optimistic path. It uses the
+             @webjsdev/ui form helpers, inputClass() + buttonClass() (both plain
+             class STRINGS, so they drop into a light-DOM component). The toggle +
+             delete below stay hand-rolled: they are not standard controls (a
+             circular checkbox, an icon affordance). -->
         <form method="post" action="" @submit=${(e: SubmitEvent) => this.add(e)}
-          class="flex items-center gap-2 p-2 pl-4 rounded-2xl bg-card border border-border shadow-[0_1px_0_0_color-mix(in_oklch,var(--foreground)_5%,transparent)]">
+          class="flex items-center gap-2">
           <input type="hidden" name="intent" value="create" />
           <input name="title" required maxlength="280" autocomplete="off" placeholder="What needs doing?"
-            class="flex-1 min-w-0 bg-transparent border-0 outline-none text-foreground text-[15px] placeholder:text-muted-foreground/70 py-1.5" />
-          <!-- The @webjsdev/ui buttonClass() helper: a class STRING (not a custom
-               element), so it drops into a light-DOM component's markup. The
-               toggle + delete below stay hand-rolled because they are not
-               standard buttons (a circular checkbox, an icon affordance). -->
+            class="${inputClass()} flex-1" />
           <button type="submit" class=${buttonClass()}>Add</button>
         </form>
 
