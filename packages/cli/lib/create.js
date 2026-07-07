@@ -830,6 +830,20 @@ export default cors({
   return Response.json({ status: 'ok', timestamp: Date.now() });
 }
 `);
+    // Root API index. The api template has no UI, so \`/\` is a route handler,
+    // not a page: it lists the available endpoints instead of returning a bare
+    // 404 (friendlier than an empty root for an API-only app).
+    await writeFile(join(appDir, 'app', 'route.ts'), `export async function GET(request: Request) {
+  const base = new URL(request.url).origin;
+  return Response.json({
+    name: '${name}',
+    endpoints: {
+      health: \`\${base}/api/health\`,
+      users: \`\${base}/api/users\`,
+    },
+  });
+}
+`);
     await mkdir(join(appDir, 'modules', 'users', 'actions'), { recursive: true });
     await mkdir(join(appDir, 'modules', 'users', 'queries'), { recursive: true });
 
