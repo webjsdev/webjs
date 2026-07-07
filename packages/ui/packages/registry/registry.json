@@ -16,6 +16,18 @@
       ]
     },
     {
+      "name": "lib-dom",
+      "type": "registry:lib",
+      "description": "onBeforeCache() client-router cache hook",
+      "files": [
+        {
+          "path": "lib/dom.ts",
+          "type": "registry:lib",
+          "target": "lib/dom.ts"
+        }
+      ]
+    },
+    {
       "name": "theme-neutral",
       "type": "registry:theme",
       "title": "Neutral",
@@ -59,7 +71,8 @@
       "type": "registry:ui",
       "registryDependencies": [
         "button",
-        "dialog"
+        "dialog",
+        "lib-dom"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -189,7 +202,8 @@
       "type": "registry:ui",
       "registryDependencies": [
         "lib-utils",
-        "button"
+        "button",
+        "lib-dom"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -205,7 +219,8 @@
       "name": "dropdown-menu",
       "type": "registry:ui",
       "registryDependencies": [
-        "popover"
+        "popover",
+        "lib-dom"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -221,7 +236,8 @@
       "name": "hover-card",
       "type": "registry:ui",
       "registryDependencies": [
-        "popover"
+        "popover",
+        "lib-dom"
       ],
       "dependencies": [
         "@webjsdev/core"
@@ -381,6 +397,9 @@
     {
       "name": "sonner",
       "type": "registry:ui",
+      "registryDependencies": [
+        "lib-dom"
+      ],
       "dependencies": [
         "@webjsdev/core"
       ],
@@ -476,7 +495,8 @@
       "name": "tooltip",
       "type": "registry:ui",
       "registryDependencies": [
-        "popover"
+        "popover",
+        "lib-dom"
       ],
       "dependencies": [
         "@webjsdev/core"

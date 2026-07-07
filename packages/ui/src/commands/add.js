@@ -76,31 +76,51 @@ async function writeRegistryFile(cwd, config, item, file, opts) {
 }
 
 /**
- * Rewrite the registry-relative `'../lib/utils.ts'` import to the path
- * that resolves correctly from the file's target location to the user's
- * cn() helper.
+ * Rewrite the registry-relative `'../lib/utils.ts'` and `'../lib/dom.ts'`
+ * imports to the paths that resolve correctly from the file's target
+ * location to the user's cn() helper and onBeforeCache() DOM helper.
  *
  * The registry source assumes its own layout (`<registry>/components/<x>.ts`
- * imports `'../lib/utils.ts'`). When that file lands in the user's
- * components/ui/<x>.ts, the literal `'../lib/utils.ts'` resolves to
- * `components/lib/utils.ts`, which doesn't exist. We compute the actual
- * relative path from the target directory to `config.resolvedPaths.utils`
- * (an absolute path the user has already configured via components.json's
- * aliases.utils) and substitute it in.
+ * imports `'../lib/utils.ts'` / `'../lib/dom.ts'`). When that file lands in
+ * the user's components/ui/<x>.ts, the literal `'../lib/utils.ts'` resolves
+ * to `components/lib/utils.ts`, which doesn't exist. We compute the actual
+ * relative path from the target directory to the user's configured helper
+ * (`config.resolvedPaths.utils`, from components.json's aliases.utils) and
+ * substitute it in. The DOM helper is written as a SIBLING of the utils
+ * file (the scaffold puts it at `lib/utils/dom.ts`, next to `cn.ts`), so its
+ * absolute target is `dom.ts` in the utils file's directory. sonner imports
+ * ONLY the DOM helper, so both specifiers are handled independently and
+ * neither presence gates the other.
  *
  * @param {string} content raw file content from the registry
  * @param {string} target absolute path where the file will be written
  * @param {{ resolvedPaths: { utils: string } }} config parsed components.json
  */
 export function rewriteUtilsImport(content, target, config) {
-  if (!content.includes('../lib/utils.ts')) return content;
   const utilsAbs = config?.resolvedPaths?.utils;
   if (!utilsAbs) return content;
-  let rel = relPath(dirname(target), utilsAbs).split(/[\\/]/).join('/');
+  let out = replaceImportSpecifier(content, '../lib/utils.ts', utilsAbs, target);
+  const domAbs = join(dirname(utilsAbs), 'dom.ts');
+  out = replaceImportSpecifier(out, '../lib/dom.ts', domAbs, target);
+  return out;
+}
+
+/**
+ * Replace a single registry-relative import specifier with the relative path
+ * from `target`'s directory to `destAbs`. No-op when `spec` is absent.
+ *
+ * @param {string} content
+ * @param {string} spec the registry-relative specifier to replace
+ * @param {string} destAbs absolute path of the destination file
+ * @param {string} target absolute path where the importing file is written
+ */
+function replaceImportSpecifier(content, spec, destAbs, target) {
+  if (!content.includes(spec)) return content;
+  let rel = relPath(dirname(target), destAbs).split(/[\\/]/).join('/');
   if (!rel.startsWith('.')) rel = './' + rel;
   return content
-    .replaceAll("'../lib/utils.ts'", `'${rel}'`)
-    .replaceAll('"../lib/utils.ts"', `"${rel}"`);
+    .replaceAll(`'${spec}'`, `'${rel}'`)
+    .replaceAll(`"${spec}"`, `"${rel}"`);
 }
 
 function resolveTarget(cwd, config, item, file) {
