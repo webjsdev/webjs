@@ -489,6 +489,8 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     '.claude/hooks/guard-branch-context.sh',
     '.claude/hooks/nudge-uncommitted.sh',
     '.claude/hooks/require-tests-with-src.sh',
+    '.claude/hooks/check-server-imports.sh',
+    '.claude/hooks/check-server-imports.mjs',
     // Gemini CLI config + hooks
     '.gemini/settings.json',
     '.gemini/hooks/nudge-uncommitted.sh',
