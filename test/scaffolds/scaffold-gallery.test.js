@@ -26,7 +26,7 @@ import { scaffoldApp } from '../../packages/cli/lib/create.js';
 // Single-feature demos under app/features/<name>.
 const FEATURES = [
   'routing', 'components', 'server-actions', 'optimistic-ui',
-  'async-render', 'directives', 'route-handler',
+  'async-render', 'directives', 'route-handler', 'forms',
 ];
 // Whole example apps under app/examples/<name>.
 const EXAMPLE_APPS = ['todo'];
