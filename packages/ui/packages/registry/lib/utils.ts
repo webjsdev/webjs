@@ -127,95 +127,12 @@ export function ensureId(el: { id: string }, prefix = 'ui'): string {
   return el.id;
 }
 
-// ---------------------------------------------------------------------------
-// Custom-element base: SSR-safe. In the browser `Base = HTMLElement`. On
-// the server (Node, during SSR) `HTMLElement` is undefined; we substitute
-// a stub class so that `class Foo extends Base { … }` doesn't throw at
-// module-load time. The stub's methods are never actually called server-side
-// because connectedCallback/lifecycle hooks only run when the element is
-// inserted into a live DOM, which doesn't happen during webjs SSR.
-// ---------------------------------------------------------------------------
-
-const HasHTMLElement = typeof HTMLElement !== 'undefined';
-
-class ServerHTMLElementStub {
-  // Minimal surface so attribute reads/writes inside synchronous code paths
-  // that DO execute during SSR (e.g. attribute reflection) don't throw.
-  _ssrAttrs: Record<string, string> = {};
-  getAttribute(name: string): string | null {
-    return this._ssrAttrs[name] ?? null;
-  }
-  setAttribute(name: string, value: string): void {
-    this._ssrAttrs[name] = String(value);
-  }
-  hasAttribute(name: string): boolean {
-    return name in this._ssrAttrs;
-  }
-  removeAttribute(name: string): void {
-    delete this._ssrAttrs[name];
-  }
-  toggleAttribute(name: string, force?: boolean): boolean {
-    const want = force === undefined ? !this.hasAttribute(name) : force;
-    if (want) this.setAttribute(name, '');
-    else this.removeAttribute(name);
-    return want;
-  }
-  addEventListener(): void {}
-  removeEventListener(): void {}
-  dispatchEvent(): boolean {
-    return true;
-  }
-  // Tree-walk APIs no-op into null: components that call them server-side
-  // simply see "no children / no siblings", which is acceptable for SSR.
-  closest(): null {
-    return null;
-  }
-  querySelector(): null {
-    return null;
-  }
-  querySelectorAll(): never[] {
-    return [];
-  }
-  focus(): void {}
-  blur(): void {}
-  contains(): boolean {
-    return false;
-  }
-  insertBefore<T>(node: T): T {
-    return node;
-  }
-  appendChild<T>(node: T): T {
-    return node;
-  }
-  replaceChildren(): void {}
-  get firstChild(): null {
-    return null;
-  }
-  get classList() {
-    return { add: () => {}, remove: () => {}, toggle: () => false, contains: () => false };
-  }
-  get className(): string {
-    return this._ssrAttrs.class ?? '';
-  }
-  set className(v: string) {
-    this._ssrAttrs.class = v;
-  }
-  get style(): Record<string, string> {
-    return {};
-  }
-}
-
-/** SSR-safe base class: `HTMLElement` in browser, a thin stub in Node. */
-export const Base: typeof HTMLElement = (HasHTMLElement
-  ? HTMLElement
-  : (ServerHTMLElementStub as unknown as typeof HTMLElement)) as typeof HTMLElement;
-
-/** Register a custom element. No-op on server (no `customElements` global). */
-export function defineElement(name: string, cls: CustomElementConstructor): void {
-  if (typeof customElements === 'undefined') return;
-  if (customElements.get(name)) return; // already defined (HMR / double-import)
-  customElements.define(name, cls);
-}
+// NOTE: the old `HTMLElement`-era `Base` / `defineElement` / SSR-stub helpers
+// were removed. The ui registry components extend `WebComponent` from
+// `@webjsdev/core` now, so those helpers were dead code, and referencing
+// `HTMLElement` / `customElements` at module scope marked this util (and any
+// page that imports `cn`) as client-effecting. Everything below is pure or
+// SSR-safe, so importing `cn` no longer pins a page to the browser (#819).
 
 // ---------------------------------------------------------------------------
 // Layout helpers: encode the design-system rhythm (spacing between label /
@@ -266,19 +183,3 @@ export const helpClass = () => 'text-xs text-muted-foreground';
 
 /** Validation error text: replaces hint when the field is invalid. */
 export const errorClass = () => 'text-sm font-medium text-destructive';
-
-/**
- * Run `reset` just before the webjs client router snapshots the page into its
- * back/forward cache (the `webjs:before-cache` event). Transient overlays use
- * this to close themselves so a restored snapshot is clean rather than, say, a
- * hover-card frozen open after Back then Forward (#766). Wire it in
- * `connectedCallback` and call the returned disposer in `disconnectedCallback`
- * so the listener never leaks across soft navigations.
- *
- * SSR-safe: a no-op when there is no `document` (server / no client router).
- */
-export function onBeforeCache(reset: () => void): () => void {
-  if (typeof document === 'undefined') return () => {};
-  document.addEventListener('webjs:before-cache', reset);
-  return () => document.removeEventListener('webjs:before-cache', reset);
-}

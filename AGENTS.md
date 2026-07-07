@@ -22,6 +22,9 @@ reference there.
 | `agent-docs/testing.md` | Unit, browser, convention validation, the `handle()` test harness (`@webjsdev/server/testing`) |
 | `agent-docs/framework-dev.md` | Monorepo dev (only when editing webjs itself): commands, repo-health git config, changelog flow, dev error overlay |
 | `agent-docs/recipes.md` | Page / route / action / component recipes |
+| `agent-docs/orm.md` | Drizzle rc.3 query surface: `db.query` reads, the removed `db.select({...})` projection overload, no-arg `.returning()` (#804) |
+| `agent-docs/types-and-mutations.md` | Where server-derived types live so a shipping module does not pin `db/*.server.ts` (`import type` vs value import, the carrier rule) (#804) |
+| `agent-docs/components-shadowing.md` | Inherited `WebComponent` members app code must not shadow (`title`, `remove`, ...) and the `TS2415`/`TS2416` each produces (#804) |
 | `agent-docs/lit-muscle-memory-gotchas.md` | **READ FIRST** when writing components. Lit patterns that break webjs SSR or reactivity, with the webjs-shaped fix for each |
 
 ---

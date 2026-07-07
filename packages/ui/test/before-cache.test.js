@@ -17,7 +17,7 @@ before(async () => {
   const { window } = parseHTML('<!doctype html><html><body></body></html>');
   globalThis.document = window.document;
   globalThis.CustomEvent = window.CustomEvent;
-  ({ onBeforeCache } = await import('../packages/registry/lib/utils.ts'));
+  ({ onBeforeCache } = await import('../packages/registry/lib/dom.ts'));
 });
 
 afterEach(() => {

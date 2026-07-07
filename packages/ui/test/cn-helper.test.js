@@ -78,14 +78,13 @@ test('cn: rounded variants collapse to last', () => {
   assert.equal(cn('rounded', 'rounded-full'), 'rounded-full');
 });
 
-test('Base export exists and is a constructor (HTMLElement in browser, stub in Node)', async () => {
+// The old `Base` / `defineElement` HTMLElement-era helpers were removed in #819
+// (the registry components extend `WebComponent` from `@webjsdev/core` now, and
+// keeping them referenced `HTMLElement` / `customElements` at module scope, which
+// pinned every page importing `cn`). Their absence + cn's purity is guarded by
+// `utils-purity.test.js`.
+test('Base and defineElement are no longer exported (removed in #819)', async () => {
   const utils = await import(pathToFileURL(file).href);
-  assert.equal(typeof utils.Base, 'function');
-});
-
-test('defineElement is a no-op when customElements is undefined (server)', async () => {
-  const utils = await import(pathToFileURL(file).href);
-  assert.equal(typeof utils.defineElement, 'function');
-  // Should not throw on the server where `customElements` is absent.
-  utils.defineElement('ui-noop-test', class {});
+  assert.equal(utils.Base, undefined, 'Base was removed');
+  assert.equal(utils.defineElement, undefined, 'defineElement was removed');
 });

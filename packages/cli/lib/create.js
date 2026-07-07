@@ -101,7 +101,10 @@ async function readUiComponent(name) {
   // it to the scaffolded app's aliased path (cn lives at lib/utils/cn.ts).
   return raw
     .replaceAll("'../lib/utils.ts'", "'#lib/utils/cn.ts'")
-    .replaceAll('"../lib/utils.ts"', '"#lib/utils/cn.ts"');
+    .replaceAll('"../lib/utils.ts"', '"#lib/utils/cn.ts"')
+    // onBeforeCache lives in its own client-only module so cn() stays pure (#819).
+    .replaceAll("'../lib/dom.ts'", "'#lib/utils/dom.ts'")
+    .replaceAll('"../lib/dom.ts"', '"#lib/utils/dom.ts"');
 }
 
 /**
@@ -166,12 +169,20 @@ async function writeUiBootstrap(appDir) {
   // Caller (scaffoldApp) has already invoked assertUiRegistryAvailable(),
   // so the source files below are guaranteed to exist.
 
-  // 1) lib/utils/cn.ts: the cn() helper
+  // 1) lib/utils/cn.ts: the cn() helper (pure; safe to import into a page).
   const utilsContent = await readFile(
     join(UI_REGISTRY_ROOT, 'lib', 'utils.ts'), 'utf8',
   );
   await mkdir(join(appDir, 'lib', 'utils'), { recursive: true });
   await writeFile(join(appDir, 'lib', 'utils', 'cn.ts'), utilsContent);
+
+  // 1b) lib/utils/dom.ts: the client-only DOM helper (onBeforeCache). Split out
+  // of cn.ts so importing cn() does not pin a page to the browser (#819). Any
+  // `webjs ui add` component that uses onBeforeCache imports it from here.
+  const domContent = await readFile(
+    join(UI_REGISTRY_ROOT, 'lib', 'dom.ts'), 'utf8',
+  );
+  await writeFile(join(appDir, 'lib', 'utils', 'dom.ts'), domContent);
 
   // 2) components.json: the same shape `webjsui init` writes for webjs
   // projects (see packages/ui/src/utils/detect-project.js). The utils alias
@@ -515,6 +526,8 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     '.claude/hooks/guard-branch-context.sh',
     '.claude/hooks/nudge-uncommitted.sh',
     '.claude/hooks/require-tests-with-src.sh',
+    '.claude/hooks/check-server-imports.sh',
+    '.claude/hooks/check-server-imports.mjs',
     // Gemini CLI config + hooks
     '.gemini/settings.json',
     '.gemini/hooks/nudge-uncommitted.sh',

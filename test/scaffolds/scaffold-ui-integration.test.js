@@ -227,20 +227,20 @@ test('api scaffold route imports resolve to real modules/ files', async () => {
   }
 });
 
-test('lib/utils/cn.ts ships the cn() helper + Base + defineElement', async () => {
+test('lib/utils/cn.ts ships the pure cn() helper; onBeforeCache is in lib/utils/dom.ts (#819)', async () => {
   const cwd = await tempCwd();
   try {
     await scaffoldApp('demo', cwd, { template: 'full-stack' });
     const utils = await readFile(join(cwd, 'demo', 'lib', 'utils', 'cn.ts'), 'utf8');
     assert.match(utils, /export function cn/);
     assert.match(utils, /ClassValue/);
-    // Tier-2 custom elements (when added via `webjs ui add dialog`) import
-    // Base + defineElement from here: verify both exports are present.
-    // Base is exported as a const (class expression assigned to a const)
-    // so it works in non-browser test environments where HTMLElement is
-    // undefined; accept either `class Base` or `const Base`.
-    assert.match(utils, /export\s+(?:class|const)\s+Base\b/);
-    assert.match(utils, /export\s+function\s+defineElement\b/);
+    // #819: the HTMLElement-era Base + defineElement were removed (the ui
+    // components extend WebComponent now), so cn.ts stays pure and importing it
+    // does not pin a page. onBeforeCache moved to its own client module.
+    assert.ok(!/export\s+(?:class|const)\s+Base\b/.test(utils), 'Base removed from cn.ts');
+    assert.ok(!/export\s+function\s+defineElement\b/.test(utils), 'defineElement removed from cn.ts');
+    const dom = await readFile(join(cwd, 'demo', 'lib', 'utils', 'dom.ts'), 'utf8');
+    assert.match(dom, /export function onBeforeCache\b/, 'onBeforeCache is shipped in lib/utils/dom.ts');
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }

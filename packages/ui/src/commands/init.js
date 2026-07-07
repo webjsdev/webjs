@@ -75,19 +75,43 @@ export const init = new Command()
   });
 
 async function writeLibUtils(cwd, utilsAlias, registryUrl) {
+  // `utils` alias points at e.g. "lib/utils" so we write to lib/utils.ts
+  const utilsRel = utilsAlias.replace(/^@\//, '') + '.ts';
+  const utilsTarget = join(cwd, utilsRel);
   try {
     const item = await fetchRegistryItem('lib-utils', registryUrl);
-    if (!item.files) return;
-    for (const f of item.files) {
-      // `utils` alias points at e.g. "lib/utils" → we write to lib/utils.ts
-      const target = join(cwd, utilsAlias.replace(/^@\//, '') + '.ts');
-      ensureDir(dirname(target));
-      writeFileSync(target, f.content || '', 'utf8');
-      logger.success(`Wrote ${utilsAlias}.ts`);
+    if (item.files) {
+      for (const f of item.files) {
+        ensureDir(dirname(utilsTarget));
+        writeFileSync(utilsTarget, f.content || '', 'utf8');
+        logger.success(`Wrote ${utilsAlias}.ts`);
+      }
     }
   } catch (e) {
     logger.warn(`Could not fetch lib-utils from registry (${e.message}). You may need to write lib/utils.ts manually.`);
   }
+
+  // The onBeforeCache() DOM helper lives in a SEPARATE module (#819) because
+  // it references `document`, so keeping it out of cn()'s file prevents the
+  // elision analyzer pinning every page that imports cn to the browser.
+  // Overlay components import it from `../lib/dom.ts`, so write it as a
+  // sibling of the utils file (e.g. lib/utils/dom.ts next to cn.ts).
+  const domTarget = join(dirname(utilsTarget), 'dom.ts');
+  try {
+    const item = await fetchRegistryItem('lib-dom', registryUrl);
+    if (!item.files) return;
+    for (const f of item.files) {
+      ensureDir(dirname(domTarget));
+      writeFileSync(domTarget, f.content || '', 'utf8');
+      logger.success(`Wrote ${relative(cwd, domTarget)}`);
+    }
+  } catch (e) {
+    logger.warn(`Could not fetch lib-dom from registry (${e.message}). You may need to write lib/dom.ts manually.`);
+  }
+}
+
+function relative(cwd, p) {
+  return p.startsWith(cwd) ? p.slice(cwd.length + 1) : p;
 }
 
 async function writeTheme(cwd, baseColor, cssPath, registryUrl) {

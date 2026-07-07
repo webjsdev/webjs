@@ -402,6 +402,19 @@ The scaffold exists so the agent doesn't reinvent the directory layout,
 the Drizzle wiring, the test runner config, or the convention files. It
 does NOT exist so the agent ships the example homepage.
 
+### Prune what the app does not use
+
+The scaffold is reference, so keep the infrastructure the app actually
+USES and delete the rest, both files AND their folders. No persistence
+means delete `db/`, `drizzle.config.ts`, and the `db:*` scripts. No UI
+kit used means delete `components/ui/`, `components.json`, and
+`lib/utils/cn.ts`. No PWA means delete `public/sw.js` and `offline.html`.
+Always KEEP the durable knowledge (`AGENTS.md`, `CONVENTIONS.md`, the
+per-agent rule files, the MCP wiring), and never prune it, so removing
+example code never removes your context. Prune AFTER you have used the
+examples as reference, never blindly up front. This is a no-op for the
+`api` template, which ships no UI kit and no PWA files.
+
 ---
 
 ## Sensible defaults
@@ -1067,6 +1080,12 @@ toggle, the tab switch) requires JS.
 - **Don't gate read-paths on hydration.** Never write components whose
   SSR'd HTML is empty or wrong on purpose with the expectation that
   JS will fill it in. The first paint must be the right content.
+- **Label every interactive control.** Give each control an accessible
+  name, and make clickable text a `<label for="control-id">` (or the
+  control itself) so a text click activates the control on BOTH the JS
+  path and the no-JS form-submit path. Use `aria-label` and
+  `aria-pressed` on icon-only controls. `assertNoA11yViolations(el)` in a
+  browser test (see the Testing section) catches missing labels.
 
 **SSR-meaningful component state.** The SSR pipeline constructs the
 component, applies its attributes, runs `willUpdate` and controllers'
@@ -1115,6 +1134,16 @@ Where the data lives, where to read it:
 
 <!-- OVERRIDE -->
 
+**The `.server.ts` vs `'use server'` decision, in one question.** Will the
+client call it? Add `'use server'` and the file becomes an RPC action
+(the browser import is rewritten to a typed stub). Is it server-only
+infra instead (a DB driver, secrets, `node:*`)? Use NO directive, and
+never import it into a page, layout, or component. Reach it from a
+`'use server'` action, a `route.ts` handler, or `middleware.ts`. A
+`.server.ts` file WITHOUT the directive is a server-only utility whose
+browser import throws at module load, so a page/component that imports it
+directly crashes on the client.
+
 ```ts
 // modules/posts/actions/create-post.server.ts
 'use server';
@@ -1136,6 +1165,47 @@ export async function createPost(input: {
 - Return `ActionResult<T>` envelope for actions that can fail
 - Never throw for expected errors. Return `{ success: false, error, status }`
 - Validate input at the top of the function
+
+---
+
+## Mutations: default to optimistic UI
+
+<!-- OVERRIDE -->
+
+Default to optimistic UI for every feasible mutation. Use `optimistic()`
+from `@webjsdev/core` (create, toggle, like, follow, reorder, rename,
+status change) so the UI updates instantly and rolls back automatically
+on failure. No hand-written try-catch, cache-and-restore, or temp-id
+reconciliation.
+
+```ts
+import { WebComponent, prop, optimistic, html } from '@webjsdev/core';
+import { createTodo } from '#modules/todos/actions/create-todo.server.ts';
+
+class TodoList extends WebComponent({ todos: prop<Todo[]>(Array) }) {
+  private optimisticTodos = optimistic(this, {
+    source: () => this.todos,
+    update: (state, title: string) => [...state, { title, pending: true }],
+  });
+
+  async handleSubmit(title: string) {
+    const promise = createTodo({ title });
+    this.optimisticTodos.add(title, promise);   // auto-releases on settle
+    await promise;
+  }
+
+  render() {
+    return html`<ul>${this.optimisticTodos.value.map(t => html`
+      <li class=${t.pending ? 'opacity-50' : ''}>${t.title}</li>`)}</ul>`;
+  }
+}
+```
+
+Do NOT reach for optimistic UI where it hurts: unpredictable or
+server-computed results (AI output, server-assigned values the client
+cannot guess), side-effectful mutations the user must wait on (payment,
+email, OAuth), and destructive irreversible actions (a confirm-first UX
+is better). See `agent-docs/advanced.md` for the full API.
 
 ---
 
