@@ -19,6 +19,15 @@ cover what you need, the full hosted docs are at **https://docs.webjs.com**.
   the example `User` model, the example users module, etc. with the app the
   user actually asked for. Do not ship "Hello from <app-name>" as the
   deliverable.
+- **Prune what the app does not use.** Keep the infrastructure the app USES
+  and delete the rest (files AND folders). No persistence means delete `db/`,
+  `drizzle.config.ts`, and the `db:*` scripts. No UI kit used means delete
+  `components/ui/`, `components.json`, and `lib/utils/cn.ts`. No PWA means
+  delete `public/sw.js` and `offline.html`. Always KEEP the durable knowledge
+  (`AGENTS.md`, `CONVENTIONS.md`, the rule files, the MCP), never prune it, so
+  removing example code never removes your context. Prune AFTER using the
+  examples as reference, never blindly up front. A no-op for the `api` template
+  (no UI kit, no PWA files).
 - **Use a unique design (UI apps).** When the app has a UI, give it a design of
   your own (palette, layout, typography, chrome) that fits what the user asked
   for. Do NOT mimic the scaffold's example look (its warm colors, the 760px
@@ -145,6 +154,18 @@ self-review loop.
   a static field on the class.
 - **Never extend raw HTMLElement directly for app components.** Always subclass `WebComponent` (or the factory form `WebComponent({...})`) to hook into SSR, lifecycle, elision, and the reactive property system. Extend raw HTMLElement only for rare native-API edge cases (like form-associated `ElementInternals` or customized built-in elements), and add a `webjs-allow-htmlelement: <reason>` comment to acknowledge the exception.
 - One function per server action file (`*.server.ts`).
+- **`.server.ts` vs `'use server'`, the decision.** Will the client call it?
+  Add `'use server'` and the file becomes an RPC action (browser import
+  rewritten to a typed stub). Is it server-only infra instead (a DB driver,
+  secrets, `node:*`)? Use NO directive, and NEVER import it into a
+  page/layout/component. Reach it from a `'use server'` action, `route.ts`, or
+  `middleware.ts`. A `.server.ts` WITHOUT the directive is a server-only utility
+  whose browser import throws at module load.
+- **Label every interactive control.** Give each control an accessible name, and
+  make clickable text a `<label for="control-id">` (or the control itself) so a
+  text click activates the control on BOTH the JS path and the no-JS
+  form-submit path. Use `aria-label` and `aria-pressed` on icon-only controls.
+  `assertNoA11yViolations(el)` in a browser test catches missing labels.
 - Server-only code (a DB driver like `pg`, `node:*`, anything that needs Node APIs)
   goes only in `.server.{js,ts}` files, `route.ts` handlers, or
   `middleware.ts`. Never in pages, layouts, or components. Wrap the access in
@@ -188,6 +209,12 @@ self-review loop.
   paint), NOT from `fetch` calls in `connectedCallback`. For write-paths, prefer `<form action=...>` plus
   server action over `fetch` plus click handler. The framework upgrades plain
   forms to partial-swap submissions automatically.
+- **Default to optimistic UI for feasible mutations.** Use `optimistic()` from
+  `@webjsdev/core` for create/toggle/like/reorder so the UI updates instantly
+  and rolls back on failure (no hand-written try-catch or temp-id bookkeeping).
+  Do NOT use it where it hurts: unpredictable or server-computed results,
+  side-effectful or OAuth/payment mutations, and destructive irreversible
+  actions (confirm-first instead).
 - **Client navigation is auto-magic.** Real `<a href>` and `<form action>`
   get partial-swap behavior with no opt-in. Because layouts persist across
   navigation, put shared chrome (sidenav, header) in `layout.ts` and
