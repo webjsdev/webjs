@@ -5,10 +5,10 @@
 // component; a page/layout cannot be interactive in its own markup.
 //
 // Styling uses the shadcn-standard design tokens the @webjsdev/ui theme defines
-// (bg-card, text-foreground, bg-accent, text-muted-foreground, border-border,
+// (bg-card, text-foreground, bg-primary, text-muted-foreground, border-border,
 // ...), so the whole app (this component AND any `webjs ui add` component) shares
 // one coherent theme. Prefer these tokens (and opacity modifiers like
-// bg-accent/90) over ad-hoc colors.
+// bg-primary/90) over ad-hoc colors.
 import { WebComponent, prop, optimistic, html } from '@webjsdev/core';
 import { createTodo } from '../actions/create-todo.server.ts';
 import { toggleTodo } from '../actions/toggle-todo.server.ts';
@@ -77,7 +77,7 @@ export class TodoApp extends WebComponent({
         <!-- Header: a title, a live done/total count, and a progress bar. -->
         <header class="grid gap-3">
           <div class="flex items-center gap-3">
-            <span class="grid place-items-center w-10 h-10 rounded-2xl bg-accent/15 text-accent shrink-0">
+            <span class="grid place-items-center w-10 h-10 rounded-2xl bg-primary/15 text-primary shrink-0">
               <svg viewBox="0 0 24 24" class="w-5 h-5 stroke-current fill-none" style="stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round"><path d="m5 13 4 4L19 7"/></svg>
             </span>
             <div class="grid gap-0.5">
@@ -87,7 +87,7 @@ export class TodoApp extends WebComponent({
             <span class="ml-auto text-[13px] font-semibold tabular-nums text-muted-foreground">${pct}%</span>
           </div>
           <div class="h-1.5 rounded-full bg-muted overflow-hidden">
-            <div class="h-full rounded-full bg-accent transition-[width] duration-300" style="width:${pct}%"></div>
+            <div class="h-full rounded-full bg-primary transition-[width] duration-300" style="width:${pct}%"></div>
           </div>
         </header>
 
@@ -99,7 +99,7 @@ export class TodoApp extends WebComponent({
           <input name="title" required maxlength="280" autocomplete="off" placeholder="What needs doing?"
             class="flex-1 min-w-0 bg-transparent border-0 outline-none text-foreground text-[15px] placeholder:text-muted-foreground/70 py-1.5" />
           <button type="submit"
-            class="shrink-0 px-4 py-2 rounded-xl bg-accent text-accent-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-accent/90 active:scale-[0.97]">Add</button>
+            class="shrink-0 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">Add</button>
         </form>
 
         <ul class="list-none m-0 p-0 grid gap-2">
@@ -115,7 +115,7 @@ export class TodoApp extends WebComponent({
                   aria-pressed=${todo.completed ? 'true' : 'false'}
                   aria-label=${todo.completed ? 'Mark as not done' : 'Mark as done'}
                   @click=${(e: Event) => this.toggle(e, todo)}
-                  class="shrink-0 grid place-items-center w-5 h-5 rounded-full border-2 cursor-pointer transition-all ${todo.completed ? 'bg-accent border-accent text-accent-foreground' : 'bg-transparent border-border-strong text-transparent hover:border-accent'}">
+                  class="shrink-0 grid place-items-center w-5 h-5 rounded-full border-2 cursor-pointer transition-all ${todo.completed ? 'bg-primary border-primary text-primary-foreground' : 'bg-transparent border-border-strong text-transparent hover:border-primary'}">
                   <svg viewBox="0 0 24 24" class="w-3 h-3 stroke-current fill-none" style="stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round"><path d="m5 13 4 4L19 7"/></svg>
                 </button>
                 <!-- The title is a <label for> the toggle: clicking the text toggles

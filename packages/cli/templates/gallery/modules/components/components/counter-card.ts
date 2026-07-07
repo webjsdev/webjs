@@ -27,7 +27,7 @@ export class CounterCard extends WebComponent({
           <span class="text-sm text-muted-foreground/70">${this.label}</span>
         </div>
         <button @click=${() => this.count.set(this.count.get() + 1)}
-          class="w-fit px-4 py-2 rounded-xl bg-accent text-accent-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-accent/90 active:scale-[0.97]">Increment</button>
+          class="w-fit px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">Increment</button>
       </div>
     `;
   }

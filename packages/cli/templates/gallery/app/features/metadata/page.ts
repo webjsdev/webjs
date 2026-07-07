@@ -43,9 +43,9 @@ export default function MetadataExample({
       <code class="font-mono text-sm">${topic ? '?topic=' + topic : '(default, no ?topic=)'}</code>
     </p>
     <ul class="list-disc pl-5 mb-4">
-      <li><a class="text-accent" href="/features/metadata?topic=webjs">?topic=webjs</a></li>
-      <li><a class="text-accent" href="/features/metadata?topic=Routing">?topic=Routing</a></li>
-      <li><a class="text-accent" href="/features/metadata">clear the param</a></li>
+      <li><a class="text-primary" href="/features/metadata?topic=webjs">?topic=webjs</a></li>
+      <li><a class="text-primary" href="/features/metadata?topic=Routing">?topic=Routing</a></li>
+      <li><a class="text-primary" href="/features/metadata">clear the param</a></li>
     </ul>
     <p class="text-muted-foreground text-sm">
       Site-wide metadata (sitemap, robots, Open Graph images) lives in metadata

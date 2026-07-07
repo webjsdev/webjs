@@ -23,8 +23,8 @@ export default function EnvExample() {
       names are exposed to the browser; the rest stay server-side.
     </p>
     <ul class="list-disc pl-5 mb-4 space-y-1">
-      <li><code class="font-mono text-sm">NODE_ENV</code> = <span class="text-accent">${nodeEnv}</span> <span class="text-muted-foreground text-sm">(defined both sides)</span></li>
-      <li><code class="font-mono text-sm">WEBJS_PUBLIC_APP_NAME</code> = <span class="text-accent">${publicName}</span></li>
+      <li><code class="font-mono text-sm">NODE_ENV</code> = <span class="text-primary">${nodeEnv}</span> <span class="text-muted-foreground text-sm">(defined both sides)</span></li>
+      <li><code class="font-mono text-sm">WEBJS_PUBLIC_APP_NAME</code> = <span class="text-primary">${publicName}</span></li>
     </ul>
     <p class="text-muted-foreground text-sm">
       Never read a secret in a page, layout, or component that ships to the

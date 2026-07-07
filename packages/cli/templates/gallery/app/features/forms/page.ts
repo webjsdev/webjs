@@ -26,18 +26,18 @@ const field = (label: string, name: string, input: unknown, error?: string) => h
   </div>
 `;
 
-const inputCls = 'w-full bg-background border border-border rounded-xl px-3 py-2 text-[15px] text-foreground outline-none transition-colors focus:border-accent placeholder:text-muted-foreground/70';
+const inputCls = 'w-full bg-background border border-border rounded-xl px-3 py-2 text-[15px] text-foreground outline-none transition-colors focus:border-primary placeholder:text-muted-foreground/70';
 
 export default function FormsFeature({ searchParams, actionData }: { searchParams: Record<string, string | undefined>; actionData?: Result }) {
   if (searchParams.sent) {
     return html`
       <h1 class="text-h2 font-bold mb-4">Forms</h1>
       <div class="max-w-[460px] grid gap-3 p-6 rounded-2xl bg-card border border-border text-center">
-        <span class="mx-auto grid place-items-center w-12 h-12 rounded-2xl bg-accent/15 text-accent">
+        <span class="mx-auto grid place-items-center w-12 h-12 rounded-2xl bg-primary/15 text-primary">
           <svg viewBox="0 0 24 24" class="w-6 h-6 stroke-current fill-none" style="stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round"><path d="m5 13 4 4L19 7"/></svg>
         </span>
         <p class="m-0 text-lg font-semibold text-foreground">Message sent</p>
-        <p class="m-0 text-sm text-muted-foreground">Thanks, we got it. <a class="text-accent" href="/features/forms">Send another</a>.</p>
+        <p class="m-0 text-sm text-muted-foreground">Thanks, we got it. <a class="text-primary" href="/features/forms">Send another</a>.</p>
       </div>
     `;
   }
@@ -50,7 +50,7 @@ export default function FormsFeature({ searchParams, actionData }: { searchParam
       ${field('Name', 'name', html`<input id="name" name="name" value=${v.name ?? ''} class=${inputCls} placeholder="Ada Lovelace" />`, errs.name)}
       ${field('Email', 'email', html`<input id="email" name="email" type="email" value=${v.email ?? ''} class=${inputCls} placeholder="ada@example.com" />`, errs.email)}
       ${field('Message', 'message', html`<textarea id="message" name="message" rows="3" class=${inputCls} placeholder="Say hello...">${v.message ?? ''}</textarea>`, errs.message)}
-      <button type="submit" class="justify-self-start px-4 py-2 rounded-xl bg-accent text-accent-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-accent/90 active:scale-[0.97]">Send message</button>
+      <button type="submit" class="justify-self-start px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">Send message</button>
     </form>
   `;
 }

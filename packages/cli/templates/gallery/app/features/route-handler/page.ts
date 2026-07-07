@@ -8,6 +8,6 @@ export default function RouteHandlerExample() {
   return html`
     <h1 class="text-h2 font-bold mb-4">Route handlers</h1>
     <p class="text-muted-foreground mb-4">A <code>route.ts</code> is a server-only HTTP endpoint (named <code>GET</code>/<code>POST</code>/... exports), the webjs equivalent of a Next route handler. It never ships to the client.</p>
-    <p><a class="text-accent" href="/features/route-handler/data">GET /features/route-handler/data</a> returns JSON.</p>
+    <p><a class="text-primary" href="/features/route-handler/data">GET /features/route-handler/data</a> returns JSON.</p>
   `;
 }

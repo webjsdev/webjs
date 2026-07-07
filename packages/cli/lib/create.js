@@ -1096,19 +1096,23 @@ ${UI_THEME}
          added later with webjs ui add <name> inherits it automatically. This
          block is emitted after the ui theme, so these values win on every Tailwind
          recompile. Dark-first, with light via the theme toggle (data-theme) or the
-         OS. Edit the palette here. Add a new design token the canonical way, a
-         --x variable below plus a --color-x: var(--x) line in the @theme inline
-         block, then use it as bg-x / text-x. Reach for opacity modifiers
-         (bg-accent/10, hover:bg-accent/90, text-muted-foreground/70) before
+         OS. Follows the shadcn model: --primary is the BRAND color (orange, used
+         for primary buttons, links, and emphasis), while --accent stays a NEUTRAL
+         hover tint so the ui kit's outline/ghost/dropdown hover states keep proper
+         contrast. Use bg-primary / text-primary for brand, bg-accent for hovers.
+         Add a new design token the canonical way, a --x variable below plus a
+         --color-x: var(--x) line in the @theme inline block, then use it as bg-x /
+         text-x. Reach for opacity modifiers
+         (bg-primary/10, hover:bg-primary/90, text-muted-foreground/70) before
          inventing a new token. */
       :root {
         --font-sans:  -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         --font-serif: ui-serif, 'Iowan Old Style', Palatino, Georgia, serif;
         --font-mono:  ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         --header-h: 56px;
-        /* A translucent accent, derived from --accent so it tracks light/dark
-           automatically. Used for the logo glow and the focus ring tint. */
-        --accent-tint: color-mix(in oklch, var(--accent) 20%, transparent);
+        /* A translucent brand tint, derived from --primary so it tracks
+           light/dark automatically. Used for the logo glow and focus ring. */
+        --primary-tint: color-mix(in oklch, var(--primary) 20%, transparent);
       }
       /* dark (the default, and the explicit .dark the toggle sets) */
       :root, .dark {
@@ -1119,14 +1123,17 @@ ${UI_THEME}
         --card-foreground: oklch(0.96 0.015 60);
         --popover: oklch(0.18 0.01 55);
         --popover-foreground: oklch(0.96 0.015 60);
-        --primary: oklch(0.922 0 0);
-        --primary-foreground: oklch(0.205 0 0);
+        /* --primary is the orange BRAND color (shadcn model: primary = brand). */
+        --primary: oklch(0.7 0.16 52);
+        --primary-foreground: oklch(0.17 0.02 52);
         --secondary: oklch(0.22 0.01 55);
         --secondary-foreground: oklch(0.96 0.015 60);
         --muted: oklch(0.16 0.01 55);
         --muted-foreground: oklch(0.72 0.02 60);
-        --accent: oklch(0.7 0.16 52);
-        --accent-foreground: oklch(0.17 0.02 52);
+        /* --accent stays a NEUTRAL hover tint (shadcn model), so the ui kit's
+           outline/ghost/dropdown hover states keep proper contrast. */
+        --accent: oklch(0.27 0.008 55);
+        --accent-foreground: oklch(0.96 0.015 60);
         --border: oklch(0.26 0.012 55 / 0.9);
         --border-strong: oklch(0.38 0.012 55 / 0.9);
         --input: oklch(0.26 0.012 55 / 0.9);
@@ -1143,14 +1150,14 @@ ${UI_THEME}
         --card-foreground: oklch(0.18 0.015 60);
         --popover: oklch(1 0 0);
         --popover-foreground: oklch(0.18 0.015 60);
-        --primary: oklch(0.205 0 0);
-        --primary-foreground: oklch(0.985 0 0);
+        --primary: oklch(0.54 0.16 52);
+        --primary-foreground: oklch(1 0 0);
         --secondary: oklch(0.96 0.008 80);
         --secondary-foreground: oklch(0.18 0.015 60);
         --muted: oklch(0.96 0.008 80);
         --muted-foreground: oklch(0.42 0.02 65);
-        --accent: oklch(0.54 0.16 52);
-        --accent-foreground: oklch(1 0 0);
+        --accent: oklch(0.955 0.006 80);
+        --accent-foreground: oklch(0.18 0.015 60);
         --border: oklch(0.88 0.01 75 / 0.95);
         --border-strong: oklch(0.78 0.01 75 / 0.95);
         --input: oklch(0.88 0.01 75 / 0.95);
@@ -1168,14 +1175,14 @@ ${UI_THEME}
           --card-foreground: oklch(0.18 0.015 60);
           --popover: oklch(1 0 0);
           --popover-foreground: oklch(0.18 0.015 60);
-          --primary: oklch(0.205 0 0);
-          --primary-foreground: oklch(0.985 0 0);
+          --primary: oklch(0.54 0.16 52);
+          --primary-foreground: oklch(1 0 0);
           --secondary: oklch(0.96 0.008 80);
           --secondary-foreground: oklch(0.18 0.015 60);
           --muted: oklch(0.96 0.008 80);
           --muted-foreground: oklch(0.42 0.02 65);
-          --accent: oklch(0.54 0.16 52);
-          --accent-foreground: oklch(1 0 0);
+          --accent: oklch(0.955 0.006 80);
+          --accent-foreground: oklch(0.18 0.015 60);
           --border: oklch(0.88 0.01 75 / 0.95);
           --border-strong: oklch(0.78 0.01 75 / 0.95);
           --input: oklch(0.88 0.01 75 / 0.95);
@@ -1189,7 +1196,7 @@ ${UI_THEME}
            already maps --color-background/foreground/card/primary/secondary/
            muted/accent/border/input/ring/destructive. */
         --color-border-strong: var(--border-strong);
-        --color-accent-tint: var(--accent-tint);
+        --color-primary-tint: var(--primary-tint);
         --font-sans:  var(--font-sans);
         --font-serif: var(--font-serif);
         --font-mono:  var(--font-mono);
@@ -1211,7 +1218,7 @@ ${UI_THEME}
         font: 16px/1.65 var(--font-sans);
         -webkit-font-smoothing: antialiased;
       }
-      ::selection { background: color-mix(in oklch, var(--accent) 22%, transparent); color: var(--foreground); }
+      ::selection { background: color-mix(in oklch, var(--primary) 22%, transparent); color: var(--foreground); }
     </style>
 
     <header class="fixed inset-x-0 top-0 z-20 flex items-center gap-6 px-4 sm:px-6 py-3 border-b border-border bg-[color-mix(in_oklch,var(--background)_75%,transparent)] backdrop-blur-[18px]">
@@ -1242,7 +1249,7 @@ ${UI_THEME}
         <div class="max-w-[760px] mx-auto px-4 sm:px-6 py-6 flex items-center justify-center">
           <a href="https://webjs.dev" class="inline-flex items-center gap-2 no-underline text-sm text-muted-foreground hover:text-foreground transition-colors">
             <span>Built with</span>
-            <span class="w-[18px] h-[18px] rounded-[6px] bg-gradient-to-br from-[var(--logo-from)] to-[var(--logo-to)] shadow-[0_2px_10px_var(--accent-tint)]"></span>
+            <span class="w-[18px] h-[18px] rounded-[6px] bg-gradient-to-br from-[var(--logo-from)] to-[var(--logo-to)] shadow-[0_2px_10px_var(--primary-tint)]"></span>
             <span class="font-semibold text-foreground">webjs</span>
           </a>
         </div>
@@ -1314,7 +1321,7 @@ export default function Home() {
   return html\`
     <section class="mb-14">
       \${rubric('welcome')}
-      \${displayH1(html\`Hello from <span class="text-accent italic">${displayName}</span>.\`)}
+      \${displayH1(html\`Hello from <span class="text-primary italic">${displayName}</span>.\`)}
       <p class="text-lede leading-[1.5] text-muted-foreground max-w-[56ch] m-0 mb-6">
         This scaffold ships a gallery below: single-feature demos and one whole
         example app, all small, idiomatic, and heavily commented. Browse them for
@@ -1365,15 +1372,15 @@ export default function Home() {
   return html\`
     <section class="mb-14">
       \${rubric('welcome')}
-      \${displayH1(html\`Hello from <span class="text-accent italic">${displayName}</span>.\`)}
+      \${displayH1(html\`Hello from <span class="text-primary italic">${displayName}</span>.\`)}
       <p class="text-lede leading-[1.5] text-muted-foreground max-w-[56ch] m-0 mb-6">
         The saas starter: email and password auth, a protected dashboard, and a
         User model, all wired up. Replace this page with your product's landing.
         See \${accentLink('https://docs.webjs.dev', 'the docs')} for the full reference.
       </p>
       <div class="flex gap-3 items-center">
-        <a href="/login" class="inline-flex items-center px-4 py-2 rounded-xl bg-accent text-accent-foreground font-semibold text-sm no-underline transition-all hover:bg-accent/90 active:scale-[0.97]">Log in</a>
-        <a href="/signup" class="text-accent no-underline font-medium text-sm">Create an account</a>
+        <a href="/login" class="inline-flex items-center px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm no-underline transition-all hover:bg-primary/90 active:scale-[0.97]">Log in</a>
+        <a href="/signup" class="text-primary no-underline font-medium text-sm">Create an account</a>
         <a href="/dashboard" class="text-muted-foreground no-underline font-medium text-sm hover:text-foreground transition-colors">Dashboard</a>
       </div>
     </section>
@@ -1435,7 +1442,7 @@ export class ThemeToggle extends WebComponent {
     const icon = t === 'light' ? ICONS.sun : t === 'dark' ? ICONS.moon : ICONS.system;
     return html\`
       <button
-        class="inline-flex items-center justify-center w-9 h-9 p-0 border border-border rounded-full bg-card text-muted-foreground cursor-pointer transition-all duration-150 hover:text-foreground hover:border-border-strong active:scale-[0.94] focus-visible:outline-none focus-visible:border-accent focus-visible:ring-[3px] focus-visible:ring-accent-tint"
+        class="inline-flex items-center justify-center w-9 h-9 p-0 border border-border rounded-full bg-card text-muted-foreground cursor-pointer transition-all duration-150 hover:text-foreground hover:border-border-strong active:scale-[0.94] focus-visible:outline-none focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary-tint"
         @click=\${() => this.cycle()}
         aria-label="Cycle theme (currently \${label})"
         title="Theme: \${label.toLowerCase()}"

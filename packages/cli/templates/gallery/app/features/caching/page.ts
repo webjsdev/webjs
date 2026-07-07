@@ -26,7 +26,7 @@ export default function CachingExample() {
     </p>
     <p class="mb-4">
       Rendered at
-      <code class="font-mono text-accent">${renderedAt}</code>.
+      <code class="font-mono text-primary">${renderedAt}</code>.
       Reload within 10s and this is unchanged; after 10s it re-renders.
     </p>
     <p class="text-muted-foreground text-sm">

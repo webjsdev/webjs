@@ -41,14 +41,14 @@ export class WsEcho extends WebComponent {
     return html`
       <div class="grid gap-4 max-w-[420px]">
         <div class="flex items-center gap-2 text-sm">
-          <span class="w-2 h-2 rounded-full ${on ? 'bg-accent' : 'bg-muted-foreground/40'}"></span>
+          <span class="w-2 h-2 rounded-full ${on ? 'bg-primary' : 'bg-muted-foreground/40'}"></span>
           <span class="text-muted-foreground">${on ? 'connected' : 'connecting (live echo needs JavaScript)'}</span>
         </div>
         <form @submit=${(e: SubmitEvent) => this.send(e)} class="flex gap-2">
           <input name="msg" autocomplete="off" placeholder="Say something"
             class="flex-1 px-3 py-2 rounded-xl bg-card border border-border text-foreground text-sm outline-none focus:border-border-strong" />
           <button type="submit"
-            class="px-3.5 py-2 rounded-xl bg-accent text-accent-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-accent/90 active:scale-[0.97]">Send</button>
+            class="px-3.5 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">Send</button>
         </form>
         <ul class="grid gap-1.5 list-none m-0 p-0">
           ${this.lines.get().map((line) => html`

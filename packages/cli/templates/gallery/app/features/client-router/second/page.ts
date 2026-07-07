@@ -15,6 +15,6 @@ export default function ClientRouterSecond() {
       the link below): the previous page and its scroll position are restored
       from the snapshot cache.
     </p>
-    <a href="/features/client-router" class="text-accent no-underline font-medium">&larr; Back to page one</a>
+    <a href="/features/client-router" class="text-primary no-underline font-medium">&larr; Back to page one</a>
   `;
 }

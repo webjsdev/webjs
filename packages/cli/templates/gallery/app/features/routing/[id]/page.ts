@@ -20,6 +20,6 @@ export default function RoutingParam({ params }: PageProps<'/features/routing/[i
       so <code class="font-mono">params.id</code> is a checked
       <code class="font-mono">string</code> from the generated route union.
     </p>
-    <p class="mt-3"><a class="text-accent" href="/features/routing">Back</a></p>
+    <p class="mt-3"><a class="text-primary" href="/features/routing">Back</a></p>
   `;
 }

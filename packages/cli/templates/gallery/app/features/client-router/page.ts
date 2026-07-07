@@ -21,7 +21,7 @@ export default function ClientRouterExample() {
       navigations. Nothing was imported to get this.
     </p>
     <div class="flex gap-3 items-center">
-      <a href="/features/client-router/second" class="inline-flex items-center px-4 py-2 rounded-xl bg-accent text-accent-foreground font-semibold text-sm no-underline transition-all hover:bg-accent/90 active:scale-[0.97]">Go to page two</a>
+      <a href="/features/client-router/second" class="inline-flex items-center px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm no-underline transition-all hover:bg-primary/90 active:scale-[0.97]">Go to page two</a>
       <a href="/" class="text-muted-foreground no-underline font-medium text-sm hover:text-foreground transition-colors">Home</a>
     </div>
     <p class="text-muted-foreground text-sm mt-6">

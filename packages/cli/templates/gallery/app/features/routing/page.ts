@@ -12,8 +12,8 @@ export default function RoutingExample() {
     <h1 class="text-h2 font-bold mb-4">Routing</h1>
     <p class="text-muted-foreground mb-4">A folder is a URL segment; a <code>[id]</code> folder is a dynamic param.</p>
     <ul class="list-disc pl-5 mb-4">
-      <li><a class="text-accent" href="/features/routing/42">/features/routing/42</a></li>
-      <li><a class="text-accent" href="/features/routing/hello">/features/routing/hello</a></li>
+      <li><a class="text-primary" href="/features/routing/42">/features/routing/42</a></li>
+      <li><a class="text-primary" href="/features/routing/hello">/features/routing/hello</a></li>
     </ul>
     <p class="text-muted-foreground text-sm mb-2">
       Routes are type-safe: <code class="font-mono">webjs types</code> (run by

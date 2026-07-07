@@ -31,7 +31,7 @@ export class DirectiveDemo extends WebComponent {
       <div class="grid gap-4 max-w-[420px]">
         <div class="flex gap-2">
           <button @click=${() => this.reverse()}
-            class="px-3.5 py-1.5 rounded-xl bg-accent text-accent-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-accent/90 active:scale-[0.97]">Reverse</button>
+            class="px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">Reverse</button>
           <button @click=${() => this.add()}
             class="px-3.5 py-1.5 rounded-xl bg-card border border-border text-foreground font-medium text-sm cursor-pointer transition-colors hover:border-border-strong">Add</button>
         </div>
