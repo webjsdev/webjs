@@ -1,4 +1,7 @@
 'use server';
+// A MUTATION (no `method` export defaults to POST: CSRF-protected). Imported
+// directly by the client component (the import becomes a typed RPC stub); the
+// id argument and the ActionResult round-trip through webjs's serializer.
 import { eq } from 'drizzle-orm';
 import { db } from '#db/connection.server.ts';
 import { todos } from '#db/schema.server.ts';
