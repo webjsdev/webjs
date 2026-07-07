@@ -1208,7 +1208,7 @@ ${UI_THEME}
       drop the cap and mx-auto for an edge-to-edge layout. A wide layout left
       inside the 760px reading column overflows into a horizontal scrollbar.
     -->
-    <main class="block max-w-[760px] mx-auto px-4 sm:px-6 pt-[72px] pb-12 min-h-screen">
+    <main class="block max-w-[760px] mx-auto px-4 sm:px-6 pt-[72px] pb-12 min-h-[calc(100dvh-var(--header-h))]">
       \${children}
     </main>
   \`;
