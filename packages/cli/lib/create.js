@@ -263,6 +263,11 @@ function assertUiRegistryAvailable() {
  */
 export async function scaffoldApp(name, cwd, opts = {}) {
   const template = opts.template || 'full-stack';
+  // A human-friendly display title for the example home page. The npm `name`
+  // stays the raw slug (lowercase, hyphenated), but showing a hyphenated slug as
+  // a hero title looks unpolished, so title-case it for display ("my-app" ->
+  // "My App"). Replace this with your real brand anyway.
+  const displayName = name.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   // `install` is opt-in at the library level (so tests + programmatic
   // callers get a side-effect-free scaffold by default). The CLI entry
   // points (`webjs create` and `npx create-webjs-app`) explicitly set
@@ -1192,7 +1197,7 @@ import {
 } from '#components/ui/card.ts';
 
 export const metadata = {
-  title: '${name}: built with webjs',
+  title: '${displayName}: built with webjs',
 };
 
 // Two kinds of reference the scaffold ships. FEATURES are single-concept demos
@@ -1227,7 +1232,7 @@ export default function Home() {
   return html\`
     <section class="mb-14">
       \${rubric('welcome')}
-      \${displayH1(html\`Hello from <span class="italic" style="color:var(--accent)">${name}</span>.\`)}
+      \${displayH1(html\`Hello from <span class="italic" style="color:var(--accent)">${displayName}</span>.\`)}
       <p class="text-lede leading-[1.5] text-fg-muted max-w-[56ch] m-0 mb-6">
         This scaffold ships a gallery below: single-feature demos and one whole
         example app, all small, idiomatic, and heavily commented. Browse them for
