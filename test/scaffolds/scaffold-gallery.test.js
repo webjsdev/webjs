@@ -163,16 +163,27 @@ test('feature pages have no stale /examples/ links after the features refactor',
   }
 });
 
-test('the api template does NOT ship the gallery (no UI)', async () => {
+test('the api template ships the backend-features showcase, not the UI gallery', async () => {
   const cwd = await tempCwd();
   try {
     await scaffoldApp('demo', cwd, { template: 'api' });
     const appDir = join(cwd, 'demo');
-    assert.equal(existsSync(join(appDir, 'app', 'features')), false, 'api must not ship app/features');
+    // No UI gallery (the api template has no pages/components).
+    assert.equal(existsSync(join(appDir, 'app', 'features')), false, 'api must not ship the UI app/features');
     assert.equal(existsSync(join(appDir, 'app', 'examples')), false, 'api must not ship app/examples');
     assert.equal(existsSync(join(appDir, 'modules', 'todo')), false, 'api must not ship the todo module');
-    const schema = await readFile(join(appDir, 'db', 'schema.server.ts'), 'utf8');
-    assert.doesNotMatch(schema, /table\('todos'/, 'api schema must not add the gallery todos table');
+    // The BACKEND-features showcase (endpoints under app/api/features/).
+    for (const name of ['validate', 'rate-limit', 'stream', 'files', 'ws']) {
+      assert.ok(await exists(join(appDir, 'app', 'api', 'features', name, 'route.ts')), `api backend demo ${name}`);
+    }
+    assert.ok(await exists(join(appDir, 'app', 'api', 'features', 'rate-limit', 'middleware.ts')), 'rate-limit middleware');
+    assert.ok(await exists(join(appDir, 'app', 'api', 'features', 'files', '[key]', 'route.ts')), 'file serve route');
+    assert.ok(await exists(join(appDir, 'modules', 'widgets', 'actions', 'create-widget.server.ts')), 'widgets action');
+    assert.ok(await exists(join(appDir, 'env.ts')), 'env-validation demo at the app root');
+    // The root index lists the showcase.
+    const rootRoute = await readFile(join(appDir, 'app', 'route.ts'), 'utf8');
+    assert.match(rootRoute, /features:/, 'root index lists the features');
+    assert.match(rootRoute, /api\/features\/validate/, 'root index links the validate endpoint');
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }

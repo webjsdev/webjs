@@ -841,6 +841,14 @@ export default cors({
       health: \`\${base}/api/health\`,
       users: \`\${base}/api/users\`,
     },
+    // The backend-features showcase (delete app/api/features + its modules to prune).
+    features: {
+      validate: \`\${base}/api/features/validate\`,
+      'rate-limit': \`\${base}/api/features/rate-limit\`,
+      stream: \`\${base}/api/features/stream\`,
+      files: \`\${base}/api/features/files\`,
+      ws: \`\${base.replace(/^http/, 'ws')}/api/features/ws\`,
+    },
   });
 }
 `);
@@ -925,6 +933,13 @@ export type ActionResult<T> =
   | { success: true; data: T }
   | { success: false; error: string; status: number };
 `);
+
+    // The api backend-features showcase: endpoints under app/api/features/**
+    // demonstrating the server-side surface (route() adapter + validation, rate
+    // limiting, streaming, file storage, WebSockets + broadcast) plus env
+    // validation. The api counterpart of the UI gallery. Prune what you skip.
+    const { writeApiGallery } = await import('./api-gallery.js');
+    await writeApiGallery(appDir);
   }
 
   if (!isApi) {
