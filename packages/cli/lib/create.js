@@ -212,7 +212,7 @@ async function writeUiBootstrap(appDir) {
 }
 
 /**
- * Read the shadcn theme CSS so we can inline it into the layout's
+ * Read the @webjsdev/ui theme CSS so we can inline it into the layout's
  * `<style type="text/tailwindcss">` block. The Tailwind browser runtime
  * picks up inline `<style type="text/tailwindcss">` content, so the theme
  * tokens (`--color-primary`, `--color-card`, …) the registry components
@@ -227,7 +227,7 @@ async function readThemeCss() {
 
 /**
  * Fail loudly when the @webjsdev/ui registry is not on disk. The scaffold
- * reads component sources, the cn() helper, and the shadcn theme from
+ * reads component sources, the cn() helper, and the @webjsdev/ui theme from
  * UI_REGISTRY_ROOT and weaves them into a generated app/page.ts that
  * imports `components/ui/button.ts`. If the registry is missing, the
  * generated app boots to ERR_MODULE_NOT_FOUND on first request, which is
@@ -417,9 +417,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // tsserver plugin can't provide); tsserver dedupes by name, so loading
       // it both ways is a no-op. Standalone, no Lit dependency. Editor-only.
       '@webjsdev/intellisense': 'latest',
-      // NOTE: @webjsdev/ui is intentionally NOT pinned. The UI kit is
-      // shadcn-style copy-in: `webjs ui add <name>` copies component source
-      // into components/ui/ (they import @webjsdev/core, not the kit), and the
+      // NOTE: @webjsdev/ui is intentionally NOT pinned. The UI kit uses a
+      // copy-in model (shadcn-compatible conventions): `webjs ui add <name>`
+      // copies component source into components/ui/ (they import
+      // @webjsdev/core, not the kit), and the
       // CLI resolves @webjsdev/ui from its own install.
     },
     // Dev + start task orchestration (#550). `webjs dev` / `webjs start` read
@@ -950,7 +951,7 @@ export type ActionResult<T> =
 
     // Pre-initialise @webjsdev/ui so the scaffold boots ready for
     // `webjs ui add <name>`: writes components.json + lib/utils/cn.ts +
-    // styles/globals.css (the shadcn theme).
+    // styles/globals.css (the @webjsdev/ui theme).
     await writeUiBootstrap(appDir);
 
     // Copy the standard ui-* component kit the scaffold's example pages
@@ -968,13 +969,13 @@ export type ActionResult<T> =
     // use. See CONVENTIONS.md "prune what the app does not use".
     if (isFullStack) await copyGallery(appDir);
 
-    // The shadcn theme tokens (`--color-primary`, `--color-card`, …) the
+    // The @webjsdev/ui theme tokens (`--color-primary`, `--color-card`, …) the
     // ui-* components consume. We read the registry's themes/index.css at
     // create time and inline it into the layout's
     // `<style type="text/tailwindcss">` block so the Tailwind browser
     // runtime picks it up. Same content also lives at styles/globals.css for
     // `webjsui` tooling.
-    const SHADCN_THEME = (await readThemeCss())
+    const UI_THEME = (await readThemeCss())
       // Escape backticks + ${} so the CSS survives interpolation into the
       // layout's template literal below.
       .replace(/\\/g, '\\\\')
@@ -1029,7 +1030,7 @@ export default function RootLayout({ children }: { children: unknown }) {
             var el = document.documentElement;
             if (t === 'light' || t === 'dark') el.dataset.theme = t;
             else delete el.dataset.theme;
-            // Keep shadcn's .dark class in sync with the effective theme so the
+            // Keep the .dark class the @webjsdev/ui kit uses in sync with the effective theme so the
             // copied ui-* components (button, card, etc.) follow light/dark too.
             // Dark is the default unless the OS prefers light or 'light' is set.
             var dark = t === 'dark' || (t !== 'light' && !mq.matches);
@@ -1069,7 +1070,7 @@ export default function RootLayout({ children }: { children: unknown }) {
       Edit base palette via the :root / .dark blocks below.
     -->
     <style type="text/tailwindcss">
-${SHADCN_THEME}
+${UI_THEME}
     </style>
     <style type="text/tailwindcss">
       @theme {
@@ -1081,10 +1082,10 @@ ${SHADCN_THEME}
         --color-bg-subtle:     var(--bg-subtle);
         --color-border:        var(--border);
         --color-border-strong: var(--border-strong);
-        --color-accent:        var(--accent);
-        --color-accent-hover:  var(--accent-hover);
-        --color-accent-fg:     var(--accent-fg);
-        --color-accent-tint:   var(--accent-tint);
+        --color-accent:        var(--brand);
+        --color-accent-hover:  var(--brand-hover);
+        --color-accent-fg:     var(--brand-fg);
+        --color-accent-tint:   var(--brand-tint);
         --font-sans:  var(--font-sans);
         --font-serif: var(--font-serif);
         --font-mono:  var(--font-mono);
@@ -1109,11 +1110,11 @@ ${SHADCN_THEME}
         --border:        oklch(0.26 0.012 55 / 0.9);
         --border-strong: oklch(0.38 0.012 55 / 0.9);
         /* Accent matches the webjs website (warm orange, hue 52). */
-        --accent:        oklch(0.7 0.16 52);
-        --accent-hover:  oklch(0.75 0.16 52);
-        --accent-fg:     oklch(0.17 0.02 52);
-        --accent-live:   oklch(0.63 0.17 50);
-        --accent-tint:   color-mix(in oklch, var(--accent-live) 14%, transparent);
+        --brand:        oklch(0.7 0.16 52);
+        --brand-hover:  oklch(0.75 0.16 52);
+        --brand-fg:     oklch(0.17 0.02 52);
+        --brand-live:   oklch(0.63 0.17 50);
+        --brand-tint:   color-mix(in oklch, var(--brand-live) 14%, transparent);
         --font-sans:   -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         --font-serif:  ui-serif, 'Iowan Old Style', Palatino, Georgia, serif;
         --font-mono:   ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -1127,11 +1128,11 @@ ${SHADCN_THEME}
         --bg-subtle:     oklch(0.96 0.008 80);
         --border:        oklch(0.88 0.01 75 / 0.95);
         --border-strong: oklch(0.78 0.01 75 / 0.95);
-        --accent:        oklch(0.54 0.16 52);
-        --accent-hover:  oklch(0.5 0.16 52);
-        --accent-fg:     oklch(1 0 0);
-        --accent-live:   oklch(0.63 0.17 50);
-        --accent-tint:   color-mix(in oklch, var(--accent-live) 14%, transparent);
+        --brand:        oklch(0.54 0.16 52);
+        --brand-hover:  oklch(0.5 0.16 52);
+        --brand-fg:     oklch(1 0 0);
+        --brand-live:   oklch(0.63 0.17 50);
+        --brand-tint:   color-mix(in oklch, var(--brand-live) 14%, transparent);
       }
       @media (prefers-color-scheme: light) {
         :root:not([data-theme='dark']) {
@@ -1143,11 +1144,11 @@ ${SHADCN_THEME}
           --bg-subtle:     oklch(0.96 0.008 80);
           --border:        oklch(0.88 0.01 75 / 0.95);
           --border-strong: oklch(0.78 0.01 75 / 0.95);
-          --accent:        oklch(0.54 0.16 52);
-          --accent-hover:  oklch(0.5 0.16 52);
-          --accent-fg:     oklch(1 0 0);
-          --accent-live:   oklch(0.63 0.17 50);
-          --accent-tint:   color-mix(in oklch, var(--accent-live) 14%, transparent);
+          --brand:        oklch(0.54 0.16 52);
+          --brand-hover:  oklch(0.5 0.16 52);
+          --brand-fg:     oklch(1 0 0);
+          --brand-live:   oklch(0.63 0.17 50);
+          --brand-tint:   color-mix(in oklch, var(--brand-live) 14%, transparent);
         }
       }
       /* Body + pseudo-elements utility classes can't reach. */
@@ -1160,12 +1161,12 @@ ${SHADCN_THEME}
         font: 16px/1.65 var(--font-sans);
         -webkit-font-smoothing: antialiased;
       }
-      ::selection { background: var(--accent-tint); color: var(--fg); }
+      ::selection { background: var(--brand-tint); color: var(--fg); }
     </style>
 
     <header class="fixed inset-x-0 top-0 z-20 flex items-center gap-6 px-4 sm:px-6 py-3 border-b border-border bg-[color-mix(in_oklch,var(--bg)_75%,transparent)] backdrop-blur-[18px]">
       <a href="/" class="mr-auto inline-flex items-center gap-2 no-underline text-fg font-semibold text-[15px] leading-none tracking-tight">
-        <span>${name}</span>
+        <span>${displayName}</span>
       </a>
       <nav class="flex gap-4 items-center">
         <!-- Example nav. Replace with the real navigation for your app. -->
@@ -1315,7 +1316,7 @@ export class ThemeToggle extends WebComponent {
     const el = document.documentElement;
     if (next === 'system') delete el.dataset.theme;
     else el.dataset.theme = next;
-    // Keep shadcn's .dark class in sync so the ui-* components follow the theme.
+    // Keep the .dark class the @webjsdev/ui kit uses in sync so the ui-* components follow the theme.
     const dark = next === 'dark'
       || (next === 'system' && !window.matchMedia('(prefers-color-scheme: light)').matches);
     el.classList.toggle('dark', dark);
