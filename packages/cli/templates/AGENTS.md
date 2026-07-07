@@ -311,7 +311,8 @@ app/                     ROUTING ONLY: thin route adapters (import from modules/
                          styles/, NOT app/.
   page.ts                → / (the scaffold home links to the example gallery)
   examples/<name>/       the example gallery (todo, tic-tac-toe, components,
-                         routing, server-actions); prune what you do not use
+                         routing, server-actions, async-render, directives,
+                         route-handler); prune what you do not use
   layout.ts              root layout, wraps every page
   error.ts               error boundary (render failures → user-friendly)
   loading.ts             Suspense fallback for sibling page

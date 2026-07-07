@@ -1203,6 +1203,9 @@ const examples = [
   { href: '/examples/components', title: 'Components', blurb: 'The WebComponent factory, reactive props, instance signals, and slot projection in light DOM.' },
   { href: '/examples/routing', title: 'Routing', blurb: 'A static route plus a dynamic [id] segment that reads params. The file-based router in miniature.' },
   { href: '/examples/server-actions', title: 'Server actions', blurb: 'A use-server RPC action next to a server-only .server.ts utility, and why the boundary matters.' },
+  { href: '/examples/async-render', title: 'Async render', blurb: 'A component that awaits server data in async render(), so the resolved value is in the first paint.' },
+  { href: '/examples/directives', title: 'Directives', blurb: 'The lit-html directive set: repeat for keyed lists, watch(signal) for a fine-grained node swap.' },
+  { href: '/examples/route-handler', title: 'Route handlers', blurb: 'A server-only route.ts HTTP endpoint returning JSON, the webjs equivalent of a Next route handler.' },
 ];
 
 export default function Home() {
@@ -1363,7 +1366,8 @@ ThemeToggle.register('theme-toggle');
   } else {
     console.log(`  ${name}/
     app/layout.ts, page.ts       ← home links to the example gallery
-    app/examples/{todo,tic-tac-toe,components,routing,server-actions}/
+    app/examples/{todo,tic-tac-toe,components,routing,server-actions,
+                  async-render,directives,route-handler}/
                                  ← thin routes for the gallery
     styles/globals.css           ← @webjsdev/ui theme tokens
     components.json              ← preconfigured for \`webjs ui add\`
@@ -1372,8 +1376,8 @@ ThemeToggle.register('theme-toggle');
     lib/utils/cn.ts              ← cn() helper for ui-* components
     lib/utils/ui.ts              ← Tailwind class-bundle helpers
     public/tailwind-browser.js   ← Tailwind runtime
-    modules/{todo,tic-tac-toe,components,routing,server-actions}/
-                                 ← gallery logic (prune what you skip)
+    modules/{todo,tic-tac-toe,components,server-actions,async-render,
+             directives}/       ← gallery logic (prune what you skip)
     db/{schema,columns,connection}.server.ts  ← Drizzle (User + Todo)
     CONVENTIONS.md, AGENTS.md, CLAUDE.md
 `);
