@@ -16,6 +16,12 @@ function stubFetch() {
         files: [{ path: 'lib/utils.ts', type: 'registry:lib', content: 'export function cn(){}\n' }],
       }), { status: 200 });
     }
+    if (u.endsWith('/lib-dom.json')) {
+      return new Response(JSON.stringify({
+        name: 'lib-dom', type: 'registry:lib',
+        files: [{ path: 'lib/dom.ts', type: 'registry:lib', content: 'export function onBeforeCache(){ return () => {}; }\n' }],
+      }), { status: 200 });
+    }
     if (u.includes('/theme-')) {
       return new Response(JSON.stringify({
         name: 'theme-neutral', type: 'registry:theme',

@@ -243,8 +243,10 @@ export default async function ProjectPage() {
     const hits = find(violations, 'project/page.ts');
     assert.equal(hits.length, 1, 'an indirect server import must still be flagged');
     assert.ok(hits[0].message.includes('auth.server.ts'), 'names the server module reached transitively');
-    assert.ok(hits[0].message.includes('-> … ->') || hits[0].message.includes('… ->'),
-      'message shows the indirection in the chain');
+    // #804: the full chain is printed now, every hop, no `… ->` truncation.
+    assert.match(hits[0].message, /app\/project\/page\.ts -> lib\/session\.ts -> lib\/auth\.server\.ts/,
+      'message shows the full indirection chain');
+    assert.ok(!hits[0].message.includes('…'), 'no truncation glyph in the chain');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
@@ -613,5 +615,29 @@ export default function Home() { return '<todo-list></todo-list>'; }
     assert.ok(hits[0].message.includes('schema.server.ts'), 'names the server import');
   } finally {
     await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+// #804: the message must print the FULL transitive chain (every hop), not a
+// `… ->` truncation, and name the types-module relocation fix when the edge
+// enters via a types-shaped module.
+test('message prints the full import chain and names the types-module fix (#804)', async () => {
+  const dir = await makeApp({
+    'app/layout.ts': `import { html } from '@webjsdev/core';\nexport default function L({ children }) { return html\`<div>\${children}</div>\`; }\n`,
+    'app/page.ts': `import { html } from '@webjsdev/core';\nimport './widget.ts';\nimport { thing } from '../modules/todos/types.ts';\nexport default function P() { return html\`<my-widget></my-widget>\${thing}\`; }\n`,
+    'app/widget.ts': INTERACTIVE_COMPONENT.replace('crisp-workspace', 'my-widget').replace('CrispWorkspace', 'MyWidget'),
+    'modules/todos/types.ts': `export { thing } from '../../lib/data.server.ts';\n`,
+    'lib/data.server.ts': `export const thing = 'x';\n`,
+  });
+  try {
+    const violations = await checkConventions(dir);
+    const v = find(violations, 'app/page.ts')[0];
+    assert.ok(v, 'the shipping page importing a server value via types.ts is flagged');
+    // full chain: every hop present, no truncation glyph
+    assert.match(v.message, /app\/page\.ts -> modules\/todos\/types\.ts -> lib\/data\.server\.ts/, `full chain, got: ${v.message}`);
+    assert.ok(!v.message.includes('…'), 'no `… ->` truncation in the chain');
+    assert.match(v.fix, /types-shaped module/, 'the fix names the types-module relocation');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 });

@@ -39,7 +39,8 @@
  * Design tokens used: --popover, --popover-foreground, --border.
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
-import { ensureId, onBeforeCache } from '../lib/utils.ts';
+import { ensureId } from '../lib/utils.ts';
+import { onBeforeCache } from '../lib/dom.ts';
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
 // `fixed m-0` opts out of the UA `[popover]` auto-centering margin so

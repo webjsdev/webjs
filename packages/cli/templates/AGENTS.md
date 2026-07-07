@@ -57,6 +57,17 @@ user asked for, never leftover scaffold code.
    app's real domain models (delete the example `User` model unless the
    app actually needs users), run `webjs db generate` then
    `webjs db migrate`, then build pages / actions / queries against them.
+4. **Prune what the app does not use.** The scaffold is reference, so keep
+   the infrastructure the app USES and delete the rest, both files AND
+   folders. No persistence means delete `db/`, `drizzle.config.ts`, and
+   the `db:*` scripts. No UI kit used means delete `components/ui/`,
+   `components.json`, and `lib/utils/cn.ts`. No PWA means delete
+   `public/sw.js` and `offline.html`. Always KEEP the durable knowledge
+   (`AGENTS.md`, `CONVENTIONS.md`, the per-agent rule files, the MCP
+   wiring), never prune it, so removing example code never removes your
+   context. Prune AFTER you have used the examples as reference, never
+   blindly up front. This is a no-op for the `api` template (no UI kit,
+   no PWA files).
 
 **Picking the right scaffold from the user's prompt** (you do this BEFORE
 running `webjs create`; if you're reading this you've already scaffolded.
@@ -301,6 +312,18 @@ for the visual stuff because hiding a `<button>` inside a `<Button>`
 wrapper adds zero value and obscures the real element from inspection,
 form submission, and screen readers. Custom elements are reserved for
 behavior the browser can't deliver natively.
+
+### Accessible control labeling
+
+Give every interactive control an accessible name, and make clickable
+text a `<label for="control-id">` (or the control itself) so a text click
+activates the control on BOTH the JS path and the no-JS form-submit path.
+Use `aria-label` and `aria-pressed` on icon-only controls (a toggle
+button, an icon-only close/menu button). A native `<input>` under a
+`<label>` gets this for free, which is another reason to reach for the
+Tier-1 class helpers on real elements. In a browser test,
+`assertNoA11yViolations(el)` from `@webjsdev/core/testing` catches
+missing labels.
 
 ## File conventions
 
@@ -767,6 +790,16 @@ legitimately use `static styles = css\`\`` for scoped CSS.
 
 ## Server action pattern
 
+**The `.server.ts` vs `'use server'` decision, in one question.** Will the
+client call it? Add `'use server'` and the file becomes an RPC action
+(the browser import is rewritten to a typed stub). Is it server-only
+infra instead (a DB driver, secrets, `node:*`)? Use NO directive, and
+never import it into a page, layout, or component. Reach it from a
+`'use server'` action, a `route.ts` handler, or `middleware.ts`. A
+`.server.ts` file WITHOUT the directive is a server-only utility whose
+browser import throws at module load (invariant 2 below), so a
+page/component that imports it directly crashes on the client.
+
 ```ts
 // modules/posts/actions/create-post.server.ts
 'use server';
@@ -795,6 +828,42 @@ with `for await`); read the request `AbortSignal` via `actionSignal()` to cancel
 on disconnect. **SAFETY:** a `cache` with `public: true` shares one response
 across all users, so use it only for data identical for every visitor. Full
 reference: https://docs.webjs.com/docs/server-actions
+
+## Mutations: default to optimistic UI
+
+Default to optimistic UI for every feasible mutation. Use `optimistic()`
+from `@webjsdev/core` (create, toggle, like, follow, reorder, rename,
+status change) so the UI updates instantly and rolls back automatically
+on failure. The declarative form queues an update on a component with
+auto-release when the action promise settles, no hand-written try-catch,
+cache-and-restore, or temp-id bookkeeping.
+
+```ts
+import { WebComponent, prop, optimistic, html } from '@webjsdev/core';
+import { createTodo } from '#modules/todos/actions/create-todo.server.ts';
+
+class TodoList extends WebComponent({ todos: prop<Todo[]>(Array) }) {
+  private optimisticTodos = optimistic(this, {
+    source: () => this.todos,
+    update: (state, title: string) => [...state, { title, pending: true }],
+  });
+  async handleSubmit(title: string) {
+    const promise = createTodo({ title });
+    this.optimisticTodos.add(title, promise);   // auto-releases on settle
+    await promise;
+  }
+  render() {
+    return html`<ul>${this.optimisticTodos.value.map(t => html`
+      <li class=${t.pending ? 'opacity-50' : ''}>${t.title}</li>`)}</ul>`;
+  }
+}
+```
+
+Do NOT use optimistic UI where it hurts: unpredictable or server-computed
+results (AI output, server-assigned values the client cannot guess),
+side-effectful mutations the user must wait on (payment, email, OAuth),
+and destructive irreversible actions (a confirm-first UX is better). Full
+reference: https://docs.webjs.com/docs/optimistic-ui
 
 ## Client navigation patterns (auto-magic)
 

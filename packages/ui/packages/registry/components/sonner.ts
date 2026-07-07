@@ -44,7 +44,7 @@
  * Design tokens used: --popover, --popover-foreground, --border, --radius.
  */
 import { WebComponent, html, repeat, unsafeHTML, signal, prop } from '@webjsdev/core';
-import { onBeforeCache } from '../lib/utils.ts';
+import { onBeforeCache } from '../lib/dom.ts';
 
 type ToastType = 'default' | 'success' | 'error' | 'info' | 'warning' | 'loading';
 
