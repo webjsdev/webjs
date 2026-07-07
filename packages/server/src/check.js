@@ -1080,6 +1080,41 @@ export async function checkConventions(appDir) {
 }
 
 /**
+ * BFS the module graph for the shortest import path from `from` to `to`,
+ * returning every hop `[from, ..., to]` so the `no-server-import-in-browser-module`
+ * message can print the FULL chain instead of an opaque `… ->` truncation (#804).
+ * Falls back to `[from, to]` if no path is found (defensive; the caller only
+ * calls this once `to` is known reachable).
+ *
+ * @param {Map<string, Set<string>>} graph
+ * @param {string} from
+ * @param {string} to
+ * @returns {string[]}
+ */
+function findImportChain(graph, from, to) {
+  const prev = new Map();
+  const seen = new Set([from]);
+  const queue = [from];
+  while (queue.length) {
+    const cur = queue.shift();
+    const deps = graph.get(cur);
+    if (!deps) continue;
+    for (const dep of deps) {
+      if (seen.has(dep)) continue;
+      seen.add(dep);
+      prev.set(dep, cur);
+      if (dep === to) {
+        const path = [];
+        for (let n = to; n !== undefined; n = prev.get(n)) path.unshift(n);
+        return path;
+      }
+      queue.push(dep);
+    }
+  }
+  return [from, to];
+}
+
+/**
  * Implements `no-server-import-in-browser-module`. Factored into its own
  * function (rather than an inline block) because it does the heavier
  * whole-app analysis the other rules avoid: it builds the module graph,
@@ -1241,11 +1276,12 @@ async function checkServerImportInBrowserModule(appDir, violations) {
     // module, the chain is just the two; otherwise show one intermediate hop
     // so the diagnostic points at where the edge enters (the full path is
     // recoverable from the graph, but one hop is enough to locate it).
-    const directDeps = moduleGraph.get(file);
-    const directlyImported = directDeps && directDeps.has(serverDep);
-    const chain = directlyImported
-      ? `${relFile} -> ${relServer}`
-      : `${relFile} -> … -> ${relServer}`;
+    const chainFiles = findImportChain(moduleGraph, file, serverDep);
+    const chain = chainFiles.map((f) => relative(appDir, f)).join(' -> ');
+    // If the edge into the server file comes from a types-shaped module, the
+    // idiomatic fix is to relocate that type to a browser-safe typedef (#804).
+    const importer = chainFiles.length >= 2 ? chainFiles[chainFiles.length - 2] : null;
+    const viaTypesModule = importer && /(^|\/)types(\.m?[jt]s$|\/)/.test(relative(appDir, importer));
 
     // The "register the component in a layout so it elides again" remedy only
     // applies to a page / layout, which CAN elide (it became browser-bound by
@@ -1253,9 +1289,12 @@ async function checkServerImportInBrowserModule(appDir, violations) {
     // ship and are never elided, so offering them an "elides again" fix is
     // wrong. Branch the fix text on whether the kind can elide.
     const canElide = kind === 'page' || kind === 'layout';
+    const typesHint = viaTypesModule
+      ? `The edge enters via a types-shaped module (${relative(appDir, importer)}); if it re-exports a runtime VALUE from a \`.server.{ts,js}\` file, relocate that to a browser-safe typedef (a plain \`interface\` / JSDoc, or an \`import type\` which the stripper erases) so the type is shared without pinning the module. `
+      : '';
     const fixText = canElide
-      ? `Keep the server call off this browser-shipped ${kind}. Options: (1) gate the route in \`middleware.ts\` (runs server-side, never ships); (2) move the server-only call behind a \`'use server'\` action in a \`.server.{ts,js}\` file and call it as an RPC; or (3) if this ${kind} only became browser-bound because it imports a component to register, register that component in a \`layout.{ts,js}\` instead so the ${kind} elides again and its server import is stripped.`
-      : `Keep the server call off this browser-shipped ${kind} (it always ships and is never elided). Options: (1) gate the route in \`middleware.ts\` (runs server-side, never ships); or (2) move the server-only call behind a \`'use server'\` action in a \`.server.{ts,js}\` file and call it as an RPC.`;
+      ? `${typesHint}Keep the server call off this browser-shipped ${kind}. Options: (1) gate the route in \`middleware.ts\` (runs server-side, never ships); (2) move the server-only call behind a \`'use server'\` action in a \`.server.{ts,js}\` file and call it as an RPC; or (3) if this ${kind} only became browser-bound because it imports a component to register, register that component in a \`layout.{ts,js}\` instead so the ${kind} elides again and its server import is stripped.`
+      : `${typesHint}Keep the server call off this browser-shipped ${kind} (it always ships and is never elided). Options: (1) gate the route in \`middleware.ts\` (runs server-side, never ships); or (2) move the server-only call behind a \`'use server'\` action in a \`.server.{ts,js}\` file and call it as an RPC.`;
 
     violations.push({
       rule: 'no-server-import-in-browser-module',
