@@ -818,8 +818,8 @@ page and a later-added ui component share one coherent theme automatically.
   `bg-elev`, a separate `--brand`). It collides with the ui tokens (the accent
   once flipped to neutral on navigation for exactly this reason) and diverges
   from the shadcn conventions the ui kit and AI agents both expect.
-- **Reach for opacity modifiers before a new token**: `bg-accent/10` for a
-  tint, `hover:bg-accent/90` for a hover, `text-muted-foreground/70` for a
+- **Reach for opacity modifiers before a new token**: `bg-primary/10` for a
+  tint, `hover:bg-primary/90` for a hover, `text-muted-foreground/70` for a
   subtler text level.
 - **Edit the palette in one place** (`app/layout.ts`). To ADD a token, do it
   the canonical way: a `--x` variable in the `:root` / `.dark` blocks plus a

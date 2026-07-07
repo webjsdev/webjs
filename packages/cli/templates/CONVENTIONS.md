@@ -791,7 +791,7 @@ parallel token vocabulary** (`--fg`, `--bg`, `text-fg`, `bg-elev`, a
 separate `--brand`): it collides with the ui tokens (the accent once
 flipped to neutral on navigation for exactly this reason) and diverges
 from the shadcn conventions the kit and AI agents both expect. Reach for
-opacity modifiers (`bg-accent/10`, `hover:bg-accent/90`,
+opacity modifiers (`bg-primary/10`, `hover:bg-primary/90`,
 `text-muted-foreground/70`) before adding a token; to ADD one, do it the
 canonical way (a `--x` variable in the `:root` / `.dark` blocks plus a
 `--color-x: var(--x)` line in `@theme inline`, then `bg-x` / `text-x`).

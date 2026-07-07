@@ -167,8 +167,8 @@ self-review loop.
   vocabulary (`--fg`, `--bg`, `text-fg`, `bg-elev`, a separate `--brand`): it
   collides with the ui tokens (the accent once flipped to neutral on navigation
   for exactly this reason) and diverges from the shadcn conventions the kit and
-  AI agents expect. Reach for opacity modifiers (`bg-accent/10`,
-  `hover:bg-accent/90`) before adding a token; add one the canonical way (a
+  AI agents expect. Reach for opacity modifiers (`bg-primary/10`,
+  `hover:bg-primary/90`) before adding a token; add one the canonical way (a
   `--x` var plus a `--color-x: var(--x)` line in `@theme inline`).
 - Custom-element tag names are passed to `.register('tag-name')`. They are NOT
   a static field on the class.
