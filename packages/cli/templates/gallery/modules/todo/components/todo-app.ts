@@ -10,8 +10,6 @@
 // one coherent theme. Prefer these tokens (and opacity modifiers like
 // bg-primary/90) over ad-hoc colors.
 import { WebComponent, prop, optimistic, html } from '@webjsdev/core';
-import { buttonClass } from '#components/ui/button.ts';
-import { inputClass } from '#components/ui/input.ts';
 import { createTodo } from '../actions/create-todo.server.ts';
 import { toggleTodo } from '../actions/toggle-todo.server.ts';
 import { deleteTodo } from '../actions/delete-todo.server.ts';
@@ -94,17 +92,14 @@ export class TodoApp extends WebComponent({
         </header>
 
         <!-- Add: a real <form> so it works with JS off (posts to the page action);
-             with JS, @submit intercepts and runs the optimistic path. It uses the
-             @webjsdev/ui form helpers, inputClass() + buttonClass() (both plain
-             class STRINGS, so they drop into a light-DOM component). The toggle +
-             delete below stay hand-rolled: they are not standard controls (a
-             circular checkbox, an icon affordance). -->
+             with JS, @submit intercepts and runs the optimistic path. -->
         <form method="post" action="" @submit=${(e: SubmitEvent) => this.add(e)}
-          class="flex items-center gap-2">
+          class="flex items-center gap-2 p-2 pl-4 rounded-2xl bg-card border border-border shadow-[0_1px_0_0_color-mix(in_oklch,var(--foreground)_5%,transparent)]">
           <input type="hidden" name="intent" value="create" />
           <input name="title" required maxlength="280" autocomplete="off" placeholder="What needs doing?"
-            class="${inputClass()} flex-1" />
-          <button type="submit" class=${buttonClass()}>Add</button>
+            class="flex-1 min-w-0 bg-transparent border-0 outline-none text-foreground text-[15px] placeholder:text-muted-foreground/70 py-1.5" />
+          <button type="submit"
+            class="shrink-0 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">Add</button>
         </form>
 
         <ul class="list-none m-0 p-0 grid gap-2">
