@@ -5,7 +5,6 @@
 // the signal changes, without re-running the whole template.
 import { WebComponent, signal, html } from '@webjsdev/core';
 import { repeat, watch } from '@webjsdev/core/directives';
-import { buttonClass } from '#components/ui/button.ts';
 
 interface Item { id: number; label: string }
 
@@ -31,18 +30,22 @@ export class DirectiveDemo extends WebComponent {
     return html`
       <div class="grid gap-4 max-w-[420px]">
         <div class="flex gap-2">
-          <button @click=${() => this.reverse()} class=${buttonClass({ size: 'sm' })}>Reverse</button>
-          <button @click=${() => this.add()} class=${buttonClass({ variant: 'outline', size: 'sm' })}>Add</button>
+          <button @click=${() => this.reverse()}
+            class="px-3.5 py-1.5 rounded-xl bg-accent text-accent-fg font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-accent-hover active:scale-[0.97]">Reverse</button>
+          <button @click=${() => this.add()}
+            class="px-3.5 py-1.5 rounded-xl bg-bg-elev border border-border text-fg font-medium text-sm cursor-pointer transition-colors hover:border-border-strong">Add</button>
         </div>
         <!-- repeat keyed by item.id: reversing reuses the existing <li> nodes. -->
-        <ul class="grid gap-1 list-none m-0 p-0">
+        <ul class="grid gap-2 list-none m-0 p-0">
           ${repeat(this.items.get(), (it: Item) => it.id, (it: Item) => html`
-            <li class="border border-border rounded px-3 py-1.5">#${it.id} ${it.label}</li>
+            <li class="flex items-center gap-2 px-3 py-2 rounded-xl bg-bg-elev border border-border text-[15px] text-fg">
+              <span class="text-fg-subtle tabular-nums text-[13px]">#${it.id}</span>${it.label}
+            </li>
           `)}
         </ul>
         <!-- watch(signal) swaps only this node when ticks changes. -->
         <button @click=${() => this.ticks.set(this.ticks.get() + 1)}
-          class="text-sm underline underline-offset-4 w-fit">ticks: ${watch(this.ticks)}</button>
+          class="w-fit text-sm text-fg-muted cursor-pointer transition-colors hover:text-fg underline decoration-dotted underline-offset-4">ticks: ${watch(this.ticks)}</button>
       </div>
     `;
   }

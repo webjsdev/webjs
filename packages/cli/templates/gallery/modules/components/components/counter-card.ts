@@ -1,11 +1,9 @@
 // Demonstrates the WebComponent essentials: the declare-free reactive-prop
 // factory, an instance signal for local state, a lifecycle hook, and a <slot>
 // for content projection (works in light DOM, the default). This is the core
-// component authoring shape.
+// component authoring shape. Styling is crafted Tailwind on the app's design
+// tokens so it stays visually coherent with the rest of the app.
 import { WebComponent, prop, signal, html } from '@webjsdev/core';
-// A shipped @webjsdev/ui class helper (CONVENTIONS.md prefers the kit over raw
-// Tailwind); it is a pure browser-safe function returning a class string.
-import { buttonClass } from '#components/ui/button.ts';
 
 export class CounterCard extends WebComponent({
   // A reactive prop rides an HTML attribute / SSR hydration. Declared ONLY here
@@ -22,11 +20,14 @@ export class CounterCard extends WebComponent({
 
   render() {
     return html`
-      <div class="border border-border rounded-xl p-4 grid gap-2">
+      <div class="grid gap-4 p-5 rounded-2xl bg-bg-elev border border-border max-w-[320px]">
         <slot></slot>
-        <p class="font-semibold">${this.label}: ${this.count.get()}</p>
+        <div class="flex items-baseline gap-2">
+          <span class="text-[2.5rem] font-bold tabular-nums leading-none text-fg">${this.count.get()}</span>
+          <span class="text-sm text-fg-subtle">${this.label}</span>
+        </div>
         <button @click=${() => this.count.set(this.count.get() + 1)}
-          class="${buttonClass({ size: 'sm' })} w-fit">Increment</button>
+          class="w-fit px-4 py-2 rounded-xl bg-accent text-accent-fg font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-accent-hover active:scale-[0.97]">Increment</button>
       </div>
     `;
   }

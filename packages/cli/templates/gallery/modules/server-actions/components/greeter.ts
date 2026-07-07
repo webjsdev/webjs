@@ -1,8 +1,6 @@
 // Calls the 'use server' action via a normal import (the RPC stub). Never
 // hand-write fetch(); importing the action IS the API.
 import { WebComponent, signal, html } from '@webjsdev/core';
-import { buttonClass } from '#components/ui/button.ts';
-import { inputClass } from '#components/ui/input.ts';
 import { greet } from '../actions/greet.server.ts';
 
 export class Greeter extends WebComponent {
@@ -16,11 +14,16 @@ export class Greeter extends WebComponent {
   }
   render() {
     return html`
-      <form @submit=${(e: SubmitEvent) => this.run(e)} class="flex gap-2">
-        <input name="name" placeholder="your name" class=${inputClass()} />
-        <button type="submit" class=${buttonClass()}>Greet</button>
-      </form>
-      <p class="mt-3 font-semibold">${this.msg.get()}</p>
+      <div class="grid gap-3 max-w-[420px]">
+        <form @submit=${(e: SubmitEvent) => this.run(e)}
+          class="flex items-center gap-2 p-2 pl-4 rounded-2xl bg-bg-elev border border-border">
+          <input name="name" placeholder="your name" autocomplete="off"
+            class="flex-1 min-w-0 bg-transparent border-0 outline-none text-fg text-[15px] placeholder:text-fg-subtle py-1.5" />
+          <button type="submit"
+            class="shrink-0 px-4 py-2 rounded-xl bg-accent text-accent-fg font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-accent-hover active:scale-[0.97]">Greet</button>
+        </form>
+        ${this.msg.get() ? html`<p class="m-0 font-semibold text-fg">${this.msg.get()}</p>` : ''}
+      </div>
     `;
   }
 }
