@@ -3,7 +3,7 @@ import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
 import '#modules/server-actions/components/greeter.ts';
 
-export const metadata: Metadata = { title: 'Server actions (.server vs use server) | examples' };
+export const metadata: Metadata = { title: 'Server actions (.server vs use server) | features' };
 
 export default function ServerActionsExample() {
   return html`

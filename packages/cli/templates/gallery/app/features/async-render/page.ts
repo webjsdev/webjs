@@ -3,7 +3,7 @@ import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
 import '#modules/async-render/components/server-clock.ts';
 
-export const metadata: Metadata = { title: 'Async render (server data in first paint) | examples' };
+export const metadata: Metadata = { title: 'Async render (server data in first paint) | features' };
 
 export default function AsyncRenderExample() {
   return html`

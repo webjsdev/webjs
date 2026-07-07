@@ -5,15 +5,15 @@
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
 
-export const metadata: Metadata = { title: 'Routing (dynamic params) | examples' };
+export const metadata: Metadata = { title: 'Routing (dynamic params) | features' };
 
 export default function RoutingExample() {
   return html`
     <h1 class="text-h2 font-bold mb-4">Routing</h1>
     <p class="text-fg-muted mb-4">A folder is a URL segment; a <code>[id]</code> folder is a dynamic param.</p>
     <ul class="list-disc pl-5">
-      <li><a class="text-accent" href="/examples/routing/42">/examples/routing/42</a></li>
-      <li><a class="text-accent" href="/examples/routing/hello">/examples/routing/hello</a></li>
+      <li><a class="text-accent" href="/features/routing/42">/features/routing/42</a></li>
+      <li><a class="text-accent" href="/features/routing/hello">/features/routing/hello</a></li>
     </ul>
   `;
 }

@@ -3,7 +3,7 @@ import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
 import '#modules/components/components/counter-card.ts';
 
-export const metadata: Metadata = { title: 'Components (signals + slots) | examples' };
+export const metadata: Metadata = { title: 'Components (signals + slots) | features' };
 
 export default function ComponentsExample() {
   return html`

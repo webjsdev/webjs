@@ -3,7 +3,7 @@ import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
 import '#modules/directives/components/directive-demo.ts';
 
-export const metadata: Metadata = { title: 'Directives (repeat + watch) | examples' };
+export const metadata: Metadata = { title: 'Directives (repeat + watch) | features' };
 
 export default function DirectivesExample() {
   return html`
