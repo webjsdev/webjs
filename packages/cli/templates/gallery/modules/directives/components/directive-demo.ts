@@ -31,21 +31,21 @@ export class DirectiveDemo extends WebComponent {
       <div class="grid gap-4 max-w-[420px]">
         <div class="flex gap-2">
           <button @click=${() => this.reverse()}
-            class="px-3.5 py-1.5 rounded-xl bg-accent text-accent-fg font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-accent-hover active:scale-[0.97]">Reverse</button>
+            class="px-3.5 py-1.5 rounded-xl bg-accent text-accent-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-accent/90 active:scale-[0.97]">Reverse</button>
           <button @click=${() => this.add()}
-            class="px-3.5 py-1.5 rounded-xl bg-bg-elev border border-border text-fg font-medium text-sm cursor-pointer transition-colors hover:border-border-strong">Add</button>
+            class="px-3.5 py-1.5 rounded-xl bg-card border border-border text-foreground font-medium text-sm cursor-pointer transition-colors hover:border-border-strong">Add</button>
         </div>
         <!-- repeat keyed by item.id: reversing reuses the existing <li> nodes. -->
         <ul class="grid gap-2 list-none m-0 p-0">
           ${repeat(this.items.get(), (it: Item) => it.id, (it: Item) => html`
-            <li class="flex items-center gap-2 px-3 py-2 rounded-xl bg-bg-elev border border-border text-[15px] text-fg">
-              <span class="text-fg-subtle tabular-nums text-[13px]">#${it.id}</span>${it.label}
+            <li class="flex items-center gap-2 px-3 py-2 rounded-xl bg-card border border-border text-[15px] text-foreground">
+              <span class="text-muted-foreground/70 tabular-nums text-[13px]">#${it.id}</span>${it.label}
             </li>
           `)}
         </ul>
         <!-- watch(signal) swaps only this node when ticks changes. -->
         <button @click=${() => this.ticks.set(this.ticks.get() + 1)}
-          class="w-fit text-sm text-fg-muted cursor-pointer transition-colors hover:text-fg underline decoration-dotted underline-offset-4">ticks: ${watch(this.ticks)}</button>
+          class="w-fit text-sm text-muted-foreground cursor-pointer transition-colors hover:text-foreground underline decoration-dotted underline-offset-4">ticks: ${watch(this.ticks)}</button>
       </div>
     `;
   }

@@ -4,10 +4,11 @@
 // intercepted by JS for the optimistic path). All interactivity lives in a
 // component; a page/layout cannot be interactive in its own markup.
 //
-// Styling is crafted Tailwind on the app's design tokens (bg-elev, accent,
-// fg-muted, border-strong, ...), the same tokens the layout defines. Prefer this
-// or the @webjsdev/ui class helpers over ad-hoc colors, so the whole app stays
-// visually coherent.
+// Styling uses the shadcn-standard design tokens the @webjsdev/ui theme defines
+// (bg-card, text-foreground, bg-accent, text-muted-foreground, border-border,
+// ...), so the whole app (this component AND any `webjs ui add` component) shares
+// one coherent theme. Prefer these tokens (and opacity modifiers like
+// bg-accent/90) over ad-hoc colors.
 import { WebComponent, prop, optimistic, html } from '@webjsdev/core';
 import { createTodo } from '../actions/create-todo.server.ts';
 import { toggleTodo } from '../actions/toggle-todo.server.ts';
@@ -76,16 +77,16 @@ export class TodoApp extends WebComponent({
         <!-- Header: a title, a live done/total count, and a progress bar. -->
         <header class="grid gap-3">
           <div class="flex items-center gap-3">
-            <span class="grid place-items-center w-10 h-10 rounded-2xl bg-accent-tint text-accent shrink-0">
+            <span class="grid place-items-center w-10 h-10 rounded-2xl bg-accent/15 text-accent shrink-0">
               <svg viewBox="0 0 24 24" class="w-5 h-5 stroke-current fill-none" style="stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round"><path d="m5 13 4 4L19 7"/></svg>
             </span>
             <div class="grid gap-0.5">
-              <h2 class="m-0 text-[1.4rem] font-bold tracking-[-0.02em] leading-none text-fg">Tasks</h2>
-              <p class="m-0 text-[13px] text-fg-subtle leading-none">${done} of ${list.length} done</p>
+              <h2 class="m-0 text-[1.4rem] font-bold tracking-[-0.02em] leading-none text-foreground">Tasks</h2>
+              <p class="m-0 text-[13px] text-muted-foreground/70 leading-none">${done} of ${list.length} done</p>
             </div>
-            <span class="ml-auto text-[13px] font-semibold tabular-nums text-fg-muted">${pct}%</span>
+            <span class="ml-auto text-[13px] font-semibold tabular-nums text-muted-foreground">${pct}%</span>
           </div>
-          <div class="h-1.5 rounded-full bg-bg-subtle overflow-hidden">
+          <div class="h-1.5 rounded-full bg-muted overflow-hidden">
             <div class="h-full rounded-full bg-accent transition-[width] duration-300" style="width:${pct}%"></div>
           </div>
         </header>
@@ -93,19 +94,19 @@ export class TodoApp extends WebComponent({
         <!-- Add: a real <form> so it works with JS off (posts to the page action);
              with JS, @submit intercepts and runs the optimistic path. -->
         <form method="post" action="" @submit=${(e: SubmitEvent) => this.add(e)}
-          class="flex items-center gap-2 p-2 pl-4 rounded-2xl bg-bg-elev border border-border shadow-[0_1px_0_0_color-mix(in_oklch,var(--fg)_5%,transparent)]">
+          class="flex items-center gap-2 p-2 pl-4 rounded-2xl bg-card border border-border shadow-[0_1px_0_0_color-mix(in_oklch,var(--foreground)_5%,transparent)]">
           <input type="hidden" name="intent" value="create" />
           <input name="title" required maxlength="280" autocomplete="off" placeholder="What needs doing?"
-            class="flex-1 min-w-0 bg-transparent border-0 outline-none text-fg text-[15px] placeholder:text-fg-subtle py-1.5" />
+            class="flex-1 min-w-0 bg-transparent border-0 outline-none text-foreground text-[15px] placeholder:text-muted-foreground/70 py-1.5" />
           <button type="submit"
-            class="shrink-0 px-4 py-2 rounded-xl bg-accent text-accent-fg font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-accent-hover active:scale-[0.97]">Add</button>
+            class="shrink-0 px-4 py-2 rounded-xl bg-accent text-accent-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-accent/90 active:scale-[0.97]">Add</button>
         </form>
 
         <ul class="list-none m-0 p-0 grid gap-2">
           ${list.length ? list.map((todo) => html`
             <li>
               <form method="post" action=""
-                class="group flex items-center gap-3 px-3 py-2.5 rounded-xl bg-bg-elev border border-border transition-colors hover:border-border-strong ${todo.pending ? 'opacity-55' : ''}">
+                class="group flex items-center gap-3 px-3 py-2.5 rounded-xl bg-card border border-border transition-colors hover:border-border-strong ${todo.pending ? 'opacity-55' : ''}">
                 <input type="hidden" name="id" value=${todo.id} />
                 <!-- Toggle is a submit button (degrades to a form POST no-JS); with JS
                      @click intercepts for the optimistic toggle. The check is centered
@@ -114,22 +115,22 @@ export class TodoApp extends WebComponent({
                   aria-pressed=${todo.completed ? 'true' : 'false'}
                   aria-label=${todo.completed ? 'Mark as not done' : 'Mark as done'}
                   @click=${(e: Event) => this.toggle(e, todo)}
-                  class="shrink-0 grid place-items-center w-5 h-5 rounded-full border-2 cursor-pointer transition-all ${todo.completed ? 'bg-accent border-accent text-accent-fg' : 'bg-transparent border-border-strong text-transparent hover:border-accent'}">
+                  class="shrink-0 grid place-items-center w-5 h-5 rounded-full border-2 cursor-pointer transition-all ${todo.completed ? 'bg-accent border-accent text-accent-foreground' : 'bg-transparent border-border-strong text-transparent hover:border-accent'}">
                   <svg viewBox="0 0 24 24" class="w-3 h-3 stroke-current fill-none" style="stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round"><path d="m5 13 4 4L19 7"/></svg>
                 </button>
                 <!-- The title is a <label for> the toggle: clicking the text toggles
                      the task (works on JS and no-JS paths, and screen readers). -->
-                <label for="t-${todo.id}" class="flex-1 min-w-0 text-[15px] leading-snug break-words cursor-pointer select-none ${todo.completed ? 'line-through text-fg-subtle' : 'text-fg'}">${todo.title}</label>
+                <label for="t-${todo.id}" class="flex-1 min-w-0 text-[15px] leading-snug break-words cursor-pointer select-none ${todo.completed ? 'line-through text-muted-foreground/70' : 'text-foreground'}">${todo.title}</label>
                 <!-- Delete: a proper icon button, revealed on row hover / focus. -->
                 <button type="submit" name="intent" value="delete" aria-label="Delete task"
                   @click=${(e: Event) => this.removeTodo(e, todo)}
-                  class="shrink-0 grid place-items-center w-7 h-7 rounded-lg border-0 bg-transparent text-fg-subtle cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all hover:text-destructive hover:bg-[color-mix(in_oklch,var(--color-destructive)_12%,transparent)]">
+                  class="shrink-0 grid place-items-center w-7 h-7 rounded-lg border-0 bg-transparent text-muted-foreground/70 cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all hover:text-destructive hover:bg-[color-mix(in_oklch,var(--color-destructive)_12%,transparent)]">
                   <svg viewBox="0 0 24 24" class="w-4 h-4 stroke-current fill-none" style="stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M18 6 6 18M6 6l12 12"/></svg>
                 </button>
               </form>
             </li>
           `) : html`
-            <li class="text-center text-fg-subtle text-sm py-14 border border-dashed border-border rounded-2xl">No tasks yet. Add your first one above.</li>
+            <li class="text-center text-muted-foreground/70 text-sm py-14 border border-dashed border-border rounded-2xl">No tasks yet. Add your first one above.</li>
           `}
         </ul>
       </section>

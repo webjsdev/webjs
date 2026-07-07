@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: 'Async render (server data in first p
 export default function AsyncRenderExample() {
   return html`
     <h1 class="text-h2 font-bold mb-4">Async render</h1>
-    <p class="text-fg-muted mb-4">A component's <code>async render()</code> awaits server data. SSR blocks, so the resolved value is in the first paint (no fallback, readable with JS off).</p>
+    <p class="text-muted-foreground mb-4">A component's <code>async render()</code> awaits server data. SSR blocks, so the resolved value is in the first paint (no fallback, readable with JS off).</p>
     <server-clock></server-clock>
   `;
 }

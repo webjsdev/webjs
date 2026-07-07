@@ -20,14 +20,14 @@ export class CounterCard extends WebComponent({
 
   render() {
     return html`
-      <div class="grid gap-4 p-5 rounded-2xl bg-bg-elev border border-border max-w-[320px]">
+      <div class="grid gap-4 p-5 rounded-2xl bg-card border border-border max-w-[320px]">
         <slot></slot>
         <div class="flex items-baseline gap-2">
-          <span class="text-[2.5rem] font-bold tabular-nums leading-none text-fg">${this.count.get()}</span>
-          <span class="text-sm text-fg-subtle">${this.label}</span>
+          <span class="text-[2.5rem] font-bold tabular-nums leading-none text-foreground">${this.count.get()}</span>
+          <span class="text-sm text-muted-foreground/70">${this.label}</span>
         </div>
         <button @click=${() => this.count.set(this.count.get() + 1)}
-          class="w-fit px-4 py-2 rounded-xl bg-accent text-accent-fg font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-accent-hover active:scale-[0.97]">Increment</button>
+          class="w-fit px-4 py-2 rounded-xl bg-accent text-accent-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-accent/90 active:scale-[0.97]">Increment</button>
       </div>
     `;
   }

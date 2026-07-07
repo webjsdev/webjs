@@ -1002,7 +1002,7 @@ import '#components/theme-toggle.ts';
  *
  * Light DOM + Tailwind by default. Design tokens live in :root and are
  * mapped into the Tailwind palette via @theme, so classes like
- * text-fg, bg-bg-elev, font-serif, duration-fast, text-display all work.
+ * text-foreground, bg-card, font-serif, duration-fast, text-display all work.
  *
  * Nav + footer links repeat the same class bundle, so they're extracted
  * into small JS helpers below. Each helper runs at SSR time inside
@@ -1010,7 +1010,7 @@ import '#components/theme-toggle.ts';
  */
 
 const navLink = (href: string, label: string) => html\`
-  <a href=\${href} class="text-fg-muted no-underline font-medium text-[13px] leading-none tracking-[0.005em] transition-colors duration-fast hover:text-fg">\${label}</a>
+  <a href=\${href} class="text-muted-foreground no-underline font-medium text-[13px] leading-none tracking-[0.005em] transition-colors duration-fast hover:text-foreground">\${label}</a>
 \`;
 
 export default function RootLayout({ children }: { children: unknown }) {
@@ -1073,19 +1073,99 @@ export default function RootLayout({ children }: { children: unknown }) {
 ${UI_THEME}
     </style>
     <style type="text/tailwindcss">
-      @theme {
-        --color-fg:            var(--fg);
-        --color-fg-muted:      var(--fg-muted);
-        --color-fg-subtle:     var(--fg-subtle);
-        --color-bg:            var(--bg);
-        --color-bg-elev:       var(--bg-elev);
-        --color-bg-subtle:     var(--bg-subtle);
-        --color-border:        var(--border);
+      /* ONE theme, canonical shadcn-style tokens. The @webjsdev/ui theme above
+         provides the token STRUCTURE and the @theme inline mappings that generate
+         bg-background, text-foreground, bg-card, bg-primary, bg-accent,
+         text-muted-foreground, border-border, ring-ring, and the rest. Here we
+         set those tokens' VALUES to this app's brand palette, so the ui-*
+         components AND the example chrome read ONE source of truth. Any component
+         added later with webjs ui add <name> inherits it automatically. This
+         block is emitted after the ui theme, so these values win on every Tailwind
+         recompile. Dark-first, with light via the theme toggle (data-theme) or the
+         OS. Edit the palette here. Add a new design token the canonical way, a
+         --x variable below plus a --color-x: var(--x) line in the @theme inline
+         block, then use it as bg-x / text-x. Reach for opacity modifiers
+         (bg-accent/10, hover:bg-accent/90, text-muted-foreground/70) before
+         inventing a new token. */
+      :root {
+        --font-sans:  -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: ui-serif, 'Iowan Old Style', Palatino, Georgia, serif;
+        --font-mono:  ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        --header-h: 56px;
+      }
+      /* dark (the default, and the explicit .dark the toggle sets) */
+      :root, .dark {
+        color-scheme: dark;
+        --background: oklch(0.14 0.01 55);
+        --foreground: oklch(0.96 0.015 60);
+        --card: oklch(0.18 0.01 55);
+        --card-foreground: oklch(0.96 0.015 60);
+        --popover: oklch(0.18 0.01 55);
+        --popover-foreground: oklch(0.96 0.015 60);
+        --primary: oklch(0.922 0 0);
+        --primary-foreground: oklch(0.205 0 0);
+        --secondary: oklch(0.22 0.01 55);
+        --secondary-foreground: oklch(0.96 0.015 60);
+        --muted: oklch(0.16 0.01 55);
+        --muted-foreground: oklch(0.72 0.02 60);
+        --accent: oklch(0.7 0.16 52);
+        --accent-foreground: oklch(0.17 0.02 52);
+        --border: oklch(0.26 0.012 55 / 0.9);
+        --border-strong: oklch(0.38 0.012 55 / 0.9);
+        --input: oklch(0.26 0.012 55 / 0.9);
+        --ring: oklch(0.7 0.16 52);
+      }
+      /* light (explicit via the toggle) */
+      :root[data-theme='light'] {
+        color-scheme: light;
+        --background: oklch(0.985 0.008 80);
+        --foreground: oklch(0.18 0.015 60);
+        --card: oklch(1 0 0);
+        --card-foreground: oklch(0.18 0.015 60);
+        --popover: oklch(1 0 0);
+        --popover-foreground: oklch(0.18 0.015 60);
+        --primary: oklch(0.205 0 0);
+        --primary-foreground: oklch(0.985 0 0);
+        --secondary: oklch(0.96 0.008 80);
+        --secondary-foreground: oklch(0.18 0.015 60);
+        --muted: oklch(0.96 0.008 80);
+        --muted-foreground: oklch(0.42 0.02 65);
+        --accent: oklch(0.54 0.16 52);
+        --accent-foreground: oklch(1 0 0);
+        --border: oklch(0.88 0.01 75 / 0.95);
+        --border-strong: oklch(0.78 0.01 75 / 0.95);
+        --input: oklch(0.88 0.01 75 / 0.95);
+        --ring: oklch(0.54 0.16 52);
+      }
+      /* light (OS preference, when the user has made no explicit choice) */
+      @media (prefers-color-scheme: light) {
+        :root:not(.dark):not([data-theme='dark']) {
+          color-scheme: light;
+          --background: oklch(0.985 0.008 80);
+          --foreground: oklch(0.18 0.015 60);
+          --card: oklch(1 0 0);
+          --card-foreground: oklch(0.18 0.015 60);
+          --popover: oklch(1 0 0);
+          --popover-foreground: oklch(0.18 0.015 60);
+          --primary: oklch(0.205 0 0);
+          --primary-foreground: oklch(0.985 0 0);
+          --secondary: oklch(0.96 0.008 80);
+          --secondary-foreground: oklch(0.18 0.015 60);
+          --muted: oklch(0.96 0.008 80);
+          --muted-foreground: oklch(0.42 0.02 65);
+          --accent: oklch(0.54 0.16 52);
+          --accent-foreground: oklch(1 0 0);
+          --border: oklch(0.88 0.01 75 / 0.95);
+          --border-strong: oklch(0.78 0.01 75 / 0.95);
+          --input: oklch(0.88 0.01 75 / 0.95);
+          --ring: oklch(0.54 0.16 52);
+        }
+      }
+      @theme inline {
+        /* Only tokens the @webjsdev/ui theme does not already map live here. It
+           already maps --color-background/foreground/card/primary/secondary/
+           muted/accent/border/input/ring/destructive. */
         --color-border-strong: var(--border-strong);
-        --color-accent:        var(--brand);
-        --color-accent-hover:  var(--brand-hover);
-        --color-accent-fg:     var(--brand-fg);
-        --color-accent-tint:   var(--brand-tint);
         --font-sans:  var(--font-sans);
         --font-serif: var(--font-serif);
         --font-mono:  var(--font-mono);
@@ -1098,74 +1178,20 @@ ${UI_THEME}
       }
     </style>
     <style>
-      :root {
-        color-scheme: light dark;
-        /* ---------- dark (default) ---------- */
-        --fg:            oklch(0.96 0.015 60);
-        --fg-muted:      oklch(0.72 0.02 60);
-        --fg-subtle:     oklch(0.55 0.02 60);
-        --bg:            oklch(0.14 0.01 55);
-        --bg-elev:       oklch(0.18 0.01 55);
-        --bg-subtle:     oklch(0.16 0.01 55);
-        --border:        oklch(0.26 0.012 55 / 0.9);
-        --border-strong: oklch(0.38 0.012 55 / 0.9);
-        /* Accent matches the webjs website (warm orange, hue 52). */
-        --brand:        oklch(0.7 0.16 52);
-        --brand-hover:  oklch(0.75 0.16 52);
-        --brand-fg:     oklch(0.17 0.02 52);
-        --brand-live:   oklch(0.63 0.17 50);
-        --brand-tint:   color-mix(in oklch, var(--brand-live) 14%, transparent);
-        --font-sans:   -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        --font-serif:  ui-serif, 'Iowan Old Style', Palatino, Georgia, serif;
-        --font-mono:   ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      }
-      :root[data-theme='light'] {
-        --fg:            oklch(0.18 0.015 60);
-        --fg-muted:      oklch(0.42 0.02 65);
-        --fg-subtle:     oklch(0.62 0.015 70);
-        --bg:            oklch(0.985 0.008 80);
-        --bg-elev:       oklch(1 0 0);
-        --bg-subtle:     oklch(0.96 0.008 80);
-        --border:        oklch(0.88 0.01 75 / 0.95);
-        --border-strong: oklch(0.78 0.01 75 / 0.95);
-        --brand:        oklch(0.54 0.16 52);
-        --brand-hover:  oklch(0.5 0.16 52);
-        --brand-fg:     oklch(1 0 0);
-        --brand-live:   oklch(0.63 0.17 50);
-        --brand-tint:   color-mix(in oklch, var(--brand-live) 14%, transparent);
-      }
-      @media (prefers-color-scheme: light) {
-        :root:not([data-theme='dark']) {
-          --fg:            oklch(0.18 0.015 60);
-          --fg-muted:      oklch(0.42 0.02 65);
-          --fg-subtle:     oklch(0.62 0.015 70);
-          --bg:            oklch(0.985 0.008 80);
-          --bg-elev:       oklch(1 0 0);
-          --bg-subtle:     oklch(0.96 0.008 80);
-          --border:        oklch(0.88 0.01 75 / 0.95);
-          --border-strong: oklch(0.78 0.01 75 / 0.95);
-          --brand:        oklch(0.54 0.16 52);
-          --brand-hover:  oklch(0.5 0.16 52);
-          --brand-fg:     oklch(1 0 0);
-          --brand-live:   oklch(0.63 0.17 50);
-          --brand-tint:   color-mix(in oklch, var(--brand-live) 14%, transparent);
-        }
-      }
-      /* Body + pseudo-elements utility classes can't reach. */
+      /* Base styles utility classes can't reach. */
       html, body { margin: 0; }
-      :root { --header-h: 56px; } /* fixed-header offset, kept exact by the script above */
       body {
         padding-top: var(--header-h);
-        background: var(--bg);
-        color: var(--fg);
+        background: var(--background);
+        color: var(--foreground);
         font: 16px/1.65 var(--font-sans);
         -webkit-font-smoothing: antialiased;
       }
-      ::selection { background: var(--brand-tint); color: var(--fg); }
+      ::selection { background: color-mix(in oklch, var(--accent) 22%, transparent); color: var(--foreground); }
     </style>
 
-    <header class="fixed inset-x-0 top-0 z-20 flex items-center gap-6 px-4 sm:px-6 py-3 border-b border-border bg-[color-mix(in_oklch,var(--bg)_75%,transparent)] backdrop-blur-[18px]">
-      <a href="/" class="mr-auto inline-flex items-center gap-2 no-underline text-fg font-semibold text-[15px] leading-none tracking-tight">
+    <header class="fixed inset-x-0 top-0 z-20 flex items-center gap-6 px-4 sm:px-6 py-3 border-b border-border bg-[color-mix(in_oklch,var(--background)_75%,transparent)] backdrop-blur-[18px]">
+      <a href="/" class="mr-auto inline-flex items-center gap-2 no-underline text-foreground font-semibold text-[15px] leading-none tracking-tight">
         <span>${displayName}</span>
       </a>
       <nav class="flex gap-4 items-center">
@@ -1239,7 +1265,7 @@ export default function Home() {
     <section class="mb-14">
       \${rubric('welcome')}
       \${displayH1(html\`Hello from <span class="text-accent italic">${displayName}</span>.\`)}
-      <p class="text-lede leading-[1.5] text-fg-muted max-w-[56ch] m-0 mb-6">
+      <p class="text-lede leading-[1.5] text-muted-foreground max-w-[56ch] m-0 mb-6">
         This scaffold ships a gallery below: single-feature demos and one whole
         example app, all small, idiomatic, and heavily commented. Browse them for
         context, then replace this page with your own. See
@@ -1253,7 +1279,7 @@ export default function Home() {
 
     <section class="mb-12">
       <h2 class="font-serif text-[1.6rem] tracking-[-0.02em] font-bold m-0 mb-1">Features</h2>
-      <p class="text-fg-muted text-sm m-0 mb-5">
+      <p class="text-muted-foreground text-sm m-0 mb-5">
         One webjs concept each, under <code class="font-mono text-[0.9em]">app/features/</code>
         with logic in <code class="font-mono text-[0.9em]">modules/</code>. Delete the ones you do not need.
       </p>
@@ -1264,7 +1290,7 @@ export default function Home() {
 
     <section>
       <h2 class="font-serif text-[1.6rem] tracking-[-0.02em] font-bold m-0 mb-1">Example apps</h2>
-      <p class="text-fg-muted text-sm m-0 mb-5">
+      <p class="text-muted-foreground text-sm m-0 mb-5">
         Whole apps that compose several features, under <code class="font-mono text-[0.9em]">app/examples/</code>.
       </p>
       <div class="grid gap-4 sm:grid-cols-2">
@@ -1328,7 +1354,7 @@ export class ThemeToggle extends WebComponent {
     const icon = t === 'light' ? ICONS.sun : t === 'dark' ? ICONS.moon : ICONS.system;
     return html\`
       <button
-        class="inline-flex items-center justify-center w-9 h-9 p-0 border border-border rounded-full bg-bg-elev text-fg-muted cursor-pointer transition-all duration-150 hover:text-fg hover:border-border-strong active:scale-[0.94] focus-visible:outline-none focus-visible:border-accent focus-visible:ring-[3px] focus-visible:ring-accent-tint"
+        class="inline-flex items-center justify-center w-9 h-9 p-0 border border-border rounded-full bg-card text-muted-foreground cursor-pointer transition-all duration-150 hover:text-foreground hover:border-border-strong active:scale-[0.94] focus-visible:outline-none focus-visible:border-accent focus-visible:ring-[3px] focus-visible:ring-accent-tint"
         @click=\${() => this.cycle()}
         aria-label="Cycle theme (currently \${label})"
         title="Theme: \${label.toLowerCase()}"

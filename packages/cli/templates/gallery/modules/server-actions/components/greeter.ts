@@ -16,13 +16,13 @@ export class Greeter extends WebComponent {
     return html`
       <div class="grid gap-3 max-w-[420px]">
         <form @submit=${(e: SubmitEvent) => this.run(e)}
-          class="flex items-center gap-2 p-2 pl-4 rounded-2xl bg-bg-elev border border-border">
+          class="flex items-center gap-2 p-2 pl-4 rounded-2xl bg-card border border-border">
           <input name="name" placeholder="your name" autocomplete="off"
-            class="flex-1 min-w-0 bg-transparent border-0 outline-none text-fg text-[15px] placeholder:text-fg-subtle py-1.5" />
+            class="flex-1 min-w-0 bg-transparent border-0 outline-none text-foreground text-[15px] placeholder:text-muted-foreground/70 py-1.5" />
           <button type="submit"
-            class="shrink-0 px-4 py-2 rounded-xl bg-accent text-accent-fg font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-accent-hover active:scale-[0.97]">Greet</button>
+            class="shrink-0 px-4 py-2 rounded-xl bg-accent text-accent-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-accent/90 active:scale-[0.97]">Greet</button>
         </form>
-        ${this.msg.get() ? html`<p class="m-0 font-semibold text-fg">${this.msg.get()}</p>` : ''}
+        ${this.msg.get() ? html`<p class="m-0 font-semibold text-foreground">${this.msg.get()}</p>` : ''}
       </div>
     `;
   }
