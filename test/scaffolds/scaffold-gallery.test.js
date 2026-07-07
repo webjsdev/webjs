@@ -163,19 +163,45 @@ test('feature pages have no stale /examples/ links after the features refactor',
   }
 });
 
-test('api and saas do NOT ship the gallery (full-stack only)', async () => {
-  for (const template of ['api', 'saas']) {
-    const cwd = await tempCwd();
-    try {
-      await scaffoldApp('demo', cwd, { template });
-      const appDir = join(cwd, 'demo');
-      assert.equal(existsSync(join(appDir, 'app', 'features')), false, `${template} must not ship app/features`);
-      assert.equal(existsSync(join(appDir, 'app', 'examples')), false, `${template} must not ship app/examples`);
-      assert.equal(existsSync(join(appDir, 'modules', 'todo')), false, `${template} must not ship the todo module`);
-      const schema = await readFile(join(appDir, 'db', 'schema.server.ts'), 'utf8');
-      assert.doesNotMatch(schema, /table\('todos'/, `${template} schema must not add the gallery todos table`);
-    } finally {
-      await rm(cwd, { recursive: true, force: true });
+test('the api template does NOT ship the gallery (no UI)', async () => {
+  const cwd = await tempCwd();
+  try {
+    await scaffoldApp('demo', cwd, { template: 'api' });
+    const appDir = join(cwd, 'demo');
+    assert.equal(existsSync(join(appDir, 'app', 'features')), false, 'api must not ship app/features');
+    assert.equal(existsSync(join(appDir, 'app', 'examples')), false, 'api must not ship app/examples');
+    assert.equal(existsSync(join(appDir, 'modules', 'todo')), false, 'api must not ship the todo module');
+    const schema = await readFile(join(appDir, 'db', 'schema.server.ts'), 'utf8');
+    assert.doesNotMatch(schema, /table\('todos'/, 'api schema must not add the gallery todos table');
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test('the saas template ships the gallery AND keeps its auth example', async () => {
+  const cwd = await tempCwd();
+  try {
+    await scaffoldApp('demo', cwd, { template: 'saas' });
+    const appDir = join(cwd, 'demo');
+    // The full webjs feature gallery ships below the auth landing.
+    for (const name of FEATURES) {
+      assert.ok(await exists(join(appDir, 'app', 'features', name, 'page.ts')), `saas app/features/${name}/page.ts`);
     }
+    assert.ok(await exists(join(appDir, 'app', 'examples', 'todo', 'page.ts')), 'saas todo example');
+    assert.ok(await exists(join(appDir, 'modules', 'todo')), 'saas todo module');
+    // The saas schema carries BOTH the auth users table and the gallery todos table.
+    const schema = await readFile(join(appDir, 'db', 'schema.server.ts'), 'utf8');
+    assert.match(schema, /table\('users'/, 'saas keeps the auth users table');
+    assert.match(schema, /passwordHash/, 'saas users table keeps the auth column');
+    assert.match(schema, /table\('todos'/, 'saas adds the gallery todos table');
+    // The auth example is intact.
+    assert.ok(await exists(join(appDir, 'app', 'login', 'page.ts')), 'saas keeps login');
+    assert.ok(await exists(join(appDir, 'app', 'dashboard', 'page.ts')), 'saas keeps the dashboard');
+    // The saas home shows both the auth CTAs and the gallery.
+    const home = await readFile(join(appDir, 'app', 'page.ts'), 'utf8');
+    assert.match(home, /\/login/, 'saas home keeps the auth CTA');
+    assert.match(home, /\/features\/routing/, 'saas home links the gallery');
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
   }
 });

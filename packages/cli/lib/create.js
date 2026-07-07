@@ -981,7 +981,7 @@ export type ActionResult<T> =
     // scaffold so an agent gains context by browsing real code; prune
     // per-feature (delete the route + its module) for what the app does not
     // use. See CONVENTIONS.md "prune what the app does not use".
-    if (isFullStack) await copyGallery(appDir);
+    if (!isApi) await copyGallery(appDir);
 
     // The @webjsdev/ui theme tokens (`--color-primary`, `--color-card`, …) the
     // ui-* components consume. We read the registry's themes/index.css at
@@ -1358,15 +1358,61 @@ export default function Home() {
 }
 `);
   } else {
-    // saas landing: the app has auth + a dashboard, so link those instead of a
-    // gallery it does not ship.
+    // saas home: the auth landing (hero + login/signup/dashboard) stays the
+    // headline, and the webjs feature gallery sits BELOW it, so a saas app is
+    // also a learning surface. Keep the `features` list in sync with the
+    // full-stack home above (both ship the same gallery).
     await writeFile(join(appDir, 'app', 'page.ts'), `// webjs-scaffold-placeholder. This is the example homepage. Replace it with your app's real landing page, then delete this line. webjs check fails while the marker remains.
 import { html } from '@webjsdev/core';
 import { rubric, displayH1, accentLink } from '#lib/utils/ui.ts';
+import {
+  cardClass,
+  cardHeaderClass,
+  cardTitleClass,
+  cardDescriptionClass,
+} from '#components/ui/card.ts';
 
 export const metadata = {
   title: '${displayName}: built with webjs',
 };
+
+// The webjs feature gallery, shown below the auth landing. FEATURES are
+// single-concept demos (under app/features/, logic in modules/); EXAMPLES are
+// whole apps (under app/examples/). Prune what you do not use (delete the route
+// AND its modules/<name>). Keep this list in sync with the full-stack home.
+const features = [
+  { href: '/features/routing', title: 'Routing', blurb: 'A static route plus a dynamic [id] segment that reads params. The file-based router in miniature.' },
+  { href: '/features/components', title: 'Components', blurb: 'The WebComponent factory, reactive props, instance signals, and slot projection in light DOM.' },
+  { href: '/features/server-actions', title: 'Server actions', blurb: 'A use-server RPC action next to a server-only .server.ts utility, and why the boundary matters.' },
+  { href: '/features/optimistic-ui', title: 'Optimistic UI', blurb: 'The imperative optimistic(signal, value, action) flip: instant update, automatic rollback on failure.' },
+  { href: '/features/async-render', title: 'Async render', blurb: 'A component that awaits server data in async render(), so the resolved value is in the first paint.' },
+  { href: '/features/directives', title: 'Directives', blurb: 'The lit-html directive set: repeat for keyed lists, watch(signal) for a fine-grained node swap.' },
+  { href: '/features/route-handler', title: 'Route handlers', blurb: 'A server-only route.ts HTTP endpoint returning JSON, the webjs equivalent of a Next route handler.' },
+  { href: '/features/forms', title: 'Forms', blurb: 'A no-JS progressive-enhancement form posting to the page action, with server-side validation errors.' },
+  { href: '/features/metadata', title: 'Metadata', blurb: 'Static metadata plus generateMetadata(ctx), which reads the request to compute the title and Open Graph tags.' },
+  { href: '/features/caching', title: 'Caching', blurb: 'export const revalidate caches the page HTML per URL, with the safety rule for when a shared cache is allowed.' },
+  { href: '/features/env', title: 'Env vars', blurb: 'The server-only vs WEBJS_PUBLIC_ boundary, read during SSR so secrets never reach the browser.' },
+  { href: '/features/client-router', title: 'Client router', blurb: 'Automatic soft navigation: fragment-only fetches, hover prefetch, scroll restore, and graceful no-JS fallback.' },
+  { href: '/features/service-worker', title: 'Service worker', blurb: 'The opt-in offline enhancement, registered from a browser-only lifecycle hook (never a page or layout).' },
+  { href: '/features/websockets', title: 'WebSockets', blurb: 'A WS(ws, req) route endpoint plus the connectWS() client, echoing messages over a live socket.' },
+  { href: '/features/broadcast', title: 'Broadcast', blurb: 'Fan a message out to every connected client on a WebSocket path, so all open tabs stay in sync.' },
+  { href: '/features/rate-limit', title: 'Rate limiting', blurb: 'The rateLimit() middleware scoped to one endpoint, returning a 429 with Retry-After past the window.' },
+  { href: '/features/file-storage', title: 'File storage', blurb: 'A no-JS multipart upload streamed into the FileStore, then served back through a streaming route.' },
+];
+const examples = [
+  { href: '/examples/todo', title: 'Optimistic todo', blurb: 'A whole app composing several features: the declarative optimistic() list API, progressive-enhancement forms, accessible labels, the modules split, and SQLite.' },
+];
+
+const galleryCard = (item: { href: string; title: string; blurb: string }) => html\`
+  <a href=\${item.href} class="block no-underline">
+    <div class="\${cardClass()} h-full transition-colors hover:border-border-strong">
+      <div class=\${cardHeaderClass()}>
+        <h3 class=\${cardTitleClass()}>\${item.title}</h3>
+        <p class=\${cardDescriptionClass()}>\${item.blurb}</p>
+      </div>
+    </div>
+  </a>
+\`;
 
 export default function Home() {
   return html\`
@@ -1375,13 +1421,35 @@ export default function Home() {
       \${displayH1(html\`Hello from <span class="text-primary italic">${displayName}</span>.\`)}
       <p class="text-lede leading-[1.5] text-muted-foreground max-w-[56ch] m-0 mb-6">
         The saas starter: email and password auth, a protected dashboard, and a
-        User model, all wired up. Replace this page with your product's landing.
+        User model, all wired up. Replace this hero with your product's landing;
+        the webjs feature gallery below is reference, prune what you do not need.
         See \${accentLink('https://docs.webjs.dev', 'the docs')} for the full reference.
       </p>
       <div class="flex gap-3 items-center">
         <a href="/login" class="inline-flex items-center px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm no-underline transition-all hover:bg-primary/90 active:scale-[0.97]">Log in</a>
         <a href="/signup" class="text-primary no-underline font-medium text-sm">Create an account</a>
         <a href="/dashboard" class="text-muted-foreground no-underline font-medium text-sm hover:text-foreground transition-colors">Dashboard</a>
+      </div>
+    </section>
+
+    <section class="mb-12">
+      <h2 class="font-serif text-[1.6rem] tracking-[-0.02em] font-bold m-0 mb-1">Features</h2>
+      <p class="text-muted-foreground text-sm m-0 mb-5">
+        One webjs concept each, under <code class="font-mono text-[0.9em]">app/features/</code>
+        with logic in <code class="font-mono text-[0.9em]">modules/</code>. Delete the ones you do not need.
+      </p>
+      <div class="grid gap-4 sm:grid-cols-2">
+        \${features.map(galleryCard)}
+      </div>
+    </section>
+
+    <section>
+      <h2 class="font-serif text-[1.6rem] tracking-[-0.02em] font-bold m-0 mb-1">Example apps</h2>
+      <p class="text-muted-foreground text-sm m-0 mb-5">
+        Whole apps that compose several features, under <code class="font-mono text-[0.9em]">app/examples/</code>.
+      </p>
+      <div class="grid gap-4 sm:grid-cols-2">
+        \${examples.map(galleryCard)}
       </div>
     </section>
   \`;

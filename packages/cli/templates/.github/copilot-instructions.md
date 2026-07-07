@@ -18,7 +18,7 @@ the full hosted docs are at **https://docs.webjs.dev**.
   `app/page.ts`, the example `User` model, the example users module, etc.
   with the app the user actually asked for. Don't ship "Hello from
   <app-name>" as the deliverable.
-- **Study the gallery first, prune it second.** The full-stack scaffold ships
+- **Study the gallery first, prune it second.** The full-stack and saas scaffolds ship
   single-feature demos under `app/features/` plus one whole example app under
   `app/examples/` (logic in `modules/`). It is your PRIMARY webjs reference:
   read every demo end to end (code AND comments) to learn the idioms BEFORE you

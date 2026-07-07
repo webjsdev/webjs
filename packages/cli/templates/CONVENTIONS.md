@@ -315,7 +315,7 @@ now (the `app/page.ts` homepage, the example `User` model, the
 `app/examples/` in the full-stack template, the example users module in
 api / saas templates) is a **starting point**.
 
-The full-stack scaffold ships a **gallery** organized by kind so features
+The full-stack and saas scaffolds ship a **gallery** organized by kind so features
 and whole apps are not mixed. `app/features/<name>/` are single-feature
 demos, one webjs concept each (routing, components, server-actions,
 optimistic-ui, async-render, directives, route-handler). `app/examples/<name>/`
