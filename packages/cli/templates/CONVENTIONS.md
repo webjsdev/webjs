@@ -310,9 +310,31 @@ production workloads.
 <!-- OVERRIDE -->
 
 This project was created with `webjs create`. Every file you see right
-now (the `app/page.ts` "Hello from …" homepage, the example `User`
-model, the `theme-toggle` component, the example users module in api /
-saas templates) is a **starting point**.
+now (the `app/page.ts` homepage, the example `User` model, the
+`theme-toggle` component, the example gallery under `app/examples/` in
+the full-stack template, the example users module in api / saas
+templates) is a **starting point**.
+
+The full-stack scaffold ships an **example gallery**: small, idiomatic,
+heavily commented working apps under `app/examples/` (with their logic in
+`modules/`) that demonstrate optimistic UI, progressive enhancement,
+signals, slots, dynamic routes, and the `.server.ts` vs `'use server'`
+boundary. Read them to learn the patterns. They are REFERENCE, not the
+app: keep and adapt the ones you need, and **prune the rest**. Pruning an
+example means deleting its `app/examples/<name>` route AND its
+`modules/<name>` folder (for the todo example, also the `todos` table in
+`db/schema.server.ts` and its link in `app/page.ts`). Each example page
+carries a `webjs-scaffold-placeholder` marker, so `webjs check` fails
+until you consciously keep-and-adapt or prune it. After pruning, delete
+any now-empty directories, an empty `lib/utils/` or `modules/<name>/` is
+leftover scaffolding, not structure.
+
+**`app/` is routing-only.** Only routing files belong in `app/` (page,
+layout, route, middleware, and metadata routes). CSS, helpers, and
+constants do NOT: the theme lives at `styles/globals.css` (NOT
+`app/globals.css`), browser-safe helpers at `lib/utils/`, and feature
+logic in `modules/`. If you add a stylesheet or a helper, put it outside
+`app/`.
 
 When the user asks the agent to build their actual app:
 
@@ -325,6 +347,9 @@ When the user asks the agent to build their actual app:
    need a theme picker.
 4. **Delete the example users module** (api/saas templates) if the app
    doesn't use it.
+4b. **Prune the example gallery** (full-stack template). Keep and adapt the
+   examples the app uses, delete the rest (route + module + any table),
+   and remove their links from `app/page.ts`.
 5. **Adapt `app/layout.ts` to the app, not just the page.** Set the real
    brand, replace the example `Home` nav with the app's navigation, and
    pick a content-width container that fits. The default
@@ -347,9 +372,10 @@ When the user asks the agent to build their actual app:
    conventions, the design tokens in `app/layout.ts`. These are the
    infrastructure, not the example app.
 
-This is enforced, not just advised. The example `app/page.ts` and
-`app/layout.ts` carry a `webjs-scaffold-placeholder` marker comment, and
-the `no-scaffold-placeholder` check fails while any marker remains, so a
+This is enforced, not just advised. The example `app/page.ts`,
+`app/layout.ts`, and each `app/examples/<name>/page.ts` carry a
+`webjs-scaffold-placeholder` marker comment, and the
+`no-scaffold-placeholder` check fails while any marker remains, so a
 freshly scaffolded app fails `webjs check` until you address each
 placeholder. The marker is acknowledge-and-remove: replace the example
 content, or deliberately keep it, and in either case delete the marker

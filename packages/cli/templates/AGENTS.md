@@ -305,8 +305,13 @@ behavior the browser can't deliver natively.
 ## File conventions
 
 ```
-app/                     thin route adapters (import from modules/)
-  page.ts                → /
+app/                     ROUTING ONLY: thin route adapters (import from modules/).
+                         No CSS, helpers, or constants here; those live in
+                         styles/, lib/utils/, and modules/. globals.css is at
+                         styles/, NOT app/.
+  page.ts                → / (the scaffold home links to the example gallery)
+  examples/<name>/       the example gallery (todo, tic-tac-toe, components,
+                         routing, server-actions); prune what you do not use
   layout.ts              root layout, wraps every page
   error.ts               error boundary (render failures → user-friendly)
   loading.ts             Suspense fallback for sibling page
@@ -330,6 +335,8 @@ modules/<feature>/
   types.ts               feature types
 lib/
   ...                    cross-cutting infra (session, auth config, etc.)
+styles/
+  globals.css            @webjsdev/ui theme tokens (NOT in app/; app/ is routing-only)
 db/
   schema.server.ts       Drizzle models + relations (your data layer)
   columns.server.ts      column helpers (dialect-specific; the only file to swap for Postgres)
@@ -346,6 +353,21 @@ test/<feature>/                feature-scoped tests, one folder per concern
   smoke/<name>.test.ts          fast post-deploy sanity check
 middleware.ts            root middleware (optional, outermost)
 ```
+
+### The example gallery (reference content, prune it)
+
+The scaffold ships a working example gallery under `app/examples/` with its
+logic in `modules/`. Each example is small, idiomatic, and heavily commented,
+so read them to learn the webjs patterns (optimistic UI, progressive
+enhancement, signals, slots, dynamic routes, the `.server.ts` vs `'use server'`
+boundary). They are REFERENCE, not your app: keep and adapt the ones you need,
+and prune the rest. Pruning one example means deleting its `app/examples/<name>`
+route AND its `modules/<name>` folder (and, for the todo example, the `todos`
+table in `db/schema.server.ts`), then removing its link from `app/page.ts`. Each
+example page carries a `webjs-scaffold-placeholder` marker so `webjs check`
+fails until you have consciously kept-and-adapted or pruned it. After pruning,
+delete any now-empty directories (an empty `lib/utils/` or `modules/<name>/` is
+leftover scaffolding, not structure).
 
 ### Typed page / layout / route-handler props
 

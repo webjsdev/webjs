@@ -1391,14 +1391,16 @@ ThemeToggle.register('theme-toggle');
   ✓ Convention validation via \`webjs check\`
 
 For AI agents, read this before editing scaffolded files:
-  • The example layout / page / components / schema are REFERENCE ONLY.
-    Replace them with the app the user actually asked for. Don't ship
-    the scaffold's example User model or "Hello from …" page as the
-    final product.
-  • This fresh app intentionally FAILS \`webjs check\` with two
-    no-scaffold-placeholder violations (app/page.ts, app/layout.ts).
-    That is the signal to replace the example content. Delete each
-    marker comment line as you do, and the check goes green.
+  • The example layout, home page, the app/examples gallery (+ its
+    modules) and schema are REFERENCE ONLY. Replace them with the app
+    the user asked for, and prune the example routes you do not use
+    (delete the app/examples/<name> route AND its modules/<name>). Don't
+    ship the scaffold's examples as the final product.
+  • This fresh app intentionally FAILS \`webjs check\` with
+    no-scaffold-placeholder violations on the example content (the home
+    page, the layout, and each app/examples route). That is the signal
+    to replace or prune each. Delete the marker comment line as you do,
+    and the check goes green.
   • Use Drizzle + SQLite for app data. It's already wired up. Define
     real models in db/schema.server.ts, then run \`webjs db generate\`
     and \`webjs db migrate\`. NEVER store app data in JSON files,
