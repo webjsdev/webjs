@@ -1092,6 +1092,9 @@ ${UI_THEME}
         --font-serif: ui-serif, 'Iowan Old Style', Palatino, Georgia, serif;
         --font-mono:  ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         --header-h: 56px;
+        /* A translucent accent, derived from --accent so it tracks light/dark
+           automatically. Used for the logo glow and the focus ring tint. */
+        --accent-tint: color-mix(in oklch, var(--accent) 20%, transparent);
       }
       /* dark (the default, and the explicit .dark the toggle sets) */
       :root, .dark {
@@ -1172,6 +1175,7 @@ ${UI_THEME}
            already maps --color-background/foreground/card/primary/secondary/
            muted/accent/border/input/ring/destructive. */
         --color-border-strong: var(--border-strong);
+        --color-accent-tint: var(--accent-tint);
         --font-sans:  var(--font-sans);
         --font-serif: var(--font-serif);
         --font-mono:  var(--font-mono);
