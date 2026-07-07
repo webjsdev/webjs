@@ -1269,7 +1269,7 @@ export default function Home() {
         This scaffold ships a gallery below: single-feature demos and one whole
         example app, all small, idiomatic, and heavily commented. Browse them for
         context, then replace this page with your own. See
-        \${accentLink('https://docs.webjs.com', 'the docs')} for the full reference.
+        \${accentLink('https://docs.webjs.dev', 'the docs')} for the full reference.
       </p>
       <div class="flex gap-3 items-center">
         <a href="/examples/todo" class=\${buttonClass()}>Open the todo app</a>
@@ -1468,7 +1468,7 @@ For AI agents, read this before editing scaffolded files:
     the closest scaffold and adapt it.
   • Read AGENTS.md + CONVENTIONS.md in the new project before writing
     any code. They are the contract.
-  • Need more detail? Full hosted docs are at https://docs.webjs.com
+  • Need more detail? Full hosted docs are at https://docs.webjs.dev
     (every API, directive, recipe, and deployment guide).
 `);
 

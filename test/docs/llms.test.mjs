@@ -60,7 +60,7 @@ describe('docs /llms.txt (the index)', () => {
     // The request origin is http in the harness, so links carry the
     // request origin. Assert the known titles are linked, and that the
     // link target is an absolute URL (origin-prefixed), which in
-    // production resolves to https://docs.webjs.com.
+    // production resolves to https://docs.webjs.dev.
     const links = body.split('\n').filter((l) => l.startsWith('- ['));
     assert.ok(links.length >= 3, 'expected at least 3 topic links');
     for (const title of ['Getting Started', 'Components', 'Server Actions']) {

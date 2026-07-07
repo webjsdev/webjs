@@ -46,7 +46,7 @@ TypeScript with zero build step, real SSR with Declarative Shadow DOM.
 > - Auth, login/signup, protected dashboard, SaaS → **`--template saas`**
 >
 > Full rules: [`AGENTS.md` → How AI agents must scaffold](./AGENTS.md#how-ai-agents-must-scaffold).
-> Full framework docs (every API, every recipe): **https://docs.webjs.com**.
+> Full framework docs (every API, every recipe): **https://docs.webjs.dev**.
 
 ```sh
 # Get started in one command (no global install required)

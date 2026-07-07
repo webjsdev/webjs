@@ -113,7 +113,7 @@ async function walkFiles(dir, re, out = []) {
  * The agent- AND user-facing doc corpus. Three surfaces:
  *  - AGENTS.md + agent-docs/*.md (agent-facing markdown, imports in ``` fences).
  *  - the scaffold's shipped AGENTS.md (ships into every app).
- *  - the docs SITE (`docs/app/**`, the docs.webjs.com source): its code samples
+ *  - the docs SITE (`docs/app/**`, the docs.webjs.dev source): its code samples
  *    are embedded in `.ts` page template strings, and its own components import
  *    the framework for real. Both must resolve, so the site cannot drift ahead
  *    of the shipped surface (the external documentation the user asked about).

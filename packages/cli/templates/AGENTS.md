@@ -4,8 +4,8 @@ Read this before editing any file. This is a webjs app: AI-first, web-
 components-first, no build step. The framework's own full API reference
 lives at https://github.com/webjsdev/webjs/blob/main/AGENTS.md and the
 full hosted documentation (every API, recipe, and example) lives at
-**https://docs.webjs.com**. Treat this file as the app-scoped
-companion and reach for docs.webjs.com whenever you need more detail.
+**https://docs.webjs.dev**. Treat this file as the app-scoped
+companion and reach for docs.webjs.dev whenever you need more detail.
 
 ## If you just scaffolded this app (AI agents, read first)
 
@@ -177,7 +177,7 @@ entry, its own template parser. Inside `` html`…` `` templates you get:
 In VS Code / Cursor / Windsurf, the **`webjs` extension** bundles this
 automatically (no `tsconfig.json` edit, no separate Lit extension).
 
-See [docs.webjs.com → Editor setup](https://docs.webjs.com/docs/editor-setup)
+See [docs.webjs.dev → Editor setup](https://docs.webjs.dev/docs/editor-setup)
 for the full walkthrough.
 
 **Config validation in `package.json`.** The scaffold ships
@@ -567,7 +567,7 @@ git commit -m "vendor + download dayjs"
 Bundle files land in `.webjs/vendor/<pkg>@<version>.js`. importmap
 points at local `/__webjs/vendor/` paths. Browser fetches from your
 own origin. Suitable for `script-src 'self'` CSP, air-gapped deploys,
-or compliance environments. See [docs.webjs.com Deployment → CSP](https://docs.webjs.com/docs/deployment#csp).
+or compliance environments. See [docs.webjs.dev Deployment → CSP](https://docs.webjs.dev/docs/deployment#csp).
 
 **Other CLI commands:**
 
@@ -643,7 +643,7 @@ const url = process.env.WEBJS_PUBLIC_API_URL;       // works
 const secret = process.env.AUTH_SECRET;             // undefined (fail-closed)
 ```
 
-`process.env.NODE_ENV` is also defined in the browser (`'development'` in `webjs dev`, `'production'` in `webjs start`), so vendor bundles that probe it work without setup. Full docs: [Configuration](https://docs.webjs.com/docs/configuration).
+`process.env.NODE_ENV` is also defined in the browser (`'development'` in `webjs dev`, `'production'` in `webjs start`), so vendor bundles that probe it work without setup. Full docs: [Configuration](https://docs.webjs.dev/docs/configuration).
 
 ## Component pattern
 
@@ -838,7 +838,7 @@ that RETURNS a `ReadableStream` / async generator streams its chunks (consume
 with `for await`); read the request `AbortSignal` via `actionSignal()` to cancel
 on disconnect. **SAFETY:** a `cache` with `public: true` shares one response
 across all users, so use it only for data identical for every visitor. Full
-reference: https://docs.webjs.com/docs/server-actions
+reference: https://docs.webjs.dev/docs/server-actions
 
 ## Client navigation patterns (auto-magic)
 

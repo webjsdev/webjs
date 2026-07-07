@@ -524,7 +524,7 @@ components/schema with the actual app the user requested. Use Drizzle +
 SQLite for persistence (already wired up). Never store app data in JSON
 files.
 
-Full docs: https://docs.webjs.com`);
+Full docs: https://docs.webjs.dev`);
         process.exit(1);
       }
       const noInstall = rest.includes('--no-install');
