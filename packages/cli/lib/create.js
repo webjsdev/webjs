@@ -134,8 +134,9 @@ async function copyUiComponents(appDir, names) {
 /**
  * Copy the example gallery (idiomatic, densely-commented working examples) into
  * the scaffolded app. Merges `templates/gallery/{app,modules}` over the app so
- * the example routes land under `app/examples/<feature>/` and their logic under
- * `modules/<feature>/`, the app-thin + modules-logic split webjs prescribes.
+ * single-feature demos land under `app/features/<name>/`, whole example apps
+ * under `app/examples/<name>/`, and their logic under `modules/<name>/`, the
+ * app-thin + modules-logic split webjs prescribes.
  *
  * Ships verbatim (no `{{APP_NAME}}` substitution): the examples are self-
  * contained and reference only `@webjsdev/*`, drizzle, `#db/*`, and each other.
@@ -954,9 +955,9 @@ export type ActionResult<T> =
       'button', 'card', 'alert', 'badge', 'separator', 'label', 'input',
     ]);
 
-    // The example gallery: idiomatic, densely-commented working examples of
-    // webjs features (app-thin routes under app/examples/ + modules/<feature>/
-    // logic), linked from the home page. Shipped in the default full-stack
+    // The gallery: idiomatic, densely-commented single-feature demos under
+    // app/features/ plus one whole example app under app/examples/, with logic
+    // in modules/, linked from the home page. Shipped in the default full-stack
     // scaffold so an agent gains context by browsing real code; prune
     // per-feature (delete the route + its module) for what the app does not
     // use. See CONVENTIONS.md "prune what the app does not use".
@@ -1194,19 +1195,33 @@ export const metadata = {
   title: '${name}: built with webjs',
 };
 
-// The example routes this scaffold ships, each a small idiomatic webjs app.
-// Prune the ones you do not need (delete the app/examples/<name> route AND its
-// modules/<name> folder), then reshape this page into your app's real home.
-const examples = [
-  { href: '/examples/todo', title: 'Optimistic todo', blurb: 'Optimistic UI with instant updates and auto-rollback, progressive-enhancement forms, accessible labels, and the app-thin plus modules split, backed by SQLite.' },
-  { href: '/examples/tic-tac-toe', title: 'Tic-tac-toe', blurb: 'Client-only state with signals. No server and no database, so all interactivity lives in the component.' },
-  { href: '/examples/components', title: 'Components', blurb: 'The WebComponent factory, reactive props, instance signals, and slot projection in light DOM.' },
-  { href: '/examples/routing', title: 'Routing', blurb: 'A static route plus a dynamic [id] segment that reads params. The file-based router in miniature.' },
-  { href: '/examples/server-actions', title: 'Server actions', blurb: 'A use-server RPC action next to a server-only .server.ts utility, and why the boundary matters.' },
-  { href: '/examples/async-render', title: 'Async render', blurb: 'A component that awaits server data in async render(), so the resolved value is in the first paint.' },
-  { href: '/examples/directives', title: 'Directives', blurb: 'The lit-html directive set: repeat for keyed lists, watch(signal) for a fine-grained node swap.' },
-  { href: '/examples/route-handler', title: 'Route handlers', blurb: 'A server-only route.ts HTTP endpoint returning JSON, the webjs equivalent of a Next route handler.' },
+// Two kinds of reference the scaffold ships. FEATURES are single-concept demos
+// (one webjs feature each, under app/features/, logic in modules/). EXAMPLES are
+// whole apps that compose several features (under app/examples/). Prune what you
+// do not use (delete the route AND its modules/<name>), then reshape this page.
+const features = [
+  { href: '/features/routing', title: 'Routing', blurb: 'A static route plus a dynamic [id] segment that reads params. The file-based router in miniature.' },
+  { href: '/features/components', title: 'Components', blurb: 'The WebComponent factory, reactive props, instance signals, and slot projection in light DOM.' },
+  { href: '/features/server-actions', title: 'Server actions', blurb: 'A use-server RPC action next to a server-only .server.ts utility, and why the boundary matters.' },
+  { href: '/features/optimistic-ui', title: 'Optimistic UI', blurb: 'The imperative optimistic(signal, value, action) flip: instant update, automatic rollback on failure.' },
+  { href: '/features/async-render', title: 'Async render', blurb: 'A component that awaits server data in async render(), so the resolved value is in the first paint.' },
+  { href: '/features/directives', title: 'Directives', blurb: 'The lit-html directive set: repeat for keyed lists, watch(signal) for a fine-grained node swap.' },
+  { href: '/features/route-handler', title: 'Route handlers', blurb: 'A server-only route.ts HTTP endpoint returning JSON, the webjs equivalent of a Next route handler.' },
 ];
+const examples = [
+  { href: '/examples/todo', title: 'Optimistic todo', blurb: 'A whole app composing several features: the declarative optimistic() list API, progressive-enhancement forms, accessible labels, the modules split, and SQLite.' },
+];
+
+const galleryCard = (item: { href: string; title: string; blurb: string }) => html\`
+  <a href=\${item.href} class="block no-underline">
+    <div class="\${cardClass()} h-full transition-colors hover:border-border-strong">
+      <div class=\${cardHeaderClass()}>
+        <h3 class=\${cardTitleClass()}>\${item.title}</h3>
+        <p class=\${cardDescriptionClass()}>\${item.blurb}</p>
+      </div>
+    </div>
+  </a>
+\`;
 
 export default function Home() {
   return html\`
@@ -1214,35 +1229,35 @@ export default function Home() {
       \${rubric('welcome')}
       \${displayH1(html\`Hello from <span class="text-accent italic">${name}</span>.\`)}
       <p class="text-lede leading-[1.5] text-fg-muted max-w-[56ch] m-0 mb-6">
-        This scaffold ships an example gallery below: small, idiomatic, heavily
-        commented webjs apps. Browse them for context, then replace this page
-        with your own. See \${accentLink('https://docs.webjs.com', 'the docs')}
-        for the full reference.
+        This scaffold ships a gallery below: single-feature demos and one whole
+        example app, all small, idiomatic, and heavily commented. Browse them for
+        context, then replace this page with your own. See
+        \${accentLink('https://docs.webjs.com', 'the docs')} for the full reference.
       </p>
       <div class="flex gap-3 items-center">
-        <a href="/examples/todo" class=\${buttonClass()}>Open the todo example</a>
+        <a href="/examples/todo" class=\${buttonClass()}>Open the todo app</a>
         <span class=\${badgeClass({ variant: 'secondary' })}>v0.1</span>
       </div>
     </section>
 
-    <section>
-      <h2 class="font-serif text-[1.6rem] tracking-[-0.02em] font-bold m-0 mb-1">Example gallery</h2>
+    <section class="mb-12">
+      <h2 class="font-serif text-[1.6rem] tracking-[-0.02em] font-bold m-0 mb-1">Features</h2>
       <p class="text-fg-muted text-sm m-0 mb-5">
-        Each route lives under <code class="font-mono text-[0.9em]">app/examples/</code>
-        with its logic in <code class="font-mono text-[0.9em]">modules/</code>.
-        Delete the ones you do not need.
+        One webjs concept each, under <code class="font-mono text-[0.9em]">app/features/</code>
+        with logic in <code class="font-mono text-[0.9em]">modules/</code>. Delete the ones you do not need.
       </p>
       <div class="grid gap-4 sm:grid-cols-2">
-        \${examples.map((ex) => html\`
-          <a href=\${ex.href} class="block no-underline">
-            <div class="\${cardClass()} h-full transition-colors hover:border-border-strong">
-              <div class=\${cardHeaderClass()}>
-                <h3 class=\${cardTitleClass()}>\${ex.title}</h3>
-                <p class=\${cardDescriptionClass()}>\${ex.blurb}</p>
-              </div>
-            </div>
-          </a>
-        \`)}
+        \${features.map(galleryCard)}
+      </div>
+    </section>
+
+    <section>
+      <h2 class="font-serif text-[1.6rem] tracking-[-0.02em] font-bold m-0 mb-1">Example apps</h2>
+      <p class="text-fg-muted text-sm m-0 mb-5">
+        Whole apps that compose several features, under <code class="font-mono text-[0.9em]">app/examples/</code>.
+      </p>
+      <div class="grid gap-4 sm:grid-cols-2">
+        \${examples.map(galleryCard)}
       </div>
     </section>
   \`;
@@ -1365,10 +1380,11 @@ ThemeToggle.register('theme-toggle');
 `);
   } else {
     console.log(`  ${name}/
-    app/layout.ts, page.ts       ← home links to the example gallery
-    app/examples/{todo,tic-tac-toe,components,routing,server-actions,
+    app/layout.ts, page.ts       ← home links to the gallery
+    app/features/{routing,components,server-actions,optimistic-ui,
                   async-render,directives,route-handler}/
-                                 ← thin routes for the gallery
+                                 ← single-feature demos
+    app/examples/todo/           ← one whole example app (composes features)
     styles/globals.css           ← @webjsdev/ui theme tokens
     components.json              ← preconfigured for \`webjs ui add\`
     components/ui/{button,card,alert,badge,separator,label,input}.ts
@@ -1376,8 +1392,8 @@ ThemeToggle.register('theme-toggle');
     lib/utils/cn.ts              ← cn() helper for ui-* components
     lib/utils/ui.ts              ← Tailwind class-bundle helpers
     public/tailwind-browser.js   ← Tailwind runtime
-    modules/{todo,tic-tac-toe,components,server-actions,async-render,
-             directives}/       ← gallery logic (prune what you skip)
+    modules/{components,server-actions,optimistic-ui,async-render,
+             directives,todo}/  ← feature + example logic (prune what you skip)
     db/{schema,columns,connection}.server.ts  ← Drizzle (User + Todo)
     CONVENTIONS.md, AGENTS.md, CLAUDE.md
 `);
@@ -1395,16 +1411,17 @@ ThemeToggle.register('theme-toggle');
   ✓ Convention validation via \`webjs check\`
 
 For AI agents, read this before editing scaffolded files:
-  • The example layout, home page, the app/examples gallery (+ its
-    modules) and schema are REFERENCE ONLY. Replace them with the app
-    the user asked for, and prune the example routes you do not use
-    (delete the app/examples/<name> route AND its modules/<name>). Don't
-    ship the scaffold's examples as the final product.
+  • The example layout, home page, the gallery under app/features/ and
+    app/examples/ (+ their modules) and schema are REFERENCE ONLY. Replace
+    them with the app the user asked for, and prune the routes you do not
+    use (delete the app/features/<name> or app/examples/<name> route AND
+    its modules/<name>). Don't ship the scaffold's examples as the final
+    product.
   • This fresh app intentionally FAILS \`webjs check\` with
     no-scaffold-placeholder violations on the example content (the home
-    page, the layout, and each app/examples route). That is the signal
-    to replace or prune each. Delete the marker comment line as you do,
-    and the check goes green.
+    page, the layout, and each gallery route). That is the signal to
+    replace or prune each. Delete the marker comment line as you do, and
+    the check goes green.
   • Use Drizzle + SQLite for app data. It's already wired up. Define
     real models in db/schema.server.ts, then run \`webjs db generate\`
     and \`webjs db migrate\`. NEVER store app data in JSON files,

@@ -1,4 +1,4 @@
-// webjs-scaffold-placeholder. Example gallery route. Keep and adapt it, or prune it (delete this app/examples/server-actions route AND modules/server-actions), then delete this marker line. webjs check fails while the marker remains.
+// webjs-scaffold-placeholder. Feature gallery route. Keep and adapt it, or prune it (delete this app/features/server-actions route AND modules/server-actions), then delete this marker line. webjs check fails while the marker remains.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
 import '#modules/server-actions/components/greeter.ts';

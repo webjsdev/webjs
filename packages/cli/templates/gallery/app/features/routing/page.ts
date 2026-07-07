@@ -1,7 +1,7 @@
-// webjs-scaffold-placeholder. Example gallery route. Keep and adapt it, or prune it (delete this app/examples/routing route), then delete this marker line. webjs check fails while the marker remains.
+// webjs-scaffold-placeholder. Feature gallery route. Keep and adapt it, or prune it (delete this app/features/routing route), then delete this marker line. webjs check fails while the marker remains.
 // Routing basics: a static page that links to a dynamic route. app/ is routing
 // only; a folder maps to a URL segment, and [id] is a dynamic segment read from
-// `params`. See app/examples/routing/[id]/page.ts.
+// `params`. See app/features/routing/[id]/page.ts.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
 

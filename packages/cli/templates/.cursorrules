@@ -18,13 +18,14 @@ cover what you need, the full hosted docs are at **https://docs.webjs.com**.
   `app/page.ts`, the example `User` model, the example users module, etc.
   with the app the user actually asked for. Don't ship "Hello from
   <app-name>" as the deliverable.
-- **The example gallery is reference too, prune it.** The full-stack
-  scaffold ships a gallery under `app/examples/` (logic in `modules/`).
-  Read it to learn the patterns, keep and adapt what you need, and delete
-  the rest (the `app/examples/<name>` route AND its `modules/<name>`; for
-  the todo example, also the `todos` table). Each example page has a
-  `webjs-scaffold-placeholder` marker so `webjs check` fails until you
-  resolve it. Delete now-empty directories after pruning.
+- **The gallery is reference too, prune it.** The full-stack scaffold ships
+  single-feature demos under `app/features/` plus one whole example app
+  under `app/examples/` (logic in `modules/`). Read it to learn the
+  patterns, keep and adapt what you need, and delete the rest (the
+  `app/features/<name>` or `app/examples/<name>` route AND its
+  `modules/<name>`; for the todo app, also the `todos` table). Each route
+  page has a `webjs-scaffold-placeholder` marker so `webjs check` fails
+  until you resolve it. Delete now-empty directories after pruning.
 - **`app/` is routing-only.** Only routing files live in `app/` (page,
   layout, route, middleware, metadata routes). CSS, helpers, and constants
   do NOT: `globals.css` is at `styles/`, browser-safe helpers at
