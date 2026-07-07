@@ -10,6 +10,7 @@
 // one coherent theme. Prefer these tokens (and opacity modifiers like
 // bg-primary/90) over ad-hoc colors.
 import { WebComponent, prop, optimistic, html } from '@webjsdev/core';
+import { buttonClass } from '#components/ui/button.ts';
 import { createTodo } from '../actions/create-todo.server.ts';
 import { toggleTodo } from '../actions/toggle-todo.server.ts';
 import { deleteTodo } from '../actions/delete-todo.server.ts';
@@ -98,8 +99,11 @@ export class TodoApp extends WebComponent({
           <input type="hidden" name="intent" value="create" />
           <input name="title" required maxlength="280" autocomplete="off" placeholder="What needs doing?"
             class="flex-1 min-w-0 bg-transparent border-0 outline-none text-foreground text-[15px] placeholder:text-muted-foreground/70 py-1.5" />
-          <button type="submit"
-            class="shrink-0 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">Add</button>
+          <!-- The @webjsdev/ui buttonClass() helper: a class STRING (not a custom
+               element), so it drops into a light-DOM component's markup. The
+               toggle + delete below stay hand-rolled because they are not
+               standard buttons (a circular checkbox, an icon affordance). -->
+          <button type="submit" class=${buttonClass()}>Add</button>
         </form>
 
         <ul class="list-none m-0 p-0 grid gap-2">
