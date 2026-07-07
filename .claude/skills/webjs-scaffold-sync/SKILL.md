@@ -36,6 +36,14 @@ They overlap on two surfaces (the scaffold's per-agent rule files, and the
 template matrix in the framework docs/README). Whichever skill reaches that
 surface must update it; when in doubt run both.
 
+A hard commit gate enforces the FLOOR: `.claude/hooks/require-scaffold-with-src.sh`
+BLOCKS a commit that stages framework-feature source (`packages/(core|server|cli)/src`)
+with no scaffold surface (`packages/cli/templates` or `packages/cli/lib`) in the
+same commit (escape hatch `WEBJS_NO_SCAFFOLD_GATE=1` for a change that genuinely
+needs no scaffold update). The hook can only enforce "stage SOME scaffold
+surface"; THIS skill does the substantive per-surface judgment and the
+generate-boot-check verification.
+
 ## The complete scaffold surface map
 
 Treat this as the universe. For any scaffold change, decide per surface whether
