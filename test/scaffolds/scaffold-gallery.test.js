@@ -25,7 +25,7 @@ import { scaffoldApp } from '../../packages/cli/lib/create.js';
 
 // Single-feature demos under app/features/<name>.
 const FEATURES = [
-  'routing', 'components', 'server-actions', 'optimistic-ui',
+  'routing', 'boundaries', 'components', 'server-actions', 'optimistic-ui',
   'async-render', 'directives', 'route-handler', 'forms',
   'metadata', 'caching', 'env', 'client-router', 'service-worker',
   'websockets', 'broadcast', 'rate-limit', 'file-storage',
@@ -55,6 +55,11 @@ test('full-stack scaffold ships feature demos and one example app', async () => 
     for (const name of EXAMPLE_APPS) {
       assert.ok(await exists(join(appDir, 'app', 'examples', name, 'page.ts')), `app/examples/${name}/page.ts`);
     }
+    // Boundaries demo: a forbidden()/unauthorized() thrower next to its nearest boundary file.
+    assert.ok(await exists(join(appDir, 'app', 'features', 'boundaries', 'gated', 'page.ts')));
+    assert.ok(await exists(join(appDir, 'app', 'features', 'boundaries', 'gated', 'forbidden.ts')));
+    assert.ok(await exists(join(appDir, 'app', 'features', 'boundaries', 'private', 'page.ts')));
+    assert.ok(await exists(join(appDir, 'app', 'features', 'boundaries', 'private', 'unauthorized.ts')));
     // Dynamic route param example + the route.ts handler.
     assert.ok(await exists(join(appDir, 'app', 'features', 'routing', '[id]', 'page.ts')));
     assert.ok(await exists(join(appDir, 'app', 'features', 'route-handler', 'data', 'route.ts')));
