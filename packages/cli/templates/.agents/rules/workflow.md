@@ -157,7 +157,7 @@ self-review loop.
   explicit fields plus constructor body assignments instead of parameter
   properties. If `erasableSyntaxOnly` is disabled and non-erasable syntax is
   used, the dev server fails at strip time and returns a 500 pointing at the
-  `no-non-erasable-typescript` lint rule. webjs is buildless end-to-end and
+  `no-non-erasable-typescript` lint rule. WebJs is buildless end-to-end and
   has no bundler fallback.
 - Web components render into light DOM by default (so Tailwind / global CSS
   apply directly). Opt in to shadow DOM per component with

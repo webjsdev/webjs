@@ -108,7 +108,7 @@ Five stacked zero-build optimizations:
 
 ## No-build production model
 
-webjs has no bundler and no `webjs build` step. The same `.js` / `.ts`
+WebJs has no bundler and no `webjs build` step. The same `.js` / `.ts`
 source files that run in dev are served as-is to the browser in
 production. The Rails 7+ / Hotwire pattern:
 
@@ -139,7 +139,7 @@ production. The Rails 7+ / Hotwire pattern:
   npm **vendor** URLs those shipped modules reach (#754). The browser
   parallelizes fetches instead of waterfalling through nested imports. This
   is what closes most of the perceived gap vs a bundle. **The honest caveat:**
-  a bundle still wins on a DEEP vendor tree. webjs flattens the FIRST level
+  a bundle still wins on a DEEP vendor tree. WebJs flattens the FIRST level
   (the vendor entries your code imports are hinted up front, with their SRI
   `integrity`, byte-identical to the importmap target so there is no double
   fetch), but a vendor's OWN transitive deps are still discovered by parsing
@@ -650,7 +650,7 @@ sniff. A per-link `data-prefetch` always overrides the adaptive default.
 
 Per link, set `data-prefetch` (a valid-HTML `data-*` attribute, the shape
 SvelteKit and Astro use; Next / Nuxt / Remix use a component prop, which
-webjs has no equivalent for since links are plain `<a href>`):
+WebJs has no equivalent for since links are plain `<a href>`):
 
 ```html
 <a href="/dashboard">adaptive: intent on pointer, viewport on touch (default)</a>

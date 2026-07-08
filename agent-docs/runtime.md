@@ -1,6 +1,6 @@
 # Runtime: Node and Bun (and future Deno)
 
-webjs runs on **Node 24+** or **Bun**. The app source is identical on either; only
+WebJs runs on **Node 24+** or **Bun**. The app source is identical on either; only
 the listener shell, the type stripper, and a few built-ins differ. The selection
 is a runtime-neutral seam in `startServer` (it picks the `node:http` shell on
 Node and the `Bun.serve` shell on Bun), designed to also host a future

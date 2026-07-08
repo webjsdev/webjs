@@ -6,7 +6,7 @@ nested layouts (deeper wins). Surface is Next.js-compatible.
 
 ## Type it with `Metadata`
 
-webjs exports a `Metadata` type covering every field below, so a typo
+WebJs exports a `Metadata` type covering every field below, so a typo
 (`titel`, `descripton`), wrong nesting, or a wrong-typed value
 (`themeColor: 123`) is a tsserver / checkJs error instead of a silently
 dropped tag. Import it from `@webjsdev/core` (the same isomorphic surface

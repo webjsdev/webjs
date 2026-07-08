@@ -33,10 +33,10 @@ render(html`
 
 ## Why this exists
 
-webjs components register at runtime with `Class.register('tag')` (a plain
+WebJs components register at runtime with `Class.register('tag')` (a plain
 method call, no decorator, no `HTMLElementTagNameMap`), which a generic
 TypeScript setup cannot statically trace, so it offers no intelligence for
-webjs tags. This plugin scans the program for `Class.register('tag')` and
+WebJs tags. This plugin scans the program for `Class.register('tag')` and
 `customElements.define('tag', Class)` calls, builds a registry of each
 component's factory-declared reactive props (the `WebComponent({ ... })`
 shape), parses the markup inside `` html`` ``
@@ -86,7 +86,7 @@ gated: you can still navigate to a class even from a file that doesn't
 import it.
 
 There is deliberately **no** blanket "unknown tag / attribute" diagnostic:
-webjs has no element type map, so flagging an unrecognised tag/attribute
+WebJs has no element type map, so flagging an unrecognised tag/attribute
 would false-positive on legitimate third-party custom elements.
 
 ## What it recognises

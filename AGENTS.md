@@ -32,7 +32,7 @@ reference there.
 
 ## AI-driven development: guardrails for all agents
 
-**webjs is AI-first. These rules apply to ALL agents (Claude, Cursor, Copilot, Antigravity, Aider), enforced via per-agent config the scaffold ships** (`AGENTS.md` + `CONVENTIONS.md` + `CLAUDE.md`, `.claude/settings.json` hooks, `.cursorrules`, `.agents/rules/workflow.md`, `.github/copilot-instructions.md`, a PR template, `.editorconfig`), all carrying the same rules in each agent's format.
+**WebJs is AI-first. These rules apply to ALL agents (Claude, Cursor, Copilot, Antigravity, Aider), enforced via per-agent config the scaffold ships** (`AGENTS.md` + `CONVENTIONS.md` + `CLAUDE.md`, `.claude/settings.json` hooks, `.cursorrules`, `.agents/rules/workflow.md`, `.github/copilot-instructions.md`, a PR template, `.editorconfig`), all carrying the same rules in each agent's format.
 
 ### Before starting ANY work: verify and sync the branch
 
@@ -44,7 +44,7 @@ Claude Code enforces step 1 via `.claude/hooks/guard-branch-context.sh`. Other a
 
 ### One task per git worktree when agents run concurrently
 
-webjs is worked by MULTIPLE agents at once. If more than one agent (or more than one in-flight task) shares ONE working checkout, they collide: a `git checkout` in one moves `HEAD` under the other, so the next commit lands on the WRONG branch. This has happened (a `chore: release` commit landed on an unrelated `feat/` branch, with a contaminated changelog). So give each task its own worktree:
+WebJs is worked by MULTIPLE agents at once. If more than one agent (or more than one in-flight task) shares ONE working checkout, they collide: a `git checkout` in one moves `HEAD` under the other, so the next commit lands on the WRONG branch. This has happened (a `chore: release` commit landed on an unrelated `feat/` branch, with a contaminated changelog). So give each task its own worktree:
 
 ```sh
 git worktree add -b <prefix>/<slug> ../<repo>-<slug> origin/main
@@ -109,7 +109,7 @@ An **AI-first, web-components-first** framework inspired by NextJs, Lit, and Rai
 
 ## Execution model (read this to avoid the RSC mental model)
 
-webjs has **no server/client component split.** There is no RSC render tree, no Flight protocol, no "use client" / "use server" component boundary.
+WebJs has **no server/client component split.** There is no RSC render tree, no Flight protocol, no "use client" / "use server" component boundary.
 
 **Pages, layouts, and components are isomorphic modules** (same source both sides), but hydrate differently:
 

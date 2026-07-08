@@ -37,7 +37,7 @@ mechanisms keep it that way, and both are load-bearing:
 - **Intelligence** bundles `@webjsdev/intellisense`, which is standalone as
   of Phase 3 (#386): it has its own template parser and no `ts-lit-plugin`
   dependency, so the esbuilt bundle (`scripts/build.mjs`) is the whole
-  webjs language service with no Lit code at all.
+  WebJs language service with no Lit code at all.
 
 `test/extension.test.mjs` asserts no `ts-lit-plugin` / `lit-html` string
 appears in the manifest and that the built bundle neither requires nor

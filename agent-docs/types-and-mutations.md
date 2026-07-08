@@ -19,7 +19,7 @@ the server module and trips the `no-server-import-in-browser-module` check.
 
 ## Why a value import breaks and a type import does not
 
-webjs strips TypeScript at runtime with no bundler. The stripper erases every
+WebJs strips TypeScript at runtime with no bundler. The stripper erases every
 `import type` and every type-only specifier, so those imports never exist in the
 served JavaScript. A value import survives stripping and becomes a real browser
 `import`. When the target is a `.server.ts` module, its browser stub throws at

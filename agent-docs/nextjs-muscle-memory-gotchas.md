@@ -156,7 +156,7 @@ check deeper in), each middleware calling `next()` to continue.
 ## 10. Server-only code: the `.server.ts` boundary, not a `server-only` package
 
 Next uses the `server-only` package to poison a module imported client-side.
-webjs uses the file extension: `*.server.ts` is the path-level boundary (the file
+WebJs uses the file extension: `*.server.ts` is the path-level boundary (the file
 router refuses to serve the source). A `'use server'` file's exports are
 RPC-callable; a `.server.ts` file WITHOUT `'use server'` is a server-only utility
 whose browser import throws at load. Never import a no-`'use server'` `.server.ts`

@@ -6,7 +6,7 @@ Opinionated defaults: **set `REDIS_URL` and everything scales.**
 
 ## Caching (HTTP standards, Remix-style)
 
-webjs uses standard HTTP caching via `Cache-Control` on responses. Let
+WebJs uses standard HTTP caching via `Cache-Control` on responses. Let
 browsers, CDNs, and reverse proxies handle caching. No framework cache
 layer to debug.
 
@@ -301,7 +301,7 @@ Both are opt-in and types-only. See `agent-docs/typescript.md` and the auth reci
 
 ## File storage (`FileStore` + `diskStore`)
 
-webjs round-trips a native `File` / `Blob` / `FormData` over the wire, and the file-storage primitive decides WHERE the bytes land. The model mirrors the cache / session adapters: a documented `FileStore` interface, a default local-disk adapter (`diskStore`), and a module singleton (`setFileStore` / `getFileStore`) so an app swaps the backend in one call without touching any call site.
+WebJs round-trips a native `File` / `Blob` / `FormData` over the wire, and the file-storage primitive decides WHERE the bytes land. The model mirrors the cache / session adapters: a documented `FileStore` interface, a default local-disk adapter (`diskStore`), and a module singleton (`setFileStore` / `getFileStore`) so an app swaps the backend in one call without touching any call site.
 
 ```js
 import { getFileStore, generateKey, signedUrl, verifySignedUrl } from '@webjsdev/server';
@@ -360,7 +360,7 @@ The content-type a store records is the one the BROWSER sent at upload time, so 
 
 ### S3-pluggability (call-site stability)
 
-The interface operates on web-standard objects only, so an S3 / R2 / GCS / MinIO adapter is a drop-in: it implements the same `put` (PutObject, streaming the body), `get` (GetObject, returning the SDK's response stream as `body`), `delete` (DeleteObject), and `url` (the object / CDN URL). Because the shape is identical, `setFileStore(s3Store({ ... }))` switches the whole app with no call-site change. webjs ships no S3 SDK (no new dependency); the adapter is a thin wrapper an app provides.
+The interface operates on web-standard objects only, so an S3 / R2 / GCS / MinIO adapter is a drop-in: it implements the same `put` (PutObject, streaming the body), `get` (GetObject, returning the SDK's response stream as `body`), `delete` (DeleteObject), and `url` (the object / CDN URL). Because the shape is identical, `setFileStore(s3Store({ ... }))` switches the whole app with no call-site change. WebJs ships no S3 SDK (no new dependency); the adapter is a thin wrapper an app provides.
 
 See the "Receive and persist an uploaded file" recipe in `agent-docs/recipes.md` for the no-JS `<form>` upload + serving route end to end.
 

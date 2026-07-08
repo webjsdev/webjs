@@ -52,7 +52,7 @@ set. Run `webjs check` to confirm.
 If a third-party package ships `.ts` source using non-erasable
 syntax (rare; most npm packages publish compiled `.js`), the dev
 server fails at strip time and returns a 500 naming the file and
-pointing at the `no-non-erasable-typescript` lint rule. webjs is
+pointing at the `no-non-erasable-typescript` lint rule. WebJs is
 buildless end-to-end and has no bundler fallback. Your own code
 never hits this as long as `erasableSyntaxOnly` is set.
 
@@ -134,7 +134,7 @@ gone (matches React Server Actions).
 The class-instance / function caveat above is a silent runtime surprise: a
 method-valued field or a function argument typechecks fine but vanishes on the
 wire. The opt-in `SerializableActionFn` annotation turns it into a compile-time
-error. webjs actions stay plain `export async function`s (the framework rewrites
+error. WebJs actions stay plain `export async function`s (the framework rewrites
 the client import to an RPC stub at runtime, it does not wrap the authored
 function), so the guard is an OPTIONAL type annotation the author applies when
 they want it:
