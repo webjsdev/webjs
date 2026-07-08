@@ -33,7 +33,15 @@ export default {
   // Browser tests are `.js` (web-test-runner serves them through its own test
   // framework); the components + modules they import are `.ts`, served
   // transformed by the webjs middleware below.
-  files: ['test/**/browser/**/*.test.js'],
+  // Browser tests live under any `browser/` dir: the top-level `test/<feature>/
+  // browser/`, OR co-located next to the code they exercise (a component's
+  // `modules/<feature>/components/browser/`, the modules-architecture default).
+  files: [
+    'test/**/browser/**/*.test.js',
+    'app/**/browser/**/*.test.js',
+    'modules/**/browser/**/*.test.js',
+    'components/**/browser/**/*.test.js',
+  ],
   // webjs's importmap resolves `@webjsdev/core`, the `#` app aliases, and
   // vendors, so web-test-runner must NOT rewrite bare specifiers to
   // node_modules paths.

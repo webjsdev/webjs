@@ -381,10 +381,14 @@ db/
   dev.db                 SQLite file (gitignored); created when migrations apply (\`dev\`/\`start\` run \`webjs db migrate\`)
   migrations/            generated migration SQL (committed)
 drizzle.config.ts        drizzle-kit config (root; SQLite by default, --db postgres to switch)
-public/                  static assets, served at /public/*
+public/                  static assets at /public/* (favicon, sw.js, offline.html serve at root)
 test/<feature>/                feature-scoped tests, one folder per concern
   <name>.test.ts                node unit / integration test (node --test)
-  browser/<name>.test.js        real-browser test (web-test-runner)
+  browser/<name>.test.js        real-browser test (web-test-runner); may ALSO be
+                                co-located next to a component, e.g.
+                                modules/<feature>/components/browser/<name>.test.js
+                                (see the gallery counter-card test for the idioms:
+                                suite/test, ssrFixture, inline assert, no chai)
   e2e/<name>.test.ts            end-to-end test (full app boot, opt in via WEBJS_E2E=1)
   smoke/<name>.test.ts          fast post-deploy sanity check
 middleware.ts            root middleware (optional, outermost)

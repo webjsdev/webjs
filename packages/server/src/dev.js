@@ -1825,9 +1825,14 @@ async function handleCore(req, ctx) {
     return invokeAction(state.actionIndex, actMatch[1], actMatch[2], req, onActionError, allowedOrigins);
   }
 
-  // Static: /public/*
-  if (path.startsWith('/public/') || path === '/favicon.ico') {
-    const p = path === '/favicon.ico' ? '/public/favicon.ico' : path;
+  // Static: /public/*, plus a small set of ROOT assets that must serve at the
+  // site root even though they live under public/. A service worker registered
+  // at /sw.js scopes to the origin root, so it MUST serve at / (not
+  // /public/sw.js), and so must its offline fallback. Same remap shape as the
+  // /favicon.ico special-case below. (#830)
+  const ROOT_ASSETS = { '/sw.js': '/public/sw.js', '/offline.html': '/public/offline.html' };
+  if (path.startsWith('/public/') || path === '/favicon.ico' || path in ROOT_ASSETS) {
+    const p = path === '/favicon.ico' ? '/public/favicon.ico' : (ROOT_ASSETS[path] || path);
     const abs = join(appDir, p);
     // Containment check. `join` normalises `..` segments, so a path
     // like `/public/%2E%2E/secret/x.svg` decodes (after URL parsing,
@@ -1843,7 +1848,13 @@ async function handleCore(req, ctx) {
       return new Response(null, { status: 404 });
     }
     // A `?v=<hash>` public asset is content-addressed -> immutable (#243).
-    if (await exists(abs)) return fileResponse(abs, { dev, immutable: versioned });
+    if (await exists(abs)) {
+      const res = await fileResponse(abs, { dev, immutable: versioned });
+      // A worker served below its registration path only controls that subtree
+      // unless the response opts it up to the root scope. (#830)
+      if (path === '/sw.js') res.headers.set('Service-Worker-Allowed', '/');
+      return res;
+    }
   }
 
   // User source modules (served as ES modules, with action-file rewriting).

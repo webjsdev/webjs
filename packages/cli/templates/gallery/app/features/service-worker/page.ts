@@ -22,7 +22,8 @@ export default function ServiceWorkerExample() {
     <pre class="bg-card border border-border rounded-xl p-4 overflow-x-auto text-sm font-mono mb-4"><code>connectedCallback() {
   super.connectedCallback();
   if ('serviceWorker' in navigator) {
-    // Register at the site root so the worker's scope is the whole origin.
+    // The framework serves your public/sw.js at the site root /sw.js (with a
+    // Service-Worker-Allowed: / header), so the worker's scope is the whole origin.
     navigator.serviceWorker.register('/sw.js');
   }
 }</code></pre>

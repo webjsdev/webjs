@@ -156,7 +156,7 @@ sitemap.js robots.js manifest.js icon.js opengraph-image.js twitter-image.js app
 lib/                        app-wide code (lib/*.server.js infra, lib/utils/ browser-safe helpers)
 modules/<feature>/          feature-scoped: actions/ (mutations), queries/ (reads), components/, utils/, types.js
 components/*.js             SHARED presentational primitives
-public/*                    static assets, served at /<name>
+public/*                    static assets, served at /public/<name> (favicon, sw.js, offline.html serve at root)
 db/*.server.{js,ts}         data layer (Drizzle: schema, columns, connection)
 ```
 

@@ -401,14 +401,18 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // for relations v2. SQLite needs NO driver dependency: the connection
       // uses the built-in node:sqlite (Node) / bun:sqlite (Bun) via Drizzle's
       // node-sqlite / bun-sqlite adapters. Postgres still needs the pg driver.
-      'drizzle-orm': '^1.0.0-rc.3',
+      // Pinned EXACTLY (no caret): a caret on a prerelease still admits later
+      // rc.N of 1.0.0, and the relations-v2 query API the scaffold is written and
+      // tested against is rc.3 (#562). An exact pin keeps generated apps
+      // deterministic instead of silently drifting to a newer rc.
+      'drizzle-orm': '1.0.0-rc.3',
       ...(dialect === 'postgres' ? { pg: '^8.13.0' } : {}),
       '@webjsdev/cli': 'latest',
       '@webjsdev/core': 'latest',
       '@webjsdev/server': 'latest',
     },
     devDependencies: {
-      'drizzle-kit': '^1.0.0-rc.3',
+      'drizzle-kit': '1.0.0-rc.3',
       ...(dialect === 'postgres' ? { '@types/pg': '^8.11.0' } : {}),
       // The TypeScript compiler, for `npm run typecheck` (webjs typecheck runs
       // tsc --noEmit). Not needed at runtime (Node strips types in place), only
