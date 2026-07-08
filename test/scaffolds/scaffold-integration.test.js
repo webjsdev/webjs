@@ -112,6 +112,13 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     const pageSrc = readFileSync(join(appDir, 'app', 'page.ts'), 'utf8');
     assert.ok(layoutSrc.includes(marker), 'layout.ts must carry the scaffold-placeholder marker');
     assert.ok(pageSrc.includes(marker), 'page.ts must carry the scaffold-placeholder marker');
+    // The "Built with webjs" footer is scaffold branding. It ships guarded by
+    // its OWN placeholder marker so `webjs check` fails until the agent removes
+    // or replaces it (a delivered app must not keep the scaffold attribution).
+    // Two markers means removing only the top one still fails the check.
+    assert.ok(layoutSrc.includes('Built with'), 'layout ships the example footer branding');
+    assert.ok(layoutSrc.split(marker).length - 1 >= 2,
+      'layout.ts carries a second marker guarding the "Built with webjs" footer');
 
     // Drizzle db layer wired up
     assert.ok(existsSync(join(appDir, 'db', 'schema.server.ts')), 'db/schema.server.ts written');
@@ -155,6 +162,24 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
       preCommands.includes('.claude/hooks/require-tests-with-src.sh'),
       'settings.json wires the require-tests hook into PreToolUse',
     );
+
+    // Commit enforcement for Claude Code: CLAUDE.md overrides Claude Code's
+    // never-commit default, a Stop hook backstops end-of-turn, and a
+    // PostToolUse hook removes merged worktrees after `gh pr merge`.
+    const claudeMd = readFileSync(join(appDir, 'CLAUDE.md'), 'utf8');
+    assert.match(claudeMd, /OVERRIDES Claude Code/i,
+      'CLAUDE.md overrides Claude Code\'s never-commit default');
+    for (const h of ['commit-before-stop.sh', 'cleanup-merged-worktree.sh']) {
+      assert.ok(existsSync(join(appDir, '.claude/hooks', h)), `${h} is scaffolded`);
+    }
+    const stopCommands = (claudeSettings.hooks?.Stop ?? [])
+      .flatMap((g) => g.hooks.map((h) => h.command));
+    assert.ok(stopCommands.includes('.claude/hooks/commit-before-stop.sh'),
+      'settings.json wires commit-before-stop into Stop');
+    const postCommands = (claudeSettings.hooks?.PostToolUse ?? [])
+      .flatMap((g) => g.hooks.map((h) => h.command));
+    assert.ok(postCommands.includes('.claude/hooks/cleanup-merged-worktree.sh'),
+      'settings.json wires cleanup-merged-worktree into PostToolUse');
 
     // The local pre-commit hook is lightweight: it blocks commits to main
     // and nothing else. The test/convention gate runs in CI, not locally,

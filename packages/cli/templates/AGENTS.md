@@ -21,12 +21,21 @@ default `<main class="max-w-[760px]">` is a reading column for prose and
 forms, so for a full-bleed app, dashboard, or board, widen the cap or
 remove it (keep the theme tokens). A wide layout left in the 760px
 reading column overflows into a horizontal scrollbar. **Give the app a
-unique design.** When it has a UI, choose its palette, layout, typography,
-and chrome to fit what the user asked for, rather than mimicking the
-scaffold's example look (the warm accent, the reading column, the serif
-display, the example header/nav) or just recoloring the same layout. The
-`api` template has no UI, so this does not apply there. The design tokens
-and theme wiring are infrastructure to keep and restyle on top of. This is ENFORCED:
+unique design, and redesign means more than recolor.** When it has a UI,
+choose its palette, typography, LAYOUT, and chrome from what the app IS.
+Recoloring the scaffold and swapping the logo while keeping its skeleton (a
+fixed top header with a Home link and a theme toggle, the centered ~760px
+reading column, the "Built with webjs" footer) is NOT a unique design.
+Decide from scratch whether this app even needs a header or footer, what nav
+(if any), and what layout fits (a centered board, a full-bleed dashboard, a
+split, a single card). Before finishing, self-audit that nothing still reads
+as the scaffold example (no "Built with webjs" footer, no leftover example
+nav, no default reading column unless it truly fits). The `api` template has
+no UI, so this does not apply there. The design tokens and theme wiring are
+infrastructure to keep and restyle on top of. Style with Tailwind utilities
+wherever they reach, and use custom CSS only for what utilities cannot
+express (@theme tokens, @keyframes, scrollbar, complex color-mix or
+gradients). This is ENFORCED:
 the example `app/page.ts` and `app/layout.ts` carry a
 `webjs-scaffold-placeholder` marker comment, and `webjs check` fails
 while any marker remains, so this freshly scaffolded app fails the check
@@ -1404,8 +1413,10 @@ composition, so a nested shell ends up dropped by the HTML parser.
 3. Commit and push **per logical unit**, not at the end. A logical unit is one
    feature, one fix, one rename, one doc rewrite. If you have 5+ unstaged files
    spanning different concerns, commit the current group before continuing.
-   The framework ships a `nudge-uncommitted` hook for several agents that
-   fires at threshold 4:
+   For Claude Code, its `CLAUDE.md` explicitly OVERRIDES Claude Code's built-in
+   never-commit default, so it commits per unit without waiting to be asked. The
+   framework also ships a `nudge-uncommitted` hook for several agents that fires
+   at threshold 4:
 
    | Agent | Hook path | Doc |
    |---|---|---|
@@ -1415,6 +1426,12 @@ composition, so a nested shell ends up dropped by the HTML parser.
    | OpenCode | `.opencode/plugins/nudge-uncommitted.ts` (`tool.execute.after`) | `.opencode/plugins/` |
    | Antigravity (Google) | text rule only (post-write hooks not yet exposed) | `.agents/rules/workflow.md` |
    | GitHub Copilot | text rule only (no hooks API) | `.github/copilot-instructions.md` |
+
+   Claude Code adds two more backstops of its own. A `commit-before-stop.sh`
+   Stop hook refuses to end a turn with a pile of uncommitted work on a feature
+   branch (loop-safe, disable with `WEBJS_NO_COMMIT_STOP=1`), and a
+   `cleanup-merged-worktree.sh` PostToolUse hook removes a merged branch's
+   worktree after a `gh pr merge`.
 
    The `.hooks/pre-commit` hook blocks commits to main and nothing else;
    `webjs test` + `webjs check` run in CI (`.github/workflows/ci.yml`) on

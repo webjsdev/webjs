@@ -528,6 +528,8 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     '.claude/hooks/block-prose-punctuation.sh',
     '.claude/hooks/guard-branch-context.sh',
     '.claude/hooks/nudge-uncommitted.sh',
+    '.claude/hooks/commit-before-stop.sh',
+    '.claude/hooks/cleanup-merged-worktree.sh',
     '.claude/hooks/require-tests-with-src.sh',
     '.claude/hooks/check-server-imports.sh',
     '.claude/hooks/check-server-imports.mjs',
@@ -603,7 +605,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
 
   // Make hook scripts executable
   const { chmod } = await import('node:fs/promises');
-  for (const hook of ['block-prose-punctuation.sh', 'guard-branch-context.sh', 'nudge-uncommitted.sh', 'require-tests-with-src.sh']) {
+  for (const hook of ['block-prose-punctuation.sh', 'guard-branch-context.sh', 'nudge-uncommitted.sh', 'commit-before-stop.sh', 'cleanup-merged-worktree.sh', 'require-tests-with-src.sh']) {
     const hookPath = join(appDir, '.claude', 'hooks', hook);
     if (existsSync(hookPath)) await chmod(hookPath, 0o755);
   }
@@ -1274,8 +1276,10 @@ ${UI_THEME}
       <main class="flex-1 w-full max-w-[760px] mx-auto px-4 sm:px-6 pt-[72px] pb-12">
         \${children}
       </main>
-      <!-- "Built with webjs" attribution. Keep it or replace it with your own
-           footer; the gradient mark uses the --logo-from/--logo-to tokens. -->
+      <!-- webjs-scaffold-placeholder. This "Built with webjs" footer is SCAFFOLD
+           branding, not your app's. REMOVE it, or replace it with your own
+           footer, before shipping a delivered app. Delete this line once done.
+           webjs check fails while the marker remains. -->
       <footer class="border-t border-border">
         <div class="max-w-[760px] mx-auto px-4 sm:px-6 py-6 flex items-center justify-center">
           <a href="https://webjs.dev" class="inline-flex items-center gap-2 no-underline text-sm text-muted-foreground hover:text-foreground transition-colors">

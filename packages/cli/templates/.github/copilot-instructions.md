@@ -46,13 +46,23 @@ the full hosted docs are at **https://docs.webjs.dev**.
   layout, route, middleware, metadata routes). CSS, helpers, and constants
   do NOT: `globals.css` is at `styles/`, browser-safe helpers at
   `lib/utils/`, feature logic in `modules/`.
-- **Use a unique design (UI apps).** When the app has a UI, give it a
-  design of your own (palette, layout, typography, chrome) that fits what
-  the user asked for. Do NOT mimic the scaffold's example look (its warm
-  colors, the 760px reading column, the example header/nav). The `api`
-  template has no UI, so this does not apply there. Keep the design tokens
-  and theme setup in `app/layout.ts`, those are infrastructure, and
-  restyle on top of them.
+- **Use a unique design, and redesign means more than recolor (UI apps).** Give
+  the app a design of its own (palette, typography, LAYOUT, and chrome) chosen
+  from what the app IS. Recoloring the scaffold and swapping the logo while
+  keeping its skeleton (a fixed top header with a Home link and a theme toggle,
+  the centered ~760px reading column, the "Built with webjs" footer) is NOT a
+  unique design. Decide from scratch whether this app even needs a header or
+  footer, what nav (if any), and what layout fits (a centered board, a
+  full-bleed dashboard, a split, a single card). The scaffold ships a
+  `webjs-scaffold-placeholder` marker on its footer, so `webjs check` fails until
+  you remove or replace the "Built with webjs" branding. Self-audit before
+  finishing: nothing should read as the scaffold example (no "Built with webjs"
+  footer, no leftover example nav, no default reading column unless it truly
+  fits). Keep only the design TOKENS and theme wiring in `app/layout.ts`
+  (infrastructure the ui kit reads) and restyle on top. Style with Tailwind
+  utilities wherever they reach, and use custom CSS only for what utilities
+  cannot express (@theme tokens, @keyframes, scrollbar, complex color-mix or
+  gradients). The `api` template has no UI, so this does not apply there.
 - **Only three templates exist:** `webjs create <name>` (default
   full-stack), `--template api`, `--template saas`. The CLI rejects any
   other `--template` value. Pick:
