@@ -28,6 +28,12 @@ This repo uses git worktrees (the review subagents spawn throwaway ones under `.
 
 Because the pin lives in the main worktree's `config.worktree`, `git worktree add` copies it into each linked worktree, so a commit made inside a throwaway review worktree also runs the framework `.hooks/pre-commit`. That is harmless (the hook only blocks main and auto-generates a changelog on a version bump), and review subagents are read-only so they do not commit; the inheritance is noted here only so the behavior is not surprising.
 
+### Merged worktrees are auto-removed (`cleanup-merged-worktree.sh`)
+
+Per-task worktrees pile up when a session merges its PR but never runs `git worktree remove` (a skipped step, or a crash mid-task). The `.claude/hooks/cleanup-merged-worktree.sh` PostToolUse hook (matcher `Bash`, wired in `.claude/settings.json`) closes that gap: after any `gh pr merge`, it sweeps every linked worktree and removes the ones that are safe to drop, so cleanup is deterministic rather than a thing an agent has to remember.
+
+It is conservative. A worktree is removed ONLY when it is a linked (non-primary) checkout, on a non-`main`/`master` branch, whose branch is MERGED (an ancestor of `origin/main`, OR a merged GitHub PR for that head branch, which is how squash-merges are detected via `gh`) AND whose working tree is clean apart from untracked `node_modules` / `.webjs`. It KEEPS anything dirty, unmerged, the primary checkout, or the worktree the merge was run from (you cannot remove your current directory; `cd` out and remove it manually), reporting each kept/removed worktree back to the model via `hookSpecificOutput`. It never blocks the tool (always exits 0). Escape hatch: `WEBJS_NO_WORKTREE_CLEANUP=1`. Regression test: `test/hooks/cleanup-merged-worktree.test.mjs`.
+
 The fix only repairs the LOCAL checkout. Commits and branches are always safe on GitHub regardless.
 
 ---
