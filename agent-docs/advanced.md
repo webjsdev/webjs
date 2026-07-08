@@ -1246,7 +1246,7 @@ prod. A truncated stream (a server crash, a dropped connection) also throws
 rather than completing silently: a healthy stream always ends in an explicit
 terminal frame, so a missing one is an error. For a slow region you want behind a fallback on the FIRST paint, use
 `<webjs-suspense>` instead; streaming RPC is for an imperative stream consumed
-after an interaction. Full reference: the [Data fetching](https://docs.webjs.com/docs/data-fetching) page.
+after an interaction. Full reference: the [Data fetching](https://docs.webjs.dev/docs/data-fetching) page.
 
 ### Opt out per link
 

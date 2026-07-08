@@ -135,6 +135,28 @@ async function copyUiComponents(appDir, names) {
 }
 
 /**
+ * Copy the example gallery (idiomatic, densely-commented working examples) into
+ * the scaffolded app. Merges `templates/gallery/{app,modules}` over the app so
+ * single-feature demos land under `app/features/<name>/`, whole example apps
+ * under `app/examples/<name>/`, and their logic under `modules/<name>/`, the
+ * app-thin + modules-logic split webjs prescribes.
+ *
+ * Ships verbatim (no `{{APP_NAME}}` substitution): the examples are self-
+ * contained and reference only `@webjsdev/*`, drizzle, `#db/*`, and each other.
+ * The scaffold's own `app/page.ts` / `app/layout.ts` are written AFTER this and
+ * the gallery ships neither, so there is no clobber. `cp` merges into existing
+ * `app/` and `modules/` dirs rather than replacing them.
+ *
+ * @param {string} appDir
+ */
+async function copyGallery(appDir) {
+  const galleryDir = join(TEMPLATES, 'gallery');
+  for (const sub of ['app', 'modules']) {
+    await cp(join(galleryDir, sub), join(appDir, sub), { recursive: true });
+  }
+}
+
+/**
  * Write `lib/utils/cn.ts` (the `cn()` helper) and `components.json` so the
  * scaffolded app is pre-initialised for `webjs ui add`. Reads the registry's
  * `lib/utils.ts` verbatim and writes it under `lib/utils/cn.ts` in the
@@ -165,11 +187,13 @@ async function writeUiBootstrap(appDir) {
   // 2) components.json: the same shape `webjsui init` writes for webjs
   // projects (see packages/ui/src/utils/detect-project.js). The utils alias
   // is lib/utils/cn so get-config.js's `+ '.ts'` resolves to lib/utils/cn.ts.
+  // The theme CSS lives at styles/globals.css, NOT app/globals.css: app/ is
+  // routing-only, so a non-routing stylesheet does not belong there.
   const componentsJson = {
     $schema: 'https://ui.webjs.dev/schema.json',
     style: 'default',
     tailwind: {
-      css: 'app/globals.css',
+      css: 'styles/globals.css',
       baseColor: 'neutral',
       cssVariables: true,
     },
@@ -186,17 +210,20 @@ async function writeUiBootstrap(appDir) {
     JSON.stringify(componentsJson, null, 2) + '\n',
   );
 
-  // 3) app/globals.css: copy the neutral theme verbatim. components.json
-  // references this path, and future `webjs ui add` calls append to it.
+  // 3) styles/globals.css: copy the neutral theme verbatim. components.json
+  // references this path, and future `webjs ui add` calls append to it. It
+  // lives OUTSIDE app/ because app/ is routing-only; the layout inlines the
+  // same tokens into a <style type="text/tailwindcss"> block so the browser
+  // Tailwind runtime resolves them with no build step.
   const css = await readFile(
     join(UI_REGISTRY_ROOT, 'themes', 'index.css'), 'utf8',
   );
-  await mkdir(join(appDir, 'app'), { recursive: true });
-  await writeFile(join(appDir, 'app', 'globals.css'), css);
+  await mkdir(join(appDir, 'styles'), { recursive: true });
+  await writeFile(join(appDir, 'styles', 'globals.css'), css);
 }
 
 /**
- * Read the shadcn theme CSS so we can inline it into the layout's
+ * Read the @webjsdev/ui theme CSS so we can inline it into the layout's
  * `<style type="text/tailwindcss">` block. The Tailwind browser runtime
  * picks up inline `<style type="text/tailwindcss">` content, so the theme
  * tokens (`--color-primary`, `--color-card`, …) the registry components
@@ -211,7 +238,7 @@ async function readThemeCss() {
 
 /**
  * Fail loudly when the @webjsdev/ui registry is not on disk. The scaffold
- * reads component sources, the cn() helper, and the shadcn theme from
+ * reads component sources, the cn() helper, and the @webjsdev/ui theme from
  * UI_REGISTRY_ROOT and weaves them into a generated app/page.ts that
  * imports `components/ui/button.ts`. If the registry is missing, the
  * generated app boots to ERR_MODULE_NOT_FOUND on first request, which is
@@ -247,6 +274,11 @@ function assertUiRegistryAvailable() {
  */
 export async function scaffoldApp(name, cwd, opts = {}) {
   const template = opts.template || 'full-stack';
+  // A human-friendly display title for the example home page. The npm `name`
+  // stays the raw slug (lowercase, hyphenated), but showing a hyphenated slug as
+  // a hero title looks unpolished, so title-case it for display ("my-app" ->
+  // "My App"). Replace this with your real brand anyway.
+  const displayName = name.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   // `install` is opt-in at the library level (so tests + programmatic
   // callers get a side-effect-free scaffold by default). The CLI entry
   // points (`webjs create` and `npx create-webjs-app`) explicitly set
@@ -262,6 +294,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   }
   const isApi = template === 'api';
   const isSaas = template === 'saas';
+  // The example gallery ships in the DEFAULT full-stack scaffold only: api has no
+  // UI, and saas overwrites db/schema.server.ts (users-only, so the gallery's
+  // todos table would vanish) and already carries its own idiomatic auth example.
+  const isFullStack = !isApi && !isSaas;
 
   // Database dialect (#563): sqlite (default) or postgres. Drizzle is the ORM;
   // the schema/queries/actions are identical across dialects, only db/columns
@@ -392,9 +428,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // tsserver plugin can't provide); tsserver dedupes by name, so loading
       // it both ways is a no-op. Standalone, no Lit dependency. Editor-only.
       '@webjsdev/intellisense': 'latest',
-      // NOTE: @webjsdev/ui is intentionally NOT pinned. The UI kit is
-      // shadcn-style copy-in: `webjs ui add <name>` copies component source
-      // into components/ui/ (they import @webjsdev/core, not the kit), and the
+      // NOTE: @webjsdev/ui is intentionally NOT pinned. The UI kit uses a
+      // copy-in model (shadcn-compatible conventions): `webjs ui add <name>`
+      // copies component source into components/ui/ (they import
+      // @webjsdev/core, not the kit), and the
       // CLI resolves @webjsdev/ui from its own install.
     },
     // Dev + start task orchestration (#550). `webjs dev` / `webjs start` read
@@ -635,7 +672,7 @@ export const index = (...cols: PgColumn[]) =>
 
   // Example schema (dialect-agnostic). Replace the User model with your own.
   await writeFile(join(appDir, 'db', 'schema.server.ts'), `import { defineRelations } from 'drizzle-orm';
-import { table, pk, text, createdAt } from './columns.server.ts';
+import { table, pk, ${isFullStack ? 'uuidPk, ' : ''}text, ${isFullStack ? 'bool, ' : ''}createdAt } from './columns.server.ts';
 
 // Example model. Feel free to delete or extend.
 export const users = table('users', {
@@ -644,10 +681,19 @@ export const users = table('users', {
   name: text(),
   createdAt: createdAt(),
 });
-
+${isFullStack ? `
+// Backs the example-gallery /examples/todo route (modules/todo). Delete it with
+// the gallery when you prune the examples you do not use.
+export const todos = table('todos', {
+  id: uuidPk(),
+  title: text().notNull(),
+  completed: bool().notNull().default(false),
+  createdAt: createdAt(),
+});
+` : ''}
 // Relations live here (one defineRelations for the whole schema). Empty
 // for now; add per-model relations as your schema grows.
-export const relations = defineRelations({ users }, () => ({}));
+export const relations = defineRelations({ users${isFullStack ? ', todos' : ''} }, () => ({}));
 
 // Derived types, never hand-written.
 export type User = typeof users.$inferSelect;
@@ -797,6 +843,28 @@ export default cors({
   return Response.json({ status: 'ok', timestamp: Date.now() });
 }
 `);
+    // Root API index. The api template has no UI, so \`/\` is a route handler,
+    // not a page: it lists the available endpoints instead of returning a bare
+    // 404 (friendlier than an empty root for an API-only app).
+    await writeFile(join(appDir, 'app', 'route.ts'), `export async function GET(request: Request) {
+  const base = new URL(request.url).origin;
+  return Response.json({
+    name: '${name}',
+    endpoints: {
+      health: \`\${base}/api/health\`,
+      users: \`\${base}/api/users\`,
+    },
+    // The backend-features showcase (delete app/api/features + its modules to prune).
+    features: {
+      validate: \`\${base}/api/features/validate\`,
+      'rate-limit': \`\${base}/api/features/rate-limit\`,
+      stream: \`\${base}/api/features/stream\`,
+      files: \`\${base}/api/features/files\`,
+      ws: \`\${base.replace(/^http/, 'ws')}/api/features/ws\`,
+    },
+  });
+}
+`);
     await mkdir(join(appDir, 'modules', 'users', 'actions'), { recursive: true });
     await mkdir(join(appDir, 'modules', 'users', 'queries'), { recursive: true });
 
@@ -878,6 +946,13 @@ export type ActionResult<T> =
   | { success: true; data: T }
   | { success: false; error: string; status: number };
 `);
+
+    // The api backend-features showcase: endpoints under app/api/features/**
+    // demonstrating the server-side surface (route() adapter + validation, rate
+    // limiting, streaming, file storage, WebSockets + broadcast) plus env
+    // validation. The api counterpart of the UI gallery. Prune what you skip.
+    const { writeApiGallery } = await import('./api-gallery.js');
+    await writeApiGallery(appDir);
   }
 
   if (!isApi) {
@@ -918,7 +993,7 @@ export type ActionResult<T> =
 
     // Pre-initialise @webjsdev/ui so the scaffold boots ready for
     // `webjs ui add <name>`: writes components.json + lib/utils/cn.ts +
-    // app/globals.css (the shadcn theme).
+    // styles/globals.css (the @webjsdev/ui theme).
     await writeUiBootstrap(appDir);
 
     // Copy the standard ui-* component kit the scaffold's example pages
@@ -928,13 +1003,21 @@ export type ActionResult<T> =
       'button', 'card', 'alert', 'badge', 'separator', 'label', 'input',
     ]);
 
-    // The shadcn theme tokens (`--color-primary`, `--color-card`, …) the
+    // The gallery: idiomatic, densely-commented single-feature demos under
+    // app/features/ plus one whole example app under app/examples/, with logic
+    // in modules/, linked from the home page. Shipped in the default full-stack
+    // scaffold so an agent gains context by browsing real code; prune
+    // per-feature (delete the route + its module) for what the app does not
+    // use. See CONVENTIONS.md "prune what the app does not use".
+    if (!isApi) await copyGallery(appDir);
+
+    // The @webjsdev/ui theme tokens (`--color-primary`, `--color-card`, …) the
     // ui-* components consume. We read the registry's themes/index.css at
     // create time and inline it into the layout's
     // `<style type="text/tailwindcss">` block so the Tailwind browser
-    // runtime picks it up. Same content also lives at app/globals.css for
+    // runtime picks it up. Same content also lives at styles/globals.css for
     // `webjsui` tooling.
-    const SHADCN_THEME = (await readThemeCss())
+    const UI_THEME = (await readThemeCss())
       // Escape backticks + ${} so the CSS survives interpolation into the
       // layout's template literal below.
       .replace(/\\/g, '\\\\')
@@ -961,7 +1044,7 @@ import '#components/theme-toggle.ts';
  *
  * Light DOM + Tailwind by default. Design tokens live in :root and are
  * mapped into the Tailwind palette via @theme, so classes like
- * text-fg, bg-bg-elev, font-serif, duration-fast, text-display all work.
+ * text-foreground, bg-card, font-serif, duration-fast, text-display all work.
  *
  * Nav + footer links repeat the same class bundle, so they're extracted
  * into small JS helpers below. Each helper runs at SSR time inside
@@ -969,7 +1052,7 @@ import '#components/theme-toggle.ts';
  */
 
 const navLink = (href: string, label: string) => html\`
-  <a href=\${href} class="text-fg-muted no-underline font-medium text-[13px] leading-none tracking-[0.005em] transition-colors duration-fast hover:text-fg">\${label}</a>
+  <a href=\${href} class="text-muted-foreground no-underline font-medium text-[13px] leading-none tracking-[0.005em] transition-colors duration-fast hover:text-foreground">\${label}</a>
 \`;
 
 export default function RootLayout({ children }: { children: unknown }) {
@@ -989,7 +1072,7 @@ export default function RootLayout({ children }: { children: unknown }) {
             var el = document.documentElement;
             if (t === 'light' || t === 'dark') el.dataset.theme = t;
             else delete el.dataset.theme;
-            // Keep shadcn's .dark class in sync with the effective theme so the
+            // Keep the .dark class the @webjsdev/ui kit uses in sync with the effective theme so the
             // copied ui-* components (button, card, etc.) follow light/dark too.
             // Dark is the default unless the OS prefers light or 'light' is set.
             var dark = t === 'dark' || (t !== 'light' && !mq.matches);
@@ -1024,27 +1107,124 @@ export default function RootLayout({ children }: { children: unknown }) {
     <!--
       Webjs UI theme. Design tokens (--color-primary,
       --color-card, --radius, etc.) the ui-* components consume.
-      The same content is also at app/globals.css; we inline it here so
+      The same content is also at styles/globals.css. We inline it here so
       the Tailwind browser runtime resolves the tokens without a build step.
       Edit base palette via the :root / .dark blocks below.
     -->
     <style type="text/tailwindcss">
-${SHADCN_THEME}
+${UI_THEME}
     </style>
     <style type="text/tailwindcss">
-      @theme {
-        --color-fg:            var(--fg);
-        --color-fg-muted:      var(--fg-muted);
-        --color-fg-subtle:     var(--fg-subtle);
-        --color-bg:            var(--bg);
-        --color-bg-elev:       var(--bg-elev);
-        --color-bg-subtle:     var(--bg-subtle);
-        --color-border:        var(--border);
+      /* ONE theme, canonical shadcn-style tokens. The @webjsdev/ui theme above
+         provides the token STRUCTURE and the @theme inline mappings that generate
+         bg-background, text-foreground, bg-card, bg-primary, bg-accent,
+         text-muted-foreground, border-border, ring-ring, and the rest. Here we
+         set those tokens' VALUES to this app's brand palette, so the ui-*
+         components AND the example chrome read ONE source of truth. Any component
+         added later with webjs ui add <name> inherits it automatically. This
+         block is emitted after the ui theme, so these values win on every Tailwind
+         recompile. Dark-first, with light via the theme toggle (data-theme) or the
+         OS. Follows the shadcn model: --primary is the BRAND color (orange, used
+         for primary buttons, links, and emphasis), while --accent stays a NEUTRAL
+         hover tint so the ui kit's outline/ghost/dropdown hover states keep proper
+         contrast. Use bg-primary / text-primary for brand, bg-accent for hovers.
+         Add a new design token the canonical way, a --x variable below plus a
+         --color-x: var(--x) line in the @theme inline block, then use it as bg-x /
+         text-x. Reach for opacity modifiers
+         (bg-primary/10, hover:bg-primary/90, text-muted-foreground/70) before
+         inventing a new token. */
+      :root {
+        --font-sans:  -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: ui-serif, 'Iowan Old Style', Palatino, Georgia, serif;
+        --font-mono:  ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        --header-h: 56px;
+        /* A translucent brand tint, derived from --primary so it tracks
+           light/dark automatically. Used for the logo glow and focus ring. */
+        --primary-tint: color-mix(in oklch, var(--primary) 20%, transparent);
+      }
+      /* dark (the default, and the explicit .dark the toggle sets) */
+      :root, .dark {
+        color-scheme: dark;
+        --background: oklch(0.14 0.01 55);
+        --foreground: oklch(0.96 0.015 60);
+        --card: oklch(0.18 0.01 55);
+        --card-foreground: oklch(0.96 0.015 60);
+        --popover: oklch(0.18 0.01 55);
+        --popover-foreground: oklch(0.96 0.015 60);
+        /* --primary is the orange BRAND color (shadcn model: primary = brand). */
+        --primary: oklch(0.7 0.16 52);
+        --primary-foreground: oklch(0.17 0.02 52);
+        --secondary: oklch(0.22 0.01 55);
+        --secondary-foreground: oklch(0.96 0.015 60);
+        --muted: oklch(0.16 0.01 55);
+        --muted-foreground: oklch(0.72 0.02 60);
+        /* --accent stays a NEUTRAL hover tint (shadcn model), so the ui kit's
+           outline/ghost/dropdown hover states keep proper contrast. */
+        --accent: oklch(0.27 0.008 55);
+        --accent-foreground: oklch(0.96 0.015 60);
+        --border: oklch(0.26 0.012 55 / 0.9);
+        --border-strong: oklch(0.38 0.012 55 / 0.9);
+        --input: oklch(0.26 0.012 55 / 0.9);
+        --ring: oklch(0.7 0.16 52);
+        --logo-from: oklch(0.8 0.16 58);
+        --logo-to: oklch(0.62 0.18 44);
+      }
+      /* light (explicit via the toggle) */
+      :root[data-theme='light'] {
+        color-scheme: light;
+        --background: oklch(0.985 0.008 80);
+        --foreground: oklch(0.18 0.015 60);
+        --card: oklch(1 0 0);
+        --card-foreground: oklch(0.18 0.015 60);
+        --popover: oklch(1 0 0);
+        --popover-foreground: oklch(0.18 0.015 60);
+        --primary: oklch(0.54 0.16 52);
+        --primary-foreground: oklch(1 0 0);
+        --secondary: oklch(0.96 0.008 80);
+        --secondary-foreground: oklch(0.18 0.015 60);
+        --muted: oklch(0.96 0.008 80);
+        --muted-foreground: oklch(0.42 0.02 65);
+        --accent: oklch(0.955 0.006 80);
+        --accent-foreground: oklch(0.18 0.015 60);
+        --border: oklch(0.88 0.01 75 / 0.95);
+        --border-strong: oklch(0.78 0.01 75 / 0.95);
+        --input: oklch(0.88 0.01 75 / 0.95);
+        --ring: oklch(0.54 0.16 52);
+        --logo-from: oklch(0.63 0.17 50);
+        --logo-to: oklch(0.44 0.11 52);
+      }
+      /* light (OS preference, when the user has made no explicit choice) */
+      @media (prefers-color-scheme: light) {
+        :root:not(.dark):not([data-theme='dark']) {
+          color-scheme: light;
+          --background: oklch(0.985 0.008 80);
+          --foreground: oklch(0.18 0.015 60);
+          --card: oklch(1 0 0);
+          --card-foreground: oklch(0.18 0.015 60);
+          --popover: oklch(1 0 0);
+          --popover-foreground: oklch(0.18 0.015 60);
+          --primary: oklch(0.54 0.16 52);
+          --primary-foreground: oklch(1 0 0);
+          --secondary: oklch(0.96 0.008 80);
+          --secondary-foreground: oklch(0.18 0.015 60);
+          --muted: oklch(0.96 0.008 80);
+          --muted-foreground: oklch(0.42 0.02 65);
+          --accent: oklch(0.955 0.006 80);
+          --accent-foreground: oklch(0.18 0.015 60);
+          --border: oklch(0.88 0.01 75 / 0.95);
+          --border-strong: oklch(0.78 0.01 75 / 0.95);
+          --input: oklch(0.88 0.01 75 / 0.95);
+          --ring: oklch(0.54 0.16 52);
+          --logo-from: oklch(0.63 0.17 50);
+          --logo-to: oklch(0.44 0.11 52);
+        }
+      }
+      @theme inline {
+        /* Only tokens the @webjsdev/ui theme does not already map live here. It
+           already maps --color-background/foreground/card/primary/secondary/
+           muted/accent/border/input/ring/destructive. */
         --color-border-strong: var(--border-strong);
-        --color-accent:        var(--accent);
-        --color-accent-hover:  var(--accent-hover);
-        --color-accent-fg:     var(--accent-fg);
-        --color-accent-tint:   var(--accent-tint);
+        --color-primary-tint: var(--primary-tint);
         --font-sans:  var(--font-sans);
         --font-serif: var(--font-serif);
         --font-mono:  var(--font-mono);
@@ -1057,71 +1237,21 @@ ${SHADCN_THEME}
       }
     </style>
     <style>
-      :root {
-        color-scheme: light dark;
-        /* ---------- dark (default) ---------- */
-        --fg:            oklch(0.96 0.015 60);
-        --fg-muted:      oklch(0.72 0.02 60);
-        --fg-subtle:     oklch(0.55 0.02 60);
-        --bg:            oklch(0.14 0.01 55);
-        --bg-elev:       oklch(0.18 0.01 55);
-        --bg-subtle:     oklch(0.16 0.01 55);
-        --border:        oklch(0.26 0.012 55 / 0.9);
-        --border-strong: oklch(0.38 0.012 55 / 0.9);
-        --accent:        oklch(0.78 0.14 55);
-        --accent-hover:  oklch(0.85 0.14 55);
-        --accent-fg:     oklch(0.15 0.01 55);
-        --accent-tint:   oklch(0.78 0.14 55 / 0.14);
-        --font-sans:   -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        --font-serif:  ui-serif, 'Iowan Old Style', Palatino, Georgia, serif;
-        --font-mono:   ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      }
-      :root[data-theme='light'] {
-        --fg:            oklch(0.18 0.015 60);
-        --fg-muted:      oklch(0.42 0.02 65);
-        --fg-subtle:     oklch(0.62 0.015 70);
-        --bg:            oklch(0.985 0.008 80);
-        --bg-elev:       oklch(1 0 0);
-        --bg-subtle:     oklch(0.96 0.008 80);
-        --border:        oklch(0.88 0.01 75 / 0.95);
-        --border-strong: oklch(0.78 0.01 75 / 0.95);
-        --accent:        oklch(0.58 0.15 55);
-        --accent-hover:  oklch(0.5 0.15 55);
-        --accent-fg:     oklch(1 0 0);
-        --accent-tint:   oklch(0.58 0.15 55 / 0.1);
-      }
-      @media (prefers-color-scheme: light) {
-        :root:not([data-theme='dark']) {
-          --fg:            oklch(0.18 0.015 60);
-          --fg-muted:      oklch(0.42 0.02 65);
-          --fg-subtle:     oklch(0.62 0.015 70);
-          --bg:            oklch(0.985 0.008 80);
-          --bg-elev:       oklch(1 0 0);
-          --bg-subtle:     oklch(0.96 0.008 80);
-          --border:        oklch(0.88 0.01 75 / 0.95);
-          --border-strong: oklch(0.78 0.01 75 / 0.95);
-          --accent:        oklch(0.58 0.15 55);
-          --accent-hover:  oklch(0.5 0.15 55);
-          --accent-fg:     oklch(1 0 0);
-          --accent-tint:   oklch(0.58 0.15 55 / 0.1);
-        }
-      }
-      /* Body + pseudo-elements utility classes can't reach. */
+      /* Base styles utility classes can't reach. */
       html, body { margin: 0; }
-      :root { --header-h: 56px; } /* fixed-header offset, kept exact by the script above */
       body {
         padding-top: var(--header-h);
-        background: var(--bg);
-        color: var(--fg);
+        background: var(--background);
+        color: var(--foreground);
         font: 16px/1.65 var(--font-sans);
         -webkit-font-smoothing: antialiased;
       }
-      ::selection { background: var(--accent-tint); color: var(--fg); }
+      ::selection { background: color-mix(in oklch, var(--primary) 22%, transparent); color: var(--foreground); }
     </style>
 
-    <header class="fixed inset-x-0 top-0 z-20 flex items-center gap-6 px-4 sm:px-6 py-3 border-b border-border bg-[color-mix(in_oklch,var(--bg)_75%,transparent)] backdrop-blur-[18px]">
-      <a href="/" class="mr-auto inline-flex items-center gap-2 no-underline text-fg font-semibold text-[15px] leading-none tracking-tight">
-        <span>${name}</span>
+    <header class="fixed inset-x-0 top-0 z-20 flex items-center gap-6 px-4 sm:px-6 py-3 border-b border-border bg-[color-mix(in_oklch,var(--background)_75%,transparent)] backdrop-blur-[18px]">
+      <a href="/" class="mr-auto inline-flex items-center gap-2 no-underline text-foreground font-semibold text-[15px] leading-none tracking-tight">
+        <span>${displayName}</span>
       </a>
       <nav class="flex gap-4 items-center">
         <!-- Example nav. Replace with the real navigation for your app. -->
@@ -1137,13 +1267,30 @@ ${SHADCN_THEME}
       drop the cap and mx-auto for an edge-to-edge layout. A wide layout left
       inside the 760px reading column overflows into a horizontal scrollbar.
     -->
-    <main class="block max-w-[760px] mx-auto px-4 sm:px-6 pt-[72px] pb-12 min-h-screen">
-      \${children}
-    </main>
+    <div class="flex flex-col min-h-[calc(100dvh-var(--header-h))]">
+      <main class="flex-1 w-full max-w-[760px] mx-auto px-4 sm:px-6 pt-[72px] pb-12">
+        \${children}
+      </main>
+      <!-- "Built with webjs" attribution. Keep it or replace it with your own
+           footer; the gradient mark uses the --logo-from/--logo-to tokens. -->
+      <footer class="border-t border-border">
+        <div class="max-w-[760px] mx-auto px-4 sm:px-6 py-6 flex items-center justify-center">
+          <a href="https://webjs.dev" class="inline-flex items-center gap-2 no-underline text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <span>Built with</span>
+            <span class="w-[18px] h-[18px] rounded-[6px] bg-gradient-to-br from-[var(--logo-from)] to-[var(--logo-to)] shadow-[0_2px_10px_var(--primary-tint)]"></span>
+            <span class="font-semibold text-foreground">webjs</span>
+          </a>
+        </div>
+      </footer>
+    </div>
   \`;
 }
 `);
 
+  // The gallery-index home (links every feature demo + the example app) ships
+  // only in the full-stack scaffold, which is the only one that ships the
+  // gallery. saas gets its own landing below.
+  if (isFullStack) {
   await writeFile(join(appDir, 'app', 'page.ts'), `// webjs-scaffold-placeholder. This is the example homepage. Replace it with your app's real page, then delete this line. webjs check fails while the marker remains.
 import { html } from '@webjsdev/core';
 import { rubric, displayH1, accentLink } from '#lib/utils/ui.ts';
@@ -1154,69 +1301,189 @@ import {
   cardHeaderClass,
   cardTitleClass,
   cardDescriptionClass,
-  cardContentClass,
 } from '#components/ui/card.ts';
-import { alertClass, alertTitleClass, alertDescriptionClass } from '#components/ui/alert.ts';
-import { separatorClass } from '#components/ui/separator.ts';
 
 export const metadata = {
-  title: '${name}: built with webjs',
+  title: '${displayName}: built with webjs',
 };
+
+// Two kinds of reference the scaffold ships. FEATURES are single-concept demos
+// (one webjs feature each, under app/features/, logic in modules/). EXAMPLES are
+// whole apps that compose several features (under app/examples/). Prune what you
+// do not use (delete the route AND its modules/<name>), then reshape this page.
+const features = [
+  { href: '/features/routing', title: 'Routing', blurb: 'A static route plus a dynamic [id] segment that reads params. The file-based router in miniature.' },
+  { href: '/features/components', title: 'Components', blurb: 'The WebComponent factory, reactive props, instance signals, and slot projection in light DOM.' },
+  { href: '/features/server-actions', title: 'Server actions', blurb: 'A use-server RPC action next to a server-only .server.ts utility, and why the boundary matters.' },
+  { href: '/features/optimistic-ui', title: 'Optimistic UI', blurb: 'The imperative optimistic(signal, value, action) flip: instant update, automatic rollback on failure.' },
+  { href: '/features/async-render', title: 'Async render', blurb: 'A component that awaits server data in async render(), so the resolved value is in the first paint.' },
+  { href: '/features/directives', title: 'Directives', blurb: 'The lit-html directive set: repeat for keyed lists, watch(signal) for a fine-grained node swap.' },
+  { href: '/features/route-handler', title: 'Route handlers', blurb: 'A server-only route.ts HTTP endpoint returning JSON, the webjs equivalent of a Next route handler.' },
+  { href: '/features/forms', title: 'Forms', blurb: 'A no-JS progressive-enhancement form posting to the page action, with server-side validation errors.' },
+  { href: '/features/metadata', title: 'Metadata', blurb: 'Static metadata plus generateMetadata(ctx), which reads the request to compute the title and Open Graph tags.' },
+  { href: '/features/caching', title: 'Caching', blurb: 'export const revalidate caches the page HTML per URL, with the safety rule for when a shared cache is allowed.' },
+  { href: '/features/env', title: 'Env vars', blurb: 'The server-only vs WEBJS_PUBLIC_ boundary, read during SSR so secrets never reach the browser.' },
+  { href: '/features/client-router', title: 'Client router', blurb: 'Automatic soft navigation: fragment-only fetches, hover prefetch, scroll restore, and graceful no-JS fallback.' },
+  { href: '/features/service-worker', title: 'Service worker', blurb: 'The opt-in offline enhancement, registered from a browser-only lifecycle hook (never a page or layout).' },
+  { href: '/features/websockets', title: 'WebSockets', blurb: 'A WS(ws, req) route endpoint plus the connectWS() client, echoing messages over a live socket.' },
+  { href: '/features/broadcast', title: 'Broadcast', blurb: 'Fan a message out to every connected client on a WebSocket path, so all open tabs stay in sync.' },
+  { href: '/features/rate-limit', title: 'Rate limiting', blurb: 'The rateLimit() middleware scoped to one endpoint, returning a 429 with Retry-After past the window.' },
+  { href: '/features/file-storage', title: 'File storage', blurb: 'A no-JS multipart upload streamed into the FileStore, then served back through a streaming route.' },
+];
+const examples = [
+  { href: '/examples/todo', title: 'Optimistic todo', blurb: 'A whole app composing several features: the declarative optimistic() list API, progressive-enhancement forms, accessible labels, the modules split, and SQLite.' },
+];
+
+const galleryCard = (item: { href: string; title: string; blurb: string }) => html\`
+  <a href=\${item.href} class="block no-underline">
+    <div class="\${cardClass()} h-full transition-colors hover:border-border-strong">
+      <div class=\${cardHeaderClass()}>
+        <h3 class=\${cardTitleClass()}>\${item.title}</h3>
+        <p class=\${cardDescriptionClass()}>\${item.blurb}</p>
+      </div>
+    </div>
+  </a>
+\`;
 
 export default function Home() {
   return html\`
-    <section class="mb-18">
+    <section class="mb-14">
       \${rubric('welcome')}
-      \${displayH1(html\`Hello from <span class="text-accent italic">${name}</span>.\`)}
-      <p class="text-lede leading-[1.5] text-fg-muted max-w-[56ch] m-0 mb-6">
-        Edit <code class="font-mono text-[0.9em]">app/page.ts</code> to get started.
-        Run \${accentLink('#', 'webjs test')} to run tests and
-        \${accentLink('#', 'webjs check')} to catch correctness issues.
+      \${displayH1(html\`Hello from <span class="text-primary italic">${displayName}</span>.\`)}
+      <p class="text-lede leading-[1.5] text-muted-foreground max-w-[56ch] m-0 mb-6">
+        This scaffold ships a gallery below: single-feature demos and one whole
+        example app, all small, idiomatic, and heavily commented. Browse them for
+        context, then replace this page with your own. See
+        \${accentLink('https://docs.webjs.dev', 'the docs')} for the full reference.
       </p>
       <div class="flex gap-3 items-center">
-        <button class=\${buttonClass()}>Get started</button>
-        <button class=\${buttonClass({ variant: 'outline' })}>View docs</button>
+        <a href="/examples/todo" class=\${buttonClass()}>Open the todo app</a>
         <span class=\${badgeClass({ variant: 'secondary' })}>v0.1</span>
       </div>
     </section>
 
-    <div class=\${cardClass()} style="margin-bottom: 3rem">
-      <div class=\${cardHeaderClass()}>
-        <h3 class=\${cardTitleClass()}>Web Components + Server Actions</h3>
-        <p class=\${cardDescriptionClass()}>
-          Drop a custom element anywhere. Call a server action like a local
-          function. webjs rewrites the import into a typed RPC stub.
-        </p>
-      </div>
-      <div class=\${cardContentClass()}>
-        <div class=\${alertClass()}>
-          <h5 class=\${alertTitleClass()}>AI-first component kit included</h5>
-          <div class=\${alertDescriptionClass()}>
-            button, card, alert, badge, separator, label, input are already
-            in <code class="font-mono text-[0.9em]">components/ui/</code> as
-            class-helper functions you call from a native element. Add more
-            with <code class="font-mono text-[0.9em]">webjs ui add &lt;name&gt;</code>.
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class=\${separatorClass()} style="margin: 2.5rem 0"></div>
-
-    <section class="mt-10">
-      <h2 class="font-serif text-[1.6rem] tracking-[-0.02em] font-bold m-0 mb-2">Light DOM + Tailwind</h2>
-      <p class="text-fg-muted text-sm m-0 mb-4">
-        Components render into light DOM by default. Tailwind utility classes
-        apply directly. Set <code class="font-mono text-[0.9em]">static shadow = true</code>
-        on a component when you need scoped styles or third-party-embed
-        isolation. &lt;slot&gt; projection works identically in both modes,
-        including named slots, fallback content, and the full
-        assignedNodes / slotchange API.
+    <section class="mb-12">
+      <h2 class="font-serif text-[1.6rem] tracking-[-0.02em] font-bold m-0 mb-1">Features</h2>
+      <p class="text-muted-foreground text-sm m-0 mb-5">
+        One webjs concept each, under <code class="font-mono text-[0.9em]">app/features/</code>
+        with logic in <code class="font-mono text-[0.9em]">modules/</code>. Delete the ones you do not need.
       </p>
+      <div class="grid gap-4 sm:grid-cols-2">
+        \${features.map(galleryCard)}
+      </div>
+    </section>
+
+    <section>
+      <h2 class="font-serif text-[1.6rem] tracking-[-0.02em] font-bold m-0 mb-1">Example apps</h2>
+      <p class="text-muted-foreground text-sm m-0 mb-5">
+        Whole apps that compose several features, under <code class="font-mono text-[0.9em]">app/examples/</code>.
+      </p>
+      <div class="grid gap-4 sm:grid-cols-2">
+        \${examples.map(galleryCard)}
+      </div>
     </section>
   \`;
 }
 `);
+  } else {
+    // saas home: the auth landing (hero + login/signup/dashboard) stays the
+    // headline, and the webjs feature gallery sits BELOW it, so a saas app is
+    // also a learning surface. Keep the `features` list in sync with the
+    // full-stack home above (both ship the same gallery).
+    await writeFile(join(appDir, 'app', 'page.ts'), `// webjs-scaffold-placeholder. This is the example homepage. Replace it with your app's real landing page, then delete this line. webjs check fails while the marker remains.
+import { html } from '@webjsdev/core';
+import { rubric, displayH1, accentLink } from '#lib/utils/ui.ts';
+import {
+  cardClass,
+  cardHeaderClass,
+  cardTitleClass,
+  cardDescriptionClass,
+} from '#components/ui/card.ts';
+
+export const metadata = {
+  title: '${displayName}: built with webjs',
+};
+
+// The webjs feature gallery, shown below the auth landing. FEATURES are
+// single-concept demos (under app/features/, logic in modules/); EXAMPLES are
+// whole apps (under app/examples/). Prune what you do not use (delete the route
+// AND its modules/<name>). Keep this list in sync with the full-stack home.
+const features = [
+  { href: '/features/routing', title: 'Routing', blurb: 'A static route plus a dynamic [id] segment that reads params. The file-based router in miniature.' },
+  { href: '/features/components', title: 'Components', blurb: 'The WebComponent factory, reactive props, instance signals, and slot projection in light DOM.' },
+  { href: '/features/server-actions', title: 'Server actions', blurb: 'A use-server RPC action next to a server-only .server.ts utility, and why the boundary matters.' },
+  { href: '/features/optimistic-ui', title: 'Optimistic UI', blurb: 'The imperative optimistic(signal, value, action) flip: instant update, automatic rollback on failure.' },
+  { href: '/features/async-render', title: 'Async render', blurb: 'A component that awaits server data in async render(), so the resolved value is in the first paint.' },
+  { href: '/features/directives', title: 'Directives', blurb: 'The lit-html directive set: repeat for keyed lists, watch(signal) for a fine-grained node swap.' },
+  { href: '/features/route-handler', title: 'Route handlers', blurb: 'A server-only route.ts HTTP endpoint returning JSON, the webjs equivalent of a Next route handler.' },
+  { href: '/features/forms', title: 'Forms', blurb: 'A no-JS progressive-enhancement form posting to the page action, with server-side validation errors.' },
+  { href: '/features/metadata', title: 'Metadata', blurb: 'Static metadata plus generateMetadata(ctx), which reads the request to compute the title and Open Graph tags.' },
+  { href: '/features/caching', title: 'Caching', blurb: 'export const revalidate caches the page HTML per URL, with the safety rule for when a shared cache is allowed.' },
+  { href: '/features/env', title: 'Env vars', blurb: 'The server-only vs WEBJS_PUBLIC_ boundary, read during SSR so secrets never reach the browser.' },
+  { href: '/features/client-router', title: 'Client router', blurb: 'Automatic soft navigation: fragment-only fetches, hover prefetch, scroll restore, and graceful no-JS fallback.' },
+  { href: '/features/service-worker', title: 'Service worker', blurb: 'The opt-in offline enhancement, registered from a browser-only lifecycle hook (never a page or layout).' },
+  { href: '/features/websockets', title: 'WebSockets', blurb: 'A WS(ws, req) route endpoint plus the connectWS() client, echoing messages over a live socket.' },
+  { href: '/features/broadcast', title: 'Broadcast', blurb: 'Fan a message out to every connected client on a WebSocket path, so all open tabs stay in sync.' },
+  { href: '/features/rate-limit', title: 'Rate limiting', blurb: 'The rateLimit() middleware scoped to one endpoint, returning a 429 with Retry-After past the window.' },
+  { href: '/features/file-storage', title: 'File storage', blurb: 'A no-JS multipart upload streamed into the FileStore, then served back through a streaming route.' },
+];
+const examples = [
+  { href: '/examples/todo', title: 'Optimistic todo', blurb: 'A whole app composing several features: the declarative optimistic() list API, progressive-enhancement forms, accessible labels, the modules split, and SQLite.' },
+];
+
+const galleryCard = (item: { href: string; title: string; blurb: string }) => html\`
+  <a href=\${item.href} class="block no-underline">
+    <div class="\${cardClass()} h-full transition-colors hover:border-border-strong">
+      <div class=\${cardHeaderClass()}>
+        <h3 class=\${cardTitleClass()}>\${item.title}</h3>
+        <p class=\${cardDescriptionClass()}>\${item.blurb}</p>
+      </div>
+    </div>
+  </a>
+\`;
+
+export default function Home() {
+  return html\`
+    <section class="mb-14">
+      \${rubric('welcome')}
+      \${displayH1(html\`Hello from <span class="text-primary italic">${displayName}</span>.\`)}
+      <p class="text-lede leading-[1.5] text-muted-foreground max-w-[56ch] m-0 mb-6">
+        The saas starter: email and password auth, a protected dashboard, and a
+        User model, all wired up. Replace this hero with your product's landing;
+        the webjs feature gallery below is reference, prune what you do not need.
+        See \${accentLink('https://docs.webjs.dev', 'the docs')} for the full reference.
+      </p>
+      <div class="flex gap-3 items-center">
+        <a href="/login" class="inline-flex items-center px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm no-underline transition-all hover:bg-primary/90 active:scale-[0.97]">Log in</a>
+        <a href="/signup" class="text-primary no-underline font-medium text-sm">Create an account</a>
+        <a href="/dashboard" class="text-muted-foreground no-underline font-medium text-sm hover:text-foreground transition-colors">Dashboard</a>
+      </div>
+    </section>
+
+    <section class="mb-12">
+      <h2 class="font-serif text-[1.6rem] tracking-[-0.02em] font-bold m-0 mb-1">Features</h2>
+      <p class="text-muted-foreground text-sm m-0 mb-5">
+        One webjs concept each, under <code class="font-mono text-[0.9em]">app/features/</code>
+        with logic in <code class="font-mono text-[0.9em]">modules/</code>. Delete the ones you do not need.
+      </p>
+      <div class="grid gap-4 sm:grid-cols-2">
+        \${features.map(galleryCard)}
+      </div>
+    </section>
+
+    <section>
+      <h2 class="font-serif text-[1.6rem] tracking-[-0.02em] font-bold m-0 mb-1">Example apps</h2>
+      <p class="text-muted-foreground text-sm m-0 mb-5">
+        Whole apps that compose several features, under <code class="font-mono text-[0.9em]">app/examples/</code>.
+      </p>
+      <div class="grid gap-4 sm:grid-cols-2">
+        \${examples.map(galleryCard)}
+      </div>
+    </section>
+  \`;
+}
+`);
+  }
 
   // AGENTS.md is copied via the `templateFiles` loop above, from
   // `packages/cli/templates/AGENTS.md` with `{{APP_NAME}}` substitution.
@@ -1259,7 +1526,7 @@ export class ThemeToggle extends WebComponent {
     const el = document.documentElement;
     if (next === 'system') delete el.dataset.theme;
     else el.dataset.theme = next;
-    // Keep shadcn's .dark class in sync so the ui-* components follow the theme.
+    // Keep the .dark class the @webjsdev/ui kit uses in sync so the ui-* components follow the theme.
     const dark = next === 'dark'
       || (next === 'system' && !window.matchMedia('(prefers-color-scheme: light)').matches);
     el.classList.toggle('dark', dark);
@@ -1271,7 +1538,7 @@ export class ThemeToggle extends WebComponent {
     const icon = t === 'light' ? ICONS.sun : t === 'dark' ? ICONS.moon : ICONS.system;
     return html\`
       <button
-        class="inline-flex items-center justify-center w-9 h-9 p-0 border border-border rounded-full bg-bg-elev text-fg-muted cursor-pointer transition-all duration-150 hover:text-fg hover:border-border-strong active:scale-[0.94] focus-visible:outline-none focus-visible:border-accent focus-visible:ring-[3px] focus-visible:ring-accent-tint"
+        class="inline-flex items-center justify-center w-9 h-9 p-0 border border-border rounded-full bg-card text-muted-foreground cursor-pointer transition-all duration-150 hover:text-foreground hover:border-border-strong active:scale-[0.94] focus-visible:outline-none focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary-tint"
         @click=\${() => this.cycle()}
         aria-label="Cycle theme (currently \${label})"
         title="Theme: \${label.toLowerCase()}"
@@ -1321,7 +1588,7 @@ ThemeToggle.register('theme-toggle');
     app/layout.ts, page.ts, login/, signup/
     app/dashboard/{page,settings,middleware}.ts  ← protected
     app/api/auth/[...path]/route.ts      ← auth API
-    app/globals.css                      ← @webjsdev/ui theme tokens
+    styles/globals.css                   ← @webjsdev/ui theme tokens
     components.json                      ← preconfigured for \`webjs ui add\`
     components/ui/{button,card,alert,badge,separator,label,input,
                     dialog,form,field,switch,checkbox}.ts
@@ -1334,15 +1601,21 @@ ThemeToggle.register('theme-toggle');
 `);
   } else {
     console.log(`  ${name}/
-    app/layout.ts, page.ts       ← light DOM + Tailwind + @theme tokens
-    app/globals.css              ← @webjsdev/ui theme tokens
+    app/layout.ts, page.ts       ← home links to the gallery
+    app/features/{routing,components,server-actions,optimistic-ui,
+                  async-render,directives,route-handler}/
+                                 ← single-feature demos
+    app/examples/todo/           ← one whole example app (composes features)
+    styles/globals.css           ← @webjsdev/ui theme tokens
     components.json              ← preconfigured for \`webjs ui add\`
     components/ui/{button,card,alert,badge,separator,label,input}.ts
     components/theme-toggle.ts   ← light DOM web component
     lib/utils/cn.ts              ← cn() helper for ui-* components
     lib/utils/ui.ts              ← Tailwind class-bundle helpers
     public/tailwind-browser.js   ← Tailwind runtime
-    modules/
+    modules/{components,server-actions,optimistic-ui,async-render,
+             directives,todo}/  ← feature + example logic (prune what you skip)
+    db/{schema,columns,connection}.server.ts  ← Drizzle (User + Todo)
     CONVENTIONS.md, AGENTS.md, CLAUDE.md
 `);
   }
@@ -1359,14 +1632,17 @@ ThemeToggle.register('theme-toggle');
   ✓ Convention validation via \`webjs check\`
 
 For AI agents, read this before editing scaffolded files:
-  • The example layout / page / components / schema are REFERENCE ONLY.
-    Replace them with the app the user actually asked for. Don't ship
-    the scaffold's example User model or "Hello from …" page as the
-    final product.
-  • This fresh app intentionally FAILS \`webjs check\` with two
-    no-scaffold-placeholder violations (app/page.ts, app/layout.ts).
-    That is the signal to replace the example content. Delete each
-    marker comment line as you do, and the check goes green.
+  • The example layout, home page, the gallery under app/features/ and
+    app/examples/ (+ their modules) and schema are REFERENCE ONLY. Replace
+    them with the app the user asked for, and prune the routes you do not
+    use (delete the app/features/<name> or app/examples/<name> route AND
+    its modules/<name>). Don't ship the scaffold's examples as the final
+    product.
+  • This fresh app intentionally FAILS \`webjs check\` with
+    no-scaffold-placeholder violations on the example content (the home
+    page, the layout, and each gallery route). That is the signal to
+    replace or prune each. Delete the marker comment line as you do, and
+    the check goes green.
   • Use Drizzle + SQLite for app data. It's already wired up. Define
     real models in db/schema.server.ts, then run \`webjs db generate\`
     and \`webjs db migrate\`. NEVER store app data in JSON files,
@@ -1376,7 +1652,7 @@ For AI agents, read this before editing scaffolded files:
     the closest scaffold and adapt it.
   • Read AGENTS.md + CONVENTIONS.md in the new project before writing
     any code. They are the contract.
-  • Need more detail? Full hosted docs are at https://docs.webjs.com
+  • Need more detail? Full hosted docs are at https://docs.webjs.dev
     (every API, directive, recipe, and deployment guide).
 `);
 
@@ -1404,13 +1680,14 @@ For AI agents, read this before editing scaffolded files:
   // templates ship with @webjsdev/ui already initialised; the api
   // template has no UI but may add one later.
   const installSegment = installed ? '' : `${pm} install && `;
-  // The saas example queries the users table on its first request (auth), so it
-  // needs a migration authored first: `db:generate` writes it and the
-  // `webjs.dev.before` migrate applies it on `run dev` (Drizzle splits Prisma's
-  // `migrate dev` into generate-then-migrate). The full-stack / api examples do
-  // not query the db on first paint, so they boot with just `run dev`; once you
-  // add a db route, `db:generate` then `run dev` is the loop (dev auto-migrates).
-  const dbSegment = isSaas ? `${pm} run db:generate && ` : '';
+  // Some examples query the db on their first request, so a migration must be
+  // authored first: `db:generate` writes it and the `webjs.dev.before` migrate
+  // applies it on `run dev` (Drizzle splits Prisma's `migrate dev` into
+  // generate-then-migrate). The saas example queries users (auth); the
+  // full-stack scaffold ships the gallery's /examples/todo route (queries todos).
+  // The api template has no such first-request query, so it boots with just
+  // `run dev`; once you add a db route, `db:generate` then `run dev` is the loop.
+  const dbSegment = isApi ? '' : `${pm} run db:generate && `;
   const runCommand = `cd ${name} && ${installSegment}${dbSegment}${pm} run dev`;
   // Postgres needs a reachable DATABASE_URL before any migrate (sqlite uses a
   // local file with no .env). Point it at a running database; `dev` / `start`

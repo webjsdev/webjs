@@ -3,7 +3,7 @@
 You are working on a webjs app, an AI-first, no-build, web-components-first
 framework. Read AGENTS.md for the full API reference and CONVENTIONS.md for
 project-specific conventions before writing any code. When AGENTS.md does not
-cover what you need, the full hosted docs are at **https://docs.webjs.com**.
+cover what you need, the full hosted docs are at **https://docs.webjs.dev**.
 
 ## Persistence + scaffold rules (non-negotiable)
 
@@ -19,6 +19,20 @@ cover what you need, the full hosted docs are at **https://docs.webjs.com**.
   the example `User` model, the example users module, etc. with the app the
   user actually asked for. Do not ship "Hello from <app-name>" as the
   deliverable.
+- **Study the gallery first, prune it second.** The full-stack and saas scaffolds
+  ship single-feature demos under `app/features/` plus one whole example app under
+  `app/examples/` (logic in `modules/`). It is your PRIMARY webjs reference: read
+  every demo end to end (code AND comments) to learn the idioms BEFORE you write
+  or delete anything. Only after internalising the patterns should you prune,
+  keeping and adapting what you need and deleting the rest (the
+  `app/features/<name>` or `app/examples/<name>` route AND its `modules/<name>`;
+  for the todo app, also the `todos` table). Never delete blindly up front. Each
+  route page has a `webjs-scaffold-placeholder` marker so `webjs check` fails
+  until you resolve it. Delete now-empty directories after pruning. The `api`
+  template ships a BACKEND-features showcase instead (endpoints under
+  `app/api/features/`: the `route()` adapter + validation, rate limiting,
+  streaming, file storage, WebSockets + broadcast, plus `env.ts` validation),
+  listed in the root `app/route.ts` index; prune it the same way.
 - **Prune what the app does not use.** Keep the infrastructure the app USES
   and delete the rest (files AND folders). No persistence means delete `db/`,
   `drizzle.config.ts`, and the `db:*` scripts. No UI kit used means delete
@@ -26,8 +40,12 @@ cover what you need, the full hosted docs are at **https://docs.webjs.com**.
   delete `public/sw.js` and `offline.html`. Always KEEP the durable knowledge
   (`AGENTS.md`, `CONVENTIONS.md`, the rule files, the MCP), never prune it, so
   removing example code never removes your context. Prune AFTER using the
-  examples as reference, never blindly up front. A no-op for the `api` template
+  features and examples as reference, never blindly up front. A no-op for the `api` template
   (no UI kit, no PWA files).
+- **`app/` is routing-only.** Only routing files live in `app/` (page, layout,
+  route, middleware, metadata routes). CSS, helpers, and constants do NOT:
+  `globals.css` is at `styles/`, browser-safe helpers at `lib/utils/`, feature
+  logic in `modules/`.
 - **Use a unique design (UI apps).** When the app has a UI, give it a design of
   your own (palette, layout, typography, chrome) that fits what the user asked
   for. Do NOT mimic the scaffold's example look (its warm colors, the 760px
@@ -150,6 +168,21 @@ self-review loop.
   gradients); when unavoidable in a light-DOM component, prefix every class
   selector with the component tag. Shadow-DOM components legitimately use
   `static styles = css\`...\`` for scoped CSS.
+- **One theme, canonical tokens.** The app has a SINGLE theme, defined once in
+  `app/layout.ts` using the standard `@webjsdev/ui` (shadcn-compatible)
+  semantic tokens set to the brand palette. Use the canonical utility names
+  everywhere, in the page chrome AND inside components: `bg-background`,
+  `text-foreground`, `bg-card`, `bg-muted`, `text-muted-foreground`,
+  `bg-primary`, `text-primary-foreground`, `bg-accent`, `text-accent-foreground`,
+  `border-border`, `ring-ring`. These are exactly the tokens a component copied
+  in by `webjs ui add <name>` reads, so a scaffolded page and a later-added ui
+  component share one theme with no wiring. NEVER invent a parallel token
+  vocabulary (`--fg`, `--bg`, `text-fg`, `bg-elev`, a separate `--brand`): it
+  collides with the ui tokens (the accent once flipped to neutral on navigation
+  for exactly this reason) and diverges from the shadcn conventions the kit and
+  AI agents expect. Reach for opacity modifiers (`bg-primary/10`,
+  `hover:bg-primary/90`) before adding a token; add one the canonical way (a
+  `--x` var plus a `--color-x: var(--x)` line in `@theme inline`).
 - Custom-element tag names are passed to `.register('tag-name')`. They are NOT
   a static field on the class.
 - **Never extend raw HTMLElement directly for app components.** Always subclass `WebComponent` (or the factory form `WebComponent({...})`) to hook into SSR, lifecycle, elision, and the reactive property system. Extend raw HTMLElement only for rare native-API edge cases (like form-associated `ElementInternals` or customized built-in elements), and add a `webjs-allow-htmlelement: <reason>` comment to acknowledge the exception.

@@ -310,9 +310,45 @@ production workloads.
 <!-- OVERRIDE -->
 
 This project was created with `webjs create`. Every file you see right
-now (the `app/page.ts` "Hello from …" homepage, the example `User`
-model, the `theme-toggle` component, the example users module in api /
-saas templates) is a **starting point**.
+now (the `app/page.ts` homepage, the example `User` model, the
+`theme-toggle` component, the gallery under `app/features/` and
+`app/examples/` in the full-stack template, the example users module in
+api / saas templates) is a **starting point**.
+
+The full-stack and saas scaffolds ship a **gallery** organized by kind so features
+and whole apps are not mixed. `app/features/<name>/` are single-feature
+demos, one webjs concept each (routing, components, server-actions,
+optimistic-ui, async-render, directives, route-handler). `app/examples/<name>/`
+are whole example apps that compose several features (todo: optimistic UI
++ progressive enhancement + a11y + db + modules). Both keep their logic in
+`modules/`, are small and heavily commented, and are the PRIMARY reference
+for how webjs works.
+
+**Study the whole gallery FIRST, prune SECOND.** Before writing or deleting
+anything, read every feature demo and the example app end to end (code AND
+comments) to absorb the idioms you will reuse. Only AFTER you have
+internalised the patterns should you prune. Never delete the examples
+blindly up front (that discards your context before you have read it), and
+never prune the durable knowledge surfaces (`AGENTS.md`, `CONVENTIONS.md`,
+the per-agent rule files), which stay as context for every future
+iteration.
+
+Then prune: the examples are REFERENCE, not the app, so keep and adapt the
+ones you need and **delete the rest**. Pruning a route means deleting its
+`app/features/<name>` or `app/examples/<name>` folder AND its
+`modules/<name>` folder (for the todo app, also the `todos` table in
+`db/schema.server.ts` and its link in `app/page.ts`). Each route page
+carries a `webjs-scaffold-placeholder` marker, so `webjs check` fails until
+you consciously keep-and-adapt or prune it. After pruning, delete any
+now-empty directories, an empty `lib/utils/` or `modules/<name>/` is
+leftover scaffolding, not structure.
+
+**`app/` is routing-only.** Only routing files belong in `app/` (page,
+layout, route, middleware, and metadata routes). CSS, helpers, and
+constants do NOT: the theme lives at `styles/globals.css` (NOT
+`app/globals.css`), browser-safe helpers at `lib/utils/`, and feature
+logic in `modules/`. If you add a stylesheet or a helper, put it outside
+`app/`.
 
 When the user asks the agent to build their actual app:
 
@@ -325,6 +361,10 @@ When the user asks the agent to build their actual app:
    need a theme picker.
 4. **Delete the example users module** (api/saas templates) if the app
    doesn't use it.
+4b. **Prune the gallery** (full-stack template). Keep and adapt the
+   `app/features/` demos and the `app/examples/` app the real app uses,
+   delete the rest (route + module + any table), and remove their links
+   from `app/page.ts`.
 5. **Adapt `app/layout.ts` to the app, not just the page.** Set the real
    brand, replace the example `Home` nav with the app's navigation, and
    pick a content-width container that fits. The default
@@ -347,9 +387,11 @@ When the user asks the agent to build their actual app:
    conventions, the design tokens in `app/layout.ts`. These are the
    infrastructure, not the example app.
 
-This is enforced, not just advised. The example `app/page.ts` and
-`app/layout.ts` carry a `webjs-scaffold-placeholder` marker comment, and
-the `no-scaffold-placeholder` check fails while any marker remains, so a
+This is enforced, not just advised. The example `app/page.ts`,
+`app/layout.ts`, and each `app/features/<name>/page.ts` +
+`app/examples/<name>/page.ts` carry a
+`webjs-scaffold-placeholder` marker comment, and the
+`no-scaffold-placeholder` check fails while any marker remains, so a
 freshly scaffolded app fails `webjs check` until you address each
 placeholder. The marker is acknowledge-and-remove: replace the example
 content, or deliberately keep it, and in either case delete the marker
@@ -370,7 +412,7 @@ kit used means delete `components/ui/`, `components.json`, and
 Always KEEP the durable knowledge (`AGENTS.md`, `CONVENTIONS.md`, the
 per-agent rule files, the MCP wiring), and never prune it, so removing
 example code never removes your context. Prune AFTER you have used the
-examples as reference, never blindly up front. This is a no-op for the
+features and examples as reference, never blindly up front. This is a no-op for the
 `api` template, which ships no UI kit and no PWA files.
 
 ---
@@ -685,7 +727,7 @@ export class MyWidget extends WebComponent({
   render() {
     return html`
       <div class="p-4 border border-border rounded-lg">
-        <p class="font-serif text-fg">${this.label}: ${this.count}</p>
+        <p class="font-serif text-foreground">${this.label}: ${this.count}</p>
       </div>
     `;
   }
@@ -745,8 +787,27 @@ Both hydrate without flash on the client.
 The scaffold ships with the **Tailwind CSS browser runtime** + `@theme`
 design tokens defined in the root layout. Every colour, font family,
 fluid type scale value, and motion duration is declared once in `@theme`
-and available everywhere via utility classes (`text-fg`, `bg-bg-elev`,
-`font-serif`, `duration-fast`, `text-display`).
+and available everywhere via utility classes (`text-foreground`,
+`bg-card`, `font-serif`, `duration-fast`, `text-display`).
+
+**One theme, canonical tokens.** The app has a SINGLE theme, defined
+once in `app/layout.ts` using the standard `@webjsdev/ui`
+(shadcn-compatible) semantic tokens set to the brand palette. Use the
+canonical utility names everywhere, in the page chrome AND inside
+components: `bg-background`, `text-foreground`, `bg-card`, `bg-muted`,
+`text-muted-foreground`, `bg-primary`, `text-primary-foreground`,
+`bg-accent`, `text-accent-foreground`, `border-border`, `ring-ring`.
+These are exactly the tokens a component copied in by
+`webjs ui add <name>` reads, so a scaffolded page and a later-added ui
+component share one coherent theme with no extra wiring. **Never invent a
+parallel token vocabulary** (`--fg`, `--bg`, `text-fg`, `bg-elev`, a
+separate `--brand`): it collides with the ui tokens (the accent once
+flipped to neutral on navigation for exactly this reason) and diverges
+from the shadcn conventions the kit and AI agents both expect. Reach for
+opacity modifiers (`bg-primary/10`, `hover:bg-primary/90`,
+`text-muted-foreground/70`) before adding a token; to ADD one, do it the
+canonical way (a `--x` variable in the `:root` / `.dark` blocks plus a
+`--color-x: var(--x)` line in `@theme inline`, then `bg-x` / `text-x`).
 
 **Tailwind-first is the strong default for pages AND light-DOM
 components (the default DOM mode).** Use utilities for layout, spacing,

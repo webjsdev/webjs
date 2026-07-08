@@ -3,7 +3,7 @@
 You are working on a webjs app, an AI-first, no-build, web-components-first
 framework. Read AGENTS.md for the full API reference and CONVENTIONS.md for
 project-specific conventions. When AGENTS.md doesn't cover what you need,
-the full hosted docs are at **https://docs.webjs.com**.
+the full hosted docs are at **https://docs.webjs.dev**.
 
 ## Persistence + scaffold rules (non-negotiable)
 
@@ -18,6 +18,20 @@ the full hosted docs are at **https://docs.webjs.com**.
   `app/page.ts`, the example `User` model, the example users module, etc.
   with the app the user actually asked for. Don't ship "Hello from
   <app-name>" as the deliverable.
+- **Study the gallery first, prune it second.** The full-stack and saas scaffolds ship
+  single-feature demos under `app/features/` plus one whole example app under
+  `app/examples/` (logic in `modules/`). It is your PRIMARY webjs reference:
+  read every demo end to end (code AND comments) to learn the idioms BEFORE you
+  write or delete anything. Only after internalising the patterns should you
+  prune, keeping and adapting what you need and deleting the rest (the
+  `app/features/<name>` or `app/examples/<name>` route AND its `modules/<name>`;
+  for the todo app, also the `todos` table). Never delete blindly up front. Each
+  route page has a `webjs-scaffold-placeholder` marker so `webjs check` fails
+  until you resolve it. Delete now-empty directories after pruning. The `api`
+  template ships a BACKEND-features showcase instead (endpoints under
+  `app/api/features/`: the `route()` adapter + validation, rate limiting,
+  streaming, file storage, WebSockets + broadcast, plus `env.ts` validation),
+  listed in the root `app/route.ts` index; prune it the same way.
 - **Prune what the app does not use.** Keep the infrastructure the app
   USES and delete the rest (files AND folders). No persistence means
   delete `db/`, `drizzle.config.ts`, and the `db:*` scripts. No UI kit
@@ -25,9 +39,13 @@ the full hosted docs are at **https://docs.webjs.com**.
   `lib/utils/cn.ts`. No PWA means delete `public/sw.js` and
   `offline.html`. Always KEEP the durable knowledge (`AGENTS.md`,
   `CONVENTIONS.md`, the rule files, the MCP), never prune it, so removing
-  example code never removes your context. Prune AFTER using the examples
-  as reference, never blindly up front. A no-op for the `api` template
+  example code never removes your context. Prune AFTER using the features
+  and examples as reference, never blindly up front. A no-op for the `api` template
   (no UI kit, no PWA files).
+- **`app/` is routing-only.** Only routing files live in `app/` (page,
+  layout, route, middleware, metadata routes). CSS, helpers, and constants
+  do NOT: `globals.css` is at `styles/`, browser-safe helpers at
+  `lib/utils/`, feature logic in `modules/`.
 - **Use a unique design (UI apps).** When the app has a UI, give it a
   design of your own (palette, layout, typography, chrome) that fits what
   the user asked for. Do NOT mimic the scaffold's example look (its warm
@@ -124,6 +142,7 @@ each change must include.
 - **Erasable TypeScript only.** The runtime strips types via `module.stripTypeScriptTypes` (Node's built-in, or `amaro` on Bun) (whitespace replacement, byte-exact position preservation, no sourcemap). The scaffold's tsconfig.json sets `erasableSyntaxOnly: true`, so the TS compiler rejects `enum`, `namespace` with values, constructor parameter properties, legacy decorators with `emitDecoratorMetadata`, and `import = require`. Use erasable equivalents: `const X = { ... } as const` plus a derived union type instead of `enum`; explicit fields plus constructor body assignments instead of parameter properties. If `erasableSyntaxOnly` is disabled and non-erasable syntax is used, the dev server fails at strip time and returns a 500 pointing at the `no-non-erasable-typescript` lint rule. webjs is buildless end-to-end and has no bundler fallback.
 - Tagged template: html`<div>${value}</div>` with css`...` for styles.
 - **Tailwind-first styling.** Tailwind utilities are the strong default for pages AND light-DOM components (the default DOM mode): layout, spacing, color (via `@theme` tokens), typography, borders, radius, shadows, interaction states. Light DOM does not scope, so utilities apply directly. The lit reflex to scope CSS (`static styles = css\`...\``) or write an inline `<style>` with semantic class names (`.hero`, `.card`) in a light-DOM component is wrong: the scoped block needs `static shadow = true`, and inline class names leak globally. When a utility bundle repeats, extract a `lib/utils/ui.ts` helper returning an `html` fragment, not a CSS class. Reserve raw CSS for the allowlist (design tokens / `@theme`, `@property` + `@keyframes`, `::-webkit-scrollbar`, `prefers-reduced-motion`, complex `color-mix()` / gradients); when unavoidable in a light-DOM component, prefix every class selector with the component tag. Shadow-DOM components (`static shadow = true`) legitimately author `static styles = css\`...\`` for scoped CSS; don't use inline `style="..."` there.
+- **One theme, canonical tokens.** The app has a SINGLE theme, defined once in `app/layout.ts` using the standard `@webjsdev/ui` (shadcn-compatible) semantic tokens set to the brand palette. Use the canonical utility names everywhere, in the page chrome AND inside components: `bg-background`, `text-foreground`, `bg-card`, `bg-muted`, `text-muted-foreground`, `bg-primary`, `text-primary-foreground`, `bg-accent`, `text-accent-foreground`, `border-border`, `ring-ring`. These are exactly the tokens a component copied in by `webjs ui add <name>` reads, so a scaffolded page and a later-added ui component share one theme with no wiring. NEVER invent a parallel token vocabulary (`--fg`, `--bg`, `text-fg`, `bg-elev`, a separate `--brand`): it collides with the ui tokens (the accent once flipped to neutral on navigation for exactly this reason) and diverges from the shadcn conventions the kit and AI agents expect. Reach for opacity modifiers (`bg-primary/10`, `hover:bg-primary/90`) before adding a token; add one the canonical way (a `--x` var plus a `--color-x: var(--x)` line in `@theme inline`).
 - Components: extend the `WebComponent({ ... })` factory to declare reactive properties (e.g. `extends WebComponent({ count: Number })`; per-prop options via `prop(Number, { reflect: true })`), add `static styles` for shadow-DOM components, call `Class.register('tag-name')` at the bottom of the file. The tag name is the argument to `.register()`, not a static field. A hand-written `static properties` throws at construction (`no-static-properties`); set defaults in the constructor, never a class-field initializer (`reactive-props-no-class-field`). Declare an array-typed prop with the `Array` constructor, not `Object` (`items: prop<Tag[]>(Array)`), flagged by `array-prop-uses-array-type`. **Never extend raw HTMLElement directly for app components.** Always subclass `WebComponent` (or the factory form `WebComponent({...})`) to hook into SSR, lifecycle, elision, and the reactive property system. Extend raw HTMLElement only for rare native-API edge cases (like form-associated `ElementInternals` or customized built-in elements), and add a `webjs-allow-htmlelement: <reason>` comment to acknowledge the exception.
 - Async data in a component: prefer an `async render()` (`const u = await getUser(this.uid)`), which SSR awaits so the data is in the first paint, over prop-drilling from the page or fetching in `connectedCallback`. `renderFallback()` is the optional re-fetch loading state (never first paint); error isolation is automatic (`renderError()` customizes it); a `Task` is for genuinely client-only data.
 - **Default to optimistic UI for feasible mutations.** Use `optimistic()` from `@webjsdev/core` for create/toggle/like/reorder so the UI updates instantly and rolls back on failure (no hand-written try-catch or temp-id bookkeeping). Do NOT use it where it hurts: unpredictable or server-computed results, side-effectful or OAuth/payment mutations, and destructive irreversible actions (confirm-first instead).

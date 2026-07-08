@@ -34,7 +34,9 @@ export function defaultsForProject(cwd = process.cwd()) {
   switch (type) {
     case 'webjs':
       return {
-        tailwindCss: 'app/globals.css',
+        // styles/globals.css, NOT app/globals.css: in webjs, app/ is routing-only,
+        // so a non-routing stylesheet lives outside it.
+        tailwindCss: 'styles/globals.css',
         aliases: { components: 'components', utils: 'lib/utils', ui: 'components/ui', lib: 'lib' },
       };
     case 'next':

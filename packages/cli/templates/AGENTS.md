@@ -4,8 +4,8 @@ Read this before editing any file. This is a webjs app: AI-first, web-
 components-first, no build step. The framework's own full API reference
 lives at https://github.com/webjsdev/webjs/blob/main/AGENTS.md and the
 full hosted documentation (every API, recipe, and example) lives at
-**https://docs.webjs.com**. Treat this file as the app-scoped
-companion and reach for docs.webjs.com whenever you need more detail.
+**https://docs.webjs.dev**. Treat this file as the app-scoped
+companion and reach for docs.webjs.dev whenever you need more detail.
 
 ## If you just scaffolded this app (AI agents, read first)
 
@@ -65,7 +65,7 @@ user asked for, never leftover scaffold code.
    `public/sw.js` and `offline.html`. Always KEEP the durable knowledge
    (`AGENTS.md`, `CONVENTIONS.md`, the per-agent rule files, the MCP
    wiring), never prune it, so removing example code never removes your
-   context. Prune AFTER you have used the examples as reference, never
+   context. Prune AFTER you have used the features and examples as reference, never
    blindly up front. This is a no-op for the `api` template (no UI kit,
    no PWA files).
 
@@ -188,7 +188,7 @@ entry, its own template parser. Inside `` html`…` `` templates you get:
 In VS Code / Cursor / Windsurf, the **`webjs` extension** bundles this
 automatically (no `tsconfig.json` edit, no separate Lit extension).
 
-See [docs.webjs.com → Editor setup](https://docs.webjs.com/docs/editor-setup)
+See [docs.webjs.dev → Editor setup](https://docs.webjs.dev/docs/editor-setup)
 for the full walkthrough.
 
 **Config validation in `package.json`.** The scaffold ships
@@ -328,8 +328,17 @@ missing labels.
 ## File conventions
 
 ```
-app/                     thin route adapters (import from modules/)
-  page.ts                → /
+app/                     ROUTING ONLY: thin route adapters (import from modules/).
+                         No CSS, helpers, or constants here; those live in
+                         styles/, lib/utils/, and modules/. globals.css is at
+                         styles/, NOT app/.
+  page.ts                → / (the scaffold home links to the gallery)
+  features/<name>/       single-feature demos (routing, components,
+                         server-actions, optimistic-ui, async-render,
+                         directives, route-handler, forms, metadata, caching,
+                         env, client-router, service-worker); prune what you skip
+  examples/<name>/       whole example apps that compose features (todo);
+                         prune what you skip
   layout.ts              root layout, wraps every page
   error.ts               error boundary (render failures → user-friendly)
   loading.ts             Suspense fallback for sibling page
@@ -353,6 +362,8 @@ modules/<feature>/
   types.ts               feature types
 lib/
   ...                    cross-cutting infra (session, auth config, etc.)
+styles/
+  globals.css            @webjsdev/ui theme tokens (NOT in app/; app/ is routing-only)
 db/
   schema.server.ts       Drizzle models + relations (your data layer)
   columns.server.ts      column helpers (dialect-specific; the only file to swap for Postgres)
@@ -369,6 +380,41 @@ test/<feature>/                feature-scoped tests, one folder per concern
   smoke/<name>.test.ts          fast post-deploy sanity check
 middleware.ts            root middleware (optional, outermost)
 ```
+
+### The gallery (reference content, prune it)
+
+The scaffold ships a gallery organized by KIND, so features and whole apps are
+not mixed:
+- `app/features/<name>/` are single-feature demos, one webjs concept each
+  (routing, components, server-actions, optimistic-ui, async-render, directives,
+  route-handler, forms, metadata, caching, env, client-router, service-worker,
+  plus the infra demos websockets, file-storage, rate-limit, broadcast).
+- `app/examples/<name>/` are whole example apps that compose several features
+  (todo: optimistic UI + progressive enhancement + a11y + db + modules).
+
+Both keep their logic in `modules/<name>/`. Each route is small, idiomatic, and
+heavily commented, and the gallery is your PRIMARY reference for how webjs works.
+
+**Study the whole gallery FIRST, prune SECOND.** Before you write or delete
+anything, read every feature demo and the example app end to end (the code AND
+the comments) to absorb the idioms you will reuse: the modules split, signals,
+the `optimistic()` API, `async render()`, the `.server.ts` vs `'use server'`
+boundary, progressive-enhancement forms, `<label for>` a11y, dynamic routes, and
+`route.ts` handlers. Only AFTER you have internalised the patterns should you
+prune. Never delete the examples blindly up front (that throws away your context
+before you have read it), and never prune the durable knowledge surfaces
+(`AGENTS.md`, `CONVENTIONS.md`, the per-agent rule files), which stay as context
+for every future iteration.
+
+Then prune: the examples are REFERENCE, not your app, so keep and adapt the ones
+you need and delete the rest. Pruning a route means deleting its
+`app/features/<name>` or `app/examples/<name>` folder AND its `modules/<name>`
+folder (and, for the todo app, the `todos` table in `db/schema.server.ts`), then
+removing its link from `app/page.ts`. Each route page carries a
+`webjs-scaffold-placeholder` marker so `webjs check` fails until you have
+consciously kept-and-adapted or pruned it. After pruning, delete any now-empty
+directories (an empty `lib/utils/` or `modules/<name>/` is leftover scaffolding,
+not structure).
 
 ### Typed page / layout / route-handler props
 
@@ -546,7 +592,7 @@ git commit -m "vendor + download dayjs"
 Bundle files land in `.webjs/vendor/<pkg>@<version>.js`. importmap
 points at local `/__webjs/vendor/` paths. Browser fetches from your
 own origin. Suitable for `script-src 'self'` CSP, air-gapped deploys,
-or compliance environments. See [docs.webjs.com Deployment → CSP](https://docs.webjs.com/docs/deployment#csp).
+or compliance environments. See [docs.webjs.dev Deployment → CSP](https://docs.webjs.dev/docs/deployment#csp).
 
 **Other CLI commands:**
 
@@ -622,7 +668,7 @@ const url = process.env.WEBJS_PUBLIC_API_URL;       // works
 const secret = process.env.AUTH_SECRET;             // undefined (fail-closed)
 ```
 
-`process.env.NODE_ENV` is also defined in the browser (`'development'` in `webjs dev`, `'production'` in `webjs start`), so vendor bundles that probe it work without setup. Full docs: [Configuration](https://docs.webjs.com/docs/configuration).
+`process.env.NODE_ENV` is also defined in the browser (`'development'` in `webjs dev`, `'production'` in `webjs start`), so vendor bundles that probe it work without setup. Full docs: [Configuration](https://docs.webjs.dev/docs/configuration).
 
 ## Component pattern
 
@@ -780,6 +826,31 @@ globally. Prefer Tailwind. When a utility bundle repeats, extract it into
 a `lib/utils/ui.ts` helper returning an `` html`...` `` fragment, not a
 CSS class.
 
+#### Design tokens: ONE theme, shadcn-canonical
+
+The app has a SINGLE theme, defined once in `app/layout.ts`. It uses the
+standard `@webjsdev/ui` (shadcn-compatible) semantic tokens, set to this app's
+brand palette. Use the canonical utility names everywhere, in the page chrome
+AND inside components: `bg-background`, `text-foreground`, `bg-card`, `bg-muted`,
+`text-muted-foreground`, `bg-primary`, `text-primary-foreground`, `bg-accent`,
+`text-accent-foreground`, `border-border`, `ring-ring`. These are exactly the
+tokens the components copied in by `webjs ui add <name>` read, so a scaffolded
+page and a later-added ui component share one coherent theme automatically.
+
+- **Never invent a parallel token vocabulary** (`--fg`, `--bg`, `text-fg`,
+  `bg-elev`, a separate `--brand`). It collides with the ui tokens (the accent
+  once flipped to neutral on navigation for exactly this reason) and diverges
+  from the shadcn conventions the ui kit and AI agents both expect.
+- **Reach for opacity modifiers before a new token**: `bg-primary/10` for a
+  tint, `hover:bg-primary/90` for a hover, `text-muted-foreground/70` for a
+  subtler text level.
+- **Edit the palette in one place** (`app/layout.ts`). To ADD a token, do it
+  the canonical way: a `--x` variable in the `:root` / `.dark` blocks plus a
+  `--color-x: var(--x)` line in the `@theme inline` block, then use it as
+  `bg-x` / `text-x`.
+- Dark mode is a `.dark` class the theme toggle sets. Tokens switch by theme
+  automatically, so a component written with these names works in both.
+
 Reserve raw CSS for what utilities cannot express: design-token `:root` /
 `@theme` definitions, `@property` + `@keyframes` animations,
 `::-webkit-scrollbar`, `prefers-reduced-motion` blocks, and complex
@@ -827,7 +898,7 @@ that RETURNS a `ReadableStream` / async generator streams its chunks (consume
 with `for await`); read the request `AbortSignal` via `actionSignal()` to cancel
 on disconnect. **SAFETY:** a `cache` with `public: true` shares one response
 across all users, so use it only for data identical for every visitor. Full
-reference: https://docs.webjs.com/docs/server-actions
+reference: https://docs.webjs.dev/docs/server-actions
 
 ## Mutations: default to optimistic UI
 

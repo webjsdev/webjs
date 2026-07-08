@@ -41,12 +41,12 @@ test('detectProject: plain when no package.json', () => {
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('defaultsForProject: webjs uses app/globals.css', () => {
+test('defaultsForProject: webjs uses styles/globals.css (app/ is routing-only)', () => {
   const d = tmp();
   try {
     writeFileSync(join(d, 'package.json'), JSON.stringify({ dependencies: { '@webjsdev/server': '*' } }));
     const def = defaultsForProject(d);
-    assert.equal(def.tailwindCss, 'app/globals.css');
+    assert.equal(def.tailwindCss, 'styles/globals.css');
     assert.equal(def.aliases.ui, 'components/ui');
   } finally { rmSync(d, { recursive: true }); }
 });

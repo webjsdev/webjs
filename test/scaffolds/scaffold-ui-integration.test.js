@@ -1,6 +1,6 @@
 /**
  * Verifies that the full-stack and saas scaffolds pre-initialise the Webjs UI
- * kit correctly: components.json + lib/utils/cn.ts + app/globals.css are
+ * kit correctly: components.json + lib/utils/cn.ts + styles/globals.css are
  * written, the standard component sources land in components/ui/, generated
  * pages call the Tier-1 class helpers on raw native elements (not stale
  * `<ui-X>` tags for Tier-1 components), and the API template deliberately
@@ -72,11 +72,13 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     assert.ok(await exists(join(appDir, 'components.json')), 'components.json should exist');
     assert.ok(await exists(join(appDir, 'lib', 'utils', 'cn.ts')), 'lib/utils/cn.ts should exist');
     assert.ok(await exists(join(appDir, 'lib', 'utils', 'ui.ts')), 'lib/utils/ui.ts should exist');
-    assert.ok(await exists(join(appDir, 'app', 'globals.css')), 'app/globals.css should exist');
+    assert.ok(await exists(join(appDir, 'styles', 'globals.css')), 'styles/globals.css should exist');
+    // app/ is routing-only: the theme must NOT live in app/.
+    assert.equal(existsSync(join(appDir, 'app', 'globals.css')), false, 'globals.css must not be in routing-only app/');
 
     // components.json shape matches what webjsui init writes for webjs
     const cfg = JSON.parse(await readFile(join(appDir, 'components.json'), 'utf8'));
-    assert.equal(cfg.tailwind.css, 'app/globals.css');
+    assert.equal(cfg.tailwind.css, 'styles/globals.css');
     assert.equal(cfg.tailwind.baseColor, 'neutral');
     assert.equal(cfg.aliases.ui, 'components/ui');
     assert.equal(cfg.aliases.utils, 'lib/utils/cn');
@@ -108,9 +110,9 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
       'Tier-1 side-effect imports should be removed from layout',
     );
 
-    // Homepage calls Tier-1 class helpers on native elements
+    // Homepage (the gallery index) calls Tier-1 class helpers on native elements
     const page = await readFile(join(appDir, 'app', 'page.ts'), 'utf8');
-    for (const fn of [...TIER1_HELPERS_BUTTON, 'badgeClass', 'cardClass', 'cardHeaderClass', 'cardTitleClass', 'alertClass']) {
+    for (const fn of [...TIER1_HELPERS_BUTTON, 'badgeClass', 'cardClass', 'cardHeaderClass', 'cardTitleClass', 'cardDescriptionClass']) {
       assert.match(page, new RegExp(`\\b${fn}\\b`), `homepage should call ${fn}()`);
     }
     // …and contains no Tier-1 custom element tags
@@ -185,6 +187,7 @@ test('api scaffold deliberately ships no ui-* components', async () => {
     assert.equal(existsSync(join(appDir, 'components', 'ui')), false);
     assert.equal(existsSync(join(appDir, 'components.json')), false);
     assert.equal(existsSync(join(appDir, 'app', 'globals.css')), false);
+    assert.equal(existsSync(join(appDir, 'styles', 'globals.css')), false);
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }

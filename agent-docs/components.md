@@ -96,7 +96,7 @@ The SSR pipeline runs the **pre-render value-deriving hooks** before `render()`:
 
 For component-local state, create an instance signal in the constructor and call `signal.set(...)` to mutate. The built-in `SignalWatcher` re-runs `render()` on the next microtask; the same lifecycle hooks fire as for reactive-property changes.
 
-See [`/docs/lifecycle`](https://docs.webjs.com/docs/lifecycle) for per-hook usage examples.
+See [`/docs/lifecycle`](https://docs.webjs.dev/docs/lifecycle) for per-hook usage examples.
 
 ## Async render: bare-await data fetch (#469)
 

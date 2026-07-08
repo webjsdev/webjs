@@ -45,8 +45,10 @@ TypeScript with zero build step, real SSR with Declarative Shadow DOM.
 > - Backend-only HTTP/JSON API, no UI → **`--template api`**
 > - Auth, login/signup, protected dashboard, SaaS → **`--template saas`**
 >
+> **The scaffold is the tutorial.** Every UI scaffold (full-stack and saas) ships a commented **feature gallery** (`app/features/` + an example app under `app/examples/`); the `api` template ships a **backend-features showcase** (`app/api/features/`). Read the demos to learn the idioms, then prune per-feature.
+>
 > Full rules: [`AGENTS.md` → How AI agents must scaffold](./AGENTS.md#how-ai-agents-must-scaffold).
-> Full framework docs (every API, every recipe): **https://docs.webjs.com**.
+> Full framework docs (every API, every recipe): **https://docs.webjs.dev**.
 
 ```sh
 # Get started in one command (no global install required)

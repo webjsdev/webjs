@@ -16,11 +16,11 @@
  */
 import { html } from '@webjsdev/core';
 
-/** `● label` kicker: small caps, accent colour, above headings. */
+/** `● label` kicker: small caps, brand colour, above headings. */
 export function rubric(label: string, mb: 'sm' | 'md' = 'md') {
   const mbCls = mb === 'sm' ? 'mb-3' : 'mb-4';
   return html`
-    <span class="block font-mono text-[11px] leading-none font-semibold tracking-[0.2em] uppercase text-accent ${mbCls}">● ${label}</span>
+    <span class="block font-mono text-[11px] leading-none font-semibold tracking-[0.2em] uppercase text-primary ${mbCls}">● ${label}</span>
   `;
 }
 
@@ -68,10 +68,10 @@ export function banner(content: unknown) {
   `;
 }
 
-/** Inline accent link: used inside body copy and banners. */
+/** Inline brand link: used inside body copy and banners. */
 export function accentLink(href: string, label: unknown) {
   return html`
-    <a href=${href} class="text-accent font-semibold no-underline hover:underline hover:underline-offset-[3px]">${label}</a>
+    <a href=${href} class="text-primary font-semibold no-underline hover:underline hover:underline-offset-[3px]">${label}</a>
   `;
 }
 

@@ -47,7 +47,7 @@ test('init: writes components.json with project-detected defaults', async () => 
     const cfg = JSON.parse(readFileSync(join(d, 'components.json'), 'utf8'));
     assert.equal(cfg.style, 'default');
     assert.equal(cfg.tailwind.baseColor, 'neutral');
-    assert.equal(cfg.tailwind.css, 'app/globals.css'); // webjs default
+    assert.equal(cfg.tailwind.css, 'styles/globals.css'); // webjs default (app/ is routing-only)
     assert.equal(cfg.aliases.ui, 'components/ui');
   } finally {
     globalThis.fetch = origFetch;
@@ -73,17 +73,11 @@ test('init: appends theme CSS to globals.css', async () => {
   stubFetch();
   const d = tmp();
   try {
-    // Pre-seed globals with existing content
-    writeFileSync(join(d, 'app', 'globals.css'), '/* existing */\n', { flag: 'w' });
-  } catch {
-    // First create the directory
-  }
-  try {
     const { mkdirSync } = await import('node:fs');
-    mkdirSync(join(d, 'app'), { recursive: true });
-    writeFileSync(join(d, 'app', 'globals.css'), '/* existing */\n');
+    mkdirSync(join(d, 'styles'), { recursive: true });
+    writeFileSync(join(d, 'styles', 'globals.css'), '/* existing */\n');
     await init.parseAsync(['--yes', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
-    const css = readFileSync(join(d, 'app', 'globals.css'), 'utf8');
+    const css = readFileSync(join(d, 'styles', 'globals.css'), 'utf8');
     assert.match(css, /\/\* existing \*\//);
     assert.match(css, /@webjsdev\/ui theme/);
     assert.match(css, /--primary: #000/);
@@ -98,11 +92,11 @@ test('init: theme is idempotent (doesn\'t append twice)', async () => {
   const d = tmp();
   try {
     const { mkdirSync } = await import('node:fs');
-    mkdirSync(join(d, 'app'), { recursive: true });
-    writeFileSync(join(d, 'app', 'globals.css'), '');
+    mkdirSync(join(d, 'styles'), { recursive: true });
+    writeFileSync(join(d, 'styles', 'globals.css'), '');
     await init.parseAsync(['--yes', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
     await init.parseAsync(['--yes', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
-    const css = readFileSync(join(d, 'app', 'globals.css'), 'utf8');
+    const css = readFileSync(join(d, 'styles', 'globals.css'), 'utf8');
     const occurrences = (css.match(/@webjsdev\/ui theme/g) || []).length;
     assert.equal(occurrences, 1, 'theme block should only appear once');
   } finally {
