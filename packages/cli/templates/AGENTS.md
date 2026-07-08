@@ -351,7 +351,9 @@ app/                     ROUTING ONLY: thin route adapters (import from modules/
   layout.ts              root layout, wraps every page
   error.ts               error boundary (render failures → user-friendly)
   loading.ts             Suspense fallback for sibling page
-  not-found.ts           custom 404 page
+  not-found.ts           custom 404 page (nearest wins on notFound())
+  forbidden.ts           403 page (nearest wins on forbidden())
+  unauthorized.ts        401 page (nearest wins on unauthorized())
   middleware.ts          global request middleware
   [slug]/page.ts         dynamic route segment
   [...rest]/page.ts      catch-all

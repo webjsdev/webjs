@@ -18,7 +18,7 @@
  * @module action-error
  */
 
-import { isRedirect, isNotFound } from '@webjsdev/core';
+import { isRedirect, isNotFound, isForbidden, isUnauthorized } from '@webjsdev/core';
 import { digestHex } from './crypto-utils.js';
 
 /** The generic client-facing message for a sanitized prod action error. */
@@ -38,7 +38,7 @@ export const GENERIC_ERROR_MESSAGE = 'Internal server error';
  * @returns {boolean}
  */
 export function isControlFlowThrow(err) {
-  return isRedirect(err) || isNotFound(err);
+  return isRedirect(err) || isNotFound(err) || isForbidden(err) || isUnauthorized(err);
 }
 
 /**

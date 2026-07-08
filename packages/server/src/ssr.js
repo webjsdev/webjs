@@ -1,6 +1,6 @@
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
-import { renderToString, isNotFound, isRedirect, lookupModuleUrl, isLazy, cspNonce } from '@webjsdev/core';
+import { renderToString, isNotFound, isRedirect, isForbidden, isUnauthorized, lookupModuleUrl, isLazy, cspNonce } from '@webjsdev/core';
 import { importMapTag, vendorIntegrityFor, publishedBuildId, basePath, vendorPreconnectOrigins, vendorPreloadTargets } from './importmap.js';
 import { withBasePath } from './base-path.js';
 import { withAssetHash } from './asset-hash.js';
@@ -281,6 +281,17 @@ export async function ssrPage(route, params, url, opts) {
       const html = await ssrNotFoundHtml(null, opts);
       return htmlResponse(html, 404, opts.req, url);
     }
+    // forbidden() / unauthorized() sentinels (#848, Next 15/16 parity): render
+    // the nearest forbidden.{js,ts} / unauthorized.{js,ts} boundary (innermost
+    // wins), else a default page, at 403 / 401.
+    if (isForbidden(err)) {
+      const html = await ssrBoundaryHtml(nearest(route.forbiddens), '403: Forbidden', opts);
+      return htmlResponse(html, 403, opts.req, url);
+    }
+    if (isUnauthorized(err)) {
+      const html = await ssrBoundaryHtml(nearest(route.unauthorizeds), '401: Unauthorized', opts);
+      return htmlResponse(html, 401, opts.req, url);
+    }
     // APM / Sentry sink (issue #239): a page render error that becomes a 500
     // (an error.js boundary OR the default 500 page) is an unhandled error the
     // app should see in its error tracker. Report it best-effort BEFORE
@@ -392,6 +403,45 @@ function cachedHtmlResponse(rec, req, url) {
 }
 
 /* ------------ internals ------------ */
+
+/**
+ * Nearest-wins boundary file from a chain projected outermost -> innermost
+ * (the router builds these arrays via chainOf). The innermost (last) wins, the
+ * same "nearest boundary" rule error.js uses. Returns null for an empty chain.
+ * @param {string[] | undefined} files
+ * @returns {string | null}
+ */
+function nearest(files) {
+  return files && files.length ? files[files.length - 1] : null;
+}
+
+/**
+ * Render a simple boundary page (forbidden / unauthorized, #848) at the given
+ * default heading. Loads the nearest boundary module when one exists (its
+ * default export receives no props, like not-found), else emits the default
+ * heading. Mirrors ssrNotFoundHtml.
+ * @param {string | null} file
+ * @param {string} heading  e.g. '403: Forbidden'
+ * @param {{ dev: boolean, appDir: string, req?: Request }} opts
+ */
+async function ssrBoundaryHtml(file, heading, opts) {
+  let body = `<h1>${heading}</h1>`;
+  if (file) {
+    try {
+      const mod = await loadModule(file, opts.dev);
+      if (mod.default) body = await renderToString(await mod.default({}), { ssr: true, dev: opts.dev });
+    } catch (e) {
+      body = `<h1>${heading}</h1><pre>${escapeHtml(String(e))}</pre>`;
+    }
+  }
+  const nonce = opts.req ? getNonce(opts.req) : undefined;
+  return wrapInDocument(body, {
+    metadata: { title: heading.replace(/^\d+:\s*/, '') },
+    moduleUrls: [],
+    dev: opts.dev,
+    nonce,
+  });
+}
 
 async function ssrNotFoundHtml(notFoundFile, opts) {
   let body = '<h1>404: Not found</h1>';

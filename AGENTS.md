@@ -141,7 +141,9 @@ app/                        ROUTING ONLY (thin adapters importing from modules/;
   layout.js                 root layout, wraps every page
   page.js                   /
   error.js                  nested error boundary
-  not-found.js              404 page (only at app/ root; nested <segment>/not-found.js, nearest wins)
+  not-found.js              404 page (root or nested <segment>/not-found.js, nearest wins)
+  forbidden.js              403 boundary for forbidden() (nested, nearest wins)
+  unauthorized.js           401 boundary for unauthorized() (nested, nearest wins)
   <segment>/page.js         /<segment>
   [param]/page.js           dynamic route (`params.param`)
   [...rest]/ [[...rest]]/   catch-all / optional catch-all
@@ -201,6 +203,7 @@ The bare `@webjsdev/core` specifier resolves to a BROWSER bundle dropping server
 | `render(v, el)` | Client-side render into a DOM element. |
 | `renderToString` | Server-side async render to HTML with DSD (from `/server`). |
 | `notFound()` / `redirect(url[, status])` | Throw to return 404, or a redirect. No-status default is convention-picked at the catching site: 302 for a GET page-render gate, 307 (method-preserving) for a server-action redirect. Override with `redirect(url, 308)` or `redirect(url, { status })`. **NEVER** throw `redirect()` inside API route handlers (`route.ts`), as they must return a standard `Response.redirect(url, 303)` response object instead. |
+| `forbidden()` / `unauthorized()` | Throw to return 403 / 401 (#848, Next 15/16 parity). Renders the nearest `forbidden.{js,ts}` / `unauthorized.{js,ts}` boundary (innermost wins), else a default page. `forbidden()` for an authenticated user lacking permission, `unauthorized()` for a request that is not authenticated. Same control-flow-throw rules as `notFound()` (valid in pages / layouts / server actions, not in a `route.ts` handler). |
 | `Suspense({fallback, children})` | Page/region-level streaming boundary (a value in a hole). `repeat` keyed-list directive is also re-exported. |
 | `<webjs-suspense .fallback=${html\`…\`}>` | Component-level streaming boundary element (#471): wraps one or more components, flushes `.fallback` on the first byte, streams the resolved content in (concurrently across boundaries, progressively on soft nav). The renderer-recognized opt-in for SLOW async-render data. |
 | `connectWS(url, handlers)` / `richFetch<T>` | Client WebSocket (auto-reconnect, queued sends); content-negotiated rich-type fetch. |

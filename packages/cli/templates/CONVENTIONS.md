@@ -500,6 +500,8 @@ Routes live under `app/` and follow NextJs App Router conventions:
 - `app/**/error.ts`: Error boundary. Default export receives `{ error }`, returns `TemplateResult`. Nearest boundary catches errors from pages below it.
 - `app/**/loading.ts`: Loading state. Auto-wraps the sibling page in a `Suspense` boundary. Shown while async page functions resolve.
 - `app/**/not-found.ts`: 404 page. Nearest wins when `notFound()` is thrown.
+- `app/**/forbidden.ts`: 403 page. Nearest wins when `forbidden()` is thrown (an authenticated user who lacks permission).
+- `app/**/unauthorized.ts`: 401 page. Nearest wins when `unauthorized()` is thrown (a request that is not authenticated).
 - `app/sitemap.ts`: Dynamic sitemap at `/sitemap.xml`. Export a function returning an array of `{ url, lastModified }`.
 - `app/robots.ts`: Dynamic robots.txt at `/robots.txt`.
 - `app/manifest.ts`: Web app manifest at `/manifest.json`.
