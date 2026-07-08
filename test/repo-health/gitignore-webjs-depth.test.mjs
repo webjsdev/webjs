@@ -27,7 +27,10 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SHIPPED = [
   '.gitignore',
   'examples/blog/.gitignore',
-  'packages/cli/templates/.gitignore',
+  // The scaffold template ships as `gitignore` (no dot): npm strips a
+  // published `.gitignore`, so a dotfile name would arrive missing (#845).
+  // create.js renames it to `.gitignore` in the generated app.
+  'packages/cli/templates/gitignore',
 ];
 
 // `git check-ignore -q` exits 0 when ignored, 1 when not ignored, so
