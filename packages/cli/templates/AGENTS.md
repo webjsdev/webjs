@@ -549,6 +549,7 @@ Scripts (all wrap `drizzle-kit`):
 - `npm run db:studio`: `webjs db studio` (visual DB browser)
 - `npm run db:seed`: `webjs db seed` (run `db/seed.server.ts`)
 - `webjs.dev.before` and `webjs.start.before` both run `webjs db migrate` inside `webjs dev` / `webjs start` (idempotent; replaces the old `prestart` hook), so after you `db:generate` a migration it is applied on the next boot with no manual `db:migrate` step.
+- The INITIAL migration for the shipped schema is authored by `webjs create` at setup time (right after install), so `db/migrations/` is populated and the first `run dev` works with no manual database step. You run `db:generate` yourself only when you CHANGE `db/schema.server.ts` (a new table or column), then the next `run dev` applies it.
 
 Always import `db` from `db/connection.server.ts` (the globalThis-cached
 singleton avoids opening a new connection on every dev-server reload), and

@@ -21,7 +21,7 @@ cd my-app && npm run dev
 
     <p><strong><code>npm create webjs@latest</code> is the canonical way to scaffold.</strong> It always fetches the latest <code>create-webjs</code>, so you never need a global install. Prefer it over a bare <code>webjs create</code>, because a globally installed or version-manager-shimmed <code>webjs</code> (or a stray <code>npx webjs</code>) can shadow the real CLI or resolve to an unrelated package. If you DO want the global CLI for <code>webjs dev</code> / <code>db</code> and friends, install it with <code>npm i -g webjsdev</code>.</p>
 
-    <p>Every scaffold ships with Drizzle + SQLite wired up (<code>db/schema.server.ts</code> with an example <code>User</code> model and <code>db/connection.server.ts</code> exporting the <code>db</code> connection). Run <code>npm run db:migrate</code> the first time to create <code>db/dev.db</code>.</p>
+    <p>Every scaffold ships with Drizzle + SQLite wired up (<code>db/schema.server.ts</code> with an example <code>User</code> model and <code>db/connection.server.ts</code> exporting the <code>db</code> connection). <code>webjs create</code> authors the initial migration for you during setup, and the first <code>npm run dev</code> applies it automatically (the <code>webjs.dev.before</code> step runs <code>webjs db migrate</code>), so the shipped app works with no manual database step. When you later change the schema, run <code>npm run db:generate</code> and the next <code>npm run dev</code> applies the new migration.</p>
 
     <h2>Create a New App</h2>
 
