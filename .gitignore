@@ -30,7 +30,7 @@ out/
 .env.*
 !.env.example
 
-# prisma local db
+# local sqlite db (Drizzle)
 **/dev.db
 **/dev.db-journal
 

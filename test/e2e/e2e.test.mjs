@@ -16,7 +16,7 @@
  * spawns can be served on Bun by setting WEBJS_E2E_RUNTIME=bun (point
  * WEBJS_BUN_PATH at the bun binary if it is not `bun` on PATH). This exercises
  * the full browser stack against a Bun-served blog, proving the Bun.serve shell
- * and Prisma-on-Bun in a real browser:
+ * and Drizzle-on-Bun in a real browser:
  *   WEBJS_E2E=1 WEBJS_E2E_RUNTIME=bun node --test test/e2e/e2e.test.mjs
  */
 
