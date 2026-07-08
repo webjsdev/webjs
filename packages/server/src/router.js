@@ -10,6 +10,7 @@ import { walk } from './fs-walk.js';
  *   layouts: string[],
  *   errors: string[],
  *   loadings: string[],
+ *   notFounds: string[],
  *   forbiddens: string[],
  *   unauthorizeds: string[],
  *   metadataFiles: string[],
@@ -31,6 +32,8 @@ import { walk } from './fs-walk.js';
  *   apis: ApiRoute[],
  *   notFound: string | null,
  *   notFounds: Map<string, string>,
+ *   globalError: string | null,
+ *   globalNotFound: string | null,
  *   metadataRoutes: MetadataRoute[],
  *   appDir: string
  * }} RouteTable
@@ -81,6 +84,10 @@ export async function buildRouteTable(appDir) {
   const forbiddens = new Map();
   /** @type {Map<string,string>} */
   const unauthorizeds = new Map();
+  // Root-only boundaries (#848): the app-wide catch-all error and the
+  // unmatched-anywhere 404, set only at dir '.'.
+  let globalError = null;
+  let globalNotFound = null;
   /** @type {MetadataRoute[]} */
   const metadataRoutes = [];
 
@@ -141,6 +148,10 @@ export async function buildRouteTable(appDir) {
       forbiddens.set(dir, file);
     } else if (stem === 'unauthorized') {
       unauthorizeds.set(dir, file);
+    } else if (stem === 'global-error') {
+      if (dir === '.') globalError = file;
+    } else if (stem === 'global-not-found') {
+      if (dir === '.') globalNotFound = file;
     } else if (METADATA_STEMS.has(stem) && (dir === '.' || dir.split('/').every(s => !s.startsWith('[')))) {
       // Metadata route: sitemap.ts, robots.ts, icon.ts, etc.
       // Only at root or static segments (no dynamic params in metadata routes).
@@ -160,6 +171,7 @@ export async function buildRouteTable(appDir) {
     page.layouts = chainDirs.map((d) => layouts.get(d)).filter(Boolean);
     page.errors = chainDirs.map((d) => errors.get(d)).filter(Boolean);
     page.loadings = chainDirs.map((d) => loadings.get(d)).filter(Boolean);
+    page.notFounds = chainDirs.map((d) => notFounds.get(d)).filter(Boolean);
     page.forbiddens = chainDirs.map((d) => forbiddens.get(d)).filter(Boolean);
     page.unauthorizeds = chainDirs.map((d) => unauthorizeds.get(d)).filter(Boolean);
     page.middlewares = chainDirs.map((d) => middlewares.get(d)).filter(Boolean);
@@ -173,7 +185,7 @@ export async function buildRouteTable(appDir) {
   }
 
   pages.sort(compareSpecificity);
-  return { pages, apis, notFound, notFounds, metadataRoutes, appDir };
+  return { pages, apis, notFound, notFounds, globalError, globalNotFound, metadataRoutes, appDir };
 }
 
 /**

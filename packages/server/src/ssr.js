@@ -278,7 +278,10 @@ export async function ssrPage(route, params, url, opts) {
       return new Response(null, { status: e.status || 302, headers: { location: e.url } });
     }
     if (isNotFound(err)) {
-      const html = await ssrNotFoundHtml(null, opts);
+      // Nearest not-found.{js,ts} in the page's chain wins (#848 fix: previously
+      // this always rendered the bare default, ignoring even a root not-found);
+      // fall back to a root global-not-found.{js,ts}, else the default page.
+      const html = await ssrNotFoundHtml(nearest(route.notFounds) || opts.globalNotFound || null, opts);
       return htmlResponse(html, 404, opts.req, url);
     }
     // forbidden() / unauthorized() sentinels (#848, Next 15/16 parity): render
@@ -322,6 +325,23 @@ export async function ssrPage(route, params, url, opts) {
         return htmlResponse(html, 500, opts.req, url);
       } catch (nested) {
         // fall through to next error boundary
+      }
+    }
+    // Root global-error.{js,ts} (#848): the app-wide catch-all, tried after the
+    // nested error boundaries are exhausted. It renders the FULL document (its
+    // own <!doctype><html><body>, like the root layout), since a root-layout
+    // failure is exactly when it fires, so its rendered output is returned
+    // verbatim without wrapInDocument. Status 500.
+    if (opts.globalError) {
+      try {
+        const mod = await loadModule(opts.globalError, opts.dev);
+        if (mod.default) {
+          const tree = await mod.default({ error: err });
+          const body = await renderToString(tree, { ssr: true, dev: opts.dev });
+          return htmlResponse(body, 500, opts.req, url);
+        }
+      } catch (nested) {
+        // fall through to the default 500 page
       }
     }
     // Default: dev shows stack, prod shows a terse message (no stack trace leaks).

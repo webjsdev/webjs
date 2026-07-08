@@ -354,6 +354,8 @@ app/                     ROUTING ONLY: thin route adapters (import from modules/
   not-found.ts           custom 404 page (nearest wins on notFound())
   forbidden.ts           403 page (nearest wins on forbidden())
   unauthorized.ts        401 page (nearest wins on unauthorized())
+  global-error.ts        root-only app-wide error boundary (owns its <html>)
+  global-not-found.ts    root-only 404 for an unmatched-anywhere URL
   middleware.ts          global request middleware
   [slug]/page.ts         dynamic route segment
   [...rest]/page.ts      catch-all

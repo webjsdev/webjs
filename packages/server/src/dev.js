@@ -2010,6 +2010,11 @@ async function handleCore(req, ctx) {
         inertRouteModules: state.inertRouteModules,
         importOnlyRouteModules: state.importOnlyRouteModules,
         notFoundFile: state.routeTable.notFound,
+        // Root-only boundaries (#848): the app-wide catch-all error page and the
+        // unmatched-anywhere 404, rendered by ssr.js when a nested boundary is
+        // absent.
+        globalError: state.routeTable.globalError,
+        globalNotFound: state.routeTable.globalNotFound,
         // Server HTML cache (#241): a CSP-enabled page emits a fresh
         // per-request nonce into its body, so its bytes vary per request and
         // it must never be HTML-cached. Pass the flag so the cache guard skips
@@ -2039,7 +2044,9 @@ async function handleCore(req, ctx) {
   if (wantsJson(req, path)) {
     return Response.json({ error: 'Not found', path }, { status: 404 });
   }
-  return ssrNotFound(state.routeTable.notFound, { dev, appDir, req, url });
+  // Unmatched anywhere: prefer the root not-found.{js,ts}, then a
+  // global-not-found.{js,ts} (#848), else the default 404 page.
+  return ssrNotFound(state.routeTable.notFound || state.routeTable.globalNotFound, { dev, appDir, req, url });
 }
 
 /** @param {Request} req @param {string} path */
@@ -2487,11 +2494,15 @@ function computeBrowserBoundFiles(routeTable, moduleGraph, components, appDir) {
     for (const f of page.layouts || []) entries.add(f);
     for (const f of page.errors || []) entries.add(f);
     for (const f of page.loadings || []) entries.add(f);
+    for (const f of page.forbiddens || []) entries.add(f);
+    for (const f of page.unauthorizeds || []) entries.add(f);
   }
   if (routeTable.notFound) entries.add(routeTable.notFound);
   if (routeTable.notFounds) {
     for (const f of routeTable.notFounds.values()) entries.add(f);
   }
+  if (routeTable.globalError) entries.add(routeTable.globalError);
+  if (routeTable.globalNotFound) entries.add(routeTable.globalNotFound);
   // Lazy components live in the registry but no page imports their
   // class directly; the lazy-loader fetches their module URLs on
   // viewport entry. Add every discovered component file as an entry so

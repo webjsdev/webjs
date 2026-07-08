@@ -144,6 +144,8 @@ app/                        ROUTING ONLY (thin adapters importing from modules/;
   not-found.js              404 page (root or nested <segment>/not-found.js, nearest wins)
   forbidden.js              403 boundary for forbidden() (nested, nearest wins)
   unauthorized.js           401 boundary for unauthorized() (nested, nearest wins)
+  global-error.js           root-only app-wide error boundary (renders its own <html>)
+  global-not-found.js       root-only 404 for an unmatched-anywhere URL
   <segment>/page.js         /<segment>
   [param]/page.js           dynamic route (`params.param`)
   [...rest]/ [[...rest]]/   catch-all / optional catch-all
@@ -271,7 +273,7 @@ Default export receives `{ children, params, searchParams, url }`, must embed `c
 
 ### Error / loading / metadata routes
 
-`error.{js,ts}` default-exports `({ error, ...ctx }) => TemplateResult` (catches sibling-page / deeper render errors, innermost wins, prod sends only `error.message`). `loading.{js,ts}` wraps the sibling page in `Suspense` with an immediately-flushed fallback. Metadata routes (`sitemap`, `robots`, `manifest`, `icon`, `apple-icon`, `opengraph-image`, `twitter-image`) live at app root or static segments only and default-export a possibly-async function; `sitemap(entries)` / `sitemapIndex(sitemaps)` from `@webjsdev/server` serialize spec-valid XML.
+`error.{js,ts}` default-exports `({ error, ...ctx }) => TemplateResult` (catches sibling-page / deeper render errors, innermost wins, prod sends only `error.message`). `loading.{js,ts}` wraps the sibling page in `Suspense` with an immediately-flushed fallback. `forbidden.{js,ts}` / `unauthorized.{js,ts}` render the nearest 403 / 401 boundary for a thrown `forbidden()` / `unauthorized()` (#848). Two **root-only** boundaries (`app/` root exactly): `global-error.{js,ts}` is the app-wide catch-all tried after the nested `error` boundaries are exhausted, and it renders its **own** `<!doctype><html><body>` document (returned verbatim, since a root-layout failure is when it fires); `global-not-found.{js,ts}` renders for an unmatched-anywhere URL when no `not-found` matches. `not-found` is nearest-wins from the throwing page's chain (#848 fixed the prior root-only behavior). Metadata routes (`sitemap`, `robots`, `manifest`, `icon`, `apple-icon`, `opengraph-image`, `twitter-image`) live at app root or static segments only and default-export a possibly-async function; `sitemap(entries)` / `sitemapIndex(sitemaps)` from `@webjsdev/server` serialize spec-valid XML.
 
 ### Route handlers (`app/**/route.{js,ts}`)
 

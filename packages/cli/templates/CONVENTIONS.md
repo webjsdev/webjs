@@ -502,6 +502,8 @@ Routes live under `app/` and follow NextJs App Router conventions:
 - `app/**/not-found.ts`: 404 page. Nearest wins when `notFound()` is thrown.
 - `app/**/forbidden.ts`: 403 page. Nearest wins when `forbidden()` is thrown (an authenticated user who lacks permission).
 - `app/**/unauthorized.ts`: 401 page. Nearest wins when `unauthorized()` is thrown (a request that is not authenticated).
+- `app/global-error.ts` (root only): app-wide error boundary, tried after nested `error.ts` boundaries. Renders its OWN `<!doctype><html><body>` document.
+- `app/global-not-found.ts` (root only): 404 for a URL that matches nothing anywhere.
 - `app/sitemap.ts`: Dynamic sitemap at `/sitemap.xml`. Export a function returning an array of `{ url, lastModified }`.
 - `app/robots.ts`: Dynamic robots.txt at `/robots.txt`.
 - `app/manifest.ts`: Web app manifest at `/manifest.json`.
