@@ -247,6 +247,9 @@ export function register() {
 A separate app-root `instrumentation-client.{js,ts}` is imported FIRST in the
 client boot `<script type="module">`, so it runs before app modules (mirrors
 Next's `instrumentation-client`). Use it for browser-side observability init.
+Note: because it always loads, a page that would otherwise ship zero JS (a fully
+static / elided route) emits a boot script when this file is present, so add it
+only when you genuinely want client instrumentation app-wide.
 
 ### Build-info endpoint (`GET /__webjs/version`)
 

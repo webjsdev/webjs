@@ -99,6 +99,28 @@ test('setOnError does not leak across boots (cleared per run)', async () => {
   assert.equal(b.onError, null, 'the prior boot sink did not leak into this one');
 });
 
+test('CONCURRENT boots do not cross-contaminate the setOnError sink (race-safe)', async () => {
+  // Two apps whose register() install DIFFERENT sinks, booted concurrently.
+  // With a module-global handoff this races (one captures the other's sink);
+  // the AsyncLocalStorage scoping keeps each run's sink to its own context.
+  const appA = makeApp({
+    'instrumentation.js':
+      `import { setOnError } from ${JSON.stringify(INSTR_SRC)};\n` +
+      `export async function register() { await new Promise(r => setTimeout(r, 15)); setOnError(() => 'A'); }\n`,
+  });
+  const appB = makeApp({
+    'instrumentation.js':
+      `import { setOnError } from ${JSON.stringify(INSTR_SRC)};\n` +
+      `export async function register() { await new Promise(r => setTimeout(r, 5)); setOnError(() => 'B'); }\n`,
+  });
+  const [a, b] = await Promise.all([
+    runInstrumentation(appA, { dev: true }),
+    runInstrumentation(appB, { dev: true }),
+  ]);
+  assert.equal(a.onError?.(), 'A', 'app A got its own sink');
+  assert.equal(b.onError?.(), 'B', 'app B got its own sink');
+});
+
 test('instrumentation-client.js is imported FIRST in the client boot script', async () => {
   const appDir = makeApp({
     'package.json': '{"name":"x"}',

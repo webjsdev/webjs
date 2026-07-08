@@ -18,25 +18,29 @@
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { stat } from 'node:fs/promises';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 /**
- * Transient handoff channel for a `register()`-registered error sink. It is a
- * module singleton by necessity (the app imports `setOnError` from the package),
- * but `runInstrumentation` reads and CLEARS it around each boot, so the value
- * never leaks across apps sharing one process (e.g. tests): the durable copy
- * lives in the caller's closure, not here.
- * @type {((error: unknown, ctx?: any) => void) | null}
+ * Per-boot handoff channel for a `register()`-registered error sink. An
+ * AsyncLocalStorage (NOT a module global) so two `runInstrumentation` calls
+ * racing in one process (e.g. `Promise.all` of two `createRequestHandler`s in a
+ * test) each get their OWN store: `setOnError` writes to whichever run's context
+ * is active, so a concurrent boot can never capture the other's sink. The
+ * context propagates across the `await register()` awaits.
+ * @type {AsyncLocalStorage<{ onError: ((error: unknown, ctx?: any) => void) | null }>}
  */
-let _pendingOnError = null;
+const _als = new AsyncLocalStorage();
 
 /**
  * Register an error sink from inside `instrumentation.register()`. Composes with
  * the `createRequestHandler({ onError })` option. Passing a non-function clears
- * it.
+ * it. A call made outside a `runInstrumentation` context (no active store) is a
+ * safe no-op.
  * @param {(error: unknown, ctx?: any) => void} fn
  */
 export function setOnError(fn) {
-  _pendingOnError = typeof fn === 'function' ? fn : null;
+  const store = _als.getStore();
+  if (store) store.onError = typeof fn === 'function' ? fn : null;
 }
 
 async function exists(p) {
@@ -72,27 +76,28 @@ export async function findInstrumentationClient(appDir) {
  */
 export async function runInstrumentation(appDir, opts = {}) {
   const { dev = false, logger } = opts;
-  _pendingOnError = null;
   let file = null;
   for (const name of ['instrumentation.ts', 'instrumentation.js', 'instrumentation.mts', 'instrumentation.mjs']) {
     const p = join(appDir, name);
     if (await exists(p)) { file = p; break; }
   }
   if (!file) return { onError: null };
-  try {
-    const url = pathToFileURL(file).toString();
-    const bust = dev ? `?t=${Date.now()}-${Math.random().toString(36).slice(2)}` : '';
-    const mod = await import(url + bust);
-    const register = typeof mod.default === 'function'
-      ? mod.default
-      : (typeof mod.register === 'function' ? mod.register : null);
-    if (register) await register();
-  } catch (e) {
-    // A failing instrumentation hook must not crash boot: log and continue, the
-    // same fail-open posture as the readiness loader. The app still serves.
-    logger?.error?.(`[webjs] instrumentation.{js,ts} register() failed`, { err: String(e) });
-  }
-  const onError = _pendingOnError;
-  _pendingOnError = null;
-  return { onError };
+  // Per-boot store: setOnError writes here, scoped to THIS run's async context.
+  const store = { onError: null };
+  await _als.run(store, async () => {
+    try {
+      const url = pathToFileURL(file).toString();
+      const bust = dev ? `?t=${Date.now()}-${Math.random().toString(36).slice(2)}` : '';
+      const mod = await import(url + bust);
+      const register = typeof mod.default === 'function'
+        ? mod.default
+        : (typeof mod.register === 'function' ? mod.register : null);
+      if (register) await register();
+    } catch (e) {
+      // A failing instrumentation hook must not crash boot: log and continue, the
+      // same fail-open posture as the readiness loader. The app still serves.
+      logger?.error?.(`[webjs] instrumentation.{js,ts} register() failed`, { err: String(e) });
+    }
+  });
+  return { onError: store.onError };
 }

@@ -297,14 +297,8 @@ export async function ssrPage(route, params, url, opts) {
     // forbidden() / unauthorized() sentinels (#848, Next 15/16 parity): render
     // the nearest forbidden.{js,ts} / unauthorized.{js,ts} boundary (innermost
     // wins), else a default page, at 403 / 401.
-    if (isForbidden(err)) {
-      const html = await ssrBoundaryHtml(nearest(route.forbiddens), '403: Forbidden', opts);
-      return htmlResponse(html, 403, opts.req, url);
-    }
-    if (isUnauthorized(err)) {
-      const html = await ssrBoundaryHtml(nearest(route.unauthorizeds), '401: Unauthorized', opts);
-      return htmlResponse(html, 401, opts.req, url);
-    }
+    if (isForbidden(err)) return ssrForbidden(route, { ...opts, url });
+    if (isUnauthorized(err)) return ssrUnauthorized(route, { ...opts, url });
     // APM / Sentry sink (issue #239): a page render error that becomes a 500
     // (an error.js boundary OR the default 500 page) is an unhandled error the
     // app should see in its error tracker. Report it best-effort BEFORE
@@ -378,6 +372,30 @@ export async function ssrPage(route, params, url, opts) {
 export async function ssrNotFound(notFoundFile, opts) {
   const html = await ssrNotFoundHtml(notFoundFile, opts);
   return htmlResponse(html, 404, opts.req, opts.url);
+}
+
+/**
+ * 403 response for a thrown forbidden() (#848). Renders the nearest
+ * forbidden.{js,ts} in the page's chain, else a default 403 page. Shared by the
+ * page-render catch (ssr.js) and the page-action write path (page-action.js) so
+ * both behave identically.
+ * @param {{ forbiddens?: string[] }} route
+ * @param {{ dev: boolean, appDir: string, req?: Request, url?: URL }} opts
+ */
+export async function ssrForbidden(route, opts) {
+  const html = await ssrBoundaryHtml(nearest(route.forbiddens), '403: Forbidden', opts);
+  return htmlResponse(html, 403, opts.req, opts.url);
+}
+
+/**
+ * 401 response for a thrown unauthorized() (#848). Renders the nearest
+ * unauthorized.{js,ts} in the page's chain, else a default 401 page.
+ * @param {{ unauthorizeds?: string[] }} route
+ * @param {{ dev: boolean, appDir: string, req?: Request, url?: URL }} opts
+ */
+export async function ssrUnauthorized(route, opts) {
+  const html = await ssrBoundaryHtml(nearest(route.unauthorizeds), '401: Unauthorized', opts);
+  return htmlResponse(html, 401, opts.req, opts.url);
 }
 
 /**

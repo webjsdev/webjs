@@ -1,5 +1,5 @@
-import { isNotFound, isRedirect } from '@webjsdev/core';
-import { ssrPage, ssrNotFound, loadModule } from './ssr.js';
+import { isNotFound, isRedirect, isForbidden, isUnauthorized } from '@webjsdev/core';
+import { ssrPage, ssrNotFound, ssrForbidden, ssrUnauthorized, loadModule } from './ssr.js';
 import { readBytesBounded, payloadTooLarge, DEFAULT_MAX_MULTIPART_BYTES } from './body-limit.js';
 import { getBodyLimits } from './context.js';
 import { propagateTrustedRemoteIp } from './rate-limit.js';
@@ -222,6 +222,14 @@ export async function runPageAction(route, params, url, loaded, req, ssrOpts) {
     }
     if (isNotFound(err)) {
       return ssrNotFound(ssrOpts.notFoundFile ?? null, { ...ssrOpts, req, url });
+    }
+    // forbidden()/unauthorized() from a page action render the same 403/401
+    // boundary as the page-render path (#848), not a generic 500.
+    if (isForbidden(err)) {
+      return ssrForbidden(route, { ...ssrOpts, req, url });
+    }
+    if (isUnauthorized(err)) {
+      return ssrUnauthorized(route, { ...ssrOpts, req, url });
     }
     throw err;
   }
