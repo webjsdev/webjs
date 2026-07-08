@@ -49,6 +49,27 @@ function runInstall(appDir, pm) {
   return r.status === 0;
 }
 
+/**
+ * Author the INITIAL Drizzle migration for the shipped schema, so the app boots
+ * with its tables and the very first `run dev` works with no manual step. The
+ * scaffold's schema is TypeScript (`db/schema.server.ts`); `db migrate` (run in
+ * `webjs.dev.before` / `webjs.start.before`) only applies migration SQL FILES, so
+ * with no file the shipped example hits "no such table". `db generate` turns the
+ * schema into that first `db/migrations/*.sql`. It runs OFFLINE (a schema-to-SQL
+ * diff, no database connection), so it is safe for sqlite AND postgres here, well
+ * before any `DATABASE_URL` exists. Needs `drizzle-kit`, so it only runs after a
+ * successful install; on `--no-install` the printed next-steps still show
+ * `db:generate`. Returns whether a migration was authored.
+ *
+ * @param {string} appDir
+ * @param {string} pm
+ * @returns {boolean}
+ */
+function runDbGenerate(appDir, pm) {
+  const r = spawnSync(pm, ['run', 'db:generate'], { cwd: appDir, stdio: 'inherit' });
+  return r.status === 0;
+}
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMPLATES = resolve(__dirname, '..', 'templates');
 
@@ -1676,11 +1697,21 @@ For AI agents, read this before editing scaffolded files:
   // (#541). Otherwise honour the invoking PM (npm / pnpm / yarn / bun).
   const pm = isBun ? 'bun' : detectPackageManager();
   let installed = false;
+  let generatedMigration = false;
   if (shouldInstall) {
     console.log(`Running '${pm} install' in ${name}/ ...\n`);
     installed = runInstall(appDir, pm);
     if (!installed) {
       console.log(`\n[warn] ${pm} install failed. Run '${pm} install' manually in ${name}/ to finish setup.\n`);
+    } else {
+      // Author the initial migration NOW (drizzle-kit is installed), so the
+      // shipped schema's tables exist and the very first `run dev` works with no
+      // manual step (webjs.*.before applies the migration on boot). See runDbGenerate.
+      console.log(`Authoring the initial database migration ('${pm} run db:generate') ...\n`);
+      generatedMigration = runDbGenerate(appDir, pm);
+      if (!generatedMigration) {
+        console.log(`\n[warn] '${pm} run db:generate' failed. Run it manually in ${name}/ before '${pm} run dev'.\n`);
+      }
     }
   }
 
@@ -1691,14 +1722,14 @@ For AI agents, read this before editing scaffolded files:
   // templates ship with @webjsdev/ui already initialised; the api
   // template has no UI but may add one later.
   const installSegment = installed ? '' : `${pm} install && `;
-  // Some examples query the db on their first request, so a migration must be
-  // authored first: `db:generate` writes it and the `webjs.dev.before` migrate
-  // applies it on `run dev` (Drizzle splits Prisma's `migrate dev` into
-  // generate-then-migrate). The saas example queries users (auth); the
-  // full-stack scaffold ships the gallery's /examples/todo route (queries todos).
-  // The api template has no such first-request query, so it boots with just
-  // `run dev`; once you add a db route, `db:generate` then `run dev` is the loop.
-  const dbSegment = isApi ? '' : `${pm} run db:generate && `;
+  // The shipped schema is applied on the first `run dev` (webjs.*.before runs
+  // `db migrate`), but only if a migration FILE exists. When we installed, we
+  // already authored it above (runDbGenerate), so the run command is just
+  // `run dev`. Otherwise (--no-install, or generate failed) the user authors it
+  // first: `db:generate` writes the migration from db/schema.server.ts, then
+  // `run dev` applies it (Drizzle splits Prisma's `migrate dev` into
+  // generate-then-migrate).
+  const dbSegment = generatedMigration ? '' : `${pm} run db:generate && `;
   const runCommand = `cd ${name} && ${installSegment}${dbSegment}${pm} run dev`;
   // Postgres needs a reachable DATABASE_URL before any migrate (sqlite uses a
   // local file with no .env). Point it at a running database; `dev` / `start`

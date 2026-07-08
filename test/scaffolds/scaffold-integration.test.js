@@ -126,6 +126,16 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(existsSync(join(appDir, 'db', 'connection.server.ts')), 'db/connection.server.ts written');
     assert.ok(existsSync(join(appDir, 'drizzle.config.ts')), 'drizzle.config.ts written');
     assert.ok(!existsSync(join(appDir, 'prisma')), 'no prisma/ dir (counterfactual: fails if db files not written)');
+    // The INITIAL migration is authored by `webjs create` only AFTER a successful
+    // install (drizzle-kit is needed). This test scaffolds with install:false, so
+    // no migration is authored here; the printed next-steps still show db:generate
+    // for that path. (The install:true path that authors it is verified manually /
+    // via a docker build, per the CLI AGENTS.md e2e note.)
+    const migDir = join(appDir, 'db', 'migrations');
+    const migrationSql = existsSync(migDir)
+      ? readdirSync(migDir).some((d) => existsSync(join(migDir, d, 'migration.sql')))
+      : false;
+    assert.equal(migrationSql, false, 'install:false authors no migration (db:generate needs drizzle-kit)');
     assert.ok(!existsSync(join(appDir, 'lib', 'prisma.server.ts')), 'no lib/prisma.server.ts');
 
     // # path-alias imports (#555/#556): the scaffold ships the single #* catch-all
