@@ -72,6 +72,15 @@ test('does NOTHING for a normal (non-release) PR merge', () => {
   assert.doesNotMatch(out, /webjsdev/, 'no reminder for a non-release PR');
 });
 
+test('does NOTHING for a chore/release-* branch that is not a package release (the #841 false positive)', () => {
+  const { code, out } = runHook('gh pr merge 841 --squash --admin --delete-branch', {
+    headRefName: 'chore/release-hook-mise',
+    title: 'chore: also refresh the mise-shimmed webjs CLI after a release',
+  });
+  assert.equal(code, 0);
+  assert.doesNotMatch(out, /webjsdev/, 'a chore/release-* branch with a non-release title must not fire');
+});
+
 test('does NOTHING for a command that is not `gh pr merge`', () => {
   const { out } = runHook('git status', { headRefName: 'chore/release-x', title: 'chore: release x' });
   assert.doesNotMatch(out, /webjsdev/);
