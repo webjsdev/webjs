@@ -1,7 +1,7 @@
 /**
  * Resolve bare npm imports to browser-loadable URLs via jspm.io.
  *
- * webjs follows the Rails 7 + importmap-rails posture exactly. When user
+ * WebJs follows the Rails 7 + importmap-rails posture exactly. When user
  * code imports a bare specifier (e.g. `import dayjs from 'dayjs'`), the
  * browser can't resolve it natively. The framework's job is to emit an
  * importmap that translates each bare specifier to a real URL.
@@ -10,7 +10,7 @@
  *
  *   importmap: { "dayjs": "https://ga.jspm.io/npm:dayjs@1.11.13/index.js" }
  *
- * The browser fetches the bundle directly from jspm.io. The webjs server
+ * The browser fetches the bundle directly from jspm.io. The WebJs server
  * does not proxy, cache, or bundle anything. jspm.io has done the work
  * server-side (CJS-to-ESM conversion, transitive bundling, browser
  * polyfills).
@@ -85,7 +85,7 @@ const FRAMEWORK_SERVER_ONLY = new Set(['@webjsdev/cli', '@webjsdev/server', '@we
  * Excludes:
  *   - `node_modules`, `.webjs`, `public` directories
  *   - Any directory starting with `_` (webjs `_private/` convention)
- *   - `test/` and `tests/` (server-only by webjs convention)
+ *   - `test/` and `tests/` (server-only by WebJs convention)
  *   - Files whose name marks them as server-only:
  *       * `*.server.{js,ts,mjs,mts}` (path-level boundary)
  *       * `route.{js,ts,mjs,mts}` (file-router HTTP handler)
@@ -1030,7 +1030,7 @@ export async function readPinFile(appDir) {
  * When `integrity` is provided and non-empty, it's included alongside
  * `imports` as a sibling key (matching the browser importmap-integrity
  * spec: a flat `{url: 'sha384-...'}` map). Omitted entirely when empty
- * so older webjs versions read the file as before.
+ * so older WebJs versions read the file as before.
  *
  * `provider` is persisted alongside imports when non-default. It lets
  * `webjs vendor update` know which CDN to re-resolve against, and
@@ -1343,7 +1343,7 @@ export async function pinAll(appDir, opts = {}) {
   }
 
   // The app legitimately has zero bare-specifier imports (or the
-  // scanner is running outside a webjs project). Don't create an
+  // scanner is running outside a WebJs project). Don't create an
   // empty `.webjs/vendor/importmap.json`. Without this guard the file
   // gets written as `{ imports: {} }` in whatever cwd the CLI was
   // invoked from, then immediately rejected by readPinFile's empty

@@ -2,7 +2,7 @@
  * Build a full URL from a Node IncomingMessage, respecting standard
  * reverse-proxy headers (`X-Forwarded-Proto`, `X-Forwarded-Host`).
  *
- * Why: webjs apps are almost always deployed behind a reverse proxy
+ * Why: WebJs apps are almost always deployed behind a reverse proxy
  * (Railway, Fly, Render, Vercel, Cloudflare, nginx, Caddy, Traefik -
  * see the no-build architecture docs). The proxy terminates TLS and
  * speaks plain HTTP/1.1 to the container, so `req.url` inside the

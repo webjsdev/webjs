@@ -1,7 +1,7 @@
 /**
  * Minimal pluggable logger.
  *
- * webjs doesn't pick pino/winston/bunyan for you. The default in prod emits
+ * WebJs doesn't pick pino/winston/bunyan for you. The default in prod emits
  * one JSON object per line to stdout: trivially ingestable by any log
  * aggregator. In dev, lines are plain text for readability.
  *

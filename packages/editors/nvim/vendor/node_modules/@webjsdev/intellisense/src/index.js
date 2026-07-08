@@ -155,7 +155,7 @@ function init(modules) {
   }
 
   /**
-   * Build the set of webjs tag names reachable from `entry` through its
+   * Build the set of WebJs tag names reachable from `entry` through its
    * (transitive) import graph. A tag is reachable if and only if the
    * file that registers it appears anywhere in entry's import closure
    * (entry counts as importing itself).
@@ -268,7 +268,7 @@ function init(modules) {
     });
 
     // `.prop` -> property names; `?bool`/plain -> attribute names; `@event`
-    // is permissive (webjs has no declared event source) so we offer nothing
+    // is permissive (WebJs has no declared event source) so we offer nothing
     // rather than guess.
     if (ctx.prefix === 'property') {
       return ref.properties.map((p) => mk(p, 'memberVariableElement'));
@@ -326,7 +326,7 @@ function init(modules) {
 
   /**
    * The `{ tag, attr, ref, member }` for an attribute name under the cursor
-   * inside a reachable webjs tag, or undefined.
+   * inside a reachable WebJs tag, or undefined.
    *
    * @param {import('typescript/lib/tsserverlibrary').server.PluginCreateInfo} info
    * @param {string} fileName
@@ -866,7 +866,7 @@ function init(modules) {
   }
 
   /**
-   * Extract webjs components from a single source file by scanning for
+   * Extract WebJs components from a single source file by scanning for
    * `Class.register('tag')` or `customElements.define('tag', Class)`.
    *
    * @param {import('typescript').SourceFile} sf
@@ -918,7 +918,7 @@ function init(modules) {
   /**
    * Read a class's reactive property declarations into per-member records.
    * Covers BOTH the `extends WebComponent({ … })` factory shape (the canonical
-   * form) and a legacy `static properties = { … }` initializer. webjs maps each
+   * form) and a legacy `static properties = { … }` initializer. WebJs maps each
    * key to a reactive property (the `.prop` binding name) plus, unless
    * `state: true`, a hyphenated HTML attribute (the plain and `?bool` binding
    * name).
@@ -1284,9 +1284,9 @@ function init(modules) {
    * ================================================================ */
 
   /**
-   * Walk every html`` template in the file and run the webjs in-template
-   * diagnostic rules over the parsed AST of each reachable webjs tag. Rules
-   * (all zero-false-positive by design, since webjs has no element type map
+   * Walk every html`` template in the file and run the WebJs in-template
+   * diagnostic rules over the parsed AST of each reachable WebJs tag. Rules
+   * (all zero-false-positive by design, since WebJs has no element type map
    * to safely flag unknown tags/attributes against):
    *
    *  - **incompatible-type-binding** (code 9001): an interpolated value whose

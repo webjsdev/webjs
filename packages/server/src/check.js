@@ -14,7 +14,7 @@ import { analyzeElision } from './component-elision.js';
 import { RESERVED_CONFIG } from './action-config.js';
 
 /**
- * Convention validator for webjs apps.
+ * Convention validator for WebJs apps.
  *
  * Scans an app directory and reports correctness violations: things that
  * crash the app, leak a secret, or fail the build / type-strip. Designed to be
@@ -380,7 +380,7 @@ function findBrowserMemberUses(code) {
 }
 
 /**
- * Scan a webjs app directory and report convention violations.
+ * Scan a WebJs app directory and report convention violations.
  *
  * Every rule is a correctness check (a crash, a security leak, or a
  * build/type-strip failure), so they all run unconditionally. There is no
@@ -436,7 +436,7 @@ export async function checkConventions(appDir) {
       // redactor leaves them alone.
       if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
       // Accept either registration pattern:
-      //   Counter.register('tag')                    (webjs idiom)
+      //   Counter.register('tag')                    (WebJs idiom)
       //   customElements.define('tag', Counter)      (native)
       if (/\b[A-Z][A-Za-z0-9_$]*\.register\s*\(\s*['"`]/.test(scan)) continue;
       if (/\bcustomElements\.define\s*\(/.test(scan)) continue;
@@ -1208,7 +1208,7 @@ function findImportChain(graph, from, to) {
  * @param {Violation[]} violations  appended to in place
  */
 async function checkServerImportInBrowserModule(appDir, violations) {
-  // No `app/` directory means this is not a routable webjs app (e.g. a bare
+  // No `app/` directory means this is not a routable WebJs app (e.g. a bare
   // component library, or a fixture with only `lib/`); nothing ships, so the
   // rule has nothing to police. Skip rather than do the heavy analysis.
   if (!(await pathExists(join(appDir, 'app')))) return;

@@ -1,7 +1,7 @@
 /**
  * Startup env-var validation with a typed schema hook (issue #236).
  *
- * webjs auto-loads `<appDir>/.env` into `process.env` at boot, but does no
+ * WebJs auto-loads `<appDir>/.env` into `process.env` at boot, but does no
  * validation, so a missing or misconfigured required var (DATABASE_URL,
  * AUTH_SECRET, ...) fails late and cryptically (a database connect error
  * mid-request, an undefined secret signing a token). This module adds an

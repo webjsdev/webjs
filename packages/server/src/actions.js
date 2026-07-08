@@ -33,12 +33,12 @@ function jsonBodyLimit() {
 }
 
 /**
- * Internal RPC wire-format content type. Distinguishes webjs action
+ * Internal RPC wire-format content type. Distinguishes WebJs action
  * responses from plain `application/json` so the stub can pick the right
  * parser and external JSON consumers aren't confused.
  *
  * Uses the content type from the active serializer (defaults to
- * `application/vnd.webjs+json` with the built-in webjs serializer).
+ * `application/vnd.webjs+json` with the built-in WebJs serializer).
  */
 export const RPC_CONTENT_TYPE = 'application/vnd.webjs+json';
 

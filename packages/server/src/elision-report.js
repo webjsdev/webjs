@@ -2,7 +2,7 @@
  * App-level elision report (#646).
  *
  * A reporting layer over the `analyzeElision` verdict, NOT a second analysis
- * and NOT a build (webjs is no-build; elision is the server's analysis pass,
+ * and NOT a build (WebJs is no-build; elision is the server's analysis pass,
  * run at dev-server start and re-derived after each fs.watch rebuild). It
  * builds the module graph, runs `analyzeElision`, and returns the page / layout
  * route modules that SHIP WHOLE to the browser, each with the first

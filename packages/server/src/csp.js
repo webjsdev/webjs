@@ -181,7 +181,7 @@ export function readCspConfig(pkg) {
 export function mintNonce() {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
-  // Buffer is available in every webjs server runtime (Node 24+). Avoids a
+  // Buffer is available in every WebJs server runtime (Node 24+). Avoids a
   // hand-rolled base64 of a binary string.
   return Buffer.from(bytes).toString('base64');
 }

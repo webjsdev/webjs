@@ -1,5 +1,5 @@
 /**
- * Static analyser deciding whether a webjs component module can be
+ * Static analyser deciding whether a WebJs component module can be
  * ELIDED from the browser, that is, never downloaded as JS because its
  * SSR'd HTML is the complete, final output and the component does no
  * client-side work.
@@ -34,7 +34,7 @@
  *      packages/core/AGENTS.md and the MAINTAINER NOTE on the
  *      WebComponent lifecycle in packages/core/src/component.js both
  *      direct anyone adding an interactivity surface to update these
- *      lists, since webjs development is largely AI-agent driven.
+ *      lists, since WebJs development is largely AI-agent driven.
  */
 
 import {
@@ -101,7 +101,7 @@ export const CLIENT_LIFECYCLE_HOOKS = [
   'connectedCallback',
   'disconnectedCallback',
   'attributeChangedCallback',
-  // Standard custom-element callback webjs does not itself define (so it
+  // Standard custom-element callback WebJs does not itself define (so it
   // is absent from the prototype guard's CLASSIFICATION), but an author
   // can still override it to do client work. Kept for conservatism.
   'adoptedCallback',

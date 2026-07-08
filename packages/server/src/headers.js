@@ -2,7 +2,7 @@
  * Secure-by-default response headers plus a small declarative per-path
  * header config (issue #232).
  *
- * webjs sets a baseline of standard security headers on every document
+ * WebJs sets a baseline of standard security headers on every document
  * and asset response, so a scaffolded app is not clickjackable or
  * MIME-sniffable out of the box (no reverse proxy required for the
  * baseline). The defaults are LITERAL HTTP headers, no abstraction.

@@ -1,5 +1,5 @@
 /**
- * The webjs VSCode extension entry point (#382, phase 1 of #381).
+ * The WebJs VSCode extension entry point (#382, phase 1 of #381).
  *
  * Most of the value is DECLARATIVE (the manifest's `contributes`): the
  * `html`/`css`/`svg` template grammars highlight embedded markup with no Lit

@@ -1,5 +1,5 @@
 /**
- * Testing utilities for webjs components.
+ * Testing utilities for WebJs components.
  *
  * **When to use (AI hint):** Import from `'@webjsdev/core/testing'` in test files
  * to create, render, and interact with web components in a Node.js test

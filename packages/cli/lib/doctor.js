@@ -1,7 +1,7 @@
 /**
  * `webjs doctor`: a project-health checklist runner (issue #266).
  *
- * webjs has unusually many fragile preconditions, each an independent failure
+ * WebJs has unusually many fragile preconditions, each an independent failure
  * mode a contributor onboarding to an existing repo only hits at runtime: the
  * Node 24+ strip-types floor, the `erasableSyntaxOnly` TS flag, importmap pin
  * freshness, env drift vs `.env.example`, `@webjsdev/*` version coherence, and

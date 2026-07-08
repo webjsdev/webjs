@@ -2,7 +2,7 @@
  * Context Protocol: cross-component data sharing without prop drilling.
  *
  * Implements the W3C Community Group Context Protocol so any web component
- * (not just webjs components) can participate as a provider or consumer.
+ * (not just WebJs components) can participate as a provider or consumer.
  *
  * ## When to use
  *

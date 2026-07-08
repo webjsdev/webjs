@@ -493,7 +493,7 @@ class SignalWatcher {
    * to the watcher's producer set automatically. Re-arms on every call.
    *
    * Used by the WebComponent integration and the `watch()` directive
-   * because the natural webjs pattern is "watch everything this render
+   * because the natural WebJs pattern is "watch everything this render
    * touches" rather than enumerating signals up front.
    *
    * @param {() => unknown} fn

@@ -2,7 +2,7 @@
  * The `source` tool for `webjs mcp` (#378): read-only access to the FRAMEWORK
  * source itself.
  *
- * webjs is buildless, so every app's `node_modules/@webjsdev/<pkg>/src` holds the
+ * WebJs is buildless, so every app's `node_modules/@webjsdev/<pkg>/src` holds the
  * authored JSDoc `.js`, and server-side that source runs directly. (The one built
  * artifact is the `@webjsdev/core` browser bundle in `dist/`, which this tool
  * deliberately skips: it surfaces only the authored `src/`.) That is a real

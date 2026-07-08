@@ -1,5 +1,5 @@
 /**
- * TypeScript overlay for the `webjs` config block in a webjs app's
+ * TypeScript overlay for the `webjs` config block in a WebJs app's
  * package.json.
  *
  *     // package.json is JSON, so author it there, but a typed reference
@@ -124,7 +124,7 @@ export interface WebjsCspConfig {
 }
 
 /**
- * The `webjs` object in a webjs app's package.json. Every key is
+ * The `webjs` object in a WebJs app's package.json. Every key is
  * optional. Mirrors what the server readers actually consume, NOT a
  * Next.js superset.
  */

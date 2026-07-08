@@ -19,7 +19,7 @@ import { readFileSync } from 'node:fs';
 /**
  * Pull the first useful `file:line:column` out of an error stack. Prefers a
  * frame under `appDir` (the user's own code) over a framework / node_modules
- * frame, so the overlay points at the edit that broke, not webjs internals.
+ * frame, so the overlay points at the edit that broke, not WebJs internals.
  *
  * Handles the V8 stack forms `at fn (/abs/file.ts:12:5)`, `at /abs/file.ts:12:5`,
  * and `at file:///abs/file.ts:12:5`.

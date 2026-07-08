@@ -1,6 +1,6 @@
 /**
  * Tiny client-side WebSocket helper with automatic reconnection, JSON
- * parse/stringify, and the webjs CSRF-style matches-origin wss:// scheme
+ * parse/stringify, and the WebJs CSRF-style matches-origin wss:// scheme
  * rewriting.
  *
  * ```js

@@ -159,7 +159,7 @@ function defaultHasChanged(a, b) {
  * `attachInternals()` on hydration.
  *
  * Deliberate deviation from lit: lit's `checkValidity` / `reportValidity`
- * THROW on the server. webjs returns `true` instead, to keep SSR
+ * THROW on the server. WebJs returns `true` instead, to keep SSR
  * progressive-enhancement-safe (a stray validity call in a constructor must
  * not 500 the page); the browser does the real validation.
  * @returns {any}

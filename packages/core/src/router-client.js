@@ -153,7 +153,7 @@ let currentPageUrl = null;
  * Previous value of `history.scrollRestoration` (so we can restore it
  * when the router is disabled). The browser's default behavior of
  * auto-restoring scroll on popstate races with the SPA's own scroll
- * restoration: disabled here so webjs is the sole authority on scroll
+ * restoration: disabled here so WebJs is the sole authority on scroll
  * during navigation. Same pattern as Turbo Drive's
  * `assumeControlOfScrollRestoration()` (turbo/src/core/drive/history.js).
  *
@@ -1189,7 +1189,7 @@ function prefetchSuppressed(anchor) {
 
 /**
  * Resolve the prefetch strategy for an anchor from a `data-prefetch`
- * attribute. webjs has no Link component (links are plain `<a href>`), so
+ * attribute. WebJs has no Link component (links are plain `<a href>`), so
  * the knob is a valid-HTML `data-*` attribute, the same shape SvelteKit
  * (`data-sveltekit-preload-data`) and Astro (`data-astro-prefetch`) use.
  * Next.js / Nuxt / Remix express the same choice as a component PROP
@@ -2839,7 +2839,7 @@ function getCspNonce() {
   // because it can be called against script/link elements (where
   // browsers DO expose `.nonce` and additionally clear the
   // `nonce` attribute on document load). The `<meta name="csp-nonce">`
-  // element webjs targets has no `.nonce` IDL (only script + link
+  // element WebJs targets has no `.nonce` IDL (only script + link
   // elements do per HTML spec), so the only viable source is the
   // `content` attribute.
   return meta ? meta.getAttribute('content') || '' : '';

@@ -73,7 +73,7 @@ export function startBunListener(ctx) {
   const server = Bun.serve({
     port,
     idleTimeout: bunIdleTimeout(timeouts),
-    // webjs owns its dev error overlay (over SSE) and handles thrown errors in
+    // WebJs owns its dev error overlay (over SSE) and handles thrown errors in
     // `fetch`, so Bun's own development error page must never interfere; keep it
     // deterministic (off) rather than tied to NODE_ENV.
     development: false,
@@ -172,7 +172,7 @@ export function startBunListener(ctx) {
  * the `open` handler; messages/close are forwarded to its emitter from the
  * `websocket.message` / `websocket.close` handlers.
  *
- * Only `'message'` and `'close'` are forwarded (the events webjs WS handlers and
+ * Only `'message'` and `'close'` are forwarded (the events WebJs WS handlers and
  * `broadcast()` use). Bun exposes no per-socket `'error'` / `'ping'` / `'pong'`
  * handler to bridge; a socket failure on Bun surfaces as a `'close'`, so
  * `'close'`-keyed cleanup still runs. Documented in the WebSockets doc.

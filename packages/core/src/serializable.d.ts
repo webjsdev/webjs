@@ -2,7 +2,7 @@
  * Compile-time serializability typing for server actions (#488).
  *
  * A `'use server'` action's arguments and result cross the RPC wire through the
- * webjs serializer, which round-trips a SPECIFIC set of rich types (`Date`,
+ * WebJs serializer, which round-trips a SPECIFIC set of rich types (`Date`,
  * `Map`, `Set`, `BigInt`, `Error`, `RegExp`, `URL`, typed arrays, `ArrayBuffer`,
  * `Blob`, `File`, `FormData`, registered `Symbol`s, plain objects / arrays, and
  * cycles). It does NOT round-trip a FUNCTION or a class instance's METHODS: a
@@ -17,7 +17,7 @@
  * / `SerializableResult` apply it across an action's parameter tuple and its
  * (possibly promised) return.
  *
- * This is OPT-IN by design: webjs actions stay plain `export async function`s
+ * This is OPT-IN by design: WebJs actions stay plain `export async function`s
  * with no wrapper (the framework rewrites the client import to an RPC stub at
  * runtime, it does not wrap the authored function). An author who wants the
  * guard annotates the action with `SerializableActionFn`, e.g.
@@ -40,7 +40,7 @@ export type NonSerializable<Reason extends string = 'this value is not serializa
 type SerializablePrimitive = string | number | boolean | bigint | null | undefined;
 
 /**
- * Built-in rich types the webjs serializer round-trips as themselves (their
+ * Built-in rich types the WebJs serializer round-trips as themselves (their
  * identity / methods survive because the serializer reconstructs the instance).
  * `Map` / `Set` recurse into their members via the top-level mapper.
  */
