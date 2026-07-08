@@ -10,6 +10,7 @@
 #
 #   npm update -g webjsdev
 #   bun add -g webjsdev
+#   mise use -g npm:webjsdev@latest
 #
 # It REMINDS rather than runs, on purpose: those commands pull the LATEST
 # PUBLISHED version, so they must run AFTER `.github/workflows/release.yml`
@@ -56,8 +57,11 @@ released version), update the globally installed CLI on BOTH package managers so
 local scaffolding / dogfooding uses the new release:
   npm update -g webjsdev
   bun add -g webjsdev
-Run them AFTER the publish is confirmed, not before (they pull the latest
-PUBLISHED version). Disable this reminder with WEBJS_NO_RELEASE_GLOBAL_UPDATE=1.
+  mise use -g npm:webjsdev@latest
+Run all three AFTER the publish is confirmed, not before (they pull the latest
+PUBLISHED version). The `mise use` line is the one that actually moves a
+mise-shimmed `webjs` (verify with `mise which webjs`). Disable this reminder with
+WEBJS_NO_RELEASE_GLOBAL_UPDATE=1.
 EOF
 
 jq -n --arg ctx "$MSG" '{

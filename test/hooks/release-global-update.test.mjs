@@ -52,6 +52,7 @@ test('reminds after a chore/release-* branch PR merge', () => {
   assert.equal(code, 0);
   assert.match(out, /npm update -g webjsdev/, 'reminds about npm global update');
   assert.match(out, /bun add -g webjsdev/, 'reminds about bun global add');
+  assert.match(out, /mise use -g npm:webjsdev/, 'reminds about the mise-shimmed CLI update');
 });
 
 test('reminds when the title is "chore: release" even if the branch differs', () => {
