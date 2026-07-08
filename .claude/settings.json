@@ -67,6 +67,10 @@
           {
             "type": "command",
             "command": ".claude/hooks/cleanup-merged-worktree.sh"
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/release-global-update.sh"
           }
         ]
       }

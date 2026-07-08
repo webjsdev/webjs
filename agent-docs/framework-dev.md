@@ -62,6 +62,8 @@ npm runs first; if it fails (auth, network, transient registry error), the GitHu
 
 The workflow uses `NPM_TOKEN` (repo secret) and the auto-provisioned `GITHUB_TOKEN`. Free for public repos.
 
+**Update the global CLI after the publish lands.** The maintainer scaffolds and dogfoods with the globally installed `webjs` CLI, which lags a release until refreshed. So once `release.yml` has published (verify `npm view @webjsdev/cli version` matches the released version), run BOTH `npm update -g webjsdev` and `bun add -g webjsdev`. Run them AFTER the publish, never at merge time (they pull the LATEST PUBLISHED version). This is reminded automatically by the `.claude/hooks/release-global-update.sh` PostToolUse hook, which fires when a `chore/release-*` PR merges (escape hatch `WEBJS_NO_RELEASE_GLOBAL_UPDATE=1`, regression test `test/hooks/release-global-update.test.mjs`).
+
 ---
 
 ## Dev error overlay: rich, pushed live over SSE (dev-only) (#264)
