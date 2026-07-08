@@ -177,7 +177,7 @@ const posts = await richFetch<Post[]>('/api/posts');
 ```
 
 The `json()` helper reads the in-flight Request via AsyncLocalStorage:
-- `Accept: application/vnd.webjs+json` → encoded with the webjs serializer, served with `Content-Type: application/vnd.webjs+json` and `Vary: Accept`.
+- `Accept: application/vnd.webjs+json` → encoded with the WebJs serializer, served with `Content-Type: application/vnd.webjs+json` and `Vary: Accept`.
 - Otherwise → plain JSON.
 
 Request bodies parse with `readBody(req)` from `@webjsdev/server`.
@@ -389,7 +389,7 @@ Gives you, inside `` html`` `` templates:
 - **Diagnostics**: attribute / property value type-checks (`<my-counter .count=${expr}>` assignability-checks `typeof expr` against the property's type from the `WebComponent({ count: Number })` factory shape, and `@click=${fn}` must be callable), unquoted `@`/`.`/`?` bindings (invariant 4), and expressionless `.prop` bindings.
 - **Hover**: a tag shows its component class; an attribute / property / event shows its declared type.
 
-Every feature is gated on import-graph reachability: a tag is recognized only if the file registering it is reachable from the file you're editing. There is deliberately no blanket "unknown tag / attribute" diagnostic (webjs has no element type map, so it would false-positive on third-party custom elements).
+Every feature is gated on import-graph reachability: a tag is recognized only if the file registering it is reachable from the file you're editing. There is deliberately no blanket "unknown tag / attribute" diagnostic (WebJs has no element type map, so it would false-positive on third-party custom elements).
 
 ### The `webjs` VSCode extension (recommended over a manual tsconfig plugin)
 
@@ -397,6 +397,6 @@ The `webjs` extension (`packages/editors/vscode`, on the VS Marketplace and Open
 
 - `` html` `` / `` css` `` / `` svg` `` template highlighting via original TextMate injection grammars (no separate Lit / lit-html extension needed).
 - Snippets for the common recipes (`wjpage`, `wjcomponent`, `wjaction`, and more).
-- Commands (`webjs: Run check`, `webjs: Create a new app`, `webjs: Open documentation`).
+- Commands (`WebJs: Run check`, `WebJs: Create a new app`, `WebJs: Open documentation`).
 
 It works in VSCode and its forks (Cursor, Antigravity, Windsurf, VSCodium), which pull from Open VSX. The bundled plugin is standalone (no Lit dependency), so it is the whole webjs language service. Install via the Extensions view (search "webjs"), or for editors without a UI, `code --install-extension webjs.vsix`. **Neovim** has its own plugin, `webjs.nvim` (`packages/editors/nvim`, install `webjsdev/webjs.nvim` via lazy.nvim / packer): treesitter `html` / `css` / `svg` template highlighting plus the same tsserver plugin wired through `ts_ls`. JetBrains uses the manual `tsconfig.json` `plugins` entry above.

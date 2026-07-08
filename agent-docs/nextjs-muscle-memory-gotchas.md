@@ -1,11 +1,11 @@
 # Next.js muscle-memory gotchas
 
 AI agents trained on Next.js will reach for patterns that look correct
-because webjs borrows Next's **file-based routing** (the `app/` directory,
+because WebJs borrows Next's **file-based routing** (the `app/` directory,
 `page` / `layout` / `route` / `loading` / `error` / `not-found`, dynamic
 `[param]` segments, route groups, `middleware`, the metadata routes). The
 routing SHAPE is familiar; the execution model underneath is not. This file
-catalogs the Next patterns that break webjs, with the webjs-shaped fix for each.
+catalogs the Next patterns that break WebJs, with the webjs-shaped fix for each.
 
 The architectural disagreement underneath all of these. Next is React-first
 with a server/client component split (RSC, the Flight protocol, `'use client'`).
@@ -24,17 +24,17 @@ Do not reach for `'use client'` at the top of a component, and do not think of
   page or layout cannot be interactive in its own markup (an `@click` in a page
   template is dropped at SSR).
 - **`'use server'` DOES exist, but it is not a component annotation.** In Next
-  `'use server'` marks a Server Action; in webjs it is the RPC plus
+  `'use server'` marks a Server Action; in WebJs it is the RPC plus
   source-protection directive at the top of a `*.server.ts` file, marking that
   file's exports as callable from the client (the import is rewritten to a typed
-  RPC stub). It never turns a component into a "Server Component" (webjs has no
+  RPC stub). It never turns a component into a "Server Component" (WebJs has no
   such thing). So `'use server'` is a real, supported directive. Just apply it to
   a `.server.ts` action file, not to a component or page.
 
 ## 2. `redirect()` throws, and it is illegal in a route handler
 
 In Next, `redirect()` works in Server Components, Server Actions, and Route
-Handlers alike. In webjs, `redirect()` (and `notFound()`) throw a control-flow
+Handlers alike. In WebJs, `redirect()` (and `notFound()`) throw a control-flow
 sentinel the SSR page pipeline and the action pipeline catch. They are valid in
 **page functions, layouts, and server actions**. They are **NOT** valid in a
 `route.ts` handler, where the throw goes uncaught and returns a 500 (the
@@ -72,7 +72,7 @@ Component. Webjs has no Server Components, so:
 ## 4. `params` and `searchParams` are awaitable AND synchronously readable
 
 Next 15/16 made `params` / `searchParams` Promises (`const { id } = await
-params`). webjs supports BOTH (#848): the Next `await` habit works, and the
+params`). WebJs supports BOTH (#848): the Next `await` habit works, and the
 plain sync read also works, so either muscle memory is correct.
 
 ```ts
@@ -91,7 +91,7 @@ handler context alike.
 ## 5. The page default export returns a template, and runs server-only
 
 A Next page returns JSX and (as a Server Component) may embed client
-interactivity directly. A webjs page default export returns a `TemplateResult`
+interactivity directly. A WebJs page default export returns a `TemplateResult`
 from `html` and **runs only on the server**. It is never re-invoked in the
 browser, so a signal read or `@click` in a page body does nothing after load. Put
 interactivity in a `WebComponent` and render its tag from the page.
@@ -119,7 +119,7 @@ Two Next habits break here.
 
 **The file is still `middleware.ts`, NOT `proxy.ts`.** Next 16 renamed its
 `middleware.ts` to `proxy.ts` (its request interceptor is really an edge/CDN
-proxy). webjs deliberately keeps `middleware.ts`: webjs's is an in-process,
+proxy). WebJs deliberately keeps `middleware.ts`: webjs's is an in-process,
 chainable, per-segment request middleware (the Remix / Koa model), which is what
 "middleware" means everywhere except Next's edge runtime. The name follows the
 behaviour, so do not create a `proxy.ts` expecting it to run.
@@ -132,10 +132,10 @@ folder (a `middleware.ts` in a segment applies to that subtree), running
 outermost to innermost down the matched route, plus an optional root
 `middleware.ts` that runs on every request.
 
-**webjs advantage over Next here.** Next supports only ONE `proxy.ts` per project
+**WebJs advantage over Next here.** Next supports only ONE `proxy.ts` per project
 (docs: "only one `proxy.ts` file is supported per project"); to scope logic to a
 route you branch inside that one function against `matcher` / the pathname, so all
-cross-cutting concerns funnel through a single growing file. webjs colocates
+cross-cutting concerns funnel through a single growing file. WebJs colocates
 middleware with the segment it guards: put `app/admin/middleware.ts` next to the
 admin routes and it runs for that subtree only, no path-matching boilerplate and
 no central bottleneck. The chain composes naturally (auth at the root, an extra
@@ -148,7 +148,7 @@ check deeper in), each middleware calling `next()` to continue.
   soft navigation for free. There is no `<Link>` to import, no `useRouter`. For
   programmatic navigation import `navigate()` / `revalidate()` from
   `@webjsdev/core`.
-- **No `next/image`, `next/font`, `next/script`, `next/dynamic`.** webjs is
+- **No `next/image`, `next/font`, `next/script`, `next/dynamic`.** WebJs is
   no-build; use a plain `<img>`, a `<link>`/`@font-face`, a component's
   `static lazy = true` for viewport lazy-loading, and a dynamic `import()` where
   you need code to load lazily.

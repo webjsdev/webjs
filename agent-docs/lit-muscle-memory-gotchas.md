@@ -26,7 +26,7 @@ decision. You decide whether a given component is interactive (and
 therefore needs JS shipped and run) at the component boundary.
 "Hydrate this island, skip that one."
 
-In webjs, the granularity is different. Every component is server
+In WebJs, the granularity is different. Every component is server
 rendered. JavaScript is requested **by the specific interactive holes
 you write in the template**. A `@click=${...}` binding requests JS for
 click handling. A `signal.set(...)` call (instance or module-scope)
@@ -46,7 +46,7 @@ stays exactly as the server painted it. You do not pick a hydration
 mode for the component. You write the markup, and the JS budget
 follows from which interactive behaviors that markup uses.
 
-Practical consequences for agents writing webjs code.
+Practical consequences for agents writing WebJs code.
 
 1. Never reach for `fetch()` plus a JS click handler when a `<form>`
    plus a server action would do. The form is free (no JS), the
@@ -75,7 +75,7 @@ manual `observedAttributes` / `attributeChangedCallback`, manual
 `customElements.define`) inside a component is the anti-pattern. Use the
 lit form unless the vanilla API is genuinely unavoidable.
 
-| Vanilla muscle memory | Lit-style webjs form |
+| Vanilla muscle memory | Lit-style WebJs form |
 |---|---|
 | `this.getAttribute('x')` / `this.hasAttribute('x')` for own config | a reactive prop declared in the factory: `extends WebComponent({ x: String })`, read `this.x` (the prop rides the `x` attribute) |
 | `this.setAttribute('x', v)` / `removeAttribute` to reflect own state | a reactive prop with `reflect: true`, or for non-attribute state a `signal` |
@@ -132,7 +132,7 @@ just use it.
 
 ## The SSR contract: the pre-render lifecycle plus `render()`
 
-By design, the webjs SSR pipeline constructs the instance, applies
+By design, the WebJs SSR pipeline constructs the instance, applies
 attributes, runs the **pre-render value-deriving hooks** (`willUpdate`,
 then controllers' `hostUpdate`), reflects `reflect: true` properties,
 and calls `instance.render()`. Nothing past render fires server-side.
@@ -155,7 +155,7 @@ The gotchas below are all violations of that rule.
 ### 1. Fetching data in `connectedCallback` or `firstUpdated`
 
 The lit pattern is to subscribe or fetch on connect, then update
-state when the data arrives. In webjs the first paint is empty because
+state when the data arrives. In WebJs the first paint is empty because
 neither hook runs server-side. Content pops in after hydration, often
 with a layout shift.
 
@@ -184,7 +184,7 @@ mutations, polling, websocket reactions). For initial-paint data, fetch
 in the page function OR in the component itself with an `async render()`
 (see the next entry), which Lit does not have.
 
-### 2b. Lit has no async render; webjs does (#469)
+### 2b. Lit has no async render; WebJs does (#469)
 
 Lit keeps `render()` synchronous (its async-SSR work signals a promise the
 renderer awaits BEFORE a still-sync render). WebJs lets `render()` itself be
@@ -278,7 +278,7 @@ connectedCallback() {
 
 ### 5. Class-field initializers for reactive properties
 
-In Lit, class-field initializers (like `student: Student = { name: '', email: '' }`) are commonly used. In webjs, the base class installs reactive accessors on `this` inside the constructor via `Object.defineProperty` (to support SSR property hydration and signals). Under modern V8 class-field semantics, a class-field initializer compiles to an assignment after `super()`, which uses `[[Define]]` and overwrites the accessor, silently breaking reactivity. The footgun is still live with factory-declared props, so it stays a gotcha.
+In Lit, class-field initializers (like `student: Student = { name: '', email: '' }`) are commonly used. In WebJs, the base class installs reactive accessors on `this` inside the constructor via `Object.defineProperty` (to support SSR property hydration and signals). Under modern V8 class-field semantics, a class-field initializer compiles to an assignment after `super()`, which uses `[[Define]]` and overwrites the accessor, silently breaking reactivity. The footgun is still live with factory-declared props, so it stays a gotcha.
 
 The fix is to declare the prop in the base-class factory `WebComponent({ ... })` (which types it automatically, no `declare` line) and set its default in the constructor after `super()`, never as a class-field initializer:
 
@@ -298,7 +298,7 @@ class StudentCard extends WebComponent({
 
 ### 6. The `@property()` decorator and a direct `static properties` block
 
-The `@property()` decorator is banned by framework invariant 10 (erasable TS): decorators are non-erasable, so they would force the framework to depend on a build step. A direct `static properties = { ... }` block is also gone, and webjs THROWS at runtime if a class body declares one (flagged by the `no-static-properties` rule). The single replacement for both is the declare-free base-class factory `WebComponent({ ... })` (the `prop()` helper carries options), as shown above.
+The `@property()` decorator is banned by framework invariant 10 (erasable TS): decorators are non-erasable, so they would force the framework to depend on a build step. A direct `static properties = { ... }` block is also gone, and WebJs THROWS at runtime if a class body declares one (flagged by the `no-static-properties` rule). The single replacement for both is the declare-free base-class factory `WebComponent({ ... })` (the `prop()` helper carries options), as shown above.
 
 ## Patterns that produce different visual output
 
@@ -313,7 +313,7 @@ the global namespace.
 This is also the **styling reflex** to unlearn, not just a config
 default. Because lit scopes, the lit habit is to author scoped CSS
 (`static styles = css\`\``) or an inline `<style>` with semantic class
-names (`.hero`, `.feature`, `.card`) for every component. In a webjs
+names (`.hero`, `.feature`, `.card`) for every component. In a WebJs
 light-DOM component that CSS either does nothing (the scoped block) or
 leaks globally (the inline `<style>` with bare class names). **The
 webjs-shaped fix is Tailwind utilities, which apply directly in light
@@ -383,7 +383,7 @@ derivation is shared across `render()` and a client hook.
 ### 10. `ContextProvider` for server-known data
 
 Context providers in lit publish on connect via `hostConnected`. In
-webjs SSR, `connectedCallback` does not run, so descendants that read
+WebJs SSR, `connectedCallback` does not run, so descendants that read
 context during SSR see the default value (or undefined). On hydration
 the provider connects and consumers re-render, causing a content
 shift.
@@ -447,7 +447,7 @@ must move with it, use `repeat()` with a stable key.
 
 ### 12. Interpolating into a `<style>` or `<script>` inside a component
 
-In lit you can write a binding inside a `<style>` and it works. In a webjs
+In lit you can write a binding inside a `<style>` and it works. In a WebJs
 **component** it does not, and it fails in the worst way (silently, only after
 hydration). The server renderer emits the interpolated content, so the first
 paint looks right; the client renderer drops a raw-text hole (the compile cache

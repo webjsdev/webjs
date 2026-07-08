@@ -236,7 +236,7 @@ see: a tag built from a dynamic string (`whenDefined(\`x-\${name}\`)`), or
 a `:defined` rule in an external stylesheet that is not part of the module
 graph. If you observe a component that way, add an interactivity signal
 (an `@event`, a non-`state` reactive property, or a lifecycle hook) so it
-ships. In idiomatic webjs this is rare: a display-only element is
+ships. In idiomatic WebJs this is rare: a display-only element is
 server-rendered to its final HTML and read as plain markup, and
 `:defined` FOUC-hiding works against progressive enhancement (it would
 hide content that already painted). But if you reach for those dynamic

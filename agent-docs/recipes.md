@@ -1,6 +1,6 @@
 # Recipes
 
-Copy-paste patterns for the most common webjs tasks. Each recipe is the
+Copy-paste patterns for the most common WebJs tasks. Each recipe is the
 canonical shape, follow it rather than inventing a variant. The full API
 reference lives in the root `AGENTS.md`.
 
