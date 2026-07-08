@@ -89,6 +89,26 @@ test('grepSources: returns pkg-qualified file:line hits; no-match message', asyn
   assert.match(await grepSources(fakeTree(), ''), /non-empty/);
 });
 
+test('grepSources: a cross-package symbol is found (server src, the actionData case #837)', async () => {
+  const out = await grepSources(fakeTree(), 'renderToString');
+  assert.match(out, /\[@webjsdev\/server\/src\/ssr\.js:1\]/, 'finds a symbol in the server package src');
+});
+
+test('grepSources: empty roots report NOTHING searched, not a false "no match" (#837)', async () => {
+  // The dogfood failure: a shimmed/odd node_modules layout resolved zero roots,
+  // so a real symbol looked missing. "No matches" must NOT be returned when the
+  // search never ran; that reads as authoritative absence.
+  const noRoots = { ...fakeTree(), roots: [] };
+  const out = await grepSources(noRoots, 'renderToString');
+  assert.doesNotMatch(out, /No matches for/, 'not a false "no match" when nothing was searched');
+  assert.match(out, /nothing was searched/i, 'says nothing was searched');
+});
+
+test('grepSources: a genuine no-match discloses the searched packages (#837)', async () => {
+  const out = await grepSources(fakeTree(), 'zzzznotfound');
+  assert.match(out, /core, server, cli/, 'discloses the searched scope so absence is trustworthy');
+});
+
 test('grepSources: discloses the cap at > 60 matches (no silent truncation)', async () => {
   const many = Array.from({ length: 70 }, (_, i) => `hit signal ${i}`).join('\n');
   const out = await grepSources(fakeTree({ '/fw/core/src/big.js': many }), 'hit signal');

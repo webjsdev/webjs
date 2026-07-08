@@ -153,6 +153,13 @@ export function listSources(deps, pkgFilter) {
 export async function grepSources(deps, query) {
   const q = String(query).toLowerCase();
   if (!q) return 'Provide a non-empty `query`.';
+  // No resolvable packages means NOTHING was searched. Returning "no matches"
+  // here would read as authoritative absence when the search never ran, which
+  // is the #837 dogfood failure: an odd/shimmed node_modules layout resolved
+  // zero roots, so a real symbol looked missing and the agent lost trust.
+  if (!deps.roots.length) {
+    return 'No @webjsdev/* source is resolvable here, so NOTHING was searched (run inside a webjs app or the monorepo). This is not the same as "not found".';
+  }
   /** @type {string[]} */
   const hits = [];
   let capped = false;
@@ -170,7 +177,10 @@ export async function grepSources(deps, query) {
       }
     }
   }
-  if (!hits.length) return `No matches for "${query}" in the @webjsdev/* source.`;
+  // Disclose the SEARCHED scope on a no-match, so "no matches" reads as a
+  // comprehensive-search result the agent can trust, not a silent gap (#837).
+  const searched = deps.roots.map((r) => r.pkg).join(', ');
+  if (!hits.length) return `No matches for "${query}" in the searched @webjsdev/* source (${searched}).`;
   if (capped) hits.push(`... (truncated at ${MAX_HITS} matches; narrow the query or read a file with \`path\`)`);
   return hits.join('\n');
 }
