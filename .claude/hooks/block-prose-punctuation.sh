@@ -14,6 +14,10 @@
 #        - `<code>foo()</code>:` (markdown code-LHS in docs)
 #        - `<my-tag>:` (custom-element tag with hyphen)
 #        - Inline comment `// foo(): description`
+#   5. Lowercase "webjs" as the brand in prose (sentence start OR mid-sentence).
+#      Blunt like rule 1: standalone lowercase "webjs" in prose IS the brand,
+#      except a `webjs <subcommand>` CLI command and literal code tokens
+#      (@webjsdev, webjs.dev, "webjs", WEBJS_*, webjsdev/webjs, code spans).
 #
 # Why this exists: see AGENTS.md "Invariants", item 10. These patterns
 # confuse AI agents that try to parse the prose as TypeScript / shorthand-
@@ -233,48 +237,80 @@ EOF
   exit 2
 fi
 
-# --- 5. Lowercase "webjs" at a prose sentence start ---------------------
-# The brand renders "WebJs" when it BEGINS a sentence and lowercase
-# "webjs" everywhere else. This flags the lowercase form only at a
-# sentence-initial PROSE position: after . ! ?, or at a prose line start
-# (optionally behind markdown / comment markers and emphasis), or right
-# after a prose HTML tag. A following space is required, so "webjs.dev",
-# "webjs-suspense", "@webjsdev", and "webjsdev" never match. A "webjs"
-# immediately followed by a CLI subcommand (webjs dev, webjs check, ...)
-# is a command reference and is kept lowercase, so it is filtered out.
-# Inline `code`, fenced blocks, and mid-sentence brand uses are not a
-# sentence start and do not match. The rule biases toward false negatives
-# (a missed case) over false positives (a wrongly blocked write), the
-# same tradeoff as the pause rules above.
-webjs_cli='create|dev|start|test|check|db|ui|doctor|types|typecheck|mcp|vendor|add|init|generate|migrate|push|studio|seed|pin|unpin|list|audit|outdated|update|view'
+# --- 5. Lowercase "webjs" as the brand in prose -------------------------
+# The brand is a proper noun, so it is "WebJs" wherever it names the project
+# in prose, at a sentence start AND mid-sentence. This rule is BLUNT, like the
+# em-dash rule: a standalone lowercase "webjs" in prose IS the brand and is
+# flagged, with only two exclusions, neither an open-ended word list:
+#
+#   (a) literal code: fenced ``` blocks and inline `backtick` spans are
+#       stripped first, and emphasis markers (** __ * _) are stripped so a
+#       **webjs**-wrapped brand still matches.
+#   (b) structural token forms, excluded for free by the word boundary:
+#       @webjsdev, webjsdev, webjs.dev, webjs.* , "webjs", WEBJS_* ,
+#       webjsdev/webjs, webjs-suspense, .webjs/ , const webjs = pkg.webjs.
+#       These are caught because "webjs" there is adjacent to . - / @ _ a
+#       quote or more letters. A trailing "." only counts as a sentence
+#       period (webjs. + space/EOL), so "webjs.dev" never matches.
+#
+# The ONE token that is NOT structurally distinct is the CLI command
+# (`webjs dev` looks exactly like brand prose `webjs ships`), so a finite,
+# real, closed list of subcommands is subtracted. That list is the only
+# hardcoded surface, and a test asserts it stays in sync with the CLI. Unlike
+# the removed verb allowlist, this catches EVERY verb (webjs ships / powers /
+# handles / ...), because it flags by default and excludes only commands.
+#
+# The rule biases toward false negatives (a missed brand mention) over false
+# positives (a wrongly blocked write), the same tradeoff as the rules above:
+# e.g. a sentence-ending "built on webjs." is not flagged (trailing period),
+# and the `bin/webjs.js` "webjs commands:" usage banner may rarely trip it.
+webjs_cli='create|dev|start|test|check|db|ui|doctor|types|typecheck|mcp|vendor|help|add|init|generate|migrate|push|studio|seed|pin|unpin|list|audit|outdated|update|view|diff|info|build'
 
-webjs_hits=$(printf '%s\n' "$new_content" | grep -nE \
-  -e '[.!?]["'"'"')]?[[:space:]]+(\*\*|__|\*|_|")?webjs(\*\*|__|\*|_|")?[[:space:]]' \
-  -e '^[[:space:]]*((//|#{1,6}|>|[-*])[[:space:]]+)*(\*\*|__|\*|_|")?webjs(\*\*|__|\*|_|")?[[:space:]]' \
-  -e '<(p|li|td|h[1-6]|strong|em|blockquote)[^>]*>[[:space:]]*(\*\*|__|\*|_|")?webjs(\*\*|__|\*|_|")?[[:space:]]' \
+# Scan copy: drop fenced code blocks, inline code spans, and emphasis markers
+# so a `webjs` inside code is never considered and **webjs** still matches.
+brand_scan=$(printf '%s\n' "$new_content" \
+  | awk 'BEGIN{f=0} /^[[:space:]]*```/{f=!f; next} !f' \
+  | sed -E 's/`[^`]*`//g; s/(\*\*|__|\*|_)//g')
+
+# Standalone lowercase `webjs` in a PROSE position: followed by a word (space
+# then a letter) or a sentence-ending period. Only these two reliably mean
+# prose. Deliberately NOT clause punctuation, because `webjs)` / `webjs,` /
+# `webjs:` / `webjs;` collide with ordinary code (`if (!webjs)`, `[webjs, x]`,
+# a `webjs: {` object key, `webjs;`), and a bare `webjs =` assignment is
+# likewise skipped (space then `=`, not a letter). The leading boundary
+# excludes @webjsdev / webjsdev / webjs.dev / "webjs" / /webjs / .webjs / etc.
+# A trailing period matches only before a space or end-of-line, so "webjs.dev"
+# never matches while "built on webjs." does.
+brand_hits=$(printf '%s\n' "$brand_scan" \
+  | grep -nE '(^|[^A-Za-z0-9@._/`-])webjs([[:space:]]+[A-Za-z]|\.([[:space:]]|$))' \
   2>/dev/null || true)
 
-if [ -n "$webjs_hits" ]; then
-  # Drop hits whose "webjs" is a CLI subcommand reference (kept lowercase).
-  offending=$(printf '%s\n' "$webjs_hits" \
+if [ -n "$brand_hits" ]; then
+  # Drop lines whose "webjs" is a `webjs <subcommand>` CLI reference.
+  offending=$(printf '%s\n' "$brand_hits" \
     | grep -vE "webjs[[:space:]]+(${webjs_cli})([[:space:]]|[.,:;)]|\$)" 2>/dev/null || true)
   if [ -n "$offending" ]; then
     cat >&2 <<'EOF'
-BLOCKED: lowercase "webjs" at a prose sentence start.
+BLOCKED: lowercase "webjs" naming the brand in prose.
 
-The brand is "WebJs" when it BEGINS a sentence and lowercase "webjs"
-everywhere else. Capitalize this occurrence.
+The brand is a proper noun: write "WebJs" wherever it names the project
+in prose, at a sentence start AND mid-sentence. Capitalize this occurrence.
 
-  Bad:  webjs ships a cache() helper.
-  Good: WebJs ships a cache() helper.
-  Bad:  ...round-trips. webjs rewrites the import.
-  Good: ...round-trips. WebJs rewrites the import.
+  Bad:  On Bun, webjs ships a native listener.
+  Good: On Bun, WebJs ships a native listener.
+  Bad:  Most webjs apps ship without a build step.
+  Good: Most WebJs apps ship without a build step.
+  Bad:  the webjs serializer round-trips a Map.
+  Good: the WebJs serializer round-trips a Map.
 
-Still lowercase (NOT a sentence start, do NOT capitalize these):
+Still lowercase (literal code tokens, do NOT capitalize these):
   - a CLI command: `webjs dev`, `webjs check`, `webjs create my-app`
   - a domain / package / config / env: webjs.dev, @webjsdev,
     "webjs": { ... }, WEBJS_PUBLIC_*
-  - mid-sentence: "Most webjs apps ship without a build step."
+  - the org / repo path: webjsdev/webjs
+  - anything inside a `code` span or a fenced block
+
+If you mean the literal config key or command, wrap it in `backticks`.
 
 Rule: AGENTS.md, Invariants section, item 11.
 Hook: .claude/hooks/block-prose-punctuation.sh.
