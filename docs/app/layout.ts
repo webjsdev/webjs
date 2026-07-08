@@ -27,7 +27,7 @@ export function generateMetadata(ctx: { url: string }) {
       image,
       'image:width': '1200',
       'image:height': '630',
-      'image:alt': 'webjs documentation',
+      'image:alt': 'WebJs documentation',
       'site_name': 'webjs · docs',
     },
     twitter: {

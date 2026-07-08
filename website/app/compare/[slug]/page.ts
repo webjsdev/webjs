@@ -11,7 +11,7 @@ import { renderPostBody } from '#modules/blog/utils/render-post.ts';
  *
  * `generateMetadata` gives each comparison its own title / description /
  * og:* tags, with a canonical URL at `/compare/<slug>`, which is what
- * makes these pages rank for "webjs vs <framework>" queries.
+ * makes these pages rank for "WebJs vs <framework>" queries.
  */
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {
