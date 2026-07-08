@@ -43,14 +43,14 @@ services:
     image: webjs
     build: .
     working_dir: /app/examples/blog
-    # Apply migrations on Node (the proven Prisma CLI path), then serve on Bun.
-    # `migrate deploy` is idempotent; a second boot on an already-migrated DB is
-    # a quick no-op.
+    # Apply Drizzle migrations, then serve on Bun. `webjs db migrate` is the
+    # drizzle-kit path (npx-free since cli #570, proven under Bun), idempotent so
+    # a second boot on an already-migrated DB is a quick no-op.
     command:
       - sh
       - -c
       - |
-        node /app/node_modules/prisma/build/index.js migrate deploy && \
+        bun /app/node_modules/@webjsdev/cli/bin/webjs.js db migrate && \
         bun /app/node_modules/@webjsdev/cli/bin/webjs.js start
     ports:
       - "15004:5004"
