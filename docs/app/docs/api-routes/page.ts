@@ -97,7 +97,7 @@ export async function POST(req: Request) {
     <h2>json() Helper: Content Negotiation</h2>
     <p>The <code>json()</code> helper from <code>@webjsdev/server</code> adds smart content negotiation. It inspects the incoming request's <code>Accept</code> header and responds accordingly:</p>
     <ul>
-      <li>If the client sent <code>Accept: application/vnd.webjs+json</code> (e.g. via <code>richFetch()</code>), the response is encoded with the <strong>webjs serializer</strong> so that <code>Date</code>, <code>Map</code>, <code>Set</code>, <code>BigInt</code>, <code>TypedArray</code>, <code>Blob</code>, <code>File</code>, <code>FormData</code>, and reference cycles all survive the round trip.</li>
+      <li>If the client sent <code>Accept: application/vnd.webjs+json</code> (e.g. via <code>richFetch()</code>), the response is encoded with the <strong>WebJs serializer</strong> so that <code>Date</code>, <code>Map</code>, <code>Set</code>, <code>BigInt</code>, <code>TypedArray</code>, <code>Blob</code>, <code>File</code>, <code>FormData</code>, and reference cycles all survive the round trip.</li>
       <li>Otherwise, the response is plain <code>application/json</code>, the standard for curl, mobile apps, and third-party consumers.</li>
     </ul>
     <pre>// app/api/posts/route.ts
@@ -198,7 +198,7 @@ export default async function authGuard(
     <p>Middleware files nest. If you have <code>app/middleware.ts</code>, <code>app/api/middleware.ts</code>, and <code>app/api/admin/middleware.ts</code>, a request to <code>/api/admin/users</code> runs all three in outermost-to-innermost order.</p>
 
     <h2>Rate Limiting</h2>
-    <p>webjs ships a built-in in-memory fixed-window rate limiter, shaped as a middleware:</p>
+    <p>WebJs ships a built-in in-memory fixed-window rate limiter, shaped as a middleware:</p>
     <pre>import { rateLimit } from '@webjsdev/server';
 
 // In a middleware.ts file:
@@ -248,7 +248,7 @@ export default async function cors(
 }</pre>
 
     <h2>Backend-Only Usage</h2>
-    <p>webjs works as a <strong>pure API framework</strong> with no pages or components. If your <code>app/</code> directory contains only <code>route.ts</code> and <code>middleware.ts</code> files (no <code>page.ts</code>, no <code>layout.ts</code>), webjs serves only API routes. No SSR, no import maps, no client JS. This is ideal for microservices, backends for mobile apps, or REST APIs. See <a href="/docs/backend-only">Backend-Only Mode</a> for a full guide.</p>
+    <p>WebJs works as a <strong>pure API framework</strong> with no pages or components. If your <code>app/</code> directory contains only <code>route.ts</code> and <code>middleware.ts</code> files (no <code>page.ts</code>, no <code>layout.ts</code>), webjs serves only API routes. No SSR, no import maps, no client JS. This is ideal for microservices, backends for mobile apps, or REST APIs. See <a href="/docs/backend-only">Backend-Only Mode</a> for a full guide.</p>
 
     <h2>Complete CRUD Example</h2>
     <p>Here is a full route.ts implementing GET, POST, and DELETE for a resource:</p>
@@ -361,7 +361,7 @@ export async function DELETE(_req: Request, { params }: Ctx) {
       <li>Per-segment <code>middleware.ts</code> applies to all routes underneath</li>
       <li><code>rateLimit()</code> from <code>@webjsdev/server</code> for built-in rate limiting</li>
       <li>CORS via the <code>cors()</code> middleware on <code>route.ts</code> files or in <code>middleware.ts</code></li>
-      <li>webjs works as a backend-only API framework when no page files are present</li>
+      <li>WebJs works as a backend-only API framework when no page files are present</li>
     </ul>
   `;
 }

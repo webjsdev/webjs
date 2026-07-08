@@ -5,7 +5,7 @@ export const metadata = { title: 'Getting Started | webjs' };
 export default function GettingStarted() {
   return html`
     <h1>Getting Started</h1>
-    <p>webjs is an <strong>AI-first, web-components-first</strong> framework with a NextJs-like API and Lit-inspired web components, built on web standards. You can use it as a full-stack framework with server-rendered pages, or as a lightweight backend-only API framework. The same file conventions work either way.</p>
+    <p>WebJs is an <strong>AI-first, web-components-first</strong> framework with a NextJs-like API and Lit-inspired web components, built on web standards. You can use it as a full-stack framework with server-rendered pages, or as a lightweight backend-only API framework. The same file conventions work either way.</p>
 
     <h2>Prerequisites</h2>
     <ul>
@@ -44,7 +44,7 @@ webjs create my-app --template saas</pre>
     <p><strong>The scaffold IS the tutorial.</strong> Every UI scaffold (full-stack AND saas) ships a densely commented <strong>feature gallery</strong>: one webjs concept per demo under <code>app/features/</code> (routing, components, server actions, optimistic UI, async render, directives, forms, metadata, caching, env vars, the client router, service worker, WebSockets, broadcast, rate limiting, file storage, type-safe routes) with logic in <code>modules/</code>, plus a whole example app under <code>app/examples/</code>. The <code>--template api</code> scaffold ships the backend counterpart instead, a <strong>backend-features showcase</strong> under <code>app/api/features/</code> (the <code>route()</code> adapter + input validation, rate limiting, a streaming response, file storage, and a WebSocket + broadcast endpoint) listed in the root <code>app/route.ts</code> index. Read each demo end to end (the code AND its comments) to learn the idioms, then prune the ones you do not need. Each demo carries a placeholder marker (the <code>no-scaffold-placeholder</code> check), so <code>webjs check</code> fails until you keep-and-adapt or delete it (the route AND its <code>modules/&lt;name&gt;</code>).</p>
 
     <h3>Scaffolding a Bun app</h3>
-    <p>webjs runs on Node 24+ or Bun. To generate a Bun-flavored app, add <code>--runtime bun</code> (a separate axis from <code>--template</code>, so it works with all three). It is auto-detected when you scaffold through Bun, so both forms below produce the same Bun app:</p>
+    <p>WebJs runs on Node 24+ or Bun. To generate a Bun-flavored app, add <code>--runtime bun</code> (a separate axis from <code>--template</code>, so it works with all three). It is auto-detected when you scaffold through Bun, so both forms below produce the same Bun app:</p>
     <pre># auto-detected: scaffolding through bun implies --runtime bun
 bun create webjs my-app
 # the explicit pin-latest form (bun create maps to bunx create-webjs)

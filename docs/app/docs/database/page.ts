@@ -5,7 +5,7 @@ export const metadata = { title: 'Database (Drizzle) | webjs' };
 export default function Database() {
   return html`
     <h1>Database (Drizzle)</h1>
-    <p>webjs uses <strong>Drizzle</strong> as the default ORM. It fits the buildless thesis: there is <strong>no codegen and no engine binary</strong> (what you write is what runs), it runs on Node and Bun, and the types are inferred straight from your schema. SQLite is the default; Postgres is a flag away. The scaffold wires it all up under a <code>db/</code> folder.</p>
+    <p>WebJs uses <strong>Drizzle</strong> as the default ORM. It fits the buildless thesis: there is <strong>no codegen and no engine binary</strong> (what you write is what runs), it runs on Node and Bun, and the types are inferred straight from your schema. SQLite is the default; Postgres is a flag away. The scaffold wires it all up under a <code>db/</code> folder.</p>
 
     <h2>What the scaffold gives you</h2>
     <pre>db/

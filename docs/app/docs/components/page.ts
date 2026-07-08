@@ -5,7 +5,7 @@ export const metadata = { title: 'Components | webjs' };
 export default function Components() {
   return html`
     <h1>Components</h1>
-    <p>webjs components are <strong>standard HTML custom elements</strong> built on a thin base class called <code>WebComponent</code>. If you are coming from React, think of <code>WebComponent</code> as a class component whose render method returns a tagged template instead of JSX. The browser owns the component lifecycle. There is no virtual DOM, no reconciler, and no framework-specific component model to learn.</p>
+    <p>WebJs components are <strong>standard HTML custom elements</strong> built on a thin base class called <code>WebComponent</code>. If you are coming from React, think of <code>WebComponent</code> as a class component whose render method returns a tagged template instead of JSX. The browser owns the component lifecycle. There is no virtual DOM, no reconciler, and no framework-specific component model to learn.</p>
 
     <h2>The WebComponent Base Class</h2>
     <p>Every interactive component extends <code>WebComponent</code>, declares its <strong>property map</strong> by passing a shape into the base-class factory (<code>extends WebComponent({ ... })</code>, and optionally <code>static styles</code> for shadow-DOM components), implements <code>render()</code>, and registers itself by passing a hyphenated tag name to <code>ClassName.register('tag-name')</code>. The tag name is an argument to <code>.register()</code>, not a static field.</p>
@@ -261,7 +261,7 @@ static styles = css\`
   .accent { color: var(--accent); }
 \`;</pre>
 
-    <blockquote>This is fundamentally different from React CSS-in-JS solutions that require runtime injection or build tooling. webjs uses the platform: shadow DOM gives you scoping, CSS custom properties give you theming, and there is nothing to configure.</blockquote>
+    <blockquote>This is fundamentally different from React CSS-in-JS solutions that require runtime injection or build tooling. WebJs uses the platform: shadow DOM gives you scoping, CSS custom properties give you theming, and there is nothing to configure.</blockquote>
 
     <h2>Light DOM (default)</h2>
     <p>Light DOM is the default because global CSS and Tailwind utility classes apply directly: no <code>:host</code>, no <code>::part</code>, no CSS-variable plumbing. The browser renders a plain custom element with normal children. This is the mode the blog example uses everywhere except when shadow DOM buys something specific.</p>
@@ -415,7 +415,7 @@ class Cart extends WebComponent {
     <p>This is the design rule that makes <a href="/docs/progressive-enhancement">progressive enhancement</a> work in webjs: the component's HTML lands in the response, with the right content, before any script runs.</p>
 
     <h3>Compound components: reading the parent with closest() at SSR</h3>
-    <p>A compound component (a tabs trigger, a toggle-group item) derives its active or pressed state by walking up to the parent and reading the parent's value. webjs supports <code>this.closest(...)</code> at SSR for <strong>tag-name selectors only</strong>, so the active or pressed state is marked in the <strong>first server paint</strong>, not only after hydration.</p>
+    <p>A compound component (a tabs trigger, a toggle-group item) derives its active or pressed state by walking up to the parent and reading the parent's value. WebJs supports <code>this.closest(...)</code> at SSR for <strong>tag-name selectors only</strong>, so the active or pressed state is marked in the <strong>first server paint</strong>, not only after hydration.</p>
 
     <pre>class UiTabsTrigger extends WebComponent({ value: String }) {
   get _tabs() { return this.closest('ui-tabs'); }
@@ -461,7 +461,7 @@ UserProfile.register('user-profile');</pre>
     </ul>
 
     <h2>Slots: Content Projection</h2>
-    <p>Slots are how a parent passes content into a component. If you are coming from React, think of the default slot as <code>children</code>. <strong>webjs supports the full shadow-DOM <code>&lt;slot&gt;</code> surface in light DOM as well as shadow DOM</strong>, so every example below works identically whether the component sets <code>static shadow = true</code> or leaves it at the default (light DOM). The light-DOM runtime mirrors <code>HTMLSlotElement.assignedNodes()</code>, <code>assignedElements()</code>, <code>assignedSlot</code>, and the <code>slotchange</code> event, plus named slots, fallback content, and first-wins resolution. To our knowledge no other web-components framework offers this complete parity in light DOM. Lit's slot APIs only work inside shadow roots, and Stencil's light-DOM slot polyfill has known gaps around fallback content and mixed shadow / non-shadow trees.</p>
+    <p>Slots are how a parent passes content into a component. If you are coming from React, think of the default slot as <code>children</code>. <strong>WebJs supports the full shadow-DOM <code>&lt;slot&gt;</code> surface in light DOM as well as shadow DOM</strong>, so every example below works identically whether the component sets <code>static shadow = true</code> or leaves it at the default (light DOM). The light-DOM runtime mirrors <code>HTMLSlotElement.assignedNodes()</code>, <code>assignedElements()</code>, <code>assignedSlot</code>, and the <code>slotchange</code> event, plus named slots, fallback content, and first-wins resolution. To our knowledge no other web-components framework offers this complete parity in light DOM. Lit's slot APIs only work inside shadow roots, and Stencil's light-DOM slot polyfill has known gaps around fallback content and mixed shadow / non-shadow trees.</p>
 
     <h3>Default Slot</h3>
     <p>The <code>&lt;slot&gt;&lt;/slot&gt;</code> element in a component's <code>render()</code> is where the parent's child content appears:</p>
@@ -531,7 +531,7 @@ html\`
     <p>Content without a <code>slot</code> attribute goes to the default (unnamed) slot. Content with <code>slot="name"</code> is routed to the matching <code>&lt;slot name="name"&gt;</code>. Text inside the <code>&lt;slot&gt;</code> tag itself is fallback content shown when no matching content is provided.</p>
 
     <h2>Lifecycle</h2>
-    <p>webjs components use the standard custom element lifecycle callbacks. If you override them, <strong>always call super</strong>.</p>
+    <p>WebJs components use the standard custom element lifecycle callbacks. If you override them, <strong>always call super</strong>.</p>
 
     <h3>connectedCallback()</h3>
     <p>Called when the element is inserted into the document. This is where webjs attaches the shadow root, adopts styles, and performs the first render. Use it for setup work like fetching data, opening WebSocket connections, or reading from <code>localStorage</code>:</p>
@@ -557,7 +557,7 @@ html\`
     <p>You do not need to call <code>super.disconnectedCallback()</code> (the base class is a no-op), but it does not hurt to include it for safety.</p>
 
     <h3>attributeChangedCallback(name, oldValue, newValue)</h3>
-    <p>Called when one of the <code>observedAttributes</code> changes. webjs handles this for you. It coerces the attribute value based on the type declared in the factory shape, sets the corresponding instance property, and schedules a re-render. You rarely need to override this, but you can if you need side effects when a specific attribute changes:</p>
+    <p>Called when one of the <code>observedAttributes</code> changes. WebJs handles this for you. It coerces the attribute value based on the type declared in the factory shape, sets the corresponding instance property, and schedules a re-render. You rarely need to override this, but you can if you need side effects when a specific attribute changes:</p>
 
     <pre>attributeChangedCallback(name, oldVal, newVal) {
   super.attributeChangedCallback(name, oldVal, newVal);
@@ -641,7 +641,7 @@ render() {
 
     <pre>MyCounter.register('my-counter');</pre>
 
-    <p>webjs wraps the native API (and installs a compatible shim on the server) so the same line works in both environments:</p>
+    <p>WebJs wraps the native API (and installs a compatible shim on the server) so the same line works in both environments:</p>
     <ul>
       <li><strong>Browser</strong>: tells the browser to upgrade all <code>&lt;my-counter&gt;</code> elements with the <code>MyCounter</code> class, and mirrors the mapping into webjs's internal registry.</li>
       <li><strong>Server</strong>: stores the class in the internal registry so <code>renderToString</code> can look it up for Declarative Shadow DOM injection.</li>
@@ -654,7 +654,7 @@ render() {
     <p>The tag argument accepts any short-string quote style. <code>register('my-counter')</code>, <code>register("my-counter")</code>, and <code>register(&#96;my-counter&#96;)</code> are all equivalent. The framework's <code>tag-name-has-hyphen</code> lint rule reads the tag through any of them.</p>
 
     <h2>Server Rendering</h2>
-    <p>webjs components are server-rendered using <strong>Declarative Shadow DOM</strong>. When the server renders a page containing <code>&lt;my-counter count="5"&gt;&lt;/my-counter&gt;</code>, the output looks like:</p>
+    <p>WebJs components are server-rendered using <strong>Declarative Shadow DOM</strong>. When the server renders a page containing <code>&lt;my-counter count="5"&gt;&lt;/my-counter&gt;</code>, the output looks like:</p>
 
     <pre>&lt;my-counter count="5"&gt;
   &lt;template shadowrootmode="open"&gt;

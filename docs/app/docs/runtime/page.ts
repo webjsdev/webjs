@@ -5,7 +5,7 @@ export const metadata = { title: 'Runtime (Node & Bun) | webjs' };
 export default function Runtime() {
   return html`
     <h1>Runtime</h1>
-    <p>webjs runs on <strong>Node 24+</strong> or <strong>Bun</strong>. The same app source runs on either; the framework picks a runtime-neutral path internally and only the listener shell, the type stripper, and a few built-ins differ. Deno is a planned target (the listener seam is already runtime-neutral), not yet supported. This page is the single reference for the per-runtime commands and differences; other pages link here rather than repeat them.</p>
+    <p>WebJs runs on <strong>Node 24+</strong> or <strong>Bun</strong>. The same app source runs on either; the framework picks a runtime-neutral path internally and only the listener shell, the type stripper, and a few built-ins differ. Deno is a planned target (the listener seam is already runtime-neutral), not yet supported. This page is the single reference for the per-runtime commands and differences; other pages link here rather than repeat them.</p>
 
     <p>Related reading:</p>
     <ul>

@@ -5,7 +5,7 @@ export const metadata = { title: 'Architecture | webjs' };
 export default function Architecture() {
   return html`
     <h1>Architecture</h1>
-    <p>webjs is a monorepo with three packages that together form the framework. Understanding the split helps when you need to import something specific or embed webjs into another runtime.</p>
+    <p>WebJs is a monorepo with three packages that together form the framework. Understanding the split helps when you need to import something specific or embed webjs into another runtime.</p>
 
     <p><strong>Mental model, especially if you come from React Server Components:</strong> webjs has no server/client component split. Pages, layouts, and components are <em>isomorphic</em> modules, the same source runs on the server to produce SSR'd HTML and then loads in the browser to add interactivity. There is no Flight protocol and no "server component" identity. The one server boundary is the <code>.server.{js,ts}</code> file, which is an RPC + source-protection mechanism (server actions and server-only utilities), not a server-rendered component. <code>route.{js,ts}</code> is a server-only HTTP handler. And elision (skipping the JS download of a module that does no client work) is a build-free optimization on those isomorphic modules, not a boundary, it never changes behaviour because progressive enhancement is the no-JS baseline.</p>
 
@@ -19,7 +19,7 @@ export default function Architecture() {
 │   └── blog/     # reference app exercising every feature
 └── docs/         # this documentation site (built on webjs)</pre>
 
-    <h3>webjs (core)</h3>
+    <h3>WebJs (core)</h3>
     <p>Isomorphic: safe to import on both server and client. Contains:</p>
     <ul>
       <li><code>html</code> / <code>css</code>: tagged template literals for templates and styles</li>
@@ -97,7 +97,7 @@ import { Button } from '#components/ui/button.ts';
 import { listPosts } from '#modules/posts/queries/list-posts.server.ts';</pre>
     <p>This is Node's native <code>package.json</code> <code>"imports"</code> field. The scaffold ships a single catch-all key, so every top-level folder is aliased and a new one needs no config change:</p>
     <pre>"imports": { "#*": "./*" }</pre>
-    <p>It resolves at runtime on Node 24+ AND Bun with no build step and no <code>tsconfig</code> <code>paths</code>. The sigil is <code>#</code> (not <code>@</code>) and there is no slash after it (<code>#lib/...</code>, not <code>#/lib/...</code>): a <code>#/</code>-prefixed key does not resolve on Bun. webjs expands the same map for its import graph, so a <code>#</code>-aliased <code>.server.ts</code> still trips the server-only boundary, and the browser importmap gets a matching scope per top-level folder automatically. A same-directory import stays a plain relative (<code>./sibling.ts</code>); opt out anywhere by writing a relative path.</p>
+    <p>It resolves at runtime on Node 24+ AND Bun with no build step and no <code>tsconfig</code> <code>paths</code>. The sigil is <code>#</code> (not <code>@</code>) and there is no slash after it (<code>#lib/...</code>, not <code>#/lib/...</code>): a <code>#/</code>-prefixed key does not resolve on Bun. WebJs expands the same map for its import graph, so a <code>#</code>-aliased <code>.server.ts</code> still trips the server-only boundary, and the browser importmap gets a matching scope per top-level folder automatically. A same-directory import stays a plain relative (<code>./sibling.ts</code>); opt out anywhere by writing a relative path.</p>
 
     <h2>Request Lifecycle</h2>
     <ol>
@@ -124,7 +124,7 @@ import { listPosts } from '#modules/posts/queries/list-posts.server.ts';</pre>
     <p>See <a href="/docs/progressive-enhancement">Progressive Enhancement</a> for the full design rationale and patterns.</p>
 
     <h2>Embedding</h2>
-    <p>webjs can be embedded in any Node-compatible runtime via <code>createRequestHandler</code>:</p>
+    <p>WebJs can be embedded in any Node-compatible runtime via <code>createRequestHandler</code>:</p>
     <pre>import { createRequestHandler } from '@webjsdev/server';
 
 const app = await createRequestHandler({

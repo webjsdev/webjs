@@ -5,7 +5,7 @@ export const metadata = { title: 'Middleware | webjs' };
 export default function Middleware() {
   return html`
     <h1>Middleware</h1>
-    <p>Middleware in webjs lets you intercept requests before they reach your pages, API routes, or server actions. Use it for authentication, logging, rate limiting, CORS, header injection, or any cross-cutting concern. webjs supports two levels of middleware: a single root middleware and per-segment middleware scoped to subtrees of your route hierarchy.</p>
+    <p>Middleware in webjs lets you intercept requests before they reach your pages, API routes, or server actions. Use it for authentication, logging, rate limiting, CORS, header injection, or any cross-cutting concern. WebJs supports two levels of middleware: a single root middleware and per-segment middleware scoped to subtrees of your route hierarchy.</p>
 
     <h2>Root Middleware</h2>
     <p>Place a <code>middleware.ts</code> (or <code>middleware.js</code>) at the root of your project (next to <code>app/</code>, not inside it). This middleware runs on <strong>every request</strong> before webjs routes it to a page, API route, or server action.</p>
@@ -156,10 +156,10 @@ export default async function cors(
   resp.headers.set('access-control-allow-origin', '*');
   return resp;
 }</pre>
-    <p>webjs also ships a ready-made <code>cors()</code> middleware (from <code>@webjsdev/server</code>) you can wrap around a single <code>route.ts</code> handler. Use middleware CORS when you need blanket coverage across all routes in a segment.</p>
+    <p>WebJs also ships a ready-made <code>cors()</code> middleware (from <code>@webjsdev/server</code>) you can wrap around a single <code>route.ts</code> handler. Use middleware CORS when you need blanket coverage across all routes in a segment.</p>
 
     <h2>Rate Limiting</h2>
-    <p>webjs ships a built-in rate limiter as a middleware factory. Import <code>rateLimit</code> from <code>@webjsdev/server</code>:</p>
+    <p>WebJs ships a built-in rate limiter as a middleware factory. Import <code>rateLimit</code> from <code>@webjsdev/server</code>:</p>
     <pre>// app/api/auth/middleware.ts
 import { rateLimit } from '@webjsdev/server';
 
@@ -184,7 +184,7 @@ export default rateLimit({ window: '10s', max: 5 });</pre>
     <p>For multi-instance deployments, rate-limit at the edge (nginx, Cloudflare, AWS WAF) or use the <code>key</code> function to integrate with a shared store like Redis.</p>
 
     <h2>cookies() and headers() Helpers</h2>
-    <p>webjs provides request-scoped helpers via <code>@webjsdev/server</code> that let you read cookies and headers from anywhere in your server-side code (middleware, pages, server actions, API routes) without explicitly threading the request object:</p>
+    <p>WebJs provides request-scoped helpers via <code>@webjsdev/server</code> that let you read cookies and headers from anywhere in your server-side code (middleware, pages, server actions, API routes) without explicitly threading the request object:</p>
     <pre>import { cookies, headers } from '@webjsdev/server';
 
 // In any server-side function:

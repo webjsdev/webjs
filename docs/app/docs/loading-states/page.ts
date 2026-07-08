@@ -5,7 +5,7 @@ export const metadata = { title: 'Loading States | webjs' };
 export default function LoadingStates() {
   return html`
     <h1>Loading States</h1>
-    <p>webjs uses <code>loading.ts</code> files to automatically wrap page content in a Suspense boundary. The loading UI is flushed to the browser immediately while the async page function resolves in the background.</p>
+    <p>WebJs uses <code>loading.ts</code> files to automatically wrap page content in a Suspense boundary. The loading UI is flushed to the browser immediately while the async page function resolves in the background.</p>
 
     <h2>When to use</h2>
     <ul>

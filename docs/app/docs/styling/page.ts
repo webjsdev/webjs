@@ -5,7 +5,7 @@ export const metadata = { title: 'Styling | webjs' };
 export default function Styling() {
   return html`
     <h1>Styling</h1>
-    <p>webjs ships two styling models and lets you pick per component. The <strong>default is light DOM</strong> with <strong>Tailwind CSS</strong>: the browser runtime with <code>@theme</code> design tokens. Shadow DOM is opt-in when you need truly scoped styles or third-party-embed isolation. <code>&lt;slot&gt;</code> projection works identically in both modes (light DOM uses framework projection), so slot usage is not a reason to opt into shadow.</p>
+    <p>WebJs ships two styling models and lets you pick per component. The <strong>default is light DOM</strong> with <strong>Tailwind CSS</strong>: the browser runtime with <code>@theme</code> design tokens. Shadow DOM is opt-in when you need truly scoped styles or third-party-embed isolation. <code>&lt;slot&gt;</code> projection works identically in both modes (light DOM uses framework projection), so slot usage is not a reason to opt into shadow.</p>
 
     <h2>The default: light DOM + Tailwind</h2>
     <p>Pages, layouts, and components render into the normal document tree. Tailwind utility classes apply directly: no <code>:host</code>, no <code>::part</code>, no CSS-variable plumbing. Design tokens live in a single <code>@theme</code> block in the root layout and become first-class Tailwind classes.</p>

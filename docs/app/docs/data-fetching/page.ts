@@ -8,7 +8,7 @@ export const metadata = {
 export default function DataFetching() {
   return html`
     <h1>Data Fetching</h1>
-    <p>webjs gives a component four ways to get data into the page. This is the canonical guide to which one to reach for, and the anti-patterns to avoid. The headline is <strong>bare-await async render</strong>: a component fetches its own server data into the first paint, co-located, with no page orchestration.</p>
+    <p>WebJs gives a component four ways to get data into the page. This is the canonical guide to which one to reach for, and the anti-patterns to avoid. The headline is <strong>bare-await async render</strong>: a component fetches its own server data into the first paint, co-located, with no page orchestration.</p>
 
     <h2>The default: async render()</h2>
     <p>Make a component's <code>render()</code> async and call a <code>'use server'</code> action directly. Writing <code>await</code> makes the function async; webjs awaits a promise-returning <code>render()</code> automatically on both the server and the client. There is no flag.</p>

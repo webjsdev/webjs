@@ -5,7 +5,7 @@ export const metadata = { title: 'Conventions & AI Workflow | webjs' };
 export default function Conventions() {
   return html`
     <h1>Conventions &amp; AI Workflow</h1>
-    <p>webjs is an <strong>AI-first framework</strong>. It ships an opinionated conventions system that both humans and AI agents follow. The conventions are enforced via config files, CLI commands, and guardrails that ensure consistent, high-quality code across the entire project, whether written by a person or an agent.</p>
+    <p>WebJs is an <strong>AI-first framework</strong>. It ships an opinionated conventions system that both humans and AI agents follow. The conventions are enforced via config files, CLI commands, and guardrails that ensure consistent, high-quality code across the entire project, whether written by a person or an agent.</p>
 
     <h2>CONVENTIONS.md</h2>
     <p>Every webjs app has a <code>CONVENTIONS.md</code> file at its root. This is the project-specific conventions document that all AI agents read before writing code. It defines:</p>
@@ -51,7 +51,7 @@ webjs check --rules</pre>
     </ol>
 
     <h2>webjs test</h2>
-    <p>webjs ships a testing setup based on <code>node:test</code> and WTR + Playwright.</p>
+    <p>WebJs ships a testing setup based on <code>node:test</code> and WTR + Playwright.</p>
 
     <h3>Unit Tests</h3>
     <pre># Run all unit tests
@@ -94,7 +94,7 @@ webjs test --e2e
     <p>Tests-per-feature is a project convention (guidance), not a <code>webjs check</code> rule.</p>
 
     <h2>AI Agent Guardrails</h2>
-    <p>webjs enforces disciplined AI workflows through config files and hooks. These guardrails apply to all agents: Claude, Cursor, Copilot, Antigravity, and others.</p>
+    <p>WebJs enforces disciplined AI workflows through config files and hooks. These guardrails apply to all agents: Claude, Cursor, Copilot, Antigravity, and others.</p>
 
     <h3>Branch Checking</h3>
     <p>AI agents must never commit directly to <code>main</code> or <code>master</code>. Before any edit, the agent checks what branch it is on:</p>

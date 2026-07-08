@@ -5,7 +5,7 @@ export const metadata = { title: 'Editor Setup | webjs' };
 export default function EditorSetup() {
   return html`
     <h1>Editor Setup for VS Code &amp; Neovim</h1>
-    <p>webjs ships a TypeScript overlay (<code>packages/core/index.d.ts</code> and <code>packages/core/src/component.d.ts</code>) so any editor that speaks the TypeScript Language Server (<code>tsserver</code>) gets autocomplete, hover documentation, and type-checking for the framework APIs with zero build step.</p>
+    <p>WebJs ships a TypeScript overlay (<code>packages/core/index.d.ts</code> and <code>packages/core/src/component.d.ts</code>) so any editor that speaks the TypeScript Language Server (<code>tsserver</code>) gets autocomplete, hover documentation, and type-checking for the framework APIs with zero build step.</p>
 
     <div class="callout">
       <p><strong>VS Code, Cursor, Windsurf, VSCodium:</strong> install the <strong><code>webjs</code></strong> extension from the <a href="https://marketplace.visualstudio.com/items?itemName=webjsdev.webjs" target="_blank">VS Marketplace</a> or <a href="https://open-vsx.org/extension/webjsdev/webjs" target="_blank">Open VSX</a> (search "webjs"). It bundles the language-service plugin and registers it automatically (no <code>tsconfig.json</code> edit), and adds <code>html</code> / <code>css</code> template highlighting.</p>
@@ -59,7 +59,7 @@ export default function EditorSetup() {
     <ul>
       <li><code>moduleResolution: "NodeNext"</code>: required for the framework's <code>exports</code> map to resolve correctly.</li>
       <li><code>allowImportingTsExtensions: true</code>: lets you write <code>import { x } from './foo.ts'</code>, matching how webjs serves them.</li>
-      <li><code>noEmit: true</code>: TypeScript type-checks only. webjs strips types at the runtime layer at import / request time (Node's built-in stripper, or <code>amaro</code> on Bun).</li>
+      <li><code>noEmit: true</code>: TypeScript type-checks only. WebJs strips types at the runtime layer at import / request time (Node's built-in stripper, or <code>amaro</code> on Bun).</li>
       <li><code>erasableSyntaxOnly: true</code>: rejects non-erasable TypeScript (<code>enum</code>, <code>namespace</code> with values, parameter properties, legacy decorators). Required because Node's stripper only supports erasable TS. See the <a href="/docs/typescript">TypeScript</a> page for the erasable equivalents.</li>
       <li><code>plugins</code>: one entry. <code>@webjsdev/intellisense</code> is standalone (no separate <code>ts-lit-plugin</code> entry).</li>
     </ul>

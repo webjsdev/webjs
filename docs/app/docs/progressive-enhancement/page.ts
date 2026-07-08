@@ -11,7 +11,7 @@ export default function ProgressiveEnhancement() {
     <h1>Progressive Enhancement</h1>
 
     <p>
-      <strong>webjs is HTML-first by design.</strong> Every page is server-rendered to real HTML. Every web component runs its <code>render()</code> on the server, so the component's initial markup is in the response before any script loads. With JavaScript disabled (slow networks, strict CSP, hostile proxies, user preference, ad-blockers, hydration races) the page still paints, content reads, links navigate, and forms submit.
+      <strong>WebJs is HTML-first by design.</strong> Every page is server-rendered to real HTML. Every web component runs its <code>render()</code> on the server, so the component's initial markup is in the response before any script loads. With JavaScript disabled (slow networks, strict CSP, hostile proxies, user preference, ad-blockers, hydration races) the page still paints, content reads, links navigate, and forms submit.
     </p>
 
     <p>

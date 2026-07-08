@@ -5,7 +5,7 @@ export const metadata = { title: 'AI-First Development | webjs' };
 export default function AIFirst() {
   return html`
     <h1>AI-First Development</h1>
-    <p>webjs is designed from the ground up to be <strong>the framework AI agents can read, write, and ship</strong>. Every architectural decision (from the file layout to the naming conventions to the one-function-per-file rule) was made with one question in mind: <em>can an LLM understand this without loading the entire codebase into context?</em></p>
+    <p>WebJs is designed from the ground up to be <strong>the framework AI agents can read, write, and ship</strong>. Every architectural decision (from the file layout to the naming conventions to the one-function-per-file rule) was made with one question in mind: <em>can an LLM understand this without loading the entire codebase into context?</em></p>
 
     <h2>Why AI-First Matters</h2>
     <p>Modern AI coding assistants (Claude Code, GitHub Copilot, Cursor, Antigravity, etc.) are increasingly writing production code. But most frameworks were designed for humans who hold the whole project in their head. They rely on:</p>
@@ -81,7 +81,7 @@ modules/posts/queries/get-post.server.ts      → exports getPost()</pre>
 
     <h3>5. No Build Step = What You See Is What Runs</h3>
     <p>Frameworks with build pipelines transform source code before it executes. The JSX you write becomes <code>React.createElement</code> calls. Your imports become webpack chunks. Your CSS modules get hashed classnames. An AI agent reading the source sees one thing, while the runtime does another.</p>
-    <p>webjs has <strong>no build step you run</strong>. The <code>.ts</code> file you see is the file that runs. <code>.ts</code> imports are stripped of types by the runtime's stripper (Node 24+'s built-in <code>module.stripTypeScriptTypes</code>, or <code>amaro</code> on Bun), which is whitespace replacement: every <code>(line, column)</code> in the source maps to the same position in the output, so stack traces stay byte-exact. The same transform runs server-side and on browser-bound requests. No intermediate representation, no generated code, no output directory. An AI agent can reason about what the code does by reading the file, because the file IS what runs. See <a href="/docs/no-build">No-Build Model</a> for the full pipeline.</p>
+    <p>WebJs has <strong>no build step you run</strong>. The <code>.ts</code> file you see is the file that runs. <code>.ts</code> imports are stripped of types by the runtime's stripper (Node 24+'s built-in <code>module.stripTypeScriptTypes</code>, or <code>amaro</code> on Bun), which is whitespace replacement: every <code>(line, column)</code> in the source maps to the same position in the output, so stack traces stay byte-exact. The same transform runs server-side and on browser-bound requests. No intermediate representation, no generated code, no output directory. An AI agent can reason about what the code does by reading the file, because the file IS what runs. See <a href="/docs/no-build">No-Build Model</a> for the full pipeline.</p>
 
     <h3>6. Explicit Server Boundary</h3>
     <p>The <code>.server.ts</code> extension is a visible, greppable marker that says "this code runs only on the server." An AI agent never accidentally puts a database call in a component, because the naming convention prevents it. And the framework enforces it: <code>.server.ts</code> files are rewritten to RPC stubs for the browser.</p>
@@ -102,7 +102,7 @@ export async function createPost(
     <p>Zero indirection. Zero codegen. Zero schema drift.</p>
 
     <h3>8. JSDoc or TypeScript: Agent's Choice</h3>
-    <p>Some AI agents work better with TypeScript, others prefer JSDoc. webjs supports both equally. The type-checking story is identical either way, since the TS language server reads both. An agent can generate whichever format it's more fluent in.</p>
+    <p>Some AI agents work better with TypeScript, others prefer JSDoc. WebJs supports both equally. The type-checking story is identical either way, since the TS language server reads both. An agent can generate whichever format it's more fluent in.</p>
 
     <h3>9. Cross-Agent Config Files</h3>
     <p><code>webjs create</code> scaffolds guardrail config files for every major AI coding agent:</p>
@@ -122,7 +122,7 @@ export async function createPost(
     <p>In a webjs project, the user never has to say "also write tests" or "also update the docs." Agents do this automatically with every code change. The convention is enforced via <code>CONVENTIONS.md</code>, <code>webjs test</code>, and <code>webjs check</code>. For an agent lint-and-fix loop, run <code>webjs check --json</code>: the structured output lets the agent parse violations, fix them, and re-run until the report is clean (the same correctness data the MCP <code>check</code> tool returns).</p>
 
     <h3>12. Scaffold + Persistence Defaults</h3>
-    <p>When a layman user says "create a todo app with webjs", the agent should produce a real full-stack app with a real database, not a JSON-file simulation. webjs enforces this with three guardrails:</p>
+    <p>When a layman user says "create a todo app with webjs", the agent should produce a real full-stack app with a real database, not a JSON-file simulation. WebJs enforces this with three guardrails:</p>
     <ul>
       <li><strong>Exactly three scaffolds.</strong> <code>webjs create &lt;name&gt;</code> (full-stack default), <code>--template api</code>, <code>--template saas</code>. The CLI rejects any other <code>--template</code> value, so an agent can't hallucinate <code>--template todo</code> or <code>--template blog</code>.</li>
       <li><strong>Drizzle + SQLite wired up by default.</strong> Every scaffold ships <code>db/schema.server.ts</code>, <code>db/columns.server.ts</code>, <code>db/connection.server.ts</code> (exports <code>db</code>), the <code>webjs.dev.before</code> + <code>webjs.start.before</code> steps running <code>webjs db migrate</code> (idempotent, so a <code>db:generate</code>'d migration applies on the next boot), and <code>npm run db:generate</code> / <code>db:migrate</code> / <code>db:studio</code> / <code>db:seed</code>. The agent edits the schema, runs <code>db:generate</code>, and <code>npm run dev</code> applies it, and won't accidentally fall back to JSON files for persistence.</li>

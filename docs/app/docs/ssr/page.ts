@@ -64,7 +64,7 @@ export default async function Home() {
     <p>If a component sets <code>static shadow = false</code>, DSD injection is skipped. The component renders into the light DOM and its styles are not scoped. This is useful for components that need to participate in the parent document's layout or inherit global styles.</p>
 
     <h2>The Server Element Shim</h2>
-    <p>The <code>injectDSD</code> pass instantiates each component server-side, but there is no real DOM, so a naive <code>this.getAttribute(...)</code> or <code>this.addEventListener(...)</code> in the constructor or <code>render()</code> would throw. webjs backs the SSR-time instance with a server element shim, so the attribute and event surface a component reads during the pre-render lifecycle is safe and does not crash.</p>
+    <p>The <code>injectDSD</code> pass instantiates each component server-side, but there is no real DOM, so a naive <code>this.getAttribute(...)</code> or <code>this.addEventListener(...)</code> in the constructor or <code>render()</code> would throw. WebJs backs the SSR-time instance with a server element shim, so the attribute and event surface a component reads during the pre-render lifecycle is safe and does not crash.</p>
     <ul>
       <li><strong>Attribute methods work</strong>: <code>getAttribute</code>, <code>hasAttribute</code>, <code>setAttribute</code>, and <code>toggleAttribute</code> read and write the SSR instance's attribute map, so reading an attribute in <code>render()</code> or reflecting a property during the SSR update cycle behaves as it does in the browser.</li>
       <li><strong>Event methods are no-ops</strong>: <code>addEventListener</code>, <code>removeEventListener</code>, and <code>dispatchEvent</code> are inert at SSR (there is no event loop on the server), so wiring a delegated listener in the constructor is safe. The real listeners bind on the client after the script loads.</li>
@@ -73,7 +73,7 @@ export default async function Home() {
     <p>Reading attributes that drive render through a reactive property (declared via the <code>WebComponent({ ... })</code> factory) is still the idiomatic path, but a direct <code>this.hasAttribute(...)</code> no longer crashes at SSR. Genuinely browser-only members (<code>this.classList</code>, <code>this.querySelector(...)</code>, <code>this.attachShadow(...)</code>, <code>this.getBoundingClientRect(...)</code>, layout reads) have no server shim and still throw, so keep them in <code>connectedCallback</code> or a later hook. See <a href="/docs/lifecycle">Lifecycle</a> for which hooks run where.</p>
 
     <h3>closest() at SSR for compound components</h3>
-    <p>A compound component (a tabs trigger, a toggle-group item) derives its active or pressed state by walking up to its parent and reading the parent's value. webjs supports <code>this.closest(...)</code> at SSR for <strong>tag-name selectors only</strong>, backed by the SSR walker's ancestor chain, so the active or pressed state is marked in the first server paint rather than only after hydration.</p>
+    <p>A compound component (a tabs trigger, a toggle-group item) derives its active or pressed state by walking up to its parent and reading the parent's value. WebJs supports <code>this.closest(...)</code> at SSR for <strong>tag-name selectors only</strong>, backed by the SSR walker's ancestor chain, so the active or pressed state is marked in the first server paint rather than only after hydration.</p>
     <pre>get _tabs() { return this.closest('ui-tabs'); }
 render() {
   const active = this._tabs?.value === this.value;
@@ -208,7 +208,7 @@ export const metadata = {
     </ul>
 
     <h3>JSON-LD structured data</h3>
-    <p>Set <code>metadata.jsonLd</code> to a schema.org object (or an array of objects, one script per element) to emit <code>&lt;script type="application/ld+json"&gt;</code> for Google rich results (Article, Product, BreadcrumbList, FAQ, etc.). webjs serializes and HTML-safe-escapes it for you, so a value containing <code>&lt;/script&gt;</code> can never break out of the tag. You own the schema; the framework adds no schema library. It works in <code>generateMetadata</code> too, for per-request data.</p>
+    <p>Set <code>metadata.jsonLd</code> to a schema.org object (or an array of objects, one script per element) to emit <code>&lt;script type="application/ld+json"&gt;</code> for Google rich results (Article, Product, BreadcrumbList, FAQ, etc.). WebJs serializes and HTML-safe-escapes it for you, so a value containing <code>&lt;/script&gt;</code> can never break out of the tag. You own the schema; the framework adds no schema library. It works in <code>generateMetadata</code> too, for per-request data.</p>
 
     <pre>export const metadata = {
   jsonLd: {

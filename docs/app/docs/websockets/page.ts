@@ -5,7 +5,7 @@ export const metadata = { title: 'WebSockets | webjs' };
 export default function WebSockets() {
   return html`
     <h1>WebSockets</h1>
-    <p>webjs has first-class WebSocket support. Export a <code>WS</code> function from any <code>route.ts</code> file and it becomes a WebSocket endpoint at that URL. On the client, <code>connectWS()</code> provides auto-reconnect, JSON serialisation, and send queuing out of the box.</p>
+    <p>WebJs has first-class WebSocket support. Export a <code>WS</code> function from any <code>route.ts</code> file and it becomes a WebSocket endpoint at that URL. On the client, <code>connectWS()</code> provides auto-reconnect, JSON serialisation, and send queuing out of the box.</p>
 
     <h2>Server Side: Export WS</h2>
     <p>Add a named <code>WS</code> export to any <code>route.ts</code> file. The function receives the raw WebSocket connection, the upgrade Request, and the route params:</p>
@@ -40,7 +40,7 @@ export function WS(ws: WebSocket, req: Request, { params }: { params: Record&lt;
     </ul>
 
     <h3>Under the Hood</h3>
-    <p>webjs uses the <a href="https://github.com/websockets/ws">ws</a> library with <code>noServer: true</code>. When the Node.js HTTP server receives an <code>Upgrade</code> request:</p>
+    <p>WebJs uses the <a href="https://github.com/websockets/ws">ws</a> library with <code>noServer: true</code>. When the Node.js HTTP server receives an <code>Upgrade</code> request:</p>
     <ol>
       <li>The URL is matched against the API route table.</li>
       <li>If a match is found, the route's module is loaded and checked for a <code>WS</code> export.</li>

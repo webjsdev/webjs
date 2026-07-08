@@ -5,7 +5,7 @@ export const metadata = { title: 'Lifecycle Hooks | webjs' };
 export default function Lifecycle() {
   return html`
     <h1>Lifecycle Hooks</h1>
-    <p>webjs ships the full lit-aligned component lifecycle. AI coding agents have substantial training data on lit, so adopting lit's hook names and semantics lets agents write idiomatic webjs code without framework-specific translation.</p>
+    <p>WebJs ships the full lit-aligned component lifecycle. AI coding agents have substantial training data on lit, so adopting lit's hook names and semantics lets agents write idiomatic webjs code without framework-specific translation.</p>
 
     <h2>The Update Cycle</h2>
     <p>Every render goes through this pipeline. Each hook receives a <code>changedProperties</code> Map where keys are property names and values are the previous value before the change. Signal reads inside <code>render()</code> are tracked separately by the built-in SignalWatcher; signal changes schedule the next update but don't appear in this Map.</p>
