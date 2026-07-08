@@ -1093,6 +1093,15 @@ export default function RootLayout({ children }: { children: unknown }) {
   const nonce = cspNonce();
   return html\`
     <script nonce="\${nonce}">
+      // ===== OPTIONAL: light/dark theme apparatus (remove as one unit) =====
+      // This IIFE reads the saved or OS theme and toggles the data-theme
+      // attribute plus the dark class the ui kit reads, so the token VALUES in
+      // the root, dark, and data-theme style blocks below switch. It is what
+      // makes the app theme-aware. Building a SINGLE-theme app of your own?
+      // Delete this IIFE, delete the dark and light style blocks below, and set
+      // your palette once on the root selector. That removes the wiring so it
+      // cannot fight your own colours (it will not override a plain root
+      // palette). The header-measure IIFE that follows is unrelated, keep it.
       (function(){
         try {
           var mq = window.matchMedia('(prefers-color-scheme: light)');
@@ -1112,6 +1121,7 @@ export default function RootLayout({ children }: { children: unknown }) {
           mq.addEventListener('change', apply);
         } catch (_) {}
       })();
+      // ===== end optional theme apparatus =====
       // The header is position:fixed (not sticky): a sticky header flickers on
       // iOS WebKit during a client-router nav. fixed leaves normal flow, so
       // --header-h reserves its height for the content below. Measured here so
