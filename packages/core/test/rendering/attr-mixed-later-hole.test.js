@@ -52,6 +52,21 @@ test('mixed attribute with both holes changing rebuilds fully', () => {
   assert.equal(host.querySelector('i').getAttribute('class'), 's A2 B2');
 });
 
+test('a THREE-hole attribute re-applies when the middle hole changes', () => {
+  // Uses data-* (not class) with distinct multi-char statics so the assertion
+  // reads the raw attribute value (a class token-set view would obscure it).
+  const el = (a, b, c) => html`<i data-v="p ${a} q ${b} r ${c}"></i>`;
+  const host = document.createElement('div');
+  render(el('1', '2', '3'), host);
+  assert.equal(host.querySelector('i').getAttribute('data-v'), 'p 1 q 2 r 3');
+  // change ONLY the middle hole. Counterfactual: pre-fix stayed 'p 1 q 2 r 3'.
+  render(el('1', '9', '3'), host);
+  assert.equal(host.querySelector('i').getAttribute('data-v'), 'p 1 q 9 r 3');
+  // change ONLY the last hole.
+  render(el('1', '9', '8'), host);
+  assert.equal(host.querySelector('i').getAttribute('data-v'), 'p 1 q 9 r 8');
+});
+
 test('an unkeyed fixed-length list patches each cell class independently', () => {
   // The board case: a length-9 list where per-item class holes change every
   // render. Positional reconcile plus the mixed-attr fix must keep each cell's
