@@ -60,6 +60,15 @@
             "command": ".claude/hooks/nudge-uncommitted.sh"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/cleanup-merged-worktree.sh"
+          }
+        ]
       }
     ]
   }
