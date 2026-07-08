@@ -1,6 +1,6 @@
 # Changelog
 
-WebJs ships **per-package, per-version** changelog files.
+webjs ships **per-package, per-version** changelog files.
 
 ```
 changelog/

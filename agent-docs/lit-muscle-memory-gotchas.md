@@ -383,7 +383,7 @@ derivation is shared across `render()` and a client hook.
 ### 10. `ContextProvider` for server-known data
 
 Context providers in lit publish on connect via `hostConnected`. In
-WebJs SSR, `connectedCallback` does not run, so descendants that read
+webjs SSR, `connectedCallback` does not run, so descendants that read
 context during SSR see the default value (or undefined). On hydration
 the provider connects and consumers re-render, causing a content
 shift.

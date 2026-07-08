@@ -36,7 +36,7 @@ render(html`
 WebJs components register at runtime with `Class.register('tag')` (a plain
 method call, no decorator, no `HTMLElementTagNameMap`), which a generic
 TypeScript setup cannot statically trace, so it offers no intelligence for
-WebJs tags. This plugin scans the program for `Class.register('tag')` and
+webjs tags. This plugin scans the program for `Class.register('tag')` and
 `customElements.define('tag', Class)` calls, builds a registry of each
 component's factory-declared reactive props (the `WebComponent({ ... })`
 shape), parses the markup inside `` html`` ``

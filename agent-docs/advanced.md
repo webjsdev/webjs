@@ -650,7 +650,7 @@ sniff. A per-link `data-prefetch` always overrides the adaptive default.
 
 Per link, set `data-prefetch` (a valid-HTML `data-*` attribute, the shape
 SvelteKit and Astro use; Next / Nuxt / Remix use a component prop, which
-WebJs has no equivalent for since links are plain `<a href>`):
+webjs has no equivalent for since links are plain `<a href>`):
 
 ```html
 <a href="/dashboard">adaptive: intent on pointer, viewport on touch (default)</a>
