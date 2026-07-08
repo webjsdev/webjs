@@ -3,6 +3,7 @@ import { ssrPage, ssrNotFound, loadModule } from './ssr.js';
 import { readBytesBounded, payloadTooLarge, DEFAULT_MAX_MULTIPART_BYTES } from './body-limit.js';
 import { getBodyLimits } from './context.js';
 import { propagateTrustedRemoteIp } from './rate-limit.js';
+import { makeThenable } from './thenable-params.js';
 
 /**
  * Page server actions: a `page.{js,ts}` may export an `action` function that
@@ -201,7 +202,14 @@ export async function runPageAction(route, params, url, loaded, req, ssrOpts) {
   /** @type {ActionResult | undefined} */
   let result;
   try {
-    result = await action({ request: actionReq, params, searchParams, url, formData });
+    // params / searchParams are awaitable AND sync-readable here too (#848).
+    result = await action({
+      request: actionReq,
+      params: makeThenable(params),
+      searchParams: makeThenable(searchParams),
+      url,
+      formData,
+    });
   } catch (err) {
     if (isRedirect(err)) {
       const e = /** @type any */ (err);

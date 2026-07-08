@@ -69,17 +69,24 @@ Component. Webjs has no Server Components, so:
   `cache()` query helper, `export const revalidate` on a page, or `export const
   cache` on a GET action (see `agent-docs/built-ins.md`).
 
-## 4. `params` and `searchParams` are plain objects, not Promises
+## 4. `params` and `searchParams` are awaitable AND synchronously readable
 
-Next 15 made `params` / `searchParams` async (you `await` them). In webjs they
-are plain synchronous objects on the page/layout/route context.
+Next 15/16 made `params` / `searchParams` Promises (`const { id } = await
+params`). webjs supports BOTH (#848): the Next `await` habit works, and the
+plain sync read also works, so either muscle memory is correct.
 
 ```ts
-// WRONG (Next 15 habit): const { id } = await params;
-export default async function User({ params }: PageProps<'/users/[id]'>) {
-  const id = params.id;   // plain object, no await
+export default async function User({ params, searchParams }: PageProps<'/users/[id]'>) {
+  const id = params.id;              // sync read, works
+  const { id: id2 } = await params;  // Next 15/16 await, ALSO works
+  const tab = (await searchParams).tab;
 }
 ```
+
+Under the hood the runtime hands a plain object with a non-enumerable `then`
+(so a `{ ...params }` spread, `JSON.stringify`, and `Object.keys` see only the
+data keys, never the `then`). This applies to pages, layouts, and `route.{js,ts}`
+handler context alike.
 
 ## 5. The page default export returns a template, and runs server-only
 
@@ -172,7 +179,7 @@ as undefined after hydration).
 | `redirect()` in a route handler | `Response.redirect(url, 303)`; `redirect()` only in pages/actions |
 | `throw redirect()` from a form action | return an `ActionResult` `{ redirect }` (303 PRG) |
 | `fetch()` in a Server Component | page function, async `render()`, or a `'use server'` action import |
-| `await params` | `params` is a plain object |
+| `await params` | works, and `params.id` sync works too (both supported) |
 | Next 16 `proxy.ts`, one file + `matcher` | `middleware.ts`, chainable `(req, next)`, per-segment (no matcher) |
 | page returns JSX, can be interactive | page returns a `TemplateResult`, server-only, never hydrates |
 | `NextRequest` / `NextResponse` | platform `Request` / `Response` |

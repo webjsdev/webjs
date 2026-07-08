@@ -85,6 +85,14 @@ export type RouteParams<R extends string> = R extends keyof RouteParamMap
   : Record<string, string>;
 
 /**
+ * A value that is BOTH synchronously usable as `T` and `await`-able to `T`
+ * (#848). The webjs runtime hands `params` / `searchParams` as a plain object
+ * carrying a non-enumerable `then`, so `params.id` and `await params` both
+ * work; this type expresses that dual nature to TypeScript.
+ */
+export type Awaitable<T> = T & PromiseLike<T>;
+
+/**
  * The argument a page default-export receives. Mirrors the `ctx` object
  * packages/server/src/ssr.js builds: `{ params, searchParams, url,
  * actionData }`.
@@ -94,16 +102,22 @@ export type RouteParams<R extends string> = R extends keyof RouteParamMap
  * `Object.fromEntries(url.searchParams.entries())` (so a repeated key is
  * last-wins `string`, never an array). The wider type keeps a future
  * multi-value reader source-compatible.
+ *
+ * `params` / `searchParams` are `Awaitable<T>` (#848): synchronously readable
+ * (`params.id`) AND `await`-able (`const { id } = await params`) for Next
+ * 15/16 muscle-memory parity. The runtime object carries a non-enumerable
+ * `then` (see packages/server/src/thenable-params.js), so a spread / JSON /
+ * `Object.keys` sees only the data keys.
  */
 export interface PageProps<R extends string = string> {
   /**
    * Path params. A generated dynamic route narrows this to its exact shape
    * (`{ slug: string }`); a static or un-generated route is
-   * `Record<string, string>`.
+   * `Record<string, string>`. Sync-readable and `await`-able (#848).
    */
-  params: R extends keyof RouteParamMap ? RouteParamMap[R] : Record<string, string>;
-  /** Query string, as an object. Repeated keys are last-wins at runtime. */
-  searchParams: Record<string, string | string[]>;
+  params: Awaitable<R extends keyof RouteParamMap ? RouteParamMap[R] : Record<string, string>>;
+  /** Query string, as an object. Repeated keys are last-wins at runtime. Sync-readable and `await`-able (#848). */
+  searchParams: Awaitable<Record<string, string | string[]>>;
   /** The full request URL string. */
   url: string;
   /**
@@ -132,5 +146,6 @@ export interface LayoutProps<R extends string = string> extends PageProps<R> {
  * narrow them against a generated route the same way `PageProps` does.
  */
 export interface RouteHandlerContext<R extends string = string> {
-  params: R extends keyof RouteParamMap ? RouteParamMap[R] : Record<string, string>;
+  /** Sync-readable and `await`-able (#848), same as `PageProps['params']`. */
+  params: Awaitable<R extends keyof RouteParamMap ? RouteParamMap[R] : Record<string, string>>;
 }

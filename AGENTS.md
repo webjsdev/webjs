@@ -256,7 +256,7 @@ MyThing.register('my-thing');
 
 ### Pages (`app/**/page.{js,ts}`)
 
-- Default export is a possibly-async function receiving `{ params, searchParams, url, actionData }`. Runs **only on the server**. Throw `notFound()` / `redirect(url)` to short-circuit.
+- Default export is a possibly-async function receiving `{ params, searchParams, url, actionData }`. Runs **only on the server**. Throw `notFound()` / `redirect(url)` to short-circuit. `params` / `searchParams` are awaitable AND synchronously readable (`params.id` and `await params` both work, Next 15/16 parity, #848).
 - Named exports: `metadata` (static), `generateMetadata(ctx)` (async, takes precedence). Type both with `Metadata`. See `agent-docs/metadata.md`.
 - Optional `export const revalidate` (seconds) opts into the server HTML response cache (#241). SAFETY: only on a page identical for every visitor (no `cookies()` / session / per-user data); keyed by URL only. See `agent-docs/built-ins.md`.
 - Optional `export const action`: a fn `({ request, params, searchParams, url, formData })` handling a non-GET submission to the page's own URL (the no-JS write-path, #244), returning an `ActionResult`. Success is a `303` (PRG); failure re-renders the SAME page at `422` with the result on `ctx.actionData`. See `agent-docs/recipes.md`.

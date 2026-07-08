@@ -14,6 +14,7 @@ import {
   HTML_CACHE_MARKER,
 } from './html-cache.js';
 import { requestedFrameId, extractFrameSubtree } from './frame-render.js';
+import { makeThenable } from './thenable-params.js';
 
 /**
  * SSR a matched page route to a Response.
@@ -67,8 +68,11 @@ export async function ssrPage(route, params, url, opts) {
   }
 
   const ctx = {
-    params,
-    searchParams: Object.fromEntries(url.searchParams.entries()),
+    // params / searchParams are awaitable AND synchronously readable (#848):
+    // `params.id` still works, `await params` also works (Next 15/16 parity).
+    // The `then` is non-enumerable so spread / JSON / Object.keys are unchanged.
+    params: makeThenable(params),
+    searchParams: makeThenable(Object.fromEntries(url.searchParams.entries())),
     url: url.toString(),
     // Populated only when this render is the re-render after a failed page
     // `action` submission (#244). The page function and every layout receive
