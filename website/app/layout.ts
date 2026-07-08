@@ -24,6 +24,7 @@ const NAV = [
   { label: 'UI', href: UI_URL, ext: true },
   { label: 'Demo', href: EXAMPLE_BLOG_URL, ext: true },
   { label: 'Blog', href: '/blog', ext: false },
+  { label: 'Compare', href: '/compare', ext: false },
   { label: 'Changelog', href: '/changelog', ext: false },
   { label: 'GitHub', href: GH_URL, ext: true },
 ];
