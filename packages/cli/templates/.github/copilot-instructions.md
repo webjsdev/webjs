@@ -39,8 +39,8 @@ the full hosted docs are at **https://docs.webjs.dev**.
   `lib/utils/cn.ts`. No PWA means delete `public/sw.js` and
   `offline.html`. Always KEEP the durable knowledge (`AGENTS.md`,
   `CONVENTIONS.md`, the rule files, the MCP), never prune it, so removing
-  example code never removes your context. Prune AFTER using the examples
-  as reference, never blindly up front. A no-op for the `api` template
+  example code never removes your context. Prune AFTER using the features
+  and examples as reference, never blindly up front. A no-op for the `api` template
   (no UI kit, no PWA files).
 - **`app/` is routing-only.** Only routing files live in `app/` (page,
   layout, route, middleware, metadata routes). CSS, helpers, and constants

@@ -65,7 +65,7 @@ user asked for, never leftover scaffold code.
    `public/sw.js` and `offline.html`. Always KEEP the durable knowledge
    (`AGENTS.md`, `CONVENTIONS.md`, the per-agent rule files, the MCP
    wiring), never prune it, so removing example code never removes your
-   context. Prune AFTER you have used the examples as reference, never
+   context. Prune AFTER you have used the features and examples as reference, never
    blindly up front. This is a no-op for the `api` template (no UI kit,
    no PWA files).
 

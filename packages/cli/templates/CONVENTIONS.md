@@ -412,7 +412,7 @@ kit used means delete `components/ui/`, `components.json`, and
 Always KEEP the durable knowledge (`AGENTS.md`, `CONVENTIONS.md`, the
 per-agent rule files, the MCP wiring), and never prune it, so removing
 example code never removes your context. Prune AFTER you have used the
-examples as reference, never blindly up front. This is a no-op for the
+features and examples as reference, never blindly up front. This is a no-op for the
 `api` template, which ships no UI kit and no PWA files.
 
 ---
