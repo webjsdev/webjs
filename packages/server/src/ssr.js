@@ -176,6 +176,16 @@ export async function ssrPage(route, params, url, opts) {
         else push(f);
       }
     }
+    // instrumentation-client.{js,ts} (#848): import it FIRST in the client boot
+    // so it runs before app modules (Next's instrumentation-client ordering).
+    // It ships even on an otherwise-static page (the app opted into client work),
+    // so it is prepended AFTER the component/page modules are collected.
+    if (opts.instrumentationClient) {
+      const u = toUrlPath(opts.instrumentationClient, opts.appDir);
+      const i = moduleUrls.indexOf(u);
+      if (i !== -1) moduleUrls.splice(i, 1);
+      moduleUrls.unshift(u);
+    }
     // Emit <link rel="modulepreload"> for every custom element that
     // actually rendered PLUS their transitive dependencies (from the
     // module graph). URLs are deduplicated so the browser never sees

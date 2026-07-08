@@ -157,6 +157,8 @@ app/                        ROUTING ONLY (thin adapters importing from modules/;
 middleware.js               root middleware (every request)
 readiness.js                optional /__webjs/ready check (return false/throw = 503)
 env.js                      optional boot-time env validation (schema or validator fn; fails fast)
+instrumentation.js          optional boot-time hook (register(); wire APM via setOnError, #848)
+instrumentation-client.js   optional client boot hook (runs first, before app modules, #848)
 sitemap.js robots.js manifest.js icon.js opengraph-image.js twitter-image.js apple-icon.js   metadata routes
 lib/                        app-wide code (lib/*.server.js infra, lib/utils/ browser-safe helpers)
 modules/<feature>/          feature-scoped: actions/ (mutations), queries/ (reads), components/, utils/, types.js

@@ -495,6 +495,8 @@ Routes live under `app/` and follow NextJs App Router conventions:
 - `app/**/layout.ts`: Layout wrapper
 - `app/**/error.ts`: Error boundary
 - `app/**/middleware.ts`: Per-segment middleware
+- `instrumentation.ts` (app root): optional boot hook. `register()` runs once at startup; call `setOnError()` (from `@webjsdev/server`) inside it to wire an APM error sink (composes with `createRequestHandler({ onError })`).
+- `instrumentation-client.ts` (app root): optional client boot hook, imported first in the browser boot so it runs before app modules.
 
 **Special route files:**
 - `app/**/error.ts`: Error boundary. Default export receives `{ error }`, returns `TemplateResult`. Nearest boundary catches errors from pages below it.

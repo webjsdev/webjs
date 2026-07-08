@@ -213,6 +213,23 @@ export declare function applyEnvValidation(
 ): Promise<void>;
 
 // ---------------------------------------------------------------------------
+// instrumentation.js (#848)
+// ---------------------------------------------------------------------------
+
+/**
+ * Register an error sink from inside `instrumentation.register()`. Composes with
+ * the `createRequestHandler({ onError })` option (both fire).
+ */
+export declare function setOnError(
+  fn: (error: unknown, ctx?: { request?: Request; requestId?: string; phase?: string }) => void,
+): void;
+/** Run the app's boot-time `instrumentation.{js,ts}` hook once; returns any registered error sink. */
+export declare function runInstrumentation(
+  appDir: string,
+  opts?: { dev?: boolean; logger?: { error?: (...a: unknown[]) => void } },
+): Promise<{ onError: ((error: unknown, ctx?: unknown) => void) | null }>;
+
+// ---------------------------------------------------------------------------
 // router.js
 // ---------------------------------------------------------------------------
 

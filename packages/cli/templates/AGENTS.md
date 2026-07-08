@@ -396,6 +396,8 @@ test/<feature>/                feature-scoped tests, one folder per concern
   e2e/<name>.test.ts            end-to-end test (full app boot, opt in via WEBJS_E2E=1)
   smoke/<name>.test.ts          fast post-deploy sanity check
 middleware.ts            root middleware (optional, outermost)
+instrumentation.ts       optional boot hook: register() runs once; wire APM via setOnError
+instrumentation-client.ts  optional client boot hook, runs first before app modules
 ```
 
 ### The gallery (reference content, prune it)
