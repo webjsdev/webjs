@@ -112,6 +112,13 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     const pageSrc = readFileSync(join(appDir, 'app', 'page.ts'), 'utf8');
     assert.ok(layoutSrc.includes(marker), 'layout.ts must carry the scaffold-placeholder marker');
     assert.ok(pageSrc.includes(marker), 'page.ts must carry the scaffold-placeholder marker');
+    // The "Built with webjs" footer is scaffold branding. It ships guarded by
+    // its OWN placeholder marker so `webjs check` fails until the agent removes
+    // or replaces it (a delivered app must not keep the scaffold attribution).
+    // Two markers means removing only the top one still fails the check.
+    assert.ok(layoutSrc.includes('Built with'), 'layout ships the example footer branding');
+    assert.ok(layoutSrc.split(marker).length - 1 >= 2,
+      'layout.ts carries a second marker guarding the "Built with webjs" footer');
 
     // Drizzle db layer wired up
     assert.ok(existsSync(join(appDir, 'db', 'schema.server.ts')), 'db/schema.server.ts written');

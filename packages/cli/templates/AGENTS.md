@@ -21,12 +21,21 @@ default `<main class="max-w-[760px]">` is a reading column for prose and
 forms, so for a full-bleed app, dashboard, or board, widen the cap or
 remove it (keep the theme tokens). A wide layout left in the 760px
 reading column overflows into a horizontal scrollbar. **Give the app a
-unique design.** When it has a UI, choose its palette, layout, typography,
-and chrome to fit what the user asked for, rather than mimicking the
-scaffold's example look (the warm accent, the reading column, the serif
-display, the example header/nav) or just recoloring the same layout. The
-`api` template has no UI, so this does not apply there. The design tokens
-and theme wiring are infrastructure to keep and restyle on top of. This is ENFORCED:
+unique design, and redesign means more than recolor.** When it has a UI,
+choose its palette, typography, LAYOUT, and chrome from what the app IS.
+Recoloring the scaffold and swapping the logo while keeping its skeleton (a
+fixed top header with a Home link and a theme toggle, the centered ~760px
+reading column, the "Built with webjs" footer) is NOT a unique design.
+Decide from scratch whether this app even needs a header or footer, what nav
+(if any), and what layout fits (a centered board, a full-bleed dashboard, a
+split, a single card). Before finishing, self-audit that nothing still reads
+as the scaffold example (no "Built with webjs" footer, no leftover example
+nav, no default reading column unless it truly fits). The `api` template has
+no UI, so this does not apply there. The design tokens and theme wiring are
+infrastructure to keep and restyle on top of. Style with Tailwind utilities
+wherever they reach, and use custom CSS only for what utilities cannot
+express (@theme tokens, @keyframes, scrollbar, complex color-mix or
+gradients). This is ENFORCED:
 the example `app/page.ts` and `app/layout.ts` carry a
 `webjs-scaffold-placeholder` marker comment, and `webjs check` fails
 while any marker remains, so this freshly scaffolded app fails the check

@@ -1276,8 +1276,10 @@ ${UI_THEME}
       <main class="flex-1 w-full max-w-[760px] mx-auto px-4 sm:px-6 pt-[72px] pb-12">
         \${children}
       </main>
-      <!-- "Built with webjs" attribution. Keep it or replace it with your own
-           footer; the gradient mark uses the --logo-from/--logo-to tokens. -->
+      <!-- webjs-scaffold-placeholder. This "Built with webjs" footer is SCAFFOLD
+           branding, not your app's. REMOVE it, or replace it with your own
+           footer, before shipping a delivered app. Delete this line once done.
+           webjs check fails while the marker remains. -->
       <footer class="border-t border-border">
         <div class="max-w-[760px] mx-auto px-4 sm:px-6 py-6 flex items-center justify-center">
           <a href="https://webjs.dev" class="inline-flex items-center gap-2 no-underline text-sm text-muted-foreground hover:text-foreground transition-colors">
