@@ -2,6 +2,10 @@
 // (possibly async) function receiving { params, searchParams, url }; it runs
 // ONLY on the server. Throw notFound() / redirect() to short-circuit.
 //
+// params / searchParams are BOTH synchronously readable AND awaitable: read
+// `params.id` directly, or `const { id } = await params` (the Next 15/16
+// pattern, supported so that muscle memory transfers). Either form is correct.
+//
 // Type-safe routes: instead of hand-typing `{ params: { id: string } }`, type
 // the props with PageProps<'<route>'>. `webjs types` (run automatically by
 // `webjs dev`) generates .webjs/routes.d.ts with a Route union and per-route
@@ -11,14 +15,18 @@
 import { html } from '@webjsdev/core';
 import type { PageProps } from '@webjsdev/core';
 
-export default function RoutingParam({ params }: PageProps<'/features/routing/[id]'>) {
+export default async function RoutingParam({ params }: PageProps<'/features/routing/[id]'>) {
+  // The Next-style await also works; `params.id` sync would be identical.
+  const { id } = await params;
   return html`
     <h1 class="text-h2 font-bold mb-4">Route param</h1>
-    <p>The <code>[id]</code> segment is: <strong>${params.id}</strong></p>
+    <p>The <code>[id]</code> segment is: <strong>${id}</strong></p>
     <p class="text-muted-foreground text-sm mt-3">
       Typed with <code class="font-mono">PageProps&lt;'/features/routing/[id]'&gt;</code>,
       so <code class="font-mono">params.id</code> is a checked
       <code class="font-mono">string</code> from the generated route union.
+      <code class="font-mono">params</code> is awaitable too:
+      <code class="font-mono">const { id } = await params</code> works, same value.
     </p>
     <p class="mt-3"><a class="text-primary" href="/features/routing">Back</a></p>
   `;

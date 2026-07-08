@@ -3,6 +3,7 @@ import { matchApi } from './router.js';
 import { urlFromRequest } from './forwarded.js';
 import { registerClient } from './broadcast.js';
 import { loadWsModule } from './listener-core.js';
+import { makeThenable } from './thenable-params.js';
 
 /**
  * WebSocket support.
@@ -57,7 +58,7 @@ export function attachWebSocket(server, getRouteTable, opts) {
         try {
           registerClient(url.pathname, ws);
           const webReq = buildRequestFromUpgrade(req, url);
-          mod.WS(ws, webReq, { params: match.params });
+          mod.WS(ws, webReq, { params: makeThenable(match.params) });
         } catch (e) {
           opts.logger.error('WebSocket handler threw', {
             err: e instanceof Error ? e.stack || e.message : String(e),

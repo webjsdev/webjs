@@ -141,7 +141,11 @@ app/                        ROUTING ONLY (thin adapters importing from modules/;
   layout.js                 root layout, wraps every page
   page.js                   /
   error.js                  nested error boundary
-  not-found.js              404 page (only at app/ root; nested <segment>/not-found.js, nearest wins)
+  not-found.js              404 page (root or nested <segment>/not-found.js, nearest wins)
+  forbidden.js              403 boundary for forbidden() (nested, nearest wins)
+  unauthorized.js           401 boundary for unauthorized() (nested, nearest wins)
+  global-error.js           root-only app-wide error boundary (renders its own <html>)
+  global-not-found.js       root-only 404 for an unmatched-anywhere URL
   <segment>/page.js         /<segment>
   [param]/page.js           dynamic route (`params.param`)
   [...rest]/ [[...rest]]/   catch-all / optional catch-all
@@ -153,6 +157,8 @@ app/                        ROUTING ONLY (thin adapters importing from modules/;
 middleware.js               root middleware (every request)
 readiness.js                optional /__webjs/ready check (return false/throw = 503)
 env.js                      optional boot-time env validation (schema or validator fn; fails fast)
+instrumentation.js          optional boot-time hook (register(); wire APM via setOnError, #848)
+instrumentation-client.js   optional client boot hook (runs first, before app modules, #848)
 sitemap.js robots.js manifest.js icon.js opengraph-image.js twitter-image.js apple-icon.js   metadata routes
 lib/                        app-wide code (lib/*.server.js infra, lib/utils/ browser-safe helpers)
 modules/<feature>/          feature-scoped: actions/ (mutations), queries/ (reads), components/, utils/, types.js
@@ -201,6 +207,7 @@ The bare `@webjsdev/core` specifier resolves to a BROWSER bundle dropping server
 | `render(v, el)` | Client-side render into a DOM element. |
 | `renderToString` | Server-side async render to HTML with DSD (from `/server`). |
 | `notFound()` / `redirect(url[, status])` | Throw to return 404, or a redirect. No-status default is convention-picked at the catching site: 302 for a GET page-render gate, 307 (method-preserving) for a server-action redirect. Override with `redirect(url, 308)` or `redirect(url, { status })`. **NEVER** throw `redirect()` inside API route handlers (`route.ts`), as they must return a standard `Response.redirect(url, 303)` response object instead. |
+| `forbidden()` / `unauthorized()` | Throw to return 403 / 401 (#848, Next 15/16 parity). Renders the nearest `forbidden.{js,ts}` / `unauthorized.{js,ts}` boundary (innermost wins), else a default page, from a page/layout render OR a page `action` (the no-JS write path). `forbidden()` for an authenticated user lacking permission, `unauthorized()` for a request that is not authenticated. Same control-flow-throw model as `notFound()`: NOT for a `route.ts` handler, and inside a `'use server'` RPC action return an `ActionResult` for an auth failure instead (a raw throw there is a generic 500, like `notFound()`/`redirect()`). |
 | `Suspense({fallback, children})` | Page/region-level streaming boundary (a value in a hole). `repeat` keyed-list directive is also re-exported. |
 | `<webjs-suspense .fallback=${html\`…\`}>` | Component-level streaming boundary element (#471): wraps one or more components, flushes `.fallback` on the first byte, streams the resolved content in (concurrently across boundaries, progressively on soft nav). The renderer-recognized opt-in for SLOW async-render data. |
 | `connectWS(url, handlers)` / `richFetch<T>` | Client WebSocket (auto-reconnect, queued sends); content-negotiated rich-type fetch. |
@@ -256,7 +263,7 @@ MyThing.register('my-thing');
 
 ### Pages (`app/**/page.{js,ts}`)
 
-- Default export is a possibly-async function receiving `{ params, searchParams, url, actionData }`. Runs **only on the server**. Throw `notFound()` / `redirect(url)` to short-circuit.
+- Default export is a possibly-async function receiving `{ params, searchParams, url, actionData }`. Runs **only on the server**. Throw `notFound()` / `redirect(url)` to short-circuit. `params` / `searchParams` are awaitable AND synchronously readable (`params.id` and `await params` both work, Next 15/16 parity, #848).
 - Named exports: `metadata` (static), `generateMetadata(ctx)` (async, takes precedence). Type both with `Metadata`. See `agent-docs/metadata.md`.
 - Optional `export const revalidate` (seconds) opts into the server HTML response cache (#241). SAFETY: only on a page identical for every visitor (no `cookies()` / session / per-user data); keyed by URL only. See `agent-docs/built-ins.md`.
 - Optional `export const action`: a fn `({ request, params, searchParams, url, formData })` handling a non-GET submission to the page's own URL (the no-JS write-path, #244), returning an `ActionResult`. Success is a `303` (PRG); failure re-renders the SAME page at `422` with the result on `ctx.actionData`. See `agent-docs/recipes.md`.
@@ -268,7 +275,7 @@ Default export receives `{ children, params, searchParams, url }`, must embed `c
 
 ### Error / loading / metadata routes
 
-`error.{js,ts}` default-exports `({ error, ...ctx }) => TemplateResult` (catches sibling-page / deeper render errors, innermost wins, prod sends only `error.message`). `loading.{js,ts}` wraps the sibling page in `Suspense` with an immediately-flushed fallback. Metadata routes (`sitemap`, `robots`, `manifest`, `icon`, `apple-icon`, `opengraph-image`, `twitter-image`) live at app root or static segments only and default-export a possibly-async function; `sitemap(entries)` / `sitemapIndex(sitemaps)` from `@webjsdev/server` serialize spec-valid XML.
+`error.{js,ts}` default-exports `({ error, ...ctx }) => TemplateResult` (catches sibling-page / deeper render errors, innermost wins, prod sends only `error.message`). `loading.{js,ts}` wraps the sibling page in `Suspense` with an immediately-flushed fallback. `forbidden.{js,ts}` / `unauthorized.{js,ts}` render the nearest 403 / 401 boundary for a thrown `forbidden()` / `unauthorized()` (#848). Two **root-only** boundaries (`app/` root exactly): `global-error.{js,ts}` is the app-wide catch-all tried after the nested `error` boundaries are exhausted, and it renders its **own** `<!doctype><html><body>` document (returned verbatim, since a root-layout failure is when it fires). Because it is returned verbatim (no framework `<head>` splice), it ships **no importmap or boot script**, so keep it **static HTML with no components/hydration** (a last-resort page must not depend on the module system that may have just failed); under an opt-in CSP, an inline `<style>`/`<script>` in it must carry the nonce via `cspNonce()`. `global-not-found.{js,ts}` renders for an unmatched-anywhere URL when no `not-found` matches. `not-found` is nearest-wins from the throwing page's chain (#848 fixed the prior root-only behavior). Metadata routes (`sitemap`, `robots`, `manifest`, `icon`, `apple-icon`, `opengraph-image`, `twitter-image`) live at app root or static segments only and default-export a possibly-async function; `sitemap(entries)` / `sitemapIndex(sitemaps)` from `@webjsdev/server` serialize spec-valid XML.
 
 ### Route handlers (`app/**/route.{js,ts}`)
 

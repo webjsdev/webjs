@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { notFound, redirect, isNotFound, isRedirect } from '../../src/nav.js';
+import { notFound, redirect, forbidden, unauthorized, isNotFound, isRedirect, isForbidden, isUnauthorized } from '../../src/nav.js';
 
 test('notFound throws an error with the sentinel', () => {
   try {
@@ -71,6 +71,41 @@ test('isRedirect returns false for plain errors', () => {
   assert.equal(isRedirect(new Error('nope')), false);
   assert.equal(isRedirect(null), false);
   assert.equal(isRedirect(undefined), false);
+});
+
+test('forbidden throws its own sentinel, distinct from notFound/redirect (#848)', () => {
+  try {
+    forbidden();
+    assert.fail('should have thrown');
+  } catch (e) {
+    assert.ok(isForbidden(e));
+    assert.equal(isUnauthorized(e), false);
+    assert.equal(isNotFound(e), false);
+    assert.equal(isRedirect(e), false);
+  }
+});
+
+test('unauthorized throws its own sentinel, distinct from forbidden (#848)', () => {
+  try {
+    unauthorized();
+    assert.fail('should have thrown');
+  } catch (e) {
+    assert.ok(isUnauthorized(e));
+    assert.equal(isForbidden(e), false);
+    assert.equal(isNotFound(e), false);
+  }
+});
+
+test('isForbidden / isUnauthorized are false for plain errors and each other', () => {
+  assert.equal(isForbidden(new Error('nope')), false);
+  assert.equal(isForbidden(null), false);
+  assert.equal(isUnauthorized(undefined), false);
+  // COUNTERFACTUAL: a forbidden sentinel is NOT an unauthorized one and vice versa.
+  let f, u;
+  try { forbidden(); } catch (e) { f = e; }
+  try { unauthorized(); } catch (e) { u = e; }
+  assert.equal(isUnauthorized(f), false);
+  assert.equal(isForbidden(u), false);
 });
 
 test('sentinels use Symbol.for so they match cross-realm', () => {

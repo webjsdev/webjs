@@ -224,6 +224,33 @@ const app = await createRequestHandler({
 });
 ```
 
+### Boot-time instrumentation hook (`instrumentation.{js,ts}`, #848)
+
+An optional app-root `instrumentation.{js,ts}` (sibling of `app/`, like
+`env.js` / `readiness.js`) default-exports (or names) a `register()` function
+the framework runs ONCE at boot, after env validation and before the route
+table is built, so observability plumbing (OpenTelemetry, an APM) starts before
+any request. Absent file is a no-op (opt-in); a throwing `register()` is logged,
+not fatal. Inside it, call `setOnError(fn)` (from `@webjsdev/server`) to register
+an error sink that **composes with** the `createRequestHandler({ onError })`
+option (both fire, so the file-based hook and the option coexist).
+
+```ts
+// instrumentation.ts (app root)
+import { setOnError } from '@webjsdev/server';
+export function register() {
+  // start tracing, then wire an error sink that composes with opts.onError:
+  setOnError((error, { requestId, phase }) => reportToApm(error, { requestId, phase }));
+}
+```
+
+A separate app-root `instrumentation-client.{js,ts}` is imported FIRST in the
+client boot `<script type="module">`, so it runs before app modules (mirrors
+Next's `instrumentation-client`). Use it for browser-side observability init.
+Note: because it always loads, a page that would otherwise ship zero JS (a fully
+static / elided route) emits a boot script when this file is present, so add it
+only when you genuinely want client instrumentation app-wide.
+
 ### Build-info endpoint (`GET /__webjs/version`)
 
 Returns JSON describing the live build, alongside the `/__webjs/health` and `/__webjs/ready` probes, so a deploy can curl it to confirm which build is serving. No secrets; answered before the analysis warms (like the other probes), so it responds on a cold instance. `Cache-Control: no-store`.

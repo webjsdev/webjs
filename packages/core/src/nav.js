@@ -13,11 +13,42 @@
 
 const NOT_FOUND = Symbol.for('webjs.notFound');
 const REDIRECT = Symbol.for('webjs.redirect');
+const FORBIDDEN = Symbol.for('webjs.forbidden');
+const UNAUTHORIZED = Symbol.for('webjs.unauthorized');
 
 /** @returns {never} */
 export function notFound() {
   const err = new Error('webjs: notFound()');
   /** @type any */ (err).__webjs = NOT_FOUND;
+  throw err;
+}
+
+/**
+ * Throw a 403 Forbidden sentinel the SSR pipeline catches (#848, Next 15/16
+ * parity). Renders the nearest `forbidden.{js,ts}` boundary at status 403, or a
+ * default 403 page when none exists. Use for an authenticated user who lacks
+ * permission (contrast `unauthorized()` for a not-logged-in user).
+ *
+ * @returns {never}
+ */
+export function forbidden() {
+  const err = new Error('webjs: forbidden()');
+  /** @type any */ (err).__webjs = FORBIDDEN;
+  throw err;
+}
+
+/**
+ * Throw a 401 Unauthorized sentinel the SSR pipeline catches (#848, Next 15/16
+ * parity). Renders the nearest `unauthorized.{js,ts}` boundary at status 401, or
+ * a default 401 page when none exists. Use for a request that is not
+ * authenticated (contrast `forbidden()` for an authenticated-but-not-allowed
+ * user).
+ *
+ * @returns {never}
+ */
+export function unauthorized() {
+  const err = new Error('webjs: unauthorized()');
+  /** @type any */ (err).__webjs = UNAUTHORIZED;
   throw err;
 }
 
@@ -61,4 +92,14 @@ export function isNotFound(e) {
 /** @param {unknown} e */
 export function isRedirect(e) {
   return !!e && /** @type any */ (e).__webjs === REDIRECT;
+}
+
+/** @param {unknown} e */
+export function isForbidden(e) {
+  return !!e && /** @type any */ (e).__webjs === FORBIDDEN;
+}
+
+/** @param {unknown} e */
+export function isUnauthorized(e) {
+  return !!e && /** @type any */ (e).__webjs === UNAUTHORIZED;
 }

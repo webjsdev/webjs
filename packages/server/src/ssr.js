@@ -1,6 +1,6 @@
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
-import { renderToString, isNotFound, isRedirect, lookupModuleUrl, isLazy, cspNonce } from '@webjsdev/core';
+import { renderToString, isNotFound, isRedirect, isForbidden, isUnauthorized, lookupModuleUrl, isLazy, cspNonce } from '@webjsdev/core';
 import { importMapTag, vendorIntegrityFor, publishedBuildId, basePath, vendorPreconnectOrigins, vendorPreloadTargets } from './importmap.js';
 import { withBasePath } from './base-path.js';
 import { withAssetHash } from './asset-hash.js';
@@ -14,6 +14,7 @@ import {
   HTML_CACHE_MARKER,
 } from './html-cache.js';
 import { requestedFrameId, extractFrameSubtree } from './frame-render.js';
+import { makeThenable } from './thenable-params.js';
 
 /**
  * SSR a matched page route to a Response.
@@ -67,8 +68,11 @@ export async function ssrPage(route, params, url, opts) {
   }
 
   const ctx = {
-    params,
-    searchParams: Object.fromEntries(url.searchParams.entries()),
+    // params / searchParams are awaitable AND synchronously readable (#848):
+    // `params.id` still works, `await params` also works (Next 15/16 parity).
+    // The `then` is non-enumerable so spread / JSON / Object.keys are unchanged.
+    params: makeThenable(params),
+    searchParams: makeThenable(Object.fromEntries(url.searchParams.entries())),
     url: url.toString(),
     // Populated only when this render is the re-render after a failed page
     // `action` submission (#244). The page function and every layout receive
@@ -172,6 +176,16 @@ export async function ssrPage(route, params, url, opts) {
         else push(f);
       }
     }
+    // instrumentation-client.{js,ts} (#848): import it FIRST in the client boot
+    // so it runs before app modules (Next's instrumentation-client ordering).
+    // It ships even on an otherwise-static page (the app opted into client work),
+    // so it is prepended AFTER the component/page modules are collected.
+    if (opts.instrumentationClient) {
+      const u = toUrlPath(opts.instrumentationClient, opts.appDir);
+      const i = moduleUrls.indexOf(u);
+      if (i !== -1) moduleUrls.splice(i, 1);
+      moduleUrls.unshift(u);
+    }
     // Emit <link rel="modulepreload"> for every custom element that
     // actually rendered PLUS their transitive dependencies (from the
     // module graph). URLs are deduplicated so the browser never sees
@@ -274,9 +288,17 @@ export async function ssrPage(route, params, url, opts) {
       return new Response(null, { status: e.status || 302, headers: { location: e.url } });
     }
     if (isNotFound(err)) {
-      const html = await ssrNotFoundHtml(null, opts);
+      // Nearest not-found.{js,ts} in the page's chain wins (#848 fix: previously
+      // this always rendered the bare default, ignoring even a root not-found);
+      // fall back to a root global-not-found.{js,ts}, else the default page.
+      const html = await ssrNotFoundHtml(nearest(route.notFounds) || opts.globalNotFound || null, opts);
       return htmlResponse(html, 404, opts.req, url);
     }
+    // forbidden() / unauthorized() sentinels (#848, Next 15/16 parity): render
+    // the nearest forbidden.{js,ts} / unauthorized.{js,ts} boundary (innermost
+    // wins), else a default page, at 403 / 401.
+    if (isForbidden(err)) return ssrForbidden(route, { ...opts, url });
+    if (isUnauthorized(err)) return ssrUnauthorized(route, { ...opts, url });
     // APM / Sentry sink (issue #239): a page render error that becomes a 500
     // (an error.js boundary OR the default 500 page) is an unhandled error the
     // app should see in its error tracker. Report it best-effort BEFORE
@@ -309,6 +331,23 @@ export async function ssrPage(route, params, url, opts) {
         // fall through to next error boundary
       }
     }
+    // Root global-error.{js,ts} (#848): the app-wide catch-all, tried after the
+    // nested error boundaries are exhausted. It renders the FULL document (its
+    // own <!doctype><html><body>, like the root layout), since a root-layout
+    // failure is exactly when it fires, so its rendered output is returned
+    // verbatim without wrapInDocument. Status 500.
+    if (opts.globalError) {
+      try {
+        const mod = await loadModule(opts.globalError, opts.dev);
+        if (mod.default) {
+          const tree = await mod.default({ error: err });
+          const body = await renderToString(tree, { ssr: true, dev: opts.dev });
+          return htmlResponse(body, 500, opts.req, url);
+        }
+      } catch (nested) {
+        // fall through to the default 500 page
+      }
+    }
     // Default: dev shows stack, prod shows a terse message (no stack trace leaks).
     console.error('[webjs] unhandled render error:', err);
     const body = opts.dev
@@ -333,6 +372,30 @@ export async function ssrPage(route, params, url, opts) {
 export async function ssrNotFound(notFoundFile, opts) {
   const html = await ssrNotFoundHtml(notFoundFile, opts);
   return htmlResponse(html, 404, opts.req, opts.url);
+}
+
+/**
+ * 403 response for a thrown forbidden() (#848). Renders the nearest
+ * forbidden.{js,ts} in the page's chain, else a default 403 page. Shared by the
+ * page-render catch (ssr.js) and the page-action write path (page-action.js) so
+ * both behave identically.
+ * @param {{ forbiddens?: string[] }} route
+ * @param {{ dev: boolean, appDir: string, req?: Request, url?: URL }} opts
+ */
+export async function ssrForbidden(route, opts) {
+  const html = await ssrBoundaryHtml(nearest(route.forbiddens), '403: Forbidden', opts);
+  return htmlResponse(html, 403, opts.req, opts.url);
+}
+
+/**
+ * 401 response for a thrown unauthorized() (#848). Renders the nearest
+ * unauthorized.{js,ts} in the page's chain, else a default 401 page.
+ * @param {{ unauthorizeds?: string[] }} route
+ * @param {{ dev: boolean, appDir: string, req?: Request, url?: URL }} opts
+ */
+export async function ssrUnauthorized(route, opts) {
+  const html = await ssrBoundaryHtml(nearest(route.unauthorizeds), '401: Unauthorized', opts);
+  return htmlResponse(html, 401, opts.req, opts.url);
 }
 
 /**
@@ -388,6 +451,45 @@ function cachedHtmlResponse(rec, req, url) {
 }
 
 /* ------------ internals ------------ */
+
+/**
+ * Nearest-wins boundary file from a chain projected outermost -> innermost
+ * (the router builds these arrays via chainOf). The innermost (last) wins, the
+ * same "nearest boundary" rule error.js uses. Returns null for an empty chain.
+ * @param {string[] | undefined} files
+ * @returns {string | null}
+ */
+function nearest(files) {
+  return files && files.length ? files[files.length - 1] : null;
+}
+
+/**
+ * Render a simple boundary page (forbidden / unauthorized, #848) at the given
+ * default heading. Loads the nearest boundary module when one exists (its
+ * default export receives no props, like not-found), else emits the default
+ * heading. Mirrors ssrNotFoundHtml.
+ * @param {string | null} file
+ * @param {string} heading  e.g. '403: Forbidden'
+ * @param {{ dev: boolean, appDir: string, req?: Request }} opts
+ */
+async function ssrBoundaryHtml(file, heading, opts) {
+  let body = `<h1>${heading}</h1>`;
+  if (file) {
+    try {
+      const mod = await loadModule(file, opts.dev);
+      if (mod.default) body = await renderToString(await mod.default({}), { ssr: true, dev: opts.dev });
+    } catch (e) {
+      body = `<h1>${heading}</h1><pre>${escapeHtml(String(e))}</pre>`;
+    }
+  }
+  const nonce = opts.req ? getNonce(opts.req) : undefined;
+  return wrapInDocument(body, {
+    metadata: { title: heading.replace(/^\d+:\s*/, '') },
+    moduleUrls: [],
+    dev: opts.dev,
+    nonce,
+  });
+}
 
 async function ssrNotFoundHtml(notFoundFile, opts) {
   let body = '<h1>404: Not found</h1>';

@@ -14,18 +14,22 @@ render server-only and never hydrate, and the ONE client boundary is a
 `WebComponent` custom element. Read the "Execution model" section of the root
 `AGENTS.md` first; every gotcha below is downstream of that one difference.
 
-## 1. There is no RSC, no `'use client'`, no `'use server'` component boundary
+## 1. There is no RSC and no `'use client'` boundary, and `'use server'` means something different
 
-Do not reach for `'use client'` at the top of a component or a `'use server'`
-directive to make a component a Server Component. Those do nothing in webjs.
+Do not reach for `'use client'` at the top of a component, and do not think of
+`'use server'` as a *component* boundary. There is no RSC render tree.
 
-- **Interactivity lives in a `WebComponent`**, an islands-style custom element
-  that hydrates per-element. A page or layout cannot be interactive in its own
-  markup (an `@click` in a page template is dropped at SSR).
-- **`'use server'` is an RPC + source-protection mechanism on a `*.server.ts`
-  file, not a component annotation.** It marks a file's exports as callable from
-  the client (rewritten to a typed RPC stub), the opposite direction from Next's
-  Server Actions form binding.
+- **`'use client'` does nothing in webjs.** Interactivity lives in a
+  `WebComponent`, an islands-style custom element that hydrates per-element. A
+  page or layout cannot be interactive in its own markup (an `@click` in a page
+  template is dropped at SSR).
+- **`'use server'` DOES exist, but it is not a component annotation.** In Next
+  `'use server'` marks a Server Action; in webjs it is the RPC plus
+  source-protection directive at the top of a `*.server.ts` file, marking that
+  file's exports as callable from the client (the import is rewritten to a typed
+  RPC stub). It never turns a component into a "Server Component" (webjs has no
+  such thing). So `'use server'` is a real, supported directive. Just apply it to
+  a `.server.ts` action file, not to a component or page.
 
 ## 2. `redirect()` throws, and it is illegal in a route handler
 
@@ -65,17 +69,24 @@ Component. Webjs has no Server Components, so:
   `cache()` query helper, `export const revalidate` on a page, or `export const
   cache` on a GET action (see `agent-docs/built-ins.md`).
 
-## 4. `params` and `searchParams` are plain objects, not Promises
+## 4. `params` and `searchParams` are awaitable AND synchronously readable
 
-Next 15 made `params` / `searchParams` async (you `await` them). In webjs they
-are plain synchronous objects on the page/layout/route context.
+Next 15/16 made `params` / `searchParams` Promises (`const { id } = await
+params`). webjs supports BOTH (#848): the Next `await` habit works, and the
+plain sync read also works, so either muscle memory is correct.
 
 ```ts
-// WRONG (Next 15 habit): const { id } = await params;
-export default async function User({ params }: PageProps<'/users/[id]'>) {
-  const id = params.id;   // plain object, no await
+export default async function User({ params, searchParams }: PageProps<'/users/[id]'>) {
+  const id = params.id;              // sync read, works
+  const { id: id2 } = await params;  // Next 15/16 await, ALSO works
+  const tab = (await searchParams).tab;
 }
 ```
+
+Under the hood the runtime hands a plain object with a non-enumerable `then`
+(so a `{ ...params }` spread, `JSON.stringify`, and `Object.keys` see only the
+data keys, never the `then`). This applies to pages, layouts, and `route.{js,ts}`
+handler context alike.
 
 ## 5. The page default export returns a template, and runs server-only
 
@@ -102,12 +113,33 @@ metadata field exists. Metadata ROUTES (`sitemap`, `robots`, `manifest`, `icon`,
 `opengraph-image`, ...) default-export a function and live at app root or static
 segments only.
 
-## 8. `middleware.ts` is a per-segment function, not a matcher config
+## 8. `middleware.ts` is a per-segment chainable function, not a single matcher config
 
-No `export const config = { matcher }`. The default export is `async (req, next)
-=> Response`: return a Response to short-circuit, or call `next()` and
-post-process. Middleware nests by folder (a `middleware.ts` in a segment applies
-to its subtree), outermost to innermost, plus an optional root `middleware.ts`.
+Two Next habits break here.
+
+**The file is still `middleware.ts`, NOT `proxy.ts`.** Next 16 renamed its
+`middleware.ts` to `proxy.ts` (its request interceptor is really an edge/CDN
+proxy). webjs deliberately keeps `middleware.ts`: webjs's is an in-process,
+chainable, per-segment request middleware (the Remix / Koa model), which is what
+"middleware" means everywhere except Next's edge runtime. The name follows the
+behaviour, so do not create a `proxy.ts` expecting it to run.
+
+**It is per-segment and chainable, not one root file with a matcher.** There is
+no `export const config = { matcher }` and no single-file restriction. The
+default export is `async (req, next) => Response`: return a Response to
+short-circuit, or call `next()` and post-process its result. Middleware nests by
+folder (a `middleware.ts` in a segment applies to that subtree), running
+outermost to innermost down the matched route, plus an optional root
+`middleware.ts` that runs on every request.
+
+**webjs advantage over Next here.** Next supports only ONE `proxy.ts` per project
+(docs: "only one `proxy.ts` file is supported per project"); to scope logic to a
+route you branch inside that one function against `matcher` / the pathname, so all
+cross-cutting concerns funnel through a single growing file. webjs colocates
+middleware with the segment it guards: put `app/admin/middleware.ts` next to the
+admin routes and it runs for that subtree only, no path-matching boilerplate and
+no central bottleneck. The chain composes naturally (auth at the root, an extra
+check deeper in), each middleware calling `next()` to continue.
 
 ## 9. No `<Link>`, no `next/navigation` hooks, no `next/*` component libraries
 
@@ -147,7 +179,8 @@ as undefined after hydration).
 | `redirect()` in a route handler | `Response.redirect(url, 303)`; `redirect()` only in pages/actions |
 | `throw redirect()` from a form action | return an `ActionResult` `{ redirect }` (303 PRG) |
 | `fetch()` in a Server Component | page function, async `render()`, or a `'use server'` action import |
-| `await params` | `params` is a plain object |
+| `await params` | works, and `params.id` sync works too (both supported) |
+| Next 16 `proxy.ts`, one file + `matcher` | `middleware.ts`, chainable `(req, next)`, per-segment (no matcher) |
 | page returns JSX, can be interactive | page returns a `TemplateResult`, server-only, never hydrates |
 | `NextRequest` / `NextResponse` | platform `Request` / `Response` |
 | `<Link>` / `useRouter` | plain `<a>` (auto soft-nav) / `navigate()` |

@@ -30,6 +30,7 @@ import { stripTypeScript, ensureStripper } from './ts-strip.js';
 import { defaultLogger } from './logger.js';
 import { assertNodeVersion } from './node-version.js';
 import { applyEnvValidation } from './env-schema.js';
+import { runInstrumentation, findInstrumentationClient } from './instrumentation.js';
 import { withRequest, setCspNonce, setBodyLimits, setRequestId, requestId as getRequestId } from './context.js';
 import { buildInfoResponse } from './build-info.js';
 import { readCspConfig, mintNonce, buildCspHeader, cspHeaderName } from './csp.js';
@@ -482,6 +483,13 @@ export async function createRequestHandler(opts) {
   await applyEnvValidation(appDir, { dev: !!opts.dev });
   const dev = !!opts.dev;
   const logger = opts.logger || defaultLogger({ dev });
+  // Boot-time instrumentation hook (#848): run the optional app-root
+  // instrumentation.{js,ts} register() ONCE, after env validation and before
+  // the route table / action index are built, so observability plumbing starts
+  // before traffic. Any error sink it registers via setOnError composes with
+  // the programmatic opts.onError (both fire). Fail-open (a throwing hook is
+  // logged, not fatal).
+  const { onError: instrumentationOnError } = await runInstrumentation(appDir, { dev, logger });
   // APM / Sentry integration point (issue #239). Called whenever the request
   // pipeline catches an unhandled error: the top-level handle() catch (the
   // last-resort 500), an unexpected throw inside the produce() funnel, or a
@@ -490,20 +498,26 @@ export async function createRequestHandler(opts) {
   // sanitized 500 / existing error behavior is unchanged (the hook is purely
   // additive). The sink receives the error plus the correlation id so it can
   // tie the report to the same id the access log and X-Request-Id carry.
-  const onError = typeof opts.onError === 'function' ? opts.onError : null;
+  // Both the programmatic opts.onError AND any sink an instrumentation.{js,ts}
+  // register() installed via setOnError fire (they compose, #848).
+  const onErrorSinks = [opts.onError, instrumentationOnError].filter((f) => typeof f === 'function');
+  const hasOnError = onErrorSinks.length > 0;
   /**
-   * Invoke the app's onError sink defensively. The phase is a coarse label of
-   * where the pipeline caught the error, for the sink's own grouping.
+   * Invoke every registered onError sink defensively. The phase is a coarse
+   * label of where the pipeline caught the error, for the sink's own grouping.
    * @param {unknown} error
    * @param {Request} request
    * @param {string} phase
    */
   function reportError(error, request, phase) {
-    if (!onError) return;
-    try {
-      onError(error, { request, requestId: getRequestId(), phase });
-    } catch (e) {
-      logger.error?.('[webjs] onError hook threw (ignored)', { err: String(e) });
+    if (!hasOnError) return;
+    const ctx = { request, requestId: getRequestId(), phase };
+    for (const sink of onErrorSinks) {
+      try {
+        sink(error, ctx);
+      } catch (e) {
+        logger.error?.('[webjs] onError hook threw (ignored)', { err: String(e) });
+      }
     }
   }
   // Sub-path deployment base path (issue #256), read once from the app's
@@ -616,6 +630,10 @@ export async function createRequestHandler(opts) {
   // eagerly: it is a cheap directory scan (no code reads), and routing, Early
   // Hints, and WebSocket lookups need it available before the first request.
   const routeTable = await buildRouteTable(appDir);
+  // instrumentation-client.{js,ts} (#848) is an app-ROOT file (sibling of app/,
+  // like env.js / readiness.js), not a router stem. Resolve it once and stash it
+  // on the route table so ssrOpts + the browser-servable gate reach it uniformly.
+  routeTable.instrumentationClient = await findInstrumentationClient(appDir);
 
   // Emit `.webjs/routes.d.ts` (typed Route union + per-route params, #258) in
   // dev so an editor's tsserver always has up-to-date route types without the
@@ -1011,6 +1029,7 @@ export async function createRequestHandler(opts) {
     // The route table is the only eager artifact (cheap directory scan); rebuild
     // it so routing reflects added/removed route files immediately.
     state.routeTable = await buildRouteTable(appDir);
+    state.routeTable.instrumentationClient = await findInstrumentationClient(appDir);
     // Refresh the generated route types (#258) so adding/removing a route file
     // updates `.webjs/routes.d.ts` without a manual `webjs types`. Dev only,
     // best-effort (see emitRouteTypes).
@@ -2010,6 +2029,14 @@ async function handleCore(req, ctx) {
         inertRouteModules: state.inertRouteModules,
         importOnlyRouteModules: state.importOnlyRouteModules,
         notFoundFile: state.routeTable.notFound,
+        // Root-only boundaries (#848): the app-wide catch-all error page and the
+        // unmatched-anywhere 404, rendered by ssr.js when a nested boundary is
+        // absent.
+        globalError: state.routeTable.globalError,
+        globalNotFound: state.routeTable.globalNotFound,
+        // instrumentation-client.{js,ts} (#848): imported first in the client
+        // boot so it runs before app modules.
+        instrumentationClient: state.routeTable.instrumentationClient,
         // Server HTML cache (#241): a CSP-enabled page emits a fresh
         // per-request nonce into its body, so its bytes vary per request and
         // it must never be HTML-cached. Pass the flag so the cache guard skips
@@ -2039,7 +2066,9 @@ async function handleCore(req, ctx) {
   if (wantsJson(req, path)) {
     return Response.json({ error: 'Not found', path }, { status: 404 });
   }
-  return ssrNotFound(state.routeTable.notFound, { dev, appDir, req, url });
+  // Unmatched anywhere: prefer the root not-found.{js,ts}, then a
+  // global-not-found.{js,ts} (#848), else the default 404 page.
+  return ssrNotFound(state.routeTable.notFound || state.routeTable.globalNotFound, { dev, appDir, req, url });
 }
 
 /** @param {Request} req @param {string} path */
@@ -2487,11 +2516,18 @@ function computeBrowserBoundFiles(routeTable, moduleGraph, components, appDir) {
     for (const f of page.layouts || []) entries.add(f);
     for (const f of page.errors || []) entries.add(f);
     for (const f of page.loadings || []) entries.add(f);
+    for (const f of page.forbiddens || []) entries.add(f);
+    for (const f of page.unauthorizeds || []) entries.add(f);
   }
   if (routeTable.notFound) entries.add(routeTable.notFound);
   if (routeTable.notFounds) {
     for (const f of routeTable.notFounds.values()) entries.add(f);
   }
+  if (routeTable.globalError) entries.add(routeTable.globalError);
+  if (routeTable.globalNotFound) entries.add(routeTable.globalNotFound);
+  // instrumentation-client is browser-bound (imported first in the boot), so it
+  // must be servable through the gate.
+  if (routeTable.instrumentationClient) entries.add(routeTable.instrumentationClient);
   // Lazy components live in the registry but no page imports their
   // class directly; the lazy-loader fetches their module URLs on
   // viewport entry. Add every discovered component file as an entry so

@@ -1,4 +1,5 @@
 import { pathToFileURL } from 'node:url';
+import { makeThenable } from './thenable-params.js';
 
 /**
  * Dispatch an incoming request to a matched API route.
@@ -24,10 +25,14 @@ export async function handleApi(route, params, webRequest, dev) {
       headers: { allow: allowedMethods(mod).join(', ') },
     });
   }
-  /** @type any */ (webRequest).params = params;
+  // Route-handler params are awaitable AND sync-readable (#848, Next parity:
+  // `const { id } = await params`). Non-enumerable `then`, so a handler that
+  // spreads / JSON-stringifies params is unaffected.
+  const thenableParams = makeThenable(params);
+  /** @type any */ (webRequest).params = thenableParams;
   let result;
   try {
-    result = await handler(webRequest, { params });
+    result = await handler(webRequest, { params: thenableParams });
   } catch (e) {
     // A route handler that read its body via `readBody` (json.js) over the
     // size limit (issue #237) throws a BodyLimitError; surface it as 413 rather

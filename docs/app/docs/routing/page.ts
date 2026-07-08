@@ -86,8 +86,8 @@ export default async function BlogPost({ params, searchParams, url }: Ctx) {
 }</pre>
 
     <ul>
-      <li><strong><code>params</code></strong>: an object of dynamic route segments (e.g. <code>{ slug: "hello-world" }</code>).</li>
-      <li><strong><code>searchParams</code></strong>: an object of query-string key/value pairs (e.g. <code>{ page: "2" }</code>).</li>
+      <li><strong><code>params</code></strong>: the dynamic route segments (e.g. <code>{ slug: "hello-world" }</code>). Readable synchronously (<code>params.slug</code>) AND awaitable (<code>const { slug } = await params</code>, the Next 15/16 pattern). Both work.</li>
+      <li><strong><code>searchParams</code></strong>: the query-string key/value pairs (e.g. <code>{ page: "2" }</code>). Also sync-readable and awaitable.</li>
       <li><strong><code>url</code></strong>: the full request URL as a string.</li>
     </ul>
 

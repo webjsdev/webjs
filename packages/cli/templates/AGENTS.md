@@ -351,7 +351,11 @@ app/                     ROUTING ONLY: thin route adapters (import from modules/
   layout.ts              root layout, wraps every page
   error.ts               error boundary (render failures → user-friendly)
   loading.ts             Suspense fallback for sibling page
-  not-found.ts           custom 404 page
+  not-found.ts           custom 404 page (nearest wins on notFound())
+  forbidden.ts           403 page (nearest wins on forbidden())
+  unauthorized.ts        401 page (nearest wins on unauthorized())
+  global-error.ts        root-only app-wide error boundary (owns its <html>)
+  global-not-found.ts    root-only 404 for an unmatched-anywhere URL
   middleware.ts          global request middleware
   [slug]/page.ts         dynamic route segment
   [...rest]/page.ts      catch-all
@@ -392,6 +396,8 @@ test/<feature>/                feature-scoped tests, one folder per concern
   e2e/<name>.test.ts            end-to-end test (full app boot, opt in via WEBJS_E2E=1)
   smoke/<name>.test.ts          fast post-deploy sanity check
 middleware.ts            root middleware (optional, outermost)
+instrumentation.ts       optional boot hook: register() runs once; wire APM via setOnError
+instrumentation-client.ts  optional client boot hook, runs first before app modules
 ```
 
 ### The gallery (reference content, prune it)
