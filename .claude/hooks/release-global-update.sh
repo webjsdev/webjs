@@ -2,7 +2,7 @@
 #
 # Claude Code PostToolUse hook (matcher: Bash).
 #
-# After a RELEASE PR (`chore/release-*`, or a "chore: release ..." title) merges,
+# After a RELEASE PR (a canonical "chore: release <pkgs>" title) merges,
 # the just-published packages are live on npm a minute or two later. The globally
 # installed `webjs` CLI (used to scaffold / dogfood) then lags the release. This
 # hook fires on that merge and injects a directive to update the global CLI on
@@ -44,11 +44,12 @@ if [ -z "$info" ]; then exit 0; fi
 head=$(printf '%s' "$info" | jq -r '.headRefName // ""' 2>/dev/null || true)
 title=$(printf '%s' "$info" | jq -r '.title // ""' 2>/dev/null || true)
 
-# Release PRs only: a `chore/release-*` branch or a "chore: release" title.
-is_release=no
-printf '%s' "$head" | grep -q '^chore/release-' && is_release=yes
-printf '%s' "$title" | grep -qi '^chore: release' && is_release=yes
-if [ "$is_release" != "yes" ]; then exit 0; fi
+# A real release PR carries the canonical "chore: release <pkgs>" title (the
+# release process always titles it exactly that). Match the TITLE, not the
+# branch prefix: a `chore/release-*` branch that is NOT a package release (a hook
+# tweak, a doc change) would otherwise fire a false reminder with nothing to
+# publish. `head` is unused now but kept in the fetch for future signals.
+if ! printf '%s' "$title" | grep -qiE '^chore: release '; then exit 0; fi
 
 read -r -d '' MSG <<'EOF' || true
 A release PR just merged. Once .github/workflows/release.yml has published the
