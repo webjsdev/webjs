@@ -156,6 +156,24 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
       'settings.json wires the require-tests hook into PreToolUse',
     );
 
+    // Commit enforcement for Claude Code: CLAUDE.md overrides Claude Code's
+    // never-commit default, a Stop hook backstops end-of-turn, and a
+    // PostToolUse hook removes merged worktrees after `gh pr merge`.
+    const claudeMd = readFileSync(join(appDir, 'CLAUDE.md'), 'utf8');
+    assert.match(claudeMd, /OVERRIDES Claude Code/i,
+      'CLAUDE.md overrides Claude Code\'s never-commit default');
+    for (const h of ['commit-before-stop.sh', 'cleanup-merged-worktree.sh']) {
+      assert.ok(existsSync(join(appDir, '.claude/hooks', h)), `${h} is scaffolded`);
+    }
+    const stopCommands = (claudeSettings.hooks?.Stop ?? [])
+      .flatMap((g) => g.hooks.map((h) => h.command));
+    assert.ok(stopCommands.includes('.claude/hooks/commit-before-stop.sh'),
+      'settings.json wires commit-before-stop into Stop');
+    const postCommands = (claudeSettings.hooks?.PostToolUse ?? [])
+      .flatMap((g) => g.hooks.map((h) => h.command));
+    assert.ok(postCommands.includes('.claude/hooks/cleanup-merged-worktree.sh'),
+      'settings.json wires cleanup-merged-worktree into PostToolUse');
+
     // The local pre-commit hook is lightweight: it blocks commits to main
     // and nothing else. The test/convention gate runs in CI, not locally,
     // so `git commit` stays fast and the gate cannot be skipped with a

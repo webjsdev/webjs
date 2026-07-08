@@ -1404,8 +1404,10 @@ composition, so a nested shell ends up dropped by the HTML parser.
 3. Commit and push **per logical unit**, not at the end. A logical unit is one
    feature, one fix, one rename, one doc rewrite. If you have 5+ unstaged files
    spanning different concerns, commit the current group before continuing.
-   The framework ships a `nudge-uncommitted` hook for several agents that
-   fires at threshold 4:
+   For Claude Code, its `CLAUDE.md` explicitly OVERRIDES Claude Code's built-in
+   never-commit default, so it commits per unit without waiting to be asked. The
+   framework also ships a `nudge-uncommitted` hook for several agents that fires
+   at threshold 4:
 
    | Agent | Hook path | Doc |
    |---|---|---|
@@ -1415,6 +1417,12 @@ composition, so a nested shell ends up dropped by the HTML parser.
    | OpenCode | `.opencode/plugins/nudge-uncommitted.ts` (`tool.execute.after`) | `.opencode/plugins/` |
    | Antigravity (Google) | text rule only (post-write hooks not yet exposed) | `.agents/rules/workflow.md` |
    | GitHub Copilot | text rule only (no hooks API) | `.github/copilot-instructions.md` |
+
+   Claude Code adds two more backstops of its own. A `commit-before-stop.sh`
+   Stop hook refuses to end a turn with a pile of uncommitted work on a feature
+   branch (loop-safe, disable with `WEBJS_NO_COMMIT_STOP=1`), and a
+   `cleanup-merged-worktree.sh` PostToolUse hook removes a merged branch's
+   worktree after a `gh pr merge`.
 
    The `.hooks/pre-commit` hook blocks commits to main and nothing else;
    `webjs test` + `webjs check` run in CI (`.github/workflows/ci.yml`) on

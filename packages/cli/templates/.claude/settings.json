@@ -56,6 +56,25 @@
             "command": ".claude/hooks/nudge-uncommitted.sh"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/cleanup-merged-worktree.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/commit-before-stop.sh"
+          }
+        ]
       }
     ]
   }
