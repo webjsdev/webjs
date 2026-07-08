@@ -928,7 +928,11 @@ global light-DOM namespace.
 
 Every page wraps its output in `<div class="page-<route>">`. Every
 layout wraps in `<div class="layout-<name>">`. Components scope via
-their tag. Styles colocate as `const STYLES = css\`…\`` + `<style>${'$'}{STYLES.text}</style>`.
+their tag. In a PAGE or LAYOUT (which render server-only and never
+hydrate) styles colocate as `const STYLES = css\`…\`` + `<style>${'$'}{STYLES.text}</style>`.
+In a COMPONENT, do NOT interpolate into `<style>` (the client drops the
+raw-text hole on hydrate, so the styles vanish); use `static styles =
+css\`…\`` or Tailwind classes instead.
 
 ```ts
 // app/dashboard/page.ts

@@ -21,6 +21,17 @@ async function tempCwd() {
   return mkdtemp(join(tmpdir(), 'webjs-scaffold-integ-'));
 }
 
+// Root-cause guard for #845: the gitignore template MUST ship as `gitignore`
+// (no dot). npm strips a `.gitignore` from a published tarball, so a dotfile
+// name arrives missing in the installed CLI and the scaffold ships an app with
+// no `.env` ignore. Renaming it back to `.gitignore` would silently reintroduce
+// the bug (repo-local generation would still pass), so assert the file name.
+test('gitignore template ships as a non-dotfile so npm cannot strip it', () => {
+  const dir = join(import.meta.dirname, '..', '..', 'packages', 'cli', 'templates');
+  assert.ok(existsSync(join(dir, 'gitignore')), 'templates/gitignore must exist');
+  assert.ok(!existsSync(join(dir, '.gitignore')), 'templates/.gitignore must NOT exist (npm strips it)');
+});
+
 /**
  * Silence console.log during scaffold to keep test output clean.
  * Returns a restore function.
@@ -279,6 +290,15 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // .gitignore mentions the SQLite dev DB
     const gitignore = readFileSync(join(appDir, '.gitignore'), 'utf8');
     assert.match(gitignore, /db\/dev\.db/, '.gitignore covers SQLite');
+
+    // .gitignore ignores the real .env but keeps .env.example (#845). The
+    // template ships as `gitignore` (no dot) and is renamed on copy, because
+    // npm STRIPS a `.gitignore` from a published tarball; a regression to the
+    // dotfile name makes the scaffold ship without a .env ignore, so a real
+    // .env gets committed. Anchor to line starts so the active rules match,
+    // not the comment prose.
+    assert.match(gitignore, /^\.env$/m, '.gitignore ignores .env');
+    assert.match(gitignore, /^!\.env\.example$/m, '.gitignore keeps .env.example tracked');
 
     // .gitignore ignores .webjs/ at ANY depth (#365): a scaffolded app
     // nested below its repo root must not leak its generated

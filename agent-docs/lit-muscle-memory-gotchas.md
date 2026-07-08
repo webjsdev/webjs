@@ -443,6 +443,67 @@ their position, plain `.map()` is fine and preserves identity. List that
 **reorders or splices in the middle** and each item owns DOM state that
 must move with it, use `repeat()` with a stable key.
 
+## More silent traps
+
+### 12. Interpolating into a `<style>` or `<script>` inside a component
+
+In lit you can write a binding inside a `<style>` and it works. In a webjs
+**component** it does not, and it fails in the worst way (silently, only after
+hydration). The server renderer emits the interpolated content, so the first
+paint looks right; the client renderer drops a raw-text hole (the compile cache
+is keyed on the static strings, so a per-render value cannot be baked in), so on
+hydration the element is rebuilt EMPTY and the styles vanish.
+
+```ts
+// BROKEN in a component: paints at SSR, wipes to empty on hydrate.
+const STYLE = `my-widget { color: red; }`;
+render() { return html`<style>${STYLE}</style><div>hi</div>`; }
+```
+
+Do this instead. For a shadow-DOM component use `static styles`; for a light-DOM
+component use Tailwind utilities (the strong default) or a `css` template applied
+via `static styles`. A fully STATIC `<style>...</style>` with no `${}` is fine.
+
+```ts
+class MyWidget extends WebComponent({}) {
+  static styles = css`:host { color: red; }`;   // scoped, survives hydration
+  render() { return html`<div>hi</div>`; }
+}
+```
+
+Note the one exception. **Pages and layouts never hydrate** (they render
+server-only), so a page's `<style>${STYLES.text}</style>` is a legitimate,
+documented pattern. The trap is specific to components, which is exactly where
+the `no-interpolation-in-raw-text-element` check scopes its flag.
+
+### 13. A GET server action's first client call returns the SSR seed, not a fresh read
+
+webjs seeds each GET-action result rendered during SSR into the page, and the
+generated RPC stub reads that seed on its FIRST client call instead of hitting
+the network (#472). This kills the redundant on-hydration refetch. The muscle
+memory that bites: reaching for a re-call of the same query to REFRESH after a
+mutation. That first client call resolves from the SSR snapshot (the pre-mutation
+value), so the UI looks stale.
+
+```ts
+// Looks stale: this is the first client call of getScore(), so it
+// resolves from the SSR seed (the value from before the mutation).
+await likePost(id);
+this.score = await getScore(id);   // returns the seeded, pre-like value
+```
+
+Refresh a value the client just mutated with an **optimistic update** (the
+recommended default, deterministic and instant) or `revalidate()`, not a re-call:
+
+```ts
+import { optimistic, revalidate } from '@webjsdev/core';
+// deterministic optimistic bump (preferred)
+this.score = this.score + 1;
+await likePost(id);
+// or force the browser snapshot to refetch from the network
+revalidate();
+```
+
 ## Quick reference
 
 | Lit pattern | Webjs equivalent |

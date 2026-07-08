@@ -139,6 +139,11 @@ export const RULES = [
     description:
       'API route handlers (`route.{js,ts}`) must NOT call `redirect()` from `@webjsdev/core`. That function throws a control-flow signal designed for the SSR page renderer; in a route handler it goes uncaught and produces a 500. Use `Response.redirect(url, 303)` for external redirects or return a 3xx Response directly. Page functions, layouts, and server actions may still use `redirect()` (caught by the SSR pipeline).',
   },
+  {
+    name: 'no-interpolation-in-raw-text-element',
+    description:
+      'Flags a template interpolation (`${...}`) placed as a child of a `<style>` or `<script>` element inside a COMPONENT `html` template. Raw-text elements are an SSR/client asymmetry trap: the server renderer emits the interpolated content, but the client renderer drops it (a raw-text hole is a `noop`, since the compile cache is keyed on the static strings), so the element renders correctly on the server and then wipes to empty on hydration. Scoped to components (files with a `WebComponent` class), which hydrate; pages and layouts render server-only and never hydrate, so a page interpolating a `css` result into a `<style>` is a legitimate pattern and is not flagged. In a component, author scoped CSS with `static styles` (shadow DOM) or a `css` template. Found dogfooding a tic-tac-toe app (#845): a `<style>${STYLE}</style>` painted at SSR then vanished on hydrate.',
+  },
 ];
 
 /** Set of all known rule names for fast lookup. */
@@ -629,6 +634,50 @@ export async function checkConventions(appDir) {
           });
           flagged = true; // one violation per file is enough
           break;
+        }
+      }
+    }
+  }
+
+  // --- Rule: no-interpolation-in-raw-text-element ---
+  // A `${...}` hole inside a `<style>` or `<script>` element in an `html`
+  // template is an SSR/client asymmetry: `renderToString` emits it, but the
+  // client parser drops a raw-text hole as a `noop` (the compile cache is keyed
+  // on the static strings, so a per-render value cannot be baked in), so the
+  // element paints at SSR then wipes to empty on hydration.
+  //
+  // Scoped to COMPONENTS. The drop only happens on the CLIENT renderer, which
+  // runs for components (hydration + re-render). Pages and layouts render
+  // server-only (never hydrate), so a page's `<style>${STYLES.text}</style>` is
+  // a legitimate, taught pattern and must NOT be flagged. Scan raw source with
+  // comments stripped (the tag text lives in a template string, which the
+  // redacted `scan` view blanks). One violation per file.
+  {
+    for (const { rel, content } of files) {
+      // Only files that define a hydrating custom element. A page/layout that
+      // interpolates a `css` result into a `<style>` is server-only and fine.
+      if (!/class\s+\w+\s+extends\s+WebComponent/.test(content)) continue;
+      const stripped = content
+        .replace(/\/\/.*$/gm, '')
+        .replace(/\/\*[\s\S]*?\*\//g, '');
+      for (const tag of ['style', 'script']) {
+        // `<tag ...> ... ${ ... </tag>`, where the hole sits before the close
+        // tag. The negative lookahead keeps the match from crossing `</tag>`.
+        const re = new RegExp(
+          `<${tag}\\b[^>]*>(?:(?!<\\/${tag}>)[\\s\\S])*?\\$\\{(?:(?!<\\/${tag}>)[\\s\\S])*?<\\/${tag}>`,
+          'i',
+        );
+        if (re.test(stripped)) {
+          violations.push({
+            rule: 'no-interpolation-in-raw-text-element',
+            file: rel,
+            message: `An interpolation (\`\${...}\`) sits inside a <${tag}> element in an html template. The server renderer emits it but the client renderer drops it, so it paints at SSR then wipes to empty on hydration.`,
+            fix:
+              tag === 'style'
+                ? `Move the CSS out of the raw-text hole: use \`static styles\` (shadow DOM) or a \`css\` template for a component, or put page CSS in the layout. Static \`<style>...</style>\` with no \`\${}\` is fine.`
+                : `Build the script body outside the raw-text element (set attributes/properties via bindings, or compute the value before the template). Static \`<script>...</script>\` with no \`\${}\` is fine.`,
+          });
+          break; // one violation per file is enough
         }
       }
     }

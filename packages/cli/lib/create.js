@@ -542,9 +542,12 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     // Environment variables
     '.env.example',
     // Project-level gitignore (node_modules, .webjs, .env, OS junk).
-    // The SQLite dev.db rule is appended programmatically below so it
-    // only appears for the sqlite dialect.
-    '.gitignore',
+    // Shipped as `gitignore` (no dot) and renamed to `.gitignore` on copy:
+    // npm STRIPS a `.gitignore` from a published tarball, so a dotfile name
+    // would arrive missing and the app would ship without a `.env` ignore
+    // (dogfood #845). The SQLite dev.db rule is appended programmatically
+    // below so it only appears for the sqlite dialect.
+    'gitignore',
     // Git hooks (blocks commits on main)
     '.hooks/pre-commit',
     // Claude Code config + hooks
@@ -617,14 +620,17 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   for (const f of templateFiles) {
     const src = join(TEMPLATES, f);
     if (existsSync(src)) {
-      await mkdir(dirname(join(appDir, f)), { recursive: true });
+      // `gitignore` ships without a dot (npm strips a published `.gitignore`)
+      // and is written to `.gitignore` in the generated app.
+      const dest = f === 'gitignore' ? '.gitignore' : f;
+      await mkdir(dirname(join(appDir, dest)), { recursive: true });
       let content = await readFile(src, 'utf8');
       content = content.replace(/\{\{APP_NAME\}\}/g, name);
       if (isBun) {
         if (PROSE_REWRITE.has(f)) content = bunifyProse(content);
         else if (FILE_REWRITE[f]) content = FILE_REWRITE[f](content);
       }
-      await writeFile(join(appDir, f), content);
+      await writeFile(join(appDir, dest), content);
     }
   }
 
@@ -837,7 +843,9 @@ export default defineConfig({
       const cur = await readFile(gitignore, 'utf8');
       if (!cur.includes('db/dev.db')) await writeFile(gitignore, cur + gitignoreExtra);
     } else {
-      await writeFile(gitignore, 'node_modules\n.webjs\n' + gitignoreExtra);
+      // Defense in depth: if the template gitignore is ever absent, still
+      // never leave a real `.env` trackable (dogfood #845).
+      await writeFile(gitignore, 'node_modules\n.webjs\n.env\n.env.*\n!.env.example\n' + gitignoreExtra);
     }
   }
 
@@ -1093,6 +1101,15 @@ export default function RootLayout({ children }: { children: unknown }) {
   const nonce = cspNonce();
   return html\`
     <script nonce="\${nonce}">
+      // ===== OPTIONAL: light/dark theme apparatus (remove as one unit) =====
+      // This IIFE reads the saved or OS theme and toggles the data-theme
+      // attribute plus the dark class the ui kit reads, so the token VALUES in
+      // the root, dark, and data-theme style blocks below switch. It is what
+      // makes the app theme-aware. Building a SINGLE-theme app of your own?
+      // Delete this IIFE, delete the dark and light style blocks below, and set
+      // your palette once on the root selector. That removes the wiring so it
+      // cannot fight your own colours (it will not override a plain root
+      // palette). The header-measure IIFE that follows is unrelated, keep it.
       (function(){
         try {
           var mq = window.matchMedia('(prefers-color-scheme: light)');
@@ -1112,6 +1129,7 @@ export default function RootLayout({ children }: { children: unknown }) {
           mq.addEventListener('change', apply);
         } catch (_) {}
       })();
+      // ===== end optional theme apparatus =====
       // The header is position:fixed (not sticky): a sticky header flickers on
       // iOS WebKit during a client-router nav. fixed leaves normal flow, so
       // --header-h reserves its height for the content below. Measured here so

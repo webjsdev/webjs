@@ -726,7 +726,8 @@ function pinFilePath(appDir) {
  * The three-line `.gitignore` pattern that ignores the transient
  * `.webjs` caches at any depth while re-including the committed
  * `.webjs/vendor/` pin output. This mirrors the scaffold template
- * (`packages/cli/templates/.gitignore`) and the `vendor-gitignore`
+ * (`packages/cli/templates/gitignore`, shipped dotless so npm cannot
+ * strip it, renamed to `.gitignore` on copy) and the `vendor-gitignore`
  * check in `doctor.js` verbatim, so a self-healed `.gitignore`
  * ends up byte-identical to a freshly scaffolded one.
  */
