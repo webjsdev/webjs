@@ -294,9 +294,12 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   }
   const isApi = template === 'api';
   const isSaas = template === 'saas';
-  // The example gallery ships in the DEFAULT full-stack scaffold only: api has no
-  // UI, and saas overwrites db/schema.server.ts (users-only, so the gallery's
-  // todos table would vanish) and already carries its own idiomatic auth example.
+  // The example gallery ships in every UI scaffold (full-stack AND saas). The
+  // copyGallery gate below is !isApi, since only the api template has no UI. saas
+  // overwrites db/schema.server.ts with its own schema (which includes the
+  // gallery's todos table) and renders the gallery below its auth landing.
+  // isFullStack distinguishes the plain full-stack app from saas for the parts
+  // that differ (its own home page and the create.js-written schema).
   const isFullStack = !isApi && !isSaas;
 
   // Database dialect (#563): sqlite (default) or postgres. Drizzle is the ORM;
