@@ -264,6 +264,15 @@ function compile(tr) {
                 statics,
                 group,
               };
+              // The mixed attribute is rebuilt from ALL its holes' values, but
+              // it is anchored at a single part (group[0]). The later holes stay
+              // `noop`, so a change confined to one of them would be skipped by
+              // updateInstance's per-hole dirty-check and the attribute would go
+              // stale. Point every non-anchor member back at the anchor so a
+              // change to any hole re-applies the whole attribute.
+              for (let m = 1; m < group.length; m++) {
+                parts[group[m]] = { kind: 'noop', path: [], mixedAnchor: idx0 };
+              }
               mixedAttr = null;
             }
             state = 'in-tag';
@@ -488,7 +497,7 @@ function createInstance(tr, container) {
  * @returns {BoundPart}
  */
 function bindPart(p, root) {
-  if (p.kind === 'noop') return /** @type any */ ({ kind: 'noop' });
+  if (p.kind === 'noop') return /** @type any */ ({ kind: 'noop', mixedAnchor: /** @type any */ (p).mixedAnchor });
   let node = /** @type Node */ (root);
   for (const i of p.path) node = node.childNodes[i];
   if (p.kind === 'child') {
@@ -533,7 +542,18 @@ function updateInstance(inst, values) {
   for (let i = 0; i < values.length; i++) {
     const next = values[i];
     if (Object.is(next, inst.lastValues[i])) continue;
-    applyPart(inst.bound[i], next, inst.lastValues[i], values);
+    const bp = inst.bound[i];
+    // A hole that belongs to a mixed attribute (`class="a ${x} b ${y}"`) is a
+    // `noop` pointing at the attribute's anchor part; re-apply the anchor so the
+    // whole attribute is rebuilt from every hole's current value, not just the
+    // anchor hole's. Without this, a change confined to a non-anchor hole is
+    // dropped (the attribute goes stale).
+    const anchor = /** @type any */ (bp).mixedAnchor;
+    if (bp.kind === 'noop' && anchor != null) {
+      applyPart(inst.bound[anchor], values[anchor], inst.lastValues[anchor], values);
+    } else {
+      applyPart(bp, next, inst.lastValues[i], values);
+    }
     inst.lastValues[i] = next;
   }
 }
