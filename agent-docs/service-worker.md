@@ -39,7 +39,11 @@ and emit `<script nonce="${cspNonce()}">…`.
 ## What the worker does (scope + strategy)
 
 Registered from `/sw.js`, the worker's scope is the site root (`/`), so it sees
-every navigation and same-origin asset request.
+every navigation and same-origin asset request. Your worker file lives at
+`public/sw.js`, and although most `public/*` assets serve at `/public/<name>`,
+the framework serves this one (and `public/offline.html`) at the SITE ROOT with a
+`Service-Worker-Allowed: /` header, so `register('/sw.js')` resolves to a 200 and
+the worker controls the whole origin (#830).
 
 - **Navigations are network-first.** The worker always tries the network first,
   so the user sees fresh server-rendered HTML, and caches each successful page
