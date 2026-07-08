@@ -18,7 +18,7 @@ export default function ApiRoutes() {
       <li><strong>PATCH</strong>: partially update a resource</li>
       <li><strong>DELETE</strong>: remove a resource</li>
     </ul>
-    <p>If a request arrives with a method that has no matching export, webjs returns <code>405 Method Not Allowed</code> with an <code>Allow</code> header listing the available methods.</p>
+    <p>If a request arrives with a method that has no matching export, WebJs returns <code>405 Method Not Allowed</code> with an <code>Allow</code> header listing the available methods.</p>
 
     <h2>Handler Signature</h2>
     <p>Every handler receives two arguments:</p>
@@ -30,7 +30,7 @@ export default function ApiRoutes() {
       <li><strong>req</strong>: a standard Web API <code>Request</code>. Read headers, cookies, URL, query params, body.</li>
       <li><strong>params</strong>: an object containing dynamic route segment values (from <code>[slug]</code> folder names).</li>
     </ul>
-    <p>Return a <code>Response</code> for full control over status, headers, and body. Or return a plain object (or array, number, null) and webjs wraps it with <code>Response.json()</code> automatically.</p>
+    <p>Return a <code>Response</code> for full control over status, headers, and body. Or return a plain object (or array, number, null) and WebJs wraps it with <code>Response.json()</code> automatically.</p>
 
     <h2>Basic Example</h2>
     <pre>// app/api/hello/route.ts
@@ -81,7 +81,7 @@ export async function GET(_req: Request, { params }: Ctx) {
 }</pre>
 
     <h2>Returning Objects (Auto-JSON)</h2>
-    <p>If a handler returns a plain object or array instead of a <code>Response</code>, webjs wraps it with <code>Response.json()</code>:</p>
+    <p>If a handler returns a plain object or array instead of a <code>Response</code>, WebJs wraps it with <code>Response.json()</code>:</p>
     <pre>export async function GET() {
   const posts = await db.post.findMany();
   return posts;  // Automatically becomes Response.json(posts)
@@ -120,7 +120,7 @@ export async function POST(req: Request) {
     <p>The helper reads the in-flight Request from an <code>AsyncLocalStorage</code> context set up by the request pipeline, so you do not need to pass the request explicitly.</p>
 
     <h2>readBody(): Parsing Rich Request Bodies</h2>
-    <p>The <code>readBody()</code> helper from <code>@webjsdev/server</code> is the inverse of <code>json()</code>. It parses the request body with the webjs rich serializer when the client sent the <code>application/vnd.webjs+json</code> content type, and as plain JSON otherwise:</p>
+    <p>The <code>readBody()</code> helper from <code>@webjsdev/server</code> is the inverse of <code>json()</code>. It parses the request body with the WebJs rich serializer when the client sent the <code>application/vnd.webjs+json</code> content type, and as plain JSON otherwise:</p>
     <pre>import { json, readBody } from '@webjsdev/server';
 
 export async function POST(req: Request) {
@@ -158,8 +158,8 @@ try {
     <p><code>richFetch</code> automatically:</p>
     <ul>
       <li>Sets <code>Accept: application/vnd.webjs+json</code> on outgoing requests</li>
-      <li>If <code>body</code> is a plain object (not FormData, Blob, ArrayBuffer, or string), encodes it with the webjs serializer and sets the content type</li>
-      <li>Parses the response with the webjs serializer when the server responds with the vendor content type, or with plain <code>JSON.parse</code> otherwise</li>
+      <li>If <code>body</code> is a plain object (not FormData, Blob, ArrayBuffer, or string), encodes it with the WebJs serializer and sets the content type</li>
+      <li>Parses the response with the WebJs serializer when the server responds with the vendor content type, or with plain <code>JSON.parse</code> otherwise</li>
       <li>Throws an <code>Error</code> with <code>.status</code> and <code>.body</code> properties for non-2xx responses</li>
     </ul>
 
@@ -220,7 +220,7 @@ export default rateLimit({
     <p>These rate-limit headers are also added to successful responses so clients can monitor their usage. The default key function extracts the client IP from <code>X-Forwarded-For</code>, <code>CF-Connecting-IP</code>, or <code>X-Real-IP</code> headers (in that order). For multi-instance deployments, use an external rate limiter (Redis, nginx, Cloudflare).</p>
 
     <h2>CORS on REST Endpoints</h2>
-    <p>CORS in webjs comes from the <code>cors()</code> middleware (from <code>@webjsdev/server</code>):</p>
+    <p>CORS in WebJs comes from the <code>cors()</code> middleware (from <code>@webjsdev/server</code>):</p>
     <ol>
       <li><strong>Wrap a single route.ts handler</strong> in <code>cors(...)</code> for per-route CORS.</li>
       <li><strong>Apply it in middleware.ts</strong> for blanket coverage across all routes in a segment.</li>
@@ -248,7 +248,7 @@ export default async function cors(
 }</pre>
 
     <h2>Backend-Only Usage</h2>
-    <p>WebJs works as a <strong>pure API framework</strong> with no pages or components. If your <code>app/</code> directory contains only <code>route.ts</code> and <code>middleware.ts</code> files (no <code>page.ts</code>, no <code>layout.ts</code>), webjs serves only API routes. No SSR, no import maps, no client JS. This is ideal for microservices, backends for mobile apps, or REST APIs. See <a href="/docs/backend-only">Backend-Only Mode</a> for a full guide.</p>
+    <p>WebJs works as a <strong>pure API framework</strong> with no pages or components. If your <code>app/</code> directory contains only <code>route.ts</code> and <code>middleware.ts</code> files (no <code>page.ts</code>, no <code>layout.ts</code>), WebJs serves only API routes. No SSR, no import maps, no client JS. This is ideal for microservices, backends for mobile apps, or REST APIs. See <a href="/docs/backend-only">Backend-Only Mode</a> for a full guide.</p>
 
     <h2>Complete CRUD Example</h2>
     <p>Here is a full route.ts implementing GET, POST, and DELETE for a resource:</p>
@@ -354,7 +354,7 @@ export async function DELETE(_req: Request, { params }: Ctx) {
       <li>Handler signature: <code>(req: Request, { params }) =&gt; Response | object</code></li>
       <li>Dynamic params via <code>[slug]</code> folder names, catch-all via <code>[...rest]</code></li>
       <li>Return a <code>Response</code> for full control, or return a plain object for auto-JSON</li>
-      <li><code>json()</code> from <code>@webjsdev/server</code> provides content negotiation (plain JSON vs webjs rich JSON)</li>
+      <li><code>json()</code> from <code>@webjsdev/server</code> provides content negotiation (plain JSON vs WebJs rich JSON)</li>
       <li><code>readBody()</code> parses incoming rich-format or plain JSON based on content type</li>
       <li><code>richFetch()</code> on the client for typed API calls with rich types</li>
       <li>Export <code>WS</code> from the same <code>route.ts</code> for WebSocket support</li>

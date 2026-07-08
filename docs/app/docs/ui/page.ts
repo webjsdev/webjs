@@ -16,10 +16,10 @@ export default function UiDocs() {
       runtime: webjs, Next, Astro, Vite, SvelteKit, Lit, vanilla HTML.
     </p>
 
-    <h2>For webjs users</h2>
+    <h2>For WebJs users</h2>
     <p>
       Nothing to install. <code>@webjsdev/ui</code> is a hard dependency of <code>@webjsdev/cli</code>, so a global
-      webjs install already includes it, and <code>webjs ui add</code> resolves the kit from there. A
+      WebJs install already includes it, and <code>webjs ui add</code> resolves the kit from there. A
       scaffolded app does NOT pin <code>@webjsdev/ui</code>: <code>webjs ui add</code> copies the component
       source into <code>components/ui/</code> (those files import <code>@webjsdev/core</code>, not the kit).
     </p>

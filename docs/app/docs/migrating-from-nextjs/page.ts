@@ -9,7 +9,7 @@ export const metadata = {
 export default function MigratingFromNextjs() {
   return html`
     <h1>Migrating from Next.js</h1>
-    <p>WebJs is deliberately Next-adjacent: the <code>app/</code> router, the <code>page</code> / <code>layout</code> / <code>error</code> / <code>loading</code> / <code>not-found</code> / <code>route</code> / <code>middleware</code> file conventions, the metadata API, and server actions will all feel familiar. So most of the file layout ports over directly. The one thing you must un-learn is the React Server Components mental model, because webjs does not have it.</p>
+    <p>WebJs is deliberately Next-adjacent: the <code>app/</code> router, the <code>page</code> / <code>layout</code> / <code>error</code> / <code>loading</code> / <code>not-found</code> / <code>route</code> / <code>middleware</code> file conventions, the metadata API, and server actions will all feel familiar. So most of the file layout ports over directly. The one thing you must un-learn is the React Server Components mental model, because WebJs does not have it.</p>
 
     <h2>The mental-model shift: there is no RSC</h2>
     <p>WebJs has <strong>no server/client component split</strong>. There is no server-component render tree, no Flight protocol, no <code>'use client'</code> / <code>'use server'</code> component boundary, and no per-component server-versus-client identity. Stop reasoning about a component as "server" or "client".</p>
@@ -66,7 +66,7 @@ export function Counter({ start }: { start: number }) {
   const [n, setN] = useState(start);
   return &lt;button onClick={() =&gt; setN(n + 1)}&gt;{n}&lt;/button&gt;;
 }</pre>
-    <p>The webjs equivalent. The page is an async server function that reads data through a <code>.server</code> query, and the interactive part is a web component that hydrates:</p>
+    <p>The WebJs equivalent. The page is an async server function that reads data through a <code>.server</code> query, and the interactive part is a web component that hydrates:</p>
     <pre>// modules/stats/queries/get-stats.server.ts  (webjs: the server boundary)
 'use server';
 import { db } from '../../../db/connection.server.ts';

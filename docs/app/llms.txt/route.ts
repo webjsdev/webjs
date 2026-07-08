@@ -7,7 +7,7 @@
  * drifts (no build step).
  *
  * The folder is literally named `llms.txt`, so the file router maps it
- * to the `/llms.txt` URL. This routes cleanly because a webjs route.ts
+ * to the `/llms.txt` URL. This routes cleanly because a WebJs route.ts
  * handler is matched BEFORE the static-asset / source-file gate.
  */
 import { renderLlmsIndex, textResponse } from '#lib/llms.server.ts';

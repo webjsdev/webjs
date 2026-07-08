@@ -5,9 +5,9 @@ export const metadata = { title: 'Architecture | webjs' };
 export default function Architecture() {
   return html`
     <h1>Architecture</h1>
-    <p>WebJs is a monorepo with three packages that together form the framework. Understanding the split helps when you need to import something specific or embed webjs into another runtime.</p>
+    <p>WebJs is a monorepo with three packages that together form the framework. Understanding the split helps when you need to import something specific or embed WebJs into another runtime.</p>
 
-    <p><strong>Mental model, especially if you come from React Server Components:</strong> webjs has no server/client component split. Pages, layouts, and components are <em>isomorphic</em> modules, the same source runs on the server to produce SSR'd HTML and then loads in the browser to add interactivity. There is no Flight protocol and no "server component" identity. The one server boundary is the <code>.server.{js,ts}</code> file, which is an RPC + source-protection mechanism (server actions and server-only utilities), not a server-rendered component. <code>route.{js,ts}</code> is a server-only HTTP handler. And elision (skipping the JS download of a module that does no client work) is a build-free optimization on those isomorphic modules, not a boundary, it never changes behaviour because progressive enhancement is the no-JS baseline.</p>
+    <p><strong>Mental model, especially if you come from React Server Components:</strong> WebJs has no server/client component split. Pages, layouts, and components are <em>isomorphic</em> modules, the same source runs on the server to produce SSR'd HTML and then loads in the browser to add interactivity. There is no Flight protocol and no "server component" identity. The one server boundary is the <code>.server.{js,ts}</code> file, which is an RPC + source-protection mechanism (server actions and server-only utilities), not a server-rendered component. <code>route.{js,ts}</code> is a server-only HTTP handler. And elision (skipping the JS download of a module that does no client work) is a build-free optimization on those isomorphic modules, not a boundary, it never changes behaviour because progressive enhancement is the no-JS baseline.</p>
 
     <h2>Package Overview</h2>
     <pre>webjs/
@@ -55,7 +55,7 @@ export default function Architecture() {
     </ul>
 
     <h2>Modules Architecture (Recommended)</h2>
-    <p>For non-trivial apps, webjs recommends a feature-scoped modules pattern:</p>
+    <p>For non-trivial apps, WebJs recommends a feature-scoped modules pattern:</p>
     <pre>my-app/
 ├── app/                    # thin route adapters
 │   ├── layout.ts
@@ -138,6 +138,6 @@ console.log(await resp.json());</pre>
 
     <p>This returns standard <code>Request → Response</code>, usable in Express, Fastify, Bun, Deno, Cloudflare Workers (with the file-system caveat documented in the deployment guide).</p>
 
-    <p>Coming from Next.js? The execution model above (isomorphic modules, no Server/Client Component split, the <code>.server</code> boundary as the one server boundary) is the biggest difference. The <a href="/docs/migrating-from-nextjs">Migrating from Next.js</a> guide maps each Next idiom to its webjs equivalent.</p>
+    <p>Coming from Next.js? The execution model above (isomorphic modules, no Server/Client Component split, the <code>.server</code> boundary as the one server boundary) is the biggest difference. The <a href="/docs/migrating-from-nextjs">Migrating from Next.js</a> guide maps each Next idiom to its WebJs equivalent.</p>
   `;
 }

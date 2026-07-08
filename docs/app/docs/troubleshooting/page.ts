@@ -3,7 +3,7 @@ import { html } from '@webjsdev/core';
 export const metadata = {
   title: 'Troubleshooting | webjs',
   description:
-    'Symptom-keyed fixes for the distinctive webjs error signatures: throw-at-load server imports, backtick-in-template 500s, TypeScript strip failures, SSR browser-global crashes, the missing-frame swap, and more, each linked to the webjs check rule and the invariant behind it.',
+    'Symptom-keyed fixes for the distinctive WebJs error signatures: throw-at-load server imports, backtick-in-template 500s, TypeScript strip failures, SSR browser-global crashes, the missing-frame swap, and more, each linked to the webjs check rule and the invariant behind it.',
 };
 
 export default function Troubleshooting() {
@@ -23,7 +23,7 @@ export default function Troubleshooting() {
 
     <h2>A 500 at strip time pointing at <code>no-non-erasable-typescript</code></h2>
     <p><strong>Symptom:</strong> a <code>.ts</code> file 500s with a message about TypeScript stripping and the <code>no-non-erasable-typescript</code> rule, or the server refuses to start naming a required Node version.</p>
-    <p><strong>Cause:</strong> webjs strips types with Node 24+'s built-in <code>module.stripTypeScriptTypes</code>, which only erases TYPES. Non-erasable syntax (an <code>enum</code>, a <code>namespace</code> with values, a constructor parameter property, a legacy decorator with <code>emitDecoratorMetadata</code>, or <code>import = require</code>) has no type-only form to strip, so it fails. The Node-version variant means you are on Node below 24, where the built-in strip and recursive <code>fs.watch</code> are unavailable.</p>
+    <p><strong>Cause:</strong> WebJs strips types with Node 24+'s built-in <code>module.stripTypeScriptTypes</code>, which only erases TYPES. Non-erasable syntax (an <code>enum</code>, a <code>namespace</code> with values, a constructor parameter property, a legacy decorator with <code>emitDecoratorMetadata</code>, or <code>import = require</code>) has no type-only form to strip, so it fails. The Node-version variant means you are on Node below 24, where the built-in strip and recursive <code>fs.watch</code> are unavailable.</p>
     <p><strong>Fix:</strong> set <code>compilerOptions.erasableSyntaxOnly: true</code> in <code>tsconfig.json</code> so the compiler rejects these at edit time, and use the erasable equivalents (a <code>const</code> object plus a union type instead of an <code>enum</code>, an explicit field plus assignment instead of a parameter property). Upgrade to Node 24+ for the version error. See <a href="/docs/typescript">TypeScript</a>. This is framework invariant 10, enforced by the <code>erasable-typescript-only</code> and <code>no-non-erasable-typescript</code> check rules.</p>
 
     <h2>An SSR crash naming <code>document</code>, <code>window</code>, or a DOM method</h2>
@@ -48,7 +48,7 @@ export default function Troubleshooting() {
 
     <h2>A whole page gets replaced on a frame navigation</h2>
     <p><strong>Symptom:</strong> clicking a link inside a <code>&lt;webjs-frame&gt;</code> replaces the entire document instead of just the frame (for example an auth redirect returning a login page).</p>
-    <p><strong>Cause:</strong> the navigation response did not contain a <code>&lt;webjs-frame&gt;</code> with the requested id. Rather than silently swapping the whole document, webjs now fires a cancelable <code>webjs:frame-missing</code> event and leaves the frame unchanged (with a console warning).</p>
+    <p><strong>Cause:</strong> the navigation response did not contain a <code>&lt;webjs-frame&gt;</code> with the requested id. Rather than silently swapping the whole document, WebJs now fires a cancelable <code>webjs:frame-missing</code> event and leaves the frame unchanged (with a console warning).</p>
     <p><strong>Fix:</strong> make sure the response for a frame-scoped navigation includes the matching frame, or listen for <code>webjs:frame-missing</code> on <code>document</code> and decide the outcome yourself (the event detail carries <code>{ frameId, url, document }</code>; call <code>preventDefault()</code> to take over, for example a full navigation with <code>navigate(detail.url)</code>). See the <code>&lt;webjs-frame&gt;</code> section in <a href="/docs/client-router">Client Router</a>.</p>
 
     <h2>A vendor module 404s after deploying under a sub-path</h2>

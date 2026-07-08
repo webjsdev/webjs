@@ -9,7 +9,7 @@ export default function GettingStarted() {
 
     <h2>Prerequisites</h2>
     <ul>
-      <li><strong>Node.js 24+ or Bun</strong>: on Node, webjs uses the built-in TypeScript type-stripping (<code>process.features.typescript === 'strip'</code>), default-on and stable from Node 24. On Bun (which has no such built-in), it strips via <code>amaro</code> automatically. Run a Bun app with <code>bun --bun run dev</code> / <code>bun --bun run start</code>.</li>
+      <li><strong>Node.js 24+ or Bun</strong>: on Node, WebJs uses the built-in TypeScript type-stripping (<code>process.features.typescript === 'strip'</code>), default-on and stable from Node 24. On Bun (which has no such built-in), it strips via <code>amaro</code> automatically. Run a Bun app with <code>bun --bun run dev</code> / <code>bun --bun run start</code>.</li>
       <li><strong>npm</strong> (or any package manager).</li>
     </ul>
 
@@ -41,7 +41,7 @@ webjs create my-app --template saas</pre>
 
     <p>The <code>--template saas</code> scaffold includes login + signup pages, a dashboard with auth middleware guard, settings page, auth API route, <code>createAuth()</code> with Credentials provider, Drizzle User model with password hashing, and a modules architecture (<code>modules/auth/{actions,queries,types.ts}</code>, <code>db/connection.server.ts</code>, <code>lib/{auth,password}.ts</code>).</p>
 
-    <p><strong>The scaffold IS the tutorial.</strong> Every UI scaffold (full-stack AND saas) ships a densely commented <strong>feature gallery</strong>: one webjs concept per demo under <code>app/features/</code> (routing, components, server actions, optimistic UI, async render, directives, forms, metadata, caching, env vars, the client router, service worker, WebSockets, broadcast, rate limiting, file storage, type-safe routes) with logic in <code>modules/</code>, plus a whole example app under <code>app/examples/</code>. The <code>--template api</code> scaffold ships the backend counterpart instead, a <strong>backend-features showcase</strong> under <code>app/api/features/</code> (the <code>route()</code> adapter + input validation, rate limiting, a streaming response, file storage, and a WebSocket + broadcast endpoint) listed in the root <code>app/route.ts</code> index. Read each demo end to end (the code AND its comments) to learn the idioms, then prune the ones you do not need. Each demo carries a placeholder marker (the <code>no-scaffold-placeholder</code> check), so <code>webjs check</code> fails until you keep-and-adapt or delete it (the route AND its <code>modules/&lt;name&gt;</code>).</p>
+    <p><strong>The scaffold IS the tutorial.</strong> Every UI scaffold (full-stack AND saas) ships a densely commented <strong>feature gallery</strong>: one WebJs concept per demo under <code>app/features/</code> (routing, components, server actions, optimistic UI, async render, directives, forms, metadata, caching, env vars, the client router, service worker, WebSockets, broadcast, rate limiting, file storage, type-safe routes) with logic in <code>modules/</code>, plus a whole example app under <code>app/examples/</code>. The <code>--template api</code> scaffold ships the backend counterpart instead, a <strong>backend-features showcase</strong> under <code>app/api/features/</code> (the <code>route()</code> adapter + input validation, rate limiting, a streaming response, file storage, and a WebSocket + broadcast endpoint) listed in the root <code>app/route.ts</code> index. Read each demo end to end (the code AND its comments) to learn the idioms, then prune the ones you do not need. Each demo carries a placeholder marker (the <code>no-scaffold-placeholder</code> check), so <code>webjs check</code> fails until you keep-and-adapt or delete it (the route AND its <code>modules/&lt;name&gt;</code>).</p>
 
     <h3>Scaffolding a Bun app</h3>
     <p>WebJs runs on Node 24+ or Bun. To generate a Bun-flavored app, add <code>--runtime bun</code> (a separate axis from <code>--template</code>, so it works with all three). It is auto-detected when you scaffold through Bun, so both forms below produce the same Bun app:</p>
@@ -155,7 +155,7 @@ Counter.register('my-counter');</pre>
       <li><a href="/docs/routing">Routing</a>: file-based routing with pages, layouts, dynamic segments, and route groups</li>
       <li><a href="/docs/components">Components</a>: web components with shadow DOM + scoped styles</li>
       <li><a href="/docs/server-actions">Server Actions</a>: type-safe server functions callable from client components</li>
-      <li><a href="/docs/backend-only">Backend-Only Mode</a>: use webjs as a pure API framework</li>
+      <li><a href="/docs/backend-only">Backend-Only Mode</a>: use WebJs as a pure API framework</li>
       <li><a href="/docs/migrating-from-nextjs">Migrating from Next.js</a>: a concept map for Next users (no RSC, isomorphic modules, the .server boundary)</li>
     </ul>
   `;

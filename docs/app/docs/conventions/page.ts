@@ -8,7 +8,7 @@ export default function Conventions() {
     <p>WebJs is an <strong>AI-first framework</strong>. It ships an opinionated conventions system that both humans and AI agents follow. The conventions are enforced via config files, CLI commands, and guardrails that ensure consistent, high-quality code across the entire project, whether written by a person or an agent.</p>
 
     <h2>CONVENTIONS.md</h2>
-    <p>Every webjs app has a <code>CONVENTIONS.md</code> file at its root. This is the project-specific conventions document that all AI agents read before writing code. It defines:</p>
+    <p>Every WebJs app has a <code>CONVENTIONS.md</code> file at its root. This is the project-specific conventions document that all AI agents read before writing code. It defines:</p>
 
     <ul>
       <li><strong>Module architecture</strong>: where actions, queries, and components go.</li>
@@ -118,7 +118,7 @@ After merging, should &lt;branch&gt; be deleted or kept?</pre>
       <li><strong>Documentation</strong>: updates to <code>AGENTS.md</code> for API changes, <code>CONVENTIONS.md</code> for convention changes, and <code>docs/</code> for user-facing features.</li>
       <li><strong>Convention validation</strong>: <code>webjs check</code> runs and violations are fixed.</li>
     </ol>
-    <p>The user should never have to say "also write tests" or "also update the docs." That is the default behavior in a webjs project.</p>
+    <p>The user should never have to say "also write tests" or "also update the docs." That is the default behavior in a WebJs project.</p>
 
     <h2>Agent Config Files</h2>
     <p>When you scaffold a project with <code>webjs create</code>, it generates config files for every major AI coding agent:</p>
@@ -187,7 +187,7 @@ cd my-app && npm run dev</pre>
     <p>Every file is ready to use immediately. The project works out of the box with <code>webjs dev</code>, and every AI agent that opens the project will automatically read the config files and follow the conventions.</p>
 
     <h2>The Complete Workflow</h2>
-    <p>When a user tells an AI agent "add a contact page" in a webjs project, the agent automatically delivers:</p>
+    <p>When a user tells an AI agent "add a contact page" in a WebJs project, the agent automatically delivers:</p>
 
     <pre>app/contact/page.ts                           # the page
 modules/contact/actions/send-message.server.ts # the server action

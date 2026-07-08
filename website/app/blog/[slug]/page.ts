@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   const post = await getPost(params.slug);
   if (!post) return { title: 'Post not found · webjs' };
   return {
-    title: `${post.title} · webjs blog`,
+    title: `${post.title} · WebJs blog`,
     description: post.description,
     openGraph: {
       title: post.title,

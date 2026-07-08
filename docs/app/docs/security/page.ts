@@ -3,7 +3,7 @@ import { html } from '@webjsdev/core';
 export const metadata = {
   title: 'Security | webjs',
   description:
-    'The webjs threat model and hardening surface: CSRF, CSP, secure headers, CORS, body limits, SRI, the .server boundary, sessions, and rate limiting, with which protections are automatic and which are opt-in.',
+    'The WebJs threat model and hardening surface: CSRF, CSP, secure headers, CORS, body limits, SRI, the .server boundary, sessions, and rate limiting, with which protections are automatic and which are opt-in.',
 };
 
 export default function Security() {

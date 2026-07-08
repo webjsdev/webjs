@@ -130,7 +130,7 @@ assert.equal(dash.status, 200);</pre>
     <pre>// modules/posts/actions/create.server.ts exports createPost
 const out = await invokeActionForTest(
   app, 'modules/posts/actions/create.server.ts', 'createPost', [input]);</pre>
-    <p><code>invokeActionForTest</code> serializes <code>args</code> with the webjs serializer (exactly as the generated client stub does), POSTs them to the REAL <code>/__webjs/action/&lt;hash&gt;/&lt;fn&gt;</code> endpoint as a same-origin request (so it passes the cross-origin CSRF check), and parses the response with the serializer. The action is addressed by the SHA-256 hash of its <code>.server.{js,ts}</code> file path (absolute or appDir-relative) plus the function name, the same scheme the stub uses.</p>
+    <p><code>invokeActionForTest</code> serializes <code>args</code> with the WebJs serializer (exactly as the generated client stub does), POSTs them to the REAL <code>/__webjs/action/&lt;hash&gt;/&lt;fn&gt;</code> endpoint as a same-origin request (so it passes the cross-origin CSRF check), and parses the response with the serializer. The action is addressed by the SHA-256 hash of its <code>.server.{js,ts}</code> file path (absolute or appDir-relative) plus the function name, the same scheme the stub uses.</p>
     <p><strong>Prefer this over a direct import of the action.</strong> A direct import calls the function in-process and bypasses three production concerns the endpoint enforces:</p>
     <ul>
       <li><strong>the wire serializer</strong> (a <code>Date</code> / <code>Map</code> / <code>BigInt</code> arg or return is genuinely encoded and decoded, not passed by reference),</li>
@@ -240,7 +240,7 @@ webjs check --rules</pre>
     e2e/hello.test.ts</pre>
 
     <h2>AI Agent Testing Convention</h2>
-    <p>In a webjs project, AI agents are expected to write tests automatically with every code change. The convention is defined in <code>CONVENTIONS.md</code>:</p>
+    <p>In a WebJs project, AI agents are expected to write tests automatically with every code change. The convention is defined in <code>CONVENTIONS.md</code>:</p>
     <ul>
       <li><strong>New server action</strong> needs a unit test (round-trip it through <code>invokeActionForTest</code>).</li>
       <li><strong>New component</strong> needs a unit test (SSR rendering), plus a browser test via <code>ssrFixture()</code> when hydration / DOM / slots matter.</li>

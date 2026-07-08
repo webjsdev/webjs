@@ -5,7 +5,7 @@ export const metadata = { title: 'Server-Side Rendering | webjs' };
 export default function SSR() {
   return html`
     <h1>Server-Side Rendering</h1>
-    <p>Every webjs page is <strong>server-rendered by default</strong>. There is no client-only mode and no opt-in flag. When a request arrives, the server executes your page function, renders the result to an HTML string, injects Declarative Shadow DOM for every web component that appeared, and streams the response. The browser paints meaningful content before a single byte of JavaScript has been parsed.</p>
+    <p>Every WebJs page is <strong>server-rendered by default</strong>. There is no client-only mode and no opt-in flag. When a request arrives, the server executes your page function, renders the result to an HTML string, injects Declarative Shadow DOM for every web component that appeared, and streams the response. The browser paints meaningful content before a single byte of JavaScript has been parsed.</p>
 
     <h2>How SSR Works</h2>
     <p>Pages are plain async functions that return <code>html\`\`</code> tagged templates (a <code>TemplateResult</code>). The server imports the page module, calls its default export, and passes the result through <code>renderToString()</code>. That function walks the template tree, resolves every <code>Promise</code> it encounters in template holes, and produces a complete HTML string.</p>
@@ -144,7 +144,7 @@ async function loadExpensiveItems() {
       <li>The class is registered via <code>Class.register('tag')</code> .</li>
       <li>The browser upgrades every instance of that tag in the document, calling <code>connectedCallback()</code>.</li>
       <li>In <code>connectedCallback</code>, the framework first applies any <code>data-webjs-prop-*</code> attributes emitted by SSR for <code>.prop=\${value}</code> bindings (decoding via the wire serializer, assigning as JS properties, stripping the attributes from the live DOM).</li>
-      <li>If <code>this.shadowRoot</code> already exists (from DSD), webjs skips <code>attachShadow()</code> and re-renders into the existing shadow root. The DSD content serves as the initial paint, and the client render just adds event listeners and reactive bindings.</li>
+      <li>If <code>this.shadowRoot</code> already exists (from DSD), WebJs skips <code>attachShadow()</code> and re-renders into the existing shadow root. The DSD content serves as the initial paint, and the client render just adds event listeners and reactive bindings.</li>
       <li>The fine-grained client renderer preserves focus, cursor position, scroll offset, and form state across subsequent state updates.</li>
     </ol>
 

@@ -5,7 +5,7 @@ export const metadata = { title: 'Lifecycle Hooks | webjs' };
 export default function Lifecycle() {
   return html`
     <h1>Lifecycle Hooks</h1>
-    <p>WebJs ships the full lit-aligned component lifecycle. AI coding agents have substantial training data on lit, so adopting lit's hook names and semantics lets agents write idiomatic webjs code without framework-specific translation.</p>
+    <p>WebJs ships the full lit-aligned component lifecycle. AI coding agents have substantial training data on lit, so adopting lit's hook names and semantics lets agents write idiomatic WebJs code without framework-specific translation.</p>
 
     <h2>The Update Cycle</h2>
     <p>Every render goes through this pipeline. Each hook receives a <code>changedProperties</code> Map where keys are property names and values are the previous value before the change. Signal reads inside <code>render()</code> are tracked separately by the built-in SignalWatcher; signal changes schedule the next update but don't appear in this Map.</p>
@@ -88,7 +88,7 @@ this.name = 'updated';                       // reactive property assignment
     <p>Without this, one broken component would crash the entire page. The default implementation renders nothing and logs to console.</p>
 
     <h2>async render() and renderFallback()</h2>
-    <p>A component's <code>render()</code> may be <code>async</code>, so it can fetch its own server data into the first paint. Writing <code>await</code> makes the function async; webjs awaits a promise-returning <code>render()</code> automatically on both the server and the client. There is no flag.</p>
+    <p>A component's <code>render()</code> may be <code>async</code>, so it can fetch its own server data into the first paint. Writing <code>await</code> makes the function async; WebJs awaits a promise-returning <code>render()</code> automatically on both the server and the client. There is no flag.</p>
     <pre>async render() {
   const user = await getUser(this.uid);   // a 'use server' action: real fn at SSR, RPC stub on the client
   return html\`&lt;h3&gt;\${user.name}&lt;/h3&gt;\`;
@@ -100,7 +100,7 @@ this.name = 'updated';                       // reactive property assignment
     <p>A failed <code>async render()</code> (a thrown <code>await getData()</code>) is isolated to that component automatically: siblings render, the page does not blank, and <code>renderError()</code> optionally customizes the error UI. To STREAM slow data with a first-paint fallback, wrap the region in <code>&lt;webjs-suspense .fallback=\${html\`…\`}&gt;</code> (it flushes the fallback on the first byte, then streams the data in, progressively on soft navigation too). See <a href="/docs/components">Components</a> and <a href="/docs/data-fetching">Data fetching</a> for the full decision guide and anti-patterns.</p>
 
     <h2>Native Web Component Callbacks</h2>
-    <p>These are provided by <code>HTMLElement</code> itself and work as normal in webjs components:</p>
+    <p>These are provided by <code>HTMLElement</code> itself and work as normal in WebJs components:</p>
     <ul>
       <li><code>connectedCallback()</code> fires when the element is added to DOM (call <code>super.connectedCallback()</code>)</li>
       <li><code>disconnectedCallback()</code> fires when the element is removed from DOM</li>
@@ -134,7 +134,7 @@ this.name = 'updated';                       // reactive property assignment
 
     <p><strong>Practical rule:</strong> set SSR-meaningful defaults in the <em>constructor</em> (or as an instance signal's initial value), and derive SSR-visible state in <code>willUpdate</code>. Use <code>connectedCallback</code> only for browser-only data (<code>localStorage</code>, viewport, <code>navigator.*</code>, observers, timers). Read the value and write the signal to refine the initial render after hydration. A <code>Task</code> is the exception among controllers: its <code>hostUpdate</code> does not auto-run server-side, so it ships the <code>INITIAL</code> state and fetches only on hydration.</p>
 
-    <p><strong>Attribute and event methods are SSR-safe.</strong> The pre-render hooks run on a server instance that has no real DOM, but webjs backs it with a server element shim, so the attribute methods (<code>getAttribute</code> / <code>hasAttribute</code> / <code>setAttribute</code> / <code>toggleAttribute</code>) work, the event methods (<code>addEventListener</code> / <code>removeEventListener</code> / <code>dispatchEvent</code>) are inert no-ops, and <code>attachInternals()</code> returns an inert object. So reading an attribute in <code>render()</code>, wiring a delegated listener in the constructor, or reflecting a property during the SSR update cycle all run without an <code>isServer</code> guard. <code>closest()</code> is shimmed too, for tag-name selectors only, so a compound component marks its active state in the first paint. Genuinely browser-only members (<code>classList</code>, <code>querySelector</code>, <code>attachShadow</code>, geometry, layout reads) have no shim and still throw at SSR; keep those in <code>connectedCallback</code> or a later hook. See <a href="/docs/ssr">Server-Side Rendering</a> for the full shim surface.</p>
+    <p><strong>Attribute and event methods are SSR-safe.</strong> The pre-render hooks run on a server instance that has no real DOM, but WebJs backs it with a server element shim, so the attribute methods (<code>getAttribute</code> / <code>hasAttribute</code> / <code>setAttribute</code> / <code>toggleAttribute</code>) work, the event methods (<code>addEventListener</code> / <code>removeEventListener</code> / <code>dispatchEvent</code>) are inert no-ops, and <code>attachInternals()</code> returns an inert object. So reading an attribute in <code>render()</code>, wiring a delegated listener in the constructor, or reflecting a property during the SSR update cycle all run without an <code>isServer</code> guard. <code>closest()</code> is shimmed too, for tag-name selectors only, so a compound component marks its active state in the first paint. Genuinely browser-only members (<code>classList</code>, <code>querySelector</code>, <code>attachShadow</code>, geometry, layout reads) have no shim and still throw at SSR; keep those in <code>connectedCallback</code> or a later hook. See <a href="/docs/ssr">Server-Side Rendering</a> for the full shim surface.</p>
 
     <p>See <a href="/docs/progressive-enhancement">Progressive Enhancement</a> for the full pattern, including how to push server-known data through the page function instead of fetching in browser-only hooks.</p>
   `;
