@@ -1363,6 +1363,7 @@ export const metadata = {
 // do not use (delete the route AND its modules/<name>), then reshape this page.
 const features = [
   { href: '/features/routing', title: 'Routing', blurb: 'A static route plus a dynamic [id] segment that reads params. The file-based router in miniature.' },
+  { href: '/features/boundaries', title: 'Boundaries', blurb: 'The control-flow throws (forbidden / unauthorized / notFound) and the nearest boundary file that catches each.' },
   { href: '/features/components', title: 'Components', blurb: 'The WebComponent factory, reactive props, instance signals, and slot projection in light DOM.' },
   { href: '/features/server-actions', title: 'Server actions', blurb: 'A use-server RPC action next to a server-only .server.ts utility, and why the boundary matters.' },
   { href: '/features/optimistic-ui', title: 'Optimistic UI', blurb: 'The imperative optimistic(signal, value, action) flip: instant update, automatic rollback on failure.' },
@@ -1460,6 +1461,7 @@ export const metadata = {
 // AND its modules/<name>). Keep this list in sync with the full-stack home.
 const features = [
   { href: '/features/routing', title: 'Routing', blurb: 'A static route plus a dynamic [id] segment that reads params. The file-based router in miniature.' },
+  { href: '/features/boundaries', title: 'Boundaries', blurb: 'The control-flow throws (forbidden / unauthorized / notFound) and the nearest boundary file that catches each.' },
   { href: '/features/components', title: 'Components', blurb: 'The WebComponent factory, reactive props, instance signals, and slot projection in light DOM.' },
   { href: '/features/server-actions', title: 'Server actions', blurb: 'A use-server RPC action next to a server-only .server.ts utility, and why the boundary matters.' },
   { href: '/features/optimistic-ui', title: 'Optimistic UI', blurb: 'The imperative optimistic(signal, value, action) flip: instant update, automatic rollback on failure.' },

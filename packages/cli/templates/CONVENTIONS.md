@@ -317,7 +317,7 @@ api / saas templates) is a **starting point**.
 
 The full-stack and saas scaffolds ship a **gallery** organized by kind so features
 and whole apps are not mixed. `app/features/<name>/` are single-feature
-demos, one webjs concept each (routing, components, server-actions,
+demos, one webjs concept each (routing, boundaries, components, server-actions,
 optimistic-ui, async-render, directives, route-handler). `app/examples/<name>/`
 are whole example apps that compose several features (todo: optimistic UI
 + progressive enhancement + a11y + db + modules). Both keep their logic in

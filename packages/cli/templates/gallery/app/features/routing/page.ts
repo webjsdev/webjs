@@ -43,5 +43,13 @@ export default function RoutingExample() {
       <code class="font-mono">redirect()</code> on the server, call
       <code class="font-mono">navigate()</code> on the client.
     </p>
+    <p class="text-muted-foreground text-sm mt-3">
+      A page can also THROW to short-circuit rendering:
+      <code class="font-mono">notFound()</code> (404),
+      <code class="font-mono">forbidden()</code> (403), and
+      <code class="font-mono">unauthorized()</code> (401), each rendering the
+      nearest matching boundary file. See the
+      <a class="text-primary" href="/features/boundaries">Boundaries</a> demo.
+    </p>
   `;
 }
