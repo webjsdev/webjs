@@ -29,7 +29,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // known to serve 200 in prod mode.
 // The blog routes are deliberately DB-independent (`/about` and the inert
 // `/static-info`), since the unit/integration CI job does not migrate the
-// blog's Prisma DB; `/` calls listPosts() and would 500 there. Both still
+// blog's Drizzle DB, so `/` calls listPosts() and would 500 there. Both still
 // emit the layout's modulepreloads, which is what this test probes.
 const APPS = [
   { name: 'blog', dir: 'examples/blog', routes: ['/about', '/static-info'] },

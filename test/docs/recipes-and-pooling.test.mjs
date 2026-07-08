@@ -1,7 +1,7 @@
 /**
  * Tests for #272: the agent-docs/recipes.md restore (the schema-first recipe +
  * the anti-pattern warnings + the common recipes the root AGENTS.md references)
- * and the deployment-doc Prisma connection-pool section.
+ * and the deployment-doc Postgres connection-pool section.
  */
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
@@ -38,13 +38,13 @@ test('recipes.md has the schema-first recipe, the anti-pattern warnings, and the
   }
 });
 
-test('the deployment doc documents Prisma connection pooling for Postgres', async () => {
+test('the deployment doc documents Postgres connection pooling', async () => {
   const app = await createRequestHandler({ appDir: DOCS_DIR, dev: false });
   if (app.warmup) await app.warmup();
   const res = await app.handle(new Request('http://localhost/docs/deployment'));
   assert.equal(res.status, 200);
   const html = await res.text();
-  assert.ok(html.includes('connection_limit'), 'documents connection_limit');
+  assert.ok(/new Pool\(\{[^}]*max|max: (1|10)/.test(html), 'documents bounding the pg Pool with max (not a Prisma connection_limit URL param)');
   assert.ok(/pooler|PgBouncer/i.test(html), 'documents when to use a pooler');
   assert.ok(/max_connections/.test(html), 'explains the max_connections constraint');
   assert.ok(/DATABASE_URL="postgresql:/.test(html), 'gives a concrete DATABASE_URL example');
