@@ -74,6 +74,33 @@ export default async function PostPage({ params }: { params: { slug: string } })
   return html${'`'}...&lt;/h1&gt;${'`'};
 }</pre>
 
+    <h2>forbidden.ts and unauthorized.ts</h2>
+    <p>Throw <code>forbidden()</code> (403) or <code>unauthorized()</code> (401) the same way as <code>notFound()</code>. The nearest <code>forbidden.ts</code> / <code>unauthorized.ts</code> boundary renders (a default page when none exists). Use <code>unauthorized()</code> for a request that is not authenticated, and <code>forbidden()</code> for an authenticated user who lacks permission:</p>
+
+    <pre>import { forbidden, unauthorized } from '@webjsdev/core';
+
+export default async function AdminPage() {
+  const user = await currentUser();
+  if (!user) unauthorized();        // renders nearest unauthorized.ts (401)
+  if (!user.isAdmin) forbidden();   // renders nearest forbidden.ts (403)
+  return html${'`'}...${'`'};
+}</pre>
+
+    <h2>global-error.ts and global-not-found.ts</h2>
+    <p>Two root-only boundaries (in <code>app/</code> exactly). <code>global-error.ts</code> is the app-wide catch-all, tried after the nested <code>error.ts</code> boundaries are exhausted, and it renders its OWN full document (a root-layout failure is when it fires):</p>
+
+    <pre>// app/global-error.ts
+import { html } from '@webjsdev/core';
+
+export default function GlobalError({ error }: { error: Error }) {
+  return html${'`'}
+    &lt;!doctype html&gt;
+    &lt;html&gt;&lt;body&gt;&lt;h1&gt;Something went wrong&lt;/h1&gt;&lt;/body&gt;&lt;/html&gt;
+  ${'`'};
+}</pre>
+
+    <p><code>global-not-found.ts</code> renders for a URL that matches nothing anywhere, when no <code>not-found.ts</code> applies.</p>
+
     <h2>Component-level error handling</h2>
     <p>Override <code>renderError(error)</code> in any <code>WebComponent</code> to catch errors from that component's <code>render()</code> method:</p>
 
