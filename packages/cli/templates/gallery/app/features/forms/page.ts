@@ -58,6 +58,12 @@ export default function FormsFeature({ searchParams, actionData }: { searchParam
 // The page action runs on a non-GET submission to this URL (the no-JS write
 // path). Validate, then return a failure (re-renders at 422 with fieldErrors +
 // values) or a success with a same-site `redirect` (a 303 PRG to the confirmation).
+//
+// FOOTGUN: to redirect on success, RETURN `{ success: true, redirect: '/path' }`
+// (a 303 See Other, so the browser follows with a GET). Do NOT THROW `redirect()`
+// from a page action, that is a 307 which PRESERVES the POST method and body, so
+// the browser re-POSTs to the target and re-runs the mutation (a duplicate write).
+// Throw `redirect()` only from a page render / GET context, never a page action.
 export async function action({ formData }: { formData: FormData }): Promise<Result> {
   const name = String(formData.get('name') ?? '').trim();
   const email = String(formData.get('email') ?? '').trim();

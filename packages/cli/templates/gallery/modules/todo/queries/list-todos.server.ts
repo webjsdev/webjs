@@ -14,6 +14,12 @@ export async function listTodos(): Promise<Todo[]> {
   // imported column mis-compiles to a bad SQL alias in rc.3. Do NOT use
   // `db.select({ col })` either (its projection overload trips TS2554 in rc.3).
   // See the Database (Drizzle) section in this app's AGENTS.md.
+  //
+  // Two equivalent read styles, both fine: the relational query API
+  // (`db.query.todos.findFirst({ where: { id } })` / `findMany`, used here and in
+  // toggle-todo) reads by an object filter; the core builder
+  // (`db.select().from(todos).where(eq(todos.id, id))`) reads with the `eq()`
+  // helper. Reach for whichever fits; the relational form is terser for by-id reads.
   const rows = await db.query.todos.findMany({ orderBy: { createdAt: 'desc' } });
   return rows as Todo[];
 }
