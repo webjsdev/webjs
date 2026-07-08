@@ -81,6 +81,11 @@ COPY changelog ./changelog
 # reason as changelog: without the tree in the image, /blog renders
 # "No posts yet."
 COPY blog ./blog
+# website/app/compare/[slug]/page.ts and app/sitemap.ts read
+# ../../../../compare/<slug>.md at SSR time (via
+# modules/compare/queries/*.server.ts). Same reason as blog: without the
+# tree in the image, /compare renders "No comparisons yet."
+COPY compare ./compare
 
 # --- 3. Build-time work --------------------------------------------------
 # Core: build the dist/ bundles. The package.json `prepare` hook is a

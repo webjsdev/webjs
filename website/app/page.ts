@@ -395,7 +395,7 @@ lib/session.server.ts</pre>
 
     <footer class="mt-24 border-t border-border py-16 px-6 bg-bg-subtle/30">
       <div class="max-w-[1080px] mx-auto">
-        <nav class="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12" aria-label="Footer">
+        <nav class="grid grid-cols-2 md:grid-cols-5 gap-8 mb-12" aria-label="Footer">
           <div class="flex flex-col gap-3">
             <h4 class="text-xs font-bold uppercase tracking-wider text-fg">Product</h4>
             <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${DOCS_URL + '/docs/getting-started'} target="_blank" rel="noopener noreferrer">Docs${NEW_TAB}</a>
@@ -408,6 +408,14 @@ lib/session.server.ts</pre>
             <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/blog">Blog</a>
             <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/changelog">Changelog</a>
             <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${GH_URL + '/releases'} target="_blank" rel="noopener noreferrer">Releases${NEW_TAB}</a>
+          </div>
+          <div class="flex flex-col gap-3">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-fg"><a class="no-underline text-fg hover:text-accent transition-colors" href="/compare">Compare</a></h4>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/compare/webjs-vs-nextjs">WebJs vs Next.js</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/compare/webjs-vs-lit">WebJs vs Lit</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/compare/webjs-vs-remix">WebJs vs Remix 3</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/compare/webjs-vs-astro">WebJs vs Astro</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/compare/webjs-vs-rails">WebJs vs Rails</a>
           </div>
           <div class="flex flex-col gap-3">
             <h4 class="text-xs font-bold uppercase tracking-wider text-fg">Community</h4>
