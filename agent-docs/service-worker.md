@@ -1,6 +1,6 @@
 # Service worker / offline primitive (opt-in, #271)
 
-webjs ships a hand-authored service worker and an offline fallback into the UI
+WebJs ships a hand-authored service worker and an offline fallback into the UI
 scaffolds (`public/sw.js`, `public/offline.html`; the full-stack and saas
 templates, since the api template has no UI). It adds an offline experience
 and an asset cache **without changing the JavaScript-disabled baseline**: the

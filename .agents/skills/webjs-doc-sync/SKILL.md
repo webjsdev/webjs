@@ -16,7 +16,7 @@ when_to_use: |
 
 # Keep every webjs doc surface in sync with shipped behaviour
 
-webjs ships its documentation across SEVERAL independent surfaces. The recurring
+WebJs ships its documentation across SEVERAL independent surfaces. The recurring
 failure mode is updating ONE (usually `AGENTS.md`) and silently missing the rest,
 so the docs site, the marketing website, and the scaffold's per-agent rule files
 drift behind the framework. HTTP-verb server actions (#488) shipped with

@@ -5,7 +5,7 @@ export const metadata = { title: 'TypeScript | webjs' };
 export default function TypeScript() {
   return html`
     <h1>TypeScript</h1>
-    <p>webjs is built for TypeScript from the ground up, but never forces a build step you run. It runs on <strong>Node 24+ or Bun</strong>; on Node the type-stripping is the built-in (<code>process.features.typescript === 'strip'</code>), on Bun it is <code>amaro</code> (byte-identical). Server-side <code>.ts</code> imports work without any loader registration; browser-bound <code>.ts</code> requests go through the runtime stripper on the dev server. Both paths perform whitespace replacement: every (line, column) in the source maps to the same position in the stripped output, so no sourcemap is shipped and stack traces are byte-exact.</p>
+    <p>WebJs is built for TypeScript from the ground up, but never forces a build step you run. It runs on <strong>Node 24+ or Bun</strong>; on Node the type-stripping is the built-in (<code>process.features.typescript === 'strip'</code>), on Bun it is <code>amaro</code> (byte-identical). Server-side <code>.ts</code> imports work without any loader registration; browser-bound <code>.ts</code> requests go through the runtime stripper on the dev server. Both paths perform whitespace replacement: every (line, column) in the source maps to the same position in the stripped output, so no sourcemap is shipped and stack traces are byte-exact.</p>
 
     <h2>No-Build TypeScript</h2>
     <p>The runtime's type stripping does the heavy lifting: Node 24+'s built-in <code>module.stripTypeScriptTypes</code>, or <code>amaro</code> on Bun (the same engine Node wraps internally, so the output is byte-identical). The dev server reads each <code>.ts</code> request from disk, strips it, and serves the result. Transform time is around 1ms per file; the result is cached by mtime, so subsequent loads are instant. SSR and hydration produce identical JS because both halves use the same stripper.</p>
@@ -13,7 +13,7 @@ export default function TypeScript() {
     <p>The "no build" promise is literal: every position in source maps to itself in runtime. DevTools shows accurate stack traces without consulting a sourcemap, and wire bytes drop by roughly 70% vs a bundler-with-sourcemap pipeline.</p>
 
     <h2>Use .ts or .js: both are first-class</h2>
-    <p>webjs treats <code>.ts</code>, <code>.mts</code>, <code>.js</code>, and <code>.mjs</code> identically for routing and module resolution. The router recognises <code>page.ts</code> and <code>page.js</code> the same way. The action scanner recognises <code>create-post.server.ts</code> and <code>create-post.server.js</code>. Pick your preference and be consistent, or mix them freely across your project.</p>
+    <p>WebJs treats <code>.ts</code>, <code>.mts</code>, <code>.js</code>, and <code>.mjs</code> identically for routing and module resolution. The router recognises <code>page.ts</code> and <code>page.js</code> the same way. The action scanner recognises <code>create-post.server.ts</code> and <code>create-post.server.js</code>. Pick your preference and be consistent, or mix them freely across your project.</p>
 
     <h2>tsconfig.json Setup</h2>
     <p>TypeScript type-checking is entirely optional, but recommended. Here is the recommended <code>tsconfig.json</code>:</p>
@@ -99,7 +99,7 @@ if (result.success) {
   // result.data is typed as PostFormatted
   console.log(result.data.slug);
 }</pre>
-    <p>At runtime, the browser never receives the server code. webjs replaces the import with a thin RPC stub that calls <code>POST /__webjs/action/:hash/createPost</code>. But TypeScript's type checker sees through the <code>.server.ts</code> boundary and validates argument/return types at compile time.</p>
+    <p>At runtime, the browser never receives the server code. WebJs replaces the import with a thin RPC stub that calls <code>POST /__webjs/action/:hash/createPost</code>. But TypeScript's type checker sees through the <code>.server.ts</code> boundary and validates argument/return types at compile time.</p>
 
     <h2>Typed metadata and page props</h2>
     <p>The same isomorphic <code>@webjsdev/core</code> surface a page already imports <code>html</code> from also exports the types for its routing files, so metadata, page / layout / route-handler props, and client-router hrefs all type-check. Every one is a pure type (zero runtime, erased at strip time, no build cost).</p>
@@ -152,7 +152,7 @@ export async function GET(req: Request, ctx: RouteHandlerContext) {
     <p><code>webjs dev</code> also emits it automatically at startup and re-emits after each route rebuild, so an editor always has fresh route types. The file is gitignored (regenerated per machine, like Next's <code>.next/types</code>); the scaffold <code>tsconfig.json</code> lists <code>.webjs/routes.d.ts</code> in <code>include</code> so tsserver picks it up. To opt in for an existing app, run <code>webjs types</code> once and ensure your <code>tsconfig.json</code> <code>include</code> lists <code>.webjs/routes.d.ts</code>. This is webjs's no-build equivalent of Next 15's <code>typedRoutes</code>, achieved via interface declaration-merging rather than a bundler. Output is deterministic (sorted keys), so re-running yields a byte-identical file.</p>
 
     <h2>Rich Types Across the Wire</h2>
-    <p>Standard JSON cannot represent <code>Date</code>, <code>Map</code>, <code>Set</code>, <code>BigInt</code>, <code>undefined</code>, <code>NaN</code>, <code>Infinity</code>, <code>TypedArray</code>, <code>Blob</code>, <code>File</code>, or <code>FormData</code>. webjs ships its own pure-ESM serializer (in <code>@webjsdev/core</code>) used for all server action RPC calls and for the <code>json()</code> / <code>richFetch()</code> helpers, so rich types survive the network round-trip, including binary content (file uploads through actions just work).</p>
+    <p>Standard JSON cannot represent <code>Date</code>, <code>Map</code>, <code>Set</code>, <code>BigInt</code>, <code>undefined</code>, <code>NaN</code>, <code>Infinity</code>, <code>TypedArray</code>, <code>Blob</code>, <code>File</code>, or <code>FormData</code>. WebJs ships its own pure-ESM serializer (in <code>@webjsdev/core</code>) used for all server action RPC calls and for the <code>json()</code> / <code>richFetch()</code> helpers, so rich types survive the network round-trip, including binary content (file uploads through actions just work).</p>
     <pre>// Server action
 export async function getEvents(): Promise&lt;Event[]&gt; {
   return db.query.events.findMany(); // createdAt is a Date
@@ -213,7 +213,7 @@ export function formatDate(post) {
     <p>JSDoc-typed <code>.js</code> files and <code>.ts</code> files can import each other freely. The type checker treats them as part of the same project.</p>
 
     <h2>TypeScript Feature Support: Erasable Only</h2>
-    <p>webjs uses Node 24+'s built-in <code>module.stripTypeScriptTypes</code> as its primary stripper. That stripper only supports <strong>erasable TypeScript</strong>: type annotations, <code>interface</code>, <code>type</code>, <code>declare</code>, generics, <code>import type</code>, <code>as</code> casts, <code>satisfies</code>. Non-erasable syntax is rejected at compile time (via <code>erasableSyntaxOnly: true</code>) and at runtime.</p>
+    <p>WebJs uses Node 24+'s built-in <code>module.stripTypeScriptTypes</code> as its primary stripper. That stripper only supports <strong>erasable TypeScript</strong>: type annotations, <code>interface</code>, <code>type</code>, <code>declare</code>, generics, <code>import type</code>, <code>as</code> casts, <code>satisfies</code>. Non-erasable syntax is rejected at compile time (via <code>erasableSyntaxOnly: true</code>) and at runtime.</p>
     <p>What's not allowed, and what to write instead:</p>
     <ul>
       <li><strong>Enums</strong> are not allowed. Use a <code>const</code> object plus a derived union type.</li>
@@ -241,7 +241,7 @@ class User {
 
 const Util = { VERSION: '1.0' };</pre>
     <p>This constraint exists because Node's stripper performs whitespace replacement, not AST regeneration. <code>enum</code> requires emitting a real runtime object, which would change line numbers and require shipping a sourcemap. Banning it preserves the byte-exact position property.</p>
-    <p>webjs is buildless end-to-end: there is no bundler fallback for non-erasable syntax. If a <code>.ts</code> file uses <code>enum</code>, <code>namespace</code> with values, parameter properties, legacy decorators with <code>emitDecoratorMetadata</code>, or <code>import = require</code>, Node's stripper throws and the dev server returns a 500 naming the file and pointing at the <code>no-non-erasable-typescript</code> lint rule. The companion <code>erasable-typescript-only</code> rule additionally warns when <code>erasableSyntaxOnly</code> is missing or off in <code>tsconfig.json</code>, so the compiler catches the same constructs at edit time. The realistic edge case (a third-party package shipping raw non-erasable <code>.ts</code>) is rare in practice: published packages compile to <code>.js</code> with sidecar <code>.d.ts</code> files, which the runtime serves as plain JavaScript with no transform.</p>
+    <p>WebJs is buildless end-to-end: there is no bundler fallback for non-erasable syntax. If a <code>.ts</code> file uses <code>enum</code>, <code>namespace</code> with values, parameter properties, legacy decorators with <code>emitDecoratorMetadata</code>, or <code>import = require</code>, Node's stripper throws and the dev server returns a 500 naming the file and pointing at the <code>no-non-erasable-typescript</code> lint rule. The companion <code>erasable-typescript-only</code> rule additionally warns when <code>erasableSyntaxOnly</code> is missing or off in <code>tsconfig.json</code>, so the compiler catches the same constructs at edit time. The realistic edge case (a third-party package shipping raw non-erasable <code>.ts</code>) is rare in practice: published packages compile to <code>.js</code> with sidecar <code>.d.ts</code> files, which the runtime serves as plain JavaScript with no transform.</p>
 
     <h2>Mixed Codebases</h2>
     <p><code>.js</code> and <code>.ts</code> files can coexist in the same webjs project and import each other without restriction:</p>
@@ -273,7 +273,7 @@ import '../components/footer.js';</pre>
     <p>The router, action scanner, dev server, and production bundler all accept <code>.ts</code>, <code>.mts</code>, <code>.js</code>, and <code>.mjs</code> interchangeably. Type-check the whole project with a single <code>tsc --noEmit</code>.</p>
 
     <h2>Running Type Checks</h2>
-    <p>webjs does not type-check at runtime or during dev serving. Add a type-check command to your workflow:</p>
+    <p>WebJs does not type-check at runtime or during dev serving. Add a type-check command to your workflow:</p>
     <pre>{
   "scripts": {
     "dev": "webjs dev",

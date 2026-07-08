@@ -200,7 +200,7 @@ export default function DocsLayout({ children }: { children: unknown }) {
     <header class="hidden max-[860px]:flex fixed inset-x-0 top-0 z-[25] items-center gap-4 px-4 py-3 border-b border-border bg-[color-mix(in_oklch,var(--bg)_85%,transparent)] backdrop-blur-[18px] backdrop-saturate-[180%]">
       <a href="/" class="mr-auto inline-flex items-center gap-2 no-underline text-fg font-semibold text-[15px] leading-none tracking-tight">
         <span class="inline-block w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-[var(--logo-from)] to-[var(--logo-to)] shadow-[0_2px_10px_var(--accent-tint)]"></span>
-        <span>webjs docs</span>
+        <span>WebJs docs</span>
       </a>
       <button
         class="inline-flex items-center justify-center w-9 h-9 p-0 border border-border rounded-full bg-bg-elev text-fg-muted cursor-pointer transition-all duration-150 hover:text-fg hover:border-border-strong"

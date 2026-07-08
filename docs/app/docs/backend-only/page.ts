@@ -5,7 +5,7 @@ export const metadata = { title: 'Backend-Only Mode | webjs' };
 export default function BackendOnly() {
   return html`
     <h1>Backend-Only Mode</h1>
-    <p>webjs works as a pure API framework with no pages, no SSR, and no web components. If you only need file-based routing, middleware, TypeScript, and a fast HTTP server, you can use webjs without writing a single page or component. Everything in the framework is designed around standard <code>Request</code>/<code>Response</code> objects, so the server-side features work independently of the rendering layer.</p>
+    <p>WebJs works as a pure API framework with no pages, no SSR, and no web components. If you only need file-based routing, middleware, TypeScript, and a fast HTTP server, you can use webjs without writing a single page or component. Everything in the framework is designed around standard <code>Request</code>/<code>Response</code> objects, so the server-side features work independently of the rendering layer.</p>
 
     <h2>When to Choose Backend-Only</h2>
     <p>Use backend-only mode when:</p>
@@ -45,7 +45,7 @@ export default function BackendOnly() {
   middleware.ts             # root middleware (logging, timing)
   package.json
   tsconfig.json</pre>
-    <p>There is no <code>page.ts</code>, no <code>layout.ts</code>, no <code>components/</code> directory. webjs detects what files exist and only activates the features you use.</p>
+    <p>There is no <code>page.ts</code>, no <code>layout.ts</code>, no <code>components/</code> directory. WebJs detects what files exist and only activates the features you use.</p>
 
     <h2>File-Based API Routing</h2>
     <p>A <code>route.ts</code> file anywhere under <code>app/</code> becomes an API endpoint. Export functions named after HTTP methods:</p>
@@ -274,8 +274,8 @@ fastify.listen({ port: 8080 });</pre>
     </ul>
     <p>What webjs does not give you:</p>
     <ul>
-      <li><strong>Massive middleware ecosystem</strong>: Express has thousands of middleware packages (passport, multer, helmet, etc.). webjs has a handful of built-in utilities. You can still use any standard library that works with <code>Request</code>/<code>Response</code>.</li>
-      <li><strong>Years of battle-testing</strong>: Express and Fastify have been production-proven at enormous scale. webjs is new.</li>
+      <li><strong>Massive middleware ecosystem</strong>: Express has thousands of middleware packages (passport, multer, helmet, etc.). WebJs has a handful of built-in utilities. You can still use any standard library that works with <code>Request</code>/<code>Response</code>.</li>
+      <li><strong>Years of battle-testing</strong>: Express and Fastify have been production-proven at enormous scale. WebJs is new.</li>
       <li><strong>Plugin system</strong>: Fastify's plugin architecture for encapsulated contexts does not have a webjs equivalent. The middleware chain and file conventions are the extension points.</li>
       <li><strong>Advanced schema validation</strong>: Fastify has built-in JSON Schema validation with Ajv. In webjs, use the <code>validate</code> config export (or the <code>route()</code> adapter's <code>validate</code> option) with zod, valibot, or any library.</li>
     </ul>

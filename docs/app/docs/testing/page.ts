@@ -5,7 +5,7 @@ export const metadata = { title: 'Testing | webjs' };
 export default function Testing() {
   return html`
     <h1>Testing</h1>
-    <p>webjs uses Node's built-in <code>node:test</code> runner, so no external test framework is needed. The framework itself ships with 70+ tests covering the server renderer, router, actions, CSRF, client diffing, and more.</p>
+    <p>WebJs uses Node's built-in <code>node:test</code> runner, so no external test framework is needed. The framework itself ships with 70+ tests covering the server renderer, router, actions, CSRF, client diffing, and more.</p>
 
     <h2>Running Tests</h2>
     <pre># from the webjs monorepo root

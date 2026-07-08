@@ -12,7 +12,7 @@ export default function Security() {
     <p>This page consolidates webjs's threat model and hardening surface into one reference. The per-feature pages go deeper; this page is the map of what protects you, what is on by default, and what you must turn on before going live. Pair it with the <a href="/docs/deployment">Deployment</a> checklist for the go-live overlap.</p>
 
     <h2>Automatic vs opt-in at a glance</h2>
-    <p>webjs ships a secure baseline that needs no configuration, plus a set of protections you opt into when your app needs them.</p>
+    <p>WebJs ships a secure baseline that needs no configuration, plus a set of protections you opt into when your app needs them.</p>
     <p><strong>Automatic (on by default, no config):</strong></p>
     <ul>
       <li>Secure response headers (<code>X-Content-Type-Options</code>, <code>X-Frame-Options</code>, <code>Referrer-Policy</code>, <code>Permissions-Policy</code>).</li>

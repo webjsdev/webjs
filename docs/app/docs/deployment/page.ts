@@ -5,10 +5,10 @@ export const metadata = { title: 'Deployment | webjs' };
 export default function Deployment() {
   return html`
     <h1>Deployment</h1>
-    <p>webjs runs as a standard server on <strong>Node 24+ or Bun</strong>. There is no static export, no serverless adapter, and no edge runtime yet. Deploy it anywhere you can run Node or Bun: a VPS, a container, a PaaS like Fly.io or Railway, or behind a reverse proxy on bare metal. On Node the minimum is set by the built-in TypeScript type-stripping; on Bun the stripping comes from <code>amaro</code> automatically, so the same source runs on either.</p>
+    <p>WebJs runs as a standard server on <strong>Node 24+ or Bun</strong>. There is no static export, no serverless adapter, and no edge runtime yet. Deploy it anywhere you can run Node or Bun: a VPS, a container, a PaaS like Fly.io or Railway, or behind a reverse proxy on bare metal. On Node the minimum is set by the built-in TypeScript type-stripping; on Bun the stripping comes from <code>amaro</code> automatically, so the same source runs on either.</p>
 
     <h2>Dev vs Prod</h2>
-    <p>webjs has two modes, controlled by the npm script (which wraps the underlying <code>webjs dev</code> / <code>webjs start</code> CLI):</p>
+    <p>WebJs has two modes, controlled by the npm script (which wraps the underlying <code>webjs dev</code> / <code>webjs start</code> CLI):</p>
     <pre># Development: live reload, no compression, no caching, verbose errors
 npm run dev -- --port 8080
 
@@ -52,7 +52,7 @@ npm run start -- --port 8080</pre>
     <p>Pick the mode that matches your security posture. The choice is per-deploy, not per-package: either everything goes through jspm.io or everything is locally vendored. Mixing modes per-package is not supported.</p>
 
     <h3>Secure response headers</h3>
-    <p>webjs sets a baseline of standard security headers on every response, so a deployed app is not clickjackable or MIME-sniffable without any reverse-proxy configuration. The defaults are literal HTTP headers:</p>
+    <p>WebJs sets a baseline of standard security headers on every response, so a deployed app is not clickjackable or MIME-sniffable without any reverse-proxy configuration. The defaults are literal HTTP headers:</p>
     <ul>
       <li><code>X-Content-Type-Options: nosniff</code></li>
       <li><code>X-Frame-Options: SAMEORIGIN</code></li>
@@ -60,7 +60,7 @@ npm run start -- --port 8080</pre>
       <li><code>Permissions-Policy: camera=(), microphone=(), geolocation=()</code></li>
       <li><code>Strict-Transport-Security: max-age=63072000; includeSubDomains</code> in production over HTTPS only</li>
     </ul>
-    <p>HSTS is gated to production AND HTTPS. webjs detects the original scheme from <code>X-Forwarded-Proto</code> (the header the trusted edge proxy forwards after terminating TLS), honoring the same proxy-trust posture as the rest of the framework, so HSTS is never set on a plain-HTTP hop or in dev. Set <code>WEBJS_NO_TRUST_PROXY=1</code> to stop trusting forwarded headers when the container is directly exposed.</p>
+    <p>HSTS is gated to production AND HTTPS. WebJs detects the original scheme from <code>X-Forwarded-Proto</code> (the header the trusted edge proxy forwards after terminating TLS), honoring the same proxy-trust posture as the rest of the framework, so HSTS is never set on a plain-HTTP hop or in dev. Set <code>WEBJS_NO_TRUST_PROXY=1</code> to stop trusting forwarded headers when the container is directly exposed.</p>
     <p>A default is set only when the response does not already carry that header, so anything your middleware, a <code>route.&#123;js,ts&#125;</code> handler, or <code>expose</code> sets always wins.</p>
     <h4>Per-path overrides</h4>
     <p>Declare per-path header rules in <code>package.json</code> under <code>"webjs": &#123; "headers": [...] &#125;</code>, shaped like Next's. The <code>source</code> is a path pattern matched with the native URLPattern API, so <code>:param</code> and <code>:rest*</code> tokens work:</p>
@@ -75,7 +75,7 @@ npm run start -- --port 8080</pre>
     <p>A rule can ADD a header, OVERRIDE a default by giving a new value, or DISABLE a default on a path with a <code>null</code> value (the first example drops <code>X-Frame-Options</code> so a public-embed route can be framed). Precedence, lowest to highest, runs secure defaults, then the <code>webjs.headers</code> path config, then app middleware (which always wins, since its headers are already on the response when webjs merges).</p>
 
     <h4>Content-Security-Policy (nonce, opt-in)</h4>
-    <p>webjs can mint a fresh per-request CSP nonce and emit a matching <code>Content-Security-Policy</code> response header. It is OFF by default (a strict policy would break an app with third-party inline scripts/styles, so you opt in). Enable it with a <code>webjs.csp</code> key in <code>package.json</code>:</p>
+    <p>WebJs can mint a fresh per-request CSP nonce and emit a matching <code>Content-Security-Policy</code> response header. It is OFF by default (a strict policy would break an app with third-party inline scripts/styles, so you opt in). Enable it with a <code>webjs.csp</code> key in <code>package.json</code>:</p>
     <pre>&#123;
   "webjs": &#123; "csp": true &#125;
 &#125;</pre>
@@ -106,7 +106,7 @@ npm run start -- --port 8080</pre>
     <p>Unhandled promise rejections are logged but do not crash the process. Uncaught exceptions trigger an orderly shutdown (state may be corrupted, so continuing is unsafe).</p>
 
     <h3>Health and readiness probes</h3>
-    <p>webjs answers two built-in probe endpoints, and the distinction matters under runtime-first boot:</p>
+    <p>WebJs answers two built-in probe endpoints, and the distinction matters under runtime-first boot:</p>
     <pre>GET /__webjs/health    # liveness:  always 200 once the process is listening
 GET /__webjs/ready     # readiness: 503 until the instance is fully warm, then 200</pre>
     <p><code>/__webjs/health</code> is <strong>liveness</strong>. It returns <code>200 { "status": "ok" }</code> as soon as the process is accepting connections, so an orchestrator can tell the process is alive. It never waits on the analysis.</p>
@@ -136,7 +136,7 @@ export default async function ready() {
 }</pre>
 
     <h2>HTTP/2: at the edge, not in webjs</h2>
-    <p>webjs delegates TLS termination and HTTP/2 negotiation to whatever sits in front of <code>npm run start</code>. The framework's HTTP server speaks plain HTTP/1.1. ALPN, certificates, and h2 framing are entirely the proxy's concern. Two reasons:</p>
+    <p>WebJs delegates TLS termination and HTTP/2 negotiation to whatever sits in front of <code>npm run start</code>. The framework's HTTP server speaks plain HTTP/1.1. ALPN, certificates, and h2 framing are entirely the proxy's concern. Two reasons:</p>
     <ul>
       <li><strong>PaaS already gives you HTTP/2.</strong> Railway, Fly, Render, Vercel, Cloudflare Pages, and Heroku all terminate TLS + HTTP/2 at their edge and proxy plain HTTP/1.1 to your container. Zero framework configuration: you get HTTP/2 to the browser the moment you deploy.</li>
       <li><strong>For bare-VM, reverse proxies do it better.</strong> nginx, Caddy, and Traefik are battle-tested for TLS termination. They handle cert renewal (ACME), OCSP, ALPN, HTTP/3, and h2-to-h1 downgrade more capably than Node's <code>http2</code> module.</li>
@@ -145,7 +145,7 @@ export default async function ready() {
     <p><strong>Forwarding 103 Early Hints.</strong> webjs sends a <code>103 Early Hints</code> response carrying <code>Link: rel=modulepreload</code> headers before SSR begins, so the browser can start fetching JS while the server renders. Most major edges (Cloudflare, fly-proxy, Fastly) forward 103 responses to the client transparently. If yours doesn't, the page still works (the headers are just lost) but you skip the head-start. Early Hints are disabled in dev because file churn could send stale URLs.</p>
 
     <h2>Pluggable Logger</h2>
-    <p>webjs includes a minimal logger that writes structured JSON in production and human-readable lines in development:</p>
+    <p>WebJs includes a minimal logger that writes structured JSON in production and human-readable lines in development:</p>
     <pre># Dev output:
 [webjs] webjs dev server ready on http://localhost:8080
 
@@ -168,7 +168,7 @@ const app = await createRequestHandler({
 });</pre>
 
     <h2>Observability: access log, request id, error hook, build-info</h2>
-    <p>Day-2 ops needs more than liveness probes. webjs ships four standards-native observability surfaces, all wired at the single response funnel so they apply uniformly across pages, route handlers, server actions, and assets.</p>
+    <p>Day-2 ops needs more than liveness probes. WebJs ships four standards-native observability surfaces, all wired at the single response funnel so they apply uniformly across pages, route handlers, server actions, and assets.</p>
 
     <h3>Per-request access log</h3>
     <p>Every handled request emits ONE structured <code>info</code> line through the pluggable logger after the response is produced, carrying <code>method</code>, <code>path</code>, <code>status</code>, <code>durationMs</code>, and <code>requestId</code>. It never logs request bodies or secrets. In prod the default logger writes it as one JSON object per line; in dev it is a readable line.</p>
@@ -267,7 +267,7 @@ const app = await createRequestHandler({ appDir: Deno.cwd(), dev: false });
 Deno.serve({ port: 8080 }, (req) =&gt; app.handle(req));</pre>
 
     <h2>Environment Variables</h2>
-    <p>webjs reads the following environment variables:</p>
+    <p>WebJs reads the following environment variables:</p>
     <ul>
       <li><strong>PORT</strong>: server port (default: 8080). Resolved with precedence <code>--port</code> &gt; <code>PORT</code> (a real exported env var <em>or</em> a <code>PORT</code> in the app's <code>.env</code>) &gt; <code>8080</code>. A real exported <code>PORT</code> wins over the <code>.env</code> value, matching the auto-load's shell-wins-over-file rule.</li>
       <li><strong>NODE_ENV</strong>: not directly used by webjs (it uses the <code>dev</code> flag from the CLI command), but your app code and dependencies may read it.</li>
@@ -277,10 +277,10 @@ Deno.serve({ port: 8080 }, (req) =&gt; app.handle(req));</pre>
 DATABASE_URL="postgresql://user:pass@localhost:5432/mydb"
 SESSION_SECRET="change-me"
 API_KEY="sk-..."</pre>
-    <p>webjs auto-loads <code>&lt;appDir&gt;/.env</code> into <code>process.env</code> on boot via Node 24+'s built-in <code>process.loadEnvFile</code>. No <code>dotenv</code> dependency. Shell-exported values take precedence over the file, so production platforms (Railway, Fly, Render, Docker, systemd) keep injecting secrets the same way they already do. See <a href="/docs/configuration">Configuration</a> for the full precedence rules.</p>
+    <p>WebJs auto-loads <code>&lt;appDir&gt;/.env</code> into <code>process.env</code> on boot via Node 24+'s built-in <code>process.loadEnvFile</code>. No <code>dotenv</code> dependency. Shell-exported values take precedence over the file, so production platforms (Railway, Fly, Render, Docker, systemd) keep injecting secrets the same way they already do. See <a href="/docs/configuration">Configuration</a> for the full precedence rules.</p>
 
     <h2>Secrets: platform injection, not a committed file</h2>
-    <p>webjs deliberately stays out of secret management. There is no encrypted credentials file and no bespoke crypto subsystem. Secrets are plain environment variables, the 12-factor way, and the safe production posture is the standard one your platform already supports.</p>
+    <p>WebJs deliberately stays out of secret management. There is no encrypted credentials file and no bespoke crypto subsystem. Secrets are plain environment variables, the 12-factor way, and the safe production posture is the standard one your platform already supports.</p>
     <div role="note" style="border-left:4px solid var(--accent,#3b82f6);padding:1rem 1.25rem;background:var(--bg-elev);border-radius:.25rem;margin:1.25rem 0">
       <p style="margin:0 0 .5rem;font-weight:600">Never commit <code>.env</code></p>
       <p style="margin:0">The scaffold gitignores <code>.env</code> for you. Keep it that way. A committed <code>.env</code> leaks every secret to anyone with repo access and into your git history forever. Commit <code>.env.example</code> (keys with placeholder values) instead, so a new contributor knows what to set without seeing real values.</p>
@@ -337,16 +337,16 @@ HEALTHCHECK CMD curl -f http://localhost:8080/__webjs/health || exit 1
 CMD ["npx", "webjs", "start"]</pre>
     <p>Tips:</p>
     <ul>
-      <li><code>node:slim</code> works fine. webjs strips TypeScript via the runtime's stripper (Node's built-in <code>module.stripTypeScriptTypes</code>, or <code>amaro</code> on a Bun image), so no extra system packages are needed.</li>
+      <li><code>node:slim</code> works fine. WebJs strips TypeScript via the runtime's stripper (Node's built-in <code>module.stripTypeScriptTypes</code>, or <code>amaro</code> on a Bun image), so no extra system packages are needed.</li>
       <li><strong>Serve on Bun (the scaffold's <code>--runtime bun</code> Dockerfile).</strong> <code>webjs create my-app --runtime bun</code> (or <code>bun create webjs my-app</code>) generates a pure <code>oven/bun:1</code> Dockerfile (no Node): <code>bun install</code> and <code>CMD ["bun", "--bun", "run", "start"]</code>. This works because <code>webjs db</code> / <code>webjs test</code> resolve their tools (drizzle-kit, wtr) and run them under the current runtime instead of <code>npx</code> (#570), so the boot-time <code>webjs db migrate</code> runs under Bun with no Node toolchain. SQLite uses the built-in <code>bun:sqlite</code> (no native module), so no build toolchain or <code>trustedDependencies</code> is needed. If you prefer a Node base instead, copy the Bun binary into a Node image with <code>COPY --from=oven/bun:1-alpine /usr/local/bin/bun /usr/local/bin/bun</code> and start with <code>bun node_modules/@webjsdev/cli/bin/webjs.js start</code> (<code>startServer</code> selects the <code>Bun.serve</code> shell either way). Note: a direct <code>bun webjs.js start</code> bypasses npm lifecycle hooks, so any per-app asset a <code>prestart</code> hook generates (Tailwind css, generated component sources) must be baked at BUILD time in the image; only runtime-dependent steps (a DB <code>webjs db migrate</code>) belong in the start command. One trade-off: <code>Bun.serve</code> has no informational-response API, so the 103 Early Hints modulepreload head-start (covered above) is node-only. The preload hints still ship in the document head, so this costs a small first-load latency edge only where your edge forwards 103, not correctness.</li>
-      <li><code>npm ci --omit=dev</code> skips dev dependencies. <code>@webjsdev/server</code> is a runtime dependency. webjs is buildless end-to-end: there is no bundler or transpiler at deploy time.</li>
+      <li><code>npm ci --omit=dev</code> skips dev dependencies. <code>@webjsdev/server</code> is a runtime dependency. WebJs is buildless end-to-end: there is no bundler or transpiler at deploy time.</li>
       <li>Set <code>HEALTHCHECK</code> to the built-in health endpoint for container orchestrators.</li>
       <li>Drizzle has no client codegen step, so nothing to run at build time. Apply migrations at start instead. The scaffold puts <code>webjs db migrate</code> under <code>webjs.start.before</code>, which runs before the server serves (a read-only prod container still applies pending migrations against its writable database).</li>
       <li>Layer-cache deps separately: copy <code>package.json</code> + <code>package-lock.json</code> and <code>npm ci</code> before copying the rest of the source, so application edits don't bust the deps layer.</li>
     </ul>
 
     <h2>Reverse Proxy (nginx / Caddy), recommended for HTTP/2</h2>
-    <p>For production deployments, a reverse proxy handles TLS termination, HTTP/2, static asset caching, and load balancing. webjs runs as an HTTP/1.1 upstream, and the proxy speaks HTTP/2 to clients.</p>
+    <p>For production deployments, a reverse proxy handles TLS termination, HTTP/2, static asset caching, and load balancing. WebJs runs as an HTTP/1.1 upstream, and the proxy speaks HTTP/2 to clients.</p>
 
     <h3>nginx</h3>
     <pre>upstream webjs {

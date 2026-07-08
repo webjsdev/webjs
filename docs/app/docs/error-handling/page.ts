@@ -5,7 +5,7 @@ export const metadata = { title: 'Error Handling | webjs' };
 export default function ErrorHandling() {
   return html`
     <h1>Error Handling</h1>
-    <p>webjs provides nested error boundaries via <code>error.js</code>/<code>error.ts</code> files, plus component-level error handling via <code>renderError()</code>. Errors are caught at the nearest boundary and rendered without crashing the entire page.</p>
+    <p>WebJs provides nested error boundaries via <code>error.js</code>/<code>error.ts</code> files, plus component-level error handling via <code>renderError()</code>. Errors are caught at the nearest boundary and rendered without crashing the entire page.</p>
 
     <h2>When to use</h2>
     <ul>

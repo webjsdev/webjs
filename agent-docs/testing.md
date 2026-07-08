@@ -149,7 +149,7 @@ each app's OWN `webjs test` script, not the root runner.
 
 ### The Bun test matrix (#509)
 
-webjs runs on Node 24+ or Bun (#508). The **Node suite (`npm test`) is the
+WebJs runs on Node 24+ or Bun (#508). The **Node suite (`npm test`) is the
 source of truth**; a separate, additive **Bun matrix** re-runs the
 runtime-sensitive suite under Bun to catch the long tail of cross-runtime
 incompatibilities (a `node:*` API Bun implements differently, a crypto/stream

@@ -5,7 +5,7 @@ export const metadata = { title: 'File Storage | webjs' };
 export default function FileStorage() {
   return html`
     <h1>File Storage</h1>
-    <p>webjs ships a pluggable file-storage primitive for uploaded <code>File</code> / <code>Blob</code> payloads. It mirrors the cache and session adapters: a documented <code>FileStore</code> interface, a default on-disk adapter (<code>diskStore</code>), and a module singleton (<code>getFileStore</code> / <code>setFileStore</code>) so an app swaps the backend in one call without touching any call site. The default lands bytes on local disk, and the same shape is S3-pluggable for production.</p>
+    <p>WebJs ships a pluggable file-storage primitive for uploaded <code>File</code> / <code>Blob</code> payloads. It mirrors the cache and session adapters: a documented <code>FileStore</code> interface, a default on-disk adapter (<code>diskStore</code>), and a module singleton (<code>getFileStore</code> / <code>setFileStore</code>) so an app swaps the backend in one call without touching any call site. The default lands bytes on local disk, and the same shape is S3-pluggable for production.</p>
 
     <pre>import { getFileStore, setFileStore, diskStore, generateKey, signedUrl, verifySignedUrl } from '@webjsdev/server';</pre>
 
@@ -146,7 +146,7 @@ const href = signedUrl(user.avatarKey, { secret: process.env.AUTH_SECRET!, expir
     <p>A native <code>File</code>, <code>Blob</code>, or <code>FormData</code> passes through the server-action wire intact, so the same <code>saveAvatar(file)</code> call works whether it runs during SSR (the real function) or from a client component (an RPC stub). You never hand-write a multipart <code>fetch</code>. See <a href="/docs/server-actions">Server Actions</a> for the full list of rich types the wire round-trips.</p>
 
     <h2>S3-pluggability</h2>
-    <p>The interface operates on web-standard objects only, so an S3 / R2 / GCS / MinIO adapter is a drop-in. It implements the same <code>put</code> (PutObject, streaming the body), <code>get</code> (GetObject, returning the SDK's response stream as <code>body</code>), <code>delete</code> (DeleteObject), and <code>url</code> (the object / CDN URL). Because the shape is identical, <code>setFileStore(s3Store({ ... }))</code> switches the whole app with no call-site change. webjs ships no S3 SDK (no new dependency), so the adapter is a thin wrapper an app provides.</p>
+    <p>The interface operates on web-standard objects only, so an S3 / R2 / GCS / MinIO adapter is a drop-in. It implements the same <code>put</code> (PutObject, streaming the body), <code>get</code> (GetObject, returning the SDK's response stream as <code>body</code>), <code>delete</code> (DeleteObject), and <code>url</code> (the object / CDN URL). Because the shape is identical, <code>setFileStore(s3Store({ ... }))</code> switches the whole app with no call-site change. WebJs ships no S3 SDK (no new dependency), so the adapter is a thin wrapper an app provides.</p>
 
     <h2>Next Steps</h2>
     <ul>

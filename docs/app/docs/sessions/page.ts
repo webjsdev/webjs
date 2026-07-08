@@ -5,7 +5,7 @@ export const metadata = { title: 'Sessions | webjs' };
 export default function Sessions() {
   return html`
     <h1>Sessions</h1>
-    <p>webjs provides a <code>Session</code> class with a <code>SessionStorage</code> interface, inspired by Remix. Storage owns the session lifecycle: <code>storage.read(cookie) → Session</code>, <code>storage.save(session) → cookie</code>. Two built-in storage implementations cover most use cases.</p>
+    <p>WebJs provides a <code>Session</code> class with a <code>SessionStorage</code> interface, inspired by Remix. Storage owns the session lifecycle: <code>storage.read(cookie) → Session</code>, <code>storage.save(session) → cookie</code>. Two built-in storage implementations cover most use cases.</p>
 
     <h2>Setup</h2>
     <p>Add session middleware in <code>middleware.ts</code>:</p>

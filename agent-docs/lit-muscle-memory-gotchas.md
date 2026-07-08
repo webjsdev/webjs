@@ -66,7 +66,7 @@ Practical consequences for agents writing webjs code.
 
 ## Use lit idioms, not vanilla DOM (the whole point of lit-style components)
 
-webjs components are lit-shaped on purpose: the value is the declarative
+WebJs components are lit-shaped on purpose: the value is the declarative
 DX (typed reactive props, signals, `html` templates, declarative
 bindings), not raw DOM scripting. Reaching for vanilla web-component
 muscle memory (`this.getAttribute`, `this.setAttribute`, `this.classList`,
@@ -187,7 +187,7 @@ in the page function OR in the component itself with an `async render()`
 ### 2b. Lit has no async render; webjs does (#469)
 
 Lit keeps `render()` synchronous (its async-SSR work signals a promise the
-renderer awaits BEFORE a still-sync render). webjs lets `render()` itself be
+renderer awaits BEFORE a still-sync render). WebJs lets `render()` itself be
 `async`, so you write `const u = await getUser(this.id)` directly in the
 component and SSR bakes the resolved data into the first paint. Three things
 trip up Lit muscle memory:
@@ -478,7 +478,7 @@ the `no-interpolation-in-raw-text-element` check scopes its flag.
 
 ### 13. A GET server action's first client call returns the SSR seed, not a fresh read
 
-webjs seeds each GET-action result rendered during SSR into the page, and the
+WebJs seeds each GET-action result rendered during SSR into the page, and the
 generated RPC stub reads that seed on its FIRST client call instead of hitting
 the network (#472). This kills the redundant on-hydration refetch. The muscle
 memory that bites: reaching for a re-call of the same query to REFRESH after a

@@ -180,7 +180,7 @@ does NOT exist so the agent ships the example homepage.
 ## Sensible defaults
 
 <!-- OVERRIDE -->
-webjs uses sensible defaults. Environment
+WebJs uses sensible defaults. Environment
 variables control infrastructure (no config files needed):
 
 | Environment variable | Effect |
@@ -687,7 +687,7 @@ auth middleware.
 
 <!-- OVERRIDE -->
 
-webjs pages work without JavaScript by design. Read-paths render to
+WebJs pages work without JavaScript by design. Read-paths render to
 real HTML on the server. Write-paths run through plain `<form>` plus
 server actions, and navigation is a real `<a href>`. Every web component
 is SSR'd too. Its `render()` runs on the server, so the component's
@@ -807,7 +807,7 @@ export async function createPost(input: {
     constructor(x: number) { this.x = x; }
   }
   ```
-  If you turn `erasableSyntaxOnly` off and use non-erasable syntax, the dev server fails at strip time and returns a 500 pointing at the `no-non-erasable-typescript` lint rule. webjs is buildless end-to-end and has no bundler fallback. The `erasable-typescript-only` convention check warns when the flag is off.
+  If you turn `erasableSyntaxOnly` off and use non-erasable syntax, the dev server fails at strip time and returns a 500 pointing at the `no-non-erasable-typescript` lint rule. WebJs is buildless end-to-end and has no bundler fallback. The `erasable-typescript-only` convention check warns when the flag is off.
 - No semicolons (or with semicolons, pick one and stay consistent)
 - `const` by default, `let` when needed, never `var`
 - Prefer `async/await` over `.then()` chains

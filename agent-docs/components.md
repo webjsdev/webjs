@@ -189,7 +189,7 @@ Decision: a bare `async render()` for request-time data that should be in the fi
 ## Display-only components are elided from the browser
 
 A component that does no client-side work renders the same SSR'd HTML
-whether or not its JavaScript ever reaches the browser. webjs detects
+whether or not its JavaScript ever reaches the browser. WebJs detects
 these statically and strips their import from the served source, so the
 browser never downloads them (and their unique vendor dependencies drop
 from the importmap). This is automatic, with no opt-in keyword and no
@@ -517,7 +517,7 @@ resolution). See the "Slots" section below.
 
 ## Slots: full shadow-DOM parity in both DOM modes
 
-webjs supports the entire shadow-DOM `<slot>` surface in light DOM. The
+WebJs supports the entire shadow-DOM `<slot>` surface in light DOM. The
 same `render()` template projects children identically whether your
 component declares `static shadow = true` or leaves it at the default
 `false`. Migrating between modes never requires a template rewrite.

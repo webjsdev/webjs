@@ -5,7 +5,7 @@ export const metadata = { title: 'Authentication | webjs' };
 export default function Auth() {
   return html`
     <h1>Authentication</h1>
-    <p>webjs provides NextAuth-style authentication with OAuth providers, credentials login, and JWT sessions. No external auth library needed.</p>
+    <p>WebJs provides NextAuth-style authentication with OAuth providers, credentials login, and JWT sessions. No external auth library needed.</p>
 
     <h2>Setup</h2>
     <pre>// lib/auth.server.ts: create once

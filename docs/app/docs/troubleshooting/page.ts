@@ -38,7 +38,7 @@ export default function Troubleshooting() {
 
     <h2>An error saying <code>static properties</code> is no longer supported</h2>
     <p><strong>Symptom:</strong> a component throws at construction with <code>static properties is no longer supported. Declare reactive properties via the factory instead</code>.</p>
-    <p><strong>Cause:</strong> the class body has a hand-written <code>static properties = { ... }</code> field. webjs declares reactive properties only through the <code>WebComponent({ ... })</code> base-class factory now, and the runtime throws on a direct <code>static properties</code>.</p>
+    <p><strong>Cause:</strong> the class body has a hand-written <code>static properties = { ... }</code> field. WebJs declares reactive properties only through the <code>WebComponent({ ... })</code> base-class factory now, and the runtime throws on a direct <code>static properties</code>.</p>
     <p><strong>Fix:</strong> move the properties into the factory call (<code>class X extends WebComponent({ count: Number })</code>). Use the <code>prop()</code> helper for options (<code>prop(Number, { reflect: true })</code>) and set defaults in the constructor. Delete the <code>static properties</code> block and any matching <code>declare</code> fields. See <a href="/docs/components">Components</a>. The <code>no-static-properties</code> check rule flags this ahead of the runtime throw.</p>
 
     <h2>A component's first paint is empty until JavaScript runs</h2>
@@ -54,7 +54,7 @@ export default function Troubleshooting() {
     <h2>A vendor module 404s after deploying under a sub-path</h2>
     <p><strong>Symptom:</strong> the app works at the origin root but, when mounted under a sub-path (example.com/app/) behind a proxy that does not strip the prefix, the importmap and module URLs 404 and the page never hydrates.</p>
     <p><strong>Cause:</strong> the framework-emitted URLs (importmap targets, the boot module specifiers, the RPC endpoint) default to origin-root paths.</p>
-    <p><strong>Fix:</strong> set <code>"webjs": { "basePath": "/app" }</code> in <code>package.json</code>. webjs strips the prefix at ingress and prefixes every framework-emitted URL, so module resolution works under the mount. See <a href="/docs/configuration">Configuration</a>.</p>
+    <p><strong>Fix:</strong> set <code>"webjs": { "basePath": "/app" }</code> in <code>package.json</code>. WebJs strips the prefix at ingress and prefixes every framework-emitted URL, so module resolution works under the mount. See <a href="/docs/configuration">Configuration</a>.</p>
 
     <h2>A browser <code>import</code> of an app file returns 404</h2>
     <p><strong>Symptom:</strong> a module the browser tries to fetch returns 404 even though the file exists.</p>

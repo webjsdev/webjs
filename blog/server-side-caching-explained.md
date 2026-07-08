@@ -11,7 +11,7 @@ Here is a pattern I see in almost every new app. A page loads a list of posts. E
 
 Caching is the fix. A cache stores a computed or fetched result so you can skip the work next time. The hard part was never storing the value. The hard part is knowing when the stored value is stale and throwing it away at the right moment. That second half is called invalidation, and it is where most caching bugs live.
 
-webjs gives you a few caching layers, each aimed at a different kind of "same work repeated." This post walks through all of them from scratch, in plain language, and is careful about the one safety rule that matters most (never cache one user's data where another user can see it).
+WebJs gives you a few caching layers, each aimed at a different kind of "same work repeated." This post walks through all of them from scratch, in plain language, and is careful about the one safety rule that matters most (never cache one user's data where another user can see it).
 
 # Layer 1: HTTP Cache-Control on responses
 
@@ -34,7 +34,7 @@ export async function GET() {
 
 # Layer 2: cache() for query results, with tags
 
-The HTTP header caches a whole response. Often you want to cache one expensive thing inside the request instead, like a database query. webjs ships a `cache()` helper for that. You wrap an async function, give it a key, and give it a time-to-live in seconds.
+The HTTP header caches a whole response. Often you want to cache one expensive thing inside the request instead, like a database query. WebJs ships a `cache()` helper for that. You wrap an async function, give it a key, and give it a time-to-live in seconds.
 
 ```ts
 // modules/posts/queries/list-posts.server.ts
@@ -95,13 +95,13 @@ Evict it early on a write with `revalidatePath('/blog')` from a server action. T
 
 Read this part twice. `export const revalidate` is you asserting "this page is the same for every visitor for N seconds." The HTML cache is keyed by the full URL only, with no per-user keying. So a page that reads `cookies()`, a session, or any per-user data MUST NOT set `revalidate`. If it does, the first visitor's rendered HTML can be served to the next visitor. A wrongly-cached per-user page is a data leak, plain and simple.
 
-webjs backs this with a framework defense. When your render reads per-user state through a framework helper (`cookies()`, `headers()`, `getSession()`, or `auth()`), the framework auto-marks the request dynamic and refuses to cache it even if you set `revalidate`, warning you once. So a dashboard page that does `const session = await auth()` fails safe. The loud caveat: this only catches reads THROUGH those helpers. If you read an auth cookie raw instead of via `cookies()`, the page can still be cached wrongly. The rule holds regardless. Read per-user state through the helpers, or never set `revalidate` on a per-user page.
+WebJs backs this with a framework defense. When your render reads per-user state through a framework helper (`cookies()`, `headers()`, `getSession()`, or `auth()`), the framework auto-marks the request dynamic and refuses to cache it even if you set `revalidate`, warning you once. So a dashboard page that does `const session = await auth()` fails safe. The loud caveat: this only catches reads THROUGH those helpers. If you read an auth cookie raw instead of via `cookies()`, the page can still be cached wrongly. The rule holds regardless. Read per-user state through the helpers, or never set `revalidate` on a per-user page.
 
 # Layer 4: conditional GET (ETags and 304s)
 
 The layers above avoid recomputing. This last one avoids re-sending bytes the client already has.
 
-An ETag is a short fingerprint of a response, like a version stamp. webjs puts one on every cacheable response. The browser stores it, and on the next request it sends it back in an `If-None-Match` header, effectively asking "do you still have exactly this?" If the fingerprint still matches, the server replies `304 Not Modified` with an empty body, meaning "unchanged, reuse what you have." A tiny 304 instead of the full payload.
+An ETag is a short fingerprint of a response, like a version stamp. WebJs puts one on every cacheable response. The browser stores it, and on the next request it sends it back in an `If-None-Match` header, effectively asking "do you still have exactly this?" If the fingerprint still matches, the server replies `304 Not Modified` with an empty body, meaning "unchanged, reuse what you have." A tiny 304 instead of the full payload.
 
 This is on by default and needs no code. It covers cacheable SSR pages, static assets in `public/`, your app's source modules, and the core and vendor runtime uniformly. The ETag is the hash of the response body, so an identical body always produces an identical ETag.
 

@@ -5,7 +5,7 @@ export const metadata = { title: 'Authentication | webjs' };
 export default function Authentication() {
   return html`
     <h1>Authentication</h1>
-    <p>webjs doesn't ship an auth library. It provides the primitives you need to build session-based authentication cleanly. The blog example demonstrates a complete implementation using scrypt password hashing, session tokens in cookies, and middleware-based route protection.</p>
+    <p>WebJs doesn't ship an auth library. It provides the primitives you need to build session-based authentication cleanly. The blog example demonstrates a complete implementation using scrypt password hashing, session tokens in cookies, and middleware-based route protection.</p>
 
     <h2>Architecture</h2>
     <pre>lib/

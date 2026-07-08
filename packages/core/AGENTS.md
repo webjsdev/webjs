@@ -145,7 +145,7 @@ them per app.
    `static properties` block throws at runtime. See `component.js`, the
    `no-static-properties` rule, and `reactive-props-no-class-field`.
 6. **New interactivity surfaces must update the elision analyser.**
-   webjs elides display-only component modules from the browser by
+   WebJs elides display-only component modules from the browser by
    static analysis (`packages/server/src/component-elision.js`). It is a
    conservative denylist of interactivity signals. When you add a new
    overridable lifecycle hook, reactive primitive, or client-only

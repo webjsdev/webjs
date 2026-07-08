@@ -5,7 +5,7 @@ export const metadata = { title: 'Streaming & Suspense | webjs' };
 export default function SuspensePage() {
   return html`
     <h1>Streaming & Suspense</h1>
-    <p>webjs supports <strong>streaming SSR with Suspense boundaries</strong>. The server flushes the page shell (header, layout, fast content) immediately, then streams deferred content as it resolves. The browser paints above-the-fold content in milliseconds while slow data trickles in.</p>
+    <p>WebJs supports <strong>streaming SSR with Suspense boundaries</strong>. The server flushes the page shell (header, layout, fast content) immediately, then streams deferred content as it resolves. The browser paints above-the-fold content in milliseconds while slow data trickles in.</p>
 
     <h2>How It Works</h2>
     <ol>

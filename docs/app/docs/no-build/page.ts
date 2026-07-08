@@ -5,7 +5,7 @@ export const metadata = { title: 'No-Build Model | webjs' };
 export default function NoBuild() {
   return html`
     <h1>No-Build Model</h1>
-    <p>webjs has no bundler, no <code>webjs build</code> command, no output directory. The <code>.js</code> and <code>.ts</code> files you edit are the files the browser fetches. <code>npm run dev</code> and <code>npm run start</code> run the same source. This page is the canonical reference for how it works in practice and why per-file ESM at production scale is competitive with bundling.</p>
+    <p>WebJs has no bundler, no <code>webjs build</code> command, no output directory. The <code>.js</code> and <code>.ts</code> files you edit are the files the browser fetches. <code>npm run dev</code> and <code>npm run start</code> run the same source. This page is the canonical reference for how it works in practice and why per-file ESM at production scale is competitive with bundling.</p>
 
     <p>Related reading:</p>
     <ul>
@@ -15,7 +15,7 @@ export default function NoBuild() {
     </ul>
 
     <h2>The model</h2>
-    <p>webjs serves source as native ES modules over HTTP. The browser walks the import graph one file at a time, the server transforms each file lazily on first request, and an in-memory cache keyed by mtime makes subsequent requests instant. There is no concatenation, no minification, no chunk graph, no "prepare for production" phase. The Rails 7+ <a href="https://github.com/rails/importmap-rails">importmap-rails</a> + Hotwire pipeline is the closest analogue.</p>
+    <p>WebJs serves source as native ES modules over HTTP. The browser walks the import graph one file at a time, the server transforms each file lazily on first request, and an in-memory cache keyed by mtime makes subsequent requests instant. There is no concatenation, no minification, no chunk graph, no "prepare for production" phase. The Rails 7+ <a href="https://github.com/rails/importmap-rails">importmap-rails</a> + Hotwire pipeline is the closest analogue.</p>
 
     <table>
       <thead>
@@ -42,7 +42,7 @@ export default function NoBuild() {
     </ol>
 
     <h2>The importmap</h2>
-    <p>An <code>&lt;script type="importmap"&gt;</code> is emitted in every SSR response's <code>&lt;head&gt;</code>. It tells the browser how to resolve every bare specifier (anything that isn't a relative <code>./foo</code> or absolute <code>/bar</code>) to a real URL. webjs ships a minimal map and extends it dynamically as your app references new npm packages:</p>
+    <p>An <code>&lt;script type="importmap"&gt;</code> is emitted in every SSR response's <code>&lt;head&gt;</code>. It tells the browser how to resolve every bare specifier (anything that isn't a relative <code>./foo</code> or absolute <code>/bar</code>) to a real URL. WebJs ships a minimal map and extends it dynamically as your app references new npm packages:</p>
     <pre>&lt;script type="importmap"&gt;
 {
   "imports": {
@@ -70,7 +70,7 @@ export default function NoBuild() {
 &lt;link rel="modulepreload" href="/lib/format-date.ts"&gt;</pre>
     <p>This converts a sequential <code>import</code> waterfall into a parallel fetch. The browser fires every request as soon as the HTML head is parsed, well before <code>&lt;script type="module"&gt;</code> at the bottom would have discovered them.</p>
     <h3>npm vendor dependencies are preloaded too</h3>
-    <p>The same hinting extends to the npm packages your shipped modules import. webjs emits a <code>&lt;link rel="modulepreload"&gt;</code> for each reached vendor URL (carrying its SRI <code>integrity</code> and <code>crossorigin</code>), byte-identical to the importmap target so the browser never double-fetches:</p>
+    <p>The same hinting extends to the npm packages your shipped modules import. WebJs emits a <code>&lt;link rel="modulepreload"&gt;</code> for each reached vendor URL (carrying its SRI <code>integrity</code> and <code>crossorigin</code>), byte-identical to the importmap target so the browser never double-fetches:</p>
     <pre>&lt;link rel="modulepreload" href="https://ga.jspm.io/npm:dayjs@1/dayjs.min.js" crossorigin integrity="sha384-…"&gt;</pre>
     <p>Only <strong>reached</strong> vendors are hinted: a package imported solely by a display-only (elided) component, or pinned but never imported, is left out, so this never over-fetches.</p>
     <p><strong>The honest caveat vs a bundle.</strong> This flattens the <em>first</em> level of the vendor graph (the packages your code imports directly). A vendor's own transitive dependencies are still discovered by parsing each fetched CDN module in turn, level by level, over the cross-origin connection, which is exactly the waterfall a bundler eliminates. So the complementary practice is <strong>shallow-dependency discipline</strong>: prefer few, shallow ESM dependencies. A library with a flat or one-level graph fully benefits; a deep tree still waterfalls past the first level.</p>
@@ -97,7 +97,7 @@ Content-Type: text/html
     <p>The browser starts fetching JS modules while the server is still rendering HTML. By the time the document parser reaches the import statements, those files are already in cache. Most major edges (Cloudflare, fly-proxy, Fastly) forward 103 responses to the client. Early Hints are disabled in dev because file churn could send stale URLs before a rebuild.</p>
 
     <h2>Bare specifiers (npm packages)</h2>
-    <p>The browser can't resolve <code>import dayjs from 'dayjs'</code> on its own. webjs follows the Rails 7 + <code>importmap-rails</code> posture: bare specifiers resolve through an importmap to <strong>jspm.io</strong> CDN URLs, and the browser fetches the bundle directly from jspm.io. The webjs server doesn't bundle, cache, or proxy vendor packages.</p>
+    <p>The browser can't resolve <code>import dayjs from 'dayjs'</code> on its own. WebJs follows the Rails 7 + <code>importmap-rails</code> posture: bare specifiers resolve through an importmap to <strong>jspm.io</strong> CDN URLs, and the browser fetches the bundle directly from jspm.io. The webjs server doesn't bundle, cache, or proxy vendor packages.</p>
     <ol>
       <li>Scan every <code>.js</code> / <code>.ts</code> file under the app for bare import specifiers (skipping <code>node_modules</code>, <code>.server.{js,ts}</code> files, <code>route.{js,ts}</code> / <code>middleware.{js,ts}</code>, <code>test/</code>, <code>'use server'</code> modules, type-only imports, and imports inside comments).</li>
       <li>For each discovered package, resolve the installed version from <code>node_modules/&lt;pkg&gt;/package.json</code>.</li>
@@ -146,7 +146,7 @@ $ webjs vendor update</pre>
     <p>One narrow exception: <code>@webjsdev/core</code> ships pre-built <code>dist/</code> bundles alongside its <code>src/</code> in the npm tarball. The browser fetches the framework as ONE self-contained file, <code>/__webjs/core/dist/webjs-core-browser.js</code> (built with code-splitting off, so no <code>chunk-*.js</code>), instead of waterfalling through 15+ <code>src/</code> files. That single bundle re-exports the whole browser surface, so the bare specifier and the <code>/directives</code>, <code>/context</code>, <code>/task</code>, and <code>/client-router</code> subpaths all resolve to it and each import picks its named exports; only <code>/lazy-loader</code> stays a separate on-demand file. The bare specifier points at a BROWSER entry that drops server-only modules (<code>render-server.js</code>, <code>expose.js</code>, <code>setCspNonceProvider</code>) so server bytes never ride the wire. Node-side consumers resolve via the package's <code>exports</code> field and land on the universal <code>webjs-core.js</code>, which keeps the full surface for the SSR pipeline and unit tests. The readable <code>src/</code> still ships so AI agents grep it directly. The bundle is built ONCE at <code>npm publish</code> time on the framework author's machine via esbuild as a publish-time devDependency; user installs never invoke a bundler. Workspace dev (monorepo edits) silently falls back to per-file <code>src/</code> serving until <code>npm run build:dist</code> is run, so the edit-and-refresh loop has no build step. Only <code>@webjsdev/core</code> ships bundles; every other <code>@webjsdev/*</code> package is source-only.</p>
 
     <h2>Browser-side env vars without a build step</h2>
-    <p>Next.js exposes <code>NEXT_PUBLIC_*</code> to the browser via build-time static substitution. webjs has no build step, so it can't substitute literals into source. Instead, the SSR pipeline emits an inline <code>&lt;script&gt;</code> in the document head, before the importmap and any module code:</p>
+    <p>Next.js exposes <code>NEXT_PUBLIC_*</code> to the browser via build-time static substitution. WebJs has no build step, so it can't substitute literals into source. Instead, the SSR pipeline emits an inline <code>&lt;script&gt;</code> in the document head, before the importmap and any module code:</p>
     <pre>&lt;script&gt;
   window.process = window.process || {};
   window.process.env = Object.assign(window.process.env || {}, {
@@ -169,7 +169,7 @@ $ webjs vendor update</pre>
 
     <h2>HTTP/2 at the edge</h2>
     <p>Per-file ESM is competitive with bundling only over HTTP/2 (or HTTP/3). On HTTP/1.1 the browser limits concurrent connections per origin to six, so a hundred-file page serializes into sixteen waves. On HTTP/2 the same hundred files multiplex over one TCP connection, with header compression amortizing the per-request overhead.</p>
-    <p>webjs delegates TLS termination and HTTP/2 negotiation to the proxy in front of it. <code>webjs start</code> itself speaks plain HTTP/1.1 to its upstream. The full deployment story (PaaS edges, nginx, Caddy, Traefik configs) lives in the <a href="/docs/deployment">Deployment</a> doc.</p>
+    <p>WebJs delegates TLS termination and HTTP/2 negotiation to the proxy in front of it. <code>webjs start</code> itself speaks plain HTTP/1.1 to its upstream. The full deployment story (PaaS edges, nginx, Caddy, Traefik configs) lives in the <a href="/docs/deployment">Deployment</a> doc.</p>
 
     <h2>Dev vs prod</h2>
     <table>
@@ -192,7 +192,7 @@ $ webjs vendor update</pre>
     <ul>
       <li><strong>HTTP/1.1 only deploys are slow.</strong> If you can't put a reverse proxy or PaaS edge in front, per-file ESM will serialize on connection limits. Either accept the latency, deploy on PaaS, or front <code>webjs start</code> with nginx / Caddy.</li>
       <li><strong>Very large apps with deep import graphs.</strong> The modulepreload hint list grows with transitive deps. On a page that touches a hundred files, you ship a hundred preload links. Browsers handle this fine; some CDNs cap header size around 8 KB, which is a soft ceiling of roughly 80 preloads per page. The framework deduplicates against the boot script's imports to keep the list tight.</li>
-      <li><strong>Non-erasable TypeScript in third-party deps.</strong> A <code>.ts</code> file in <code>node_modules</code> that uses <code>enum</code>, parameter properties, or other non-erasable syntax fails at strip time and the dev server returns a 500 naming the file and pointing at the <code>no-non-erasable-typescript</code> lint rule. webjs is buildless end-to-end and has no bundler fallback. Doubly rare in practice: published npm packages almost always ship compiled <code>.js</code> + <code>.d.ts</code>, not raw TypeScript, so the runtime never sees a <code>.ts</code> file from <code>node_modules</code> to begin with. The realistic trigger is a monorepo-internal workspace package that exports <code>.ts</code> source with non-erasable syntax (raw <code>.ts</code> using only erasable syntax goes through the stripper just fine).</li>
+      <li><strong>Non-erasable TypeScript in third-party deps.</strong> A <code>.ts</code> file in <code>node_modules</code> that uses <code>enum</code>, parameter properties, or other non-erasable syntax fails at strip time and the dev server returns a 500 naming the file and pointing at the <code>no-non-erasable-typescript</code> lint rule. WebJs is buildless end-to-end and has no bundler fallback. Doubly rare in practice: published npm packages almost always ship compiled <code>.js</code> + <code>.d.ts</code>, not raw TypeScript, so the runtime never sees a <code>.ts</code> file from <code>node_modules</code> to begin with. The realistic trigger is a monorepo-internal workspace package that exports <code>.ts</code> source with non-erasable syntax (raw <code>.ts</code> using only erasable syntax goes through the stripper just fine).</li>
       <li><strong>Tree-shaking is per-file, not bundle-wide.</strong> If you import a large utility module for one function, the whole module ships. Either import named symbols from a more focused entry point, or accept it. The mtime cache means repeat fetches are free, so the cost is one-time.</li>
     </ul>
     <p>None of these are show-stoppers, and none of them benefit from introducing a bundler. The framework is explicitly designed to make per-file ESM the right answer at production scale.</p>

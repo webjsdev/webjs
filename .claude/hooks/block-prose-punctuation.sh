@@ -233,4 +233,54 @@ EOF
   exit 2
 fi
 
+# --- 5. Lowercase "webjs" at a prose sentence start ---------------------
+# The brand renders "WebJs" when it BEGINS a sentence and lowercase
+# "webjs" everywhere else. This flags the lowercase form only at a
+# sentence-initial PROSE position: after . ! ?, or at a prose line start
+# (optionally behind markdown / comment markers and emphasis), or right
+# after a prose HTML tag. A following space is required, so "webjs.dev",
+# "webjs-suspense", "@webjsdev", and "webjsdev" never match. A "webjs"
+# immediately followed by a CLI subcommand (webjs dev, webjs check, ...)
+# is a command reference and is kept lowercase, so it is filtered out.
+# Inline `code`, fenced blocks, and mid-sentence brand uses are not a
+# sentence start and do not match. The rule biases toward false negatives
+# (a missed case) over false positives (a wrongly blocked write), the
+# same tradeoff as the pause rules above.
+webjs_cli='create|dev|start|test|check|db|ui|doctor|types|typecheck|mcp|vendor|add|init|generate|migrate|push|studio|seed|pin|unpin|list|audit|outdated|update|view'
+
+webjs_hits=$(printf '%s\n' "$new_content" | grep -nE \
+  -e '[.!?]["'"'"')]?[[:space:]]+(\*\*|__|\*|_|")?webjs(\*\*|__|\*|_|")?[[:space:]]' \
+  -e '^[[:space:]]*((//|#{1,6}|>|[-*])[[:space:]]+)*(\*\*|__|\*|_|")?webjs(\*\*|__|\*|_|")?[[:space:]]' \
+  -e '<(p|li|td|h[1-6]|strong|em|blockquote)[^>]*>[[:space:]]*(\*\*|__|\*|_|")?webjs(\*\*|__|\*|_|")?[[:space:]]' \
+  2>/dev/null || true)
+
+if [ -n "$webjs_hits" ]; then
+  # Drop hits whose "webjs" is a CLI subcommand reference (kept lowercase).
+  offending=$(printf '%s\n' "$webjs_hits" \
+    | grep -vE "webjs[[:space:]]+(${webjs_cli})([[:space:]]|[.,:;)]|\$)" 2>/dev/null || true)
+  if [ -n "$offending" ]; then
+    cat >&2 <<'EOF'
+BLOCKED: lowercase "webjs" at a prose sentence start.
+
+The brand is "WebJs" when it BEGINS a sentence and lowercase "webjs"
+everywhere else. Capitalize this occurrence.
+
+  Bad:  webjs ships a cache() helper.
+  Good: WebJs ships a cache() helper.
+  Bad:  ...round-trips. webjs rewrites the import.
+  Good: ...round-trips. WebJs rewrites the import.
+
+Still lowercase (NOT a sentence start, do NOT capitalize these):
+  - a CLI command: `webjs dev`, `webjs check`, `webjs create my-app`
+  - a domain / package / config / env: webjs.dev, @webjsdev,
+    "webjs": { ... }, WEBJS_PUBLIC_*
+  - mid-sentence: "Most webjs apps ship without a build step."
+
+Rule: AGENTS.md, Invariants section, item 11.
+Hook: .claude/hooks/block-prose-punctuation.sh.
+EOF
+    exit 2
+  fi
+fi
+
 exit 0

@@ -15,7 +15,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '#db/connection.server.ts';
 import { posts } from '#db/schema.server.ts';
 
-// Import this from a page or client component. webjs rewrites
+// Import this from a page or client component. WebJs rewrites
 // the import into a typed RPC stub (the real call at SSR). No
 // fetch by hand.
 export async function getPost(id) {

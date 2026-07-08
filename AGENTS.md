@@ -32,7 +32,7 @@ reference there.
 
 ## AI-driven development: guardrails for all agents
 
-**webjs is AI-first. These rules apply to ALL agents (Claude, Cursor, Copilot, Antigravity, Aider), enforced via per-agent config the scaffold ships** (`AGENTS.md` + `CONVENTIONS.md` + `CLAUDE.md`, `.claude/settings.json` hooks, `.cursorrules`, `.agents/rules/workflow.md`, `.github/copilot-instructions.md`, a PR template, `.editorconfig`), all carrying the same rules in each agent's format.
+**WebJs is AI-first. These rules apply to ALL agents (Claude, Cursor, Copilot, Antigravity, Aider), enforced via per-agent config the scaffold ships** (`AGENTS.md` + `CONVENTIONS.md` + `CLAUDE.md`, `.claude/settings.json` hooks, `.cursorrules`, `.agents/rules/workflow.md`, `.github/copilot-instructions.md`, a PR template, `.editorconfig`), all carrying the same rules in each agent's format.
 
 ### Before starting ANY work: verify and sync the branch
 
@@ -44,7 +44,7 @@ Claude Code enforces step 1 via `.claude/hooks/guard-branch-context.sh`. Other a
 
 ### One task per git worktree when agents run concurrently
 
-webjs is worked by MULTIPLE agents at once. If more than one agent (or more than one in-flight task) shares ONE working checkout, they collide: a `git checkout` in one moves `HEAD` under the other, so the next commit lands on the WRONG branch. This has happened (a `chore: release` commit landed on an unrelated `feat/` branch, with a contaminated changelog). So give each task its own worktree:
+WebJs is worked by MULTIPLE agents at once. If more than one agent (or more than one in-flight task) shares ONE working checkout, they collide: a `git checkout` in one moves `HEAD` under the other, so the next commit lands on the WRONG branch. This has happened (a `chore: release` commit landed on an unrelated `feat/` branch, with a contaminated changelog). So give each task its own worktree:
 
 ```sh
 git worktree add -b <prefix>/<slug> ../<repo>-<slug> origin/main
@@ -109,7 +109,7 @@ An **AI-first, web-components-first** framework inspired by NextJs, Lit, and Rai
 
 ## Execution model (read this to avoid the RSC mental model)
 
-webjs has **no server/client component split.** There is no RSC render tree, no Flight protocol, no "use client" / "use server" component boundary.
+WebJs has **no server/client component split.** There is no RSC render tree, no Flight protocol, no "use client" / "use server" component boundary.
 
 **Pages, layouts, and components are isomorphic modules** (same source both sides), but hydrate differently:
 
@@ -440,7 +440,7 @@ const result = await optimistic(liked, true, () => likePost(postId));
 9. **No backtick characters inside `html\`...\`` template bodies**, even inside CSS / HTML comments. A nested backtick closes the literal at JS-parse time and 500s in prod.
 10. **TypeScript must be erasable.** Set `compilerOptions.erasableSyntaxOnly: true`. No `enum`, no value `namespace`, no constructor parameter properties, no legacy decorators with `emitDecoratorMetadata`, no `import = require`. Types are stripped via Node 24+'s `module.stripTypeScriptTypes` (buildless, no bundler fallback); non-erasable syntax 500s at strip time. Enforced by `erasable-typescript-only` (tsconfig flag) and `no-non-erasable-typescript` (source scan). See `agent-docs/typescript.md`.
 
-11. **No em-dashes (U+2014), no hyphen or semicolon used as pause-punctuation in prose, and no colon attached to a code-shaped LHS.** Banned as a pause: U+2014, a space-surrounded hyphen between words, a space-surrounded semicolon between words. Banned colon attachments: a colon-then-prose after `xyz()`, a `<my-tag>`, an `[expr]` subscript, or a `<code>foo()</code>` definition list (rephrase verb-led). Prefer a period, comma, a colon on a plain-noun LHS, parentheses, or a restructure. Plain hyphens stay fine in compound words, flags, filenames, ranges; semicolons and colons stay fine inside code / TS / JSON / CSS. Enforced via `.claude/hooks/block-prose-punctuation.sh`, which scans only NEW content (you can still edit an existing line to remove a glyph).
+11. **No em-dashes (U+2014), no hyphen or semicolon used as pause-punctuation in prose, and no colon attached to a code-shaped LHS.** Banned as a pause: U+2014, a space-surrounded hyphen between words, a space-surrounded semicolon between words. Banned colon attachments: a colon-then-prose after `xyz()`, a `<my-tag>`, an `[expr]` subscript, or a `<code>foo()</code>` definition list (rephrase verb-led). Prefer a period, comma, a colon on a plain-noun LHS, parentheses, or a restructure. Plain hyphens stay fine in compound words, flags, filenames, ranges; semicolons and colons stay fine inside code / TS / JSON / CSS. The same hook also enforces brand casing: write `WebJs` when the brand BEGINS a sentence and lowercase `webjs` everywhere else (a CLI command like `webjs dev`, a `webjs.dev` domain, an `@webjsdev` package, a `webjs.*` config key, a `WEBJS_*` env var, and any mid-sentence mention all stay lowercase). Enforced via `.claude/hooks/block-prose-punctuation.sh`, which scans only NEW content (you can still edit an existing line to remove a glyph or fix casing).
 
 ---
 

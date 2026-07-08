@@ -5,7 +5,7 @@ export const metadata = { title: 'Metadata Routes | webjs' };
 export default function MetadataRoutes() {
   return html`
     <h1>Metadata Routes</h1>
-    <p>webjs supports special route files that generate SEO and PWA metadata: sitemaps, robots.txt, web manifest, favicons, and Open Graph images. These files export a function and the framework serves the output at the standard URL.</p>
+    <p>WebJs supports special route files that generate SEO and PWA metadata: sitemaps, robots.txt, web manifest, favicons, and Open Graph images. These files export a function and the framework serves the output at the standard URL.</p>
 
     <h2>When to use</h2>
     <ul>
@@ -111,7 +111,7 @@ export const metadata: Metadata = {
     <p>The SSR pipeline reads <code>metadata</code> and injects <code>&lt;title&gt;</code>, <code>&lt;meta&gt;</code>, and <code>&lt;meta property="og:..."&gt;</code> tags into the HTML head. For a request-scoped title (a dynamic route building its metadata from the loaded record), export an async <code>generateMetadata(ctx)</code> returning <code>Promise&lt;Metadata&gt;</code> instead. See <a href="/docs/typescript">TypeScript</a> for the typed-metadata surface.</p>
 
     <h3>JSON-LD structured data</h3>
-    <p><code>metadata.jsonLd</code> emits schema.org structured data as one or more <code>&lt;script type="application/ld+json"&gt;</code> blocks in <code>&lt;head&gt;</code>. This is the highest-leverage modern SEO surface (Google's Article, Product, BreadcrumbList, Organization, and FAQ rich results all read it). webjs stays true to its no-build identity here. JSON-LD is a web standard rendered as a plain script tag, so the framework ONLY serializes and escapes. There is no schema library and no validation, so you own the schema.org object.</p>
+    <p><code>metadata.jsonLd</code> emits schema.org structured data as one or more <code>&lt;script type="application/ld+json"&gt;</code> blocks in <code>&lt;head&gt;</code>. This is the highest-leverage modern SEO surface (Google's Article, Product, BreadcrumbList, Organization, and FAQ rich results all read it). WebJs stays true to its no-build identity here. JSON-LD is a web standard rendered as a plain script tag, so the framework ONLY serializes and escapes. There is no schema library and no validation, so you own the schema.org object.</p>
     <p>A single object emits one script:</p>
     <pre>import type { Metadata } from '@webjsdev/core';
 

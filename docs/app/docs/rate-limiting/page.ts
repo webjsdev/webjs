@@ -5,7 +5,7 @@ export const metadata = { title: 'Rate Limiting | webjs' };
 export default function RateLimiting() {
   return html`
     <h1>Rate Limiting</h1>
-    <p>webjs ships a fixed-window rate limiter backed by the pluggable cache store. In development it uses in-memory counters. For shared limits across multiple instances in production, switch the global cache store to Redis at app startup (one <code>setStore()</code> call), and the rate limiter picks it up automatically.</p>
+    <p>WebJs ships a fixed-window rate limiter backed by the pluggable cache store. In development it uses in-memory counters. For shared limits across multiple instances in production, switch the global cache store to Redis at app startup (one <code>setStore()</code> call), and the rate limiter picks it up automatically.</p>
 
     <h2>When to use</h2>
     <ul>

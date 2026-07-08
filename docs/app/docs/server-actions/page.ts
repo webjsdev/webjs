@@ -5,7 +5,7 @@ export const metadata = { title: 'Server Actions | webjs' };
 export default function ServerActions() {
   return html`
     <h1>Server Actions</h1>
-    <p>Server actions are <strong>async functions that run exclusively on the server</strong> but can be imported and called from client-side web components as if they were local functions. webjs rewrites the import at serve time so the browser receives a thin RPC stub instead of the real implementation. The result is full-stack type safety with zero manual API layer.</p>
+    <p>Server actions are <strong>async functions that run exclusively on the server</strong> but can be imported and called from client-side web components as if they were local functions. WebJs rewrites the import at serve time so the browser receives a thin RPC stub instead of the real implementation. The result is full-stack type safety with zero manual API layer.</p>
 
     <h2>Defining a Server Action: the Two-Marker Convention</h2>
     <p>Server-side files use <strong>two complementary markers</strong>. The combination determines behaviour:</p>
@@ -149,7 +149,7 @@ PostForm.register('post-form');</pre>
     <p>The stub serialises function arguments with <code>await stringify(args)</code> and deserialises the response with <code>parse(text)</code>. The server does the inverse. This is invisible to the developer, so you work with native types on both sides. The serializer is async because Blob/File/FormData require an <code>await arrayBuffer()</code>. For payloads without binary the async cost is just one Promise tick.</p>
 
     <h2>HTTP Verbs, Caching, and Streaming</h2>
-    <p>A server action is a POST by default, but it can declare richer HTTP semantics through reserved sibling exports the framework reads statically, the same way a page declares <code>export const revalidate</code>. The call site never changes (you still write <code>await getUser(7)</code>); only the transport does. webjs needs this where React and Next do not: webjs has no server/client component split, so both reads and writes flow through the one action mechanism.</p>
+    <p>A server action is a POST by default, but it can declare richer HTTP semantics through reserved sibling exports the framework reads statically, the same way a page declares <code>export const revalidate</code>. The call site never changes (you still write <code>await getUser(7)</code>); only the transport does. WebJs needs this where React and Next do not: webjs has no server/client component split, so both reads and writes flow through the one action mechanism.</p>
     <p><strong>One callable function per configured file.</strong> A <code>.server.ts</code> file that declares any of these config exports must export exactly one callable. A second callable in the same file is a <code>webjs check</code> error.</p>
 
     <h3>Choosing the verb</h3>

@@ -162,7 +162,7 @@ UserList.register('user-list');</pre>
 DashboardWidget.register('dashboard-widget');</pre>
 
     <h2>Built-in Controllers</h2>
-    <p>webjs ships three controllers out of the box:</p>
+    <p>WebJs ships three controllers out of the box:</p>
 
     <h3>Task</h3>
     <p>Manages async operations with automatic loading/error states, abort support, and reactive args. Imported from <code>webjs/task</code>. See the <a href="/docs/task">Task Controller</a> page for full documentation.</p>

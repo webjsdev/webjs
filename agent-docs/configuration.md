@@ -59,7 +59,7 @@ CSP is OFF by default and opt-in via a `webjs.csp` key in `package.json`. When e
 
 ## Declarative redirects: `webjs.redirects` in package.json (#254)
 
-webjs already has `redirect(url)` (an imperative, request-time throw sentinel). For a MOVED URL (old-path -> new-path), SEO wants a DECLARATIVE permanent redirect so link equity transfers and search engines update their index. Declare those under `package.json` `"webjs": { "redirects": [...] }`, an array of `{ source, destination, permanent?, statusCode? }`, cohesive with the `webjs.headers` config:
+WebJs already has `redirect(url)` (an imperative, request-time throw sentinel). For a MOVED URL (old-path -> new-path), SEO wants a DECLARATIVE permanent redirect so link equity transfers and search engines update their index. Declare those under `package.json` `"webjs": { "redirects": [...] }`, an array of `{ source, destination, permanent?, statusCode? }`, cohesive with the `webjs.headers` config:
 
 ```jsonc
 {
