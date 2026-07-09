@@ -52,7 +52,7 @@ describe('docs /llms.txt (the index)', () => {
     assert.match(r.headers.get('content-type') || '', /text\/plain/);
     const body = await r.text();
     assert.ok(body.startsWith('# '), 'body should start with a markdown H1');
-    assert.match(body, /^# webjs documentation/);
+    assert.match(body, /^# WebJs documentation/);
   });
 
   test('index lists known doc topics with absolute https URLs', async () => {
