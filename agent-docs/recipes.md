@@ -202,12 +202,13 @@ non-envelope return transforms the input.
 
 To reuse the action's OWN declared `middleware` / `validate` config on the REST
 boundary without re-listing it, pass the MODULE NAMESPACE to `route()` instead of
-the function (#876): `import * as createPost from './create-post.server.ts';
-export const POST = route(createPost)`. The adapter finds the single action
+the function (#876): `import * as postActions from './create-post.server.ts';
+export const POST = route(postActions)`. The adapter finds the single action
 function and applies its declared `middleware` and `validate`, so a guard
-declared once next to the action protects the RPC and REST boundaries alike. The
-bare-function form (`route(createPost)`) cannot see sibling config exports, so it
-applies only what you pass in `route(fn, { middleware, validate })`.
+declared once next to the action protects the RPC and REST boundaries alike.
+Passing the imported function itself (`import { createPost }` then
+`route(createPost)`) cannot see sibling config exports, so it applies only what
+you pass in `route(fn, { middleware, validate })`.
 
 ## HTTP verbs, caching, streaming, and cancellation (#488, #489, #490, #492)
 
