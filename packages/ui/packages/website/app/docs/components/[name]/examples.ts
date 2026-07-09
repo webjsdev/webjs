@@ -53,6 +53,7 @@ import {
 } from '#components/ui/avatar.ts';
 import { separatorClass } from '#components/ui/separator.ts';
 import { skeletonClass } from '#components/ui/skeleton.ts';
+import { aspectRatioClass } from '#components/ui/aspect-ratio.ts';
 import { kbdClass, kbdGroupClass } from '#components/ui/kbd.ts';
 import {
   tableContainerClass,
@@ -151,6 +152,7 @@ const HELPERS: Record<string, (...args: any[]) => string> = {
   nativeSelectClass, nativeSelectIconClass, nativeSelectWrapperClass,
   paginationClass, paginationContentClass, paginationLinkClass, paginationNextClass, paginationPreviousClass,
   popoverContentClass, popoverDescriptionClass, popoverHeaderClass, popoverTitleClass,
+  aspectRatioClass,
   progressClass, radioClass, radioGroupClass, separatorClass, skeletonClass, stackClass,
   switchInputClass, switchTrackClass,
   tableBodyClass, tableCellClass, tableClass, tableContainerClass, tableHeadClass, tableHeaderClass, tableRowClass,
@@ -370,7 +372,7 @@ const EXAMPLES: Record<string, string> = {
   `,
 
   'aspect-ratio': `
-    <div class="aspect-[16/9] w-full max-w-md rounded-md bg-muted flex items-center justify-center text-muted-foreground">
+    <div style="aspect-ratio: 16 / 9;" class="\${aspectRatioClass()} max-w-md rounded-md bg-muted flex items-center justify-center text-muted-foreground">
       16:9
     </div>
   `,
