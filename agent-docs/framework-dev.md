@@ -48,6 +48,12 @@ The scaffold is webjs's primary teaching surface for AI agents, so a new framewo
 
 **When you add or rename a `@webjsdev/core` or `@webjsdev/server` export, or add a routing convention file the router parses, update the manifest** the same way you write a test: add a demo pointer / `{ demoed: true }`, or an honest exemption. All three surfaces are gated (the convention stems are derived from `packages/server/src/router.js`, so a new `stem === '...'` branch auto-appears and must be classified).
 
+The scaffold gate is one of a FAMILY of tier-2 coverage gates that keep the framework's agent-facing surfaces from rotting behind a new feature. The others:
+
+- **Knowledge coverage** (`test/knowledge/knowledge-coverage.test.js`): reconciles the live `webjs check` `RULES` against the troubleshooting page + gotcha docs (a new rule must be explained in a symptom-keyed surface or exempted in `knowledge-coverage.json`), and asserts the AGENTS.md headings the MCP `init` primer sources (DERIVED from the `sectionByHeading(agents, /.../)` calls in `packages/mcp/src/mcp-docs.js`) still exist, so a heading rename cannot silently empty the primer.
+- **API docs + test coverage** (`test/api-coverage/api-coverage.test.js`): every agent-facing `@webjsdev/core` + `@webjsdev/server` export (NON-internal per the scaffold manifest, the single source of truth) must be referenced in the docs corpus (AGENTS.md + agent-docs + docs site) AND in a test. A new public export that ships undocumented or untested turns CI red.
+- **Types** (`test/types/dts-export-coverage.test.mjs`, `server-types.test.mjs`), **elision** (`packages/server/test/elision/lifecycle-coverage.test.js`), and **llms.txt** (`test/docs/llms.test.mjs`) round out the family. Each reads its live surface dynamically so it cannot go stale.
+
 ---
 
 ### Changelog: per-package, per-version, auto-generated
