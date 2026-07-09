@@ -82,7 +82,7 @@ export class TodoApp extends WebComponent({
             </span>
             <div class="grid gap-0.5">
               <h2 class="m-0 text-[1.4rem] font-bold tracking-[-0.02em] leading-none text-foreground">Tasks</h2>
-              <p class="m-0 text-[13px] text-muted-foreground/70 leading-none">${done} of ${list.length} done</p>
+              <p class="m-0 text-[13px] text-muted-foreground leading-none">${done} of ${list.length} done</p>
             </div>
             <span class="ml-auto text-[13px] font-semibold tabular-nums text-muted-foreground">${pct}%</span>
           </div>
@@ -97,7 +97,7 @@ export class TodoApp extends WebComponent({
           class="flex items-center gap-2 p-2 pl-4 rounded-2xl bg-card border border-border shadow-[0_1px_0_0_color-mix(in_oklch,var(--foreground)_5%,transparent)]">
           <input type="hidden" name="intent" value="create" />
           <input name="title" required maxlength="280" autocomplete="off" placeholder="What needs doing?"
-            class="flex-1 min-w-0 bg-transparent border-0 outline-none text-foreground text-[15px] placeholder:text-muted-foreground/70 py-1.5" />
+            class="flex-1 min-w-0 bg-transparent border-0 outline-none text-foreground text-[15px] placeholder:text-muted-foreground py-1.5" />
           <button type="submit"
             class="shrink-0 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">Add</button>
         </form>
@@ -120,17 +120,17 @@ export class TodoApp extends WebComponent({
                 </button>
                 <!-- The title is a <label for> the toggle: clicking the text toggles
                      the task (works on JS and no-JS paths, and screen readers). -->
-                <label for="t-${todo.id}" class="flex-1 min-w-0 text-[15px] leading-snug break-words cursor-pointer select-none ${todo.completed ? 'line-through text-muted-foreground/70' : 'text-foreground'}">${todo.title}</label>
+                <label for="t-${todo.id}" class="flex-1 min-w-0 text-[15px] leading-snug break-words cursor-pointer select-none ${todo.completed ? 'line-through text-muted-foreground' : 'text-foreground'}">${todo.title}</label>
                 <!-- Delete: a proper icon button, revealed on row hover / focus. -->
                 <button type="submit" name="intent" value="delete" aria-label="Delete task"
                   @click=${(e: Event) => this.removeTodo(e, todo)}
-                  class="shrink-0 grid place-items-center w-7 h-7 rounded-lg border-0 bg-transparent text-muted-foreground/70 cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all hover:text-destructive hover:bg-[color-mix(in_oklch,var(--color-destructive)_12%,transparent)]">
+                  class="shrink-0 grid place-items-center w-7 h-7 rounded-lg border-0 bg-transparent text-muted-foreground cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all hover:text-destructive hover:bg-[color-mix(in_oklch,var(--color-destructive)_12%,transparent)]">
                   <svg viewBox="0 0 24 24" class="w-4 h-4 stroke-current fill-none" style="stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M18 6 6 18M6 6l12 12"/></svg>
                 </button>
               </form>
             </li>
           `) : html`
-            <li class="text-center text-muted-foreground/70 text-sm py-14 border border-dashed border-border rounded-2xl">No tasks yet. Add your first one above.</li>
+            <li class="text-center text-muted-foreground text-sm py-14 border border-dashed border-border rounded-2xl">No tasks yet. Add your first one above.</li>
           `}
         </ul>
       </section>

@@ -435,20 +435,42 @@ test('scaffoldApp saas: writes auth + dashboard + Drizzle User model', async () 
     assert.match(authSrc, /secret:\s*authSecret\b/, 'createAuth uses the typed authSecret');
     assert.match(authSrc, /NODE_ENV === 'production'[\s\S]*AUTH_SECRET must be set/, 'production fails fast when AUTH_SECRET is unset');
 
-    // #878: each auth page needs exactly one <h1> (axe page-has-heading-one).
-    // The pages previously used <h3> as their only heading. Counterfactual:
-    // the <h3>-only page fails this.
-    for (const p of [['login'], ['signup']]) {
+    // #878: every top-level page needs EXACTLY one <h1> (axe page-has-heading-one
+    // wants one, and a second h1 is its own violation). The auth cards are the
+    // sole heading so their title is the h1; the dashboard/settings pages already
+    // carry a page <h1>, so their card title stays a subordinate <h2> (promoting
+    // it to h1 was the regression this pins). Counterfactual: an <h3>-only page,
+    // or a double-h1 dashboard, fails this.
+    const h1Count = (src) => (src.match(/<h1\b/g) || []).length;
+    for (const p of [['login'], ['signup'], ['dashboard'], ['dashboard', 'settings']]) {
       const pageSrc = readFileSync(join(appDir, 'app', ...p, 'page.ts'), 'utf8');
-      assert.match(pageSrc, /<h1\b/, `${p.join('/')} page has an <h1>`);
+      assert.equal(h1Count(pageSrc), 1, `${p.join('/')} page has exactly one <h1>`);
     }
 
-    // #878: the counter-card gallery label must not drop below AA contrast.
-    // `text-muted-foreground/70` measured 3.83:1 on the card; full-opacity
-    // `text-muted-foreground` passes. Counterfactual: the /70 opacity fails.
-    const counterCard = readFileSync(
-      join(appDir, 'modules', 'components', 'components', 'counter-card.ts'), 'utf8');
-    assert.doesNotMatch(counterCard, /text-muted-foreground\/\d/, 'counter-card label uses full-contrast text-muted-foreground');
+    // #878: no gallery surface may drop label text below AA contrast. The
+    // `text-muted-foreground/70` opacity measured 3.83:1; full-opacity
+    // `text-muted-foreground` passes. Scan the WHOLE generated gallery (every
+    // component + feature page), not just one demo, so a stray low-contrast
+    // token anywhere reds this. Counterfactual: any `/NN` opacity fails.
+    const galleryDirs = [join(appDir, 'modules'), join(appDir, 'app', 'features')];
+    const walk = (dir) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, e.name);
+        if (e.isDirectory()) { walk(full); continue; }
+        if (!e.name.endsWith('.ts')) continue;
+        const src = readFileSync(full, 'utf8');
+        assert.doesNotMatch(src, /text-muted-foreground\/\d/, `${full} keeps full-contrast text-muted-foreground (no /NN opacity)`);
+      }
+    };
+    for (const d of galleryDirs) if (existsSync(d)) walk(d);
+
+    // #878: gallery form controls need an accessible name (axe `label`). The
+    // file-upload input and the directive-demo text input carried none, so a
+    // full axe sweep flagged them critical. Pin their aria-labels.
+    const fileStorage = readFileSync(join(appDir, 'app', 'features', 'file-storage', 'page.ts'), 'utf8');
+    assert.match(fileStorage, /type="file"[^>]*aria-label=/, 'the file input has an aria-label');
+    const directiveDemo = readFileSync(join(appDir, 'modules', 'directives', 'components', 'directive-demo.ts'), 'utf8');
+    assert.match(directiveDemo, /aria-label="Editable text/, 'the ref-focus input has an aria-label');
 
     // Drizzle User model (saas overwrites db/schema.server.ts to add passwordHash)
     const schema = readFileSync(join(appDir, 'db', 'schema.server.ts'), 'utf8');

@@ -1179,8 +1179,9 @@ ${UI_THEME}
          Add a new design token the canonical way, a --x variable below plus a
          --color-x: var(--x) line in the @theme inline block, then use it as bg-x /
          text-x. Reach for opacity modifiers
-         (bg-primary/10, hover:bg-primary/90, text-muted-foreground/70) before
-         inventing a new token. */
+         (bg-primary/10, hover:bg-primary/90, border-border/60) before inventing a
+         new token, but keep body text at full opacity so it stays above the AA
+         contrast floor (a faded text-muted-foreground/70 measured 3.83:1). */
       :root {
         --font-sans:  -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         --font-serif: ui-serif, 'Iowan Old Style', Palatino, Georgia, serif;
