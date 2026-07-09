@@ -393,7 +393,7 @@
       "exempt": "deferred: cookie session strategy (#865)"
     },
     "cookieSessionStorage": {
-      "exempt": "internal: cookie session storage primitive"
+      "exempt": "deferred: cookie session storage strategy; documented in docs/app/docs/sessions (#859)"
     },
     "cookies": {
       "exempt": "deferred: request cookie accessor (#865)"
@@ -474,7 +474,7 @@
       "exempt": "internal: low-level Set-Cookie reader"
     },
     "getStore": {
-      "exempt": "internal: active-store accessor; apps use setStore()"
+      "exempt": "deferred: active-store read API; docs/app/docs/cache + agent-docs/built-ins (#859)"
     },
     "handleApi": {
       "exempt": "internal: framework/CLI plumbing"
@@ -648,10 +648,10 @@
       "exempt": "deferred: programmatic server boot (#865)"
     },
     "storeSession": {
-      "exempt": "internal: session persistence primitive; apps use createAuth()/session"
+      "exempt": "deferred: production session storage (alias of storeSessionStorage); docs/app/docs/sessions (#859)"
     },
     "storeSessionStorage": {
-      "exempt": "internal: session storage primitive"
+      "exempt": "deferred: production (Redis-backed) session storage; docs/app/docs/sessions + cache (#859)"
     },
     "stream": {
       "demoed": true
