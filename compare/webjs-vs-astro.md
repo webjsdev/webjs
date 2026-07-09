@@ -4,6 +4,7 @@ date: 2026-07-09T10:00:00+05:30
 slug: webjs-vs-astro
 description: "An honest comparison of WebJs and Astro. Both ship little JavaScript by default and use an islands model, but WebJs is a no-build full-stack framework with server actions and a data layer, where Astro is a build-time content framework you add islands to."
 competitor: "Astro"
+link: "https://astro.build"
 tagline: "Islands and near-zero JS, plus a full server-action and data story."
 tags: comparison, astro, islands, zero-js, no-build
 author: Vivek

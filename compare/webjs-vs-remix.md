@@ -4,6 +4,7 @@ date: 2026-07-09T10:00:00+05:30
 slug: webjs-vs-remix
 description: "An honest comparison of WebJs and Remix 3. Both drop the bundler, move beyond React, run on web standards, and are built for AI agents. They diverge on the view layer: WebJs uses native web components with a declarative reactive API, Remix 3 uses its own runtime-first virtual DOM with an imperative model."
 competitor: "Remix 3"
+link: "https://remix.run"
 tagline: "Two frameworks that dropped the bundler and moved beyond React, diverging on the view layer."
 tags: comparison, remix, remix-3, web-standards, no-build
 author: Vivek
@@ -48,7 +49,7 @@ WebJs uses one server-action boundary. A `.server.ts` file with `'use server'` e
 
 # Difference four: stability today
 
-Remix 3 is in beta preview. Its ideas are compelling and its direction is close to WebJs's, but the API is still moving, and building on it today means building on a moving target. This is a factual note about where Remix 3 is in its cycle, worth weighing if you need to ship on a stable surface now.
+Remix 3 is in [beta preview](https://remix.run/blog/remix-3-beta-preview). Its ideas are compelling and its direction is close to WebJs's, but the API is still moving, and building on it today means building on a moving target. This is a factual note about where Remix 3 is in its cycle, worth weighing if you need to ship on a stable surface now.
 
 
 # Where Remix 3 is the better pick

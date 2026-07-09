@@ -22,8 +22,13 @@ function inline(s: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
-  out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, t, u) =>
-    `<a href="${u}" class="text-accent no-underline hover:underline" rel="noopener noreferrer">${t}</a>`);
+  out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, t, u) => {
+    // Absolute (off-site) links open in a new tab so the reader keeps the
+    // article; internal links (starting with /) navigate in place.
+    const external = /^https?:\/\//.test(u);
+    const attrs = external ? ' target="_blank" rel="noopener noreferrer"' : '';
+    return `<a href="${u}" class="text-accent no-underline hover:underline"${attrs}>${t}</a>`;
+  });
   out = out.replace(/`([^`]+)`/g, '<code class="font-mono text-[0.9em] bg-bg-subtle text-fg px-[6px] py-[2px] rounded">$1</code>');
   out = out.replace(/\*\*([^\n]+?)\*\*/g, '<strong class="font-semibold text-fg">$1</strong>');
   out = out.replace(/(^|[^\w])_([^_\s][^_]*[^_\s]|[^_\s])_(?=$|[^\w])/g, '$1<em>$2</em>');

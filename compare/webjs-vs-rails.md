@@ -4,6 +4,7 @@ date: 2026-07-09T10:00:00+05:30
 slug: webjs-vs-rails
 description: "An honest comparison of WebJs and Ruby on Rails. Both refuse a build step and lean on importmaps and sensible defaults, but WebJs is one TypeScript language across the stack with web components and typed server actions, where Rails is Ruby with Hotwire."
 competitor: "Rails"
+link: "https://rubyonrails.org"
 tagline: "The Rails no-build, sensible-defaults philosophy, in one TypeScript language."
 tags: comparison, rails, hotwire, importmap, no-build
 author: Vivek
