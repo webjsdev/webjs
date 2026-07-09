@@ -36,6 +36,16 @@ test('a double quote in a link URL cannot break out of the href attribute', () =
   assert.match(out, /%22/, 'the quote is percent-escaped in the href');
 });
 
+test('a link URL containing balanced parens is captured whole, not truncated', () => {
+  const out = renderPostBody('[Ruby](https://en.wikipedia.org/wiki/Ruby_(programming_language))');
+  // Counterfactual: the old `[^)]+` capture stopped at the first `)`, so the
+  // href lost its `)` tail. The full URL must survive.
+  assert.match(out, /href="https:\/\/en\.wikipedia\.org\/wiki\/Ruby_\(programming_language\)"/, 'href keeps the full parenthesized URL');
+  assert.match(out, /target="_blank"/, 'still classified as an external link');
+  // The stray trailing `)` from the truncated form must not leak as text.
+  assert.doesNotMatch(out, />Ruby<\/a>\)/, 'no orphaned closing paren after the link');
+});
+
 test('the compare page shows a visible outbound link to the competitor site in a new tab', async () => {
   const out = await renderToString(await ComparePage({ params: { slug: 'webjs-vs-nextjs' } }));
   // A visible, underlined "Visit the Next.js site" link (distinguishable while

@@ -24,7 +24,10 @@ function inline(s: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
-  out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, t, u) => {
+  // The URL group allows one level of balanced nested parens, so a link whose
+  // address contains a `(...)` (e.g. a Wikipedia `..._(programming_language)`
+  // URL) is captured whole instead of truncated at the first `)`.
+  out = out.replace(/\[([^\]]+)\]\(((?:[^()]|\([^()]*\))*)\)/g, (_m, t, u) => {
     // Absolute (off-site) links open in a new tab so the reader keeps the
     // article; internal links (starting with /) navigate in place. Escape any
     // `"` in the URL so it cannot break out of the href attribute.
