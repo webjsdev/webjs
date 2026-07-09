@@ -28,6 +28,22 @@
  * export const POST = route(createPost, { validate: createPostSchema });
  * ```
  *
+ * Passing the action's MODULE NAMESPACE instead of the function auto-applies the
+ * action's declared `export const middleware` and `export const validate`, so a
+ * guard declared once next to the action protects the REST boundary the same way
+ * it protects the RPC boundary (#876). This is the way to keep "declare once,
+ * protected on every entry point" true without re-listing the config:
+ *
+ * ```js
+ * // app/api/posts/route.ts
+ * import { route } from '@webjsdev/server';
+ * import * as createPost from '../../../modules/posts/actions/create-post.server.ts';
+ * export const POST = route(createPost);   // its declared middleware + validate apply
+ * ```
+ *
+ * The function form still takes explicit `opts`, and an explicit `opts.middleware`
+ * / `opts.validate` overrides the module's declared config when both are given.
+ *
  * Adapter rules when invoked over HTTP:
  *   - URL query params, route params (`ctx.params`), and the parsed JSON body
  *     (for a method with a body) are merged into a single object argument
@@ -51,6 +67,7 @@
 import { runValidate } from './actions.js';
 import { runWithActionSignal } from './action-signal.js';
 import { runActionChain } from './action-middleware.js';
+import { actionFunctionNames, actionMiddleware } from './action-config.js';
 import { readTextBounded, payloadTooLarge, DEFAULT_MAX_BODY_BYTES } from './body-limit.js';
 import { getBodyLimits } from './context.js';
 
@@ -69,16 +86,48 @@ function jsonBodyLimit() {
  * Expose a plain `'use server'` action over REST as a `route.ts`-style handler.
  *
  * @template A, R
- * @param {(input: A, ctx: { req: Request, params: Record<string,string> }) => R | Promise<R>} action
- *   the server action to call (its source is unchanged; this only wraps the
- *   HTTP-to-action adapter around it).
+ * @param {((input: A, ctx: { req: Request, params: Record<string,string> }) => R | Promise<R>) | Record<string, unknown>} actionOrModule
+ *   the server action to call, OR the action's module namespace (`import * as m`)
+ *   so its declared `middleware` / `validate` config is auto-applied (#876). Its
+ *   source is unchanged; this only wraps the HTTP-to-action adapter around it.
  * @param {{
  *   validate?: (input: any) => any,
  *   middleware?: Function[],
  * }} [opts]
  * @returns {(req: Request, ctx?: { params?: Record<string,string> }) => Promise<Response>}
  */
-export function route(action, opts = {}) {
+export function route(actionOrModule, opts = {}) {
+  // Resolve the callable action plus any config the caller did not pass
+  // explicitly. A function is used verbatim (the original form). A module
+  // namespace exposes the single action function and its declared config, so
+  // `route(mod)` inherits the same `middleware` / `validate` the RPC boundary
+  // reads (#876). An explicit `opts` value still wins over the declared one.
+  let action;
+  /** @type {{ middleware?: Function[], validate?: Function }} */
+  let declared = {};
+  if (typeof actionOrModule === 'function') {
+    action = actionOrModule;
+  } else if (actionOrModule && typeof actionOrModule === 'object') {
+    const names = actionFunctionNames(actionOrModule);
+    if (names.length !== 1) {
+      throw new Error(
+        `route(module) expects exactly one action function in the module, found ${names.length}` +
+          (names.length ? ` (${names.join(', ')})` : ''),
+      );
+    }
+    action = /** @type {Function} */ (actionOrModule[names[0]]);
+    declared = {
+      middleware: actionMiddleware(actionOrModule),
+      validate: typeof actionOrModule.validate === 'function'
+        ? /** @type {Function} */ (actionOrModule.validate)
+        : undefined,
+    };
+  } else {
+    throw new Error('route() expects an action function or a module namespace');
+  }
+  const validate = opts.validate ?? declared.validate;
+  const middlewareChain = opts.middleware ?? declared.middleware ?? [];
+
   return async function handler(req, ctx) {
     const params = (ctx && ctx.params) || {};
     const url = new URL(req.url);
@@ -102,13 +151,13 @@ export function route(action, opts = {}) {
     }
 
     let arg = { ...query, ...params, ...body };
-    if (typeof opts.validate === 'function') {
+    if (typeof validate === 'function') {
       // Run the validator through the SHARED contract (#245) so the REST adapter
       // and the RPC path interpret a `{ success, fieldErrors }` envelope, a
       // throw, and a transform-return identically. A structured failure becomes
       // a 422 JSON; a throw stays a 400 (keeping a schema lib's `issues`); a
       // transform-return replaces the input.
-      const v = runValidate(opts.validate, arg);
+      const v = runValidate(validate, arg);
       if (!v.ok) {
         if (v.thrown !== undefined) {
           const msg = v.result.error || 'Invalid input';
@@ -126,10 +175,9 @@ export function route(action, opts = {}) {
     // The action runs inside the request signal scope (#492) and the per-action
     // middleware chain (#490). `ranAction` distinguishes a real completion from
     // a middleware short-circuit (the action never ran).
-    const middleware = opts.middleware || [];
     let ranAction = false;
     const result = await runWithActionSignal(req.signal, () =>
-      runActionChain(middleware, { request: req, args: [arg], signal: req.signal }, () => {
+      runActionChain(middlewareChain, { request: req, args: [arg], signal: req.signal }, () => {
         ranAction = true;
         return action(/** @type any */ (arg), { req, params });
       }));

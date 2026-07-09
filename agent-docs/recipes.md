@@ -200,6 +200,15 @@ option: `export const POST = route(createPost, { validate })`. A
 validator that THROWS (the classic `Schema.parse` style) becomes a 400, and a
 non-envelope return transforms the input.
 
+To reuse the action's OWN declared `middleware` / `validate` config on the REST
+boundary without re-listing it, pass the MODULE NAMESPACE to `route()` instead of
+the function (#876): `import * as createPost from './create-post.server.ts';
+export const POST = route(createPost)`. The adapter finds the single action
+function and applies its declared `middleware` and `validate`, so a guard
+declared once next to the action protects the RPC and REST boundaries alike. The
+bare-function form (`route(createPost)`) cannot see sibling config exports, so it
+applies only what you pass in `route(fn, { middleware, validate })`.
+
 ## HTTP verbs, caching, streaming, and cancellation (#488, #489, #490, #492)
 
 A `'use server'` action is a POST by default. Reserved sibling exports, read

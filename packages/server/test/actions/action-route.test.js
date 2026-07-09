@@ -135,3 +135,62 @@ test('a validator transform-return reaches the action body (REST boundary, #245)
   await handler(new Request('http://x/api/x?a=1', { method: 'GET' }));
   assert.deepEqual(received, { a: '1', coerced: true });
 });
+
+// --- Module-namespace form: auto-apply the action's declared config (#876) ---
+
+test('route(module) applies the action-declared middleware (short-circuit)', async () => {
+  let ran = false;
+  // A module namespace: one action function + a declared `export const middleware`.
+  const mod = {
+    middleware: [async () => ({ success: false, error: 'mw-blocked', status: 403 })],
+    async guarded() { ran = true; return { success: true }; },
+  };
+  const handler = route(mod);
+  const res = await handler(new Request('http://x/api/x?a=1', { method: 'POST' }));
+  assert.equal(res.status, 403);
+  assert.deepEqual(await res.json(), { success: false, error: 'mw-blocked' });
+  assert.equal(ran, false, 'declared middleware must gate the route boundary too');
+});
+
+test('COUNTERFACTUAL: route(fn) without opts does NOT apply the declared middleware', async () => {
+  // Passing the bare function (not the module) cannot see sibling config, so the
+  // body runs. This is the exact gap #876 fixes for the module form.
+  let ran = false;
+  const mod = {
+    middleware: [async () => ({ success: false, error: 'mw-blocked', status: 403 })],
+    async guarded() { ran = true; return { success: true }; },
+  };
+  const handler = route(mod.guarded);
+  const res = await handler(new Request('http://x/api/x?a=1', { method: 'POST' }));
+  assert.equal(res.status, 200);
+  assert.equal(ran, true, 'the bare-function form has no access to declared middleware');
+});
+
+test('route(module) applies the action-declared validate', async () => {
+  const mod = {
+    validate: (input) => (input.title ? { success: true } : { success: false, fieldErrors: { title: 'required' } }),
+    async createPost(input) { return { made: input.title }; },
+  };
+  const handler = route(mod);
+  const bad = await handler(new Request('http://x/api/x', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }));
+  assert.equal(bad.status, 422);
+  const ok = await handler(new Request('http://x/api/x', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: 'hi' }) }));
+  assert.deepEqual(await ok.json(), { made: 'hi' });
+});
+
+test('explicit opts override the module-declared config', async () => {
+  const mod = {
+    middleware: [async () => ({ success: false, error: 'declared', status: 403 })],
+    async guarded() { return { success: true, from: 'body' }; },
+  };
+  // Passing an empty middleware array explicitly overrides the declared one.
+  const handler = route(mod, { middleware: [] });
+  const res = await handler(new Request('http://x/api/x?a=1', { method: 'POST' }));
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { success: true, from: 'body' });
+});
+
+test('route(module) with more than one action function throws', () => {
+  const mod = { async a() {}, async b() {} };
+  assert.throws(() => route(mod), /exactly one action function/);
+});
