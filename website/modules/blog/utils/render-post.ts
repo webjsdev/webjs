@@ -14,9 +14,10 @@
  *   - `> ` blockquotes
  *   - `- ` bulleted lists (custom-positioned markers via `before:` pseudo-element)
  *   - ```fenced``` code blocks
- *   - Inline: **bold**, *italic*, `code`, [text](url). An absolute or
- *     protocol-relative URL opens in a new tab (with a screen-reader cue);
- *     an internal `/path` link navigates in place.
+ *   - Inline: **bold**, *italic*, `code`, [text](url). The URL may contain
+ *     one level of balanced parens (e.g. a Wikipedia `..._(language)` link).
+ *     An absolute or protocol-relative URL opens in a new tab (with a
+ *     screen-reader cue); an internal `/path` link navigates in place.
  */
 
 function inline(s: string): string {
@@ -27,7 +28,7 @@ function inline(s: string): string {
   // The URL group allows one level of balanced nested parens, so a link whose
   // address contains a `(...)` (e.g. a Wikipedia `..._(programming_language)`
   // URL) is captured whole instead of truncated at the first `)`.
-  out = out.replace(/\[([^\]]+)\]\(((?:[^()]|\([^()]*\))*)\)/g, (_m, t, u) => {
+  out = out.replace(/\[([^\]]+)\]\(((?:[^()]|\([^()]*\))+)\)/g, (_m, t, u) => {
     // Absolute (off-site) links open in a new tab so the reader keeps the
     // article; internal links (starting with /) navigate in place. Escape any
     // `"` in the URL so it cannot break out of the href attribute.

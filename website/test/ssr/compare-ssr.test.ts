@@ -42,8 +42,15 @@ test('a link URL containing balanced parens is captured whole, not truncated', (
   // href lost its `)` tail. The full URL must survive.
   assert.match(out, /href="https:\/\/en\.wikipedia\.org\/wiki\/Ruby_\(programming_language\)"/, 'href keeps the full parenthesized URL');
   assert.match(out, /target="_blank"/, 'still classified as an external link');
-  // The stray trailing `)` from the truncated form must not leak as text.
-  assert.doesNotMatch(out, />Ruby<\/a>\)/, 'no orphaned closing paren after the link');
+  // Counterfactual: the truncated form left a stray `)` right after the closing
+  // </a>. The whole-URL form emits no such orphan.
+  assert.doesNotMatch(out, /<\/a>\)/, 'no orphaned closing paren after the link');
+});
+
+test('an empty link URL stays literal text (no empty-href anchor)', () => {
+  const out = renderPostBody('see [x]() here');
+  assert.doesNotMatch(out, /<a /, 'does not emit an anchor for an empty URL');
+  assert.match(out, /\[x\]\(\)/, 'leaves the malformed link as literal text');
 });
 
 test('the compare page shows a visible outbound link to the competitor site in a new tab', async () => {
