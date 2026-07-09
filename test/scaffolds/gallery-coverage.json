@@ -701,16 +701,16 @@
       "demoed": true
     },
     "error": {
-      "exempt": "deferred: no example error file shipped by the scaffold yet (#865)"
+      "demoed": true
     },
     "loading": {
-      "exempt": "deferred: no example loading file shipped by the scaffold yet (#865)"
+      "demoed": true
     },
     "middleware": {
       "demoed": true
     },
     "not-found": {
-      "exempt": "deferred: no example not-found file shipped by the scaffold yet (#865)"
+      "demoed": true
     },
     "forbidden": {
       "demoed": true
