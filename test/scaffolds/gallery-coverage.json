@@ -207,7 +207,7 @@
       "exempt": "internal: stale-while-revalidate plumbing"
     },
     "navigate": {
-      "exempt": "deferred: programmatic client navigation; mentioned in the routing demo prose (#859)"
+      "demo": "modules/client-router/components/router-controls.ts"
     },
     "notFound": {
       "demo": "app/features/routing/[id]/page.ts"
@@ -255,7 +255,7 @@
       "demo": "modules/directives/components/directive-demo.ts"
     },
     "revalidate": {
-      "exempt": "deferred: client snapshot eviction; agent-docs/built-ins.md (#859)"
+      "demo": "modules/client-router/components/router-controls.ts"
     },
     "richFetch": {
       "exempt": "deferred: content-negotiated rich fetch; agent-docs/advanced.md (#859)"
