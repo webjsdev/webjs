@@ -26,6 +26,9 @@ export class DirectiveDemo extends WebComponent {
   private variant = signal(0);
   // A handle to the input node, attached by `ref` in the browser.
   private inputRef = createRef<HTMLInputElement>();
+  // Created ONCE (not per render), so `until` keeps the resolved value across
+  // re-renders instead of flashing back to the fallback each time.
+  private asyncValue: Promise<string> = this.later();
 
   private reverse() {
     this.items.set(this.items.get().slice().reverse());
@@ -67,9 +70,9 @@ export class DirectiveDemo extends WebComponent {
         </div>
 
         <div class="grid gap-3 border-t border-border pt-4">
-          <!-- live(): the input's DOM value tracks the signal even after the user
-               edits it, so it stays a controlled input. ref(): inputRef.value is
-               the node once attached in the browser. -->
+          <!-- live keeps the input's DOM value tracking the signal even after the
+               user edits it, so it stays a controlled input. ref hands you the
+               node via inputRef.value once it is attached in the browser. -->
           <div class="flex gap-2">
             <input
               ${ref(this.inputRef)}
@@ -79,10 +82,10 @@ export class DirectiveDemo extends WebComponent {
             <button @click=${() => this.focusInput()}
               class="px-3.5 py-1.5 rounded-xl bg-card border border-border text-foreground text-sm cursor-pointer transition-colors hover:border-border-strong">Focus</button>
           </div>
-          <!-- until(): shows the fallback until the promise resolves. -->
-          <p class="text-sm text-muted-foreground">async: ${until(this.later(), 'loading...')}</p>
-          <!-- keyed(): bumping the key discards and rebuilds this subtree.
-               unsafeHTML(): trusted, author-written HTML (NEVER user input). -->
+          <!-- until shows the fallback until the promise resolves. -->
+          <p class="text-sm text-muted-foreground">async: ${until(this.asyncValue, 'loading...')}</p>
+          <!-- keyed discards and rebuilds this subtree when the key changes;
+               unsafeHTML injects trusted, author-written HTML (NEVER user input). -->
           <button @click=${() => this.variant.set(variant + 1)}
             class="w-fit text-sm text-muted-foreground cursor-pointer transition-colors hover:text-foreground underline decoration-dotted underline-offset-4">rekey</button>
           ${keyed(variant, html`<div class="text-[15px] text-foreground">${unsafeHTML('<em>fresh subtree</em>')} #${variant}</div>`)}
