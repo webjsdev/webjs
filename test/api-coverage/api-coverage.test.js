@@ -95,7 +95,7 @@ export function reconcileCoverage(liveNames, internalOf, exemptSet, present, kin
  */
 export function staleExemptions(exemptNames, allLive) {
   const live = new Set(allLive);
-  return [...exemptNames].filter((n) => !live.has(n)).map((n) => `stale exemption "${n}": no longer a live export, remove it from test/coverage/api-coverage.json.`);
+  return [...exemptNames].filter((n) => !live.has(n)).map((n) => `stale exemption "${n}": no longer a live export, remove it from test/api-coverage/api-coverage.json.`);
 }
 
 const SURFACES = [
