@@ -42,7 +42,7 @@ export default function FileStorageExample({
       <code class="font-mono">setFileStore()</code> call, no call-site change.
     </p>
     <form method="post" enctype="multipart/form-data" class="flex flex-wrap gap-3 items-center mb-4">
-      <input type="file" name="file" required
+      <input type="file" name="file" required aria-label="Choose a file to upload"
         class="text-sm text-muted-foreground file:mr-3 file:px-3.5 file:py-2 file:rounded-xl file:border-0 file:bg-card file:border file:border-border file:text-foreground file:text-sm file:cursor-pointer" />
       <button type="submit"
         class="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">Upload</button>
@@ -54,7 +54,7 @@ export default function FileStorageExample({
       ? html`
         <div class="px-4 py-3 rounded-xl bg-card border border-border text-sm">
           Stored <span class="text-foreground font-medium">${name}</span>
-          <span class="text-muted-foreground/70">(${size} bytes)</span>
+          <span class="text-muted-foreground">(${size} bytes)</span>
           <a class="text-primary no-underline ml-2" href="/features/file-storage/file/${key}">download</a>
         </div>`
       : ''}

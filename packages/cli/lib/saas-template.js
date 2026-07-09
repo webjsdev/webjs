@@ -27,7 +27,12 @@ async function readUiComponent(name) {
   // it to the scaffolded app's aliased path (cn lives at lib/utils/cn.ts).
   return raw
     .replaceAll("'../lib/utils.ts'", "'#lib/utils/cn.ts'")
-    .replaceAll('"../lib/utils.ts"', '"#lib/utils/cn.ts"');
+    .replaceAll('"../lib/utils.ts"', '"#lib/utils/cn.ts"')
+    // onBeforeCache lives in its own client-only module so cn() stays pure (#819).
+    // Without this rewrite dialog.ts keeps the registry-relative `../lib/dom.ts`
+    // (which resolves to a nonexistent components/lib/dom.ts) and fails typecheck.
+    .replaceAll("'../lib/dom.ts'", "'#lib/utils/dom.ts'")
+    .replaceAll('"../lib/dom.ts"', '"#lib/utils/dom.ts"');
 }
 
 /** Copy named registry components into `<appDir>/components/ui/`. */
@@ -87,6 +92,15 @@ export async function writeSaasFiles(appDir, opts = {}) {
     "import { db } from '#db/connection.server.ts';",
     "import { compare } from './password.server.ts';",
     "",
+    "// AUTH_SECRET signs session tokens. Set a strong value in .env for any real",
+    "// deployment. The dev fallback keeps a fresh scaffold booting, but is NOT",
+    "// safe for production, so we fail fast if it is missing or blank there.",
+    "const trimmedSecret = process.env.AUTH_SECRET?.trim();",
+    "if (process.env.NODE_ENV === 'production' && !trimmedSecret) {",
+    "  throw new Error('AUTH_SECRET must be set in production');",
+    "}",
+    "const authSecret = trimmedSecret || 'dev-insecure-secret-change-me';",
+    "",
     "export const { auth, signIn, signOut, handlers } = createAuth({",
     "  providers: [",
     "    Credentials({",
@@ -97,7 +111,7 @@ export async function writeSaasFiles(appDir, opts = {}) {
     "      },",
     "    }),",
     "  ],",
-    "  secret: process.env.AUTH_SECRET,",
+    "  secret: authSecret,",
     "});",
     "",
   ].join('\n'));
@@ -324,7 +338,7 @@ export async function writeSaasFiles(appDir, opts = {}) {
     "    <div class=\"max-w-sm mx-auto mt-12\">",
     "      <div class=${cardClass()}>",
     "        <div class=${cardHeaderClass()}>",
-    "          <h3 class=${cardTitleClass()}>Sign in</h3>",
+    "          <h1 class=${cardTitleClass()}>Sign in</h1>",
     "          <p class=${cardDescriptionClass()}>Welcome back: log in to continue.</p>",
     "        </div>",
     "        <div class=${cardContentClass()}>",
@@ -393,7 +407,7 @@ export async function writeSaasFiles(appDir, opts = {}) {
     "    <div class=\"max-w-sm mx-auto mt-12\">",
     "      <div class=${cardClass()}>",
     "        <div class=${cardHeaderClass()}>",
-    "          <h3 class=${cardTitleClass()}>Create an account</h3>",
+    "          <h1 class=${cardTitleClass()}>Create an account</h1>",
     "          <p class=${cardDescriptionClass()}>Get started with your new workspace.</p>",
     "        </div>",
     "        <div class=${cardContentClass()}>",
@@ -460,7 +474,7 @@ export async function writeSaasFiles(appDir, opts = {}) {
     "    </div>",
     "    <div class=${cardClass()}>",
     "      <div class=${cardHeaderClass()}>",
-    "        <h3 class=${cardTitleClass()}>Welcome, ${user?.name || user?.email}!</h3>",
+    "        <h2 class=${cardTitleClass()}>Welcome, ${user?.name || user?.email}!</h2>",
     "        <p class=${cardDescriptionClass()}>You're authenticated. Replace this scaffold with your real app.</p>",
     "      </div>",
     "      <div class=${cardContentClass()}>",
@@ -486,7 +500,7 @@ export async function writeSaasFiles(appDir, opts = {}) {
     "    <h1 class=\"text-2xl font-semibold mb-6\">Settings</h1>",
     "    <div class=${cardClass()}>",
     "      <div class=${cardHeaderClass()}>",
-    "        <h3 class=${cardTitleClass()}>Account</h3>",
+    "        <h2 class=${cardTitleClass()}>Account</h2>",
     "        <p class=${cardDescriptionClass()}>Your basic profile information.</p>",
     "      </div>",
     "      <div class=${cardContentClass()}>",

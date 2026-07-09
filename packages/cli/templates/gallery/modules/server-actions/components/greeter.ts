@@ -18,7 +18,7 @@ export class Greeter extends WebComponent {
         <form @submit=${(e: SubmitEvent) => this.run(e)}
           class="flex items-center gap-2 p-2 pl-4 rounded-2xl bg-card border border-border">
           <input name="name" placeholder="your name" autocomplete="off"
-            class="flex-1 min-w-0 bg-transparent border-0 outline-none text-foreground text-[15px] placeholder:text-muted-foreground/70 py-1.5" />
+            class="flex-1 min-w-0 bg-transparent border-0 outline-none text-foreground text-[15px] placeholder:text-muted-foreground py-1.5" />
           <button type="submit"
             class="shrink-0 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">Greet</button>
         </form>

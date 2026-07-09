@@ -26,7 +26,7 @@ const field = (label: string, name: string, input: unknown, error?: string) => h
   </div>
 `;
 
-const inputCls = 'w-full bg-background border border-border rounded-xl px-3 py-2 text-[15px] text-foreground outline-none transition-colors focus:border-primary placeholder:text-muted-foreground/70';
+const inputCls = 'w-full bg-background border border-border rounded-xl px-3 py-2 text-[15px] text-foreground outline-none transition-colors focus:border-primary placeholder:text-muted-foreground';
 
 export default function FormsFeature({ searchParams, actionData }: { searchParams: Record<string, string | undefined>; actionData?: Result }) {
   if (searchParams.sent) {

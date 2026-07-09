@@ -243,8 +243,9 @@ export async function POST(req: Request) {
 
     <h3>The route() Adapter</h3>
     <p>For the common case (merge query + route params + JSON body into one input object, run an optional validator, JSON-respond the result), the <code>route()</code> helper from <code>@webjsdev/server</code> writes that handler for you in one line. The hand-written <code>route.ts</code> above is always available for full control (custom headers, content negotiation, streaming).</p>
+    <p>The examples below import the action FUNCTION, which is the bare-function form: it applies only the <code>middleware</code> / <code>validate</code> you pass in <code>route(fn, {'{'} middleware, validate {'}'})</code>, because a function reference cannot reach its sibling config exports. To auto-apply the action's OWN declared <code>middleware</code> and <code>validate</code>, import the module namespace instead (<code>import * as postActions from '.../create-post.server.ts'</code>) and pass that: <code>export const POST = route(postActions)</code>, so a guard declared once beside the action protects the RPC and REST boundaries alike (issue #876).</p>
 
-    <pre>// app/api/posts/route.ts
+    <pre>// app/api/posts/route.ts (bare-function form)
 import { route } from '@webjsdev/server';
 import { createPost } from '../../../modules/posts/actions/create-post.server.ts';
 

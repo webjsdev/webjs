@@ -70,22 +70,22 @@ First, the middleware short-circuits by returning an `ActionResult` instead of c
 
 Second, it accumulates context. Anything the middleware writes onto `ctx` is readable inside the action via `actionContext()` (imported from `@webjsdev/server`). The action's own signature never changes. `deletePost(id)` still takes one argument. The user arrives out of band, through the context the middleware built, so the calling code stays exactly as clean as it was.
 
-# Where it runs, and the one place you wire it through by hand
+# Where it runs on every entry point
 
 This is the part that made me want the feature. A WebJs action is reachable two ways. A client component imports it and the import becomes a typed RPC (Remote Procedure Call) stub. Or a `route.ts` REST endpoint imports and calls it, often through the `route()` adapter from `@webjsdev/server`.
 
 On the RPC boundary the declared middleware runs automatically. When the browser calls `deletePost` over RPC, `requireUser` runs first, because the framework reads the `export const middleware` config off the action and wraps the chain around it for you. That is the primary path for a WebJs app, since components import actions directly, and it needs no wiring at all.
 
-The `route()` adapter is deliberately lower level, and here you pass the same chain explicitly:
+The `route()` adapter picks the declared chain up too, as long as you hand it the action's module namespace rather than the bare function:
 
 ```ts
 // app/api/posts/[id]/route.ts
 import { route } from '@webjsdev/server';
-import { deletePost, middleware } from '#modules/posts/actions/delete-post.server.ts';
-export const DELETE = route(deletePost, { middleware });
+import * as postActions from '#modules/posts/actions/delete-post.server.ts';
+export const DELETE = route(postActions);   // its declared middleware + validate apply
 ```
 
-I would honestly prefer `route(deletePost)` to pick the action's own middleware up on its own, the way the RPC boundary does. Today it does not, so you re-export the `middleware` array and hand it to the adapter. It is one line, and the guard still lives next to the action as its single source of truth, but it is a real seam to remember rather than an automatic guarantee. Verified by dogfooding: `route(action)` with no `middleware` option runs the body without the declared guards.
+Passing the whole module lets the adapter read the `export const middleware` (and `export const validate`) sitting next to the action, so the guard you declared once protects the REST boundary automatically, the same way it does on the RPC one. The guard stays a property of the action, not of a single transport. If you instead import just the function (`import { deletePost }` then `route(deletePost)`), the adapter has no way to reach its sibling config, so there you pass the chain explicitly with `route(deletePost, { middleware })`. Verified by dogfooding: the module form applies the declared guards, the bare-function form runs only what you pass it.
 
 # Compose several, in order
 
@@ -111,4 +111,4 @@ One rule ties this together. A configured action file holds exactly one callable
 
 # The takeaway
 
-Auth, rate-limit checks, logging, and tenant resolution are cross-cutting, so they do not belong copy-pasted into the top of every action body. WebJs lets a `'use server'` action declare `export const middleware = [mw1, mw2]`, an array of `async (ctx, next) => result` functions that wrap the action. On the RPC boundary they run automatically; a `route.ts` REST endpoint built with the `route()` adapter takes the same array through its `middleware` option. A middleware short-circuits by returning an `ActionResult` before the body runs, and feeds context the action reads through `actionContext()` with no change to its signature. You write the guard once, next to the function, and reuse that one array on every path into the action. Next.js has no first-class primitive for this (you wrap manually or lean on route middleware that cannot even see the action), which is exactly the gap this closes.
+Auth, rate-limit checks, logging, and tenant resolution are cross-cutting, so they do not belong copy-pasted into the top of every action body. WebJs lets a `'use server'` action declare `export const middleware = [mw1, mw2]`, an array of `async (ctx, next) => result` functions that wrap the action. On the RPC boundary they run automatically, and a `route.ts` REST endpoint built with the `route()` adapter picks them up automatically too when you hand it the action's module namespace (or takes the array through its `middleware` option if you pass the bare function). A middleware short-circuits by returning an `ActionResult` before the body runs, and feeds context the action reads through `actionContext()` with no change to its signature. You write the guard once, next to the function, and reuse that one array on every path into the action. Next.js has no first-class primitive for this (you wrap manually or lean on route middleware that cannot even see the action), which is exactly the gap this closes.

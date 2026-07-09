@@ -38,7 +38,7 @@ export class RateProbe extends WebComponent {
             <li class="flex items-center justify-between px-3 py-2 rounded-xl bg-card border border-border text-sm">
               <span class="text-muted-foreground">#${p.n}</span>
               <span class="font-mono ${p.status === 429 ? 'text-destructive' : 'text-primary'}">${p.status === 429 ? '429 limited' : '200 ok'}</span>
-              <span class="text-muted-foreground/70 text-[13px]">remaining: ${p.remaining}</span>
+              <span class="text-muted-foreground text-[13px]">remaining: ${p.remaining}</span>
             </li>
           `)}
         </ul>

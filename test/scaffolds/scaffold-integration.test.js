@@ -415,7 +415,62 @@ test('scaffoldApp saas: writes auth + dashboard + Drizzle User model', async () 
       if (!c.endsWith('.ts')) continue;
       const src = readFileSync(join(appDir, 'components', 'ui', c), 'utf8');
       assert.doesNotMatch(src, /from ['"]\.\.\/lib\/utils\.ts['"]/, `${c} must not keep the stale ../lib/utils.ts cn import`);
+      // #877: the onBeforeCache import must be rewritten the same way. The saas
+      // generator previously rewrote only the cn() import, so dialog.ts kept the
+      // registry-relative `../lib/dom.ts` (a nonexistent components/lib/dom.ts)
+      // and failed `webjs typecheck` with TS2307. Counterfactual: the missing
+      // rewrite leaves `'../lib/dom.ts'` and this fails.
+      assert.doesNotMatch(src, /from ['"]\.\.\/lib\/dom\.ts['"]/, `${c} must not keep the stale ../lib/dom.ts import`);
+      if (/onBeforeCache/.test(src)) {
+        assert.match(src, /from ['"]#lib\/utils\/dom\.ts['"]/, `${c} imports onBeforeCache from #lib/utils/dom.ts`);
+      }
     }
+
+    // #877: lib/auth.server.ts must not assign `process.env.AUTH_SECRET`
+    // (string | undefined) straight to the required `string` secret (TS2322).
+    // It resolves through a typed const with a dev fallback + prod guard.
+    const authSrc = readFileSync(join(appDir, 'lib', 'auth.server.ts'), 'utf8');
+    assert.doesNotMatch(authSrc, /secret:\s*process\.env\.AUTH_SECRET\b/, 'secret must not be the raw string | undefined env read');
+    assert.match(authSrc, /const authSecret =/, 'auth secret resolved through a typed const');
+    assert.match(authSrc, /secret:\s*authSecret\b/, 'createAuth uses the typed authSecret');
+    assert.match(authSrc, /NODE_ENV === 'production'[\s\S]*AUTH_SECRET must be set/, 'production fails fast when AUTH_SECRET is unset');
+
+    // #878: every top-level page needs EXACTLY one <h1> (axe page-has-heading-one
+    // wants one, and a second h1 is its own violation). The auth cards are the
+    // sole heading so their title is the h1; the dashboard/settings pages already
+    // carry a page <h1>, so their card title stays a subordinate <h2> (promoting
+    // it to h1 was the regression this pins). Counterfactual: an <h3>-only page,
+    // or a double-h1 dashboard, fails this.
+    const h1Count = (src) => (src.match(/<h1\b/g) || []).length;
+    for (const p of [['login'], ['signup'], ['dashboard'], ['dashboard', 'settings']]) {
+      const pageSrc = readFileSync(join(appDir, 'app', ...p, 'page.ts'), 'utf8');
+      assert.equal(h1Count(pageSrc), 1, `${p.join('/')} page has exactly one <h1>`);
+    }
+
+    // #878: no gallery surface may drop label text below AA contrast. The
+    // `text-muted-foreground/70` opacity measured 3.83:1; full-opacity
+    // `text-muted-foreground` passes. Scan the WHOLE generated gallery (every
+    // component + feature page), not just one demo, so a stray low-contrast
+    // token anywhere reds this. Counterfactual: any `/NN` opacity fails.
+    const galleryDirs = [join(appDir, 'modules'), join(appDir, 'app', 'features')];
+    const walk = (dir) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, e.name);
+        if (e.isDirectory()) { walk(full); continue; }
+        if (!e.name.endsWith('.ts')) continue;
+        const src = readFileSync(full, 'utf8');
+        assert.doesNotMatch(src, /text-muted-foreground\/\d/, `${full} keeps full-contrast text-muted-foreground (no /NN opacity)`);
+      }
+    };
+    for (const d of galleryDirs) if (existsSync(d)) walk(d);
+
+    // #878: gallery form controls need an accessible name (axe `label`). The
+    // file-upload input and the directive-demo text input carried none, so a
+    // full axe sweep flagged them critical. Pin their aria-labels.
+    const fileStorage = readFileSync(join(appDir, 'app', 'features', 'file-storage', 'page.ts'), 'utf8');
+    assert.match(fileStorage, /type="file"[^>]*aria-label=/, 'the file input has an aria-label');
+    const directiveDemo = readFileSync(join(appDir, 'modules', 'directives', 'components', 'directive-demo.ts'), 'utf8');
+    assert.match(directiveDemo, /aria-label="Editable text/, 'the ref-focus input has an aria-label');
 
     // Drizzle User model (saas overwrites db/schema.server.ts to add passwordHash)
     const schema = readFileSync(join(appDir, 'db', 'schema.server.ts'), 'utf8');

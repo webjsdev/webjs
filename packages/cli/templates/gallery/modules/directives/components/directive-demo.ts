@@ -60,7 +60,7 @@ export class DirectiveDemo extends WebComponent {
           <ul class="grid gap-2 list-none m-0 p-0">
             ${repeat(this.items.get(), (it: Item) => it.id, (it: Item) => html`
               <li class="flex items-center gap-2 px-3 py-2 rounded-xl bg-card border border-border text-[15px] text-foreground">
-                <span class="text-muted-foreground/70 tabular-nums text-[13px]">#${it.id}</span>${it.label}
+                <span class="text-muted-foreground tabular-nums text-[13px]">#${it.id}</span>${it.label}
               </li>
             `)}
           </ul>
@@ -76,6 +76,7 @@ export class DirectiveDemo extends WebComponent {
           <div class="flex gap-2">
             <input
               ${ref(this.inputRef)}
+              aria-label="Editable text for the ref focus demo"
               class="flex-1 px-3 py-1.5 rounded-xl bg-card border border-border text-[15px] text-foreground"
               .value=${live(this.text.get())}
               @input=${(e: Event) => this.text.set((e.target as HTMLInputElement).value)}>
