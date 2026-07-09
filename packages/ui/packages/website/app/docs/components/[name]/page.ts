@@ -7,6 +7,9 @@ import {
 } from './examples.ts';
 import { getComponentApi, type ComponentApi } from './component-api.ts';
 import { loadRegistryItem } from '#app/_lib/registry.server.ts';
+// Side-effect import: register <preview-tabs> so every preview pane below can
+// flip between the live demo and its source snippet.
+import '#app/_components/preview-tabs.ts';
 
 // ---------------------------------------------------------------------------
 // Side-effect imports: load every ui-* component module so the custom
@@ -76,6 +79,35 @@ function previewPane(snippet: string, opts: { minH?: string } = {}) {
   `;
 }
 
+// Strip the shared leading indentation off a snippet so the Code view reads
+// like hand-written markup rather than template-literal-indented source.
+function dedent(snippet: string): string {
+  const lines = snippet.replace(/^\n+/, '').replace(/\s+$/, '').split('\n');
+  const widths = lines
+    .filter((l) => l.trim().length > 0)
+    .map((l) => (l.match(/^[ \t]*/)?.[0].length ?? 0));
+  const trim = widths.length ? Math.min(...widths) : 0;
+  return lines.map((l) => l.slice(trim)).join('\n');
+}
+
+// The "Code" side of a preview: the exact snippet that produced the demo,
+// escaped (text interpolation, not unsafeHTML) so the markup shows as source.
+// Reuses the site-wide <pre> code surface + client highlighter.
+function codePane(snippet: string) {
+  return html`<pre class="rounded-lg p-4 overflow-x-auto text-xs !mt-0 !mb-0"><code>${dedent(snippet)}</code></pre>`;
+}
+
+// Wraps a live preview and its source in <preview-tabs> so the reader can flip
+// between them. Used for the hero preview and every Variants/Sizes/Icon pane.
+function previewWithCode(snippet: string, opts: { minH?: string } = {}) {
+  return html`
+    <preview-tabs>
+      <div slot="preview">${previewPane(snippet, opts)}</div>
+      <div slot="code">${codePane(snippet)}</div>
+    </preview-tabs>
+  `;
+}
+
 // Concatenate all defined values from a variant/size example map into one
 // snippet for the combined preview pane. Skips keys missing from the
 // examples map so a stale metadata entry doesn't blank the pane.
@@ -112,7 +144,7 @@ function renderValueSection(
               ? html`
                   <div>
                     <h3 class="text-sm font-medium mb-2 text-fg">${startCase(k)}</h3>
-                    ${previewPane(examples[k])}
+                    ${previewWithCode(examples[k])}
                   </div>
                 `
               : '',
@@ -124,7 +156,7 @@ function renderValueSection(
   return html`
     <section class="mb-12">
       <h2 class="text-base font-medium mb-3 text-fg-muted">${heading}</h2>
-      ${previewPane(combineExamples(keys, examples))}
+      ${previewWithCode(combineExamples(keys, examples))}
     </section>
   `;
 }
@@ -176,7 +208,7 @@ export default async function ComponentDoc({ params }: { params: { name: string 
               component fresh, connectedCallback captures innerHTML correctly, and
               the rendered output looks right.
             -->
-            ${previewPane(example, { minH: '280px' })}
+            ${previewWithCode(example, { minH: '280px' })}
           </section>
         `
         : html`
