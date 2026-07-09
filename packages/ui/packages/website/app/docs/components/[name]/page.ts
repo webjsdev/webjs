@@ -4,6 +4,8 @@ import {
   getVariantExamples,
   getSizeExamples,
   getIconSizeExamples,
+  renderExample,
+  codeExample,
 } from './examples.ts';
 import { getComponentApi, type ComponentApi } from './component-api.ts';
 import { loadRegistryItem } from '#app/_lib/registry.server.ts';
@@ -90,20 +92,23 @@ function dedent(snippet: string): string {
   return lines.map((l) => l.slice(trim)).join('\n');
 }
 
-// The "Code" side of a preview: the exact snippet that produced the demo,
+// The "Code" side of a preview: the idiomatic snippet that composes the demo,
 // escaped (text interpolation, not unsafeHTML) so the markup shows as source.
 // Reuses the site-wide <pre> code surface + client highlighter.
-function codePane(snippet: string) {
-  return html`<pre class="rounded-lg p-4 overflow-x-auto text-xs !mt-0 !mb-0"><code>${dedent(snippet)}</code></pre>`;
+function codePane(code: string) {
+  return html`<pre class="rounded-lg p-4 overflow-x-auto text-xs !mt-0 !mb-0"><code>${dedent(code)}</code></pre>`;
 }
 
 // Wraps a live preview and its source in <preview-tabs> so the reader can flip
-// between them. Used for the hero preview and every Variants/Sizes/Icon pane.
+// between them. Both sides derive from ONE authored snippet: renderExample()
+// evaluates the frozen class-helper holes for the live demo, codeExample()
+// keeps them as calls so the Code tab teaches the idiomatic helper usage.
+// Used for the hero preview and every Variants/Sizes/Icon pane.
 function previewWithCode(snippet: string, opts: { minH?: string } = {}) {
   return html`
     <preview-tabs>
-      <div slot="preview">${previewPane(snippet, opts)}</div>
-      <div slot="code">${codePane(snippet)}</div>
+      <div slot="preview">${previewPane(renderExample(snippet), opts)}</div>
+      <div slot="code">${codePane(codeExample(snippet))}</div>
     </preview-tabs>
   `;
 }

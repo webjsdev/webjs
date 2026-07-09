@@ -117,135 +117,237 @@ import {
 } from '#components/ui/alert-dialog.ts';
 
 // --------------------------------------------------------------------------
+// Single source of truth for previews (#866 follow-up)
+//
+// Every example below is authored the way an end user composes the component:
+// the class-helper call sits INLINE in the markup as a frozen `${xClass(...)}`
+// hole (the leading `${` is backslash-escaped, so the string stores the call
+// verbatim instead of interpolating it at module load). Two derivations read
+// off that single source.
+//   - renderExample() evaluates each frozen hole to its class string, for the
+//     live preview (unsafeHTML needs real classes to render).
+//   - codeExample() shows each hole as the call, for the Code tab, so the
+//     snippet teaches the helper usage rather than the expanded class soup.
+// Only class-helper holes are frozen; structural holes (${type}, ${position})
+// and ${ICON_SETTINGS} stay live and are resolved at authoring time.
+// --------------------------------------------------------------------------
+
+// Registry the frozen holes are evaluated against. Listing every imported
+// helper here also keeps each import "used" after the freeze.
+const HELPERS: Record<string, (...args: any[]) => string> = {
+  accordionClass, accordionContentClass, accordionItemClass, accordionTriggerClass,
+  alertClass, alertDescriptionClass, alertTitleClass,
+  alertDialogContentClass, alertDialogDescriptionClass, alertDialogFooterClass,
+  alertDialogHeaderClass, alertDialogTitleClass,
+  avatarClass, avatarFallbackClass, avatarGroupClass, avatarImageClass,
+  badgeClass,
+  breadcrumbItemClass, breadcrumbLinkClass, breadcrumbListClass, breadcrumbPageClass, breadcrumbSeparatorClass,
+  buttonClass,
+  cardClass, cardContentClass, cardDescriptionClass, cardFooterClass, cardHeaderClass, cardTitleClass,
+  checkboxClass,
+  collapsibleClass, collapsibleContentClass, collapsibleTriggerClass,
+  dialogDescriptionClass, dialogFooterClass, dialogHeaderClass, dialogTitleClass,
+  fieldClass, hintClass, inputClass, kbdClass, kbdGroupClass, labelClass,
+  nativeSelectClass, nativeSelectIconClass, nativeSelectWrapperClass,
+  paginationClass, paginationContentClass, paginationLinkClass, paginationNextClass, paginationPreviousClass,
+  popoverContentClass, popoverDescriptionClass, popoverHeaderClass, popoverTitleClass,
+  progressClass, radioClass, radioGroupClass, separatorClass, skeletonClass, stackClass,
+  switchInputClass, switchTrackClass,
+  tableBodyClass, tableCellClass, tableClass, tableContainerClass, tableHeadClass, tableHeaderClass, tableRowClass,
+  tabsListClass, textareaClass, toggleClass,
+};
+
+// Evaluate one authored call expression such as buttonClass({ variant: 'x' })
+// against HELPERS. Runs server-side only (from the page render), over strings
+// this module authored, never user input. Fails soft to an empty class.
+function evalHole(expr: string): string {
+  try {
+    return String(new Function('H', `return (H.${expr});`)(HELPERS));
+  } catch {
+    return '';
+  }
+}
+
+// Walk a frozen snippet, replacing each hole. Uses a brace-balanced scan so
+// object-literal args do not end the hole early. In render mode a hole becomes
+// its evaluated class string (quotes left as authored); in code mode a hole
+// becomes the call verbatim, and when the hole is the ENTIRE quoted attribute
+// value the quotes are dropped so it reads as the idiomatic unquoted form.
+function buildExample(src: string, mode: 'render' | 'code'): string {
+  let out = '';
+  let i = 0;
+  while (i < src.length) {
+    const open = src.indexOf('${', i);
+    if (open === -1) {
+      out += src.slice(i);
+      break;
+    }
+    let depth = 0;
+    let j = open + 2;
+    for (; j < src.length; j++) {
+      const ch = src[j];
+      if (ch === '{') depth++;
+      else if (ch === '}') {
+        if (depth === 0) break;
+        depth--;
+      }
+    }
+    const before = src.slice(i, open);
+    const expr = src.slice(open + 2, j).trim();
+    if (mode === 'render') {
+      out += before + evalHole(expr);
+      i = j + 1;
+    } else if (before.endsWith('="') && src[j + 1] === '"') {
+      out += before.slice(0, -1) + '${' + expr + '}';
+      i = j + 2;
+    } else {
+      out += before + '${' + expr + '}';
+      i = j + 1;
+    }
+  }
+  return out;
+}
+
+/** A snippet with every class-helper hole evaluated, for the live preview. */
+export function renderExample(src: string): string {
+  return buildExample(src, 'render');
+}
+
+/** A snippet with every class-helper hole shown as the call, for the Code tab. */
+export function codeExample(src: string): string {
+  return buildExample(src, 'code');
+}
+
+// --------------------------------------------------------------------------
 // Tier-1 examples (class-helper functions on native HTML)
 // --------------------------------------------------------------------------
 
 const EXAMPLES: Record<string, string> = {
   button: `
     <div class="flex flex-wrap items-center gap-3">
-      <button class="${buttonClass()}">Default</button>
-      <button class="${buttonClass({ variant: 'secondary' })}">Secondary</button>
-      <button class="${buttonClass({ variant: 'outline' })}">Outline</button>
-      <button class="${buttonClass({ variant: 'ghost' })}">Ghost</button>
-      <button class="${buttonClass({ variant: 'destructive' })}">Destructive</button>
-      <button class="${buttonClass({ variant: 'link' })}">Link</button>
+      <button class="\${buttonClass()}">Default</button>
+      <button class="\${buttonClass({ variant: 'secondary' })}">Secondary</button>
+      <button class="\${buttonClass({ variant: 'outline' })}">Outline</button>
+      <button class="\${buttonClass({ variant: 'ghost' })}">Ghost</button>
+      <button class="\${buttonClass({ variant: 'destructive' })}">Destructive</button>
+      <button class="\${buttonClass({ variant: 'link' })}">Link</button>
     </div>
   `,
 
   badge: `
     <div class="flex flex-wrap items-center gap-2">
-      <span class="${badgeClass()}">Default</span>
-      <span class="${badgeClass({ variant: 'secondary' })}">Secondary</span>
-      <span class="${badgeClass({ variant: 'destructive' })}">Destructive</span>
-      <span class="${badgeClass({ variant: 'outline' })}">Outline</span>
-      <span class="${badgeClass({ variant: 'ghost' })}">Ghost</span>
-      <span class="${badgeClass({ variant: 'link' })}">Link</span>
+      <span class="\${badgeClass()}">Default</span>
+      <span class="\${badgeClass({ variant: 'secondary' })}">Secondary</span>
+      <span class="\${badgeClass({ variant: 'destructive' })}">Destructive</span>
+      <span class="\${badgeClass({ variant: 'outline' })}">Outline</span>
+      <span class="\${badgeClass({ variant: 'ghost' })}">Ghost</span>
+      <span class="\${badgeClass({ variant: 'link' })}">Link</span>
     </div>
   `,
 
   alert: `
-    <div role="alert" class="${alertClass()}">
+    <div role="alert" class="\${alertClass()}">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-      <div data-slot="alert-title" class="${alertTitleClass()}">Heads up!</div>
-      <div data-slot="alert-description" class="${alertDescriptionClass()}">You can add components to your app using the cli.</div>
+      <div data-slot="alert-title" class="\${alertTitleClass()}">Heads up!</div>
+      <div data-slot="alert-description" class="\${alertDescriptionClass()}">You can add components to your app using the cli.</div>
     </div>
   `,
 
   card: `
-    <div class="${cardClass()} w-full max-w-sm">
-      <div class="${cardHeaderClass()}">
-        <div class="${cardTitleClass()}">Create project</div>
-        <div class="${cardDescriptionClass()}">Deploy your new project in one-click.</div>
+    <div class="\${cardClass()} w-full max-w-sm">
+      <div class="\${cardHeaderClass()}">
+        <div class="\${cardTitleClass()}">Create project</div>
+        <div class="\${cardDescriptionClass()}">Deploy your new project in one-click.</div>
       </div>
-      <div class="${cardContentClass()}">
-        <div class="${fieldClass()}">
-          <label class="${labelClass()}" for="card-name">Name</label>
-          <input class="${inputClass()}" id="card-name" placeholder="Name of your project">
+      <div class="\${cardContentClass()}">
+        <div class="\${fieldClass()}">
+          <label class="\${labelClass()}" for="card-name">Name</label>
+          <input class="\${inputClass()}" id="card-name" placeholder="Name of your project">
         </div>
       </div>
-      <div class="${cardFooterClass()} justify-end gap-2">
-        <button class="${buttonClass({ variant: 'outline' })}">Cancel</button>
-        <button class="${buttonClass()}">Deploy</button>
+      <div class="\${cardFooterClass()} justify-end gap-2">
+        <button class="\${buttonClass({ variant: 'outline' })}">Cancel</button>
+        <button class="\${buttonClass()}">Deploy</button>
       </div>
     </div>
   `,
 
   input: `
-    <div class="${fieldClass()} max-w-sm w-full">
-      <label class="${labelClass()}" for="email">Email</label>
-      <input class="${inputClass()}" id="email" name="email" type="email" placeholder="you@example.com" aria-describedby="email-hint">
-      <p class="${hintClass()}" id="email-hint">We'll never share it.</p>
+    <div class="\${fieldClass()} max-w-sm w-full">
+      <label class="\${labelClass()}" for="email">Email</label>
+      <input class="\${inputClass()}" id="email" name="email" type="email" placeholder="you@example.com" aria-describedby="email-hint">
+      <p class="\${hintClass()}" id="email-hint">We'll never share it.</p>
     </div>
   `,
 
   textarea: `
-    <div class="${fieldClass()} max-w-md w-full">
-      <label class="${labelClass()}" for="message">Message</label>
-      <textarea class="${textareaClass()}" id="message" name="message" rows="4" placeholder="Tell us how it's going…"></textarea>
+    <div class="\${fieldClass()} max-w-md w-full">
+      <label class="\${labelClass()}" for="message">Message</label>
+      <textarea class="\${textareaClass()}" id="message" name="message" rows="4" placeholder="Tell us how it's going…"></textarea>
     </div>
   `,
 
   label: `
-    <div class="${fieldClass()}">
-      <label class="${labelClass()}" for="lbl-demo">Accept terms</label>
-      <input type="checkbox" id="lbl-demo" class="${checkboxClass()}" data-slot="checkbox">
+    <div class="\${fieldClass()}">
+      <label class="\${labelClass()}" for="lbl-demo">Accept terms</label>
+      <input type="checkbox" id="lbl-demo" class="\${checkboxClass()}" data-slot="checkbox">
     </div>
   `,
 
   checkbox: `
     <div class="flex items-center gap-2">
-      <input type="checkbox" id="cb-1" class="${checkboxClass()}" data-slot="checkbox" checked>
-      <label class="${labelClass()}" for="cb-1">Subscribe to newsletter</label>
+      <input type="checkbox" id="cb-1" class="\${checkboxClass()}" data-slot="checkbox" checked>
+      <label class="\${labelClass()}" for="cb-1">Subscribe to newsletter</label>
     </div>
   `,
 
   switch: `
     <label class="flex items-center gap-2">
-      <input type="checkbox" role="switch" class="${switchInputClass()}" name="notify" checked>
-      <span class="${switchTrackClass()}"></span>
-      <span class="${labelClass()}">Notifications</span>
+      <input type="checkbox" role="switch" class="\${switchInputClass()}" name="notify" checked>
+      <span class="\${switchTrackClass()}"></span>
+      <span class="\${labelClass()}">Notifications</span>
     </label>
   `,
 
   radio_group: `
-    <div role="radiogroup" class="${radioGroupClass()}">
+    <div role="radiogroup" class="\${radioGroupClass()}">
       <div class="flex items-center gap-2">
-        <input type="radio" name="plan" value="basic" id="plan-basic" class="${radioClass()}" data-slot="radio" checked>
-        <label class="${labelClass()}" for="plan-basic">Basic</label>
+        <input type="radio" name="plan" value="basic" id="plan-basic" class="\${radioClass()}" data-slot="radio" checked>
+        <label class="\${labelClass()}" for="plan-basic">Basic</label>
       </div>
       <div class="flex items-center gap-2">
-        <input type="radio" name="plan" value="pro" id="plan-pro" class="${radioClass()}" data-slot="radio">
-        <label class="${labelClass()}" for="plan-pro">Pro</label>
+        <input type="radio" name="plan" value="pro" id="plan-pro" class="\${radioClass()}" data-slot="radio">
+        <label class="\${labelClass()}" for="plan-pro">Pro</label>
       </div>
     </div>
   `,
 
   'native-select': `
-    <div class="${nativeSelectWrapperClass()}">
-      <select class="${nativeSelectClass()}" name="plan">
+    <div class="\${nativeSelectWrapperClass()}">
+      <select class="\${nativeSelectClass()}" name="plan">
         <option>Basic</option>
         <option>Pro</option>
         <option>Enterprise</option>
       </select>
-      <svg class="${nativeSelectIconClass()}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      <svg class="\${nativeSelectIconClass()}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
     </div>
   `,
 
   avatar: `
     <div class="flex items-center gap-3">
-      <span class="${avatarClass()}" data-size="default" data-slot="avatar">
-        <img class="${avatarImageClass()}" src="https://github.com/vivek7405.png" alt="Avatar of Vivek, webjs project owner">
-        <span class="${avatarFallbackClass()}">V</span>
+      <span class="\${avatarClass()}" data-size="default" data-slot="avatar">
+        <img class="\${avatarImageClass()}" src="https://github.com/vivek7405.png" alt="Avatar of Vivek, webjs project owner">
+        <span class="\${avatarFallbackClass()}">V</span>
       </span>
-      <div class="${avatarGroupClass()}">
-        <span class="${avatarClass()}" data-size="default" data-slot="avatar">
-          <span class="${avatarFallbackClass()}">A</span>
+      <div class="\${avatarGroupClass()}">
+        <span class="\${avatarClass()}" data-size="default" data-slot="avatar">
+          <span class="\${avatarFallbackClass()}">A</span>
         </span>
-        <span class="${avatarClass()}" data-size="default" data-slot="avatar">
-          <span class="${avatarFallbackClass()}">B</span>
+        <span class="\${avatarClass()}" data-size="default" data-slot="avatar">
+          <span class="\${avatarFallbackClass()}">B</span>
         </span>
-        <span class="${avatarClass()}" data-size="default" data-slot="avatar">
-          <span class="${avatarFallbackClass()}">C</span>
+        <span class="\${avatarClass()}" data-size="default" data-slot="avatar">
+          <span class="\${avatarFallbackClass()}">C</span>
         </span>
       </div>
     </div>
@@ -254,16 +356,16 @@ const EXAMPLES: Record<string, string> = {
   separator: `
     <div class="w-64">
       <div>Above</div>
-      <div role="none" class="${separatorClass()} my-3" data-orientation="horizontal"></div>
+      <div role="none" class="\${separatorClass()} my-3" data-orientation="horizontal"></div>
       <div>Below</div>
     </div>
   `,
 
   skeleton: `
     <div class="flex flex-col gap-3 w-full max-w-sm">
-      <div class="${skeletonClass()} h-4 w-3/4"></div>
-      <div class="${skeletonClass()} h-4 w-1/2"></div>
-      <div class="${skeletonClass()} h-4 w-2/3"></div>
+      <div class="\${skeletonClass()} h-4 w-3/4"></div>
+      <div class="\${skeletonClass()} h-4 w-1/2"></div>
+      <div class="\${skeletonClass()} h-4 w-2/3"></div>
     </div>
   `,
 
@@ -274,39 +376,39 @@ const EXAMPLES: Record<string, string> = {
   `,
 
   kbd: `
-    <div class="${kbdGroupClass()}">
-      <kbd class="${kbdClass()}">⌘</kbd>
-      <kbd class="${kbdClass()}">Shift</kbd>
-      <kbd class="${kbdClass()}">P</kbd>
+    <div class="\${kbdGroupClass()}">
+      <kbd class="\${kbdClass()}">⌘</kbd>
+      <kbd class="\${kbdClass()}">Shift</kbd>
+      <kbd class="\${kbdClass()}">P</kbd>
     </div>
   `,
 
   progress: `
     <div class="w-64">
-      <progress value="42" max="100" class="${progressClass()}"></progress>
+      <progress value="42" max="100" class="\${progressClass()}"></progress>
     </div>
   `,
 
   table: `
-    <div class="${tableContainerClass()} max-w-md w-full">
-      <table class="${tableClass()}">
-        <thead class="${tableHeaderClass()}">
-          <tr class="${tableRowClass()}">
-            <th class="${tableHeadClass()}">Invoice</th>
-            <th class="${tableHeadClass()}">Status</th>
-            <th class="${tableHeadClass()} text-right">Amount</th>
+    <div class="\${tableContainerClass()} max-w-md w-full">
+      <table class="\${tableClass()}">
+        <thead class="\${tableHeaderClass()}">
+          <tr class="\${tableRowClass()}">
+            <th class="\${tableHeadClass()}">Invoice</th>
+            <th class="\${tableHeadClass()}">Status</th>
+            <th class="\${tableHeadClass()} text-right">Amount</th>
           </tr>
         </thead>
-        <tbody class="${tableBodyClass()}">
-          <tr class="${tableRowClass()}">
-            <td class="${tableCellClass()}">INV001</td>
-            <td class="${tableCellClass()}">Paid</td>
-            <td class="${tableCellClass()} text-right">$250.00</td>
+        <tbody class="\${tableBodyClass()}">
+          <tr class="\${tableRowClass()}">
+            <td class="\${tableCellClass()}">INV001</td>
+            <td class="\${tableCellClass()}">Paid</td>
+            <td class="\${tableCellClass()} text-right">$250.00</td>
           </tr>
-          <tr class="${tableRowClass()}">
-            <td class="${tableCellClass()}">INV002</td>
-            <td class="${tableCellClass()}">Pending</td>
-            <td class="${tableCellClass()} text-right">$150.00</td>
+          <tr class="\${tableRowClass()}">
+            <td class="\${tableCellClass()}">INV002</td>
+            <td class="\${tableCellClass()}">Pending</td>
+            <td class="\${tableCellClass()} text-right">$150.00</td>
           </tr>
         </tbody>
       </table>
@@ -329,24 +431,24 @@ const EXAMPLES: Record<string, string> = {
 
   breadcrumb: `
     <nav aria-label="breadcrumb" data-slot="breadcrumb">
-      <ol class="${breadcrumbListClass()}">
-        <li class="${breadcrumbItemClass()}"><a class="${breadcrumbLinkClass()}" href="#">Home</a></li>
-        <li class="${breadcrumbSeparatorClass()}" role="presentation" aria-hidden="true">/</li>
-        <li class="${breadcrumbItemClass()}"><a class="${breadcrumbLinkClass()}" href="#">Docs</a></li>
-        <li class="${breadcrumbSeparatorClass()}" role="presentation" aria-hidden="true">/</li>
-        <li class="${breadcrumbItemClass()}"><span class="${breadcrumbPageClass()}" aria-current="page">Components</span></li>
+      <ol class="\${breadcrumbListClass()}">
+        <li class="\${breadcrumbItemClass()}"><a class="\${breadcrumbLinkClass()}" href="#">Home</a></li>
+        <li class="\${breadcrumbSeparatorClass()}" role="presentation" aria-hidden="true">/</li>
+        <li class="\${breadcrumbItemClass()}"><a class="\${breadcrumbLinkClass()}" href="#">Docs</a></li>
+        <li class="\${breadcrumbSeparatorClass()}" role="presentation" aria-hidden="true">/</li>
+        <li class="\${breadcrumbItemClass()}"><span class="\${breadcrumbPageClass()}" aria-current="page">Components</span></li>
       </ol>
     </nav>
   `,
 
   pagination: `
-    <nav role="navigation" aria-label="pagination" class="${paginationClass()}">
-      <ul class="${paginationContentClass()}">
-        <li><a class="${paginationPreviousClass()}" href="#">‹ Previous</a></li>
-        <li><a class="${paginationLinkClass()}" href="#">1</a></li>
-        <li><a class="${paginationLinkClass({ isActive: true })}" aria-current="page">2</a></li>
-        <li><a class="${paginationLinkClass()}" href="#">3</a></li>
-        <li><a class="${paginationNextClass()}" href="#">Next ›</a></li>
+    <nav role="navigation" aria-label="pagination" class="\${paginationClass()}">
+      <ul class="\${paginationContentClass()}">
+        <li><a class="\${paginationPreviousClass()}" href="#">‹ Previous</a></li>
+        <li><a class="\${paginationLinkClass()}" href="#">1</a></li>
+        <li><a class="\${paginationLinkClass({ isActive: true })}" aria-current="page">2</a></li>
+        <li><a class="\${paginationLinkClass()}" href="#">3</a></li>
+        <li><a class="\${paginationNextClass()}" href="#">Next ›</a></li>
       </ul>
     </nav>
   `,
@@ -358,20 +460,20 @@ const EXAMPLES: Record<string, string> = {
   dialog: `
     <ui-dialog>
       <ui-dialog-trigger>
-        <button class="${buttonClass({ variant: 'outline' })}">Open dialog</button>
+        <button class="\${buttonClass({ variant: 'outline' })}">Open dialog</button>
       </ui-dialog-trigger>
       <ui-dialog-content>
-        <div class="${dialogHeaderClass()}">
-          <h2 class="${dialogTitleClass()}">Edit profile</h2>
-          <p class="${dialogDescriptionClass()}">Make changes to your profile here.</p>
+        <div class="\${dialogHeaderClass()}">
+          <h2 class="\${dialogTitleClass()}">Edit profile</h2>
+          <p class="\${dialogDescriptionClass()}">Make changes to your profile here.</p>
         </div>
-        <div class="${fieldClass()}">
-          <label class="${labelClass()}" for="dlg-name">Name</label>
-          <input class="${inputClass()}" id="dlg-name" placeholder="Your name">
+        <div class="\${fieldClass()}">
+          <label class="\${labelClass()}" for="dlg-name">Name</label>
+          <input class="\${inputClass()}" id="dlg-name" placeholder="Your name">
         </div>
-        <div class="${dialogFooterClass()}">
-          <ui-dialog-close><button class="${buttonClass({ variant: 'outline' })}">Cancel</button></ui-dialog-close>
-          <button class="${buttonClass()}">Save</button>
+        <div class="\${dialogFooterClass()}">
+          <ui-dialog-close><button class="\${buttonClass({ variant: 'outline' })}">Cancel</button></ui-dialog-close>
+          <button class="\${buttonClass()}">Save</button>
         </div>
       </ui-dialog-content>
     </ui-dialog>
@@ -380,14 +482,14 @@ const EXAMPLES: Record<string, string> = {
   alert_dialog: `
     <ui-alert-dialog>
       <ui-alert-dialog-trigger>
-        <button class="${buttonClass({ variant: 'destructive' })}">Delete account</button>
+        <button class="\${buttonClass({ variant: 'destructive' })}">Delete account</button>
       </ui-alert-dialog-trigger>
       <ui-alert-dialog-content>
-        <div class="${alertDialogHeaderClass()}">
-          <h2 class="${alertDialogTitleClass()}">Are you sure?</h2>
-          <p class="${alertDialogDescriptionClass()}">This action cannot be undone.</p>
+        <div class="\${alertDialogHeaderClass()}">
+          <h2 class="\${alertDialogTitleClass()}">Are you sure?</h2>
+          <p class="\${alertDialogDescriptionClass()}">This action cannot be undone.</p>
         </div>
-        <div class="${alertDialogFooterClass()}">
+        <div class="\${alertDialogFooterClass()}">
           <ui-alert-dialog-cancel>Cancel</ui-alert-dialog-cancel>
           <ui-alert-dialog-action variant="destructive">Yes, delete</ui-alert-dialog-action>
         </div>
@@ -396,15 +498,15 @@ const EXAMPLES: Record<string, string> = {
   `,
 
   popover: `
-    <button popovertarget="ex-popover" class="${buttonClass({ variant: 'outline' })}">Open popover</button>
-    <div popover id="ex-popover" class="${popoverContentClass({ side: 'bottom', align: 'start', sideOffset: 4 })}">
-      <div class="${popoverHeaderClass()}">
-        <h3 class="${popoverTitleClass()}">Filter</h3>
-        <p class="${popoverDescriptionClass()}">Tag and status.</p>
+    <button popovertarget="ex-popover" class="\${buttonClass({ variant: 'outline' })}">Open popover</button>
+    <div popover id="ex-popover" class="\${popoverContentClass({ side: 'bottom', align: 'start', sideOffset: 4 })}">
+      <div class="\${popoverHeaderClass()}">
+        <h3 class="\${popoverTitleClass()}">Filter</h3>
+        <p class="\${popoverDescriptionClass()}">Tag and status.</p>
       </div>
-      <div class="${stackClass({ gap: 'sm' })} mt-3">
-        <label class="${labelClass()}">Status</label>
-        <select class="${nativeSelectClass()}"><option>Open</option><option>Closed</option></select>
+      <div class="\${stackClass({ gap: 'sm' })} mt-3">
+        <label class="\${labelClass()}">Status</label>
+        <select class="\${nativeSelectClass()}"><option>Open</option><option>Closed</option></select>
       </div>
     </div>
   `,
@@ -412,7 +514,7 @@ const EXAMPLES: Record<string, string> = {
   tooltip: `
     <ui-tooltip delay-duration="200">
       <ui-tooltip-trigger>
-        <button class="${buttonClass({ variant: 'outline', size: 'icon' })}" aria-label="Help">?</button>
+        <button class="\${buttonClass({ variant: 'outline', size: 'icon' })}" aria-label="Help">?</button>
       </ui-tooltip-trigger>
       <ui-tooltip-content side="top">Helpful tip appears on hover</ui-tooltip-content>
     </ui-tooltip>
@@ -421,12 +523,12 @@ const EXAMPLES: Record<string, string> = {
   'hover-card': `
     <ui-hover-card open-delay="300" close-delay="200">
       <ui-hover-card-trigger>
-        <a class="${buttonClass({ variant: 'link' })}" href="#">@vivek</a>
+        <a class="\${buttonClass({ variant: 'link' })}" href="#">@vivek</a>
       </ui-hover-card-trigger>
       <ui-hover-card-content>
         <div class="flex gap-3">
-          <span class="${avatarClass()}" data-size="default">
-            <span class="${avatarFallbackClass()}">V</span>
+          <span class="\${avatarClass()}" data-size="default">
+            <span class="\${avatarFallbackClass()}">V</span>
           </span>
           <div>
             <h4 class="font-semibold">@vivek</h4>
@@ -443,21 +545,21 @@ const EXAMPLES: Record<string, string> = {
         <ui-tabs-trigger value="account">Account</ui-tabs-trigger>
         <ui-tabs-trigger value="password">Password</ui-tabs-trigger>
       </ui-tabs-list>
-      <ui-tabs-content value="account" class="${cardClass()} mt-3 p-6">
-        <h3 class="${cardTitleClass()}">Account</h3>
-        <p class="${cardDescriptionClass()} mt-1">Manage your account settings.</p>
+      <ui-tabs-content value="account" class="\${cardClass()} mt-3 p-6">
+        <h3 class="\${cardTitleClass()}">Account</h3>
+        <p class="\${cardDescriptionClass()} mt-1">Manage your account settings.</p>
       </ui-tabs-content>
-      <ui-tabs-content value="password" class="${cardClass()} mt-3 p-6">
-        <h3 class="${cardTitleClass()}">Password</h3>
-        <p class="${cardDescriptionClass()} mt-1">Change your password here.</p>
+      <ui-tabs-content value="password" class="\${cardClass()} mt-3 p-6">
+        <h3 class="\${cardTitleClass()}">Password</h3>
+        <p class="\${cardDescriptionClass()} mt-1">Change your password here.</p>
       </ui-tabs-content>
     </ui-tabs>
   `,
 
   accordion: `
-    <div class="${accordionClass()} max-w-md">
-      <details name="ex-accordion" class="${accordionItemClass()}">
-        <summary class="${accordionTriggerClass()}">
+    <div class="\${accordionClass()} max-w-md">
+      <details name="ex-accordion" class="\${accordionItemClass()}">
+        <summary class="\${accordionTriggerClass()}">
           <span>Is it accessible?</span>
           <svg class="size-4 shrink-0 transition-transform group-open:rotate-180"
                xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
@@ -465,10 +567,10 @@ const EXAMPLES: Record<string, string> = {
             <path d="m6 9 6 6 6-6"/>
           </svg>
         </summary>
-        <div class="${accordionContentClass()}">Yes. Native disclosure widget pattern.</div>
+        <div class="\${accordionContentClass()}">Yes. Native disclosure widget pattern.</div>
       </details>
-      <details name="ex-accordion" class="${accordionItemClass()}">
-        <summary class="${accordionTriggerClass()}">
+      <details name="ex-accordion" class="\${accordionItemClass()}">
+        <summary class="\${accordionTriggerClass()}">
           <span>Is it styled?</span>
           <svg class="size-4 shrink-0 transition-transform group-open:rotate-180"
                xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
@@ -476,14 +578,14 @@ const EXAMPLES: Record<string, string> = {
             <path d="m6 9 6 6 6-6"/>
           </svg>
         </summary>
-        <div class="${accordionContentClass()}">Yes. Matches shadcn design tokens.</div>
+        <div class="\${accordionContentClass()}">Yes. Matches shadcn design tokens.</div>
       </details>
     </div>
   `,
 
   collapsible: `
-    <details class="${collapsibleClass()} max-w-md">
-      <summary class="${collapsibleTriggerClass()} ${buttonClass({ variant: 'outline' })}">
+    <details class="\${collapsibleClass()} max-w-md">
+      <summary class="\${collapsibleTriggerClass()} \${buttonClass({ variant: 'outline' })}">
         Show / Hide details
         <svg class="size-4 transition-transform group-open:rotate-180"
              xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
@@ -491,7 +593,7 @@ const EXAMPLES: Record<string, string> = {
           <path d="m6 9 6 6 6-6"/>
         </svg>
       </summary>
-      <div class="${collapsibleContentClass()} mt-3 rounded-md border p-4">
+      <div class="\${collapsibleContentClass()} mt-3 rounded-md border p-4">
         Hidden content revealed when the disclosure widget opens. Real content, real DOM.
       </div>
     </details>
@@ -500,7 +602,7 @@ const EXAMPLES: Record<string, string> = {
   'dropdown-menu': `
     <ui-dropdown-menu>
       <ui-dropdown-menu-trigger>
-        <button class="${buttonClass({ variant: 'outline' })}">Open menu</button>
+        <button class="\${buttonClass({ variant: 'outline' })}">Open menu</button>
       </ui-dropdown-menu-trigger>
       <ui-dropdown-menu-content align="start">
         <ui-dropdown-menu-label>My Account</ui-dropdown-menu-label>
@@ -526,7 +628,7 @@ const EXAMPLES: Record<string, string> = {
   sonner: `
     <div class="flex flex-col items-center gap-3">
       <ui-sonner position="bottom-right"></ui-sonner>
-      <button class="${buttonClass({ variant: 'outline' })}" onclick="import('/components/ui/sonner.ts').then(m => m.toast.success('Saved!', {description: 'Your changes were saved.'}))">Show toast</button>
+      <button class="\${buttonClass({ variant: 'outline' })}" onclick="import('/components/ui/sonner.ts').then(m => m.toast.success('Saved!', {description: 'Your changes were saved.'}))">Show toast</button>
     </div>
   `,
 };
@@ -564,32 +666,32 @@ const VARIANT_EXAMPLES: Record<string, Record<string, string>> = {
   // and the values' visual difference is what's being demonstrated,
   // the text content should name the value rather than be generic.
   button: {
-    default: `<button class="${buttonClass({ variant: 'default' })}">Default</button>`,
-    destructive: `<button class="${buttonClass({ variant: 'destructive' })}">Destructive</button>`,
-    outline: `<button class="${buttonClass({ variant: 'outline' })}">Outline</button>`,
-    secondary: `<button class="${buttonClass({ variant: 'secondary' })}">Secondary</button>`,
-    ghost: `<button class="${buttonClass({ variant: 'ghost' })}">Ghost</button>`,
-    link: `<button class="${buttonClass({ variant: 'link' })}">Link</button>`,
+    default: `<button class="\${buttonClass({ variant: 'default' })}">Default</button>`,
+    destructive: `<button class="\${buttonClass({ variant: 'destructive' })}">Destructive</button>`,
+    outline: `<button class="\${buttonClass({ variant: 'outline' })}">Outline</button>`,
+    secondary: `<button class="\${buttonClass({ variant: 'secondary' })}">Secondary</button>`,
+    ghost: `<button class="\${buttonClass({ variant: 'ghost' })}">Ghost</button>`,
+    link: `<button class="\${buttonClass({ variant: 'link' })}">Link</button>`,
   },
   badge: {
-    default: `<span class="${badgeClass({ variant: 'default' })}">Default</span>`,
-    secondary: `<span class="${badgeClass({ variant: 'secondary' })}">Secondary</span>`,
-    destructive: `<span class="${badgeClass({ variant: 'destructive' })}">Destructive</span>`,
-    outline: `<span class="${badgeClass({ variant: 'outline' })}">Outline</span>`,
-    ghost: `<span class="${badgeClass({ variant: 'ghost' })}">Ghost</span>`,
-    link: `<span class="${badgeClass({ variant: 'link' })}">Link</span>`,
+    default: `<span class="\${badgeClass({ variant: 'default' })}">Default</span>`,
+    secondary: `<span class="\${badgeClass({ variant: 'secondary' })}">Secondary</span>`,
+    destructive: `<span class="\${badgeClass({ variant: 'destructive' })}">Destructive</span>`,
+    outline: `<span class="\${badgeClass({ variant: 'outline' })}">Outline</span>`,
+    ghost: `<span class="\${badgeClass({ variant: 'ghost' })}">Ghost</span>`,
+    link: `<span class="\${badgeClass({ variant: 'link' })}">Link</span>`,
   },
   alert: {
     default: `
-      <div class="${alertClass({ variant: 'default' })} max-w-md">
-        <h5 class="${alertTitleClass()}">Default</h5>
-        <p class="${alertDescriptionClass()}">You can add components to your app using the CLI.</p>
+      <div class="\${alertClass({ variant: 'default' })} max-w-md">
+        <h5 class="\${alertTitleClass()}">Default</h5>
+        <p class="\${alertDescriptionClass()}">You can add components to your app using the CLI.</p>
       </div>
     `,
     destructive: `
-      <div class="${alertClass({ variant: 'destructive' })} max-w-md">
-        <h5 class="${alertTitleClass()}">Destructive</h5>
-        <p class="${alertDescriptionClass()}">Your session has expired. Please log in again.</p>
+      <div class="\${alertClass({ variant: 'destructive' })} max-w-md">
+        <h5 class="\${alertTitleClass()}">Destructive</h5>
+        <p class="\${alertDescriptionClass()}">Your session has expired. Please log in again.</p>
       </div>
     `,
   },
@@ -624,34 +726,34 @@ const VARIANT_EXAMPLES: Record<string, Record<string, string>> = {
   },
   'radio-group': {
     vertical: `
-      <div role="radiogroup" class="${radioGroupClass({ orientation: 'vertical' })}">
+      <div role="radiogroup" class="\${radioGroupClass({ orientation: 'vertical' })}">
         <div class="flex items-center gap-2">
-          <input type="radio" name="plan-v" id="plan-v-basic" data-slot="radio" class="${radioClass()}" checked>
-          <label class="${labelClass()}" for="plan-v-basic">Basic</label>
+          <input type="radio" name="plan-v" id="plan-v-basic" data-slot="radio" class="\${radioClass()}" checked>
+          <label class="\${labelClass()}" for="plan-v-basic">Basic</label>
         </div>
         <div class="flex items-center gap-2">
-          <input type="radio" name="plan-v" id="plan-v-pro" data-slot="radio" class="${radioClass()}">
-          <label class="${labelClass()}" for="plan-v-pro">Pro</label>
+          <input type="radio" name="plan-v" id="plan-v-pro" data-slot="radio" class="\${radioClass()}">
+          <label class="\${labelClass()}" for="plan-v-pro">Pro</label>
         </div>
         <div class="flex items-center gap-2">
-          <input type="radio" name="plan-v" id="plan-v-enterprise" data-slot="radio" class="${radioClass()}">
-          <label class="${labelClass()}" for="plan-v-enterprise">Enterprise</label>
+          <input type="radio" name="plan-v" id="plan-v-enterprise" data-slot="radio" class="\${radioClass()}">
+          <label class="\${labelClass()}" for="plan-v-enterprise">Enterprise</label>
         </div>
       </div>
     `,
     horizontal: `
-      <div role="radiogroup" class="${radioGroupClass({ orientation: 'horizontal' })}">
+      <div role="radiogroup" class="\${radioGroupClass({ orientation: 'horizontal' })}">
         <div class="flex items-center gap-2">
-          <input type="radio" name="plan-h" id="plan-h-basic" data-slot="radio" class="${radioClass()}" checked>
-          <label class="${labelClass()}" for="plan-h-basic">Basic</label>
+          <input type="radio" name="plan-h" id="plan-h-basic" data-slot="radio" class="\${radioClass()}" checked>
+          <label class="\${labelClass()}" for="plan-h-basic">Basic</label>
         </div>
         <div class="flex items-center gap-2">
-          <input type="radio" name="plan-h" id="plan-h-pro" data-slot="radio" class="${radioClass()}">
-          <label class="${labelClass()}" for="plan-h-pro">Pro</label>
+          <input type="radio" name="plan-h" id="plan-h-pro" data-slot="radio" class="\${radioClass()}">
+          <label class="\${labelClass()}" for="plan-h-pro">Pro</label>
         </div>
         <div class="flex items-center gap-2">
-          <input type="radio" name="plan-h" id="plan-h-enterprise" data-slot="radio" class="${radioClass()}">
-          <label class="${labelClass()}" for="plan-h-enterprise">Enterprise</label>
+          <input type="radio" name="plan-h" id="plan-h-enterprise" data-slot="radio" class="\${radioClass()}">
+          <label class="\${labelClass()}" for="plan-h-enterprise">Enterprise</label>
         </div>
       </div>
     `,
@@ -669,7 +771,7 @@ const VARIANT_EXAMPLES: Record<string, Record<string, string>> = {
     default: `
       <ui-dropdown-menu>
         <ui-dropdown-menu-trigger>
-          <button class="${buttonClass({ variant: 'outline' })}">Open menu</button>
+          <button class="\${buttonClass({ variant: 'outline' })}">Open menu</button>
         </ui-dropdown-menu-trigger>
         <ui-dropdown-menu-content align="start">
           <ui-dropdown-menu-item>Profile</ui-dropdown-menu-item>
@@ -679,7 +781,7 @@ const VARIANT_EXAMPLES: Record<string, Record<string, string>> = {
     destructive: `
       <ui-dropdown-menu>
         <ui-dropdown-menu-trigger>
-          <button class="${buttonClass({ variant: 'outline' })}">Open menu</button>
+          <button class="\${buttonClass({ variant: 'outline' })}">Open menu</button>
         </ui-dropdown-menu-trigger>
         <ui-dropdown-menu-content align="start">
           <ui-dropdown-menu-item variant="destructive">Sign out</ui-dropdown-menu-item>
@@ -717,14 +819,14 @@ const VARIANT_EXAMPLES: Record<string, Record<string, string>> = {
     horizontal: `
       <div class="w-64">
         <div class="text-sm pb-2">Section A</div>
-        <div class="${separatorClass({ orientation: 'horizontal' })}" role="separator" data-orientation="horizontal"></div>
+        <div class="\${separatorClass({ orientation: 'horizontal' })}" role="separator" data-orientation="horizontal"></div>
         <div class="text-sm pt-2">Section B</div>
       </div>
     `,
     vertical: `
       <div class="flex h-12 items-center gap-3">
         <div class="text-sm">Left</div>
-        <div class="${separatorClass({ orientation: 'vertical' })}" role="separator" data-orientation="vertical"></div>
+        <div class="\${separatorClass({ orientation: 'vertical' })}" role="separator" data-orientation="vertical"></div>
         <div class="text-sm">Right</div>
       </div>
     `,
@@ -738,32 +840,32 @@ const SIZE_EXAMPLES: Record<string, Record<string, string>> = {
   // (text buttons whose height varies) and the Icon section stays
   // consistent (cog icons whose box varies, no label text).
   button: {
-    xs: `<button class="${buttonClass({ size: 'xs' })}">xs</button>`,
-    sm: `<button class="${buttonClass({ size: 'sm' })}">sm</button>`,
-    default: `<button class="${buttonClass({ size: 'default' })}">default</button>`,
-    lg: `<button class="${buttonClass({ size: 'lg' })}">lg</button>`,
+    xs: `<button class="\${buttonClass({ size: 'xs' })}">xs</button>`,
+    sm: `<button class="\${buttonClass({ size: 'sm' })}">sm</button>`,
+    default: `<button class="\${buttonClass({ size: 'default' })}">default</button>`,
+    lg: `<button class="\${buttonClass({ size: 'lg' })}">lg</button>`,
   },
   // Avatar fallback letter = first letter of size name so the three
   // sizes are distinguishable at a glance (S / M / L) on top of the
   // visual diameter cue.
   avatar: {
-    sm: `<span class="${avatarClass({ size: 'sm' })}" data-size="sm"><span class="${avatarFallbackClass()}">S</span></span>`,
-    default: `<span class="${avatarClass({ size: 'default' })}" data-size="default"><span class="${avatarFallbackClass()}">M</span></span>`,
-    lg: `<span class="${avatarClass({ size: 'lg' })}" data-size="lg"><span class="${avatarFallbackClass()}">L</span></span>`,
+    sm: `<span class="\${avatarClass({ size: 'sm' })}" data-size="sm"><span class="\${avatarFallbackClass()}">S</span></span>`,
+    default: `<span class="\${avatarClass({ size: 'default' })}" data-size="default"><span class="\${avatarFallbackClass()}">M</span></span>`,
+    lg: `<span class="\${avatarClass({ size: 'lg' })}" data-size="lg"><span class="\${avatarFallbackClass()}">L</span></span>`,
   },
   switch: {
     default: `
       <label class="inline-flex items-center gap-2">
-        <input type="checkbox" data-slot="switch" class="${switchInputClass()}" checked>
-        <span class="${switchTrackClass({ size: 'default' })}"></span>
-        <span class="${labelClass()}">Default</span>
+        <input type="checkbox" data-slot="switch" class="\${switchInputClass()}" checked>
+        <span class="\${switchTrackClass({ size: 'default' })}"></span>
+        <span class="\${labelClass()}">Default</span>
       </label>
     `,
     sm: `
       <label class="inline-flex items-center gap-2">
-        <input type="checkbox" data-slot="switch" class="${switchInputClass()}" checked>
-        <span class="${switchTrackClass({ size: 'sm' })}"></span>
-        <span class="${labelClass()}">Small</span>
+        <input type="checkbox" data-slot="switch" class="\${switchInputClass()}" checked>
+        <span class="\${switchTrackClass({ size: 'sm' })}"></span>
+        <span class="\${labelClass()}">Small</span>
       </label>
     `,
   },
@@ -778,19 +880,19 @@ const SIZE_EXAMPLES: Record<string, Record<string, string>> = {
   },
   'native-select': {
     default: `
-      <div class="${nativeSelectWrapperClass()}">
-        <select class="${nativeSelectClass()}" data-size="default">
+      <div class="\${nativeSelectWrapperClass()}">
+        <select class="\${nativeSelectClass()}" data-size="default">
           <option>Default</option><option>Other</option>
         </select>
-        <svg class="${nativeSelectIconClass()}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+        <svg class="\${nativeSelectIconClass()}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
       </div>
     `,
     sm: `
-      <div class="${nativeSelectWrapperClass()}">
-        <select class="${nativeSelectClass()}" data-size="sm">
+      <div class="\${nativeSelectWrapperClass()}">
+        <select class="\${nativeSelectClass()}" data-size="sm">
           <option>Small</option><option>Other</option>
         </select>
-        <svg class="${nativeSelectIconClass()}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+        <svg class="\${nativeSelectIconClass()}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
       </div>
     `,
   },
@@ -799,21 +901,21 @@ const SIZE_EXAMPLES: Record<string, Record<string, string>> = {
   // child helpers pick up the compact layout.
   card: {
     default: `
-      <div class="${cardClass({ size: 'default' })} w-72" data-slot="card" data-size="default">
-        <div class="${cardHeaderClass()}">
-          <div class="${cardTitleClass()}">Notifications</div>
-          <div class="${cardDescriptionClass()}">You have 3 unread.</div>
+      <div class="\${cardClass({ size: 'default' })} w-72" data-slot="card" data-size="default">
+        <div class="\${cardHeaderClass()}">
+          <div class="\${cardTitleClass()}">Notifications</div>
+          <div class="\${cardDescriptionClass()}">You have 3 unread.</div>
         </div>
-        <div class="${cardContentClass()}">Default size, gap-6 / py-6 / px-6.</div>
+        <div class="\${cardContentClass()}">Default size, gap-6 / py-6 / px-6.</div>
       </div>
     `,
     sm: `
-      <div class="${cardClass({ size: 'sm' })} w-72" data-slot="card" data-size="sm">
-        <div class="${cardHeaderClass()}">
-          <div class="${cardTitleClass()}">Notifications</div>
-          <div class="${cardDescriptionClass()}">You have 3 unread.</div>
+      <div class="\${cardClass({ size: 'sm' })} w-72" data-slot="card" data-size="sm">
+        <div class="\${cardHeaderClass()}">
+          <div class="\${cardTitleClass()}">Notifications</div>
+          <div class="\${cardDescriptionClass()}">You have 3 unread.</div>
         </div>
-        <div class="${cardContentClass()}">Small size, gap-3 / py-3 / px-4.</div>
+        <div class="\${cardContentClass()}">Small size, gap-3 / py-3 / px-4.</div>
       </div>
     `,
   },
@@ -851,14 +953,14 @@ const SIZE_EXAMPLES: Record<string, Record<string, string>> = {
     default: `
       <ui-alert-dialog>
         <ui-alert-dialog-trigger>
-          <button class="${buttonClass({ variant: 'outline' })}">Open default</button>
+          <button class="\${buttonClass({ variant: 'outline' })}">Open default</button>
         </ui-alert-dialog-trigger>
         <ui-alert-dialog-content size="default">
-          <div class="${alertDialogHeaderClass()}">
-            <h2 class="${alertDialogTitleClass()}">Are you absolutely sure?</h2>
-            <p class="${alertDialogDescriptionClass()}">This action cannot be undone. This will permanently delete your account.</p>
+          <div class="\${alertDialogHeaderClass()}">
+            <h2 class="\${alertDialogTitleClass()}">Are you absolutely sure?</h2>
+            <p class="\${alertDialogDescriptionClass()}">This action cannot be undone. This will permanently delete your account.</p>
           </div>
-          <div class="${alertDialogFooterClass()}">
+          <div class="\${alertDialogFooterClass()}">
             <ui-alert-dialog-cancel>Cancel</ui-alert-dialog-cancel>
             <ui-alert-dialog-action variant="destructive">Delete</ui-alert-dialog-action>
           </div>
@@ -868,14 +970,14 @@ const SIZE_EXAMPLES: Record<string, Record<string, string>> = {
     sm: `
       <ui-alert-dialog>
         <ui-alert-dialog-trigger>
-          <button class="${buttonClass({ variant: 'outline' })}">Open sm</button>
+          <button class="\${buttonClass({ variant: 'outline' })}">Open sm</button>
         </ui-alert-dialog-trigger>
         <ui-alert-dialog-content size="sm">
-          <div class="${alertDialogHeaderClass()}">
-            <h2 class="${alertDialogTitleClass()}">Delete file?</h2>
-            <p class="${alertDialogDescriptionClass()}">Move "report.pdf" to trash?</p>
+          <div class="\${alertDialogHeaderClass()}">
+            <h2 class="\${alertDialogTitleClass()}">Delete file?</h2>
+            <p class="\${alertDialogDescriptionClass()}">Move "report.pdf" to trash?</p>
           </div>
-          <div class="${alertDialogFooterClass()}">
+          <div class="\${alertDialogFooterClass()}">
             <ui-alert-dialog-cancel>Cancel</ui-alert-dialog-cancel>
             <ui-alert-dialog-action variant="destructive">Delete</ui-alert-dialog-action>
           </div>
@@ -896,7 +998,7 @@ SIZE_EXAMPLES.sonner = (() => {
   const make = (position: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right') => `
     <div class="flex items-center gap-3">
       <ui-sonner position="${position}"></ui-sonner>
-      <button class="${buttonClass({ variant: 'outline' })}" onclick="this.previousElementSibling.addToast('${position} toast')">Show ${position}</button>
+      <button class="\${buttonClass({ variant: 'outline' })}" onclick="this.previousElementSibling.addToast('${position} toast')">Show ${position}</button>
     </div>
   `;
   return {
@@ -938,14 +1040,14 @@ VARIANT_EXAMPLES.sonner = (() => {
       return `
         <div class="flex items-center gap-3">
           <ui-sonner position="bottom-right"></ui-sonner>
-          <button class="${buttonClass({ variant: 'outline' })}" onclick="import('/components/ui/sonner.ts').then(m => m.toast.promise(new Promise(r => setTimeout(r, 2000)), { loading: 'Loading…', success: 'Done!', error: 'Failed' }))">Show loading</button>
+          <button class="\${buttonClass({ variant: 'outline' })}" onclick="import('/components/ui/sonner.ts').then(m => m.toast.promise(new Promise(r => setTimeout(r, 2000)), { loading: 'Loading…', success: 'Done!', error: 'Failed' }))">Show loading</button>
         </div>
       `;
     }
     return `
       <div class="flex items-center gap-3">
         <ui-sonner position="bottom-right"></ui-sonner>
-        <button class="${buttonClass({ variant: 'outline' })}" onclick="import('/components/ui/sonner.ts').then(m => m.toast${type === 'default' ? '' : '.' + type}('${type[0].toUpperCase() + type.slice(1)} toast', { description: 'Example ${type} toast.' }))">Show ${type}</button>
+        <button class="\${buttonClass({ variant: 'outline' })}" onclick="import('/components/ui/sonner.ts').then(m => m.toast${type === 'default' ? '' : '.' + type}('${type[0].toUpperCase() + type.slice(1)} toast', { description: 'Example ${type} toast.' }))">Show ${type}</button>
       </div>
     `;
   };
@@ -977,10 +1079,10 @@ export function getSizeExamples(name: string): Record<string, string> | null {
 // component that grows an icon-only API.
 const ICON_SIZE_EXAMPLES: Record<string, Record<string, string>> = {
   button: {
-    'icon-xs': `<button class="${buttonClass({ size: 'icon-xs' })}" aria-label="Settings">${ICON_SETTINGS}</button>`,
-    'icon-sm': `<button class="${buttonClass({ size: 'icon-sm' })}" aria-label="Settings">${ICON_SETTINGS}</button>`,
-    icon: `<button class="${buttonClass({ size: 'icon' })}" aria-label="Settings">${ICON_SETTINGS}</button>`,
-    'icon-lg': `<button class="${buttonClass({ size: 'icon-lg' })}" aria-label="Settings">${ICON_SETTINGS}</button>`,
+    'icon-xs': `<button class="\${buttonClass({ size: 'icon-xs' })}" aria-label="Settings">${ICON_SETTINGS}</button>`,
+    'icon-sm': `<button class="\${buttonClass({ size: 'icon-sm' })}" aria-label="Settings">${ICON_SETTINGS}</button>`,
+    icon: `<button class="\${buttonClass({ size: 'icon' })}" aria-label="Settings">${ICON_SETTINGS}</button>`,
+    'icon-lg': `<button class="\${buttonClass({ size: 'icon-lg' })}" aria-label="Settings">${ICON_SETTINGS}</button>`,
   },
 };
 
