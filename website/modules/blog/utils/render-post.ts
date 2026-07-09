@@ -14,7 +14,9 @@
  *   - `> ` blockquotes
  *   - `- ` bulleted lists (custom-positioned markers via `before:` pseudo-element)
  *   - ```fenced``` code blocks
- *   - Inline: **bold**, *italic*, `code`, [text](url)
+ *   - Inline: **bold**, *italic*, `code`, [text](url). An absolute or
+ *     protocol-relative URL opens in a new tab (with a screen-reader cue);
+ *     an internal `/path` link navigates in place.
  */
 
 function inline(s: string): string {
@@ -27,7 +29,9 @@ function inline(s: string): string {
     // article; internal links (starting with /) navigate in place. Escape any
     // `"` in the URL so it cannot break out of the href attribute.
     const href = u.replace(/"/g, '%22');
-    const external = /^https?:\/\//.test(u);
+    // External = an absolute http(s) URL (scheme is case-insensitive) or a
+    // protocol-relative `//host`. Internal `/path` links stay same-tab.
+    const external = /^(https?:)?\/\//i.test(u);
     // For a new-tab link, append the same visually-hidden cue the site chrome
     // uses (lib/links.ts NEW_TAB) so screen readers announce the tab change.
     const attrs = external ? ' target="_blank" rel="noopener noreferrer"' : '';

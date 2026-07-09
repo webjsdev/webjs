@@ -19,6 +19,10 @@ test('external markdown links open in a new tab with the a11y cue; internal link
   assert.match(external, /rel="noopener noreferrer"/, 'external link carries rel noopener noreferrer');
   assert.match(external, /\(opens in a new tab\)/, 'external link appends the screen-reader cue');
 
+  // An uppercase scheme is still external (schemes are case-insensitive).
+  const upper = renderPostBody('[x](HTTPS://example.com)');
+  assert.match(upper, /target="_blank"/, 'uppercase-scheme link is treated as external');
+
   // Counterfactual: an internal link must stay same-tab (no target/cue).
   const internal = renderPostBody('Read the [docs](/docs).');
   assert.match(internal, /href="\/docs"/, 'keeps the internal href');
