@@ -66,13 +66,13 @@
       "exempt": "deferred: asyncReplace directive; agent-docs/components.md (#859)"
     },
     "batch": {
-      "exempt": "deferred: signal batching; agent-docs/components.md (#859)"
+      "demo": "modules/components/components/reactive-meter.ts"
     },
     "cache": {
       "exempt": "deferred: lit cache directive (distinct from the server cache() helper); agent-docs/advanced.md (#859)"
     },
     "computed": {
-      "exempt": "deferred: derived signal; agent-docs/components.md (#859)"
+      "demo": "modules/components/components/reactive-meter.ts"
     },
     "connectWS": {
       "demo": "modules/broadcast/components/broadcast-feed.ts"
@@ -93,7 +93,7 @@
       "exempt": "deferred: CSP nonce accessor; agent-docs/configuration.md (#859)"
     },
     "css": {
-      "exempt": "deferred: shadow-DOM scoped styles; documented in agent-docs/styling.md (#859)"
+      "demo": "modules/components/components/reactive-meter.ts"
     },
     "deserialize": {
       "exempt": "internal: wire serializer; app code round-trips via server actions"
@@ -102,7 +102,7 @@
       "exempt": "deferred: client-router opt-out; agent-docs/configuration.md (#859)"
     },
     "effect": {
-      "exempt": "deferred: signal effect; agent-docs/components.md (#859)"
+      "demo": "modules/components/components/reactive-meter.ts"
     },
     "enableClientRouter": {
       "exempt": "deferred: client-router opt-in; agent-docs/configuration.md (#859)"
@@ -354,7 +354,7 @@
       "exempt": "internal: framework/CLI plumbing"
     },
     "attachWebSocket": {
-      "exempt": "deferred: WS upgrade helper (#865)"
+      "exempt": "internal: WS upgrade helper; apps export a WS() handler from route.ts"
     },
     "auditPinned": {
       "exempt": "internal: framework/CLI plumbing"
@@ -393,13 +393,13 @@
       "exempt": "deferred: cookie session strategy (#865)"
     },
     "cookieSessionStorage": {
-      "exempt": "deferred: cookie session storage (#865)"
+      "exempt": "internal: cookie session storage primitive"
     },
     "cookies": {
       "exempt": "deferred: request cookie accessor (#865)"
     },
     "cookiesToHeader": {
-      "exempt": "deferred: cookie serializer (#865)"
+      "exempt": "internal: low-level cookie serializer; apps use cookies()"
     },
     "cors": {
       "demoed": true
@@ -471,10 +471,10 @@
       "exempt": "deferred: session read (#865)"
     },
     "getSetCookies": {
-      "exempt": "deferred: Set-Cookie reader (#865)"
+      "exempt": "internal: low-level Set-Cookie reader"
     },
     "getStore": {
-      "exempt": "deferred: active store accessor (#865)"
+      "exempt": "internal: active-store accessor; apps use setStore()"
     },
     "handleApi": {
       "exempt": "internal: framework/CLI plumbing"
@@ -588,10 +588,10 @@
       "demoed": true
     },
     "runInstrumentation": {
-      "exempt": "deferred: instrumentation runner (#865)"
+      "exempt": "internal: the framework runs it; apps write instrumentation.ts register()"
     },
     "runWithActionSignal": {
-      "exempt": "deferred: action-signal scope helper (#865)"
+      "exempt": "internal: action-signal scope helper; apps use actionSignal()"
     },
     "satisfiesSemverRange": {
       "exempt": "internal: framework/CLI plumbing"
@@ -648,10 +648,10 @@
       "exempt": "deferred: programmatic server boot (#865)"
     },
     "storeSession": {
-      "exempt": "deferred: session persistence (#865)"
+      "exempt": "internal: session persistence primitive; apps use createAuth()/session"
     },
     "storeSessionStorage": {
-      "exempt": "deferred: session storage (#865)"
+      "exempt": "internal: session storage primitive"
     },
     "stream": {
       "demoed": true
@@ -684,7 +684,7 @@
       "exempt": "deferred: signed URL verifier (#865)"
     },
     "withCookies": {
-      "exempt": "deferred: cookie response helper (#865)"
+      "exempt": "internal: low-level response cookie helper; apps use cookies()"
     },
     "withRequest": {
       "exempt": "internal: framework/CLI plumbing"
