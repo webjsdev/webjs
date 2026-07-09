@@ -1,6 +1,6 @@
 # AGENTS.md for the docs site
 
-The webjs documentation site, built on webjs itself (eating our own
+The WebJs documentation site, built on WebJs itself (eating our own
 dogfood). All framework-wide rules (file conventions, public API,
 workflow, scaffold rules, persistence rules, autonomous-mode behaviour)
 live in the **framework root [`../AGENTS.md`](../AGENTS.md)** and apply
@@ -51,7 +51,7 @@ automatically):
 
 | URL | What it serves |
 |---|---|
-| `/llms.txt` | A structured INDEX. An `# webjs documentation` H1, a one-line blurb, then a markdown bullet list of every doc page (title, blurb, absolute link). Ordered to match the sidebar nav. |
+| `/llms.txt` | A structured INDEX. An `# WebJs documentation` H1, a one-line blurb, then a markdown bullet list of every doc page (title, blurb, absolute link). Ordered to match the sidebar nav. |
 | `/llms-full.txt` | The full prose CORPUS. Every doc page concatenated as lightweight markdown. In the monorepo it also folds in `agent-docs/*.md`; a standalone deploy that lacks the repo root simply skips that (try/catch read). |
 | `/docs/<topic>/llms.txt` | One page's raw markdown. Every topic gets one via the `app/docs/[topic]/llms.txt/route.ts` dynamic route. |
 
