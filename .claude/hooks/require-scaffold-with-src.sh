@@ -21,10 +21,11 @@
 # generate-boot-check.
 #
 # The TIER-2 teeth live in CI, not here: test/scaffolds/gallery-coverage.test.js
-# reconciles the live @webjsdev/core export surface against
-# test/scaffolds/gallery-coverage.json and FAILS when a new export is neither
-# demoed in the gallery nor consciously exempted. That is the un-skippable gate
-# (the analogue of a test that must exist AND pass); this hook is the fast
+# reconciles the live framework surface (@webjsdev/core + @webjsdev/server exports
+# AND the routing convention files the router parses) against
+# test/scaffolds/gallery-coverage.json and FAILS when a new one is neither
+# demonstrated by the scaffold nor consciously exempted. That is the un-skippable
+# gate (the analogue of a test that must exist AND pass); this hook is the fast
 # commit-time reminder in front of it.
 #
 # Scope: only fires on `git commit` Bash calls. Inspects the STAGED diff,
