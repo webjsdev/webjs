@@ -300,10 +300,11 @@ and they reuse the REAL cookie / header names and the REAL wire serializer (so a
 test exercises the production contract, never a parallel fake).
 
 For a real-browser test that needs the app served to a live page (rather than a
-node `Response`), `createBrowserTestHandler({ appDir })` from `@webjsdev/server`
-is the browser-side counterpart: it stands up the same request pipeline behind a
-listener the web-test-runner harness drives, so a component test loads the app's
-actual routes and modules in Chromium.
+node `Response`), `createBrowserTestHandler(appDir)` from `@webjsdev/server`
+is the browser-side counterpart (it takes the app dir as a positional string):
+it stands up the same request pipeline behind a listener the web-test-runner
+harness drives, so a component test loads the app's actual routes and modules in
+Chromium.
 
 ```js
 import { createRequestHandler } from '@webjsdev/server';

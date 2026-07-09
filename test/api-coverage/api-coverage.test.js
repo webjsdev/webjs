@@ -20,7 +20,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as core from '@webjsdev/core';
 import * as server from '@webjsdev/server';
@@ -41,6 +41,9 @@ function readAll(dir, exts, out) {
   for (const e of entries) {
     if (e.name === 'node_modules' || e.name === '.git') continue;
     const f = join(dir, e.name);
+    // Exclude the coverage gate's OWN files so an export name hardcoded in a
+    // counterfactual (e.g. 'html', 'signal') does not self-satisfy the corpus.
+    if (f.includes(`${sep}knowledge${sep}`) || f.includes(`${sep}api-coverage${sep}`)) continue;
     if (e.isDirectory()) readAll(f, exts, out);
     else if (exts.some((x) => e.name.endsWith(x))) { try { out.push(readFileSync(f, 'utf8')); } catch { /* skip */ } }
   }
@@ -57,6 +60,16 @@ const TESTS = readAll(join(REPO, 'test'), ['.js', '.mjs', '.ts'], [])
   .concat(readAll(join(REPO, 'packages', 'server', 'test'), ['.js', '.mjs'], []))
   .join('\n');
 
+// A whole-word match on the export name. This is a deliberately LIGHTWEIGHT
+// signal: it reliably catches a NEW export that appears nowhere in docs/tests
+// (the case the gate exists for), but it does NOT prove depth of coverage, and a
+// common-English-word export name (`cache`, `html`, `json`, `route`, `session`,
+// `headers`, `stream`, `render`) trivially passes because the word saturates the
+// corpora. Strengthening to an import-from-@webjsdev match was tried and rejected:
+// ~55 agent-facing exports are exercised transitively, via subpath imports, or in
+// the browser-test suite this corpus omits, so it produced a large false-positive
+// exempt list with no real gain. Depth of coverage is a code-review concern, the
+// same as with the scaffold gate's demo pointers.
 const hasWord = (corpus, name) => new RegExp(`\\b${name}\\b`).test(corpus);
 
 /**
@@ -69,7 +82,7 @@ export function reconcileCoverage(liveNames, internalOf, exemptSet, present, kin
     if (internalOf(name)) continue;
     if (exemptSet.has(name)) continue;
     if (!present(name)) {
-      errors.push(`${kind} gap: agent-facing export "${name}" is not referenced in the ${kind} corpus; document/test it or exempt it (with a reason) in test/coverage/api-coverage.json.`);
+      errors.push(`${kind} gap: agent-facing export "${name}" is not referenced in the ${kind} corpus; document/test it or exempt it (with a reason) in test/api-coverage/api-coverage.json.`);
     }
   }
   return errors;
