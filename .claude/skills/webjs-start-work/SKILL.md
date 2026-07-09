@@ -360,6 +360,8 @@ If you cannot honestly say "last round clean", you cannot say "ready to merge". 
 
 **Merge is gated on green CI, enforced at the branch level, not by trust.** A PR must not merge until all CI checks pass. `main` branch protection requires the five `ci.yml` checks (Conventions, Unit+integration, Browser, E2E, Build) before any merge; if `gh api repos/webjsdev/webjs/branches/main/protection` shows `required_status_checks: null`, run `bash scripts/protect-main.sh` once (needs repo admin) to restore it. Do not work around a red or pending check; wait for green.
 
+**NEVER use `gh pr merge --admin` to bypass a FAILING check.** `--admin` skips ALL branch-protection gates, not only the review requirement, so a red CI check merges silently and lands broken code on `main`. This has happened (a Unit-test failure was admin-merged, breaking `main`). `--admin` is acceptable ONLY to bypass a required-review gate on a PR whose CI is confirmed all-green. Before any `--admin` merge, re-run `gh pr checks <N>` and confirm EVERY check reads `pass` (a `BLOCKED` state can mean review-required OR a failing check, so never assume which). If any check is red or pending, stop and fix or wait.
+
 ### Subagent prompt template
 
 ```
