@@ -10,11 +10,29 @@ when_to_use: |
     "let's start work on the rate-limit issue"
     "begin work on the next webjs todo"
   Do NOT trigger for: opening a PR for already-in-progress work, merging, asking what issues are open, or any non-webjs project.
+  ALSO invoke this (right after webjs-file-issue) before writing ANY code for
+  new work that has no issue yet, even when the user did not name an issue. The
+  standing rule is: no code before a tracked issue AND a branch cut from it.
 ---
 
 # Start work on a webjs GitHub issue
 
 The webjsdev/webjs project tracks work on the GitHub Project board at https://github.com/orgs/webjsdev/projects/1. This skill runs the start-of-work lifecycle whenever the user wants to begin a tracked issue.
+
+## Precondition: the work MUST already have a tracked issue
+
+This skill picks up from an EXISTING issue. Before running any step below, confirm the task has one. It often does NOT: a task that arrives from a conversation, a code-review finding, a dogfood observation, or your own idea has no issue yet, and THAT is the gap this guards.
+
+**If there is no tracked issue for this work, STOP. Do not create a branch, do not write code.** First invoke `webjs-file-issue` to file it and capture the new number, THEN run this skill with that number. Starting code on untracked work is a process failure: the PR ships with no `Closes #N`, the work never appears on the board, and the card never moves to Done. This has happened (a whole feature was implemented and merged before any issue existed, then filed retroactively only after the user noticed).
+
+If you are unsure whether an issue already exists, search before filing:
+
+```sh
+gh issue list --repo webjsdev/webjs --search "<keywords>" --state all
+gh project item-list 1 --owner webjsdev --format json --limit 20000
+```
+
+When in doubt, file it. A duplicate is cheap to close; untracked work is the expensive failure. Only once an issue number exists do you continue to Inputs below.
 
 ## Inputs
 
