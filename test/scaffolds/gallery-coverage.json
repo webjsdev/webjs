@@ -630,7 +630,7 @@
       "exempt": "deferred: signed URL builder (#865)"
     },
     "sitemap": {
-      "exempt": "deferred: sitemap serializer (#865)"
+      "demoed": true
     },
     "sitemapIndex": {
       "exempt": "deferred: sitemap index serializer (#865)"
@@ -728,13 +728,13 @@
       "demoed": true
     },
     "sitemap": {
-      "exempt": "deferred: no example sitemap file shipped by the scaffold yet (#865)"
+      "demoed": true
     },
     "robots": {
-      "exempt": "deferred: no example robots file shipped by the scaffold yet (#865)"
+      "demoed": true
     },
     "manifest": {
-      "exempt": "deferred: no example manifest file shipped by the scaffold yet (#865)"
+      "demoed": true
     },
     "icon": {
       "exempt": "deferred: no example icon file shipped by the scaffold yet (#865)"
