@@ -36,10 +36,11 @@ test('a double quote in a link URL cannot break out of the href attribute', () =
   assert.match(out, /%22/, 'the quote is percent-escaped in the href');
 });
 
-test('the compare page links the competitor eyebrow to its official site in a new tab', async () => {
+test('the compare page shows a visible outbound link to the competitor site in a new tab', async () => {
   const out = await renderToString(await ComparePage({ params: { slug: 'webjs-vs-nextjs' } }));
-  // The "WebJs vs Next.js" eyebrow links out to nextjs.org, new tab, with cue.
-  assert.match(out, /<a href="https:\/\/nextjs\.org"[^>]*target="_blank"[^>]*rel="noopener noreferrer"/, 'eyebrow links to the official site in a new tab');
-  assert.match(out, /Next\.js/, 'renders the competitor name');
-  assert.match(out, /\(opens in a new tab\)/, 'the outbound eyebrow link carries the screen-reader cue');
+  // A visible, underlined "Visit the Next.js site" link (distinguishable while
+  // reading, not hover-only), pointing at nextjs.org, new tab, with the cue.
+  assert.match(out, /<a href="https:\/\/nextjs\.org"[^>]*target="_blank"[^>]*rel="noopener noreferrer"[^>]*class="[^"]*underline/, 'renders an underlined outbound link');
+  assert.match(out, /Visit the Next\.js site/, 'the link is clearly labeled');
+  assert.match(out, /\(opens in a new tab\)/, 'the outbound link carries the screen-reader cue');
 });
