@@ -71,7 +71,7 @@ This is why the type safety is honest and not just optimistic. The type says `Da
 
 Server actions are the headline, but the type flow reaches the routing layer as well.
 
-Run `webjs types` and the framework generates `.webjs/routes.d.ts`, an overlay with one entry per route in `app/`. It gives you a typed `Route` union (`navigate('/blog/anything')` is fine, `navigate('/nonexistent')` is a type error) plus per-route params. `webjs dev` regenerates it on startup and after each route rebuild, so the editor always has fresh route types (this is #258, WebJs's no-build answer to Next 15's `typedRoutes`, done through interface declaration-merging instead of a bundler).
+Run `webjs types` and the framework generates `.webjs/routes.d.ts`, an overlay with one entry per route in `app/`. It gives you a typed `Route` union (`navigate('/blog/anything')` is fine, `navigate('/nonexistent')` is a type error) plus per-route params. `webjs dev` regenerates it on startup and after each route rebuild, so the editor always has fresh route types (WebJs's no-build answer to Next 15's `typedRoutes`, done through interface declaration-merging instead of a bundler).
 
 Three exported helper types read that union. `PageProps<R>` types a page's `{ params, searchParams, url, actionData }`, `LayoutProps<R>` adds `children`, and `RouteHandlerContext<R>` types a `route.ts` handler's second argument. Pass the route literal and `params` narrows to the exact shape.
 

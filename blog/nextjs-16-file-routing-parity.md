@@ -57,7 +57,7 @@ The rule of thumb is the same one that governs `notFound()` and `redirect()`. Th
 
 # not-found is now nearest-wins
 
-This is the fix that quietly matters most for a migrator (issue #848). Previously a thrown `notFound()` in WebJs always rendered the single root `not-found` page. In Next, a `not-found.tsx` is nearest-wins, so a `not-found` deep in your tree takes over for pages beneath it. WebJs now matches that.
+This is the fix that quietly matters most for a migrator. Previously a thrown `notFound()` in WebJs always rendered the single root `not-found` page. In Next, a `not-found.tsx` is nearest-wins, so a `not-found` deep in your tree takes over for pages beneath it. WebJs now matches that.
 
 ```
 app/
@@ -110,4 +110,4 @@ export function register() {
 
 # The takeaway
 
-WebJs was already file-routing compatible with Next in shape, and these four changes (all shipped in #848 and #849) close the remaining gaps a migrator actually trips on. `forbidden()` and `unauthorized()` are control-flow throws that render the nearest boundary, with honest 403 and 401 status codes and the clear rule that you throw in a render, return an `ActionResult` in an action, and return a `Response` in a route. `not-found` is nearest-wins now, so sections get their own 404s. `params` and `searchParams` read either synchronously or awaited, so your Next code just works. And `instrumentation.js` gives you the boot hook for wiring monitoring. Bring your Next.js routing habits over, and the ones that used to fall through now land.
+WebJs was already file-routing compatible with Next in shape, and these four changes close the remaining gaps a migrator actually trips on. `forbidden()` and `unauthorized()` are control-flow throws that render the nearest boundary, with honest 403 and 401 status codes and the clear rule that you throw in a render, return an `ActionResult` in an action, and return a `Response` in a route. `not-found` is nearest-wins now, so sections get their own 404s. `params` and `searchParams` read either synchronously or awaited, so your Next code just works. And `instrumentation.js` gives you the boot hook for wiring monitoring. Bring your Next.js routing habits over, and the ones that used to fall through now land.

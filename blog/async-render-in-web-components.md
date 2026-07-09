@@ -23,7 +23,7 @@ class UserProfile extends WebComponent({ uid: String }) {
 UserProfile.register('user-profile');
 ```
 
-That is it. No effect, no loading flag, no spinner, no `this.setState`. `render()` is allowed to be `async`. Writing `await` makes the function return a promise by the normal JavaScript rule, and every render path in WebJs already awaits a promise-returning `render()` automatically. There is no flag to set. A plain synchronous `render()` stays the zero-cost default, so you only pay for async where you actually reach for it. This is issue #469 if you want to read the history.
+That is it. No effect, no loading flag, no spinner, no `this.setState`. `render()` is allowed to be `async`. Writing `await` makes the function return a promise by the normal JavaScript rule, and every render path in WebJs already awaits a promise-returning `render()` automatically. There is no flag to set. A plain synchronous `render()` stays the zero-cost default, so you only pay for async where you actually reach for it.
 
 
 # Why this is not just useEffect with nicer syntax
@@ -74,9 +74,9 @@ That co-location is the other quiet win. The fetch lives in the leaf component t
 
 Two optimizations make this cheap, and both are on by default.
 
-A display-only async component gets **elided** (#474). If a component just fetches and renders, with no click handlers, no signals, no interactivity of any kind, then its server-rendered HTML is already the complete and final output. So WebJs drops its JavaScript module from the page entirely. The data is in the HTML, the component has nothing left to do in the browser, so nothing ships. A docs page or a content card built this way costs zero client JavaScript.
+A display-only async component gets **elided**. If a component just fetches and renders, with no click handlers, no signals, no interactivity of any kind, then its server-rendered HTML is already the complete and final output. So WebJs drops its JavaScript module from the page entirely. The data is in the HTML, the component has nothing left to do in the browser, so nothing ships. A docs page or a content card built this way costs zero client JavaScript.
 
-For a component that DOES ship (because it is also interactive), **SSR action seeding** (#472) kills the redundant re-fetch. Every `'use server'` action result computed during SSR is serialized into the page. When the component hydrates in the browser, its first RPC call reads that seed instead of hitting the network. So `getUser(this.uid)` runs once, on the server, and the client reuses the result on its first render. No hydration flicker, no wasted round trip. A later re-fetch or an argument change still goes to the server as normal.
+For a component that DOES ship (because it is also interactive), **SSR action seeding** kills the redundant re-fetch. Every `'use server'` action result computed during SSR is serialized into the page. When the component hydrates in the browser, its first RPC call reads that seed instead of hitting the network. So `getUser(this.uid)` runs once, on the server, and the client reuses the result on its first render. No hydration flicker, no wasted round trip. A later re-fetch or an argument change still goes to the server as normal.
 
 
 # When to reach for something else

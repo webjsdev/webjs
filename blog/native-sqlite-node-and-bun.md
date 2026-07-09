@@ -9,7 +9,7 @@ author: Vivek
 
 You clone a project, run the install, and it sits there compiling C++ for a while. Then you upgrade to a new Node major and the same package refuses to load, because the binary it built last month was compiled against a different version. You reinstall, it recompiles, and you have lost twenty minutes to a database driver that never ran a single query. If you have used SQLite in Node, you have met better-sqlite3, and you have probably met this exact afternoon.
 
-WebJs used to ship better-sqlite3 too. In #670 I pulled it out entirely and switched to the SQLite the runtime already includes. On Node that is `node:sqlite`, on Bun it is `bun:sqlite`. No native addon, no compile, nothing to rebuild when Node bumps a version.
+WebJs used to ship better-sqlite3 too. I pulled it out entirely and switched to the SQLite the runtime already includes. On Node that is `node:sqlite`, on Bun it is `bun:sqlite`. No native addon, no compile, nothing to rebuild when Node bumps a version.
 
 
 # What a native addon is, and why compiling at install is fragile
@@ -64,7 +64,7 @@ Nothing in that loop compiles a binary. The migration is a SQL file, and the dri
 
 # It also works the other direction: Postgres, same code
 
-Because Drizzle is the layer you write against, the SQLite-vs-Postgres choice is one flag at scaffold time, and the schema, queries, and actions are identical across both dialects (the dialect-parity work landed in #563).
+Because Drizzle is the layer you write against, the SQLite-vs-Postgres choice is one flag at scaffold time, and the schema, queries, and actions are identical across both dialects.
 
 ```sh
 webjs create my-app --db postgres
@@ -75,11 +75,11 @@ SQLite is the default because a new app then runs with zero setup, no server to 
 
 # The payoff shows up hardest in Docker
 
-The install-time compile is annoying on your laptop and genuinely expensive in a container image, where you would otherwise ship a C++ toolchain just so a database driver could build. Dropping the native addon is what let the Bun scaffold use a pure `oven/bun:1` Dockerfile (#595, #596) with no Node in it at all.
+The install-time compile is annoying on your laptop and genuinely expensive in a container image, where you would otherwise ship a C++ toolchain just so a database driver could build. Dropping the native addon is what let the Bun scaffold use a pure `oven/bun:1` Dockerfile with no Node in it at all.
 
-That only works because two things are true at once. SQLite is built into Bun, so there is nothing to compile, and `webjs db migrate` became npx-free in #570, so the migration step needs no Node either. Remove the native addon and remove the npx dependency, and the image no longer needs a Node runtime or a compiler toolchain sitting in it. It is a smaller image that builds faster and has less to go wrong.
+That only works because two things are true at once. SQLite is built into Bun, so there is nothing to compile, and `webjs db migrate` became npx-free, so the migration step needs no Node either. Remove the native addon and remove the npx dependency, and the image no longer needs a Node runtime or a compiler toolchain sitting in it. It is a smaller image that builds faster and has less to go wrong.
 
 
 # The takeaway
 
-SQLite in Node used to mean a native addon that compiled C++ at install time, with node-gyp failures, prebuilt-binary gaps, and a forced recompile on every Node major. WebJs dropped better-sqlite3 (#670) and uses the runtime's own SQLite instead, `node:sqlite` on Node 24+ and `bun:sqlite` on Bun, so there is no compile step and no binary pinned to your runtime version. Drizzle sits on top and keeps the same code across SQLite and Postgres. The lesson generalizes past this one driver. When the platform grows a capability you were pulling in a fragile dependency for, delete the dependency and use the platform.
+SQLite in Node used to mean a native addon that compiled C++ at install time, with node-gyp failures, prebuilt-binary gaps, and a forced recompile on every Node major. WebJs dropped better-sqlite3 and uses the runtime's own SQLite instead, `node:sqlite` on Node 24+ and `bun:sqlite` on Bun, so there is no compile step and no binary pinned to your runtime version. Drizzle sits on top and keeps the same code across SQLite and Postgres. The lesson generalizes past this one driver. When the platform grows a capability you were pulling in a fragile dependency for, delete the dependency and use the platform.

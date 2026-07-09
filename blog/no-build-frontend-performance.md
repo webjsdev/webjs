@@ -21,7 +21,7 @@ So the no-build performance problem is not really "too many requests." It is "th
 
 WebJs serves an import map in the page head. Every bare specifier a module might import (`dayjs`, or `@webjsdev/core`) resolves through it to a real URL, pinned to a CDN like jspm for third-party packages. That is the Rails 7 importmap-rails posture: no bundler, direct module URLs, the browser's native loader doing the resolution.
 
-The importmap alone does not solve discovery latency, though. It tells the browser HOW to resolve `dayjs` once it sees the import, not that it WILL need `dayjs`. So the browser still discovers the dependency only when it parses the module that imports it. That was the waterfall crack in the no-build story, and closing it (#754) is what made the posture actually competitive.
+The importmap alone does not solve discovery latency, though. It tells the browser HOW to resolve `dayjs` once it sees the import, not that it WILL need `dayjs`. So the browser still discovers the dependency only when it parses the module that imports it. That was the waterfall crack in the no-build story, and closing it is what made the posture actually competitive.
 
 The fix is `<link rel="modulepreload">`. During SSR, WebJs walks the module graph from the page's actually-shipped modules, collects every vendor specifier they reach, resolves each to its importmap target, and emits a preload hint for it in the head. So the moment the browser reads the head, it starts fetching the whole reached vendor set in parallel, before it has parsed a single component. The level-by-level discovery collapses into one parallel burst. The bytes the browser needs are already in flight by the time the code that imports them runs.
 
@@ -31,7 +31,7 @@ The walk is careful about which roots it starts from. It uses the boot's shipped
 
 The second place the cost hides is the server itself. A no-build server does more per request than a static file server, because it is resolving modules, stripping TypeScript, and running SSR. If the request path is heavy, the time-to-first-byte suffers no matter how good the preloading is.
 
-WebJs runs on Node and on Bun, and the Bun listening path got a specific pass (#773) to cut per-request overhead. The Bun shell had been cloning the whole request object on every request just to stamp the client IP, and bridging every compressed response through an extra stream hop. Both were removed: the IP is stamped out of band without rebuilding the request, and a buffered response is compressed synchronously with no bridge. That is the kind of unglamorous work that a no-build framework has to do, because there is no build step absorbing the cost ahead of time. The request path IS the product, so the request path has to be lean.
+WebJs runs on Node and on Bun, and the Bun listening path got a specific pass to cut per-request overhead. The Bun shell had been cloning the whole request object on every request just to stamp the client IP, and bridging every compressed response through an extra stream hop. Both were removed: the IP is stamped out of band without rebuilding the request, and a buffered response is compressed synchronously with no bridge. That is the kind of unglamorous work that a no-build framework has to do, because there is no build step absorbing the cost ahead of time. The request path IS the product, so the request path has to be lean.
 
 # What production actually leans on
 

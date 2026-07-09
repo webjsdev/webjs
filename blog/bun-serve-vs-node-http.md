@@ -49,7 +49,7 @@ That is the entire tradeoff. You give up one preload-timing feature and you get 
 
 The listener choice is the headline, but a buildless server has to earn throughput in the small places too, because there is no build step ahead of time to absorb overhead. So the Bun request path got its own passes.
 
-Brotli compression on the Bun listener runs through `node:zlib` (#518), so a Bun-served response gets the same compression a Node-served one does, no native gap there. And the per-request overhead got trimmed directly (#773): one pass removed a full request-object clone that existed only to stamp the client's IP address onto every request, and another removed an extra stream hop that every compressed response was being bridged through. Neither was large alone, but they are per-request costs, so they multiply by your traffic. On the hot path, a clone you do not need and a stream hop you can collapse are exactly the kind of thing worth cutting by hand.
+Brotli compression on the Bun listener runs through `node:zlib`, so a Bun-served response gets the same compression a Node-served one does, no native gap there. And the per-request overhead got trimmed directly: one pass removed a full request-object clone that existed only to stamp the client's IP address onto every request, and another removed an extra stream hop that every compressed response was being bridged through. Neither was large alone, but they are per-request costs, so they multiply by your traffic. On the hot path, a clone you do not need and a stream hop you can collapse are exactly the kind of thing worth cutting by hand.
 
 # You pick the runtime
 

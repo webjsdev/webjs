@@ -23,7 +23,7 @@ So a page's own module usually has nothing to do on the client. It rendered its 
 
 # What "import-only" means
 
-Here is the subtle case, and the one this post is really about. It landed in #605 and #609.
+Here is the subtle case, and the one this post is really about.
 
 A page rarely sits there doing nothing. It imports things, in particular the interactive components it wants to render: a `<theme-toggle>`, a `<comment-box>`, a `<search-bar>`. Those components DO hydrate, so their modules genuinely need to reach the browser.
 
@@ -48,10 +48,10 @@ That last one is sneaky, because a class-name helper looks innocent. But if it r
 
 The rule of thumb is short. `page.ts` and `layout.ts` should never appear in the network tab or in the boot `<script type="module">`. If one does, something in its closure is doing client-side work, and that is your signal to find the stray side effect and move it where it belongs.
 
-You do not have to squint at the network tab to figure out which one. `webjs doctor` includes a page and layout elision advisory (#646), and a later change (#666) added advisory naming of the specific reason a given page or layout ships, so the tool tells you which client side effect pinned the module to the browser.
+You do not have to squint at the network tab to figure out which one. `webjs doctor` includes a page and layout elision advisory, and it names the specific reason a given page or layout ships, so the tool tells you which client side effect pinned the module to the browser.
 
 If you ever want everything shipped, for a debugging session or because you distrust the analysis, turn elision off with `"webjs": { "elide": false }` in the config or `WEBJS_ELIDE=0` in the environment, and every module ships as written. Dropping a page module can never change your first paint anyway, because the served HTML is identical with elision on or off.
 
 # The takeaway
 
-A React page component is client JavaScript you ship and hydrate. A WebJs page is not, because pages and layouts do not hydrate at all. Their functions run only on the server, so an import-only page or layout gets dropped entirely and the boot ships just the interactive component leaves it imported (#605, #609). A page ships whole only when it does client work of its own, and `webjs doctor` names the reason when it happens (#646, #666). The self-check is a glance at the network tab: if `page.ts` or `layout.ts` is in it, something in that module is doing browser work it should not. The result is a mostly-static page that ships almost no JavaScript, with not a single boundary marked by hand.
+A React page component is client JavaScript you ship and hydrate. A WebJs page is not, because pages and layouts do not hydrate at all. Their functions run only on the server, so an import-only page or layout gets dropped entirely and the boot ships just the interactive component leaves it imported. A page ships whole only when it does client work of its own, and `webjs doctor` names the reason when it happens. The self-check is a glance at the network tab: if `page.ts` or `layout.ts` is in it, something in that module is doing browser work it should not. The result is a mostly-static page that ships almost no JavaScript, with not a single boundary marked by hand.

@@ -44,7 +44,7 @@ The client calls `await buildReport({ from, to })` and gets back a real `Date` a
 
 # Awaiting data in a leaf, without a render tree
 
-The feature people reach for RSC to get is "fetch data inside the component that needs it, on the server, without a client waterfall." WebJs gets this from `async render()` (#469):
+The feature people reach for RSC to get is "fetch data inside the component that needs it, on the server, without a client waterfall." WebJs gets this from `async render()`:
 
 ```ts
 class UserCard extends WebComponent {
@@ -63,7 +63,7 @@ The model is decoupled into three separate concerns so it stays predictable. SSR
 
 There is a subtle cost hiding in that design. If a component fetched its data on the server during SSR, and then hydrates in the browser, does it fetch again on hydration?
 
-By default, no, because of SSR action seeding (#472). Every `'use server'` action result produced during a server render is serialized into the page, keyed by the action hash, the function name, and the serialized arguments. The generated RPC stub checks that seed on its first client call and resolves synchronously from it instead of hitting the network. So `await getUser(this.id)` runs once, on the server, and the browser reuses the result on its first render. A later refetch or an argument change misses the seed (it is consume-once) and goes to the network as normal.
+By default, no, because of SSR action seeding. Every `'use server'` action result produced during a server render is serialized into the page, keyed by the action hash, the function name, and the serialized arguments. The generated RPC stub checks that seed on its first client call and resolves synchronously from it instead of hitting the network. So `await getUser(this.id)` runs once, on the server, and the browser reuses the result on its first render. A later refetch or an argument change misses the seed (it is consume-once) and goes to the network as normal.
 
 It is fail-open by construction. A seed miss is always a normal RPC call, never wrong data. And it needs no build step and no source transform: the capture is a server-side facade over the action module, so the files on disk and the source the browser sees are byte-unchanged. You get the RSC benefit of "the server already did this work, do not redo it on the client" without the protocol that RSC needs to deliver it.
 

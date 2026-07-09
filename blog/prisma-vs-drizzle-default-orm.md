@@ -100,7 +100,7 @@ The default database is SQLite, which means a new app runs with zero setup, no s
 webjs create my-app --db postgres
 ```
 
-Here is the part that makes this a default rather than a lock-in. The schema, the queries, and the server actions are **identical across dialects** (the dialect-parity work landed in #563). You do not rewrite your data layer to move from SQLite to Postgres. The `db/columns.server.ts` helper absorbs the per-dialect differences, and the code you wrote against `db.query...` stays the same.
+Here is the part that makes this a default rather than a lock-in. The schema, the queries, and the server actions are **identical across dialects**. You do not rewrite your data layer to move from SQLite to Postgres. The `db/columns.server.ts` helper absorbs the per-dialect differences, and the code you wrote against `db.query...` stays the same.
 
 And if you would rather use Prisma, or Kysely, or write raw SQL, that door is open too. The framework's only real contract with the database is "server-only code lives in `.server.ts` files." Whatever you export a `db` client from, and however you built it, WebJs will happily run. Swap the `db/` folder for a Prisma setup, keep `prisma generate` in your own dev script, and the rest of the framework does not change. You lose the buildless purity for that one dependency, which is a trade you are allowed to make.
 

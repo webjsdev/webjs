@@ -11,7 +11,7 @@ Write a `<price-tag>` component in webjs. It reads a number, formats it, renders
 
 It is not there. The framework served the component's HTML and then deleted its JavaScript from the page, because it could prove the component does the same thing with or without its script. The browser downloads nothing for it.
 
-This is elision, and it is the mechanism that lets a WebJs app ship only its interactive leaves instead of its whole component tree. It landed properly in #474 and I have been sharpening it since. Here is how it works.
+This is elision, and it is the mechanism that lets a WebJs app ship only its interactive leaves instead of its whole component tree. I have been sharpening it for a while. Here is how it works.
 
 # The idea
 
@@ -55,7 +55,7 @@ The first is differential verification. A test renders a page with elision on an
 
 The second is that the analyser's signal lists cannot silently fall behind the framework. A denylist is dangerous precisely because it is a maintenance burden: every time someone adds a new way for a component to be interactive, they have to teach the analyser about it, or a component using only that new mechanism gets silently over-elided. That is the one failure mode that would actually break pages.
 
-So the lists are guarded mechanically. `lifecycle-coverage.test.js` introspects the live `WebComponent` prototype and fails the build if a new public method or hook is added without being classified in the analyser. And after a recent change (#785), `sigil-coverage.test.js` does the same for the two surfaces that are not prototype methods: the template binding sigils (`@`, `.`, `?`) and the interactivity static fields. The binding sigils are single-sourced in core, and the guard asserts the analyser classifies every one of them as either a client-behaviour ship signal (like `@event`, which drops at SSR) or an SSR-safe round-trip (like `.prop` and `?bool`, which survive into the served HTML). Add a fourth sigil to the renderer without classifying it, and the build goes red before it can ship a bug.
+So the lists are guarded mechanically. `lifecycle-coverage.test.js` introspects the live `WebComponent` prototype and fails the build if a new public method or hook is added without being classified in the analyser. And more recently, `sigil-coverage.test.js` does the same for the two surfaces that are not prototype methods: the template binding sigils (`@`, `.`, `?`) and the interactivity static fields. The binding sigils are single-sourced in core, and the guard asserts the analyser classifies every one of them as either a client-behaviour ship signal (like `@event`, which drops at SSR) or an SSR-safe round-trip (like `.prop` and `?bool`, which survive into the served HTML). Add a fourth sigil to the renderer without classifying it, and the build goes red before it can ship a bug.
 
 The point is that the safety is not "we were careful." It is "the test suite refuses to let the analyser drift." Careful is not a property you can rely on across a growing codebase written partly by agents. A failing build is.
 
