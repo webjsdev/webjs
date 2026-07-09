@@ -14,10 +14,18 @@
 #
 # What a hook CANNOT do: know WHETHER a given change actually needs a
 # scaffold demo (a bug fix, an internal perf change, or a tweak to an
-# already-demoed feature may not). So it enforces the floor (a
-# feature-source commit must stage SOME scaffold surface OR consciously opt
-# out) and points at the webjs-scaffold-sync skill for the per-surface walk
-# and the mandatory generate-boot-check.
+# already-demoed feature may not), nor tell a real demo from a doc bullet.
+# So it enforces only the FLOOR (a feature-source commit must stage SOME
+# scaffold surface OR consciously opt out) and points at the
+# webjs-scaffold-sync skill for the per-surface walk and the mandatory
+# generate-boot-check.
+#
+# The TIER-2 teeth live in CI, not here: test/scaffolds/gallery-coverage.test.js
+# reconciles the live @webjsdev/core export surface against
+# test/scaffolds/gallery-coverage.json and FAILS when a new export is neither
+# demoed in the gallery nor consciously exempted. That is the un-skippable gate
+# (the analogue of a test that must exist AND pass); this hook is the fast
+# commit-time reminder in front of it.
 #
 # Scope: only fires on `git commit` Bash calls. Inspects the STAGED diff,
 # so `git add` choices drive it.
