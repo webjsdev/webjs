@@ -46,7 +46,7 @@ The scaffold is webjs's primary teaching surface for AI agents, so a new framewo
 
 - **Tier 2 (CI gate):** `test/scaffolds/gallery-coverage.test.js` reconciles the LIVE framework surface against `test/scaffolds/gallery-coverage.json` and FAILS when something new is neither demoed nor exempted. It gates three surfaces: `@webjsdev/core` exports (a `{ demo }` gallery-file pointer), `@webjsdev/server` exports (`{ demoed: true }`, verified by a generated app importing it), and routing convention files (the stems DERIVED from `packages/server/src/router.js`, each demonstrated by a file in a generated app). It runs under `npm test`, so a local `--no-verify` cannot skip it: a new export or convention turns CI red until classified. The `reconcile()` / `reconcileSet()` cores are pure and their failure modes (new name, stale key, missing/over-claimed demo, empty reason) are proven with synthetic inputs alongside the real-surface assertions. The deferred backlog is tracked in #859.
 
-**When you add or rename a `@webjsdev/core` export, update the manifest** the same way you write a test: add a demo pointer, or an honest exemption. The gate covers the export surface (where the #848-class throwers live); a new routing convention FILE type (a `*.ts` boundary) is not an export, so it stays tier-1-only for now.
+**When you add or rename a `@webjsdev/core` or `@webjsdev/server` export, or add a routing convention file the router parses, update the manifest** the same way you write a test: add a demo pointer / `{ demoed: true }`, or an honest exemption. All three surfaces are gated (the convention stems are derived from `packages/server/src/router.js`, so a new `stem === '...'` branch auto-appears and must be classified).
 
 ---
 
