@@ -10,11 +10,29 @@ when_to_use: |
     "let's start work on the rate-limit issue"
     "begin work on the next webjs todo"
   Do NOT trigger for: opening a PR for already-in-progress work, merging, asking what issues are open, or any non-webjs project.
+  ALSO invoke this (right after webjs-file-issue) before writing ANY code for
+  new work that has no issue yet, even when the user did not name an issue. The
+  standing rule is: no code before a tracked issue AND a branch cut from it.
 ---
 
 # Start work on a webjs GitHub issue
 
 The webjsdev/webjs project tracks work on the GitHub Project board at https://github.com/orgs/webjsdev/projects/1. This skill runs the start-of-work lifecycle whenever the user wants to begin a tracked issue.
+
+## Precondition: the work MUST already have a tracked issue
+
+This skill picks up from an EXISTING issue. Before running any step below, confirm the task has one. It often does NOT: a task that arrives from a conversation, a code-review finding, a dogfood observation, or your own idea has no issue yet, and THAT is the gap this guards.
+
+**If there is no tracked issue for this work, STOP. Do not create a branch, do not write code.** First invoke `webjs-file-issue` to file it and capture the new number, THEN run this skill with that number. Starting code on untracked work is a process failure: the PR ships with no `Closes #N`, the work never appears on the board, and the card never moves to Done. This has happened (a whole feature was implemented and merged before any issue existed, then filed retroactively only after the user noticed).
+
+If you are unsure whether an issue already exists, search before filing:
+
+```sh
+gh issue list --repo webjsdev/webjs --search "<keywords>" --state all
+gh project item-list 1 --owner webjsdev --format json --limit 20000
+```
+
+When in doubt, file it. A duplicate is cheap to close; untracked work is the expensive failure. Only once an issue number exists do you continue to Inputs below.
 
 ## Inputs
 
@@ -341,6 +359,8 @@ After the loop converges, report exactly this shape to the user:
 If you cannot honestly say "last round clean", you cannot say "ready to merge". If a finding is rejected as a false positive, mention it in the report so the user can second-guess the rejection. Every finding the loop surfaced must be accounted for in this report as fixed, rejected-with-reason, or filed-with-issue-number; if you reported an out-of-scope finding to the user but cannot point to its issue number, you have not finished the loop. Every genuine finding must ALSO appear as a comment on the PR (see step 2), so the report and the PR agree.
 
 **Merge is gated on green CI, enforced at the branch level, not by trust.** A PR must not merge until all CI checks pass. `main` branch protection requires the five `ci.yml` checks (Conventions, Unit+integration, Browser, E2E, Build) before any merge; if `gh api repos/webjsdev/webjs/branches/main/protection` shows `required_status_checks: null`, run `bash scripts/protect-main.sh` once (needs repo admin) to restore it. Do not work around a red or pending check; wait for green.
+
+**NEVER use `gh pr merge --admin` to bypass a FAILING check.** `--admin` skips ALL branch-protection gates, not only the review requirement, so a red CI check merges silently and lands broken code on `main`. This has happened (a Unit-test failure was admin-merged, breaking `main`). `--admin` is acceptable ONLY to bypass a required-review gate on a PR whose CI is confirmed all-green. Before any `--admin` merge, re-run `gh pr checks <N>` and confirm EVERY check reads `pass` (a `BLOCKED` state can mean review-required OR a failing check, so never assume which). If any check is red or pending, stop and fix or wait.
 
 ### Subagent prompt template
 
