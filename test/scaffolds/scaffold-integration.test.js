@@ -415,7 +415,40 @@ test('scaffoldApp saas: writes auth + dashboard + Drizzle User model', async () 
       if (!c.endsWith('.ts')) continue;
       const src = readFileSync(join(appDir, 'components', 'ui', c), 'utf8');
       assert.doesNotMatch(src, /from ['"]\.\.\/lib\/utils\.ts['"]/, `${c} must not keep the stale ../lib/utils.ts cn import`);
+      // #877: the onBeforeCache import must be rewritten the same way. The saas
+      // generator previously rewrote only the cn() import, so dialog.ts kept the
+      // registry-relative `../lib/dom.ts` (a nonexistent components/lib/dom.ts)
+      // and failed `webjs typecheck` with TS2307. Counterfactual: the missing
+      // rewrite leaves `'../lib/dom.ts'` and this fails.
+      assert.doesNotMatch(src, /from ['"]\.\.\/lib\/dom\.ts['"]/, `${c} must not keep the stale ../lib/dom.ts import`);
+      if (/onBeforeCache/.test(src)) {
+        assert.match(src, /from ['"]#lib\/utils\/dom\.ts['"]/, `${c} imports onBeforeCache from #lib/utils/dom.ts`);
+      }
     }
+
+    // #877: lib/auth.server.ts must not assign `process.env.AUTH_SECRET`
+    // (string | undefined) straight to the required `string` secret (TS2322).
+    // It resolves through a typed const with a dev fallback + prod guard.
+    const authSrc = readFileSync(join(appDir, 'lib', 'auth.server.ts'), 'utf8');
+    assert.doesNotMatch(authSrc, /secret:\s*process\.env\.AUTH_SECRET\b/, 'secret must not be the raw string | undefined env read');
+    assert.match(authSrc, /const authSecret =/, 'auth secret resolved through a typed const');
+    assert.match(authSrc, /secret:\s*authSecret\b/, 'createAuth uses the typed authSecret');
+    assert.match(authSrc, /NODE_ENV === 'production'[\s\S]*AUTH_SECRET must be set/, 'production fails fast when AUTH_SECRET is unset');
+
+    // #878: each auth page needs exactly one <h1> (axe page-has-heading-one).
+    // The pages previously used <h3> as their only heading. Counterfactual:
+    // the <h3>-only page fails this.
+    for (const p of [['login'], ['signup']]) {
+      const pageSrc = readFileSync(join(appDir, 'app', ...p, 'page.ts'), 'utf8');
+      assert.match(pageSrc, /<h1\b/, `${p.join('/')} page has an <h1>`);
+    }
+
+    // #878: the counter-card gallery label must not drop below AA contrast.
+    // `text-muted-foreground/70` measured 3.83:1 on the card; full-opacity
+    // `text-muted-foreground` passes. Counterfactual: the /70 opacity fails.
+    const counterCard = readFileSync(
+      join(appDir, 'modules', 'components', 'components', 'counter-card.ts'), 'utf8');
+    assert.doesNotMatch(counterCard, /text-muted-foreground\/\d/, 'counter-card label uses full-contrast text-muted-foreground');
 
     // Drizzle User model (saas overwrites db/schema.server.ts to add passwordHash)
     const schema = readFileSync(join(appDir, 'db', 'schema.server.ts'), 'utf8');
