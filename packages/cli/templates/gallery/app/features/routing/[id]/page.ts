@@ -12,12 +12,16 @@
 // params, so PageProps<'/features/routing/[id]'>['params'] narrows to
 // { id: string } automatically. Rename the folder and the type follows; pass a
 // route literal that does not exist and it is a compile error.
-import { html } from '@webjsdev/core';
+import { html, notFound } from '@webjsdev/core';
 import type { PageProps } from '@webjsdev/core';
 
 export default async function RoutingParam({ params }: PageProps<'/features/routing/[id]'>) {
   // The Next-style await also works; `params.id` sync would be identical.
   const { id } = await params;
+  // Throw notFound() to short-circuit into the nearest not-found boundary (404).
+  // Here the reserved id "missing" stands in for "no such record"; in a real app
+  // you throw this after a DB lookup returns nothing. Try /features/routing/missing.
+  if (id === 'missing') notFound();
   return html`
     <h1 class="text-h2 font-bold mb-4">Route param</h1>
     <p>The <code>[id]</code> segment is: <strong>${id}</strong></p>
@@ -27,6 +31,14 @@ export default async function RoutingParam({ params }: PageProps<'/features/rout
       <code class="font-mono">string</code> from the generated route union.
       <code class="font-mono">params</code> is awaitable too:
       <code class="font-mono">const { id } = await params</code> works, same value.
+    </p>
+    <p class="text-muted-foreground text-sm mt-3">
+      Throwing wins over rendering: <a class="text-primary" href="/features/routing/missing">/features/routing/missing</a>
+      throws <code class="font-mono">notFound()</code> and renders the nearest
+      not-found boundary at 404. See the
+      <a class="text-primary" href="/features/boundaries">Boundaries</a> demo for
+      <code class="font-mono">forbidden()</code> and
+      <code class="font-mono">unauthorized()</code>.
     </p>
     <p class="mt-3"><a class="text-primary" href="/features/routing">Back</a></p>
   `;

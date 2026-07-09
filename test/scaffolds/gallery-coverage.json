@@ -1,0 +1,306 @@
+{
+  "$comment": "Source of truth for scaffold teaching coverage of @webjsdev/core. The gallery-coverage.test.js gate reconciles this against the LIVE export surface and the gallery template files, and FAILS CI when a new export is neither demoed nor exempted. Add a { demo } (a runnable gallery example) or an { exempt } (with a reason: \"internal: ...\" for plumbing, \"deferred: ...\" for an agent-facing API not yet demoed) when you add a core export. See the webjs-scaffold-sync skill.",
+  "specifier": "@webjsdev/core",
+  "exports": {
+    "ContextConsumer": {
+      "exempt": "deferred: context API; agent-docs/components.md (#859)"
+    },
+    "ContextProvider": {
+      "exempt": "deferred: context API; agent-docs/components.md (#859)"
+    },
+    "ContextRequestEvent": {
+      "exempt": "deferred: context API; agent-docs/components.md (#859)"
+    },
+    "FRAME_CHUNK": {
+      "exempt": "internal: wire/stream protocol constant"
+    },
+    "FRAME_END": {
+      "exempt": "internal: wire/stream protocol constant"
+    },
+    "FRAME_ERROR": {
+      "exempt": "internal: wire/stream protocol constant"
+    },
+    "MARKER": {
+      "exempt": "internal: SSR hydration marker constant"
+    },
+    "SEED_MISS": {
+      "exempt": "internal: SSR action-seed sentinel"
+    },
+    "STREAM_CONTENT_TYPE": {
+      "exempt": "internal: stream-action content-type constant"
+    },
+    "Signal": {
+      "exempt": "internal: Signal class; app code uses signal() / computed()"
+    },
+    "Suspense": {
+      "exempt": "deferred: page-level streaming boundary; documented in agent-docs/advanced.md (#859)"
+    },
+    "Task": {
+      "exempt": "deferred: client async primitive; the gallery teaches async render() instead, agent-docs/advanced.md (#859)"
+    },
+    "TaskStatus": {
+      "exempt": "deferred: Task status enum; pairs with Task (#859)"
+    },
+    "WebComponent": {
+      "demo": "modules/async-render/components/server-clock.ts"
+    },
+    "WebjsFrame": {
+      "exempt": "internal: auto-registered element class; app uses the <webjs-frame> tag"
+    },
+    "WebjsStream": {
+      "exempt": "internal: auto-registered element class; app uses the <webjs-stream> tag"
+    },
+    "activeActionSignal": {
+      "exempt": "internal: action-signal plumbing; app code uses actionSignal() from @webjsdev/server"
+    },
+    "adoptStyles": {
+      "exempt": "internal: style-adoption plumbing"
+    },
+    "allTags": {
+      "exempt": "internal: component-registry plumbing"
+    },
+    "asyncAppend": {
+      "exempt": "deferred: asyncAppend directive; agent-docs/components.md (#859)"
+    },
+    "asyncReplace": {
+      "exempt": "deferred: asyncReplace directive; agent-docs/components.md (#859)"
+    },
+    "batch": {
+      "exempt": "deferred: signal batching; agent-docs/components.md (#859)"
+    },
+    "cache": {
+      "exempt": "deferred: lit cache directive (distinct from the server cache() helper); agent-docs/advanced.md (#859)"
+    },
+    "computed": {
+      "exempt": "deferred: derived signal; agent-docs/components.md (#859)"
+    },
+    "connectWS": {
+      "demo": "modules/broadcast/components/broadcast-feed.ts"
+    },
+    "consumeStale": {
+      "exempt": "internal: stale-while-revalidate plumbing"
+    },
+    "createContext": {
+      "exempt": "deferred: context API; agent-docs/components.md (#859)"
+    },
+    "createFrameDecoder": {
+      "exempt": "internal: frame codec used by the client router"
+    },
+    "createRef": {
+      "exempt": "deferred: element ref directive; agent-docs/components.md (#859)"
+    },
+    "cspNonce": {
+      "exempt": "deferred: CSP nonce accessor; agent-docs/configuration.md (#859)"
+    },
+    "css": {
+      "exempt": "deferred: shadow-DOM scoped styles; documented in agent-docs/styling.md (#859)"
+    },
+    "deserialize": {
+      "exempt": "internal: wire serializer; app code round-trips via server actions"
+    },
+    "disableClientRouter": {
+      "exempt": "deferred: client-router opt-out; agent-docs/configuration.md (#859)"
+    },
+    "effect": {
+      "exempt": "deferred: signal effect; agent-docs/components.md (#859)"
+    },
+    "enableClientRouter": {
+      "exempt": "deferred: client-router opt-in; agent-docs/configuration.md (#859)"
+    },
+    "encodeFrame": {
+      "exempt": "internal: frame codec used by the client router"
+    },
+    "escapeAttr": {
+      "exempt": "internal: SSR escaping primitive"
+    },
+    "escapeText": {
+      "exempt": "internal: SSR escaping primitive"
+    },
+    "fetchMark": {
+      "exempt": "internal: stale-while-revalidate plumbing"
+    },
+    "forbidden": {
+      "demo": "app/features/boundaries/gated/page.ts"
+    },
+    "guard": {
+      "exempt": "deferred: guard directive; agent-docs/components.md (#859)"
+    },
+    "html": {
+      "demo": "app/features/async-render/page.ts"
+    },
+    "isAsyncAppend": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isAsyncReplace": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isCSS": {
+      "exempt": "internal: value type guard used by the renderer"
+    },
+    "isCache": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isForbidden": {
+      "exempt": "internal: control-flow throw guard used by the renderer"
+    },
+    "isGuard": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isKeyed": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isLazy": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isLive": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isNotFound": {
+      "exempt": "internal: control-flow throw guard used by the renderer"
+    },
+    "isRedirect": {
+      "exempt": "internal: control-flow throw guard used by the renderer"
+    },
+    "isRef": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isRepeat": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isSignal": {
+      "exempt": "internal: value type guard used by the renderer"
+    },
+    "isSuspense": {
+      "exempt": "internal: value type guard used by the renderer"
+    },
+    "isTemplate": {
+      "exempt": "internal: value type guard used by the renderer"
+    },
+    "isTemplateContent": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isUnauthorized": {
+      "exempt": "internal: control-flow throw guard used by the renderer"
+    },
+    "isUnsafeHTML": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isUntil": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isWatch": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "keyed": {
+      "exempt": "deferred: keyed directive; agent-docs/components.md (#859)"
+    },
+    "live": {
+      "exempt": "deferred: live directive; agent-docs/components.md (#859)"
+    },
+    "lookup": {
+      "exempt": "internal: component-registry plumbing"
+    },
+    "lookupModuleUrl": {
+      "exempt": "internal: module-url plumbing"
+    },
+    "markStale": {
+      "exempt": "internal: stale-while-revalidate plumbing"
+    },
+    "navigate": {
+      "exempt": "deferred: programmatic client navigation; mentioned in the routing demo prose (#859)"
+    },
+    "notFound": {
+      "demo": "app/features/routing/[id]/page.ts"
+    },
+    "optimistic": {
+      "demo": "modules/optimistic-ui/components/like-button.ts"
+    },
+    "parse": {
+      "exempt": "internal: wire serializer; app code round-trips via server actions"
+    },
+    "parseTagHeader": {
+      "exempt": "internal: partial-nav header plumbing"
+    },
+    "primeModuleUrl": {
+      "exempt": "internal: module-url plumbing"
+    },
+    "prop": {
+      "demo": "modules/components/components/counter-card.ts"
+    },
+    "redirect": {
+      "exempt": "deferred: server redirect throw; mentioned in the boundaries demo prose (#859)"
+    },
+    "ref": {
+      "exempt": "deferred: element ref directive; agent-docs/components.md (#859)"
+    },
+    "register": {
+      "demo": "modules/components/components/counter-card.ts"
+    },
+    "registerKeyTags": {
+      "exempt": "internal: keyed-list registry plumbing"
+    },
+    "render": {
+      "exempt": "internal: client render entry; the framework calls it, app code writes components"
+    },
+    "renderStream": {
+      "exempt": "internal: the <webjs-stream> applier is auto-wired by the client router; app uses the tag / connectWS"
+    },
+    "renderToStream": {
+      "exempt": "internal: server render entry; used by the framework and tests, not authored in app pages"
+    },
+    "renderToString": {
+      "exempt": "internal: server render entry; used by the framework and tests, not authored in app pages"
+    },
+    "repeat": {
+      "demo": "modules/directives/components/directive-demo.ts"
+    },
+    "revalidate": {
+      "exempt": "deferred: client snapshot eviction; agent-docs/built-ins.md (#859)"
+    },
+    "richFetch": {
+      "exempt": "deferred: content-negotiated rich fetch; agent-docs/advanced.md (#859)"
+    },
+    "scanSeeds": {
+      "exempt": "internal: SSR action-seeding plumbing"
+    },
+    "serialize": {
+      "exempt": "internal: wire serializer; app code round-trips via server actions"
+    },
+    "setActiveActionSignal": {
+      "exempt": "internal: action-signal plumbing; app code uses actionSignal() from @webjsdev/server"
+    },
+    "setCspNonceProvider": {
+      "exempt": "internal: server-only CSP nonce provider setup"
+    },
+    "signal": {
+      "demo": "modules/broadcast/components/broadcast-feed.ts"
+    },
+    "stringify": {
+      "exempt": "internal: wire serializer; app code round-trips via server actions"
+    },
+    "stylesToString": {
+      "exempt": "internal: style-adoption plumbing"
+    },
+    "tagOf": {
+      "exempt": "internal: component-registry plumbing"
+    },
+    "takeSeed": {
+      "exempt": "internal: SSR action-seeding plumbing"
+    },
+    "templateContent": {
+      "exempt": "deferred: templateContent directive; agent-docs/components.md (#859)"
+    },
+    "unauthorized": {
+      "demo": "app/features/boundaries/private/page.ts"
+    },
+    "unsafeHTML": {
+      "exempt": "deferred: trusted raw-HTML directive; agent-docs/components.md (#859)"
+    },
+    "until": {
+      "exempt": "deferred: until directive; agent-docs/components.md (#859)"
+    },
+    "watch": {
+      "demo": "modules/directives/components/directive-demo.ts"
+    }
+  }
+}
