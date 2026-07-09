@@ -4,6 +4,7 @@ date: 2026-07-09T10:00:00+05:30
 slug: webjs-vs-lit
 description: "An honest comparison of WebJs and Lit. WebJs deliberately matches Lit's component API (html templates, reactive properties, lifecycle, directives) and wraps it in a full-stack framework with routing, SSR, server actions, and a client router, all with no build step."
 competitor: "Lit"
+link: "https://lit.dev"
 tagline: "Lit's component model you already know, wrapped in a full-stack framework."
 tags: comparison, lit, web-components, ssr, no-build
 author: Vivek

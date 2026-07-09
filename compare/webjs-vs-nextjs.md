@@ -4,6 +4,7 @@ date: 2026-07-09T10:00:00+05:30
 slug: webjs-vs-nextjs
 description: "An honest comparison of WebJs and Next.js. WebJs keeps the Next-style developer experience (file routing, server actions, streaming SSR) but drops the build step and the React Server Component split, building the view layer on native web components instead."
 competitor: "Next.js"
+link: "https://nextjs.org"
 tagline: "The Next.js developer experience, minus the build step and the RSC mental model."
 tags: comparison, nextjs, react, web-components, no-build
 author: Vivek

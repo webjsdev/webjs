@@ -14,7 +14,9 @@
  *   - `> ` blockquotes
  *   - `- ` bulleted lists (custom-positioned markers via `before:` pseudo-element)
  *   - ```fenced``` code blocks
- *   - Inline: **bold**, *italic*, `code`, [text](url)
+ *   - Inline: **bold**, *italic*, `code`, [text](url). An absolute or
+ *     protocol-relative URL opens in a new tab (with a screen-reader cue);
+ *     an internal `/path` link navigates in place.
  */
 
 function inline(s: string): string {
@@ -22,8 +24,20 @@ function inline(s: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
-  out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, t, u) =>
-    `<a href="${u}" class="text-accent no-underline hover:underline" rel="noopener noreferrer">${t}</a>`);
+  out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, t, u) => {
+    // Absolute (off-site) links open in a new tab so the reader keeps the
+    // article; internal links (starting with /) navigate in place. Escape any
+    // `"` in the URL so it cannot break out of the href attribute.
+    const href = u.replace(/"/g, '%22');
+    // External = an absolute http(s) URL (scheme is case-insensitive) or a
+    // protocol-relative `//host`. Internal `/path` links stay same-tab.
+    const external = /^(https?:)?\/\//i.test(u);
+    // For a new-tab link, append the same visually-hidden cue the site chrome
+    // uses (lib/links.ts NEW_TAB) so screen readers announce the tab change.
+    const attrs = external ? ' target="_blank" rel="noopener noreferrer"' : '';
+    const cue = external ? '<span class="sr-only"> (opens in a new tab)</span>' : '';
+    return `<a href="${href}" class="text-accent no-underline hover:underline"${attrs}>${t}${cue}</a>`;
+  });
   out = out.replace(/`([^`]+)`/g, '<code class="font-mono text-[0.9em] bg-bg-subtle text-fg px-[6px] py-[2px] rounded">$1</code>');
   out = out.replace(/\*\*([^\n]+?)\*\*/g, '<strong class="font-semibold text-fg">$1</strong>');
   out = out.replace(/(^|[^\w])_([^_\s][^_]*[^_\s]|[^_\s])_(?=$|[^\w])/g, '$1<em>$2</em>');

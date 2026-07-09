@@ -44,6 +44,7 @@ export async function listComparisons(): Promise<Comparison[]> {
       date: fm.date || '',
       description: fm.description || '',
       competitor: fm.competitor,
+      link: fm.link || '',
       tagline: fm.tagline,
       tags: (fm.tags || '').split(',').map((t) => t.trim()).filter(Boolean),
       author: fm.author || 'Vivek',
