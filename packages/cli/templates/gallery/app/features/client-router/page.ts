@@ -8,6 +8,7 @@
 // JS off, every link is a normal full-page navigation.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
+import '#modules/client-router/components/router-controls.ts';
 
 export const metadata: Metadata = { title: 'Client router (soft nav) | features' };
 
@@ -24,6 +25,8 @@ export default function ClientRouterExample() {
       <a href="/features/client-router/second" class="inline-flex items-center px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm no-underline transition-all hover:bg-primary/90 active:scale-[0.97]">Go to page two</a>
       <a href="/" class="text-muted-foreground no-underline font-medium text-sm hover:text-foreground transition-colors">Home</a>
     </div>
+    <p class="text-muted-foreground text-sm mt-6 mb-2">Or drive it from JS with <code class="font-mono">navigate()</code> / <code class="font-mono">revalidate()</code>:</p>
+    <router-controls></router-controls>
     <p class="text-muted-foreground text-sm mt-6">
       Opt out app-wide with <code class="font-mono">{ "webjs": { "clientRouter": false } }</code>,
       or per-link with <code class="font-mono">data-no-router</code> (use it for

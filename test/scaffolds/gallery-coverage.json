@@ -66,13 +66,13 @@
       "exempt": "deferred: asyncReplace directive; agent-docs/components.md (#859)"
     },
     "batch": {
-      "exempt": "deferred: signal batching; agent-docs/components.md (#859)"
+      "demo": "modules/components/components/reactive-meter.ts"
     },
     "cache": {
       "exempt": "deferred: lit cache directive (distinct from the server cache() helper); agent-docs/advanced.md (#859)"
     },
     "computed": {
-      "exempt": "deferred: derived signal; agent-docs/components.md (#859)"
+      "demo": "modules/components/components/reactive-meter.ts"
     },
     "connectWS": {
       "demo": "modules/broadcast/components/broadcast-feed.ts"
@@ -87,13 +87,13 @@
       "exempt": "internal: frame codec used by the client router"
     },
     "createRef": {
-      "exempt": "deferred: element ref directive; agent-docs/components.md (#859)"
+      "demo": "modules/directives/components/directive-demo.ts"
     },
     "cspNonce": {
       "exempt": "deferred: CSP nonce accessor; agent-docs/configuration.md (#859)"
     },
     "css": {
-      "exempt": "deferred: shadow-DOM scoped styles; documented in agent-docs/styling.md (#859)"
+      "demo": "modules/components/components/reactive-meter.ts"
     },
     "deserialize": {
       "exempt": "internal: wire serializer; app code round-trips via server actions"
@@ -102,7 +102,7 @@
       "exempt": "deferred: client-router opt-out; agent-docs/configuration.md (#859)"
     },
     "effect": {
-      "exempt": "deferred: signal effect; agent-docs/components.md (#859)"
+      "demo": "modules/components/components/reactive-meter.ts"
     },
     "enableClientRouter": {
       "exempt": "deferred: client-router opt-in; agent-docs/configuration.md (#859)"
@@ -192,10 +192,10 @@
       "exempt": "internal: directive type guard used by the renderer"
     },
     "keyed": {
-      "exempt": "deferred: keyed directive; agent-docs/components.md (#859)"
+      "demo": "modules/directives/components/directive-demo.ts"
     },
     "live": {
-      "exempt": "deferred: live directive; agent-docs/components.md (#859)"
+      "demo": "modules/directives/components/directive-demo.ts"
     },
     "lookup": {
       "exempt": "internal: component-registry plumbing"
@@ -207,7 +207,7 @@
       "exempt": "internal: stale-while-revalidate plumbing"
     },
     "navigate": {
-      "exempt": "deferred: programmatic client navigation; mentioned in the routing demo prose (#859)"
+      "demo": "modules/client-router/components/router-controls.ts"
     },
     "notFound": {
       "demo": "app/features/routing/[id]/page.ts"
@@ -231,7 +231,7 @@
       "exempt": "deferred: server redirect throw; mentioned in the boundaries demo prose (#859)"
     },
     "ref": {
-      "exempt": "deferred: element ref directive; agent-docs/components.md (#859)"
+      "demo": "modules/directives/components/directive-demo.ts"
     },
     "register": {
       "demo": "modules/components/components/counter-card.ts"
@@ -240,22 +240,22 @@
       "exempt": "internal: keyed-list registry plumbing"
     },
     "render": {
-      "exempt": "internal: client render entry; the framework calls it, app code writes components"
+      "exempt": "deferred: client render(v, el) into a DOM element; public API, agent-docs/advanced (#859)"
     },
     "renderStream": {
-      "exempt": "internal: the <webjs-stream> applier is auto-wired by the client router; app uses the tag / connectWS"
+      "exempt": "deferred: <webjs-stream> applier for a connectWS handler; public API, agent-docs/advanced (#859)"
     },
     "renderToStream": {
       "exempt": "internal: server render entry; used by the framework and tests, not authored in app pages"
     },
     "renderToString": {
-      "exempt": "internal: server render entry; used by the framework and tests, not authored in app pages"
+      "exempt": "deferred: SSR-to-string for test assertions; @webjsdev/core/server, agent-docs/testing (#859)"
     },
     "repeat": {
       "demo": "modules/directives/components/directive-demo.ts"
     },
     "revalidate": {
-      "exempt": "deferred: client snapshot eviction; agent-docs/built-ins.md (#859)"
+      "demo": "modules/client-router/components/router-controls.ts"
     },
     "richFetch": {
       "exempt": "deferred: content-negotiated rich fetch; agent-docs/advanced.md (#859)"
@@ -294,10 +294,10 @@
       "demo": "app/features/boundaries/private/page.ts"
     },
     "unsafeHTML": {
-      "exempt": "deferred: trusted raw-HTML directive; agent-docs/components.md (#859)"
+      "demo": "modules/directives/components/directive-demo.ts"
     },
     "until": {
-      "exempt": "deferred: until directive; agent-docs/components.md (#859)"
+      "demo": "modules/directives/components/directive-demo.ts"
     },
     "watch": {
       "demo": "modules/directives/components/directive-demo.ts"
@@ -354,7 +354,7 @@
       "exempt": "internal: framework/CLI plumbing"
     },
     "attachWebSocket": {
-      "exempt": "deferred: WS upgrade helper (#865)"
+      "exempt": "deferred: WS test-server helper; docs/app/docs/testing (#859)"
     },
     "auditPinned": {
       "exempt": "internal: framework/CLI plumbing"
@@ -372,7 +372,7 @@
       "exempt": "internal: framework/CLI plumbing"
     },
     "buildRouteTable": {
-      "exempt": "internal: framework/CLI plumbing"
+      "exempt": "deferred: documented test helper (build a route table); docs/app/docs/testing (#859)"
     },
     "cache": {
       "demoed": true
@@ -393,13 +393,13 @@
       "exempt": "deferred: cookie session strategy (#865)"
     },
     "cookieSessionStorage": {
-      "exempt": "deferred: cookie session storage (#865)"
+      "exempt": "deferred: cookie session storage strategy; documented in docs/app/docs/sessions (#859)"
     },
     "cookies": {
       "exempt": "deferred: request cookie accessor (#865)"
     },
     "cookiesToHeader": {
-      "exempt": "deferred: cookie serializer (#865)"
+      "exempt": "internal: low-level cookie serializer; apps use cookies()"
     },
     "cors": {
       "demoed": true
@@ -471,10 +471,10 @@
       "exempt": "deferred: session read (#865)"
     },
     "getSetCookies": {
-      "exempt": "deferred: Set-Cookie reader (#865)"
+      "exempt": "internal: low-level Set-Cookie reader"
     },
     "getStore": {
-      "exempt": "deferred: active store accessor (#865)"
+      "exempt": "deferred: active-store read API; docs/app/docs/cache + agent-docs/built-ins (#859)"
     },
     "handleApi": {
       "exempt": "internal: framework/CLI plumbing"
@@ -516,10 +516,10 @@
       "demoed": true
     },
     "matchApi": {
-      "exempt": "internal: framework/CLI plumbing"
+      "exempt": "deferred: documented test helper (match an API route); docs/app/docs/testing (#859)"
     },
     "matchPage": {
-      "exempt": "internal: framework/CLI plumbing"
+      "exempt": "deferred: documented test helper (match a page route); docs/app/docs/testing (#859)"
     },
     "memoryStore": {
       "exempt": "deferred: in-memory store (#865)"
@@ -546,10 +546,10 @@
       "demoed": true
     },
     "rawActionRequest": {
-      "exempt": "internal: framework/CLI plumbing"
+      "exempt": "deferred: documented test helper (build an action request); docs/app/docs/testing (#859)"
     },
     "readBody": {
-      "exempt": "internal: framework/CLI plumbing"
+      "exempt": "deferred: route-handler body helper (inverse of json()); docs/app/docs/api-routes (#859)"
     },
     "readPinFile": {
       "exempt": "internal: framework/CLI plumbing"
@@ -588,10 +588,10 @@
       "demoed": true
     },
     "runInstrumentation": {
-      "exempt": "deferred: instrumentation runner (#865)"
+      "exempt": "internal: the framework runs it; apps write instrumentation.ts register()"
     },
     "runWithActionSignal": {
-      "exempt": "deferred: action-signal scope helper (#865)"
+      "exempt": "internal: action-signal scope helper; apps use actionSignal()"
     },
     "satisfiesSemverRange": {
       "exempt": "internal: framework/CLI plumbing"
@@ -630,7 +630,7 @@
       "exempt": "deferred: signed URL builder (#865)"
     },
     "sitemap": {
-      "exempt": "deferred: sitemap serializer (#865)"
+      "demoed": true
     },
     "sitemapIndex": {
       "exempt": "deferred: sitemap index serializer (#865)"
@@ -642,16 +642,16 @@
       "exempt": "internal: framework/CLI plumbing"
     },
     "stampRemoteIp": {
-      "exempt": "internal: framework/CLI plumbing"
+      "exempt": "deferred: embedded-adapter IP helper; docs/app/docs/rate-limiting + agent-docs/advanced (#859)"
     },
     "startServer": {
       "exempt": "deferred: programmatic server boot (#865)"
     },
     "storeSession": {
-      "exempt": "deferred: session persistence (#865)"
+      "exempt": "deferred: production session storage (alias of storeSessionStorage); docs/app/docs/sessions (#859)"
     },
     "storeSessionStorage": {
-      "exempt": "deferred: session storage (#865)"
+      "exempt": "deferred: production (Redis-backed) session storage; docs/app/docs/sessions + cache (#859)"
     },
     "stream": {
       "demoed": true
@@ -684,7 +684,7 @@
       "exempt": "deferred: signed URL verifier (#865)"
     },
     "withCookies": {
-      "exempt": "deferred: cookie response helper (#865)"
+      "exempt": "internal: low-level response cookie helper; apps use cookies()"
     },
     "withRequest": {
       "exempt": "internal: framework/CLI plumbing"
@@ -701,16 +701,16 @@
       "demoed": true
     },
     "error": {
-      "exempt": "deferred: no example error file shipped by the scaffold yet (#865)"
+      "demoed": true
     },
     "loading": {
-      "exempt": "deferred: no example loading file shipped by the scaffold yet (#865)"
+      "demoed": true
     },
     "middleware": {
       "demoed": true
     },
     "not-found": {
-      "exempt": "deferred: no example not-found file shipped by the scaffold yet (#865)"
+      "demoed": true
     },
     "forbidden": {
       "demoed": true
@@ -728,13 +728,13 @@
       "demoed": true
     },
     "sitemap": {
-      "exempt": "deferred: no example sitemap file shipped by the scaffold yet (#865)"
+      "demoed": true
     },
     "robots": {
-      "exempt": "deferred: no example robots file shipped by the scaffold yet (#865)"
+      "demoed": true
     },
     "manifest": {
-      "exempt": "deferred: no example manifest file shipped by the scaffold yet (#865)"
+      "demoed": true
     },
     "icon": {
       "exempt": "deferred: no example icon file shipped by the scaffold yet (#865)"

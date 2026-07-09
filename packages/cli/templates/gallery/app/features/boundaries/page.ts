@@ -40,6 +40,16 @@ export default function BoundariesExample() {
         throws <code class="font-mono">unauthorized()</code>, caught by
         <code class="font-mono">private/unauthorized.ts</code> (401).
       </li>
+      <li>
+        <a class="text-primary" href="/features/boundaries/crash">/features/boundaries/crash</a>
+        throws a render error, caught by this segment's
+        <code class="font-mono">error.ts</code> (500).
+      </li>
+      <li>
+        <a class="text-primary" href="/features/boundaries/does-not-exist">/features/boundaries/does-not-exist</a>
+        matches nothing, caught by the nearest
+        <code class="font-mono">not-found.ts</code> (404).
+      </li>
     </ul>
     <p class="text-muted-foreground text-sm mb-2">
       <code class="font-mono">forbidden()</code> is for an authenticated user who
