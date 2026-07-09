@@ -240,16 +240,16 @@
       "exempt": "internal: keyed-list registry plumbing"
     },
     "render": {
-      "exempt": "internal: client render entry; the framework calls it, app code writes components"
+      "exempt": "deferred: client render(v, el) into a DOM element; public API, agent-docs/advanced (#859)"
     },
     "renderStream": {
-      "exempt": "internal: the <webjs-stream> applier is auto-wired by the client router; app uses the tag / connectWS"
+      "exempt": "deferred: <webjs-stream> applier for a connectWS handler; public API, agent-docs/advanced (#859)"
     },
     "renderToStream": {
       "exempt": "internal: server render entry; used by the framework and tests, not authored in app pages"
     },
     "renderToString": {
-      "exempt": "internal: server render entry; used by the framework and tests, not authored in app pages"
+      "exempt": "deferred: SSR-to-string for test assertions; @webjsdev/core/server, agent-docs/testing (#859)"
     },
     "repeat": {
       "demo": "modules/directives/components/directive-demo.ts"
@@ -354,7 +354,7 @@
       "exempt": "internal: framework/CLI plumbing"
     },
     "attachWebSocket": {
-      "exempt": "internal: WS upgrade helper; apps export a WS() handler from route.ts"
+      "exempt": "deferred: WS test-server helper; docs/app/docs/testing (#859)"
     },
     "auditPinned": {
       "exempt": "internal: framework/CLI plumbing"
@@ -372,7 +372,7 @@
       "exempt": "internal: framework/CLI plumbing"
     },
     "buildRouteTable": {
-      "exempt": "internal: framework/CLI plumbing"
+      "exempt": "deferred: documented test helper (build a route table); docs/app/docs/testing (#859)"
     },
     "cache": {
       "demoed": true
@@ -516,10 +516,10 @@
       "demoed": true
     },
     "matchApi": {
-      "exempt": "internal: framework/CLI plumbing"
+      "exempt": "deferred: documented test helper (match an API route); docs/app/docs/testing (#859)"
     },
     "matchPage": {
-      "exempt": "internal: framework/CLI plumbing"
+      "exempt": "deferred: documented test helper (match a page route); docs/app/docs/testing (#859)"
     },
     "memoryStore": {
       "exempt": "deferred: in-memory store (#865)"
@@ -546,10 +546,10 @@
       "demoed": true
     },
     "rawActionRequest": {
-      "exempt": "internal: framework/CLI plumbing"
+      "exempt": "deferred: documented test helper (build an action request); docs/app/docs/testing (#859)"
     },
     "readBody": {
-      "exempt": "internal: framework/CLI plumbing"
+      "exempt": "deferred: route-handler body helper (inverse of json()); docs/app/docs/api-routes (#859)"
     },
     "readPinFile": {
       "exempt": "internal: framework/CLI plumbing"
@@ -642,7 +642,7 @@
       "exempt": "internal: framework/CLI plumbing"
     },
     "stampRemoteIp": {
-      "exempt": "internal: framework/CLI plumbing"
+      "exempt": "deferred: embedded-adapter IP helper; docs/app/docs/rate-limiting + agent-docs/advanced (#859)"
     },
     "startServer": {
       "exempt": "deferred: programmatic server boot (#865)"
