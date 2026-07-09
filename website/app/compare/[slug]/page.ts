@@ -1,6 +1,7 @@
 import { html, unsafeHTML, notFound } from '@webjsdev/core';
 import { getComparison } from '#modules/compare/queries/get-comparison.server.ts';
 import { renderPostBody } from '#modules/blog/utils/render-post.ts';
+import { NEW_TAB } from '#lib/links.ts';
 
 /**
  * /compare/[slug]
@@ -46,7 +47,7 @@ export default async function ComparePage({ params }: { params: { slug: string }
       <header class="mb-[64px]">
         <p class="font-mono text-[12px] uppercase tracking-[0.14em] text-accent font-semibold mb-[20px]">
           WebJs vs ${c.link
-            ? html`<a href=${c.link} target="_blank" rel="noopener noreferrer" class="text-accent no-underline hover:underline">${c.competitor}</a>`
+            ? html`<a href=${c.link} target="_blank" rel="noopener noreferrer" class="text-accent no-underline hover:underline">${c.competitor}${NEW_TAB}</a>`
             : c.competitor}
         </p>
         <h1 class="font-serif text-[clamp(36px,6vw,56px)] leading-[1.05] tracking-tight text-fg m-0 mb-[24px]">${c.title}</h1>
