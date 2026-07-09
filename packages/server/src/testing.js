@@ -1,7 +1,7 @@
 /**
  * Server-side test harness helpers (issue #267).
  *
- * `createRequestHandler(...).handle(request)` drives the FULL webjs pipeline
+ * `createRequestHandler(...).handle(request)` drives the FULL WebJs pipeline
  * (middleware, routing, SSR, page actions, server-action RPC, auth + CSRF), and
  * the framework's own suite already drives it. These helpers are THIN builders
  * over the native `Request` / `Response` around that `handle()`, so an app test
@@ -350,7 +350,7 @@ export async function rawActionRequest(app, serverFilePath, fnName, args = [], o
 }
 
 /**
- * Browser-test harness (#806): build a webjs handler that a `web-test-runner`
+ * Browser-test harness (#806): build a WebJs handler that a `web-test-runner`
  * config can proxy module requests to, so a `test/**​/browser/*.test.js` file
  * can import a real `.ts` component that imports a `'use server'` action and it
  * loads + hydrates in a real browser. Plain WTR serves raw TS with no webjs
@@ -369,7 +369,7 @@ export async function rawActionRequest(app, serverFilePath, fnName, args = [], o
  * of `@webjsdev/server/testing` stays light (they pull the full server + the
  * `ws` WebSocket subsystem).
  *
- * @param {string} appDir  the webjs app root (usually `process.cwd()`)
+ * @param {string} appDir  the WebJs app root (usually `process.cwd()`)
  * @returns {Promise<{ handle: Handle, warmup: () => Promise<void>, importmapHtml: () => string }>}
  */
 export async function createBrowserTestHandler(appDir) {

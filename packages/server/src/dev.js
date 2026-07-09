@@ -136,7 +136,7 @@ const MIME = {
  * `namespace` with values, parameter properties, legacy decorators
  * with `emitDecoratorMetadata`, `import = require`) throws at strip
  * time. The `erasable-typescript-only` and `no-non-erasable-typescript`
- * lint rules catch these at edit time. webjs is buildless end-to-end:
+ * lint rules catch these at edit time. WebJs is buildless end-to-end:
  * there is no bundler fallback.
  *
  * The transformed bytes are cached per request handler in `state.tsCache`
@@ -441,7 +441,7 @@ export async function readServerTimeoutsFromApp(appDir) {
 }
 
 /**
- * Create a reusable, framework-agnostic request handler for a webjs app.
+ * Create a reusable, framework-agnostic request handler for a WebJs app.
  * The returned `handle(req)` takes a standard `Request` and resolves to a
  * standard `Response`: suitable for Node http, Deno, Bun, Cloudflare Workers,
  * or embedding inside an Express/Fastify app.
@@ -456,7 +456,7 @@ export async function readServerTimeoutsFromApp(appDir) {
  * }} opts
  */
 export async function createRequestHandler(opts) {
-  // Preflight: webjs needs Node 24+ (built-in TS strip + recursive fs.watch).
+  // Preflight: WebJs needs Node 24+ (built-in TS strip + recursive fs.watch).
   // Throw a clear Error here so an embedded host (Express/Fastify/Bun/Deno)
   // gets the actionable message at boot, not a cryptic API failure mid-request.
   assertNodeVersion({ onFail: 'throw' });
@@ -1464,7 +1464,7 @@ export async function createRequestHandler(opts) {
 }
 
 /**
- * Start a webjs HTTP server. Thin wrapper around `createRequestHandler`.
+ * Start a WebJs HTTP server. Thin wrapper around `createRequestHandler`.
  *
  * Speaks plain HTTP/1.1. TLS termination + HTTP/2 to the browser is
  * expected to be handled by a reverse proxy (PaaS edge, nginx, Caddy,
@@ -2138,7 +2138,7 @@ async function loadMiddleware(appDir, dev, logger) {
  * @param {import('./logger.js').Logger} logger
  */
 /**
- * Create a plain HTTP/1.1 server. webjs deploys are expected to sit
+ * Create a plain HTTP/1.1 server. WebJs deploys are expected to sit
  * behind a reverse proxy (PaaS edge, nginx, Caddy, etc.) that handles
  * TLS termination and speaks HTTP/2 to clients: Node's http2 module
  * doesn't need to be involved on the framework side.
@@ -2327,7 +2327,7 @@ async function exists(p) {
  * dev server returns the error to the caller. The
  * `erasable-typescript-only` and `no-non-erasable-typescript` lint
  * rules catch these at edit time. There is no bundler fallback;
- * webjs is buildless end-to-end.
+ * WebJs is buildless end-to-end.
  *
  * The backend is the runtime-appropriate stripper (#508): Node 24+'s built-in
  * `module.stripTypeScriptTypes`, or `amaro` on Bun (byte-identical, equally

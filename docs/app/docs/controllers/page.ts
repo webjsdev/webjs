@@ -7,7 +7,7 @@ export default function Controllers() {
     <h1>Reactive Controllers</h1>
     <p>Reactive controllers are a composition pattern for sharing lifecycle-bound logic across components without using inheritance. Instead of building mixin chains or base class hierarchies, you create standalone controller objects that hook into any component's lifecycle.</p>
 
-    <p><strong>Why the lit-shaped hook names?</strong> webjs adopts lit's <code>hostConnected</code> / <code>hostDisconnected</code> / <code>hostUpdate</code> / <code>hostUpdated</code> protocol verbatim because AI coding agents have substantial training data on lit. Matching lit's API names means agents emit idiomatic webjs code without framework-specific translation, and any lit ReactiveController found in the wild is drop-in compatible here.</p>
+    <p><strong>Why the lit-shaped hook names?</strong> WebJs adopts lit's <code>hostConnected</code> / <code>hostDisconnected</code> / <code>hostUpdate</code> / <code>hostUpdated</code> protocol verbatim because AI coding agents have substantial training data on lit. Matching lit's API names means agents emit idiomatic WebJs code without framework-specific translation, and any lit ReactiveController found in the wild is drop-in compatible here.</p>
 
     <h2>What Controllers Solve</h2>
     <p>Consider a scenario where three different components all need to fetch data on connect, poll on an interval, and clean up on disconnect. Without controllers, your options are:</p>

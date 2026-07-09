@@ -237,7 +237,7 @@ with no cross-origin vendors.
 `metadata.jsonLd` emits schema.org structured data as one or more
 `<script type="application/ld+json">` blocks in `<head>`. This is the
 highest-leverage modern SEO surface (Google's Article, Product,
-BreadcrumbList, Organization, and FAQ rich results all read it). webjs
+BreadcrumbList, Organization, and FAQ rich results all read it). WebJs
 stays true to its no-build identity here. JSON-LD is a web standard
 rendered as a plain script tag, so the framework ONLY serializes and
 escapes. There is no schema library and no validation. **You own the

@@ -31,7 +31,7 @@ npm run start -- --port 8080</pre>
     <h2>Production Features</h2>
 
     <h3>Compression</h3>
-    <p>In production mode, webjs automatically negotiates <code>Accept-Encoding</code> and compresses responses with Brotli (quality 4) or Gzip (level 6). Compression applies to text-based content types: HTML, JavaScript, JSON, CSS, SVG, XML. Binary assets (images, fonts) are served uncompressed.</p>
+    <p>In production mode, WebJs automatically negotiates <code>Accept-Encoding</code> and compresses responses with Brotli (quality 4) or Gzip (level 6). Compression applies to text-based content types: HTML, JavaScript, JSON, CSS, SVG, XML. Binary assets (images, fonts) are served uncompressed.</p>
 
     <h3>ETags and Cache Headers</h3>
     <p>Static files are served with a SHA-1 ETag and a 1-hour <code>max-age</code>. Vendor npm packages resolve through importmap to jspm.io URLs (default) or to local <code>/__webjs/vendor/&lt;pkg&gt;@&lt;version&gt;.js</code> paths (after <code>webjs vendor pin --download</code>). Direct jspm.io URLs use jspm.io's own immutable headers; locally-served <code>--download</code> bundles use <code>max-age=31536000, immutable</code>. In dev, all files use <code>Cache-Control: no-cache</code>.</p>
@@ -72,7 +72,7 @@ npm run start -- --port 8080</pre>
     ]
   &#125;
 &#125;</pre>
-    <p>A rule can ADD a header, OVERRIDE a default by giving a new value, or DISABLE a default on a path with a <code>null</code> value (the first example drops <code>X-Frame-Options</code> so a public-embed route can be framed). Precedence, lowest to highest, runs secure defaults, then the <code>webjs.headers</code> path config, then app middleware (which always wins, since its headers are already on the response when webjs merges).</p>
+    <p>A rule can ADD a header, OVERRIDE a default by giving a new value, or DISABLE a default on a path with a <code>null</code> value (the first example drops <code>X-Frame-Options</code> so a public-embed route can be framed). Precedence, lowest to highest, runs secure defaults, then the <code>webjs.headers</code> path config, then app middleware (which always wins, since its headers are already on the response when WebJs merges).</p>
 
     <h4>Content-Security-Policy (nonce, opt-in)</h4>
     <p>WebJs can mint a fresh per-request CSP nonce and emit a matching <code>Content-Security-Policy</code> response header. It is OFF by default (a strict policy would break an app with third-party inline scripts/styles, so you opt in). Enable it with a <code>webjs.csp</code> key in <code>package.json</code>:</p>
@@ -142,7 +142,7 @@ export default async function ready() {
       <li><strong>For bare-VM, reverse proxies do it better.</strong> nginx, Caddy, and Traefik are battle-tested for TLS termination. They handle cert renewal (ACME), OCSP, ALPN, HTTP/3, and h2-to-h1 downgrade more capably than Node's <code>http2</code> module.</li>
     </ul>
     <p>Multiplexed streams and header compression (HPACK) are what make per-file ESM competitive with bundling. <a href="/docs/no-build">No-Build Model</a> explains why, and which transport features matter for the import graph.</p>
-    <p><strong>Forwarding 103 Early Hints.</strong> webjs sends a <code>103 Early Hints</code> response carrying <code>Link: rel=modulepreload</code> headers before SSR begins, so the browser can start fetching JS while the server renders. Most major edges (Cloudflare, fly-proxy, Fastly) forward 103 responses to the client transparently. If yours doesn't, the page still works (the headers are just lost) but you skip the head-start. Early Hints are disabled in dev because file churn could send stale URLs.</p>
+    <p><strong>Forwarding 103 Early Hints.</strong> WebJs sends a <code>103 Early Hints</code> response carrying <code>Link: rel=modulepreload</code> headers before SSR begins, so the browser can start fetching JS while the server renders. Most major edges (Cloudflare, fly-proxy, Fastly) forward 103 responses to the client transparently. If yours doesn't, the page still works (the headers are just lost) but you skip the head-start. Early Hints are disabled in dev because file churn could send stale URLs.</p>
 
     <h2>Pluggable Logger</h2>
     <p>WebJs includes a minimal logger that writes structured JSON in production and human-readable lines in development:</p>
@@ -205,7 +205,7 @@ const app = await createRequestHandler({
     <p><code>version</code> is the <code>@webjsdev/server</code> framework version, <code>build</code> is the published importmap build id (the same fingerprint the client router reads from <code>data-webjs-build</code> to detect a deploy; empty until the vendor map resolves), <code>node</code> is the running Node version, and <code>uptime</code> is process uptime in seconds. The response carries <code>Cache-Control: no-store</code>.</p>
 
     <h2>createRequestHandler for Embedding</h2>
-    <p>If you need to embed webjs inside an existing server (Express, Fastify, Bun, Deno, serverless), use <code>createRequestHandler</code> directly. It returns a <code>handle(req: Request) =&gt; Promise&lt;Response&gt;</code> function that takes a standard Web API Request and returns a standard Response:</p>
+    <p>If you need to embed WebJs inside an existing server (Express, Fastify, Bun, Deno, serverless), use <code>createRequestHandler</code> directly. It returns a <code>handle(req: Request) =&gt; Promise&lt;Response&gt;</code> function that takes a standard Web API Request and returns a standard Response:</p>
     <pre>import { createRequestHandler } from '@webjsdev/server';
 
 const app = await createRequestHandler({
@@ -249,7 +249,7 @@ server.all('*', async (req, res) =&gt; {
 server.listen(8080);</pre>
 
     <h3>Bun</h3>
-    <p>Running a webjs app with <code>bun --bun run start</code> already uses <code>Bun.serve</code> natively: <code>startServer</code> detects Bun and selects a <code>Bun.serve</code> listener shell (skipping the node:http compatibility bridge for ~1.9x more requests/sec on the listening path), with near-complete feature parity (SSR, <code>route.ts</code>, SSE live-reload, WebSocket upgrade, brotli/gzip compression, timeouts, proxy-IP). The one node-only exception is 103 Early Hints, which <code>Bun.serve</code> cannot send (no informational-response API). So you only need the snippet below to <em>embed</em> webjs inside your own <code>Bun.serve</code> alongside other routes:</p>
+    <p>Running a WebJs app with <code>bun --bun run start</code> already uses <code>Bun.serve</code> natively: <code>startServer</code> detects Bun and selects a <code>Bun.serve</code> listener shell (skipping the node:http compatibility bridge for ~1.9x more requests/sec on the listening path), with near-complete feature parity (SSR, <code>route.ts</code>, SSE live-reload, WebSocket upgrade, brotli/gzip compression, timeouts, proxy-IP). The one node-only exception is 103 Early Hints, which <code>Bun.serve</code> cannot send (no informational-response API). So you only need the snippet below to <em>embed</em> WebJs inside your own <code>Bun.serve</code> alongside other routes:</p>
     <pre>import { createRequestHandler } from '@webjsdev/server';
 
 const app = await createRequestHandler({ appDir: process.cwd(), dev: false });
@@ -299,8 +299,8 @@ API_KEY="sk-..."</pre>
     <p>See the <a href="/docs/configuration">Configuration</a> page for the precedence rules and the optional <code>env.{js,ts}</code> boot-time validation that fails fast on a missing or malformed secret.</p>
 
     <h2>Database connections (Drizzle + Postgres)</h2>
-    <p>SQLite needs no pool tuning. When you move to Postgres in production, size the connection pool, because connection exhaustion is the most common scaling surprise and webjs gives no prior signal in dev (SQLite has no pool).</p>
-    <p>A webjs server is ONE Node process per instance, and the <code>pg</code> driver behind Drizzle opens its own connection pool inside that process. A <code>pg.Pool</code> defaults to a max of 10 connections, which is fine for a single instance but multiplies as you scale: with <strong>N</strong> instances the database sees up to <strong>N times the per-instance pool</strong> connections at once. Postgres caps total connections (often 100 on a small managed plan), so a few instances on the default pool can exhaust it.</p>
+    <p>SQLite needs no pool tuning. When you move to Postgres in production, size the connection pool, because connection exhaustion is the most common scaling surprise and WebJs gives no prior signal in dev (SQLite has no pool).</p>
+    <p>A WebJs server is ONE Node process per instance, and the <code>pg</code> driver behind Drizzle opens its own connection pool inside that process. A <code>pg.Pool</code> defaults to a max of 10 connections, which is fine for a single instance but multiplies as you scale: with <strong>N</strong> instances the database sees up to <strong>N times the per-instance pool</strong> connections at once. Postgres caps total connections (often 100 on a small managed plan), so a few instances on the default pool can exhaust it.</p>
     <p><strong>Bound the per-instance pool with <code>max</code> in the <code>Pool</code> config</strong> (the snippet below), sized so <code>instances * max</code> stays comfortably under the database's <code>max_connections</code> (leave headroom for migrations and admin tools). The <code>pg</code> driver behind Drizzle takes its pool size from <code>new Pool({ max })</code> in code, not from a <code>DATABASE_URL</code> query parameter:</p>
     <pre># The URL carries no pool-size hint; db/connection.server.ts sets the pool max.
 DATABASE_URL="postgresql://user:pass@db.example.com:5432/app"</pre>
@@ -319,7 +319,7 @@ export const db = drizzle({ client: pool, relations: schema.relations });</pre>
     <p>Behind a transaction pooler, set <code>max: 1</code> per instance (the pooler does the multiplexing). Without a pooler, set <code>max</code> to a per-instance budget and keep the instance count bounded. Point <code>drizzle-kit</code> (via <code>DIRECT_URL</code>) at the direct connection for migrations. Either way, import <code>db</code> from the scaffolded <code>db/connection.server.ts</code> singleton, never construct a new <code>Pool</code> per request, so a process opens one pool, not one per call.</p>
 
     <h2>Docker / Containerisation</h2>
-    <p>A minimal Dockerfile for a webjs app:</p>
+    <p>A minimal Dockerfile for a WebJs app:</p>
     <pre>FROM node:24-slim
 
 WORKDIR /app
@@ -381,7 +381,7 @@ server {
 
 
     <h2>Process Managers</h2>
-    <p>For non-containerised deployments, use a process manager to keep webjs running:</p>
+    <p>For non-containerised deployments, use a process manager to keep WebJs running:</p>
     <pre># systemd unit
 [Unit]
 Description=webjs app
@@ -412,7 +412,7 @@ pm2 start "webjs start" --name my-app</pre>
       <li>Use <code>webjs start</code> (not <code>webjs dev</code>) for production.</li>
       <li>Configure health checks against <code>/__webjs/health</code>.</li>
       <li><strong>HTTP/2 at the edge is recommended.</strong> PaaS deploys (Railway, Fly, Render, Vercel, Cloudflare Pages, Heroku) give you HTTP/2 to the browser automatically. For bare-VM deploys, front <code>npm run start</code> with nginx, Caddy, or Traefik.</li>
-      <li>Set up log aggregation (webjs outputs structured JSON in production).</li>
+      <li>Set up log aggregation (WebJs outputs structured JSON in production).</li>
     </ul>
   `;
 }

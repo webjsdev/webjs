@@ -334,7 +334,7 @@ An app served under a sub-path (`example.com/app/`) behind a proxy that does NOT
 
 The whole config surface (`webjs.redirects` / `webjs.trailingSlash` / `webjs.headers` `source` patterns) is authored app-root-relative, exactly as without a base path, because the ingress strip runs first.
 
-**OUT OF SCOPE (a documented follow-up).** Author-written `<a href="/about">` links and client-router navigation are NOT auto-prefixed under a base path. This is the same boundary Next draws between basePath auto-prefixing its `<Link>` component and a raw `<a href>`: webjs links are plain `<a href>`, so an author targeting a sub-path deploy writes the prefix into their own hrefs (or a future helper does) until client-side prefixing lands. The acceptance for #256 covers the server-emitted-URL + matching surface only.
+**OUT OF SCOPE (a documented follow-up).** Author-written `<a href="/about">` links and client-router navigation are NOT auto-prefixed under a base path. This is the same boundary Next draws between basePath auto-prefixing its `<Link>` component and a raw `<a href>`: WebJs links are plain `<a href>`, so an author targeting a sub-path deploy writes the prefix into their own hrefs (or a future helper does) until client-side prefixing lands. The acceptance for #256 covers the server-emitted-URL + matching surface only.
 
 ## CORS via `cors()`
 
@@ -650,7 +650,7 @@ sniff. A per-link `data-prefetch` always overrides the adaptive default.
 
 Per link, set `data-prefetch` (a valid-HTML `data-*` attribute, the shape
 SvelteKit and Astro use; Next / Nuxt / Remix use a component prop, which
-webjs has no equivalent for since links are plain `<a href>`):
+WebJs has no equivalent for since links are plain `<a href>`):
 
 ```html
 <a href="/dashboard">adaptive: intent on pointer, viewport on touch (default)</a>

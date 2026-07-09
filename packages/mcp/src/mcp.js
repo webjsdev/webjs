@@ -2,7 +2,7 @@
  * `webjs mcp`: a minimal, READ-ONLY Model Context Protocol server (#262).
  *
  * Exposes the live introspection surface an AI agent needs while editing a
- * webjs app (the route table, registered server actions with their RPC
+ * WebJs app (the route table, registered server actions with their RPC
  * endpoints, registered custom-element tags, and the structured `webjs check`
  * violations) over MCP's stdio transport. Every tool REUSES an existing
  * `@webjsdev/server` data function and MUTATES NOTHING. The prior art is
@@ -14,7 +14,7 @@
  * to stdout. STDOUT IS THE PROTOCOL CHANNEL, so this module writes ONLY
  * JSON-RPC frames there and routes every diagnostic to stderr. A malformed
  * input line is answered with a JSON-RPC parse error and never crashes the
- * loop. Hand-rolled with zero new dependency (webjs is buildless +
+ * loop. Hand-rolled with zero new dependency (WebJs is buildless +
  * minimal-deps).
  *
  * @module mcp
@@ -417,7 +417,7 @@ function rpcError(id, code, message) {
 }
 
 /**
- * Run the read-only webjs MCP server over the given streams. Reads
+ * Run the read-only WebJs MCP server over the given streams. Reads
  * newline-delimited JSON-RPC from `stdin`, writes one response line per request
  * to `stdout`, and logs diagnostics to `stderr` ONLY (stdout is the protocol
  * channel). Resolves when stdin ends (clean shutdown).

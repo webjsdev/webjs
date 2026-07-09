@@ -390,7 +390,7 @@ function isProd() {
  * renders an empty (silent, isolated) element so no internal detail leaks.
  *
  * The prod-silence signal is the SERVER's `dev` flag, threaded through the SSR
- * render context (#483). webjs keys prod on the CLI `dev` flag, not `NODE_ENV`,
+ * render context (#483). WebJs keys prod on the CLI `dev` flag, not `NODE_ENV`,
  * and `webjs start` does not export `NODE_ENV=production`, so a bare prod launch
  * would otherwise leak the message. When `dev` is undefined (a context-free
  * `renderToString` with no server signal, e.g. a bare unit test) it falls back

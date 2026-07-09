@@ -8,14 +8,14 @@ const RPC_CONTENT_TYPE = 'application/vnd.webjs+json';
  * `TypedArray`, `Blob`, `File`, `FormData`, cycles).
  *
  * - Adds `Accept: application/vnd.webjs+json` to the request so a
- *   server-side `json(data)` helper encodes with the webjs serializer.
+ *   server-side `json(data)` helper encodes with the WebJs serializer.
  * - If the response content-type matches, decodes with the webjs
  *   serializer and returns the rich value.
  * - Otherwise decodes with plain `.json()` (so any route you haven't
  *   opted in on still works).
  * - Request bodies: if `init.body` is a plain object (not a string,
  *   FormData/Blob/ArrayBuffer/ReadableStream/URLSearchParams), it is
- *   encoded with the webjs serializer and the request content-type is
+ *   encoded with the WebJs serializer and the request content-type is
  *   set to our vendor type.
  *
  * ```js

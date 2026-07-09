@@ -1,10 +1,10 @@
-# Testing in webjs
+# Testing in WebJs
 
 This doc covers two audiences:
 
 1. **Framework agents** working inside this monorepo (`packages/*`,
    the root `test/`, the e2e suite, the dev server).
-2. **App agents** working inside a webjs app scaffolded with
+2. **App agents** working inside a WebJs app scaffolded with
    `webjs create`. App-side conventions also live in the
    scaffold's `CONVENTIONS.md` (which is the authoritative,
    user-customisable copy); this section here is the
@@ -353,7 +353,7 @@ route `createAuth`'s handler routes a credentials login through; override
 const out = await invokeActionForTest(app, 'modules/posts/actions/create.server.ts', 'createPost', [input]);
 ```
 
-`invokeActionForTest` serializes `args` with the webjs serializer (exactly as
+`invokeActionForTest` serializes `args` with the WebJs serializer (exactly as
 the generated client stub does), POSTs them to the REAL
 `/__webjs/action/<hash>/<fn>` endpoint as a same-origin request (so it passes
 the Origin / Sec-Fetch-Site CSRF check), and parses the response with the
@@ -387,7 +387,7 @@ through `handle()` using these helpers.
 
 ## App layout (what users get)
 
-A scaffolded webjs app has one `test/` directory at its root,
+A scaffolded WebJs app has one `test/` directory at its root,
 shaped the same way:
 
 ```
@@ -421,7 +421,7 @@ App AI agents read this convention through the scaffold's
 
 A short decision flow:
 
-1. **Does it boot more than one webjs package?**
+1. **Does it boot more than one WebJs package?**
    - Yes → root `test/<feature>/`.
    - No → `packages/<the-one-package>/test/<feature>/`.
 2. **Does it need a browser?**

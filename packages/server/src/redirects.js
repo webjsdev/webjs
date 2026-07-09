@@ -1,7 +1,7 @@
 /**
  * Declarative permanent / temporary redirects (issue #254).
  *
- * webjs already ships `redirect(url)` (a per-request throw sentinel) for
+ * WebJs already ships `redirect(url)` (a per-request throw sentinel) for
  * imperative, request-time redirects. This module adds the missing
  * DECLARATIVE surface: a config of old-path -> new-path rules an app
  * declares once and the framework applies at the very start of request

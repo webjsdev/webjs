@@ -224,7 +224,7 @@ export default function DocsLayout({ children }: { children: unknown }) {
         <div class="flex items-center justify-between mb-6">
           <a class="flex items-center gap-2 no-underline text-fg font-semibold text-base leading-none" href="/">
             <span class="w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-[var(--logo-from)] to-[var(--logo-to)]"></span>
-            webjs docs
+            WebJs docs
           </a>
           <theme-toggle class="max-[860px]:hidden"></theme-toggle>
         </div>

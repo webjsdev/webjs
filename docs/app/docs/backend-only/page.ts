@@ -5,7 +5,7 @@ export const metadata = { title: 'Backend-Only Mode | webjs' };
 export default function BackendOnly() {
   return html`
     <h1>Backend-Only Mode</h1>
-    <p>WebJs works as a pure API framework with no pages, no SSR, and no web components. If you only need file-based routing, middleware, TypeScript, and a fast HTTP server, you can use webjs without writing a single page or component. Everything in the framework is designed around standard <code>Request</code>/<code>Response</code> objects, so the server-side features work independently of the rendering layer.</p>
+    <p>WebJs works as a pure API framework with no pages, no SSR, and no web components. If you only need file-based routing, middleware, TypeScript, and a fast HTTP server, you can use WebJs without writing a single page or component. Everything in the framework is designed around standard <code>Request</code>/<code>Response</code> objects, so the server-side features work independently of the rendering layer.</p>
 
     <h2>When to Choose Backend-Only</h2>
     <p>Use backend-only mode when:</p>
@@ -14,9 +14,9 @@ export default function BackendOnly() {
       <li>You want file-based routing and middleware without the weight of a UI framework.</li>
       <li>Your frontend is a separate app (React, Vue, Svelte, plain HTML) and you need a typed API backend.</li>
       <li>You are building a microservice that only serves data.</li>
-      <li>You want typed RPC endpoints (server actions, optionally exposed over REST via <code>route.ts</code>) callable from another webjs app or any HTTP client.</li>
+      <li>You want typed RPC endpoints (server actions, optionally exposed over REST via <code>route.ts</code>) callable from another WebJs app or any HTTP client.</li>
     </ul>
-    <p>Use full-stack webjs when you want server-rendered pages, web components, streaming SSR, and server actions all in one codebase.</p>
+    <p>Use full-stack WebJs when you want server-rendered pages, web components, streaming SSR, and server actions all in one codebase.</p>
 
     <h2>Minimal API-Only App Structure</h2>
     <pre>my-api/
@@ -168,7 +168,7 @@ export const GET = route(getUser);</pre>
     <p>The action is reachable two ways:</p>
     <ul>
       <li><strong>As an HTTP endpoint:</strong> <code>GET /api/v2/users/:id</code> from curl, Postman, or any HTTP client, served by the <code>route.ts</code> handler.</li>
-      <li><strong>As a typed function import:</strong> another webjs app (or the same app's components) can <code>import { getUser } from '../actions/users.server.ts'</code> and call it as a function with full type safety.</li>
+      <li><strong>As a typed function import:</strong> another WebJs app (or the same app's components) can <code>import { getUser } from '../actions/users.server.ts'</code> and call it as a function with full type safety.</li>
     </ul>
     <p>The <code>route()</code> adapter merges URL params, query string, and JSON body into a single object argument. The optional <code>validate</code> function runs before the handler and can transform or reject input (works with zod, valibot, or any schema library that throws on error). For CORS, wrap the handler in the <code>cors()</code> middleware, or apply it in <code>middleware.ts</code> for the path.</p>
 
@@ -211,7 +211,7 @@ const events = await richFetch('/api/events');
 
 // External client (curl, Postman) gets plain JSON automatically
 // curl http://localhost:8080/api/events</pre>
-    <p>The <code>json()</code> helper reads the <code>Accept</code> header. If the client sent <code>Accept: application/vnd.webjs+json</code> (as <code>richFetch</code> does), the response is encoded with the webjs serializer. Otherwise, plain <code>application/json</code>. The <code>Vary: Accept</code> header is set automatically.</p>
+    <p>The <code>json()</code> helper reads the <code>Accept</code> header. If the client sent <code>Accept: application/vnd.webjs+json</code> (as <code>richFetch</code> does), the response is encoded with the WebJs serializer. Otherwise, plain <code>application/json</code>. The <code>Vary: Accept</code> header is set automatically.</p>
     <p>For reading request bodies with the same content negotiation, use <code>readBody(req)</code> from <code>@webjsdev/server</code>.</p>
 
     <h2>Health Probes, Graceful Shutdown, Compression</h2>
@@ -225,7 +225,7 @@ const events = await richFetch('/api/events');
     </ul>
 
     <h2>createRequestHandler() for Serverless/Edge</h2>
-    <p>Embed a backend-only webjs app in any environment that speaks <code>Request</code>/<code>Response</code>:</p>
+    <p>Embed a backend-only WebJs app in any environment that speaks <code>Request</code>/<code>Response</code>:</p>
     <pre>import { createRequestHandler } from '@webjsdev/server';
 
 // Build the handler once at cold start
@@ -260,7 +260,7 @@ fastify.all('*', async (request, reply) =&gt; {
 fastify.listen({ port: 8080 });</pre>
 
     <h2>Comparison with Express/Fastify</h2>
-    <p>Here is what webjs gives you compared to a traditional Node.js API framework:</p>
+    <p>Here is what WebJs gives you compared to a traditional Node.js API framework:</p>
     <ul>
       <li><strong>File-based routing</strong>: no manual <code>app.get()</code> / <code>app.post()</code> registration. Drop a <code>route.ts</code> in a folder and it is live.</li>
       <li><strong>Nested middleware</strong>: middleware scoped to route subtrees, not global or per-route.</li>
@@ -272,11 +272,11 @@ fastify.listen({ port: 8080 });</pre>
       <li><strong>Graceful shutdown</strong>: handles SIGINT/SIGTERM, drains connections, hard-exits on timeout.</li>
       <li><strong>Compression and ETags</strong>: built-in, negotiated automatically.</li>
     </ul>
-    <p>What webjs does not give you:</p>
+    <p>What WebJs does not give you:</p>
     <ul>
       <li><strong>Massive middleware ecosystem</strong>: Express has thousands of middleware packages (passport, multer, helmet, etc.). WebJs has a handful of built-in utilities. You can still use any standard library that works with <code>Request</code>/<code>Response</code>.</li>
       <li><strong>Years of battle-testing</strong>: Express and Fastify have been production-proven at enormous scale. WebJs is new.</li>
-      <li><strong>Plugin system</strong>: Fastify's plugin architecture for encapsulated contexts does not have a webjs equivalent. The middleware chain and file conventions are the extension points.</li>
+      <li><strong>Plugin system</strong>: Fastify's plugin architecture for encapsulated contexts does not have a WebJs equivalent. The middleware chain and file conventions are the extension points.</li>
       <li><strong>Advanced schema validation</strong>: Fastify has built-in JSON Schema validation with Ajv. In webjs, use the <code>validate</code> config export (or the <code>route()</code> adapter's <code>validate</code> option) with zod, valibot, or any library.</li>
     </ul>
 

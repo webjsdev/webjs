@@ -4,7 +4,7 @@
  * `cop-middleware` and Go 1.25's `http.CrossOriginProtection` use, and the
  * spiritual sibling of Next.js / Astro's Origin-vs-Host check.
  *
- * Why not a token cookie: webjs previously issued a per-request `webjs_csrf`
+ * Why not a token cookie: WebJs previously issued a per-request `webjs_csrf`
  * double-submit cookie on every SSR response. That made SSR HTML
  * un-cacheable at a CDN (a CDN skips a response with `Set-Cookie`, and a
  * cached one would share / poison the token across visitors). A header check

@@ -252,7 +252,7 @@ export async function readBytesBounded(req, limit) {
 /**
  * Read a request body as text, bounded by `limit`. Used by the RPC endpoint,
  * `readBody`, and the exposed-action REST path, all of which then parse the
- * text (webjs wire or JSON).
+ * text (WebJs wire or JSON).
  *
  * @param {Request} req
  * @param {number} limit max bytes (0 / negative = unlimited)

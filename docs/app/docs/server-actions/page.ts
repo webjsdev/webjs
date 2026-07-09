@@ -149,7 +149,7 @@ PostForm.register('post-form');</pre>
     <p>The stub serialises function arguments with <code>await stringify(args)</code> and deserialises the response with <code>parse(text)</code>. The server does the inverse. This is invisible to the developer, so you work with native types on both sides. The serializer is async because Blob/File/FormData require an <code>await arrayBuffer()</code>. For payloads without binary the async cost is just one Promise tick.</p>
 
     <h2>HTTP Verbs, Caching, and Streaming</h2>
-    <p>A server action is a POST by default, but it can declare richer HTTP semantics through reserved sibling exports the framework reads statically, the same way a page declares <code>export const revalidate</code>. The call site never changes (you still write <code>await getUser(7)</code>); only the transport does. WebJs needs this where React and Next do not: webjs has no server/client component split, so both reads and writes flow through the one action mechanism.</p>
+    <p>A server action is a POST by default, but it can declare richer HTTP semantics through reserved sibling exports the framework reads statically, the same way a page declares <code>export const revalidate</code>. The call site never changes (you still write <code>await getUser(7)</code>); only the transport does. WebJs needs this where React and Next do not: WebJs has no server/client component split, so both reads and writes flow through the one action mechanism.</p>
     <p><strong>One callable function per configured file.</strong> A <code>.server.ts</code> file that declares any of these config exports must export exactly one callable. A second callable in the same file is a <code>webjs check</code> error.</p>
 
     <h3>Choosing the verb</h3>
@@ -237,7 +237,7 @@ export async function POST(req: Request) {
 
     <p>Now <code>createPost</code> is reachable two ways, both backed by the exact same function:</p>
     <ul>
-      <li><strong>From a client component:</strong> <code>import { createPost } from '.../create-post.server.ts'</code> is auto-rewritten to an RPC stub, CSRF-protected, encoded with the webjs rich serializer.</li>
+      <li><strong>From a client component:</strong> <code>import { createPost } from '.../create-post.server.ts'</code> is auto-rewritten to an RPC stub, CSRF-protected, encoded with the WebJs rich serializer.</li>
       <li><strong>From curl or another service:</strong> <code>POST /api/posts</code> with a JSON body, served by the <code>route.ts</code> handler.</li>
     </ul>
 
@@ -322,7 +322,7 @@ export async function createPost(input: unknown): Promise&lt;ActionResult&lt;Pos
     <p>This pattern makes error handling explicit on the client side without relying on try/catch. The caller checks <code>result.success</code> and branches accordingly. It also works naturally over a <code>route.ts</code> REST endpoint, where the caller receives the same JSON shape.</p>
 
     <h2>Error Sanitisation in Production</h2>
-    <p>When a server action throws (rather than returning an error envelope), webjs catches the exception and returns a JSON error response:</p>
+    <p>When a server action throws (rather than returning an error envelope), WebJs catches the exception and returns a JSON error response:</p>
     <ul>
       <li><strong>Development:</strong> the response includes both the error message and the full stack trace, making debugging easy.</li>
       <li><strong>Production:</strong> the client gets a generic <code>"Internal server error"</code> message plus a short <code>digest</code>, never the raw thrown message (a DB-driver message, an internal IP, or a file path is not author-controlled) and never the stack. The full error is logged server-side keyed by the same digest, so a client report maps to the server log. A <code>redirect()</code> / <code>notFound()</code> control-flow throw passes through. To show the user a specific message, return an <code>ActionResult</code> <code>{ success: false, error }</code> envelope instead of throwing.</li>

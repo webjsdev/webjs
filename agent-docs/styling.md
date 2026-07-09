@@ -22,7 +22,7 @@ its CSS with `static styles = css\`\``, so the reflex is to author scoped
 CSS or an inline `<style>` with semantic class names (`.hero`,
 `.feature`, `.card`, `.btn`) for every component.
 
-**In webjs the default is light DOM, which does NOT scope.** A scoped
+**In WebJs the default is light DOM, which does NOT scope.** A scoped
 `css` block does nothing without `static shadow = true` (the framework
 warns at runtime), and an inline `<style>` with bare semantic class names
 leaks those names into the global namespace. So reaching for either in a

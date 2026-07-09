@@ -52,7 +52,7 @@ export default rateLimit({ window: '1m', max: 10, trustProxy: true });</pre>
 
     <p>With <code>trustProxy: true</code>, the limiter reads the leftmost <code>X-Forwarded-For</code> entry, then <code>CF-Connecting-IP</code>, then <code>X-Real-IP</code>, then the stamped socket IP, then <code>'_anon_'</code>. Your reverse proxy MUST strip any inbound <code>X-Forwarded-For</code> from the wire before adding its own; otherwise <code>trustProxy</code> re-introduces the spoofability it exists to defend against. Cloudflare, Fly, Railway, Render, and Vercel all strip by default. Nginx and Caddy strip only if explicitly configured (<code>proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for</code> in nginx).</p>
 
-    <p><strong>Embedded adapters</strong> (running webjs via <code>createRequestHandler</code> under Express / Fastify / Bun / Deno / edge runtimes) do NOT get the socket-stamping automatically, the framework's <code>startServer</code> path does it. The adapter MUST call <code>stampRemoteIp(req, remoteAddress)</code> before passing the request to webjs:</p>
+    <p><strong>Embedded adapters</strong> (running WebJs via <code>createRequestHandler</code> under Express / Fastify / Bun / Deno / edge runtimes) do NOT get the socket-stamping automatically, the framework's <code>startServer</code> path does it. The adapter MUST call <code>stampRemoteIp(req, remoteAddress)</code> before passing the request to webjs:</p>
 
     <pre>// express adapter
 import { createRequestHandler, stampRemoteIp } from '@webjsdev/server';

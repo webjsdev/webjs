@@ -1,6 +1,6 @@
-# Framework development (editing webjs itself)
+# Framework development (editing WebJs itself)
 
-Read this only when editing the webjs monorepo (this repo), not a scaffolded app. The repo is buildless: `packages/` is plain `.js` with JSDoc (never add `.ts` there); TypeScript is fine in `examples/`, `docs/`, `website/`. Each in-repo app (`website/`, `docs/`, `examples/blog/`, `packages/ui/packages/website/`) is run from its OWN dir via `npm run dev` / `npm start`; as of #550 a bare `webjs dev` / `webjs start` is equivalent (each app's per-environment orchestration, the Tailwind watcher, `webjs db migrate`, the registry copy, moved into its `webjs.dev` / `webjs.start` tasks config, which `webjs dev`/`start` run). The sections below cover the repo-health git config, the changelog flow, and the dev error overlay.
+Read this only when editing the WebJs monorepo (this repo), not a scaffolded app. The repo is buildless: `packages/` is plain `.js` with JSDoc (never add `.ts` there); TypeScript is fine in `examples/`, `docs/`, `website/`. Each in-repo app (`website/`, `docs/`, `examples/blog/`, `packages/ui/packages/website/`) is run from its OWN dir via `npm run dev` / `npm start`; as of #550 a bare `webjs dev` / `webjs start` is equivalent (each app's per-environment orchestration, the Tailwind watcher, `webjs db migrate`, the registry copy, moved into its `webjs.dev` / `webjs.start` tasks config, which `webjs dev`/`start` run). The sections below cover the repo-health git config, the changelog flow, and the dev error overlay.
 
 ---
 

@@ -3,7 +3,7 @@
  * opt-in, generated route union that types `navigate()` and catches bad
  * hrefs at tsserver time (#258).
  *
- * webjs identity holds: NO build step, NO runtime cost, types-only, opt-in
+ * WebJs identity holds: NO build step, NO runtime cost, types-only, opt-in
  * for JSDoc apps. The mechanism mirrors Next 15's `typedRoutes` but via
  * interface declaration-merging instead of a bundler.
  *
@@ -86,7 +86,7 @@ export type RouteParams<R extends string> = R extends keyof RouteParamMap
 
 /**
  * A value that is BOTH synchronously usable as `T` and `await`-able to `T`
- * (#848). The webjs runtime hands `params` / `searchParams` as a plain object
+ * (#848). The WebJs runtime hands `params` / `searchParams` as a plain object
  * carrying a non-enumerable `then`, so `params.id` and `await params` both
  * work; this type expresses that dual nature to TypeScript.
  */

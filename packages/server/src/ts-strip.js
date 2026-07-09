@@ -1,8 +1,8 @@
 /**
- * Pluggable TypeScript stripper (#508), the one seam that lets webjs run on both
+ * Pluggable TypeScript stripper (#508), the one seam that lets WebJs run on both
  * Node and Bun.
  *
- * webjs serves `.ts` / `.mts` source to the browser as JavaScript by ERASING the
+ * WebJs serves `.ts` / `.mts` source to the browser as JavaScript by ERASING the
  * type syntax in place (position-preserving whitespace replacement, so no
  * sourcemap is shipped and stack traces stay byte-exact). On Node 24+ that is the
  * built-in `module.stripTypeScriptTypes`. Bun has no such built-in, so this

@@ -103,7 +103,7 @@ export async function createPost(input: { slug: string; title: string; body: str
   const [row] = await db.insert(posts).values(input).returning();
   return { success: true as const, data: row };
 }</pre>
-    <p>Import the query or action from a page or component as a normal import; webjs rewrites it into a typed RPC stub on the client.</p>
+    <p>Import the query or action from a page or component as a normal import; WebJs rewrites it into a typed RPC stub on the client.</p>
     <pre>// app/page.ts
 import { listPosts } from '../modules/posts/queries/list-posts.server.ts';
 

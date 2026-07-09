@@ -259,7 +259,7 @@ export interface Metadata {
    * `<link rel="preconnect">` hints: warm DNS + TLS + TCP to a cross-origin
    * the page is about to talk to (an API host, a font / image CDN). Each
    * entry is a URL string or `{ url, crossorigin? }` (a font CDN needs
-   * `crossorigin`). A single value or an array. webjs ALSO auto-emits one
+   * `crossorigin`). A single value or an array. WebJs ALSO auto-emits one
    * preconnect to the resolved vendor CDN origin for an unpinned app (deduped
    * against an author-declared one).
    */

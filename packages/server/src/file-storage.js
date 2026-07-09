@@ -2,7 +2,7 @@
  * File storage primitive: a pluggable `FileStore` with a streaming local-disk
  * default adapter (issue #247).
  *
- * webjs already round-trips a native `File` / `Blob` / `FormData` over the RPC
+ * WebJs already round-trips a native `File` / `Blob` / `FormData` over the RPC
  * wire (the serializer), but nothing decided WHERE the bytes land. This module
  * is that answer. The model mirrors `cache.js` exactly: a documented interface,
  * a default adapter (`diskStore`), and a module singleton (`setFileStore` /
@@ -35,7 +35,7 @@
  *     (`File` / `Blob` / `ReadableStream` / `Uint8Array` in, a `{ body, size,
  *     contentType }` handle out), so an S3 / R2 / GCS adapter is a drop-in: it
  *     implements the same `put` / `get` / `delete` / `url` and the call sites do
- *     not change. webjs ships no S3 SDK; see the JSDoc on `FileStore` below.
+ *     not change. WebJs ships no S3 SDK; see the JSDoc on `FileStore` below.
  *
  * @module file-storage
  */

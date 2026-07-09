@@ -18,10 +18,10 @@ export default function AIFirst() {
     </ul>
     <p>These work fine for experienced developers who've memorised the conventions. They're hostile to AI agents that need to discover structure from the files themselves.</p>
 
-    <h2>How webjs Solves This</h2>
+    <h2>How WebJs Solves This</h2>
 
     <h3>1. AGENTS.md: The Machine-Readable Contract</h3>
-    <p>Every webjs app has an <code>AGENTS.md</code> at the root. This is a structured document that AI agents read before touching any code. It contains:</p>
+    <p>Every WebJs app has an <code>AGENTS.md</code> at the root. This is a structured document that AI agents read before touching any code. It contains:</p>
     <ul>
       <li><strong>File conventions table</strong>: which filename means what (page.ts, route.ts, middleware.ts, .server.ts, etc.).</li>
       <li><strong>Public API surface</strong>: every exported function from <code>webjs</code> and <code>@webjsdev/server</code> with a one-line description.</li>
@@ -31,8 +31,8 @@ export default function AIFirst() {
     </ul>
     <p>An AI agent reads AGENTS.md once and knows: the shape of the app, what's safe to change, what's not, and how to add any feature. No guessing.</p>
 
-    <h3>2. The webjs MCP Server</h3>
-    <p>Alongside the static <code>AGENTS.md</code> contract, every webjs app ships a <strong>read-only Model Context Protocol server</strong> agents can wire up for live, version-accurate introspection of THIS app and the framework. It mutates nothing, so it is safe to call freely, and it is preferred over recalling webjs from training data (which drifts). It is already available with no install (the webjs CLI, a project dependency, has it built in as <code>webjs mcp</code>, and the equivalent standalone package runs as <code>npx @webjsdev/mcp</code>). It is an MCP STDIO server, so you do not run it in a terminal and read its output. Your MCP host (Claude Code, Cursor, etc.) launches it and surfaces its tools.</p>
+    <h3>2. The WebJs MCP Server</h3>
+    <p>Alongside the static <code>AGENTS.md</code> contract, every WebJs app ships a <strong>read-only Model Context Protocol server</strong> agents can wire up for live, version-accurate introspection of THIS app and the framework. It mutates nothing, so it is safe to call freely, and it is preferred over recalling WebJs from training data (which drifts). It is already available with no install (the WebJs CLI, a project dependency, has it built in as <code>webjs mcp</code>, and the equivalent standalone package runs as <code>npx @webjsdev/mcp</code>). It is an MCP STDIO server, so you do not run it in a terminal and read its output. Your MCP host (Claude Code, Cursor, etc.) launches it and surfaces its tools.</p>
     <p>Claude Code is pre-wired by the scaffold. For another host, register the server by pointing it at the package:</p>
     <pre>// .cursor/mcp.json (or your host's MCP config)
 {
@@ -119,7 +119,7 @@ export async function createPost(
     <p>In sandbox or bypass-permissions mode, agents auto-decide using best-practice defaults: create feature branches, rebase before starting, fix failing tests, generate meaningful commits, delete feature branches after merge. Same quality bar, no blocking on questions.</p>
 
     <h3>11. Automatic Tests and Docs</h3>
-    <p>In a webjs project, the user never has to say "also write tests" or "also update the docs." Agents do this automatically with every code change. The convention is enforced via <code>CONVENTIONS.md</code>, <code>webjs test</code>, and <code>webjs check</code>. For an agent lint-and-fix loop, run <code>webjs check --json</code>: the structured output lets the agent parse violations, fix them, and re-run until the report is clean (the same correctness data the MCP <code>check</code> tool returns).</p>
+    <p>In a WebJs project, the user never has to say "also write tests" or "also update the docs." Agents do this automatically with every code change. The convention is enforced via <code>CONVENTIONS.md</code>, <code>webjs test</code>, and <code>webjs check</code>. For an agent lint-and-fix loop, run <code>webjs check --json</code>: the structured output lets the agent parse violations, fix them, and re-run until the report is clean (the same correctness data the MCP <code>check</code> tool returns).</p>
 
     <h3>12. Scaffold + Persistence Defaults</h3>
     <p>When a layman user says "create a todo app with webjs", the agent should produce a real full-stack app with a real database, not a JSON-file simulation. WebJs enforces this with three guardrails:</p>
@@ -139,7 +139,7 @@ Auth / login / signup / SaaS                            --template saas</pre>
     <p><strong>When the scaffolded <code>AGENTS.md</code> doesn't cover what you need</strong> (an obscure directive, an auth-provider recipe, deployment specifics, edge cases), the full hosted documentation is at <a href="https://docs.webjs.dev">docs.webjs.dev</a>. Every API, every recipe, every example lives there. Reach for it before guessing or hand-rolling.</p>
 
     <h2>What an AI Agent Can Do with webjs</h2>
-    <p>Given a webjs app + AGENTS.md, an AI coding assistant can:</p>
+    <p>Given a WebJs app + AGENTS.md, an AI coding assistant can:</p>
     <ul>
       <li><strong>Add a new page</strong>: create <code>app/about/page.ts</code>, export a function returning <code>html\`...\`</code>. Done. No router config.</li>
       <li><strong>Add a new API endpoint</strong>: create <code>app/api/users/route.ts</code>, export <code>GET</code> / <code>POST</code>. Done. No Express boilerplate.</li>
@@ -151,7 +151,7 @@ Auth / login / signup / SaaS                            --template saas</pre>
     </ul>
 
     <h2>Design Principles for AI-Friendly Code</h2>
-    <p>If you're writing a webjs app that AI agents will work on (and they will), follow these principles:</p>
+    <p>If you're writing a WebJs app that AI agents will work on (and they will), follow these principles:</p>
     <ol>
       <li><strong>One function per file</strong> for actions and queries. Name the file after the function.</li>
       <li><strong>Type everything.</strong> Function signatures are the API contract. An untyped function is invisible to the agent's reasoning.</li>
@@ -179,7 +179,7 @@ Typed RPC (no schema)  ✅ rich types ⚠️ Flight     ❌ manual
 Autonomous mode        ✅ defaults   ❌ n/a        ❌ n/a</pre>
 
     <h2>The AGENTS.md File</h2>
-    <p>Here's what a webjs app's <code>AGENTS.md</code> contains (the blog example ships a complete one):</p>
+    <p>Here's what a WebJs app's <code>AGENTS.md</code> contains (the blog example ships a complete one):</p>
     <pre>## What webjs is
 ## App layout (file conventions table)
 ## Public API: webjs

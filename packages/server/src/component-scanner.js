@@ -1,13 +1,13 @@
 /**
  * Server-side scanner that walks the app tree and records the
- * browser-visible URL for every webjs component module.
+ * browser-visible URL for every WebJs component module.
  *
  * Called once on the first request (lazily, via `ensureReady`), then memoized. Results are used to prime the core
  * registry (`primeModuleUrl`) BEFORE any SSR render: so when a page
  * renders a component tag, `lookupModuleUrl(tag)` already has the URL
  * ready for `<link rel="modulepreload">` hints.
  *
- * The convention webjs uses is the web-standard one:
+ * The convention WebJs uses is the web-standard one:
  *
  *     class Counter extends WebComponent { … }
  *     customElements.define('my-counter', Counter);

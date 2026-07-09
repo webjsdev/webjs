@@ -1,7 +1,7 @@
 /**
- * Reusable CORS primitive for webjs.
+ * Reusable CORS primitive for WebJs.
  *
- * `cors(options)` returns a webjs MIDDLEWARE `(req, next) => Response`,
+ * `cors(options)` returns a WebJs MIDDLEWARE `(req, next) => Response`,
  * usable in `middleware.js` (root or per-segment) or wrapped around a
  * `route.js` handler. This is the public app-facing API. The shared
  * origin-resolution + header-building core (`resolveOrigin` /

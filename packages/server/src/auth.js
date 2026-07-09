@@ -1,5 +1,5 @@
 /**
- * NextAuth/Auth.js-style authentication for webjs.
+ * NextAuth/Auth.js-style authentication for WebJs.
  *
  * JWT or database sessions, Credentials + OAuth (Google, GitHub) providers.
  * Uses Web Crypto HMAC-SHA256: no external dependencies.

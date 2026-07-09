@@ -1,7 +1,7 @@
 /**
  * The optional `route(action, opts?)` convenience adapter (#488).
  *
- * REST endpoints in webjs go through `route.ts` (the framework's first-class
+ * REST endpoints in WebJs go through `route.ts` (the framework's first-class
  * HTTP handler). The ALWAYS-WORKS baseline is a hand-written `route.ts` that
  * imports a `'use server'` action and calls it:
  *

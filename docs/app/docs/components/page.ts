@@ -117,7 +117,7 @@ UserCard.register('user-card');</pre>
     <p>Declare an <strong>array-typed</strong> property with the <code>Array</code> constructor, not <code>Object</code> (<code>tags: prop&lt;string[]&gt;(Array)</code>). The default converter treats both the same (each JSON-encodes the value), so <code>Object</code> does not break anything, but <code>Array</code> states the property's shape correctly. The <code>array-prop-uses-array-type</code> rule in <code>webjs check</code> flags an array-typed generic declared with <code>Object</code>.</p>
 
     <h3>Attribute-to-Property Coercion</h3>
-    <p>When an attribute changes on the DOM element, webjs coerces the string value to the declared type:</p>
+    <p>When an attribute changes on the DOM element, WebJs coerces the string value to the declared type:</p>
 
     <ul>
       <li><strong>String</strong>: passed through as-is.</li>
@@ -128,7 +128,7 @@ UserCard.register('user-card');</pre>
 
     <p>Property names are automatically converted between camelCase (JavaScript) and kebab-case (HTML). A property named <code>userName</code> observes the attribute <code>user-name</code>.</p>
 
-    <blockquote>If you are coming from React: properties in webjs serve a similar role to props, but they are backed by real DOM attributes. You can inspect them in DevTools, set them from plain HTML, and they survive page serialization during SSR.</blockquote>
+    <blockquote>If you are coming from React: properties in WebJs serve a similar role to props, but they are backed by real DOM attributes. You can inspect them in DevTools, set them from plain HTML, and they survive page serialization during SSR.</blockquote>
 
     <h2>State</h2>
     <p>Signals are the default state primitive. Import <code>signal</code> from <code>@webjsdev/core</code> and read with <code>signal.get()</code> inside <code>render()</code>. The component's built-in SignalWatcher tracks the read and re-renders whenever the signal changes. Instance signals (class-field initializers) carry component-local state; module-scope signals share state across components.</p>
@@ -239,7 +239,7 @@ StyledCard.register('styled-card');</pre>
     </ul>
 
     <h3>Design Tokens via CSS Custom Properties</h3>
-    <p>CSS custom properties (variables) <strong>inherit across shadow DOM boundaries</strong>. This is the primary mechanism for theming in webjs. Define tokens on <code>:root</code> or a parent element, and every component in the tree can read them:</p>
+    <p>CSS custom properties (variables) <strong>inherit across shadow DOM boundaries</strong>. This is the primary mechanism for theming in WebJs. Define tokens on <code>:root</code> or a parent element, and every component in the tree can read them:</p>
 
     <pre>/* In your root layout or global stylesheet */
 :root {
@@ -485,7 +485,7 @@ html\`
   &lt;/app-shell&gt;
 \`;</pre>
 
-    <p>This is how webjs layouts work: the <code>doc-shell</code> and <code>blog-shell</code> components in the examples use a default <code>&lt;slot&gt;</code> to receive page content from the router.</p>
+    <p>This is how WebJs layouts work: the <code>doc-shell</code> and <code>blog-shell</code> components in the examples use a default <code>&lt;slot&gt;</code> to receive page content from the router.</p>
 
     <h3>Named Slots</h3>
     <p>Use <code>&lt;slot name="..."&gt;</code> to route different pieces of content to different parts of a component:</p>
@@ -534,7 +534,7 @@ html\`
     <p>WebJs components use the standard custom element lifecycle callbacks. If you override them, <strong>always call super</strong>.</p>
 
     <h3>connectedCallback()</h3>
-    <p>Called when the element is inserted into the document. This is where webjs attaches the shadow root, adopts styles, and performs the first render. Use it for setup work like fetching data, opening WebSocket connections, or reading from <code>localStorage</code>:</p>
+    <p>Called when the element is inserted into the document. This is where WebJs attaches the shadow root, adopts styles, and performs the first render. Use it for setup work like fetching data, opening WebSocket connections, or reading from <code>localStorage</code>:</p>
 
     <pre>connectedCallback() {
   super.connectedCallback();  // REQUIRED: sets up shadow root + first render

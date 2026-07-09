@@ -1,5 +1,5 @@
 /**
- * webjs serializer: JSON-friendly encoding for rich JS types.
+ * WebJs serializer: JSON-friendly encoding for rich JS types.
  *
  * Replaces superjson with a pure-ESM, dependency-free implementation
  * tuned to the wire surface that React Server Actions support, plus a

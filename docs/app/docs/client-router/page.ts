@@ -224,7 +224,7 @@ revalidate();</pre>
     <h2>Link prefetch (on by default)</h2>
     <p>Same-origin in-app links are prefetched speculatively, so a click resolves from a warm cache with no round-trip. No attribute is needed; it is on for every internal <code>&lt;a href&gt;</code>, the way Next, Nuxt, and SvelteKit ship auto-prefetch, and the prefetch sends the same headers a real navigation does so the click consumes the fragment.</p>
     <p>The default strategy is <strong>device-adaptive</strong>, because one strategy cannot serve both input modalities. On a hover-capable pointer (mouse / trackpad) the default is <strong>intent</strong> (warm on hover or focus, a real head-start before the click). On touch the default is <strong>viewport</strong> (warm as links settle on-screen), because touch has no hover and <code>touchstart</code> fires at tap time, too late to help. The modality is detected with <code>matchMedia('(hover: hover) and (pointer: fine)')</code>, not a user-agent sniff, and a per-link <code>data-prefetch</code> always overrides it.</p>
-    <p>Choose a strategy per link with <code>data-prefetch</code> (a valid-HTML <code>data-*</code> attribute, since webjs has no Link component). Next-style aliases are accepted:</p>
+    <p>Choose a strategy per link with <code>data-prefetch</code> (a valid-HTML <code>data-*</code> attribute, since WebJs has no Link component). Next-style aliases are accepted:</p>
     <pre>&lt;a href="/dashboard"&gt;adaptive: intent on pointer, viewport on touch (default)&lt;/a&gt;
 &lt;a href="/dashboard" data-prefetch="intent"&gt;hover / focus / touch&lt;/a&gt;
 &lt;a href="/dashboard" data-prefetch="render"&gt;eager, on insert (alias: true)&lt;/a&gt;

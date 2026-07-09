@@ -15,7 +15,7 @@ import { readTextBounded, BodyLimitError, DEFAULT_MAX_BODY_BYTES } from './body-
  * The helper reads the in-flight Request from the AsyncLocalStorage
  * request context. If the caller sent `Accept: application/vnd.webjs+json`
  * (e.g. via the `richFetch` client helper), the response body is
- * encoded with the webjs serializer so rich types (Date, Map, Set,
+ * encoded with the WebJs serializer so rich types (Date, Map, Set,
  * BigInt, TypedArrays, Blob, File, FormData, cycles) survive. Otherwise
  * the response is plain `application/json`, unchanged behaviour for
  * curl / external consumers.
@@ -47,7 +47,7 @@ export async function json(data, init = {}) {
 }
 
 /**
- * Parse a request body using the webjs serializer when the client sent
+ * Parse a request body using the WebJs serializer when the client sent
  * our content type, otherwise as plain JSON. Handy for route handlers
  * that accept rich bodies from the `richFetch` helper but plain JSON
  * from everyone else.

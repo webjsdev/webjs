@@ -1,5 +1,5 @@
 /**
- * `webjs create <name>`: scaffold a new webjs app with opinionated defaults.
+ * `webjs create <name>`: scaffold a new WebJs app with opinionated defaults.
  *
  * Creates a directory with:
  *   - app/ with a root layout + page
@@ -7,7 +7,7 @@
  *   - components/ with a theme toggle
  *   - test/unit/ and test/e2e/ with example tests
  *   - CONVENTIONS.md, AGENTS.md, CLAUDE.md
- *   - package.json with webjs deps + test scripts
+ *   - package.json with WebJs deps + test scripts
  *   - tsconfig.json for editor support
  */
 
@@ -160,7 +160,7 @@ async function copyUiComponents(appDir, names) {
  * the scaffolded app. Merges `templates/gallery/{app,modules}` over the app so
  * single-feature demos land under `app/features/<name>/`, whole example apps
  * under `app/examples/<name>/`, and their logic under `modules/<name>/`, the
- * app-thin + modules-logic split webjs prescribes.
+ * app-thin + modules-logic split WebJs prescribes.
  *
  * Ships verbatim (no `{{APP_NAME}}` substitution): the examples are self-
  * contained and reference only `@webjsdev/*`, drizzle, `#db/*`, and each other.
@@ -392,7 +392,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // Bun runtime (#541): the long-running server scripts (`dev` / `start`)
       // are prefixed `bun --bun` so the app SERVES on Bun. The `--bun` overrides
       // the `webjs` bin's `#!/usr/bin/env node` shebang (without it `bun run dev`
-      // would exec webjs under Node, silently running the "bun" app on Node).
+      // would exec WebJs under Node, silently running the "bun" app on Node).
       // Baking it into the script body means a plain `bun run dev` (or even
       // `npm run dev`) starts on Bun, so a user never has to remember the flag.
       // The runtime-neutral tooling scripts below (test / db / check / typecheck
@@ -487,7 +487,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       noEmit: true,
       allowImportingTsExtensions: true,
       skipLibCheck: true,
-      // webjs uses Node's built-in type-stripping (`process.features.
+      // WebJs uses Node's built-in type-stripping (`process.features.
       // typescript === 'strip'`) which preserves source positions
       // byte-exactly. The constraint is that TypeScript must be
       // "erasable": no `enum`, no `namespace` with values, no
@@ -581,7 +581,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     '.github/pull_request_template.md',
     // CI is the test gate (the pre-commit hook only blocks main). Runs
     // webjs check + the unit / browser / e2e layers on every PR and push
-    // to main, mirroring the webjs framework's own CI.
+    // to main, mirroring the WebJs framework's own CI.
     '.github/workflows/ci.yml',
     '.editorconfig',
     // VS Code: associate the published webjs-config JSON Schema with the
@@ -1358,7 +1358,7 @@ export const metadata = {
 };
 
 // Two kinds of reference the scaffold ships. FEATURES are single-concept demos
-// (one webjs feature each, under app/features/, logic in modules/). EXAMPLES are
+// (one WebJs feature each, under app/features/, logic in modules/). EXAMPLES are
 // whole apps that compose several features (under app/examples/). Prune what you
 // do not use (delete the route AND its modules/<name>), then reshape this page.
 const features = [
@@ -1438,7 +1438,7 @@ export default function Home() {
 `);
   } else {
     // saas home: the auth landing (hero + login/signup/dashboard) stays the
-    // headline, and the webjs feature gallery sits BELOW it, so a saas app is
+    // headline, and the WebJs feature gallery sits BELOW it, so a saas app is
     // also a learning surface. Keep the `features` list in sync with the
     // full-stack home above (both ship the same gallery).
     await writeFile(join(appDir, 'app', 'page.ts'), `// webjs-scaffold-placeholder. This is the example homepage. Replace it with your app's real landing page, then delete this line. webjs check fails while the marker remains.
@@ -1455,7 +1455,7 @@ export const metadata = {
   title: '${displayName}: built with webjs',
 };
 
-// The webjs feature gallery, shown below the auth landing. FEATURES are
+// The WebJs feature gallery, shown below the auth landing. FEATURES are
 // single-concept demos (under app/features/, logic in modules/); EXAMPLES are
 // whole apps (under app/examples/). Prune what you do not use (delete the route
 // AND its modules/<name>). Keep this list in sync with the full-stack home.

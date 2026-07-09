@@ -2,7 +2,7 @@ import { stringify, parse } from '@webjsdev/core';
 
 /**
  * @typedef {Object} Serializer
- * A pluggable serializer that controls how webjs server actions encode and
+ * A pluggable serializer that controls how WebJs server actions encode and
  * decode values on the RPC wire.
  *
  * **AI hint:** The default serializer uses webjs's built-in
@@ -50,7 +50,7 @@ let current = defaultSerializer;
  *
  * **AI hint:** Use this in server-side code that needs to encode or decode
  * RPC payloads. It returns whatever serializer was set via `setSerializer`,
- * or the default webjs serializer if none was set.
+ * or the default WebJs serializer if none was set.
  *
  * @returns {Serializer}
  */

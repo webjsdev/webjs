@@ -5,10 +5,10 @@ export const metadata = { title: 'Middleware | webjs' };
 export default function Middleware() {
   return html`
     <h1>Middleware</h1>
-    <p>Middleware in webjs lets you intercept requests before they reach your pages, API routes, or server actions. Use it for authentication, logging, rate limiting, CORS, header injection, or any cross-cutting concern. WebJs supports two levels of middleware: a single root middleware and per-segment middleware scoped to subtrees of your route hierarchy.</p>
+    <p>Middleware in WebJs lets you intercept requests before they reach your pages, API routes, or server actions. Use it for authentication, logging, rate limiting, CORS, header injection, or any cross-cutting concern. WebJs supports two levels of middleware: a single root middleware and per-segment middleware scoped to subtrees of your route hierarchy.</p>
 
     <h2>Root Middleware</h2>
-    <p>Place a <code>middleware.ts</code> (or <code>middleware.js</code>) at the root of your project (next to <code>app/</code>, not inside it). This middleware runs on <strong>every request</strong> before webjs routes it to a page, API route, or server action.</p>
+    <p>Place a <code>middleware.ts</code> (or <code>middleware.js</code>) at the root of your project (next to <code>app/</code>, not inside it). This middleware runs on <strong>every request</strong> before WebJs routes it to a page, API route, or server action.</p>
     <pre>my-app/
   middleware.ts          # root middleware: runs on every request
   app/

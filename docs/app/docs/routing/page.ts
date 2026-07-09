@@ -6,7 +6,7 @@ export default function Routing() {
   return html`
     <h1>Routing</h1>
     <p>
-      webjs uses <strong>file-based routing</strong>. Every file under your project's
+      WebJs uses <strong>file-based routing</strong>. Every file under your project's
       <code>app/</code> directory maps to a URL based on its folder path. There is no
       central route configuration file. The file system <em>is</em> the router.
     </p>
@@ -95,7 +95,7 @@ export default async function BlogPost({ params, searchParams, url }: Ctx) {
       The function can be <code>async</code>. You can <code>await</code> database
       queries, fetch calls, or any server-side work directly inside the page function.
       Return an <code>html\`...\`</code> tagged template literal (a <code>TemplateResult</code>)
-      and webjs will render it to HTML on the server.
+      and WebJs will render it to HTML on the server.
     </p>
 
     <!-- ===== LAYOUTS ===== -->
@@ -136,7 +136,7 @@ export default function DashboardLayout({ children }: { children: unknown }) {
 
     <p>
       Layouts nest automatically by folder depth. For the route
-      <code>/dashboard/settings</code>, webjs renders:
+      <code>/dashboard/settings</code>, WebJs renders:
     </p>
     <pre>RootLayout
   └── DashboardLayout
@@ -316,8 +316,8 @@ export async function POST(req: Request) {
 
     <ul>
       <li>Return a <code>Response</code> object for full control over status, headers, and body.</li>
-      <li>Return a plain object or array and webjs will automatically serialize it as <code>JSON</code> with a <code>200</code> status.</li>
-      <li>If a request arrives for a method you have not exported, webjs responds with <code>405 Method Not Allowed</code> and an <code>Allow</code> header listing the supported methods.</li>
+      <li>Return a plain object or array and WebJs will automatically serialize it as <code>JSON</code> with a <code>200</code> status.</li>
+      <li>If a request arrives for a method you have not exported, WebJs responds with <code>405 Method Not Allowed</code> and an <code>Allow</code> header listing the supported methods.</li>
     </ul>
 
     <h3>Dynamic API Route</h3>
@@ -340,7 +340,7 @@ export async function DELETE(_req: Request, { params }: Ctx) {
     <p>
       To handle WebSocket connections, export a <code>WS</code> function from the same
       <code>route.ts</code> file. When a client sends a WebSocket upgrade request to that
-      URL, webjs upgrades the connection and calls your <code>WS</code> handler.
+      URL, WebJs upgrades the connection and calls your <code>WS</code> handler.
     </p>
 
     <pre>// app/api/chat/route.ts
@@ -405,7 +405,7 @@ export default function NotFound() {
 }</pre>
 
     <p>
-      If no <code>not-found.ts</code> exists, webjs renders a default
+      If no <code>not-found.ts</code> exists, WebJs renders a default
       <code>&lt;h1&gt;404 Not Found&lt;/h1&gt;</code> page.
     </p>
 
@@ -413,7 +413,7 @@ export default function NotFound() {
     <h2>Error Boundaries (<code>error.ts</code>)</h2>
     <p>
       An <code>error.ts</code> file acts as an <strong>error boundary</strong>. When an
-      uncaught error occurs during page rendering, webjs walks up the folder tree looking
+      uncaught error occurs during page rendering, WebJs walks up the folder tree looking
       for the <strong>nearest</strong> <code>error.ts</code> and renders it instead. This
       means error boundaries are nested. A deeply-placed <code>error.ts</code> catches
       errors for its subtree without affecting the rest of the site.
@@ -451,7 +451,7 @@ export default function ErrorBoundary({ error }: { error: unknown }) {
     <!-- ===== METADATA ===== -->
     <h2>Metadata</h2>
     <p>
-      webjs supports two ways to define page metadata (title, description, Open Graph
+      WebJs supports two ways to define page metadata (title, description, Open Graph
       tags, etc.):
     </p>
 
@@ -510,7 +510,7 @@ export default async function PostPage({ params }: { params: { slug: string } })
     <!-- ===== NAVIGATION HELPERS ===== -->
     <h2>Navigation Helpers</h2>
     <p>
-      webjs exports four navigation primitives from <code>'@webjsdev/core'</code> -
+      WebJs exports four navigation primitives from <code>'@webjsdev/core'</code> -
       two for the server (sentinel-throw helpers) and two for the client (programmatic
       nav + cache invalidation).
     </p>
@@ -609,7 +609,7 @@ export default function Loading() {
 }</pre>
 
     <p>
-      webjs automatically wraps the sibling page in a Suspense boundary with the
+      WebJs automatically wraps the sibling page in a Suspense boundary with the
       loading content as the fallback. The page content streams in when ready,
       replacing the loading UI. No manual <code>Suspense()</code> call required.
     </p>
@@ -625,7 +625,7 @@ export default function Loading() {
 
     <!-- ===== SUMMARY ===== -->
     <h2>Route Resolution Order</h2>
-    <p>When a request arrives, webjs resolves it in this order:</p>
+    <p>When a request arrives, WebJs resolves it in this order:</p>
     <ul>
       <li><strong>1. Static file</strong>: if a file exists in the project's public/static directory, it is served directly.</li>
       <li><strong>2. API route</strong>: <code>route.ts</code> handlers are matched against the URL. WebSocket upgrades also match here.</li>

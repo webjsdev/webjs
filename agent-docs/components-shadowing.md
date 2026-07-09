@@ -84,4 +84,4 @@ in an app) rather than guessing.
 
 Cross-references. Reactive property declaration is in the root `AGENTS.md`
 (`WebComponent` essentials) and `agent-docs/components.md`. The lit patterns that
-break webjs reactivity are in `agent-docs/lit-muscle-memory-gotchas.md`.
+break WebJs reactivity are in `agent-docs/lit-muscle-memory-gotchas.md`.

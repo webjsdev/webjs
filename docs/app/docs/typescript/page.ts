@@ -45,8 +45,8 @@ export default function TypeScript() {
     <p>Key settings explained:</p>
     <ul>
       <li><strong>erasableSyntaxOnly: true</strong>: rejects non-erasable TypeScript syntax (<code>enum</code>, <code>namespace</code> with values, constructor parameter properties, legacy decorators, <code>import = require</code>) at compile time. Required because Node's built-in stripper only supports erasable TypeScript. Violations surface as red squiggles in the editor. See <strong>TypeScript Feature Support</strong> below for the erasable equivalents.</li>
-      <li><strong>noEmit: true</strong>: webjs never compiles TypeScript to JavaScript on disk. The TypeScript compiler is used only for type-checking (<code>tsc --noEmit</code>). Node runs your <code>.ts</code> files directly via its built-in stripper.</li>
-      <li><strong>allowImportingTsExtensions: true</strong>: lets you write <code>import { foo } from './bar.ts'</code> with the explicit <code>.ts</code> extension. This is the webjs convention (see below).</li>
+      <li><strong>noEmit: true</strong>: WebJs never compiles TypeScript to JavaScript on disk. The TypeScript compiler is used only for type-checking (<code>tsc --noEmit</code>). Node runs your <code>.ts</code> files directly via its built-in stripper.</li>
+      <li><strong>allowImportingTsExtensions: true</strong>: lets you write <code>import { foo } from './bar.ts'</code> with the explicit <code>.ts</code> extension. This is the WebJs convention (see below).</li>
       <li><strong>checkJs: true</strong>: type-check your <code>.js</code> files too, using JSDoc annotations. Enables a mixed codebase where both <code>.ts</code> and <code>.js</code> files participate in the same type graph.</li>
       <li><strong>allowJs: true</strong>: include <code>.js</code> files in the project. Required alongside <code>checkJs</code>.</li>
       <li><strong>module / moduleResolution: NodeNext</strong>: matches how Node resolves ESM imports, including <code>.ts</code> extensions.</li>
@@ -54,7 +54,7 @@ export default function TypeScript() {
     </ul>
 
     <h2>Import Convention: Explicit .ts Extensions</h2>
-    <p>In webjs projects, always use the real file extension in your imports:</p>
+    <p>In WebJs projects, always use the real file extension in your imports:</p>
     <pre>// Good: explicit .ts extension
 import { db } from '../db/connection.server.ts';
 import { createPost } from '../../modules/posts/actions/create-post.server.ts';
@@ -69,11 +69,11 @@ import { db } from '../db/connection.server';       // ERROR</pre>
     <ul>
       <li>The runtime strips types from <code>.ts</code> imports server-side natively (Node 24+, or Bun). No loader hook required.</li>
       <li>The dev server reads <code>.ts</code> files from disk, strips them (Node's <code>module.stripTypeScriptTypes</code> or <code>amaro</code> on Bun), and serves the result with position-preserving whitespace replacement.</li>
-      <li>When the browser requests a <code>.js</code> file that doesn't exist but a sibling <code>.ts</code> does, webjs falls back to the <code>.ts</code> version automatically. This means libraries that import without extensions can still work.</li>
+      <li>When the browser requests a <code>.js</code> file that doesn't exist but a sibling <code>.ts</code> does, WebJs falls back to the <code>.ts</code> version automatically. This means libraries that import without extensions can still work.</li>
     </ul>
 
     <h2>Full-Stack Type Safety</h2>
-    <p>Server actions in webjs provide end-to-end type safety without code generation. When a client component imports from a <code>.server.ts</code> file, TypeScript sees the real function signature:</p>
+    <p>Server actions in WebJs provide end-to-end type safety without code generation. When a client component imports from a <code>.server.ts</code> file, TypeScript sees the real function signature:</p>
     <pre>// modules/posts/actions/create-post.server.ts
 'use server';
 
@@ -244,7 +244,7 @@ const Util = { VERSION: '1.0' };</pre>
     <p>WebJs is buildless end-to-end: there is no bundler fallback for non-erasable syntax. If a <code>.ts</code> file uses <code>enum</code>, <code>namespace</code> with values, parameter properties, legacy decorators with <code>emitDecoratorMetadata</code>, or <code>import = require</code>, Node's stripper throws and the dev server returns a 500 naming the file and pointing at the <code>no-non-erasable-typescript</code> lint rule. The companion <code>erasable-typescript-only</code> rule additionally warns when <code>erasableSyntaxOnly</code> is missing or off in <code>tsconfig.json</code>, so the compiler catches the same constructs at edit time. The realistic edge case (a third-party package shipping raw non-erasable <code>.ts</code>) is rare in practice: published packages compile to <code>.js</code> with sidecar <code>.d.ts</code> files, which the runtime serves as plain JavaScript with no transform.</p>
 
     <h2>Mixed Codebases</h2>
-    <p><code>.js</code> and <code>.ts</code> files can coexist in the same webjs project and import each other without restriction:</p>
+    <p><code>.js</code> and <code>.ts</code> files can coexist in the same WebJs project and import each other without restriction:</p>
     <pre>my-app/
 app/
   layout.ts                # TypeScript

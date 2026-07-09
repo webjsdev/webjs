@@ -4,13 +4,13 @@
  * `webjs mcp` (lib/mcp.js) started as four READ-ONLY introspection tools. This
  * module adds the second layer the Next.js MCP (`next-devtools-mcp`) showed is
  * the high-leverage one: the framework knowledge an agent needs to author
- * idiomatic webjs code, surfaced as MCP RESOURCES (the `agent-docs/*.md` corpus
+ * idiomatic WebJs code, surfaced as MCP RESOURCES (the `agent-docs/*.md` corpus
  * plus the `AGENTS.md` contract), an `init` "read first" primer that fights the
  * React/RSC mental model, a `docs` retrieval tool, and guided-workflow PROMPTS
  * built from the recipes.
  *
  * It stays hand-rolled and ZERO-dependency (no `@modelcontextprotocol/sdk`),
- * consistent with webjs being buildless + minimal-deps. Everything here is PURE
+ * consistent with WebJs being buildless + minimal-deps. Everything here is PURE
  * given its injected `{ docsDir, agentsPath, readFile }` deps, so it is testable
  * in-process without booting a server or touching the real filesystem.
  *
@@ -275,7 +275,7 @@ export async function searchDocs(deps, args) {
 
 /**
  * The guided-workflow PROMPTS, built from the recipes. Each is a single-message
- * prompt that hands the agent the canonical webjs recipe plus the invariants it
+ * prompt that hands the agent the canonical WebJs recipe plus the invariants it
  * must not break, then tells it to pull `webjs-docs://recipes` for the full set.
  * Static metadata; {@link getPrompt} fills the message text.
  */

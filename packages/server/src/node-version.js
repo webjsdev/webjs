@@ -1,7 +1,7 @@
 /**
  * Node-version preflight guard (issue #238).
  *
- * webjs depends on Node 24+ built-ins: `module.stripTypeScriptTypes` (the
+ * WebJs depends on Node 24+ built-ins: `module.stripTypeScriptTypes` (the
  * no-build TypeScript strip) and recursive `fs.watch` (dev live-reload). On an
  * older Node the failure surfaces late and cryptically (a strip error or a
  * missing API deep inside a request), not as a clear "you need Node 24+". This
