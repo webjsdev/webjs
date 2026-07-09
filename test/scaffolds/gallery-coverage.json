@@ -87,7 +87,7 @@
       "exempt": "internal: frame codec used by the client router"
     },
     "createRef": {
-      "exempt": "deferred: element ref directive; agent-docs/components.md (#859)"
+      "demo": "modules/directives/components/directive-demo.ts"
     },
     "cspNonce": {
       "exempt": "deferred: CSP nonce accessor; agent-docs/configuration.md (#859)"
@@ -192,10 +192,10 @@
       "exempt": "internal: directive type guard used by the renderer"
     },
     "keyed": {
-      "exempt": "deferred: keyed directive; agent-docs/components.md (#859)"
+      "demo": "modules/directives/components/directive-demo.ts"
     },
     "live": {
-      "exempt": "deferred: live directive; agent-docs/components.md (#859)"
+      "demo": "modules/directives/components/directive-demo.ts"
     },
     "lookup": {
       "exempt": "internal: component-registry plumbing"
@@ -231,7 +231,7 @@
       "exempt": "deferred: server redirect throw; mentioned in the boundaries demo prose (#859)"
     },
     "ref": {
-      "exempt": "deferred: element ref directive; agent-docs/components.md (#859)"
+      "demo": "modules/directives/components/directive-demo.ts"
     },
     "register": {
       "demo": "modules/components/components/counter-card.ts"
@@ -294,10 +294,10 @@
       "demo": "app/features/boundaries/private/page.ts"
     },
     "unsafeHTML": {
-      "exempt": "deferred: trusted raw-HTML directive; agent-docs/components.md (#859)"
+      "demo": "modules/directives/components/directive-demo.ts"
     },
     "until": {
-      "exempt": "deferred: until directive; agent-docs/components.md (#859)"
+      "demo": "modules/directives/components/directive-demo.ts"
     },
     "watch": {
       "demo": "modules/directives/components/directive-demo.ts"
