@@ -36,13 +36,36 @@ They overlap on two surfaces (the scaffold's per-agent rule files, and the
 template matrix in the framework docs/README). Whichever skill reaches that
 surface must update it; when in doubt run both.
 
-A hard commit gate enforces the FLOOR: `.claude/hooks/require-scaffold-with-src.sh`
-BLOCKS a commit that stages framework-feature source (`packages/(core|server|cli)/src`)
-with no scaffold surface (`packages/cli/templates` or `packages/cli/lib`) in the
-same commit (escape hatch `WEBJS_NO_SCAFFOLD_GATE=1` for a change that genuinely
-needs no scaffold update). The hook can only enforce "stage SOME scaffold
-surface"; THIS skill does the substantive per-surface judgment and the
-generate-boot-check verification.
+Enforcement is TWO tiers, deliberately mirroring how tests are enforced (a
+commit-time floor plus an un-skippable CI gate):
+
+- **Tier 1, the commit floor.** `.claude/hooks/require-scaffold-with-src.sh`
+  BLOCKS a commit that stages framework-feature source (`packages/(core|server|cli)/src`)
+  with no scaffold surface (`packages/cli/templates` or `packages/cli/lib`) in the
+  same commit (escape hatch `WEBJS_NO_SCAFFOLD_GATE=1`). Like the test commit
+  gate, it only proves you *touched* a scaffold file; it cannot tell a real demo
+  from a doc bullet, which is exactly how #848 slipped (forbidden()/unauthorized()
+  staged doc bullets, shipped no gallery demo).
+
+- **Tier 2, the CI coverage gate.** `test/scaffolds/gallery-coverage.test.js`
+  reconciles the LIVE framework surface against the hand-curated
+  `test/scaffolds/gallery-coverage.json` manifest and FAILS when a new surface is
+  neither demoed nor exempted. It gates THREE surfaces: **`@webjsdev/core`
+  exports** (a `{ demo }` pointing at a gallery file that references it),
+  **`@webjsdev/server` exports** (`{ demoed: true }`, verified by a generated app
+  importing it), and **routing convention files** (the stems the router parses,
+  DERIVED from `packages/server/src/router.js` so a new `stem === '...'` branch
+  auto-appears, each demonstrated by a file in a generated app). Every entry is
+  `demo`/`demoed` or `{ exempt }` with a reason (`internal: ...` for plumbing,
+  `deferred: ...` for an agent-facing surface not yet demoed). It runs on every
+  `npm test` and in CI, so it cannot be skipped with a local `--no-verify`, the
+  analogue of "a test must exist AND pass": a new export or convention turns CI red
+  until it is classified. **When you add or rename a core/server export, or add a
+  routing convention file the router parses, update the manifest** (a demo, or an
+  honest exemption), the same reflex as writing a test.
+
+THIS skill does the substantive per-surface judgment and the generate-boot-check
+verification that neither tier can automate.
 
 ## The complete scaffold surface map
 
@@ -94,6 +117,7 @@ it applies, then update or consciously skip each.
 | New / changed **gallery or showcase demo** | the template file(s) or generator strings for the demo + the home-page `features`/index array + the scaffold AGENTS.md gallery list + `test/scaffolds/*` FEATURES/assertions + **generate + boot the affected template** |
 | New / removed **template** | the `create.js` template branch (+ a `*-template.js` if large) + the "only N templates exist" list in EVERY per-agent rule file + the framework `AGENTS.md`/getting-started/README template matrix + the CLI `--template` validation + `--help` + `test/scaffolds/*` |
 | New **control-flow throw or routing boundary file** (`notFound` / `redirect` / `forbidden` / `unauthorized` and their `not-found` / `forbidden` / `unauthorized` / `error` / `loading` / `global-error` / `global-not-found` boundary files) | a runnable **gallery demo** that exercises it (a route that throws it plus the nearest boundary file), NOT just an app-tree bullet in the rule files + the home-page `features` array + `test/scaffolds/*` FEATURES/boundary-file asserts + **generate + boot + hit the route**. A doc bullet in `AGENTS.md` / `CONVENTIONS.md` is necessary but NOT sufficient: the gallery is the primary teaching surface, so an undemoed thrower is invisible to a scaffolding agent (the #848 gap). Carve-out: a **root-only** boundary (`global-error` / `global-not-found`) cannot mount under `app/features/` without clashing with the generated app root, so teach those in the demo's PROSE rather than as a live route. |
+| New / renamed **public `@webjsdev/core` or `@webjsdev/server` export, or a new routing convention file** the router parses | `test/scaffolds/gallery-coverage.json` MUST classify it (a `{ demo }` / `{ demoed: true }`, or `{ exempt }` with an `internal:` / `deferred:` reason) or the tier-2 CI gate (`gallery-coverage.test.js`) FAILS. Prefer a real demo; `deferred:` is a conscious, reviewer-visible exemption tracked for later. This is the coverage-gate teeth described above. |
 | New **convention/rule** for generated apps | ALL per-agent rule files in lockstep (surface 3) + repo `CONVENTIONS.md` if the repo demonstrates it + `agent-docs` only if it also changes a framework API |
 | Changed **generated file** (layout, theme, home, schema, middleware) | the generator (`create.js`/`*-template.js`) + any scaffold test asserting it + any doc/preview describing it + **regenerate + boot** |
 | New **scaffold-shipped config/hook** (`.hooks/`, `webjs.*` in the generated `package.json`, a check rule) | `templates/**` + `webjs doctor`/`check` that reads it + the per-agent rule files if agents must know it |

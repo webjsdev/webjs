@@ -1,0 +1,752 @@
+{
+  "$comment": "Source of truth for scaffold teaching coverage. gallery-coverage.test.js reconciles this against the LIVE framework surface and FAILS CI when something new is unclassified. Three sections: exports (@webjsdev/core; { demo } points at a gallery file that references it), serverExports (@webjsdev/server; { demoed: true } verified by a generated app importing it), conventions (routing stems parsed by packages/server/src/router.js; { demoed: true } verified by a file of that stem in a generated app). Classify a new entry with a demo or an { exempt } reason (internal: plumbing, deferred: agent-facing not yet demoed). See the webjs-scaffold-sync skill.",
+  "specifier": "@webjsdev/core",
+  "exports": {
+    "ContextConsumer": {
+      "exempt": "deferred: context API; agent-docs/components.md (#859)"
+    },
+    "ContextProvider": {
+      "exempt": "deferred: context API; agent-docs/components.md (#859)"
+    },
+    "ContextRequestEvent": {
+      "exempt": "deferred: context API; agent-docs/components.md (#859)"
+    },
+    "FRAME_CHUNK": {
+      "exempt": "internal: wire/stream protocol constant"
+    },
+    "FRAME_END": {
+      "exempt": "internal: wire/stream protocol constant"
+    },
+    "FRAME_ERROR": {
+      "exempt": "internal: wire/stream protocol constant"
+    },
+    "MARKER": {
+      "exempt": "internal: SSR hydration marker constant"
+    },
+    "SEED_MISS": {
+      "exempt": "internal: SSR action-seed sentinel"
+    },
+    "STREAM_CONTENT_TYPE": {
+      "exempt": "internal: stream-action content-type constant"
+    },
+    "Signal": {
+      "exempt": "internal: Signal class; app code uses signal() / computed()"
+    },
+    "Suspense": {
+      "exempt": "deferred: page-level streaming boundary; documented in agent-docs/advanced.md (#859)"
+    },
+    "Task": {
+      "exempt": "deferred: client async primitive; the gallery teaches async render() instead, agent-docs/advanced.md (#859)"
+    },
+    "TaskStatus": {
+      "exempt": "deferred: Task status enum; pairs with Task (#859)"
+    },
+    "WebComponent": {
+      "demo": "modules/async-render/components/server-clock.ts"
+    },
+    "WebjsFrame": {
+      "exempt": "internal: auto-registered element class; app uses the <webjs-frame> tag"
+    },
+    "WebjsStream": {
+      "exempt": "internal: auto-registered element class; app uses the <webjs-stream> tag"
+    },
+    "activeActionSignal": {
+      "exempt": "internal: action-signal plumbing; app code uses actionSignal() from @webjsdev/server"
+    },
+    "adoptStyles": {
+      "exempt": "internal: style-adoption plumbing"
+    },
+    "allTags": {
+      "exempt": "internal: component-registry plumbing"
+    },
+    "asyncAppend": {
+      "exempt": "deferred: asyncAppend directive; agent-docs/components.md (#859)"
+    },
+    "asyncReplace": {
+      "exempt": "deferred: asyncReplace directive; agent-docs/components.md (#859)"
+    },
+    "batch": {
+      "exempt": "deferred: signal batching; agent-docs/components.md (#859)"
+    },
+    "cache": {
+      "exempt": "deferred: lit cache directive (distinct from the server cache() helper); agent-docs/advanced.md (#859)"
+    },
+    "computed": {
+      "exempt": "deferred: derived signal; agent-docs/components.md (#859)"
+    },
+    "connectWS": {
+      "demo": "modules/broadcast/components/broadcast-feed.ts"
+    },
+    "consumeStale": {
+      "exempt": "internal: stale-while-revalidate plumbing"
+    },
+    "createContext": {
+      "exempt": "deferred: context API; agent-docs/components.md (#859)"
+    },
+    "createFrameDecoder": {
+      "exempt": "internal: frame codec used by the client router"
+    },
+    "createRef": {
+      "exempt": "deferred: element ref directive; agent-docs/components.md (#859)"
+    },
+    "cspNonce": {
+      "exempt": "deferred: CSP nonce accessor; agent-docs/configuration.md (#859)"
+    },
+    "css": {
+      "exempt": "deferred: shadow-DOM scoped styles; documented in agent-docs/styling.md (#859)"
+    },
+    "deserialize": {
+      "exempt": "internal: wire serializer; app code round-trips via server actions"
+    },
+    "disableClientRouter": {
+      "exempt": "deferred: client-router opt-out; agent-docs/configuration.md (#859)"
+    },
+    "effect": {
+      "exempt": "deferred: signal effect; agent-docs/components.md (#859)"
+    },
+    "enableClientRouter": {
+      "exempt": "deferred: client-router opt-in; agent-docs/configuration.md (#859)"
+    },
+    "encodeFrame": {
+      "exempt": "internal: frame codec used by the client router"
+    },
+    "escapeAttr": {
+      "exempt": "internal: SSR escaping primitive"
+    },
+    "escapeText": {
+      "exempt": "internal: SSR escaping primitive"
+    },
+    "fetchMark": {
+      "exempt": "internal: stale-while-revalidate plumbing"
+    },
+    "forbidden": {
+      "demo": "app/features/boundaries/gated/page.ts"
+    },
+    "guard": {
+      "exempt": "deferred: guard directive; agent-docs/components.md (#859)"
+    },
+    "html": {
+      "demo": "app/features/async-render/page.ts"
+    },
+    "isAsyncAppend": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isAsyncReplace": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isCSS": {
+      "exempt": "internal: value type guard used by the renderer"
+    },
+    "isCache": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isForbidden": {
+      "exempt": "internal: control-flow throw guard used by the renderer"
+    },
+    "isGuard": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isKeyed": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isLazy": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isLive": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isNotFound": {
+      "exempt": "internal: control-flow throw guard used by the renderer"
+    },
+    "isRedirect": {
+      "exempt": "internal: control-flow throw guard used by the renderer"
+    },
+    "isRef": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isRepeat": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isSignal": {
+      "exempt": "internal: value type guard used by the renderer"
+    },
+    "isSuspense": {
+      "exempt": "internal: value type guard used by the renderer"
+    },
+    "isTemplate": {
+      "exempt": "internal: value type guard used by the renderer"
+    },
+    "isTemplateContent": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isUnauthorized": {
+      "exempt": "internal: control-flow throw guard used by the renderer"
+    },
+    "isUnsafeHTML": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isUntil": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "isWatch": {
+      "exempt": "internal: directive type guard used by the renderer"
+    },
+    "keyed": {
+      "exempt": "deferred: keyed directive; agent-docs/components.md (#859)"
+    },
+    "live": {
+      "exempt": "deferred: live directive; agent-docs/components.md (#859)"
+    },
+    "lookup": {
+      "exempt": "internal: component-registry plumbing"
+    },
+    "lookupModuleUrl": {
+      "exempt": "internal: module-url plumbing"
+    },
+    "markStale": {
+      "exempt": "internal: stale-while-revalidate plumbing"
+    },
+    "navigate": {
+      "exempt": "deferred: programmatic client navigation; mentioned in the routing demo prose (#859)"
+    },
+    "notFound": {
+      "demo": "app/features/routing/[id]/page.ts"
+    },
+    "optimistic": {
+      "demo": "modules/optimistic-ui/components/like-button.ts"
+    },
+    "parse": {
+      "exempt": "internal: wire serializer; app code round-trips via server actions"
+    },
+    "parseTagHeader": {
+      "exempt": "internal: partial-nav header plumbing"
+    },
+    "primeModuleUrl": {
+      "exempt": "internal: module-url plumbing"
+    },
+    "prop": {
+      "demo": "modules/components/components/counter-card.ts"
+    },
+    "redirect": {
+      "exempt": "deferred: server redirect throw; mentioned in the boundaries demo prose (#859)"
+    },
+    "ref": {
+      "exempt": "deferred: element ref directive; agent-docs/components.md (#859)"
+    },
+    "register": {
+      "demo": "modules/components/components/counter-card.ts"
+    },
+    "registerKeyTags": {
+      "exempt": "internal: keyed-list registry plumbing"
+    },
+    "render": {
+      "exempt": "internal: client render entry; the framework calls it, app code writes components"
+    },
+    "renderStream": {
+      "exempt": "internal: the <webjs-stream> applier is auto-wired by the client router; app uses the tag / connectWS"
+    },
+    "renderToStream": {
+      "exempt": "internal: server render entry; used by the framework and tests, not authored in app pages"
+    },
+    "renderToString": {
+      "exempt": "internal: server render entry; used by the framework and tests, not authored in app pages"
+    },
+    "repeat": {
+      "demo": "modules/directives/components/directive-demo.ts"
+    },
+    "revalidate": {
+      "exempt": "deferred: client snapshot eviction; agent-docs/built-ins.md (#859)"
+    },
+    "richFetch": {
+      "exempt": "deferred: content-negotiated rich fetch; agent-docs/advanced.md (#859)"
+    },
+    "scanSeeds": {
+      "exempt": "internal: SSR action-seeding plumbing"
+    },
+    "serialize": {
+      "exempt": "internal: wire serializer; app code round-trips via server actions"
+    },
+    "setActiveActionSignal": {
+      "exempt": "internal: action-signal plumbing; app code uses actionSignal() from @webjsdev/server"
+    },
+    "setCspNonceProvider": {
+      "exempt": "internal: server-only CSP nonce provider setup"
+    },
+    "signal": {
+      "demo": "modules/broadcast/components/broadcast-feed.ts"
+    },
+    "stringify": {
+      "exempt": "internal: wire serializer; app code round-trips via server actions"
+    },
+    "stylesToString": {
+      "exempt": "internal: style-adoption plumbing"
+    },
+    "tagOf": {
+      "exempt": "internal: component-registry plumbing"
+    },
+    "takeSeed": {
+      "exempt": "internal: SSR action-seeding plumbing"
+    },
+    "templateContent": {
+      "exempt": "deferred: templateContent directive; agent-docs/components.md (#859)"
+    },
+    "unauthorized": {
+      "demo": "app/features/boundaries/private/page.ts"
+    },
+    "unsafeHTML": {
+      "exempt": "deferred: trusted raw-HTML directive; agent-docs/components.md (#859)"
+    },
+    "until": {
+      "exempt": "deferred: until directive; agent-docs/components.md (#859)"
+    },
+    "watch": {
+      "demo": "modules/directives/components/directive-demo.ts"
+    }
+  },
+  "serverSpecifier": "@webjsdev/server",
+  "serverExports": {
+    "Credentials": {
+      "demoed": true
+    },
+    "DEFAULT_UPLOAD_DIR": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "GitHub": {
+      "exempt": "deferred: OAuth provider preset (#865)"
+    },
+    "Google": {
+      "exempt": "deferred: OAuth provider preset (#865)"
+    },
+    "STREAM_MIME": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "SUPPORTED_PROVIDERS": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "Session": {
+      "demoed": true
+    },
+    "acceptsStream": {
+      "demoed": true
+    },
+    "actionContext": {
+      "exempt": "deferred: per-action middleware context accessor (#865)"
+    },
+    "actionEndpoint": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "actionSignal": {
+      "exempt": "deferred: action AbortSignal accessor (#865)"
+    },
+    "analyzeAppElision": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "applyCorsHeaders": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "applyEnvValidation": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "assertNodeVersion": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "assertSafeKey": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "attachWebSocket": {
+      "exempt": "deferred: WS upgrade helper (#865)"
+    },
+    "auditPinned": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "broadcast": {
+      "demoed": true
+    },
+    "buildActionIndex": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "buildImportMap": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "buildModuleGraph": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "buildRouteTable": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "cache": {
+      "demoed": true
+    },
+    "checkImportmapCoherence": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "checkNodeVersion": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "clearVendorCache": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "clientIp": {
+      "exempt": "deferred: client IP accessor (#865)"
+    },
+    "cookieSession": {
+      "exempt": "deferred: cookie session strategy (#865)"
+    },
+    "cookieSessionStorage": {
+      "exempt": "deferred: cookie session storage (#865)"
+    },
+    "cookies": {
+      "exempt": "deferred: request cookie accessor (#865)"
+    },
+    "cookiesToHeader": {
+      "exempt": "deferred: cookie serializer (#865)"
+    },
+    "cors": {
+      "demoed": true
+    },
+    "createAuth": {
+      "demoed": true
+    },
+    "createBrowserTestHandler": {
+      "demoed": true
+    },
+    "createRequestHandler": {
+      "demoed": true
+    },
+    "cspNonce": {
+      "exempt": "deferred: CSP nonce accessor (#865)"
+    },
+    "defaultLogger": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "defaultSerializer": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "diskStore": {
+      "exempt": "deferred: disk file store (#865)"
+    },
+    "ensureVendorCommittable": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "extractComponents": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "extractPackageName": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "extractPinnedVersions": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "findOrphanComponents": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "findOutdated": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "formatEnvErrors": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "generateKey": {
+      "demoed": true
+    },
+    "generateRouteTypes": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "getFileStore": {
+      "demoed": true
+    },
+    "getPackageManifest": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "getPackageVersion": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "getRequest": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "getSerializer": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "getSession": {
+      "exempt": "deferred: session read (#865)"
+    },
+    "getSetCookies": {
+      "exempt": "deferred: Set-Cookie reader (#865)"
+    },
+    "getStore": {
+      "exempt": "deferred: active store accessor (#865)"
+    },
+    "handleApi": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "hasVendorPin": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "hashFile": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "headers": {
+      "exempt": "deferred: security headers helper (#865)"
+    },
+    "importMapTag": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "invokeAction": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "invokeActionForTest": {
+      "demoed": true
+    },
+    "isServerFile": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "json": {
+      "exempt": "deferred: JSON response helper (#865)"
+    },
+    "jspmGenerate": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "listPinned": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "loadEnvSchema": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "loginAndGetCookies": {
+      "demoed": true
+    },
+    "matchApi": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "matchPage": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "memoryStore": {
+      "exempt": "deferred: in-memory store (#865)"
+    },
+    "normalizeProvider": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "parseMajor": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "parseRequiredMajor": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "parseWindow": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "pinAll": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "primeComponentRegistry": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "rateLimit": {
+      "demoed": true
+    },
+    "rawActionRequest": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "readBody": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "readPinFile": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "redisStore": {
+      "demoed": true
+    },
+    "requestId": {
+      "exempt": "deferred: request id accessor (#865)"
+    },
+    "requiredNodeMajor": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "resolveOrigin": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "resolveServerModule": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "resolveVendorImports": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "revalidateAll": {
+      "exempt": "deferred: cache flush (#865)"
+    },
+    "revalidatePath": {
+      "exempt": "deferred: path cache eviction (#865)"
+    },
+    "revalidateTag": {
+      "exempt": "deferred: cache tag eviction (#865)"
+    },
+    "revalidateTags": {
+      "exempt": "deferred: cache tags eviction (#865)"
+    },
+    "route": {
+      "demoed": true
+    },
+    "runInstrumentation": {
+      "exempt": "deferred: instrumentation runner (#865)"
+    },
+    "runWithActionSignal": {
+      "exempt": "deferred: action-signal scope helper (#865)"
+    },
+    "satisfiesSemverRange": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "scanBareImports": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "scanComponents": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "serveActionStub": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "serveDownloadedBundle": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "session": {
+      "exempt": "deferred: session helper (#865)"
+    },
+    "setFileStore": {
+      "exempt": "deferred: file-store setter (#865)"
+    },
+    "setOnError": {
+      "exempt": "deferred: APM error hook (#865)"
+    },
+    "setSerializer": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "setStore": {
+      "demoed": true
+    },
+    "setVendorEntries": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "signedUrl": {
+      "exempt": "deferred: signed URL builder (#865)"
+    },
+    "sitemap": {
+      "exempt": "deferred: sitemap serializer (#865)"
+    },
+    "sitemapIndex": {
+      "exempt": "deferred: sitemap index serializer (#865)"
+    },
+    "ssrNotFound": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "ssrPage": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "stampRemoteIp": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "startServer": {
+      "exempt": "deferred: programmatic server boot (#865)"
+    },
+    "storeSession": {
+      "exempt": "deferred: session persistence (#865)"
+    },
+    "storeSessionStorage": {
+      "exempt": "deferred: session storage (#865)"
+    },
+    "stream": {
+      "demoed": true
+    },
+    "streamResponse": {
+      "demoed": true
+    },
+    "testRequest": {
+      "demoed": true
+    },
+    "toRequest": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "transitiveDeps": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "unpinPackage": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "updatePinned": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "validateEnv": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "vendorImportMapEntries": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "verifySignedUrl": {
+      "exempt": "deferred: signed URL verifier (#865)"
+    },
+    "withCookies": {
+      "exempt": "deferred: cookie response helper (#865)"
+    },
+    "withRequest": {
+      "exempt": "internal: framework/CLI plumbing"
+    },
+    "withSessionCookie": {
+      "demoed": true
+    }
+  },
+  "conventions": {
+    "page": {
+      "demoed": true
+    },
+    "layout": {
+      "demoed": true
+    },
+    "error": {
+      "exempt": "deferred: no example error file shipped by the scaffold yet (#865)"
+    },
+    "loading": {
+      "exempt": "deferred: no example loading file shipped by the scaffold yet (#865)"
+    },
+    "middleware": {
+      "demoed": true
+    },
+    "not-found": {
+      "exempt": "deferred: no example not-found file shipped by the scaffold yet (#865)"
+    },
+    "forbidden": {
+      "demoed": true
+    },
+    "unauthorized": {
+      "demoed": true
+    },
+    "global-error": {
+      "exempt": "deferred: no example global-error file shipped by the scaffold yet (#865)"
+    },
+    "global-not-found": {
+      "exempt": "deferred: no example global-not-found file shipped by the scaffold yet (#865)"
+    },
+    "route": {
+      "demoed": true
+    },
+    "sitemap": {
+      "exempt": "deferred: no example sitemap file shipped by the scaffold yet (#865)"
+    },
+    "robots": {
+      "exempt": "deferred: no example robots file shipped by the scaffold yet (#865)"
+    },
+    "manifest": {
+      "exempt": "deferred: no example manifest file shipped by the scaffold yet (#865)"
+    },
+    "icon": {
+      "exempt": "deferred: no example icon file shipped by the scaffold yet (#865)"
+    },
+    "apple-icon": {
+      "exempt": "deferred: no example apple-icon file shipped by the scaffold yet (#865)"
+    },
+    "opengraph-image": {
+      "exempt": "deferred: no example opengraph-image file shipped by the scaffold yet (#865)"
+    },
+    "twitter-image": {
+      "exempt": "deferred: no example twitter-image file shipped by the scaffold yet (#865)"
+    }
+  }
+}

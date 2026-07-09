@@ -38,6 +38,18 @@ The fix only repairs the LOCAL checkout. Commits and branches are always safe on
 
 ---
 
+### Scaffold teaching-coverage gate (`gallery-coverage.test.js`)
+
+The scaffold is webjs's primary teaching surface for AI agents, so a new framework feature must ship a runnable gallery demo, not just a doc bullet. Enforcement is two tiers, mirroring how tests are enforced:
+
+- **Tier 1 (commit floor):** `.claude/hooks/require-scaffold-with-src.sh` blocks a commit that stages `packages/(core|server|cli)/src` with no scaffold surface. It only proves you touched a scaffold file, so a documented-but-undemoed feature can still pass (this is exactly how #848 shipped `forbidden()` / `unauthorized()` with app-tree bullets and no demo).
+
+- **Tier 2 (CI gate):** `test/scaffolds/gallery-coverage.test.js` reconciles the LIVE framework surface against `test/scaffolds/gallery-coverage.json` and FAILS when something new is neither demoed nor exempted. It gates three surfaces: `@webjsdev/core` exports (a `{ demo }` gallery-file pointer), `@webjsdev/server` exports (`{ demoed: true }`, verified by a generated app importing it), and routing convention files (the stems DERIVED from `packages/server/src/router.js`, each demonstrated by a file in a generated app). It runs under `npm test`, so a local `--no-verify` cannot skip it: a new export or convention turns CI red until classified. The `reconcile()` / `reconcileSet()` cores are pure and their failure modes (new name, stale key, missing/over-claimed demo, empty reason) are proven with synthetic inputs alongside the real-surface assertions. The deferred backlog is tracked in #859.
+
+**When you add or rename a `@webjsdev/core` export, update the manifest** the same way you write a test: add a demo pointer, or an honest exemption. The gate covers the export surface (where the #848-class throwers live); a new routing convention FILE type (a `*.ts` boundary) is not an export, so it stays tier-1-only for now.
+
+---
+
 ### Changelog: per-package, per-version, auto-generated
 
 WebJs ships per-package per-version changelogs under `changelog/<pkg>/<version>.md`. The model: **a version bump is the trigger**. When any commit on `main` changes the `version` field in `packages/<pkg>/package.json`, the scripts/backfill-changelog.js generator emits a new `changelog/<pkg>/<version>.md` summarising every conventional-commit (`feat:` / `fix:` / `breaking:` / `perf:`) that landed in that package since the prior bump. The website renders the union of all packages' files at `/changelog`.
