@@ -37,8 +37,8 @@
  * ```js
  * // app/api/posts/route.ts
  * import { route } from '@webjsdev/server';
- * import * as createPost from '../../../modules/posts/actions/create-post.server.ts';
- * export const POST = route(createPost);   // its declared middleware + validate apply
+ * import * as postActions from '../../../modules/posts/actions/create-post.server.ts';
+ * export const POST = route(postActions);   // its declared middleware + validate apply
  * ```
  *
  * The function form still takes explicit `opts`, and an explicit `opts.middleware`
