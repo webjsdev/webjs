@@ -155,6 +155,11 @@ export default function RootLayout({ children }: LayoutProps) {
         --accent-text:    var(--accent);
         --accent-surface: color-mix(in oklch, var(--accent-live) 12%, transparent);
         --accent-border:  color-mix(in oklch, var(--accent-live) 28%, transparent);
+        /* Logo mark gradient: the exact warm-orange stops webjs.dev uses, so
+           the brand mark reads identically here and on the main site (dark
+           default here; the light overrides below carry the light stops). */
+        --logo-from:      oklch(0.8 0.16 58);
+        --logo-to:        oklch(0.62 0.18 44);
         --glow-a:         oklch(0.63 0.17 44);
         --glow-strength:  0.16;
 
@@ -178,6 +183,8 @@ export default function RootLayout({ children }: LayoutProps) {
         --accent:        oklch(0.54 0.16 52);
         --accent-hover:  oklch(0.5 0.16 52);
         --accent-fg:     oklch(1 0 0);
+        --logo-from:     oklch(0.63 0.17 50);
+        --logo-to:       oklch(0.44 0.11 52);
       }
 
       /* light: OS preference */
@@ -195,6 +202,8 @@ export default function RootLayout({ children }: LayoutProps) {
           --accent:        oklch(0.54 0.16 52);
           --accent-hover:  oklch(0.5 0.16 52);
           --accent-fg:     oklch(1 0 0);
+          --logo-from:     oklch(0.63 0.17 50);
+          --logo-to:       oklch(0.44 0.11 52);
         }
       }
 
@@ -251,7 +260,7 @@ export default function RootLayout({ children }: LayoutProps) {
 
     <header class="site-header fixed inset-x-0 top-0 z-20 flex items-center justify-between gap-4 px-4 sm:px-6 py-3 border-b border-border bg-[color-mix(in_oklch,var(--bg)_75%,transparent)] backdrop-blur-[18px] backdrop-saturate-[180%]">
       <a href="/" class="inline-flex items-center gap-2 no-underline text-fg font-semibold text-[15px] leading-none tracking-tight">
-        <span class="inline-block w-[22px] h-[22px] rounded-md bg-gradient-to-br from-accent to-[color-mix(in_oklch,var(--accent)_55%,var(--fg))] shadow-[inset_0_0_0_1px_oklch(1_0_0/0.15),0_1px_4px_var(--accent-tint)]"></span>
+        <span class="inline-block w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-[var(--logo-from)] to-[var(--logo-to)] shadow-[inset_0_0_0_1px_oklch(1_0_0/0.15),0_2px_10px_var(--accent-tint)]"></span>
         <span>webjs</span>
         <span class="text-fg-subtle mx-1 font-normal">/</span>
         <span>blog</span>

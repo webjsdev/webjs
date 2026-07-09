@@ -114,6 +114,11 @@ export default function Layout({ children }: { children: any }) {
         --accent-text:    var(--accent);
         --accent-surface: color-mix(in oklch, var(--accent-live) 12%, transparent);
         --accent-border:  color-mix(in oklch, var(--accent-live) 28%, transparent);
+        /* Logo mark gradient: the exact warm-orange stops webjs.dev uses, so
+           the brand mark reads identically across the site, the docs and the
+           example blog. NOT a color-mix with --fg (that muddied the mark). */
+        --logo-from:     oklch(0.63 0.17 50);
+        --logo-to:       oklch(0.44 0.11 52);
         --glow-a:        oklch(0.63 0.17 44);
         --glow-strength: 0.16;
 
@@ -152,6 +157,8 @@ export default function Layout({ children }: { children: any }) {
           --accent:        oklch(0.7 0.16 52);
           --accent-hover:  oklch(0.75 0.16 52);
           --accent-fg:     oklch(0.17 0.02 52);
+          --logo-from:     oklch(0.8 0.16 58);
+          --logo-to:       oklch(0.62 0.18 44);
           --glow-strength: 0.16;
           --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
           --shadow:    0 4px 24px oklch(0 0 0 / 0.4);
@@ -181,6 +188,8 @@ export default function Layout({ children }: { children: any }) {
         --accent:        oklch(0.7 0.16 52);
         --accent-hover:  oklch(0.75 0.16 52);
         --accent-fg:     oklch(0.17 0.02 52);
+        --logo-from:     oklch(0.8 0.16 58);
+        --logo-to:       oklch(0.62 0.18 44);
         --glow-strength: 0.16;
         --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
         --shadow:    0 4px 24px oklch(0 0 0 / 0.4);
@@ -381,7 +390,7 @@ export default function Layout({ children }: { children: any }) {
 
     <header class="flex items-center justify-between gap-4 max-w-5xl mx-auto px-4 sm:px-8 py-4">
       <a class="flex items-center gap-2 no-underline text-fg font-bold text-base leading-none tracking-tight" href="/">
-        <span class="w-[22px] h-[22px] rounded-md bg-gradient-to-br from-brand to-[color-mix(in_oklch,var(--accent)_55%,var(--fg))]"></span>
+        <span class="w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-[var(--logo-from)] to-[var(--logo-to)] shadow-[0_2px_10px_var(--accent-tint)]"></span>
         Webjs UI
       </a>
 
