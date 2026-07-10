@@ -36,7 +36,7 @@ export class TaskLoader extends WebComponent {
     return html`
       <div class="flex items-center gap-3 text-[15px]">
         <button @click=${() => this.reload()}
-          class="px-3.5 py-1.5 rounded-xl bg-card border border-border text-foreground text-sm cursor-pointer">reload</button>
+          class="px-3.5 py-1.5 rounded-xl bg-card border border-border text-foreground text-sm cursor-pointer transition-colors hover:border-border-strong">reload</button>
         ${body}
       </div>
     `;

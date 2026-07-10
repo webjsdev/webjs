@@ -22,7 +22,7 @@ export class RichData extends WebComponent {
     return html`
       <div class="flex items-center gap-3 text-[15px]">
         <button @click=${() => this.load()}
-          class="px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer">richFetch() the route</button>
+          class="px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">richFetch() the route</button>
         <span class="text-muted-foreground">${this.line.get()}</span>
       </div>
     `;

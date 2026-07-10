@@ -28,7 +28,7 @@ export class ThemeProvider extends WebComponent {
     return html`
       <div class="grid gap-3 p-3 rounded-xl bg-card border border-border max-w-[420px]">
         <button @click=${() => this.toggle()}
-          class="w-fit px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer">
+          class="w-fit px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">
           provider theme: ${this.provider.value} (toggle)
         </button>
         <slot></slot>
@@ -58,7 +58,7 @@ export class ThemeConsumer extends WebComponent {
       <div class="flex items-center gap-3 text-[15px] text-foreground">
         <span>child sees: <strong>${theme}</strong></span>
         <button @click=${() => this.readOnce()}
-          class="px-3 py-1 rounded-lg text-sm bg-card border border-border cursor-pointer">read once</button>
+          class="px-3 py-1 rounded-lg text-sm bg-card border border-border text-foreground cursor-pointer transition-colors hover:border-border-strong">read once</button>
         <span class="text-muted-foreground text-sm">last one-shot: ${this.lastRead.get()}</span>
       </div>
     `;

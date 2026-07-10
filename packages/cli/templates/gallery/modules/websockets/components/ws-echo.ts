@@ -70,7 +70,7 @@ export class WsEcho extends WebComponent {
         </ul>
         <div class="grid gap-2 border-t border-border pt-4">
           <button @click=${() => this.applyStreamUpdate()}
-            class="w-fit px-3.5 py-1.5 rounded-xl bg-card border border-border text-foreground text-sm cursor-pointer">renderStream() an element-level update</button>
+            class="w-fit px-3.5 py-1.5 rounded-xl bg-card border border-border text-foreground text-sm cursor-pointer transition-colors hover:border-border-strong">renderStream() an element-level update</button>
           <ul id="ws-stream-log" class="grid gap-1.5 list-none m-0 p-0"></ul>
         </div>
       </div>

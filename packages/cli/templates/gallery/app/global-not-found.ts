@@ -16,7 +16,7 @@ export default function GlobalNotFound() {
       <p class="text-sm font-semibold uppercase tracking-wide text-orange-500">404</p>
       <h1 class="mt-2 text-3xl font-bold">Page not found</h1>
       <p class="mt-4 text-neutral-500">We could not find the page you were looking for.</p>
-      <a href="/" class="mt-8 inline-block rounded-md bg-neutral-900 px-4 py-2 text-white dark:bg-white dark:text-neutral-900">Back to home</a>
+      <a href="/" class="mt-8 inline-block rounded-md bg-neutral-900 px-4 py-2 text-white transition-colors hover:bg-neutral-700 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200">Back to home</a>
     </main>
   `;
 }
