@@ -1,7 +1,7 @@
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { renderToString, isNotFound, isRedirect, isForbidden, isUnauthorized, lookupModuleUrl, isLazy, cspNonce } from '@webjsdev/core';
-import { importMapTag, vendorIntegrityFor, publishedBuildId, basePath, vendorPreconnectOrigins, vendorPreloadTargets } from './importmap.js';
+import { importMapTag, vendorIntegrityFor, publishedBuildId, appSourceId, basePath, vendorPreconnectOrigins, vendorPreloadTargets } from './importmap.js';
 import { withBasePath } from './base-path.js';
 import { withAssetHash } from './asset-hash.js';
 import { jsonForScriptTag } from './script-tag-json.js';
@@ -419,6 +419,7 @@ function htmlResponse(html, status, req, url, metadata) {
   // final, so a warming response is reload-safe. See router-client.js
   // applySwap and publishedBuildId() in importmap.js.
   headers.set('x-webjs-build', publishedBuildId());
+  headers.set('x-webjs-src', appSourceId());
   // Buffered (string) body: opt into the conditional-GET funnel so a
   // PUBLIC-cacheable page (metadata.cacheControl) gets a weak ETag + 304.
   // The funnel still excludes the no-store default, so a private page is
@@ -446,6 +447,7 @@ function cachedHtmlResponse(rec, req, url) {
   const headers = new Headers({ 'content-type': rec.contentType });
   headers.set('cache-control', rec.cacheControl);
   headers.set('x-webjs-build', publishedBuildId());
+  headers.set('x-webjs-src', appSourceId());
   headers.set(BUFFERED_MARKER, '1');
   return new Response(rec.body, { status: rec.status, headers });
 }
@@ -1717,6 +1719,7 @@ function streamingHtmlResponse(prefix, bodyHtml, closer, ctx, status, req, url, 
   // See htmlResponse: published build id on every response for the
   // client router's importmap-mismatch detection on partial swaps.
   headers.set('x-webjs-build', publishedBuildId());
+  headers.set('x-webjs-src', appSourceId());
 
   if (!ctx.pending.length) {
     // No pending boundaries: this degrades to a single buffered (string)

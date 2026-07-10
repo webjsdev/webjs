@@ -92,7 +92,7 @@ test('handle: a pinned app publishes a stable build id from the first response',
   // whereas merely checking the first response is non-empty passes either way
   // (handle() awaits ensureReady, which publishes on the deferred path too).
   const bootId = publishedBuildId();
-  assert.match(bootId, /^[0-9a-f]{64}$/, 'pinned app publishes a build id at boot, before any request');
+  assert.match(bootId, /^[0-9a-f]{64}\.c[\w.-]+$/, 'pinned app publishes a build id (importmap hash + core version, #899) at boot, before any request');
   // First page response: it advertises exactly the boot-published id.
   const first = await app.handle(new Request('http://x/'));
   const build1 = first.headers.get('x-webjs-build');

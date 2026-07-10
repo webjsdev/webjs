@@ -579,27 +579,56 @@ inner tree is wrapped in that layout's marker pair and returned. Outer
 layouts are not loaded, not rendered, not re-serialized. Real savings
 on every same-shell navigation.
 
-### Cross-deploy hard-reload signals
+### Cross-deploy signals: reflect a deploy on client navigation
 
-Two complementary mechanisms tell the client when a partial swap is
-unsafe and a hard reload is required:
+WebJs detects a deploy the no-build, Rails+Turbo way: the CONTENT of what the
+server serves IS the version, hashed automatically at runtime, no env var and no
+build step. There is nothing to set. Two signals ride every SSR response (as
+both an attribute on `<script type="importmap">` and a header, so they work on
+X-Webjs-Have partial responses that have no head), each with the RIGHT response,
+because the two kinds of deploy need different handling:
 
-1. **Importmap drift** (the common case after a vendor pin change).
-   Server stamps the PUBLISHED build id on `<script type="importmap"
-   data-webjs-build="…">` AND emits the same value as `X-Webjs-Build`
-   on every response, including X-Webjs-Have partial responses with no
-   head. The published id is the importmap hash, but advertised only
-   once the importmap is authoritatively final (at boot for a pinned
-   app, after the first successful vendor resolve otherwise); while the
-   map is still warming it stays empty. Client compares the response
-   header against the live document's `data-webjs-build`. A hard reload
-   (`location.href = target`) fires only when both ids are present and
-   differ (a real cross-deploy). An empty id on either side means
-   "version unknown" (a warming runtime-first-boot server) and never
-   reloads, so the warmup window cannot hard-reload and wipe a
-   half-filled form. Works for every nav, including partial-response navs.
+1. **Reload signal, `data-webjs-build` / `X-Webjs-Build`.** The importmap hash
+   (vendor pins, core export shape) FOLDED with the installed `@webjsdev/core`
+   version. It changes when the browser-shipped framework or vendor code changes,
+   which the running page cannot hot-swap (the importmap is committed at load, a
+   new core is new module code). So on a mismatch the client HARD-RELOADS
+   (`location.href = target`). Advertised only once the importmap is
+   authoritatively final (at boot for a pinned app, after the first vendor
+   resolve otherwise); empty while warming. A hard reload fires only when both
+   ids are present and differ, so the warmup window never reloads and wipes a
+   half-filled form. A one-shot `sessionStorage` guard prevents a churning
+   importmap from looping reloads.
 
-2. **Generic `data-webjs-track="reload"`** (for non-importmap concerns,
+2. **Evict signal, `data-webjs-src` / `X-Webjs-Src` (#899).** A content hash of
+   ALL the app's own source (every `.js/.ts/.mjs/.mts` under the app root,
+   INCLUDING server-only `.server.ts` that ships nothing to the browser) folded
+   with the installed `@webjsdev/server` version. It changes on an app-source
+   change (the common case, e.g. server-rendered syntax highlighting) or a
+   server-framework release: the SSR OUTPUT moved, but the running page's browser
+   code is fine, so a hard reload would be an over-correction. Instead, on a
+   mismatch the client EVICTS its URL-keyed snapshot + prefetch caches (both
+   captured on the old deploy) and advances the page's reference id, so the
+   current nav's fresh HTML applies and every later nav re-fetches fresh, with NO
+   reload. Detection also runs at prefetch-fetch time (a hover/viewport prefetch
+   fires eagerly), so the stale caches are usually dropped before the click. One
+   residual window is inherent: a page prefetched BEFORE the deploy stores the
+   old id, matching the still-old current page, so a click that consumes it
+   BEFORE any fresh response has revealed the new id serves it once; the next
+   fresh response converges the app. A client cannot detect a deploy from
+   purely-cached navigation without contacting the server.
+
+Coverage: a vendor pin or a `@webjsdev/core` release reloads; an app-source
+change or a `@webjsdev/server` release evicts-and-refreshes softly. This is why
+the importmap-only build id is not the whole story: it deliberately does not move
+on an app-only change (so app updates propagate via the fresh `?v` asset URLs on
+soft nav without a jarring reload), and the app-source signal is what makes that
+turnover actually happen by dropping the stale client caches. Framework updates
+reflect only once the app has installed the new `@webjsdev/*` version (governed
+by the app's dependency range and lockfile, e.g. `"latest"` pulls it on the next
+install); the signal detects the deployed version, it does not pull the update.
+
+3. **Generic `data-webjs-track="reload"`** (for non-importmap concerns,
    e.g. a CSS bundle hash, a build-id meta tag). Any head element with
    the attribute joins a signature computed from concatenated outerHTML.
    On nav, mismatched signatures trigger reload. Mirrors hotwired/turbo's

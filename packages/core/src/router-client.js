@@ -1284,9 +1284,34 @@ function prefetch(href) {
       if (!/^text\/html\b/i.test(ctype)) return;
       if (resp.status >= 400) return;
       const build = resp.headers.get('x-webjs-build');
+      const src = resp.headers.get('x-webjs-src');
+      // Deploy detected at PREFETCH time (#899). A prefetch fetch carries the
+      // server's current build id AND app-source id. If EITHER differs from what
+      // the page booted with, a deploy landed, so every earlier snapshot/prefetch
+      // is pre-deploy and stale. Evict them here, well before the click (a
+      // hover/viewport prefetch fires early), so a click on a previously-
+      // prefetched link re-fetches fresh (then applySwap hard-reloads on a build
+      // change or soft-applies on a src-only change). This shrinks the window
+      // where a pre-deploy prefetch, whose stored ids equal the still-old page
+      // ids so applySwap alone cannot tell it is stale, is served. Both ids of a
+      // pair must be present: an empty id is the warmup "version unknown", never
+      // a deploy signal.
+      const pageTag = typeof document !== 'undefined' ? document.querySelector('script[type="importmap"]') : null;
+      const pageBuild = pageTag ? pageTag.getAttribute('data-webjs-build') : null;
+      const pageSrc = pageTag ? pageTag.getAttribute('data-webjs-src') : null;
+      if ((build && pageBuild && build !== pageBuild) || (src && pageSrc && src !== pageSrc)) {
+        snapshotCache.clear();
+        prefetchCache.clear();
+        // Deliberately do NOT advance the page's data-webjs-src here (only the
+        // foreground `applySwap` does). A prefetch is speculative; leaving the
+        // reference id on the old deploy keeps applySwap the single authority
+        // that settles the page on the first real navigation. The cost is small:
+        // repeated prefetches in the pre-first-nav window each re-clear the
+        // (already tiny) caches, which converges the instant the user navigates.
+      }
       const finalUrl = resp.redirected && resp.url ? resp.url : href;
       const html = await resp.text();
-      prefetchStore(key, { html, build, finalUrl, at: nowMs() });
+      prefetchStore(key, { html, build, src, finalUrl, at: nowMs() });
     })
     .catch(() => { /* speculative: swallow */ })
     .finally(() => {
@@ -1608,6 +1633,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   // shell swap. Null for a buffered (non-streaming) or prefetched response.
   let streamCtx = null;
   let incomingBuild = null;
+  let incomingSrc = null;
   /** @type {number | null} */
   let respStatus = null;
   /** @type {boolean} */
@@ -1633,6 +1659,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
     if (prefetched) {
       html = prefetched.html;
       incomingBuild = prefetched.build;
+      incomingSrc = prefetched.src;
       finalUrl = prefetched.finalUrl;
       // A consumed prefetch is a successful 200 GET fragment.
       respStatus = 200;
@@ -1725,6 +1752,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
     // tag to compare. The applySwap importmap-mismatch guard reads
     // this to detect deploys that bumped the vendor pin.
     incomingBuild = resp.headers.get('x-webjs-build');
+    incomingSrc = resp.headers.get('x-webjs-src');
     // Progressive streaming (#473): read only up to the first streamed Suspense
     // boundary so the shell (with fallbacks) swaps in immediately; the rest
     // streams in after the swap. A body with no boundaries reads to completion,
@@ -1763,7 +1791,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   // recover in place rather than a destructive full reload.
   if (!doc) { restoreOptimistic(optimisticState); handleNavigationError(href, null, new Error('navigation response did not parse as HTML')); return { ok: false, status: respStatus, aborted: false }; }
 
-  applySwap(doc, frameId, false, finalUrl, incomingBuild);
+  applySwap(doc, frameId, false, finalUrl, incomingBuild, incomingSrc);
 
   if (recordHistory) history.pushState(null, '', finalUrl);
 
@@ -2234,7 +2262,7 @@ function upgradeCustomElementsInRange(range) {
   }
 }
 
-function applySwap(doc, frameId, revalidating, href, incomingBuild) {
+function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc) {
   // SSR action seeding (#472): ingest any seed payload the incoming page
   // carries BEFORE its components are grafted into the live DOM and upgrade, so
   // a soft-navigated async component resolves from the seed instead of
@@ -2308,6 +2336,14 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild) {
       if (currentSig !== incomingSig) mismatch = true;
     }
     if (mismatch && typeof location !== 'undefined') {
+      // A detected cross-deploy mismatch means every URL-keyed snapshot and
+      // speculative prefetch was captured on the OLD deploy, so it is stale
+      // pre-deploy HTML (#899). Evict both caches so no stale entry is applied
+      // on a later soft nav, even when the infinite-reload guard below bails to
+      // a partial swap instead of a full reload (that partial swap must not then
+      // pull a pre-deploy fragment out of the cache).
+      snapshotCache.clear();
+      prefetchCache.clear();
       // Infinite-reload guard: if the importmap appears to genuinely
       // change EVERY navigation (e.g. a developer is live-editing the
       // pin file in dev, or a misbehaving CDN returns different
@@ -2336,6 +2372,27 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild) {
         return;
       }
     } else if (!mismatch) {
+      // No importmap/build mismatch, so no hard reload. But the app-source
+      // signal (#899) is the SECOND tier: if `data-webjs-src` differs, an
+      // app-source or server-framework deploy changed the SSR output while the
+      // running page's browser code is unchanged. A hard reload would be an
+      // over-correction; instead EVICT the URL-keyed snapshot + prefetch caches
+      // (all captured on the OLD deploy) so a later soft nav re-fetches fresh.
+      // The current nav's already-fetched `doc` still applies normally. Both ids
+      // must be present (an empty id is the warmup "unknown", never a signal),
+      // exactly like the build guard.
+      const currentSrc = currentTag ? currentTag.getAttribute('data-webjs-src') : null;
+      if (incomingSrc && currentSrc && incomingSrc !== currentSrc) {
+        snapshotCache.clear();
+        prefetchCache.clear();
+        // Advance the page's reference id. The importmap <script> is preserved
+        // across soft navs (an importmap cannot be re-registered), so without
+        // this the tag would keep its OLD id and EVERY later nav in the new
+        // deploy would re-detect the same mismatch and evict again, defeating
+        // the caches. Updating the attribute (not the importmap body) settles
+        // the page onto the new deploy: evict once, then cache normally.
+        if (currentTag) currentTag.setAttribute('data-webjs-src', incomingSrc);
+      }
       // A clean swap (no importmap mismatch) means we're back to
       // matching client/server importmaps. Clear the reload flag so
       // a future LEGITIMATE mismatch (e.g. a later deploy) gets a
@@ -3220,7 +3277,9 @@ export {
   diffElementInPlace as _diffElementInPlace,
   reconcileChildren as _reconcileChildren,
   onPopState as _onPopState,
+  applySwap as _applySwap,
   snapshotCache as _snapshotCache,
+  prefetchCache as _prefetchCache,
   LIVE_ATTRS as _LIVE_ATTRS,
   blurOutgoingFocus as _blurOutgoingFocus,
   onSubmit as _onSubmit,
