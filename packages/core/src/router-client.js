@@ -1284,6 +1284,23 @@ function prefetch(href) {
       if (!/^text\/html\b/i.test(ctype)) return;
       if (resp.status >= 400) return;
       const build = resp.headers.get('x-webjs-build');
+      // Deploy detected at PREFETCH time (#899). A prefetch fetch carries the
+      // server's current build. If it differs from the build the page booted
+      // with, a deploy landed, so every earlier snapshot/prefetch is pre-deploy
+      // and stale. Evict them here, well before the click (a hover/viewport
+      // prefetch fires early), so a click on a previously-prefetched link
+      // re-fetches fresh and the applySwap mismatch guard hard-reloads instead
+      // of soft-swapping stale HTML. This shrinks the window where a
+      // pre-deploy prefetch (whose stored build equals the still-old page
+      // build, so applySwap alone cannot tell it is stale) is served. Both ids
+      // must be present: an empty id is the warmup "version unknown", never a
+      // deploy signal.
+      const pageTag = typeof document !== 'undefined' ? document.querySelector('script[type="importmap"]') : null;
+      const pageBuild = pageTag ? pageTag.getAttribute('data-webjs-build') : null;
+      if (build && pageBuild && build !== pageBuild) {
+        snapshotCache.clear();
+        prefetchCache.clear();
+      }
       const finalUrl = resp.redirected && resp.url ? resp.url : href;
       const html = await resp.text();
       prefetchStore(key, { html, build, finalUrl, at: nowMs() });
