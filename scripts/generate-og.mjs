@@ -91,7 +91,7 @@ const html = (a) => `<!DOCTYPE html>
   .logo {
     width: 34px; height: 34px;
     background: linear-gradient(135deg, ${LOGO_FROM}, ${LOGO_TO});
-    border-radius: 8px;
+    border-radius: 11px;
     box-shadow: 0 0 0 1px oklch(1 0 0 / 0.14) inset, 0 6px 16px color-mix(in oklch, ${LOGO_FROM} 35%, transparent);
   }
   .sep { color: oklch(0.5 0.02 60); font-weight: 400; margin: 0 2px; }

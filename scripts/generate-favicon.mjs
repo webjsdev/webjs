@@ -45,8 +45,8 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width
       }
     </style>
   </defs>
-  <rect x="32" y="32" width="448" height="448" rx="96" ry="96" fill="url(#g)"/>
-  <rect x="32" y="32" width="448" height="448" rx="96" ry="96" fill="none" stroke="oklch(1 0 0 / 0.15)" stroke-width="6"/>
+  <rect x="32" y="32" width="448" height="448" rx="142" ry="142" fill="url(#g)"/>
+  <rect x="32" y="32" width="448" height="448" rx="142" ry="142" fill="none" stroke="oklch(1 0 0 / 0.15)" stroke-width="6"/>
 </svg>`;
 
 const browser = await puppeteer.launch({

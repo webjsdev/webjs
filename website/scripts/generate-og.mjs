@@ -72,7 +72,7 @@ const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
   }
   .brand{ display:flex; align-items:center; gap:16px; }
   .mark{
-    width:46px; height:46px; border-radius:13px;
+    width:46px; height:46px; border-radius:15px;
     background:linear-gradient(135deg, ${T.logoFrom}, ${T.logoTo});
     box-shadow:0 6px 22px color-mix(in oklch, ${T.logoFrom} 40%, transparent),
                inset 0 1px 0 color-mix(in oklch, white 30%, transparent);

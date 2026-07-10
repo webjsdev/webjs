@@ -73,8 +73,8 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
 
   <!-- Logo: orange rounded square (navbar mark gradient) + wordmark -->
   <g transform="translate(64, 60)">
-    <rect width="36" height="36" rx="8" fill="url(#mark)"/>
-    <rect width="36" height="36" rx="8" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="1"/>
+    <rect width="36" height="36" rx="11" fill="url(#mark)"/>
+    <rect width="36" height="36" rx="11" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="1"/>
     <text x="52" y="26" font-family="Liberation Sans, sans-serif" font-size="22"
           font-weight="700" fill="${FG}" letter-spacing="-0.4">webjs ui</text>
   </g>
