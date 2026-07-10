@@ -294,7 +294,8 @@ and the reader key set never diverge (a counterfactual unknown key proves
    value (no per-process boot-id fallback, which would flap on a multi-instance
    deploy), and the published id becomes `<importmap-hash>.<fingerprint>`. Only
    `publishedBuildId()` carries the fingerprint; the internal `importMapHash()`
-   (the `?v` asset-fingerprint input) is untouched. With no fingerprint set the
+   (the live importmap hash, computed `fingerprint: false` so it is independent
+   of the per-file `?v` asset hashes owned by `asset-hash.js`) is untouched. With no fingerprint set the
    id is the importmap hash exactly as before, so the SSR-only case is still
    missed by design. A real cross-deploy reloads because both sides then carry
    non-empty, differing ids, and folding the fingerprint into the html-cache key
