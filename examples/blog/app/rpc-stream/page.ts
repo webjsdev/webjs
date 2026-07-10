@@ -2,7 +2,7 @@ import { html } from '@webjsdev/core';
 import '#components/token-stream.ts';
 
 export const metadata = {
-  title: 'Streaming RPC · webjs blog',
+  title: 'Streaming RPC · WebJs Blog',
   description: 'An async-generator server action streams tokens over RPC (#489).',
 };
 

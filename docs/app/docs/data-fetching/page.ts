@@ -1,7 +1,7 @@
 import { html } from '@webjsdev/core';
 
 export const metadata = {
-  title: 'Data Fetching | webjs',
+  title: 'Data Fetching | WebJs',
   description: 'When to reach for async render(), webjs-suspense streaming, Task and signals, or webjs-frame. The decision guide and anti-patterns.',
 };
 

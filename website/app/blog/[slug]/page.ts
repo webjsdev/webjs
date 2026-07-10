@@ -15,9 +15,9 @@ import { renderPostBody } from '#modules/blog/utils/render-post.ts';
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {
   const post = await getPost(params.slug);
-  if (!post) return { title: 'Post not found · webjs' };
+  if (!post) return { title: 'Post not found · WebJs' };
   return {
-    title: `${post.title} · WebJs blog`,
+    title: `${post.title} · WebJs Blog`,
     description: post.description,
     openGraph: {
       title: post.title,

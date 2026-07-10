@@ -1,7 +1,7 @@
 import { html } from '@webjsdev/core';
 
 export const metadata = {
-  title: 'Migrating from Next.js | webjs',
+  title: 'Migrating from Next.js | WebJs',
   description:
     'A concept map from Next.js to webjs: the no-RSC execution model, isomorphic modules and the .server boundary instead of Server/Client Components, plain <a> instead of next/link, an async page function instead of getServerSideProps, and a before/after example.',
 };

@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Directives | webjs' };
+export const metadata = { title: 'Directives | WebJs' };
 
 export default function Directives() {
   return html`

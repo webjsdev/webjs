@@ -36,7 +36,7 @@ type PageCtx = {
   actionData?: { fieldErrors?: Record<string, string>; values?: Record<string, string> };
 };
 
-export const metadata = { title: 'Feedback: webjs blog' };
+export const metadata = { title: 'Feedback - WebJs Blog' };
 
 export default function FeedbackPage({ actionData }: PageCtx) {
   const err = actionData?.fieldErrors?.email;

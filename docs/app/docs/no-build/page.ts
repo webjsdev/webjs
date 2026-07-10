@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'No-Build Model | webjs' };
+export const metadata = { title: 'No-Build Model | WebJs' };
 
 export default function NoBuild() {
   return html`

@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Deployment | webjs' };
+export const metadata = { title: 'Deployment | WebJs' };
 
 export default function Deployment() {
   return html`

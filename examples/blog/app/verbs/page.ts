@@ -2,7 +2,7 @@ import { html } from '@webjsdev/core';
 import '#components/verb-greeting.ts';
 
 export const metadata = {
-  title: 'HTTP-verb actions · webjs blog',
+  title: 'HTTP-verb actions · WebJs Blog',
   description: 'A GET action read (cached + seeded) and a POST mutation that invalidates it (#488).',
 };
 

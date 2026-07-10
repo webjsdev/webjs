@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'File Storage | webjs' };
+export const metadata = { title: 'File Storage | WebJs' };
 
 export default function FileStorage() {
   return html`

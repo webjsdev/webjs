@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Conventions & AI Workflow | webjs' };
+export const metadata = { title: 'Conventions & AI Workflow | WebJs' };
 
 export default function Conventions() {
   return html`

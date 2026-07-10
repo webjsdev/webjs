@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Task Controller | webjs' };
+export const metadata = { title: 'Task Controller | WebJs' };
 
 export default function TaskPage() {
   return html`

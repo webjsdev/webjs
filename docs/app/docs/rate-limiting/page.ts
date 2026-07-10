@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Rate Limiting | webjs' };
+export const metadata = { title: 'Rate Limiting | WebJs' };
 
 export default function RateLimiting() {
   return html`

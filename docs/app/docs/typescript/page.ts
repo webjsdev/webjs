@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'TypeScript | webjs' };
+export const metadata = { title: 'TypeScript | WebJs' };
 
 export default function TypeScript() {
   return html`

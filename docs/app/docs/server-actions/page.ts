@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Server Actions | webjs' };
+export const metadata = { title: 'Server Actions | WebJs' };
 
 export default function ServerActions() {
   return html`

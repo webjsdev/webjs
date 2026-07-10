@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Architecture | webjs' };
+export const metadata = { title: 'Architecture | WebJs' };
 
 export default function Architecture() {
   return html`

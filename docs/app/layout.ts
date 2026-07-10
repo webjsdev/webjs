@@ -7,7 +7,7 @@ import { html, cspNonce } from '@webjsdev/core';
  * documentation pages.
  */
 
-const TITLE = 'webjs: Documentation';
+const TITLE = 'WebJs - Documentation';
 const DESCRIPTION = 'Getting started, routing, components, server actions, deployment, and more.';
 
 export function generateMetadata(ctx: { url: string }) {
@@ -28,7 +28,7 @@ export function generateMetadata(ctx: { url: string }) {
       'image:width': '1200',
       'image:height': '630',
       'image:alt': 'WebJs documentation',
-      'site_name': 'webjs · docs',
+      'site_name': 'WebJs · docs',
     },
     twitter: {
       card: 'summary_large_image',

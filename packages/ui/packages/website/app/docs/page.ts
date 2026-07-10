@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Docs, Webjs UI' };
+export const metadata = { title: 'Docs, WebJs UI' };
 
 export default function Docs() {
   return html`

@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Context Protocol | webjs' };
+export const metadata = { title: 'Context Protocol | WebJs' };
 
 export default function Context() {
   return html`

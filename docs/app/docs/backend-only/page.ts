@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Backend-Only Mode | webjs' };
+export const metadata = { title: 'Backend-Only Mode | WebJs' };
 
 export default function BackendOnly() {
   return html`

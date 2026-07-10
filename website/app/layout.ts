@@ -16,7 +16,7 @@ import { DOCS_URL, UI_URL, EXAMPLE_BLOG_URL, GH_URL, NEW_TAB } from '#lib/links.
  * lib/links.ts, imported here and by app/page.ts.
  */
 
-const TITLE = 'webjs: the web framework for AI agents';
+const TITLE = 'WebJs - The Web Framework for AI Agents';
 const DESCRIPTION = 'A full-stack web framework built on web components, SSR, and progressive enhancement, with zero build step. Lean enough for AI agents to read end to end. File-based routing, server actions, and streaming SSR on web standards. Runs on Node 24+ or Bun.';
 
 const NAV = [
@@ -50,7 +50,7 @@ export function generateMetadata(ctx: { url: string }) {
       'image:width': '1200',
       'image:height': '630',
       'image:alt': TITLE,
-      'site_name': 'webjs',
+      'site_name': 'WebJs',
     },
     twitter: { card: 'summary_large_image', title: TITLE, description: DESCRIPTION, image },
   };
