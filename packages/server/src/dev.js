@@ -2268,7 +2268,20 @@ async function sendWebResponse(res, webRes, req, opts) {
  */
 async function fileResponse(abs, opts) {
   try {
-    const data = await readFile(abs);
+    let data = await readFile(abs);
+    // In dev an external watcher (tailwindcss --watch, esbuild, ...) rewrites a
+    // public asset with truncate-then-write, so the file is 0 bytes for a short
+    // window during a rebuild. A hot reload that lands in that window would
+    // serve empty CSS / JS and the page paints unstyled (#891). Ride over the
+    // mid-rewrite: re-read a few times before giving up, so a truncated read
+    // never reaches the browser. Bounded, so a genuinely empty file still serves
+    // (after a short delay). Prod has no such watcher and is left untouched.
+    if (opts.dev && data.length === 0) {
+      for (let i = 0; i < 12 && data.length === 0; i++) {
+        await new Promise((r) => setTimeout(r, 20));
+        try { data = await readFile(abs); } catch { break; }
+      }
+    }
     const type = MIME[extname(abs).toLowerCase()] || 'application/octet-stream';
     // The body is fully buffered (read into `data`), so opt it into the
     // conditional-GET funnel, which is the single place that hashes the bytes
