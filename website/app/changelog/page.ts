@@ -12,7 +12,7 @@ import { pkgBadge } from '#modules/changelog/utils/pkg-badge.ts';
  */
 
 export const metadata = {
-  title: 'Changelog · webjs',
+  title: 'Changelog · WebJs',
   description: 'Per-package, per-version release notes for the WebJs framework (@webjsdev/core, server, cli, intellisense, ui, mcp) plus the WebJs editor extensions for VS Code and Neovim.',
 };
 

@@ -17,9 +17,9 @@ import { NEW_TAB } from '#lib/links.ts';
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {
   const c = await getComparison(params.slug);
-  if (!c) return { title: 'Comparison not found · webjs' };
+  if (!c) return { title: 'Comparison not found · WebJs' };
   return {
-    title: `${c.title} · webjs`,
+    title: `${c.title} · WebJs`,
     description: c.description,
     openGraph: {
       title: c.title,
