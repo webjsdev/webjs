@@ -52,11 +52,12 @@ test('dev serves the reload SharedWorker, and the client uses it with a direct E
   assert.equal(worker.status, 200);
   assert.match(worker.headers.get('content-type') || '', /javascript/);
   const workerSrc = await worker.text();
-  assert.match(workerSrc, /new EventSource\(.*__webjs\/events/, 'the worker holds the single events stream');
-  assert.match(workerSrc, /self\.onconnect/, 'the worker accepts a port per tab');
-  assert.match(workerSrc, /postMessage\(\{ type: 'reload' \}\)/, 'the worker relays reload to every port');
-  assert.match(workerSrc, /postMessage\(\{ type: 'webjs-error'/, 'the worker relays the error frame');
-  assert.match(workerSrc, /lastError = null/, 'the worker clears the cached error on reload');
+  // The worker inlines the shared relay module and bootstraps it with the real
+  // globals (the relay behaviour itself is exercised in the browser test).
+  assert.match(workerSrc, /function startReloadWorker/, 'the worker inlines the relay module');
+  assert.match(workerSrc, /startReloadWorker\(self, EventSource, "\/__webjs\/events"\)/, 'it wires the single events stream to the worker');
+  assert.match(workerSrc, /scope\.onconnect/, 'the relay accepts a port per tab');
+  assert.match(workerSrc, /lastError = null/, 'the relay clears the cached error on reload');
   assert.match(workerSrc, /if \(lastError != null\)/, 'a late-joining tab gets the current error');
 });
 
@@ -73,7 +74,7 @@ test('the worker events URL carries the base path under a sub-path deploy (#256)
   const appDir = makeApp({ basePath: '/app' });
   const app = await createRequestHandler({ appDir, dev: true });
   const worker = await (await app.handle(new Request('http://x/app/__webjs/reload-worker.js'))).text();
-  assert.match(worker, /new EventSource\("\/app\/__webjs\/events"\)/, 'events URL is base-path prefixed in the worker');
+  assert.match(worker, /startReloadWorker\(self, EventSource, "\/app\/__webjs\/events"\)/, 'events URL is base-path prefixed in the worker');
   const client = await (await app.handle(new Request('http://x/app/__webjs/reload.js'))).text();
   assert.match(client, /reload-worker\.js/, 'client references the worker');
   assert.match(client, /\/app\/__webjs\/reload-worker\.js/, 'worker URL is base-path prefixed in the client');

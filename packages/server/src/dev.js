@@ -2636,6 +2636,13 @@ function locatePackageDir(appDir, pkgName) {
 const DEV_OVERLAY_SRC = readFileSync(new URL('./dev-overlay.js', import.meta.url), 'utf8')
   .replace(/^export /gm, '');
 
+// The reload SharedWorker relay source (#887), read once + `export`-stripped so
+// it inlines into the served worker script. Sharing the one source
+// (`dev-reload-worker.js`, which the browser test imports directly) means the
+// test drives the EXACT relay code that ships, with no drift (same as #264).
+const RELOAD_WORKER_SRC = readFileSync(new URL('./dev-reload-worker.js', import.meta.url), 'utf8')
+  .replace(/^export /gm, '');
+
 function reloadClientJs(bp) {
   // The overlay renderer uses textContent throughout (never innerHTML), so the
   // error message / code frame can never inject markup (#264). Served only in
@@ -2696,26 +2703,7 @@ try {
  */
 function reloadWorkerJs(bp) {
   return `// webjs dev reload worker (one shared connection for all tabs)
-const ports = new Set();
-let lastError = null;
-// A MessagePort has no reliable close event, so we prune a port when a post to
-// it throws (a closed tab). Some browsers silently no-op instead of throwing,
-// which leaves a dead port in the set, but that is a harmless dev-only no-op and
-// the set is bounded by the tabs opened in one session.
-function fanout(msg) {
-  for (const p of ports) { try { p.postMessage(msg); } catch (_) { ports.delete(p); } }
-}
-const es = new EventSource(${JSON.stringify(withBasePath('/__webjs/events', bp))});
-es.addEventListener('reload', () => { lastError = null; fanout({ type: 'reload' }); });
-es.addEventListener('webjs-error', (e) => { lastError = e.data; fanout({ type: 'webjs-error', data: e.data }); });
-self.onconnect = (e) => {
-  const port = e.ports[0];
-  ports.add(port);
-  port.start();
-  // A tab that connects AFTER a breaking edit still needs the current overlay.
-  // The single shared EventSource already consumed the server's replay (#264),
-  // so the worker caches the last error and hands it to each new tab itself.
-  if (lastError != null) { try { port.postMessage({ type: 'webjs-error', data: lastError }); } catch (_) {} }
-};
+${RELOAD_WORKER_SRC}
+startReloadWorker(self, EventSource, ${JSON.stringify(withBasePath('/__webjs/events', bp))});
 `;
 }
