@@ -1302,6 +1302,12 @@ function prefetch(href) {
       if ((build && pageBuild && build !== pageBuild) || (src && pageSrc && src !== pageSrc)) {
         snapshotCache.clear();
         prefetchCache.clear();
+        // Deliberately do NOT advance the page's data-webjs-src here (only the
+        // foreground `applySwap` does). A prefetch is speculative; leaving the
+        // reference id on the old deploy keeps applySwap the single authority
+        // that settles the page on the first real navigation. The cost is small:
+        // repeated prefetches in the pre-first-nav window each re-clear the
+        // (already tiny) caches, which converges the instant the user navigates.
       }
       const finalUrl = resp.redirected && resp.url ? resp.url : href;
       const html = await resp.text();
