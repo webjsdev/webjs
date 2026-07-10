@@ -94,6 +94,6 @@ One more small guard I like. When you scaffold an app, the example content (a de
 
 It exists because an agent will otherwise treat the scaffold as the finished product and ship the example todo app as if it were your feature. The sentinel forces the agent to actually build the thing you asked for, not decorate the demo.
 
-# The takeaway
+# Guardrails dull on purpose
 
 AI agents are fast and a little careless, and a framework built in 2026 has to plan for that. WebJs does it by moving the rules out of prose and into tooling, so an agent that skips the docs still cannot commit to main, ship untested source, drift the docs, or collide with another agent. The guardrails are dull on purpose (a few shell hooks, a correctness linter, one worktree per task), and dull is the point, because they catch mistakes at the seam where they happen instead of in a review three days later. If you want to see them work, scaffold an app with `npm create webjs@latest my-app` and watch your agent get corrected in real time. The friction you feel is the framework doing its job.

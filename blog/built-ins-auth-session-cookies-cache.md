@@ -168,7 +168,7 @@ setStore(redisStore({ url: process.env.REDIS_URL }));
 The same code that worked locally now scales horizontally. No store migration. No "which library is this from" archaeology.
 
 
-# What I learned
+# One interface, five concerns
 
 A pluggable store with a small interface is more valuable than a separate library per concern. Adding cross-cutting features later was straightforward because everything routed through one place. Adding "purge all data for this user" for compliance was a few lines, because the four-method interface already had everything we needed.
 

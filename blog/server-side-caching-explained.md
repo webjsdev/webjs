@@ -111,6 +111,6 @@ Crucially, it is careful about privacy. A `no-store` page (the default for dynam
 
 One more, for completeness. In production webjs appends a per-file content hash to asset URLs as `?v=<hash>` and serves those with `Cache-Control: public, max-age=31536000, immutable`. Because the hash changes whenever the file's bytes change, the browser can cache the file forever and still pick up a new version after a deploy (the URL changes, so it fetches fresh). This is a no-op in dev, so your source stays byte-identical to what you wrote.
 
-# The takeaway
+# Four caching layers, one rule
 
 Recomputing or refetching the same result on every request is slow and wasteful, and webjs gives you four honest ways to stop doing it plus asset fingerprinting on top. Use `Cache-Control` to let browsers and CDNs hold whole responses, `cache()` with tags to memoize expensive queries and evict them precisely, `export const revalidate` to cache a page's HTML, and conditional GET (ETags into 304s) to skip re-sending unchanged bytes, all of it standing on plain HTTP. The one rule to internalize before you cache anything: a cache keyed by URL is shared across users, so only cache data that is truly the same for every visitor, and read per-user state through the framework helpers so webjs can fail safe for you.

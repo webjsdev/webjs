@@ -45,6 +45,6 @@ There is one thing bundling does that preloading does not: tree-shaking. A bundl
 
 I am comfortable with this because it is the same trade Rails made with Hotwire, whose runtime is the same order of magnitude and has shipped to production for years. The core is off the first-paint path (SSR plus progressive enhancement mean the HTML reads before any of it loads), it is cached, and it is shared. The place it would actually bite is an app that pulls in many large, rarely-co-occurring client dependencies, which is a React-SPA shape that WebJs's whole architecture steers you away from. Stay island-shaped and the tree-shaking you are missing is tree-shaking you did not need.
 
-# The takeaway
+# Killing discovery latency, not requests
 
 No-build performance is not about matching a bundler's request count. It is about killing discovery latency, which you do by telling the browser what it will need before it finds out the slow way, and by keeping the request path lean because there is no build step to hide behind. Preload the reached graph, multiplex it over HTTP/2, cache aggressively, and the waterfall flattens. The one thing you genuinely give up is tree-shaking, so keep your client footprint honest and let the shared, cached core earn its keep.

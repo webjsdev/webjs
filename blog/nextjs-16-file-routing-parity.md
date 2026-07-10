@@ -108,6 +108,6 @@ export function register() {
 
 `setOnError` registers the hook the framework calls on an unhandled request error, so your monitoring tool sees every server-side failure with its request context. There is also an `instrumentation-client.{js,ts}` that runs first on the client, before your app modules, for the browser half of the same idea, a client error reporter or an analytics init.
 
-# The takeaway
+# Bring your routing habits over
 
 WebJs already matched Next's file router in shape, and these four changes close the gaps a migrator actually trips on. `forbidden()` and `unauthorized()` are control-flow throws that render the nearest boundary with honest 403 and 401 codes, under the same rule `notFound()` and `redirect()` already taught you, throw in a render, return an `ActionResult` in an action, return a `Response` in a route. `not-found` is nearest-wins now, so a section owns its own 404. `params` and `searchParams` read synchronously or awaited, so your Next code just works. And `instrumentation.js` gives you the boot hook for wiring monitoring. Bring your Next.js routing habits over, and the ones that used to fall through now land.

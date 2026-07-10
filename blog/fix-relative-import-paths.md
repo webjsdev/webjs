@@ -92,6 +92,6 @@ This is the part I like most. Because the alias is a real config value and not a
 The practical payoff: a `#`-aliased `.server.ts` file still trips the server-only boundary. Importing `#db/connection.server.ts` into a client component is caught the same way importing `../../../db/connection.server.ts` would be. The alias is cosmetic to you and fully transparent to the framework. There is no seam where a nicer import path quietly loses a safety guarantee.
 
 
-# The takeaway
+# Never count ../ again
 
 Deep relative imports are fragile because they hardcode your folder layout into every file, and they break the instant you rearrange anything. The usual fix, a bundler alias plus tsconfig `paths`, only works because a build step rewrites it. WebJs has no build step, so it uses Node's native `package.json` `imports` field instead. One catch-all line, `"#*": "./*"`, aliases every top-level folder with no webpack and no tsconfig `paths`, resolved at runtime by Node 24+ and Bun. Use `#lib`, `#components`, `#modules`, `#db` for the deep reaches, keep `./sibling.ts` for the neighbors, remember the sigil is `#` with no slash, and never count `../` again.

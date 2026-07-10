@@ -68,6 +68,6 @@ A `PATCH` sends the rich body, is CSRF-protected via the Origin check, and on co
 
 There is one more reserved export, `validate`, and where it runs is deliberate. It runs on the RPC boundary and on a public `route.ts` endpoint, not on a direct server-to-server call. The framework only CALLS your validator and reads its verdict. It ships no validation library and takes no opinion on which one you use. A `{ success: false, fieldErrors }` returns a `422` without running the action body. This keeps validation at the untrusted edge, where the request actually arrives, and out of the path where one server function calls another with already-trusted input.
 
-# The takeaway
+# The verb is not ceremony
 
 If reads and writes share one mechanism, that mechanism has to know the difference, because a read wants to be cached and a write must not be. WebJs puts the HTTP verb and its caching, tagging, and validation into small static config exports next to the action, so a read becomes a real GET with an ETag and a write becomes a tagged, CSRF-protected mutation, all without changing how you call it. The verb is not ceremony. It is the thing that lets one action mechanism serve both jobs correctly.

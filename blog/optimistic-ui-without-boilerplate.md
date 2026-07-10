@@ -173,6 +173,4 @@ But the boilerplate cost is high enough that many developers skip it entirely, e
 
 The new API reduces it to three lines: declare the reducer, call `.add()`, reconcile on success. The concepts are the same (optimistic update, server call, reconciliation), but the code is small enough that you can see the whole thing at once. That is the difference between "I understand this pattern" and "I copied this pattern and hope it works."
 
-# The takeaway
-
 Optimistic UI should not require a state machine. It should be three things: show the expected result immediately, run the real server action, and release the optimistic overlay when the action settles. WebJs now gives you that directly through `optimistic(host, { source, update })`, with React 19 `useOptimistic` parity, auto-release on promise settlement, concurrent update stacking, and a fallback to the original signal-based API for simple toggles. The boilerplate of temp IDs, try-catch, and manual reconciliation is gone. What remains is the intent: add the item, call the server, fix it up if the server disagrees.

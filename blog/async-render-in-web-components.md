@@ -96,6 +96,6 @@ The fallback flushes on the first byte, and the slow content streams in when it 
 And to be clear about the boundary. Use `async render()` for server data that is known at request time and belongs in the first paint. Keep `Task` and signals for data that is genuinely client-only (a `Task` renders its pending state at SSR, which means it loses the first-paint data, so it is the wrong tool for server data you want in the HTML).
 
 
-# The takeaway
+# Fetching that starts server-side
 
 Fetching data in a component should not mean a spinner, an empty first paint, and a request waterfall. In WebJs you `await` your server data right inside `async render()`, and the framework splits the problem into three clean pieces: SSR always blocks so the data is in the first paint (no `useEffect`, no empty box, works with JS off), the client re-fetch is stale-while-revalidate by default, and `renderFallback()` is an optional loading state for re-fetches only. Errors isolate per component automatically, the fetch is one isomorphic line that runs on both sides, display-only components ship zero JavaScript, and SSR seeding means no wasted re-fetch on hydration. When a query is slow enough that blocking the first byte hurts, wrap it in `<webjs-suspense>` and stream it. That is data fetching that starts from the server instead of fighting to catch up to it.

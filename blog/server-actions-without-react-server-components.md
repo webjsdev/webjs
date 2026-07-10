@@ -83,6 +83,6 @@ The honest trade is that you give up the parts of RSC that are genuinely nice wh
 
 WebJs is built for the first shape. It says the page is the server artifact, the islands are the interactive leaves, and the one server boundary is where data crosses. If that matches how you are building, dropping RSC is not a loss. It is the confusing part of the stack you get to not have.
 
-# The takeaway
+# One boundary, three sentences
 
 You do not need a server/client component split to fetch data on the server and call it from the browser. You need one clear boundary for server code and a serializer good enough to move real values across it. WebJs puts that boundary at the file level, makes importing it the API, and recovers await-in-the-leaf and no-hydration-refetch on top of it. The result is a model you can hold in your head in three sentences, which is the whole point.

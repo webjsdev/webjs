@@ -60,6 +60,4 @@ It composes with the framework's other bets. Elision is only safe because displa
 
 And it is honest about what JavaScript is for. JavaScript is the enhancement that makes an already-working page snappier and more interactive. It is not the thing that makes the page exist. When you treat it that way, the app degrades gracefully by construction, because there is a real page underneath to degrade to.
 
-# The takeaway
-
 Progressive enhancement is usually described as extra work: build the no-JS version, then layer the JS version on top. WebJs inverts that. The server-rendered page is the artifact, interactivity is opt-in per behavior, and forms submit through server actions whether or not a script is running. You do not build the no-JS path separately. You get it by not writing a first paint that depends on hydration, and the framework spends its effort making that the easy way to build. The result is an app that works with JavaScript off because it was never pretending the JavaScript was load-bearing.

@@ -113,6 +113,6 @@ setFileStore(s3Store({ /* ... */ }));
 
 Not one call site changes. `uploadAvatar`, the serving route, the signed URLs, all of it keeps working untouched. WebJs ships no S3 SDK of its own, so you are not dragging in a dependency you did not ask for; the adapter is a thin wrapper you provide. That is the entire reason for putting the interface first. What you build on a Friday afternoon against `diskStore` is the same thing you run in production, minus the rewrite.
 
-# The takeaway
+# Four problems in one trench coat
 
 An avatar upload only looks small. It is really four problems in one trench coat: multipart parsing, a home for the bytes, safe serving, and an eventual cloud migration. Built one step at a time in WebJs, each of them quietly falls away. The action receives a native `File` because the serializer round-trips it, `store.put` streams it so a big file does not eat your memory, `generateKey` gives you a traversal-safe key so a malicious filename cannot escape, and `signedUrl` gates a private file without a session lookup. The `diskStore` default runs with zero config, and because the store speaks only web-standard objects, the swap to S3 is one `setFileStore` call with no change to a single call site. Write it once on disk, ship it to the cloud unchanged.

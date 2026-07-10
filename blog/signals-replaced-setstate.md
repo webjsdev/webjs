@@ -147,7 +147,7 @@ The signals integration is covered by:
 The spec-conformance tests are ported from the signal-polyfill repo with one-line import changes. They check things like diamond-dependency glitch freedom, untracked reads, batch semantics under nesting.
 
 
-# What I learned
+# Two things stand out
 
 Two things stand out.
 

@@ -91,6 +91,4 @@ It also composes with WebJs's server-push rendering. A route can build a `<webjs
 
 One limit, stated plainly. The built-in `broadcast` is single-instance. It fans out to the clients connected to this one server process. Put several instances behind a load balancer and you add Redis pub/sub yourself to bridge them. I would rather the boundary be visible than dressed up as magic that quietly fails to scale the day you add a second instance.
 
-# The takeaway
-
 Real-time usually means a second server that re-derives your app's routing and auth just to hold a connection open. WebJs folds WebSockets into the file router instead: a `WS(ws, req, { params })` export in a `route.{js,ts}` file is a socket endpoint at that path, with the same route params your pages get and nothing extra to deploy. `connectWS` gives the client auto-reconnect and queued sends so a dropped connection does not lose a message, and `broadcast` pushes one message to every connected client for chat, presence, or live updates. It runs single-instance until you add Redis pub/sub to scale past one process. The app you build to feel alive is a file sitting next to your pages, not a server sitting next to your app.
