@@ -75,4 +75,29 @@ suite('dev reload SharedWorker relay (#887)', () => {
     const { es } = startReloadWorker(scope, FakeEventSource, '/base/__webjs/events');
     assert.equal(es.url, '/base/__webjs/events', 'the one connection uses the base-path-aware URL');
   });
+
+  // #893: a `node --watch` restart drops the connection; if the in-process
+  // reload frame was killed with the old process, no reload was delivered, so
+  // the edit would need a manual refresh. The reconnect (open after a drop) is
+  // itself the reload signal.
+  test('a reconnect after a drop fans a reload (restart with no delivered reload frame)', () => {
+    const scope = {};
+    startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    FakeEventSource.last.fire('open');   // initial connect: NOT a reload
+    assert.deepEqual(a.received, [], 'the first connect does not reload');
+    FakeEventSource.last.fire('error');  // server restarting: connection drops
+    FakeEventSource.last.fire('open');   // fresh process: reconnected
+    assert.deepEqual(a.received, [{ type: 'reload' }], 'the reconnect reloads the tab');
+  });
+
+  test('a plain first connect never reloads (no spurious reload on page load)', () => {
+    const scope = {};
+    startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    FakeEventSource.last.fire('open');
+    assert.deepEqual(a.received, [], 'connecting for the first time is not an edit');
+  });
 });

@@ -1662,7 +1662,12 @@ function startNodeListener(ctx) {
           'cache-control': 'no-cache',
           connection: 'keep-alive',
         });
-        res.write(`event: hello\ndata: webjs\n\n`);
+        // `retry: 300` shrinks the browser's EventSource reconnect backoff from
+        // its ~3s default so a reconnect after a `node --watch` restart (which
+        // is what re-triggers a reload for an edit whose in-process reload frame
+        // was killed with the old process, #893) happens promptly, not seconds
+        // later.
+        res.write(`retry: 300\nevent: hello\ndata: webjs\n\n`);
         // Register a node client wrapper in the shared hub: the fanout + keepalive
         // live in SseHub; only the transport write (res.write / res.end) is local.
         const client = {
@@ -2714,15 +2719,42 @@ function reloadClientJs(bp) {
   // its own `EventSource`, the original behaviour. Correct, just not shared.
   const eventsUrl = JSON.stringify(withBasePath('/__webjs/events', bp));
   const workerUrl = JSON.stringify(withBasePath('/__webjs/reload-worker.js', bp));
+  const versionUrl = JSON.stringify(withBasePath('/__webjs/version', bp));
   return `// webjs dev reload client
 ${DEV_OVERLAY_SRC}
 function __webjsApplyError(data) {
   let f; try { f = JSON.parse(data); } catch (_) { return; }
   renderDevOverlay(f);
 }
+// Never reload INTO a server that is still restarting (Node's node --watch
+// briefly kills the process on an edit), which would paint a style-less,
+// half-rendered page (#893). Probe the lightweight /__webjs/version endpoint
+// until it answers, THEN reload. Under an in-process reload the server is up,
+// so the first probe passes and the reload is instant; under a restart the
+// probes fail until the fresh server is listening, so the old page stays put
+// until the new one is ready. Bounded, so a genuinely-dead server still
+// reloads (and shows the browser's own error) rather than hanging forever.
+function __webjsReloadWhenReady() {
+  var tries = 0;
+  function attempt() {
+    fetch(${versionUrl}, { cache: 'no-store' }).then(function (r) {
+      if (r && r.ok) location.reload(); else again();
+    }).catch(again);
+  }
+  function again() { if (++tries > 100) location.reload(); else setTimeout(attempt, 100); }
+  attempt();
+}
 function __webjsDirectEvents() {
+  // Same restart-reload as the SharedWorker relay (#893), for the per-tab
+  // fallback: a reconnect after a drop means the server restarted, so reload.
+  var everConnected = false, dropped = false;
   const es = new EventSource(${eventsUrl});
-  es.addEventListener('reload', () => location.reload());
+  es.addEventListener('open', () => {
+    if (everConnected && dropped) __webjsReloadWhenReady();
+    everConnected = true; dropped = false;
+  });
+  es.addEventListener('error', () => { if (everConnected) dropped = true; });
+  es.addEventListener('reload', () => __webjsReloadWhenReady());
   es.addEventListener('webjs-error', (e) => __webjsApplyError(e.data));
 }
 try {
@@ -2730,7 +2762,7 @@ try {
     const w = new SharedWorker(${workerUrl});
     w.port.onmessage = (e) => {
       const m = e.data || {};
-      if (m.type === 'reload') location.reload();
+      if (m.type === 'reload') __webjsReloadWhenReady();
       else if (m.type === 'webjs-error') __webjsApplyError(m.data);
     };
     w.port.start();

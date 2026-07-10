@@ -21,6 +21,9 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl) {
   const ports = new Set();
   /** @type {string | null} the last error frame, cached for late-joining tabs */
   let lastError = null;
+  // Connection state for the restart-reload below (#893).
+  let everConnected = false;
+  let dropped = false;
 
   // A MessagePort has no reliable close event, so prune a port when a post to it
   // throws (a closed tab). Some browsers silently no-op instead of throwing,
@@ -33,6 +36,22 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl) {
   }
 
   const es = new EventSourceCtor(eventsUrl);
+
+  // A full server restart (Node's `node --watch`) drops this connection, and if
+  // the in-process rebuild's `reload` frame was killed with the old process no
+  // reload was delivered at all, so the edit would need a MANUAL refresh (#893).
+  // The browser auto-reconnects to the fresh process; treat "was connected ->
+  // dropped -> connected again" as an edit signal and broadcast a reload. The
+  // tab gates the actual reload on the server being healthy, so this never
+  // reloads into a half-restarted server. The first-ever `open` is not a
+  // reconnect, so it does not reload.
+  es.addEventListener('open', () => {
+    if (everConnected && dropped) fanout({ type: 'reload' });
+    everConnected = true;
+    dropped = false;
+  });
+  es.addEventListener('error', () => { if (everConnected) dropped = true; });
+
   es.addEventListener('reload', () => { lastError = null; fanout({ type: 'reload' }); });
   es.addEventListener('webjs-error', (e) => { lastError = e.data; fanout({ type: 'webjs-error', data: e.data }); });
 
