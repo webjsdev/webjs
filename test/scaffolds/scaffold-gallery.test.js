@@ -28,13 +28,13 @@ const FEATURES = [
   'routing', 'boundaries', 'components', 'server-actions', 'optimistic-ui',
   'async-render', 'directives', 'route-handler', 'forms',
   'metadata', 'caching', 'env', 'client-router', 'service-worker',
-  'websockets', 'broadcast', 'rate-limit', 'file-storage',
+  'websockets', 'broadcast', 'rate-limit', 'file-storage', 'sessions',
 ];
 // Whole example apps under app/examples/<name>.
 const EXAMPLE_APPS = ['todo'];
 // Routes whose logic lives in a modules/<name> folder (routing and
 // route-handler are app-only: a pages-only route and a route.ts handler).
-const MODULE_ROUTES = ['components', 'server-actions', 'optimistic-ui', 'async-render', 'directives', 'todo', 'websockets', 'broadcast', 'rate-limit', 'file-storage'];
+const MODULE_ROUTES = ['components', 'server-actions', 'optimistic-ui', 'async-render', 'directives', 'todo', 'websockets', 'broadcast', 'rate-limit', 'file-storage', 'sessions'];
 
 async function tempCwd() {
   return mkdtemp(join(tmpdir(), 'webjs-scaffold-gallery-'));
@@ -71,6 +71,10 @@ test('full-stack scaffold ships feature demos and one example app', async () => 
     assert.ok(await exists(join(appDir, 'app', 'features', 'rate-limit', 'ping', 'route.ts')));
     assert.ok(await exists(join(appDir, 'app', 'features', 'rate-limit', 'ping', 'middleware.ts')));
     assert.ok(await exists(join(appDir, 'app', 'features', 'file-storage', 'file', '[key]', 'route.ts')));
+    // Root-only boundaries + metadata image routes (the convention-file demos).
+    for (const f of ['global-error.ts', 'global-not-found.ts', 'icon.ts', 'apple-icon.ts', 'opengraph-image.ts', 'twitter-image.ts']) {
+      assert.ok(await exists(join(appDir, 'app', f)), `app/${f}`);
+    }
     // Feature/app logic lives in modules/, not app/.
     for (const name of MODULE_ROUTES) {
       assert.ok(await exists(join(appDir, 'modules', name)), `modules/${name}`);

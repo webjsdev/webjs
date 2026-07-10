@@ -22,7 +22,7 @@ export default function RateLimitExample() {
     <rate-probe></rate-probe>
     <p class="text-muted-foreground text-sm mt-4">
       With JavaScript off, hit
-      <a class="text-primary" href="/features/rate-limit/ping">/features/rate-limit/ping</a>
+      <a class="text-primary" href="/features/rate-limit/ping" data-no-router>/features/rate-limit/ping</a>
       directly (refresh past five times in ten seconds).
     </p>
   `;

@@ -539,6 +539,8 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     'test/hello/browser/hello.test.js',
     'test/hello/e2e/hello.test.ts',
     'web-test-runner.config.js',
+    // Optional boot-time APM hook (setOnError). Delete if unused.
+    'instrumentation.ts',
     // Environment variables
     '.env.example',
     // Project-level gitignore (node_modules, .webjs, .env, OS junk).
@@ -1381,6 +1383,7 @@ const features = [
   { href: '/features/broadcast', title: 'Broadcast', blurb: 'Fan a message out to every connected client on a WebSocket path, so all open tabs stay in sync.' },
   { href: '/features/rate-limit', title: 'Rate limiting', blurb: 'The rateLimit() middleware scoped to one endpoint, returning a 429 with Retry-After past the window.' },
   { href: '/features/file-storage', title: 'File storage', blurb: 'A no-JS multipart upload streamed into the FileStore, then served back through a streaming route.' },
+  { href: '/features/sessions', title: 'Sessions', blurb: 'A signed-cookie session applied by a segment middleware, read and written per visitor with getSession() in a route.' },
 ];
 const examples = [
   { href: '/examples/todo', title: 'Optimistic todo', blurb: 'A whole app composing several features: the declarative optimistic() list API, progressive-enhancement forms, accessible labels, the modules split, and SQLite.' },
@@ -1479,6 +1482,7 @@ const features = [
   { href: '/features/broadcast', title: 'Broadcast', blurb: 'Fan a message out to every connected client on a WebSocket path, so all open tabs stay in sync.' },
   { href: '/features/rate-limit', title: 'Rate limiting', blurb: 'The rateLimit() middleware scoped to one endpoint, returning a 429 with Retry-After past the window.' },
   { href: '/features/file-storage', title: 'File storage', blurb: 'A no-JS multipart upload streamed into the FileStore, then served back through a streaming route.' },
+  { href: '/features/sessions', title: 'Sessions', blurb: 'A signed-cookie session applied by a segment middleware, read and written per visitor with getSession() in a route.' },
 ];
 const examples = [
   { href: '/examples/todo', title: 'Optimistic todo', blurb: 'A whole app composing several features: the declarative optimistic() list API, progressive-enhancement forms, accessible labels, the modules split, and SQLite.' },

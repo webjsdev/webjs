@@ -8,6 +8,7 @@
 // use HTTP Cache-Control + ETag (conditional GET).
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
+import '#modules/caching/components/cache-buster.ts';
 
 export const metadata: Metadata = { title: 'Caching (revalidate) | features' };
 
@@ -35,5 +36,13 @@ export default function CachingExample() {
       <code>revalidateTag</code>, or a GET action's
       <code>export const cache</code>.
     </p>
+    <p class="text-muted-foreground text-sm mt-6 mb-2">
+      A mutation evicts the cache on demand. Click below (it calls
+      <code class="font-mono">revalidatePath('/features/caching')</code>), then refresh:
+      the timestamp updates immediately, even inside the 10s window, because the
+      cached HTML was dropped. Without clicking, the refresh serves the cached
+      copy until the window elapses.
+    </p>
+    <cache-buster></cache-buster>
   `;
 }

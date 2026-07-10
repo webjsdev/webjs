@@ -1,4 +1,4 @@
-// The lit-html directive set webjs re-exports (from '@webjsdev/core/directives').
+// The lit-html directive set WebJs re-exports (from '@webjsdev/core/directives').
 // `repeat` keys a list so DOM nodes are REUSED across reorders instead of being
 // recreated (use it for keyed lists that reorder; plain `.map()` is fine for
 // static lists). `watch(signal)` does a fine-grained DOM swap of ONE node when
@@ -6,9 +6,13 @@
 // shows more of the set: `live` (a controlled input), `ref` + `createRef` (a
 // handle to a DOM node), `until` (a pending fallback for a promise),
 // `unsafeHTML` (trusted raw HTML, NEVER user input), and `keyed` (force a fresh
-// subtree when a key changes).
+// subtree when a key changes). The third card shows the rest: `guard` (skip a
+// re-render when its deps are unchanged), `cache` (keep an inactive branch's
+// DOM around while you toggle), `templateContent` (stamp an existing template's
+// HTML), and `asyncAppend` / `asyncReplace` (stream values from an async
+// iterable, appending each or replacing with the latest).
 import { WebComponent, signal, html } from '@webjsdev/core';
-import { repeat, watch, live, until, keyed, unsafeHTML, ref, createRef } from '@webjsdev/core/directives';
+import { repeat, watch, live, until, keyed, unsafeHTML, ref, createRef, guard, cache, templateContent, asyncAppend, asyncReplace } from '@webjsdev/core/directives';
 
 interface Item { id: number; label: string }
 
@@ -29,6 +33,57 @@ export class DirectiveDemo extends WebComponent {
   // Created ONCE (not per render), so `until` keeps the resolved value across
   // re-renders instead of flashing back to the fallback each time.
   private asyncValue: Promise<string> = this.later();
+  // Which cached branch is showing (for `cache`), and a counter that lets us
+  // prove `guard` skips its recompute unless its dep actually changes.
+  private tab = signal<'a' | 'b'>('a');
+  private guardBumps = signal(0);
+  // Async iterables consumed on the client (both render empty at SSR). The
+  // generators are lazy, so the field initializer just creates the iterator
+  // without running the body. Both are FINITE and run ONCE: they animate on
+  // first paint, then settle on their final value. restartStreams() swaps in
+  // fresh iterables to replay them (a new iterable identity makes asyncAppend /
+  // asyncReplace tear down and re-subscribe). streamRun is read in render() so
+  // the swap triggers a re-render.
+  private logIter: AsyncIterable<string> = this.log();
+  private countIter: AsyncIterable<number> = this.countdown();
+  private streamRun = signal(0);
+
+  private restartStreams() {
+    this.logIter = this.log();
+    this.countIter = this.countdown();
+    this.streamRun.set(this.streamRun.get() + 1);
+  }
+  // For `templateContent`: a real <template> element on the CLIENT (the client
+  // directive clones its `.content`), and a plain { innerHTML } object at SSR
+  // (there is no document to build a template with, and the server directive
+  // emits innerHTML directly). The real template is built in connectedCallback,
+  // which SSR never calls, so the two paths agree on the output.
+  private stampTpl: HTMLTemplateElement | { innerHTML: string } = {
+    innerHTML: '<strong>stamped</strong> from a template',
+  };
+
+  connectedCallback() {
+    super.connectedCallback();
+    const tpl = document.createElement('template');
+    tpl.innerHTML = '<strong>stamped</strong> from a template';
+    this.stampTpl = tpl;
+  }
+
+  // A finite async iterable: asyncAppend adds each line as it arrives.
+  private async *log(): AsyncGenerator<string> {
+    for (const line of ['connecting', 'authenticated', 'ready']) {
+      await new Promise((r) => setTimeout(r, 500));
+      yield line;
+    }
+  }
+  // A finite async iterable: asyncReplace shows only the latest value, counting
+  // down 5 -> 0 one step at a time.
+  private async *countdown(): AsyncGenerator<number> {
+    for (let n = 5; n >= 0; n--) {
+      yield n;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
 
   private reverse() {
     this.items.set(this.items.get().slice().reverse());
@@ -90,6 +145,48 @@ export class DirectiveDemo extends WebComponent {
           <button @click=${() => this.variant.set(variant + 1)}
             class="w-fit text-sm text-muted-foreground cursor-pointer transition-colors hover:text-foreground underline decoration-dotted underline-offset-4">rekey</button>
           ${keyed(variant, html`<div class="text-[15px] text-foreground">${unsafeHTML('<em>fresh subtree</em>')} #${variant}</div>`)}
+        </div>
+
+        <div class="grid gap-3 border-t border-border pt-4">
+          <!-- guard([deps], fn) only re-runs fn when a dep changes. Bumping the
+               guard counter re-renders it; the OTHER counter (ticks above) does
+               not, so the guarded value stays put. -->
+          <button @click=${() => this.guardBumps.set(this.guardBumps.get() + 1)}
+            class="w-fit text-sm text-muted-foreground cursor-pointer transition-colors hover:text-foreground underline decoration-dotted underline-offset-4">bump guard dep</button>
+          <p class="text-sm text-foreground">guarded: ${guard([this.guardBumps.get()], () => html`computed at bump #${this.guardBumps.get()}`)}</p>
+
+          <!-- cache(value) keeps the inactive tab's DOM alive while you toggle,
+               so switching back is instant and preserves any element state. -->
+          <div class="flex gap-2">
+            <button @click=${() => this.tab.set('a')}
+              class="px-3 py-1 rounded-lg text-sm border cursor-pointer transition-colors ${this.tab.get() === 'a' ? 'bg-primary text-primary-foreground border-transparent' : 'bg-card border-border text-foreground hover:border-border-strong'}">Tab A</button>
+            <button @click=${() => this.tab.set('b')}
+              class="px-3 py-1 rounded-lg text-sm border cursor-pointer transition-colors ${this.tab.get() === 'b' ? 'bg-primary text-primary-foreground border-transparent' : 'bg-card border-border text-foreground hover:border-border-strong'}">Tab B</button>
+          </div>
+          <div class="text-[15px] text-foreground">${cache(
+            this.tab.get() === 'a'
+              ? html`<span>Panel A content</span>`
+              : html`<span>Panel B content</span>`,
+          )}</div>
+
+          <!-- templateContent stamps a <template> element's content (see
+               stampTpl: a real template on the client, a plain { innerHTML } at
+               SSR, so first paint and hydration match). -->
+          <div class="text-[15px] text-foreground">${templateContent(this.stampTpl)}</div>
+
+          <!-- asyncAppend appends each value from an async iterable as it
+               arrives; asyncReplace shows only the latest. Both render empty at
+               SSR, stream in on the client, and finish (the log stops at
+               "ready", the countdown at 0). Restart swaps in fresh iterables so
+               you can watch them replay. The run counter forces the re-render. -->
+          <div class="flex items-center gap-3">
+            <button @click=${() => this.restartStreams()}
+              class="w-fit px-3.5 py-1.5 rounded-xl bg-card border border-border text-foreground text-sm cursor-pointer transition-colors hover:border-border-strong">restart streams</button>
+            <span class="text-sm text-muted-foreground">run #${this.streamRun.get()}</span>
+          </div>
+          <div class="text-sm text-muted-foreground">log (asyncAppend, one row per value):</div>
+          <ul class="grid gap-1 list-none m-0 p-0 text-sm text-muted-foreground min-h-[1.25rem]">${asyncAppend(this.logIter, (line: string) => html`<li>· ${line}</li>`)}</ul>
+          <p class="text-sm text-foreground">countdown (asyncReplace, latest value only): ${asyncReplace(this.countIter)}</p>
         </div>
       </div>
     `;

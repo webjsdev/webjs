@@ -4,7 +4,7 @@
 // it never runs during SSR) and closed in disconnectedCallback. At SSR the
 // component renders its disconnected state, so with JS off the page still reads
 // (a live socket has no no-JS equivalent, which is the honest fallback here).
-import { WebComponent, signal, html, connectWS } from '@webjsdev/core';
+import { WebComponent, signal, html, connectWS, renderStream } from '@webjsdev/core';
 
 export class WsEcho extends WebComponent {
   private connected = signal(false);
@@ -36,6 +36,19 @@ export class WsEcho extends WebComponent {
     input.value = '';
   }
 
+  #streamN = 0;
+  // renderStream() applies a <webjs-stream> payload with native DOM methods:
+  // the SAME element-level applier a connectWS onMessage handler (or a
+  // broadcast() push) uses for surgical live updates, so a chat / presence /
+  // toast reuses it instead of hand-written DOM code. Here a button drives it
+  // locally; over a channel the server would send this HTML string.
+  private applyStreamUpdate() {
+    this.#streamN += 1;
+    renderStream(
+      `<webjs-stream action="append" target="ws-stream-log"><template><li class="px-3 py-2 rounded-xl bg-card border border-border text-[15px] text-foreground">streamed row #${this.#streamN}</li></template></webjs-stream>`,
+    );
+  }
+
   render() {
     const on = this.connected.get();
     return html`
@@ -55,6 +68,11 @@ export class WsEcho extends WebComponent {
             <li class="px-3 py-2 rounded-xl bg-card border border-border text-[15px] text-foreground font-mono">${line}</li>
           `)}
         </ul>
+        <div class="grid gap-2 border-t border-border pt-4">
+          <button @click=${() => this.applyStreamUpdate()}
+            class="w-fit px-3.5 py-1.5 rounded-xl bg-card border border-border text-foreground text-sm cursor-pointer transition-colors hover:border-border-strong">renderStream() an element-level update</button>
+          <ul id="ws-stream-log" class="grid gap-1.5 list-none m-0 p-0"></ul>
+        </div>
       </div>
     `;
   }

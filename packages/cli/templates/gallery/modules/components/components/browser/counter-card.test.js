@@ -9,7 +9,7 @@
 //     REAL SSR output and the client interactivity, not a jsdom approximation.
 // It lives NEXT TO the component (a `browser/` dir inside the module), the
 // co-located default; the runner discovers browser tests under any browser dir.
-import { html } from '@webjsdev/core';
+import { html, render } from '@webjsdev/core';
 import { ssrFixture } from '@webjsdev/core/testing';
 import '../counter-card.ts';
 
@@ -20,6 +20,26 @@ suite('<counter-card>', () => {
     const el = await ssrFixture(html`<counter-card></counter-card>`);
     assert(el.textContent.includes('0'), 'the count starts at 0');
     assert(el.textContent.includes('Clicks'), 'the default label renders');
+  });
+
+  test('render() mounts a template imperatively into a container', async () => {
+    // render(value, container) is the client-side imperative render: mount a
+    // WebJs template into any DOM node (a portal, a plain page). Components
+    // render themselves, so reach for this only when you need to drive the
+    // mount point yourself. The container must be CONNECTED to the document, or
+    // the custom element never upgrades (connectedCallback, and so its first
+    // render, only fire on connection).
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    try {
+      render(html`<counter-card label="Imperative"></counter-card>`, container);
+      const el = container.querySelector('counter-card');
+      assert(el, 'the element mounts into the container');
+      await el.updateComplete; // wait for the component's first client render
+      assert(container.textContent.includes('Imperative'), 'the label renders');
+    } finally {
+      container.remove();
+    }
   });
 
   test('reads the label reactive prop', async () => {

@@ -14,6 +14,7 @@ export default function RoutingExample() {
     <ul class="list-disc pl-5 mb-4">
       <li><a class="text-primary" href="/features/routing/42">/features/routing/42</a></li>
       <li><a class="text-primary" href="/features/routing/hello">/features/routing/hello</a></li>
+      <li><a class="text-primary" href="/features/routing/legacy">/features/routing/legacy</a> throws <code class="font-mono">redirect()</code> back here</li>
     </ul>
     <p class="text-muted-foreground text-sm mb-2">
       Routes are type-safe: <code class="font-mono">webjs types</code> (run by
