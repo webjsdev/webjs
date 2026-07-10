@@ -354,7 +354,7 @@
       "exempt": "internal: framework/CLI plumbing"
     },
     "attachWebSocket": {
-      "demoed": true
+      "exempt": "internal: low-level WS-upgrade wiring; startServer / `webjs start` do this automatically for a route.ts WS() export"
     },
     "auditPinned": {
       "exempt": "internal: framework/CLI plumbing"
