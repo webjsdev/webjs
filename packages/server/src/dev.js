@@ -1608,7 +1608,7 @@ export async function startServer(opts) {
     // Opt-in via `webjs.dev.watch`; each funnels into the same debounced rebuild.
     const extraWatch = (await readDevWatchPathsFromApp(app.appDir)).filter((p) => existsSync(p));
     for (const root of extraWatch) watchRoot(root);
-    if (extraWatch.length) logger.info?.({ paths: extraWatch }, 'watching extra dev paths');
+    if (extraWatch.length) logger.info?.(`[webjs] also watching ${extraWatch.length} extra dev path(s): ${extraWatch.join(', ')}`);
   }
 
   // Inbound server timeouts (issue #237). On node these are the node:http
