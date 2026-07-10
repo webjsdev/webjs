@@ -1745,6 +1745,14 @@ async function tryServeFrameworkStatic(path, method, ctx) {
     });
   }
 
+  // Dev live-reload SharedWorker: one shared connection for all tabs (#887).
+  if (path === '/__webjs/reload-worker.js') {
+    if (!dev) return new Response('Not found', { status: 404 });
+    return new Response(reloadWorkerJs(basePath()), {
+      headers: { 'content-type': 'application/javascript; charset=utf-8' },
+    });
+  }
+
   // Core module: /__webjs/core/*
   //
   // ETag + ~1h max-age, NOT immutable. The URL path is un-versioned
@@ -1822,7 +1830,8 @@ async function handleCore(req, ctx) {
 
   // Health / readiness probes (`/__webjs/health`, `/__webjs/ready`) and the
   // framework-internal static assets (`/__webjs/core/*`, `/__webjs/reload.js`,
-  // downloaded `/__webjs/vendor/*`) are served in `handle()` BEFORE ensureReady,
+  // `/__webjs/reload-worker.js`, downloaded `/__webjs/vendor/*`) are served in
+  // `handle()` BEFORE ensureReady,
   // so they are not repeated here. This fallback covers the (currently
   // unreachable) case of handleCore being entered for one of those assets, so
   // the routing stays correct if a future caller bypasses the early path.
@@ -2259,7 +2268,25 @@ async function sendWebResponse(res, webRes, req, opts) {
  */
 async function fileResponse(abs, opts) {
   try {
-    const data = await readFile(abs);
+    let data = await readFile(abs);
+    // In dev an external watcher (tailwindcss --watch, esbuild, ...) rewrites a
+    // public asset with truncate-then-write, so the file is 0 bytes for a short
+    // window during a rebuild. A hot reload that lands in that window would
+    // serve empty CSS / JS and the page paints unstyled (#891). Close that
+    // 0-byte window: when an empty read comes from a file that was JUST modified
+    // (the mid-rewrite signal), re-read a few times so the truncated read does
+    // not reach the browser. A genuinely empty, untouched asset is served
+    // immediately (no delay), and a non-zero-but-partial write is a smaller
+    // residual gap this does not cover. Prod has no such watcher and is
+    // left untouched.
+    if (opts.dev && data.length === 0) {
+      let midRewrite = false;
+      try { midRewrite = Date.now() - (await stat(abs)).mtimeMs < 500; } catch { /* gone */ }
+      for (let i = 0; midRewrite && i < 12 && data.length === 0; i++) {
+        await new Promise((r) => setTimeout(r, 20));
+        try { data = await readFile(abs); } catch { break; }
+      }
+    }
     const type = MIME[extname(abs).toLowerCase()] || 'application/octet-stream';
     // The body is fully buffered (read into `data`), so opt it into the
     // conditional-GET funnel, which is the single place that hashes the bytes
@@ -2609,18 +2636,74 @@ function locatePackageDir(appDir, pkgName) {
 const DEV_OVERLAY_SRC = readFileSync(new URL('./dev-overlay.js', import.meta.url), 'utf8')
   .replace(/^export /gm, '');
 
+// The reload SharedWorker relay source (#887), read once + `export`-stripped so
+// it inlines into the served worker script. Sharing the one source
+// (`dev-reload-worker.js`, which the browser test imports directly) means the
+// test drives the EXACT relay code that ships, with no drift (same as #264).
+const RELOAD_WORKER_SRC = readFileSync(new URL('./dev-reload-worker.js', import.meta.url), 'utf8')
+  .replace(/^export /gm, '');
+
 function reloadClientJs(bp) {
   // The overlay renderer uses textContent throughout (never innerHTML), so the
   // error message / code frame can never inject markup (#264). Served only in
   // dev (the /__webjs/reload.js branch 404s in prod), so it never reaches a
   // production page.
+  //
+  // Every tab shares ONE live-reload connection through a SharedWorker (#887).
+  // The old client opened an `EventSource` per tab, and because the dev server
+  // is HTTP/1.1 and browsers cap concurrent connections per host at ~6, a
+  // handful of open tabs would hold every connection slot with idle SSE streams
+  // and later tabs could not even fetch their HTML. The SharedWorker holds the
+  // single `EventSource` (see reloadWorkerJs) and relays each `reload` /
+  // `webjs-error` to every tab. The overlay still renders on the main thread
+  // (a worker has no DOM), so the worker forwards only the raw frame data.
+  //
+  // Fallback: where `SharedWorker` is missing (some mobile browsers) or its
+  // construction throws (a strict dev CSP without `worker-src`), each tab opens
+  // its own `EventSource`, the original behaviour. Correct, just not shared.
+  const eventsUrl = JSON.stringify(withBasePath('/__webjs/events', bp));
+  const workerUrl = JSON.stringify(withBasePath('/__webjs/reload-worker.js', bp));
   return `// webjs dev reload client
 ${DEV_OVERLAY_SRC}
-const es = new EventSource(${JSON.stringify(withBasePath('/__webjs/events', bp))});
-es.addEventListener('reload', () => location.reload());
-es.addEventListener('webjs-error', (e) => {
-  let f; try { f = JSON.parse(e.data); } catch (_) { return; }
+function __webjsApplyError(data) {
+  let f; try { f = JSON.parse(data); } catch (_) { return; }
   renderDevOverlay(f);
-});
+}
+function __webjsDirectEvents() {
+  const es = new EventSource(${eventsUrl});
+  es.addEventListener('reload', () => location.reload());
+  es.addEventListener('webjs-error', (e) => __webjsApplyError(e.data));
+}
+try {
+  if (typeof SharedWorker !== 'undefined') {
+    const w = new SharedWorker(${workerUrl});
+    w.port.onmessage = (e) => {
+      const m = e.data || {};
+      if (m.type === 'reload') location.reload();
+      else if (m.type === 'webjs-error') __webjsApplyError(m.data);
+    };
+    w.port.start();
+  } else {
+    __webjsDirectEvents();
+  }
+} catch (_) {
+  __webjsDirectEvents();
+}
+`;
+}
+
+/**
+ * The dev live-reload SharedWorker. One instance is shared across every tab of
+ * the same origin (a SharedWorker is keyed by its script URL), so it holds the
+ * ONE `EventSource` to `/__webjs/events` and fans each event out to all tabs
+ * over their `MessagePort`s (#887). The `EventSource` URL carries the base path
+ * the same way the client's does (#256). Served only in dev.
+ * @param {string} bp the normalized base path (`''` = no-op)
+ * @returns {string}
+ */
+function reloadWorkerJs(bp) {
+  return `// webjs dev reload worker (one shared connection for all tabs)
+${RELOAD_WORKER_SRC}
+startReloadWorker(self, EventSource, ${JSON.stringify(withBasePath('/__webjs/events', bp))});
 `;
 }
