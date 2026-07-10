@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Editor Setup | webjs' };
+export const metadata = { title: 'Editor Setup | WebJs' };
 
 export default function EditorSetup() {
   return html`

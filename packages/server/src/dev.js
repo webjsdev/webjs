@@ -1,6 +1,7 @@
 import { createServer as createHttp1Server } from 'node:http';
 import { stat, readFile, watch as fsWatch } from 'node:fs/promises';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, extname, resolve, dirname, relative, sep } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -47,7 +48,7 @@ import {
   DEV_BOOT_ID,
 } from './listener-core.js';
 import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache, hasVendorPin, readPinFile, prunePinToReachable } from './vendor.js';
-import { buildModuleGraph, transitiveDeps, reachableFromEntries, resolveImport, appImportsMap } from './module-graph.js';
+import { buildModuleGraph, transitiveDeps, reachableFromEntries, resolveImport, appImportsMap, seenFilesFor } from './module-graph.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from './component-scanner.js';
 import { analyzeElision, elideImportsFromSource } from './component-elision.js';
 
@@ -87,7 +88,7 @@ function resolveRequestId(req) {
 function shouldAccessLog(pathname) {
   return !pathname.startsWith('/__webjs/');
 }
-import { setVendorEntries, setCoreInstall, publishBuildId, setBasePath, basePath, setImportAliasEntries, importAliasBrowserEntries } from './importmap.js';
+import { setVendorEntries, setCoreInstall, publishBuildId, setAppSourceId, setBasePath, basePath, setImportAliasEntries, importAliasBrowserEntries } from './importmap.js';
 import { readBasePath, stripBasePath, withBasePath } from './base-path.js';
 import { propagateTrustedRemoteIp } from './rate-limit.js';
 import { readAllowedOrigins } from './csrf.js';
@@ -920,6 +921,25 @@ export async function createRequestHandler(opts) {
             } else {
               setAppSourceFingerprint('');
             }
+            // App-source deploy SIGNAL (#899), distinct from the #318 html-cache
+            // fingerprint above: hashes ALL app source (the module-graph `seen`
+            // set, INCLUDING server-only `.server.ts` that `browserBoundFiles`
+            // omits) with a raw per-file byte digest (decoupled from the
+            // asset-hash memo/elision machinery), plus the installed
+            // `@webjsdev/server` version, so an app-source OR a server-framework
+            // deploy moves it. Sorted + appDir-relative for determinism across
+            // instances. Drives the client's soft cache-evict (not a reload).
+            // PROD only; empty in dev (fs.watch + SSE handle staleness there).
+            if (!dev && state.moduleGraph) {
+              const relApp = (p) => (p.startsWith(appDir + sep) ? p.slice(appDir.length) : p);
+              const srcLines = [...seenFilesFor(state.moduleGraph)]
+                .map((abs) => `${relApp(abs)}:${fileByteHash(abs)}`)
+                .sort();
+              srcLines.push(`@webjsdev/server:${frameworkServerVersion()}`);
+              setAppSourceId(srcLines.join('\n'));
+            } else {
+              setAppSourceId('');
+            }
             t.elision = now() - m;
             if (dev) {
               for (const { className, file } of await findOrphanComponents(appDir)) {
@@ -1534,6 +1554,38 @@ export async function createRequestHandler(opts) {
  */
 export function shouldIgnoreWatchPath(filename) {
   return /(?:^|[\\/])(?:node_modules|\.git|\.webjs)(?:[\\/]|$)|(?:^|[\\/])db[\\/](?:dev\.db|migrations)/.test(filename || '');
+}
+
+/**
+ * A short content digest of a single file's bytes for the app-source deploy
+ * signal (#899). Raw `sha256(bytes)`, deliberately independent of `assetHashFor`
+ * (which folds the elision fingerprint and memoizes for `?v` emission): the
+ * signal only needs "did the source bytes change", and server-only files never
+ * enter the asset-hash memo anyway. Returns `''` on a read failure, so a
+ * transient error degrades the id rather than throwing during analysis.
+ * @param {string} abs
+ * @returns {string}
+ */
+function fileByteHash(abs) {
+  try { return createHash('sha256').update(readFileSync(abs)).digest('hex').slice(0, 16); }
+  catch { return ''; }
+}
+
+/** @type {string} memoized `@webjsdev/server` version, folded into the app-source signal (#899). */
+let _frameworkServerVersion;
+/**
+ * The installed `@webjsdev/server` version (this package). Folded into the
+ * app-source deploy signal so a server-framework release (which alters SSR
+ * output but ships no new browser module) turns over the client's stale caches.
+ * @returns {string}
+ */
+function frameworkServerVersion() {
+  if (_frameworkServerVersion !== undefined) return _frameworkServerVersion;
+  try {
+    const v = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
+    _frameworkServerVersion = typeof v === 'string' ? v.replace(/[^\w.-]/g, '').slice(0, 32) : '';
+  } catch { _frameworkServerVersion = ''; }
+  return _frameworkServerVersion;
 }
 
 /**

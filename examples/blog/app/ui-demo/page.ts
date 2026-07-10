@@ -20,7 +20,7 @@ import { labelClass } from '#components/ui/label.ts';
 import '#components/ui/dialog.ts';
 
 export const metadata = {
-  title: 'UI Demo · webjs',
+  title: 'UI Demo · WebJs',
   description: 'A showcase of the Webjs UI two-tier composition: class helpers on native elements + custom elements where state matters.',
 };
 

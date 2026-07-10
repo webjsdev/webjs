@@ -2,7 +2,7 @@ import { html } from '@webjsdev/core';
 import '#components/seeded-user.ts';
 
 export const metadata = {
-  title: 'Seeded user · webjs blog',
+  title: 'Seeded user · WebJs Blog',
   description: 'SSR action-seeding fixture: async render data is seeded so hydration does not re-fetch (#472).',
 };
 

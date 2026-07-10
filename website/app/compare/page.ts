@@ -11,7 +11,7 @@ import { listComparisons } from '#modules/compare/queries/list-comparisons.serve
  */
 
 export const metadata = {
-  title: 'WebJs compared: vs Next.js, Lit, Remix, Astro, Rails · webjs',
+  title: 'WebJs compared: vs Next.js, Lit, Remix, Astro, Rails · WebJs',
   description: 'Honest, head-to-head comparisons of WebJs with Next.js, Lit, Remix, Astro, and Rails. Where they agree, where they genuinely differ, and who should pick which.',
 };
 

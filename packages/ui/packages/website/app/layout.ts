@@ -16,7 +16,7 @@ const env = (globalThis as any).process?.env ?? {};
 const WEBSITE_URL = env.WEBSITE_URL || 'http://localhost:5001';
 const DOCS_URL = env.DOCS_URL || 'http://localhost:5002';
 
-const TITLE = 'Webjs UI: the AI-first component library for WebJs';
+const TITLE = 'WebJs UI - The AI-First Component Library for WebJs';
 const DESCRIPTION =
   'The AI-first component library for WebJs. Two-tier composition: class-helper functions for visuals, custom elements only where state matters. Source-copied into your project, styled with Tailwind v4.';
 
@@ -41,8 +41,8 @@ export function generateMetadata(ctx: { url: string }) {
       image,
       'image:width': '1200',
       'image:height': '630',
-      'image:alt': 'Webjs UI: AI-first component library',
-      'site_name': 'Webjs UI',
+      'image:alt': 'WebJs UI - AI-First Component Library',
+      'site_name': 'WebJs UI',
     },
     twitter: {
       card: 'summary_large_image',

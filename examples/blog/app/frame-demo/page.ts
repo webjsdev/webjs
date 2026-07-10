@@ -1,7 +1,7 @@
 import { html, type PageProps } from '@webjsdev/core';
 
 export const metadata = {
-  title: 'Frame demo · webjs blog',
+  title: 'Frame demo · WebJs Blog',
   description: 'A <webjs-frame> driven by external links (data-webjs-frame) and a _top breakout.',
 };
 

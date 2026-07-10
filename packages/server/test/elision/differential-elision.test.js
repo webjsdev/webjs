@@ -58,6 +58,7 @@ function maskJsSet(html) {
     .replace(/<link rel="preconnect"[^>]*>/g, '')
     .replace(/<link rel="dns-prefetch"[^>]*>/g, '')
     .replace(/ data-webjs-build="[^"]*"/g, '')
+    .replace(/ data-webjs-src="[^"]*"/g, '')
     // Render-clock nondeterminism: the home page SSRs a live wall-clock time
     // ("posts loaded · 3:10:10 AM"), which ticks between the on and off
     // captures. This is unrelated to elision (elision never changes rendered

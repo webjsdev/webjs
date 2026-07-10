@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Styling | webjs' };
+export const metadata = { title: 'Styling | WebJs' };
 
 export default function Styling() {
   return html`

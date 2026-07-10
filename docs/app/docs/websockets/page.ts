@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'WebSockets | webjs' };
+export const metadata = { title: 'WebSockets | WebJs' };
 
 export default function WebSockets() {
   return html`

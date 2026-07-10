@@ -2,7 +2,7 @@ import { html } from '@webjsdev/core';
 import '#components/abort-demo.ts';
 
 export const metadata = {
-  title: 'Abort demo · webjs blog',
+  title: 'Abort demo · WebJs Blog',
   description: 'A superseded async-render fetch is aborted (#492).',
 };
 

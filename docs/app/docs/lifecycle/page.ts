@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Lifecycle Hooks | webjs' };
+export const metadata = { title: 'Lifecycle Hooks | WebJs' };
 
 export default function Lifecycle() {
   return html`

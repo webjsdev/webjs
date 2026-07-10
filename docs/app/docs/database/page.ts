@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Database (Drizzle) | webjs' };
+export const metadata = { title: 'Database (Drizzle) | WebJs' };
 
 export default function Database() {
   return html`

@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Components | webjs' };
+export const metadata = { title: 'Components | WebJs' };
 
 export default function Components() {
   return html`

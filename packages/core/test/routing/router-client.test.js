@@ -27,6 +27,7 @@ import { parseHTML } from 'linkedom';
 let _collect, _longest, _keyOf, _diffEl, _reconcile,
   _addNewHead, _merge, _isNonHtmlPath, navigate,
   _reactivateScripts, _findAnchorInPath, _activeFrameId, _resolveTargetFrameId, _onPopState,
+  _applySwap, _prefetchCache,
   _snapshotCache, _LIVE_ATTRS, _blurOutgoingFocus,
   _onSubmit, _getSubmitMethod, _getSubmitAction, _buildSubmitFormData,
   _restoreOptimistic, _navToken, _bumpNavToken,
@@ -85,6 +86,8 @@ before(async () => {
     _activeFrameId,
     _resolveTargetFrameId,
     _onPopState,
+    _applySwap,
+    _prefetchCache,
     _snapshotCache,
     _LIVE_ATTRS,
     _blurOutgoingFocus,
@@ -3135,4 +3138,230 @@ test('regraftPermanentElements: only moves when the CURRENT node is actually per
 
   assert.equal(incoming.querySelector('#w'), incomingNode, 'incoming node untouched');
   assert.equal(incoming.querySelector('#w').textContent, 'INCOMING', 'non-permanent current node not regrafted');
+});
+
+/* ====================================================================
+ * #899: a detected cross-deploy build mismatch evicts the client caches
+ * ==================================================================== */
+
+test('applySwap evicts snapshot + prefetch caches on a cross-deploy build mismatch', () => {
+  // The current page booted on the OLD deploy; its importmap tag carries the
+  // old build id. A response arriving with a DIFFERENT id means a deploy
+  // landed, so every URL-keyed snapshot/prefetch is stale pre-deploy HTML.
+  const savedLocation = globalThis.location;
+  const savedHead = globalThis.document.head.innerHTML;
+  try {
+    globalThis.document.head.innerHTML =
+      '<script type="importmap" data-webjs-build="OLD">{}</script>';
+    let assigned = null;
+    globalThis.location = /** @type any */ ({
+      get href() { return 'http://x/current'; },
+      set href(v) { assigned = v; },
+    });
+    globalThis.sessionStorage.clear();
+
+    // Seed both caches with pre-deploy entries.
+    _snapshotCache.set('http://x/a', { html: 'A', at: 1 });
+    _prefetchCache.set('http://x/b', { html: 'B', build: 'OLD', at: 1 });
+    assert.equal(_snapshotCache.size, 1);
+    assert.equal(_prefetchCache.size, 1);
+
+    // A foreground nav whose response advertises a NEW build id.
+    const incoming = new globalThis.DOMParser().parseFromString(
+      '<!doctype html><html><head></head><body></body></html>', 'text/html');
+    _applySwap(incoming, null, false, 'http://x/next', 'NEW');
+
+    assert.equal(assigned, 'http://x/next', 'a cross-deploy mismatch hard-reloads the target');
+    assert.equal(_snapshotCache.size, 0, 'the snapshot cache is evicted (no stale pre-deploy HTML)');
+    assert.equal(_prefetchCache.size, 0, 'the prefetch cache is evicted');
+  } finally {
+    globalThis.location = savedLocation;
+    globalThis.document.head.innerHTML = savedHead;
+    _snapshotCache.clear();
+    _prefetchCache.clear();
+  }
+});
+
+test('applySwap does NOT evict caches when the build id is unchanged (same deploy)', () => {
+  const savedLocation = globalThis.location;
+  const savedHead = globalThis.document.head.innerHTML;
+  try {
+    globalThis.document.head.innerHTML =
+      '<script type="importmap" data-webjs-build="SAME">{}</script>';
+    let assigned = null;
+    globalThis.location = /** @type any */ ({
+      get href() { return 'http://x/current'; },
+      set href(v) { assigned = v; },
+    });
+    globalThis.sessionStorage.clear();
+    _snapshotCache.set('http://x/a', { html: 'A', at: 1 });
+
+    const incoming = new globalThis.DOMParser().parseFromString(
+      '<!doctype html><html><head><script type="importmap" data-webjs-build="SAME">{}</script></head><body></body></html>', 'text/html');
+    _applySwap(incoming, null, false, 'http://x/next', 'SAME');
+
+    assert.equal(assigned, null, 'same build id means no hard reload');
+    assert.equal(_snapshotCache.size, 1, 'the cache is preserved within one deploy');
+  } finally {
+    globalThis.location = savedLocation;
+    globalThis.document.head.innerHTML = savedHead;
+    _snapshotCache.clear();
+    _prefetchCache.clear();
+  }
+});
+
+test('applySwap on an APP-SOURCE mismatch evicts caches but does NOT hard reload (#899 two-tier)', () => {
+  // Build id is unchanged (no vendor/core change) but the app-source id differs:
+  // an app/SSR deploy changed the output while the running page's browser code
+  // is fine. The right response is a soft cache-evict, not a jarring reload.
+  const savedLocation = globalThis.location;
+  const savedHead = globalThis.document.head.innerHTML;
+  try {
+    globalThis.document.head.innerHTML =
+      '<script type="importmap" data-webjs-build="SAME" data-webjs-src="SRC_OLD">{}</script>';
+    let assigned = null;
+    globalThis.location = /** @type any */ ({ get href() { return 'http://x/current'; }, set href(v) { assigned = v; } });
+    globalThis.sessionStorage.clear();
+    _snapshotCache.set('http://x/a', { html: 'A', at: 1 });
+    _prefetchCache.set('http://x/b', { html: 'B', build: 'SAME', src: 'SRC_OLD', at: 1 });
+
+    // Incoming: SAME build, NEW src. Empty head so the tracked-signature check
+    // is skipped and only the id comparison decides.
+    const incoming = new globalThis.DOMParser().parseFromString(
+      '<!doctype html><html><head></head><body></body></html>', 'text/html');
+    _applySwap(incoming, null, false, 'http://x/next', 'SAME', 'SRC_NEW');
+
+    assert.equal(assigned, null, 'an app-source change does NOT hard reload');
+    assert.equal(_snapshotCache.size, 0, 'stale snapshots are evicted so the next nav re-fetches fresh');
+    assert.equal(_prefetchCache.size, 0, 'stale prefetches are evicted');
+  } finally {
+    globalThis.location = savedLocation;
+    globalThis.document.head.innerHTML = savedHead;
+    _snapshotCache.clear();
+    _prefetchCache.clear();
+  }
+});
+
+test('applySwap does NOT evict when the app-source id is unchanged (no churn)', () => {
+  const savedLocation = globalThis.location;
+  const savedHead = globalThis.document.head.innerHTML;
+  try {
+    globalThis.document.head.innerHTML =
+      '<script type="importmap" data-webjs-build="SAME" data-webjs-src="SRC_SAME">{}</script>';
+    let assigned = null;
+    globalThis.location = /** @type any */ ({ get href() { return 'http://x/current'; }, set href(v) { assigned = v; } });
+    globalThis.sessionStorage.clear();
+    _snapshotCache.set('http://x/a', { html: 'A', at: 1 });
+
+    const incoming = new globalThis.DOMParser().parseFromString(
+      '<!doctype html><html><head></head><body></body></html>', 'text/html');
+    _applySwap(incoming, null, false, 'http://x/next', 'SAME', 'SRC_SAME');
+
+    assert.equal(assigned, null, 'no build change, no reload');
+    assert.equal(_snapshotCache.size, 1, 'same app-source id means the cache is preserved');
+  } finally {
+    globalThis.location = savedLocation;
+    globalThis.document.head.innerHTML = savedHead;
+    _snapshotCache.clear();
+    _prefetchCache.clear();
+  }
+});
+
+test('a prefetch that reveals a NEW build id evicts stale pre-deploy caches (#899)', async () => {
+  const origFetch = globalThis.fetch;
+  const savedHead = globalThis.document.head.innerHTML;
+  const savedLoc = globalThis.location;
+  globalThis.location = /** @type any */ ({ href: 'http://localhost/', origin: 'http://localhost' });
+  try {
+    // The page booted on the OLD deploy.
+    globalThis.document.head.innerHTML =
+      '<script type="importmap" data-webjs-build="OLD">{}</script>';
+    // Pre-deploy snapshot + prefetch entries linger in the caches.
+    _snapshotCache.set('http://localhost/a', { html: 'A', at: 1 });
+    _prefetchCache.set('http://localhost/b', { html: 'B', build: 'OLD', at: 1 });
+
+    // A prefetch fetch now returns the server's NEW build id (a deploy landed).
+    globalThis.fetch = async () => new Response('<!doctype html><html><head></head><body>fresh</body></html>', {
+      status: 200, headers: { 'content-type': 'text/html', 'x-webjs-build': 'NEW' },
+    });
+
+    const done = new Promise((r) => document.addEventListener('webjs:prefetch', r, { once: true }));
+    _prefetch('http://localhost/c');
+    await done;
+
+    // The old snapshot + the stale pre-deploy prefetch are gone; only the fresh
+    // (NEW-build) prefetch of /c remains, so clicking /b re-fetches fresh.
+    assert.equal(_snapshotCache.size, 0, 'stale snapshots evicted on a deploy revealed by prefetch');
+    assert.equal(_prefetchCache.has('http://localhost/b'), false, 'stale pre-deploy prefetch evicted');
+    // Only the fresh (NEW-build) prefetch of /c survives, stored after the evict.
+    assert.equal(_prefetchCache.size, 1, 'the stale entries are gone, the fresh one remains');
+    const fresh = [..._prefetchCache.values()][0];
+    assert.equal(fresh.build, 'NEW', 'the fresh prefetch carries the new build id');
+  } finally {
+    globalThis.fetch = origFetch;
+    globalThis.location = savedLoc;
+    globalThis.document.head.innerHTML = savedHead;
+    _snapshotCache.clear();
+    _prefetchCache.clear();
+  }
+});
+
+test('a prefetch with the SAME build id does NOT evict (no deploy, no churn)', async () => {
+  const origFetch = globalThis.fetch;
+  const savedHead = globalThis.document.head.innerHTML;
+  const savedLoc = globalThis.location;
+  globalThis.location = /** @type any */ ({ href: 'http://localhost/', origin: 'http://localhost' });
+  try {
+    globalThis.document.head.innerHTML =
+      '<script type="importmap" data-webjs-build="SAME">{}</script>';
+    _snapshotCache.set('http://localhost/a', { html: 'A', at: 1 });
+    globalThis.fetch = async () => new Response('<!doctype html><html><head></head><body>x</body></html>', {
+      status: 200, headers: { 'content-type': 'text/html', 'x-webjs-build': 'SAME' },
+    });
+    const done = new Promise((r) => document.addEventListener('webjs:prefetch', r, { once: true }));
+    _prefetch('http://localhost/c');
+    await done;
+    assert.equal(_snapshotCache.size, 1, 'no eviction within one deploy');
+  } finally {
+    globalThis.fetch = origFetch;
+    globalThis.location = savedLoc;
+    globalThis.document.head.innerHTML = savedHead;
+    _snapshotCache.clear();
+    _prefetchCache.clear();
+  }
+});
+
+test('a prefetch that reveals a NEW app-source id evicts stale caches, no build change (#899)', async () => {
+  const origFetch = globalThis.fetch;
+  const savedHead = globalThis.document.head.innerHTML;
+  const savedLoc = globalThis.location;
+  globalThis.location = /** @type any */ ({ href: 'http://localhost/', origin: 'http://localhost' });
+  try {
+    // Page booted on the OLD app-source deploy (build id unchanged).
+    globalThis.document.head.innerHTML =
+      '<script type="importmap" data-webjs-build="SAME" data-webjs-src="SRC_OLD">{}</script>';
+    _snapshotCache.set('http://localhost/a', { html: 'A', at: 1 });
+    _prefetchCache.set('http://localhost/b', { html: 'B', build: 'SAME', src: 'SRC_OLD', at: 1 });
+
+    // A prefetch fetch returns the SAME build but a NEW app-source id.
+    globalThis.fetch = async () => new Response('<!doctype html><html><head></head><body>fresh</body></html>', {
+      status: 200, headers: { 'content-type': 'text/html', 'x-webjs-build': 'SAME', 'x-webjs-src': 'SRC_NEW' },
+    });
+
+    const done = new Promise((r) => document.addEventListener('webjs:prefetch', r, { once: true }));
+    _prefetch('http://localhost/c');
+    await done;
+
+    assert.equal(_snapshotCache.size, 0, 'a src-only deploy revealed by prefetch evicts stale snapshots');
+    assert.equal(_prefetchCache.has('http://localhost/b'), false, 'the stale pre-deploy prefetch is evicted');
+    assert.equal(_prefetchCache.size, 1, 'only the fresh prefetch of /c remains');
+    const fresh = [..._prefetchCache.values()][0];
+    assert.equal(fresh.src, 'SRC_NEW', 'the fresh prefetch entry carries the new app-source id');
+  } finally {
+    globalThis.fetch = origFetch;
+    globalThis.location = savedLoc;
+    globalThis.document.head.innerHTML = savedHead;
+    _snapshotCache.clear();
+    _prefetchCache.clear();
+  }
 });

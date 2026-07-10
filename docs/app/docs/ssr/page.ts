@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Server-Side Rendering | webjs' };
+export const metadata = { title: 'Server-Side Rendering | WebJs' };
 
 export default function SSR() {
   return html`

@@ -1,7 +1,7 @@
 import { html } from '@webjsdev/core';
 
 export const metadata = {
-  title: 'Static info · webjs blog',
+  title: 'Static info · WebJs Blog',
   description: 'A fully-static route that ships zero application JS.',
 };
 

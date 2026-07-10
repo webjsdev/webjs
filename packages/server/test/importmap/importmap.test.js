@@ -16,7 +16,7 @@ test('importMapTag: emits a bare script tag when no nonce is provided', async ()
   await setVendorEntries({});
   publishBuildId();
   const tag = importMapTag();
-  assert.match(tag, /^<script type="importmap" data-webjs-build="[0-9a-f]{64}">/);
+  assert.match(tag, /^<script type="importmap" data-webjs-build="[0-9a-f]{64}\.c[\w.-]+" data-webjs-src="[^"]*">/);
   assert.ok(!tag.includes('nonce='));
 });
 
@@ -24,7 +24,7 @@ test('importMapTag: emits nonce attribute when provided', async () => {
   await setVendorEntries({});
   publishBuildId();
   const tag = importMapTag({ nonce: 'abc123' });
-  assert.match(tag, /^<script type="importmap" nonce="abc123" data-webjs-build="[0-9a-f]{64}">/);
+  assert.match(tag, /^<script type="importmap" nonce="abc123" data-webjs-build="[0-9a-f]{64}\.c[\w.-]+" data-webjs-src="[^"]*">/);
 });
 
 test('importMapTag: build id is empty until publishBuildId, then the live hash', async () => {
@@ -40,8 +40,10 @@ test('importMapTag: build id is empty until publishBuildId, then the live hash',
   assert.equal(fresh.publishedBuildId(), '', 'but the advertised build id stays empty until published');
   assert.match(fresh.importMapTag(), /data-webjs-build=""/, 'so the tag is reload-safe before publish');
   fresh.publishBuildId();
-  assert.equal(fresh.publishedBuildId(), fresh.importMapHash(), 'publishBuildId promotes the live hash');
-  assert.match(fresh.importMapTag(), /data-webjs-build="[0-9a-f]{64}"/, 'and the tag now advertises it');
+  // The published id is the importmap hash folded with the installed core
+  // version (#899): `<hash>.c<version>`, so a core release moves it too.
+  assert.ok(fresh.publishedBuildId().startsWith(fresh.importMapHash() + '.c'), 'publishBuildId promotes the live hash folded with the core version');
+  assert.match(fresh.importMapTag(), /data-webjs-build="[0-9a-f]{64}\.c[\w.-]+"/, 'and the tag now advertises it');
 });
 
 test('importMapTag: HTML-escapes embedded quotes in nonce', async () => {

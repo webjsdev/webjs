@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Error Handling | webjs' };
+export const metadata = { title: 'Error Handling | WebJs' };
 
 export default function ErrorHandling() {
   return html`

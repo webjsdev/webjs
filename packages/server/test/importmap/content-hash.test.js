@@ -223,6 +223,7 @@ test('DEV vs PROD HTML differs ONLY by the ?v query (dev is the un-fingerprinted
     .replace(/\?v=[0-9a-f]+/g, '')                 // strip fingerprints
     .replace(/app-[^/"]+/g, 'APP')                 // tmpdir app-dir name
     .replace(/data-webjs-build="[^"]*"/g, 'BUILD') // per-deploy build id
+    .replace(/ ?data-webjs-src="[^"]*"/g, 'SRC') // app-source deploy signal (#899)
     .replace(/"NODE_ENV":"(development|production)"/g, '"NODE_ENV":"ENV"') // dev vs prod env shim
     .replace(/<script type="module"[^>]*src="[^"]*reload[^"]*"[^>]*><\/script>/g, ''); // dev-only reload script
 

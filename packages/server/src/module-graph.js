@@ -171,6 +171,27 @@ export function bareImports(graph) {
 }
 
 /**
+ * Every app source file walked while building a graph (#899). `graph` itself
+ * holds only files that HAVE imports, so a leaf (e.g. a no-import `.server.ts`)
+ * is absent from it; this side-channel carries the COMPLETE set of `.js/.ts/
+ * .mjs/.mts` files under the appDir (excluding `node_modules`/`.webjs`/`public`/
+ * dotfiles), INCLUDING server-only files. Used to derive the app-source deploy
+ * signal that covers an SSR-only change a browser-bound-only set would miss.
+ * @type {WeakMap<ModuleGraph, Set<string>>}
+ */
+const SEEN_FILES = new WeakMap();
+
+/**
+ * The complete set of app source files walked for a built graph, or an empty
+ * set if none. Absolute paths.
+ * @param {ModuleGraph} graph
+ * @returns {Set<string>}
+ */
+export function seenFilesFor(graph) {
+  return SEEN_FILES.get(graph) || new Set();
+}
+
+/**
  * True for a bare npm vendor specifier (`dayjs`, `@scope/pkg/sub`), excluding
  * relative / absolute / `#`-alias paths and `node:` / protocol specifiers.
  * Inlined here (not imported from vendor.js) to avoid a module cycle.
@@ -205,6 +226,7 @@ export async function buildModuleGraph(appDir) {
   await walk(appDir, appDir, graph, seen, dynamic, bare);
   if (dynamic.size) DYNAMIC_EDGES.set(graph, dynamic);
   if (bare.size) BARE_EDGES.set(graph, bare);
+  if (seen.size) SEEN_FILES.set(graph, seen);
   // Evict parse-cache entries for files no longer in the tree (a rebuild after
   // a rename or delete), so a long dev session does not accumulate dead
   // entries. Scoped to appDir so a multi-app process (tests, dogfood smoke)
