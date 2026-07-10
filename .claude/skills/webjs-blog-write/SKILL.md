@@ -63,6 +63,30 @@ author: Vivek
 5. **Sell the capability on its own terms.** Do not pitch a WebJs feature as "another tool's branded feature, but native" (no "Turbo Frames, but for WebJs"). Name what it does and why it is good in plain terms.
 6. **Defaults, not lock-in.** Drizzle, Tailwind, and SQLite are scaffold DEFAULTS. Never frame WebJs as coupled to them; it is bring-your-own-flexible.
 
+## Sound like the author, not like a model
+
+The single most important quality bar for a webjs post is that it reads as though the author, Vivek, sat down and wrote it himself, not as though a model generated it. The posts publish under his byline, so the target is not generic "human writing" but his specific voice, which the corpus you read in Step 0 is the reference for. A post that reads as AI-generated, or as written by someone other than the author, fails no matter how correct it is.
+
+Cut the tells that make writing read as machine-generated:
+
+- **Hype and empty superlatives.** "powerful", "seamless", "robust", "effortless", "game-changer", "elegant", "blazing fast", "unlock", "leverage", "delve", "dive in", "supercharge". Delete them or replace each with a specific, verifiable claim.
+- **Signposting and filler.** "In this post we will explore", "Let's take a look", "It is worth noting that", "Here's the thing", "Now, you might be wondering", "At the end of the day", "In conclusion", "To sum up". Just make the point.
+- **Symmetric, list-shaped structure.** Every section the same length, every paragraph exactly three sentences, a rule-of-three in every sentence ("fast, simple, and reliable"), a bulleted list where prose would read better. Vary the shape.
+- **Hedged neutrality.** An even "on one side, on the other side" with no actual position. The author takes a side and says why.
+- **Restating the heading** in the first sentence of its section, and over-explaining what the reader already understood.
+- **Generic placeholder examples** (foo, bar, widget, `doSomething()`). Use a real, specific example a reader could actually build.
+- **Em-dashes and the other invariant-11 punctuation.** Already banned above, and a classic generated-text tell, so this rule pulls double duty.
+- **The same skeleton on every post.** This is the one that shows up only when you look at the blog as a whole. If every post opens the same way, runs the same section shape, and closes with the same "# The takeaway", the blog reads as a template even when each post is fine on its own. The patterns in this skill (the old-way-then-WebJs contrast, the takeaway close, the concrete hook) are options to reach for, not a frame to stamp on every post. Let each topic pick the structure it wants: one post is a narrative, another a teardown, another a head-to-head comparison, another a single idea followed all the way down. Vary the openings, the number and naming of sections, and the endings from post to post, and glance at the two or three most recent posts so the new one does not repeat their shape.
+
+Aim for what makes the corpus read human:
+
+- **A real stake and a real opinion.** Say what you wanted, what annoyed you, what you tried and dropped, why you chose one thing over another. Keep the first-person point of view.
+- **Specific, concrete detail from real experience.** The exact thing that bit you, a real number you measured, a real file path, the actual failure mode. Specificity is the strongest human signal there is.
+- **Varied rhythm.** Mix a long explanatory sentence with a short blunt one. Not every paragraph is the same shape or length.
+- **Plain, direct language** over median-of-the-internet phrasing. "it runs", not "it seamlessly executes".
+
+The test before you ship: read the draft aloud and ask whether the author would actually say this sentence to another engineer over coffee. If it reads like a press release or a tutorial template, rewrite it. Then compare its rhythm and word choice against two real posts from Step 0. If it does not sound like the same person wrote all three, it is not done.
+
 ## Process: from topic to a published, true post
 
 1. **Pick an SEO topic backed by shipped work.** Mine the git history, the merged PRs, the per-package changelog, and the closed issues for a real, shipped capability that a developer would search for and that no existing post already covers. High-intent angles (migration from another framework, a concrete how-to) rank best.
