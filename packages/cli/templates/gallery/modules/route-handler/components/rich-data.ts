@@ -7,7 +7,7 @@
 // is inert and the page still reads.
 import { WebComponent, signal, html, richFetch } from '@webjsdev/core';
 
-interface RichPayload { at: Date; ip: string; requestId: string; theme: string }
+interface RichPayload { at: Date; ip: string; requestId: string; cookieCount: number }
 
 export class RichData extends WebComponent {
   private line = signal('click to fetch');
@@ -15,7 +15,7 @@ export class RichData extends WebComponent {
   private async load() {
     const data = await richFetch<RichPayload>('/features/route-handler/data');
     // data.at is a Date, so Date methods work with no manual parsing.
-    this.line.set(`at ${data.at.toLocaleTimeString()} · id ${data.requestId} · theme ${data.theme}`);
+    this.line.set(`at ${data.at.toLocaleTimeString()} · id ${data.requestId} · ${data.cookieCount} cookie(s)`);
   }
 
   render() {

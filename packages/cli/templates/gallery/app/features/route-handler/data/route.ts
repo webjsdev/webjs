@@ -19,7 +19,10 @@ export async function GET(req: Request) {
     ip: clientIp(req),
     requestId: requestId(),
     userAgent: headers().get('user-agent') ?? 'unknown',
-    theme: cookies().get('theme') ?? 'light',
+    // cookies() reads the REQUEST cookies. Report how many are present (a
+    // truthful, always-correct value); the app's theme lives in localStorage,
+    // not a cookie, so do not read it here.
+    cookieCount: cookies().entries().length,
     // cspNonce() reads the request's CSP nonce ('' with CSP off). Server-side
     // you use it to nonce a server-rendered inline <script>/<style> under CSP.
     hasNonce: cspNonce().length > 0,

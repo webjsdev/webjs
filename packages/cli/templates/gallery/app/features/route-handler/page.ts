@@ -9,7 +9,7 @@ export default function RouteHandlerExample() {
   return html`
     <h1 class="text-h2 font-bold mb-4">Route handlers</h1>
     <p class="text-muted-foreground mb-4">A <code>route.ts</code> is a server-only HTTP endpoint (named <code>GET</code>/<code>POST</code>/... exports), the WebJs equivalent of a Next route handler. It never ships to the client.</p>
-    <p>GET <a class="text-primary" href="/features/route-handler/data">/features/route-handler/data</a> returns rich JSON via <code class="font-mono">json()</code>.</p>
+    <p>GET <a class="text-primary" href="/features/route-handler/data" data-no-router>/features/route-handler/data</a> returns rich JSON via <code class="font-mono">json()</code>. It carries <code class="font-mono">data-no-router</code> so the client router does not try to soft-navigate to it: a <code>route.ts</code> is not a page, so the browser loads its JSON directly.</p>
     <p class="text-muted-foreground mt-6 mb-2">A client component reading it with <code class="font-mono">richFetch</code>, so <code class="font-mono">at</code> comes back as a real <code class="font-mono">Date</code>:</p>
     <rich-data></rich-data>
   `;
