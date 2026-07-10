@@ -1,9 +1,9 @@
+'use server';
 // A mutation that evicts cached reads. After you change data, call the narrowest
 // revalidate that covers the change so the next request refetches instead of
-// serving a stale cache() result or a revalidate-cached page. (A 'use server'
+// serving a stale cache() result or a revalidate-cached page. (A configured
 // action already runs its declared `invalidates` tags automatically; these are
 // the same helpers, callable directly when you need finer control.)
-'use server';
 import { revalidateTag, revalidateTags, revalidatePath, revalidateAll, getStore, memoryStore } from '@webjsdev/server';
 
 export async function bustCaches() {
