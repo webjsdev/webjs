@@ -7,29 +7,29 @@ tags: client-router, prefetch, performance, mobile, navigation
 author: Vivek
 ---
 
-Prefetching is the trick that makes a link feel instant. Before you click, the browser has already fetched the page behind the link, so the moment you tap it, the content is just there. No spinner, no wait. It feels like the app read your mind.
+Two things I want out of navigation pull against each other. A link should feel instant, which means fetching the page behind it before you click. And I do not want to spend a user's bandwidth on pages they never open, which is exactly what prefetching does when you get it wrong. On a desktop with a fat pipe you can ignore the conflict, prefetch everything, and nobody notices. On a phone on cellular data, warming forty links to make the one tap feel fast is a bill the user pays and never agreed to.
 
-The naive way to do it is to prefetch every link on the page. Every card in a feed, every item in a nav, every footer link, all fetched the instant they render. On a fast desktop connection you might get away with it. On a phone on cellular data you are torching someone's bandwidth to prefetch forty pages they will never visit. Open the network tab on a fetch-everything prefetcher and it lights up like a christmas tree. That is not a feature. That is a bandwidth tax you are quietly charging your users.
+The two goals are real and they disagree. Prefetching is what makes a link feel instant. Before you click, the browser has already fetched the target, so the moment you tap, the content is just there, no spinner. But a fetch-everything prefetcher lights up the network tab like a christmas tree, and most of that is pages nobody will ever see.
 
-The rule I held while building this was simple. Snappy is the goal, but never at the cost of over-fetching. When in doubt, under-fetch. A prefetch you did not need is waste, and waste on mobile data is worse than a 100ms wait.
+The rule I held while building this settled the disagreement in one direction. Snappy is the goal, but never at the cost of over-fetching. When in doubt, under-fetch. A prefetch you did not need is pure waste, and waste on mobile data is worse than a 100ms wait.
 
-# The device-adaptive default
+# The device adapts to how you'd click it
 
-WebJs's client router prefetches, but the default strategy adapts to the device it is running on. The signal it uses is whether the pointer can hover.
+WebJs's client router prefetches, and the default strategy changes with the device it runs on. The signal it reads is whether the pointer can hover.
 
-On a hover-capable pointer (a desktop with a mouse), the default is `intent` prefetch. The page behind a link is fetched when you hover over it. A hover is a strong signal. On desktop, moving the cursor onto a link and pausing there is most of the way to a click already. So the fetch fires on hover, and by the time your finger comes down on the mouse button, the page is usually ready. You prefetch exactly the links the user is actively considering, not the whole document.
+On a hover-capable pointer (a desktop with a mouse) the default is `intent` prefetch. The page is fetched when you hover the link. A hover is a strong signal, because on desktop, moving the cursor onto a link and pausing there is most of the way to a click already. The fetch fires on hover, and by the time your finger presses the button, the page is usually ready. You warm exactly the links the user is weighing, not the whole document.
 
-On a touch device (a phone or tablet, no hover), there is no hover to lean on. Your finger does not float over a link before tapping it. So the default switches to `viewport` prefetch, with two guards that keep it honest.
+On a touch device there is no hover to lean on. Your finger does not float over a link before tapping it. So the default becomes `viewport` prefetch, with two guards that keep it from turning back into fetch-everything.
 
-The first guard is dwell-gating. A link is not prefetched the instant it scrolls into view. It has to STAY in view for a short moment first. If you are flicking through a long feed, links stream past the viewport constantly, and prefetching each one as it flashed by would be exactly the network-tab flood we are trying to avoid. The dwell timer says "prefetch this only if the user actually paused on it," which is the touch-device equivalent of a hover.
+The first guard is dwell-gating. A link is not prefetched the instant it scrolls into view. It has to stay in view for a short moment first. Flick through a long feed and links stream past the viewport constantly, and prefetching each one as it flashes by is exactly the flood we are trying to avoid. The dwell timer warms a link only if the user paused on it, which is the touch-device equivalent of a hover.
 
-The second guard is cancel-on-scroll-out. If a link enters the viewport, starts its dwell timer, but scrolls back out before the timer elapses, the prefetch never fires. You looked away in time, so nothing was fetched. Only a link you dwelt on long enough to plausibly tap gets warmed.
+The second guard is cancel-on-scroll-out. A link can enter the viewport, start its dwell timer, and scroll back out before the timer elapses. When that happens the prefetch never fires. You looked away in time, so nothing was fetched.
 
-Together those two guards mean a mobile user scrolling a feed prefetches a handful of links they lingered on, not the hundreds they scrolled past. The network tab stays quiet. The navigation still feels instant on the links that matter.
+Put together, a mobile user scrolling a feed prefetches the handful of links they lingered on, not the hundreds they scrolled past. The network tab stays quiet, and the navigation still feels instant on the links that matter.
 
 # Per-link override
 
-The default is device-adaptive, but you can override any single link with `data-prefetch`.
+The default is device-adaptive, but any single link can override it with `data-prefetch`.
 
 ```ts
 import { html } from '@webjsdev/core';
@@ -45,11 +45,11 @@ export default function Nav() {
 }
 ```
 
-Set `data-prefetch="none"` on a link whose target is expensive to render or rarely visited, and it is never prefetched regardless of device. Force a strategy the other way when you know something the heuristic does not. The default is tuned for the common case, and the attribute is the escape hatch for the ones you understand better than the framework does.
+Set `data-prefetch="none"` on a link whose target is expensive to render or rarely visited, and it is never prefetched, on any device. Force a strategy the other way when you know something the heuristic does not. The default is tuned for the common case, and the attribute is the escape hatch for the links you understand better than the framework does.
 
-# You do not import anything to get this
+# Nothing to import
 
-There is no prefetch library to install and no router to wire up. The client router auto-enables the moment `@webjsdev/core` loads in the browser, and core is the bundle every component pulls in. So any page that ships a single component gets client navigation, and with it device-adaptive prefetch, for free. Prefetch is on by default. You did not opt into it and you do not configure it to get sensible behaviour.
+There is no prefetch library to install and no router to wire up. The client router auto-enables the moment `@webjsdev/core` loads in the browser, and core is the bundle every component pulls in. So any page that ships a single component gets client navigation, and with it device-adaptive prefetch, for free. You did not opt into it and you do not configure it to get sensible behaviour.
 
 ```ts
 // a page with one interactive component. prefetch is already on, nothing to wire.
@@ -67,10 +67,10 @@ export default function Feed() {
 }
 ```
 
-# Prefetch is one piece of a larger router
+# Prefetch is the front edge of one pipeline
 
-Prefetch is the front edge of a navigation, but the client router does more once you click. It swaps pages in place with no full-page reload, so there is no white flash between routes and your nested layouts stay mounted. It sends an `X-Webjs-Have` header listing the layout fragments it already holds, so the server returns only the divergent part of the next page instead of re-serializing the shared header, sidebar, and footer every time. It restores scroll position on back and forward. Prefetch and those pieces reinforce each other. Prefetch warms the divergent fragment early, `X-Webjs-Have` keeps that fragment small, and the in-place swap paints it without a flash. I will not go deep on those here (the client-router post covers them), but it is worth knowing prefetch is not a bolt-on. It is the leading edge of one coherent navigation pipeline.
+Prefetch is where a navigation starts, but the router keeps working once you click. It swaps pages in place with no full-page reload, so there is no white flash between routes and your nested layouts stay mounted. It sends an `X-Webjs-Have` header listing the layout fragments it already holds, so the server returns only the divergent part of the next page instead of re-serializing the shared header, sidebar, and footer every time. It restores scroll position on back and forward. These pieces reinforce each other. Prefetch warms the divergent fragment early, `X-Webjs-Have` keeps that fragment small, and the in-place swap paints it without a flash. The client-router post goes deep on the rest. The point here is that prefetch is not a bolt-on, it is the leading edge of one coherent navigation pipeline.
 
-# The takeaway
+# Snappy, but never greedy
 
-Prefetching the page behind a link is what makes navigation feel instant, but fetching every visible link is a bandwidth tax that hits mobile users hardest. WebJs's client router prefetches with a device-adaptive default. On a hover-capable desktop it uses `intent` prefetch (fetch on hover, since a hover is a strong click signal), and on touch it uses `viewport` prefetch that is dwell-gated and cancel-on-scroll-out, so only the links a user actually pauses on get warmed. Override any link with `data-prefetch`, and get all of it with no import because the router auto-enables when core loads. The guiding rule underneath it is the one worth stealing. Be snappy, but under-fetch when in doubt, because a prefetch you did not need is pure waste.
+Prefetching the page behind a link is what makes navigation feel instant, and fetching every visible link is what makes it expensive, most of all for the person on mobile data. The device-adaptive default resolves that tension by matching the prefetch to how you would actually click. It uses `intent` on a hover-capable desktop, because a hover is a strong click signal, and dwell-gated, cancel-on-scroll-out `viewport` prefetch on touch, because only a link you paused on is one you might tap. Override any link with `data-prefetch`, and get all of it with no import because the router auto-enables when core loads. The rule underneath is the one worth stealing. Be snappy, but under-fetch when in doubt, because a prefetch you did not need is waste you charged to someone else.
