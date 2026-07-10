@@ -120,7 +120,7 @@ await optimistic(liked, true, () => likePost(postId));
 // Stays true on success.
 ```
 
-This is the original `optimistic(signal, value, action)` from issue #246. It captures the previous value, sets the optimistic value immediately, awaits the action, and rolls back on failure. For a like button, a follow toggle, a single boolean, this is exactly the right tool. The new declarative API is for collections and complex state where a reducer makes the intent clearer.
+This is the original `optimistic(signal, value, action)`. It captures the previous value, sets the optimistic value immediately, awaits the action, and rolls back on failure. For a like button, a follow toggle, a single boolean, this is exactly the right tool. The new declarative API is for collections and complex state where a reducer makes the intent clearer.
 
 The exported `optimistic()` function dispatches between them automatically. If the first argument has `get` and `set` methods, it is the signal-based path. Otherwise it is the declarative path. Same import, two shapes.
 

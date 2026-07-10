@@ -13,7 +13,7 @@ WebJs runs on Node 24+ and on Bun, from the same source, with no build step. You
 
 The honest reason is that Bun is fast and a lot of people want to use it, and a no-build framework is exactly the kind of thing that should not care which runtime executes it. There is no bundler output that bakes in a target. The source IS the runtime. So the only thing standing between WebJs and Bun was the set of places where the framework touches a runtime API directly, and those places turned out to be worth mapping carefully.
 
-The work landed under #508. Node 24+ is the floor because that is where the built-in TypeScript stripper and a few other primitives arrived. A boot-time preflight enforces the floor and admits Bun.
+Node 24+ is the floor because that is where the built-in TypeScript stripper and a few other primitives arrived. A boot-time preflight enforces the floor and admits Bun.
 
 # The listener seam
 
@@ -59,7 +59,7 @@ A handful of tests are legitimately Node-only. They assert a `node:http` interna
 
 # What shipped around it
 
-Because the CLI's own tooling stopped needing Node anywhere in the container, the Bun scaffold ships a pure `oven/bun:1` Dockerfile (#595). The database, test, and check tooling still run on Node, but the deployed server image is Bun all the way down. `bun create webjs my-app` picks the runtime automatically, and the `--runtime bun` flag re-flavours any of the templates for Bun.
+Because the CLI's own tooling stopped needing Node anywhere in the container, the Bun scaffold ships a pure `oven/bun:1` Dockerfile. The database, test, and check tooling still run on Node, but the deployed server image is Bun all the way down. `bun create webjs my-app` picks the runtime automatically, and the `--runtime bun` flag re-flavours any of the templates for Bun.
 
 # The takeaway
 

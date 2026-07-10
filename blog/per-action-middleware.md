@@ -85,7 +85,7 @@ import * as postActions from '#modules/posts/actions/delete-post.server.ts';
 export const DELETE = route(postActions);   // its declared middleware + validate apply
 ```
 
-Passing the whole module lets the adapter read the `export const middleware` (and `export const validate`) sitting next to the action, so the guard you declared once protects the REST boundary automatically, the same way it does on the RPC one. The guard stays a property of the action, not of a single transport. If you instead import just the function (`import { deletePost }` then `route(deletePost)`), the adapter has no way to reach its sibling config, so there you pass the chain explicitly with `route(deletePost, { middleware })`. Verified by dogfooding: the module form applies the declared guards, the bare-function form runs only what you pass it.
+Passing the whole module lets the adapter read the `export const middleware` (and `export const validate`) sitting next to the action, so the guard you declared once protects the REST boundary automatically, the same way it does on the RPC one. The guard stays a property of the action, not of a single transport. If you instead import just the function (`import { deletePost }` then `route(deletePost)`), the adapter has no way to reach its sibling config, so there you pass the chain explicitly with `route(deletePost, { middleware })`.
 
 # Compose several, in order
 

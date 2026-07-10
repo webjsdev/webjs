@@ -11,7 +11,7 @@ You have seen the effect. You ask ChatGPT a question and the answer appears word
 
 The catch is that the streaming version usually costs you a lot of plumbing. You reach for WebSockets, or for Server-Sent Events (a one-way stream of text from server to browser), and now you are wiring up a channel, parsing frames on the client, and handling reconnects. That is a lot of ceremony for "show the text as it arrives."
 
-In WebJs you do not write any of that. A server action can return an async generator (a function that `yield`s values over time instead of returning once), and WebJs streams each yielded chunk to the caller over the single RPC response. The call site reads them with a plain `for await` loop. That is the whole feature (#489). Let me show you.
+In WebJs you do not write any of that. A server action can return an async generator (a function that `yield`s values over time instead of returning once), and WebJs streams each yielded chunk to the caller over the single RPC response. The call site reads them with a plain `for await` loop. That is the whole feature. Let me show you.
 
 # The action: yield tokens instead of returning a string
 
@@ -87,7 +87,7 @@ WebJs respects back-pressure on the stream. The generator only advances as the r
 
 The other half of streaming is stopping. A user closes the tab halfway through a long answer. You do not want the server to keep paying an LLM to generate tokens nobody will read.
 
-WebJs handles this on both sides (#492).
+WebJs handles this on both sides.
 
 On the server, an action reads the request's `AbortSignal` through `actionSignal()` from `@webjsdev/server`. That is the `signal` I passed to the OpenAI SDK above. When the client disconnects, the signal aborts, the SDK call stops, and the generator is cancelled. (Called outside an action, `actionSignal()` returns a signal that never aborts, so a plain server-to-server call is always safe.)
 

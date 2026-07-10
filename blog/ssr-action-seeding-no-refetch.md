@@ -9,7 +9,7 @@ author: Vivek
 
 There is a bug that almost every server-rendered app has shipped at least once, and most never fully fix. The server renders a component with real data, sends the HTML, the browser paints it, and then the component hydrates and immediately fetches the exact same data all over again. The user already had the data on screen. The server already did the query. And now the client throws a second request at the network to fetch a copy of what it is already showing. That is the double fetch, and it costs you a wasted round trip, a possible flicker when the second result swaps in, and load on a server that had no reason to answer twice.
 
-I did not want WebJs to have this problem at all, and the fix is a feature you never have to think about. It is called SSR action-result seeding, and it landed in #472 and #486.
+I did not want WebJs to have this problem at all, and the fix is a feature you never have to think about. It is called SSR action-result seeding.
 
 # The old way, in any framework
 
@@ -58,7 +58,7 @@ A few properties make it safe to leave on and forget about:
 - It is consume-once. The seed answers the first call and then it is spent. A later refetch, or a call with changed arguments, goes to the network like normal. Seeding removes the redundant hydration fetch, not real subsequent fetches.
 - It fails open. If a seed is missing for any reason, the stub degrades to a normal RPC call. A miss costs you a network request, never wrong data. There is no failure mode where a stale or mismatched seed gets served.
 
-And the way the seed is captured is worth calling out, because it is where a build-based framework would reach for a transform. WebJs captures it through a transparent server-side `'use server'` facade. There is no source transform and no build step. The file on disk is unchanged, and the source you see in the browser's network tab is unchanged. Nothing rewrites your code to inject an initial-data payload. The facade sits at the action boundary at runtime and records what SSR computed. It runs on Bun too (#529 and #534), same as on Node.
+And the way the seed is captured is worth calling out, because it is where a build-based framework would reach for a transform. WebJs captures it through a transparent server-side `'use server'` facade. There is no source transform and no build step. The file on disk is unchanged, and the source you see in the browser's network tab is unchanged. Nothing rewrites your code to inject an initial-data payload. The facade sits at the action boundary at runtime and records what SSR computed. It runs on Bun too, same as on Node.
 
 # It composes with elision
 
