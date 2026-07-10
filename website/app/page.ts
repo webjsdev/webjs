@@ -105,26 +105,9 @@ export default function LandingPage() {
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme='light']) { --code-tag: oklch(0.78 0.13 250); --code-attr: oklch(0.66 0.16 150); --code-str: oklch(0.80 0.15 145); }
       }
-      .t-com { color: var(--fg-subtle); font-style: italic; }
-      .t-str { color: oklch(0.52 0.13 150); }
-      .t-kw  { color: oklch(0.52 0.16 295); font-weight: 600; }
-      .t-fn  { color: oklch(0.52 0.15 250); }
-      .t-type{ color: oklch(0.52 0.10 200); }
-      .t-num { color: oklch(0.55 0.12 215); }
-      .t-punc{ color: var(--fg-muted); }
-      .t-id  { color: var(--fg); }
-      :root[data-theme='dark'] .t-str { color: oklch(0.80 0.14 150); }
-      :root[data-theme='dark'] .t-kw  { color: oklch(0.76 0.14 295); }
-      :root[data-theme='dark'] .t-fn  { color: oklch(0.75 0.13 250); }
-      :root[data-theme='dark'] .t-type{ color: oklch(0.80 0.10 200); }
-      :root[data-theme='dark'] .t-num { color: oklch(0.82 0.12 215); }
-      @media (prefers-color-scheme: dark) {
-        :root:not([data-theme='light']) .t-str { color: oklch(0.80 0.14 150); }
-        :root:not([data-theme='light']) .t-kw  { color: oklch(0.76 0.14 295); }
-        :root:not([data-theme='light']) .t-fn  { color: oklch(0.75 0.13 250); }
-        :root:not([data-theme='light']) .t-type{ color: oklch(0.80 0.10 200); }
-        :root:not([data-theme='light']) .t-num { color: oklch(0.82 0.12 215); }
-      }
+      /* Syntax-highlight token colors (.t-kw / .t-str / ...) are defined
+         globally in public/input.css so every surface (this page and the
+         blog code fences) shares one palette. */
       /* The live like-button demo: a bare light-DOM button the page styles
          into a pill (tag-prefixed, per the light-DOM CSS rule). */
       like-button button {

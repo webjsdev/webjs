@@ -121,3 +121,23 @@ export function highlight(code: string): TemplateResult[] {
     return cls ? html`<span class=${cls}>${tok.v}</span>` : html`${tok.v}`;
   });
 }
+
+function esc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/**
+ * Highlight a code sample into an HTML string of styled spans, for callers
+ * that build markup as a string rather than an `html` TemplateResult (the
+ * blog markdown renderer, `modules/blog/utils/render-post.ts`). Same
+ * tokenizer and token classes as `highlight()`, so the colors match every
+ * other WebJs surface. Token text is HTML-escaped, so a sample can contain
+ * `<`, `&`, and backticks safely.
+ */
+export function highlightToHtml(code: string): string {
+  return tokenize(code.replace(/^\n+|\n+$/g, '')).map((tok) => {
+    const cls = CLASS[tok.t] ?? '';
+    const v = esc(tok.v);
+    return cls ? `<span class="${cls}">${v}</span>` : v;
+  }).join('');
+}

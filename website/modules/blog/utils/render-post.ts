@@ -20,6 +20,8 @@
  *     screen-reader cue); an internal `/path` link navigates in place.
  */
 
+import { highlightToHtml } from '#lib/highlight.ts';
+
 function inline(s: string): string {
   let out = s
     .replace(/&/g, '&amp;')
@@ -75,9 +77,15 @@ export function renderPostBody(md: string): string {
   for (const raw of lines) {
     if (inCode) {
       if (raw.trim().startsWith('```')) {
-        const escaped = codeBuf.join('\n')
-          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        out.push(`<pre class="bg-bg-subtle border border-border rounded-lg my-[48px] overflow-x-auto"><code class="font-mono text-[13px] leading-[1.7] text-fg whitespace-pre block px-[24px] py-[20px]"${codeLang ? ` data-lang="${codeLang}"` : ''}>${escaped}</code></pre>`);
+        const src = codeBuf.join('\n');
+        // JS/TS fences get SSR syntax highlighting via the shared tokenizer
+        // (colors match the home page and the ui docs). Other langs (sh, plain
+        // command output) stay as plain escaped text.
+        const HIGHLIGHTED = new Set(['', 'ts', 'tsx', 'js', 'jsx', 'javascript', 'typescript']);
+        const body = HIGHLIGHTED.has(codeLang)
+          ? highlightToHtml(src)
+          : src.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        out.push(`<pre class="bg-bg-subtle border border-border rounded-lg my-[48px] overflow-x-auto"><code class="font-mono text-[13px] leading-[1.7] text-fg whitespace-pre block px-[24px] py-[20px]"${codeLang ? ` data-lang="${codeLang}"` : ''}>${body}</code></pre>`);
         codeBuf = [];
         codeLang = '';
         inCode = false;
