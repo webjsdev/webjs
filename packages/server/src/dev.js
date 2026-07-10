@@ -2272,12 +2272,17 @@ async function fileResponse(abs, opts) {
     // In dev an external watcher (tailwindcss --watch, esbuild, ...) rewrites a
     // public asset with truncate-then-write, so the file is 0 bytes for a short
     // window during a rebuild. A hot reload that lands in that window would
-    // serve empty CSS / JS and the page paints unstyled (#891). Ride over the
-    // mid-rewrite: re-read a few times before giving up, so a truncated read
-    // never reaches the browser. Bounded, so a genuinely empty file still serves
-    // (after a short delay). Prod has no such watcher and is left untouched.
+    // serve empty CSS / JS and the page paints unstyled (#891). Close that
+    // 0-byte window: when an empty read comes from a file that was JUST modified
+    // (the mid-rewrite signal), re-read a few times so the truncated read does
+    // not reach the browser. A genuinely empty, untouched asset is served
+    // immediately (no delay), and a non-zero-but-partial write is a smaller
+    // residual gap this does not cover. Prod has no such watcher and is
+    // left untouched.
     if (opts.dev && data.length === 0) {
-      for (let i = 0; i < 12 && data.length === 0; i++) {
+      let midRewrite = false;
+      try { midRewrite = Date.now() - (await stat(abs)).mtimeMs < 500; } catch { /* gone */ }
+      for (let i = 0; midRewrite && i < 12 && data.length === 0; i++) {
         await new Promise((r) => setTimeout(r, 20));
         try { data = await readFile(abs); } catch { break; }
       }
@@ -2693,15 +2698,16 @@ function reloadWorkerJs(bp) {
   return `// webjs dev reload worker (one shared connection for all tabs)
 const ports = new Set();
 let lastError = null;
+// A MessagePort has no reliable close event, so we prune a port when a post to
+// it throws (a closed tab). Some browsers silently no-op instead of throwing,
+// which leaves a dead port in the set, but that is a harmless dev-only no-op and
+// the set is bounded by the tabs opened in one session.
+function fanout(msg) {
+  for (const p of ports) { try { p.postMessage(msg); } catch (_) { ports.delete(p); } }
+}
 const es = new EventSource(${JSON.stringify(withBasePath('/__webjs/events', bp))});
-es.addEventListener('reload', () => {
-  lastError = null;
-  for (const p of ports) { try { p.postMessage({ type: 'reload' }); } catch (_) {} }
-});
-es.addEventListener('webjs-error', (e) => {
-  lastError = e.data;
-  for (const p of ports) { try { p.postMessage({ type: 'webjs-error', data: e.data }); } catch (_) {} }
-});
+es.addEventListener('reload', () => { lastError = null; fanout({ type: 'reload' }); });
+es.addEventListener('webjs-error', (e) => { lastError = e.data; fanout({ type: 'webjs-error', data: e.data }); });
 self.onconnect = (e) => {
   const port = e.ports[0];
   ports.add(port);

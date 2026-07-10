@@ -9,7 +9,7 @@
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, truncateSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, truncateSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -35,15 +35,31 @@ test('dev rides over a mid-rewrite: a 0-byte read is retried and serves the sett
   const cssPath = join(appDir, 'public', 'style.css');
   const app = await createRequestHandler({ appDir, dev: true });
 
-  // Simulate the external watcher: truncate now, rewrite the content shortly
-  // after (inside the retry window).
+  // Simulate the external watcher: truncate now (fresh mtime = the mid-rewrite
+  // signal), rewrite the content well inside the retry window.
   truncateSync(cssPath, 0);
-  setTimeout(() => writeFileSync(cssPath, CONTENT), 100);
+  setTimeout(() => writeFileSync(cssPath, CONTENT), 40);
 
   const res = await app.handle(new Request('http://x/public/style.css'));
   const body = await res.text();
   assert.equal(res.status, 200);
   assert.equal(body.length, CONTENT.length, 'the full CSS is served, not the mid-rewrite empty read');
+});
+
+test('a genuinely empty, untouched asset serves immediately (no retry, no delay)', async () => {
+  // The retry only fires when the empty file was JUST modified. An empty asset
+  // that has been sitting there is served at once, so an intentionally-empty
+  // file does not pay the retry window on every dev request.
+  const appDir = makeApp();
+  const cssPath = join(appDir, 'public', 'style.css');
+  const app = await createRequestHandler({ appDir, dev: true });
+  truncateSync(cssPath, 0);
+  utimesSync(cssPath, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000)); // mtime 1 min ago
+  const t0 = Date.now();
+  const res = await app.handle(new Request('http://x/public/style.css'));
+  const body = await res.text();
+  assert.equal(body.length, 0, 'a stale empty file is served as-is');
+  assert.ok(Date.now() - t0 < 100, 'no retry window is paid for a genuinely empty asset');
 });
 
 test('COUNTERFACTUAL: prod does not retry, so a mid-rewrite empty read is served as-is', async () => {
