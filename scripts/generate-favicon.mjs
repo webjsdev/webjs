@@ -20,6 +20,7 @@ const APPS = [
   resolve(root, 'website/public'),
   resolve(root, 'docs/public'),
   resolve(root, 'examples/blog/public'),
+  resolve(root, 'packages/ui/packages/website/public'),
 ];
 
 // SVG that matches the header logo mark in website/app/layout.ts: a rounded

@@ -1,10 +1,15 @@
 #!/usr/bin/env node
 /**
- * Generates Open Graph social-preview PNGs for the three apps.
+ * Generates Open Graph social-preview PNGs for docs and examples/blog.
  *
  * Uses puppeteer-core + system chromium to render a small HTML template
  * at 1200×630 (the OG / Twitter summary_large_image size) and writes the
  * PNG into each app's `public/og.png`.
+ *
+ * The marketing site (website/public/og.png) has its own dedicated
+ * generator at website/scripts/generate-og.mjs (a distinct hero card), so
+ * it is deliberately NOT written here: two scripts targeting one file would
+ * fight, and rerunning this one would clobber the website card.
  *
  * Rerun this script whenever the brand text / subtitle changes.
  *
@@ -18,13 +23,13 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
 
+// The logo mark stops, copied from the dark-theme --logo-from/--logo-to in
+// each app's app/layout.ts (all four in-repo apps share the same brand mark).
+// An OG card is not theme-adaptive, so the dark card carries the DARK stops.
+const LOGO_FROM = 'oklch(0.8 0.16 58)';
+const LOGO_TO = 'oklch(0.62 0.18 44)';
+
 const APPS = [
-  {
-    out: resolve(root, 'website/public/og.png'),
-    section: null,
-    title: 'The web framework built for AI agents.',
-    subtitle: 'Your AI agent reads the framework code and ships. Web components, server actions, streaming SSR. No bundler, no config, no magic.',
-  },
   {
     out: resolve(root, 'docs/public/og.png'),
     section: 'docs',
@@ -85,9 +90,9 @@ const html = (a) => `<!DOCTYPE html>
   }
   .logo {
     width: 34px; height: 34px;
-    background: linear-gradient(135deg, oklch(0.82 0.14 55), oklch(0.58 0.13 45));
+    background: linear-gradient(135deg, ${LOGO_FROM}, ${LOGO_TO});
     border-radius: 8px;
-    box-shadow: 0 0 0 1px oklch(1 0 0 / 0.14) inset, 0 6px 16px oklch(0.78 0.14 55 / 0.35);
+    box-shadow: 0 0 0 1px oklch(1 0 0 / 0.14) inset, 0 6px 16px color-mix(in oklch, ${LOGO_FROM} 35%, transparent);
   }
   .sep { color: oklch(0.5 0.02 60); font-weight: 400; margin: 0 2px; }
   .section { color: oklch(0.82 0.14 55); font-weight: 600; }
