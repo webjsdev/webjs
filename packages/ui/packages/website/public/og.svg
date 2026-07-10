@@ -13,6 +13,11 @@
       <stop offset="60%"  stop-color="#000" stop-opacity="0"/>
       <stop offset="100%" stop-color="#000" stop-opacity="0.45"/>
     </linearGradient>
+    <!-- Brand mark gradient, top-left to bottom-right, matching the navbar. -->
+    <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#ffa146"/>
+      <stop offset="100%" stop-color="#da5801"/>
+    </linearGradient>
   </defs>
 
   <!-- Base dark fill -->
@@ -24,9 +29,10 @@
   <!-- Bottom vignette for depth -->
   <rect width="1200" height="630" fill="url(#bottom-vignette)"/>
 
-  <!-- Logo: orange rounded square + wordmark -->
+  <!-- Logo: orange rounded square (navbar mark gradient) + wordmark -->
   <g transform="translate(64, 60)">
-    <rect width="36" height="36" rx="8" fill="#f6a06b"/>
+    <rect width="36" height="36" rx="11" fill="url(#mark)"/>
+    <rect width="36" height="36" rx="11" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="1"/>
     <text x="52" y="26" font-family="Liberation Sans, sans-serif" font-size="22"
           font-weight="700" fill="#f8f0e9" letter-spacing="-0.4">webjs ui</text>
   </g>
@@ -45,14 +51,14 @@
     <text x="64" y="478">Zero third-party deps. Copy-paste source. Works anywhere.</text>
   </g>
 
-  <!-- Rubric (small, mono, uppercase, tracked-out) - bottom-left -->
+  <!-- Rubric (small, mono, uppercase, tracked-out): bottom-left -->
   <g font-family="JetBrainsMono Nerd Font, monospace" font-size="14"
      font-weight="600" letter-spacing="2">
     <text x="64" y="568" fill="#f6a06b">●</text>
     <text x="86" y="568" fill="#c5b8ad">COMPOSITION-FIRST  ·  NATIVE SEMANTICS  ·  ZERO DEPS</text>
   </g>
 
-  <!-- Domain badge - bottom-right -->
+  <!-- Domain badge: bottom-right -->
   <text x="1136" y="568" text-anchor="end"
         font-family="JetBrainsMono Nerd Font, monospace" font-size="14"
         font-weight="600" letter-spacing="2" fill="#8a7d72">UI.WEBJS.DEV</text>

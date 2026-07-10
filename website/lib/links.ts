@@ -18,6 +18,7 @@ export const UI_URL = env.UI_URL || 'https://ui.webjs.dev';
 // the "Demo" nav link.
 export const EXAMPLE_BLOG_URL = env.EXAMPLE_BLOG_URL || 'https://example-blog.webjs.dev';
 export const GH_URL = 'https://github.com/webjsdev/webjs';
+export const DISCORD_URL = 'https://discord.gg/qZScjWWNA8';
 
 // Visually-hidden cue appended inside target="_blank" links so a screen reader
 // announces the new-tab context change.

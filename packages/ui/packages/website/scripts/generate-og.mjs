@@ -34,6 +34,11 @@ const ACCENT  = '#f6a06b';      // --accent (oklch 0.78 0.14 55)
 const FG      = '#f8f0e9';      // --fg (oklch 0.96 0.015 60)
 const FG_MUTED = '#c5b8ad';     // --fg-muted (oklch 0.72 0.02 60)
 const FG_SUBTLE = '#8a7d72';    // --fg-subtle (oklch 0.55 0.02 60)
+// The logo mark gradient, matching the dark navbar mark (--logo-from/--logo-to
+// in app/layout.ts, oklch 0.8 0.16 58 -> 0.62 0.18 44). Hex approximations so
+// rsvg-convert renders it identically regardless of color management.
+const LOGO_FROM = '#ffa146';    // --logo-from dark (oklch 0.8 0.16 58)
+const LOGO_TO   = '#da5801';    // --logo-to dark (oklch 0.62 0.18 44)
 
 const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
@@ -50,6 +55,11 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
       <stop offset="60%"  stop-color="#000" stop-opacity="0"/>
       <stop offset="100%" stop-color="#000" stop-opacity="0.45"/>
     </linearGradient>
+    <!-- Brand mark gradient, top-left to bottom-right, matching the navbar. -->
+    <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="${LOGO_FROM}"/>
+      <stop offset="100%" stop-color="${LOGO_TO}"/>
+    </linearGradient>
   </defs>
 
   <!-- Base dark fill -->
@@ -61,9 +71,10 @@ const svg = `<?xml version="1.0" encoding="UTF-8"?>
   <!-- Bottom vignette for depth -->
   <rect width="${W}" height="${H}" fill="url(#bottom-vignette)"/>
 
-  <!-- Logo: orange rounded square + wordmark -->
+  <!-- Logo: orange rounded square (navbar mark gradient) + wordmark -->
   <g transform="translate(64, 60)">
-    <rect width="36" height="36" rx="8" fill="${ACCENT}"/>
+    <rect width="36" height="36" rx="11" fill="url(#mark)"/>
+    <rect width="36" height="36" rx="11" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="1"/>
     <text x="52" y="26" font-family="Liberation Sans, sans-serif" font-size="22"
           font-weight="700" fill="${FG}" letter-spacing="-0.4">webjs ui</text>
   </g>
