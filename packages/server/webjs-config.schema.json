@@ -173,6 +173,11 @@
           "description": "Long-lived commands run as child processes alongside the dev server, torn down on exit so a watcher cannot leak past it.",
           "type": "array",
           "items": { "type": "string" }
+        },
+        "watch": {
+          "description": "Extra directories the dev live-reload watcher follows in addition to the appDir (#894), for content the app reads from outside its own tree (e.g. blog markdown in a repo-root blog/ dir). Each entry is resolved relative to the app root and may escape it (../blog). Read by the server (readDevWatchPathsFromApp).",
+          "type": "array",
+          "items": { "type": "string" }
         }
       }
     },

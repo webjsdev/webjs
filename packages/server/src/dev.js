@@ -422,6 +422,50 @@ export async function readBodyLimitsFromApp(appDir) {
 }
 
 /**
+ * Extra dev watch roots from the app's package.json `webjs.dev.watch` (#894).
+ * These are directories the app READS from but that live OUTSIDE its appDir, so
+ * the recursive `fs.watch(appDir)` never sees them (e.g. the website renders
+ * posts from a repo-root `blog/` dir, a sibling of the app, so editing a post
+ * would not live-reload). Each entry is resolved relative to the appDir and MAY
+ * escape it (`"../blog"`); a change under one runs the same rebuild + reload as
+ * an in-tree edit. Opt-in: a missing/empty config yields `[]`, so a plain app
+ * watches only its appDir, unchanged.
+ *
+ * Returns absolute, de-duped paths, skipping any that overlap the appDir (the
+ * appDir is already watched recursively, so an ancestor or descendant root
+ * would just double-fire the rebuild). Existence is NOT checked here (the caller
+ * filters missing paths so it can log them); the reader stays a pure
+ * package.json read, matching the other `readXFromApp` helpers.
+ *
+ * @param {string} appDir
+ * @returns {Promise<string[]>}
+ */
+export async function readDevWatchPathsFromApp(appDir) {
+  let pkg;
+  try {
+    pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
+  } catch {
+    return [];
+  }
+  const raw = pkg && pkg.webjs && pkg.webjs.dev && pkg.webjs.dev.watch;
+  if (!Array.isArray(raw)) return [];
+  /** @type {string[]} */
+  const out = [];
+  const seen = new Set();
+  for (const entry of raw) {
+    if (typeof entry !== 'string' || !entry.trim()) continue;
+    const abs = resolve(appDir, entry);
+    // Skip the appDir itself and any ancestor/descendant overlap: the appDir is
+    // already watched recursively, so an overlapping extra root double-fires.
+    if (abs === appDir || appDir.startsWith(abs + sep) || abs.startsWith(appDir + sep)) continue;
+    if (seen.has(abs)) continue;
+    seen.add(abs);
+    out.push(abs);
+  }
+  return out;
+}
+
+/**
  * Resolve the node:http server timeouts (issue #237) from the app's
  * package.json `webjs.requestTimeoutMs` / `webjs.headersTimeoutMs` /
  * `webjs.keepAliveTimeoutMs` plus the env overrides. A missing or unreadable
@@ -1543,9 +1587,9 @@ export async function startServer(opts) {
     // the SQLite dev DB (db/dev.db) + db/migrations so a file the dev server itself writes never loops.
     const rebuild = debounce(() => app.rebuild(), 80);
     watcherAbort = new AbortController();
-    (async () => {
+    const watchRoot = async (root) => {
       try {
-        const events = fsWatch(app.appDir, { recursive: true, signal: watcherAbort.signal });
+        const events = fsWatch(root, { recursive: true, signal: watcherAbort.signal });
         for await (const event of events) {
           const filename = event.filename || '';
           if (shouldIgnoreWatchPath(filename)) continue;
@@ -1553,10 +1597,17 @@ export async function startServer(opts) {
         }
       } catch (err) {
         if (err && /** @type any */(err).name !== 'AbortError') {
-          logger.warn({ err }, 'file watcher exited');
+          logger.warn({ err }, `file watcher exited (${root})`);
         }
       }
-    })();
+    };
+    watchRoot(app.appDir);
+    // Extra roots the app reads from OUTSIDE its appDir (#894): repo-root content
+    // dirs (blog markdown, data fixtures) the recursive appDir watch can't see.
+    // Opt-in via `webjs.dev.watch`; each funnels into the same debounced rebuild.
+    const extraWatch = (await readDevWatchPathsFromApp(app.appDir)).filter((p) => existsSync(p));
+    for (const root of extraWatch) watchRoot(root);
+    if (extraWatch.length) logger.info?.({ paths: extraWatch }, 'watching extra dev paths');
   }
 
   // Inbound server timeouts (issue #237). On node these are the node:http

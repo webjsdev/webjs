@@ -276,7 +276,8 @@ identically. This replaces the old `predev` / `prestart` npm hooks +
 "webjs": {
   "dev": {
     "before":   ["webjs db migrate"],                                  // one-shot, runs to completion first
-    "parallel": ["tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch"]  // long-lived, runs alongside the server
+    "parallel": ["tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch"], // long-lived, runs alongside the server
+    "watch":    ["../blog"]                                            // extra dirs to live-reload on, OUTSIDE the appDir
   },
   "start": {
     "before":   ["webjs db migrate"]                                   // one-shot, before serving
@@ -286,6 +287,7 @@ identically. This replaces the old `predev` / `prestart` npm hooks +
 
 - **`before`** (dev and start): commands run sequentially to completion BEFORE the server boots (the old `predev` / `prestart`: `webjs db migrate`, a registry copy). A non-zero exit ABORTS the boot with a clear message, so a failed migration never serves stale code/schema.
 - **`parallel`** (dev only): long-lived child processes that run ALONGSIDE the server (the old `concurrently` watchers: the Tailwind CLI `--watch`). They are spawned once in the parent (not on every hot-reload restart) and TORN DOWN on exit (SIGINT / SIGTERM / server exit), so a watcher cannot leak past the dev server.
+- **`watch`** (dev only, #894): extra directories the dev live-reload watcher follows IN ADDITION to the appDir. The dev server watches its appDir recursively, but an app that reads content from OUTSIDE its tree (the in-repo `website` renders posts from a repo-root `blog/` dir, a sibling of the app) sees no reload when that outside content changes. Each entry is resolved relative to the app root and MAY escape it (`"../blog"`); a change under one runs the same rebuild + browser reload as an in-tree edit. Opt-in: a missing/empty `watch` means the appDir is the only watched root, unchanged. A configured path that does not exist is skipped, an entry that overlaps the appDir (an ancestor or descendant) is dropped as redundant, and the usual `node_modules` / `.git` / `.webjs` / `db` noise is ignored under each extra root too.
 - Each command runs through a shell, so a normal command line works. An empty / absent block means `webjs dev` / `start` run unchanged, so a plain app with no Tailwind/DB needs no config.
 - The scaffold uses the Tailwind browser runtime (no CSS build step), so it ships only `dev.before` / `start.before` (the Drizzle migration apply); an app that adds the Tailwind CLI puts its `--watch` under `webjs.dev.parallel`. The in-repo apps (`examples/blog`, `website`, `docs`, ui-website) show the Tailwind `parallel` watcher pattern.
 - **Prod note:** `before` runs at boot, so `webjs start` runs `webjs db migrate` in-process to apply pending migrations. Drizzle has no client-codegen step (the schema IS the types, inferred at compile time), so there is nothing to run at image-BUILD time. Authoring a new migration from a schema change is a dev-time `webjs db generate`, committed to source control, not a boot step. So `CMD ["npm", "start"]` and `CMD ["webjs", "start"]` are equivalent.
