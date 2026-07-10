@@ -3,13 +3,13 @@
   "specifier": "@webjsdev/core",
   "exports": {
     "ContextConsumer": {
-      "exempt": "deferred: context API; agent-docs/components.md (#859)"
+      "demo": "modules/components/components/theme-context.ts"
     },
     "ContextProvider": {
-      "exempt": "deferred: context API; agent-docs/components.md (#859)"
+      "demo": "modules/components/components/theme-context.ts"
     },
     "ContextRequestEvent": {
-      "exempt": "deferred: context API; agent-docs/components.md (#859)"
+      "demo": "modules/components/components/theme-context.ts"
     },
     "FRAME_CHUNK": {
       "exempt": "internal: wire/stream protocol constant"
@@ -36,10 +36,10 @@
       "exempt": "deferred: page-level streaming boundary; documented in agent-docs/advanced.md (#859)"
     },
     "Task": {
-      "exempt": "deferred: client async primitive; the gallery teaches async render() instead, agent-docs/advanced.md (#859)"
+      "demo": "modules/components/components/task-loader.ts"
     },
     "TaskStatus": {
-      "exempt": "deferred: Task status enum; pairs with Task (#859)"
+      "demo": "modules/components/components/task-loader.ts"
     },
     "WebComponent": {
       "demo": "modules/async-render/components/server-clock.ts"
@@ -81,7 +81,7 @@
       "exempt": "internal: stale-while-revalidate plumbing"
     },
     "createContext": {
-      "exempt": "deferred: context API; agent-docs/components.md (#859)"
+      "demo": "modules/components/components/theme-context.ts"
     },
     "createFrameDecoder": {
       "exempt": "internal: frame codec used by the client router"
