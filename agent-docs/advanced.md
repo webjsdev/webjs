@@ -599,6 +599,22 @@ unsafe and a hard reload is required:
    reloads, so the warmup window cannot hard-reload and wipe a
    half-filled form. Works for every nav, including partial-response navs.
 
+   **Deploy fingerprint (#899).** The importmap hash alone misses a deploy
+   that changed ONLY SSR output (syntax highlighting, a template edit, a copy
+   change): the map is byte-identical, so the id never changes and the client
+   never detects the deploy, serving stale pre-deploy HTML on soft nav until a
+   manual refresh, per page. So the published id folds in a per-deploy
+   fingerprint when one is available: `WEBJS_BUILD_ID` (set it to your git SHA
+   at deploy) or a detected platform commit id (`RAILWAY_GIT_COMMIT_SHA`,
+   `VERCEL_GIT_COMMIT_SHA`, `RENDER_GIT_COMMIT`, or a generic `GIT_COMMIT` /
+   `SOURCE_COMMIT`). All instances of one deploy share the value, so a
+   multi-instance or rolling deploy does not flap; there is deliberately NO
+   per-process boot-id fallback (that would differ per instance and hard-reload
+   in a loop behind a load balancer). With no fingerprint set, the id is the
+   importmap hash exactly as before, so an SSR-only deploy is still missed:
+   set `WEBJS_BUILD_ID` (or run on a platform that exports a commit env) to
+   opt into SSR-deploy detection.
+
 2. **Generic `data-webjs-track="reload"`** (for non-importmap concerns,
    e.g. a CSS bundle hash, a build-id meta tag). Any head element with
    the attribute joins a signature computed from concatenated outerHTML.

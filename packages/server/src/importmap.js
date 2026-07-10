@@ -220,16 +220,64 @@ export function publishedBuildId() {
 }
 
 /**
- * Promote the current `importMapHash()` to the advertised build id.
- * Called by `dev.js` when the importmap becomes authoritatively final.
- * Idempotent; the value only changes when the underlying map does, so
- * re-publishing an unchanged map is a no-op for the client. Within a
- * single process the published id therefore never changes after the
- * first publish (a rebuild in dev re-publishes the fresh map, but dev
- * already forces a full reload via SSE).
+ * A per-DEPLOY fingerprint folded into the published build id (#899), so a
+ * deploy that changes ONLY SSR output (no importmap change) still bumps the id
+ * the client compares across navigations. Without this, an SSR-only deploy
+ * (e.g. syntax-highlighting blog code at render time) leaves the importmap hash
+ * byte-identical, so the client never detects the deploy and serves stale
+ * pre-deploy HTML until a manual refresh, per page.
+ *
+ * Sourced, in precedence order, from an explicit `WEBJS_BUILD_ID` (the deployer
+ * sets it, e.g. to the git SHA) or a detected platform commit/deploy id
+ * (Railway, Vercel, Render, or a generic `GIT_COMMIT` / `SOURCE_COMMIT`). All
+ * instances of ONE deploy share the value, which is why we do NOT fall back to
+ * a per-process boot id or timestamp: on a multi-instance or rolling deploy
+ * those differ per instance, so a client load-balanced across instances would
+ * see the id flap and hard-reload in a loop. With no fingerprint available the
+ * value is `''` and behavior is exactly as before (importmap-hash only).
+ *
+ * Read from the environment on each call (env is stable within a process, so
+ * this is not a per-request flap), and sanitized to a header-safe token (no CR
+ * or LF, bounded length) since `WEBJS_BUILD_ID` is deployer-supplied and the id
+ * rides the `X-Webjs-Build` response header.
+ *
+ * @returns {string}
+ */
+export function deployFingerprint() {
+  const env = /** @type {Record<string, string|undefined>} */ (
+    typeof process !== 'undefined' && process.env ? process.env : {}
+  );
+  const raw =
+    env.WEBJS_BUILD_ID ||
+    env.RAILWAY_GIT_COMMIT_SHA ||
+    env.RAILWAY_DEPLOYMENT_ID ||
+    env.VERCEL_GIT_COMMIT_SHA ||
+    env.RENDER_GIT_COMMIT ||
+    env.GIT_COMMIT ||
+    env.SOURCE_COMMIT ||
+    env.SOURCE_VERSION ||
+    '';
+  // Header-safe token: drop anything but word chars, dot, and dash, then cap.
+  return String(raw).replace(/[^\w.-]/g, '').slice(0, 64);
+}
+
+/**
+ * Promote the current `importMapHash()` to the advertised build id, folding in
+ * the per-deploy fingerprint (#899) when one is available. Called by `dev.js`
+ * when the importmap becomes authoritatively final. Idempotent; the value only
+ * changes when the underlying map OR the deploy fingerprint does, so
+ * re-publishing an unchanged map is a no-op for the client. Within a single
+ * process the published id never changes after the first publish (a rebuild in
+ * dev re-publishes, but dev already forces a full reload via SSE).
+ *
+ * The empty-until-final semantics are preserved: while `_importMapHash` is `''`
+ * (the warmup window) the published id stays `''`, so the router's "unknown
+ * version never hard-reloads" guard still holds even with a fingerprint set.
  */
 export function publishBuildId() {
-  _publishedBuildId = _importMapHash;
+  if (!_importMapHash) { _publishedBuildId = ''; return; }
+  const dep = deployFingerprint();
+  _publishedBuildId = dep ? `${_importMapHash}.${dep}` : _importMapHash;
 }
 
 /**
