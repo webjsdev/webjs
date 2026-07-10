@@ -41,7 +41,7 @@ ThemeProvider.register('theme-provider');
 export class ThemeConsumer extends WebComponent {
   // subscribe: true re-renders this element whenever the provider calls setValue.
   private consumer = new ContextConsumer<Theme>(this, { context: themeContext, subscribe: true });
-  private lastRead = signal<Theme | 'unknown'>('unknown');
+  private lastRead = signal<Theme | 'not read yet'>('not read yet');
 
   // The imperative escape hatch: dispatch a ContextRequestEvent yourself to
   // grab the current value ONCE without subscribing. It bubbles up to the

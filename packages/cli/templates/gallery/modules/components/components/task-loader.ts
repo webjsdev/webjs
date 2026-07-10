@@ -12,8 +12,11 @@ export class TaskLoader extends WebComponent {
   // Bumped on each reload so args change and the task re-runs.
   private attempt = 0;
 
+  // Task calls task(...args(), { signal }), so the args() array is SPREAD into
+  // positional parameters (not passed as one array). One arg here, so read it
+  // directly as `attempt`.
   private task = new Task<string>(this, {
-    task: async ([attempt]: [number]) => {
+    task: async (attempt: number) => {
       await new Promise((r) => setTimeout(r, 600));
       if (attempt % 3 === 2) throw new Error('unlucky attempt');
       return `loaded on attempt #${attempt}`;
