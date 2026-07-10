@@ -228,9 +228,11 @@ export function publishedBuildId() {
  * pre-deploy HTML until a manual refresh, per page.
  *
  * Sourced, in precedence order, from an explicit `WEBJS_BUILD_ID` (the deployer
- * sets it, e.g. to the git SHA) or a detected platform commit/deploy id
- * (Railway, Vercel, Render, or a generic `GIT_COMMIT` / `SOURCE_COMMIT`). All
- * instances of ONE deploy share the value, which is why we do NOT fall back to
+ * sets it, e.g. to the git SHA) or a detected platform commit/deploy id:
+ * `RAILWAY_GIT_COMMIT_SHA`, `RAILWAY_DEPLOYMENT_ID`, `VERCEL_GIT_COMMIT_SHA`,
+ * `RENDER_GIT_COMMIT`, or a generic `GIT_COMMIT` / `SOURCE_COMMIT` /
+ * `SOURCE_VERSION`. All instances of ONE deploy share the value, which is why
+ * we do NOT fall back to
  * a per-process boot id or timestamp: on a multi-instance or rolling deploy
  * those differ per instance, so a client load-balanced across instances would
  * see the id flap and hard-reload in a loop. With no fingerprint available the
