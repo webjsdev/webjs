@@ -7,7 +7,7 @@ tags: javascript, web-standards, modules, prototypes, serialization
 author: Vivek
 ---
 
-I re-read Kyle Simpson's *You Don't Know JS* over a weekend, the way you re-read something you first met years ago and expect to find nothing new in. The books walk the parts of the language most of us skate over: lexical scope and closures, ES modules, the prototype chain, property descriptors, the type system and coercion, async iteration. Deep-JS material. The stuff you are supposed to internalize and then mostly stop thinking about once a framework takes over.
+I re-read Kyle Simpson's [*You Don't Know JS*](https://github.com/getify/You-Dont-Know-JS) over a weekend, the way you re-read something you first met years ago and expect to find nothing new in. The books walk the parts of the language most of us skate over: lexical scope and closures, ES modules, the prototype chain, property descriptors, the type system and coercion, async iteration. Deep-JS material. The stuff you are supposed to internalize and then mostly stop thinking about once a framework takes over.
 
 What struck me on the re-read was how much of it I had been staring at all year while building WebJs. Not as trivia. As the actual load-bearing structure of the framework. Each pillar of the book maps onto a decision I had already made, usually because trying to do it any other way was worse. So this post is that tour: the JavaScript fundamentals a framework can either lean on or paper over, and where WebJs lands on each.
 
