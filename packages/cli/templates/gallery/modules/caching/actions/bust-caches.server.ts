@@ -6,14 +6,20 @@
 // the same helpers, callable directly when you need finer control.)
 import { revalidateTag, revalidateTags, revalidatePath, revalidateAll, getStore, memoryStore } from '@webjsdev/server';
 
-export async function bustCaches() {
-  revalidateTag('todos'); // one cache() tag
-  revalidateTags(['todos', 'user:me']); // several tags at once
-  revalidatePath('/features/caching'); // a revalidate-cached page URL
-  // getStore() is the active cache store (memoryStore() in dev, redisStore() in
-  // prod via setStore()); fall back to a fresh memoryStore() if none is set.
-  const store = getStore() ?? memoryStore();
-  const backed = store != null;
-  revalidateAll(); // the nuclear option: drop the whole cache
-  return { success: true as const, data: { backed } };
+export async function bustCaches(scope: 'tags' | 'path' | 'all' = 'tags') {
+  // getStore() is the store cache() reads from (a memoryStore() in dev, a
+  // redisStore() in prod via setStore()); fall back to a fresh in-memory one.
+  const active = getStore();
+  const store = active ?? memoryStore();
+
+  // Evict only what changed. Pick the narrowest scope that covers the mutation.
+  if (scope === 'all') {
+    revalidateAll(); // nuclear: drop the whole store
+  } else if (scope === 'path') {
+    revalidatePath('/features/caching'); // one revalidate-cached page URL
+  } else {
+    revalidateTag('todos'); // one cache() tag
+    revalidateTags(['todos', 'user:me']); // several tags at once
+  }
+  return { success: true as const, data: { evicted: scope, store: store === active ? 'active' : 'memory' } };
 }

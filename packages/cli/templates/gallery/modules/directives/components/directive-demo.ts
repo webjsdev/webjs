@@ -42,6 +42,21 @@ export class DirectiveDemo extends WebComponent {
   // field initializer just creates the iterator without running the body.
   private logIter: AsyncIterable<string> = this.log();
   private countIter: AsyncIterable<number> = this.countdown();
+  // For `templateContent`: a real <template> element on the CLIENT (the client
+  // directive clones its `.content`), and a plain { innerHTML } object at SSR
+  // (there is no document to build a template with, and the server directive
+  // emits innerHTML directly). The real template is built in connectedCallback,
+  // which SSR never calls, so the two paths agree on the output.
+  private stampTpl: HTMLTemplateElement | { innerHTML: string } = {
+    innerHTML: '<strong>stamped</strong> from a template',
+  };
+
+  connectedCallback() {
+    super.connectedCallback();
+    const tpl = document.createElement('template');
+    tpl.innerHTML = '<strong>stamped</strong> from a template';
+    this.stampTpl = tpl;
+  }
 
   // A finite async iterable: asyncAppend adds each line as it arrives.
   private async *log(): AsyncGenerator<string> {
@@ -142,9 +157,10 @@ export class DirectiveDemo extends WebComponent {
               : html`<span>Panel B content</span>`,
           )}</div>
 
-          <!-- templateContent stamps an existing template's HTML. It also takes
-               a plain { innerHTML } object, so no document access at SSR. -->
-          <div class="text-[15px] text-foreground">${templateContent({ innerHTML: '<strong>stamped</strong> from a template' })}</div>
+          <!-- templateContent stamps a <template> element's content (see
+               stampTpl: a real template on the client, a plain { innerHTML } at
+               SSR, so first paint and hydration match). -->
+          <div class="text-[15px] text-foreground">${templateContent(this.stampTpl)}</div>
 
           <!-- asyncAppend appends each value from an async iterable as it
                arrives; asyncReplace shows only the latest. Both render empty at
