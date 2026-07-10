@@ -133,6 +133,15 @@ jobs:
       # stale. The same script proves no Node regression under `npm test`.
       - name: webjs dev hot reload on Bun
         run: bun test/bun/dev-hot-reload.mjs
+      # Dev live-reload of a webjs.dev.watch dir OUTSIDE the appDir (#894) and
+      # the SSE retry hint on the Bun.serve shell (#893). Plain scripts (no
+      # per-test timeout) since each boots the real CLI + polls for readiness;
+      # the node:test integration versions are node:http-listener-specific and
+      # denylisted in run-bun-tests.js.
+      - name: webjs dev extra-watch + reload-retry on Bun
+        run: |
+          bun test/bun/dev-extra-watch.mjs
+          bun test/bun/dev-reload-retry.mjs
       # SSR action-result seeding on Bun (#529): seeding rode Node's
       # module.registerHooks, which Bun lacks; it now installs via a Bun.plugin
       # onLoad, so a shipping async component seeds during SSR (the __webjs-seeds
