@@ -7,6 +7,17 @@ import { importMapTag, setVendorEntries, buildImportMap, setCoreInstall, importM
 
 const CORE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../../core');
 
+// These tests assert the bare importmap-hash build id (`data-webjs-build="<64
+// hex>"` / `publishedBuildId() === importMapHash()`). Since #899 folds a deploy
+// fingerprint into the published id when one is in the environment, clear the
+// deploy env vars so the assertions are deterministic regardless of where the
+// suite runs (a dev on Railway/Render, or with GIT_COMMIT set). The fingerprint
+// itself is covered by build-id-deploy.test.js, which sets these vars.
+for (const k of ['WEBJS_BUILD_ID', 'RAILWAY_GIT_COMMIT_SHA', 'RAILWAY_DEPLOYMENT_ID',
+  'VERCEL_GIT_COMMIT_SHA', 'RENDER_GIT_COMMIT', 'GIT_COMMIT', 'SOURCE_COMMIT', 'SOURCE_VERSION']) {
+  delete process.env[k];
+}
+
 // Bind the importmap to the workspace @webjsdev/core install before
 // any test runs so framework entries are populated. Tests that exercise
 // dist-vs-src mode rebind via setCoreInstall(CORE_DIR, true/false).

@@ -21,6 +21,15 @@ const HTML_URL = pathToFileURL(
 
 let tmpRoot;
 
+// The boot-id assertion below expects the bare importmap-hash format (64 hex).
+// #899 folds a deploy fingerprint into the published id when one is in the
+// environment, so clear the deploy env vars to keep this deterministic wherever
+// the suite runs (build-id-deploy.test.js covers the fingerprint path).
+for (const k of ['WEBJS_BUILD_ID', 'RAILWAY_GIT_COMMIT_SHA', 'RAILWAY_DEPLOYMENT_ID',
+  'VERCEL_GIT_COMMIT_SHA', 'RENDER_GIT_COMMIT', 'GIT_COMMIT', 'SOURCE_COMMIT', 'SOURCE_VERSION']) {
+  delete process.env[k];
+}
+
 before(() => {
   tmpRoot = mkdtempSync(join(tmpdir(), 'webjs-dev-'));
 });

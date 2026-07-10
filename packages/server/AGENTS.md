@@ -279,10 +279,26 @@ and the reader key set never diverge (a counterfactual unknown key proves
    map is still warming it stays empty, and the router treats an empty id on
    either side as "version unknown" and never hard-reloads against it. So the
    warmup window can never flip the id from empty to a value mid-session and
-   trigger a destructive reload that wipes a half-filled form. A real
-   cross-deploy still reloads, because both sides then carry non-empty,
-   differing ids. Concurrent early requests await the in-flight first resolve
-   (no bypass), so the first served response already carries the final map.
+   trigger a destructive reload that wipes a half-filled form. Concurrent early
+   requests await the in-flight first resolve (no bypass), so the first served
+   response already carries the final map.
+   **Deploy fingerprint (#899).** The importmap hash alone misses an SSR-ONLY
+   deploy (syntax highlighting, a template edit, a copy change): the map is
+   byte-identical, so the id would not change and the client would keep serving
+   stale pre-deploy HTML on soft nav. So `publishBuildId()` folds a per-deploy
+   fingerprint into the published id when one is available: `WEBJS_BUILD_ID`
+   (deployer-set, e.g. the git SHA) or a detected platform commit/deploy id
+   (`RAILWAY_GIT_COMMIT_SHA`, `RAILWAY_DEPLOYMENT_ID`, `VERCEL_GIT_COMMIT_SHA`,
+   `RENDER_GIT_COMMIT`, `GIT_COMMIT`, `SOURCE_COMMIT`, `SOURCE_VERSION`, in that
+   order), via `deployFingerprint()`. All instances of one deploy share the
+   value (no per-process boot-id fallback, which would flap on a multi-instance
+   deploy), and the published id becomes `<importmap-hash>.<fingerprint>`. Only
+   `publishedBuildId()` carries the fingerprint; the internal `importMapHash()`
+   (the `?v` asset-fingerprint input) is untouched. With no fingerprint set the
+   id is the importmap hash exactly as before, so the SSR-only case is still
+   missed by design. A real cross-deploy reloads because both sides then carry
+   non-empty, differing ids, and folding the fingerprint into the html-cache key
+   (`html-cache.js`) means a deploy also re-keys the server HTML cache.
    **Probes:** `/__webjs/health` is liveness (always 200 once listening);
    `/__webjs/ready` is readiness (503 until fully warm, i.e. analysis plus the
    first vendor attempt, then 200). An optional `readiness.{js,ts}` at the app
