@@ -28,13 +28,13 @@ const FEATURES = [
   'routing', 'boundaries', 'components', 'server-actions', 'optimistic-ui',
   'async-render', 'directives', 'route-handler', 'forms',
   'metadata', 'caching', 'env', 'client-router', 'service-worker',
-  'websockets', 'broadcast', 'rate-limit', 'file-storage',
+  'websockets', 'broadcast', 'rate-limit', 'file-storage', 'sessions',
 ];
 // Whole example apps under app/examples/<name>.
 const EXAMPLE_APPS = ['todo'];
 // Routes whose logic lives in a modules/<name> folder (routing and
 // route-handler are app-only: a pages-only route and a route.ts handler).
-const MODULE_ROUTES = ['components', 'server-actions', 'optimistic-ui', 'async-render', 'directives', 'todo', 'websockets', 'broadcast', 'rate-limit', 'file-storage'];
+const MODULE_ROUTES = ['components', 'server-actions', 'optimistic-ui', 'async-render', 'directives', 'todo', 'websockets', 'broadcast', 'rate-limit', 'file-storage', 'sessions'];
 
 async function tempCwd() {
   return mkdtemp(join(tmpdir(), 'webjs-scaffold-gallery-'));

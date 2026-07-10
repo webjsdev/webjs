@@ -7,6 +7,9 @@
 // whitelisted extension.
 'use server';
 import { getFileStore, generateKey } from '@webjsdev/server';
+// Importing the config module runs setFileStore(diskStore(...)) once at load,
+// so uploads land in the configured store. See ../store.server.ts.
+import '../store.server.ts';
 
 export async function storeUpload(file: File) {
   if (!(file instanceof File) || file.size === 0) {

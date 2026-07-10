@@ -88,7 +88,7 @@ export async function writeSaasFiles(appDir, opts = {}) {
 
   // lib/auth.server.ts
   await writeFile(join(appDir, 'lib', 'auth.server.ts'), [
-    "import { createAuth, Credentials } from '@webjsdev/server';",
+    "import { createAuth, Credentials, GitHub, Google } from '@webjsdev/server';",
     "import { db } from '#db/connection.server.ts';",
     "import { compare } from './password.server.ts';",
     "",
@@ -110,6 +110,12 @@ export async function writeSaasFiles(appDir, opts = {}) {
     "        return { id: String(user.id), name: user.name, email: user.email };",
     "      },",
     "    }),",
+    "    // OAuth providers: add GitHub / Google sign-in by setting the matching",
+    "    // env vars. Each preset (GitHub(), Google()) reads AUTH_<PROVIDER>_ID /",
+    "    // _SECRET, so they only activate once configured and a fresh scaffold",
+    "    // still boots with just Credentials.",
+    "    ...(process.env.AUTH_GITHUB_ID ? [GitHub({ clientId: process.env.AUTH_GITHUB_ID, clientSecret: process.env.AUTH_GITHUB_SECRET })] : []),",
+    "    ...(process.env.AUTH_GOOGLE_ID ? [Google({ clientId: process.env.AUTH_GOOGLE_ID, clientSecret: process.env.AUTH_GOOGLE_SECRET })] : []),",
     "  ],",
     "  secret: authSecret,",
     "});",
