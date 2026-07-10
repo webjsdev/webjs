@@ -2,7 +2,7 @@ import { html } from '@webjsdev/core';
 import '#components/copy-cmd.ts';
 import '#components/like-button.ts';
 import { COMPONENT_SAMPLE, ACTION_SAMPLE, PAGE_SAMPLE } from '#lib/samples.ts';
-import { DOCS_URL, UI_URL, EXAMPLE_BLOG_URL, GH_URL, NEW_TAB } from '#lib/links.ts';
+import { DOCS_URL, UI_URL, EXAMPLE_BLOG_URL, GH_URL, DISCORD_URL, NEW_TAB } from '#lib/links.ts';
 // highlight() runs only at SSR (codeWindow renders its output into the served
 // HTML), but it does ship to the client as a small dead module: the page loads
 // in the browser to register copy-cmd, and that pulls in its
@@ -421,6 +421,7 @@ lib/session.server.ts</pre>
             <h4 class="text-xs font-bold uppercase tracking-wider text-fg">Community</h4>
             <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${GH_URL} target="_blank" rel="noopener noreferrer">GitHub${NEW_TAB}</a>
             <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${GH_URL + '/discussions'} target="_blank" rel="noopener noreferrer">Discussions${NEW_TAB}</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${DISCORD_URL} target="_blank" rel="noopener noreferrer">Discord${NEW_TAB}</a>
           </div>
           <div class="flex flex-col gap-3">
             <h4 class="text-xs font-bold uppercase tracking-wider text-fg">webjs</h4>
