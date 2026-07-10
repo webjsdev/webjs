@@ -58,7 +58,7 @@ import '#components/ui/toggle-group.ts';
 import '#components/ui/tooltip.ts';
 
 export function generateMetadata({ params }: { params: { name: string } }) {
-  return { title: `${params.name}: Webjs UI` };
+  return { title: `${params.name}: WebJs UI` };
 }
 
 // Helper: renders a single preview pane around an example snippet.
