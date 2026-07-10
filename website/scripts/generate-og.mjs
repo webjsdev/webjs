@@ -36,6 +36,11 @@ const T = {
   accent: 'oklch(0.7 0.16 52)',
   accentLive: 'oklch(0.63 0.17 50)',
   border: 'oklch(0.32 0 0 / 0.9)',
+  // The logo mark stops, copied from the dark-theme --logo-from/--logo-to in
+  // app/layout.ts. An OG card is not theme-adaptive (social unfurlers render
+  // one static image), so the dark card carries the DARK navbar mark.
+  logoFrom: 'oklch(0.8 0.16 58)',
+  logoTo: 'oklch(0.62 0.18 44)',
 };
 
 const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -68,8 +73,8 @@ const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
   .brand{ display:flex; align-items:center; gap:16px; }
   .mark{
     width:46px; height:46px; border-radius:13px;
-    background:linear-gradient(150deg, ${T.accent}, ${T.accentLive});
-    box-shadow:0 6px 22px color-mix(in oklch, ${T.accentLive} 40%, transparent),
+    background:linear-gradient(135deg, ${T.logoFrom}, ${T.logoTo});
+    box-shadow:0 6px 22px color-mix(in oklch, ${T.logoFrom} 40%, transparent),
                inset 0 1px 0 color-mix(in oklch, white 30%, transparent);
   }
   .word{ font-family:'Inter Tight',sans-serif; font-weight:700; font-size:31px; letter-spacing:-0.02em; }

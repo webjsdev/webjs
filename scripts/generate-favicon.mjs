@@ -22,14 +22,27 @@ const APPS = [
   resolve(root, 'examples/blog/public'),
 ];
 
-// SVG that matches the header logo: linear gradient, rounded corners,
-// inner highlight ring. 512×512 so it down-scales cleanly to any size.
+// SVG that matches the header logo mark in website/app/layout.ts: a rounded
+// square with the accent-orange gradient (--logo-from to --logo-to) plus a
+// subtle inner highlight ring. 512x512 so it down-scales cleanly to any size.
+//
+// The mark is theme-adaptive, exactly like the navbar: the default stops are
+// the LIGHT-theme --logo-from/--logo-to, and an embedded
+// @media (prefers-color-scheme: dark) swaps in the DARK-theme stops. This is
+// the standards-based way to ship one favicon that reads on both light and
+// dark browser chrome (a single SVG whose own style adapts, no second file).
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="oklch(0.82 0.14 55)"/>
-      <stop offset="100%" stop-color="oklch(0.58 0.13 45)"/>
+      <stop class="from" offset="0%" stop-color="oklch(0.63 0.17 50)"/>
+      <stop class="to" offset="100%" stop-color="oklch(0.44 0.11 52)"/>
     </linearGradient>
+    <style>
+      @media (prefers-color-scheme: dark) {
+        .from { stop-color: oklch(0.8 0.16 58); }
+        .to { stop-color: oklch(0.62 0.18 44); }
+      }
+    </style>
   </defs>
   <rect x="32" y="32" width="448" height="448" rx="96" ry="96" fill="url(#g)"/>
   <rect x="32" y="32" width="448" height="448" rx="96" ry="96" fill="none" stroke="oklch(1 0 0 / 0.15)" stroke-width="6"/>
@@ -41,6 +54,11 @@ const browser = await puppeteer.launch({
   args: ['--no-sandbox', '--disable-setuid-sandbox'],
 });
 const page = await browser.newPage();
+// Bake the single PNG fallback from the DARK-theme stops: a raster cannot
+// carry the @media swap, and the bright dark-navbar orange reads on both
+// light and dark tab bars. Emulate dark so the SVG's own media query resolves
+// to the dark stops before we screenshot it.
+await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: 'dark' }]);
 await page.setViewport({ width: 512, height: 512, deviceScaleFactor: 1 });
 await page.setContent(`<!doctype html><html><body style="margin:0;background:transparent">${svg}</body></html>`, { waitUntil: 'load' });
 const png = await page.screenshot({ type: 'png', omitBackground: true });
