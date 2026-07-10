@@ -71,6 +71,10 @@ test('full-stack scaffold ships feature demos and one example app', async () => 
     assert.ok(await exists(join(appDir, 'app', 'features', 'rate-limit', 'ping', 'route.ts')));
     assert.ok(await exists(join(appDir, 'app', 'features', 'rate-limit', 'ping', 'middleware.ts')));
     assert.ok(await exists(join(appDir, 'app', 'features', 'file-storage', 'file', '[key]', 'route.ts')));
+    // Root-only boundaries + metadata image routes (the convention-file demos).
+    for (const f of ['global-error.ts', 'global-not-found.ts', 'icon.ts', 'apple-icon.ts', 'opengraph-image.ts', 'twitter-image.ts']) {
+      assert.ok(await exists(join(appDir, 'app', f)), `app/${f}`);
+    }
     // Feature/app logic lives in modules/, not app/.
     for (const name of MODULE_ROUTES) {
       assert.ok(await exists(join(appDir, 'modules', name)), `modules/${name}`);

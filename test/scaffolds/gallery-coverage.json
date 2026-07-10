@@ -719,10 +719,10 @@
       "demoed": true
     },
     "global-error": {
-      "exempt": "deferred: no example global-error file shipped by the scaffold yet (#865)"
+      "demoed": true
     },
     "global-not-found": {
-      "exempt": "deferred: no example global-not-found file shipped by the scaffold yet (#865)"
+      "demoed": true
     },
     "route": {
       "demoed": true
@@ -737,16 +737,16 @@
       "demoed": true
     },
     "icon": {
-      "exempt": "deferred: no example icon file shipped by the scaffold yet (#865)"
+      "demoed": true
     },
     "apple-icon": {
-      "exempt": "deferred: no example apple-icon file shipped by the scaffold yet (#865)"
+      "demoed": true
     },
     "opengraph-image": {
-      "exempt": "deferred: no example opengraph-image file shipped by the scaffold yet (#865)"
+      "demoed": true
     },
     "twitter-image": {
-      "exempt": "deferred: no example twitter-image file shipped by the scaffold yet (#865)"
+      "demoed": true
     }
   }
 }
