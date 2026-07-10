@@ -147,6 +147,22 @@ if has '(sync|update|check|fix|add to).{0,24}(the )?(scaffold|template)' \
   add_match "webjs-scaffold-sync: the request changes what \`webjs create\` generates (a gallery/showcase demo, a template, a generated file, a scaffold convention). Invoke the webjs-scaffold-sync skill BEFORE editing. It holds the authoritative map of every scaffold surface (the packages/cli/lib/* generators, the templates/, the per-agent rule files in lockstep, the scaffold tests, the framework template-matrix docs, the preview apps) plus the mandatory generate-boot-check verification, so no surface is silently skipped. It is the scaffold-side sibling of webjs-doc-sync."
 fi
 
+# --- webjs-blog-write: write a blog post in the author's voice ----------
+# Triggers: write/draft a blog post, an SEO blog, blog about a feature,
+# "we shipped X but never blogged it". The skill carries the author's voice
+# (analyze it by reading all blog/*.md FIRST), the hard prose rules (no
+# em-dashes, no internal PR/issue numbers, no process tells), the SEO
+# front-matter conventions, the de-duplication check against every existing
+# post, and the mandatory dogfood verification of every claim in a feature
+# post before it ships.
+if has '(write|draft|author|compose).{0,24}(a |an |the )?(seo )?blog' \
+   || has 'blog post' \
+   || has '(seo|new) blog\b' \
+   || has 'blog (about|on|for|covering)' \
+   || has '(never|not) blogged'; then
+  add_match "webjs-blog-write: the request is to write or substantially edit a blog post. Invoke the webjs-blog-write skill BEFORE writing prose. It requires analyzing the author's voice by reading all blog/*.md first, and carries the hard rules (no em-dashes, no internal #NNN numbers in prose, no process tells), the SEO topic + front-matter conventions, the de-duplication check against every existing post, and the mandatory dogfood verification of every factual claim in a feature post."
+fi
+
 # --- code-review: review the diff before a PR is ready ------------------
 # Triggers: review the PR/diff/branch/changes, code review, look it over
 # for bugs. Reviewing every change before it is marked ready is a standing
