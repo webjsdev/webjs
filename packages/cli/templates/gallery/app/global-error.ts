@@ -15,19 +15,21 @@
 // Distinct from error.ts (a nested, per-segment boundary that renders a body
 // fragment the framework wraps) and from global-not-found.ts (the unmatched-URL
 // 404). In production only error.message is exposed, never the stack.
-import { html } from '@webjsdev/core';
+import { html, cspNonce } from '@webjsdev/core';
 
 export default function GlobalError({ error }: { error: Error }) {
   const message = process.env.NODE_ENV === 'production'
     ? 'Something went wrong. Please try again.'
     : error?.message || 'Unknown error';
+  // cspNonce() is '' with CSP off (the default), so this is safe as-is; under an
+  // opt-in CSP it carries the per-request nonce so the inline <style> is allowed.
   return html`<!doctype html>
     <html lang="en">
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>Something went wrong</title>
-        <style>
+        <style nonce="${cspNonce()}">
           body { font: 16px/1.6 system-ui, sans-serif; margin: 0; display: grid; place-items: center; min-height: 100vh; background: #1c1613; color: #f5f0eb; }
           main { max-width: 32rem; padding: 2rem; text-align: center; }
           a { color: #ff8a3d; }

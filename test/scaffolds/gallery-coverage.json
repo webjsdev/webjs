@@ -33,7 +33,7 @@
       "exempt": "internal: Signal class; app code uses signal() / computed()"
     },
     "Suspense": {
-      "exempt": "deferred: page-level streaming boundary; documented in agent-docs/advanced.md (#859)"
+      "demo": "app/features/async-render/page.ts"
     },
     "Task": {
       "demo": "modules/components/components/task-loader.ts"
@@ -90,7 +90,7 @@
       "demo": "modules/directives/components/directive-demo.ts"
     },
     "cspNonce": {
-      "exempt": "deferred: CSP nonce accessor; agent-docs/configuration.md (#859)"
+      "demo": "app/global-error.ts"
     },
     "css": {
       "demo": "modules/components/components/reactive-meter.ts"
@@ -99,13 +99,13 @@
       "exempt": "internal: wire serializer; app code round-trips via server actions"
     },
     "disableClientRouter": {
-      "exempt": "deferred: client-router opt-out; agent-docs/configuration.md (#859)"
+      "demo": "modules/client-router/components/router-controls.ts"
     },
     "effect": {
       "demo": "modules/components/components/reactive-meter.ts"
     },
     "enableClientRouter": {
-      "exempt": "deferred: client-router opt-in; agent-docs/configuration.md (#859)"
+      "demo": "modules/client-router/components/router-controls.ts"
     },
     "encodeFrame": {
       "exempt": "internal: frame codec used by the client router"
@@ -228,7 +228,7 @@
       "demo": "modules/components/components/counter-card.ts"
     },
     "redirect": {
-      "exempt": "deferred: server redirect throw; mentioned in the boundaries demo prose (#859)"
+      "demo": "app/features/routing/legacy/page.ts"
     },
     "ref": {
       "demo": "modules/directives/components/directive-demo.ts"
@@ -240,16 +240,16 @@
       "exempt": "internal: keyed-list registry plumbing"
     },
     "render": {
-      "exempt": "deferred: client render(v, el) into a DOM element; public API, agent-docs/advanced (#859)"
+      "demo": "modules/components/components/browser/counter-card.test.js"
     },
     "renderStream": {
-      "exempt": "deferred: <webjs-stream> applier for a connectWS handler; public API, agent-docs/advanced (#859)"
+      "demo": "modules/websockets/components/ws-echo.ts"
     },
     "renderToStream": {
       "exempt": "internal: server render entry; used by the framework and tests, not authored in app pages"
     },
     "renderToString": {
-      "exempt": "deferred: SSR-to-string for test assertions; @webjsdev/core/server, agent-docs/testing (#859)"
+      "demo": "modules/components/components/server-render.test.ts"
     },
     "repeat": {
       "demo": "modules/directives/components/directive-demo.ts"
@@ -258,7 +258,7 @@
       "demo": "modules/client-router/components/router-controls.ts"
     },
     "richFetch": {
-      "exempt": "deferred: content-negotiated rich fetch; agent-docs/advanced.md (#859)"
+      "demo": "modules/route-handler/components/rich-data.ts"
     },
     "scanSeeds": {
       "exempt": "internal: SSR action-seeding plumbing"
