@@ -67,13 +67,13 @@ You did not annotate anything. You did not write `"use client"` on the interacti
 
 You can turn it off. Set `"webjs": { "elide": false }` in the config, or `WEBJS_ELIDE=0` in the environment, and every component module ships. That is the escape hatch for the rare case where the analyser is too conservative for your taste or you are debugging a hydration issue and want everything loaded. In practice I have not needed it.
 
-# What I am still figuring out
+# Two corners still open
 
 The denylist completeness is the load-bearing assumption, and the guard tests cover the surfaces that are enumerable: prototype methods, exported reactive primitives, binding sigils, static conventions. What they cannot mechanically cover is a genuinely new KIND of interactivity surface that is none of those, for example a brand-new template syntax. Adding one is a rare, deliberate, reviewed change that touches the renderer anyway, so a human is already in the right neighbourhood. But it is the one spot where the enforcement is a documented contract rather than a failing build, and I would like to close even that eventually.
 
 The other open question is how aggressive to be about the transitive cases. A component shared between a display-only page and an interactive one has to ship, because one of its two users needs it. The analyser gets this right by shipping it, but "right" here still means the display-only page pays for a module it does not use on its own. The conservative direction protects correctness, and it occasionally costs a fetch. I am comfortable with that trade, because the alternative direction breaks pages, but it is the place where elision leaves value on the table.
 
-# The takeaway
+# Inverting the islands model
 
 Islands architecture usually asks you to mark the islands. WebJs inverts that. You write plain components, and the framework proves which ones are display-only and strips their JavaScript, conservatively, verified differentially, and guarded against drift by tests that fail the build. The result is that a mostly-static page ships almost no component code without you thinking about it.
 

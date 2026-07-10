@@ -61,6 +61,4 @@ A handful of tests are legitimately Node-only. They assert a `node:http` interna
 
 Because the CLI's own tooling stopped needing Node anywhere in the container, the Bun scaffold ships a pure `oven/bun:1` Dockerfile. The database, test, and check tooling still run on Node, but the deployed server image is Bun all the way down. `bun create webjs my-app` picks the runtime automatically, and the `--runtime bun` flag re-flavours any of the templates for Bun.
 
-# The takeaway
-
 Supporting a second runtime for a no-build framework is mostly not about making it start. It is about finding the small set of places where the two runtimes disagree, isolating them behind a seam, and then running your existing test suite on both engines so the disagreements surface as failures instead of as user reports. The five bugs the matrix caught were all invisible to code review and all real. If you are going cross-runtime, do not write a Bun test suite. Run your Node suite on Bun, and fix what turns red.

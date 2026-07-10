@@ -7,26 +7,26 @@ tags: server-actions, middleware, auth, rpc, composition
 author: Vivek
 ---
 
-Here is a shape I write in almost every app. An action that updates a profile, deletes a comment, or charges a card. Before the real work runs, the same three lines run first. Check the user is logged in. Check they are allowed to touch this record. Maybe log the attempt. Then, and only then, do the thing.
-
-The naive version copies those lines into the top of every action body. You have seen it. Fifteen actions, each opening with the same authentication dance, each one a place you could forget it. Miss the check on one action and you have shipped a hole.
+Every app I build ends up with the same two lines at the top of a dozen server actions. Get the current user. If there is no user, bail out. Then, below that, the actual work: delete the post, charge the card, update the profile.
 
 ```ts
-// modules/posts/actions/delete-post.server.ts (the copy-paste way)
+// modules/posts/actions/delete-post.server.ts
 'use server';
 export async function deletePost(id: string) {
-  const user = await auth();                  // repeated
-  if (!user) return { success: false, error: 'unauthorized' };   // repeated
+  const user = await auth();
+  if (!user) return { success: false, error: 'unauthorized' };
   await db.delete(posts).where(eq(posts.id, id));
   return { success: true };
 }
 ```
 
-The cross-cutting concern (auth) is tangled into the business logic (delete a post). Every action re-implements the same preamble, and the preamble is exactly the part you cannot afford to get wrong.
+It looks harmless the first time. By the fifteenth action it is a liability. The check is copy-pasted, which means it is one careless paste away from being subtly wrong, and it is one forgotten paste away from being absent. An action missing its two lines is a hole, and nothing about the file looks different from the fifteen that have them. You find out when someone deletes a post they do not own.
 
-# The WebJs way: declare middleware as a sibling export
+The deeper problem is that the check does not belong in the action at all. Deleting a post is the action's job. Deciding whether the caller is allowed to is a separate concern that happens to run in the same place. They are tangled together because there was nowhere else to put the guard.
 
-In WebJs a server action is a function in a `*.server.ts` file marked `'use server'`. Alongside that function you can declare a reserved export the framework reads statically, `export const middleware`, an array of functions to run around the action.
+# Give the guard its own home
+
+A WebJs server action is a function in a `*.server.ts` file marked `'use server'`. Next to that function you can declare a reserved export the framework reads statically, `export const middleware`, an array of functions that wrap the action.
 
 ```ts
 // modules/posts/actions/delete-post.server.ts
@@ -37,17 +37,17 @@ import { actionContext } from '@webjsdev/server';
 export const middleware = [requireUser];
 
 export async function deletePost(id: string) {
-  const user = actionContext().user;          // set by the middleware
+  const user = actionContext().user;
   await db.delete(posts).where(eq(posts.id, id)).where(eq(posts.authorId, user.id));
   return { success: true };
 }
 ```
 
-The action body no longer knows how auth works. It just reads the user the middleware put there. The auth logic lives in one place, and every action that lists `requireUser` gets it identically.
+The two lines are gone. `deletePost` no longer knows how auth works or where the user comes from. It reads `actionContext().user` and gets on with deleting a post. `requireUser` is the guard, written once, and every action that lists it in its `middleware` array is protected identically. There is no fifteenth file that quietly forgot.
 
-# What a middleware function looks like
+# What requireUser actually is
 
-Each middleware is `async (ctx, next) => result`. It receives a context object it can write to, and a `next` function that runs the rest of the chain (the next middleware, or finally the action itself). This is the same onion model you know from Express or Koa, scoped to a single action.
+A middleware is `async (ctx, next) => result`. It gets a context object it can write to, and a `next` function that runs the rest of the chain, whether that is the next middleware or finally the action. This is the onion model from Express or Koa, narrowed down to a single action.
 
 ```ts
 // lib/auth-middleware.server.ts
@@ -56,40 +56,39 @@ import { getSession } from '#lib/session.server.ts';
 export async function requireUser(ctx, next) {
   const user = await getSession();
   if (!user) {
-    // short-circuit: the action body never runs
     return { success: false, error: 'unauthorized', status: 401 };
   }
-  ctx.user = user;        // hand data down to the action
-  return next();          // proceed to the action
+  ctx.user = user;
+  return next();
 }
 ```
 
-Two things are happening here, and both matter.
+Two behaviors are doing the work here.
 
-First, the middleware short-circuits by returning an `ActionResult` instead of calling `next()`. When `requireUser` finds no session it returns `{ success: false, error: 'unauthorized' }` and the action body is never entered. No half-run mutation, no reaching the database with a null user. The chain simply stops and that result is what the caller receives.
+When there is no session, `requireUser` returns an `ActionResult` and never calls `next()`. That return is a hard stop. The action body is not entered, so there is no half-run mutation and no query fired with a null user. The chain ends and that result is what the caller sees. This is the guarantee the copy-pasted version could never make, because a forgotten paste failed open. A missing middleware is visible in the array, not invisible in its absence.
 
-Second, it accumulates context. Anything the middleware writes onto `ctx` is readable inside the action via `actionContext()` (imported from `@webjsdev/server`). The action's own signature never changes. `deletePost(id)` still takes one argument. The user arrives out of band, through the context the middleware built, so the calling code stays exactly as clean as it was.
+When there is a session, `requireUser` hangs the user on `ctx` and calls `next()`. Whatever a middleware writes onto `ctx` is readable in the action through `actionContext()`. The action's signature does not change to accommodate this. `deletePost(id)` still takes one argument. The user rides in out of band, so the code that calls `deletePost` stays as simple as it ever was.
 
-# Where it runs on every entry point
+# It travels with the action, not with the transport
 
-This is the part that made me want the feature. A WebJs action is reachable two ways. A client component imports it and the import becomes a typed RPC (Remote Procedure Call) stub. Or a `route.ts` REST endpoint imports and calls it, often through the `route()` adapter from `@webjsdev/server`.
+Here is the part that sold me on doing it this way. A WebJs action is reachable through two doors. A client component imports it and the import becomes a typed RPC (Remote Procedure Call) stub. Or a `route.ts` REST endpoint imports it and calls it, often through the `route()` adapter from `@webjsdev/server`.
 
-On the RPC boundary the declared middleware runs automatically. When the browser calls `deletePost` over RPC, `requireUser` runs first, because the framework reads the `export const middleware` config off the action and wraps the chain around it for you. That is the primary path for a WebJs app, since components import actions directly, and it needs no wiring at all.
+On the RPC boundary the guard runs on its own. When the browser calls `deletePost` over RPC, `requireUser` runs first, because the framework reads the `export const middleware` off the action and wraps the chain for you. Components import actions directly, so this is the everyday path, and it needs no wiring.
 
-The `route()` adapter picks the declared chain up too, as long as you hand it the action's module namespace rather than the bare function:
+The `route()` adapter picks the same chain up, on one condition. You hand it the action's module namespace, not the bare function.
 
 ```ts
 // app/api/posts/[id]/route.ts
 import { route } from '@webjsdev/server';
 import * as postActions from '#modules/posts/actions/delete-post.server.ts';
-export const DELETE = route(postActions);   // its declared middleware + validate apply
+export const DELETE = route(postActions);
 ```
 
-Passing the whole module lets the adapter read the `export const middleware` (and `export const validate`) sitting next to the action, so the guard you declared once protects the REST boundary automatically, the same way it does on the RPC one. The guard stays a property of the action, not of a single transport. If you instead import just the function (`import { deletePost }` then `route(deletePost)`), the adapter has no way to reach its sibling config, so there you pass the chain explicitly with `route(deletePost, { middleware })`.
+Passing the whole module is what lets the adapter see the `export const middleware` (and `export const validate`) sitting beside the action, so `requireUser` guards the REST door the same way it guards the RPC one. Import just the function instead, `import { deletePost }` then `route(deletePost)`, and the adapter has no path to that sibling config, so nothing is applied automatically. There you pass the chain yourself with `route(deletePost, { middleware })`. The bare form only runs what you hand it.
 
-# Compose several, in order
+# Stack them up
 
-Because it is an array, you compose. Middleware run left to right, each wrapping the next.
+Because `middleware` is an array, guards compose. They run left to right, each wrapping the next.
 
 ```ts
 export const middleware = [requireUser, requireAdmin, auditLog];
@@ -101,14 +100,12 @@ export async function banUser(id: string) {
 }
 ```
 
-`requireUser` runs first and sets `ctx.user`. `requireAdmin` reads that user and short-circuits with a `403` if they are not an admin. `auditLog` records the attempt and calls `next()`, which finally runs `banUser`. Each concern is one small function, testable on its own, reusable across every action that needs it.
+`requireUser` runs first and sets `ctx.user`. `requireAdmin` reads that user and short-circuits with a `403` if they are not an admin. `auditLog` records the attempt and calls `next()`, which finally runs `banUser`. Three concerns, three small functions, each testable alone and reusable on any action that needs it. The action reads one line of context and knows the caller made it through all three.
 
-# The neighbours: the rest of the sibling config exports
+# The other exports next to the function
 
-Middleware is one of a family of reserved exports a `'use server'` file can declare, all read statically by the framework. You already saw these if you have tuned an action's transport. `export const method` sets the HTTP verb (`'GET'`, `'PATCH'`, and so on). `export const cache` sets a GET's cache window. `export const tags` labels a read's cache entries and `export const invalidates` names the tags a mutation evicts. `export const validate` is the boundary validator. They all sit next to the function and describe how it should be treated, not what it does.
+Middleware belongs to a family of reserved exports a `'use server'` file can declare, all read statically. `export const method` sets the HTTP verb. `export const cache` sets a GET's cache window. `export const tags` labels a read's cache entries and `export const invalidates` names the tags a mutation evicts. `export const validate` is the boundary validator. Each one describes how the function should be treated, not what it does, and each sits right next to it.
 
-One rule ties this together. A configured action file holds exactly one callable function. That is not an arbitrary limit. The config exports (`middleware`, `method`, `validate`) describe THE function in the file, so a second function would have nowhere to hang its own config. `webjs check` flags a configured file with more than one export as an error. One function, one file, one clear set of guards around it.
+That is also why a configured action file holds exactly one callable function. The config describes THE function in the file, so a second function would have nowhere to attach its own. `webjs check` flags a configured file with more than one export. One function, one file, one set of guards wrapped around it.
 
-# The takeaway
-
-Auth, rate-limit checks, logging, and tenant resolution are cross-cutting, so they do not belong copy-pasted into the top of every action body. WebJs lets a `'use server'` action declare `export const middleware = [mw1, mw2]`, an array of `async (ctx, next) => result` functions that wrap the action. On the RPC boundary they run automatically, and a `route.ts` REST endpoint built with the `route()` adapter picks them up automatically too when you hand it the action's module namespace (or takes the array through its `middleware` option if you pass the bare function). A middleware short-circuits by returning an `ActionResult` before the body runs, and feeds context the action reads through `actionContext()` with no change to its signature. You write the guard once, next to the function, and reuse that one array on every path into the action. Next.js has no first-class primitive for this (you wrap manually or lean on route middleware that cannot even see the action), which is exactly the gap this closes.
+Next.js has no first-class version of this. You wrap the check by hand in every action, or you push it up to route middleware that cannot see which action it is guarding. In WebJs the guard is a property of the action itself. You declare `requireUser` once, in the file where `deletePost` lives, and it comes along on every path into that action, RPC or REST, without you carrying it there.

@@ -109,6 +109,6 @@ try {
 }
 ```
 
-# The takeaway
+# Streaming is one keyword
 
 Streaming an AI response used to mean standing up a WebSocket or an SSE endpoint and parsing frames by hand. In WebJs you return an async generator from a `'use server'` action, `yield` each token, and consume it with a `for await` loop on a normal import that WebJs turns into a typed RPC stub. Back-pressure is respected, cancellation is wired through `actionSignal()` on the server and an automatic abort on the client, and a mid-stream error surfaces as a throw from the iterable rather than a broken status code. It is the same mechanism you already use for every server action, so streaming LLM tokens is not a new subsystem to learn. It is one keyword: `yield`.

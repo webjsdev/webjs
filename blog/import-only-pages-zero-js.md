@@ -7,51 +7,45 @@ tags: performance, elision, no-build, ssr, web-components
 author: Vivek
 ---
 
-Open a WebJs blog post, pop the network tab, and look for `page.ts`. It is not there. Look for `layout.ts` either. Neither downloaded. The page rendered, the theme toggle in the corner works, the two files that describe the whole page never crossed the wire. Do the same on a typical React or Next app and you watch the page component and its layout come down as client JavaScript that then hydrates. That contrast is the whole point of this post.
+Open a WebJs blog post and pop the network tab. Now look for `page.ts`. It is not there. Look for `layout.ts`. Also not there. The post rendered, the theme toggle in the corner works, and the two files that describe the entire page never crossed the wire. Do the same on a typical React or Next app and you watch the page component and its layout come down as client JavaScript that then hydrates.
 
-The reason those two files stayed home is not something you configured. It falls out of one fact about the framework, and once you see it, the empty network tab becomes the thing you check for.
+That gap is the whole post. Those two files stayed home, and you did not configure anything to make them. It falls out of one fact about how WebJs runs, and once you have seen it, the empty network tab is the thing you learn to check.
 
-# Pages run on the server. Components run in the browser.
+# Pages run on the server, components run in the browser
 
-The mental model to unlearn comes from React, where a page component is JavaScript you ship and then hydrate. In WebJs there is no server or client component split, and pages do not work that way.
+The habit to drop comes from React, where a page is JavaScript you ship and then hydrate. WebJs has no server-versus-client component split, and pages do not work that way.
 
-Pages and layouts are isomorphic modules, meaning the same source can run on both sides. But a page function runs only on the server. It executes once to produce HTML and is never invoked again in the browser. There is no second render, no client-side re-run, no event wiring at the page level. A layout is the same: it runs on the server to wrap its children and it is done.
+Pages and layouts are isomorphic modules, so the same source can run on either side. But the page function runs only on the server. It executes once to produce HTML and is never called again in the browser. No second render, no client re-run, no event wiring at the page level. A layout is the same. It runs on the server to wrap its children, and then it is finished.
 
-All the interactivity lives one level down, in components. A component is an island: its module loads in the browser, the custom element upgrades in place, and its `@click` handlers, signals, and reactive properties come alive. That client-side run is the entire reason a component's module ships at all. It hydrates; the page around it does not.
+The interactivity lives one level down, in components. A component is an island. Its module loads in the browser, the custom element upgrades in place, and its `@click` handlers, signals, and reactive properties come alive. That client-side run is the entire reason a component ships at all. The component hydrates. The page around it does not.
 
-So a page's own module usually has nothing to do on the client. It rendered its HTML on the server, the components inside it are the parts that come alive, and the page function finished the moment SSR did. Shipping that module to the browser buys you nothing, because no code in it runs there.
+So the page's own module has nothing left to do in the browser. It rendered its HTML on the server, the components inside it are the parts that wake up, and the page function was done the moment SSR (server-side rendering) finished. Shipping that module buys nothing, because no line of it runs on the client.
 
-# What "import-only" means
+# The subtle case: import-only
 
-Here is the subtle case, and the one this post is really about.
+A page rarely just sits there, though. It imports things, and the important ones are the interactive components it renders: a `<theme-toggle>`, a `<comment-box>`, a `<search-bar>`. Those components DO hydrate, so their modules genuinely have to reach the browser.
 
-A page rarely sits there doing nothing. It imports things, in particular the interactive components it wants to render: a `<theme-toggle>`, a `<comment-box>`, a `<search-bar>`. Those components DO hydrate, so their modules genuinely need to reach the browser.
+The obvious way to get them there is to ship the page module and let the browser follow its imports. But that hauls the whole page across the wire just to serve as a pointer to its children. WebJs does not do that. A page or layout that is non-inert only because it imports interactive components is import-only. Since it never hydrates, the framework does not need it in the browser to reach its imports. The boot emits the component modules directly and drops the page or layout wrapper. The browser fetches the interactive leaves and nothing else. The page module was the middleman, and the middleman gets cut.
 
-The naive way to get them there is to ship the page module and let the browser follow its imports. But that drags the whole page module across the wire just to act as a pointer to its children. WebJs does better. A page or layout that is non-inert only because it imports interactive components is called import-only. Since the page never hydrates, the framework does not need it in the browser to reach its imports. The boot emits the component modules directly and drops the page or layout wrapper, so the browser fetches the interactive leaves and nothing else. The page module was the middleman, and the middleman gets cut out.
+Nothing was annotated to make this happen. No `"use client"` on the components, no marker on the page. You wrote a page that imports some components, and the browser received exactly the components that run in it, not the page that listed them.
 
-You never annotated anything. No `"use client"` on the components, no marker on the page. You wrote a page that imports some components, and the browser received exactly the components that run there, not the page that listed them.
+Elision also touches the display-only component itself, the interactive-looking element whose JavaScript changes nothing, which the framework strips the same way. I wrote that half up separately in `ship-zero-javascript-display-only-components`. This post stays on the page and layout side.
 
-The other module elision touches is the display-only component itself, the interactive-looking element whose JavaScript changes nothing so the framework strips it too. I wrote that side up separately in `ship-zero-javascript-display-only-components`; here I am staying on the page and layout half.
+# When a page ships whole anyway
 
-# When a page still ships whole
-
-Import-only is a specific condition, and it is worth knowing when it fails, because that is when `page.ts` shows up in your network tab. A page or layout ships whole when it has a client side effect of its own, not just interactive imports. Any of these in the module's closure pins it to the browser:
+Import-only is a specific condition, and knowing when it breaks matters, because that is precisely when `page.ts` reappears in your network tab. A page or layout ships whole when it has a client side effect of its own, beyond just interactive imports. Any of these in the module's closure pins it to the browser:
 
 - An explicit client-router import.
 - A call at module scope, something that runs the instant the module loads.
-- A self-registering bare import, a module imported purely for its side effect.
-- Importing a client-effecting non-component utility. The classic offender is a `cn.ts` class-name helper that touches a browser global. Import that into your page and the page module now does client work, so it ships whole.
+- A self-registering bare import, pulled in only for its side effect.
+- Importing a client-effecting non-component utility.
 
-That last one is sneaky, because a class-name helper looks innocent. But if it reads a browser global at module load, importing it makes your page module client-effecting, and a client-effecting page module ships. The fix is to keep client-only behavior inside a component and server-only work in a `.server.ts` file, and if a utility mixes a pure helper with client-global code, split the client part out so the pure helper does not pin every page that imports it.
+That last one is the sneaky one. The usual offender is a `cn.ts` class-name helper that reads a browser global at module load. It looks completely innocent, a tiny string function. But importing it makes your page module do client work, and a page module that does client work ships whole. The fix is to keep client-only behavior inside a component and server-only work in a `.server.ts` file, and when a utility mixes a pure helper with client-global code, split the client part out so the pure helper does not drag in every page that imports it.
 
-# The self-check, and the tool that names the reason
+# The tool that names the reason
 
-The rule of thumb is short. `page.ts` and `layout.ts` should never appear in the network tab or in the boot `<script type="module">`. If one does, something in its closure is doing client-side work, and that is your signal to find the stray side effect and move it where it belongs.
+You do not have to stare at the network tab guessing which side effect did it. `webjs doctor` includes a page and layout elision advisory, and it names the specific reason a given page or layout ships. The tool points at the client side effect that pinned the module, so you fix the cause instead of hunting for it.
 
-You do not have to squint at the network tab to figure out which one. `webjs doctor` includes a page and layout elision advisory, and it names the specific reason a given page or layout ships, so the tool tells you which client side effect pinned the module to the browser.
+And if you ever want everything shipped, for a debugging session or because you simply distrust the analysis, turn elision off with `"webjs": { "elide": false }` in the config or `WEBJS_ELIDE=0` in the environment, and every module ships as written. Dropping a page module can never change your first paint, because the served HTML is byte-for-byte identical with elision on or off.
 
-If you ever want everything shipped, for a debugging session or because you distrust the analysis, turn elision off with `"webjs": { "elide": false }` in the config or `WEBJS_ELIDE=0` in the environment, and every module ships as written. Dropping a page module can never change your first paint anyway, because the served HTML is identical with elision on or off.
-
-# The takeaway
-
-A React page component is client JavaScript you ship and hydrate. A WebJs page is not, because pages and layouts do not hydrate at all. Their functions run only on the server, so an import-only page or layout gets dropped entirely and the boot ships just the interactive component leaves it imported. A page ships whole only when it does client work of its own, and `webjs doctor` names the reason when it happens. The self-check is a glance at the network tab: if `page.ts` or `layout.ts` is in it, something in that module is doing browser work it should not. The result is a mostly-static page that ships almost no JavaScript, with not a single boundary marked by hand.
+Which brings it back to the instruction at the top. Open the network tab. `page.ts` and `layout.ts` should not be in it, and neither should show up in the boot `<script type="module">`. If one does, something in that module is doing browser work it should not, and that is your signal to find the stray side effect and move it where it belongs.

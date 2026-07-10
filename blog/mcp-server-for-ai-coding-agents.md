@@ -62,6 +62,4 @@ The pattern is always the same. Instead of hoping the agent guesses right, remov
 
 Notice that `@webjsdev/mcp` is a standalone package, extracted out of the CLI so it can be installed and pointed at on its own. It is the same read-only introspection the CLI already had, packaged as a protocol any MCP-speaking tool can plug into. A separate note: for UI debugging (clicking through pages, taking screenshots) you would reach for the Playwright MCP server. `@webjsdev/mcp` is about the shape of your app, not driving its browser.
 
-# The takeaway
-
 AI coding assistants are genuinely useful, and they are at their worst when they have to invent your project's details. The WebJs MCP server closes that gap by letting the agent ask the running project for ground truth: the real routes, the real components, and above all the real server actions with their framework-computed RPC hashes and per-action config that no amount of reading source can reliably reconstruct. It is read-only, so it is safe to hand to any agent, and it ships wired up in every scaffold. Run `npx @webjsdev/mcp` or `webjs mcp`, connect it to Claude or Cursor, and your assistant stops guessing what your app looks like and starts reading it.

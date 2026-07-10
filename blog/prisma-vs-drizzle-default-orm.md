@@ -104,7 +104,4 @@ Here is the part that makes this a default rather than a lock-in. The schema, th
 
 And if you would rather use Prisma, or Kysely, or write raw SQL, that door is open too. The framework's only real contract with the database is "server-only code lives in `.server.ts` files." Whatever you export a `db` client from, and however you built it, WebJs will happily run. Swap the `db/` folder for a Prisma setup, keep `prisma generate` in your own dev script, and the rest of the framework does not change. You lose the buildless purity for that one dependency, which is a trade you are allowed to make.
 
-
-# The takeaway
-
 Drizzle is the default because it is the same shape as everything else in WebJs: plain TypeScript, served from source, with no codegen artifact sitting between you and the runtime. Prisma is an excellent ORM with a lovely schema language and a great studio, and the only strike against it here is that its `prisma generate` step is a build step, which is the one thing a no-build framework is built to avoid. So this was a fit decision, not a quality verdict. Most important: Drizzle, SQLite, and Tailwind are the batteries the scaffold includes so you can ship on day one, not walls you are trapped behind. Prefer a different ORM, database, or styling approach? Swap it in and keep building. The default just means you do not have to decide before you have written a single feature.

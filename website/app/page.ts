@@ -411,11 +411,11 @@ lib/session.server.ts</pre>
           </div>
           <div class="flex flex-col gap-3">
             <h4 class="text-xs font-bold uppercase tracking-wider text-fg"><a class="no-underline text-fg hover:text-accent transition-colors" href="/compare">Compare</a></h4>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/compare/webjs-vs-nextjs">WebJs vs Next.js</a>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/compare/webjs-vs-lit">WebJs vs Lit</a>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/compare/webjs-vs-remix">WebJs vs Remix 3</a>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/compare/webjs-vs-astro">WebJs vs Astro</a>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/compare/webjs-vs-rails">WebJs vs Rails</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/compare/webjs-vs-nextjs">Next.js</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/compare/webjs-vs-lit">Lit</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/compare/webjs-vs-remix">Remix 3</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/compare/webjs-vs-astro">Astro</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/compare/webjs-vs-rails">Rails</a>
           </div>
           <div class="flex flex-col gap-3">
             <h4 class="text-xs font-bold uppercase tracking-wider text-fg">Community</h4>

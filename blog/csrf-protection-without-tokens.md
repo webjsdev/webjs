@@ -115,6 +115,6 @@ A `route.ts` handler is a raw HTTP handler (named `GET` / `POST` exports). It is
 The rule of thumb: reach for a server action for in-app mutations (you get CSRF protection for free), and reach for `route.ts` when you are exposing a real HTTP API to the outside world (you own the security).
 
 
-# The takeaway
+# A browser fact beats tokens
 
 CSRF is a browser trick, so the cleanest defense is a browser fact. Modern browsers stamp every request with `Sec-Fetch-Site`, which JavaScript cannot forge, so WebJs server actions simply reject any state-changing request that is not same-origin (with an Origin-host fallback for old browsers and an `allowedOrigins` escape hatch). There is no token to generate, no hidden field to inject, and no CSRF cookie to set. That last absence is the quiet win, because with no `Set-Cookie` on the SSR HTML, a visitor-identical page can opt into a public `Cache-Control` and be cached at the CDN edge, which a token-cookie approach would break. Just remember that this protection lives on the action boundary, so if you hand-write a mutating `route.ts`, you secure that one yourself.

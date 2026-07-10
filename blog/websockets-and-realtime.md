@@ -7,19 +7,17 @@ tags: websockets, realtime, broadcast, routing, web-standards
 author: Vivek
 ---
 
-The moment your app needs to feel alive, the ground shifts under you. A live chat. A little green "3 people viewing" presence dot. A cursor gliding across a shared document. All of these need the server to push to the browser without the browser asking first, which a normal HTTP request cannot do. HTTP is a question-and-answer format: the client asks, the server answers, the line closes.
+Ask what it takes to add a live chat to an app and the honest answer, in most stacks, is a second server. HTTP cannot push. The client asks, the server answers, the line closes, and that shape is fine for a page load and useless for a message arriving the instant someone else sends it. So you reach for a WebSocket, a connection that stays open in both directions, and to run it you stand up a separate process next to your app.
 
-A WebSocket is the fix. It is a connection that stays open in both directions, so the server can send you a message the instant something happens, and you can send one back, all over the same pipe. Great. Except in most stacks, adding one means standing up a second server.
+That second process is where the deflation sets in. Your app already knows how to route a request, who the logged-in user is, and which session a cookie belongs to. The socket server knows none of it. A connection to `/chat/42` is a raw string you parse yourself. The user is a cookie you re-read and re-validate by hand. You answered all of these questions once for HTTP and now you answer them again, in a different codebase, for the socket. And when you are done you have two things to deploy, two things to scale, and two things that drift apart the first time someone changes one and forgets the other.
 
-That is the part I always found deflating. You already have an app with routing and auth and sessions, and now you bolt a separate WebSocket process next to it and re-wire all of that by hand. Which user is this socket? What route does it belong to? Is it allowed to be here? You answer those questions once for HTTP and then answer them all over again, differently, for the socket server. WebJs skips the second server entirely.
+I did not want a real-time app to mean a second app. So WebJs does not have one.
 
+# The socket server living next door
 
-# The old way: a socket server living next door
-
-Here is the shape of the pain, roughly. You install a WebSocket library, create its server, and run it alongside your app, often on another port.
+Here is the usual shape, roughly. Install a WebSocket library, create its server, run it beside your app on another port.
 
 ```ts
-// a whole separate process, more or less
 import { WebSocketServer } from 'ws';
 
 const wss = new WebSocketServer({ port: 3001 });
@@ -33,12 +31,11 @@ wss.on('connection', (socket, req) => {
 });
 ```
 
-Nothing here is exotic, but every line is a small re-implementation of something your app already does. The socket server does not share your routing, so a connection to `/chat/42` is just a string you parse yourself. It does not share your auth, so you re-derive the user. And it runs beside your app, so now you have two things to deploy, two things to scale, and two things to keep from drifting apart.
+None of it is hard on its own. That is almost the problem. Every line re-implements something the app on the other port already does correctly. The socket server does not share the router, so the path is a string. It does not share auth, so the user is re-derived. It runs as its own process, so it is its own deploy, its own scaling story, its own thing to keep in sync.
 
+# A WS export in the route file you already have
 
-# The WebJs way: a WS export in the same route file
-
-WebJs folds WebSockets into the file router you already use for pages and HTTP handlers. A `route.{js,ts}` file can export named HTTP methods like `GET` and `POST`, and it can also export a `WS` function. That function defines a WebSocket endpoint at exactly that path, sitting right next to (or instead of) the HTTP handlers.
+WebJs puts WebSockets in the same file router that serves pages and HTTP handlers. A `route.{js,ts}` file exports named HTTP methods like `GET` and `POST`. It can also export a `WS` function, and that defines a WebSocket endpoint at exactly that path, sitting right beside the HTTP handlers or in place of them.
 
 ```js
 // app/api/chat/route.js
@@ -48,18 +45,17 @@ export function WS(ws, req, { params }) {
 }
 ```
 
-A socket at `/api/chat` is now a file at `app/api/chat/route.js`, the same way a page at `/about` is a file at `app/about/page.js`. The `params` argument is the same route-params object your dynamic routes get, so a socket at `app/room/[id]/route.js` reads `params.id` with no string parsing. There is no second server, no second port, no second deploy. The endpoint lives inside the app that already knows your routes.
+A socket at `/api/chat` is a file at `app/api/chat/route.js`, the same way a page at `/about` is a file at `app/about/page.js`. That `params` argument is the same route-params object your dynamic routes get, so a socket at `app/room/[id]/route.js` reads `params.id` with no string parsing at all. No second port, no second deploy. The endpoint lives inside the app that already knows the route it belongs to.
 
-One dev-mode detail worth knowing. In development the module re-imports on each new connection so it picks up your edits without a restart. That means you cannot keep shared state (like the set of connected clients) in a module-level variable, because it would reset per connection. Park it on `globalThis` instead:
+One development detail is worth knowing before it surprises you. In dev the module re-imports on each new connection so your edits show up without a restart. That means module-level state resets per connection, so the set of connected clients cannot live in a top-level variable. Park it on `globalThis`:
 
 ```js
 const clients = globalThis.__chat_clients ?? (globalThis.__chat_clients = new Set());
 ```
 
+# The client half, and the two things it saves you
 
-# The client: connectWS, and why queued sends matter
-
-On the browser side you open the socket with `connectWS(url, handlers)` from `@webjsdev/core`.
+On the browser you open the socket with `connectWS(url, handlers)` from `@webjsdev/core`.
 
 ```ts
 import { connectWS } from '@webjsdev/core';
@@ -71,32 +67,28 @@ const socket = connectWS('/api/chat', {
 });
 ```
 
-Two things it does for you that you would otherwise hand-roll. It auto-reconnects with exponential backoff, which means when the connection drops (a phone leaving a tunnel, a laptop lid closing, a flaky cafe network) it quietly tries again, waiting a little longer between each attempt so it does not hammer a struggling server. And it queues sends while disconnected. If your code calls send during that brief dead window, the message is not thrown away; it is held and flushed the instant the socket comes back. It also JSON-encodes and decodes for you, so you send and receive objects, not strings.
+Two behaviors here are the ones people get wrong by hand, which is exactly why they are built in. It auto-reconnects with exponential backoff, so when the connection drops (a phone leaving a tunnel, a lid closing, a cafe network having a moment) it retries on its own, waiting a little longer each time so it does not pound a server that is already struggling. And it queues sends while disconnected. Call send during that dead window and the message is held, not dropped, then flushed the moment the socket is back. It JSON-encodes and decodes too, so you work in objects, not strings.
 
-Those two behaviors are exactly the fiddly bits people get wrong when they wire a raw socket by hand, which is why baking them in matters. Real networks are unreliable, and a chat that silently loses the message you sent at the wrong half-second is worse than no chat.
+Real networks are unreliable, and a chat that quietly eats the message you typed at the wrong half-second is worse than a chat that is honestly down. Getting these two right is most of what "wire a socket by hand" actually costs.
 
+# One message to everyone: broadcast
 
-# Fan-out: the broadcast built-in
-
-A live feature is rarely one client talking to the server. It is one client's action showing up on everyone else's screen. That is fan-out, or broadcast: take one message and push it to every connected client on a channel. WebJs ships a `broadcast` helper in `@webjsdev/server` so you do not build the "who else is connected" bookkeeping yourself.
+A live feature is almost never one client and the server. It is one client doing something and everyone else seeing it. That is fan-out, and WebJs ships a `broadcast` helper in `@webjsdev/server` so you do not keep the "who else is connected" bookkeeping yourself.
 
 ```js
 import { broadcast } from '@webjsdev/server';
 
 export function WS(ws, req) {
   ws.on('message', (data) => {
-    broadcast('/api/chat', data);  // to every client connected on this path
+    broadcast('/api/chat', data);
   });
 }
 ```
 
-The first argument is the channel (here just the path), and everyone connected to it receives the message. This same primitive powers presence indicators and notifications, not just chat, because they are all the same shape underneath: something happened, tell everyone watching.
+The first argument is the channel, here just the path, and everyone connected to it gets the message. The same primitive drives presence dots and notifications, not only chat, because underneath they are one shape: something happened, tell everyone watching.
 
-It also composes with WebJs's server-push rendering. A route can build a `<webjs-stream>` HTML fragment and `broadcast` it, and every viewer's client applies the DOM update with no custom handler, the same applier the client router already uses. So "a new comment appears live for everyone reading the post" is a broadcast of a rendered fragment, not a bespoke client script.
+It also composes with WebJs's server-push rendering. A route can build a `<webjs-stream>` HTML fragment and `broadcast` it, and every viewer's client applies the DOM update with no custom handler, through the same applier the client router already uses. So "a new comment shows up live for everyone reading the post" is a broadcast of a rendered fragment, not a bespoke client script you write and maintain.
 
-One honest limit. The built-in `broadcast` is single-instance: it fans out to the clients connected to this one server process. When you scale to multiple instances behind a load balancer, you add Redis pub/sub yourself to bridge them. WebJs does not hide that behind magic, and I would rather it be upfront about the boundary than pretend a single-process broadcast scales horizontally on its own.
+One limit, stated plainly. The built-in `broadcast` is single-instance. It fans out to the clients connected to this one server process. Put several instances behind a load balancer and you add Redis pub/sub yourself to bridge them. I would rather the boundary be visible than dressed up as magic that quietly fails to scale the day you add a second instance.
 
-
-# The takeaway
-
-Real-time features usually mean a second server that re-implements your app's routing and auth just to hold an open connection. WebJs folds WebSockets into the same file router: a `WS(ws, req, { params })` export in a `route.{js,ts}` file defines a socket endpoint at that path, with the same route params your pages get and no separate process to deploy. On the client, `connectWS` gives you auto-reconnect and queued sends so a dropped connection does not lose a message, and `broadcast` fans one message out to every connected client for chat, presence, or live updates. It is single-instance out of the box (add Redis pub/sub when you scale past one process), but the everyday version, the one you build to make an app feel alive, is a file next to your pages instead of a server next to your app.
+Real-time usually means a second server that re-derives your app's routing and auth just to hold a connection open. WebJs folds WebSockets into the file router instead: a `WS(ws, req, { params })` export in a `route.{js,ts}` file is a socket endpoint at that path, with the same route params your pages get and nothing extra to deploy. `connectWS` gives the client auto-reconnect and queued sends so a dropped connection does not lose a message, and `broadcast` pushes one message to every connected client for chat, presence, or live updates. It runs single-instance until you add Redis pub/sub to scale past one process. The app you build to feel alive is a file sitting next to your pages, not a server sitting next to your app.

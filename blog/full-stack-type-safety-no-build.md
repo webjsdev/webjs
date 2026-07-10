@@ -98,6 +98,6 @@ WebJs skips the process because the type flow is just a normal import resolving 
 So the type checker runs in your editor and (optionally) in CI as `tsc --noEmit`. The runtime never type-checks. It just erases. The types are a development-time overlay on files that already run as-is, which is exactly why there is nothing to build and nothing to generate. Full-stack types fall out of the architecture instead of being bolted onto it.
 
 
-# The takeaway
+# Type safety without a build step
 
 Full-stack type safety in WebJs is not a feature you configure, it is what you get by default. A server action imported into a client component carries its real signature across the network, so calling your backend is as safe as calling a local function, and a wrong argument or a missing field is caught in your editor before the code runs. The wire serializer round-trips `Date`, `Map`, `Set`, and more, so the types you see are the values you actually get, not a JSON-flattened guess. `webjs types`, `PageProps`, `Metadata`, and `WebjsConfig` extend that safety to routing, metadata, and config. And all of it works with no build step and no codegen, because TypeScript is erasable and the file you write is the file that runs.

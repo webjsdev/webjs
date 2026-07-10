@@ -133,7 +133,7 @@ Two.
 A server action can also live at a REST URL. The same function powers both call paths. From a client component: `import { createPost }` and call it as RPC. From curl: drop it into a `route.ts` (`export const POST = route(createPost)`), so `POST /api/posts` hits the same implementation. One function, two protocols. The `route()` helper lives in `packages/server/src/action-route.js`.
 
 
-# What I am still figuring out
+# Edge cases that already work
 
 Catch-all routes (`[...rest]` and `[[...rest]]` for optional) work. The router builds the regex pattern from the route pattern, captures `paramNames`, and exposes them as `params.rest` as a string array.
 

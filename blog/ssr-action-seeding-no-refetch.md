@@ -7,13 +7,15 @@ tags: ssr, hydration, server-actions, performance, no-build
 author: Vivek
 ---
 
-There is a bug that almost every server-rendered app has shipped at least once, and most never fully fix. The server renders a component with real data, sends the HTML, the browser paints it, and then the component hydrates and immediately fetches the exact same data all over again. The user already had the data on screen. The server already did the query. And now the client throws a second request at the network to fetch a copy of what it is already showing. That is the double fetch, and it costs you a wasted round trip, a possible flicker when the second result swaps in, and load on a server that had no reason to answer twice.
+Some bugs get filed. This one almost never does, because nobody notices they are paying for it. Your app server-renders a component with real data, ships the HTML, the browser paints it, and then the component hydrates and quietly fetches the exact same data a second time. The result is already on screen. The query already ran. And the client fires another request at the network to fetch a copy of what the user is looking at.
 
-I did not want WebJs to have this problem at all, and the fix is a feature you never have to think about. It is called SSR action-result seeding.
+I only started calling it "the double fetch" once I went looking for it. Before that it lived in the background as a wasted round trip, a maybe-flicker when the second result swaps in, and a server answering the same question twice per page. It ships constantly in server-rendered apps precisely because it is invisible. Everything works. The page is just slower and busier than it has any reason to be.
 
-# The old way, in any framework
+I did not want WebJs to have a shape where that bug can hide, and the fix turned out to be a feature you never reach for. It is SSR action-result seeding.
 
-Here is the shape of the workaround everyone writes. In React or Next you fetch on the server, then you have to physically carry that data into the client so hydration does not refetch. Either you thread it down as props through every layer between the fetch and the component that needs it, or you stand up a query-cache hydration boundary and dehydrate and rehydrate the cache across the wire.
+# Why the bug is so easy to ship
+
+In React or Next, the server fetch and the client fetch are two different pieces of code, and the only thing stopping the second one is your discipline. You fetch on the server, then you physically carry that value into the client so hydration does not go get it again. Either you thread it down as a prop through every layer between the fetch and the component that needs it, or you stand up a query-cache hydration boundary and dehydrate and rehydrate the cache across the wire.
 
 ```tsx
 // the manual version: fetch on the server, then pass it down by hand
@@ -30,11 +32,11 @@ function UserProfile({ initialUser }) {
 }
 ```
 
-Every one of those lines is glue. The `initialUser` prop exists only to stop the refetch. The `initialData` option exists only to stop the refetch. If you forget either, it still works, it just quietly fetches twice, which is why this bug ships so often. The framework did the server fetch and then made carrying the result the application's job.
+Look at what those two extra lines are for. `initialUser` exists only to stop the refetch. `initialData` exists only to stop the refetch. Forget either one and the page still works, it just fetches twice, silently, forever. That is the whole reason the bug ships so often. The framework did the server query and then handed you the job of carrying the answer across, so the correctness of the optimization rides on a human remembering a prop.
 
-# The WebJs way, which is no way at all
+# In WebJs there is nothing to carry
 
-In WebJs you write the fetch inside the component and pass nothing.
+You write the fetch inside the component and pass nothing.
 
 ```ts
 class UserProfile extends WebComponent({ uid: String }) {
@@ -46,30 +48,28 @@ class UserProfile extends WebComponent({ uid: String }) {
 UserProfile.register('user-profile');
 ```
 
-`getUser` is a `'use server'` action, so during SSR it runs on the server as the real function and its result is baked into the HTML. When this component ships to the browser and hydrates, its first call to `getUser(this.uid)` does not hit the network. It reads a seed that the server already put in the page. The query ran once, on the server, and the client reuses the result on its first render. No prop, no `initialData`, no cache boundary, no code.
+`getUser` is a `'use server'` action, so during SSR it runs on the server as the real function and its result goes into the HTML. When this component ships to the browser and hydrates, its first call to `getUser(this.uid)` does not hit the network. It reads a seed the server already put in the page. The query ran once, on the server, and the client's first render reuses the result. No prop, no `initialData`, no cache boundary. There is no glue to forget because there is no glue.
 
-# What the framework is doing under the hood
+# What the seed actually is
 
-The mechanism is simple to state. Every `'use server'` action result computed during a non-streamed SSR render is serialized into the page. The generated client RPC stub, the typed stub WebJs rewrites your action import into, reads that serialized seed on its FIRST call for a given set of arguments. So the first client invocation is answered from the seed instead of the network.
+The mechanism is small enough to say in a sentence. Every `'use server'` action result computed during a non-streamed SSR render is serialized into the page, and the generated client RPC stub (the typed stub WebJs rewrites your action import into) reads that seed on its first call for a given set of arguments.
 
-A few properties make it safe to leave on and forget about:
+Three properties are what let me leave it on and stop thinking about it:
 
-- It is keyed by the action hash, the function name, and the serialized arguments. So the seed for `getUser(7)` is never handed to `getUser(9)`. The arguments have to match.
-- It is consume-once. The seed answers the first call and then it is spent. A later refetch, or a call with changed arguments, goes to the network like normal. Seeding removes the redundant hydration fetch, not real subsequent fetches.
-- It fails open. If a seed is missing for any reason, the stub degrades to a normal RPC call. A miss costs you a network request, never wrong data. There is no failure mode where a stale or mismatched seed gets served.
+- It is keyed by the action hash, the function name, and the serialized arguments. The seed for `getUser(7)` is never handed to `getUser(9)`. The arguments have to match exactly.
+- It is consume-once. The seed answers the first call and then it is spent. A later refetch, or a call with different arguments, goes to the network like any other request. Seeding removes the redundant hydration fetch, not your real fetches.
+- It fails open. If a seed is missing for any reason, the stub just makes a normal RPC call. A miss costs you one network request, never wrong data. There is no path where a stale or mismatched seed gets served.
 
-And the way the seed is captured is worth calling out, because it is where a build-based framework would reach for a transform. WebJs captures it through a transparent server-side `'use server'` facade. There is no source transform and no build step. The file on disk is unchanged, and the source you see in the browser's network tab is unchanged. Nothing rewrites your code to inject an initial-data payload. The facade sits at the action boundary at runtime and records what SSR computed. It runs on Bun too, same as on Node.
+The capture is the part I am happiest with, because it is exactly where a build-based framework would reach for a code transform. WebJs captures the seed through a transparent server-side `'use server'` facade that sits at the action boundary at runtime and records what SSR computed. No source transform, no build step. The file on disk is unchanged and the source in the browser network tab is unchanged. Nothing rewrites your code to inject an initial-data payload. It runs on Bun the same as on Node.
 
-# It composes with elision
+# The other half, where most of these never ship
 
-Seeding is one half of a two-part story, and the other half is that most of these components do not even ship. A display-only component, one that just fetches and renders with no click handlers, no signals, no interactivity, is elided entirely. Its server-rendered HTML is already the complete and final output, so WebJs drops its JavaScript module from the page. There is nothing left to hydrate, so there is nothing to refetch. The data is in the HTML and the browser gets zero client JavaScript for it.
+Seeding is one side of the story. The other side is that a lot of these components do not reach the browser at all. A display-only component, one that fetches and renders with no click handlers, no signals, no interactivity, is elided. Its server-rendered HTML is already the complete and final output, so WebJs drops its JavaScript module from the page. Nothing to hydrate means nothing to refetch, and the data is already sitting in the HTML.
 
-So think of it as a clean split. A display-only async component ships no JavaScript, which means no hydration and no second fetch by construction. Seeding is the safety net for the components that DO ship, the ones that are also interactive and therefore have to hydrate. Those hydrate without re-requesting the data SSR already fetched. Between the two, the double fetch has nowhere to live.
+So the split is clean. A display-only async component ships no JavaScript, so it cannot double-fetch by construction. Seeding is the safety net for the components that do ship, the ones that are also interactive and therefore have to hydrate. Those hydrate without re-requesting what SSR already fetched. Between the two, the double fetch has nowhere left to live.
 
-# Turning it off
+# If you ever want it off
 
-It is on by default and there is rarely a reason to change that, but you can. Set `"webjs": { "seed": false }` in `package.json`, or `WEBJS_SEED=0` in the environment, and the stub always goes to the network on its first call. You would only reach for this to debug the RPC path in isolation. In normal operation the default is what you want.
+It is on by default and I rarely touch it, but you can. Set `"webjs": { "seed": false }` in `package.json`, or `WEBJS_SEED=0` in the environment, and the stub always goes to the network on its first call. The only reason I have reached for it is to watch the raw RPC path in isolation while debugging. In normal operation the default is the thing you want.
 
-# The takeaway
-
-The double fetch is a bug that ships constantly because the fix in most frameworks is manual, an `initialData` you have to remember or a prop you have to thread, and forgetting it fails silently. WebJs eliminates it with SSR action-result seeding. Every `'use server'` result computed during SSR is serialized into the page, the client stub reads it on its first call keyed by action hash and function name and arguments, it is consume-once and fails open, and it is captured through a runtime facade with no source transform and no build step. Combine it with elision dropping the display-only components entirely and the picture is clean. The server already did the work, so the client does not redo it, and you wrote zero glue to make that true.
+The server already ran the query, already had the answer, already wrote it into the page the browser is showing. Asking the client to go fetch that same answer a second time was never a real requirement, just the shape most frameworks happen to have. WebJs closes the gap where the bug lives, at the action boundary, so the fastest thing and the default thing end up being the same thing. You get it by writing the obvious code and none of the glue.
