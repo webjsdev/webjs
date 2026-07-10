@@ -21,15 +21,6 @@ const HTML_URL = pathToFileURL(
 
 let tmpRoot;
 
-// The boot-id assertion below expects the bare importmap-hash format (64 hex).
-// #899 folds a deploy fingerprint into the published id when one is in the
-// environment, so clear the deploy env vars to keep this deterministic wherever
-// the suite runs (build-id-deploy.test.js covers the fingerprint path).
-for (const k of ['WEBJS_BUILD_ID', 'RAILWAY_GIT_COMMIT_SHA', 'RAILWAY_DEPLOYMENT_ID',
-  'VERCEL_GIT_COMMIT_SHA', 'RENDER_GIT_COMMIT', 'GIT_COMMIT', 'SOURCE_COMMIT', 'SOURCE_VERSION']) {
-  delete process.env[k];
-}
-
 before(() => {
   tmpRoot = mkdtempSync(join(tmpdir(), 'webjs-dev-'));
 });
@@ -101,7 +92,7 @@ test('handle: a pinned app publishes a stable build id from the first response',
   // whereas merely checking the first response is non-empty passes either way
   // (handle() awaits ensureReady, which publishes on the deferred path too).
   const bootId = publishedBuildId();
-  assert.match(bootId, /^[0-9a-f]{64}$/, 'pinned app publishes a build id at boot, before any request');
+  assert.match(bootId, /^[0-9a-f]{64}\.c[\w.-]+$/, 'pinned app publishes a build id (importmap hash + core version, #899) at boot, before any request');
   // First page response: it advertises exactly the boot-published id.
   const first = await app.handle(new Request('http://x/'));
   const build1 = first.headers.get('x-webjs-build');

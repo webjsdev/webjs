@@ -259,7 +259,7 @@ Returns JSON describing the live build, alongside the `/__webjs/health` and `/__
 { "version": "0.8.10", "build": "<importmap-hash>", "node": "v24.4.0", "uptime": 38.21 }
 ```
 
-`version` is the `@webjsdev/server` framework version (read from its own `package.json`), `build` is the published build id (the same value the client router reads from `data-webjs-build`; empty until the vendor map resolves), which folds in a per-deploy fingerprint (`WEBJS_BUILD_ID` or a platform commit id) when set so an SSR-only deploy changes it too (#899), `node` is the running Node version, `uptime` is process uptime in seconds. Mechanism: `requestId()` / `setRequestId` in `packages/server/src/context.js`, `buildInfo` / `buildInfoResponse` in `packages/server/src/build-info.js`, all wired in `packages/server/src/dev.js`.
+`version` is the `@webjsdev/server` framework version (read from its own `package.json`), `build` is the published build id (the reload signal the client router reads from `data-webjs-build`; the importmap hash folded with the installed `@webjsdev/core` version, empty until the vendor map resolves). An app-source or SSR-only deploy is carried by a separate `X-Webjs-Src` / `data-webjs-src` signal that evicts client caches softly (#899); both are automatic content hashes, no env var, `node` is the running Node version, `uptime` is process uptime in seconds. Mechanism: `requestId()` / `setRequestId` in `packages/server/src/context.js`, `buildInfo` / `buildInfoResponse` in `packages/server/src/build-info.js`, all wired in `packages/server/src/dev.js`.
 
 ---
 

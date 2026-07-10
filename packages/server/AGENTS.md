@@ -282,24 +282,28 @@ and the reader key set never diverge (a counterfactual unknown key proves
    trigger a destructive reload that wipes a half-filled form. Concurrent early
    requests await the in-flight first resolve (no bypass), so the first served
    response already carries the final map.
-   **Deploy fingerprint (#899).** The importmap hash alone misses an SSR-ONLY
-   deploy (syntax highlighting, a template edit, a copy change): the map is
-   byte-identical, so the id would not change and the client would keep serving
-   stale pre-deploy HTML on soft nav. So `publishBuildId()` folds a per-deploy
-   fingerprint into the published id when one is available: `WEBJS_BUILD_ID`
-   (deployer-set, e.g. the git SHA) or a detected platform commit/deploy id
-   (`RAILWAY_GIT_COMMIT_SHA`, `RAILWAY_DEPLOYMENT_ID`, `VERCEL_GIT_COMMIT_SHA`,
-   `RENDER_GIT_COMMIT`, `GIT_COMMIT`, `SOURCE_COMMIT`, `SOURCE_VERSION`, in that
-   order), via `deployFingerprint()`. All instances of one deploy share the
-   value (no per-process boot-id fallback, which would flap on a multi-instance
-   deploy), and the published id becomes `<importmap-hash>.<fingerprint>`. Only
-   `publishedBuildId()` carries the fingerprint; the internal `importMapHash()`
-   (the live importmap hash, computed `fingerprint: false` so it is independent
-   of the per-file `?v` asset hashes owned by `asset-hash.js`) is untouched. With no fingerprint set the
-   id is the importmap hash exactly as before, so the SSR-only case is still
-   missed by design. A real cross-deploy reloads because both sides then carry
-   non-empty, differing ids, and folding the fingerprint into the html-cache key
-   (`html-cache.js`) means a deploy also re-keys the server HTML cache.
+   **Two content-based deploy signals (#899).** The importmap hash alone misses
+   an app-only or SSR-only deploy (syntax highlighting, a template edit): the map
+   is byte-identical, so the client kept serving stale pre-deploy HTML on soft
+   nav. WebJs now emits TWO automatic, content-derived signals (no env var, the
+   no-build Rails+Turbo model where the served content IS the version), each with
+   the right response. **Reload signal `data-webjs-build` / `X-Webjs-Build`** =
+   `importMapHash()` folded with the installed `@webjsdev/core` version, via
+   `publishBuildId()` (`_publishedBuildId = <hash>.c<coreVersion>`, `_coreVersion`
+   read in `setCoreInstall`). It changes on a vendor pin or a core release
+   (browser-shipped code the running page cannot hot-swap), so the client
+   HARD-RELOADS. `importMapHash()` itself is untouched (still `fingerprint:false`,
+   independent of the per-file `?v` hashes owned by `asset-hash.js`). **Evict
+   signal `data-webjs-src` / `X-Webjs-Src`** = a content hash of ALL app source
+   (the module-graph `seenFilesFor(graph)` set INCLUDING server-only `.server.ts`,
+   raw per-file byte digests, computed in `dev.js`'s analysis) folded with the
+   installed `@webjsdev/server` version, published via `setAppSourceId` /
+   `appSourceId()`. It changes on an app-source change or a server-framework
+   release (SSR output moved, no new browser code), so the client EVICTS its
+   snapshot/prefetch caches and re-fetches softly, NO reload. Both are empty
+   until analysis is final (the client reads empty as "unknown" and never acts).
+   The #318 `_appSourceFp` html-cache fingerprint (browser-bound) is a SEPARATE,
+   unchanged mechanism; the app-source SIGNAL does not touch it.
    **Probes:** `/__webjs/health` is liveness (always 200 once listening);
    `/__webjs/ready` is readiness (503 until fully warm, i.e. analysis plus the
    first vendor attempt, then 200). An optional `readiness.{js,ts}` at the app

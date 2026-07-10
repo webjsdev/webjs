@@ -142,10 +142,10 @@ jobs:
         run: |
           bun test/bun/dev-extra-watch.mjs
           bun test/bun/dev-reload-retry.mjs
-      # The deploy fingerprint folds into the published build id + X-Webjs-Build
-      # header (#899), so an SSR-only deploy is detected on either runtime.
-      - name: Deploy build id on Bun
-        run: bun test/bun/build-id-deploy.mjs
+      # The app-source deploy signal (#899) is derived from an fs source walk +
+      # a node:crypto digest, so it must be byte-identical on the Bun.serve path.
+      - name: App-source deploy signal on Bun
+        run: bun test/bun/app-source-signal.mjs
       # SSR action-result seeding on Bun (#529): seeding rode Node's
       # module.registerHooks, which Bun lacks; it now installs via a Bun.plugin
       # onLoad, so a shipping async component seeds during SSR (the __webjs-seeds

@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { digestHex } from './crypto-utils.js';
 import { jsonForScriptTag } from './script-tag-json.js';
 import { withBasePath } from './base-path.js';
@@ -192,6 +193,9 @@ export function importMapHash() {
   return _importMapHash;
 }
 
+/** The installed `@webjsdev/core` version, folded into the published build id (#899). */
+let _coreVersion = '';
+
 /**
  * The published, client-facing build id: the value stamped into the
  * `data-webjs-build` attribute and the `X-Webjs-Build` header that the
@@ -220,66 +224,53 @@ export function publishedBuildId() {
 }
 
 /**
- * A per-DEPLOY fingerprint folded into the published build id (#899), so a
- * deploy that changes ONLY SSR output (no importmap change) still bumps the id
- * the client compares across navigations. Without this, an SSR-only deploy
- * (e.g. syntax-highlighting blog code at render time) leaves the importmap hash
- * byte-identical, so the client never detects the deploy and serves stale
- * pre-deploy HTML until a manual refresh, per page.
- *
- * Sourced, in precedence order, from an explicit `WEBJS_BUILD_ID` (the deployer
- * sets it, e.g. to the git SHA) or a detected platform commit/deploy id:
- * `RAILWAY_GIT_COMMIT_SHA`, `RAILWAY_DEPLOYMENT_ID`, `VERCEL_GIT_COMMIT_SHA`,
- * `RENDER_GIT_COMMIT`, or a generic `GIT_COMMIT` / `SOURCE_COMMIT` /
- * `SOURCE_VERSION`. All instances of ONE deploy share the value, which is why
- * we do NOT fall back to
- * a per-process boot id or timestamp: on a multi-instance or rolling deploy
- * those differ per instance, so a client load-balanced across instances would
- * see the id flap and hard-reload in a loop. With no fingerprint available the
- * value is `''` and behavior is exactly as before (importmap-hash only).
- *
- * Read from the environment on each call (env is stable within a process, so
- * this is not a per-request flap), and sanitized to a header-safe token (no CR
- * or LF, bounded length) since `WEBJS_BUILD_ID` is deployer-supplied and the id
- * rides the `X-Webjs-Build` response header.
- *
- * @returns {string}
- */
-export function deployFingerprint() {
-  const env = /** @type {Record<string, string|undefined>} */ (
-    typeof process !== 'undefined' && process.env ? process.env : {}
-  );
-  const raw =
-    env.WEBJS_BUILD_ID ||
-    env.RAILWAY_GIT_COMMIT_SHA ||
-    env.RAILWAY_DEPLOYMENT_ID ||
-    env.VERCEL_GIT_COMMIT_SHA ||
-    env.RENDER_GIT_COMMIT ||
-    env.GIT_COMMIT ||
-    env.SOURCE_COMMIT ||
-    env.SOURCE_VERSION ||
-    '';
-  // Header-safe token: drop anything but word chars, dot, and dash, then cap.
-  return String(raw).replace(/[^\w.-]/g, '').slice(0, 64);
-}
-
-/**
- * Promote the current `importMapHash()` to the advertised build id, folding in
- * the per-deploy fingerprint (#899) when one is available. Called by `dev.js`
+ * Promote the current `importMapHash()` (folded with the installed
+ * `@webjsdev/core` version, #899) to the advertised build id. Called by `dev.js`
  * when the importmap becomes authoritatively final. Idempotent; the value only
- * changes when the underlying map OR the deploy fingerprint does, so
- * re-publishing an unchanged map is a no-op for the client. Within a single
- * process the published id never changes after the first publish (a rebuild in
- * dev re-publishes, but dev already forces a full reload via SSE).
+ * changes when the map OR the core version does, so re-publishing an unchanged
+ * install is a no-op for the client. Within a single process the published id
+ * therefore never changes after the first publish (a rebuild in dev re-publishes
+ * the fresh map, but dev already forces a full reload via SSE).
  *
- * The empty-until-final semantics are preserved: while `_importMapHash` is `''`
- * (the warmup window) the published id stays `''`, so the router's "unknown
- * version never hard-reloads" guard still holds even with a fingerprint set.
+ * The empty-until-final guard holds: while `_importMapHash` is `''` (the warmup
+ * window) the published id stays `''`, so the router never hard-reloads against
+ * an unknown version even with the core version present.
  */
 export function publishBuildId() {
   if (!_importMapHash) { _publishedBuildId = ''; return; }
-  const dep = deployFingerprint();
-  _publishedBuildId = dep ? `${_importMapHash}.${dep}` : _importMapHash;
+  _publishedBuildId = _coreVersion ? `${_importMapHash}.c${_coreVersion}` : _importMapHash;
+}
+
+/**
+ * The app-source deploy signal (#899): a short digest advertised as the
+ * `data-webjs-src` attribute and the `X-Webjs-Src` header, distinct from the
+ * build id above. The client compares it across navigations and, on a mismatch,
+ * EVICTS its snapshot/prefetch caches (a soft re-fetch, NOT a hard reload):
+ * an app-source or server-framework change alters the SSR output but ships no
+ * new browser module the running page must swap, so a full reload would be an
+ * over-correction. Set by `dev.js` from a content hash of ALL app source (the
+ * module-graph `seen` set, including server-only `.server.ts`) folded with the
+ * installed `@webjsdev/server` version, PROD only. Empty in dev / warmup, which
+ * the client reads as "unknown" and never acts on (mirrors the build id guard).
+ *
+ * @type {string}
+ */
+let _appSourceId = '';
+
+/** @returns {string} the advertised app-source id, or `''` when unknown. */
+export function appSourceId() {
+  return _appSourceId;
+}
+
+/**
+ * Set the app-source id from a raw, deterministic input string (sorted
+ * `relpath:contentHash` lines plus the server version). Digested to a short hex
+ * so it stays a compact header/attribute value. An empty input clears it.
+ * @param {string} raw
+ * @returns {void}
+ */
+export function setAppSourceId(raw) {
+  _appSourceId = raw ? createHash('sha256').update(raw).digest('hex').slice(0, 16) : '';
 }
 
 /**
@@ -349,6 +340,15 @@ let _coreEntries = {
  */
 export async function setCoreInstall(coreDir, distMode) {
   _coreEntries = buildCoreEntries(coreDir, !!distMode);
+  // Capture the installed @webjsdev/core version (#899). The importmap targets
+  // core at a version-independent URL, so a core RELEASE (new implementation,
+  // same exports) does not move `_importMapHash`; folding the version into the
+  // published build id makes such a release change the client's hard-reload
+  // signal, since a running page cannot hot-swap the committed importmap core.
+  try {
+    const v = JSON.parse(readFileSync(join(coreDir, 'package.json'), 'utf8')).version;
+    _coreVersion = typeof v === 'string' ? v.replace(/[^\w.-]/g, '').slice(0, 32) : '';
+  } catch { _coreVersion = ''; }
   _importMapHash = await digestHex('SHA-256', JSON.stringify(buildImportMap({ fingerprint: false })));
 }
 
@@ -612,5 +612,9 @@ export function importMapTag(opts = {}) {
   // window never advertises an id that later changes. See
   // publishedBuildId() above for the rationale.
   const b = ` data-webjs-build="${publishedBuildId()}"`;
-  return `<script type="importmap"${n}${b}>${jsonForScriptTag(buildImportMap())}</script>`;
+  // The app-source deploy signal (#899), stamped alongside the build id. A
+  // change here evicts the client caches softly (see appSourceId()); empty until
+  // the analysis is ready, which the client reads as "unknown".
+  const s = ` data-webjs-src="${appSourceId()}"`;
+  return `<script type="importmap"${n}${b}${s}>${jsonForScriptTag(buildImportMap())}</script>`;
 }
