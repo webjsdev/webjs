@@ -28,13 +28,13 @@ Do NOT write from a fixed style spec. The voice is defined by the corpus, and th
 The patterns that have held so far (confirm them against what you read):
 
 - **First person, opinionated, honest.** The author writes as themselves ("I wanted the opposite", "kept biting me", "I did not find one I enjoyed using"). Personal origin and motivation are welcome.
-- **A concrete hook, never a definition.** Posts open on a scenario, an attack, a painful task, or a plain-language framing ("Let me start with the attack, because the name is scarier than the idea"). The "Let me show you" / "Let me start with" opener is part of the house voice, keep it.
+- **A concrete hook, never a definition.** Posts open on a scenario, an attack, a painful task, or a plain-language framing, not on "X is a...". A handful of posts use a signature "Let me start with..." or "Let me show you" opener; keep that phrasing where the author reaches for it, but the dependable pattern is the concrete hook itself, not the specific words.
 - **Beginner-friendly.** Every acronym or jargon term is expanded in parentheses on first use, for example "SSR (server-side rendering)" or "an async generator (a function that yields values over time instead of returning once)".
 - **Second person in walkthroughs.** Once into the mechanics, the author addresses "you" and shows real `ts` / `sh` code blocks.
 - **The painful old way, then the WebJs way.** Most feature posts show the tedious status-quo pattern first (a useEffect + spinner, thirty lines of optimistic bookkeeping, a native-addon compile), then the WebJs version that removes it.
 - **Section headers are single `#`, sentence case, often with a trailing clause.** For example "# The classic answer, and why it is fiddly" or "# What the sourcemap layer cost".
-- **Length is roughly 700 to 1100 words.** Substance over padding.
-- **Most posts close with a "# The takeaway" section** (about 29 of 41 do). Use it unless the post reads better without one.
+- **Length runs substantial, commonly around 1000 to 1600 words, with deeper posts closer to 2200.** Match the length of comparable posts you read in Step 0. Substance over padding, and never pad to hit a number.
+- **The majority of posts close with a "# The takeaway" section.** Use it unless the post genuinely reads better without one.
 - **Contrast with the tool the reader knows.** React, Next.js, Rails, Lit, Remix, Astro. Explain what that tool does and why WebJs chose differently, on WebJs's own terms.
 
 ## Front matter (copy this exact shape)
