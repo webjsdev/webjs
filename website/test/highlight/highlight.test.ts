@@ -126,6 +126,19 @@ test('blog renderer highlights ts/js fences but leaves sh fences plain', () => {
   assert.ok(!/<span class="t-[a-z]+">npm<\/span>/.test(out), 'sh fence is not tokenized');
 });
 
+test('a bare no-language fence stays plain (shell output is not JS-tokenized)', () => {
+  // A fence with no language often holds command output. Tokenizing it as JS
+  // mis-colors words like `Forbidden` (as a type) or `403` (as a number).
+  const out = renderPostBody('```\nnpm error code E403\nForbidden - PUT https://registry.npmjs.org\n```');
+  assert.ok(out.includes('npm error code E403'), 'output content present');
+  assert.ok(!/<span class="t-[a-z]+">/.test(out), 'no token spans in a bare fence');
+});
+
+test('fence language matching is case-insensitive', () => {
+  const out = renderPostBody('```TS\nconst x = 1;\n```');
+  assert.match(out, /<span class="t-kw">const<\/span>/);
+});
+
 test('blog renderer escapes angle brackets in a highlighted fence', () => {
   const out = renderPostBody('```ts\nconst el = html`<my-tag>`;\n```');
   assert.match(out, /&lt;my-tag&gt;/);

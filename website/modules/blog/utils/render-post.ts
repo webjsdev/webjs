@@ -79,10 +79,11 @@ export function renderPostBody(md: string): string {
       if (raw.trim().startsWith('```')) {
         const src = codeBuf.join('\n');
         // JS/TS fences get SSR syntax highlighting via the shared tokenizer
-        // (colors match the home page and the ui docs). Other langs (sh, plain
-        // command output) stay as plain escaped text.
-        const HIGHLIGHTED = new Set(['', 'ts', 'tsx', 'js', 'jsx', 'javascript', 'typescript']);
-        const body = HIGHLIGHTED.has(codeLang)
+        // (colors match the home page and the ui docs). Every other fence,
+        // INCLUDING a bare no-language fence (sh, plain command output, JSON),
+        // stays plain escaped text: JS-tokenizing shell output mis-colors it.
+        const HIGHLIGHTED = new Set(['ts', 'tsx', 'js', 'jsx', 'javascript', 'typescript']);
+        const body = HIGHLIGHTED.has(codeLang.toLowerCase())
           ? highlightToHtml(src)
           : src.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         out.push(`<pre class="bg-bg-subtle border border-border rounded-lg my-[48px] overflow-x-auto"><code class="font-mono text-[13px] leading-[1.7] text-fg whitespace-pre block px-[24px] py-[20px]"${codeLang ? ` data-lang="${codeLang}"` : ''}>${body}</code></pre>`);
