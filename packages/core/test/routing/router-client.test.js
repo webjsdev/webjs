@@ -27,6 +27,7 @@ import { parseHTML } from 'linkedom';
 let _collect, _longest, _keyOf, _diffEl, _reconcile,
   _addNewHead, _merge, _isNonHtmlPath, navigate,
   _reactivateScripts, _findAnchorInPath, _activeFrameId, _resolveTargetFrameId, _onPopState,
+  _applySwap, _prefetchCache,
   _snapshotCache, _LIVE_ATTRS, _blurOutgoingFocus,
   _onSubmit, _getSubmitMethod, _getSubmitAction, _buildSubmitFormData,
   _restoreOptimistic, _navToken, _bumpNavToken,
@@ -85,6 +86,8 @@ before(async () => {
     _activeFrameId,
     _resolveTargetFrameId,
     _onPopState,
+    _applySwap,
+    _prefetchCache,
     _snapshotCache,
     _LIVE_ATTRS,
     _blurOutgoingFocus,
@@ -3135,4 +3138,74 @@ test('regraftPermanentElements: only moves when the CURRENT node is actually per
 
   assert.equal(incoming.querySelector('#w'), incomingNode, 'incoming node untouched');
   assert.equal(incoming.querySelector('#w').textContent, 'INCOMING', 'non-permanent current node not regrafted');
+});
+
+/* ====================================================================
+ * #899: a detected cross-deploy build mismatch evicts the client caches
+ * ==================================================================== */
+
+test('applySwap evicts snapshot + prefetch caches on a cross-deploy build mismatch', () => {
+  // The current page booted on the OLD deploy; its importmap tag carries the
+  // old build id. A response arriving with a DIFFERENT id means a deploy
+  // landed, so every URL-keyed snapshot/prefetch is stale pre-deploy HTML.
+  const savedLocation = globalThis.location;
+  const savedHead = globalThis.document.head.innerHTML;
+  try {
+    globalThis.document.head.innerHTML =
+      '<script type="importmap" data-webjs-build="OLD">{}</script>';
+    let assigned = null;
+    globalThis.location = /** @type any */ ({
+      get href() { return 'http://x/current'; },
+      set href(v) { assigned = v; },
+    });
+    globalThis.sessionStorage.clear();
+
+    // Seed both caches with pre-deploy entries.
+    _snapshotCache.set('http://x/a', { html: 'A', at: 1 });
+    _prefetchCache.set('http://x/b', { html: 'B', build: 'OLD', at: 1 });
+    assert.equal(_snapshotCache.size, 1);
+    assert.equal(_prefetchCache.size, 1);
+
+    // A foreground nav whose response advertises a NEW build id.
+    const incoming = new globalThis.DOMParser().parseFromString(
+      '<!doctype html><html><head></head><body></body></html>', 'text/html');
+    _applySwap(incoming, null, false, 'http://x/next', 'NEW');
+
+    assert.equal(assigned, 'http://x/next', 'a cross-deploy mismatch hard-reloads the target');
+    assert.equal(_snapshotCache.size, 0, 'the snapshot cache is evicted (no stale pre-deploy HTML)');
+    assert.equal(_prefetchCache.size, 0, 'the prefetch cache is evicted');
+  } finally {
+    globalThis.location = savedLocation;
+    globalThis.document.head.innerHTML = savedHead;
+    _snapshotCache.clear();
+    _prefetchCache.clear();
+  }
+});
+
+test('applySwap does NOT evict caches when the build id is unchanged (same deploy)', () => {
+  const savedLocation = globalThis.location;
+  const savedHead = globalThis.document.head.innerHTML;
+  try {
+    globalThis.document.head.innerHTML =
+      '<script type="importmap" data-webjs-build="SAME">{}</script>';
+    let assigned = null;
+    globalThis.location = /** @type any */ ({
+      get href() { return 'http://x/current'; },
+      set href(v) { assigned = v; },
+    });
+    globalThis.sessionStorage.clear();
+    _snapshotCache.set('http://x/a', { html: 'A', at: 1 });
+
+    const incoming = new globalThis.DOMParser().parseFromString(
+      '<!doctype html><html><head><script type="importmap" data-webjs-build="SAME">{}</script></head><body></body></html>', 'text/html');
+    _applySwap(incoming, null, false, 'http://x/next', 'SAME');
+
+    assert.equal(assigned, null, 'same build id means no hard reload');
+    assert.equal(_snapshotCache.size, 1, 'the cache is preserved within one deploy');
+  } finally {
+    globalThis.location = savedLocation;
+    globalThis.document.head.innerHTML = savedHead;
+    _snapshotCache.clear();
+    _prefetchCache.clear();
+  }
 });

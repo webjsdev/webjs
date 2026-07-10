@@ -613,7 +613,10 @@ unsafe and a hard reload is required:
    in a loop behind a load balancer). With no fingerprint set, the id is the
    importmap hash exactly as before, so an SSR-only deploy is still missed:
    set `WEBJS_BUILD_ID` (or run on a platform that exports a commit env) to
-   opt into SSR-deploy detection.
+   opt into SSR-deploy detection. When a mismatch is detected, the client also
+   evicts its URL-keyed snapshot and speculative-prefetch caches (both captured
+   on the old deploy), so no stale pre-deploy fragment is applied on a later
+   soft nav, even if the one-shot infinite-reload guard bails to a partial swap.
 
 2. **Generic `data-webjs-track="reload"`** (for non-importmap concerns,
    e.g. a CSS bundle hash, a build-id meta tag). Any head element with

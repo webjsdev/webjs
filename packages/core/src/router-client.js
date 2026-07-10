@@ -2308,6 +2308,14 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild) {
       if (currentSig !== incomingSig) mismatch = true;
     }
     if (mismatch && typeof location !== 'undefined') {
+      // A detected cross-deploy mismatch means every URL-keyed snapshot and
+      // speculative prefetch was captured on the OLD deploy, so it is stale
+      // pre-deploy HTML (#899). Evict both caches so no stale entry is applied
+      // on a later soft nav, even when the infinite-reload guard below bails to
+      // a partial swap instead of a full reload (that partial swap must not then
+      // pull a pre-deploy fragment out of the cache).
+      snapshotCache.clear();
+      prefetchCache.clear();
       // Infinite-reload guard: if the importmap appears to genuinely
       // change EVERY navigation (e.g. a developer is live-editing the
       // pin file in dev, or a misbehaving CDN returns different
@@ -3220,7 +3228,9 @@ export {
   diffElementInPlace as _diffElementInPlace,
   reconcileChildren as _reconcileChildren,
   onPopState as _onPopState,
+  applySwap as _applySwap,
   snapshotCache as _snapshotCache,
+  prefetchCache as _prefetchCache,
   LIVE_ATTRS as _LIVE_ATTRS,
   blurOutgoingFocus as _blurOutgoingFocus,
   onSubmit as _onSubmit,
