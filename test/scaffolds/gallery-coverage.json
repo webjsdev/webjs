@@ -60,16 +60,16 @@
       "exempt": "internal: component-registry plumbing"
     },
     "asyncAppend": {
-      "exempt": "deferred: asyncAppend directive; agent-docs/components.md (#859)"
+      "demo": "modules/directives/components/directive-demo.ts"
     },
     "asyncReplace": {
-      "exempt": "deferred: asyncReplace directive; agent-docs/components.md (#859)"
+      "demo": "modules/directives/components/directive-demo.ts"
     },
     "batch": {
       "demo": "modules/components/components/reactive-meter.ts"
     },
     "cache": {
-      "exempt": "deferred: lit cache directive (distinct from the server cache() helper); agent-docs/advanced.md (#859)"
+      "demo": "modules/directives/components/directive-demo.ts"
     },
     "computed": {
       "demo": "modules/components/components/reactive-meter.ts"
@@ -123,7 +123,7 @@
       "demo": "app/features/boundaries/gated/page.ts"
     },
     "guard": {
-      "exempt": "deferred: guard directive; agent-docs/components.md (#859)"
+      "demo": "modules/directives/components/directive-demo.ts"
     },
     "html": {
       "demo": "app/features/async-render/page.ts"
@@ -288,7 +288,7 @@
       "exempt": "internal: SSR action-seeding plumbing"
     },
     "templateContent": {
-      "exempt": "deferred: templateContent directive; agent-docs/components.md (#859)"
+      "demo": "modules/directives/components/directive-demo.ts"
     },
     "unauthorized": {
       "demo": "app/features/boundaries/private/page.ts"
