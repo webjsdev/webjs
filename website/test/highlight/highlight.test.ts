@@ -14,21 +14,23 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { html } from '@webjsdev/core';
 import { renderToString } from '@webjsdev/core/server';
-import { highlight } from '#lib/highlight.ts';
+import { highlight, highlightToHtml } from '#lib/highlight.ts';
+import { renderPostBody } from '#modules/blog/utils/render-post.ts';
 
 const render = (code: string) => renderToString(html`<pre>${highlight(code)}</pre>`);
 
-test('every token class highlight() emits is styled in app/page.ts', () => {
-  // highlight.ts emits t-* classes; the only consumer that styles them is the
-  // inline <style> in app/page.ts. A rename/drop on EITHER side passes the
-  // whole suite while shipping plain (unstyled) code samples, so pin the
+test('every token class highlight() emits is styled in public/input.css', () => {
+  // highlight.ts emits t-* classes; they are styled globally in
+  // public/input.css (so every surface, the home page code windows and the
+  // blog code fences, shares one palette). A rename/drop on EITHER side passes
+  // the whole suite while shipping plain (unstyled) code samples, so pin the
   // contract (mirrors the no-animations pin in layout-ssr.test.ts).
   const read = (p: string) => readFileSync(fileURLToPath(new URL(p, import.meta.url)), 'utf8');
   const classes = [...read('../../lib/highlight.ts').matchAll(/'(t-[a-z]+)'/g)].map((m) => m[1]);
-  const page = read('../../app/page.ts');
+  const css = read('../../public/input.css');
   assert.ok(classes.length >= 6, `extracted the emitted token classes, got ${classes.join(',')}`);
   for (const cls of new Set(classes)) {
-    assert.ok(page.includes(`.${cls}`), `app/page.ts must style the .${cls} token class`);
+    assert.ok(css.includes(`.${cls}`), `public/input.css must style the .${cls} token class`);
   }
 });
 
@@ -99,4 +101,46 @@ test('tokenizer edge cases: block comments, backtick strings, hex/underscore num
   // the extra keywords the sample surface uses
   assert.match(await render('x as Foo'), /<span class="t-kw">as<\/span>/);
   assert.match(await render('typeof y'), /<span class="t-kw">typeof<\/span>/);
+});
+
+test('highlightToHtml emits the same token spans as a string', () => {
+  const out = highlightToHtml("const x = 1;");
+  assert.match(out, /<span class="t-kw">const<\/span>/);
+  assert.match(out, /<span class="t-num">1<\/span>/);
+  assert.equal(typeof out, 'string');
+});
+
+test('highlightToHtml HTML-escapes token text (no injection)', () => {
+  const out = highlightToHtml('const t = "<div> & `x`";');
+  assert.match(out, /&lt;div&gt;/);
+  assert.match(out, /&amp;/);
+  assert.ok(!out.includes('<div>'), 'no raw <div> injected');
+});
+
+test('blog renderer highlights ts/js fences but leaves sh fences plain', () => {
+  const out = renderPostBody('```ts\nconst x: number = 1;\n```\n\n```sh\nnpm run dev\n```');
+  // the ts fence is tokenized
+  assert.match(out, /<span class="t-kw">const<\/span>/);
+  // the sh fence is escaped plain text, not tokenized
+  assert.ok(out.includes('npm run dev'), 'sh fence content present');
+  assert.ok(!/<span class="t-[a-z]+">npm<\/span>/.test(out), 'sh fence is not tokenized');
+});
+
+test('a bare no-language fence stays plain (shell output is not JS-tokenized)', () => {
+  // A fence with no language often holds command output. Tokenizing it as JS
+  // mis-colors words like `Forbidden` (as a type) or `403` (as a number).
+  const out = renderPostBody('```\nnpm error code E403\nForbidden - PUT https://registry.npmjs.org\n```');
+  assert.ok(out.includes('npm error code E403'), 'output content present');
+  assert.ok(!/<span class="t-[a-z]+">/.test(out), 'no token spans in a bare fence');
+});
+
+test('fence language matching is case-insensitive', () => {
+  const out = renderPostBody('```TS\nconst x = 1;\n```');
+  assert.match(out, /<span class="t-kw">const<\/span>/);
+});
+
+test('blog renderer escapes angle brackets in a highlighted fence', () => {
+  const out = renderPostBody('```ts\nconst el = html`<my-tag>`;\n```');
+  assert.match(out, /&lt;my-tag&gt;/);
+  assert.ok(!out.includes('<my-tag>'), 'no raw custom element injected');
 });
