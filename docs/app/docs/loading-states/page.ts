@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Loading States | webjs' };
+export const metadata = { title: 'Loading States | WebJs' };
 
 export default function LoadingStates() {
   return html`

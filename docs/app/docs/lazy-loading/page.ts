@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Lazy Loading | webjs' };
+export const metadata = { title: 'Lazy Loading | WebJs' };
 
 export default function LazyLoading() {
   return html`

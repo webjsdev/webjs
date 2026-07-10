@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Client Router | webjs' };
+export const metadata = { title: 'Client Router | WebJs' };
 
 export default function ClientRouter() {
   return html`

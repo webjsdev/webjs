@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Sessions | webjs' };
+export const metadata = { title: 'Sessions | WebJs' };
 
 export default function Sessions() {
   return html`

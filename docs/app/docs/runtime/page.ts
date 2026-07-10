@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Runtime (Node & Bun) | webjs' };
+export const metadata = { title: 'Runtime (Node & Bun) | WebJs' };
 
 export default function Runtime() {
   return html`

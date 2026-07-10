@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Streaming & Suspense | webjs' };
+export const metadata = { title: 'Streaming & Suspense | WebJs' };
 
 export default function SuspensePage() {
   return html`

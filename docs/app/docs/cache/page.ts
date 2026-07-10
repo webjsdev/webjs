@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Caching | webjs' };
+export const metadata = { title: 'Caching | WebJs' };
 
 export default function Cache() {
   return html`

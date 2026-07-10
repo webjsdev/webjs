@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'AI-First Development | webjs' };
+export const metadata = { title: 'AI-First Development | WebJs' };
 
 export default function AIFirst() {
   return html`

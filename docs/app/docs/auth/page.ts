@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Authentication | webjs' };
+export const metadata = { title: 'Authentication | WebJs' };
 
 export default function Auth() {
   return html`

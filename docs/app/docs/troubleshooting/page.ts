@@ -1,7 +1,7 @@
 import { html } from '@webjsdev/core';
 
 export const metadata = {
-  title: 'Troubleshooting | webjs',
+  title: 'Troubleshooting | WebJs',
   description:
     'Symptom-keyed fixes for the distinctive WebJs error signatures: throw-at-load server imports, backtick-in-template 500s, TypeScript strip failures, SSR browser-global crashes, the missing-frame swap, and more, each linked to the webjs check rule and the invariant behind it.',
 };

@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Reactive Controllers | webjs' };
+export const metadata = { title: 'Reactive Controllers | WebJs' };
 
 export default function Controllers() {
   return html`

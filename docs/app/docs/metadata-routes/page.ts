@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Metadata Routes | webjs' };
+export const metadata = { title: 'Metadata Routes | WebJs' };
 
 export default function MetadataRoutes() {
   return html`

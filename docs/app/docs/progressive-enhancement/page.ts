@@ -1,7 +1,7 @@
 import { html } from '@webjsdev/core';
 
 export const metadata = {
-  title: 'Progressive Enhancement | webjs',
+  title: 'Progressive Enhancement | WebJs',
   description:
     'WebJs pages and components are SSR\'d to real HTML. Read-paths, navigation, and form submissions work without JavaScript. JS is opt-in per interactive behavior: only the click / signal / focus handlers require scripts, not the component\'s first paint.',
 };

@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'API Routes | webjs' };
+export const metadata = { title: 'API Routes | WebJs' };
 
 export default function ApiRoutes() {
   return html`

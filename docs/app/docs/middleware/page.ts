@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Middleware | webjs' };
+export const metadata = { title: 'Middleware | WebJs' };
 
 export default function Middleware() {
   return html`
