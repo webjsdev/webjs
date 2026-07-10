@@ -37,11 +37,22 @@ export class DirectiveDemo extends WebComponent {
   // prove `guard` skips its recompute unless its dep actually changes.
   private tab = signal<'a' | 'b'>('a');
   private guardBumps = signal(0);
-  // Async iterables created ONCE so `asyncAppend` / `asyncReplace` consume them
-  // on the client (both render empty at SSR). The generators are lazy, so the
-  // field initializer just creates the iterator without running the body.
+  // Async iterables consumed on the client (both render empty at SSR). The
+  // generators are lazy, so the field initializer just creates the iterator
+  // without running the body. Both are FINITE and run ONCE: they animate on
+  // first paint, then settle on their final value. restartStreams() swaps in
+  // fresh iterables to replay them (a new iterable identity makes asyncAppend /
+  // asyncReplace tear down and re-subscribe). streamRun is read in render() so
+  // the swap triggers a re-render.
   private logIter: AsyncIterable<string> = this.log();
   private countIter: AsyncIterable<number> = this.countdown();
+  private streamRun = signal(0);
+
+  private restartStreams() {
+    this.logIter = this.log();
+    this.countIter = this.countdown();
+    this.streamRun.set(this.streamRun.get() + 1);
+  }
   // For `templateContent`: a real <template> element on the CLIENT (the client
   // directive clones its `.content`), and a plain { innerHTML } object at SSR
   // (there is no document to build a template with, and the server directive
@@ -61,13 +72,14 @@ export class DirectiveDemo extends WebComponent {
   // A finite async iterable: asyncAppend adds each line as it arrives.
   private async *log(): AsyncGenerator<string> {
     for (const line of ['connecting', 'authenticated', 'ready']) {
-      await new Promise((r) => setTimeout(r, 400));
+      await new Promise((r) => setTimeout(r, 500));
       yield line;
     }
   }
-  // A finite async iterable: asyncReplace shows only the latest value.
+  // A finite async iterable: asyncReplace shows only the latest value, counting
+  // down 5 -> 0 one step at a time.
   private async *countdown(): AsyncGenerator<number> {
-    for (let n = 3; n >= 0; n--) {
+    for (let n = 5; n >= 0; n--) {
       yield n;
       await new Promise((r) => setTimeout(r, 500));
     }
@@ -164,9 +176,17 @@ export class DirectiveDemo extends WebComponent {
 
           <!-- asyncAppend appends each value from an async iterable as it
                arrives; asyncReplace shows only the latest. Both render empty at
-               SSR and stream in on the client. -->
-          <ul class="grid gap-1 list-none m-0 p-0 text-sm text-muted-foreground">${asyncAppend(this.logIter, (line: string) => html`<li>· ${line}</li>`)}</ul>
-          <p class="text-sm text-foreground">countdown: ${asyncReplace(this.countIter)}</p>
+               SSR, stream in on the client, and finish (the log stops at
+               "ready", the countdown at 0). Restart swaps in fresh iterables so
+               you can watch them replay. The run counter forces the re-render. -->
+          <div class="flex items-center gap-3">
+            <button @click=${() => this.restartStreams()}
+              class="w-fit px-3.5 py-1.5 rounded-xl bg-card border border-border text-foreground text-sm cursor-pointer transition-colors hover:border-border-strong">restart streams</button>
+            <span class="text-sm text-muted-foreground">run #${this.streamRun.get()}</span>
+          </div>
+          <div class="text-sm text-muted-foreground">log (asyncAppend, one row per value):</div>
+          <ul class="grid gap-1 list-none m-0 p-0 text-sm text-muted-foreground min-h-[1.25rem]">${asyncAppend(this.logIter, (line: string) => html`<li>· ${line}</li>`)}</ul>
+          <p class="text-sm text-foreground">countdown (asyncReplace, latest value only): ${asyncReplace(this.countIter)}</p>
         </div>
       </div>
     `;
