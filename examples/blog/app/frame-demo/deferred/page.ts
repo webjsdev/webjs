@@ -1,7 +1,7 @@
 import { html } from '@webjsdev/core';
 
 export const metadata = {
-  title: 'Deferred frame content · webjs blog',
+  title: 'Deferred frame content · WebJs Blog',
 };
 
 /**

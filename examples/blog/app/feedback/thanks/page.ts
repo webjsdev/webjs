@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 
-export const metadata = { title: 'Thanks: webjs blog' };
+export const metadata = { title: 'Thanks - WebJs Blog' };
 
 // PRG target for a successful /feedback submission (#244 e2e fixture).
 export default function ThanksPage() {

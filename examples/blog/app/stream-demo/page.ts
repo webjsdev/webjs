@@ -3,7 +3,7 @@ import '#components/async-greeting.ts';
 import '#components/slow-fact.ts';
 
 export const metadata = {
-  title: 'Stream demo · webjs blog',
+  title: 'Stream demo · WebJs Blog',
   description: 'async render() + <webjs-suspense> streaming, end to end.',
 };
 

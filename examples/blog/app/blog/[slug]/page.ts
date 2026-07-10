@@ -15,8 +15,8 @@ import { rubric, backLink, displayH1, stat } from '#lib/utils/ui.ts';
 export async function generateMetadata({ params }: PageProps<'/blog/[slug]'>): Promise<Metadata> {
   const post = await getPost({ slug: params.slug });
   return post
-    ? { title: `${post.title}: webjs blog` }
-    : { title: 'Not found: webjs blog' };
+    ? { title: `${post.title} - WebJs Blog` }
+    : { title: 'Not found - WebJs Blog' };
 }
 
 export default async function PostPage({ params }: PageProps<'/blog/[slug]'>) {

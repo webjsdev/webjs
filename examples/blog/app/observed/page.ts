@@ -4,7 +4,7 @@ import '#components/observe-badge.ts';
 import '#components/ssr-derived-badge.ts';
 
 export const metadata = {
-  title: 'Observed badge · webjs blog',
+  title: 'Observed badge · WebJs Blog',
   description: 'Pins the cross-module-registration elision fix (#169).',
 };
 

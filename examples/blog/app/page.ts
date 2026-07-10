@@ -10,9 +10,9 @@ import { currentUser } from '#modules/auth/queries/current-user.server.ts';
 import { rubric, stat, banner, accentLink, sectionH2 } from '#lib/utils/ui.ts';
 
 export const metadata = {
-  title: 'webjs blog',
+  title: 'WebJs Blog',
   description: 'A tiny full-feature demo of the webjs framework',
-  openGraph: { title: 'webjs blog', type: 'website' },
+  openGraph: { title: 'WebJs Blog', type: 'website' },
 };
 
 async function slowStat() {

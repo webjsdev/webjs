@@ -2,7 +2,7 @@ import { html } from '@webjsdev/core';
 import '#components/inline-quote.ts';
 
 export const metadata = {
-  title: 'Async leaf · webjs blog',
+  title: 'Async leaf · WebJs Blog',
   description: 'A bare async-render leaf, elided yet present in the first paint.',
 };
 
