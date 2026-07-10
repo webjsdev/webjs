@@ -130,6 +130,25 @@ test('webjs-scaffold-sync routes on scaffold-change phrases', () => {
   }
 });
 
+test('webjs-blog-write routes on blog-writing phrases', () => {
+  for (const p of [
+    'write a blog post about streaming actions',
+    'draft an SEO blog for the path-alias imports',
+    'author a blog covering CSRF without tokens',
+    'we shipped verb actions but never blogged it',
+    'add a new blog explaining elision',
+  ]) {
+    const { ctx } = run(p);
+    assert.ok(routed(ctx, 'webjs-blog-write'), `expected blog-write route for: ${p}`);
+  }
+});
+
+test('webjs-blog-write stays quiet on a docs-sync prompt', () => {
+  // Syncing framework reference docs is doc-sync work, not a blog post.
+  const { ctx } = run('sync the docs for the new path-alias feature');
+  assert.ok(!routed(ctx, 'webjs-blog-write'), 'doc-sync prompt must not route to blog-write');
+});
+
 test('code-review routes on review phrases', () => {
   for (const p of [
     'review the PR',
