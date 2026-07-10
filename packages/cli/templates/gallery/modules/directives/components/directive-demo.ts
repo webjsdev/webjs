@@ -147,9 +147,9 @@ export class DirectiveDemo extends WebComponent {
                so switching back is instant and preserves any element state. -->
           <div class="flex gap-2">
             <button @click=${() => this.tab.set('a')}
-              class="px-3 py-1 rounded-lg text-sm border ${this.tab.get() === 'a' ? 'bg-primary text-primary-foreground border-transparent' : 'bg-card border-border text-foreground'}">Tab A</button>
+              class="px-3 py-1 rounded-lg text-sm border cursor-pointer ${this.tab.get() === 'a' ? 'bg-primary text-primary-foreground border-transparent' : 'bg-card border-border text-foreground'}">Tab A</button>
             <button @click=${() => this.tab.set('b')}
-              class="px-3 py-1 rounded-lg text-sm border ${this.tab.get() === 'b' ? 'bg-primary text-primary-foreground border-transparent' : 'bg-card border-border text-foreground'}">Tab B</button>
+              class="px-3 py-1 rounded-lg text-sm border cursor-pointer ${this.tab.get() === 'b' ? 'bg-primary text-primary-foreground border-transparent' : 'bg-card border-border text-foreground'}">Tab B</button>
           </div>
           <div class="text-[15px] text-foreground">${cache(
             this.tab.get() === 'a'
