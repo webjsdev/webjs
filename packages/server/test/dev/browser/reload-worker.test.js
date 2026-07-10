@@ -75,4 +75,29 @@ suite('dev reload SharedWorker relay (#887)', () => {
     const { es } = startReloadWorker(scope, FakeEventSource, '/base/__webjs/events');
     assert.equal(es.url, '/base/__webjs/events', 'the one connection uses the base-path-aware URL');
   });
+
+  // #893: a `node --watch` restart drops the connection; if the in-process
+  // reload frame was killed with the old process, no reload was delivered, so
+  // the edit would need a manual refresh. The `hello` frame carries a
+  // per-process boot id, so a CHANGED id on reconnect is the reload signal.
+  test('a reconnect to a NEW process (changed boot id) fans a reload', () => {
+    const scope = {};
+    startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    FakeEventSource.last.fire('hello', 'BOOT_A'); // initial connect: baseline only
+    assert.deepEqual(a.received, [], 'the first hello does not reload');
+    FakeEventSource.last.fire('hello', 'BOOT_B'); // reconnected to a fresh process
+    assert.deepEqual(a.received, [{ type: 'reload' }], 'a new boot id reloads the tab');
+  });
+
+  test('a transient reconnect to the SAME process (same boot id) never reloads', () => {
+    const scope = {};
+    startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    FakeEventSource.last.fire('hello', 'BOOT_A'); // first connect
+    FakeEventSource.last.fire('hello', 'BOOT_A'); // sleep/wake or blip: same process
+    assert.deepEqual(a.received, [], 'a same-process reconnect is not an edit (no state loss)');
+  });
 });

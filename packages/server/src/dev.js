@@ -44,6 +44,7 @@ import {
   negotiateEncoding,
   createCompressor,
   varyWithAcceptEncoding,
+  DEV_BOOT_ID,
 } from './listener-core.js';
 import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache, hasVendorPin, readPinFile, prunePinToReachable } from './vendor.js';
 import { buildModuleGraph, transitiveDeps, reachableFromEntries, resolveImport, appImportsMap } from './module-graph.js';
@@ -419,6 +420,50 @@ export async function readBodyLimitsFromApp(appDir) {
     pkg = undefined;
   }
   return readBodyLimits(pkg);
+}
+
+/**
+ * Extra dev watch roots from the app's package.json `webjs.dev.watch` (#894).
+ * These are directories the app READS from but that live OUTSIDE its appDir, so
+ * the recursive `fs.watch(appDir)` never sees them (e.g. the website renders
+ * posts from a repo-root `blog/` dir, a sibling of the app, so editing a post
+ * would not live-reload). Each entry is resolved relative to the appDir and MAY
+ * escape it (`"../blog"`); a change under one runs the same rebuild + reload as
+ * an in-tree edit. Opt-in: a missing/empty config yields `[]`, so a plain app
+ * watches only its appDir, unchanged.
+ *
+ * Returns absolute, de-duped paths, skipping any that overlap the appDir (the
+ * appDir is already watched recursively, so an ancestor or descendant root
+ * would just double-fire the rebuild). Existence is NOT checked here (the caller
+ * filters missing paths so it can log them); the reader stays a pure
+ * package.json read, matching the other `readXFromApp` helpers.
+ *
+ * @param {string} appDir
+ * @returns {Promise<string[]>}
+ */
+export async function readDevWatchPathsFromApp(appDir) {
+  let pkg;
+  try {
+    pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
+  } catch {
+    return [];
+  }
+  const raw = pkg && pkg.webjs && pkg.webjs.dev && pkg.webjs.dev.watch;
+  if (!Array.isArray(raw)) return [];
+  /** @type {string[]} */
+  const out = [];
+  const seen = new Set();
+  for (const entry of raw) {
+    if (typeof entry !== 'string' || !entry.trim()) continue;
+    const abs = resolve(appDir, entry);
+    // Skip the appDir itself and any ancestor/descendant overlap: the appDir is
+    // already watched recursively, so an overlapping extra root double-fires.
+    if (abs === appDir || appDir.startsWith(abs + sep) || abs.startsWith(appDir + sep)) continue;
+    if (seen.has(abs)) continue;
+    seen.add(abs);
+    out.push(abs);
+  }
+  return out;
 }
 
 /**
@@ -1543,9 +1588,9 @@ export async function startServer(opts) {
     // the SQLite dev DB (db/dev.db) + db/migrations so a file the dev server itself writes never loops.
     const rebuild = debounce(() => app.rebuild(), 80);
     watcherAbort = new AbortController();
-    (async () => {
+    const watchRoot = async (root) => {
       try {
-        const events = fsWatch(app.appDir, { recursive: true, signal: watcherAbort.signal });
+        const events = fsWatch(root, { recursive: true, signal: watcherAbort.signal });
         for await (const event of events) {
           const filename = event.filename || '';
           if (shouldIgnoreWatchPath(filename)) continue;
@@ -1553,10 +1598,17 @@ export async function startServer(opts) {
         }
       } catch (err) {
         if (err && /** @type any */(err).name !== 'AbortError') {
-          logger.warn({ err }, 'file watcher exited');
+          logger.warn({ err }, `file watcher exited (${root})`);
         }
       }
-    })();
+    };
+    watchRoot(app.appDir);
+    // Extra roots the app reads from OUTSIDE its appDir (#894): repo-root content
+    // dirs (blog markdown, data fixtures) the recursive appDir watch can't see.
+    // Opt-in via `webjs.dev.watch`; each funnels into the same debounced rebuild.
+    const extraWatch = (await readDevWatchPathsFromApp(app.appDir)).filter((p) => existsSync(p));
+    for (const root of extraWatch) watchRoot(root);
+    if (extraWatch.length) logger.info?.(`[webjs] also watching ${extraWatch.length} extra dev path(s): ${extraWatch.join(', ')}`);
   }
 
   // Inbound server timeouts (issue #237). On node these are the node:http
@@ -1611,7 +1663,12 @@ function startNodeListener(ctx) {
           'cache-control': 'no-cache',
           connection: 'keep-alive',
         });
-        res.write(`event: hello\ndata: webjs\n\n`);
+        // `retry: 300` shrinks the browser's EventSource reconnect backoff from
+        // its ~3s default so a reconnect after a `node --watch` restart happens
+        // promptly. The `hello` data is a per-process boot id (#893): the client
+        // reloads on a reconnect ONLY when it changes (a real restart), so a
+        // transient reconnect never triggers a spurious reload.
+        res.write(`retry: 300\nevent: hello\ndata: ${DEV_BOOT_ID}\n\n`);
         // Register a node client wrapper in the shared hub: the fanout + keepalive
         // live in SseHub; only the transport write (res.write / res.end) is local.
         const client = {
@@ -2663,15 +2720,43 @@ function reloadClientJs(bp) {
   // its own `EventSource`, the original behaviour. Correct, just not shared.
   const eventsUrl = JSON.stringify(withBasePath('/__webjs/events', bp));
   const workerUrl = JSON.stringify(withBasePath('/__webjs/reload-worker.js', bp));
+  const versionUrl = JSON.stringify(withBasePath('/__webjs/version', bp));
   return `// webjs dev reload client
 ${DEV_OVERLAY_SRC}
 function __webjsApplyError(data) {
   let f; try { f = JSON.parse(data); } catch (_) { return; }
   renderDevOverlay(f);
 }
+// Never reload INTO a server that is still restarting (Node's node --watch
+// briefly kills the process on an edit), which would paint a style-less,
+// half-rendered page (#893). Probe the lightweight /__webjs/version endpoint
+// until it answers, THEN reload. Under an in-process reload the server is up,
+// so the first probe passes and the reload is instant; under a restart the
+// probes fail until the fresh server is listening, so the old page stays put
+// until the new one is ready. Bounded, so a genuinely-dead server still
+// reloads (and shows the browser's own error) rather than hanging forever.
+function __webjsReloadWhenReady() {
+  var tries = 0;
+  function attempt() {
+    fetch(${versionUrl}, { cache: 'no-store' }).then(function (r) {
+      if (r && r.ok) location.reload(); else again();
+    }).catch(again);
+  }
+  function again() { if (++tries > 100) location.reload(); else setTimeout(attempt, 100); }
+  attempt();
+}
 function __webjsDirectEvents() {
+  // Same restart-reload as the SharedWorker relay (#893), for the per-tab
+  // fallback: the hello frame carries the server's per-process boot id, so a
+  // CHANGED id on reconnect means a real restart (reload), while a transient
+  // reconnect to the same process keeps the id (no spurious reload).
+  var lastBoot = null;
   const es = new EventSource(${eventsUrl});
-  es.addEventListener('reload', () => location.reload());
+  es.addEventListener('hello', (e) => {
+    if (lastBoot !== null && e.data !== lastBoot) __webjsReloadWhenReady();
+    lastBoot = e.data;
+  });
+  es.addEventListener('reload', () => __webjsReloadWhenReady());
   es.addEventListener('webjs-error', (e) => __webjsApplyError(e.data));
 }
 try {
@@ -2679,7 +2764,7 @@ try {
     const w = new SharedWorker(${workerUrl});
     w.port.onmessage = (e) => {
       const m = e.data || {};
-      if (m.type === 'reload') location.reload();
+      if (m.type === 'reload') __webjsReloadWhenReady();
       else if (m.type === 'webjs-error') __webjsApplyError(m.data);
     };
     w.port.start();

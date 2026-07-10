@@ -21,6 +21,8 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl) {
   const ports = new Set();
   /** @type {string | null} the last error frame, cached for late-joining tabs */
   let lastError = null;
+  /** @type {string | null} the last-seen per-process boot id (#893) */
+  let lastBoot = null;
 
   // A MessagePort has no reliable close event, so prune a port when a post to it
   // throws (a closed tab). Some browsers silently no-op instead of throwing,
@@ -33,6 +35,22 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl) {
   }
 
   const es = new EventSourceCtor(eventsUrl);
+
+  // The `hello` frame fires on every (re)connect and carries the server's
+  // per-process boot id (#893). A full server restart (Node's `node --watch`)
+  // drops this connection, and if the in-process rebuild's `reload` frame was
+  // killed with the old process no reload was delivered, so the edit would need
+  // a MANUAL refresh. The browser auto-reconnects to the FRESH process, whose
+  // boot id differs, so a CHANGED id is the edit signal: broadcast a reload (the
+  // tab still gates it on a readiness probe). A transient reconnect (sleep/wake,
+  // a network blip, a tab evicted at the HTTP/1.1 cap) reconnects to the SAME
+  // process with the SAME id, so it never reloads. The first `hello` only
+  // records the baseline.
+  es.addEventListener('hello', (e) => {
+    if (lastBoot !== null && e.data !== lastBoot) fanout({ type: 'reload' });
+    lastBoot = e.data;
+  });
+
   es.addEventListener('reload', () => { lastError = null; fanout({ type: 'reload' }); });
   es.addEventListener('webjs-error', (e) => { lastError = e.data; fanout({ type: 'webjs-error', data: e.data }); });
 

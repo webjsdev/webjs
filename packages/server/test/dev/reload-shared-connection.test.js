@@ -79,3 +79,33 @@ test('the worker events URL carries the base path under a sub-path deploy (#256)
   assert.match(client, /reload-worker\.js/, 'client references the worker');
   assert.match(client, /\/app\/__webjs\/reload-worker\.js/, 'worker URL is base-path prefixed in the client');
 });
+
+// #893: a reload must never paint into a half-restarted server, and an app edit
+// must never need a manual refresh. The client gates every reload on the server
+// being healthy (probe /__webjs/version, then reload), and the direct-EventSource
+// fallback treats a reconnect after a drop (a `node --watch` restart) as an edit
+// signal so the reload fires even when the in-process reload frame was killed
+// with the old process.
+test('the reload client probes the server is up before reloading (no restart flash, #893)', async () => {
+  const appDir = makeApp();
+  const app = await createRequestHandler({ appDir, dev: true });
+  const clientSrc = await (await app.handle(new Request('http://x/__webjs/reload.js'))).text();
+
+  assert.match(clientSrc, /function __webjsReloadWhenReady/, 'reload is gated on a readiness probe');
+  assert.match(clientSrc, /fetch\(\"\/__webjs\/version\"/, 'the probe hits the lightweight version endpoint');
+  // Both the SharedWorker path and the direct fallback route through the gate,
+  // never a bare location.reload() on a reload signal.
+  assert.match(clientSrc, /if \(m\.type === 'reload'\) __webjsReloadWhenReady\(\)/, 'the SharedWorker path gates the reload');
+  assert.match(clientSrc, /addEventListener\('reload', \(\) => __webjsReloadWhenReady\(\)\)/, 'the direct fallback gates the reload');
+  // The direct fallback reloads on a reconnect only when the boot id changed (a
+  // real restart), never on a same-process transient reconnect.
+  assert.match(clientSrc, /addEventListener\('hello'/, 'the fallback tracks the boot id via the hello frame');
+  assert.match(clientSrc, /if \(lastBoot !== null && e\.data !== lastBoot\) __webjsReloadWhenReady\(\)/, 'only a changed boot id reloads');
+});
+
+test('the direct-fallback probe carries the base path under a sub-path deploy (#893 + #256)', async () => {
+  const appDir = makeApp({ basePath: '/app' });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const clientSrc = await (await app.handle(new Request('http://x/app/__webjs/reload.js'))).text();
+  assert.match(clientSrc, /fetch\(\"\/app\/__webjs\/version\"/, 'the readiness probe is base-path prefixed');
+});

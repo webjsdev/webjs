@@ -95,6 +95,17 @@ export interface WebjsDevTasks {
    * the parent and torn down on exit, so a watcher cannot leak past the server.
    */
   parallel?: string[];
+  /**
+   * Extra directories the dev live-reload watcher follows IN ADDITION to the
+   * appDir (#894). The dev server watches its appDir recursively, but an app
+   * that reads content from OUTSIDE its tree (e.g. blog markdown in a repo-root
+   * `blog/` dir, a sibling of the app) sees no reload when that content changes.
+   * Each entry is resolved relative to the app root and MAY escape it
+   * (`"../blog"`); a change under one triggers the same rebuild + browser reload
+   * as an in-tree edit. Missing / overlapping (ancestor or descendant of the
+   * appDir) entries are skipped. Read by the server (`readDevWatchPathsFromApp`).
+   */
+  watch?: string[];
 }
 
 /** Start task orchestration in `webjs.start` (#550). Read by the CLI, not the server. */
