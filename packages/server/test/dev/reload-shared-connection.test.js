@@ -97,8 +97,10 @@ test('the reload client probes the server is up before reloading (no restart fla
   // never a bare location.reload() on a reload signal.
   assert.match(clientSrc, /if \(m\.type === 'reload'\) __webjsReloadWhenReady\(\)/, 'the SharedWorker path gates the reload');
   assert.match(clientSrc, /addEventListener\('reload', \(\) => __webjsReloadWhenReady\(\)\)/, 'the direct fallback gates the reload');
-  // The direct fallback also reloads on a reconnect after a drop.
-  assert.match(clientSrc, /if \(everConnected && dropped\) __webjsReloadWhenReady\(\)/, 'a reconnect after a restart reloads');
+  // The direct fallback reloads on a reconnect only when the boot id changed (a
+  // real restart), never on a same-process transient reconnect.
+  assert.match(clientSrc, /addEventListener\('hello'/, 'the fallback tracks the boot id via the hello frame');
+  assert.match(clientSrc, /if \(lastBoot !== null && e\.data !== lastBoot\) __webjsReloadWhenReady\(\)/, 'only a changed boot id reloads');
 });
 
 test('the direct-fallback probe carries the base path under a sub-path deploy (#893 + #256)', async () => {

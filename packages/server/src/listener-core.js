@@ -22,9 +22,20 @@ import {
   constants as zlibConstants,
 } from 'node:zlib';
 import { stripBasePath } from './base-path.js';
+import { randomUUID } from 'node:crypto';
 
 /** The dev live-reload SSE path (matched after base-path stripping). */
 export const EVENTS_PATH = '/__webjs/events';
+
+/**
+ * A per-PROCESS id sent on the dev SSE `hello` frame (#893). It is regenerated
+ * on every server start, so a `node --watch` RESTART yields a NEW id while a
+ * transient reconnect (laptop sleep/wake, a network blip, a tab evicted at the
+ * HTTP/1.1 connection cap) reconnects to the SAME process and sees the SAME id.
+ * The reload client reloads only when this id CHANGES, so a mere reconnect never
+ * triggers a spurious full reload that would discard in-page dev state.
+ */
+export const DEV_BOOT_ID = randomUUID();
 
 /**
  * Detect the host runtime so `startServer` can pick an adapter. Bun sets

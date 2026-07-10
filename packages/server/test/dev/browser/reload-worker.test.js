@@ -78,26 +78,26 @@ suite('dev reload SharedWorker relay (#887)', () => {
 
   // #893: a `node --watch` restart drops the connection; if the in-process
   // reload frame was killed with the old process, no reload was delivered, so
-  // the edit would need a manual refresh. The reconnect (open after a drop) is
-  // itself the reload signal.
-  test('a reconnect after a drop fans a reload (restart with no delivered reload frame)', () => {
+  // the edit would need a manual refresh. The `hello` frame carries a
+  // per-process boot id, so a CHANGED id on reconnect is the reload signal.
+  test('a reconnect to a NEW process (changed boot id) fans a reload', () => {
     const scope = {};
     startReloadWorker(scope, FakeEventSource, '/__webjs/events');
     const a = fakePort();
     scope.onconnect({ ports: [a.port] });
-    FakeEventSource.last.fire('open');   // initial connect: NOT a reload
-    assert.deepEqual(a.received, [], 'the first connect does not reload');
-    FakeEventSource.last.fire('error');  // server restarting: connection drops
-    FakeEventSource.last.fire('open');   // fresh process: reconnected
-    assert.deepEqual(a.received, [{ type: 'reload' }], 'the reconnect reloads the tab');
+    FakeEventSource.last.fire('hello', 'BOOT_A'); // initial connect: baseline only
+    assert.deepEqual(a.received, [], 'the first hello does not reload');
+    FakeEventSource.last.fire('hello', 'BOOT_B'); // reconnected to a fresh process
+    assert.deepEqual(a.received, [{ type: 'reload' }], 'a new boot id reloads the tab');
   });
 
-  test('a plain first connect never reloads (no spurious reload on page load)', () => {
+  test('a transient reconnect to the SAME process (same boot id) never reloads', () => {
     const scope = {};
     startReloadWorker(scope, FakeEventSource, '/__webjs/events');
     const a = fakePort();
     scope.onconnect({ ports: [a.port] });
-    FakeEventSource.last.fire('open');
-    assert.deepEqual(a.received, [], 'connecting for the first time is not an edit');
+    FakeEventSource.last.fire('hello', 'BOOT_A'); // first connect
+    FakeEventSource.last.fire('hello', 'BOOT_A'); // sleep/wake or blip: same process
+    assert.deepEqual(a.received, [], 'a same-process reconnect is not an edit (no state loss)');
   });
 });

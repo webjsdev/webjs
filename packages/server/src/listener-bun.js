@@ -58,6 +58,7 @@ import {
   MAX_SYNC_COMPRESS_BYTES,
   varyWithAcceptEncoding,
   readBufferedOrStream,
+  DEV_BOOT_ID,
 } from './listener-core.js';
 
 /* global Bun */
@@ -276,9 +277,10 @@ function bunSseResponse(req, hub, app) {
         close: () => { try { controller.close(); } catch {} },
       };
       // `retry: 300` shrinks the EventSource reconnect backoff so a reconnect
-      // after a dev restart re-triggers a reload promptly (#893), matching the
-      // node:http shell.
-      controller.enqueue(enc.encode('retry: 300\nevent: hello\ndata: webjs\n\n'));
+      // after a dev restart re-triggers a reload promptly (#893); the `hello`
+      // data is the per-process boot id so a reconnect reloads only on a real
+      // restart, matching the node:http shell.
+      controller.enqueue(enc.encode(`retry: 300\nevent: hello\ndata: ${DEV_BOOT_ID}\n\n`));
       hub.add(client);
       // Replay an unresolved dev error (#264) so a tab connecting AFTER the
       // breaking edit still shows the overlay.

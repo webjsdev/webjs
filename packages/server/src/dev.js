@@ -44,6 +44,7 @@ import {
   negotiateEncoding,
   createCompressor,
   varyWithAcceptEncoding,
+  DEV_BOOT_ID,
 } from './listener-core.js';
 import { scanBareImports, resolveVendorImports, serveDownloadedBundle, clearVendorCache, hasVendorPin, readPinFile, prunePinToReachable } from './vendor.js';
 import { buildModuleGraph, transitiveDeps, reachableFromEntries, resolveImport, appImportsMap } from './module-graph.js';
@@ -1663,11 +1664,11 @@ function startNodeListener(ctx) {
           connection: 'keep-alive',
         });
         // `retry: 300` shrinks the browser's EventSource reconnect backoff from
-        // its ~3s default so a reconnect after a `node --watch` restart (which
-        // is what re-triggers a reload for an edit whose in-process reload frame
-        // was killed with the old process, #893) happens promptly, not seconds
-        // later.
-        res.write(`retry: 300\nevent: hello\ndata: webjs\n\n`);
+        // its ~3s default so a reconnect after a `node --watch` restart happens
+        // promptly. The `hello` data is a per-process boot id (#893): the client
+        // reloads on a reconnect ONLY when it changes (a real restart), so a
+        // transient reconnect never triggers a spurious reload.
+        res.write(`retry: 300\nevent: hello\ndata: ${DEV_BOOT_ID}\n\n`);
         // Register a node client wrapper in the shared hub: the fanout + keepalive
         // live in SseHub; only the transport write (res.write / res.end) is local.
         const client = {
@@ -2746,14 +2747,15 @@ function __webjsReloadWhenReady() {
 }
 function __webjsDirectEvents() {
   // Same restart-reload as the SharedWorker relay (#893), for the per-tab
-  // fallback: a reconnect after a drop means the server restarted, so reload.
-  var everConnected = false, dropped = false;
+  // fallback: the hello frame carries the server's per-process boot id, so a
+  // CHANGED id on reconnect means a real restart (reload), while a transient
+  // reconnect to the same process keeps the id (no spurious reload).
+  var lastBoot = null;
   const es = new EventSource(${eventsUrl});
-  es.addEventListener('open', () => {
-    if (everConnected && dropped) __webjsReloadWhenReady();
-    everConnected = true; dropped = false;
+  es.addEventListener('hello', (e) => {
+    if (lastBoot !== null && e.data !== lastBoot) __webjsReloadWhenReady();
+    lastBoot = e.data;
   });
-  es.addEventListener('error', () => { if (everConnected) dropped = true; });
   es.addEventListener('reload', () => __webjsReloadWhenReady());
   es.addEventListener('webjs-error', (e) => __webjsApplyError(e.data));
 }
