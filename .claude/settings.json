@@ -16,6 +16,10 @@
         "hooks": [
           {
             "type": "command",
+            "command": ".claude/hooks/guard-branch-context.sh"
+          },
+          {
+            "type": "command",
             "command": ".claude/hooks/block-raw-htmlelement.sh"
           }
         ]
@@ -32,6 +36,10 @@
       {
         "matcher": "Bash",
         "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/guard-main-merge.sh"
+          },
           {
             "type": "command",
             "command": ".claude/hooks/require-tests-with-src.sh"
