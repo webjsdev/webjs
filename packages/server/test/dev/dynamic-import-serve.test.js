@@ -40,6 +40,20 @@ test('handle: a string-literal dynamic import target is served (no 404)', async 
   assert.match(await resp.text(), /widget/);
 });
 
+test('handle: a dynamic import inside a template ${} hole is served (no 404, #918)', async () => {
+  const appDir = makeApp({
+    'app/page.ts': `import '../components/host.ts';\nexport default () => 'ok';\n`,
+    'components/host.ts':
+      `import { html } from '@webjsdev/core';\n` +
+      `export class Host { render() { return html\`<div>\${import('./widget.ts')}</div>\`; } }\n`,
+    'components/widget.ts': `export const widget = (): number => 1;\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: true });
+  const resp = await app.handle(new Request('http://x/components/widget.ts'));
+  assert.equal(resp.status, 200, 'the hole-position dynamic widget is servable');
+  assert.match(await resp.text(), /widget/);
+});
+
 test('handle: a computed dynamic import target 404s WITH a dev hint', async () => {
   const appDir = makeApp({
     'app/page.ts': `import '../components/host.ts';\nexport default () => 'ok';\n`,
