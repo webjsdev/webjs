@@ -94,17 +94,14 @@ const IMPORT_RE = /\bimport\s+(?:(?:[\w*{}\s,]+)\s+from\s+)?['"]([^'"]+)['"]/gd;
  *
  * Barrel files are common (`lib/index.ts` re-exports its siblings),
  * and the graph must follow these edges or downstream consumers of
- * the barrel see authorisation 404s on the underlying files. The
- * gap class excludes quotes, `;`, AND the backtick (so the lazy match
- * cannot cross a statement boundary OR a template-literal boundary)
- * but DOES allow newlines, so multi-line brace lists are caught. The
- * backtick exclusion is load-bearing (#753): without it a stray
- * `export` WORD inside a `` `…` `` template (e.g. a docs code sample)
- * anchors a match whose lazy body crosses the closing backtick and
- * consumes the next real semicolon-free `export … from '…'`, whose
- * keyword then sits in the (blanked) template and is dropped by the
- * mask guard, silently losing the real edge. Comments are handled
- * separately by scanning over `maskComments(src)` below.
+ * the barrel see authorisation 404s on the underlying files. The gap
+ * class excludes quotes, `;`, AND the backtick but DOES allow newlines,
+ * so multi-line brace lists are caught. The primary defence against a
+ * stray `export` word inside a literal swallowing a real later edge is
+ * that `parseFile` scans over the FULLY-BLANKED mask (every comment /
+ * string / template / regex body blanked), so no keyword can anchor
+ * inside a literal at all (#753); the exclusions here are belt-and-
+ * suspenders on top of that.
  */
 const EXPORT_FROM_RE = /\bexport\b[^'";`]+?\sfrom\s+['"]([^'"]+)['"]/gd;
 

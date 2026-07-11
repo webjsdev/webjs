@@ -244,9 +244,10 @@ const FIXTURES = [
     expect: ['./real.ts'],
   },
   {
-    // A protocol-URL specifier read off the comment-masked source must equal the
-    // real specifier (its `//` is inside the string, kept verbatim).
-    name: 'a protocol-URL specifier survives the comment-masked scan intact',
+    // A protocol-URL specifier must be read back byte-correct from raw src: its
+    // `//` is inside the string (blanked in the mask), and the specifier is
+    // recovered via the match's group indices, not from the mask.
+    name: 'a protocol-URL specifier survives the blanked-mask scan intact',
     file: 'f.ts',
     src: "import x from 'https://cdn.example.com/x.js';",
     expect: ['https://cdn.example.com/x.js'],
