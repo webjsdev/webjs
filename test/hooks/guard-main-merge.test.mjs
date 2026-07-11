@@ -62,6 +62,20 @@ test('allows a feature-branch push', () => {
   rmSync(home, { recursive: true, force: true });
 });
 
+test('allows a push to a branch that merely contains "main"', () => {
+  const home = makeHome(undefined);
+  for (const cmd of ['git push origin main-thing', 'git push origin maintenance']) {
+    assert.equal(run(cmd, home).out, '', `no ask for: ${cmd}`);
+  }
+  rmSync(home, { recursive: true, force: true });
+});
+
+test('asks on a git push targeting master', () => {
+  const home = makeHome(undefined);
+  assert.equal(decision(run('git push origin master', home).out), 'ask');
+  rmSync(home, { recursive: true, force: true });
+});
+
 test('allows an unrelated command', () => {
   const home = makeHome(undefined);
   const { code, out } = run('git status', home);

@@ -41,8 +41,9 @@ if [[ "$NORMALIZED" == *"git merge"* ]]; then
   ask_with_reason "This command contains 'git merge'. Merging requires approval. After merging, should the source branch be deleted or kept? Approve to proceed."
 fi
 
-# git push targeting main asks (should merge, not push directly)
-if [[ "$NORMALIZED" == *"git push"* ]] && [[ "$NORMALIZED" == *"main"* ]]; then
+# git push targeting main asks (should merge, not push directly). Match `main`
+# as a whole word so a branch like `main-thing` or `maintenance` does not trip.
+if [[ "$NORMALIZED" == *"git push"* ]] && [[ "$NORMALIZED" =~ (^|[^a-zA-Z0-9_-])(main|master)([^a-zA-Z0-9_-]|$) ]]; then
   ask_with_reason "This looks like 'git push' targeting main. Approve to proceed."
 fi
 

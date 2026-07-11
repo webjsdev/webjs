@@ -455,7 +455,7 @@ A merge updates `main` and npm, but the four in-repo apps deployed to Railway (`
 
 ## Failure handling
 
-- If `git status` is dirty: stop and ask the user to stash, commit, or abandon their pending work before creating the new branch. Never silently lose changes.
-- If the issue is already in `In progress` (someone else's work, or a prior branch left open): report this and ask the user whether to continue on the existing branch, branch off a fresh main, or pick a different issue.
+- If the SHARED checkout is dirty: it does not block you, because step 4 branches into a DEDICATED worktree off `origin/main` and never touches the shared checkout's tree. Only stop and ask the user when you must fall back to a plain branch in the primary checkout (the sole-agent case) AND that checkout is dirty. Never silently lose changes.
+- If the issue is already in `In progress` (someone else's work, or a prior branch left open): report this and ask the user whether to continue on the existing branch, start a fresh worktree off `origin/main`, or pick a different issue.
 - If the local checkout regressed mid-loop (HEAD on `main` or a base commit, the feature branch's work seemingly "gone"): a review subagent mutated shared git state. Do NOT panic or redo work. The local feature-branch ref and `origin/<branch>` still point at the latest commit (every logical unit was pushed). Recover with `git checkout <feature-branch>`; confirm with `git log --oneline origin/main..HEAD` and `git status` clean. The PR on GitHub was never affected (the GitHub-reading reviewer still saw correct content), so no re-push or force-push is needed.
 - If the `gh project item-edit` call fails (auth scope, missing field): report the failure clearly and offer to do the move manually via the web UI. The branch creation still stands.
