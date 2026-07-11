@@ -11,7 +11,7 @@
 # On a feature branch, commit and push are completely free, no prompts.
 # The only prompt is when merging into main/master.
 
-COMMAND=$(jq -r '.tool_input.command // empty' < /dev/stdin)
+COMMAND=$(jq -r '.tool_input.command // empty')
 [ -z "$COMMAND" ] && exit 0
 
 # Bypass mode: full autonomy
