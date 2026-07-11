@@ -16,7 +16,10 @@ import './webjs-suspense.js';
 import { scanSeeds } from './action-seed-client.js';
 // Slot-runtime constants for re-projecting page-authored slotted content of a
 // reused hydrated light-DOM component across a soft nav (#908).
-import { SLOT_STATE, LIGHT_SLOT_ATTR, PROJECTION_ATTR, PROJECTION_ACTUAL, scheduleProjection } from './slot.js';
+import {
+  SLOT_STATE, LIGHT_SLOT_ATTR, PROJECTION_ATTR, PROJECTION_ACTUAL,
+  applyActualAssignment, applyFallback, fireSlotChange,
+} from './slot.js';
 
 /** The content type a content-negotiated stream-action response carries (#248). */
 const STREAM_MIME = 'text/vnd.webjs-stream.html';
@@ -2752,6 +2755,25 @@ function ownActualLightSlots(host) {
 }
 
 /**
+ * The component's own light slot for `name`, whatever its projection state
+ * (first-wins by document order). Used to resolve the slot to fill on a
+ * fallback->actual transition, where the target slot is currently `fallback`
+ * so it is absent from `ownActualLightSlots`. Nested-child slots are excluded.
+ *
+ * @param {Element} host
+ * @param {string|null} name
+ * @returns {HTMLSlotElement | null}
+ */
+function ownLightSlotForName(host, name) {
+  for (const slot of host.querySelectorAll(`slot[${LIGHT_SLOT_ATTR}]`)) {
+    const s = /** @type {HTMLSlotElement} */ (slot);
+    if (!isOwnLightSlot(s, host)) continue;
+    if ((s.getAttribute('name') || null) === name) return s;
+  }
+  return null;
+}
+
+/**
  * Re-project the page-authored slotted content of a REUSED hydrated light-DOM
  * component across a soft nav (#908), without touching its render-owned
  * subtree.
@@ -2769,11 +2791,15 @@ function ownActualLightSlots(host) {
  *     on the page-authored slot children, exactly as #908 shipped.
  *   - actual->fallback (content REMOVED) and fallback->actual (content ADDED):
  *     a slot's fallback is RENDER-OWNED (the compiled fallback template held by
- *     the slot-part), so these are NOT a raw reconcile. Instead update the host's
- *     `assignedByName` (clear it for a removal, set the imported incoming nodes
- *     for an addition) and let the slot runtime's projection pass restore or
- *     replace the fallback through `applyFallback` / `applyActualAssignment`
- *     (#912). No lit-html part is ever reconciled.
+ *     the slot-part), so these are NOT a raw reconcile. Drive them through the
+ *     slot runtime's own primitives (`applyFallback` / `applyActualAssignment`)
+ *     on the ONE resolved own slot, which restore or swap the render-owned
+ *     fallback without reconciling any lit-html part (#912). This is applied
+ *     surgically to the target slot, NOT via a whole-host `projectChildren`
+ *     pass: `projectChildren` selects EVERY `data-webjs-light` slot in the
+ *     subtree (including a nested child component's), so running it here would
+ *     let this component's assignment reach into a nested child's same-named
+ *     slot and clobber its render-owned nodes (the #906 hazard, one level down).
  *
  * @param {Element} dst  Live hydrated component host.
  * @param {Element} src  Incoming SSR copy of the same component.
@@ -2792,7 +2818,6 @@ function reprojectSlottedContent(dst, src) {
 
   // A slot name is `actual` on the live side, the incoming side, or both. Walk
   // the union so a boundary transition (present on only one side) is handled.
-  let needProject = false;
   const names = new Set([...liveSlots.keys(), ...incSlots.keys()]);
   for (const name of names) {
     const liveSlot = liveSlots.get(name);
@@ -2808,24 +2833,23 @@ function reprojectSlottedContent(dst, src) {
       state.lastSnapshot.set(liveSlot, children.slice());
     } else if (liveSlot && !incSlot) {
       // actual->fallback: incoming REMOVED this slot's content. Clear the
-      // assignment and let the projection pass restore the render-owned
-      // fallback via the slot-part holding fragment.
+      // assignment and flip THIS slot to fallback; applyFallback restores the
+      // render-owned fallback from the slot-part holding fragment.
       state.assignedByName.delete(name);
-      needProject = true;
+      if (applyFallback(state, liveSlot)) fireSlotChange(liveSlot);
     } else {
       // fallback->actual: incoming ADDED content where the live slot shows
-      // fallback. Assign the imported page-authored nodes and let the
-      // projection pass swap the fallback out for them.
+      // fallback. The target slot is currently fallback, so resolve it directly
+      // (it is absent from the actual-only map) and fill it with the imported
+      // page-authored nodes; applyActualAssignment tucks the render-owned
+      // fallback into the holding fragment first.
+      const targetSlot = ownLightSlotForName(dst, name);
+      if (!targetSlot) continue;
       const nodes = [...incSlot.childNodes].map((n) => document.importNode(n, true));
       state.assignedByName.set(name, nodes);
-      needProject = true;
+      if (applyActualAssignment(state, targetSlot, nodes)) fireSlotChange(targetSlot);
     }
   }
-
-  // A boundary transition is materialised by the slot runtime, not the router:
-  // scheduleProjection drains on the next microtask (before paint), running the
-  // same `projectChildren` a normal re-render would, which owns the fallback.
-  if (needProject) scheduleProjection(dst);
 }
 
 /**

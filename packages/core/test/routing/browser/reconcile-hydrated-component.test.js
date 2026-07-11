@@ -448,4 +448,81 @@ suite('Client router: reconcile does not corrupt a hydrated component (#906)', (
 
     live.remove();
   });
+
+  test('a boundary transition must not clobber a nested child component sharing a slot name (#912)', async () => {
+    // The corruption risk: the outer component projects an actual->fallback
+    // transition on its OWN default slot while a nested light-DOM child (also
+    // using a default slot) sits elsewhere in the outer's rendered tree. The
+    // transition must touch ONLY the outer's own slot, never the nested child's
+    // same-named slot (a whole-host projection would push the child to fallback
+    // and detach its render-owned nodes: #906, one level down).
+    // A fixed child tag (defined once) so the host can reference it STATICALLY
+    // in its render template (an html tag position cannot be a `${}` hole).
+    const childTag = 'rc-clobber-child';
+    if (!customElements.get(childTag)) {
+      class RcChild extends WebComponent({ n: Number }) {
+        constructor() { super(); this.n = 0; }
+        render() {
+          return html`<button @click=${() => this.n++}>c ${this.n}</button><em><slot>childfb</slot></em>`;
+        }
+      }
+      customElements.define(childTag, RcChild);
+    }
+
+    const outerTag = `rc-host-${counter++}`;
+    // The outer renders its OWN default slot AND embeds a nested child (which has
+    // its own default, same-named slot) as a sibling in its render output.
+    class RcHost extends WebComponent({ on: Boolean }) {
+      constructor() { super(); this.on = false; }
+      render() {
+        return html`<button @click=${() => { this.on = !this.on; }}>h</button>
+          <section><slot>hostfb</slot></section>
+          <rc-clobber-child><span>KEEP</span></rc-clobber-child>`;
+      }
+    }
+    customElements.define(outerTag, RcHost);
+
+    const live = document.createElement(outerTag);
+    live.innerHTML = 'HOSTREAL';
+    document.body.appendChild(live);
+    await live.updateComplete;
+    await Promise.resolve();
+    const liveChild = live.querySelector(childTag);
+    await liveChild.updateComplete;
+    await Promise.resolve();
+    // Drive the nested child's own state so a clobber-to-fallback would be visible.
+    liveChild.querySelector('button').click();
+    await liveChild.updateComplete;
+    assert.equal(live.querySelector('section slot').textContent, 'HOSTREAL', 'outer own slot actual');
+    assert.equal(liveChild.querySelector('em slot').textContent, 'KEEP', 'child slot projects its content');
+    assert.equal(liveChild.querySelector('button').textContent, 'c 1', 'child client state');
+
+    // Incoming removes the OUTER's slotted content (its own slot -> fallback).
+    // The nested child is unchanged (same key/position, same projected content).
+    const incoming = document.createElement(outerTag);
+    incoming.innerHTML =
+      '<button>h</button>' +
+      '<section><slot data-webjs-light data-projection="fallback">hostfb</slot></section>' +
+      `<${childTag}><span>KEEP</span></${childTag}>`;
+    _diffElementInPlace(live, incoming);
+    await Promise.resolve();
+
+    // Outer's own slot flipped to fallback.
+    assert.equal(live.querySelector('section slot').textContent, 'hostfb',
+      'outer own slot flipped to its fallback');
+
+    // The nested child was NOT touched: still the SAME element, still projecting
+    // its content (not clobbered to childfb), still interactive.
+    assert.equal(live.querySelector(childTag), liveChild, 'nested child reused, not recreated');
+    assert.equal(liveChild.querySelector('em slot').textContent, 'KEEP',
+      'nested child slot must NOT be clobbered by the outer transition');
+    assert.equal(liveChild.querySelector('em slot').getAttribute('data-projection'), 'actual',
+      'nested child slot must stay actual');
+    liveChild.querySelector('button').click();
+    await liveChild.updateComplete;
+    assert.equal(liveChild.querySelector('button').textContent, 'c 2',
+      'nested child still interactive (its render-owned nodes were never detached)');
+
+    live.remove();
+  });
 });
