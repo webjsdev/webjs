@@ -16,7 +16,7 @@ import './webjs-suspense.js';
 import { scanSeeds } from './action-seed-client.js';
 // Slot-runtime constants for re-projecting page-authored slotted content of a
 // reused hydrated light-DOM component across a soft nav (#908).
-import { SLOT_STATE, LIGHT_SLOT_ATTR, PROJECTION_ATTR, PROJECTION_ACTUAL } from './slot.js';
+import { SLOT_STATE, LIGHT_SLOT_ATTR, PROJECTION_ATTR, PROJECTION_ACTUAL, scheduleProjection } from './slot.js';
 
 /** The content type a content-negotiated stream-action response carries (#248). */
 const STREAM_MIME = 'text/vnd.webjs-stream.html';
@@ -2764,12 +2764,16 @@ function ownActualLightSlots(host) {
  * the live DOM and the incoming SSR HTML carry the same slot markers
  * (render-server emits them), so slots pair up by name + document order.
  *
- * Scope: this handles the actual->actual case (the projected content changed).
- * The two boundary transitions where a slot crosses between actual and fallback
- * (content fully REMOVED, or ADDED where there was none) are deferred to #912:
- * a slot's fallback is render-owned, so restoring or replacing it must go
- * through the slot runtime, not a raw reconcile. Both are skipped here (see the
- * two `continue`/iteration guards below), so neither can touch a lit-html part.
+ * Three cases, by how a slot's projection state changes across the nav:
+ *   - actual->actual (content changed): identity-preserving `reconcileChildren`
+ *     on the page-authored slot children, exactly as #908 shipped.
+ *   - actual->fallback (content REMOVED) and fallback->actual (content ADDED):
+ *     a slot's fallback is RENDER-OWNED (the compiled fallback template held by
+ *     the slot-part), so these are NOT a raw reconcile. Instead update the host's
+ *     `assignedByName` (clear it for a removal, set the imported incoming nodes
+ *     for an addition) and let the slot runtime's projection pass restore or
+ *     replace the fallback through `applyFallback` / `applyActualAssignment`
+ *     (#912). No lit-html part is ever reconciled.
  *
  * @param {Element} dst  Live hydrated component host.
  * @param {Element} src  Incoming SSR copy of the same component.
@@ -2782,32 +2786,46 @@ function reprojectSlottedContent(dst, src) {
   const state = /** @type {any} */ (dst)[SLOT_STATE];
   if (!state) return;
 
-  // Iterate the LIVE component's actual slots only. A slot the live component
-  // currently shows as FALLBACK is absent here, so the fallback->actual
-  // direction (incoming ADDED content) is skipped: filling it would replace
-  // render-owned fallback nodes, which is the #906 hazard (deferred to #912).
   const liveSlots = ownActualLightSlots(dst);
-  if (liveSlots.size === 0) return;
   const incSlots = ownActualLightSlots(src);
+  if (liveSlots.size === 0 && incSlots.size === 0) return;
 
-  for (const [name, liveSlot] of liveSlots) {
+  // A slot name is `actual` on the live side, the incoming side, or both. Walk
+  // the union so a boundary transition (present on only one side) is handled.
+  let needProject = false;
+  const names = new Set([...liveSlots.keys(), ...incSlots.keys()]);
+  for (const name of names) {
+    const liveSlot = liveSlots.get(name);
     const incSlot = incSlots.get(name);
-    // The actual->fallback direction: incoming REMOVED this slot's content (now
-    // shows fallback), so leave the live projection as-is rather than touch
-    // render-owned fallback nodes. Conservative, no #906 regression (#912).
-    if (!incSlot) continue;
-
-    // The slot's children are page-authored, so reconcileChildren is safe:
-    // it preserves node identity where it can and never touches lit-html parts.
-    reconcileChildren(liveSlot, incSlot);
-
-    // Keep the slot runtime's assignment bookkeeping in sync with the new
-    // children so a later component re-render's projection pass materialises
-    // THESE nodes, not the stale ones it captured at hydration.
-    const children = [...liveSlot.childNodes];
-    state.assignedByName.set(name, children);
-    state.lastSnapshot.set(liveSlot, children.slice());
+    if (liveSlot && incSlot) {
+      // actual->actual: the slot's children are page-authored, so
+      // reconcileChildren is safe: it preserves node identity where it can and
+      // never touches lit-html parts. Keep the slot runtime's assignment
+      // bookkeeping in sync so a later re-render materialises THESE nodes.
+      reconcileChildren(liveSlot, incSlot);
+      const children = [...liveSlot.childNodes];
+      state.assignedByName.set(name, children);
+      state.lastSnapshot.set(liveSlot, children.slice());
+    } else if (liveSlot && !incSlot) {
+      // actual->fallback: incoming REMOVED this slot's content. Clear the
+      // assignment and let the projection pass restore the render-owned
+      // fallback via the slot-part holding fragment.
+      state.assignedByName.delete(name);
+      needProject = true;
+    } else {
+      // fallback->actual: incoming ADDED content where the live slot shows
+      // fallback. Assign the imported page-authored nodes and let the
+      // projection pass swap the fallback out for them.
+      const nodes = [...incSlot.childNodes].map((n) => document.importNode(n, true));
+      state.assignedByName.set(name, nodes);
+      needProject = true;
+    }
   }
+
+  // A boundary transition is materialised by the slot runtime, not the router:
+  // scheduleProjection drains on the next microtask (before paint), running the
+  // same `projectChildren` a normal re-render would, which owns the fallback.
+  if (needProject) scheduleProjection(dst);
 }
 
 /**
