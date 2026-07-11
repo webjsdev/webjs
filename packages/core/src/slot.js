@@ -709,7 +709,7 @@ function handleSlotRemoved(state, slot) {
  * @returns {boolean} True if the slot's assignment changed compared to
  *   its last snapshot (so slotchange should fire).
  */
-function applyActualAssignment(state, slot, assigned) {
+export function applyActualAssignment(state, slot, assigned) {
   const wasFallback = slot.getAttribute(PROJECTION_ATTR) !== PROJECTION_ACTUAL;
   const prev = state.lastSnapshot.get(slot) || [];
   const equal = !wasFallback && arraysEqual(prev, assigned);
@@ -747,7 +747,7 @@ function applyActualAssignment(state, slot, assigned) {
  * @returns {boolean} True if the slot transitioned from actual to
  *   fallback this pass.
  */
-function applyFallback(state, slot) {
+export function applyFallback(state, slot) {
   const wasActual = slot.getAttribute(PROJECTION_ATTR) === PROJECTION_ACTUAL;
   slot.setAttribute(PROJECTION_ATTR, PROJECTION_FALLBACK);
   if (!wasActual) {
@@ -841,7 +841,7 @@ export function moveSlotChildrenToPending(host, slot) {
 // ---------------------------------------------------------------------------
 
 /** Fire a `slotchange` event on the slot (bubbles, not composed; per spec). */
-function fireSlotChange(slot) {
+export function fireSlotChange(slot) {
   slot.dispatchEvent(new Event('slotchange', { bubbles: true, composed: false }));
 }
 

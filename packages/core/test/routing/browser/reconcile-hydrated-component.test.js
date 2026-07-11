@@ -367,4 +367,222 @@ suite('Client router: reconcile does not corrupt a hydrated component (#906)', (
 
     live.remove();
   });
+
+  test('re-projects an actual->fallback transition: incoming removed the content (#912)', async () => {
+    // The live component projects page-authored content; the incoming nav
+    // supplies NONE, so its slot shows fallback. The reused component must flip
+    // back to its own compiled fallback (render-owned, restored through the slot
+    // runtime, NOT a raw reconcile) rather than keep the stale content.
+    const tag = `rc-af-${counter++}`;
+    class RcAf extends WebComponent({ on: Boolean }) {
+      constructor() { super(); this.on = false; }
+      render() {
+        return html`<button @click=${() => { this.on = !this.on; }}>b</button><div><slot>FALLBACK</slot></div>`;
+      }
+    }
+    customElements.define(tag, RcAf);
+
+    const live = document.createElement(tag);
+    live.innerHTML = 'REAL';
+    document.body.appendChild(live);
+    await live.updateComplete;
+    await Promise.resolve();
+    assert.equal(live.querySelector('slot').textContent, 'REAL', 'initial actual projection');
+    assert.equal(live.querySelector('slot').getAttribute('data-projection'), 'actual', 'starts actual');
+
+    // Incoming SSR shows the slot as fallback (page authored no content).
+    const incoming = document.createElement(tag);
+    incoming.innerHTML =
+      '<button>b</button><div><slot data-webjs-light data-projection="fallback">FALLBACK</slot></div>';
+    _diffElementInPlace(live, incoming);
+    await Promise.resolve();
+
+    assert.equal(live.querySelector('slot').textContent, 'FALLBACK',
+      'removed content must flip back to the compiled fallback');
+    assert.equal(live.querySelector('slot').getAttribute('data-projection'), 'fallback',
+      'slot marked fallback after the transition');
+
+    live.querySelector('button').click();
+    await live.updateComplete;
+    assert.equal(live.on, true, 'reactive state still updates after actual->fallback');
+
+    live.remove();
+  });
+
+  test('re-projects a fallback->actual transition: incoming added content (#912)', async () => {
+    // The live component shows its fallback (page authored nothing); the incoming
+    // nav supplies content. The reused component must project the new page-authored
+    // content in place of its fallback.
+    const tag = `rc-fa-${counter++}`;
+    class RcFa extends WebComponent({ on: Boolean }) {
+      constructor() { super(); this.on = false; }
+      render() {
+        return html`<button @click=${() => { this.on = !this.on; }}>b</button><div><slot>FALLBACK</slot></div>`;
+      }
+    }
+    customElements.define(tag, RcFa);
+
+    const live = document.createElement(tag);
+    // No authored children: the slot shows its fallback.
+    document.body.appendChild(live);
+    await live.updateComplete;
+    await Promise.resolve();
+    assert.equal(live.querySelector('slot').textContent, 'FALLBACK', 'initial fallback projection');
+    assert.equal(live.querySelector('slot').getAttribute('data-projection'), 'fallback', 'starts fallback');
+
+    // Incoming SSR supplies actual content.
+    const incoming = document.createElement(tag);
+    incoming.innerHTML =
+      '<button>b</button><div><slot data-webjs-light data-projection="actual">ADDED</slot></div>';
+    _diffElementInPlace(live, incoming);
+    await Promise.resolve();
+
+    assert.equal(live.querySelector('slot').textContent, 'ADDED',
+      'added content must project in place of the fallback');
+    assert.equal(live.querySelector('slot').getAttribute('data-projection'), 'actual',
+      'slot marked actual after the transition');
+
+    live.querySelector('button').click();
+    await live.updateComplete;
+    assert.equal(live.on, true, 'reactive state still updates after fallback->actual');
+
+    live.remove();
+  });
+
+  test('a boundary transition must not clobber a nested child component sharing a slot name (#912)', async () => {
+    // The corruption risk: the outer component projects an actual->fallback
+    // transition on its OWN default slot while a nested light-DOM child (also
+    // using a default slot) sits elsewhere in the outer's rendered tree. The
+    // transition must touch ONLY the outer's own slot, never the nested child's
+    // same-named slot (a whole-host projection would push the child to fallback
+    // and detach its render-owned nodes: #906, one level down).
+    // A fixed child tag (defined once) so the host can reference it STATICALLY
+    // in its render template (an html tag position cannot be a `${}` hole).
+    const childTag = 'rc-clobber-child';
+    if (!customElements.get(childTag)) {
+      class RcChild extends WebComponent({ n: Number }) {
+        constructor() { super(); this.n = 0; }
+        render() {
+          return html`<button @click=${() => this.n++}>c ${this.n}</button><em><slot>childfb</slot></em>`;
+        }
+      }
+      customElements.define(childTag, RcChild);
+    }
+
+    const outerTag = `rc-host-${counter++}`;
+    // The outer renders its OWN default slot AND embeds a nested child (which has
+    // its own default, same-named slot) as a sibling in its render output.
+    class RcHost extends WebComponent({ on: Boolean }) {
+      constructor() { super(); this.on = false; }
+      render() {
+        return html`<button @click=${() => { this.on = !this.on; }}>h</button>
+          <section><slot>hostfb</slot></section>
+          <rc-clobber-child><span>KEEP</span></rc-clobber-child>`;
+      }
+    }
+    customElements.define(outerTag, RcHost);
+
+    const live = document.createElement(outerTag);
+    live.innerHTML = 'HOSTREAL';
+    document.body.appendChild(live);
+    await live.updateComplete;
+    await Promise.resolve();
+    const liveChild = live.querySelector(childTag);
+    await liveChild.updateComplete;
+    await Promise.resolve();
+    // Drive the nested child's own state so a clobber-to-fallback would be visible.
+    liveChild.querySelector('button').click();
+    await liveChild.updateComplete;
+    assert.equal(live.querySelector('section slot').textContent, 'HOSTREAL', 'outer own slot actual');
+    assert.equal(liveChild.querySelector('em slot').textContent, 'KEEP', 'child slot projects its content');
+    assert.equal(liveChild.querySelector('button').textContent, 'c 1', 'child client state');
+
+    // Incoming removes the OUTER's slotted content (its own slot -> fallback).
+    // The nested child is unchanged (same key/position, same projected content).
+    const incoming = document.createElement(outerTag);
+    incoming.innerHTML =
+      '<button>h</button>' +
+      '<section><slot data-webjs-light data-projection="fallback">hostfb</slot></section>' +
+      `<${childTag}><span>KEEP</span></${childTag}>`;
+    _diffElementInPlace(live, incoming);
+    await Promise.resolve();
+
+    // Outer's own slot flipped to fallback.
+    assert.equal(live.querySelector('section slot').textContent, 'hostfb',
+      'outer own slot flipped to its fallback');
+
+    // The nested child was NOT touched: still the SAME element, still projecting
+    // its content (not clobbered to childfb), still interactive.
+    assert.equal(live.querySelector(childTag), liveChild, 'nested child reused, not recreated');
+    assert.equal(liveChild.querySelector('em slot').textContent, 'KEEP',
+      'nested child slot must NOT be clobbered by the outer transition');
+    assert.equal(liveChild.querySelector('em slot').getAttribute('data-projection'), 'actual',
+      'nested child slot must stay actual');
+    liveChild.querySelector('button').click();
+    await liveChild.updateComplete;
+    assert.equal(liveChild.querySelector('button').textContent, 'c 2',
+      'nested child still interactive (its render-owned nodes were never detached)');
+
+    live.remove();
+  });
+
+  test('fires slotchange on an assigned-node-set change and boundary transitions, not on a text edit (#912)', async () => {
+    // The reproject must fire slotchange when the assigned-node SET changes
+    // (add / remove / boundary) but NOT when a text node is edited in place
+    // (same node identity), matching the DOM spec.
+    const tag = `rc-sc-${counter++}`;
+    class RcSc extends WebComponent({ on: Boolean }) {
+      constructor() { super(); this.on = false; }
+      render() {
+        return html`<button @click=${() => { this.on = !this.on; }}>b</button><div><slot>FB</slot></div>`;
+      }
+    }
+    customElements.define(tag, RcSc);
+
+    function mount(innerHTML) {
+      const el = document.createElement(tag);
+      if (innerHTML != null) el.innerHTML = innerHTML;
+      document.body.appendChild(el);
+      return el;
+    }
+    function countSlotChanges(el) {
+      let n = 0;
+      el.querySelector('slot').addEventListener('slotchange', () => { n++; });
+      return () => n;
+    }
+
+    // 1. In-place text edit (same single text node reused): NO slotchange.
+    const a = mount('<span data-key="s">OLD</span>');
+    await a.updateComplete; await Promise.resolve();
+    const aCount = countSlotChanges(a);
+    const aInc = document.createElement(tag);
+    aInc.innerHTML = '<button>b</button><div><slot data-webjs-light data-projection="actual"><span data-key="s">NEW</span></slot></div>';
+    _diffElementInPlace(a, aInc);
+    await Promise.resolve();
+    assert.equal(a.querySelector('slot').textContent, 'NEW', 'text updated');
+    assert.equal(aCount(), 0, 'no slotchange on an in-place text edit (same node)');
+    a.remove();
+
+    // 2. Set change (add a node): slotchange fires.
+    const b = mount('<span data-key="s">X</span>');
+    await b.updateComplete; await Promise.resolve();
+    const bCount = countSlotChanges(b);
+    const bInc = document.createElement(tag);
+    bInc.innerHTML = '<button>b</button><div><slot data-webjs-light data-projection="actual"><span data-key="s">X</span><span data-key="t">Y</span></slot></div>';
+    _diffElementInPlace(b, bInc);
+    await Promise.resolve();
+    assert.ok(bCount() >= 1, 'slotchange fires when a node is added to the set');
+    b.remove();
+
+    // 3. actual->fallback boundary: slotchange fires.
+    const c = mount('REAL');
+    await c.updateComplete; await Promise.resolve();
+    const cCount = countSlotChanges(c);
+    const cInc = document.createElement(tag);
+    cInc.innerHTML = '<button>b</button><div><slot data-webjs-light data-projection="fallback">FB</slot></div>';
+    _diffElementInPlace(c, cInc);
+    await Promise.resolve();
+    assert.ok(cCount() >= 1, 'slotchange fires on the actual->fallback transition');
+    c.remove();
+  });
 });
