@@ -70,17 +70,21 @@ function astRegistrations(src, filename) {
 /** Class NAMES the hand-rolled body extractor finds (over comment-masked src). */
 function lexerWebComponentClasses(src) {
   // Mirror component-elision.js:557 / check.js: the extractor is fed
-  // comment-masked source. The extractor keys on `class X extends WebComponent`;
-  // recover the name from the same window.
+  // comment-masked source. The name window mirrors the extractor's own regex
+  // (incl. the optional generic parameter) and just adds a capture group.
   const masked = redactStringsAndTemplates(src);
   const names = new Set();
-  const re = /class\s+(\w+)\s+extends\s+WebComponent/g;
+  const re = /class\s+(\w+)(?:\s*<[^{}();]*?>)?\s+extends\s+WebComponent/g;
+  let count = 0;
   let m;
-  while ((m = re.exec(masked)) !== null) names.add(m[1]);
-  // Sanity: the public extractor finds the same COUNT of bodies (it does not
-  // expose names), so a name-window regression cannot silently diverge.
+  while ((m = re.exec(masked)) !== null) { names.add(m[1]); count++; }
+  // Sanity: the public extractor finds the same NUMBER of bodies as the window
+  // has matches, so a name-window regression cannot silently diverge. Compare
+  // the raw MATCH count (not the deduped name-set size): two same-named classes
+  // (one real, one string-embedded) are two bodies but one name, and comparing
+  // to the Set size would wrongly throw on that verdict-safe over-match.
   assert.equal(
-    extractWebComponentClassBodies(masked).length, names.size,
+    extractWebComponentClassBodies(masked).length, count,
     'class-body extractor count disagrees with the name window',
   );
   return names;
@@ -165,7 +169,30 @@ const FIXTURES = [
     reg: [],
     cls: ['Nope'],
   },
+  {
+    // #753 round-2: a TS generic on the class name must not hide the component
+    // from the extractor (else elision could strip an interactive component).
+    name: 'a generic WebComponent class is detected',
+    file: 'c.ts',
+    src: "class Grid<T> extends WebComponent({ rows: prop<T[]>(Array) }) { render(){ return html`x`; } }\nGrid.register('data-grid');",
+    reg: ['Grid data-grid'],
+    cls: ['Grid'],
+  },
+  {
+    // #753 round-2: a real class plus a same-named class inside a plain string
+    // (verdict-safe over-match) must NOT make the extractor-vs-window count
+    // assert throw (two bodies, one name).
+    name: 'a duplicate class name (real + string-embedded) does not error the count check',
+    file: 'c.ts',
+    src: "class Dup extends WebComponent {}\nconst sample = 'class Dup extends WebComponent {}';\nDup.register('dup-tag');",
+    reg: ['Dup dup-tag'],
+    cls: ['Dup'],
+  },
 ];
+
+// Note: an anonymous `export default class extends WebComponent` is a MUTUAL
+// blind spot (the AST oracle also requires a class name), so the differential
+// cannot assert on it; it is out of scope for both sides here.
 
 for (const fx of FIXTURES) {
   test(`fixture (register): ${fx.name}`, () => {
