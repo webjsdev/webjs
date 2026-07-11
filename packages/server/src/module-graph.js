@@ -14,7 +14,7 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve, dirname, extname, sep } from 'node:path';
-import { redactStringsAndTemplates } from './js-scan.js';
+import { redactStringsAndTemplates, maskComments } from './js-scan.js';
 
 /**
  * Per-appDir cache of the parsed `package.json "imports"` subpath-alias map
@@ -460,11 +460,22 @@ async function parseFile(file, appDir, graph, seen, dynamic, bare) {
   // checks keyword-in-code-position, blank every literal body so a
   // code-example `import` string never becomes an edge.
   const masked = redactStringsAndTemplates(src, true);
+  // Scan for edges over a COMMENT-masked copy (strings kept, so the specifier
+  // is still readable), not raw `src`. Reason (#753, found differentially): an
+  // `import` / `export` word inside a COMMENT would otherwise anchor a regex
+  // match whose lazy body (`EXPORT_FROM_RE`'s `[^'";]+?`) spans down to the
+  // NEXT real `from '<spec>'`, consuming that real statement; the match's
+  // keyword sits in the comment so the mask guard skips it, and the real edge
+  // is silently dropped (the gate then 404s a legitimately imported module).
+  // Blanking comments first means a commented keyword can never anchor a match.
+  // The `masked` (string-body-blanked) guard below still rejects a keyword that
+  // sits inside a STRING literal, so both blind spots are covered.
+  const scanSrc = maskComments(src);
   const deps = new Set();
   /** @type {Set<string>} bare npm vendor specifiers imported by this file (#754) */
   const bareDeps = new Set();
   for (const re of [IMPORT_RE, EXPORT_FROM_RE]) {
-    for (const m of src.matchAll(re)) {
+    for (const m of scanSrc.matchAll(re)) {
       // m.index is the keyword start (`\bimport` / `\bexport`). If that
       // position is blanked in the mask, the match lives inside a literal
       // and is not a real import edge.
@@ -516,7 +527,7 @@ async function parseFile(file, appDir, graph, seen, dynamic, bare) {
   // preloading it. Same redaction-mask + alias rules as the static scan. A
   // target already statically imported is not duplicated as a dynamic edge.
   const dynDeps = new Set();
-  for (const m of src.matchAll(DYNAMIC_IMPORT_RE)) {
+  for (const m of scanSrc.matchAll(DYNAMIC_IMPORT_RE)) {
     if (masked[m.index] === ' ') continue;
     const spec = m[1];
     if (!spec.startsWith('.') && !spec.startsWith('/') && !expandImportAlias(spec, appDir)) continue;
