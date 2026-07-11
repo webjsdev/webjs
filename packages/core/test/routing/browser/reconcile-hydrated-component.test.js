@@ -525,4 +525,64 @@ suite('Client router: reconcile does not corrupt a hydrated component (#906)', (
 
     live.remove();
   });
+
+  test('fires slotchange on an assigned-node-set change and boundary transitions, not on a text edit (#912)', async () => {
+    // The reproject must fire slotchange when the assigned-node SET changes
+    // (add / remove / boundary) but NOT when a text node is edited in place
+    // (same node identity), matching the DOM spec.
+    const tag = `rc-sc-${counter++}`;
+    class RcSc extends WebComponent({ on: Boolean }) {
+      constructor() { super(); this.on = false; }
+      render() {
+        return html`<button @click=${() => { this.on = !this.on; }}>b</button><div><slot>FB</slot></div>`;
+      }
+    }
+    customElements.define(tag, RcSc);
+
+    function mount(innerHTML) {
+      const el = document.createElement(tag);
+      if (innerHTML != null) el.innerHTML = innerHTML;
+      document.body.appendChild(el);
+      return el;
+    }
+    function countSlotChanges(el) {
+      let n = 0;
+      el.querySelector('slot').addEventListener('slotchange', () => { n++; });
+      return () => n;
+    }
+
+    // 1. In-place text edit (same single text node reused): NO slotchange.
+    const a = mount('<span data-key="s">OLD</span>');
+    await a.updateComplete; await Promise.resolve();
+    const aCount = countSlotChanges(a);
+    const aInc = document.createElement(tag);
+    aInc.innerHTML = '<button>b</button><div><slot data-webjs-light data-projection="actual"><span data-key="s">NEW</span></slot></div>';
+    _diffElementInPlace(a, aInc);
+    await Promise.resolve();
+    assert.equal(a.querySelector('slot').textContent, 'NEW', 'text updated');
+    assert.equal(aCount(), 0, 'no slotchange on an in-place text edit (same node)');
+    a.remove();
+
+    // 2. Set change (add a node): slotchange fires.
+    const b = mount('<span data-key="s">X</span>');
+    await b.updateComplete; await Promise.resolve();
+    const bCount = countSlotChanges(b);
+    const bInc = document.createElement(tag);
+    bInc.innerHTML = '<button>b</button><div><slot data-webjs-light data-projection="actual"><span data-key="s">X</span><span data-key="t">Y</span></slot></div>';
+    _diffElementInPlace(b, bInc);
+    await Promise.resolve();
+    assert.ok(bCount() >= 1, 'slotchange fires when a node is added to the set');
+    b.remove();
+
+    // 3. actual->fallback boundary: slotchange fires.
+    const c = mount('REAL');
+    await c.updateComplete; await Promise.resolve();
+    const cCount = countSlotChanges(c);
+    const cInc = document.createElement(tag);
+    cInc.innerHTML = '<button>b</button><div><slot data-webjs-light data-projection="fallback">FB</slot></div>';
+    _diffElementInPlace(c, cInc);
+    await Promise.resolve();
+    assert.ok(cCount() >= 1, 'slotchange fires on the actual->fallback transition');
+    c.remove();
+  });
 });

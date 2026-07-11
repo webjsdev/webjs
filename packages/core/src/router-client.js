@@ -2774,6 +2774,21 @@ function ownLightSlotForName(host, name) {
 }
 
 /**
+ * Per-index node-identity equality of two node lists. Used to decide whether a
+ * slot's assigned-node SET actually changed (so `slotchange` should fire); an
+ * in-place text edit that reuses the same node is NOT a set change.
+ *
+ * @param {ArrayLike<Node>} a
+ * @param {ArrayLike<Node>} b
+ * @returns {boolean}
+ */
+function sameNodeList(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+/**
  * Re-project the page-authored slotted content of a REUSED hydrated light-DOM
  * component across a soft nav (#908), without touching its render-owned
  * subtree.
@@ -2827,10 +2842,15 @@ function reprojectSlottedContent(dst, src) {
       // reconcileChildren is safe: it preserves node identity where it can and
       // never touches lit-html parts. Keep the slot runtime's assignment
       // bookkeeping in sync so a later re-render materialises THESE nodes.
+      const prevAssigned = state.lastSnapshot.get(liveSlot) || [];
       reconcileChildren(liveSlot, incSlot);
       const children = [...liveSlot.childNodes];
       state.assignedByName.set(name, children);
       state.lastSnapshot.set(liveSlot, children.slice());
+      // Fire slotchange on an assigned-node-SET change (add / remove / reorder),
+      // not an in-place text edit that reuses the same node: that matches the
+      // spec and keeps this branch uniform with the boundary branches below.
+      if (!sameNodeList(prevAssigned, children)) fireSlotChange(liveSlot);
     } else if (liveSlot && !incSlot) {
       // actual->fallback: incoming REMOVED this slot's content. Clear the
       // assignment and flip THIS slot to fallback; applyFallback restores the
