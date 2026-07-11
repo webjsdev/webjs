@@ -367,4 +367,85 @@ suite('Client router: reconcile does not corrupt a hydrated component (#906)', (
 
     live.remove();
   });
+
+  test('re-projects an actual->fallback transition: incoming removed the content (#912)', async () => {
+    // The live component projects page-authored content; the incoming nav
+    // supplies NONE, so its slot shows fallback. The reused component must flip
+    // back to its own compiled fallback (render-owned, restored through the slot
+    // runtime, NOT a raw reconcile) rather than keep the stale content.
+    const tag = `rc-af-${counter++}`;
+    class RcAf extends WebComponent({ on: Boolean }) {
+      constructor() { super(); this.on = false; }
+      render() {
+        return html`<button @click=${() => { this.on = !this.on; }}>b</button><div><slot>FALLBACK</slot></div>`;
+      }
+    }
+    customElements.define(tag, RcAf);
+
+    const live = document.createElement(tag);
+    live.innerHTML = 'REAL';
+    document.body.appendChild(live);
+    await live.updateComplete;
+    await Promise.resolve();
+    assert.equal(live.querySelector('slot').textContent, 'REAL', 'initial actual projection');
+    assert.equal(live.querySelector('slot').getAttribute('data-projection'), 'actual', 'starts actual');
+
+    // Incoming SSR shows the slot as fallback (page authored no content).
+    const incoming = document.createElement(tag);
+    incoming.innerHTML =
+      '<button>b</button><div><slot data-webjs-light data-projection="fallback">FALLBACK</slot></div>';
+    _diffElementInPlace(live, incoming);
+    await Promise.resolve();
+
+    assert.equal(live.querySelector('slot').textContent, 'FALLBACK',
+      'removed content must flip back to the compiled fallback');
+    assert.equal(live.querySelector('slot').getAttribute('data-projection'), 'fallback',
+      'slot marked fallback after the transition');
+
+    live.querySelector('button').click();
+    await live.updateComplete;
+    assert.equal(live.on, true, 'reactive state still updates after actual->fallback');
+
+    live.remove();
+  });
+
+  test('re-projects a fallback->actual transition: incoming added content (#912)', async () => {
+    // The live component shows its fallback (page authored nothing); the incoming
+    // nav supplies content. The reused component must project the new page-authored
+    // content in place of its fallback.
+    const tag = `rc-fa-${counter++}`;
+    class RcFa extends WebComponent({ on: Boolean }) {
+      constructor() { super(); this.on = false; }
+      render() {
+        return html`<button @click=${() => { this.on = !this.on; }}>b</button><div><slot>FALLBACK</slot></div>`;
+      }
+    }
+    customElements.define(tag, RcFa);
+
+    const live = document.createElement(tag);
+    // No authored children: the slot shows its fallback.
+    document.body.appendChild(live);
+    await live.updateComplete;
+    await Promise.resolve();
+    assert.equal(live.querySelector('slot').textContent, 'FALLBACK', 'initial fallback projection');
+    assert.equal(live.querySelector('slot').getAttribute('data-projection'), 'fallback', 'starts fallback');
+
+    // Incoming SSR supplies actual content.
+    const incoming = document.createElement(tag);
+    incoming.innerHTML =
+      '<button>b</button><div><slot data-webjs-light data-projection="actual">ADDED</slot></div>';
+    _diffElementInPlace(live, incoming);
+    await Promise.resolve();
+
+    assert.equal(live.querySelector('slot').textContent, 'ADDED',
+      'added content must project in place of the fallback');
+    assert.equal(live.querySelector('slot').getAttribute('data-projection'), 'actual',
+      'slot marked actual after the transition');
+
+    live.querySelector('button').click();
+    await live.updateComplete;
+    assert.equal(live.on, true, 'reactive state still updates after fallback->actual');
+
+    live.remove();
+  });
 });
