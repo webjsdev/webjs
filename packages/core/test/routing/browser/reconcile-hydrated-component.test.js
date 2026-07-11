@@ -164,4 +164,56 @@ suite('Client router: reconcile does not corrupt a hydrated component (#906)', (
 
     live.remove();
   });
+
+  test('a reused interactive component re-projects changed slotted content on soft nav (#908)', async () => {
+    // The #908 acceptance bar: a light-DOM interactive component that projects
+    // page-authored <slot> content is REUSED (not recreated) across a soft nav
+    // that supplies DIFFERENT slotted content. The router must update the
+    // projected content AND keep the component interactive. Both assertions
+    // together are the bar: the pre-fix behaviour (blanket-skip the subtree)
+    // kept interactivity but left the STALE slotted content on screen.
+    const tag = `rc-slot-reproject-${counter++}`;
+    class RcSlotReproject extends WebComponent({ on: Boolean }) {
+      constructor() { super(); this.on = false; }
+      render() {
+        return html`<button @click=${() => { this.on = !this.on; }}>t</button><div><slot></slot></div>`;
+      }
+    }
+    customElements.define(tag, RcSlotReproject);
+
+    const live = document.createElement(tag);
+    live.innerHTML = 'FIRST';
+    document.body.appendChild(live);
+    await live.updateComplete;
+    // Wait a microtask for the slot runtime's batched projection to settle.
+    await Promise.resolve();
+    assert.equal(live.querySelector('slot').textContent, 'FIRST', 'initial projection');
+
+    // The incoming SSR copy mirrors what render-server emits for a light-DOM
+    // slot: `<slot data-webjs-light data-projection="actual">` carrying the
+    // NEW page-authored content.
+    const incoming = document.createElement(tag);
+    incoming.innerHTML =
+      '<button>t</button><div><slot data-webjs-light data-projection="actual">SECOND</slot></div>';
+    _diffElementInPlace(live, incoming);
+
+    // 1. The projected slotted content updated to the incoming page's content.
+    assert.equal(live.querySelector('slot').textContent, 'SECOND',
+      'reused component must re-project the incoming slotted content');
+
+    // 2. Interactivity is intact after the reproject (no #906 regression).
+    live.querySelector('button').click();
+    await live.updateComplete;
+    assert.equal(live.on, true, 'reactive state still updates after reproject');
+
+    // 3. A subsequent component re-render must NOT revert to the old content
+    //    (the slot runtime's assignment bookkeeping stayed in sync).
+    live.on = false;
+    await live.updateComplete;
+    await Promise.resolve();
+    assert.equal(live.querySelector('slot').textContent, 'SECOND',
+      're-render must keep the re-projected content, not revert to FIRST');
+
+    live.remove();
+  });
 });
