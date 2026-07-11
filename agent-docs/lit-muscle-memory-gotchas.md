@@ -138,8 +138,9 @@ then controllers' `hostUpdate`), reflects `reflect: true` properties,
 and calls `instance.render()`. Nothing past render fires server-side.
 Not `connectedCallback`, not `shouldUpdate`, not the `update` DOM
 commit, not `firstUpdated`, not `updated`, not controllers'
-`hostConnected` / `hostUpdated`. See
-`packages/core/src/render-server.js` around line 357.
+`hostConnected` / `hostUpdated`. See the `performServerUpdate()`
+pre-render pass in `packages/core/src/render-server.js` (called from
+`injectDSD`).
 
 The mental model is one sentence. Code in the constructor, `willUpdate`,
 and `render()` must avoid the genuinely browser-only surface (`document`,
