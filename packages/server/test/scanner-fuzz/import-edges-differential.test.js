@@ -224,6 +224,28 @@ const FIXTURES = [
     src: "const m = await import('./lazy.ts');\nimport { real } from './real.ts';",
     expect: ['./lazy.ts', './real.ts'],
   },
+  {
+    // Guards the comment-mask fix (#753): a `//` inside a STRING must not be
+    // treated as a comment, which would blank the following real import.
+    name: 'a // inside a string is not a comment; the next real import survives',
+    file: 'f.ts',
+    src: "const u = 'http://example.com/path';\nimport { real } from './real.ts';",
+    expect: ['./real.ts'],
+  },
+  {
+    name: 'a // inside a regex literal is not a comment; the next real import survives',
+    file: 'f.ts',
+    src: "const re = /a\\/\\/b/g;\nimport { real } from './real.ts';",
+    expect: ['./real.ts'],
+  },
+  {
+    // A protocol-URL specifier read off the comment-masked source must equal the
+    // real specifier (its `//` is inside the string, kept verbatim).
+    name: 'a protocol-URL specifier survives the comment-masked scan intact',
+    file: 'f.ts',
+    src: "import x from 'https://cdn.example.com/x.js';",
+    expect: ['https://cdn.example.com/x.js'],
+  },
 ];
 
 for (const fx of FIXTURES) {
