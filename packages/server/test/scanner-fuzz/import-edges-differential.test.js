@@ -27,7 +27,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, relative, extname, join } from 'node:path';
 import ts from 'typescript';
-import { redactStringsAndTemplates, maskComments } from '../../src/js-scan.js';
+import { redactStringsAndTemplates } from '../../src/js-scan.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../../../..');
@@ -36,15 +36,16 @@ const repoRoot = resolve(here, '../../../..');
 // These regexes are COPIED from packages/server/src/module-graph.js; a drift
 // guard below asserts they still match the source, so the mirror can never
 // silently diverge from what the gate actually runs.
-const IMPORT_RE = /\bimport\s+(?:(?:[\w*{}\s,]+)\s+from\s+)?['"]([^'"]+)['"]/g;
-const EXPORT_FROM_RE = /\bexport\b[^'";`]+?\sfrom\s+['"]([^'"]+)['"]/g;
-const DYNAMIC_IMPORT_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*[,)]/g;
+const IMPORT_RE = /\bimport\s+(?:(?:[\w*{}\s,]+)\s+from\s+)?['"]([^'"]+)['"]/gd;
+const EXPORT_FROM_RE = /\bexport\b[^'";`]+?\sfrom\s+['"]([^'"]+)['"]/gd;
+const DYNAMIC_IMPORT_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*[,)]/gd;
 
 /**
  * The set of import/export-from/dynamic-import SPECIFIERS the lexer extracts,
- * applying the same redaction-mask + type-only + quote-position guards the
- * real gate (module-graph.js `parseFile`) applies. Specifier-level (pre
- * resolution) so a divergence is a LEXER bug, not a path-resolution difference.
+ * mirroring module-graph.js `parseFile`: scan over the FULLY-BLANKED mask (so no
+ * keyword can anchor inside any comment/string/template/regex literal) and read
+ * each specifier from raw `src` via the match's group indices. Specifier-level
+ * (pre resolution) so a divergence is a LEXER bug, not a path-resolution one.
  *
  * @param {string} src
  * @returns {Set<string>}
@@ -52,33 +53,17 @@ const DYNAMIC_IMPORT_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*[,)]/g;
 function lexerSpecifiers(src) {
   const specs = new Set();
   const masked = redactStringsAndTemplates(src, true);
-  // Mirror module-graph.js: scan over a comment-masked copy (strings kept) so a
-  // commented `import`/`export` keyword can't anchor a match that swallows the
-  // next real one (#753). The `masked` guard still rejects a string-embedded
-  // keyword.
-  const scanSrc = maskComments(src);
-  for (const re of [IMPORT_RE, EXPORT_FROM_RE]) {
-    for (const m of scanSrc.matchAll(re)) {
-      if (masked[m.index] === ' ') continue; // keyword inside a literal
-      const lead = m[0];
-      const typeOnly =
-        /^(?:import|export)\s+type\s*[{*]/.test(lead) ||
-        (/^import\s+type\s+[A-Za-z_$]/.test(lead) && !/^import\s+type\s+from\b/.test(lead));
-      if (typeOnly) continue;
-      const spec = m[1];
-      const quoteAt = m.index + m[0].length - spec.length - 2;
-      if (masked[quoteAt] === ' ') continue; // specifier tail inside a literal
-      specs.add(spec);
+  for (const re of [IMPORT_RE, EXPORT_FROM_RE, DYNAMIC_IMPORT_RE]) {
+    for (const m of masked.matchAll(re)) {
+      if (re !== DYNAMIC_IMPORT_RE) {
+        const lead = m[0];
+        const typeOnly =
+          /^(?:import|export)\s+type\s*[{*]/.test(lead) ||
+          (/^import\s+type\s+[A-Za-z_$]/.test(lead) && !/^import\s+type\s+from\b/.test(lead));
+        if (typeOnly) continue;
+      }
+      specs.add(src.slice(m.indices[1][0], m.indices[1][1]));
     }
-  }
-  // The dynamic-import loop mirrors module-graph.js exactly: it guards ONLY on
-  // the keyword position, with no quote-position guard (the static scan's
-  // quoteAt guard exists for EXPORT_FROM_RE's lazy body-spanning `from`, which
-  // a `import(<literal>)` cannot exhibit). Applying a quoteAt guard here would
-  // be off-by-one anyway, since the match ends with `)` not the closing quote.
-  for (const m of scanSrc.matchAll(DYNAMIC_IMPORT_RE)) {
-    if (masked[m.index] === ' ') continue;
-    specs.add(m[1]);
   }
   return specs;
 }
@@ -265,6 +250,24 @@ const FIXTURES = [
     file: 'f.ts',
     src: "import x from 'https://cdn.example.com/x.js';",
     expect: ['https://cdn.example.com/x.js'],
+  },
+  {
+    // The #753 round-3 residual: an `export` WORD inside a REGEX literal, then a
+    // semicolon-free real re-export. The prior fix kept regex bodies verbatim,
+    // so the regex-anchored lazy body crossed the closing `/` and consumed the
+    // real edge. The root fix (scan over the fully-blanked mask) closes it.
+    name: 'export word in a regex literal must not swallow a semicolon-free real re-export',
+    file: 'f.ts',
+    src: 'const re = /export/\nexport { a } from "./real.ts"',
+    expect: ['./real.ts'],
+  },
+  {
+    // A legit inline block comment between `export` and `from` must still be a
+    // real edge (the naive "exclude /" fix would have broken this).
+    name: 'a re-export with an inline block comment before from is still an edge',
+    file: 'f.ts',
+    src: "export /* re-export */ { foo } from './bar.ts';",
+    expect: ['./bar.ts'],
   },
 ];
 
