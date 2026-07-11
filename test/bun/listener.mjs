@@ -43,7 +43,7 @@ try {
   // stamps it OUT OF BAND via a WeakMap (#756, no per-request Request clone), so
   // the header is intentionally absent on Bun and `clientIp` is the canonical
   // cross-runtime accessor that reads whichever the runtime used.
-  w('app/api/echo/route.ts', `import { clientIp } from ${JSON.stringify(SERVER)};\nexport async function GET(req: Request) {\n  const ip = clientIp(req);\n  return Response.json({ ok: true, ip: ip && ip !== '_anon_' ? 'stamped' : 'missing' });\n}\nexport function WS(ws: any) {\n  ws.on('message', (m: any) => ws.send('echo:' + m));\n}\n`);
+  w('app/api/echo/route.ts', `import { clientIp } from ${JSON.stringify(SERVER)};\nexport async function GET(req: Request) {\n  const ip = clientIp(req);\n  return Response.json({ ok: true, ip: ip && ip !== '_anon_' ? 'stamped' : 'missing' });\n}\nexport function WS(ws: any, req: Request) {\n  ws.on('message', (m: any) => {\n    if (String(m) === 'whoami') ws.send('ip:' + clientIp(req));\n    else ws.send('echo:' + m);\n  });\n}\n`);
   // A server action, to exercise the Origin / Sec-Fetch-Site CSRF check (#659)
   // over the REAL socket on this runtime.
   const actionFile = join(dir, 'actions/ping.server.ts');
@@ -96,17 +96,45 @@ try {
   assert.ok(chunk.includes('event: hello'), `SSE stream opens with the hello frame; got: ${JSON.stringify(chunk)}`);
   await reader.cancel();
 
-  // 5. WebSocket WS export echo (the BunWsAdapter shim must match the ws-library
-  //    EventEmitter contract: .on('message') / .send()).
+  // 5. WebSocket over a real socket, on ONE connection (the BunWsAdapter shim must
+  //    match the ws-library EventEmitter contract: `.on('message')` / `.send()`),
+  //    covering two things in sequence:
+  //      (a) the `WS` export echoes a message, and
+  //      (b) WS upgrade IP-trust (#778): a `WS` handler's `clientIp(req)` returns
+  //          the framework-trusted SOCKET IP, never a client-supplied (spoofable)
+  //          `x-webjs-remote-ip` sent on the upgrade (the WS-seam analog of the
+  //          #773 fetch-path fix). The upgrade is stamped out-of-band on BOTH
+  //          runtimes (the WeakMap is authoritative and ignores the inbound
+  //          header). The connection is local, so the trusted IP is a loopback
+  //          address: assert it is present (non-anon) AND not the spoofed value.
+  //          Without the fix, `clientIp` falls back to the spoofed inbound header
+  //          on both runtimes, so the assertion goes red.
+  //    One connection (not two) keeps this reliable on Bun, where a second WS
+  //    after the first closed did not settle its promise.
   await new Promise((res, rej) => {
-    const ws = new WebSocket(`ws://localhost:${port}/api/echo`);
-    const timer = setTimeout(() => rej(new Error('WebSocket echo timed out')), 5000);
+    const ws = new WebSocket(`ws://localhost:${port}/api/echo`, {
+      headers: { 'x-webjs-remote-ip': '9.9.9.9' },
+    });
+    const timer = setTimeout(() => rej(new Error('WebSocket sequence timed out')), 5000);
+    // Close the socket on EVERY exit path (success and failure), else a failed
+    // assertion leaves the connection open and the later `close()` waits on it.
+    const done = (err) => { clearTimeout(timer); try { ws.close(); } catch {} err ? rej(err) : res(); };
     ws.onopen = () => ws.send('ping');
     ws.onmessage = (e) => {
-      try { assert.equal(e.data, 'echo:ping', 'the WS export echoes the message'); clearTimeout(timer); ws.close(); res(); }
-      catch (err) { clearTimeout(timer); rej(err); }
+      try {
+        const data = String(e.data);
+        if (data.startsWith('echo:')) {
+          assert.equal(data, 'echo:ping', 'the WS export echoes the message');
+          ws.send('whoami');  // now probe the trusted IP on the same socket
+          return;
+        }
+        const ip = data.replace(/^ip:/, '');
+        assert.notEqual(ip, '9.9.9.9', 'a spoofed x-webjs-remote-ip on the WS upgrade must NOT reach clientIp');
+        assert.ok(ip && ip !== '_anon_', `the trusted socket IP must reach clientIp in the WS handler; got ${JSON.stringify(ip)}`);
+        done();
+      } catch (err) { done(err); }
     };
-    ws.onerror = (e) => { clearTimeout(timer); rej(new Error('WebSocket errored: ' + (e?.message || 'unknown'))); };
+    ws.onerror = (e) => done(new Error('WebSocket errored: ' + (e?.message || 'unknown')));
   });
 
   // 6. Clean shutdown.
@@ -114,7 +142,21 @@ try {
   close = null;
 
   console.log(`OK  webjs listener parity passed on ${runtime} (SSR + route + SSE + WebSocket over a real socket)`);
+} catch (err) {
+  // Fail LOUD and with a non-zero exit. Do NOT rely on an unhandled top-level
+  // rejection to set the exit code: Bun does not propagate an async promise
+  // rejection (a failed assertion inside a WS `onmessage`) through this
+  // try/finally to a non-zero exit, so a real regression would otherwise pass
+  // the Bun job silently. An explicit `process.exit(1)` makes both runtimes fail.
+  console.error(`FAIL webjs listener parity on ${runtime}: ${err?.message || err}`);
+  try {
+    if (close) await Promise.race([close(), new Promise((r) => setTimeout(r, 3000))]);
+  } catch {}
+  rmSync(dir, { recursive: true, force: true });
+  process.exit(1);
 } finally {
-  try { if (close) await close(); } catch {}
+  // Bound the shutdown so a hung `close()` on the success path cannot hang the
+  // process at exit.
+  try { if (close) await Promise.race([close(), new Promise((r) => setTimeout(r, 3000))]); } catch {}
   rmSync(dir, { recursive: true, force: true });
 }

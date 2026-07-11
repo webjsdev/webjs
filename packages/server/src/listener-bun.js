@@ -238,6 +238,16 @@ async function bunUpgrade(req, srv, ctx) {
 
   const wrapper = new BunWsAdapter();
   const handlerReq = upgradeRequest(req, url);
+  // Stamp the framework-trusted socket IP on the handler request so a `WS`
+  // handler's `clientIp(req)` returns the real peer, not a spoofed inbound
+  // `x-webjs-remote-ip` (#778). `srv.requestIP` must be queried with Bun's
+  // ORIGINAL `req` (the rebuilt `handlerReq` is unknown to it); the WeakMap
+  // stamp then makes `handlerReq` authoritative. Mirrors `stampRemoteIp` on the
+  // fetch path (which strips + stamps `req` directly). `upgradeRequest` already
+  // dropped any inbound copy of the header.
+  let ip;
+  try { ip = srv.requestIP(req)?.address; } catch {}
+  setTrustedRemoteIp(handlerReq, ip || '');
   const ok = srv.upgrade(req, {
     data: { wrapper, mod, req: handlerReq, params: match.params, pathname: url.pathname },
   });
@@ -254,7 +264,14 @@ async function bunUpgrade(req, srv, ctx) {
  */
 function upgradeRequest(req, url) {
   const headers = new Headers();
-  req.headers.forEach((v, k) => { if (!k.startsWith(':')) headers.set(k, v); });
+  // Skip a client-supplied `x-webjs-remote-ip`: it is a framework-internal trust
+  // header the caller re-stamps via the authoritative WeakMap (#778). Copying it
+  // would let a client spoof `clientIp` inside the WS handler on the fallback
+  // header read.
+  req.headers.forEach((v, k) => {
+    if (k.startsWith(':') || k === 'x-webjs-remote-ip') return;
+    headers.set(k, v);
+  });
   return new Request(url, { method: 'GET', headers });
 }
 
