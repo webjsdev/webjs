@@ -14,6 +14,9 @@ import './webjs-suspense.js';
 // Ingest SSR action seeds (#472) from an incoming soft-nav document before its
 // components hydrate, so a navigated async component resolves from the seed.
 import { scanSeeds } from './action-seed-client.js';
+// Slot-runtime constants for re-projecting page-authored slotted content of a
+// reused hydrated light-DOM component across a soft nav (#908).
+import { SLOT_STATE, LIGHT_SLOT_ATTR, PROJECTION_ATTR, PROJECTION_ACTUAL } from './slot.js';
 
 /** The content type a content-negotiated stream-action response carries (#248). */
 const STREAM_MIME = 'text/vnd.webjs-stream.html';
@@ -2677,7 +2680,16 @@ function diffElementInPlace(dst, src) {
   // property change through `attributeChangedCallback`, so the component
   // re-renders ITSELF; the router must not touch its internals. This mirrors
   // Turbo/morphdom, which leave custom elements alone by default.
-  if (isHydratedComponent(dst)) return;
+  //
+  // One carve-out (#908): a light-DOM component's projected <slot> content is
+  // page-authored (moved into the slot by the slot runtime), NOT render-owned,
+  // so a reused component would otherwise keep showing STALE slotted content
+  // when the nav supplies different content. Re-project ONLY those slot
+  // children; the render-owned nodes stay untouched, so #906 does not regress.
+  if (isHydratedComponent(dst)) {
+    reprojectSlottedContent(dst, src);
+    return;
+  }
 
   // Recurse into children: collect both sides, run reconcileSiblings on
   // them with synthetic boundary markers. Cheap implementation: use
@@ -2700,6 +2712,102 @@ function diffElementInPlace(dst, src) {
  */
 function isHydratedComponent(el) {
   return /** @type {any} */ (el)[Symbol.for('webjs.instance')] != null;
+}
+
+/**
+ * True when `slot` belongs directly to `host`, i.e. no OTHER custom element
+ * sits between them. A slot nested inside a child custom element belongs to
+ * THAT component (its own slot state owns it), so the host must not touch it.
+ *
+ * @param {Element} slot
+ * @param {Element} host
+ * @returns {boolean}
+ */
+function isOwnLightSlot(slot, host) {
+  for (let p = slot.parentElement; p && p !== host; p = p.parentElement) {
+    if (p.tagName.includes('-')) return false;
+  }
+  return true;
+}
+
+/**
+ * Group a component's own `data-projection="actual"` light slots by name,
+ * first-wins (mirroring the slot runtime + SSR first-wins rule). Slots nested
+ * inside a child custom element are excluded (they belong to that child).
+ *
+ * @param {Element} host
+ * @returns {Map<string|null, HTMLSlotElement>}
+ */
+function ownActualLightSlots(host) {
+  /** @type {Map<string|null, HTMLSlotElement>} */
+  const byName = new Map();
+  const sel = `slot[${LIGHT_SLOT_ATTR}][${PROJECTION_ATTR}="${PROJECTION_ACTUAL}"]`;
+  for (const slot of host.querySelectorAll(sel)) {
+    const s = /** @type {HTMLSlotElement} */ (slot);
+    if (!isOwnLightSlot(s, host)) continue;
+    const name = s.getAttribute('name') || null;
+    if (!byName.has(name)) byName.set(name, s);
+  }
+  return byName;
+}
+
+/**
+ * Re-project the page-authored slotted content of a REUSED hydrated light-DOM
+ * component across a soft nav (#908), without touching its render-owned
+ * subtree.
+ *
+ * The #906 guard treats a hydrated component as opaque so the router never
+ * corrupts its lit-html-owned nodes. But the projected children inside a
+ * light-DOM `<slot data-webjs-light data-projection="actual">` are
+ * page-authored (moved there by the slot runtime), NOT held by lit-html parts,
+ * so reconciling ONLY those children is safe and cannot reintroduce #906. Both
+ * the live DOM and the incoming SSR HTML carry the same slot markers
+ * (render-server emits them), so slots pair up by name + document order.
+ *
+ * Scope: this handles the actual->actual case (the projected content changed).
+ * The two boundary transitions where a slot crosses between actual and fallback
+ * (content fully REMOVED, or ADDED where there was none) are deferred to #912:
+ * a slot's fallback is render-owned, so restoring or replacing it must go
+ * through the slot runtime, not a raw reconcile. Both are skipped here (see the
+ * two `continue`/iteration guards below), so neither can touch a lit-html part.
+ *
+ * @param {Element} dst  Live hydrated component host.
+ * @param {Element} src  Incoming SSR copy of the same component.
+ */
+function reprojectSlottedContent(dst, src) {
+  // Only a light-DOM component that tracks slot assignments has projected
+  // page-authored content to update. No slot state (no <slot>, or a shadow-DOM
+  // component whose slotted nodes are ordinary light children) means nothing
+  // to re-project here.
+  const state = /** @type {any} */ (dst)[SLOT_STATE];
+  if (!state) return;
+
+  // Iterate the LIVE component's actual slots only. A slot the live component
+  // currently shows as FALLBACK is absent here, so the fallback->actual
+  // direction (incoming ADDED content) is skipped: filling it would replace
+  // render-owned fallback nodes, which is the #906 hazard (deferred to #912).
+  const liveSlots = ownActualLightSlots(dst);
+  if (liveSlots.size === 0) return;
+  const incSlots = ownActualLightSlots(src);
+
+  for (const [name, liveSlot] of liveSlots) {
+    const incSlot = incSlots.get(name);
+    // The actual->fallback direction: incoming REMOVED this slot's content (now
+    // shows fallback), so leave the live projection as-is rather than touch
+    // render-owned fallback nodes. Conservative, no #906 regression (#912).
+    if (!incSlot) continue;
+
+    // The slot's children are page-authored, so reconcileChildren is safe:
+    // it preserves node identity where it can and never touches lit-html parts.
+    reconcileChildren(liveSlot, incSlot);
+
+    // Keep the slot runtime's assignment bookkeeping in sync with the new
+    // children so a later component re-render's projection pass materialises
+    // THESE nodes, not the stale ones it captured at hydration.
+    const children = [...liveSlot.childNodes];
+    state.assignedByName.set(name, children);
+    state.lastSnapshot.set(liveSlot, children.slice());
+  }
 }
 
 /**

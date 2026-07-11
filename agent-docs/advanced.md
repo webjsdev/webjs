@@ -419,7 +419,14 @@ navigation automatically.
    reconciler. Elements with matching tag + matching key are reused
    with in-place attribute diffing. **Live attributes** (`value`,
    `checked`, `selected`, `indeterminate`, `disabled`, `open`,
-   `popover`) are NEVER overwritten by the server HTML.
+   `popover`) are NEVER overwritten by the server HTML. A **hydrated
+   component** (one whose client render owns its subtree via live
+   template parts) is reconciled attribute-only: the router syncs its
+   attributes (driving any reactive-property change) but never touches
+   its render-owned nodes, so a soft nav cannot corrupt a live
+   component. The one exception is a light-DOM component's projected
+   `<slot>` content, which is page-authored rather than render-owned, so
+   the router re-projects it to match the incoming page.
 5. Merges `<head>` (add-only on partial swaps so runtime-injected
    styles like Tailwind survive, with a full merge on the
    root-layout-change fallback), re-runs `<script>` elements,
