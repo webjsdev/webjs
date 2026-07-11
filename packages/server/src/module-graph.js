@@ -78,7 +78,7 @@ export function expandImportAlias(spec, appDir) {
 }
 
 /** @type {RegExp} match static `import … from '…'` and `import '…'` */
-const IMPORT_RE = /\bimport\s+(?:(?:[\w*{}\s,]+)\s+from\s+)?['"]([^'"]+)['"]/g;
+const IMPORT_RE = /\bimport\s+(?:(?:[\w*{}\s,]+)\s+from\s+)?['"]([^'"]+)['"]/gd;
 
 /**
  * @type {RegExp} match `export … from '…'` re-exports.
@@ -94,12 +94,16 @@ const IMPORT_RE = /\bimport\s+(?:(?:[\w*{}\s,]+)\s+from\s+)?['"]([^'"]+)['"]/g;
  *
  * Barrel files are common (`lib/index.ts` re-exports its siblings),
  * and the graph must follow these edges or downstream consumers of
- * the barrel see authorisation 404s on the underlying files. The
- * gap class excludes quotes and `;` (so the lazy match cannot cross
- * a statement boundary) but DOES allow newlines, so multi-line
- * brace lists are caught.
+ * the barrel see authorisation 404s on the underlying files. The gap
+ * class excludes quotes, `;`, AND the backtick but DOES allow newlines,
+ * so multi-line brace lists are caught. The primary defence against a
+ * stray `export` word inside a literal swallowing a real later edge is
+ * that `parseFile` scans over the FULLY-BLANKED mask (every comment /
+ * string / template / regex body blanked), so no keyword can anchor
+ * inside a literal at all (#753); the exclusions here are belt-and-
+ * suspenders on top of that.
  */
-const EXPORT_FROM_RE = /\bexport\b[^'";]+?\sfrom\s+['"]([^'"]+)['"]/g;
+const EXPORT_FROM_RE = /\bexport\b[^'";`]+?\sfrom\s+['"]([^'"]+)['"]/gd;
 
 /**
  * @type {RegExp} match a dynamic `import('…')` with a STRING-LITERAL specifier
@@ -118,7 +122,7 @@ const EXPORT_FROM_RE = /\bexport\b[^'";]+?\sfrom\s+['"]([^'"]+)['"]/g;
  * `import('./pages/' + name)` the char after the closing quote is `+`, neither
  * `,` nor `)`, so it does not match.
  */
-const DYNAMIC_IMPORT_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*[,)]/g;
+const DYNAMIC_IMPORT_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*[,)]/gd;
 
 /**
  * @typedef {Map<string, Set<string>>} ModuleGraph
@@ -459,16 +463,26 @@ async function parseFile(file, appDir, graph, seen, dynamic, bare) {
   // graph edge to whatever path that string names. Since this caller only
   // checks keyword-in-code-position, blank every literal body so a
   // code-example `import` string never becomes an edge.
+  // Scan for edges over the FULLY-BLANKED mask: every comment / string /
+  // template / regex body is blanked to spaces (delimiters kept), `${...}`
+  // holes stay as code. Reason (#753, found differentially): a stray `import` /
+  // `export` word inside a comment, template, OR regex literal must not anchor a
+  // lazy regex match (e.g. `EXPORT_FROM_RE`'s `[^'";`]+?`) that spans across the
+  // literal's closing delimiter and consumes the next real `from '<spec>'`,
+  // whose keyword then sits in the blanked literal and is dropped, silently
+  // losing the real edge (the gate then 404s a legitimately imported module).
+  // Scanning over the blanked mask means NO keyword can anchor inside any
+  // literal or comment at all, so the whole class of delimiter blind spots
+  // (comment, string, template, regex) is closed at once, and there is nothing
+  // left for a per-match position guard to reject. The specifier itself is a
+  // string (blanked here), so it is read back from raw `src` via the match's
+  // group indices (the `d` flag).
   const masked = redactStringsAndTemplates(src, true);
   const deps = new Set();
   /** @type {Set<string>} bare npm vendor specifiers imported by this file (#754) */
   const bareDeps = new Set();
   for (const re of [IMPORT_RE, EXPORT_FROM_RE]) {
-    for (const m of src.matchAll(re)) {
-      // m.index is the keyword start (`\bimport` / `\bexport`). If that
-      // position is blanked in the mask, the match lives inside a literal
-      // and is not a real import edge.
-      if (masked[m.index] === ' ') continue;
+    for (const m of masked.matchAll(re)) {
       // A statement-leading `import type { X }` / `import type * as X` /
       // `import type Foo` (default type import) / `export type { X }` /
       // `export type *` is fully erased by the TS stripper, so it never becomes
@@ -481,22 +495,17 @@ async function parseFile(file, appDir, graph, seen, dynamic, bare) {
       //     followed by `from` is NOT type-only.
       //   - a MIXED `import { type A, b }` does NOT lead with `type`, so it is
       //     kept (its `b` binding is a real runtime edge).
+      // (m[0] here is over the mask, which keeps the binding syntax verbatim.)
       // #805
       const lead = m[0];
       const typeOnly =
         /^(?:import|export)\s+type\s*[{*]/.test(lead) ||
         (/^import\s+type\s+[A-Za-z_$]/.test(lead) && !/^import\s+type\s+from\b/.test(lead));
       if (typeOnly) continue;
-      const spec = m[1];
-      // Guard a match whose `from '<spec>'` tail reaches INTO a blanked literal:
-      // EXPORT_FROM_RE's lazy `[^'";]+?` can span a template body to a `from`
-      // written inside example code (`export const t = html\`...import x from
-      // 'left-pad'\``), so the KEYWORD is real but the SPECIFIER is not. A real
-      // string keeps its delimiters in the mask (only the body blanks), while a
-      // template body blanks whole, so a blanked opening quote means the
-      // specifier is inside a literal and the match is spurious.
-      const quoteAt = m.index + m[0].length - spec.length - 2;
-      if (masked[quoteAt] === ' ') continue;
+      // The specifier is read from RAW src at the match's captured-group indices
+      // (the group is the blanked string body in the mask; its position is the
+      // real specifier in src).
+      const spec = src.slice(m.indices[1][0], m.indices[1][1]);
       // Only resolve relative imports + `#`-style subpath aliases (#555)
       // within the project. A bare npm specifier (dayjs) has no alias match
       // and is skipped FROM THE GRAPH, but recorded as a vendor edge so SSR
@@ -516,9 +525,8 @@ async function parseFile(file, appDir, graph, seen, dynamic, bare) {
   // preloading it. Same redaction-mask + alias rules as the static scan. A
   // target already statically imported is not duplicated as a dynamic edge.
   const dynDeps = new Set();
-  for (const m of src.matchAll(DYNAMIC_IMPORT_RE)) {
-    if (masked[m.index] === ' ') continue;
-    const spec = m[1];
+  for (const m of masked.matchAll(DYNAMIC_IMPORT_RE)) {
+    const spec = src.slice(m.indices[1][0], m.indices[1][1]);
     if (!spec.startsWith('.') && !spec.startsWith('/') && !expandImportAlias(spec, appDir)) continue;
     const resolved = resolveImport(spec, file, appDir);
     if (resolved && !deps.has(resolved)) dynDeps.add(resolved);

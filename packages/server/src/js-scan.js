@@ -432,7 +432,13 @@ export function maskComments(src) {
  */
 export function extractWebComponentClassBodies(content) {
   const bodies = [];
-  const re = /class\s+\w+\s+extends\s+WebComponent/g;
+  // The optional `(?:\s*<[^{}();]*?>)?` skips a TypeScript generic parameter
+  // list on the class name (`class Grid<T> extends WebComponent`), so a generic
+  // component is not missed (which would let elision wrongly strip an
+  // interactive component, the unsafe direction). The exclusion class keeps the
+  // generic from swallowing the class body / a call, and stops it staying
+  // within the type-parameter list (#753, found differentially).
+  const re = /class\s+\w+(?:\s*<[^{}();]*?>)?\s+extends\s+WebComponent/g;
   let m;
   while ((m = re.exec(content)) !== null) {
     let i = m.index + m[0].length;
