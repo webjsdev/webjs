@@ -487,6 +487,26 @@ test('scaffoldApp saas: writes auth + dashboard + Drizzle User model', async () 
     assert.match(signup, /actionData/, 'signup page reads actionData for re-render');
     assert.doesNotMatch(signup, /id="signup-form"/, 'old inert JS-only form id is gone');
 
+    // #904: a signed-in user must be able to log out. The dashboard subtree ships
+    // a nested layout carrying a plain POST <form> to the createAuth signout route,
+    // so logout works with JS off (progressive-enhancement default) and appears on
+    // every /dashboard page.
+    const dashLayout = readFileSync(join(appDir, 'app', 'dashboard', 'layout.ts'), 'utf8');
+    assert.match(dashLayout, /<form method="POST" action="\/api\/auth\/signout"/, 'dashboard layout ships a POST signout form');
+    assert.match(dashLayout, /Log out/, 'dashboard layout renders a Log out control');
+    // signOut is server-only, so the logout control must reach it through the
+    // route, never by importing lib/auth.server.ts into a browser-shipping page.
+    assert.doesNotMatch(dashLayout, /import[^\n]*auth\.server/, 'logout control does not import the server-only auth module');
+
+    // #904: a failed login must surface a message, not silently bounce to the home
+    // page. createAuth is configured with pages.error: '/login' and the login page
+    // reads searchParams.error to render it.
+    const auth = readFileSync(join(appDir, 'lib', 'auth.server.ts'), 'utf8');
+    assert.match(auth, /pages:\s*\{\s*error:\s*'\/login'\s*\}/, 'createAuth points its error page at /login');
+    const login = readFileSync(join(appDir, 'app', 'login', 'page.ts'), 'utf8');
+    assert.match(login, /searchParams\.error/, 'login page reads the error query param');
+    assert.match(login, /Invalid email or password/, 'login page shows a message for a failed sign-in');
+
     // The auth test is a REAL handle()-driven flow at the convention-correct
     // path test/auth/auth.test.ts (#267), not the old type-shape stub at
     // test/unit/auth.test.ts.

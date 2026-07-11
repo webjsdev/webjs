@@ -63,6 +63,24 @@ export async function loginWithGoogle() {
 export async function logout() {
   return signOut({ redirectTo: '/' });
 }</pre>
+    <p><code>signOut</code> is also reachable as a route: the mounted <code>handlers</code> serve <code>POST /api/auth/signout</code>, so a plain <code>&lt;form method="POST" action="/api/auth/signout"&gt;</code> logs a user out with no JavaScript. That is how the generated <code>saas</code> scaffold renders its logout button.</p>
+
+    <h2>Showing a failed sign-in</h2>
+    <p>A failed credentials sign-in redirects to <code>&#36;{pages.error}?error=CredentialsSignin</code>, falling back to the home page when <code>pages.error</code> is unset (which silently swallows the failure). Point the error page at your login route, then read the code and render a message:</p>
+    <pre>createAuth({
+  // ...providers, secret
+  pages: { error: '/login' },  // a failed sign-in returns here
+});
+
+// app/login/page.ts
+export default function LoginPage({ searchParams }) {
+  const failed = searchParams.error === 'CredentialsSignin';
+  return html\`
+    &#36;{failed ? html\`&lt;p role="alert"&gt;Invalid email or password.&lt;/p&gt;\` : ''}
+    &lt;form method="POST" action="/api/auth/signin/credentials"&gt;...&lt;/form&gt;
+  \`;
+}</pre>
+    <p>The generated <code>saas</code> scaffold wires exactly this, so a wrong password shows a message on the login page instead of bouncing to the landing page with no feedback.</p>
 
     <h2>Callbacks</h2>
     <p>Customize the session and JWT with callbacks:</p>
