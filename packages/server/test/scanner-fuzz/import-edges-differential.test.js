@@ -37,7 +37,7 @@ const repoRoot = resolve(here, '../../../..');
 // guard below asserts they still match the source, so the mirror can never
 // silently diverge from what the gate actually runs.
 const IMPORT_RE = /\bimport\s+(?:(?:[\w*{}\s,]+)\s+from\s+)?['"]([^'"]+)['"]/g;
-const EXPORT_FROM_RE = /\bexport\b[^'";]+?\sfrom\s+['"]([^'"]+)['"]/g;
+const EXPORT_FROM_RE = /\bexport\b[^'";`]+?\sfrom\s+['"]([^'"]+)['"]/g;
 const DYNAMIC_IMPORT_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*[,)]/g;
 
 /**
@@ -185,6 +185,26 @@ const FIXTURES = [
     src: 'export const t = `some ... import x from \'left-pad\'`;\n' +
       "export { a } from './real.ts';",
     expect: ['./real.ts'],
+  },
+  {
+    // The #753 residual (found in round-2 review): a stray `export` WORD inside
+    // a template, then a SEMICOLON-FREE real re-export. Without the backtick in
+    // EXPORT_FROM_RE's exclusion class, the template-anchored lazy body crosses
+    // the closing backtick and consumes the real `export ... from`, dropping it.
+    name: 'export word in a template must not swallow a semicolon-free real re-export',
+    file: 'f.ts',
+    src: 'const t = `export stuff`\nexport { a } from "./real.ts"',
+    expect: ['./real.ts'],
+  },
+  {
+    // The docs-site code-sample shape: a tagged html template containing an
+    // `export` word, then a semicolon-free real re-export.
+    name: 'export word in a tagged html template does not swallow a real re-export',
+    file: 'f.ts',
+    src: 'import { html } from "@webjsdev/core"\n' +
+      'const s = html`<pre>export default X</pre>`\n' +
+      'export { thing } from "./real.ts"',
+    expect: ['@webjsdev/core', './real.ts'],
   },
   {
     name: 'import inside a line comment is NOT an edge',
