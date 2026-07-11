@@ -128,4 +128,40 @@ suite('Client router: reconcile does not corrupt a hydrated component (#906)', (
 
     parent.remove();
   });
+
+  test('an interactive component that projects slotted content still clicks after reconcile', async () => {
+    // A light-DOM interactive component with a <slot> keeps its live instance
+    // symbol on the HOST, so the guard fires and the router leaves its subtree
+    // alone. The primary guarantee (interactivity survives) must hold for a
+    // slotted component too. Known trade-off (see #906 follow-up): the router
+    // no longer re-projects page-authored slotted content of a REUSED
+    // interactive component across a soft nav; that is a separate slot-aware
+    // reconcile concern, and the pre-fix behaviour here was worse (dead click).
+    const tag = `rc-slotted-${counter++}`;
+    class RcSlotted extends WebComponent({ on: Boolean }) {
+      constructor() { super(); this.on = false; }
+      render() {
+        return html`<button @click=${() => { this.on = !this.on; }}>t</button><div><slot></slot></div>`;
+      }
+    }
+    customElements.define(tag, RcSlotted);
+
+    const live = document.createElement(tag);
+    live.innerHTML = 'SLOTTED';
+    document.body.appendChild(live);
+    await live.updateComplete;
+    assert.ok(live.querySelector('button'), 'renders a button + slot');
+
+    const incoming = document.createElement(tag);
+    incoming.innerHTML = 'SLOTTED';
+    _diffElementInPlace(live, incoming);
+
+    // Interactivity survives the reconcile: the reactive toggle still updates.
+    live.querySelector('button').click();
+    await live.updateComplete;
+    assert.equal(live.on, true, 'reactive state still updates after reconcile');
+    assert.ok(live.querySelector('button'), 'button still present and live');
+
+    live.remove();
+  });
 });
