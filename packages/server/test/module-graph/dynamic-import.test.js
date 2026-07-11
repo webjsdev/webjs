@@ -152,3 +152,36 @@ test('a dynamic import written inside an html template literal is not an edge', 
   const host = join(dir, 'components/host.ts');
   assert.ok(!dynamicEdges(graph).get(host), 'an example import inside a template is masked out');
 });
+
+test('a dynamic import inside a template ${} hole IS an edge (#918)', async () => {
+  // The import here is real CODE in an interpolation hole, not template text. The
+  // prior fully-blanked mask blanked the hole and missed it, so the gate 404'd
+  // the widget; the placeholder-based dynamic scan keeps the hole readable.
+  const dir = await makeApp({
+    'components/host.ts': `import { html } from '@webjsdev/core';
+      export const render = () => html\`<div>\${import('./widget.ts')}</div>\`;`,
+    'components/widget.ts': `export const widget = 1;`,
+  });
+  const graph = await buildModuleGraph(dir);
+  const host = join(dir, 'components/host.ts');
+  const widget = join(dir, 'components/widget.ts');
+
+  const servable = reachableFromEntries(graph, [host], dir);
+  assert.ok(servable.has(widget), 'the hole-position dynamic widget is servable (no 404)');
+  const dyn = dynamicEdges(graph);
+  assert.ok(dyn.get(host)?.has(widget), 'recorded as a dynamic edge');
+  assert.ok(!graph.get(host)?.has(widget), 'not a static edge (still lazy, not preloaded)');
+});
+
+test('a dynamic import inside a nested template hole IS an edge (#918)', async () => {
+  const dir = await makeApp({
+    'components/host.ts': `import { html } from '@webjsdev/core';
+      export const render = () => html\`<ul>\${html\`<li>\${import('./deep.ts')}</li>\`}</ul>\`;`,
+    'components/deep.ts': `export const deep = 1;`,
+  });
+  const graph = await buildModuleGraph(dir);
+  const host = join(dir, 'components/host.ts');
+  const deep = join(dir, 'components/deep.ts');
+  assert.ok(reachableFromEntries(graph, [host], dir).has(deep), 'nested-hole dynamic target is servable');
+  assert.ok(dynamicEdges(graph).get(host)?.has(deep), 'recorded as a dynamic edge');
+});

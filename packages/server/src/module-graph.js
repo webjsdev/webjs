@@ -14,7 +14,7 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve, dirname, extname, sep } from 'node:path';
-import { redactStringsAndTemplates } from './js-scan.js';
+import { redactStringsAndTemplates, redactToPlaceholders } from './js-scan.js';
 
 /**
  * Per-appDir cache of the parsed `package.json "imports"` subpath-alias map
@@ -522,11 +522,30 @@ async function parseFile(file, appDir, graph, seen, dynamic, bare) {
   }
   // Dynamic `import('…')` with a string-literal specifier (#751): a separate
   // edge class so the gate admits the lazily-loaded module (no 404) without
-  // preloading it. Same redaction-mask + alias rules as the static scan. A
-  // target already statically imported is not duplicated as a dynamic edge.
+  // preloading it. A target already statically imported is not duplicated as a
+  // dynamic edge.
+  //
+  // The static scan above runs over the FULLY-BLANKED mask, which also blanks
+  // the code inside `${...}` template holes. That drops a dynamic import written
+  // directly inside a hole (`html\`${import('./x.ts')}\``), which the AST counts
+  // as an edge but the mask scan did not, so the gate 404s a legitimately-loaded
+  // module (#918, the admit-fewer direction of the #753 family). So the dynamic
+  // scan instead runs over the PLACEHOLDER redaction (#634), which keeps `${...}`
+  // hole code readable (so a hole-position `import(...)` IS seen) while still
+  // tokenizing string / template-TEXT bodies to `__STR_<idx>__` and blanking
+  // comment / regex bodies (so a dynamic import written as literal TEXT is NOT
+  // an edge). The #753 swallow class stays closed because `DYNAMIC_IMPORT_RE` is
+  // tightly anchored on `import(`, never a lazy cross-delimiter span. The
+  // specifier surfaces as a `__STR_<idx>__` token, recovered from `literals`; a
+  // computed `import(expr)` still falls out (its char after the quote is not
+  // `,`/`)`), preserving the documented limitation.
+  const { redacted: holeAware, literals } = redactToPlaceholders(src);
   const dynDeps = new Set();
-  for (const m of masked.matchAll(DYNAMIC_IMPORT_RE)) {
-    const spec = src.slice(m.indices[1][0], m.indices[1][1]);
+  for (const m of holeAware.matchAll(DYNAMIC_IMPORT_RE)) {
+    const token = m[1];
+    const pm = /^__STR_(\d+)__$/.exec(token);
+    const spec = pm ? literals[Number(pm[1])] : token;
+    if (spec == null) continue;
     if (!spec.startsWith('.') && !spec.startsWith('/') && !expandImportAlias(spec, appDir)) continue;
     const resolved = resolveImport(spec, file, appDir);
     if (resolved && !deps.has(resolved)) dynDeps.add(resolved);

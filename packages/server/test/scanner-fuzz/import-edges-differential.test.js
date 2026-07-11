@@ -27,7 +27,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, relative, extname, join } from 'node:path';
 import ts from 'typescript';
-import { redactStringsAndTemplates } from '../../src/js-scan.js';
+import { redactStringsAndTemplates, redactToPlaceholders } from '../../src/js-scan.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../../../..');
@@ -42,10 +42,17 @@ const DYNAMIC_IMPORT_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*[,)]/gd;
 
 /**
  * The set of import/export-from/dynamic-import SPECIFIERS the lexer extracts,
- * mirroring module-graph.js `parseFile`: scan over the FULLY-BLANKED mask (so no
- * keyword can anchor inside any comment/string/template/regex literal) and read
- * each specifier from raw `src` via the match's group indices. Specifier-level
- * (pre resolution) so a divergence is a LEXER bug, not a path-resolution one.
+ * mirroring module-graph.js `parseFile`. Two scans, matching the source:
+ *  - STATIC (`import ... from` / `export ... from`): over the FULLY-BLANKED mask
+ *    (so no keyword can anchor inside any comment/string/template/regex literal),
+ *    reading each specifier from raw `src` via the match's group indices.
+ *  - DYNAMIC (`import('...')`): over the PLACEHOLDER redaction (#634), which keeps
+ *    `${...}` hole code readable so a dynamic import written inside a hole is seen
+ *    (#918), while string / template-TEXT bodies are tokenized to `__STR_<idx>__`
+ *    (recovered from `literals`) and comment / regex bodies blanked, so a dynamic
+ *    import written as literal TEXT is still not an edge.
+ * Specifier-level (pre resolution) so a divergence is a LEXER bug, not a
+ * path-resolution one.
  *
  * @param {string} src
  * @returns {Set<string>}
@@ -53,17 +60,22 @@ const DYNAMIC_IMPORT_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*[,)]/gd;
 function lexerSpecifiers(src) {
   const specs = new Set();
   const masked = redactStringsAndTemplates(src, true);
-  for (const re of [IMPORT_RE, EXPORT_FROM_RE, DYNAMIC_IMPORT_RE]) {
+  for (const re of [IMPORT_RE, EXPORT_FROM_RE]) {
     for (const m of masked.matchAll(re)) {
-      if (re !== DYNAMIC_IMPORT_RE) {
-        const lead = m[0];
-        const typeOnly =
-          /^(?:import|export)\s+type\s*[{*]/.test(lead) ||
-          (/^import\s+type\s+[A-Za-z_$]/.test(lead) && !/^import\s+type\s+from\b/.test(lead));
-        if (typeOnly) continue;
-      }
+      const lead = m[0];
+      const typeOnly =
+        /^(?:import|export)\s+type\s*[{*]/.test(lead) ||
+        (/^import\s+type\s+[A-Za-z_$]/.test(lead) && !/^import\s+type\s+from\b/.test(lead));
+      if (typeOnly) continue;
       specs.add(src.slice(m.indices[1][0], m.indices[1][1]));
     }
+  }
+  const { redacted: holeAware, literals } = redactToPlaceholders(src);
+  for (const m of holeAware.matchAll(DYNAMIC_IMPORT_RE)) {
+    const token = m[1];
+    const pm = /^__STR_(\d+)__$/.exec(token);
+    const spec = pm ? literals[Number(pm[1])] : token;
+    if (spec != null) specs.add(spec);
   }
   return specs;
 }
@@ -144,6 +156,9 @@ test('drift guard: the mirrored regexes still match module-graph.js', () => {
   assert.ok(src.includes(IMPORT_RE.source), 'IMPORT_RE drifted from module-graph.js');
   assert.ok(src.includes(EXPORT_FROM_RE.source), 'EXPORT_FROM_RE drifted from module-graph.js');
   assert.ok(src.includes(DYNAMIC_IMPORT_RE.source), 'DYNAMIC_IMPORT_RE drifted from module-graph.js');
+  // The dynamic scan must run over the placeholder redaction (hole-aware, #918),
+  // not the fully-blanked mask; the mirror above depends on it.
+  assert.ok(src.includes('redactToPlaceholders'), 'dynamic scan no longer uses redactToPlaceholders (mirror would diverge)');
 });
 
 // --- Adversarial fixtures: the exact edges the lexer's blind spots live in. ---
@@ -230,6 +245,44 @@ const FIXTURES = [
     expect: ['./lazy.ts', './real.ts'],
   },
   {
+    // #918: a dynamic `import()` inside a `${}` template hole is real code (an
+    // expression), so the AST counts it as an edge. The prior fully-blanked mask
+    // blanked hole code and missed it (the gate then 404s the module). The
+    // placeholder redaction keeps hole code readable, so it is now captured.
+    name: 'dynamic import inside a template ${} hole IS an edge (#918)',
+    file: 'f.ts',
+    src: 'import { html } from "@webjsdev/core";\n' +
+      'export const t = html`<div>${import(\'./widget.ts\')}</div>`;',
+    expect: ['@webjsdev/core', './widget.ts'],
+  },
+  {
+    // The negative twin: a dynamic import written as template TEXT (not inside a
+    // `${}` hole) is literal text, NOT code, so it must NOT be an edge. Proves the
+    // placeholder scan captures only genuine hole-position code, not the text.
+    name: 'dynamic import as template TEXT is NOT an edge',
+    file: 'f.ts',
+    src: 'import { html } from "@webjsdev/core";\n' +
+      "export const t = html`<pre>import('./phantom.ts')</pre>`;",
+    expect: ['@webjsdev/core'],
+  },
+  {
+    // Nested: a dynamic import inside a hole that is inside another template's
+    // hole must still be seen (the placeholder scan recurses holes as code).
+    name: 'dynamic import inside a nested template hole IS an edge',
+    file: 'f.ts',
+    src: 'import { html } from "@webjsdev/core";\n' +
+      "export const t = html`<div>${html`<span>${import('./deep.ts')}</span>`}</div>`;",
+    expect: ['@webjsdev/core', './deep.ts'],
+  },
+  {
+    // A dynamic import inside a STRING must stay non-edge (placeholder tokenizes
+    // the string body, so `import(` never appears in the scanned stream).
+    name: 'dynamic import written inside a string is NOT an edge',
+    file: 'f.ts',
+    src: `const doc = "import('./phantom.ts')";\nimport { real } from './real.ts';`,
+    expect: ['./real.ts'],
+  },
+  {
     // Guards the comment-mask fix (#753): a `//` inside a STRING must not be
     // treated as a comment, which would blank the following real import.
     name: 'a // inside a string is not a comment; the next real import survives',
@@ -292,14 +345,13 @@ for (const fx of FIXTURES) {
 // count is expected (e.g. a specifier a parser drops as unreachable that the
 // regex still sees).
 
-// Known, documented blind spot (NOT a swallow-class bug, and pre-existing): a
-// dynamic `import()` whose specifier sits INSIDE a template `${}` interpolation
-// hole is missed, because the edge scan runs over the fully-blanked mask which
-// blanks hole code too. Real source has zero instances (the corpus below is
-// green), so the "never miss" assertion holds for real code; the construct is
-// tracked separately in #918. A static `import`/`export ... from` cannot appear
-// in a `${}` hole (it is a statement, not an expression), so only that one
-// dynamic-in-hole shape is affected.
+// A dynamic `import()` whose specifier sits INSIDE a template `${}` hole is now
+// captured (#918): the dynamic scan runs over the placeholder redaction, which
+// keeps hole code readable. A static `import`/`export ... from` cannot appear in
+// a `${}` hole (it is a statement, not an expression), so the static scan stays
+// on the fully-blanked mask (the #753 swallow-class fix). The corpus below has
+// zero dynamic-in-hole instances in real source, but the fixtures above pin the
+// construct on both the lexer and the AST.
 const CORPUS_ROOTS = [
   'packages/core/src',
   'packages/server/src',
