@@ -159,12 +159,20 @@ test('saas scaffold uses Tier-1 helpers on native elements', async () => {
     }
     assertTier1HygieneOnFile(signup, 'app/signup/page.ts');
 
-    // Dashboard: uses card + button + badge (no inputs)
+    // Dashboard page: header-only card + badge (no inputs). buttonClass moved to
+    // the dashboard layout with the logout control (#904), so it is asserted there.
     const dash = await readFile(join(appDir, 'app', 'dashboard', 'page.ts'), 'utf8');
-    for (const fn of [...TIER1_HELPERS_CARD, ...TIER1_HELPERS_BUTTON, 'badgeClass']) {
+    for (const fn of ['cardClass', 'cardHeaderClass', 'cardTitleClass', 'cardDescriptionClass', 'badgeClass']) {
       assert.match(dash, new RegExp(`\\b${fn}\\b`), `dashboard.ts should call ${fn}()`);
     }
     assertTier1HygieneOnFile(dash, 'app/dashboard/page.ts');
+
+    // Dashboard layout: the logout control demonstrates buttonClass (#904).
+    const dashLayout = await readFile(join(appDir, 'app', 'dashboard', 'layout.ts'), 'utf8');
+    for (const fn of TIER1_HELPERS_BUTTON) {
+      assert.match(dashLayout, new RegExp(`\\b${fn}\\b`), `dashboard/layout.ts should call ${fn}()`);
+    }
+    assertTier1HygieneOnFile(dashLayout, 'app/dashboard/layout.ts');
 
     // Settings: uses card subparts only
     const settings = await readFile(join(appDir, 'app', 'dashboard', 'settings', 'page.ts'), 'utf8');
