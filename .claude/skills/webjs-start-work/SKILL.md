@@ -63,22 +63,27 @@ The user's request typically names an issue by number (e.g. `#112`) or by descri
 
    If not present, add it: `gh project item-add 1 --owner webjsdev --url https://github.com/webjsdev/webjs/issues/<N>`.
 
-3. **Verify we're on `main` with a clean tree and pull latest.** If the working tree is dirty or already on a feature branch, STOP and ask the user how to proceed. Do not silently abandon their work.
+3. **Sync `main` and pull latest.** Fetch the latest `main` so the new worktree (step 4) branches from current `main`. Do NOT switch the shared checkout's branch here (step 4 creates an isolated worktree instead, so you never disturb whatever branch the shared checkout is on, which may belong to another agent).
 
    ```sh
-   git status --porcelain    # must be empty
-   git branch --show-current # must be main
-   git pull origin main
+   git fetch origin main          # do not `git checkout main` in a shared checkout
    ```
 
-4. **Create the feature branch AND push it to origin immediately.** Pick the prefix from the issue labels: `enhancement` to `feat/`, `bug` to `fix/`, `documentation` to `docs/`, otherwise `chore/`. Build the slug from the issue title (lowercase, kebab-case, max 30 chars, drop conjunctions). The empty branch goes to GitHub right away so the work survives any local-machine failure even before the first commit.
+4. **Create the feature branch in a DEDICATED WORKTREE, and work there.** This is the single most important isolation rule: **never start a second task in the same working directory as another in-flight task.** Multiple agents (or multiple tasks) sharing ONE checkout collide, because a `git checkout` in one moves `HEAD` under the other, so the next commit lands on the WRONG branch. This has actually happened: a `chore: release` commit landed on an unrelated `feat/` branch (and its auto-generated changelog got contaminated with that branch's commits), because the shared checkout's `HEAD` had been switched by a concurrent agent. A git worktree gives each task its own directory and its own `HEAD`, and git enforces one-branch-per-worktree, so the collision becomes impossible.
+
+   Pick the prefix from the issue labels: `enhancement` to `feat/`, `bug` to `fix/`, `documentation` to `docs/`, otherwise `chore/`. Build the slug from the issue title (lowercase, kebab-case, max 30 chars, drop conjunctions). Create the worktree off the fetched `origin/main`, `cd` into it, and push the empty branch immediately (so the work survives a local-machine failure even before the first commit):
 
    ```sh
-   git checkout -b <prefix>/<slug>
+   git worktree add -b <prefix>/<slug> ../<repo>-<slug> origin/main
+   cd ../<repo>-<slug>
    git push -u origin <prefix>/<slug>
    ```
 
-   After this step, ALSO push after every subsequent commit (`git push` is cheap and is the safety net against losing work). Do not batch multiple commits before pushing.
+   Do ALL subsequent work for this task (edits, commits, tests, the PR) FROM this worktree, and push after every commit (`git push` is cheap and is the safety net against losing work; do not batch). After the PR merges, clean up: `cd` out, then `git worktree remove ../<repo>-<slug>`. In repos that ship the `cleanup-merged-worktree` PostToolUse hook (WebJs does), this cleanup happens automatically after any `gh pr merge` for a merged, clean worktree, so you usually only remove it by hand when you ran the merge from inside the worktree or left uncommitted work in it.
+
+   One edge to know: a JUST-created worktree whose branch has no commits yet points at the same commit as `main`, so the cleanup hook sees it as "merged, clean" and can remove it on the next Bash call. Make your first real commit promptly so the branch diverges, or (when you are the sole agent with no sibling worktrees) work on a plain branch in the primary checkout, which the cleanup hook never touches.
+
+   The ONLY case where a plain `git checkout -b <prefix>/<slug>` in the main checkout is acceptable is when you have positively confirmed you are the SOLE agent in this directory (no other in-flight task, no sibling worktrees mid-work). When in doubt, use a worktree; it is never wrong.
 
 5. **Move the project card from Todo to In progress.** Resolve the four IDs and call `item-edit`:
 
@@ -406,6 +411,26 @@ If a package has qualifying commits since its last `changelog/<pkg>/<version>.md
 5. Changelog: the pre-commit hook runs `scripts/backfill-changelog.js`, which parses `^(feat|fix|perf|breaking):` from commit subjects in the package's tree. **Squash-merge subjects are PR titles with no conventional prefix, so the generator finds nothing and the hook fails.** Hand-write `changelog/<pkg>/<version>.md` (match an existing file's frontmatter: `package`, `version`, `date`, `commit_count`; sections ordered Breaking, Features, Performance, Fixes; entries link the PR and the squash commit) and stage it; then the commit passes.
 6. Open the release PR. Note in the body that merging it adds the `changelog/**.md` files to `main`, which triggers `release.yml` to `npm publish` and cut GitHub Releases (idempotent).
 7. Run the self-review loop on it too (a release publishes to npm; a wrong bump level, missed package, or inaccurate changelog is worth catching). Merge is still user-gated.
+
+**Release-PR CI is mostly redundant.** A release PR changes ONLY version lines + generated `changelog/**.md` + the lockfile, so the slow checks (E2E ~9min, Browser) re-test source byte-identical to what already passed on `main` and carry no release-specific signal. The only release-specific failure modes are a lockfile desync (caught by the fast Unit/Build job's `npm ci`) and changelog/convention format (caught by the fast Conventions check). So once **Conventions + Build + Unit** are green it is safe to `gh pr merge <N> --squash --admin` without waiting on E2E/Browser. Branch protection requires all 5, so `--admin` is the sanctioned override here. Still user-gated on the merge approval.
+
+### Editor plugins owe a republish when intellisense changes (nvim is done HERE, by you)
+
+`@webjsdev/intellisense` is bundled by BOTH editor plugins, so any intellisense change means the editor bundles are stale and BOTH owe a republish. In the same release PR, bump `packages/editors/nvim/package.json` AND `packages/editors/vscode/package.json` (the hook generates their changelogs with `npm: false` frontmatter, so `scripts/publish-npm.js` skips the registry and `release.yml` only cuts a GitHub Release for them). To find whether they owe a bump, run the same "unreleased commits since last changelog" check against `packages/editors/nvim` and `packages/editors/vscode` (nvim carries a COMMITTED vendored intellisense copy, so a re-vendor commit shows up; vscode esbuilds at vsix time, so its src commits are the signal). Confirm the nvim vendor is current first: `node --test packages/editors/nvim/test/vendor-sync.test.mjs`.
+
+**`release.yml` does NOT publish the editor plugins (only npm packages).** After the release PR merges, the two are separate manual publishes:
+- **webjs.nvim (you do this, end to end).** A git subtree split of `packages/editors/nvim` force-pushed to the standalone mirror `webjsdev/webjs.nvim`. Run it from the shared checkout WITHOUT switching its branch (subtree split only writes a new branch ref, it does not touch HEAD or the working tree):
+  ```sh
+  git fetch origin main -q
+  git branch -D nvim-release-tmp 2>/dev/null || true
+  git subtree split --prefix=packages/editors/nvim origin/main -b nvim-release-tmp   # split FROM origin/main so the version bump is included
+  git show nvim-release-tmp:package.json | grep '"version"'                          # sanity: root is the plugin at the new version
+  git push --force git@github.com:webjsdev/webjs.nvim.git nvim-release-tmp:main       # the mirror is a mirror; force is expected
+  gh release create v<X.Y.Z> --repo webjsdev/webjs.nvim --title v<X.Y.Z> --notes "<what changed + which intellisense version it tracks>"
+  git branch -D nvim-release-tmp
+  ```
+  Needs push access to `webjsdev/webjs.nvim` (check `gh repo view webjsdev/webjs.nvim --json viewerPermission`) and SSH to GitHub (the monorepo origin is already SSH). `packages/editors/nvim/PUBLISHING.md` is the canonical reference.
+- **VS Code extension (owner does this).** Publishing to the VS Marketplace + Open VSX needs `vsce`/`ovsx` credentials you do not have, so prepare it (version bump + changelog land in the release PR) and hand the actual `vsce publish` to the user. Do not attempt it.
 
 ### Then: make sure the deployed Railway services actually picked it up
 
