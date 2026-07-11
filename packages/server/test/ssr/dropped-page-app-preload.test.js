@@ -23,7 +23,6 @@ import { createRequestHandler } from '../../src/dev.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CORE_SRC = resolve(__dirname, '../../../core/src');
 const HTML_URL = pathToFileURL(join(CORE_SRC, 'html.js')).toString();
-const COMPONENT_URL = pathToFileURL(join(CORE_SRC, 'component.js')).toString();
 const DAYJS_URL = 'https://ga.jspm.io/npm:dayjs@1.11.21/dayjs.min.js';
 
 let tmpRoot;
@@ -66,14 +65,6 @@ function preloadHrefs(html) {
   return [...html.matchAll(/<link rel="modulepreload"[^>]*href="([^"]+)"/g)].map((m) => m[1]);
 }
 
-// An INTERACTIVE component (a `@click`, so elision keeps it and it SHIPS).
-const WIDGET = `import { WebComponent } from ${JSON.stringify(COMPONENT_URL)};\n` +
-  `import { html } from ${JSON.stringify(HTML_URL)};\n` +
-  `export class XWidget extends WebComponent {\n` +
-  `  render() { return html\`<button @click=\${() => this.remove()}>hi</button>\`; }\n` +
-  `}\n` +
-  `XWidget.register('x-widget');\n`;
-
 test('a dropped page does not preload its SSR-only relative-helper app module (#780)', async () => {
   // `/` is an inert page whose module is dropped from the boot: it imports a
   // relative helper `./fmt.js` used ONLY to build the SSR string. `fmt.js` is a
@@ -107,25 +98,37 @@ test('a dropped page does not preload its SSR-only relative-helper app module (#
     "the dropped page's SSR-only relative helper is NOT preloaded (no over-fetch)");
 });
 
-test('a shipped component reached via an import-only page IS still preloaded (#780 under-fetch guard)', async () => {
-  // `/live`'s page is import-only (non-inert ONLY because it imports an
-  // interactive component): its own module is dropped, but the widget is
-  // substituted into the shipped set. The shipped-roots walk must still reach and
-  // preload the widget, so tightening the roots does not cause an under-fetch.
+test('a SHIPPED page still preloads its transitive relative-helper app modules (#780 under-fetch guard)', async () => {
+  // The under-fetch guard for the roots change: this is what would break if the
+  // moduleUrls -> absolute-path round-trip failed to match the graph's node keys
+  // and the walk from `shippedRoots` silently dropped a genuinely-shipped dep.
+  // A page that imports a pure relative helper `./fmt.js` (used as a value) SHIPS,
+  // so `page.js` is a boot module. `fmt.js` and its own helper `./deep.js` are
+  // NOT boot modules; their preloads come ONLY from `deduplicatedPreloads` walking
+  // the transitive closure from `shippedRoots` (the boot-module preload loop
+  // covers `page.js`, not its deps, and `deduplicatedPreloads` excludes
+  // `moduleUrls` via `seen`). So asserting the helper chain IS preloaded actually
+  // exercises the changed walk (a component here would not: an import-only page's
+  // component is preloaded by the separate boot-module loop regardless).
   const appDir = makeApp({
-    'app/widget.js': WIDGET,
-    'app/live/page.js':
+    'app/deep.js': `export const deep = (x) => x + 1;\n`,
+    'app/fmt.js': `import { deep } from './deep.js';\nexport const fmt = (x) => deep(x);\n`,
+    'app/page.js':
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
-      `import '../widget.js';\n` +
-      `export default () => html\`<x-widget></x-widget>\`;\n`,
+      `import { fmt } from './fmt.js';\n` +
+      `export default () => html\`<p>\${fmt(1)}</p>\`;\n`,
   });
   const app = await createRequestHandler({ appDir, dev: false });
   await app.warmup();
-  const html = await (await app.handle(new Request('http://x/live'))).text();
+  const html = await (await app.handle(new Request('http://x/'))).text();
   const hrefs = preloadHrefs(html);
 
-  assert.ok(!hrefs.some((h) => h.includes('/app/live/page.js')),
-    'the import-only page module is dropped from the boot');
-  assert.ok(hrefs.some((h) => h.includes('/app/widget.js')),
-    'the interactive widget shipped via the import-only page IS preloaded (no under-fetch)');
+  // Precondition: the page SHIPS (so its helper chain is a walk from a real root).
+  assert.ok(hrefs.some((h) => h.includes('/app/page.js')), 'the page ships (boot module)');
+  // The guard: the walk from shippedRoots reaches the shipped page's direct AND
+  // transitive relative helpers, so both keep their hint (no under-fetch).
+  assert.ok(hrefs.some((h) => h.includes('/app/fmt.js')),
+    'the shipped page\'s direct relative helper IS preloaded');
+  assert.ok(hrefs.some((h) => h.includes('/app/deep.js')),
+    'the shipped page\'s TRANSITIVE relative helper IS preloaded');
 });
