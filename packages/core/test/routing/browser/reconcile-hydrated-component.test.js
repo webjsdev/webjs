@@ -219,11 +219,12 @@ suite('Client router: reconcile does not corrupt a hydrated component (#906)', (
 
   test('re-projects element-bearing slotted content and keeps a nested component live (#908)', async () => {
     // The corruption-risk surface: the slotted content is not plain text but an
-    // ELEMENT list including a NESTED hydrated component. The reproject must
-    // update the changed sibling (real slot-level add/remove, exercising the
-    // slot runtime's childObserver + removeFromAssignments) AND leave the
-    // nested component's own render-owned subtree alone (no #906 regression
-    // through the nested path).
+    // ELEMENT list including a NESTED hydrated component. Both children are
+    // keyed, so reconcileChildren reuses them by identity and only the changed
+    // sibling text is updated. The point of this test is the nested path: the
+    // reproject must update the sibling AND leave the nested component's own
+    // render-owned subtree alone (no #906 regression through the nested path).
+    // The real slot-level add/remove path is covered by the next test.
     const innerTag = `rc-inner-${counter++}`;
     class RcInner extends WebComponent({ count: Number }) {
       render() {
@@ -317,6 +318,52 @@ suite('Client router: reconcile does not corrupt a hydrated component (#906)', (
     live.querySelector('button').click();
     await live.updateComplete;
     assert.equal(live.on, true, 'reactive state still updates after named-slot reproject');
+
+    live.remove();
+  });
+
+  test('re-projects a real slot add/remove and does not stale-revert on re-render (#908)', async () => {
+    // This drives the exact path the fix adds bookkeeping for: keyed items that
+    // are genuinely ADDED and REMOVED at the slot level (not just reused), so
+    // reconcileChildren removes an old node and inserts a new one. The host's
+    // async childObserver fires for those mutations; the fix keeps
+    // assignedByName/lastSnapshot in sync SYNCHRONOUSLY, so a later component
+    // re-render's projection pass must materialise the NEW set, not stale-revert
+    // to the old one.
+    const tag = `rc-list-${counter++}`;
+    class RcList extends WebComponent({ on: Boolean }) {
+      constructor() { super(); this.on = false; }
+      render() {
+        return html`<button @click=${() => { this.on = !this.on; }}>b</button><ul><slot></slot></ul>`;
+      }
+    }
+    customElements.define(tag, RcList);
+
+    const live = document.createElement(tag);
+    live.innerHTML = '<li data-key="a">A</li><li data-key="b">B</li>';
+    document.body.appendChild(live);
+    await live.updateComplete;
+    await Promise.resolve();
+    assert.equal(live.querySelector('slot').textContent, 'AB', 'initial list projection');
+
+    // Incoming removes A, keeps B, adds C: a genuine slot-level add + remove.
+    const incoming = document.createElement(tag);
+    incoming.innerHTML =
+      '<button>b</button><ul><slot data-webjs-light data-projection="actual">' +
+      '<li data-key="b">B</li><li data-key="c">C</li></slot></ul>';
+    _diffElementInPlace(live, incoming);
+
+    assert.equal(live.querySelector('slot').textContent, 'BC',
+      'slot add/remove re-projected (A removed, C added)');
+
+    // The async childObserver has since fired; a re-render must keep BC, proving
+    // assignedByName was synced to the new set (not the stale [A,B]).
+    await Promise.resolve();
+    live.querySelector('button').click();
+    await live.updateComplete;
+    await Promise.resolve();
+    assert.equal(live.querySelector('slot').textContent, 'BC',
+      're-render after a slot add/remove must not stale-revert to the old items');
 
     live.remove();
   });
