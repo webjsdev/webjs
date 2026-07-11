@@ -401,6 +401,57 @@ test('diffElementInPlace: different tag → replaceWith (no in-place reuse)', ()
     'mismatched tags swap out the element');
 });
 
+test('diffElementInPlace: does NOT recurse into a hydrated component (#906)', () => {
+  // A hydrated component owns its rendered subtree: the client renderer
+  // stashes a live instance on the host under Symbol.for('webjs.instance'),
+  // whose lit-html parts hold direct references to these child nodes.
+  // Reconciling into them would swap the nodes out and orphan the parts, so
+  // the component's next reactive update writes to detached nodes (a dead
+  // click after a soft nav). The router must leave the subtree alone.
+  const dst = document.createElement('like-button');
+  dst.setAttribute('count', '3');
+  dst.innerHTML = '<button>heart 7</button>'; // live: user clicked up to 7
+  const liveButton = dst.firstChild;
+  /** @type {any} */ (dst)[Symbol.for('webjs.instance')] = { strings: [], parts: [] };
+
+  const src = document.createElement('like-button');
+  src.setAttribute('count', '3');
+  src.innerHTML = '<button>heart 3</button>'; // incoming SSR: initial state
+
+  _diffEl(dst, src);
+
+  // The live rendered node is preserved by identity, its content untouched.
+  assert.equal(dst.firstChild, liveButton, 'component child kept its identity');
+  assert.equal(dst.textContent, 'heart 7', 'live component content not morphed');
+});
+
+test('diffElementInPlace: hydrated component still gets its attributes synced (#906)', () => {
+  // Opacity is only about CHILDREN. Attributes must still sync, because a
+  // reactive-property attribute change is how the router drives the
+  // component to re-render itself.
+  const dst = document.createElement('my-widget');
+  dst.setAttribute('label', 'old');
+  /** @type {any} */ (dst)[Symbol.for('webjs.instance')] = { strings: [], parts: [] };
+  const src = document.createElement('my-widget');
+  src.setAttribute('label', 'new');
+  _diffEl(dst, src);
+  assert.equal(dst.getAttribute('label'), 'new',
+    'reactive-prop attribute must still sync so the component re-renders itself');
+});
+
+test('diffElementInPlace: a custom element with NO live instance IS reconciled (#906)', () => {
+  // The guard keys on the live-instance symbol, not on the tag name: a
+  // not-yet-upgraded or display-only custom element has no parts to corrupt
+  // and must still reconcile normally.
+  const dst = document.createElement('like-button');
+  dst.innerHTML = '<button>heart 7</button>';
+  const src = document.createElement('like-button');
+  src.innerHTML = '<button>heart 3</button>';
+  _diffEl(dst, src);
+  assert.equal(dst.textContent, 'heart 3',
+    'a custom element with no client render reconciles like any element');
+});
+
 /* ====================================================================
  * reconcileChildren: keyed reuse + positional reuse
  * ==================================================================== */

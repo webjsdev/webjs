@@ -2666,10 +2666,40 @@ function diffElementInPlace(dst, src) {
   // The attribute version is skipped above; we deliberately do nothing
   // here so the user's typing / checking is never blown away.
 
+  // A hydrated component OWNS its rendered subtree. The client renderer
+  // stashes the live template instance (lit-html parts holding DIRECT
+  // references to the rendered nodes) on the host under
+  // `Symbol.for('webjs.instance')`. Recursing into those children would
+  // import/remove/reorder the very nodes the parts still point at, so the
+  // component's next reactive update would write into detached nodes and
+  // silently do nothing (a dead click after a soft nav, #906). Treat the
+  // component as opaque: the attribute sync above already drove any reactive
+  // property change through `attributeChangedCallback`, so the component
+  // re-renders ITSELF; the router must not touch its internals. This mirrors
+  // Turbo/morphdom, which leave custom elements alone by default.
+  if (isHydratedComponent(dst)) return;
+
   // Recurse into children: collect both sides, run reconcileSiblings on
   // them with synthetic boundary markers. Cheap implementation: use
   // virtual ranges instead of inserting real comment markers.
   reconcileChildren(dst, src);
+}
+
+/**
+ * True when `el` carries a live client-side render instance, i.e. a webjs
+ * component whose `render()` produced the current children and owns them via
+ * lit-html parts. The router must not reconcile INTO such an element (#906).
+ *
+ * Detected via the render-client instance symbol rather than a `customElements`
+ * lookup so it fires only for elements that have actually rendered client-side:
+ * a not-yet-upgraded or purely display-only custom element (no client render,
+ * no parts to corrupt) stays fully reconcilable.
+ *
+ * @param {Element} el
+ * @returns {boolean}
+ */
+function isHydratedComponent(el) {
+  return /** @type {any} */ (el)[Symbol.for('webjs.instance')] != null;
 }
 
 /**
