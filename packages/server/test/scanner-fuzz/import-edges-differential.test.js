@@ -157,8 +157,12 @@ test('drift guard: the mirrored regexes still match module-graph.js', () => {
   assert.ok(src.includes(EXPORT_FROM_RE.source), 'EXPORT_FROM_RE drifted from module-graph.js');
   assert.ok(src.includes(DYNAMIC_IMPORT_RE.source), 'DYNAMIC_IMPORT_RE drifted from module-graph.js');
   // The dynamic scan must run over the placeholder redaction (hole-aware, #918),
-  // not the fully-blanked mask; the mirror above depends on it.
-  assert.ok(src.includes('redactToPlaceholders'), 'dynamic scan no longer uses redactToPlaceholders (mirror would diverge)');
+  // NOT the fully-blanked mask; the mirror above depends on it. Assert the real
+  // call is present AND that the dynamic regex is no longer iterated over the
+  // blanked `masked` stream, so a revert to the pre-#918 scan trips this guard
+  // even though the (now-unused) import line would still satisfy a bare mention.
+  assert.ok(src.includes('redactToPlaceholders(src)'), 'dynamic scan no longer calls redactToPlaceholders(src) (mirror would diverge)');
+  assert.ok(!/masked\.matchAll\(DYNAMIC_IMPORT_RE\)/.test(src), 'dynamic scan reverted to the fully-blanked mask (misses ${} hole imports, #918)');
 });
 
 // --- Adversarial fixtures: the exact edges the lexer's blind spots live in. ---
