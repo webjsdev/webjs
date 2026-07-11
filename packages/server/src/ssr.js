@@ -194,25 +194,30 @@ export async function ssrPage(route, params, url, opts) {
     // enter the viewport.
     const { eager: eagerComponents, lazy: lazyComponents } =
       componentPreloads(suspenseCtx.usedComponents, opts.appDir, opts.elidableComponents);
+    // The walk roots for BOTH preload passes are the BOOT's actually-shipped
+    // module set (`moduleUrls`, which already drops inert page/layout modules and
+    // substitutes an import-only page with its components), NOT the raw route
+    // entries `[route.file, ...route.layouts]`. Rooting at the raw entries would
+    // walk a dropped page's SSR-only subtree (a direct import OR a relative
+    // helper) and hint a `modulepreload` for a module nothing that ships imports,
+    // an over-fetch (#780, the app-module analog of the #754 vendor over-fetch).
+    const shippedRoots = moduleUrls.map((u) =>
+      resolve(opts.appDir, u.startsWith('/') ? u.slice(1) : u));
     const preloads = deduplicatedPreloads(
       eagerComponents,
       moduleUrls,
       opts.moduleGraph,
-      [route.file, ...route.layouts],
+      shippedRoots,
       opts.appDir,
       opts.serverFiles,
       opts.elidableComponents,
     );
     // Vendor modulepreload (#754): flatten the npm CDN waterfall by hinting the
     // vendor URLs the page's SHIPPED modules actually import, fetched in parallel
-    // instead of discovered level by level. The walk roots are the BOOT's shipped
-    // module set (`moduleUrls`, which already drops inert page/layout modules and
-    // substitutes an import-only page with its components) plus the rendered
-    // components, so a vendor reached ONLY through a dropped module (a page's
-    // SSR-only direct import OR its SSR-only relative helper) is never preloaded
-    // (no over-fetch).
-    const shippedRoots = moduleUrls.map((u) =>
-      resolve(opts.appDir, u.startsWith('/') ? u.slice(1) : u));
+    // instead of discovered level by level. Same shipped-module roots as the
+    // app-module walk above, so a vendor reached ONLY through a dropped module
+    // (a page's SSR-only direct import OR its SSR-only relative helper) is never
+    // preloaded (no over-fetch).
     const vendorPreloads = vendorPreloadTargets(
       reachedVendorSpecifiers(
         opts.moduleGraph,
@@ -1581,10 +1586,24 @@ function componentPreloads(usedTags, appDir, elidable) {
  * Merge component preloads with transitive dependencies from the module
  * graph, then deduplicate against the already-imported module URLs.
  *
+ * The walk ROOTS (`entryFiles`) are the boot's actually-SHIPPED page/layout
+ * module set (the caller passes the absolute paths of `moduleUrls`, which
+ * already drops an inert page/layout and substitutes an import-only page with
+ * its components), NOT the raw `[route.file, ...route.layouts]` route entries.
+ * This matches `reachedVendorSpecifiers`' roots so the two walks stay
+ * consistent. Rooting at the shipped set means a module reached ONLY through a
+ * dropped page/layout (its SSR-only direct app import OR its SSR-only relative
+ * helper) is never a walk root's dep, so it gets no `modulepreload` hint (no
+ * over-fetch, #780). A module that also ships some other way (a component shared
+ * with a live route, or reached via an import-only page's substituted
+ * components) is still reached through a real shipped root, so its hint stays
+ * (no under-fetch). `seen = new Set(moduleUrls)` already excludes the shipped
+ * modules' own URLs; the shipped-roots change closes the TRANSITIVE gap.
+ *
  * @param {string[]} componentUrls  direct component module URLs
  * @param {string[]} moduleUrls     boot script imports (page + layouts)
  * @param {import('./module-graph.js').ModuleGraph | undefined} graph
- * @param {string[]} entryFiles     absolute paths of page + layout files
+ * @param {string[]} entryFiles     absolute paths of the SHIPPED page/layout modules (from `moduleUrls`)
  * @param {string} appDir
  * @param {Set<string>} [elidableComponents]  absolute paths to skip in the walk
  * @returns {string[]}
