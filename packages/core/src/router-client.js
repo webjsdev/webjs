@@ -2764,6 +2764,13 @@ function ownActualLightSlots(host) {
  * the live DOM and the incoming SSR HTML carry the same slot markers
  * (render-server emits them), so slots pair up by name + document order.
  *
+ * Scope: this handles the actual->actual case (the projected content changed).
+ * The two boundary transitions where a slot crosses between actual and fallback
+ * (content fully REMOVED, or ADDED where there was none) are deferred to #912:
+ * a slot's fallback is render-owned, so restoring or replacing it must go
+ * through the slot runtime, not a raw reconcile. Both are skipped here (see the
+ * two `continue`/iteration guards below), so neither can touch a lit-html part.
+ *
  * @param {Element} dst  Live hydrated component host.
  * @param {Element} src  Incoming SSR copy of the same component.
  */
@@ -2775,15 +2782,19 @@ function reprojectSlottedContent(dst, src) {
   const state = /** @type {any} */ (dst)[SLOT_STATE];
   if (!state) return;
 
+  // Iterate the LIVE component's actual slots only. A slot the live component
+  // currently shows as FALLBACK is absent here, so the fallback->actual
+  // direction (incoming ADDED content) is skipped: filling it would replace
+  // render-owned fallback nodes, which is the #906 hazard (deferred to #912).
   const liveSlots = ownActualLightSlots(dst);
   if (liveSlots.size === 0) return;
   const incSlots = ownActualLightSlots(src);
 
   for (const [name, liveSlot] of liveSlots) {
     const incSlot = incSlots.get(name);
-    // Incoming has no actual content for this slot (content removed, now
-    // showing fallback): leave the live projection as-is rather than risk
-    // touching render-owned fallback nodes. Conservative, no #906 regression.
+    // The actual->fallback direction: incoming REMOVED this slot's content (now
+    // shows fallback), so leave the live projection as-is rather than touch
+    // render-owned fallback nodes. Conservative, no #906 regression (#912).
     if (!incSlot) continue;
 
     // The slot's children are page-authored, so reconcileChildren is safe:
