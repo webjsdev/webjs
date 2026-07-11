@@ -291,6 +291,14 @@ for (const fx of FIXTURES) {
 // count is expected (e.g. a specifier a parser drops as unreachable that the
 // regex still sees).
 
+// Known, documented blind spot (NOT a swallow-class bug, and pre-existing): a
+// dynamic `import()` whose specifier sits INSIDE a template `${}` interpolation
+// hole is missed, because the edge scan runs over the fully-blanked mask which
+// blanks hole code too. Real source has zero instances (the corpus below is
+// green), so the "never miss" assertion holds for real code; the construct is
+// tracked separately in #918. A static `import`/`export ... from` cannot appear
+// in a `${}` hole (it is a statement, not an expression), so only that one
+// dynamic-in-hole shape is affected.
 const CORPUS_ROOTS = [
   'packages/core/src',
   'packages/server/src',
