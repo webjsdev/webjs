@@ -20,7 +20,7 @@ import { DOCS_URL, GH_URL, EXAMPLE_BLOG_URL, NEW_TAB } from '#lib/links.ts';
 export function generateMetadata(ctx: { url: string }) {
   const origin = new URL(ctx.url).origin;
   const image = `${origin}/public/og-why.png`;
-  const title = 'Why WebJs: the framework your AI agent already understands';
+  const title = 'Why WebJs - The Framework Your AI Agent Already Understands';
   const description =
     'WebJs serves the framework source and your app code exactly as written, so any AI model can read the whole stack from node_modules, reason about it, and debug it. No training data required, no single blessed model. Built on the web components, HTML, and JavaScript every model already knows.';
   return {
