@@ -5,8 +5,10 @@ import { dbGenerateTtyHint } from '../../lib/db-hints.js';
 test('dbGenerateTtyHint: surfaces the escape hatch when generate dead-ends off a non-TTY', () => {
   const hint = dbGenerateTtyHint('generate', 1, undefined);
   assert.ok(hint, 'a hint is returned');
-  assert.match(hint, /interactive terminal/, 'names the interactive-terminal fix');
+  assert.match(hint, /rename prompt/, 'frames the rename-prompt case conditionally');
+  assert.match(hint, /interactive\s+terminal/, 'names the interactive-terminal fix');
   assert.match(hint, /db\/migrations/, 'names the reset-initial-migration escape');
+  assert.match(hint, /error above/, 'defers other failures to the real error, not a rename misdiagnosis');
 });
 
 test('dbGenerateTtyHint: stays silent on the paths that do NOT dead-end', () => {

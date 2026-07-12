@@ -19,6 +19,39 @@ test('stripPlaceholderMarkers: removes only the marker comment lines, keeps code
   assert.match(content, /return html/, 'code is preserved');
 });
 
+test('stripPlaceholderMarkers: removes a WHOLE multi-line HTML comment marker, no orphaned text', () => {
+  // The layout footer marker is a 4-line <!-- ... --> block. Removing only the
+  // token line would orphan lines 2-4 and a dangling --> as raw text inside the
+  // html`` template. Regression guard for that corruption.
+  const src = [
+    '      </main>',
+    `      <!-- ${MARKER}. This "Built with" footer is SCAFFOLD`,
+    '           branding, not your app. REMOVE it before shipping.',
+    '           webjs check fails while the marker remains. -->',
+    '      <footer>real footer</footer>',
+  ].join('\n');
+  const { content, removed } = stripPlaceholderMarkers(src);
+  assert.equal(removed, 3, 'the whole 3-line comment block is removed');
+  assert.doesNotMatch(content, new RegExp(MARKER), 'token gone');
+  assert.doesNotMatch(content, /branding, not your app/, 'no orphaned prose survives');
+  assert.doesNotMatch(content, /-->/, 'no dangling comment terminator');
+  assert.match(content, /<\/main>/, 'surrounding markup kept');
+  assert.match(content, /<footer>real footer<\/footer>/, 'the real footer is kept');
+});
+
+test('stripPlaceholderMarkers: removes a wrapped multi-line // marker, no orphaned prose', () => {
+  const src = [
+    `// ${MARKER}. Keep and adapt it, or prune it (delete this`,
+    '// file), then delete this marker line. webjs check fails while the marker',
+    '// remains.',
+    "export default function Page() { return null; }",
+  ].join('\n');
+  const { content, removed } = stripPlaceholderMarkers(src);
+  assert.equal(removed, 3, 'all three // comment lines removed');
+  assert.doesNotMatch(content, /Keep and adapt|marker line|remains/, 'no orphaned // prose');
+  assert.match(content, /export default function Page/, 'code kept');
+});
+
 test('stripPlaceholderMarkers: a file with no marker is untouched (counterfactual)', () => {
   const src = "export const x = 1;\nexport const y = 2;\n";
   const { content, removed } = stripPlaceholderMarkers(src);

@@ -15,17 +15,45 @@ export const MARKER = 'webjs-scaffold-' + 'placeholder';
 const SKIP_DIRS = new Set(['node_modules', '.git', '.webjs', 'graphify-out', 'dist']);
 
 /**
- * Pure: drop every line carrying the marker token. The token only ever appears
- * inside dedicated one-line `//` marker comments (the check depends on that), so
- * removing a token-carrying line can never delete real code.
+ * Pure: drop the whole marker COMMENT that carries the token, not just the token
+ * line. The token never shares a line with code, but the marker comment is not
+ * always one line: the layout footer marker is a multi-line `<!-- ... -->` HTML
+ * comment, and several metadata markers wrap across consecutive `//` lines.
+ * Removing only the token line would orphan the rest (raw text and a dangling
+ * `-->` inside a template, or leftover `//` prose), so extend to the full
+ * comment. Both marker styles start on the token line, so extend downward.
  * @param {string} content
  * @param {string} [marker]
  * @returns {{ content: string, removed: number }}
  */
 export function stripPlaceholderMarkers(content, marker = MARKER) {
   const lines = content.split('\n');
-  const kept = lines.filter((line) => !line.includes(marker));
-  return { content: kept.join('\n'), removed: lines.length - kept.length };
+  const isLineComment = (line) => /^\s*\/\//.test(line);
+  const kept = [];
+  let removed = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.includes(marker)) { kept.push(line); continue; }
+    if (line.includes('<!--') && !line.includes('-->')) {
+      // Multi-line HTML comment (the "Built with" footer): drop through the
+      // closing `-->` so no orphaned text or dangling terminator survives.
+      let j = i;
+      while (j < lines.length && !lines[j].includes('-->')) j++;
+      removed += j - i + 1;
+      i = j;
+    } else if (isLineComment(line)) {
+      // A `//` marker comment, possibly wrapped across consecutive `//` lines.
+      // Drop the token line plus its contiguous `//` continuation.
+      let j = i + 1;
+      while (j < lines.length && isLineComment(lines[j])) j++;
+      removed += j - i;
+      i = j - 1;
+    } else {
+      // A self-closed `<!-- ... -->` on one line, or any other single-line form.
+      removed += 1;
+    }
+  }
+  return { content: kept.join('\n'), removed };
 }
 
 /**
