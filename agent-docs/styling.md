@@ -298,6 +298,18 @@ light-DOM component adds a tag-prefixed rule `my-badge { display: inline }`, a
 shadow-DOM component sets `:host { display: inline }` in `static styles`. Both
 beat the framework default.
 
+**Size the HOST, not just an inner wrapper.** The host custom element is the box
+the parent lays out. `display: block` (above) stops the inline-collapse, but a
+host that is a flex/grid ITEM in a centering parent (`flex justify-center`, `grid
+place-items-center`) is still sized to its content unless it carries width
+itself. So put the sizing classes on the host, not only on an inner `<div>`. In a
+light-DOM component the host is the custom element rendering the template, so give
+it `w-full max-w-[...]` (or render your outermost element AS the sized box); an
+inner `<div class="w-full">` alone resolves `w-full` against a collapsed host and
+the whole component shrinks. Symptom: a board or card that renders tiny even
+though its inner grid says `w-full max-w-[400px]`. Fix: move `w-full
+max-w-[400px]` onto the host.
+
 **An even grid uses `1fr` tracks, never `auto` rows.** The reflow bug (a cell
 grows when it gets content while the others shrink) comes from `auto`-sized grid
 rows: the row with content is taller. Size the tracks explicitly so every cell is

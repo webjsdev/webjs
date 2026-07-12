@@ -12,8 +12,17 @@ column, a footer), then write the layout your app actually needs in
 all? Does a dashboard want a sidebar instead? Does a landing page want a
 full-bleed hero? Keep only what fits.
 
-You do not import from this file. Copy the pieces you want into `app/layout.ts`'s
-returned template, inside the `<main>` (or replacing it).
+> **This is ONE example, not a template to reproduce.** Reproducing this exact
+> header (a slim bar with a mark on the left and a theme toggle on the right)
+> just recreates the old scaffold look under a new name. It is here to show the
+> mechanics (how a header, nav, theme toggle, or footer are wired), not the
+> design. Design a layout that fits what THIS app is: a game might be a
+> full-bleed centered stage with no header; a tool might have a compact command
+> bar; a reader might have a wide sidebar. Take the mechanics, invent the form.
+
+You do not import from this file. Copy the mechanics you want into
+`app/layout.ts`'s returned template, inside the `<main>` (or replacing it), and
+restyle them into your own design.
 
 ## A complete worked layout
 

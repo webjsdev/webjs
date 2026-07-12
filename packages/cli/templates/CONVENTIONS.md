@@ -393,6 +393,14 @@ When the user asks the agent to build their actual app:
    they reach, and use custom CSS only for what utilities cannot express (@theme
    tokens, @keyframes, scrollbar, complex color-mix or gradients). The `api`
    template has no UI, so this does not apply there.
+   **Size the component HOST, not just an inner wrapper.** A component's host
+   custom element is the box its parent lays out. Hosts default to
+   `display: block`, but a host that is a flex/grid item in a centering parent
+   (`flex justify-center`, `grid place-items-center`) is still sized to its
+   content unless it carries width itself. Put `w-full max-w-[...]` on the host,
+   not only on an inner `<div>` (an inner `w-full` resolves against a collapsed
+   host and the whole component renders tiny). If a board or card renders small
+   despite `w-full max-w-[400px]` on its inner grid, move that sizing to the host.
    **Definition of done (design gate):** a UI app is NOT finished until you
    have (a) given it a design of its own (layout AND palette) and removed the
    scaffold shell, and (b) run it and PLAYED THROUGH every state in a browser
