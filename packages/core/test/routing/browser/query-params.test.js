@@ -135,8 +135,9 @@ suite('Client router: query-string preservation (#639)', () => {
         '<form method="get" action="/qp/search?old=1">' +
         '<input name="q" value="shoes"><button type="submit">go</button></form>';
       container.querySelector('button').click();
-      await tick();
-      const fetched = calls.find((c) => c.url.includes('/qp/search'));
+      // Poll for the routed fetch (more robust than a fixed delay on a slow runner).
+      let fetched;
+      for (let i = 0; i < 40 && !(fetched = calls.find((c) => c.url.includes('/qp/search'))); i++) await tick();
       assert.ok(fetched, 'the GET form submission was routed (fetched)');
       assert.ok(fetched.url.includes('q=shoes'), 'the form field is in the submitted query');
       assert.ok(!fetched.url.includes('old=1'), "the action's own query (?old=1) is replaced, not merged");
