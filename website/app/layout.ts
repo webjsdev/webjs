@@ -60,9 +60,70 @@ export function generateMetadata(ctx: { url: string }) {
 const navLink = 'text-fg-muted no-underline font-medium text-sm px-[11px] py-2 rounded-lg transition-colors duration-[140ms] hover:text-fg hover:bg-bg-subtle';
 const panelLink = 'text-fg-muted no-underline font-medium text-sm px-3 py-[10px] rounded-[9px] hover:text-fg hover:bg-bg-subtle';
 
-export default function RootLayout({ children }: { children: unknown }) {
+export default function RootLayout({ children, url }: { children: unknown; url?: string | URL }) {
   const nonce = cspNonce();
+  // #936 fetch-capture diagnostic. Inert unless the entry page loads with
+  // ?diag=capture. Records the RAW bytes of each client-router nav fetch (an
+  // on-device proxy stripping HTML comments from fetch responses, but not from
+  // page loads, is the leading hypothesis) and shows them on a badge.
+  let diagOn = false;
+  try { diagOn = new URL(String(url ?? ''), 'http://x').searchParams.get('diag') === 'capture'; }
+  catch { /* no url */ }
   return html`
+    ${diagOn ? html`<script nonce="${nonce}">
+      (function () {
+        var last = null;
+        var of = window.fetch;
+        window.fetch = function (input, init) {
+          init = init || {};
+          var isRouter = false;
+          try {
+            var h = init.headers;
+            if (h) {
+              if (typeof h.get === 'function') isRouter = !!h.get('x-webjs-router');
+              else isRouter = !!(h['x-webjs-router'] || h['X-Webjs-Router']);
+            }
+          } catch (_) {}
+          var p = of.apply(this, arguments);
+          if (isRouter) {
+            p.then(function (resp) {
+              try {
+                resp.clone().text().then(function (t) {
+                  last = {
+                    len: t.length,
+                    doctype: /^\s*<!doctype/i.test(t),
+                    head: /<head[ >]/i.test(t),
+                    o: (t.match(/<!--wj:children:/g) || []).length,
+                    c: (t.match(/<!--\/wj:children-->/g) || []).length,
+                    nav: /site-top/.test(t),
+                    sheet: /tailwind\.css/.test(t),
+                    enc: resp.headers.get('content-encoding') || '-',
+                  };
+                  badge();
+                });
+              } catch (_) {}
+            });
+          }
+          return p;
+        };
+        function badge() {
+          var b = document.getElementById('wj-cap');
+          if (!b) {
+            b = document.createElement('div');
+            b.id = 'wj-cap';
+            b.style.cssText = 'position:fixed;left:6px;bottom:6px;z-index:99999;background:#111;color:#fff;font:600 11px/1.4 system-ui,sans-serif;padding:6px 8px;border-radius:8px;opacity:.92;pointer-events:none;max-width:88vw';
+            (document.body || document.documentElement).appendChild(b);
+          }
+          b.textContent = last
+            ? 'nav-fetch: len=' + last.len + ' doctype=' + last.doctype + ' head=' + last.head
+              + ' | markers o' + last.o + '/c' + last.c + ' nav=' + last.nav + ' sheet=' + last.sheet
+              + ' | enc=' + last.enc
+            : 'diag:capture ready. tap a nav link.';
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', badge);
+        else badge();
+      })();
+    </script>` : ''}
     <link rel="icon" href="/public/favicon.svg" type="image/svg+xml" sizes="any">
     <link rel="icon" href="/public/favicon.png" type="image/png" sizes="32x32">
     <link rel="apple-touch-icon" href="/public/favicon.png">
