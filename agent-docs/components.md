@@ -482,8 +482,17 @@ leaves shadow hosts alone. A shadow component sets its host display the idiomati
 way, `:host { display: block }` (or `flex` / `grid` / `inline`) in `static
 styles`, and because the framework does not mark it, that `:host` is fully
 respected. Set `:host { display: block }` for a shadow component used as a block
-container (an unstyled shadow host stays `display: inline`). See
-`agent-docs/styling.md` for the even-grid / no-reflow layout recipes.
+container (an unstyled shadow host stays `display: inline`).
+
+**Size the HOST, not just an inner wrapper.** The host custom element is the box
+its parent lays out. `display: block` stops the inline-collapse, but a host that
+is a flex/grid ITEM in a centering parent (`flex justify-center`, `grid
+place-items-center`) is still sized to its content unless it carries width
+itself. So put `w-full max-w-[...]` on the host (the render root), not only on an
+inner `<div>` (an inner `w-full` resolves against a collapsed host and the whole
+component renders tiny). Symptom: a board or card renders small even though its
+inner grid says `w-full max-w-[400px]`. See `agent-docs/styling.md` for the
+even-grid / no-reflow layout recipes.
 
 ### Class-prefix rule for light-DOM components
 
