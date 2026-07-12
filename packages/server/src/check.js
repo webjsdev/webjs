@@ -6,8 +6,9 @@ import {
   extractWebComponentClassBodies,
   matchClosingBrace,
   parsePropEntries,
+  maskComments,
 } from './js-scan.js';
-import { buildModuleGraph, transitiveDeps } from './module-graph.js';
+import { buildModuleGraph, transitiveDeps, resolveImport } from './module-graph.js';
 import { scanComponents } from './component-scanner.js';
 import { buildRouteTable } from './router.js';
 import { analyzeElision } from './component-elision.js';
@@ -143,6 +144,11 @@ export const RULES = [
     name: 'no-interpolation-in-raw-text-element',
     description:
       'Flags a template interpolation (`${...}`) placed as a child of a `<style>` or `<script>` element inside a COMPONENT `html` template. Raw-text elements are an SSR/client asymmetry trap: the server renderer emits the interpolated content, but the client renderer drops it (a raw-text hole is a `noop`, since the compile cache is keyed on the static strings), so the element renders correctly on the server and then wipes to empty on hydration. Scoped to components (files with a `WebComponent` class), which hydrate; pages and layouts render server-only and never hydrate, so a page interpolating a `css` result into a `<style>` is a legitimate pattern and is not flagged. In a component, author scoped CSS with `static styles` (shadow DOM) or a `css` template. Found dogfooding a tic-tac-toe app (#845): a `<style>${STYLE}</style>` painted at SSR then vanished on hydrate.',
+  },
+  {
+    name: 'no-missing-local-import',
+    description:
+      'Flags a NAMED value import of a symbol that a resolvable app-internal module does not export (`import { todos } from \'#db/schema.server.ts\'` when the schema no longer exports `todos`). The binding is `undefined` at runtime and crashes on first use, yet the rest of `webjs check` (elision-based, it does not compile types) misses it, so a schema swap that orphans a gallery module can pass `check` while `typecheck` is red. This is the runtime-crash class `check` exists to catch, filling that gap so an agent running only `check` cannot ship a broken import. Deliberately conservative to never false-positive on a valid app: it only inspects app-internal specifiers (a relative `./` path or a `#` alias) that resolve to a file in the app, only NAMED value imports (a `type` import, a default import, a namespace import, and any bare / `node:` / npm-package specifier are skipped), and it treats a module as UNKNOWABLE (never flags imports from it) when its exports are not fully enumerable: a `export * from ...` star re-export, a destructuring `export const { a } = ...`, or a multi-declarator `export const a = .., b = ..`. It reads names from `export function/class/const/let/var/type/interface/enum` and from `export { a, b as c }` / `export { x } from ...` clauses (the alias after `as` is the exported name). A re-export barrel therefore resolves correctly, and a `\'use server\'` action file exports its function names normally. Found dogfooding a tic-tac-toe app: dropping the example `todos` table left a gallery module importing it, green under `check` but red under `typecheck`.',
   },
 ];
 
@@ -377,6 +383,63 @@ function findBrowserMemberUses(code) {
     out.push({ member: key, kind: 'an HTMLElement member' });
   }
   return out;
+}
+
+/**
+ * Enumerate a module's provable named exports from its redacted `scan`, for the
+ * `no-missing-local-import` rule. Returns `null` when the export list is NOT
+ * fully enumerable (a `export *` star re-export, a destructuring export, or a
+ * multi-declarator `export const a = .., b = ..`), which tells the rule to treat
+ * the module as unknowable and flag nothing from it. Otherwise returns the set
+ * of exported names (the alias after `as` for a clause, and type/interface/enum
+ * names too, so a value import of a type is not falsely flagged; tsc owns that).
+ * @param {string} scan  string/template/comment-redacted source
+ * @returns {Set<string>|null}
+ */
+function enumerableExports(scan) {
+  // Unknowable export shapes: bail so the rule never false-positives.
+  if (/\bexport\s*\*/.test(scan)) return null;                       // export * from
+  if (/\bexport\s+(?:const|let|var)\s*[{[]/.test(scan)) return null; // destructuring export
+  if (/\bexport\s+(?:const|let|var)\b[^;\n=]*,[^;\n]*=/.test(scan)) return null; // multi-declarator
+  const names = new Set();
+  let m;
+  const collect = (re) => { while ((m = re.exec(scan))) names.add(m[1]); };
+  collect(/\bexport\s+(?:async\s+)?function\s*\*?\s+([A-Za-z_$][\w$]*)/g);
+  collect(/\bexport\s+(?:abstract\s+)?class\s+([A-Za-z_$][\w$]*)/g);
+  collect(/\bexport\s+(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g);
+  collect(/\bexport\s+(?:type|interface|enum|namespace)\s+([A-Za-z_$][\w$]*)/g);
+  // `export { a, b as c }` / `export type { ... }` / `export { x } from '...'`:
+  // the EXPORTED name is the alias after `as`, else the bare name.
+  const reClause = /\bexport\s+(?:type\s+)?\{([^}]*)\}/g;
+  while ((m = reClause.exec(scan))) {
+    for (let part of m[1].split(',')) {
+      part = part.trim().replace(/^type\s+/, '');
+      if (!part) continue;
+      const name = part.split(/\s+as\s+/).pop().trim();
+      if (/^[A-Za-z_$][\w$]*$/.test(name)) names.add(name);
+    }
+  }
+  return names;
+}
+
+/**
+ * The NAMED VALUE names a single `import { ... } from` clause pulls in, for the
+ * `no-missing-local-import` rule. Returns `null` for an `import type { ... }`
+ * (all type, skip), and `[]` for a default / namespace / side-effect import
+ * (nothing named to verify). A per-specifier inline `type` marker is dropped,
+ * and for `a as b` the IMPORTED name is `a` (what the target must export).
+ * @param {string} clause  the text between `import` and `from`
+ * @returns {string[]|null}
+ */
+function importedValueNames(clause) {
+  if (/^\s*type\b/.test(clause)) return null; // import type { ... }
+  const brace = clause.match(/\{([^}]*)\}/);
+  if (!brace) return []; // default / namespace only
+  return brace[1].split(',')
+    .map((s) => s.trim())
+    .filter((s) => s && !/^type\s/.test(s))
+    .map((s) => s.split(/\s+as\s+/)[0].trim())
+    .filter((n) => /^[A-Za-z_$][\w$]*$/.test(n));
 }
 
 /**
@@ -1124,6 +1187,48 @@ export async function checkConventions(appDir) {
   // `await auth()` (import from `lib/auth.server.ts`) AND imports a component
   // directly, so it is not elided and ships the server import.
   await checkServerImportInBrowserModule(appDir, violations);
+
+  // --- Rule: no-missing-local-import ---
+  // A named value import of a symbol an app-internal module does not export is a
+  // runtime crash (the binding is undefined) that the elision-based checks miss,
+  // so `check` can stay green while `typecheck` is red (a dropped schema table
+  // orphaning a gallery module is the motivating dogfood case). Conservative by
+  // construction: only app-internal specifiers resolving to a known app file,
+  // only named value imports, and only when the target's exports are fully
+  // enumerable (see enumerableExports / importedValueNames).
+  {
+    const exportsByAbs = new Map();
+    for (const f of files) exportsByAbs.set(f.abs, enumerableExports(f.scan));
+    // `import <clause> from '<spec>'`. `import\s+` excludes `import.meta` and a
+    // dynamic `import(`; a side-effect `import '...'` has no clause and no match.
+    // Match on a COMMENT-masked view (not the string-redacted `scan`): comments
+    // are blanked so a commented-out import is never flagged, but the specifier
+    // string is preserved so we can read and resolve it.
+    const reImport = /\bimport\s+([\s\S]*?)\bfrom\s*['"]([^'"]+)['"]/g;
+    for (const { abs, rel, content } of files) {
+      const masked = maskComments(content);
+      reImport.lastIndex = 0;
+      let m;
+      while ((m = reImport.exec(masked))) {
+        const spec = m[2];
+        if (!/^(?:\.|#)/.test(spec)) continue; // app-internal only (relative or #alias)
+        const names = importedValueNames(m[1]);
+        if (!names || names.length === 0) continue;
+        const target = resolveImport(spec, abs, appDir);
+        const exp = exportsByAbs.get(target);
+        if (exp == null) continue; // not an app file, or exports not enumerable
+        for (const name of names) {
+          if (exp.has(name)) continue;
+          violations.push({
+            rule: 'no-missing-local-import',
+            file: rel,
+            message: `Imports \`${name}\` from \`${spec}\`, but that module does not export \`${name}\`. The binding is undefined at runtime and crashes on first use (often a renamed or removed export, e.g. a dropped schema table).`,
+            fix: `Add \`${name}\` to \`${spec}\`, correct the imported name, or remove the import.`,
+          });
+        }
+      }
+    }
+  }
 
   return violations;
 }

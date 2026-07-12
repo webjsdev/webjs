@@ -1,0 +1,99 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+
+import { checkConventions, RULES } from '../../src/check.js';
+
+/**
+ * Tests for `no-missing-local-import`: a NAMED value import of a symbol a
+ * resolvable app-internal module does not export is a runtime crash the
+ * elision-based checks miss. The rule fills that gap while staying conservative
+ * enough to never false-positive on a valid app (the whole point of it).
+ */
+const RULE = 'no-missing-local-import';
+
+async function makeApp(files) {
+  const dir = await mkdtemp(join(tmpdir(), 'webjs-missing-import-'));
+  for (const [rel, contents] of Object.entries(files)) {
+    const abs = join(dir, rel);
+    await mkdir(abs.slice(0, abs.lastIndexOf('/')), { recursive: true });
+    await writeFile(abs, contents);
+  }
+  return dir;
+}
+const hits = (v) => v.filter((x) => x.rule === RULE);
+
+test('the rule is registered', () => {
+  assert.ok(RULES.some((r) => r.name === RULE), 'RULES lists no-missing-local-import');
+});
+
+test('flags a named import of a symbol the target does not export (the dropped-table case)', async () => {
+  const dir = await makeApp({
+    'db/schema.server.ts': `export const users = table('users', {});\nexport type User = 1;\n`,
+    'modules/todo/create.server.ts': `import { todos } from '../../db/schema.server.ts';\nexport function make() { return todos; }\n`,
+  });
+  const v = hits(await checkConventions(dir));
+  assert.equal(v.length, 1, 'exactly one violation');
+  assert.match(v[0].file, /create\.server\.ts/);
+  assert.match(v[0].message, /does not export `todos`/);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('does NOT flag when the target DOES export the name (counterfactual)', async () => {
+  const dir = await makeApp({
+    'db/schema.server.ts': `export const users = table('users', {});\nexport const todos = table('todos', {});\n`,
+    'modules/todo/create.server.ts': `import { todos, users } from '../../db/schema.server.ts';\nexport function m() { return [todos, users]; }\n`,
+  });
+  assert.equal(hits(await checkConventions(dir)).length, 0);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('is silent on a type import, a default/namespace import, and a bare specifier', async () => {
+  const dir = await makeApp({
+    'db/schema.server.ts': `export const users = table('users', {});\n`,
+    'lib/x.ts': `export default 1;\nexport const y = 2;\n`,
+    // type import of a missing name -> tsc's job, not this rule
+    'a.ts': `import type { Gone } from './db/schema.server.ts';\nexport const a: Gone = 1;\n`,
+    // default + namespace import -> no named value to verify
+    'b.ts': `import def, * as ns from './lib/x.ts';\nexport const b = [def, ns];\n`,
+    // bare npm specifier -> not app-internal, skipped
+    'c.ts': `import { anything } from 'some-pkg';\nexport const c = anything;\n`,
+  });
+  assert.equal(hits(await checkConventions(dir)).length, 0);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('resolves a re-export barrel (export { X } from) and the `as` alias', async () => {
+  const dir = await makeApp({
+    'components/button.ts': `export const Button = 1;\n`,
+    'components/index.ts': `export { Button } from './button.ts';\nexport { Button as PrimaryButton } from './button.ts';\n`,
+    'ok.ts': `import { Button, PrimaryButton } from './components/index.ts';\nexport const u = [Button, PrimaryButton];\n`,
+    'bad.ts': `import { Ghost } from './components/index.ts';\nexport const g = Ghost;\n`,
+  });
+  const v = hits(await checkConventions(dir));
+  assert.equal(v.length, 1, 'only the truly-missing Ghost is flagged');
+  assert.match(v[0].file, /bad\.ts/);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('bails (flags nothing) when the target has a star re-export or destructuring export', async () => {
+  const dir = await makeApp({
+    'star.ts': `export * from './somewhere.ts';\n`,
+    'destructure.ts': `export const { a, b } = obj;\n`,
+    'i1.ts': `import { whatever } from './star.ts';\nexport const x = whatever;\n`,
+    'i2.ts': `import { c } from './destructure.ts';\nexport const y = c;\n`,
+  });
+  assert.equal(hits(await checkConventions(dir)).length, 0, 'unknowable exports -> no flag');
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('does NOT flag a commented-out import of a missing name', async () => {
+  const dir = await makeApp({
+    'db/schema.server.ts': `export const users = table('users', {});\n`,
+    'x.ts': `// import { todos } from './db/schema.server.ts';\nexport const x = 1;\n`,
+  });
+  assert.equal(hits(await checkConventions(dir)).length, 0);
+  await rm(dir, { recursive: true, force: true });
+});
