@@ -33,6 +33,28 @@ Some packages will only have one or two of these kinds (e.g.
 a kind subfolder when there's at least one test of that kind.
 Empty `e2e/` folders are anti-patterns.
 
+**Assert only on what the layer needs (#777).** A block that inspects only the
+HTTP response, the SSR HTML string, headers, or the importmap does NOT need a
+browser: put it in the fast `node --test` integration layer, not the Puppeteer
+e2e suite (each browser navigation is 10-50x slower AND the e2e suite runs twice,
+Node + Bun, so a demotable block is paid four times over). The blog's non-browser
+blocks live in `test/integration/blog-http.test.mjs`, which boots the blog ONCE
+in-process via `createRequestHandler({ dev: false })` and asserts over
+`handle(new Request(...))` (no spawn, no port). It is denylisted from the Bun
+matrix (the cold blog boot exceeds `bun test`'s 5s, same as `preload-subset`).
+Keep in the Puppeteer suite only blocks that genuinely need a DOM: `page.evaluate`
+of live state, hydration, client-router nav, slots, view transitions, streaming
+into the DOM, custom-element upgrade.
+
+**Browser tests import the shared assert helper (#777).** A browser test runs in
+a real browser where `node:assert` does not exist, so it imports the plain-object
+`assert` from `test/browser-assert.js` (a superset of `ok` / `equal` /
+`deepEqual` / `strictEqual` / `notStrictEqual` / `notEqual` / `match` / `isTrue` /
+`isFalse` / `isOk` / `notOk` / `isNaN` / `isUndefined` / `isArray` / `doesNotThrow`
+/ `throws`) instead of hand-rolling a `const assert = {...}` block per file. Its
+`equal` is strict (`!==`) and `deepEqual` is a JSON-stringify compare with Map +
+NaN normalization and sorted object keys.
+
 ### App browser tests import your REAL components (#806)
 
 In a scaffolded app, a browser test (`test/<feature>/browser/<name>.test.js`)

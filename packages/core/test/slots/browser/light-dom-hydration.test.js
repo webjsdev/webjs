@@ -10,10 +10,7 @@
 import { html } from '../../../src/html.js';
 import { render } from '../../../src/render-client.js';
 
-const assert = {
-  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-  equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${b}, got ${a}`); },
-};
+import { assert } from '../../../../../test/browser-assert.js';
 
 suite('Light DOM hydration', () => {
   test('hydration marker is removed and content renders correctly', () => {

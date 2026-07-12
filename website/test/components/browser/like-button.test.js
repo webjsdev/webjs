@@ -10,10 +10,7 @@
  */
 import '#components/like-button.ts';
 
-const assert = {
-  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-  equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); },
-};
+import { assert } from '../../../../test/browser-assert.js';
 
 const mount = async (count) => {
   const el = document.createElement('like-button');

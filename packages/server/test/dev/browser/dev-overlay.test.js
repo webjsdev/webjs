@@ -12,10 +12,7 @@
  */
 import { renderDevOverlay, dismissDevOverlay } from '../../../src/dev-overlay.js';
 
-const assert = {
-  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-  equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); },
-};
+import { assert } from '../../../../../test/browser-assert.js';
 
 suite('dev error overlay renderer (#264)', () => {
   function teardown() {

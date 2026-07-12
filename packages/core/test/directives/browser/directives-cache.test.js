@@ -19,12 +19,7 @@ import { html } from '../../../src/html.js';
 import { render } from '../../../src/render-client.js';
 import { cache } from '../../../src/directives.js';
 
-const assert = {
-  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-  equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); },
-  notStrictEqual: (a, b, msg) => { if (a === b) throw new Error(msg || 'Expected different references'); },
-  strictEqual: (a, b, msg) => { if (a !== b) throw new Error(msg || 'Expected strict equal'); },
-};
+import { assert } from '../../../../../test/browser-assert.js';
 
 /**
  * Strip webjs marker comments (the framework injects `<!--?webjs?-->`

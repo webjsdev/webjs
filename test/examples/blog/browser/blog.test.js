@@ -13,10 +13,7 @@
 
 const BLOG_URL = '/__blog';
 
-const assert = {
-  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-  equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${b}, got ${a}`); },
-};
+import { assert } from '../../../browser-assert.js';
 
 async function fetchPage(path) {
   const resp = await fetch(BLOG_URL + path);

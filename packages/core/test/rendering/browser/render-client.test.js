@@ -8,12 +8,7 @@ import { repeat } from '../../../src/repeat.js';
 import { unsafeHTML } from '../../../src/directives.js';
 
 const { suite, test } = window.Mocha ? Mocha : { suite, test };
-const assert = {
-  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-  equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${b}, got ${a}`); },
-  strictEqual: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected strict equal`); },
-  doesNotThrow: (fn, msg) => { try { fn(); } catch (e) { throw new Error(msg || `Unexpected throw: ${e.message}`); } },
-};
+import { assert } from '../../../../../test/browser-assert.js';
 
 suite('Client renderer', () => {
   test('renders a simple template into a container', () => {

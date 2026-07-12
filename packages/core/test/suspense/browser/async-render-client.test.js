@@ -10,10 +10,7 @@ import { WebComponent } from '../../../src/component.js';
 import { activeActionSignal } from '../../../src/action-abort-client.js';
 
 const { suite, test } = window.Mocha ? Mocha : { suite, test };
-const assert = {
-  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-  equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${b}, got ${a}`); },
-};
+import { assert } from '../../../../../test/browser-assert.js';
 
 let host;
 function container() {

@@ -33,14 +33,7 @@ import { html } from '../../../src/html.js';
 import { render } from '../../../src/render-client.js';
 import { until } from '../../../src/directives.js';
 
-const assert = {
-  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-  equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); },
-  notStrictEqual: (a, b, msg) => { if (a === b) throw new Error(msg || 'Expected different references'); },
-  strictEqual: (a, b, msg) => { if (a !== b) throw new Error(msg || 'Expected strict equal'); },
-  isTrue: (v, msg) => { if (v !== true) throw new Error(msg || `Expected true, got ${v}`); },
-  isFalse: (v, msg) => { if (v !== false) throw new Error(msg || `Expected false, got ${v}`); },
-};
+import { assert } from '../../../../../test/browser-assert.js';
 
 /**
  * Strip webjs marker comments so HTML assertions compare visible markup.

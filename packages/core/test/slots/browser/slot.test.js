@@ -20,19 +20,7 @@ import { installSlotPolyfills } from '../../../src/slot.js';
 // Make sure polyfills are installed against the live DOM realm.
 installSlotPolyfills();
 
-const assert = {
-  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-  equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${b}, got ${a}`); },
-  notEqual: (a, b, msg) => { if (a === b) throw new Error(msg || `Expected !== ${b}`); },
-  strictEqual: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected strict equal`); },
-  deepEqual: (a, b, msg) => {
-    if (a === b) return;
-    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
-      throw new Error(msg || `Expected deep equal`);
-    }
-    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) throw new Error(msg || `Differ at index ${i}`);
-  },
-};
+import { assert } from '../../../../../test/browser-assert.js';
 
 // Tiny helper to wait for microtask batch + observer callbacks.
 function tick() {
