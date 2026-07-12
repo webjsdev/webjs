@@ -186,6 +186,29 @@ suite('Client router: query-string preservation (#639)', () => {
     } finally { teardown(); }
   });
 
+  test('a GET-form does not pull the CURRENT PAGE query into the submission (#639)', async () => {
+    // Turbo parity (form_submission_tests.js "does not incorporate the current
+    // page's URLSearchParams"): submitting a GET form to a query-less action from
+    // a page that itself has `?sort=old` must produce `?<form fields>` only, not
+    // merge the page's `?sort=old` in. WebJs resolves the action against
+    // location.href but the absolute action path replaces the search, then the
+    // form fields set it, so the current page query never leaks in.
+    setup();
+    try {
+      await navigate(location.origin + '/qp/onpage?sort=old');
+      assert.equal(location.search, '?sort=old', 'on a page carrying ?sort=old');
+      container.innerHTML =
+        '<form method="get" action="/qp/onpage">' +
+        '<input name="q" value="new"><button type="submit">go</button></form>';
+      container.querySelector('button').click();
+      const search = await waitForSearch('?q=new');
+      const fetched = calls.find((c) => c.url.includes('/qp/onpage') && c.url.includes('q=new'));
+      assert.ok(fetched, 'the GET form submission was routed');
+      assert.ok(!fetched.url.includes('sort=old'), "the current page's ?sort=old is NOT merged into the submission");
+      assert.equal(search, '?q=new', 'location.search is the form fields only');
+    } finally { teardown(); }
+  });
+
   test('a server redirect updates the URL to the redirect target query (#639)', async () => {
     // fetch follows a redirect and the resolved Response reports redirected=true +
     // url=<final>; the router records THAT url (with its query), not the request's.
