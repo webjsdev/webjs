@@ -88,6 +88,26 @@ suite('Client router: soft nav keeps CSS + empty-have prefetch gate (#936)', () 
     }
   });
 
+  test('a stylesheet tagged data-webjs-track="dynamic" IS removed when absent from the new head (Turbo parity)', () => {
+    enableClientRouter();
+    const dyn = document.createElement('link');
+    dyn.rel = 'stylesheet';
+    dyn.href = '/df-dynamic.css';
+    dyn.setAttribute('data-webjs-track', 'dynamic');
+    document.head.appendChild(dyn);
+
+    try {
+      const doc = _parseHTML('<!doctype html><html><head></head><body></body></html>');
+      _mergeHead(doc.head);
+      // Mirrors Turbo's data-turbo-track="dynamic": an opted-in stylesheet not in
+      // the new head IS removed (the explicit escape hatch from the default).
+      assert.ok(!document.head.querySelector('link[href="/df-dynamic.css"]'),
+        'a data-webjs-track="dynamic" stylesheet absent from the new head is removed');
+    } finally {
+      const s = document.head.querySelector('link[href="/df-dynamic.css"]'); if (s) s.remove();
+    }
+  });
+
   test('an empty-have prefetch is skipped while the document is still parsing', () => {
     enableClientRouter();
     _resetPrefetch();

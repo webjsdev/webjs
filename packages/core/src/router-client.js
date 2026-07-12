@@ -3261,21 +3261,26 @@ function addNewHeadElements(newHead) {
 }
 
 /**
- * A head element that a soft nav must NEVER remove: a `<style>` or a
- * `<link rel="stylesheet">` (incl. `rel="preload" as="style"`). Removing one
- * during a full-body-swap fallback whose incoming head lacked it leaves the
- * page unstyled (#936). Case-insensitive on `rel` (it may list several tokens).
+ * A stylesheet a soft nav must NOT remove, mirroring Turbo's default. Turbo's
+ * `elementIsStylesheet` is `<style>` or `<link rel~="stylesheet">`, and its
+ * head merge removes an old stylesheet ONLY when it opts into dynamic removal
+ * via `data-turbo-track="dynamic"` (`unusedDynamicStylesheetElements`); a plain
+ * stylesheet is never removed. WebJs mirrors that: a stylesheet is persistent
+ * unless tagged `data-webjs-track="dynamic"` (the sibling of the existing
+ * `data-webjs-track="reload"`). Removing a plain stylesheet during a full-body
+ * merge whose incoming head lacked it is exactly what left the page unstyled
+ * (#936): WebJs's `X-Webjs-Have` optimization returns a REDUCED head (the app
+ * stylesheet omitted), so the merge must not treat "absent from the incoming
+ * head" as "stale". A genuinely changed stylesheet is dropped by the
+ * deploy-level hard reload (build-id mismatch), not a soft swap.
  *
  * @param {Element} el
  * @returns {boolean}
  */
 function isPersistentHeadStyle(el) {
-  if (el.tagName === 'STYLE') return true;
-  if (el.tagName !== 'LINK') return false;
-  const rel = (el.getAttribute('rel') || '').toLowerCase();
-  if (rel.split(/\s+/).includes('stylesheet')) return true;
-  if (rel.split(/\s+/).includes('preload') && (el.getAttribute('as') || '').toLowerCase() === 'style') return true;
-  return false;
+  const isStylesheet = el.tagName === 'STYLE' ||
+    (el.tagName === 'LINK' && (el.getAttribute('rel') || '').toLowerCase().split(/\s+/).includes('stylesheet'));
+  return isStylesheet && el.getAttribute('data-webjs-track') !== 'dynamic';
 }
 
 /** @param {HTMLHeadElement} newHead */

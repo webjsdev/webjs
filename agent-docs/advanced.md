@@ -423,11 +423,14 @@ navigation automatically.
 3. Picks the **longest shared path**, the deepest layout boundary
    both pages have in common. When there is no shared path it falls to a
    full-body swap (a genuine root-layout change). That fallback's head
-   merge **never removes a `<link rel=stylesheet>` or `<style>`** (Turbo's
-   persistent-CSS model): an incoming head that lacks the app stylesheet
-   (a partial or mangled response) can no longer strip the live CSS and
-   leave the page unstyled (#936). A genuinely stale stylesheet is dropped
-   by the deploy-level hard reload (build-id mismatch), not by a soft swap.
+   merge **never removes a `<link rel=stylesheet>` or `<style>`** unless it
+   opts into removal with `data-webjs-track="dynamic"` (mirroring Turbo's
+   `data-turbo-track="dynamic"`; the sibling of the existing
+   `data-webjs-track="reload"`). So an incoming head that lacks the app
+   stylesheet (a partial or mangled response) can no longer strip the live
+   CSS and leave the page unstyled (#936); a genuinely stale stylesheet is
+   dropped by the deploy-level hard reload (build-id mismatch), not a soft
+   swap.
    Relatedly, the **viewport prefetch is skipped while the document is
    still parsing** when `buildHaveHeader()` is empty: the closing
    `<!--/wj:children-->` marker may not be parsed yet, so an empty
