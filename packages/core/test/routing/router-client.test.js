@@ -1763,10 +1763,13 @@ test('navigate: deepest shared marker wins (inner swap, not outer)', async () =>
   }
 });
 
-test('navigate: cross-layout nav falls through to full body swap', async () => {
-  // /docs/x → /admin/y: no shared marker path → full body swap.
+test('navigate: cross-layout nav (no shared marker) does a full-page load, not a destructive swap (#936)', async () => {
+  // /docs/x → /admin/y: no shared marker path. A full-body in-place swap here
+  // strips the outer layout + its head CSS (the #936 crime), so when the live
+  // page actually has a layout the router full-loads instead. The old behavior
+  // was a destructive in-place swap; the reload is always correct by construction.
   document.body.innerHTML = '<!--wj:children:/docs-->old<!--/wj:children-->';
-  const { restore } = installNavigationMocks({
+  const { redirect, restore } = installNavigationMocks({
     contentType: 'text/html',
     body:
       '<!doctype html><html><head></head><body>' +
@@ -1775,8 +1778,12 @@ test('navigate: cross-layout nav falls through to full body swap', async () => {
   });
   try {
     await navigate('http://localhost/admin/y');
-    assert.ok(document.body.textContent.includes('new'));
-    assert.ok(!document.body.textContent.includes('old'));
+    assert.ok(redirect.assigns.includes('http://localhost/admin/y'),
+      'a cross-layout nav does a full-page load to the target');
+    // The destructive in-place swap did NOT run: the old content stays put until
+    // the reload lands (the new content is never grafted in).
+    assert.ok(document.body.textContent.includes('old'), 'no in-place swap happened');
+    assert.ok(!document.body.textContent.includes('new'));
   } finally {
     restore();
     document.body.innerHTML = '';

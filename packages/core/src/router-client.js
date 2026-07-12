@@ -2316,7 +2316,11 @@ function upgradeCustomElementsInRange(range) {
  *
  * @param {string} href
  */
-let hardNavigate = (href) => { if (typeof location !== 'undefined') location.assign(href); };
+let hardNavigate = (href) => {
+  if (typeof location === 'undefined') return;
+  if (typeof location.assign === 'function') location.assign(href);
+  else location.href = href;
+};
 
 /** @param {(href: string) => void} fn */
 function setHardNavigate(fn) { hardNavigate = fn; }
@@ -2541,7 +2545,13 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
   // any browser, at the cost of one non-instant navigation in the rare genuine
   // cross-root-layout case. `location.assign` keeps the target in history
   // (a Back returns to the current page), matching a normal link navigation.
-  if (href && !revalidating && !frameId && typeof location !== 'undefined') {
+  // Only when the LIVE page actually has a layout (`here` is non-empty) does a
+  // full-body swap risk destroying an outer layout + its head-bound CSS. A
+  // genuinely marker-less page (no children slot at all) has nothing to lose, so
+  // the in-place swap below stays safe for it. Every real WebJs page is wrapped
+  // in a layout that emits markers, so this reloads the destructive case and
+  // leaves the marker-less edge case (and its tests) alone.
+  if (href && !revalidating && !frameId && here.size > 0 && typeof location !== 'undefined') {
     hardNavigate(href);
     return;
   }
