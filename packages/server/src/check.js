@@ -399,6 +399,7 @@ function hasMultiDeclaratorExport(scan) {
   let m;
   while ((m = re.exec(scan))) {
     let depth = 0;      // () [] {} nesting
+    let angle = 0;      // <> generics, tracked ONLY inside a type annotation
     let seenEq = false; // passed this declarator's `=` (now in the initializer)
     let inType = false; // inside a `: Type` annotation (before the `=`)
     for (let i = m.index + m[0].length; i < scan.length; i++) {
@@ -409,14 +410,21 @@ function hasMultiDeclaratorExport(scan) {
       if (ch === ';') break;
       // A plain `=` ends the type annotation and enters the initializer. `<=`,
       // `>=`, `=>`, `==` are harmless here (seenEq only latches true).
-      if (ch === '=') { seenEq = true; inType = false; continue; }
-      // A `:` BEFORE the `=` opens the type annotation, whose commas belong to a
-      // generic (`Map<string, number>`), not a second declarator. A `:` after
-      // `=` (a ternary in the initializer) is NOT a type and must not suppress a
-      // real declarator comma.
+      if (ch === '=') { seenEq = true; inType = false; angle = 0; continue; }
+      // A `:` BEFORE the `=` opens the type annotation. A `:` after `=` (a
+      // ternary in the initializer) is NOT a type and must not suppress a real
+      // declarator comma.
       if (ch === ':' && !seenEq) { inType = true; continue; }
-      // A top-level comma outside a type annotation starts a second declarator.
-      if (ch === ',' && !inType) return true;
+      // Inside a type annotation `<` / `>` are generic delimiters (a comparison
+      // only appears in the initializer, after `=`). Track their depth so a
+      // generic's comma (`Map<string, number>`) is skipped while a real
+      // declarator comma (`a: number, b: number`) still counts. A `>` that is
+      // part of a `=>` function-type arrow is not a generic close.
+      if (inType && ch === '<') { angle++; continue; }
+      if (inType && ch === '>' && scan[i - 1] !== '=') { if (angle > 0) angle--; continue; }
+      // A top-level comma starts a second declarator UNLESS it is a generic's
+      // comma inside a type annotation.
+      if (ch === ',' && !(inType && angle > 0)) return true;
     }
   }
   return false;
@@ -445,6 +453,9 @@ function enumerableExports(scan) {
   collect(/\bexport\s+(?:abstract\s+)?class\s+([A-Za-z_$][\w$]*)/g);
   collect(/\bexport\s+(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g);
   collect(/\bexport\s+(?:type|interface|enum|namespace)\s+([A-Za-z_$][\w$]*)/g);
+  // A named-default import (`import { default as Foo }`) is legal against an
+  // `export default` module, so record the `default` name when present.
+  if (/\bexport\s+default\b/.test(scan)) names.add('default');
   // `export { a, b as c }` / `export type { ... }` / `export { x } from '...'`:
   // the EXPORTED name is the alias after `as`, else the bare name.
   const reClause = /\bexport\s+(?:type\s+)?\{([^}]*)\}/g;

@@ -160,3 +160,22 @@ test('a real multi-declarator with a ternary or comparison first initializer is 
   assert.equal(hits(await checkConventions(dir)).length, 0, 'multi-declarator bail holds through a ternary/comparison init');
   await rm(dir, { recursive: true, force: true });
 });
+
+test('FP: a typed multi-declarator with no initializer is bailed, not under-counted', async () => {
+  const dir = await makeApp({
+    'lib/dims.ts': `export let width: number, height: number;\nexport var cache: Record<string, string>, count: number;\n`,
+    'use.ts': `import { height, count } from './lib/dims.ts';\nexport const u = [height, count];\n`,
+  });
+  assert.equal(hits(await checkConventions(dir)).length, 0, 'the type-with-no-init declarator comma is not swallowed');
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('FP: a named-default import resolves against an export default module', async () => {
+  const dir = await makeApp({
+    'lib/widget.ts': `export default class Widget {}\n`,
+    'lib/val.ts': `export default 1;\n`,
+    'use.ts': `import { default as Widget } from './lib/widget.ts';\nimport { default as v } from './lib/val.ts';\nexport const u = [Widget, v];\n`,
+  });
+  assert.equal(hits(await checkConventions(dir)).length, 0, 'default is a recognized export');
+  await rm(dir, { recursive: true, force: true });
+});
