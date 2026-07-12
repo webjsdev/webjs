@@ -534,6 +534,11 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     'AGENTS.md',
     'CONVENTIONS.md',
     'CLAUDE.md',
+    // A worked layout (header/nav/theme-toggle/reading-column/footer) the agent
+    // reads to learn the patterns, since app/layout.ts ships as a minimal shell
+    // so the app designs its own chrome. Shipped for every template (harmless
+    // for api, which has no app/layout.ts).
+    'LAYOUT-REFERENCE.md',
     // Starter tests under the new feature-folder layout.
     'test/hello/hello.test.ts',
     'test/hello/browser/hello.test.js',
@@ -1103,14 +1108,11 @@ import '#components/theme-toggle.ts';
  * mapped into the Tailwind palette via @theme, so classes like
  * text-foreground, bg-card, font-serif, duration-fast, text-display all work.
  *
- * Nav + footer links repeat the same class bundle, so they're extracted
- * into small JS helpers below. Each helper runs at SSR time inside
- * html\\\`\\\`, producing static HTML in the response with no client runtime.
+ * This shell is deliberately MINIMAL: it wires the theme, tokens, and Tailwind,
+ * then renders \${children} in a bare container with no chrome, so you design the
+ * app's own layout. LAYOUT-REFERENCE.md (project root) is a complete worked
+ * layout (header, nav, theme toggle, reading column, footer) to learn from.
  */
-
-const navLink = (href: string, label: string) => html\`
-  <a href=\${href} class="text-muted-foreground no-underline font-medium text-[13px] leading-none tracking-[0.005em] transition-colors duration-fast hover:text-foreground">\${label}</a>
-\`;
 
 export default function RootLayout({ children }: { children: unknown }) {
   // Read the in-flight request's CSP nonce so the theme-detection
@@ -1205,7 +1207,11 @@ ${UI_THEME}
         --font-sans:  -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         --font-serif: ui-serif, 'Iowan Old Style', Palatino, Georgia, serif;
         --font-mono:  ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        --header-h: 56px;
+        /* 0 by default because the minimal shell has no fixed header. The
+           header-measure script below overrides it to the real height the moment
+           you add a fixed header element (see LAYOUT-REFERENCE.md), so body
+           padding tracks it automatically. */
+        --header-h: 0px;
         /* A translucent brand tint, derived from --primary so it tracks
            light/dark automatically. Used for the logo glow and focus ring. */
         --primary-tint: color-mix(in oklch, var(--primary) 20%, transparent);
@@ -1318,43 +1324,10 @@ ${UI_THEME}
       ::selection { background: color-mix(in oklch, var(--primary) 22%, transparent); color: var(--foreground); }
     </style>
 
-    <header class="fixed inset-x-0 top-0 z-20 flex items-center gap-6 px-4 sm:px-6 py-3 border-b border-border bg-[color-mix(in_oklch,var(--background)_75%,transparent)] backdrop-blur-[18px]">
-      <!-- webjs-scaffold-placeholder. This is the scaffold's example brand: the app name as a plain wordmark. Give THIS app its own brand or logo mark (a glyph, a wordmark treatment, the real product name), then delete this line. webjs check fails while the marker remains. -->
-      <a href="/" class="mr-auto inline-flex items-center gap-2 no-underline text-foreground font-semibold text-[15px] leading-none tracking-tight">
-        <span>${displayName}</span>
-      </a>
-      <nav class="flex gap-4 items-center">
-        <!-- webjs-scaffold-placeholder. This is the scaffold's example nav: a single "Home" link. Replace it with THIS app's real navigation, or remove the nav entirely if the app does not need one, then delete this line. webjs check fails while the marker remains. -->
-        \${navLink('/', 'Home')}
-        <theme-toggle></theme-toggle>
-      </nav>
-    </header>
-
-    <!--
-      Content shell. The max-w-[760px] cap is a comfortable READING width,
-      right for prose, forms, and marketing. For a full-bleed app, dashboard,
-      or board, REPLACE it: widen the cap (for example max-w-[1400px]) or
-      drop the cap and mx-auto for an edge-to-edge layout. A wide layout left
-      inside the 760px reading column overflows into a horizontal scrollbar.
-    -->
-    <div class="flex flex-col min-h-[calc(100dvh-var(--header-h))]">
-      <main class="flex-1 w-full max-w-[760px] mx-auto px-4 sm:px-6 pt-[72px] pb-12">
-        \${children}
-      </main>
-      <!-- webjs-scaffold-placeholder. This "Built with webjs" footer is SCAFFOLD
-           branding, not your app's. REMOVE it, or replace it with your own
-           footer, before shipping a delivered app. Delete this line once done.
-           webjs check fails while the marker remains. -->
-      <footer class="border-t border-border">
-        <div class="max-w-[760px] mx-auto px-4 sm:px-6 py-6 flex items-center justify-center">
-          <a href="https://webjs.dev" class="inline-flex items-center gap-2 no-underline text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <span>Built with</span>
-            <span class="w-[18px] h-[18px] rounded-[6px] bg-gradient-to-br from-[var(--logo-from)] to-[var(--logo-to)] shadow-[0_2px_10px_var(--primary-tint)]"></span>
-            <span class="font-semibold text-foreground">webjs</span>
-          </a>
-        </div>
-      </footer>
-    </div>
+    <!-- webjs-scaffold-placeholder. MINIMAL SHELL, on purpose. Everything above (the theme apparatus, the design tokens, the Tailwind runtime) is infrastructure to keep. Below, \${children} drops into a bare full-height container with NO chrome: design THIS app's layout from scratch. Decide from what the app IS whether it needs a header, a nav, a footer, a sidebar, a centered reading column, or a full-bleed canvas, and build that here. A COMPLETE reference layout (fixed header, brand, nav, theme toggle, reading column, footer) ships at LAYOUT-REFERENCE.md in the project root: read it to learn the patterns, then write your own. Delete this line once your layout is designed. webjs check fails while the marker remains. -->
+    <main class="min-h-dvh px-4 sm:px-6 py-8">
+      \${children}
+    </main>
   \`;
 }
 `);
@@ -1425,9 +1398,9 @@ export default function Home() {
       \${rubric('welcome')}
       \${displayH1(html\`Hello from <span class="text-primary italic">${displayName}</span>.\`)}
       <p class="text-lede leading-[1.5] text-muted-foreground max-w-[56ch] m-0 mb-6">
-        This scaffold ships a gallery below: single-feature demos and one whole
-        example app, all small, idiomatic, and heavily commented. Browse them for
-        context, then replace this page with your own. See
+        This WebJs scaffold ships a gallery below: single-feature demos and one
+        whole example app, all small, idiomatic, and heavily commented. Browse
+        them for context, then replace this page with your own. See
         \${accentLink('https://docs.webjs.dev', 'the docs')} for the full reference.
       </p>
       <div class="flex gap-3 items-center">

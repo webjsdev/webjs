@@ -105,30 +105,34 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(toggleSrc, /classList\.toggle\(['"]dark['"]/,
       'theme-toggle must toggle the .dark class (shadcn dark-mode signal)');
 
-    // Layout-chrome guidance (#356): the scaffolded layout must steer the
-    // agent to adapt the content-width container instead of dropping a
-    // full-bleed app into the narrow reading column (which overflows into a
-    // horizontal scrollbar). Counterfactual: dropping the comment fails here.
-    assert.match(layoutSrc, /max-w-\[760px\] cap is a comfortable READING width/,
-      'layout must carry the content-width steering comment so a full-bleed app widens it');
-    assert.match(layoutSrc, /example nav[^]*Replace it with THIS app's real navigation/,
-      'layout must flag the example nav as replace-me (now a placeholder marker)');
+    // Minimal-shell layout: the scaffold ships app/layout.ts as a MINIMAL shell
+    // (theme + tokens + Tailwind infra, then {children} in a bare padded
+    // container) so a delivered app designs its OWN chrome from scratch rather
+    // than inheriting a header/nav/footer. The rich worked layout moved to
+    // LAYOUT-REFERENCE.md, which the agent reads to learn the patterns.
+    assert.match(layoutSrc, /<main class="min-h-dvh[^"]*">/,
+      'layout renders a minimal full-height main, not a fixed-header reading-column shell');
+    assert.doesNotMatch(layoutSrc, /<header\b/,
+      'the minimal shell ships NO header (design your own; see LAYOUT-REFERENCE.md)');
+    assert.doesNotMatch(layoutSrc, /Built with/,
+      'the minimal shell ships NO scaffold "Built with webjs" footer');
+    assert.ok(existsSync(join(appDir, 'LAYOUT-REFERENCE.md')),
+      'the rich worked layout ships as LAYOUT-REFERENCE.md');
 
-    // Scaffold-removal enforcement (#359): the example homepage and the
-    // example app chrome carry a `webjs-scaffold-placeholder` marker, which
-    // the no-scaffold-placeholder check fails on until the agent replaces the
-    // content and deletes the marker. Token assembled so this test file does
-    // not carry the contiguous literal the rule scans for.
+    // Scaffold-removal enforcement (#359): the example homepage and the minimal
+    // layout shell carry a `webjs-scaffold-placeholder` marker, which the
+    // no-scaffold-placeholder check fails on until the agent replaces the content
+    // and deletes the marker. Token assembled so this test file does not carry
+    // the contiguous literal the rule scans for.
     const marker = 'webjs-scaffold-' + 'placeholder';
     const pageSrc = readFileSync(join(appDir, 'app', 'page.ts'), 'utf8');
     assert.ok(layoutSrc.includes(marker), 'layout.ts must carry the scaffold-placeholder marker');
     assert.ok(pageSrc.includes(marker), 'page.ts must carry the scaffold-placeholder marker');
-    // The "Built with webjs" footer is scaffold branding. It ships guarded by
-    // its OWN placeholder marker so `webjs check` fails until the agent removes
-    // or replaces it (a delivered app must not keep the scaffold attribution).
-    // Multiple markers mean removing only the top one still fails the check.
-    assert.ok(layoutSrc.includes('Built with'), 'layout ships the example footer branding');
-    // The design PALETTE also ships guarded by its own placeholder marker, so a
+    // The minimal shell carries a "design your layout from scratch" marker, so
+    // check stays red until the agent builds a real layout.
+    assert.match(layoutSrc, new RegExp(marker + '[^\\n]*MINIMAL SHELL'),
+      'layout.ts guards the minimal shell with a "design your layout" placeholder marker');
+    // The design PALETTE ships guarded by its own placeholder marker, so a
     // delivered app cannot silently keep the scaffold's starter brand colors: the
     // agent must own the palette (or run --clear-placeholders) to clear the file.
     // The starter orange is kept (it looks finished); the marker forces a
@@ -136,20 +140,10 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // --clear-placeholders strips it without breaking the <style> block.
     assert.match(layoutSrc, new RegExp(marker + '[^\\n]*STARTER brand colors'),
       'layout.ts guards the palette tokens with a scaffold-placeholder marker');
-    // The scaffold's IDENTITY elements (the example brand wordmark and the "Home"
-    // nav) also ship guarded by their own placeholder markers, so a delivered app
-    // must own its identity, not just tweak the scaffold's. The layout STRUCTURE
-    // (header/main/footer) stays whole as teaching material; only the identity is
-    // marked. Both are single-line HTML comments so --clear-placeholders strips
-    // them without orphaning a dangling -->.
-    assert.match(layoutSrc, new RegExp(marker + '[^\\n]*example brand'),
-      'layout.ts guards the example brand wordmark with a scaffold-placeholder marker');
-    assert.match(layoutSrc, new RegExp(marker + '[^\\n]*example nav'),
-      'layout.ts guards the example nav with a scaffold-placeholder marker');
-    // Five markers (chrome, brand, nav, palette, footer): removing any one still
-    // fails the check until all are addressed, so no identity element is skipped.
-    assert.ok(layoutSrc.split(marker).length - 1 >= 5,
-      'layout.ts carries chrome + brand + nav + palette + footer placeholder markers');
+    // Two markers (minimal-shell, palette): removing one still fails the check
+    // until both are addressed.
+    assert.ok(layoutSrc.split(marker).length - 1 >= 2,
+      'layout.ts carries the minimal-shell + palette placeholder markers');
 
     // Drizzle db layer wired up
     assert.ok(existsSync(join(appDir, 'db', 'schema.server.ts')), 'db/schema.server.ts written');
@@ -438,12 +432,14 @@ test('scaffoldApp saas: writes auth + dashboard + Drizzle User model', async () 
     assert.ok(existsSync(join(appDir, 'app', 'layout.ts')), 'layout.ts written');
     assert.ok(existsSync(join(appDir, 'app', 'page.ts')), 'page.ts written');
 
-    // #356: saas shares the same layout template, so it must carry the
-    // content-width steering comment too (saas is a full-bleed dashboard,
-    // the case most likely to overflow the narrow reading column).
+    // saas shares the same minimal-shell root layout, so it too ships the bare
+    // full-height main (no header/reading-column) plus LAYOUT-REFERENCE.md, and
+    // designs its own chrome (the dashboard sub-nav lives in app/dashboard/layout.ts).
     const saasLayoutSrc = readFileSync(join(appDir, 'app', 'layout.ts'), 'utf8');
-    assert.match(saasLayoutSrc, /max-w-\[760px\] cap is a comfortable READING width/,
-      'saas layout must carry the content-width steering comment');
+    assert.match(saasLayoutSrc, /<main class="min-h-dvh[^"]*">/,
+      'saas root layout is the minimal full-height shell');
+    assert.ok(existsSync(join(appDir, 'LAYOUT-REFERENCE.md')),
+      'saas ships LAYOUT-REFERENCE.md');
 
     // #271: saas is a UI scaffold, so it ships the opt-in service worker.
     assert.ok(existsSync(join(appDir, 'public', 'sw.js')), 'saas ships public/sw.js');

@@ -365,44 +365,32 @@ When the user asks the agent to build their actual app:
    `app/features/` demos and the `app/examples/` app the real app uses,
    delete the rest (route + module + any table), and remove their links
    from `app/page.ts`.
-5. **Adapt `app/layout.ts` to the app, not just the page.** Set the real
-   brand, replace the example `Home` nav with the app's navigation, and
-   pick a content-width container that fits. The default
-   `<main class="max-w-[760px]">` is a reading column for prose, forms,
-   and marketing. Widen it or drop the cap for a full-bleed app,
-   dashboard, or board, or a wide layout overflows into an unnecessary
-   horizontal scrollbar. Keep the design tokens and theme setup, those
-   are infrastructure.
+5. **Design the layout in `app/layout.ts` (it ships MINIMAL on purpose).**
+   The root layout wires the theme, design tokens, and Tailwind (keep all of
+   that), then drops `${children}` into a bare padded `<main>` with NO chrome.
+   There is no header, nav, footer, or reading column to inherit: design the
+   app's own from what the app IS. Decide from scratch whether it needs a
+   header at all, a nav (or none), a footer, a sidebar, a centered reading
+   column, or a full-bleed canvas. `LAYOUT-REFERENCE.md` at the project root is
+   a complete worked layout (fixed header, brand, nav, theme toggle, reading
+   column, footer) to learn the patterns from, then build your own. Keep the
+   design tokens and theme apparatus, those are infrastructure.
 6. **Use a unique design, and redesign means more than recolor (UI apps).**
    Give the app a design of its own (palette, typography, LAYOUT, spacing,
-   and chrome) chosen from what the app IS. Recoloring the scaffold and
-   swapping the logo while keeping its skeleton (a fixed top header with a
-   Home link and a theme toggle, the centered ~760px reading column, the
-   "Built with webjs" footer) is NOT a unique design. Decide from scratch
-   whether this app even needs a header or footer, what nav (if any), and
-   what layout fits (a centered board, a full-bleed dashboard, a split, a
-   single card). The scaffold ships a `webjs-scaffold-placeholder` marker on
-   its footer, so `webjs check` fails until you remove or replace the
-   "Built with webjs" branding. Self-audit before finishing: nothing should
-   read as the scaffold example (no "Built with webjs" footer, no leftover
-   example nav, no default reading column unless it truly fits). The design
-   token NAMES and theme wiring (`--background`, `--primary`, `--card`, ... in
-   `app/layout.ts`) are infrastructure to keep, but their COLOR VALUES are
-   yours: set a distinctive palette that fits the app, in both the light and
-   dark blocks. Keeping the scaffold's token colors (or a light warm recolor of
-   them) is NOT owning the palette. The palette block ships guarded by its own
-   `webjs-scaffold-placeholder` marker (the starter orange looks finished on
-   purpose), so `webjs check` fails until you own the palette and delete that
-   marker line, the same way the gallery and footer markers work. To keep the
-   starter palette deliberately, run `webjs check --clear-placeholders`. The
-   scaffold's IDENTITY elements carry the same marker: the example brand
-   wordmark, the "Home" nav, and the "Built with webjs" footer. The layout
-   STRUCTURE (header, main, footer, theme wiring) is generic and stays whole as
-   teaching material, but each scaffold-specific identity element must be made
-   the app's own (a real brand or logo, the app's real nav or none, its own
-   footer) to clear `app/layout.ts`. That is the point of the markers: own the
-   identity, keep the structure. Style with Tailwind utilities wherever they
-   reach, and use custom CSS only for what utilities cannot express (@theme
+   and chrome) chosen from what the app IS. The layout ships MINIMAL (see item
+   5), so there is no scaffold skeleton to inherit: build the chrome the app
+   actually needs. Two things are gated by a `webjs-scaffold-placeholder`
+   marker, so `webjs check` fails until each is addressed: the minimal shell
+   carries a "design your layout from scratch" marker (delete it once you have
+   built a real layout), and the palette block carries its own marker (the
+   starter orange looks finished on purpose). The design token NAMES and theme
+   wiring (`--background`, `--primary`, `--card`, ... in `app/layout.ts`) are
+   infrastructure to keep, but their COLOR VALUES are yours: set a distinctive
+   palette that fits the app, in both the light and dark blocks. Keeping the
+   scaffold's token colors (or a light warm recolor of them) is NOT owning the
+   palette. To keep the starter palette deliberately, run
+   `webjs check --clear-placeholders`. Style with Tailwind utilities wherever
+   they reach, and use custom CSS only for what utilities cannot express (@theme
    tokens, @keyframes, scrollbar, complex color-mix or gradients). The `api`
    template has no UI, so this does not apply there.
    **Definition of done (design gate):** a UI app is NOT finished until you
