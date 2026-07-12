@@ -178,9 +178,22 @@ script already covers the surface AND you ran it under Bun).
   failure, which fails the job). Set `WEBJS_BUN_TESTS=<substr,…>` to scope a
   local run.
 - CI runs it in the `bun` job alongside `test/bun/smoke.mjs` (#508),
-  `test/bun/listener.mjs` (#511, the listener-shell parity), and
+  `test/bun/listener.mjs` (#511, the listener-shell parity),
   `test/bun/timeouts.mjs` (#663, the `Bun.serve` `idleTimeout` wiring; the pure
-  ms-to-seconds mapping is unit-tested under the matrix too).
+  ms-to-seconds mapping is unit-tested under the matrix too), and
+  `test/bun/app-boot.mjs` (#542, the in-repo-app boot-check below).
+- **In-repo app boot-check (`test/bun/app-boot.mjs`, #542 / #627).** Boots
+  `website`, `docs`, and `packages/ui/packages/website` (ui-website) via
+  `createRequestHandler({ dev: false })`, runs each app's `webjs.start.before`
+  presteps first (the ui-website registry copy + the Tailwind build, exactly
+  what `webjs start` runs), GETs real routes (incl. a ui-website component detail
+  page, the #526 route class), and asserts status < 400 with no broken same-origin
+  `modulepreload`. A plain assert script (not `node:test`), so it runs identically
+  on BOTH runtimes: on Bun in the `bun` job (#542, since all four apps deploy on
+  Bun and only the blog had Bun coverage) and on Node in the "In-repo app tests"
+  job (#627, since docs + ui-website ship no `webjs test` suite). `examples/blog`
+  is not included (its own Bun e2e covers it). This automates the manual "boot
+  all four dogfood apps every framework PR" discipline.
 - Two cross-runtime test scripts also run under BOTH runtimes: `test/bun/smoke.mjs`
   (boot + SSR + TS strip + a server-action RPC) and `test/bun/listener.mjs`
   (`startServer` over a real socket: SSR + route + SSE + WebSocket). Plain assert
