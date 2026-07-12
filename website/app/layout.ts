@@ -166,12 +166,27 @@ export default function RootLayout({ children, url }: { children: unknown; url?:
         // what background colour actually resolved. Read straight off the badge
         // on the phone, so we can tell a head-removal (css:GONE) apart from a
         // repaint failure (css:ok but the page looks unstyled).
+        function countMarkers() {
+          // Count wj:children open-comment markers in the live body. The client
+          // router needs these to do the scoped layout-marker swap; if they are
+          // missing (e.g. an on-device optimizing proxy stripped HTML comments),
+          // it falls back to a destructive full-body swap that wipes the head
+          // CSS and the outer layout. 0 here on the entry page is the smoking gun.
+          var n = 0;
+          try {
+            var w = document.createTreeWalker(document.body, NodeFilter.SHOW_COMMENT, null);
+            var c;
+            while ((c = w.nextNode())) { if (/^wj:children:/.test(c.data)) n++; }
+          } catch (_) { n = -1; }
+          return n;
+        }
         function probe() {
           var link = document.querySelector('link[rel="stylesheet"][href*="tailwind"]');
           var sheets = document.querySelectorAll('link[rel="stylesheet"]').length;
+          var nav = document.querySelector('.site-top') ? 'ok' : 'GONE';
           var bg = '';
           try { bg = getComputedStyle(document.body).backgroundColor; } catch (_) {}
-          return { css: link ? 'ok' : 'GONE', sheets: sheets, bg: bg };
+          return { css: link ? 'ok' : 'GONE', sheets: sheets, nav: nav, markers: countMarkers(), bg: bg };
         }
         function badge() {
           var b = document.getElementById('webjs-diag-badge');
@@ -182,7 +197,10 @@ export default function RootLayout({ children, url }: { children: unknown; url?:
             (document.body || document.documentElement).appendChild(b);
           }
           var p = probe();
-          b.textContent = 'diag:' + mode + ' ' + location.pathname + ' | css:' + p.css + ' sheets:' + p.sheets + ' | bg:' + p.bg;
+          b.textContent = 'diag:' + mode + ' ' + location.pathname
+            + ' | css:' + p.css + ' sheets:' + p.sheets
+            + ' | nav:' + p.nav + ' markers:' + p.markers
+            + ' | bg:' + p.bg;
         }
         function nudge() {
           try {
