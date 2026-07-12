@@ -167,18 +167,23 @@ export default function RootLayout({ children, url }: { children: unknown; url?:
         // on the phone, so we can tell a head-removal (css:GONE) apart from a
         // repaint failure (css:ok but the page looks unstyled).
         function countMarkers() {
-          // Count wj:children open-comment markers in the live body. The client
-          // router needs these to do the scoped layout-marker swap; if they are
-          // missing (e.g. an on-device optimizing proxy stripped HTML comments),
-          // it falls back to a destructive full-body swap that wipes the head
-          // CSS and the outer layout. 0 here on the entry page is the smoking gun.
-          var n = 0;
+          // Count wj:children OPEN and CLOSE comment markers in the live body.
+          // The client router's collectChildrenSlots only registers a layout
+          // slot when it sees BOTH the open (wj:children:<path>) AND the close
+          // (/wj:children) comment. If the device's HTML parser drops the close
+          // comment, the slot map is empty and the router falls to a destructive
+          // full-body swap that wipes the head CSS and the outer layout. Reading
+          // open vs close separately shows exactly which comment is lost.
+          var open = 0, close = 0;
           try {
             var w = document.createTreeWalker(document.body, NodeFilter.SHOW_COMMENT, null);
             var c;
-            while ((c = w.nextNode())) { if (/^wj:children:/.test(c.data)) n++; }
-          } catch (_) { n = -1; }
-          return n;
+            while ((c = w.nextNode())) {
+              if (/^wj:children:/.test(c.data)) open++;
+              else if (c.data.trim() === '/wj:children') close++;
+            }
+          } catch (_) { open = -1; close = -1; }
+          return 'o' + open + '/c' + close;
         }
         function probe() {
           var link = document.querySelector('link[rel="stylesheet"][href*="tailwind"]');
