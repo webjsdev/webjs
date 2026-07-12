@@ -1309,9 +1309,19 @@ function prefetch(href) {
     return;
   }
 
+  const have = buildHaveHeader();
+  // #936: while the document is still parsing, the closing `<!--/wj:children-->`
+  // marker at the bottom of the body may not exist yet, so `buildHaveHeader()`
+  // returns '' meaning "markers not parsed yet", NOT "this page has no layout".
+  // A touch-device viewport prefetch fires early enough (mid-parse) to hit this
+  // window on real Android Chrome. Caching that empty-`have` response (a full
+  // page) would later drive the destructive full-body swap fallback. Skip the
+  // speculative fetch; the click path re-fetches with a correct `have` once the
+  // document has parsed (and applySwap now falls back to a full load anyway).
+  if (!have && typeof document !== 'undefined' && document.readyState === 'loading') return;
+
   prefetchInflight.add(key);
   const headers = { 'x-webjs-router': '1', 'x-webjs-prefetch': '1' };
-  const have = buildHaveHeader();
   if (have) headers['x-webjs-have'] = have;
 
   fetch(href, { method: 'GET', headers, credentials: 'same-origin' })
@@ -2298,6 +2308,19 @@ function upgradeCustomElementsInRange(range) {
   }
 }
 
+/**
+ * Full-page load seam. Production always does a real `location.assign` (a Back
+ * returns to the current page, matching a normal link). It is a module variable
+ * only so tests can observe the fallback without navigating the harness away
+ * (`location.assign` is not stubbable in any browser). Reset via `_setHardNavigate`.
+ *
+ * @param {string} href
+ */
+let hardNavigate = (href) => { if (typeof location !== 'undefined') location.assign(href); };
+
+/** @param {(href: string) => void} fn */
+function setHardNavigate(fn) { hardNavigate = fn; }
+
 function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc) {
   // SSR action seeding (#472): ingest any seed payload the incoming page
   // carries BEFORE its components are grafted into the live DOM and upgrade, so
@@ -2500,8 +2523,34 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
     return;
   }
 
-  // 3. Full body swap fallback. Use full head merge: different root
-  // layout, so stale head elements should be removed.
+  // 3. No shared layout marker between the live DOM and the incoming document.
+  //
+  // For a FOREGROUND router nav (we have the URL, and it is not a cache restore
+  // or a frame swap) fall back to a real full-page load instead of an in-place
+  // full-body swap. The in-place swap here is destructive by nature: `mergeHead`
+  // removes live head elements the incoming head lacks (the stylesheet), and
+  // `replaceChildren` swaps the whole body. That is correct only when the
+  // incoming document is a full same-shell page. But the client can end up here
+  // with an incoming body that is missing the outer layout and a head missing
+  // the stylesheets, e.g. after a viewport prefetch fired mid-parse and sent an
+  // empty `X-Webjs-Have` (before the closing `<!--/wj:children-->` marker was
+  // parsed), so the server returned a body the swap then mangles: it strips the
+  // head CSS and wipes the navbar, and because the live markers are gone the
+  // corruption cascades to every later nav (#936). A full-page load is always
+  // correct by construction, so this whole failure class becomes impossible on
+  // any browser, at the cost of one non-instant navigation in the rare genuine
+  // cross-root-layout case. `location.assign` keeps the target in history
+  // (a Back returns to the current page), matching a normal link navigation.
+  if (href && !revalidating && !frameId && typeof location !== 'undefined') {
+    hardNavigate(href);
+    return;
+  }
+
+  // A revalidation / cache restore (href null) keeps the in-place full-body
+  // swap: its `doc` is a full same-shell snapshot captured from a real page, so
+  // applying it is safe, and a reload would defeat the instant back/forward
+  // restore this path exists to serve. Full head merge: a genuine root-layout
+  // change means stale head elements should be removed.
   mergeHead(doc.head);
   // Persist permanent elements by node identity across the full-body
   // swap: move each live [data-webjs-permanent][id] node into the matching
@@ -3509,6 +3558,8 @@ export {
   reconcileChildren as _reconcileChildren,
   onPopState as _onPopState,
   applySwap as _applySwap,
+  setHardNavigate as _setHardNavigate,
+  buildHaveHeader as _buildHaveHeader,
   snapshotCache as _snapshotCache,
   prefetchCache as _prefetchCache,
   LIVE_ATTRS as _LIVE_ATTRS,
