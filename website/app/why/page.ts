@@ -121,12 +121,16 @@ export default function Why() {
             <p class="font-mono font-semibold text-[11px] leading-[1.4] tracking-[0.12em] uppercase text-fg-subtle mb-[10px] ml-1">The framework, readable in node_modules</p>
             <figure class=${WIN}>
               <figcaption class=${WINBAR}>${DOTS}<span class=${WINNAME}>terminal</span></figcaption>
-              <pre class="scroll-thin m-0 p-[18px] overflow-x-auto font-mono text-[13px] leading-[1.7] [tab-size:2] flex-1" tabindex="0" aria-label="Listing the framework source in node_modules"><code><span class="text-accent">$</span> ls node_modules/@webjsdev/core/src
+              <pre class="scroll-thin m-0 p-[18px] overflow-x-auto font-mono text-[13px] leading-[1.7] [tab-size:2] flex-1" tabindex="0" aria-label="Listing and grepping the framework source in node_modules"><code><span class="text-accent">$</span> ls node_modules/@webjsdev/core/src
 component.js    html.js         render-client.js
 css.js          directives.js   render-server.js
 serialize.js    router-client.js
-<span class="text-fg-subtle"># plain .js with JSDoc. the agent reads the</span>
-<span class="text-fg-subtle"># whole framework and fits it into context.</span></code></pre>
+
+<span class="text-accent">$</span> grep -rn "renderToString" node_modules/@webjsdev
+core/src/render-server.js: export async function renderToString(
+server/src/ssr.js: const html = await renderToString(tree)
+<span class="text-fg-subtle"># plain .js with JSDoc. the agent greps the</span>
+<span class="text-fg-subtle"># framework source straight from node_modules.</span></code></pre>
             </figure>
           </div>
           <div class="flex flex-col min-w-0">
