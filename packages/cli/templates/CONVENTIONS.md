@@ -391,6 +391,13 @@ When the user asks the agent to build their actual app:
    utilities wherever they reach, and use custom CSS only for what utilities
    cannot express (@theme tokens, @keyframes, scrollbar, complex color-mix
    or gradients). The `api` template has no UI, so this does not apply there.
+   **Definition of done (design gate):** a UI app is NOT finished until you
+   have (a) given it a design of its own and removed the scaffold shell, and
+   (b) actually run it and LOOKED at the rendered result (the game/board sizes
+   correctly, no layout shift as it fills, it does not resemble the scaffold).
+   `webjs doctor` emits an advisory when `app/layout` still carries the
+   scaffold shell (reading column, theme-toggle, fixed-header artifact); treat
+   that advisory as a to-do, not noise.
 7. **Keep:** the Drizzle setup, the test config, the agent config files
    (`AGENTS.md`, `CONVENTIONS.md`, `CLAUDE.md`, `.cursorrules`, etc.),
    `db/connection.server.ts` + `db/columns.server.ts`, the directory

@@ -460,7 +460,7 @@ webjs start  [--port N]            # prod server; source IS the runtime, plain H
 webjs test   [--server] [--browser] [--watch]
 webjs check  [--rules] [--json] [--clear-placeholders]  # correctness validator (report-only, no autofix); --json for an agent loop; --clear-placeholders strips scaffold markers in one shot
 webjs mcp                          # read-only MCP: routes, actions (RPC hashes), components, check
-webjs doctor                       # project-health checklist (incl. a page/layout elision advisory, #646); non-zero exit on a hard fail
+webjs doctor                       # project-health checklist (incl. a page/layout elision advisory + a scaffold-shell design advisory that warns when a UI app still rides the scaffold chrome); non-zero exit on a hard fail
 webjs types                        # generate .webjs/routes.d.ts (typed Route union + per-route params, #258)
 webjs typecheck [tsc args...]      # the project's own tsc --noEmit
 webjs create <name> [--template api|saas]

@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolveBin } from '../lib/resolve-bin.js';
 import { dbGenerateTtyHint } from '../lib/db-hints.js';
+import { DESIGN_REMINDER } from '../lib/design-bar.js';
 import { checkNodeInline, nodeInlineMessage } from '../lib/node-preflight.js';
 import { loadAppEnv, resolvePort } from '../lib/port.js';
 import { planDevSupervisor } from '../lib/dev-supervisor.js';
@@ -409,6 +410,11 @@ async function main() {
           console.log(`webjs check: cleared ${total} scaffold-placeholder marker(s) across ${report.length} file(s):`);
           for (const r of report) console.log(`  ${r.file}`);
           console.log('\nThe demo code is kept. Delete any gallery route/module you do not want, then re-run `webjs check`.');
+          // Re-surface the design bar the cleared markers carried. The
+          // layout/home marker was the just-in-time "adapt this chrome" reminder;
+          // stripping it silently is how an app ends up shipping the scaffold
+          // shell. Print the bar so clearing the markers cannot quietly drop it.
+          console.log(DESIGN_REMINDER);
         }
         break;
       }
