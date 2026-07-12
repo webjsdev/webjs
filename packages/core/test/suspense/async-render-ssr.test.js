@@ -90,7 +90,9 @@ test('in prod a throwing async render with no renderError() renders an empty ele
     NoBoundaryProd.register('no-boundary-prod');
     const out = await quiet(() => renderToString(html`<no-boundary-prod></no-boundary-prod>`));
     assert.doesNotMatch(out, /secret internal detail/, 'the error message never reaches the client in prod');
-    assert.match(out, /<no-boundary-prod><!--webjs-hydrate--><\/no-boundary-prod>/, 'an empty, isolated element is emitted');
+    // Content-empty and isolated (the marker is appended so the error host is
+    // display:block like the success path, not the inline default).
+    assert.match(out, /<no-boundary-prod data-wj-host><!--webjs-hydrate--><\/no-boundary-prod>/, 'an empty, isolated element is emitted (marker present)');
   } finally {
     process.env.NODE_ENV = prev;
   }

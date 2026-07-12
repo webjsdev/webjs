@@ -36,6 +36,17 @@ test('a shadow-DOM host is NOT marked (its :host must win)', async () => {
   assert.doesNotMatch(out, /<hd-shadow[^>]*data-wj-host/, 'shadow host is NOT marked (would override its :host)');
 });
 
+test('a light host whose SSR render() throws still gets the marker (error path)', async () => {
+  // The render throws before the success path's marker runs; the error branch
+  // must mark the light host too, so the error state is display:block not inline.
+  class ThrowsOnRender extends WebComponent {
+    async render() { throw new Error('boom'); }
+  }
+  ThrowsOnRender.register('hd-throws');
+  const out = await renderToString(html`<hd-throws></hd-throws>`);
+  assert.match(out, /<hd-throws[^>]*data-wj-host/, 'the error-state host carries the marker');
+});
+
 test('the marker does not clobber authored attributes and is added once', async () => {
   class WithAttrs extends WebComponent {
     render() { return html`<p>x</p>`; }
