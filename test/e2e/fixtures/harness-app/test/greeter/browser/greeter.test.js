@@ -2,7 +2,7 @@
 // imports AND CALLS a 'use server' action; only works if the harness transforms
 // + serves it (TS strip, .server.ts -> RPC stub, @webjsdev/core via importmap)
 // AND routes the action POST through the middleware to the handler. (#806)
-import { assert } from '../../../../../../browser-assert.js';
+const assert = { ok: (v, m) => { if (!v) throw new Error(m || 'expected truthy'); } };
 
 function waitFor(fn, ms = 5000) {
   return new Promise((res, rej) => {

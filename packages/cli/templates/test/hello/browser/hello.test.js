@@ -17,7 +17,10 @@
 import { html } from '@webjsdev/core';
 import { ssrFixture, assertNoA11yViolations } from '@webjsdev/core/testing';
 
-import { assert } from '../../../../../../test/browser-assert.js';
+const assert = {
+  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy`); },
+  equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${b}, got ${a}`); },
+};
 
 suite('Example browser tests', () => {
   test('DOM is real (not jsdom/linkedom)', () => {
