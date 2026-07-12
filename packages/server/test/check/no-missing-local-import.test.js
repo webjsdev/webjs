@@ -97,3 +97,35 @@ test('does NOT flag a commented-out import of a missing name', async () => {
   assert.equal(hits(await checkConventions(dir)).length, 0);
   await rm(dir, { recursive: true, force: true });
 });
+
+// The three false-positive regressions the review found.
+
+test('FP: a multi-declarator export is bailed, not under-counted', async () => {
+  const dir = await makeApp({
+    'lib/consts.ts': `export const FOO = 1, BAR = 2;\nexport const inits = fn(a, b), zed = [1, 2];\n`,
+    'use.ts': `import { FOO, BAR, zed } from './lib/consts.ts';\nexport const u = [FOO, BAR, zed];\n`,
+  });
+  assert.equal(hits(await checkConventions(dir)).length, 0, 'multi-declarator module is treated as unknowable');
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('FP: an import statement inside a string or template is not matched', async () => {
+  const dir = await makeApp({
+    'lib/utils.ts': `export const real = 1;\n`,
+    'a.ts': `export const s = "import { missingName } from './lib/utils.ts'";\n`,
+    'b.ts': "export const t = `<pre>import { gone } from './lib/utils.ts'</pre>`;\n",
+    'c.ts': `import { real } from './lib/utils.ts';\nexport const c = real;\n`,
+  });
+  assert.equal(hits(await checkConventions(dir)).length, 0, 'only the genuine import is considered, and it resolves');
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('FP: a side-effect import followed by braced code does not bleed into the next import', async () => {
+  const dir = await makeApp({
+    'lib/side.ts': `export const noop = 1;\n`,
+    'lib/utils.ts': `export const realFn = 1;\n`,
+    'x.ts': `import './lib/side.ts';\nconst opts = { notAnExport };\nimport { realFn } from './lib/utils.ts';\nexport const x = [opts, realFn];\n`,
+  });
+  assert.equal(hits(await checkConventions(dir)).length, 0, 'notAnExport is not misattributed to utils.ts');
+  await rm(dir, { recursive: true, force: true });
+});

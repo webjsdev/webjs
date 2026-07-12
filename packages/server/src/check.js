@@ -6,7 +6,6 @@ import {
   extractWebComponentClassBodies,
   matchClosingBrace,
   parsePropEntries,
-  maskComments,
 } from './js-scan.js';
 import { buildModuleGraph, transitiveDeps, resolveImport } from './module-graph.js';
 import { scanComponents } from './component-scanner.js';
@@ -386,6 +385,34 @@ function findBrowserMemberUses(code) {
 }
 
 /**
+ * True if any `export const/let/var` declares more than one binding
+ * (`export const a = 1, b = 2`), which the single-name collector would
+ * under-count. Depth-aware: a comma inside an initializer (`f(a, b)`, `[a, b]`,
+ * `{ a, b }`) does not count, only a top-level comma before the statement end.
+ * Bailing the whole module on this errs toward a false negative (safe), never a
+ * false positive. Runs on the string/comment-redacted `scan`.
+ * @param {string} scan
+ * @returns {boolean}
+ */
+function hasMultiDeclaratorExport(scan) {
+  const re = /\bexport\s+(?:const|let|var)\b/g;
+  let m;
+  while ((m = re.exec(scan))) {
+    let depth = 0;
+    for (let i = m.index + m[0].length; i < scan.length; i++) {
+      const ch = scan[i];
+      if (ch === '(' || ch === '[' || ch === '{') depth++;
+      else if (ch === ')' || ch === ']' || ch === '}') { if (depth === 0) break; depth--; }
+      else if (depth === 0) {
+        if (ch === ';') break;
+        if (ch === ',') return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * Enumerate a module's provable named exports from its redacted `scan`, for the
  * `no-missing-local-import` rule. Returns `null` when the export list is NOT
  * fully enumerable (a `export *` star re-export, a destructuring export, or a
@@ -400,7 +427,7 @@ function enumerableExports(scan) {
   // Unknowable export shapes: bail so the rule never false-positives.
   if (/\bexport\s*\*/.test(scan)) return null;                       // export * from
   if (/\bexport\s+(?:const|let|var)\s*[{[]/.test(scan)) return null; // destructuring export
-  if (/\bexport\s+(?:const|let|var)\b[^;\n=]*,[^;\n]*=/.test(scan)) return null; // multi-declarator
+  if (hasMultiDeclaratorExport(scan)) return null;                   // export const a=1, b=2
   const names = new Set();
   let m;
   const collect = (re) => { while ((m = re.exec(scan))) names.add(m[1]); };
@@ -1197,20 +1224,31 @@ export async function checkConventions(appDir) {
   // only named value imports, and only when the target's exports are fully
   // enumerable (see enumerableExports / importedValueNames).
   {
+    // Fully-blanked view (blankStrings=true): string AND template AND comment
+    // bodies blank to spaces, position-preserving. The default `scan` keeps
+    // plain-string bodies VERBATIM (so callers can read `register('tag')`),
+    // which would let an `import`/`export` inside a string be matched, so use
+    // the fully-blanked view for both the export map and the import scan. The
+    // real specifier is read back from `content` at the same (length-preserved)
+    // offset.
+    const maskedByAbs = new Map();
+    for (const f of files) maskedByAbs.set(f.abs, redactStringsAndTemplates(f.content, true));
     const exportsByAbs = new Map();
-    for (const f of files) exportsByAbs.set(f.abs, enumerableExports(f.scan));
-    // `import <clause> from '<spec>'`. `import\s+` excludes `import.meta` and a
-    // dynamic `import(`; a side-effect `import '...'` has no clause and no match.
-    // Match on a COMMENT-masked view (not the string-redacted `scan`): comments
-    // are blanked so a commented-out import is never flagged, but the specifier
-    // string is preserved so we can read and resolve it.
-    const reImport = /\bimport\s+([\s\S]*?)\bfrom\s*['"]([^'"]+)['"]/g;
+    for (const f of files) exportsByAbs.set(f.abs, enumerableExports(maskedByAbs.get(f.abs)));
+    // `import\s+` excludes `import.meta` and a dynamic `import(`. The clause is
+    // `[^'";]*?` so it cannot swallow a side-effect `import '...'` (its quote) or
+    // bridge across a `;` into the next statement's `from`.
+    const reImport = /\bimport\s+([^'";]*?)\bfrom\s*(['"])/g;
     for (const { abs, rel, content } of files) {
-      const masked = maskComments(content);
+      const masked = maskedByAbs.get(abs);
       reImport.lastIndex = 0;
       let m;
       while ((m = reImport.exec(masked))) {
-        const spec = m[2];
+        const quote = m[2];
+        const specStart = reImport.lastIndex;           // just past the opening quote
+        const specEnd = content.indexOf(quote, specStart);
+        if (specEnd < 0) continue;
+        const spec = content.slice(specStart, specEnd);
         if (!/^(?:\.|#)/.test(spec)) continue; // app-internal only (relative or #alias)
         const names = importedValueNames(m[1]);
         if (!names || names.length === 0) continue;
