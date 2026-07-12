@@ -129,3 +129,34 @@ test('FP: a side-effect import followed by braced code does not bleed into the n
   assert.equal(hits(await checkConventions(dir)).length, 0, 'notAnExport is not misattributed to utils.ts');
   await rm(dir, { recursive: true, force: true });
 });
+
+test('FP: an exported generator is collected in every star position', async () => {
+  const dir = await makeApp({
+    'lib/g.ts': `export function* a(){}\nexport function *b(){}\nexport function*c(){}\nexport async function* d(){}\nexport async function *e(){}\n`,
+    'use.ts': `import { a, b, c, d, e } from './lib/g.ts';\nexport const u = [a, b, c, d, e];\n`,
+  });
+  assert.equal(hits(await checkConventions(dir)).length, 0, 'no star-placement is treated as a missing export');
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('a generic type annotation does not disable the rule (comma inside Map<> is not a declarator)', async () => {
+  const dir = await makeApp({
+    'lib/store.ts': `export const cache: Map<string, number> = new Map();\nexport const real = 1;\n`,
+    'ok.ts': `import { cache, real } from './lib/store.ts';\nexport const o = [cache, real];\n`,
+    'bad.ts': `import { gone } from './lib/store.ts';\nexport const b = gone;\n`,
+  });
+  const v = hits(await checkConventions(dir));
+  assert.equal(v.length, 1, 'the module is still checked despite the generic annotation');
+  assert.match(v[0].file, /bad\.ts/);
+  assert.match(v[0].message, /does not export `gone`/);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('a real multi-declarator with a ternary or comparison first initializer is still bailed', async () => {
+  const dir = await makeApp({
+    'lib/m.ts': `export const x = cond ? a : b, y = 2;\nexport const p = q < r, s = 3;\n`,
+    'use.ts': `import { y, s } from './lib/m.ts';\nexport const u = [y, s];\n`,
+  });
+  assert.equal(hits(await checkConventions(dir)).length, 0, 'multi-declarator bail holds through a ternary/comparison init');
+  await rm(dir, { recursive: true, force: true });
+});

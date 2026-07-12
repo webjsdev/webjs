@@ -398,15 +398,25 @@ function hasMultiDeclaratorExport(scan) {
   const re = /\bexport\s+(?:const|let|var)\b/g;
   let m;
   while ((m = re.exec(scan))) {
-    let depth = 0;
+    let depth = 0;      // () [] {} nesting
+    let seenEq = false; // passed this declarator's `=` (now in the initializer)
+    let inType = false; // inside a `: Type` annotation (before the `=`)
     for (let i = m.index + m[0].length; i < scan.length; i++) {
       const ch = scan[i];
-      if (ch === '(' || ch === '[' || ch === '{') depth++;
-      else if (ch === ')' || ch === ']' || ch === '}') { if (depth === 0) break; depth--; }
-      else if (depth === 0) {
-        if (ch === ';') break;
-        if (ch === ',') return true;
-      }
+      if (ch === '(' || ch === '[' || ch === '{') { depth++; continue; }
+      if (ch === ')' || ch === ']' || ch === '}') { if (depth === 0) break; depth--; continue; }
+      if (depth !== 0) continue;
+      if (ch === ';') break;
+      // A plain `=` ends the type annotation and enters the initializer. `<=`,
+      // `>=`, `=>`, `==` are harmless here (seenEq only latches true).
+      if (ch === '=') { seenEq = true; inType = false; continue; }
+      // A `:` BEFORE the `=` opens the type annotation, whose commas belong to a
+      // generic (`Map<string, number>`), not a second declarator. A `:` after
+      // `=` (a ternary in the initializer) is NOT a type and must not suppress a
+      // real declarator comma.
+      if (ch === ':' && !seenEq) { inType = true; continue; }
+      // A top-level comma outside a type annotation starts a second declarator.
+      if (ch === ',' && !inType) return true;
     }
   }
   return false;
@@ -431,7 +441,7 @@ function enumerableExports(scan) {
   const names = new Set();
   let m;
   const collect = (re) => { while ((m = re.exec(scan))) names.add(m[1]); };
-  collect(/\bexport\s+(?:async\s+)?function\s*\*?\s+([A-Za-z_$][\w$]*)/g);
+  collect(/\bexport\s+(?:async\s+)?function\b\s*\*?\s*([A-Za-z_$][\w$]*)/g);
   collect(/\bexport\s+(?:abstract\s+)?class\s+([A-Za-z_$][\w$]*)/g);
   collect(/\bexport\s+(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g);
   collect(/\bexport\s+(?:type|interface|enum|namespace)\s+([A-Za-z_$][\w$]*)/g);
