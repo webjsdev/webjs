@@ -37,7 +37,7 @@ test('the document head carries the low-specificity host display default', async
   const res = await h.handle(new Request('http://localhost/'));
   assert.equal(res.status, 200);
   const html = await res.text();
-  assert.match(html, /<style[^>]*>@layer webjs-host\{:where\(\[data-wj-host\]\)\{display:block\}:where\(\[data-wj-host\]\[hidden\]\)\{display:none\}\}<\/style>/, 'head has the layered host default rule + [hidden] carve-out');
+  assert.match(html, /<style[^>]*>@layer webjs-host\{:where\(\[data-wj-host\]\)\{display:block\}:where\(\[data-wj-host\]\[hidden\]:not\(\[hidden='until-found'\]\)\)\{display:none\}\}<\/style>/, 'head has the layered host default rule + [hidden] carve-out (excluding until-found)');
   // It sits in <head>, before <body>.
   assert.ok(html.indexOf('data-wj-host') < html.indexOf('<body'), 'rule is in the head');
 });

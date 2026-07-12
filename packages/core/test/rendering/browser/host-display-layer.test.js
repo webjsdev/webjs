@@ -34,7 +34,7 @@ suite('host display:block default (cascade layer)', () => {
     // The exact shipped rule (layered host default + [hidden] carve-out) declared
     // FIRST (lowest layer), then Tailwind-style layered utilities.
     style.textContent = `
-      @layer webjs-host { :where([data-wj-host]) { display: block } :where([data-wj-host][hidden]) { display: none } }
+      @layer webjs-host { :where([data-wj-host]) { display: block } :where([data-wj-host][hidden]:not([hidden='until-found'])) { display: none } }
       @layer utilities { .flex { display: flex } .hidden { display: none } }
     `;
     document.head.appendChild(style);
@@ -68,6 +68,20 @@ suite('host display:block default (cascade layer)', () => {
     // display:none from the same-layer [hidden] carve-out must win over the block
     // default, so `?hidden=${cond}` / el.hidden actually hides a component host.
     assert.equal(hostWith({ hidden: '' }), 'none', 'a hidden host must be display:none');
+  });
+
+  test('the carve-out excludes hidden="until-found" (mirrors the UA rule)', () => {
+    // Whether until-found ultimately hides is up to the browser's own support,
+    // so assert our RULE's TARGETING (browser-independent): the carve-out matches
+    // plain [hidden] but NOT hidden="until-found", so it never force-collapses a
+    // findable region to display:none (which would break find-in-page).
+    const sel = "[data-wj-host][hidden]:not([hidden='until-found'])";
+    const plain = document.createElement('x-uf-plain');
+    plain.setAttribute('data-wj-host', ''); plain.setAttribute('hidden', '');
+    const uf = document.createElement('x-uf-until');
+    uf.setAttribute('data-wj-host', ''); uf.setAttribute('hidden', 'until-found');
+    assert.equal(plain.matches(sel), true, 'plain [hidden] host IS targeted (hidden)');
+    assert.equal(uf.matches(sel), false, 'hidden="until-found" host is NOT targeted');
   });
 
   test("a shadow host (NOT marked) keeps its own :host{display}", () => {

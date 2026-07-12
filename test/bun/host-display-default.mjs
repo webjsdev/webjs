@@ -5,13 +5,15 @@
  *   node test/bun/host-display-default.mjs
  *   bun  test/bun/host-display-default.mjs
  *
- * The SSR walker stamps every component host (light AND shadow) with
- * `data-wj-host` so the head rule `@layer webjs-host{:where([data-wj-host]){display:block}}`
- * defaults hosts to block (a custom element is display:inline by default, which
- * collapses a block container). Host emission is on the SSR hot path, so it is
- * runtime-sensitive. A plain assert script (not `*.test.mjs`), exits non-zero on
- * failure. Run from the repo root so the bare `@webjsdev/core` specifier
- * resolves to the workspace package.
+ * The SSR walker stamps LIGHT component hosts (never shadow) with `data-wj-host`
+ * so the head rule
+ * `@layer webjs-host{:where([data-wj-host]){display:block}:where([data-wj-host][hidden]:not([hidden='until-found'])){display:none}}`
+ * defaults light hosts to block (a custom element is display:inline by default,
+ * which collapses a block container). Shadow hosts are NOT marked (a document
+ * rule would override the shadow author's `:host`). Host emission is on the SSR
+ * hot path, so it is runtime-sensitive. A plain assert script (not `*.test.mjs`),
+ * exits non-zero on failure. Run from the repo root so the bare `@webjsdev/core`
+ * specifier resolves to the workspace package.
  */
 import assert from 'node:assert/strict';
 import { html, WebComponent } from '@webjsdev/core';
