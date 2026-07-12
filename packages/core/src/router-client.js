@@ -3261,26 +3261,28 @@ function addNewHeadElements(newHead) {
 }
 
 /**
- * A stylesheet a soft nav must NOT remove, mirroring Turbo's default. Turbo's
- * `elementIsStylesheet` is `<style>` or `<link rel~="stylesheet">`, and its
- * head merge removes an old stylesheet ONLY when it opts into dynamic removal
- * via `data-turbo-track="dynamic"` (`unusedDynamicStylesheetElements`); a plain
- * stylesheet is never removed. WebJs mirrors that: a stylesheet is persistent
- * unless tagged `data-webjs-track="dynamic"` (the sibling of the existing
- * `data-webjs-track="reload"`). Removing a plain stylesheet during a full-body
- * merge whose incoming head lacked it is exactly what left the page unstyled
- * (#936): WebJs's `X-Webjs-Have` optimization returns a REDUCED head (the app
- * stylesheet omitted), so the merge must not treat "absent from the incoming
- * head" as "stale". A genuinely changed stylesheet is dropped by the
- * deploy-level hard reload (build-id mismatch), not a soft swap.
+ * Is `el` a stylesheet the head merge must never remove: a `<style>` or a
+ * `<link rel~="stylesheet">`. WebJs ALWAYS keeps these on a soft nav, with no
+ * opt-out, and that is a deliberate divergence from Turbo. Turbo removes a
+ * stylesheet absent from the new head when it is tagged
+ * `data-turbo-track="dynamic"`, which is sound in Turbo because a Turbo visit
+ * always compares a COMPLETE old head to a COMPLETE new head, so "absent" means
+ * "this page removed it". WebJs's `X-Webjs-Have` optimization returns a REDUCED
+ * head (the shared app stylesheet is omitted because the client already has it),
+ * so "absent from the incoming head" means "optimized away", NOT "removed". A
+ * dynamic-removal opt-out would therefore re-introduce #936 (it would strip a
+ * still-needed sheet on any partial response), and WebJs is Tailwind-first (one
+ * global sheet, no page-specific sheets to drop), so the knob would be unsafe
+ * and unused. Keeping every stylesheet is correct here; a genuinely changed one
+ * is dropped by the deploy-level hard reload (build-id mismatch), not a soft swap.
  *
  * @param {Element} el
  * @returns {boolean}
  */
 function isPersistentHeadStyle(el) {
-  const isStylesheet = el.tagName === 'STYLE' ||
-    (el.tagName === 'LINK' && (el.getAttribute('rel') || '').toLowerCase().split(/\s+/).includes('stylesheet'));
-  return isStylesheet && el.getAttribute('data-webjs-track') !== 'dynamic';
+  if (el.tagName === 'STYLE') return true;
+  return el.tagName === 'LINK' &&
+    (el.getAttribute('rel') || '').toLowerCase().split(/\s+/).includes('stylesheet');
 }
 
 /** @param {HTMLHeadElement} newHead */
