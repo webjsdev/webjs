@@ -41,7 +41,10 @@ const SHELL_TELLS = [
   { key: 'reading-column (max-w-[760px])', re: /max-w-\[760px\]/ },
   { key: 'theme-toggle chrome', re: /theme-toggle/ },
   { key: 'fixed-header --header-h artifact', re: /--header-h\b/ },
-  { key: 'attribution footer', re: /Built with|webjs\.dev/ },
+  // Specific to the scaffold's own attribution (its footer links webjs.dev and
+  // says "Built with webjs"). A bare "Built with ..." is a common bespoke footer,
+  // so it is NOT a tell on its own.
+  { key: 'attribution footer', re: /webjs\.dev|Built with webjs/ },
 ];
 
 /**

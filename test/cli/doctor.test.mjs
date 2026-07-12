@@ -705,3 +705,11 @@ test('design advisory does not hard-fail (advisory only)', async () => {
   assert.equal(byName(results, DESIGN_CHECK).status, 'warn');
   assert.equal(results.filter((r) => r.status === 'fail').length, 0, 'never a hard fail');
 });
+
+test('design advisory PASSES (stays quiet) on a layout-less api app', async () => {
+  const dir = tmpDir();
+  write(dir, 'app/health/route.ts', 'export const GET = () => new Response("ok");');
+  const r = byName(await runDoctorChecks(dir, baseOpts()), DESIGN_CHECK);
+  assert.equal(r.status, 'pass', 'an api app with no app/layout must not be nudged');
+  assert.match(r.message, /no app\/layout/);
+});
