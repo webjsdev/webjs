@@ -1319,11 +1319,12 @@ ${UI_THEME}
     </style>
 
     <header class="fixed inset-x-0 top-0 z-20 flex items-center gap-6 px-4 sm:px-6 py-3 border-b border-border bg-[color-mix(in_oklch,var(--background)_75%,transparent)] backdrop-blur-[18px]">
+      <!-- webjs-scaffold-placeholder. This is the scaffold's example brand: the app name as a plain wordmark. Give THIS app its own brand or logo mark (a glyph, a wordmark treatment, the real product name), then delete this line. webjs check fails while the marker remains. -->
       <a href="/" class="mr-auto inline-flex items-center gap-2 no-underline text-foreground font-semibold text-[15px] leading-none tracking-tight">
         <span>${displayName}</span>
       </a>
       <nav class="flex gap-4 items-center">
-        <!-- Example nav. Replace with the real navigation for your app. -->
+        <!-- webjs-scaffold-placeholder. This is the scaffold's example nav: a single "Home" link. Replace it with THIS app's real navigation, or remove the nav entirely if the app does not need one, then delete this line. webjs check fails while the marker remains. -->
         \${navLink('/', 'Home')}
         <theme-toggle></theme-toggle>
       </nav>

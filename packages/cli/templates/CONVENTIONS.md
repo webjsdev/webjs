@@ -394,7 +394,14 @@ When the user asks the agent to build their actual app:
    `webjs-scaffold-placeholder` marker (the starter orange looks finished on
    purpose), so `webjs check` fails until you own the palette and delete that
    marker line, the same way the gallery and footer markers work. To keep the
-   starter palette deliberately, run `webjs check --clear-placeholders`. Style with Tailwind utilities wherever they
+   starter palette deliberately, run `webjs check --clear-placeholders`. The
+   scaffold's IDENTITY elements carry the same marker: the example brand
+   wordmark, the "Home" nav, and the "Built with webjs" footer. The layout
+   STRUCTURE (header, main, footer, theme wiring) is generic and stays whole as
+   teaching material, but each scaffold-specific identity element must be made
+   the app's own (a real brand or logo, the app's real nav or none, its own
+   footer) to clear `app/layout.ts`. That is the point of the markers: own the
+   identity, keep the structure. Style with Tailwind utilities wherever they
    reach, and use custom CSS only for what utilities cannot express (@theme
    tokens, @keyframes, scrollbar, complex color-mix or gradients). The `api`
    template has no UI, so this does not apply there.

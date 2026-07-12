@@ -111,8 +111,8 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // horizontal scrollbar). Counterfactual: dropping the comment fails here.
     assert.match(layoutSrc, /max-w-\[760px\] cap is a comfortable READING width/,
       'layout must carry the content-width steering comment so a full-bleed app widens it');
-    assert.match(layoutSrc, /Example nav\. Replace with the real navigation/,
-      'layout must flag the example nav as replace-me');
+    assert.match(layoutSrc, /example nav[^]*Replace it with THIS app's real navigation/,
+      'layout must flag the example nav as replace-me (now a placeholder marker)');
 
     // Scaffold-removal enforcement (#359): the example homepage and the
     // example app chrome carry a `webjs-scaffold-placeholder` marker, which
@@ -136,10 +136,20 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // --clear-placeholders strips it without breaking the <style> block.
     assert.match(layoutSrc, new RegExp(marker + '[^\\n]*STARTER brand colors'),
       'layout.ts guards the palette tokens with a scaffold-placeholder marker');
-    // Three markers (chrome, palette, footer): removing any one still fails until
-    // all are addressed, so the palette cannot be skipped.
-    assert.ok(layoutSrc.split(marker).length - 1 >= 3,
-      'layout.ts carries chrome + palette + footer placeholder markers');
+    // The scaffold's IDENTITY elements (the example brand wordmark and the "Home"
+    // nav) also ship guarded by their own placeholder markers, so a delivered app
+    // must own its identity, not just tweak the scaffold's. The layout STRUCTURE
+    // (header/main/footer) stays whole as teaching material; only the identity is
+    // marked. Both are single-line HTML comments so --clear-placeholders strips
+    // them without orphaning a dangling -->.
+    assert.match(layoutSrc, new RegExp(marker + '[^\\n]*example brand'),
+      'layout.ts guards the example brand wordmark with a scaffold-placeholder marker');
+    assert.match(layoutSrc, new RegExp(marker + '[^\\n]*example nav'),
+      'layout.ts guards the example nav with a scaffold-placeholder marker');
+    // Five markers (chrome, brand, nav, palette, footer): removing any one still
+    // fails the check until all are addressed, so no identity element is skipped.
+    assert.ok(layoutSrc.split(marker).length - 1 >= 5,
+      'layout.ts carries chrome + brand + nav + palette + footer placeholder markers');
 
     // Drizzle db layer wired up
     assert.ok(existsSync(join(appDir, 'db', 'schema.server.ts')), 'db/schema.server.ts written');
