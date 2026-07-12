@@ -67,7 +67,7 @@ export default function RootLayout({ children, url }: { children: unknown; url?:
   // client-router soft navs (add-only head merge keeps it), so loading
   // /?diag=nudge once governs the whole session. Whitelisted so the value that
   // reaches the inline script is always a known literal.
-  const DIAG_MODES = new Set(['control', 'reflow', 'repaint', 'recolor', 'nudge']);
+  const DIAG_MODES = new Set(['control', 'reflow', 'repaint', 'recolor', 'nudge', 'restore']);
   let diagMode = '';
   try {
     const raw = new URL(String(url ?? ''), 'http://x').searchParams.get('diag') || '';
@@ -161,15 +161,28 @@ export default function RootLayout({ children, url }: { children: unknown; url?:
       (function () {
         var mode = "${diagMode}";
         var tick = 0;
+        // Live probe of the state that actually matters: did the stylesheet
+        // <link> survive the soft nav, how many stylesheets are attached, and
+        // what background colour actually resolved. Read straight off the badge
+        // on the phone, so we can tell a head-removal (css:GONE) apart from a
+        // repaint failure (css:ok but the page looks unstyled).
+        function probe() {
+          var link = document.querySelector('link[rel="stylesheet"][href*="tailwind"]');
+          var sheets = document.querySelectorAll('link[rel="stylesheet"]').length;
+          var bg = '';
+          try { bg = getComputedStyle(document.body).backgroundColor; } catch (_) {}
+          return { css: link ? 'ok' : 'GONE', sheets: sheets, bg: bg };
+        }
         function badge() {
           var b = document.getElementById('webjs-diag-badge');
           if (!b) {
             b = document.createElement('div');
             b.id = 'webjs-diag-badge';
-            b.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;background:#111;color:#fff;font:600 12px/1.2 system-ui,sans-serif;padding:6px 9px;border-radius:8px;opacity:0.85;pointer-events:none;max-width:70vw';
+            b.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;background:#111;color:#fff;font:600 11px/1.35 system-ui,sans-serif;padding:6px 9px;border-radius:8px;opacity:0.9;pointer-events:none;max-width:82vw';
             (document.body || document.documentElement).appendChild(b);
           }
-          b.textContent = 'diag: ' + mode + ' @ ' + location.pathname;
+          var p = probe();
+          b.textContent = 'diag:' + mode + ' ' + location.pathname + ' | css:' + p.css + ' sheets:' + p.sheets + ' | bg:' + p.bg;
         }
         function nudge() {
           try {
@@ -184,12 +197,24 @@ export default function RootLayout({ children, url }: { children: unknown; url?:
               var h = document.documentElement, prev = h.style.display;
               h.style.display = 'none'; void h.offsetHeight; h.style.display = prev;
             }
-            /* mode 'control' does nothing: it only shows the badge, to confirm the
-               bug still reproduces with the diagnostic script present. */
+            else if (mode === 'restore') {
+              // Head-removal hypothesis: if the stylesheet <link> is gone after
+              // the swap, re-add it. If this restores styling, the cause is the
+              // head merge stripping the sheet, not a repaint issue.
+              if (!document.querySelector('link[rel="stylesheet"][href*="tailwind"]')) {
+                var l = document.createElement('link');
+                l.rel = 'stylesheet'; l.href = '/public/tailwind.css';
+                document.head.appendChild(l);
+              }
+            }
+            /* mode 'control' does nothing: badge/probe only, to confirm the bug
+               still reproduces with the diagnostic present. */
           } catch (_) {}
         }
         document.addEventListener('webjs:navigate', function () {
-          requestAnimationFrame(function () { nudge(); badge(); });
+          // nudge on the next frame (after the swap), then read the probe one
+          // more frame later so any nudge/restore has landed before we report.
+          requestAnimationFrame(function () { nudge(); requestAnimationFrame(badge); });
         });
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', badge);
         else badge();
