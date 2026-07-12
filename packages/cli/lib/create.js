@@ -563,6 +563,14 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     '.claude/hooks/require-tests-with-src.sh',
     '.claude/hooks/check-server-imports.sh',
     '.claude/hooks/check-server-imports.mjs',
+    // Render-and-look enforcement for UI work: a UserPromptSubmit router that
+    // points UI-building prompts at the webjs-design-review skill, a Stop-hook
+    // backstop that nudges a render-and-look before finishing UI changes, and
+    // the skill they route to. A design/layout defect has no failing test, so
+    // this vision-in-the-loop is the only thing that catches it.
+    '.claude/hooks/route-skills.sh',
+    '.claude/hooks/design-review-before-stop.sh',
+    '.claude/skills/webjs-design-review/SKILL.md',
     // Gemini CLI config + hooks
     '.gemini/settings.json',
     '.gemini/hooks/nudge-uncommitted.sh',
@@ -638,7 +646,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
 
   // Make hook scripts executable
   const { chmod } = await import('node:fs/promises');
-  for (const hook of ['block-prose-punctuation.sh', 'guard-branch-context.sh', 'nudge-uncommitted.sh', 'commit-before-stop.sh', 'cleanup-merged-worktree.sh', 'require-tests-with-src.sh']) {
+  for (const hook of ['block-prose-punctuation.sh', 'guard-branch-context.sh', 'nudge-uncommitted.sh', 'commit-before-stop.sh', 'cleanup-merged-worktree.sh', 'require-tests-with-src.sh', 'route-skills.sh', 'design-review-before-stop.sh']) {
     const hookPath = join(appDir, '.claude', 'hooks', hook);
     if (existsSync(hookPath)) await chmod(hookPath, 0o755);
   }

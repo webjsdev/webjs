@@ -211,6 +211,26 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(postCommands.includes('.claude/hooks/cleanup-merged-worktree.sh'),
       'settings.json wires cleanup-merged-worktree into PostToolUse');
 
+    // Render-and-look enforcement for UI work: a design/layout defect has no
+    // failing test, so the scaffold ships a design-review skill, a
+    // UserPromptSubmit router that points UI prompts at it, and a Stop-hook
+    // backstop that nudges a render-and-look before finishing. All three must
+    // be scaffolded and wired, and the skill the router names must exist (else
+    // a fresh clone routes to a dangling skill).
+    for (const h of ['route-skills.sh', 'design-review-before-stop.sh']) {
+      assert.ok(existsSync(join(appDir, '.claude/hooks', h)), `${h} is scaffolded`);
+    }
+    assert.ok(
+      existsSync(join(appDir, '.claude/skills/webjs-design-review/SKILL.md')),
+      'the webjs-design-review skill is scaffolded',
+    );
+    const promptCommands = (claudeSettings.hooks?.UserPromptSubmit ?? [])
+      .flatMap((g) => g.hooks.map((h) => h.command));
+    assert.ok(promptCommands.includes('.claude/hooks/route-skills.sh'),
+      'settings.json wires route-skills into UserPromptSubmit');
+    assert.ok(stopCommands.includes('.claude/hooks/design-review-before-stop.sh'),
+      'settings.json wires design-review-before-stop into Stop');
+
     // The local pre-commit hook is lightweight: it blocks commits to main
     // and nothing else. The test/convention gate runs in CI, not locally,
     // so `git commit` stays fast and the gate cannot be skipped with a
