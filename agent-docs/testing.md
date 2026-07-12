@@ -319,6 +319,49 @@ await assertNoA11yViolations(el);                // passes a clean subtree
 // live in packages/core/test/testing/browser/a11y.test.js.
 ```
 
+### Layout-stability: catch uneven / collapsing / reflowing layouts
+
+A layout bug (a board that collapses, cells that are unequal, a grid that
+resizes as it fills) is invisible to static `check` / `typecheck` and to a glance
+at the empty first paint; it only shows mid-interaction. A browser test measures
+real geometry with `getBoundingClientRect()` (the WTR session is a real browser),
+so it FAILS on the defect. There is no framework helper for this (it is a few
+lines); write it against your app's own component:
+
+```js
+import { ssrFixture } from '@webjsdev/core/testing';
+
+// A grid's children must all be the same size, and stay that size as it fills.
+function assertEvenGrid(gridEl, label = 'grid') {
+  const cells = [...gridEl.children];
+  const rects = cells.map((c) => c.getBoundingClientRect());
+  const w = rects.map((r) => Math.round(r.width));
+  const h = rects.map((r) => Math.round(r.height));
+  const spread = (a) => Math.max(...a) - Math.min(...a);
+  if (spread(w) > 1 || spread(h) > 1) {
+    throw new Error(`${label}: cells are uneven (widths ${w}, heights ${h}). ` +
+      `Use grid-template-columns/rows: repeat(N,1fr) + aspect-ratio on the container, ` +
+      `and min-h-0/overflow-hidden on cells. See agent-docs/styling.md.`);
+  }
+  return rects[0];
+}
+
+test('the board stays even and stable through a move', async () => {
+  const el = await ssrFixture(html`<game-board></game-board>`);
+  const board = el.querySelector('[role="grid"], .board');
+  const before = assertEvenGrid(board, 'empty board');
+  // Drive a real interaction (place a mark), then re-measure.
+  board.querySelector('button').click();
+  await new Promise((r) => requestAnimationFrame(r));
+  const after = assertEvenGrid(board, 'after a move');
+  // The board must not resize when a cell gets content (the reflow bug).
+  assert.ok(Math.abs(before.width - after.width) <= 1, 'board width is stable across a move');
+});
+```
+
+This is the objective FAILURE SIGNAL for the class of visual bug an agent cannot
+see while coding blind. Ship one for any grid/board/gallery layout.
+
 ---
 
 ## The handle() test harness (`@webjsdev/server/testing`)
