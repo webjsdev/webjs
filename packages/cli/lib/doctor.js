@@ -872,9 +872,9 @@ async function checkScaffoldDesign(appDir) {
     name,
     status: 'warn',
     message:
-      `app/layout still carries ${tells.length} scaffold-shell signal(s): ${tells.join(', ')}. ` +
-      'A delivered UI app should own its design, not adapt the scaffold shell.',
-    fix: 'Design the app\'s own layout, palette, typography, and chrome from what the app IS (a centered board, a full-bleed dashboard, ...), not the scaffold\'s header / reading column / theme-toggle / footer. Recoloring is not a redesign. Render the app and look at it. See AGENTS.md / CONVENTIONS.md item 6.',
+      `app/layout still carries ${tells.length} scaffold design signal(s): ${tells.join(', ')}. ` +
+      'A delivered UI app should own its design (layout AND palette), not adapt the scaffold.',
+    fix: 'Design the app\'s own layout, palette, typography, and chrome from what the app IS (a centered board, a full-bleed dashboard, ...), not the scaffold\'s header / reading column / theme-toggle / footer / default token colors. Recoloring the scaffold is not a redesign. Render the app and look at it. See AGENTS.md / CONVENTIONS.md item 6.',
   };
 }
 

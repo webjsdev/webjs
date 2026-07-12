@@ -680,7 +680,7 @@ test('design advisory WARNS when the layout still rides the scaffold shell', asy
   `);
   const r = byName(await runDoctorChecks(dir, baseOpts()), DESIGN_CHECK);
   assert.equal(r.status, 'warn', 'kept-shell layout should warn');
-  assert.match(r.message, /scaffold-shell signal/);
+  assert.match(r.message, /scaffold design signal/);
   assert.match(r.fix, /item 6/);
 });
 

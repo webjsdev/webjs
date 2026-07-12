@@ -51,6 +51,12 @@ const SHELL_TELLS = [
   // says "Built with webjs"). A bare "Built with ..." is a common bespoke footer,
   // so it is NOT a tell on its own.
   { key: 'attribution footer', re: /webjs\.dev|Built with webjs/ },
+  // The scaffold's exact default brand colors (item 6: the token NAMES are
+  // infrastructure but the VALUES are the app's own; keeping the defaults is not
+  // owning the palette). These are the distinctive scaffold values, so a verbatim
+  // match means the palette was not changed. A recolored palette does not match.
+  { key: 'default scaffold primary color', re: /--primary:\s*oklch\(0\.7\s+0\.16\s+52\)/ },
+  { key: 'default scaffold card color', re: /--card:\s*oklch\(0\.18\s+0\.01\s+55\)/ },
 ];
 
 /**

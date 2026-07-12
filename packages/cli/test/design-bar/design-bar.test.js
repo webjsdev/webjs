@@ -52,6 +52,17 @@ test('scaffoldShellTells returns nothing for a bespoke layout (counterfactual)',
   assert.deepEqual(scaffoldShellTells(undefined), []);
 });
 
+test('the default scaffold palette values are a tell; a recolored palette is not', () => {
+  // Keeping the scaffold's exact token colors is not owning the palette.
+  const kept = `<style>:root { --primary: oklch(0.7 0.16 52); --card: oklch(0.18 0.01 55); }</style>`;
+  const tells = scaffoldShellTells(kept);
+  assert.ok(tells.some((t) => /primary color/.test(t)), 'default primary is a tell');
+  assert.ok(tells.some((t) => /card color/.test(t)), 'default card is a tell');
+  // A recolored palette (own values) is NOT flagged.
+  const recolored = `<style>:root { --primary: oklch(0.55 0.2 265); --card: oklch(0.2 0.03 265); }</style>`;
+  assert.deepEqual(scaffoldShellTells(recolored), [], 'an own palette is not a tell');
+});
+
 test('a bespoke "Built with X" footer is NOT an attribution tell (no false positive)', () => {
   // A redesigned dashboard that kept a dark-mode toggle and wrote its own footer
   // must not reach the 2-tell threshold on a generic "Built with ..." string.
