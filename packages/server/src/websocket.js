@@ -4,6 +4,7 @@ import { urlFromRequest } from './forwarded.js';
 import { registerClient } from './broadcast.js';
 import { loadWsModule } from './listener-core.js';
 import { makeThenable } from './thenable-params.js';
+import { setTrustedRemoteIp } from './rate-limit.js';
 
 /**
  * WebSocket support.
@@ -106,7 +107,17 @@ function buildRequestFromUpgrade(req, url) {
   const headers = {};
   for (const [k, v] of Object.entries(req.headers)) {
     if (k.startsWith(':')) continue;
+    // Never copy an inbound `x-webjs-remote-ip`: it is a framework-internal
+    // trust header a client could spoof on the upgrade. The real socket IP is
+    // stamped below via the authoritative WeakMap (#778, the WS-seam analog of
+    // the #773 fetch-path IP-trust fix).
+    if (k === 'x-webjs-remote-ip') continue;
     headers[k] = Array.isArray(v) ? v.join(',') : String(v ?? '');
   }
-  return new Request(url, { method: 'GET', headers });
+  const webReq = new Request(url, { method: 'GET', headers });
+  // Stamp the framework-trusted socket IP so `clientIp(req)` inside the `WS`
+  // handler returns the real peer address (the WeakMap is authoritative and
+  // ignores the inbound header), matching the fetch path's `toWebRequest`.
+  setTrustedRemoteIp(webReq, req.socket?.remoteAddress || '');
+  return webReq;
 }
