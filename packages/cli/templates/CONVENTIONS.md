@@ -386,15 +386,21 @@ When the user asks the agent to build their actual app:
    "Built with webjs" branding. Self-audit before finishing: nothing should
    read as the scaffold example (no "Built with webjs" footer, no leftover
    example nav, no default reading column unless it truly fits). The design
-   tokens and theme wiring in `app/layout.ts` are infrastructure to keep and
-   restyle on top of, not the example look to preserve. Style with Tailwind
-   utilities wherever they reach, and use custom CSS only for what utilities
-   cannot express (@theme tokens, @keyframes, scrollbar, complex color-mix
-   or gradients). The `api` template has no UI, so this does not apply there.
+   token NAMES and theme wiring (`--background`, `--primary`, `--card`, ... in
+   `app/layout.ts`) are infrastructure to keep, but their COLOR VALUES are
+   yours: set a distinctive palette that fits the app, in both the light and
+   dark blocks. Keeping the scaffold's token colors (or a light warm recolor of
+   them) is NOT owning the palette. Style with Tailwind utilities wherever they
+   reach, and use custom CSS only for what utilities cannot express (@theme
+   tokens, @keyframes, scrollbar, complex color-mix or gradients). The `api`
+   template has no UI, so this does not apply there.
    **Definition of done (design gate):** a UI app is NOT finished until you
-   have (a) given it a design of its own and removed the scaffold shell, and
-   (b) actually run it and LOOKED at the rendered result (the game/board sizes
-   correctly, no layout shift as it fills, it does not resemble the scaffold).
+   have (a) given it a design of its own (layout AND palette) and removed the
+   scaffold shell, and (b) run it and PLAYED THROUGH every state in a browser
+   (fill the board, win, draw, reload), confirming nothing resizes or shifts as
+   it fills (even, stable squares) and it does not resemble the scaffold. A
+   glance at the empty first paint is not enough; the layout bugs show up
+   mid-interaction.
    `webjs doctor` emits an advisory when `app/layout` still carries the
    scaffold shell (reading column, theme-toggle, fixed-header artifact); treat
    that advisory as a to-do, not noise.

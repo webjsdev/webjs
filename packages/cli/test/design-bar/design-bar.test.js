@@ -29,7 +29,8 @@ test('hasUiLayout is true for a UI app and false for a layout-less (api) app', (
 test('DESIGN_REMINDER states the bar and points at the convention', () => {
   assert.match(DESIGN_REMINDER, /TEACHING artifact/);
   assert.match(DESIGN_REMINDER, /OWN design/);
-  assert.match(DESIGN_REMINDER, /render the app and look at it/);
+  assert.match(DESIGN_REMINDER, /COLOR VALUES are yours/, 'says the token colors are the app\'s own');
+  assert.match(DESIGN_REMINDER, /play through every state/, 'says to exercise every state, not just the first paint');
   assert.match(DESIGN_REMINDER, /item 6/);
 });
 

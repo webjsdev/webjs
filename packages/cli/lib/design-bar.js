@@ -25,10 +25,16 @@ export const DESIGN_REMINDER =
   'A delivered UI app must have its OWN design chosen from what the app IS:\n' +
   'layout, palette, typography, icons, spacing, and chrome. Do not keep the\n' +
   "scaffold's header / Home nav / theme-toggle / ~760px reading column / its\n" +
-  'attribution footer, and recoloring is not a redesign. Decide from scratch\n' +
-  'what layout fits (a centered board, a full-bleed dashboard, a split, a single\n' +
-  'card), then render the app and look at it before calling it done. See\n' +
-  'AGENTS.md / CONVENTIONS.md item 6.';
+  'attribution footer.\n' +
+  '- Palette: the design-token NAMES (--background, --primary, --card, ...) are\n' +
+  '  infrastructure to keep, but their COLOR VALUES are yours. Set a distinctive\n' +
+  '  palette that fits the app; a light recolor of the scaffold neutrals is not\n' +
+  '  a redesign.\n' +
+  '- Verify by USING it: render the app and play through every state (fill the\n' +
+  '  board, win, draw, reload), and confirm nothing resizes or shifts as it\n' +
+  '  fills (even, stable squares). A glance at the empty first paint is not\n' +
+  '  enough; the layout bugs show up mid-interaction.\n' +
+  'See AGENTS.md / CONVENTIONS.md item 6.';
 
 // Distinctive strings the scaffold emits into `app/layout.ts`. An app that still
 // carries several of them kept the scaffold shell rather than designing its own.
