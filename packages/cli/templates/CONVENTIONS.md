@@ -408,9 +408,11 @@ When the user asks the agent to build their actual app:
    it fills (even, stable squares) and it does not resemble the scaffold. A
    glance at the empty first paint is not enough; the layout bugs show up
    mid-interaction.
-   `webjs doctor` emits an advisory when `app/layout` still carries the
-   scaffold shell (reading column, theme-toggle, fixed-header artifact); treat
-   that advisory as a to-do, not noise.
+   `webjs doctor` emits an advisory when `app/layout` still reproduces scaffold
+   design (the exact 760px reading column, the "Built with webjs" attribution, or
+   the unmodified starter palette values); the kept theme apparatus (theme-toggle,
+   `--header-h`) is infrastructure and does NOT trip it. Treat the advisory as a
+   to-do, not noise.
 7. **Keep:** the Drizzle setup, the test config, the agent config files
    (`AGENTS.md`, `CONVENTIONS.md`, `CLAUDE.md`, `.cursorrules`, etc.),
    `db/connection.server.ts` + `db/columns.server.ts`, the directory

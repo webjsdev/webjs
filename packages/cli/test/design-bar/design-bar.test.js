@@ -35,14 +35,23 @@ test('DESIGN_REMINDER states the bar and points at the convention', () => {
 });
 
 test('scaffoldShellTells detects the kept-shell signals', () => {
-  const layout = `import '#components/theme-toggle.ts';
-    <header class="fixed" style="--header-h:56px">
-    <main class="max-w-[760px]"><theme-toggle></theme-toggle></main>
-    <a href="https://webjs.dev">Built with</a>`;
+  const layout = `<main class="max-w-[760px]">\${children}</main>
+    <a href="https://webjs.dev">Built with webjs</a>`;
   const tells = scaffoldShellTells(layout);
-  assert.ok(tells.length >= 3, `expected multiple tells, got ${tells.length}`);
+  assert.ok(tells.length >= 2, `expected multiple tells, got ${tells.length}`);
   assert.ok(tells.some((t) => /760px/.test(t)));
-  assert.ok(tells.some((t) => /theme-toggle/.test(t)));
+  assert.ok(tells.some((t) => /attribution/.test(t)));
+});
+
+test('theme-toggle and --header-h are NOT tells (kept infrastructure, avoids nagging a finished app)', () => {
+  // The minimal shell ships the theme apparatus (`--header-h`, the theme-toggle
+  // import) in EVERY app, so counting them warned on every correctly-finished
+  // app forever. A layout that recolored the palette and dropped the reading
+  // column but kept the theme apparatus must score 0 tells.
+  const finished = `import '#components/theme-toggle.ts';
+    <style>:root { --header-h: 0px; --primary: oklch(0.55 0.2 265); --card: oklch(0.2 0.03 265); }</style>
+    <main class="min-h-dvh"><theme-toggle></theme-toggle>\${children}</main>`;
+  assert.deepEqual(scaffoldShellTells(finished), [], 'kept theme apparatus + own palette is not a tell');
 });
 
 test('scaffoldShellTells returns nothing for a bespoke layout (counterfactual)', () => {
@@ -65,10 +74,9 @@ test('the default scaffold palette values are a tell; a recolored palette is not
 
 test('a bespoke "Built with X" footer is NOT an attribution tell (no false positive)', () => {
   // A redesigned dashboard that kept a dark-mode toggle and wrote its own footer
-  // must not reach the 2-tell threshold on a generic "Built with ..." string.
+  // must score zero tells on a generic "Built with ..." string.
   const redesigned = `<theme-toggle></theme-toggle><footer>Built with care by Acme</footer>`;
-  const tells = scaffoldShellTells(redesigned);
-  assert.deepEqual(tells, ['theme-toggle chrome'], 'only the toggle counts, not the generic footer');
+  assert.deepEqual(scaffoldShellTells(redesigned), [], 'neither the toggle nor a generic footer is a tell');
   // The real scaffold footer (its own attribution) still counts.
   assert.ok(scaffoldShellTells(`<a href="https://webjs.dev">x</a>`).includes('attribution footer'));
 });

@@ -669,13 +669,13 @@ const DESIGN_CHECK = 'App design (own design, not the scaffold shell)';
 
 test('design advisory WARNS when the layout still rides the scaffold shell', async () => {
   const dir = tmpDir();
-  // A layout keeping several scaffold-shell tells (reading column + theme toggle
-  // + the fixed-header --header-h artifact): the kept-shell case.
+  // A layout keeping scaffold-shell tells (the exact 760px reading column + the
+  // scaffold's own "Built with webjs" attribution footer): the kept-shell case.
+  // (theme-toggle / --header-h are NOT tells: they are kept infrastructure.)
   write(dir, 'app/layout.ts', `
-    import '#components/theme-toggle.ts';
     export default function Layout({ children }) {
-      return html\`<header class="fixed">…<theme-toggle></theme-toggle></header>
-        <main class="max-w-[760px] mx-auto" style="padding-top: var(--header-h)">\${children}</main>\`;
+      return html\`<main class="max-w-[760px] mx-auto">\${children}</main>
+        <footer><a href="https://webjs.dev">Built with webjs</a></footer>\`;
     }
   `);
   const r = byName(await runDoctorChecks(dir, baseOpts()), DESIGN_CHECK);
@@ -700,7 +700,7 @@ test('design advisory PASSES on a bespoke layout (counterfactual: no false posit
 
 test('design advisory does not hard-fail (advisory only)', async () => {
   const dir = tmpDir();
-  write(dir, 'app/layout.ts', `<main class="max-w-[760px]"><theme-toggle></theme-toggle></main>`);
+  write(dir, 'app/layout.ts', `<main class="max-w-[760px]"></main><a href="https://webjs.dev">Built with webjs</a>`);
   const results = await runDoctorChecks(dir, baseOpts());
   assert.equal(byName(results, DESIGN_CHECK).status, 'warn');
   assert.equal(results.filter((r) => r.status === 'fail').length, 0, 'never a hard fail');

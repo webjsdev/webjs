@@ -21,40 +21,35 @@ export function hasUiLayout(appDir) {
 }
 
 export const DESIGN_REMINDER =
-  '\nDesign: the scaffold shell is a TEACHING artifact, not a starting design.\n' +
+  '\nDesign: the scaffold is a TEACHING artifact, not a starting design.\n' +
   'A delivered UI app must have its OWN design chosen from what the app IS:\n' +
-  'layout, palette, typography, icons, spacing, and chrome. Do not keep the\n' +
-  "scaffold's header / Home nav / theme-toggle / ~760px reading column / its\n" +
-  'attribution footer.\n' +
+  'layout, palette, typography, icons, spacing, and chrome.\n' +
+  '- Layout: app/layout.ts ships as a MINIMAL shell (no header / nav / footer /\n' +
+  '  reading column). Design your own from what the app IS. LAYOUT-REFERENCE.md\n' +
+  '  shows the mechanics; do not reproduce its example header verbatim.\n' +
   '- Palette: the design-token NAMES (--background, --primary, --card, ...) are\n' +
   '  infrastructure to keep, but their COLOR VALUES are yours. Set a distinctive\n' +
-  '  palette that fits the app; a light recolor of the scaffold neutrals is not\n' +
-  '  a redesign.\n' +
-  '- Verify by USING it: render the app and play through every state (fill the\n' +
-  '  board, win, draw, reload), and confirm nothing resizes or shifts as it\n' +
-  '  fills (even, stable squares). A glance at the empty first paint is not\n' +
-  '  enough; the layout bugs show up mid-interaction.\n' +
+  '  palette that fits the app; keeping the starter orange is not a redesign.\n' +
+  '- Verify by USING it: render the app and play through every state, and confirm\n' +
+  '  nothing resizes or shifts as it fills (even, stable cells). A glance at the\n' +
+  '  empty first paint is not enough; the layout bugs show up mid-interaction.\n' +
   'See AGENTS.md / CONVENTIONS.md item 6.';
 
-// Distinctive strings the scaffold emits into `app/layout.ts`. An app that still
-// carries several of them kept the scaffold shell rather than designing its own.
-// Each is scaffold-authored default chrome (not something a bespoke design would
-// reproduce verbatim), so counting them is an objective proxy for "unchanged
-// shell" without judging taste. `--header-h` + `theme-toggle` are the scaffold's
-// fixed-header + theme-picker artifacts, `max-w-[760px]` is its reading column,
-// and the attribution string is its footer.
+// Distinctive strings that indicate an app kept scaffold-specific chrome or the
+// unmodified starter palette, rather than designing its own. Counting them is an
+// objective proxy for "did not own the design" without judging taste. NOTE: the
+// theme apparatus (`--header-h`, the `theme-toggle` import) is KEEP-infrastructure
+// the minimal shell ships in every app, so it is NOT a tell (it fired on every
+// finished app and made the advisory nag forever). The tells that remain are
+// genuine "reproduced the scaffold" signals: the exact 760px reading column, the
+// scaffold's own attribution footer, and the two exact default palette VALUES (a
+// verbatim match means the palette was never changed; a recolor does not match).
 const SHELL_TELLS = [
   { key: 'reading-column (max-w-[760px])', re: /max-w-\[760px\]/ },
-  { key: 'theme-toggle chrome', re: /theme-toggle/ },
-  { key: 'fixed-header --header-h artifact', re: /--header-h\b/ },
   // Specific to the scaffold's own attribution (its footer links webjs.dev and
   // says "Built with webjs"). A bare "Built with ..." is a common bespoke footer,
   // so it is NOT a tell on its own.
   { key: 'attribution footer', re: /webjs\.dev|Built with webjs/ },
-  // The scaffold's exact default brand colors (item 6: the token NAMES are
-  // infrastructure but the VALUES are the app's own; keeping the defaults is not
-  // owning the palette). These are the distinctive scaffold values, so a verbatim
-  // match means the palette was not changed. A recolored palette does not match.
   { key: 'default scaffold primary color', re: /--primary:\s*oklch\(0\.7\s+0\.16\s+52\)/ },
   { key: 'default scaffold card color', re: /--card:\s*oklch\(0\.18\s+0\.01\s+55\)/ },
 ];
