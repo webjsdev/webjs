@@ -265,6 +265,7 @@ static styles = css\`
 
     <h2>Light DOM (default)</h2>
     <p>Light DOM is the default because global CSS and Tailwind utility classes apply directly: no <code>:host</code>, no <code>::part</code>, no CSS-variable plumbing. The browser renders a plain custom element with normal children. This is the mode the blog example uses everywhere except when shadow DOM buys something specific.</p>
+    <p><strong>Light-DOM hosts default to <code>display: block</code>.</strong> A custom element is <code>display: inline</code> by default (so a container component would collapse), and a light-DOM component has no <code>:host</code> to fix it with. So the framework marks every light host <code>data-wj-host</code> and injects one low-priority-layer rule (<code>@layer webjs-host &#123; :where([data-wj-host]) &#123; display: block &#125; &#125;</code>), overridable by any author style including Tailwind utilities (<code>class="flex"</code> wins). Shadow-DOM hosts are NOT marked: set their display via <code>:host</code> in <code>static styles</code>, the way Lit does (fully respected). See the <a href="/docs/styling">styling</a> page.</p>
 
     <pre>// static shadow = false is the default, no need to declare it.
 class AppCard extends WebComponent({ heading: String }) {
