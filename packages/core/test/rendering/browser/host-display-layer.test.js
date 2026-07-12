@@ -31,8 +31,10 @@ suite('host display:block default (cascade layer)', () => {
     // Reproduce the real document: the framework's layered host rule declared
     // FIRST (lowest layer), then Tailwind-style layered utilities.
     style = document.createElement('style');
+    // The exact shipped rule (layered host default + [hidden] carve-out) declared
+    // FIRST (lowest layer), then Tailwind-style layered utilities.
     style.textContent = `
-      @layer webjs-host { :where([data-wj-host]) { display: block } }
+      @layer webjs-host { :where([data-wj-host]) { display: block } :where([data-wj-host][hidden]) { display: none } }
       @layer utilities { .flex { display: flex } .hidden { display: none } }
     `;
     document.head.appendChild(style);
@@ -60,5 +62,27 @@ suite('host display:block default (cascade layer)', () => {
 
   test('an explicit author display (inline style) wins', () => {
     assert.equal(hostWith({ style: 'display:inline' }), 'inline', 'author inline style must win');
+  });
+
+  test('a [hidden] host is still hidden (the carve-out)', () => {
+    // display:none from the same-layer [hidden] carve-out must win over the block
+    // default, so `?hidden=${cond}` / el.hidden actually hides a component host.
+    assert.equal(hostWith({ hidden: '' }), 'none', 'a hidden host must be display:none');
+  });
+
+  test("a shadow host (NOT marked) keeps its own :host{display}", () => {
+    // Shadow hosts are deliberately NOT stamped with data-wj-host, so the document
+    // rule never applies and the shadow tree's :host wins. Simulate: an UNMARKED
+    // host with a shadow :host{display:flex}. If the framework wrongly marked it,
+    // the document rule would clobber :host to block.
+    const el = document.createElement('x-shadow-host');
+    const root = el.attachShadow({ mode: 'open' });
+    root.innerHTML = '<style>:host{display:flex}</style><span>x</span>';
+    document.body.appendChild(el);
+    const marked = el.hasAttribute('data-wj-host');
+    const display = getComputedStyle(el).display;
+    el.remove();
+    assert.equal(marked, false, 'a shadow host must not carry data-wj-host');
+    assert.equal(display, 'flex', "the shadow tree's :host{display:flex} must win");
   });
 });

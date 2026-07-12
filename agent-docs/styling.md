@@ -284,19 +284,28 @@ These are the CSS traps that cause a visually-broken app (uneven cells, a
 collapsed board, a layout that resizes as it fills). They are not app-specific;
 they apply to any grid / board / gallery / card layout.
 
-**Component hosts are `display: block` by default.** A custom element is
-`display: inline` in plain CSS (both light and shadow DOM), which collapses a
-component used as a block container (a board, a card) to its content size. WebJs
-defaults every component host to `display: block` via one rule in the document
+**Light-DOM component hosts are `display: block` by default.** A custom element
+is `display: inline` in plain CSS, which collapses a component used as a block
+container (a board, a card) to its content size. WebJs marks every LIGHT-DOM host
+`data-wj-host` and defaults it to `display: block` via one rule in the document
 head, wrapped in a dedicated low-priority cascade layer (`@layer webjs-host {
 :where([data-wj-host]) { display: block } }`), so this does not bite you. The
 layer is what keeps it overridable: any author style, INCLUDING a Tailwind
 utility (`class="flex"`, `grid`, `hidden`), wins over it (Tailwind's utilities
-live in a later layer). So sizing a host with `class="flex ..."` just works. If
-you WANT an inline component (a badge inside flowing text), opt out explicitly: a
-light-DOM component adds a tag-prefixed rule `my-badge { display: inline }`, a
-shadow-DOM component sets `:host { display: inline }` in `static styles`. Both
-beat the framework default.
+live in a later layer). So sizing a host with `class="flex ..."` just works.
+`[hidden]` still hides a host (a same-layer `[hidden]` carve-out), so
+`?hidden=${cond}` works. If you WANT an inline light-DOM component (a badge in
+flowing text), opt out with a tag-prefixed rule `my-badge { display: inline }`.
+
+**Shadow-DOM hosts are NOT marked; set their display via `:host`.** A document
+rule targeting the host would override the shadow tree's own `:host` (the
+encapsulation-context criterion outranks layer and specificity for normal
+declarations), so WebJs does not touch shadow hosts. A shadow-DOM component
+controls its host display the idiomatic way, `:host { display: block }` (or
+`flex` / `grid` / `inline`) in `static styles`. Because the framework does not
+mark it, that `:host` is fully respected. A shadow component used as a block
+container should set `:host { display: block }` itself (a shadow host with no
+`:host` display stays `display: inline`).
 
 **Size the HOST, not just an inner wrapper.** The host custom element is the box
 the parent lays out. `display: block` (above) stops the inline-collapse, but a

@@ -69,7 +69,7 @@ test('DSD injection handles attribute values containing slashes', async () => {
   SlashTag.register('slash-tag');
   const out = await renderToString(html`<slash-tag href="/some/path"></slash-tag>`);
   // The opening tag must have DSD injected even though the attribute has /.
-  assert.match(out, /<slash-tag href="\/some\/path" data-wj-host><template shadowrootmode="open">/);
+  assert.match(out, /<slash-tag href="\/some\/path"><template shadowrootmode="open">/);
 });
 
 test('custom element injects declarative shadow DOM', async () => {
@@ -80,7 +80,7 @@ test('custom element injects declarative shadow DOM', async () => {
   }
   Greet.register('g-reet');
   const out = await renderToString(html`<g-reet></g-reet>`);
-  assert.match(out, /<g-reet data-wj-host><template shadowrootmode="open">/);
+  assert.match(out, /<g-reet><template shadowrootmode="open">/);
   assert.match(out, /<style>span \{ color: red; \}<\/style>/);
   assert.match(out, /<span>hi you<\/span>/);
   assert.match(out, /<\/template><\/g-reet>/);
@@ -154,11 +154,11 @@ test('nested DSD: shadow parent → shadow child gets DSD with inline styles', a
   const out = await renderToString(html`<ss-parent></ss-parent>`);
 
   // Parent has DSD
-  assert.match(out, /<ss-parent data-wj-host><template shadowrootmode="open">/);
+  assert.match(out, /<ss-parent><template shadowrootmode="open">/);
   assert.match(out, /<style>:host \{ display: block; \}<\/style>/);
 
   // Child inside parent's DSD also has its own DSD with styles
-  assert.match(out, /<ss-child data-wj-host><template shadowrootmode="open">/);
+  assert.match(out, /<ss-child><template shadowrootmode="open">/);
   assert.match(out, /width: 36px; height: 36px/);
   assert.match(out, /<button>X<\/button>/);
 });
@@ -180,7 +180,7 @@ test('nested DSD: shadow parent → light child gets hydration marker', async ()
   const out = await renderToString(html`<sl-parent></sl-parent>`);
 
   // Parent has DSD
-  assert.match(out, /<sl-parent data-wj-host><template shadowrootmode="open">/);
+  assert.match(out, /<sl-parent><template shadowrootmode="open">/);
 
   // Light DOM child inside parent's DSD gets hydration marker, no DSD template
   assert.match(out, /<sl-child data-wj-host><!--webjs-hydrate--><span>light content<\/span>/);
@@ -207,7 +207,7 @@ test('nested DSD: light parent → shadow child gets DSD with inline styles', as
   assert.match(out, /<ls-parent data-wj-host><!--webjs-hydrate-->/);
 
   // Shadow child inside light parent gets its own DSD with styles
-  assert.match(out, /<ls-child data-wj-host><template shadowrootmode="open">/);
+  assert.match(out, /<ls-child><template shadowrootmode="open">/);
   assert.match(out, /<style>button \{ color: red; \}<\/style>/);
   assert.match(out, /<button>click<\/button>/);
 });
@@ -259,9 +259,9 @@ test('nested DSD: three levels deep: shadow → shadow → shadow', async () => 
   const out = await renderToString(html`<deep-root></deep-root>`);
 
   // All three levels have DSD with their own styles
-  assert.match(out, /<deep-root data-wj-host><template shadowrootmode="open">/);
-  assert.match(out, /<deep-mid data-wj-host><template shadowrootmode="open">/);
-  assert.match(out, /<deep-leaf data-wj-host><template shadowrootmode="open">/);
+  assert.match(out, /<deep-root><template shadowrootmode="open">/);
+  assert.match(out, /<deep-mid><template shadowrootmode="open">/);
+  assert.match(out, /<deep-leaf><template shadowrootmode="open">/);
   assert.match(out, /\.leaf \{ color: green; \}/);
   assert.match(out, /padding: 8px/);
   assert.match(out, /<span class="leaf">leaf<\/span>/);

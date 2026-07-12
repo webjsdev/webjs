@@ -34,9 +34,10 @@ const light = await renderToString(html`<bun-hd-light></bun-hd-light>`);
 assert.match(light, /<bun-hd-light data-wj-host><!--webjs-hydrate-->/, `[${runtime}] light host marked`);
 
 const shadow = await renderToString(html`<bun-hd-shadow></bun-hd-shadow>`);
-assert.match(shadow, /<bun-hd-shadow data-wj-host><template shadowrootmode="open">/, `[${runtime}] shadow host marked`);
+assert.match(shadow, /<bun-hd-shadow><template shadowrootmode="open">/, `[${runtime}] shadow host renders DSD`);
+assert.doesNotMatch(shadow, /<bun-hd-shadow[^>]*data-wj-host/, `[${runtime}] shadow host is NOT marked`);
 
 // Idempotent: the marker is added exactly once.
 assert.equal((light.match(/data-wj-host/g) || []).length, 1, `[${runtime}] marker added once`);
 
-console.log(`[${runtime}] host-display-default: light + shadow hosts carry data-wj-host ✓`);
+console.log(`[${runtime}] host-display-default: light host marked, shadow host NOT marked ✓`);

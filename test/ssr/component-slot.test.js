@@ -370,7 +370,7 @@ describe('SSR edge cases', () => {
     Shadow.register('slot-edge-shadow-inner');
     const out = await renderToString(html`<slot-edge-light-outer><slot-edge-shadow-inner><p>both</p></slot-edge-shadow-inner></slot-edge-light-outer>`);
     // Light outer projects the shadow inner; shadow inner uses native slot.
-    assert.match(out, /data-projection="actual"><slot-edge-shadow-inner data-wj-host><template shadowrootmode="open"><div><slot><\/slot><\/div><\/template>/);
+    assert.match(out, /data-projection="actual"><slot-edge-shadow-inner><template shadowrootmode="open"><div><slot><\/slot><\/div><\/template>/);
     assert.match(out, /<p>both<\/p><\/slot-edge-shadow-inner>/);
   });
 

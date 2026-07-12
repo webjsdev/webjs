@@ -64,7 +64,7 @@ test('mixed page with both shadow and light DOM', async () => {
   assert.match(out, /<test-mix-light data-wj-host><!--webjs-hydrate--><em>light part<\/em><\/test-mix-light>/);
 
   // Shadow DOM: wrapped in DSD template
-  assert.match(out, /<test-mix-shadow data-wj-host><template shadowrootmode="open">/);
+  assert.match(out, /<test-mix-shadow><template shadowrootmode="open">/);
   assert.match(out, /<p>shadow part<\/p>/);
   assert.match(out, /<style>p \{ color: blue; \}<\/style>/);
 

@@ -455,25 +455,34 @@ Both modes are fully SSR'd (shadow DOM via Declarative Shadow DOM, light
 DOM as direct HTML with a `<!--webjs-hydrate-->` marker) and hydrate
 without flash on the client.
 
-### Hosts are `display: block` by default (both modes)
+### Light-DOM hosts are `display: block` by default
 
-A custom element is `display: inline` in plain CSS, so a component used as
-a block container (a board, a card, a panel) would otherwise collapse to
-its content size. WebJs marks every SSR'd and client-upgraded host with a
-`data-wj-host` attribute and injects ONE rule into the document head,
+A custom element is `display: inline` in plain CSS, so a light-DOM component
+used as a block container (a board, a card, a panel) would otherwise collapse
+to its content size. WebJs marks every SSR'd and client-upgraded LIGHT-DOM host
+with a `data-wj-host` attribute and injects ONE rule into the document head,
 wrapped in a dedicated low-priority cascade layer, `@layer webjs-host {
 :where([data-wj-host]) { display: block } }`, so a container component fills
 its parent as expected. The layer (not the zero-specificity `:where()`) is
 what keeps it overridable: any author style wins, INCLUDING a Tailwind
 utility (`class="flex"`, `grid`, `hidden`) whose layer is ordered after
 `webjs-host`. A bare unlayered rule was NOT enough (unlayered beats layered
-regardless of specificity, so it silently overrode `class="flex"`). If you
-WANT an inline component (a badge in flowing text), opt
-out explicitly: a light-DOM component adds `my-badge { display: inline }`
-(tag-prefixed, per the class-prefix rule below), a shadow-DOM component
-sets `:host { display: inline }` in `static styles`. The marker is uniform
-across every host, so it does not perturb the display-only elision verdict
-(the SSR output stays byte-identical with JS on or off). See
+regardless of specificity, so it silently overrode `class="flex"`). A same-layer
+`[hidden]` carve-out keeps `[hidden]` / `?hidden=${cond}` working. If you WANT an
+inline light-DOM component (a badge in flowing text), opt out with
+`my-badge { display: inline }` (tag-prefixed, per the class-prefix rule below).
+The marker is uniform across every light host, so it does not perturb the
+display-only elision verdict (the SSR output stays byte-identical with JS on or
+off).
+
+**Shadow-DOM hosts are NOT marked.** A document-level rule targeting the host
+would override the shadow tree's own `:host` display (the encapsulation-context
+criterion outranks layer and specificity for normal declarations), so WebJs
+leaves shadow hosts alone. A shadow component sets its host display the idiomatic
+way, `:host { display: block }` (or `flex` / `grid` / `inline`) in `static
+styles`, and because the framework does not mark it, that `:host` is fully
+respected. Set `:host { display: block }` for a shadow component used as a block
+container (an unstyled shadow host stays `display: inline`). See
 `agent-docs/styling.md` for the even-grid / no-reflow layout recipes.
 
 ### Class-prefix rule for light-DOM components

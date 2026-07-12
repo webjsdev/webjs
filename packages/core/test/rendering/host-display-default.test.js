@@ -1,10 +1,13 @@
 /**
- * The framework defaults a component host to `display:block` (a custom element
- * is `display:inline` by default, which collapses a component used as a block
- * container). SSR stamps every host (light AND shadow) with `data-wj-host`; the
- * document head (built in @webjsdev/server) carries the single low-specificity
- * rule `@layer webjs-host { :where([data-wj-host]) { display: block } }`. This test pins the SSR half
- * (the marker); the head-rule half is asserted in the server package.
+ * The framework defaults a LIGHT-DOM component host to `display:block` (a custom
+ * element is `display:inline` by default, which collapses a component used as a
+ * block container). SSR stamps LIGHT hosts with `data-wj-host`; the document head
+ * (built in @webjsdev/server) carries the single low-priority-layer rule
+ * `@layer webjs-host { :where([data-wj-host]) { display: block } }`. Shadow hosts
+ * are NOT marked: a document rule would override the shadow author's own `:host`
+ * display, so shadow components set their host display via `:host` in
+ * `static styles`. This test pins the SSR half (the marker); the head-rule half
+ * is asserted in the server package.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -22,14 +25,15 @@ test('a light-DOM host is marked with data-wj-host', async () => {
   assert.match(out, /<hd-light data-wj-host><!--webjs-hydrate-->/, 'light host carries the marker');
 });
 
-test('a shadow-DOM host is marked with data-wj-host', async () => {
+test('a shadow-DOM host is NOT marked (its :host must win)', async () => {
   class ShadowHost extends WebComponent {
     static shadow = true;
     render() { return html`<p>hi</p>`; }
   }
   ShadowHost.register('hd-shadow');
   const out = await renderToString(html`<hd-shadow></hd-shadow>`);
-  assert.match(out, /<hd-shadow data-wj-host><template shadowrootmode="open">/, 'shadow host carries the marker');
+  assert.match(out, /<hd-shadow><template shadowrootmode="open">/, 'shadow host renders DSD');
+  assert.doesNotMatch(out, /<hd-shadow[^>]*data-wj-host/, 'shadow host is NOT marked (would override its :host)');
 });
 
 test('the marker does not clobber authored attributes and is added once', async () => {

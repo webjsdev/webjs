@@ -502,17 +502,24 @@ async function injectDSD(html, ctx, ancestors = [], dev) {
       // this.hidden on the host). Reading after render() captures all three.
       // Appending keeps the original tag byte-identical when nothing changed.
       opening = appendReflectedAttrs(opening, instance, presentAttrNames);
-      // Mark EVERY component host (light AND shadow) so the framework default
-      // `:where([data-wj-host]) { display: block }` (injected once in the
-      // document head) applies at first paint. A custom element is
-      // `display:inline` by default in both DOM modes, which collapses a
-      // component used as a block container (a board / card) until an author
-      // style intervenes. This makes block the sensible default while staying
-      // overridable: a light-DOM author overrides via a tag-prefixed rule /
-      // class, a shadow-DOM author via `:host { display: … }` (both beat the
-      // zero-specificity `:where()`). Emitted uniformly regardless of elision,
-      // so the elision on-vs-off differential is preserved.
-      opening = withHostMarker(opening);
+      // Mark LIGHT-DOM component hosts so the framework default
+      // `@layer webjs-host { :where([data-wj-host]) { display: block } }`
+      // (injected once in the document head) applies at first paint. A custom
+      // element is `display:inline` by default, which collapses a component used
+      // as a block container (a board / card) until an author style intervenes.
+      // The low-priority `@layer` keeps it overridable by any author style,
+      // INCLUDING Tailwind's layered utilities (`class="flex"` wins). Emitted
+      // uniformly regardless of elision, so the elision on-vs-off differential is
+      // preserved.
+      //
+      // Shadow hosts are NOT marked: a document-level rule targeting the host
+      // beats the shadow tree's own `:host { display: … }` (the encapsulation-
+      // context criterion outranks both layer and specificity for normal
+      // declarations), so marking them would silently override the shadow
+      // author's `:host` display. Shadow components set their own host display
+      // via `:host` in `static styles` (the idiomatic mechanism), which the
+      // framework must not clobber.
+      if (!isShadow) opening = withHostMarker(opening);
       // Render the template to HTML. injectDSD recurses on the result so
       // nested custom elements (e.g. <theme-toggle> inside <blog-shell>)
       // get their own DSD pass.
