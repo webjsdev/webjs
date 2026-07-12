@@ -65,9 +65,12 @@ you confirmed (which states, light + dark), so the review is on the record.
 ---
 
 **Why this is a skill and not just a test:** a real-browser test
-(`webjs test --browser`, and the `assertEvenGrid` / layout-stability helpers from
-`@webjsdev/core/testing`) catches the mechanical failures (collapse, uneven
-cells, reflow) and you SHOULD ship one. But "looks like the scaffold", "the
+(`webjs test --browser`) catches the mechanical failures (collapse, uneven
+cells, reflow) and you SHOULD ship one. There is no framework helper for this; a
+layout-stability check is a few lines you write against your own component (in a
+`*/test/**/browser/*.test.js`): measure `getBoundingClientRect()` on the grid
+children and assert they stay equal-sized before AND after a move, so a collapse
+or reflow FAILS the test. But "looks like the scaffold", "the
 palette is bland", "the spacing is off", "it's ugly in dark mode" are judgment
 calls no assertion makes for you. That is what this human-in-the-loop look is
 for. Do both: the test for the mechanical floor, the look for everything above
