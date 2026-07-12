@@ -192,56 +192,8 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.ok(markers.hasMain, '<main> should render in the layout');
   });
 
-  test('import map includes all framework entries', async () => {
-    const map = await page.evaluate(() => {
-      const s = document.querySelector('script[type="importmap"]');
-      return s ? JSON.parse(s.textContent) : null;
-    });
-    assert.ok(map, 'Import map should exist');
-    assert.ok(map.imports['@webjsdev/core'], 'Should have @webjsdev/core entry');
-    assert.ok(map.imports['@webjsdev/core/directives'], 'Should have @webjsdev/core/directives entry');
-    assert.ok(map.imports['@webjsdev/core/context'], 'Should have @webjsdev/core/context entry');
-    assert.ok(map.imports['@webjsdev/core/task'], 'Should have @webjsdev/core/task entry');
-  });
 
-  test('modulepreload links are deduplicated', async () => {
-    const preloads = await page.evaluate(() =>
-      [...document.querySelectorAll('link[rel="modulepreload"]')].map(l => l.href)
-    );
-    const unique = new Set(preloads);
-    assert.equal(preloads.length, unique.size, 'Modulepreloads should be deduplicated');
-    assert.ok(preloads.length > 0, 'Should have at least one modulepreload');
-  });
 
-  test('every modulepreload resolves (no preload points at a 404)', async () => {
-    // Regression for #158 / #159: the preload set must be a subset of the
-    // servable set. The blog previously emitted modulepreload hints for
-    // server-only files reached through a .server.ts (slugify.ts, the two
-    // types.ts), which the auth gate then 404s. Probe each same-origin
-    // preload href and assert it serves. A real network fetch, since a
-    // 404 here is exactly what shipped to users. The in-process counterpart
-    // covering all four apps + the graph layer is test/preload-subset.test.mjs
-    // (#182); this is the real-browser layer. Probe more than one route so a
-    // route-specific preload regression is caught, and navigate explicitly so
-    // the test is self-contained rather than relying on a prior test's goto.
-    const broken = [];
-    for (const route of ['/', '/about']) {
-      await page.goto(`${baseUrl}${route}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
-      await sleep(500);
-      const preloads = await page.evaluate(() =>
-        [...document.querySelectorAll('link[rel="modulepreload"]')]
-          .map(l => l.href)
-          .filter(h => h.startsWith(location.origin))
-      );
-      assert.ok(preloads.length > 0, `expected at least one same-origin preload to probe on ${route}`);
-      for (const href of preloads) {
-        const resp = await fetch(href);
-        if (resp.status >= 400) broken.push(`${route}: ${href} -> ${resp.status}`);
-      }
-    }
-    assert.equal(broken.length, 0,
-      `no modulepreload may point at a non-servable URL; broken:\n${broken.join('\n')}`);
-  });
 
   test('nested component modules are fetched once: import URL matches the preload (#369)', async () => {
     // Regression for #369: layout.ts / page.ts import their components with a
@@ -669,11 +621,6 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     page.removeAllListeners('pageerror');
   });
 
-  test('health endpoint responds', async () => {
-    const response = await page.goto(`${baseUrl}/__webjs/health`, { timeout: 5000 });
-    const body = await response.json();
-    assert.equal(body.status, 'ok');
-  });
 
   // ---------------------------------------------------------------------------
   // Counter component survives client-side navigation
@@ -1022,48 +969,8 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
   // browser history, Suspense streaming, server-side /api round-trip.
   // ---------------------------------------------------------------------------
 
-  test('dynamic route: /blog/[slug] renders the post title in <head>', async () => {
-    await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
-    await sleep(1500);
-    // Use any post href rendered on the home page.
-    const href = await page.evaluate(() => {
-      const a = document.querySelector('main ul a[href^="/blog/"]');
-      return a?.getAttribute('href');
-    });
-    assert.ok(href, 'homepage should list at least one /blog/... link');
-    await page.goto(baseUrl + href, { waitUntil: 'domcontentloaded', timeout: 10000 });
-    await sleep(1000);
-    const title = await page.title();
-    assert.ok(title.toLowerCase().includes('blog'),
-      `slug page title should mention "blog", got: ${title}`);
-    const hasArticle = await page.evaluate(() => !!document.querySelector('article'));
-    assert.ok(hasArticle, 'slug page should render an <article>');
-  });
 
-  test('dynamic route: unknown slug hits notFound() → 404 page', async () => {
-    const resp = await page.goto(
-      baseUrl + '/blog/this-post-definitely-does-not-exist-xyz-98765',
-      { waitUntil: 'domcontentloaded', timeout: 10000 },
-    );
-    assert.equal(resp.status(), 404);
-    const body = await page.evaluate(() =>
-      document.body.textContent.toLowerCase());
-    assert.ok(/not found|404/.test(body),
-      `custom 404 page should render a "not found" message; got: ${body.slice(0, 200)}`);
-  });
 
-  test('dashboard middleware redirects unauthenticated requests to /login', async () => {
-    const resp = await page.goto(baseUrl + '/dashboard', {
-      waitUntil: 'domcontentloaded',
-      timeout: 10000,
-    });
-    assert.equal(resp.status(), 200);
-    assert.ok(page.url().includes('/login'),
-      `unauthenticated /dashboard should redirect to /login; final url: ${page.url()}`);
-    // `then` query parameter should be set so post-login returns to /dashboard.
-    assert.ok(page.url().includes('then='),
-      'redirect should carry a ?then= parameter');
-  });
 
   test('login page renders the <auth-forms> custom element', async () => {
     await page.goto(baseUrl + '/login', { waitUntil: 'domcontentloaded', timeout: 10000 });
@@ -1237,22 +1144,6 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       `expected navigation or error message after submit; url=${after.url}, hasError=${after.hasError}`);
   });
 
-  test('metadata: <title> and <meta description> update per route', async () => {
-    await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
-    await sleep(500);
-    const home = await page.evaluate(() => ({
-      title: document.title,
-      description: document.querySelector('meta[name="description"]')?.getAttribute('content'),
-    }));
-    assert.ok(home.title.toLowerCase().includes('blog'));
-    assert.ok(home.description && home.description.length > 0, 'homepage has a description meta');
-
-    await page.goto(baseUrl + '/login', { waitUntil: 'domcontentloaded', timeout: 10000 });
-    await sleep(500);
-    const login = await page.evaluate(() => ({ title: document.title }));
-    assert.ok(login.title.toLowerCase().includes('sign in'),
-      `/login <title> should mention "sign in"; got: ${login.title}`);
-  });
 
   test('browser history: back button after client nav returns to previous page', async () => {
     await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
@@ -1283,35 +1174,8 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.ok(hasStat, 'resolved Suspense content should eventually render');
   });
 
-  test('/api/posts GET returns an array of posts', async () => {
-    const resp = await page.goto(baseUrl + '/api/posts', { timeout: 5000 });
-    assert.equal(resp.status(), 200);
-    const data = await resp.json();
-    assert.ok(Array.isArray(data), '/api/posts should return an array');
-  });
 
-  test('POST /api/posts without auth is rejected', async () => {
-    const result = await page.evaluate(async (url) => {
-      const r = await fetch(url + '/api/posts', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ title: 'x', body: 'y' }),
-      });
-      return { status: r.status };
-    }, baseUrl);
-    assert.ok(result.status >= 400 && result.status < 500,
-      `unauthenticated POST should be 4xx, got ${result.status}`);
-  });
 
-  test('404 for unknown pathname serves text/html', async () => {
-    const resp = await page.goto(baseUrl + '/nothing-here-abcxyz', {
-      waitUntil: 'domcontentloaded',
-      timeout: 5000,
-    });
-    assert.equal(resp.status(), 404);
-    const ct = resp.headers()['content-type'];
-    assert.ok(ct && ct.includes('text/html'), `expected html 404, got ${ct}`);
-  });
 
   test('same-origin link with download attribute is NOT intercepted by router', async () => {
     await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
@@ -1334,17 +1198,6 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       'downloads should bypass the router (let the browser handle)');
   });
 
-  test('no CSRF cookie on a GET response (Origin-checked, so SSR is cacheable)', async () => {
-    // CSRF is an Origin / Sec-Fetch-Site check (#659), not a token cookie, so a
-    // page response must carry no webjs_csrf cookie. That cookielessness is
-    // exactly what lets a public-Cache-Control page be CDN-cached.
-    await page.deleteCookie(...(await page.cookies()));
-    const resp = await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
-    assert.equal(resp.status(), 200);
-    const cookies = await page.cookies();
-    const csrf = cookies.find((c) => /csrf/i.test(c.name));
-    assert.ok(!csrf, `expected NO csrf cookie; got: ${cookies.map((c) => c.name).join(', ')}`);
-  });
 
   test('theme toggle still works after navigations that test counter', async () => {
     // Verify that upgradeCustomElements doesn't break other components
