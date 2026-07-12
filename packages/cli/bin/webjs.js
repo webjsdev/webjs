@@ -3,6 +3,7 @@ import { resolve, join, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolveBin } from '../lib/resolve-bin.js';
+import { dbGenerateTtyHint } from '../lib/db-hints.js';
 import { checkNodeInline, nodeInlineMessage } from '../lib/node-preflight.js';
 import { loadAppEnv, resolvePort } from '../lib/port.js';
 import { planDevSupervisor } from '../lib/dev-supervisor.js';
@@ -241,7 +242,15 @@ async function main() {
         process.exit(1);
       }
       const child = spawn(process.execPath, [dkPath, ...kitArgs, ...args], { stdio: 'inherit', cwd: process.cwd() });
-      child.on('exit', (code) => process.exit(code ?? 0));
+      child.on('exit', (code) => {
+        // Surface the escape hatch when `generate` dead-ends on a rename prompt
+        // with no TTY to answer it, instead of leaving the raw drizzle-kit
+        // "Interactive prompts require a TTY" as the last word. Interactive and
+        // successful runs print nothing extra.
+        const hint = dbGenerateTtyHint(sub, code, process.stdin.isTTY);
+        if (hint) console.error(hint);
+        process.exit(code ?? 0);
+      });
       break;
     }
     case 'ui': {
