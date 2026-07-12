@@ -77,20 +77,36 @@ const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
     font-size:16px; letter-spacing:0.18em; text-transform:uppercase;
     color:${T.accent};
   }
-  .mid{ flex:1; display:flex; flex-direction:column; justify-content:center; }
+  .top{ display:flex; align-items:center; justify-content:space-between; }
+  .mid{ flex:1; display:flex; flex-direction:column; justify-content:center; gap:34px; }
   h1{
     font-family:'Inter Tight',sans-serif; font-weight:800;
-    font-size:62px; line-height:1.06; letter-spacing:-0.035em;
-    max-width:17ch;
+    font-size:52px; line-height:1.05; letter-spacing:-0.035em;
+    max-width:20ch;
   }
   .accent{
     background:linear-gradient(105deg, ${T.accent}, color-mix(in oklch, ${T.accentLive} 72%, ${T.fg}));
     -webkit-background-clip:text; background-clip:text; color:transparent;
   }
-  p.lede{
-    margin-top:26px; max-width:34ch;
-    font-size:24px; line-height:1.5; color:${T.fgMuted};
+  /* Two fact cards: the framework in node_modules, and the app served as
+     written. Each pairs a mono eyebrow with a short benefit line, so the card
+     stays scannable at timeline size while carrying the two-fact story. */
+  .cards{ display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .card{
+    border:1px solid ${T.border}; border-radius:18px;
+    background:color-mix(in oklch, ${T.bgDeep} 60%, transparent);
+    padding:24px 26px; display:flex; flex-direction:column; gap:12px;
   }
+  .clabel{
+    display:flex; align-items:center; gap:9px;
+    font-family:'JetBrains Mono',monospace; font-weight:500;
+    font-size:14px; letter-spacing:0.1em; text-transform:uppercase; color:${T.accent};
+  }
+  .cnum{ color:${T.fgSubtle}; }
+  .ctext{ font-size:21px; line-height:1.42; color:${T.fg}; font-weight:400; }
+  .ctext b{ font-weight:600; }
+  .ctext .q{ color:${T.fgMuted}; }
+  .mono{ font-family:'JetBrains Mono',monospace; font-size:0.86em; color:${T.fgMuted}; }
   .foot{
     display:flex; align-items:center; justify-content:space-between;
     font-family:'JetBrains Mono',monospace; font-weight:500;
@@ -103,16 +119,27 @@ const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <body>
   <div class="glow"></div>
   <div class="frame">
-    <div class="brand"><div class="mark"></div><div class="word">webjs</div></div>
-    <div class="mid">
+    <div class="top">
+      <div class="brand"><div class="mark"></div><div class="word">webjs</div></div>
       <div class="kicker">Built for the AI era</div>
-      <h1 style="margin-top:18px">The framework your <span class="accent">AI agent</span> already understands</h1>
-      <p class="lede">No build step, so the whole stack stays readable as written. Any model reads it and builds, no single blessed model.</p>
+    </div>
+    <div class="mid">
+      <h1>The framework your <span class="accent">AI agent</span> already understands</h1>
+      <div class="cards">
+        <div class="card">
+          <div class="clabel"><span class="cnum">01</span> Framework source</div>
+          <div class="ctext">No build, <span class="mono">node_modules</span> holds plain JS. <span class="q">The agent reads the whole framework and fits it into context.</span></div>
+        </div>
+        <div class="card">
+          <div class="clabel"><span class="cnum">02</span> Your app code</div>
+          <div class="ctext">Served to the browser as written. <span class="q">The agent debugs the running app against the real source, not a bundle.</span></div>
+        </div>
+      </div>
     </div>
     <div>
       <hr>
       <div class="foot">
-        <div class="tags"><span class="dot"></span>NO TRAINING DATA &nbsp;&middot;&nbsp; WEB STANDARDS &nbsp;&middot;&nbsp; NO BUILD</div>
+        <div class="tags"><span class="dot"></span>NO TRAINING DATA &nbsp;&middot;&nbsp; NO BUNDLER &nbsp;&middot;&nbsp; ANY MODEL</div>
         <div>github.com/webjsdev/webjs</div>
       </div>
     </div>
