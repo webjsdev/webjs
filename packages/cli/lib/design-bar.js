@@ -6,6 +6,20 @@
 // layout marker that carried this reminder just-in-time, so it is re-surfaced
 // there, and doctor catches an app that kept the shell anyway).
 
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+
+/**
+ * True when the app has a root layout, i.e. it is a UI app the design bar
+ * applies to. The `api` template ships no `app/layout`, so the reminder /
+ * advisory stay quiet there.
+ * @param {string} appDir
+ * @returns {boolean}
+ */
+export function hasUiLayout(appDir) {
+  return ['ts', 'js', 'mts', 'mjs'].some((e) => existsSync(join(appDir, 'app', `layout.${e}`)));
+}
+
 export const DESIGN_REMINDER =
   '\nDesign: the scaffold shell is a TEACHING artifact, not a starting design.\n' +
   'A delivered UI app must have its OWN design chosen from what the app IS:\n' +

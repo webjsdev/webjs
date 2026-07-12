@@ -1,6 +1,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DESIGN_REMINDER, scaffoldShellTells } from '../../lib/design-bar.js';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DESIGN_REMINDER, scaffoldShellTells, hasUiLayout } from '../../lib/design-bar.js';
+
+test('hasUiLayout is true for a UI app and false for a layout-less (api) app', () => {
+  const ui = mkdtempSync(join(tmpdir(), 'db-ui-'));
+  const api = mkdtempSync(join(tmpdir(), 'db-api-'));
+  try {
+    mkdirSync(join(ui, 'app'), { recursive: true });
+    writeFileSync(join(ui, 'app', 'layout.ts'), 'export default () => null;');
+    mkdirSync(join(api, 'app', 'health'), { recursive: true });
+    writeFileSync(join(api, 'app', 'health', 'route.ts'), 'export const GET = () => new Response();');
+    assert.equal(hasUiLayout(ui), true);
+    assert.equal(hasUiLayout(api), false, 'an api app with no app/layout is not a UI app');
+  } finally {
+    rmSync(ui, { recursive: true, force: true });
+    rmSync(api, { recursive: true, force: true });
+  }
+});
 
 test('DESIGN_REMINDER states the bar and points at the convention', () => {
   assert.match(DESIGN_REMINDER, /TEACHING artifact/);

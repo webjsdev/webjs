@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolveBin } from '../lib/resolve-bin.js';
 import { dbGenerateTtyHint } from '../lib/db-hints.js';
-import { DESIGN_REMINDER } from '../lib/design-bar.js';
+import { DESIGN_REMINDER, hasUiLayout } from '../lib/design-bar.js';
 import { checkNodeInline, nodeInlineMessage } from '../lib/node-preflight.js';
 import { loadAppEnv, resolvePort } from '../lib/port.js';
 import { planDevSupervisor } from '../lib/dev-supervisor.js';
@@ -413,8 +413,9 @@ async function main() {
           // Re-surface the design bar the cleared markers carried. The
           // layout/home marker was the just-in-time "adapt this chrome" reminder;
           // stripping it silently is how an app ends up shipping the scaffold
-          // shell. Print the bar so clearing the markers cannot quietly drop it.
-          console.log(DESIGN_REMINDER);
+          // shell. Print the bar so clearing the markers cannot quietly drop it,
+          // but only for a UI app (the api template has no layout / no chrome).
+          if (hasUiLayout(process.cwd())) console.log(DESIGN_REMINDER);
         }
         break;
       }
