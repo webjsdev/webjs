@@ -455,6 +455,23 @@ Both modes are fully SSR'd (shadow DOM via Declarative Shadow DOM, light
 DOM as direct HTML with a `<!--webjs-hydrate-->` marker) and hydrate
 without flash on the client.
 
+### Hosts are `display: block` by default (both modes)
+
+A custom element is `display: inline` in plain CSS, so a component used as
+a block container (a board, a card, a panel) would otherwise collapse to
+its content size. WebJs marks every SSR'd and client-upgraded host with a
+`data-wj-host` attribute and injects ONE zero-specificity rule into the
+document head, `:where([data-wj-host]) { display: block }`, so a container
+component fills its parent as expected. The rule is zero-specificity, so
+any author style wins (a `class`, a tag-prefixed rule, `static styles`,
+`:host`). If you WANT an inline component (a badge in flowing text), opt
+out explicitly: a light-DOM component adds `my-badge { display: inline }`
+(tag-prefixed, per the class-prefix rule below), a shadow-DOM component
+sets `:host { display: inline }` in `static styles`. The marker is uniform
+across every host, so it does not perturb the display-only elision verdict
+(the SSR output stays byte-identical with JS on or off). See
+`agent-docs/styling.md` for the even-grid / no-reflow layout recipes.
+
 ### Class-prefix rule for light-DOM components
 
 If a light-DOM component authors its own custom CSS (a `<style>` block

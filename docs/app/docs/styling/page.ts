@@ -101,6 +101,25 @@ class MyCard extends WebComponent {
 
     <p>Pick one pattern and stay consistent across a component.</p>
 
+    <h2>Layout: block hosts and even grids (the CSS traps)</h2>
+    <p>Two layout defects ship silently because the checker and the type-checker are static (they never render the pixels), so both only show once you render and interact. Both have a one-line fix.</p>
+    <p><strong>Component hosts are <code>display: block</code> by default.</strong> A custom element is <code>display: inline</code> in plain CSS (both light and shadow DOM), which would collapse a component used as a block container (a board, a card, a panel) to its content size. The framework marks every host and injects one zero-specificity rule, <code>:where([data-wj-host]) &#123; display: block &#125;</code>, so a container fills its parent. Any author style wins over it. Want an inline component? Opt out explicitly: <code>my-badge &#123; display: inline &#125;</code> in a light-DOM component, or <code>:host &#123; display: inline &#125;</code> in a shadow-DOM component's <code>static styles</code>.</p>
+    <p><strong>An even grid uses <code>1fr</code> tracks, never <code>auto</code> rows.</strong> The reflow bug (a cell grows when it gets content while the others shrink) comes from <code>auto</code>-sized rows. Put <code>aspect-ratio</code> on the CONTAINER, size the tracks explicitly, and cap the cells:</p>
+
+    <pre>&lt;!-- a 3x3 board whose cells stay equal and square as it fills --&gt;
+&lt;div class="grid gap-2 aspect-square [grid-template-columns:repeat(3,1fr)] [grid-template-rows:repeat(3,1fr)]"&gt;
+  \${cells.map((c) =&gt; html\`
+    &lt;button class="grid place-items-center min-h-0 overflow-hidden text-[clamp(1rem,8cqi,3rem)]"&gt;\${c}&lt;/button&gt;
+  \`)}
+&lt;/div&gt;</pre>
+
+    <ul>
+      <li><code>aspect-square</code> on the CONTAINER plus <code>repeat(N,1fr)</code> columns AND rows makes every cell an equal square that does not resize as marks land. Putting <code>aspect-square</code> on the CELLS is the common mistake that produces uneven rows.</li>
+      <li><code>min-h-0</code> + <code>overflow-hidden</code> on a cell stops its content from forcing the track taller (a grid child's implicit <code>min-height: auto</code> otherwise lets content push past its track).</li>
+      <li>Size text relative to the cell (<code>clamp()</code>, container-query units <code>cqi</code>) so the glyph scales with the board, not the reverse.</li>
+    </ul>
+    <p><strong>Verify by USING it.</strong> A layout bug only shows mid-interaction. Render the app, play through every state (fill the board, win, draw, reload), and confirm nothing resizes and the cells stay equal.</p>
+
     <h2>Opting in to shadow DOM</h2>
     <p>Set <code>static shadow = true</code> when you want <code>adoptedStyleSheets</code>-scoped styles, real <code>&lt;slot&gt;</code> projection, or third-party-embed-proof CSS isolation:</p>
 
