@@ -46,7 +46,7 @@ const USAGE = `webjs commands:
                                                   (--no-hot: run in-process, no hot-reload supervisor)
   webjs start [--port 8080]                       Start production server (serves source directly, no build step)
   webjs test  [--server|--browser]                 Run server + browser tests
-  webjs check [--json]                            Run correctness checks on the app (--json emits structured violations)
+  webjs check [--json] [--clear-placeholders]     Run correctness checks (--json emits structured violations; --clear-placeholders strips scaffold markers)
   webjs mcp                                       Start the read-only MCP server (routes / actions / components / check)
   webjs doctor                                    Verify project health (Node, tsconfig, env, vendor pins, importmap coherence, @webjsdev versions, git hook, page/layout elision)
   webjs types                                     Generate .webjs/routes.d.ts (typed Route union + per-route params)
@@ -381,6 +381,23 @@ async function main() {
     case 'check': {
       const { checkConventions, RULES } = await import('@webjsdev/server/check');
 
+      // --clear-placeholders: acknowledge the whole scaffold gallery in one
+      // command (strip the marker comment lines, keep the demo code), instead of
+      // one hand-edit per file. The gate then reflects only real violations.
+      if (rest.includes('--clear-placeholders')) {
+        const { clearPlaceholders } = await import('../lib/clear-placeholders.js');
+        const report = clearPlaceholders(process.cwd());
+        const total = report.reduce((n, r) => n + r.removed, 0);
+        if (report.length === 0) {
+          console.log('webjs check: no scaffold-placeholder markers found (nothing to clear).');
+        } else {
+          console.log(`webjs check: cleared ${total} scaffold-placeholder marker(s) across ${report.length} file(s):`);
+          for (const r of report) console.log(`  ${r.file}`);
+          console.log('\nThe demo code is kept. Delete any gallery route/module you do not want, then re-run `webjs check`.');
+        }
+        break;
+      }
+
       if (rest.includes('--rules')) {
         console.log('webjs check, correctness rules:');
         console.log('  Every rule catches code that is wrong to ship: a crash, a');
@@ -415,10 +432,26 @@ async function main() {
         console.log('webjs check: all checks pass ✓');
       } else {
         console.log(`webjs check: ${violations.length} violation(s) found\n`);
+        // A fresh scaffold trips no-scaffold-placeholder on every unadapted demo
+        // file at once. Printing an identical block per file drowns the real
+        // feature violations, so collapse the sentinel to ONE grouped summary
+        // (with a one-command clear) and print every other rule per-violation.
+        // The returned violations and --json are unchanged; only this human
+        // printout groups, so agents/tools still see one entry per file.
+        const PLACEHOLDER = 'no-scaffold-placeholder';
+        const placeholders = violations.filter((v) => v.rule === PLACEHOLDER);
         for (const v of violations) {
+          if (v.rule === PLACEHOLDER) continue;
           console.log(`  ✗ [${v.rule}] ${v.file}`);
           console.log(`    ${v.message}`);
           if (v.fix) console.log(`    Fix: ${v.fix}`);
+          console.log();
+        }
+        if (placeholders.length > 0) {
+          console.log(`  ✗ [${PLACEHOLDER}] ${placeholders.length} file(s) still carry scaffold example content:`);
+          for (const v of placeholders) console.log(`      ${v.file}`);
+          console.log('    Fix: adapt or delete each file, then remove its marker comment line.');
+          console.log('         Keeping the gallery? Run `webjs check --clear-placeholders` to clear all markers at once.');
           console.log();
         }
         process.exit(1);

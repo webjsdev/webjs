@@ -406,7 +406,9 @@ freshly scaffolded app fails `webjs check` until you address each
 placeholder. The marker is acknowledge-and-remove: replace the example
 content, or deliberately keep it, and in either case delete the marker
 line. So the delivered app contains only what the user asked for, never
-leftover scaffold code.
+leftover scaffold code. To keep the gallery and clear every marker in one
+step (instead of one edit per file), run `webjs check --clear-placeholders`,
+then delete whichever demo routes/modules you do not want.
 
 The scaffold exists so the agent doesn't reinvent the directory layout,
 the Drizzle wiring, the test runner config, or the convention files. It

@@ -458,7 +458,7 @@ Rules: **always scaffold via `webjs create`** (never hand-roll). **Default to a 
 webjs dev    [--port N] [--no-hot] # dev server with live reload (node --watch on Node, bun --hot on Bun). --no-hot runs in-process. Runs webjs.dev.before + webjs.dev.parallel (#550)
 webjs start  [--port N]            # prod server; source IS the runtime, plain HTTP/1.1 (reverse-proxy for TLS + HTTP/2). Runs webjs.start.before first (#550)
 webjs test   [--server] [--browser] [--watch]
-webjs check  [--rules] [--json]    # correctness validator (report-only, no autofix); --json for an agent loop
+webjs check  [--rules] [--json] [--clear-placeholders]  # correctness validator (report-only, no autofix); --json for an agent loop; --clear-placeholders strips scaffold markers in one shot
 webjs mcp                          # read-only MCP: routes, actions (RPC hashes), components, check
 webjs doctor                       # project-health checklist (incl. a page/layout elision advisory, #646); non-zero exit on a hard fail
 webjs types                        # generate .webjs/routes.d.ts (typed Route union + per-route params, #258)

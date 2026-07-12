@@ -40,8 +40,11 @@ the example `app/page.ts` and `app/layout.ts` carry a
 `webjs-scaffold-placeholder` marker comment, and `webjs check` fails
 while any marker remains, so this freshly scaffolded app fails the check
 until you replace the example content (or deliberately keep it) and
-delete the marker line. The delivered app must contain only what the
-user asked for, never leftover scaffold code.
+delete the marker line. To keep the gallery and clear every marker at
+once, run `webjs check --clear-placeholders` (it strips the marker lines
+and keeps the demo code), then delete any demo you do not want. The
+delivered app must contain only what the user asked for, never leftover
+scaffold code.
 
 **Non-negotiables for every webjs app:**
 
