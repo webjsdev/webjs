@@ -89,14 +89,20 @@ export default function RootLayout({ children, url }: { children: unknown; url?:
             p.then(function (resp) {
               try {
                 resp.clone().text().then(function (t) {
+                  // String methods only: a regex literal in this template-emitted
+                  // script has its backslashes cooked away, which corrupts it.
+                  var openTok = '<!--wj:children:';
+                  var closeTok = '<!--' + '/wj:children-->';
+                  var start = t.slice(0, 15).toLowerCase();
                   last = {
                     len: t.length,
-                    doctype: /^\s*<!doctype/i.test(t),
-                    head: /<head[ >]/i.test(t),
-                    o: (t.match(/<!--wj:children:/g) || []).length,
-                    c: (t.match(/<!--\/wj:children-->/g) || []).length,
-                    nav: /site-top/.test(t),
-                    sheet: /tailwind\.css/.test(t),
+                    start: t.slice(0, 15),
+                    doctype: start.indexOf('<!doctype') !== -1,
+                    head: t.indexOf('<head') !== -1,
+                    o: t.split(openTok).length - 1,
+                    c: t.split(closeTok).length - 1,
+                    nav: t.indexOf('site-top') !== -1,
+                    sheet: t.indexOf('tailwind.css') !== -1,
                     enc: resp.headers.get('content-encoding') || '-',
                   };
                   badge();
@@ -115,9 +121,10 @@ export default function RootLayout({ children, url }: { children: unknown; url?:
             (document.body || document.documentElement).appendChild(b);
           }
           b.textContent = last
-            ? 'nav-fetch: len=' + last.len + ' doctype=' + last.doctype + ' head=' + last.head
-              + ' | markers o' + last.o + '/c' + last.c + ' nav=' + last.nav + ' sheet=' + last.sheet
-              + ' | enc=' + last.enc
+            ? 'nav-fetch len=' + last.len + ' start="' + last.start + '"'
+              + ' | markers o' + last.o + '/c' + last.c
+              + ' | nav=' + last.nav + ' sheet=' + last.sheet + ' head=' + last.head
+              + ' enc=' + last.enc
             : 'diag:capture ready. tap a nav link.';
         }
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', badge);
