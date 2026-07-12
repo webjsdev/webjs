@@ -33,3 +33,11 @@ test('why metadata is self-consistent and points at the dedicated /why social ca
   assert.match(m.openGraph.image, /\/public\/og-why\.png$/, 'og:image is the dedicated /why card');
   assert.equal(m.twitter.image, m.openGraph.image, 'twitter image matches the og image');
 });
+
+test('the /why title uses a clean hyphen form, not a colon', () => {
+  // Guards the regression that shipped the title as "Why WebJs: the framework
+  // ...". This is a marketing page, so it takes the brand-first hyphen title
+  // like the home page, not a colon-label form.
+  const { title } = generateMetadata({ url: 'https://webjs.dev/why' });
+  assert.ok(!title.includes(':'), 'title uses no colon-label form');
+});
