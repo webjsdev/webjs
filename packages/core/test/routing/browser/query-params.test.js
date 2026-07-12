@@ -144,6 +144,46 @@ suite('Client router: query-string preservation (#639)', () => {
     } finally { teardown(); }
   });
 
+  test('repeated keys are a DISTINCT cache key from the single-value form (#639)', async () => {
+    // The cache keys on the RAW `pathname + search` string, so `?foo=bar&foo=baz`
+    // and `?foo=baz` are different entries. Next.js had a real bug here (#92787):
+    // its key collapsed repeated keys via `Object.fromEntries(URLSearchParams)`,
+    // keeping only the last value, so a multi-value -> single-value nav was a
+    // false cache HIT with no re-render. Lock that WebJs does NOT collapse.
+    setup();
+    try {
+      _prefetch(location.origin + '/qp/multi?foo=bar&foo=baz');
+      for (let i = 0; i < 40 && (_prefetchInflightSize() > 0 || !_prefetchPeek(location.origin + '/qp/multi?foo=bar&foo=baz')); i++) await tick();
+      assert.ok(_prefetchPeek(location.origin + '/qp/multi?foo=bar&foo=baz'), 'the multi-value entry is cached');
+      assert.equal(_prefetchPeek(location.origin + '/qp/multi?foo=baz'), null,
+        'the single-value ?foo=baz is a cache MISS (repeated keys are NOT collapsed to the last value)');
+    } finally { teardown(); }
+  });
+
+  test('a hash and a query survive a nav TOGETHER; a hash-only nav keeps the query (#639)', async () => {
+    setup();
+    try {
+      await navigate(location.origin + '/qp/h?a=1#sec');
+      assert.equal(location.search, '?a=1', 'query preserved alongside a hash');
+      assert.equal(location.hash, '#sec', 'hash preserved alongside a query');
+      // Changing only the hash must NOT drop the existing query.
+      await navigate(location.origin + '/qp/h?a=1#other');
+      assert.equal(location.search, '?a=1', 'a hash change did not drop the query');
+      assert.equal(location.hash, '#other', 'the hash updated');
+    } finally { teardown(); }
+  });
+
+  test('an encoded / unicode query value round-trips through the nav (#639)', async () => {
+    setup();
+    try {
+      // A space (encoded), a unicode value, and a reserved char in a value.
+      const search = '?name=' + encodeURIComponent('a b 名') + '&tag=' + encodeURIComponent('x&y');
+      await navigate(location.origin + '/qp/enc' + search);
+      assert.equal(location.search, search, 'the encoded query round-trips byte-for-byte in location.search');
+      assert.ok(calls.some((c) => c.url.includes(search)), 'the router fetched the encoded query unchanged');
+    } finally { teardown(); }
+  });
+
   test('a server redirect updates the URL to the redirect target query (#639)', async () => {
     // fetch follows a redirect and the resolved Response reports redirected=true +
     // url=<final>; the router records THAT url (with its query), not the request's.
