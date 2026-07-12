@@ -82,10 +82,40 @@ const STREAM_MIME = 'text/vnd.webjs-stream.html';
  * Parse HTML into a Document. Prefers Document.parseHTMLUnsafe (processes
  * Declarative Shadow DOM) over DOMParser (does NOT process DSD).
  *
+ * A partial-nav response (#936) is an INNER fragment that BEGINS with the
+ * `<!--wj:children:<path>-->` layout marker and carries no `<!doctype>`/`<html>`.
+ * Parsing such a fragment as a DOCUMENT hoists that leading comment OUT of
+ * `<body>` (the HTML parser's "before html" insertion mode makes a leading
+ * comment a child of the document, before `<html>`), so
+ * `collectChildrenSlots(doc.body)` never sees the opening marker, finds no
+ * shared slot, and `applySwap` falls to the destructive full-body swap that
+ * strips the head stylesheets and the outer layout. So a fragment is parsed in
+ * BODY (fragment) context instead, keeping the marker with its content.
+ * `body.setHTMLUnsafe` also processes Declarative Shadow DOM, so a shadow
+ * component inside the swapped content still re-attaches its root; the
+ * `<template>` path is the fallback for browsers without it (markers preserved,
+ * DSD not, which matches the pre-`setHTMLUnsafe` baseline).
+ *
  * @param {string} html
  * @returns {Document | null}
  */
 function parseHTML(html) {
+  const isFragment = !/^\s*(?:<!doctype|<html)/i.test(html);
+  if (isFragment && typeof document !== 'undefined' && document.implementation) {
+    try {
+      const doc = document.implementation.createHTMLDocument();
+      if (typeof doc.body.setHTMLUnsafe === 'function') {
+        doc.body.setHTMLUnsafe(html);
+      } else {
+        const t = doc.createElement('template');
+        t.innerHTML = html;
+        doc.body.appendChild(t.content);
+      }
+      return doc;
+    } catch {
+      // Fall through to a document parse (still functional, just the #936 path).
+    }
+  }
   if (typeof Document !== 'undefined' && typeof Document.parseHTMLUnsafe === 'function') {
     return Document.parseHTMLUnsafe(html);
   }
@@ -3473,6 +3503,7 @@ export {
   clearFormBusy as _clearFormBusy,
   collectChildrenSlots as _collectChildrenSlots,
   longestSharedPath as _longestSharedPath,
+  parseHTML as _parseHTML,
   keyOf as _keyOf,
   diffElementInPlace as _diffElementInPlace,
   reconcileChildren as _reconcileChildren,
