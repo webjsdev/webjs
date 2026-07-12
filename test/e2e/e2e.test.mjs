@@ -926,7 +926,7 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       'light-inner should NOT have DSD template');
 
     // Verify the inline styles contain actual CSS (not empty)
-    assert.match(html, /shadow-inner><template shadowrootmode="open"><style>[^<]+<\/style>/,
+    assert.match(html, /shadow-inner[^>]*><template shadowrootmode="open"><style>[^<]+<\/style>/,
       'shadow-inner DSD should contain non-empty inline styles');
   });
 
