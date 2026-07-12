@@ -1528,7 +1528,7 @@ function wrapHead(opts) {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<style${n}>:where([data-wj-host]){display:block}</style>
+<style${n}>@layer webjs-host{:where([data-wj-host]){display:block}}</style>
 ${opts.nonce ? `<meta name="csp-nonce" content="${escapeAttr(opts.nonce)}">` : ''}
 ${metaTags.join('\n')}
 <title>${escapeHtml(title)}</title>

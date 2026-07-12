@@ -1,9 +1,13 @@
 /**
- * The framework defaults component hosts to display:block via ONE low-specificity
- * rule injected into every page's <head>: `:where([data-wj-host]) { display:
- * block }`. A custom element is display:inline by default (both light and shadow
- * DOM), which collapses a component used as a block container. The zero-
- * specificity `:where()` keeps it fully overridable by any author style.
+ * The framework defaults component hosts to display:block via ONE rule injected
+ * into every page's <head>: `@layer webjs-host { :where([data-wj-host]) {
+ * display: block } }`. A custom element is display:inline by default (both light
+ * and shadow DOM), which collapses a component used as a block container. The
+ * rule lives in a dedicated `@layer` declared FIRST (so it is the lowest-priority
+ * cascade layer), which keeps it overridable by any author style INCLUDING
+ * Tailwind's layered utilities (`flex`, `grid`, `hidden`). A bare unlayered rule
+ * with `:where()` was NOT enough: unlayered declarations beat layered ones
+ * regardless of specificity, so it silently overrode `class="flex"` on hosts.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -33,7 +37,7 @@ test('the document head carries the low-specificity host display default', async
   const res = await h.handle(new Request('http://localhost/'));
   assert.equal(res.status, 200);
   const html = await res.text();
-  assert.match(html, /<style[^>]*>:where\(\[data-wj-host\]\)\{display:block\}<\/style>/, 'head has the host default rule');
+  assert.match(html, /<style[^>]*>@layer webjs-host\{:where\(\[data-wj-host\]\)\{display:block\}\}<\/style>/, 'head has the layered host default rule');
   // It sits in <head>, before <body>.
   assert.ok(html.indexOf('data-wj-host') < html.indexOf('<body'), 'rule is in the head');
 });

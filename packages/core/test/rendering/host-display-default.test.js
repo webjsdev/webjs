@@ -3,7 +3,7 @@
  * is `display:inline` by default, which collapses a component used as a block
  * container). SSR stamps every host (light AND shadow) with `data-wj-host`; the
  * document head (built in @webjsdev/server) carries the single low-specificity
- * rule `:where([data-wj-host]) { display: block }`. This test pins the SSR half
+ * rule `@layer webjs-host { :where([data-wj-host]) { display: block } }`. This test pins the SSR half
  * (the marker); the head-rule half is asserted in the server package.
  */
 import { test } from 'node:test';

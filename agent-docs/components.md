@@ -460,11 +460,15 @@ without flash on the client.
 A custom element is `display: inline` in plain CSS, so a component used as
 a block container (a board, a card, a panel) would otherwise collapse to
 its content size. WebJs marks every SSR'd and client-upgraded host with a
-`data-wj-host` attribute and injects ONE zero-specificity rule into the
-document head, `:where([data-wj-host]) { display: block }`, so a container
-component fills its parent as expected. The rule is zero-specificity, so
-any author style wins (a `class`, a tag-prefixed rule, `static styles`,
-`:host`). If you WANT an inline component (a badge in flowing text), opt
+`data-wj-host` attribute and injects ONE rule into the document head,
+wrapped in a dedicated low-priority cascade layer, `@layer webjs-host {
+:where([data-wj-host]) { display: block } }`, so a container component fills
+its parent as expected. The layer (not the zero-specificity `:where()`) is
+what keeps it overridable: any author style wins, INCLUDING a Tailwind
+utility (`class="flex"`, `grid`, `hidden`) whose layer is ordered after
+`webjs-host`. A bare unlayered rule was NOT enough (unlayered beats layered
+regardless of specificity, so it silently overrode `class="flex"`). If you
+WANT an inline component (a badge in flowing text), opt
 out explicitly: a light-DOM component adds `my-badge { display: inline }`
 (tag-prefixed, per the class-prefix rule below), a shadow-DOM component
 sets `:host { display: inline }` in `static styles`. The marker is uniform

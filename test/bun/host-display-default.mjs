@@ -6,7 +6,7 @@
  *   bun  test/bun/host-display-default.mjs
  *
  * The SSR walker stamps every component host (light AND shadow) with
- * `data-wj-host` so the head rule `:where([data-wj-host]){display:block}`
+ * `data-wj-host` so the head rule `@layer webjs-host{:where([data-wj-host]){display:block}}`
  * defaults hosts to block (a custom element is display:inline by default, which
  * collapses a block container). Host emission is on the SSR hot path, so it is
  * runtime-sensitive. A plain assert script (not `*.test.mjs`), exits non-zero on

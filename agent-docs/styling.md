@@ -287,11 +287,16 @@ they apply to any grid / board / gallery / card layout.
 **Component hosts are `display: block` by default.** A custom element is
 `display: inline` in plain CSS (both light and shadow DOM), which collapses a
 component used as a block container (a board, a card) to its content size. WebJs
-defaults every component host to `display: block` via one zero-specificity rule
-in the document head, so this does not bite you. If you WANT an inline component
-(a badge inside flowing text), opt out explicitly: a light-DOM component adds a
-tag-prefixed rule `my-badge { display: inline }`, a shadow-DOM component sets
-`:host { display: inline }` in `static styles`. Both beat the framework default.
+defaults every component host to `display: block` via one rule in the document
+head, wrapped in a dedicated low-priority cascade layer (`@layer webjs-host {
+:where([data-wj-host]) { display: block } }`), so this does not bite you. The
+layer is what keeps it overridable: any author style, INCLUDING a Tailwind
+utility (`class="flex"`, `grid`, `hidden`), wins over it (Tailwind's utilities
+live in a later layer). So sizing a host with `class="flex ..."` just works. If
+you WANT an inline component (a badge inside flowing text), opt out explicitly: a
+light-DOM component adds a tag-prefixed rule `my-badge { display: inline }`, a
+shadow-DOM component sets `:host { display: inline }` in `static styles`. Both
+beat the framework default.
 
 **An even grid uses `1fr` tracks, never `auto` rows.** The reflow bug (a cell
 grows when it gets content while the others shrink) comes from `auto`-sized grid
