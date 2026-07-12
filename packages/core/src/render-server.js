@@ -653,10 +653,13 @@ async function injectDSD(html, ctx, ancestors = [], dev) {
       // path), not land in light DOM. Otherwise the client renders the error
       // into the shadow root while the light error box lingers underneath.
       const isShadowErr = /** @type any */ (Cls).shadow === true;
-      // The render threw before the success path's withHostMarker ran, so mark
-      // the LIGHT host here too, so a component whose SSR render() throws paints
-      // its error state as display:block (not the inline default), matching the
-      // success path. Shadow hosts stay unmarked (their :host must win).
+      // Mark the LIGHT host here too, so a component whose SSR render() throws
+      // paints its error state as display:block (not the inline default),
+      // matching the success path. When an `async render()` rejects, it throws
+      // before the success-path withHostMarker (above) ran, so `opening` is still
+      // unmarked; when a later template render throws, the success marker already
+      // ran and this call is a no-op (withHostMarker is idempotent). Shadow hosts
+      // stay unmarked (their :host must win).
       if (!isShadowErr) opening = withHostMarker(opening);
       let text;
       if (isShadowErr) {
