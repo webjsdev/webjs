@@ -421,21 +421,20 @@ navigation automatically.
    that leading comment out of `<body>` (the HTML "before html" insertion
    mode) and the marker map would come up empty (#936).
 3. Picks the **longest shared path**, the deepest layout boundary
-   both pages have in common. **When there is NO shared path** and the
-   live page actually has a layout, the router does a **full-page load**
-   (`location.assign`) instead of a destructive in-place full-body swap.
-   A full-body swap there would strip the head stylesheets and the outer
-   layout (that was #936: a viewport prefetch firing mid-parse sent an
-   empty `X-Webjs-Have`, so the server returned a body the swap then
-   mangled); a real page load is always correct by construction. A
-   revalidation / cache restore (`href` null) keeps the in-place swap: its
-   document is a full same-shell snapshot, safe to apply, and a reload
-   would defeat the instant back/forward restore. A genuinely marker-less
-   page (no children slot) also keeps the in-place swap, since it has no
-   outer layout to lose. Relatedly, the viewport prefetch is skipped while
-   the document is still parsing if `buildHaveHeader()` is empty (the
-   closing marker may not be parsed yet), so it never caches a poisoned
-   full-page response.
+   both pages have in common. When there is no shared path it falls to a
+   full-body swap (a genuine root-layout change). That fallback's head
+   merge **never removes a `<link rel=stylesheet>` or `<style>`** (Turbo's
+   persistent-CSS model): an incoming head that lacks the app stylesheet
+   (a partial or mangled response) can no longer strip the live CSS and
+   leave the page unstyled (#936). A genuinely stale stylesheet is dropped
+   by the deploy-level hard reload (build-id mismatch), not by a soft swap.
+   Relatedly, the **viewport prefetch is skipped while the document is
+   still parsing** when `buildHaveHeader()` is empty: the closing
+   `<!--/wj:children-->` marker may not be parsed yet, so an empty
+   `X-Webjs-Have` there means "markers not ready", not "no layout", and
+   caching that full-page response would feed the fallback a body it should
+   never have applied. The click path re-fetches with a correct `have`
+   once the document has parsed.
 4. Replaces nodes between that marker pair using a keyed `data-key`
    reconciler. Elements with matching tag + matching key are reused
    with in-place attribute diffing. **Live attributes** (`value`,
@@ -448,11 +447,11 @@ navigation automatically.
    component. The one exception is a light-DOM component's projected
    `<slot>` content, which is page-authored rather than render-owned, so
    the router re-projects it to match the incoming page.
-5. Merges `<head>` add-only (so runtime-injected styles like Tailwind
-   survive), re-runs `<script>` elements, `customElements.upgrade()`s the
-   swapped subtree, `pushState`s the URL, scrolls. (The old remove-capable
-   full head merge only ran on the no-shared-path fallback, which is now a
-   full-page load, so a soft swap never removes a live head element.)
+5. Merges `<head>` (add-only on the shared-path swap so runtime-injected
+   styles like Tailwind survive; a remove-capable full merge on the
+   no-shared-path fallback, which still never removes a stylesheet or
+   `<style>`, #936), re-runs `<script>` elements, `customElements.upgrade()`s
+   the swapped subtree, `pushState`s the URL, scrolls.
 6. Dispatches `webjs:navigate` event on `document`.
 
 ### In-place navigation-error recovery (`webjs:navigation-error`)

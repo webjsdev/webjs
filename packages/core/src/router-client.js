@@ -2308,23 +2308,6 @@ function upgradeCustomElementsInRange(range) {
   }
 }
 
-/**
- * Full-page load seam. Production always does a real `location.assign` (a Back
- * returns to the current page, matching a normal link). It is a module variable
- * only so tests can observe the fallback without navigating the harness away
- * (`location.assign` is not stubbable in any browser). Reset via `_setHardNavigate`.
- *
- * @param {string} href
- */
-let hardNavigate = (href) => {
-  if (typeof location === 'undefined') return;
-  if (typeof location.assign === 'function') location.assign(href);
-  else location.href = href;
-};
-
-/** @param {(href: string) => void} fn */
-function setHardNavigate(fn) { hardNavigate = fn; }
-
 function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc) {
   // SSR action seeding (#472): ingest any seed payload the incoming page
   // carries BEFORE its components are grafted into the live DOM and upgrade, so
@@ -2527,40 +2510,14 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
     return;
   }
 
-  // 3. No shared layout marker between the live DOM and the incoming document.
-  //
-  // For a FOREGROUND router nav (we have the URL, and it is not a cache restore
-  // or a frame swap) fall back to a real full-page load instead of an in-place
-  // full-body swap. The in-place swap here is destructive by nature: `mergeHead`
-  // removes live head elements the incoming head lacks (the stylesheet), and
-  // `replaceChildren` swaps the whole body. That is correct only when the
-  // incoming document is a full same-shell page. But the client can end up here
-  // with an incoming body that is missing the outer layout and a head missing
-  // the stylesheets, e.g. after a viewport prefetch fired mid-parse and sent an
-  // empty `X-Webjs-Have` (before the closing `<!--/wj:children-->` marker was
-  // parsed), so the server returned a body the swap then mangles: it strips the
-  // head CSS and wipes the navbar, and because the live markers are gone the
-  // corruption cascades to every later nav (#936). A full-page load is always
-  // correct by construction, so this whole failure class becomes impossible on
-  // any browser, at the cost of one non-instant navigation in the rare genuine
-  // cross-root-layout case. `location.assign` keeps the target in history
-  // (a Back returns to the current page), matching a normal link navigation.
-  // Only when the LIVE page actually has a layout (`here` is non-empty) does a
-  // full-body swap risk destroying an outer layout + its head-bound CSS. A
-  // genuinely marker-less page (no children slot at all) has nothing to lose, so
-  // the in-place swap below stays safe for it. Every real WebJs page is wrapped
-  // in a layout that emits markers, so this reloads the destructive case and
-  // leaves the marker-less edge case (and its tests) alone.
-  if (href && !revalidating && !frameId && here.size > 0 && typeof location !== 'undefined') {
-    hardNavigate(href);
-    return;
-  }
-
-  // A revalidation / cache restore (href null) keeps the in-place full-body
-  // swap: its `doc` is a full same-shell snapshot captured from a real page, so
-  // applying it is safe, and a reload would defeat the instant back/forward
-  // restore this path exists to serve. Full head merge: a genuine root-layout
-  // change means stale head elements should be removed.
+  // 3. Full body swap fallback: no shared layout marker (a genuine root-layout
+  // change, or a same-layout nav whose markers could not be paired). Full head
+  // merge, so a real root-layout change removes stale head elements. `mergeHead`
+  // now PRESERVES stylesheets and `<style>` unconditionally (#936): even if the
+  // client reaches this path with an incoming head that lacks the app's
+  // `<link rel=stylesheet>` (a partial or mangled response, e.g. from a
+  // mid-parse empty-`have` prefetch), the live CSS is never stripped, so the
+  // swap can no longer leave the page unstyled.
   mergeHead(doc.head);
   // Persist permanent elements by node identity across the full-body
   // swap: move each live [data-webjs-permanent][id] node into the matching
@@ -3303,6 +3260,24 @@ function addNewHeadElements(newHead) {
   }
 }
 
+/**
+ * A head element that a soft nav must NEVER remove: a `<style>` or a
+ * `<link rel="stylesheet">` (incl. `rel="preload" as="style"`). Removing one
+ * during a full-body-swap fallback whose incoming head lacked it leaves the
+ * page unstyled (#936). Case-insensitive on `rel` (it may list several tokens).
+ *
+ * @param {Element} el
+ * @returns {boolean}
+ */
+function isPersistentHeadStyle(el) {
+  if (el.tagName === 'STYLE') return true;
+  if (el.tagName !== 'LINK') return false;
+  const rel = (el.getAttribute('rel') || '').toLowerCase();
+  if (rel.split(/\s+/).includes('stylesheet')) return true;
+  if (rel.split(/\s+/).includes('preload') && (el.getAttribute('as') || '').toLowerCase() === 'style') return true;
+  return false;
+}
+
 /** @param {HTMLHeadElement} newHead */
 function mergeHead(newHead) {
   const currentHead = document.head;
@@ -3328,6 +3303,14 @@ function mergeHead(newHead) {
     if (el.tagName === 'SCRIPT' && el.getAttribute('type') === 'importmap') continue;
     if (el.tagName === 'BASE') continue;
     if (el.tagName === 'TITLE') continue;
+    // #936: NEVER remove a stylesheet or a `<style>` on a soft nav (Turbo's
+    // persistent-CSS model). The incoming head of a full-body-swap fallback can
+    // legitimately lack the app's `<link rel=stylesheet>` (a partial or mangled
+    // response, e.g. from a mid-parse empty-`have` prefetch): removing the live
+    // one there leaves the whole page unstyled until a manual refresh, the
+    // headline #936 symptom. Keeping it is safe: a genuinely stale sheet is
+    // dropped by the deploy-level hard reload (build-id mismatch), not here.
+    if (isPersistentHeadStyle(el)) continue;
     if (!newSet.has(outerHTMLForDiff(el))) el.remove();
   }
 
@@ -3568,7 +3551,6 @@ export {
   reconcileChildren as _reconcileChildren,
   onPopState as _onPopState,
   applySwap as _applySwap,
-  setHardNavigate as _setHardNavigate,
   buildHaveHeader as _buildHaveHeader,
   snapshotCache as _snapshotCache,
   prefetchCache as _prefetchCache,
