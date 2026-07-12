@@ -20,10 +20,7 @@ import { html } from '../../../src/html.js';
 import { render } from '../../../src/render-client.js';
 import { guard } from '../../../src/directives.js';
 
-const assert = {
-  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-  equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); },
-};
+import { assert } from '../../../../../test/browser-assert.js';
 
 function stripExpressionComments(s) {
   return s.replace(/<!--[\s\S]*?-->/g, '');

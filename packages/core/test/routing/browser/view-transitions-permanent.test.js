@@ -25,11 +25,7 @@
  */
 import { enableClientRouter } from '../../../src/router-client.js';
 
-const assert = {
-  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-  equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); },
-  notEqual: (a, b, msg) => { if (a === b) throw new Error(msg || `Expected !== ${JSON.stringify(b)}`); },
-};
+import { assert } from '../../../../../test/browser-assert.js';
 const tick = () => new Promise((r) => setTimeout(r, 0));
 async function settle() { await tick(); await tick(); await tick(); await tick(); }
 

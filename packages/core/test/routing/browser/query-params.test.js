@@ -20,10 +20,7 @@ import {
   _prefetchInflightSize,
 } from '../../../src/router-client.js';
 
-const assert = {
-  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-  equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); },
-};
+import { assert } from '../../../../../test/browser-assert.js';
 const tick = () => new Promise((r) => setTimeout(r, 25));
 /** Poll `location.search` until it equals `want` (a real popstate/pushState is
  *  async), returning the final value so the assertion message is useful. */

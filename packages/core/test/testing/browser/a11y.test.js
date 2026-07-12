@@ -11,9 +11,7 @@ import { html } from '../../../src/html.js';
 import { WebComponent } from '../../../src/component.js';
 import { ssrFixture, assertNoA11yViolations } from '../../../src/testing.js';
 
-const assert = {
-  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-};
+import { assert } from '../../../../../test/browser-assert.js';
 
 suite('assertNoA11yViolations() (#268)', () => {
 

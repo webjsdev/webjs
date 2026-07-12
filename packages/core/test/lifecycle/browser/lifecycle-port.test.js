@@ -24,40 +24,7 @@
 import { html } from '../../../src/html.js';
 import { WebComponent, prop } from '../../../src/component.js';
 
-const assert = {
-  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-  notOk: (v, msg) => { if (v) throw new Error(msg || `Expected falsy, got ${v}`); },
-  isTrue: (v, msg) => { if (v !== true) throw new Error(msg || `Expected true, got ${v}`); },
-  isFalse: (v, msg) => { if (v !== false) throw new Error(msg || `Expected false, got ${v}`); },
-  isNaN: (v, msg) => { if (!Number.isNaN(v)) throw new Error(msg || `Expected NaN, got ${v}`); },
-  equal: (a, b, msg) => {
-    if (a !== b) throw new Error(msg || `Expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
-  },
-  notEqual: (a, b, msg) => {
-    if (a === b) throw new Error(msg || `Expected not equal to ${JSON.stringify(b)}`);
-  },
-  deepEqual: (a, b, msg) => {
-    const norm = (v) => {
-      if (v instanceof Map) return ['__map__', [...v.entries()].map(([k, vv]) => [k, norm(vv)])];
-      if (Array.isArray(v)) return v.map(norm);
-      if (v && typeof v === 'object') {
-        const out = {};
-        for (const k of Object.keys(v).sort()) out[k] = norm(v[k]);
-        return out;
-      }
-      if (Number.isNaN(v)) return '__NaN__';
-      return v;
-    };
-    const aS = JSON.stringify(norm(a));
-    const bS = JSON.stringify(norm(b));
-    if (aS !== bS) throw new Error(msg || `deepEqual failed:\n  got    : ${aS}\n  expect : ${bS}`);
-  },
-  throws: async (fn, msg) => {
-    let threw = false;
-    try { await fn(); } catch { threw = true; }
-    if (!threw) throw new Error(msg || 'Expected function to throw');
-  },
-};
+import { assert } from '../../../../../test/browser-assert.js';
 
 let __ctr = 0;
 const tag = (prefix) => `${prefix}-${++__ctr}`;

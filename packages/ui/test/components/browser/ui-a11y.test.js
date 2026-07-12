@@ -14,10 +14,7 @@
 import { html } from '../../../../core/src/html.js';
 import { render } from '../../../../core/src/render-client.js';
 
-const assert = {
-  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-  equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${b}, got ${a}`); },
-};
+import { assert } from '../../../../../test/browser-assert.js';
 
 const COMPONENTS_DIR = '/packages/ui/packages/registry/components';
 

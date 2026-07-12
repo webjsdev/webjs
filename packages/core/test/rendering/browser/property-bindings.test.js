@@ -11,16 +11,7 @@ import { html } from '../../../src/html.js';
 import { WebComponent } from '../../../src/component.js';
 import { stringify } from '../../../src/serialize.js';
 
-const assert = {
-  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-  equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${b}, got ${a}`); },
-  deepEqual: (a, b, msg) => {
-    if (JSON.stringify(a) !== JSON.stringify(b)) {
-      throw new Error(msg || `deepEqual failed: ${JSON.stringify(a)} !== ${JSON.stringify(b)}`);
-    }
-  },
-  isArray: (v, msg) => { if (!Array.isArray(v)) throw new Error(msg || `Expected array, got ${typeof v}`); },
-};
+import { assert } from '../../../../../test/browser-assert.js';
 
 // Each test owns a uniquely-tagged component so registrations do not
 // collide across tests in the same suite. customElements.define throws

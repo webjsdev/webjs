@@ -27,10 +27,7 @@ import { html } from '../../../src/html.js';
 import { WebComponent } from '../../../src/component.js';
 import { signal } from '../../../src/signal.js';
 
-const assert = {
-  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-  equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); },
-};
+import { assert } from '../../../../../test/browser-assert.js';
 
 suite('slot projection cycle (regression)', () => {
   let nextTag = 0;

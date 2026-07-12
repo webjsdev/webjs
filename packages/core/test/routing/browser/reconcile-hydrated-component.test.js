@@ -22,10 +22,7 @@ import { html } from '../../../src/html.js';
 import { WebComponent } from '../../../src/component.js';
 import { _diffElementInPlace, _reconcileChildren } from '../../../src/router-client.js';
 
-const assert = {
-  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-  equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); },
-};
+import { assert } from '../../../../../test/browser-assert.js';
 
 let counter = 0;
 function defineLikeButton() {

@@ -18,22 +18,7 @@ import { html } from '../../../src/html.js';
 import { render } from '../../../src/render-client.js';
 import { ref, createRef } from '../../../src/directives.js';
 
-const assert = {
-  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-  equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); },
-  notStrictEqual: (a, b, msg) => { if (a === b) throw new Error(msg || 'Expected different references'); },
-  strictEqual: (a, b, msg) => { if (a !== b) throw new Error(msg || 'Expected strict equal'); },
-  isUndefined: (v, msg) => { if (v !== undefined) throw new Error(msg || `Expected undefined, got ${JSON.stringify(v)}`); },
-  isOk: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-  deepEqual: (a, b, msg) => {
-    const aj = JSON.stringify(a);
-    const bj = JSON.stringify(b);
-    if (aj !== bj) throw new Error(msg || `Expected ${bj}, got ${aj}`);
-  },
-  doesNotThrow: (fn, msg) => {
-    try { fn(); } catch (e) { throw new Error(msg || `Expected not to throw, got ${e}`); }
-  },
-};
+import { assert } from '../../../../../test/browser-assert.js';
 
 suite('ref directive (lit parity port)', () => {
   let container;

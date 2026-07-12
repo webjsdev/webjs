@@ -18,11 +18,7 @@ import { signal } from '../../../src/signal.js';
 import { renderToString } from '../../../src/render-server.js';
 import { ssrFixture, waitForUpdate } from '../../../src/testing.js';
 
-const assert = {
-  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-  equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); },
-  notEqual: (a, b, msg) => { if (a === b) throw new Error(msg || `Expected values to differ, both were ${JSON.stringify(a)}`); },
-};
+import { assert } from '../../../../../test/browser-assert.js';
 
 function normalize(s) {
   return String(s)

@@ -18,10 +18,7 @@ import { html } from '../../../src/html.js';
 import { render } from '../../../src/render-client.js';
 import { enableClientRouter } from '../../../src/router-client.js';
 
-const assert = {
-  ok: (v, msg) => { if (!v) throw new Error(msg || `Expected truthy, got ${v}`); },
-  equal: (a, b, msg) => { if (a !== b) throw new Error(msg || `Expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); },
-};
+import { assert } from '../../../../../test/browser-assert.js';
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
 suite('Client router: JS-handled links/forms are not hijacked (#150, #153)', () => {
