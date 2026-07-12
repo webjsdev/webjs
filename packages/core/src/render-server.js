@@ -502,6 +502,17 @@ async function injectDSD(html, ctx, ancestors = [], dev) {
       // this.hidden on the host). Reading after render() captures all three.
       // Appending keeps the original tag byte-identical when nothing changed.
       opening = appendReflectedAttrs(opening, instance, presentAttrNames);
+      // Mark EVERY component host (light AND shadow) so the framework default
+      // `:where([data-wj-host]) { display: block }` (injected once in the
+      // document head) applies at first paint. A custom element is
+      // `display:inline` by default in both DOM modes, which collapses a
+      // component used as a block container (a board / card) until an author
+      // style intervenes. This makes block the sensible default while staying
+      // overridable: a light-DOM author overrides via a tag-prefixed rule /
+      // class, a shadow-DOM author via `:host { display: … }` (both beat the
+      // zero-specificity `:where()`). Emitted uniformly regardless of elision,
+      // so the elision on-vs-off differential is preserved.
+      opening = withHostMarker(opening);
       // Render the template to HTML. injectDSD recurses on the result so
       // nested custom elements (e.g. <theme-toggle> inside <blog-shell>)
       // get their own DSD pass.
@@ -1032,6 +1043,18 @@ function seedServerAttrs(instance, attrs) {
  * @param {Set<string>} presentAttrNames  lowercased names already in the source tag
  * @returns {string}
  */
+/**
+ * Add the component host marker (`data-wj-host`) to an opening tag, unless it
+ * is already present. Insert before the closing `>` the same way
+ * `appendReflectedAttrs` does. Idempotent so a re-processed tag is unchanged.
+ * @param {string} opening  the element's opening tag, ending in `>`
+ * @returns {string}
+ */
+function withHostMarker(opening) {
+  if (/\sdata-wj-host(?=[\s>=])/i.test(opening)) return opening;
+  return `${opening.slice(0, -1)} data-wj-host>`;
+}
+
 function appendReflectedAttrs(opening, instance, presentAttrNames) {
   if (!instance || typeof instance.getAttributeNames !== 'function') return opening;
   let extra = '';

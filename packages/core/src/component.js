@@ -778,6 +778,11 @@ class WebComponentBase extends Base {
     // attributes the SSR walker emitted. Same-value reflects are no-ops, so a
     // hydrated element (whose attribute already arrived from SSR) is unchanged.
     this._reflectDeclaredAttributes();
+    // Mark EVERY component host (light AND shadow) so the framework default
+    // host rule (`:where([data-wj-host]) { display: block }`) applies. SSR
+    // already stamps this on server-rendered hosts (idempotent here); this also
+    // covers a client-only component (never SSR'd) so it does not collapse.
+    if (!this.hasAttribute('data-wj-host')) this.setAttribute('data-wj-host', '');
     const Ctor = /** @type any */ (this.constructor);
     if (Ctor.shadow === true) {
       const hadSSRShadow = !!this.shadowRoot;

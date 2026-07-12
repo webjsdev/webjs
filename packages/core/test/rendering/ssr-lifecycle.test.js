@@ -152,7 +152,7 @@ test('a component that neither reflects nor sets attributes keeps a byte-identic
   const out = await renderToString(html`<ssr-plain name="x" class="y"></ssr-plain>`);
   // The opening tag is exactly the source tag (no appended attributes), which
   // is what preserves the elision on-vs-off differential invariant.
-  assert.match(out, /<ssr-plain name="x" class="y"><!--webjs-hydrate-->/, 'opening tag unchanged');
+  assert.match(out, /<ssr-plain name="x" class="y" data-wj-host><!--webjs-hydrate-->/, 'opening tag unchanged');
 });
 
 test('the server element shim mirrors lit: attributes getter, toggleAttribute, double-attach throws', async () => {
