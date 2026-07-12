@@ -412,7 +412,16 @@ navigation automatically.
    one pair per layout in the chain. Auto-derived from folder
    structure. Layout authors write nothing extra.
 2. On click, the router walks both the live DOM and the incoming HTML
-   for these markers and builds `Map<path, {start, end}>`.
+   for these markers and builds `Map<path, {start, end}>`. The incoming
+   response for a same-layout nav is an INNER fragment that begins with
+   the `<!--wj:children:...-->` marker and carries no `<!doctype>`/`<html>`,
+   so the router parses it in a `<body>` fragment context
+   (`body.setHTMLUnsafe`, which also processes Declarative Shadow DOM),
+   NOT as a document. Parsing such a fragment as a document would hoist
+   that leading comment out of `<body>` (the HTML "before html" insertion
+   mode), the marker map would come up empty, and the nav would wrongly
+   fall to the full-body-swap fallback that strips head CSS and the outer
+   layout (#936).
 3. Picks the **longest shared path**, the deepest layout boundary
    both pages have in common.
 4. Replaces nodes between that marker pair using a keyed `data-key`
