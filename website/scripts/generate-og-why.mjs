@@ -107,7 +107,7 @@ const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
     <div class="mid">
       <div class="kicker">Built for the AI era</div>
       <h1 style="margin-top:18px">The framework your <span class="accent">AI agent</span> already understands</h1>
-      <p class="lede">Any model reads the whole stack from node_modules and builds. No training data required, no single blessed model.</p>
+      <p class="lede">No build step, so the whole stack stays readable as written. Any model reads it and builds, no single blessed model.</p>
     </div>
     <div>
       <hr>

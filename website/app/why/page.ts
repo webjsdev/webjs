@@ -82,12 +82,13 @@ export default function Why() {
       <h1 class="font-display font-extrabold text-display leading-[1.04] tracking-[-0.035em] mx-auto mt-4 mb-4 max-w-[16ch] text-balance">
         The framework your AI agent already understands
       </h1>
-      <p class="text-lede leading-[1.6] text-fg-muted max-w-[60ch] mx-auto mb-8 text-pretty">
-        WebJs serves both the framework source and your app code exactly as
-        written, so any AI model can read the whole stack from node_modules,
-        reason about it, and debug it. No training data required, no single
-        blessed model. It runs on the web components, HTML, and JavaScript every
-        model already knows.
+      <p class="text-lede leading-[1.6] text-fg-muted max-w-[62ch] mx-auto mb-8 text-pretty">
+        WebJs has no build step, so nothing is hidden from your agent. The
+        framework ships in node_modules as plain JavaScript it can read end to
+        end, and your app code is served to the browser exactly as written. Any
+        model reasons about the whole stack and debugs it, with no training data
+        required and no single blessed model, on the web components and standard
+        HTML every model already knows.
       </p>
       <div class="flex gap-3 justify-center flex-wrap mb-8">
         <a class="${BTN} bg-accent text-accent-fg border-transparent shadow-[var(--shadow-glow)] hover:bg-accent-hover hover:-translate-y-0.5" href=${DOCS_URL + '/docs/getting-started'} target="_blank" rel="noopener noreferrer">
@@ -105,34 +106,42 @@ export default function Why() {
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
           <div class=${KICKER}>Read the source, not the training set</div>
-          <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">Your agent can read the entire framework</h2>
+          <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">Nothing is hidden behind a build step</h2>
           <p class="text-fg-muted text-[1.05rem] leading-[1.6] m-0">
-            Most frameworks reach the browser as a bundled, minified artifact
-            that no longer resembles their source. WebJs has no build step, so
-            the framework arrives as plain, readable JavaScript. An agent lists
-            the source, opens the file it needs, and reasons from the real code.
+            No build step means two things, and both help your agent. The
+            framework itself sits in node_modules as plain JavaScript with JSDoc,
+            so an agent reads it end to end and fits it into context. And your own
+            app code is served to the browser exactly as written, so the agent
+            debugs the running app against the real source, never a bundled or
+            minified artifact.
           </p>
         </div>
         <div class="grid grid-cols-1 min-[900px]:grid-cols-2 gap-4 items-stretch max-w-[900px] mx-auto">
           <div class="flex flex-col min-w-0">
-            <p class="font-mono font-semibold text-[11px] leading-[1.4] tracking-[0.12em] uppercase text-fg-subtle mb-[10px] ml-1">The agent reads the framework</p>
+            <p class="font-mono font-semibold text-[11px] leading-[1.4] tracking-[0.12em] uppercase text-fg-subtle mb-[10px] ml-1">The framework, readable in node_modules</p>
             <figure class=${WIN}>
               <figcaption class=${WINBAR}>${DOTS}<span class=${WINNAME}>terminal</span></figcaption>
-              <pre class="scroll-thin m-0 p-[18px] overflow-x-auto font-mono text-[13px] leading-[1.7] [tab-size:2] flex-1" tabindex="0" aria-label="Listing the framework source"><code><span class="text-accent">$</span> ls node_modules/@webjsdev/core/src
+              <pre class="scroll-thin m-0 p-[18px] overflow-x-auto font-mono text-[13px] leading-[1.7] [tab-size:2] flex-1" tabindex="0" aria-label="Listing the framework source in node_modules"><code><span class="text-accent">$</span> ls node_modules/@webjsdev/core/src
 component.js    html.js         render-client.js
 css.js          directives.js   render-server.js
 serialize.js    router-client.js
-<span class="text-fg-subtle"># plain .js with JSDoc. what you read is what runs.</span></code></pre>
+<span class="text-fg-subtle"># plain .js with JSDoc. the agent reads the</span>
+<span class="text-fg-subtle"># whole framework and fits it into context.</span></code></pre>
             </figure>
           </div>
           <div class="flex flex-col min-w-0">
-            <p class="font-mono font-semibold text-[11px] leading-[1.4] tracking-[0.12em] uppercase text-fg-subtle mb-[10px] ml-1">And traces any behaviour to its line</p>
+            <p class="font-mono font-semibold text-[11px] leading-[1.4] tracking-[0.12em] uppercase text-fg-subtle mb-[10px] ml-1">Your app code, served to the browser as written</p>
             <figure class=${WIN}>
               <figcaption class=${WINBAR}>${DOTS}<span class=${WINNAME}>terminal</span></figcaption>
-              <pre class="scroll-thin m-0 p-[18px] overflow-x-auto font-mono text-[13px] leading-[1.7] [tab-size:2] flex-1" tabindex="0" aria-label="Grepping the framework source"><code><span class="text-accent">$</span> grep -rn "renderToString" node_modules/@webjsdev
-core/src/render-server.js: export async function renderToString(
-server/src/ssr.js: const html = await renderToString(tree)
-<span class="text-fg-subtle"># the answer is in the working tree, every time.</span></code></pre>
+              <pre class="scroll-thin m-0 p-[18px] overflow-x-auto font-mono text-[13px] leading-[1.7] [tab-size:2] flex-1" tabindex="0" aria-label="Fetching an app module served unbundled"><code><span class="text-accent">$</span> curl localhost:5001/components/counter.ts
+import { WebComponent } from '@webjsdev/core';
+
+class Counter extends WebComponent({ count: Number }) {
+  increment() { this.count++; }
+}
+Counter.register('counter');
+<span class="text-fg-subtle"># your source, served unbundled. what the</span>
+<span class="text-fg-subtle"># agent wrote is what the browser fetched.</span></code></pre>
             </figure>
           </div>
         </div>
