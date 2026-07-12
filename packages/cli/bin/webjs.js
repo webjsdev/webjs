@@ -254,7 +254,11 @@ async function main() {
       if (captureStderr && child.stderr) {
         child.stderr.on('data', (chunk) => { errText += chunk; process.stderr.write(chunk); });
       }
-      child.on('exit', (code) => {
+      // Read the captured stderr on `close`, NOT `exit`: `exit` can fire before
+      // the stderr pipe has drained its final chunk, which would miss the prompt
+      // signature (and tee the raw error AFTER the hint). `close` fires once all
+      // stdio has flushed, and still carries the exit code.
+      child.on('close', (code) => {
         // Surface the escape hatch when `generate` dead-ends on a rename prompt
         // with no TTY, instead of leaving the raw drizzle-kit error as the last
         // word. Interactive and successful runs print nothing extra.
