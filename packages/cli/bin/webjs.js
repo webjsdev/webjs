@@ -387,7 +387,7 @@ async function main() {
       if (rest.includes('--clear-placeholders')) {
         const { clearPlaceholders } = await import('../lib/clear-placeholders.js');
         const report = clearPlaceholders(process.cwd());
-        const total = report.reduce((n, r) => n + r.removed, 0);
+        const total = report.reduce((n, r) => n + r.markers, 0);
         if (report.length === 0) {
           console.log('webjs check: no scaffold-placeholder markers found (nothing to clear).');
         } else {

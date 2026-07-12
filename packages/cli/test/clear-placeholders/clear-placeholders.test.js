@@ -52,6 +52,43 @@ test('stripPlaceholderMarkers: removes a wrapped multi-line // marker, no orphan
   assert.match(content, /export default function Page/, 'code kept');
 });
 
+test('stripPlaceholderMarkers: keeps a SEPARATE educational comment that follows the marker', () => {
+  // Real scaffold shape (app/features/routing/page.ts): a one-line marker ending
+  // in the closing clause, then an unrelated `//` explanation paragraph. The
+  // marker must be cut at its clause, never eat the following comment or code.
+  const src = [
+    `// ${MARKER}. Feature gallery route. Keep and adapt it, then delete this marker line. webjs check fails while the marker remains.`,
+    '// Routing basics: a static page that links to a dynamic route. app/ is',
+    '// routing only; [id] is a dynamic segment read from params.',
+    "import { html } from '@webjsdev/core';",
+  ].join('\n');
+  const { content, removed, markers } = stripPlaceholderMarkers(src);
+  assert.equal(markers, 1, 'one marker cleared');
+  assert.equal(removed, 1, 'only the marker line removed');
+  assert.doesNotMatch(content, new RegExp(MARKER), 'marker gone');
+  assert.match(content, /Routing basics/, 'the educational comment is KEPT (regression: greedy run must not eat it)');
+  assert.match(content, /import \{ html \}/, 'code kept');
+});
+
+test('stripPlaceholderMarkers: a wrapped marker followed by a doc block keeps the doc block', () => {
+  // Real scaffold shape (app/global-error.ts): the marker sentence WRAPS across
+  // three `//` lines, then a `//` separator, then a distinct doc paragraph.
+  const src = [
+    `// ${MARKER}. Keep and adapt it, or prune it (delete this`,
+    '// file), then delete this marker line. webjs check fails while the marker',
+    '// remains.',
+    '//',
+    '// app/global-error.ts is the ROOT-ONLY app-wide error boundary. Keep it',
+    '// static HTML with no components.',
+    "import { html } from '@webjsdev/core';",
+  ].join('\n');
+  const { content, removed } = stripPlaceholderMarkers(src);
+  assert.equal(removed, 3, 'only the 3 wrapped marker lines removed, not the doc block');
+  assert.doesNotMatch(content, /delete this marker line|marker remains/, 'marker prose gone');
+  assert.match(content, /ROOT-ONLY app-wide error boundary/, 'the doc paragraph is KEPT');
+  assert.match(content, /import \{ html \}/, 'code kept');
+});
+
 test('stripPlaceholderMarkers: a file with no marker is untouched (counterfactual)', () => {
   const src = "export const x = 1;\nexport const y = 2;\n";
   const { content, removed } = stripPlaceholderMarkers(src);
