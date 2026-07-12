@@ -252,7 +252,7 @@ describe('SSR edge cases', () => {
     const out = await renderToString(html`<slot-edge-box><slot-edge-box><p>inner</p></slot-edge-box></slot-edge-box>`);
     // Outer Box should project the inner Box (and its <p>) into its default slot.
     // Inner Box should project the <p> into its default slot.
-    assert.match(out, /<div class="box"><slot[^>]*data-projection="actual"><slot-edge-box><!--webjs-hydrate--><div class="box"><slot[^>]*data-projection="actual"><p>inner<\/p>/);
+    assert.match(out, /<div class="box"><slot[^>]*data-projection="actual"><slot-edge-box data-wj-host><!--webjs-hydrate--><div class="box"><slot[^>]*data-projection="actual"><p>inner<\/p>/);
   });
 
   test('case-sensitive slot name matching', async () => {
@@ -370,7 +370,7 @@ describe('SSR edge cases', () => {
     Shadow.register('slot-edge-shadow-inner');
     const out = await renderToString(html`<slot-edge-light-outer><slot-edge-shadow-inner><p>both</p></slot-edge-shadow-inner></slot-edge-light-outer>`);
     // Light outer projects the shadow inner; shadow inner uses native slot.
-    assert.match(out, /data-projection="actual"><slot-edge-shadow-inner><template shadowrootmode="open"><div><slot><\/slot><\/div><\/template>/);
+    assert.match(out, /data-projection="actual"><slot-edge-shadow-inner data-wj-host><template shadowrootmode="open"><div><slot><\/slot><\/div><\/template>/);
     assert.match(out, /<p>both<\/p><\/slot-edge-shadow-inner>/);
   });
 
@@ -387,7 +387,7 @@ describe('SSR edge cases', () => {
     const out = await renderToString(html`<slot-edge-shadow-outer><slot-edge-light-inner><b>inner content</b></slot-edge-light-inner></slot-edge-shadow-outer>`);
     // Light inner uses framework slot; sits in the outer's light children
     // for browser's native projection.
-    assert.match(out, /<slot-edge-light-inner><!--webjs-hydrate--><section><slot[^>]*data-projection="actual"><b>inner content<\/b>/);
+    assert.match(out, /<slot-edge-light-inner data-wj-host><!--webjs-hydrate--><section><slot[^>]*data-projection="actual"><b>inner content<\/b>/);
   });
 
   test('multiple authored children to same named slot concatenate in order', async () => {
@@ -422,7 +422,7 @@ describe('SSR edge cases', () => {
     Inner.register('slot-edge-inner-with-slot');
     const out = await renderToString(html`<slot-edge-outer-with-inner><slot-edge-inner-with-slot><b>deep</b></slot-edge-inner-with-slot></slot-edge-outer-with-inner>`);
     // Outer projects the inner; inner projects its child <b>.
-    assert.match(out, /<slot-edge-inner-with-slot><!--webjs-hydrate--><span><slot[^>]*data-projection="actual"><b>deep<\/b>/);
+    assert.match(out, /<slot-edge-inner-with-slot data-wj-host><!--webjs-hydrate--><span><slot[^>]*data-projection="actual"><b>deep<\/b>/);
   });
 
   test('attribute values with special characters survive partition', async () => {

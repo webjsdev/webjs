@@ -25,7 +25,7 @@ test('light DOM SSR includes hydration marker', async () => {
 
   const out = await renderToString(html`<test-light-marker></test-light-marker>`);
   assert.match(out, /<!--webjs-hydrate-->/);
-  assert.match(out, /<test-light-marker><!--webjs-hydrate--><span>marked<\/span><\/test-light-marker>/);
+  assert.match(out, /<test-light-marker data-wj-host><!--webjs-hydrate--><span>marked<\/span><\/test-light-marker>/);
 });
 
 test('shadow DOM component SSR still uses DSD', async () => {
@@ -61,10 +61,10 @@ test('mixed page with both shadow and light DOM', async () => {
   );
 
   // Light DOM: direct children with hydration marker, no DSD
-  assert.match(out, /<test-mix-light><!--webjs-hydrate--><em>light part<\/em><\/test-mix-light>/);
+  assert.match(out, /<test-mix-light data-wj-host><!--webjs-hydrate--><em>light part<\/em><\/test-mix-light>/);
 
   // Shadow DOM: wrapped in DSD template
-  assert.match(out, /<test-mix-shadow><template shadowrootmode="open">/);
+  assert.match(out, /<test-mix-shadow data-wj-host><template shadowrootmode="open">/);
   assert.match(out, /<p>shadow part<\/p>/);
   assert.match(out, /<style>p \{ color: blue; \}<\/style>/);
 
