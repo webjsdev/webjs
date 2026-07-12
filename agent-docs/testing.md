@@ -46,9 +46,9 @@ Keep in the Puppeteer suite only blocks that genuinely need a DOM: `page.evaluat
 of live state, hydration, client-router nav, slots, view transitions, streaming
 into the DOM, custom-element upgrade.
 
-**Browser tests import the shared assert helper (#777).** A browser test runs in
-a real browser where `node:assert` does not exist, so it imports the plain-object
-`assert` from `test/browser-assert.js` (a superset of `ok` / `equal` /
+**Browser tests import the shared assert helper (#777).** In THIS repo, a browser
+test runs in a real browser where `node:assert` does not exist, so it imports the
+plain-object `assert` from `test/browser-assert.js` (a superset of `ok` / `equal` /
 `deepEqual` / `strictEqual` / `notStrictEqual` / `notEqual` / `match` / `isTrue` /
 `isFalse` / `isOk` / `notOk` / `isNaN` / `isUndefined` / `isArray` / `doesNotThrow`
 / `throws`) instead of hand-rolling a `const assert = {...}` block per file. Its
