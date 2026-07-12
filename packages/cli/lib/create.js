@@ -1086,8 +1086,7 @@ export type ActionResult<T> =
       .replace(/`/g, '\\`')
       .replace(/\$\{/g, '\\${');
 
-  await writeFile(join(appDir, 'app', 'layout.ts'), `// webjs-scaffold-placeholder. This is the example app chrome (brand, nav, content-width container). Adapt it to your app, then delete this line. webjs check fails while the marker remains.
-import { html, cspNonce } from '@webjsdev/core';
+  await writeFile(join(appDir, 'app', 'layout.ts'), `import { html, cspNonce } from '@webjsdev/core';
 import '#components/theme-toggle.ts';
 // Webjs UI components are tiered:
 //   - Tier 1 (button, card, input, label, alert, badge, separator, etc.) are
@@ -1102,7 +1101,7 @@ import '#components/theme-toggle.ts';
 // extra needs to be registered. Add Tier-2 imports as you 'webjs ui add'.
 
 /**
- * Root layout: globals + chrome.
+ * Root layout: globals + a minimal shell.
  *
  * Light DOM + Tailwind by default. Design tokens live in :root and are
  * mapped into the Tailwind palette via @theme, so classes like
@@ -1130,7 +1129,8 @@ export default function RootLayout({ children }: { children: unknown }) {
       // Delete this IIFE, delete the dark and light style blocks below, and set
       // your palette once on the root selector. That removes the wiring so it
       // cannot fight your own colours (it will not override a plain root
-      // palette). The header-measure IIFE that follows is unrelated, keep it.
+      // palette). The header-measure IIFE that follows is unrelated, keep it
+      // (it is dormant until you add a fixed header, per LAYOUT-REFERENCE.md).
       (function(){
         try {
           var mq = window.matchMedia('(prefers-color-scheme: light)');
@@ -1151,11 +1151,13 @@ export default function RootLayout({ children }: { children: unknown }) {
         } catch (_) {}
       })();
       // ===== end optional theme apparatus =====
-      // The header is position:fixed (not sticky): a sticky header flickers on
-      // iOS WebKit during a client-router nav. fixed leaves normal flow, so
-      // --header-h reserves its height for the content below. Measured here so
-      // it tracks the real (responsive) height; degrades fine with no JS via
-      // the :root default.
+      // Header-measure script: DORMANT until you add a fixed header (the minimal
+      // shell has none). When you add one (see LAYOUT-REFERENCE.md), make it
+      // position:fixed (NOT sticky: a sticky header flickers on iOS WebKit during
+      // a client-router nav). fixed leaves normal flow, so --header-h reserves its
+      // height for the content below; this measures the real (responsive) height.
+      // With no header it is a no-op (querySelector returns null) and --header-h
+      // stays 0, so there is no phantom gap.
       (function(){
         function measure(){
           try {
@@ -1189,7 +1191,7 @@ ${UI_THEME}
          bg-background, text-foreground, bg-card, bg-primary, bg-accent,
          text-muted-foreground, border-border, ring-ring, and the rest. Here we
          set those tokens' VALUES to this app's brand palette, so the ui-*
-         components AND the example chrome read ONE source of truth. Any component
+         components AND your own chrome read ONE source of truth. Any component
          added later with webjs ui add <name> inherits it automatically. This
          block is emitted after the ui theme, so these values win on every Tailwind
          recompile. Dark-first, with light via the theme toggle (data-theme) or the

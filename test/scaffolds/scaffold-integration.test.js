@@ -145,6 +145,26 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(layoutSrc.split(marker).length - 1 >= 2,
       'layout.ts carries the minimal-shell + palette placeholder markers');
 
+    // GUARD (regression for a stripPlaceholderMarkers gap): `--clear-placeholders`
+    // has no /* */ block-comment continuation (only // and <!-- --> runs). So any
+    // marker emitted inside a CSS `/* */` comment MUST be single-line, or clearing
+    // it would strip only the opening line and orphan a dangling `*/`, corrupting
+    // every generated app's stylesheet. Assert every generated file keeps its
+    // block-comment markers on one line.
+    for (const rel of ['app/layout.ts', 'app/page.ts']) {
+      const src = readFileSync(join(appDir, rel), 'utf8');
+      for (const line of src.split('\n')) {
+        if (!line.includes(marker)) continue;
+        // A block-comment marker line opening `/*` must also close `*/` on the
+        // same line (single-line). `//` and `<!-- -->` markers are handled by the
+        // stripper's continuation logic and are exempt.
+        if (line.includes('/*')) {
+          assert.ok(line.includes('*/'),
+            `${rel}: a /* */ scaffold marker must be single-line (else --clear-placeholders orphans a */)`);
+        }
+      }
+    }
+
     // Drizzle db layer wired up
     assert.ok(existsSync(join(appDir, 'db', 'schema.server.ts')), 'db/schema.server.ts written');
     assert.ok(existsSync(join(appDir, 'db', 'columns.server.ts')), 'db/columns.server.ts written');
