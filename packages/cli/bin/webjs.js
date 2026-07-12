@@ -241,13 +241,24 @@ async function main() {
         );
         process.exit(1);
       }
-      const child = spawn(process.execPath, [dkPath, ...kitArgs, ...args], { stdio: 'inherit', cwd: process.cwd() });
+      // For `generate` off a non-TTY, capture stderr (teed straight through) so
+      // the rename-prompt dead-end can be detected: drizzle-kit reports it on
+      // stderr but exits 0, so the exit code is useless. Every other case keeps
+      // plain inherit, and an interactive terminal still answers the prompt.
+      const captureStderr = sub === 'generate' && !process.stdin.isTTY;
+      const child = spawn(process.execPath, [dkPath, ...kitArgs, ...args], {
+        stdio: captureStderr ? ['inherit', 'inherit', 'pipe'] : 'inherit',
+        cwd: process.cwd(),
+      });
+      let errText = '';
+      if (captureStderr && child.stderr) {
+        child.stderr.on('data', (chunk) => { errText += chunk; process.stderr.write(chunk); });
+      }
       child.on('exit', (code) => {
         // Surface the escape hatch when `generate` dead-ends on a rename prompt
-        // with no TTY to answer it, instead of leaving the raw drizzle-kit
-        // "Interactive prompts require a TTY" as the last word. Interactive and
-        // successful runs print nothing extra.
-        const hint = dbGenerateTtyHint(sub, code, process.stdin.isTTY);
+        // with no TTY, instead of leaving the raw drizzle-kit error as the last
+        // word. Interactive and successful runs print nothing extra.
+        const hint = dbGenerateTtyHint(sub, process.stdin.isTTY, errText);
         if (hint) console.error(hint);
         process.exit(code ?? 0);
       });

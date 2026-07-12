@@ -2,28 +2,33 @@
 // opaquely. Kept as pure functions so the dispatch path in bin/webjs.js stays a
 // thin spawn and the messages are unit-testable without a child process.
 
+// drizzle-kit prints this on stderr when a rename prompt has no TTY to answer.
+// It is the reliable signal: this drizzle-kit version EXITS 0 on that failure,
+// so the exit code cannot be used, and keying on stderr also means an unrelated
+// generate failure (a schema type error, a missing config) does NOT misfire.
+const TTY_PROMPT = /require a tty|interactive prompt/i;
+
 /**
  * `webjs db generate` off a non-interactive stdin dead-ends when a table is
  * renamed or swapped: drizzle-kit asks "is <newTable> a rename of <oldTable>?"
- * and, with no TTY to answer, exits with "Interactive prompts require a TTY".
- * That message goes to the inherited stderr (this process never captures it), so
- * we cannot tell the rename-prompt failure apart from any other generate error.
- * The hint therefore reads as CONDITIONAL guidance appended after the real error
- * for a non-TTY `generate` failure, and defers to the error shown above for
- * anything else. Returns null on success, an interactive run, or another
- * subcommand, so those print nothing extra.
+ * and, with no TTY to answer, prints "Interactive prompts require a TTY" to
+ * stderr (and exits 0). Returns the escape-hatch hint only when the captured
+ * stderr carries that signature, so it fires on exactly that case and stays
+ * silent on success, an interactive run, another subcommand, or an unrelated
+ * generate error.
  *
  * @param {string} sub  the `webjs db` subcommand (generate|migrate|push|studio)
- * @param {number|null|undefined} code  drizzle-kit's exit code
  * @param {boolean|undefined} isTTY  process.stdin.isTTY
+ * @param {string|undefined} stderr  drizzle-kit's captured stderr
  * @returns {string|null}
  */
-export function dbGenerateTtyHint(sub, code, isTTY) {
-  if (sub !== 'generate' || !code || isTTY) return null;
+export function dbGenerateTtyHint(sub, isTTY, stderr) {
+  if (sub !== 'generate' || isTTY) return null;
+  if (!TTY_PROMPT.test(stderr || '')) return null;
   return (
-    '\nIf `webjs db generate` stopped at a rename prompt, it needs an interactive\n' +
-    'terminal to answer it: run it in a real terminal, or, if the dev database has\n' +
-    'no data yet, delete the db/migrations/<initial> folder and re-run to author a\n' +
-    'clean create-table migration. Any other failure is described in the error above.'
+    '\nwebjs db generate needs an interactive terminal to resolve a table rename.\n' +
+    'Run it in a real terminal to answer the prompt, or, if the dev database has no\n' +
+    'data yet, delete the db/migrations/<initial> folder and re-run to author a clean\n' +
+    'create-table migration.'
   );
 }
