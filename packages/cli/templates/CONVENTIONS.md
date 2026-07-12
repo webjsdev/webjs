@@ -390,7 +390,11 @@ When the user asks the agent to build their actual app:
    `app/layout.ts`) are infrastructure to keep, but their COLOR VALUES are
    yours: set a distinctive palette that fits the app, in both the light and
    dark blocks. Keeping the scaffold's token colors (or a light warm recolor of
-   them) is NOT owning the palette. Style with Tailwind utilities wherever they
+   them) is NOT owning the palette. The palette block ships guarded by its own
+   `webjs-scaffold-placeholder` marker (the starter orange looks finished on
+   purpose), so `webjs check` fails until you own the palette and delete that
+   marker line, the same way the gallery and footer markers work. To keep the
+   starter palette deliberately, run `webjs check --clear-placeholders`. Style with Tailwind utilities wherever they
    reach, and use custom CSS only for what utilities cannot express (@theme
    tokens, @keyframes, scrollbar, complex color-mix or gradients). The `api`
    template has no UI, so this does not apply there.

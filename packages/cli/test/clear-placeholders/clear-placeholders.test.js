@@ -39,6 +39,30 @@ test('stripPlaceholderMarkers: removes a WHOLE multi-line HTML comment marker, n
   assert.match(content, /<footer>real footer<\/footer>/, 'the real footer is kept');
 });
 
+test('stripPlaceholderMarkers: removes a single-line /* */ CSS marker, keeps valid CSS', () => {
+  // The palette marker in app/layout.ts is a single-line CSS block comment
+  // inside a <style> block (not a // or <!-- --> comment). It MUST be one line:
+  // stripPlaceholderMarkers only extends across // and <!-- --> runs, so a
+  // multi-line /* */ marker would strip just the token line and orphan a
+  // dangling `*/` that breaks the stylesheet. Regression guard for that.
+  const src = [
+    '      }',
+    `      /* ${MARKER}. These are the scaffold's STARTER brand colors. Own the palette, then delete this marker line. webjs check fails while the marker remains. */`,
+    '      :root, .dark {',
+    '        --primary: oklch(0.7 0.16 52);',
+  ].join('\n');
+  const { content, removed, markers } = stripPlaceholderMarkers(src);
+  assert.equal(markers, 1, 'one marker cleared');
+  assert.equal(removed, 1, 'only the single CSS comment line removed');
+  assert.doesNotMatch(content, new RegExp(MARKER), 'token gone');
+  assert.doesNotMatch(content, /STARTER brand colors/, 'no orphaned CSS-comment prose');
+  // The stylesheet stays valid: balanced comment delimiters, tokens intact.
+  assert.equal((content.match(/\/\*/g) || []).length, (content.match(/\*\//g) || []).length,
+    'no dangling /* or */ left behind');
+  assert.match(content, /:root, \.dark \{/, 'the palette block is kept');
+  assert.match(content, /--primary: oklch\(0\.7 0\.16 52\)/, 'the token values are kept');
+});
+
 test('stripPlaceholderMarkers: removes a wrapped multi-line // marker, no orphaned prose', () => {
   const src = [
     `// ${MARKER}. Keep and adapt it, or prune it (delete this`,

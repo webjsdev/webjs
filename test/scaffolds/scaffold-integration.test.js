@@ -126,10 +126,20 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // The "Built with webjs" footer is scaffold branding. It ships guarded by
     // its OWN placeholder marker so `webjs check` fails until the agent removes
     // or replaces it (a delivered app must not keep the scaffold attribution).
-    // Two markers means removing only the top one still fails the check.
+    // Multiple markers mean removing only the top one still fails the check.
     assert.ok(layoutSrc.includes('Built with'), 'layout ships the example footer branding');
-    assert.ok(layoutSrc.split(marker).length - 1 >= 2,
-      'layout.ts carries a second marker guarding the "Built with webjs" footer');
+    // The design PALETTE also ships guarded by its own placeholder marker, so a
+    // delivered app cannot silently keep the scaffold's starter brand colors: the
+    // agent must own the palette (or run --clear-placeholders) to clear the file.
+    // The starter orange is kept (it looks finished); the marker forces a
+    // conscious palette decision, and the marker is a single-line CSS comment so
+    // --clear-placeholders strips it without breaking the <style> block.
+    assert.match(layoutSrc, new RegExp(marker + '[^\\n]*STARTER brand colors'),
+      'layout.ts guards the palette tokens with a scaffold-placeholder marker');
+    // Three markers (chrome, palette, footer): removing any one still fails until
+    // all are addressed, so the palette cannot be skipped.
+    assert.ok(layoutSrc.split(marker).length - 1 >= 3,
+      'layout.ts carries chrome + palette + footer placeholder markers');
 
     // Drizzle db layer wired up
     assert.ok(existsSync(join(appDir, 'db', 'schema.server.ts')), 'db/schema.server.ts written');

@@ -1210,6 +1210,7 @@ ${UI_THEME}
            light/dark automatically. Used for the logo glow and focus ring. */
         --primary-tint: color-mix(in oklch, var(--primary) 20%, transparent);
       }
+      /* webjs-scaffold-placeholder. These are the scaffold's STARTER brand colors (the shadcn-style orange); they look finished on purpose. Own the palette: set the token VALUES below (dark AND light blocks) to colors that fit what THIS app IS, keeping the token NAMES. A recolor chosen for the app beats keeping the starter orange. Then delete this marker line (or run webjs check --clear-placeholders to keep the starter palette deliberately). webjs check fails while the marker remains. */
       /* dark (the default, and the explicit .dark the toggle sets) */
       :root, .dark {
         color-scheme: dark;
