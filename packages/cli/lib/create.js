@@ -675,6 +675,9 @@ export const table = sqliteTableCreator((name) => name, 'snake_case');
 export const pk = () => integer().primaryKey({ autoIncrement: true });
 export const uuidPk = () => text().primaryKey().$defaultFn(() => crypto.randomUUID());
 export const uuid = () => text();
+// Structured value (array / object) stored as JSON. Type it with json<T>() so
+// the column is narrowed on read/write instead of \`unknown\`.
+export const json = <T>() => text({ mode: 'json' }).$type<T>();
 export const bool = () => integer({ mode: 'boolean' });
 export const timestamp = () => integer({ mode: 'timestamp_ms' });
 export const createdAt = () => timestamp().notNull().defaultNow();
@@ -686,7 +689,7 @@ export const index = (...cols: SQLiteColumn[]) =>
   _index(getTableName((cols[0] as unknown as { table: Table }).table) + '_' + cols.map((c) => c.name).join('_') + '_idx').on(...(cols as [SQLiteColumn, ...SQLiteColumn[]]));
 `;
 
-  const columnsPg = `import { pgTableCreator, serial, uuid as pgUuid, integer, text, real, boolean, timestamp as pgTimestamp, index as _index } from 'drizzle-orm/pg-core';
+  const columnsPg = `import { pgTableCreator, serial, uuid as pgUuid, integer, text, real, boolean, jsonb, timestamp as pgTimestamp, index as _index } from 'drizzle-orm/pg-core';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 import { getTableName, type Table } from 'drizzle-orm';
 
@@ -697,6 +700,9 @@ export const table = pgTableCreator((name) => name, 'snake_case');
 export const pk = () => serial().primaryKey();
 export const uuidPk = () => pgUuid().primaryKey().defaultRandom();
 export const uuid = () => pgUuid();
+// Structured value (array / object) stored as JSON. Type it with json<T>() so
+// the column is narrowed on read/write instead of \`unknown\`.
+export const json = <T>() => jsonb().$type<T>();
 export const bool = () => boolean();
 export const timestamp = () => pgTimestamp({ withTimezone: true });
 export const createdAt = () => timestamp().notNull().defaultNow();
@@ -710,13 +716,16 @@ export const index = (...cols: PgColumn[]) =>
 
   // Example schema (dialect-agnostic). Replace the User model with your own.
   await writeFile(join(appDir, 'db', 'schema.server.ts'), `import { defineRelations } from 'drizzle-orm';
-import { table, pk, ${isFullStack ? 'uuidPk, ' : ''}text, ${isFullStack ? 'bool, ' : ''}createdAt } from './columns.server.ts';
+import { table, pk, ${isFullStack ? 'uuidPk, ' : ''}text, ${isFullStack ? 'bool, ' : ''}json, createdAt } from './columns.server.ts';
 
 // Example model. Feel free to delete or extend.
 export const users = table('users', {
   id: pk(),
   email: text().notNull().unique(),
   name: text(),
+  // JSON column: a structured value persisted as JSON, typed via json<T>().
+  // Same helper works on SQLite and Postgres. Delete if you do not need it.
+  settings: json<{ theme?: string }>(),
   createdAt: createdAt(),
 });
 ${isFullStack ? `

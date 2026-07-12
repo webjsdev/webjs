@@ -136,6 +136,15 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(existsSync(join(appDir, 'db', 'columns.server.ts')), 'db/columns.server.ts written');
     assert.ok(existsSync(join(appDir, 'db', 'connection.server.ts')), 'db/connection.server.ts written');
     assert.ok(existsSync(join(appDir, 'drizzle.config.ts')), 'drizzle.config.ts written');
+    // A JSON column helper ships so persisting structured data (a board, a tag
+    // list, a settings blob) needs no outside Drizzle knowledge. SQLite path
+    // uses text({ mode: 'json' }). The example schema demonstrates it once.
+    const colsSrc = readFileSync(join(appDir, 'db', 'columns.server.ts'), 'utf8');
+    assert.match(colsSrc, /export const json = <T>\(\) => text\(\{ mode: 'json' \}\)\.\$type<T>\(\)/,
+      'sqlite columns.server.ts exports a generic json<T>() helper');
+    const schemaSrc = readFileSync(join(appDir, 'db', 'schema.server.ts'), 'utf8');
+    assert.match(schemaSrc, /\bjson\b/, 'schema imports json');
+    assert.match(schemaSrc, /json<\{[^}]*\}>\(\)/, 'schema demonstrates json<T>() on a column (counterfactual: fails if the demo column is dropped)');
     assert.ok(!existsSync(join(appDir, 'prisma')), 'no prisma/ dir (counterfactual: fails if db files not written)');
     // The INITIAL migration is authored by `webjs create` only AFTER a successful
     // install (drizzle-kit is needed). This test scaffolds with install:false, so
@@ -614,6 +623,26 @@ test('scaffoldApp: template placeholder substitution in copied files', async () 
       assert.ok(!content.includes('{{APP_NAME}}'),
         `${f} should have {{APP_NAME}} substituted out`);
     }
+  } finally {
+    restore();
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test('scaffoldApp --db postgres: json<T>() helper maps to jsonb, one schema both dialects', async () => {
+  const cwd = await tempCwd();
+  const restore = muteConsole();
+  try {
+    await scaffoldApp('my-pg', cwd, { template: 'full-stack', db: 'postgres' });
+    const appDir = join(cwd, 'my-pg');
+    const cols = readFileSync(join(appDir, 'db', 'columns.server.ts'), 'utf8');
+    // The Postgres seam uses jsonb; the schema (shared across dialects) is
+    // unchanged, so the same json<T>() call compiles on both.
+    assert.match(cols, /jsonb/, 'postgres columns.server.ts imports jsonb');
+    assert.match(cols, /export const json = <T>\(\) => jsonb\(\)\.\$type<T>\(\)/,
+      'postgres json<T>() maps to jsonb().$type<T>() (counterfactual: fails if the helper is sqlite-only)');
+    const schema = readFileSync(join(appDir, 'db', 'schema.server.ts'), 'utf8');
+    assert.match(schema, /json<\{[^}]*\}>\(\)/, 'the one shared schema demonstrates json<T>() on postgres too');
   } finally {
     restore();
     await rm(cwd, { recursive: true, force: true });
