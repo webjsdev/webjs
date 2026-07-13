@@ -416,6 +416,8 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // app runs the compiler under Bun (its image has no Node), a Node app runs
       // it directly.
       ...(isApi ? {} : { 'css:build': cssBuildCmd }),
+      // Shed the demo gallery to a clean, buildable base (scripts/clear-gallery.mjs).
+      ...(isApi ? {} : { 'gallery:clear': isBun ? 'bun scripts/clear-gallery.mjs' : 'node scripts/clear-gallery.mjs' }),
       dev: isBun ? 'bun --bun webjs dev' : 'webjs dev',
       start: isBun ? 'bun --bun webjs start' : 'webjs start',
       test: 'webjs test',
@@ -578,6 +580,9 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     '.gemini/settings.json',
     '.gemini/hooks/nudge-uncommitted.sh',
     '.opencode/plugins/nudge-uncommitted.ts',
+    // One-step gallery reset: sheds the demo gallery to a clean, buildable base
+    // (wired as `gallery:clear` in package.json for the UI templates).
+    'scripts/clear-gallery.mjs',
     // Claude Code config + the protective enforcement hooks (no design ceremony).
     '.claude.json',
     '.claude/settings.json',

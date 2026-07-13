@@ -18,17 +18,26 @@ This scaffold is a starting point. It ships a gallery index home
 (`app/page.ts`), a root layout with a neutral design-token palette
 (`app/layout.ts`), a database wired up (`db/`), and a densely-commented feature
 gallery: single-concept demos under `app/features/` plus the `app/examples/todo`
-app, with logic in `modules/`. Read the gallery to learn the idioms, then build
-the app the user asked for by growing this app here: add routes under `app/`,
-components under `components/`, features under `modules/<feature>/`, and keep
-server-only code behind `.server.ts`. Prune the demos the app does not use
-(delete the `app/features/<x>` route AND its `modules/<x>`). Give the app its own
-design by setting the token values in `app/layout.ts`.
+app, with logic in `modules/`. The gallery is reference to learn the idioms
+from, not part of your product.
+
+**Building a real app? Run `npm run gallery:clear` first.** It sheds the whole
+demo gallery in one step (removes `app/features/`, `app/examples/`, the demo
+`modules/`, and the demo `todos` table, and resets `app/page.ts` to a minimal
+home), while KEEPING the agent skill, the layout, and the database wiring. Then
+regenerate the database (`npm run db:generate` then `npm run db:migrate`) and
+grow the app in place: add routes under `app/`, components under `components/`,
+features under `modules/<feature>/`, keep server-only code behind `.server.ts`,
+and give the app its own design by setting the token values in `app/layout.ts`.
+
+If you are exploring rather than building, keep the gallery and browse it. To
+learn one idiom before clearing, read its demo (or the skill's `references/`).
 
 ## Commands
 
 ```sh
 npm install
+npm run gallery:clear  # shed the demo gallery before building a real app
 npm run dev            # dev server at http://localhost:8080
 npm run start          # production server
 npm test               # unit + browser tests
