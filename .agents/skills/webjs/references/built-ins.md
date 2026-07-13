@@ -1,0 +1,200 @@
+# Built-ins and Configuration
+
+Env vars, caching, rate limiting, broadcast, file storage, and the `package.json` `"webjs"` config block plus observability. Everything here is imported from `@webjsdev/server`.
+
+## What This Covers
+
+- **Environment variables** and the `WEBJS_PUBLIC_` browser-exposed prefix.
+- **Caching primitives.** `cache()` with tag invalidation, HTTP `Cache-Control`, the server HTML response cache (`export const revalidate`), content-hash asset URLs, conditional GET (ETag).
+- **Rate limiting** (`rateLimit()` middleware) and **broadcast** (`broadcast()` over WebSockets).
+- **File storage.** `FileStore` / `diskStore`, safe keys, signed URLs.
+- **The `"webjs"` config block.** Security headers, CSP, redirects, trailing-slash, basePath, allowed origins, client-router opt-out, ingress caps, dev/start task orchestration.
+- **Observability.** Access log, `requestId()`, the `onError` hook, `instrumentation.ts`, the build-info endpoint.
+
+Read this when wiring caching or rate limiting, storing uploads, hardening headers, or configuring redirects and observability. **Auth and sessions are a separate reference (`auth-and-sessions.md`).** Server actions, `revalidateTag` from a mutation, and the `ActionResult` envelope live in `data-and-actions.md`.
+
+## Environment variables
+
+`process.env.X` reads are **server-only**. `NODE_ENV` is defined both sides. A variable named with the `WEBJS_PUBLIC_` prefix is exposed to the browser via an inline `<script>` (no build step), so read it client-side as `process.env.WEBJS_PUBLIC_ANALYTICS_ID`.
+
+| Variable | Effect |
+|---|---|
+| `REDIS_URL` | When set, sessions, rate limit, and cache use Redis instead of memory |
+| `SESSION_SECRET` / `AUTH_SECRET` | Session and auth signing (see `auth-and-sessions.md`) |
+| `PORT` | Listen port. Precedence `--port` flag, then `PORT` (real env or `.env`), then `8080` |
+
+Defaults are single-instance memory stores. To scale horizontally, switch the store once at startup: `setStore(redisStore({ url: process.env.REDIS_URL }))`.
+
+## Caching
+
+### `cache()` for query and computation results
+
+Wrap an async function so identical calls serve from the store until the TTL expires. Cached values and keys round-trip through the rich serializer, so a `Date` stays a `Date` on a warm hit.
+
+```ts
+// modules/posts/queries/list-posts.server.ts
+'use server';
+import { cache } from '@webjsdev/server';
+import { db } from '#db/connection.server.ts';
+
+export const postById = cache(
+  async (id: string) => db.query.posts.findFirst({ where: { id } }),
+  { key: 'post', ttl: 300, tags: (id) => ['post:' + id] } // per-entity tag
+);
+export const listPosts = cache(
+  async () => db.query.posts.findMany(),
+  { key: 'posts', ttl: 60, tags: ['posts'] } // static tag
+);
+```
+
+A mutation invalidates a tagged read from an unrelated module with `revalidateTag('post:' + id)` (evicts only that entry) or `revalidateTags([...])`. See `data-and-actions.md` for the mutation side. An untagged `cache()` is untouched by any `revalidateTag`.
+
+### HTTP `Cache-Control`
+
+Standard HTTP caching. Let browsers, CDNs, and proxies do the work. Set it on a `route.ts` `Response` or via page `metadata.cacheControl`.
+
+```ts
+export const metadata = { cacheControl: 'public, max-age=60' };
+```
+
+### Server HTML response cache (`export const revalidate`)
+
+For a page that renders the **same HTML for every visitor**, opt into caching the SSR output (WebJs's no-build equivalent of ISR). Keyed by full URL only.
+
+```ts
+// app/blog/page.ts
+export const revalidate = 60;   // cache this page's HTML for 60s
+```
+
+**Safety.** This asserts the page is identical for everyone for N seconds. Never set it on a page that reads `cookies()`, a session, or per-user data. The framework auto-marks a request dynamic and refuses to cache when the render reads per-user state through a framework helper (`cookies()`, `headers()`, `getSession()`, `auth()`), so an `auth()`-gated page fails safe. It also never caches a non-200, a streamed Suspense body, a `Set-Cookie` response, or a page under CSP. Evict on a write with `revalidatePath('/blog')`; `revalidateAll()` clears everything (single-instance / dev). This differs from the client-side `revalidate()` in `@webjsdev/core`, which evicts the browser snapshot cache.
+
+### Content-hash asset URLs and conditional GET
+
+Both are automatic, prod-focused, and need no config. In production every served module and `public/` asset gets a per-file `?v=<hash>` and `Cache-Control: public, max-age=31536000, immutable`, so a returning client fetches a changed file only when its bytes change. Every cacheable response also carries a weak `ETag`, and a repeat request with a matching `If-None-Match` gets a `304 Not Modified` with no body. Private (`no-store` / `private`) and streamed responses are excluded from the ETag path (no cross-session 304). Dev is byte-faithful (no hashing).
+
+## Rate limiting
+
+`rateLimit()` is middleware backed by the pluggable cache store (memory by default, Redis when the global store is switched). Fixed-window.
+
+```ts
+// middleware.ts (or a per-segment middleware.ts)
+import { rateLimit } from '@webjsdev/server';
+export default rateLimit({ window: '1m', max: 60 });
+```
+
+Options: `window` (ms or a string like `'1m'`), `max`, `key` (a string prefix or a `(req) => string` function, defaults to the client IP), `message`, `store`, `trustProxy`. Over-limit responds `429` with `Retry-After` and `X-RateLimit-*` headers; an allowed response carries the remaining-quota headers too. For multi-instance scaling, set the global store to Redis once at startup.
+
+## Broadcast
+
+Send data to every WebSocket client connected to a route path, from inside that route's `WS` handler.
+
+```ts
+// app/api/chat/route.ts
+import { broadcast } from '@webjsdev/server';
+export function WS(ws, req) {
+  ws.on('message', (data) => broadcast('/api/chat', data, { except: ws }));
+}
+```
+
+`broadcast(path, data, opts?)` fans out to all clients on `path`; `opts.except` skips one socket (typically the sender). `clientCount(path)` returns the live count. Single-instance by default; wire Redis pub/sub yourself for multi-instance.
+
+## File storage
+
+WebJs round-trips a native `File` / `Blob` / `FormData` over the wire; the file-storage primitive decides where the bytes land. Same adapter pattern as cache and sessions: a `FileStore` interface, a default `diskStore`, and a `setFileStore` / `getFileStore` singleton so swapping the backend touches no call site.
+
+```ts
+import { getFileStore, setFileStore, diskStore, generateKey, signedUrl, verifySignedUrl } from '@webjsdev/server';
+// Default: <cwd>/.webjs/uploads served under /uploads. Override at startup:
+setFileStore(diskStore({ dir: '/var/data/uploads', baseUrl: '/files' }));
+```
+
+`FileStore` methods (all web-standard, so an S3 / R2 adapter is a drop-in): `put(key, file, opts?)` streams to storage, `get(key)` returns a streaming handle (`{ body, size, contentType }`) or `null`, `delete(key)` (idempotent), `url(key)`, `has(key)`.
+
+**Never trust a user filename as a key.** `generateKey(file.name)` returns an opaque `<uuid>.<ext>` with a sanitized extension; a traversal attempt yields a bare safe key. Keys are containment-checked before any filesystem op.
+
+**Signed URLs** gate serving without a session lookup. `signedUrl(key, { secret, expiresIn })` mints an expiring HMAC signature; `verifySignedUrl(searchParams, secret)` returns `{ valid }`. An `expiresIn` of `0` or negative fails closed.
+
+**Serving-XSS warning.** The recorded content-type is attacker-controlled (the browser sent it at upload). A serving route MUST send `X-Content-Type-Options: nosniff` and SHOULD send `Content-Disposition: attachment` for user uploads. Only serve inline after validating bytes against a strict inert allowlist, never `text/html` / `image/svg+xml`. Add the uploads directory to `.gitignore`.
+
+## The `"webjs"` config block (package.json)
+
+All keys are optional; a malformed entry is dropped at boot with a warning, never crashing the pipeline.
+
+### Security headers
+
+On by default (`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`, `Permissions-Policy`, plus HSTS in prod over HTTPS). A default is set only when absent. Override per path:
+
+```jsonc
+{ "webjs": { "headers": [
+  { "source": "/embed/:path*", "headers": [{ "key": "X-Frame-Options", "value": null }] }
+] } }
+```
+
+`source` uses the native URLPattern syntax (`:param`, `:rest*`). A `value` of `null` disables a default. Precedence lowest to highest: secure defaults, then `webjs.headers`, then app middleware.
+
+### CSP (opt-in, nonce)
+
+Off by default. `{ "webjs": { "csp": true } }` enables a strict-dynamic + per-request nonce posture. An object form merges `directives` and supports `reportOnly`. Read the nonce with `cspNonce()` from `@webjsdev/core` to stamp your own inline `<script>`.
+
+### Redirects, trailing-slash, basePath, allowed origins
+
+```jsonc
+{ "webjs": {
+  "redirects": [{ "source": "/blog/:slug", "destination": "/posts/:slug" }],
+  "trailingSlash": "never",
+  "basePath": "/app",
+  "allowedOrigins": ["admin.example.com"],
+  "clientRouter": true
+} }
+```
+
+- **`redirects`** run first in the pipeline. `permanent` defaults to `true` (308); set `statusCode` for a legacy code. The query string is preserved. No server-side loop guard, so keep a `destination` off another rule's `source`.
+- **`trailingSlash`** picks a canonical form and 308-redirects the other. `"never"` (recommended), `"always"`, `"ignore"` (default). The root `/` is always exempt.
+- **`basePath`** prefixes every framework-emitted URL for a sub-path mount and strips the prefix at ingress. Author-written `<a href>` links are NOT auto-prefixed. Empty default is a byte-identical no-op.
+- **`allowedOrigins`** is the action-RPC CSRF allowlist (CSRF is an Origin / `Sec-Fetch-Site` check, not a token cookie). Default same-origin only. This is not CORS; use the `cors()` middleware for cross-origin `route.ts` reads.
+- **`clientRouter: false`** opts the whole app out of SPA navigation (pure MPA) while components still hydrate. Per-page escape hatch: `disableClientRouter()`.
+
+### Ingress caps
+
+Inbound bodies and connection lifetimes are capped by default. Override in the block or via env; precedence is env, then package.json, then default. A value of `0` disables a cap.
+
+| Cap | Default | Config key |
+|---|---|---|
+| JSON / RPC body | 1 MiB | `maxBodyBytes` |
+| Form / multipart body | 10 MiB | `maxMultipartBytes` |
+| Full request receive | 30s | `requestTimeoutMs` |
+| Headers receive | 20s | `headersTimeoutMs` |
+| Keep-alive idle | 5s | `keepAliveTimeoutMs` |
+
+An over-limit body responds `413` without buffering the whole payload.
+
+### Dev/start task orchestration
+
+`webjs dev` and `webjs start` run per-environment tasks from the block, so the primitive matches `npm run dev` / `npm start`.
+
+```jsonc
+{ "webjs": {
+  "dev":   { "before": ["webjs db migrate"], "parallel": ["tailwindcss ... --watch"], "watch": ["../blog"] },
+  "start": { "before": ["webjs db migrate"] }
+} }
+```
+
+`before` runs to completion first (a non-zero exit aborts the boot). `parallel` (dev only) runs long-lived watchers alongside the server and tears them down on exit. `watch` (dev only) adds extra live-reload directories outside the app tree.
+
+## Observability
+
+Wired at the single response funnel, covering pages, routes, actions, and assets uniformly.
+
+- **Access log.** One structured `info` line per handled request (`method`, `path`, `status`, `durationMs`, `requestId`). Never logs bodies or secrets; framework `/__webjs/*` traffic is suppressed.
+- **Request id.** Each request gets a `crypto.randomUUID()` correlation id, set as `X-Request-Id` (honoring a trusted inbound one) and readable server-side with `requestId()` from `@webjsdev/server` (returns `null` outside a request scope).
+- **`onError` hook.** Register via `createRequestHandler({ onError })` or `startServer({ onError })`. Called with `(error, { request, requestId, phase })` on any caught pipeline error, before the sanitized response is sent. Best-effort (a throwing hook is ignored), purely additive (the sanitized 500 / action digest is unchanged). Point it at Sentry or an APM.
+
+```ts
+const app = await createRequestHandler({
+  appDir: process.cwd(),
+  onError(error, { requestId, phase }) { Sentry.captureException(error, { tags: { requestId, phase } }); },
+});
+```
+
+- **`instrumentation.ts`** (app root) default-exports or names a `register()` function run once at boot, before the route table builds. Inside it, `setOnError(fn)` composes with the handler option. A sibling `instrumentation-client.ts` runs first in the client boot script for browser-side init.
+- **Build info.** `GET /__webjs/version` returns `{ version, build, node, uptime }` (`Cache-Control: no-store`), alongside the `/__webjs/health` and `/__webjs/ready` probes, so a deploy can confirm which build is live.
