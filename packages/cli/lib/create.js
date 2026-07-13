@@ -1156,11 +1156,12 @@ export default function RootLayout({ children }: { children: unknown }) {
       })();
     </script>
     <meta name="color-scheme" content="light dark">
-    <!-- JetBrains Mono gives the scaffold its monospaced, developer-console
-         aesthetic. Swap this for your own font (and update --font-sans below). -->
+    <!-- JetBrains Mono for body/UI (its monospaced, developer-console feel) and
+         Space Grotesk for the display wordmark. Swap these for your own fonts
+         (and update --font-sans / --font-display below). -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;600;700&display=swap">
     <!-- Tailwind: a STATIC stylesheet compiled from public/input.css to
          public/tailwind.css by css:build / css:watch (run by the dev and start
          tasks). A real stylesheet, so the app is styled with JavaScript OFF. -->
@@ -1175,6 +1176,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         --font-sans:  'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
         --font-serif: ui-serif, 'Iowan Old Style', Palatino, Georgia, serif;
         --font-mono:  'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+        --font-display: 'Space Grotesk', 'JetBrains Mono', ui-sans-serif, system-ui, sans-serif;
         --header-h: 0px;
         /* A translucent tint of the primary, tracked automatically across
            light/dark. Used for focus rings (ring-primary-tint). */
@@ -1320,7 +1322,7 @@ export default function Home() {
       <!-- Masthead -->
       <section class="flex flex-col items-center text-center gap-5">
         <p class="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground m-0">Welcome to</p>
-        <h1 class="text-5xl sm:text-6xl font-bold uppercase tracking-tight leading-none m-0 break-words bg-gradient-to-b from-foreground to-muted-foreground bg-clip-text text-transparent">
+        <h1 class="text-6xl sm:text-7xl font-bold uppercase tracking-tight leading-none m-0 break-words bg-gradient-to-b from-foreground to-muted-foreground bg-clip-text text-transparent" style="font-family: var(--font-display); word-spacing: -0.06em; letter-spacing: -0.02em;">
           WebJs Gallery
         </h1>
         <p class="text-base sm:text-lg text-muted-foreground max-w-lg leading-relaxed m-0">
