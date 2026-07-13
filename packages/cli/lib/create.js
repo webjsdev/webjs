@@ -1321,7 +1321,7 @@ export default function Home() {
       <section class="flex flex-col items-center text-center gap-5">
         <p class="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground m-0">Welcome to</p>
         <h1 class="text-5xl sm:text-6xl font-bold uppercase tracking-tight leading-none m-0 break-words bg-gradient-to-b from-foreground to-muted-foreground bg-clip-text text-transparent">
-          ${displayName}
+          WebJs Gallery
         </h1>
         <p class="text-base sm:text-lg text-muted-foreground max-w-lg leading-relaxed m-0">
           AI-first and web-components-first. Server-rendered, progressively enhanced, and buildless.
@@ -1334,7 +1334,7 @@ export default function Home() {
           <h2 class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground m-0">Explore the gallery</h2>
           <p class="text-sm text-muted-foreground max-w-lg leading-relaxed m-0">
             One WebJs concept per demo under <code class="text-[0.9em] text-foreground">app/features/</code>, with logic
-            in <code class="text-[0.9em] text-foreground">modules/</code>. Delete the ones you do not need.
+            in <code class="text-[0.9em] text-foreground">modules/</code>.
           </p>
         </div>
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
