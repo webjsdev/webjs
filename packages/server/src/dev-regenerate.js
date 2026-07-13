@@ -171,7 +171,7 @@ const inFlight = new Map();
  * @param {string} appDir
  * @param {string} relPath  appDir-relative served path, no leading slash (e.g. `public/tailwind.css`)
  * @param {RegenerateRule[]} rules
- * @param {{ spawn?: typeof nodeSpawn, now?: () => number }} [opts] injectables for tests
+ * @param {{ spawn?: typeof nodeSpawn }} [opts] injectable spawn for tests
  * @returns {Promise<void>}
  */
 export async function maybeRegenerate(appDir, relPath, rules, opts = {}) {
