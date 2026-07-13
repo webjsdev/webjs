@@ -403,9 +403,13 @@ When the user asks the agent to build their actual app:
    despite `w-full max-w-[400px]` on its inner grid, move that sizing to the host.
    **Definition of done (design gate):** a UI app is NOT finished until you
    have (a) given it a design of its own (layout AND palette) and removed the
-   scaffold shell, and (b) run it and PLAYED THROUGH every state in a browser
+   scaffold shell, (b) run it and PLAYED THROUGH every state in a browser
    (fill the board, win, draw, reload), confirming nothing resizes or shifts as
-   it fills (even, stable squares) and it does not resemble the scaffold. A
+   it fills (even, stable squares) and it does not resemble the scaffold, and
+   (c) confirmed it still reads AND looks right with JavaScript OFF (SSR +
+   progressive enhancement): content shows, links navigate, forms submit, and
+   the CSS is fully applied (the app links a static compiled `public/tailwind.css`,
+   so utilities resolve with no JS). A
    glance at the empty first paint is not enough; the layout bugs show up
    mid-interaction.
    `webjs doctor` emits an advisory when `app/layout` still reproduces scaffold
@@ -824,10 +828,13 @@ Both hydrate without flash on the client.
 
 <!-- OVERRIDE -->
 
-The scaffold ships with the **Tailwind CSS browser runtime** + `@theme`
-design tokens defined in the root layout. Every colour, font family,
-fluid type scale value, and motion duration is declared once in `@theme`
-and available everywhere via utility classes (`text-foreground`,
+The scaffold compiles a **static Tailwind stylesheet** (`css:build` builds
+`public/input.css` into the `public/tailwind.css` the layout links, so the
+app is styled with JavaScript off) + `@theme` design tokens. The token
+VALUES live on `:root` in the root layout (plain CSS, JS-off safe); the
+`@theme` maps live in `public/input.css`. Every colour, font family,
+fluid type scale value, and motion duration is declared once and
+available everywhere via utility classes (`text-foreground`,
 `bg-card`, `font-serif`, `duration-fast`, `text-display`).
 
 **One theme, canonical tokens.** The app has a SINGLE theme, defined

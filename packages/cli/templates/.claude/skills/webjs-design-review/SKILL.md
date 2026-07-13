@@ -41,7 +41,7 @@ interacting. Play the app the way a user will:
 
 Reload each state. Resize the window narrow (mobile) and wide.
 
-## 3. Confirm the three things a test can't
+## 3. Confirm the things a test can't
 
 Look at each state and confirm, with your eyes:
 
@@ -55,6 +55,13 @@ Look at each state and confirm, with your eyes:
    "It still looks like the starter" is a defect to fix, not ship.
 3. **Light AND dark both look right.** Toggle the theme. Check contrast, that
    nothing disappears against its background, that borders and shadows read.
+4. **It still renders with JavaScript OFF.** WebJs is SSR + progressive
+   enhancement, so the page must read and look right with no JS (disable it in
+   devtools, or load in a JS-off context). Content shows, `<a>` navigates,
+   forms submit, and CRUCIALLY the CSS is fully applied (the app links a static
+   compiled `public/tailwind.css`, so utilities resolve with no JS). An app that
+   goes unstyled or blank with JS off is a broken first paint, not a design to
+   ship.
 
 ## 4. Iterate until it holds, then say what you saw
 

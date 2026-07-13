@@ -118,8 +118,17 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     // …and contains no Tier-1 custom element tags
     assertTier1HygieneOnFile(page, 'app/page.ts');
 
-    // Theme CSS is inlined into the layout (shadcn tokens)
-    assert.match(layout, /color-primary/);
+    // CSS delivery (#947): the layout links a STATIC compiled stylesheet (works
+    // with JS off), not the browser runtime. The Tailwind @theme maps live in
+    // public/input.css; the token VALUES stay inline in the layout (plain CSS).
+    assert.match(layout, /<link rel="stylesheet" href="\/public\/tailwind\.css">/,
+      'layout links the static compiled stylesheet');
+    assert.doesNotMatch(layout, /tailwind-browser\.js|type="text\/tailwindcss"/,
+      'layout no longer ships the Tailwind browser runtime');
+    const inputCss = await readFile(join(appDir, 'public', 'input.css'), 'utf8');
+    assert.match(inputCss, /@import "tailwindcss"/, 'input.css imports Tailwind');
+    assert.match(inputCss, /color-primary/, 'input.css carries the @theme color maps');
+    assert.match(layout, /--primary:\s*oklch/, 'the palette VALUES stay inline (JS-off safe)');
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }

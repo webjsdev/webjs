@@ -43,6 +43,16 @@ test('bun scaffold: package.json scripts, trustedDependencies, lockfile flavor',
     assert.equal(p.trustedDependencies, undefined);
     // The native better-sqlite3 driver is gone entirely.
     assert.equal(p.dependencies['better-sqlite3'], undefined);
+    // The Tailwind compile MUST run under Bun on a Bun app (#947): the oven/bun:1
+    // image has no Node and no npm, so `npm run css:build` or a bare (node-shebang)
+    // `tailwindcss` would abort the boot. It runs via `bun --bun tailwindcss` in
+    // the css:build script AND the before / parallel hooks (never `npm run`).
+    assert.equal(p.scripts['css:build'], 'bun --bun tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify');
+    assert.deepEqual(p.webjs.start.before, ['webjs db migrate', 'bun --bun tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify']);
+    assert.deepEqual(p.webjs.dev.parallel, ['bun --bun tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch']);
+    for (const step of [...p.webjs.dev.before, ...p.webjs.start.before]) {
+      assert.doesNotMatch(step, /npm run/, 'no npm in a Bun app before-step (the image has no npm)');
+    }
   } finally {
     restore();
     await rm(cwd, { recursive: true, force: true });
