@@ -91,27 +91,27 @@ export class CommentsThread extends WebComponent({
     const error = this.error.get();
     return html`
       ${comments.length === 0
-        ? html`<div class="p-6 text-center text-fg-subtle font-serif text-sm leading-relaxed italic border border-dashed border-border rounded-xl mb-5">No comments yet: be the first.</div>`
+        ? html`<div class="p-6 text-center text-muted-foreground/70 font-serif text-sm leading-relaxed italic border border-dashed border-border rounded-xl mb-5">No comments yet: be the first.</div>`
         : html`<ul class="list-none p-0 m-0 mb-5 grid gap-4">${repeat(comments, (c) => c.id, (c) => html`
-            <li class="p-4 px-5 bg-bg-elev border border-border rounded">
-              <div class="flex gap-2 items-baseline font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-fg-subtle mb-1.5">
-                <strong class="text-fg font-bold tracking-[0.08em]">${c.authorName}</strong>
-                <span class="text-fg-subtle">·</span>
+            <li class="p-4 px-5 bg-card border border-border rounded">
+              <div class="flex gap-2 items-baseline font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground/70 mb-1.5">
+                <strong class="text-foreground font-bold tracking-[0.08em]">${c.authorName}</strong>
+                <span class="text-muted-foreground/70">·</span>
                 <span>${new Date(c.createdAt).toLocaleString()}</span>
               </div>
-              <div class="font-serif text-[15px] leading-relaxed text-fg">${c.body}</div>
+              <div class="font-serif text-[15px] leading-relaxed text-foreground">${c.body}</div>
             </li>`)}
           </ul>`}
 
       ${this.signedIn
-        ? html`<form class="flex gap-2 p-3 bg-bg-elev border border-border rounded" @submit=${(e: SubmitEvent) => this.onSubmit(e)}>
+        ? html`<form class="flex gap-2 p-3 bg-card border border-border rounded" @submit=${(e: SubmitEvent) => this.onSubmit(e)}>
             <input name="body" class="${inputClass()} flex-1"
                    placeholder="Add a comment…" ?disabled=${busy} autocomplete="off">
             <button class=${buttonClass({ size: 'sm' })} type="submit" ?disabled=${busy}>Post</button>
           </form>
-          ${error ? html`<p class="mt-2 text-accent font-mono text-xs leading-snug">${error}</p>` : ''}`
-        : html`<p class="p-5 text-fg-muted bg-bg-subtle border border-dashed border-border rounded text-center font-serif text-sm leading-relaxed italic">
-            <a class="text-accent font-semibold no-underline not-italic hover:underline hover:underline-offset-[3px]" href=${signinHref()}>Sign in</a> to comment.
+          ${error ? html`<p class="mt-2 text-primary font-mono text-xs leading-snug">${error}</p>` : ''}`
+        : html`<p class="p-5 text-muted-foreground bg-muted border border-dashed border-border rounded text-center font-serif text-sm leading-relaxed italic">
+            <a class="text-primary font-semibold no-underline not-italic hover:underline hover:underline-offset-[3px]" href=${signinHref()}>Sign in</a> to comment.
           </p>`}
     `;
   }

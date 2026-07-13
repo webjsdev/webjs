@@ -1,51 +1,61 @@
-/* Tailwind CSS v4 input file - compiled to public/tailwind.css by the
+/* Tailwind CSS v4 input file, compiled to public/tailwind.css by the
  * `css:watch` / `css:build` npm scripts. Authors shouldn't edit
  * public/tailwind.css directly; it's generated and gitignored. */
 @import "tailwindcss";
 
-/* Scan the new shadcn-style component sources so their utility classes
- * make it into the generated bundle. (Tailwind v4 already scans the
- * project tree by default - this @source is belt-and-braces.) */
+/* Scan the shadcn-style component sources so their utility classes make it
+ * into the generated bundle. (Tailwind v4 already scans the project tree by
+ * default; this @source is belt-and-braces.) */
 @source "../components/ui/*.ts";
 
-/* @theme maps our design-token CSS custom properties (defined on
- * :root in app/layout.ts for light/dark switching) into Tailwind's
- * palette so utility classes like `text-fg`, `bg-bg-elev`,
- * `text-display`, `font-serif`, `duration-fast` resolve. */
+/* @theme maps the shadcn design-token CSS custom properties (defined on :root
+ * in app/layout.ts for light/dark switching) into Tailwind's palette, so
+ * utility classes like `text-foreground`, `bg-card`, `bg-primary`,
+ * `text-muted-foreground`, `border-border`, `text-display`, `font-serif`,
+ * `duration-fast` resolve. Same shadcn vocabulary the scaffold and the
+ * @webjsdev/ui kit use, so the ui-* components read one source of truth. */
 @theme {
-  --color-fg:            var(--fg);
-  --color-fg-muted:      var(--fg-muted);
-  --color-fg-subtle:     var(--fg-subtle);
+  --color-background:             var(--background);
+  --color-foreground:             var(--foreground);
+  --color-card:                   var(--card);
+  --color-card-foreground:        var(--card-foreground);
+  --color-popover:                var(--popover);
+  --color-popover-foreground:     var(--popover-foreground);
+  --color-primary:                var(--primary);
+  --color-primary-foreground:     var(--primary-foreground);
+  --color-secondary:              var(--secondary);
+  --color-secondary-foreground:   var(--secondary-foreground);
+  --color-muted:                  var(--muted);
+  --color-muted-foreground:       var(--muted-foreground);
+  --color-accent:                 var(--accent);
+  --color-accent-foreground:      var(--accent-foreground);
+  --color-destructive:            var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border:                 var(--border);
+  --color-input:                  var(--input);
+  --color-ring:                   var(--ring);
 
-  --color-bg:            var(--bg);
-  --color-bg-elev:       var(--bg-elev);
-  --color-bg-subtle:     var(--bg-subtle);
-  --color-bg-sunken:     var(--bg-sunken);
+  /* A translucent brand tint derived from --primary (the same pattern the
+     scaffold's --primary-tint uses), for focus rings and the logo glow. */
+  --color-primary-tint:           var(--primary-tint);
 
-  --color-border:        var(--border);
-  --color-border-strong: var(--border-strong);
-
-  --color-accent:        var(--accent);
-  --color-accent-hover:  var(--accent-hover);
-  --color-accent-fg:     var(--accent-fg);
-  --color-accent-tint:   var(--accent-tint);
-  --color-accent-live:   var(--accent-live);
-
-  --color-success:       var(--success);
-  --color-danger:        var(--danger);
+  /* One extra semantic shadcn does not ship: success (a couple of status
+     affordances use it). Added the canonical @theme way, not a parallel
+     vocabulary. */
+  --color-success:                var(--success);
 
   --font-display: var(--font-display);
   --font-sans:  var(--font-sans);
   --font-serif: var(--font-serif);
   --font-mono:  var(--font-mono);
 
-  /* Fluid type scale - used via text-display, text-h1, text-h2, text-lede. */
+  /* Fluid type scale (text-display, text-h1, text-h2, text-lede). */
   --text-display: clamp(2.6rem, 1.6rem + 3.2vw, 4.25rem);
   --text-h1:      clamp(2rem, 1.5rem + 1.6vw, 2.85rem);
   --text-h2:      clamp(1.35rem, 1.15rem + 0.7vw, 1.7rem);
   --text-lede:    clamp(1.05rem, 0.95rem + 0.3vw, 1.2rem);
 
-  /* Custom motion durations - used via duration-fast / duration-slow. */
+  /* Custom motion durations (duration-fast / duration-slow). */
   --duration-fast: 140ms;
   --duration-slow: 380ms;
 }

@@ -19,14 +19,14 @@ import { WebComponent, html } from '@webjsdev/core';
 export class SlotCard extends WebComponent {
   render() {
     return html`
-      <article class="rounded-lg border border-border bg-bg-elev p-6">
+      <article class="rounded-lg border border-border bg-card p-6">
         <header class="mb-4 border-b border-border pb-3 text-lg font-semibold" data-region="header">
           <slot name="header"></slot>
         </header>
-        <div class="text-sm text-fg" data-region="body">
+        <div class="text-sm text-foreground" data-region="body">
           <slot></slot>
         </div>
-        <footer class="mt-4 border-t border-border pt-3 text-xs text-fg-muted" data-region="footer">
+        <footer class="mt-4 border-t border-border pt-3 text-xs text-muted-foreground" data-region="footer">
           <slot name="footer">no actions</slot>
         </footer>
       </article>

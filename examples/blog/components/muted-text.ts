@@ -10,7 +10,7 @@ import { WebComponent, html } from '@webjsdev/core';
 export class MutedText extends WebComponent {
   constructor() {
     super();
-    this.className = 'text-fg-subtle font-mono text-[11px] font-medium leading-snug tracking-[0.12em] uppercase';
+    this.className = 'text-muted-foreground/70 font-mono text-[11px] font-medium leading-snug tracking-[0.12em] uppercase';
   }
 
   render() {

@@ -17,8 +17,8 @@ export default function RpcStream() {
       <h1 class="font-serif text-display leading-[1.02] tracking-[-0.035em] font-bold m-0 mb-4">
         Streaming RPC
       </h1>
-      <p class="text-lede leading-[1.5] text-fg-muted max-w-[56ch] m-0 mb-6">
-        The button below calls an <strong class="text-fg font-bold">async-generator</strong>
+      <p class="text-lede leading-[1.5] text-muted-foreground max-w-[56ch] m-0 mb-6">
+        The button below calls an <strong class="text-foreground font-bold">async-generator</strong>
         server action. Each yielded token streams over the single RPC response and
         is appended as it arrives.
       </p>

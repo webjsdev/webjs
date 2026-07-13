@@ -28,7 +28,7 @@ export class VendorBadge extends WebComponent {
   render() {
     const formatted = dayjs(RELEASED_AT).format('MMM D, YYYY');
     return html`<span
-      class="font-mono text-[11px] tracking-[0.12em] uppercase text-fg-subtle"
+      class="font-mono text-[11px] tracking-[0.12em] uppercase text-muted-foreground/70"
       >released ${formatted} · zero JS for this badge</span
     >`;
   }

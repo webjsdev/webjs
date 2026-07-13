@@ -32,15 +32,15 @@ export default async function Search({ searchParams }: PageProps<'/search'>) {
           value=${q}
           placeholder="Search by title"
           aria-label="Search posts"
-          class="flex-1 px-3 py-2 rounded-md border border-border bg-bg-elev text-fg"
+          class="flex-1 px-3 py-2 rounded-md border border-border bg-card text-foreground"
         >
-        <button type="submit" class="px-4 py-2 rounded-md bg-accent text-bg font-medium">Search</button>
+        <button type="submit" class="px-4 py-2 rounded-md bg-primary text-primary-foreground font-medium">Search</button>
       </form>
       ${q
-        ? html`<p data-search-summary class="text-fg-muted text-sm">Found ${results.length} result${results.length === 1 ? '' : 's'} for "${q}".</p>`
-        : html`<p data-search-summary class="text-fg-muted text-sm">Type a query and submit to search post titles.</p>`}
+        ? html`<p data-search-summary class="text-muted-foreground text-sm">Found ${results.length} result${results.length === 1 ? '' : 's'} for "${q}".</p>`
+        : html`<p data-search-summary class="text-muted-foreground text-sm">Type a query and submit to search post titles.</p>`}
       <ul class="grid gap-2">
-        ${results.map((p) => html`<li class="search-result"><a href="/blog/${p.slug}" class="text-accent no-underline hover:underline">${p.title}</a></li>`)}
+        ${results.map((p) => html`<li class="search-result"><a href="/blog/${p.slug}" class="text-primary no-underline hover:underline">${p.title}</a></li>`)}
       </ul>
     </section>
   `;

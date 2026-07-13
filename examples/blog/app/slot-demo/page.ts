@@ -33,11 +33,11 @@ export default function SlotDemo() {
         <h2 slot="header">Form survival</h2>
         <p>Type into the input then navigate away and back. The value
         should be preserved through hydration via DOM identity.</p>
-        <input id="survive-input" type="text" class="mt-2 rounded border border-border bg-bg-subtle px-2 py-1" />
+        <input id="survive-input" type="text" class="mt-2 rounded border border-border bg-muted px-2 py-1" />
       </slot-card>
 
       <h2 class="mt-8 text-xl font-semibold">Shadow-DOM parity</h2>
-      <p class="text-sm text-fg-muted">Identical render templates, just with <code>static shadow = true</code>.</p>
+      <p class="text-sm text-muted-foreground">Identical render templates, just with <code>static shadow = true</code>.</p>
 
       <slot-card-shadow id="card-shadow-full" data-testid="shadow-full">
         <h2 slot="header">Shadow full card</h2>

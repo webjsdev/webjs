@@ -66,12 +66,12 @@ export class AuthForms extends WebComponent({
     const submitLabel = busy ? '…' : (mode === 'login' ? 'Sign in' : 'Create account');
     const pillBase =
       'py-2.5 px-3 font-sans text-xs font-semibold tracking-[0.02em] border-0 rounded-full cursor-pointer transition-all duration-150';
-    const pillActive = `${pillBase} bg-bg-elev text-fg shadow-sm`;
-    const pillInactive = `${pillBase} bg-transparent text-fg-muted`;
+    const pillActive = `${pillBase} bg-card text-foreground shadow-sm`;
+    const pillInactive = `${pillBase} bg-transparent text-muted-foreground`;
     return html`
       <div class=${cardClass()}>
         <div class=${cardHeaderClass()}>
-          <div class="grid grid-cols-2 p-1 rounded-full bg-bg-subtle border border-border" role="tablist">
+          <div class="grid grid-cols-2 p-1 rounded-full bg-muted border border-border" role="tablist">
             <button role="tab"
                     class=${mode === 'login' ? pillActive : pillInactive}
                     @click=${() => { this.mode = 'login'; this.error.set(null); }}>Sign in</button>

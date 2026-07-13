@@ -28,12 +28,12 @@ export default function UiDemo() {
   return html`
     <section class="mx-auto max-w-3xl py-16 px-6">
       <h1 class="text-4xl font-bold tracking-tight mb-2">Webjs UI demo</h1>
-      <p class="text-fg-muted mb-8">
+      <p class="text-muted-foreground mb-8">
         The component kit is split into two tiers. Tier-1 components
         (button, card, input, label, alert, badge, separator) are
         <strong>class-helper functions</strong> you apply to raw native
         elements. Tier-2 components (dialog, popover, tabs, …) are real
-        <code class="font-mono text-sm bg-bg-subtle px-1.5 py-0.5 rounded">&lt;ui-X&gt;</code>
+        <code class="font-mono text-sm bg-muted px-1.5 py-0.5 rounded">&lt;ui-X&gt;</code>
         custom elements for state the browser doesn't give you natively.
       </p>
 
@@ -85,7 +85,7 @@ export default function UiDemo() {
         </ui-dialog-content>
       </ui-dialog>
 
-      <p class="mt-12 text-sm text-fg-subtle">
+      <p class="mt-12 text-sm text-muted-foreground/70">
         Tier-1 helpers compile to plain Tailwind class strings at SSR time -
         no client-side runtime. Tier-2 elements register with
         <code class="font-mono text-xs">customElements.define</code> and

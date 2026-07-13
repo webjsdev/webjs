@@ -20,8 +20,8 @@ export default function StreamDemo() {
       <h1 class="font-serif text-display leading-[1.02] tracking-[-0.035em] font-bold m-0 mb-4">
         Stream demo
       </h1>
-      <p class="text-lede leading-[1.5] text-fg-muted max-w-[56ch] m-0 mb-6">
-        The greeting below is fetched <strong class="text-fg font-bold">inside the component</strong>
+      <p class="text-lede leading-[1.5] text-muted-foreground max-w-[56ch] m-0 mb-6">
+        The greeting below is fetched <strong class="text-foreground font-bold">inside the component</strong>
         with an async render(), so it is in the first paint with no fallback. The
         slow fact is wrapped in <code>&lt;webjs-suspense&gt;</code>, so its fallback
         shows immediately and the content streams in.

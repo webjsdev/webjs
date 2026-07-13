@@ -38,15 +38,15 @@ export default async function PostPage({ params }: PageProps<'/blog/[slug]'>) {
       <header class="mb-12">
         ${rubric('post')}
         ${displayH1(post.title)}
-        <div class="flex items-center gap-3 py-4 border-y border-border font-mono text-[11px] leading-[1.4] font-medium tracking-[0.1em] uppercase text-fg-subtle">
-          <span>By <strong class="text-fg font-bold">${post.authorName || 'someone'}</strong></span>
-          <span class="text-fg-subtle">·</span>
+        <div class="flex items-center gap-3 py-4 border-y border-border font-mono text-[11px] leading-[1.4] font-medium tracking-[0.1em] uppercase text-muted-foreground/70">
+          <span>By <strong class="text-foreground font-bold">${post.authorName || 'someone'}</strong></span>
+          <span class="text-muted-foreground/70">·</span>
           <span>${date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
-          <span class="text-fg-subtle">·</span>
+          <span class="text-muted-foreground/70">·</span>
           <span>${readingMin} min read</span>
         </div>
       </header>
-      <div class="font-serif text-[1.14rem] leading-[1.75] text-fg whitespace-pre-wrap my-8 first-letter:text-[4em] first-letter:font-bold first-letter:leading-[0.9] first-letter:float-left first-letter:mr-3.5 first-letter:mt-2.5 first-letter:text-accent first-letter:font-serif">${post.body}</div>
+      <div class="font-serif text-[1.14rem] leading-[1.75] text-foreground whitespace-pre-wrap my-8 first-letter:text-[4em] first-letter:font-bold first-letter:leading-[0.9] first-letter:float-left first-letter:mr-3.5 first-letter:mt-2.5 first-letter:text-primary first-letter:font-serif">${post.body}</div>
     </article>
 
     <div class="mt-18 pt-8 border-t border-border">

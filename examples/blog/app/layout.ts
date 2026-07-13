@@ -2,11 +2,11 @@ import { html, cspNonce, type Metadata, type LayoutProps } from '@webjsdev/core'
 import '#components/theme-toggle.ts';
 
 const navLink = (href: string, label: string) => html`
-  <a href=${href} class="text-fg-muted no-underline font-medium text-[13px] leading-none tracking-[0.005em] transition-colors duration-fast hover:text-fg">${label}</a>
+  <a href=${href} class="text-muted-foreground no-underline font-medium text-[13px] leading-none tracking-[0.005em] transition-colors duration-fast hover:text-foreground">${label}</a>
 `;
 
 const footerLink = (href: string, label: string) => html`
-  <a href=${href} class="text-inherit no-underline transition-colors duration-fast hover:text-fg-muted">${label}</a>
+  <a href=${href} class="text-inherit no-underline transition-colors duration-fast hover:text-muted-foreground">${label}</a>
 `;
 
 const TITLE = 'WebJs Blog - Live Demo';
@@ -53,7 +53,7 @@ export function generateMetadata(ctx: { url: string }): Metadata {
  *     once in prod via `npm run start` or on-file-change in dev via
  *     `npm run dev`. The input lives in `public/input.css` and includes
  *     the `@theme` block that maps our design tokens into Tailwind's
- *     palette (so classes like `text-fg`, `bg-bg-elev`, `text-display`,
+ *     palette (so classes like `text-foreground`, `bg-card`, `text-display`,
  *     `font-serif`, `duration-fast` resolve).
  *  3. Shell markup styled with Tailwind utility classes.
  *
@@ -130,34 +130,37 @@ export default function RootLayout({ children }: LayoutProps) {
         color-scheme: light dark;
         --header-h: 61px; /* #610 fixed-header offset, kept exact by the ResizeObserver below */
 
-        /* dark (default) */
-        --fg:            oklch(0.96 0 0);
-        --fg-muted:      oklch(0.74 0 0);
-        --fg-subtle:     oklch(0.62 0 0);
-        --bg:            oklch(0 0 0);
-        --bg-elev:       oklch(0.135 0 0);
-        --bg-subtle:     oklch(0.09 0 0);
-        --bg-sunken:     oklch(0 0 0);
-        --border:        oklch(0.32 0 0 / 0.9);
-        --border-strong: oklch(0.44 0 0 / 0.92);
-        --accent:        oklch(0.7 0.16 52);
-        --accent-hover:  oklch(0.75 0.16 52);
-        --accent-fg:     oklch(0.17 0.02 52);
-        --danger:        oklch(0.7 0.19 25);
-        --success:       oklch(0.72 0.15 145);
+        /* dark (default). shadcn token names, the same vocabulary the scaffold
+           and the @webjsdev/ui kit use. --primary is the orange BRAND color;
+           --accent is a NEUTRAL hover tint (shadcn model). */
+        --background:             oklch(0 0 0);
+        --foreground:             oklch(0.96 0 0);
+        --card:                   oklch(0.135 0 0);
+        --card-foreground:        oklch(0.96 0 0);
+        --popover:                oklch(0.135 0 0);
+        --popover-foreground:     oklch(0.96 0 0);
+        --primary:                oklch(0.7 0.16 52);
+        --primary-foreground:     oklch(0.17 0.02 52);
+        --secondary:              oklch(0 0 0);
+        --secondary-foreground:   oklch(0.96 0 0);
+        --muted:                  oklch(0.09 0 0);
+        --muted-foreground:       oklch(0.74 0 0);
+        --accent:                 oklch(0.20 0 0);
+        --accent-foreground:      oklch(0.96 0 0);
+        --destructive:            oklch(0.7 0.19 25);
+        --destructive-foreground: oklch(0.96 0 0);
+        --border:                 oklch(0.32 0 0 / 0.9);
+        --input:                  oklch(0.32 0 0 / 0.9);
+        --ring:                   oklch(0.7 0.16 52);
+        --success:                oklch(0.72 0.15 145);
 
-        /* Accent-derived tokens + glow. Declared once: they reference
-           --accent / --accent-live, which resolve per scope, so they flow to
-           both modes. --glow-strength is 0.16 everywhere, so the glow shows in
-           light and dark alike. */
-        --accent-live:    oklch(0.63 0.17 50);
-        --accent-tint:    color-mix(in oklch, var(--accent-live) 14%, transparent);
-        --accent-text:    var(--accent);
-        --accent-surface: color-mix(in oklch, var(--accent-live) 12%, transparent);
-        --accent-border:  color-mix(in oklch, var(--accent-live) 28%, transparent);
-        /* Logo mark gradient: the exact warm-orange stops webjs.dev uses, so
-           the brand mark reads identically here and on the main site (dark
-           default here; the light overrides below carry the light stops). */
+        /* Decorative, derived from --primary so it tracks light/dark: a
+           translucent brand tint for focus rings and the logo glow (the same
+           pattern the scaffold's --primary-tint uses). Plus the logo mark
+           gradient, the exact warm-orange stops webjs.dev uses, so the brand
+           mark reads identically here and on the main site (dark stops here,
+           the light overrides below carry the light stops). */
+        --primary-tint:   color-mix(in oklch, var(--primary) 14%, transparent);
         --logo-from:      oklch(0.8 0.16 58);
         --logo-to:        oklch(0.62 0.18 44);
         --glow-a:         oklch(0.63 0.17 44);
@@ -171,39 +174,49 @@ export default function RootLayout({ children }: LayoutProps) {
 
       /* light: explicit toggle */
       :root[data-theme='light'] {
-        --fg:            oklch(0.20 0.018 60);
-        --fg-muted:      oklch(0.44 0.02 60);
-        --fg-subtle:     oklch(0.50 0.02 65);
-        --bg:            oklch(0.985 0.008 75);
-        --bg-elev:       oklch(1 0 0);
-        --bg-subtle:     oklch(0.96 0.008 75);
-        --bg-sunken:     oklch(0.93 0.01 70);
-        --border:        oklch(0.88 0.012 70 / 0.9);
-        --border-strong: oklch(0.78 0.014 70 / 0.95);
-        --accent:        oklch(0.54 0.16 52);
-        --accent-hover:  oklch(0.5 0.16 52);
-        --accent-fg:     oklch(1 0 0);
-        --logo-from:     oklch(0.63 0.17 50);
-        --logo-to:       oklch(0.44 0.11 52);
+        --background:             oklch(0.985 0.008 75);
+        --foreground:             oklch(0.20 0.018 60);
+        --card:                   oklch(1 0 0);
+        --card-foreground:        oklch(0.20 0.018 60);
+        --popover:                oklch(1 0 0);
+        --popover-foreground:     oklch(0.20 0.018 60);
+        --primary:                oklch(0.54 0.16 52);
+        --primary-foreground:     oklch(1 0 0);
+        --secondary:              oklch(0.93 0.01 70);
+        --secondary-foreground:   oklch(0.20 0.018 60);
+        --muted:                  oklch(0.96 0.008 75);
+        --muted-foreground:       oklch(0.44 0.02 60);
+        --accent:                 oklch(0.94 0.008 75);
+        --accent-foreground:      oklch(0.20 0.018 60);
+        --border:                 oklch(0.88 0.012 70 / 0.9);
+        --input:                  oklch(0.88 0.012 70 / 0.9);
+        --ring:                   oklch(0.54 0.16 52);
+        --logo-from:              oklch(0.63 0.17 50);
+        --logo-to:                oklch(0.44 0.11 52);
       }
 
       /* light: OS preference */
       @media (prefers-color-scheme: light) {
         :root:not([data-theme='dark']) {
-          --fg:            oklch(0.20 0.018 60);
-          --fg-muted:      oklch(0.44 0.02 60);
-          --fg-subtle:     oklch(0.50 0.02 65);
-          --bg:            oklch(0.985 0.008 75);
-          --bg-elev:       oklch(1 0 0);
-          --bg-subtle:     oklch(0.96 0.008 75);
-          --bg-sunken:     oklch(0.93 0.01 70);
-          --border:        oklch(0.88 0.012 70 / 0.9);
-          --border-strong: oklch(0.78 0.014 70 / 0.95);
-          --accent:        oklch(0.54 0.16 52);
-          --accent-hover:  oklch(0.5 0.16 52);
-          --accent-fg:     oklch(1 0 0);
-          --logo-from:     oklch(0.63 0.17 50);
-          --logo-to:       oklch(0.44 0.11 52);
+          --background:             oklch(0.985 0.008 75);
+          --foreground:             oklch(0.20 0.018 60);
+          --card:                   oklch(1 0 0);
+          --card-foreground:        oklch(0.20 0.018 60);
+          --popover:                oklch(1 0 0);
+          --popover-foreground:     oklch(0.20 0.018 60);
+          --primary:                oklch(0.54 0.16 52);
+          --primary-foreground:     oklch(1 0 0);
+          --secondary:              oklch(0.93 0.01 70);
+          --secondary-foreground:   oklch(0.20 0.018 60);
+          --muted:                  oklch(0.96 0.008 75);
+          --muted-foreground:       oklch(0.44 0.02 60);
+          --accent:                 oklch(0.94 0.008 75);
+          --accent-foreground:      oklch(0.20 0.018 60);
+          --border:                 oklch(0.88 0.012 70 / 0.9);
+          --input:                  oklch(0.88 0.012 70 / 0.9);
+          --ring:                   oklch(0.54 0.16 52);
+          --logo-from:              oklch(0.63 0.17 50);
+          --logo-to:                oklch(0.44 0.11 52);
         }
       }
 
@@ -222,8 +235,8 @@ export default function RootLayout({ children }: LayoutProps) {
            single source of truth: a sane SSR first-paint default in :root,
            kept exact and responsive by the ResizeObserver inline script. */
         padding-top: var(--header-h);
-        background: var(--bg);
-        color: var(--fg);
+        background: var(--background);
+        color: var(--foreground);
         font: 16px/1.65 var(--font-sans);
         -webkit-font-smoothing: antialiased;
         text-rendering: optimizeLegibility;
@@ -241,9 +254,9 @@ export default function RootLayout({ children }: LayoutProps) {
           radial-gradient(58% 44% at 50% -4%, color-mix(in oklch, var(--glow-a) calc(var(--glow-strength) * 100%), transparent), transparent 72%),
           radial-gradient(40% 36% at 88% 8%, color-mix(in oklch, var(--glow-a) calc(var(--glow-strength) * 60%), transparent), transparent 70%);
       }
-      ::selection { background: var(--accent-tint); color: var(--fg); }
+      ::selection { background: var(--primary-tint); color: var(--foreground); }
       ::-webkit-scrollbar { width: 10px; height: 10px; }
-      ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
+      ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
       ::-webkit-scrollbar-track { background: transparent; }
 
       /* Mobile menu: native <details>/<summary>, same shape as
@@ -258,11 +271,11 @@ export default function RootLayout({ children }: LayoutProps) {
 
     <div class="glow-layer" aria-hidden="true"></div>
 
-    <header class="site-header fixed inset-x-0 top-0 z-20 flex items-center justify-between gap-4 px-4 sm:px-6 py-3 border-b border-border bg-[color-mix(in_oklch,var(--bg)_75%,transparent)] backdrop-blur-[18px] backdrop-saturate-[180%]">
-      <a href="/" class="inline-flex items-center gap-2 no-underline text-fg font-semibold text-[15px] leading-none tracking-tight">
-        <span class="inline-block w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-[var(--logo-from)] to-[var(--logo-to)] shadow-[inset_0_0_0_1px_oklch(1_0_0/0.15),0_2px_10px_var(--accent-tint)]"></span>
+    <header class="site-header fixed inset-x-0 top-0 z-20 flex items-center justify-between gap-4 px-4 sm:px-6 py-3 border-b border-border bg-[color-mix(in_oklch,var(--background)_75%,transparent)] backdrop-blur-[18px] backdrop-saturate-[180%]">
+      <a href="/" class="inline-flex items-center gap-2 no-underline text-foreground font-semibold text-[15px] leading-none tracking-tight">
+        <span class="inline-block w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-[var(--logo-from)] to-[var(--logo-to)] shadow-[inset_0_0_0_1px_oklch(1_0_0/0.15),0_2px_10px_var(--primary-tint)]"></span>
         <span>webjs</span>
-        <span class="text-fg-subtle mx-1 font-normal">/</span>
+        <span class="text-muted-foreground/70 mx-1 font-normal">/</span>
         <span>blog</span>
       </a>
 
@@ -274,7 +287,7 @@ export default function RootLayout({ children }: LayoutProps) {
         ${navLink('/seeded', 'Seeded')}
         ${navLink('/about', 'About')}
         ${navLink('/dashboard', 'Dashboard')}
-        <a href="https://github.com/webjsdev/webjs/tree/main/examples/blog" target="_blank" rel="noopener" class="text-fg-muted no-underline font-medium text-[13px] leading-none tracking-[0.005em] transition-colors duration-fast hover:text-fg">GitHub</a>
+        <a href="https://github.com/webjsdev/webjs/tree/main/examples/blog" target="_blank" rel="noopener" class="text-muted-foreground no-underline font-medium text-[13px] leading-none tracking-[0.005em] transition-colors duration-fast hover:text-foreground">GitHub</a>
         <theme-toggle></theme-toggle>
       </nav>
 
@@ -283,7 +296,7 @@ export default function RootLayout({ children }: LayoutProps) {
            ui.webjs.dev. -->
       <div class="flex items-center gap-2 sm:hidden">
         <details class="mobile-menu relative">
-          <summary class="list-none cursor-pointer w-9 h-9 inline-flex items-center justify-center rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" aria-label="Toggle navigation">
+          <summary class="list-none cursor-pointer w-9 h-9 inline-flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-fast" aria-label="Toggle navigation">
             <svg class="open-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/>
             </svg>
@@ -291,12 +304,12 @@ export default function RootLayout({ children }: LayoutProps) {
               <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
             </svg>
           </summary>
-          <nav class="absolute right-0 top-[calc(100%+8px)] min-w-[200px] flex flex-col gap-1 bg-bg-elev border border-border rounded-lg shadow-lg p-2 z-50">
-            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="/">Posts</a>
-            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="/search">Search</a>
-            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="/about">About</a>
-            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="/dashboard">Dashboard</a>
-            <a class="text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-bg-subtle hover:text-fg transition-colors duration-fast" href="https://github.com/webjsdev/webjs/tree/main/examples/blog" target="_blank" rel="noopener">GitHub</a>
+          <nav class="absolute right-0 top-[calc(100%+8px)] min-w-[200px] flex flex-col gap-1 bg-card border border-border rounded-lg shadow-lg p-2 z-50">
+            <a class="text-muted-foreground no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-muted hover:text-foreground transition-colors duration-fast" href="/">Posts</a>
+            <a class="text-muted-foreground no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-muted hover:text-foreground transition-colors duration-fast" href="/search">Search</a>
+            <a class="text-muted-foreground no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-muted hover:text-foreground transition-colors duration-fast" href="/about">About</a>
+            <a class="text-muted-foreground no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-muted hover:text-foreground transition-colors duration-fast" href="/dashboard">Dashboard</a>
+            <a class="text-muted-foreground no-underline font-medium text-sm px-3 py-2 rounded-md hover:bg-muted hover:text-foreground transition-colors duration-fast" href="https://github.com/webjsdev/webjs/tree/main/examples/blog" target="_blank" rel="noopener">GitHub</a>
           </nav>
         </details>
         <theme-toggle></theme-toggle>
@@ -304,7 +317,7 @@ export default function RootLayout({ children }: LayoutProps) {
     </header>
 
     <div class="relative z-[1]">
-      <div class="max-w-[760px] mx-auto px-4 sm:px-6 pt-4 text-[11px] leading-snug text-fg-subtle font-mono tracking-wide">
+      <div class="max-w-[760px] mx-auto px-4 sm:px-6 pt-4 text-[11px] leading-snug text-muted-foreground/70 font-mono tracking-wide">
         Demo app. Data will be wiped between redeploys.
       </div>
 
@@ -312,8 +325,8 @@ export default function RootLayout({ children }: LayoutProps) {
         ${children}
       </main>
 
-      <footer class="max-w-[760px] mx-auto px-4 sm:px-6 pt-12 pb-[72px] border-t border-border flex justify-between flex-wrap gap-3 text-fg-subtle font-mono text-[11px] leading-[1.4] tracking-[0.12em] uppercase">
-        <span><span class="text-accent">&#9679;</span>&nbsp; webjs / demo</span>
+      <footer class="max-w-[760px] mx-auto px-4 sm:px-6 pt-12 pb-[72px] border-t border-border flex justify-between flex-wrap gap-3 text-muted-foreground/70 font-mono text-[11px] leading-[1.4] tracking-[0.12em] uppercase">
+        <span><span class="text-primary">&#9679;</span>&nbsp; webjs / demo</span>
         <span>
           ${footerLink('/api/posts', 'api')}
           &nbsp;&middot;&nbsp;
