@@ -646,6 +646,30 @@ Full docs: https://docs.webjs.dev`);
           (download ? ' (downloading bundles)' : '') + '...',
         );
         const result = await pinAll(appDir, { download, from: explicitFrom });
+        if (result.droppedUnresolvable && !result.pins?.length) {
+          // The scan FOUND bare specifiers but every one was dropped because
+          // it is not installed under node_modules, so no local version could
+          // be read. Name them and point at the remedy instead of the
+          // misleading "no bare imports found" message (#953).
+          const list = result.droppedUnresolvable;
+          // Root package name from a bare specifier: `@scope/pkg/sub` -> `@scope/pkg`,
+          // `pkg/sub` -> `pkg`. This is the thing the user must `npm install`.
+          const rootPkg = (s) => {
+            const parts = s.split('/');
+            return s.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
+          };
+          console.error(
+            `Pin: found ${list.length} bare-specifier import${list.length === 1 ? '' : 's'} in ` +
+            `client code under ${appDir}, but could not resolve a version for ` +
+            `${list.length === 1 ? 'it' : 'them'} (not installed under node_modules):`,
+          );
+          for (const s of list) console.error(`  ${s}`);
+          console.error(
+            `Install the package first (e.g. \`npm install ${rootPkg(list[0])}\`), then rerun ` +
+            `\`webjs vendor pin\`. No pin file written.`,
+          );
+          process.exit(1);
+        }
         if (result.noBareImports) {
           // Scanner found zero bare-specifier imports in client-
           // reachable source. Without this branch pinAll would write
@@ -691,6 +715,16 @@ Full docs: https://docs.webjs.dev`);
           (downloaded ? ` + ${downloaded} bundle${downloaded === 1 ? '' : 's'}` : '') + '.';
         const pruneMsg = pruned.length ? ` Pruned ${pruned.length} orphan${pruned.length === 1 ? '' : 's'}.` : '';
         console.log(pinMsg + pruneMsg);
+        if (result.droppedUnresolvable?.length) {
+          // A partial pin: some specifiers resolved, others were dropped for a
+          // missing local version. Name the skipped ones so it is not silent.
+          console.warn(
+            `[webjs] Skipped ${result.droppedUnresolvable.length} import` +
+            `${result.droppedUnresolvable.length === 1 ? '' : 's'} with no installed version ` +
+            `(install then rerun to pin ${result.droppedUnresolvable.length === 1 ? 'it' : 'them'}):`,
+          );
+          for (const s of result.droppedUnresolvable) console.warn(`  ${s}`);
+        }
 
         // Make the pins committable. Vendoring is opt-in, so the pins the
         // user just wrote are meant for source control; a `.gitignore`
