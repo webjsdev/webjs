@@ -155,11 +155,13 @@ export async function ssrPage(route, params, url, opts) {
     // Import-only route modules (#605) go one step further: a page / layout
     // whose only client relevance is importing shipping components is itself
     // dead weight on the client (it never hydrates), so it is dropped and its
-    // component modules are emitted directly in its place. The component set is
-    // the STATIC closure the analyser computed (what loading the module would
-    // have registered), so a component imported but only conditionally rendered
-    // still registers. Dedup so a component shared across the page and a layout
-    // (or two layouts) is emitted once.
+    // component modules are emitted directly in its place. The component set
+    // is the FRONTIER of the analyser's path-aware walk (#963): the shipping
+    // components the module reaches without passing through another shipping
+    // component. A component imported but only conditionally rendered still
+    // registers; one nested behind an emitted component is absent here and
+    // loads via its importer's own imports. Dedup so a component shared
+    // across the page and a layout (or two layouts) is emitted once.
     const inert = opts.inertRouteModules;
     const importOnly = opts.importOnlyRouteModules;
     const moduleUrls = [];
