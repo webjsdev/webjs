@@ -14,11 +14,13 @@ import { highlight } from '#lib/highlight.ts';
 
 const GH_URL = 'https://github.com/remix-run/remix';
 
+// The clone is homepage-only, so the routes not rebuilt here (blog, jam) point
+// at their real pages rather than 404ing on a local path.
 const NAV_ITEMS = [
   { key: 'G', label: 'github', href: GH_URL },
   { key: 'D', label: 'docs', href: 'https://api.remix.run/' },
-  { key: 'B', label: 'blog', href: '/blog' },
-  { key: 'J', label: 'jam', href: '/jam/2026' },
+  { key: 'B', label: 'blog', href: 'https://remix.run/blog' },
+  { key: 'J', label: 'jam', href: 'https://remix.run/jam/2026' },
   { key: 'S', label: 'store', href: 'https://shop.remix.run/' },
 ];
 

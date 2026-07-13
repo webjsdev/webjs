@@ -27,6 +27,7 @@ export default function RootLayout({ children }: { children: unknown }) {
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="theme-color" content="#000000" />
 
+    <link rel="icon" href="/public/favicon.ico" sizes="32x32" />
     <link rel="icon" href="/public/favicon.svg" type="image/svg+xml" sizes="any" />
 
     <!-- The two LCP text faces plus the mono UI face, preloaded so they fetch
