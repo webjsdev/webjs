@@ -151,6 +151,17 @@ Card.register('my-card');</pre>
     <h2>Design tokens via CSS custom properties</h2>
     <p>CSS custom properties <strong>inherit through shadow DOM boundaries</strong>. Define them once on <code>:root</code> (as the blog example does in its layout) and both light-DOM and shadow-DOM components can consume them via Tailwind classes (<code>text-foreground</code>, <code>bg-card</code>) or bare CSS (<code>var(--foreground)</code>).</p>
 
+    <h2>Gotcha: an animated <code>@property</code> paints its <code>var()</code> fallback inside a link (Chromium)</h2>
+    <p>An element that paints a registered <code>@property</code> custom property directly, for example <code>background: var(--brand-cycle, &lt;fallback&gt;)</code>, paints the <strong>fallback</strong> instead of the live animated value whenever it has an <code>&lt;a href&gt;</code> ancestor, when <code>--brand-cycle</code> is a registered <code>@property</code> animated by <code>@keyframes</code> on <code>:root</code>. A registered <code>@property</code> always has a valid computed value, so it must never paint its <code>var()</code> fallback; that it does here is a Chromium paint bug (confirmed headless and headed; other engines are unaffected).</p>
+    <p>The tell that it is a PAINT bug, not a style bug: <code>getComputedStyle</code> returns the correct live animated value, only the painted pixels are stale. So verify with a screenshot or pixel sample, never with <code>getComputedStyle</code> (it lies here). The trigger is specifically an <code>&lt;a&gt;</code> with an <code>href</code>: the same subtree under a <code>&lt;div&gt;</code>, a <code>&lt;button&gt;</code>, or an <code>&lt;a&gt;</code> with no <code>href</code> animates correctly, which points at Chromium's visited-link paint isolation (links paint through a separate path, for <code>:visited</code> history-sniffing defense, that does not invalidate on a registered-custom-property animation). Neither <code>isolation: isolate</code>, <code>will-change</code>, <code>content-visibility</code>, a self-<code>animation</code>, nor re-declaring the property fixes it.</p>
+    <p><strong>The fix is to route the value through <code>color</code> + <code>currentColor</code></strong> instead of a direct <code>var()</code> paint reference. Chromium's link paint path does invalidate <code>color</code>, so this sidesteps the bug with no JavaScript:</p>
+    <pre>/* BROKEN inside &lt;a href&gt;: paints the fallback, not the animated color */
+.wordmark { background: var(--brand-cycle, #ebeff2); }
+
+/* WORKS: the animated property rides color, the paint reads currentColor */
+.logo-link { color: var(--brand-cycle, #ebeff2); }   /* the &lt;a&gt; (or the element) */
+.wordmark  { background: currentColor; }             /* the painted descendant */</pre>
+
     <h2>DRY'ing up repeated Tailwind classes via JS helpers</h2>
     <p>When the same bundle of Tailwind classes appears in 2+ places, extract it into a JS helper in <code>lib/utils/ui.ts</code>. The helper runs at SSR time inside <code>html\`\`</code>, so the browser sees fully materialised HTML. No client-side runtime, no diff from inline classes.</p>
 
