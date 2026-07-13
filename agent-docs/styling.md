@@ -283,7 +283,7 @@ scrolls, so the iOS URL bar stays visible).
 An element that paints a registered `@property` custom property directly, e.g.
 `background: var(--brand-cycle, <fallback>)`, paints the **fallback** instead of
 the live animated value whenever it has an `<a href>` ancestor, if `--brand-cycle`
-is a registered `@property` animated by `@keyframes` on `:root` (or any ancestor).
+is a registered `@property` animated by `@keyframes` on `:root`.
 A registered `@property` always has a valid computed value, so it must NEVER paint
 its `var()` fallback; that it does here is a Chromium paint bug. Confirmed in
 Chromium (headless and headed); other engines are unaffected.
