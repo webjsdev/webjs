@@ -319,12 +319,17 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.equal(pkg.type, 'module');
     assert.equal(pkg.scripts.dev, 'webjs dev');
     assert.equal(pkg.scripts.start, 'webjs start');
-    // Both dev and start apply pending migrations before serving (#725), so a
-    // generated migration is applied on the next boot with no manual step.
-    assert.deepEqual(pkg.webjs?.dev?.before, ['webjs db migrate'],
-      'webjs.dev.before runs db migrate (#725)');
-    assert.deepEqual(pkg.webjs?.start?.before, ['webjs db migrate'],
-      'webjs.start.before runs db migrate');
+    // Both dev and start apply pending migrations before serving (#725), then
+    // compile the static Tailwind stylesheet (#947), so a fresh clone boots
+    // migrated AND fully styled with no manual step.
+    assert.deepEqual(pkg.webjs?.dev?.before, ['webjs db migrate', 'npm run css:build'],
+      'webjs.dev.before runs db migrate then css:build (#725, #947)');
+    assert.deepEqual(pkg.webjs?.start?.before, ['webjs db migrate', 'npm run css:build'],
+      'webjs.start.before runs db migrate then css:build');
+    assert.deepEqual(pkg.webjs?.dev?.parallel, ['tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch'],
+      'webjs.dev.parallel runs the Tailwind watcher (#947)');
+    assert.equal(pkg.scripts['css:build'], 'tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify');
+    assert.ok(pkg.devDependencies['@tailwindcss/cli'], 'the Tailwind CLI is a devDependency');
     assert.ok(pkg.dependencies['@webjsdev/core']);
     assert.ok(pkg.dependencies['@webjsdev/server']);
     assert.ok(pkg.dependencies['drizzle-orm'], 'drizzle-orm dep present');

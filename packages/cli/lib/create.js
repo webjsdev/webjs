@@ -233,9 +233,9 @@ async function writeUiBootstrap(appDir) {
 
   // 3) styles/globals.css: copy the neutral theme verbatim. components.json
   // references this path, and future `webjs ui add` calls append to it. It
-  // lives OUTSIDE app/ because app/ is routing-only; the layout inlines the
-  // same tokens into a <style type="text/tailwindcss"> block so the browser
-  // Tailwind runtime resolves them with no build step.
+  // lives OUTSIDE app/ because app/ is routing-only. The same @theme maps are
+  // written to public/input.css and compiled to the static public/tailwind.css
+  // the layout links (so the app is styled with JavaScript off).
   const css = await readFile(
     join(UI_REGISTRY_ROOT, 'themes', 'index.css'), 'utf8',
   );
@@ -1344,7 +1344,7 @@ export default function RootLayout({ children }: { children: unknown }) {
       ::selection { background: color-mix(in oklch, var(--primary) 22%, transparent); color: var(--foreground); }
     </style>
 
-    <!-- webjs-scaffold-placeholder. MINIMAL SHELL, on purpose. Everything above (the theme apparatus, the design tokens, the Tailwind runtime) is infrastructure to keep. Below, \${children} drops into a bare full-height container with NO chrome: design THIS app's layout from scratch. Decide from what the app IS whether it needs a header, a nav, a footer, a sidebar, a centered reading column, or a full-bleed canvas, and build that here. A COMPLETE reference layout (fixed header, brand, nav, theme toggle, reading column, footer) ships at LAYOUT-REFERENCE.md in the project root: read it to learn the patterns, then write your own. Delete this line once your layout is designed. webjs check fails while the marker remains. -->
+    <!-- webjs-scaffold-placeholder. MINIMAL SHELL, on purpose. Everything above (the theme apparatus, the design tokens, the linked Tailwind stylesheet) is infrastructure to keep. Below, \${children} drops into a bare full-height container with NO chrome: design THIS app's layout from scratch. Decide from what the app IS whether it needs a header, a nav, a footer, a sidebar, a centered reading column, or a full-bleed canvas, and build that here. A COMPLETE reference layout (fixed header, brand, nav, theme toggle, reading column, footer) ships at LAYOUT-REFERENCE.md in the project root: read it to learn the patterns, then write your own. Delete this line once your layout is designed. webjs check fails while the marker remains. -->
     <main class="min-h-dvh px-4 sm:px-6 py-8">
       \${children}
     </main>
@@ -1681,7 +1681,7 @@ ThemeToggle.register('theme-toggle');
     components/theme-toggle.ts   ← light DOM web component
     lib/utils/cn.ts              ← cn() helper for ui-* components
     lib/utils/ui.ts              ← Tailwind class-bundle helpers
-    public/tailwind-browser.js   ← Tailwind runtime
+    public/input.css             ← Tailwind entry (compiled to public/tailwind.css)
     modules/{components,server-actions,optimistic-ui,async-render,
              directives,todo}/  ← feature + example logic (prune what you skip)
     db/{schema,columns,connection}.server.ts  ← Drizzle (User + Todo)

@@ -85,10 +85,12 @@ The infrastructure above the `<main>` is not chrome and should stay:
 
 - the theme-detection `<script>` (light/dark apparatus) and the header-measure
   script,
-- the Tailwind runtime `<script src="/public/tailwind-browser.js">`,
-- the two `<style type="text/tailwindcss">` blocks (the `@webjsdev/ui` theme and
-  your palette tokens; the palette carries its own `webjs-scaffold-placeholder`
-  marker, so own the colors),
-- the design-token `:root` / dark / light blocks.
+- the `<link rel="stylesheet" href="/public/tailwind.css">` (the STATIC stylesheet
+  compiled from `public/input.css` by `css:build`, so the app is styled with JS
+  off),
+- the `<style>` block of design-token VALUES (`:root` / dark / light), which
+  carries its own `webjs-scaffold-placeholder` marker, so own the colors. The
+  Tailwind `@theme` maps that turn those tokens into utilities live in
+  `public/input.css`.
 
 Design the chrome; keep the plumbing.

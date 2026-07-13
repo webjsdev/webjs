@@ -8,26 +8,28 @@ export default function Styling() {
     <p>WebJs ships two styling models and lets you pick per component. The <strong>default is light DOM</strong> with <strong>Tailwind CSS</strong>: the browser runtime with <code>@theme</code> design tokens. Shadow DOM is opt-in when you need truly scoped styles or third-party-embed isolation. <code>&lt;slot&gt;</code> projection works identically in both modes (light DOM uses framework projection), so slot usage is not a reason to opt into shadow.</p>
 
     <h2>The default: light DOM + Tailwind</h2>
-    <p>Pages, layouts, and components render into the normal document tree. Tailwind utility classes apply directly: no <code>:host</code>, no <code>::part</code>, no CSS-variable plumbing. Design tokens live in a single <code>@theme</code> block in the root layout and become first-class Tailwind classes.</p>
+    <p>Pages, layouts, and components render into the normal document tree. Tailwind utility classes apply directly: no <code>:host</code>, no <code>::part</code>, no CSS-variable plumbing. Design tokens live in a single <code>@theme</code> block in <code>public/input.css</code>, which <code>css:build</code> compiles to a static <code>public/tailwind.css</code> the layout links, so the app is fully styled with JavaScript disabled (a real stylesheet, not an in-browser compile). The token VALUES stay inline in the layout as plain CSS custom properties, so they resolve with JS off too.</p>
 
-    <pre>// app/layout.ts excerpt
+    <pre>// public/input.css (compiled to a static public/tailwind.css by css:build,
+// which the dev / start tasks run automatically). The @theme maps live here.
+@import "tailwindcss";
+@theme {
+  --color-fg:        var(--fg);
+  --color-bg:        var(--bg);
+  --color-accent:    var(--accent);
+  --font-serif:      var(--font-serif);
+  --text-display:    clamp(2.6rem, 1.6rem + 3.2vw, 4.25rem);
+  --duration-fast:   140ms;
+}
+
+// app/layout.ts excerpt
 import { html } from '@webjsdev/core';
 
 export default function RootLayout({ children }: { children: unknown }) {
   return html\`
-    &lt;script src="/public/tailwind-browser.js"&gt;&lt;/script&gt;
-    &lt;style type="text/tailwindcss"&gt;
-      @theme {
-        --color-fg:        var(--fg);
-        --color-bg:        var(--bg);
-        --color-accent:    var(--accent);
-        --color-bg-elev:   var(--bg-elev);
-        --font-serif:      var(--font-serif);
-        --text-display:    clamp(2.6rem, 1.6rem + 3.2vw, 4.25rem);
-        --duration-fast:   140ms;
-      }
-    &lt;/style&gt;
+    &lt;link rel="stylesheet" href="/public/tailwind.css"&gt;
     &lt;style&gt;
+      /* Token VALUES: plain CSS custom properties, so they resolve with JS off. */
       :root {
         --fg: oklch(0.96 0.015 60);
         --bg: oklch(0.14 0.01 55);
