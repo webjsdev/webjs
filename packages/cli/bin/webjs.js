@@ -126,6 +126,21 @@ async function main() {
     const { assertNodeVersion } = await import('@webjsdev/server');
     assertNodeVersion({ onFail: 'exit' });
   }
+  // #954: `dev` / `start` need `@webjsdev/core` resolvable FROM the app dir. A
+  // fresh git worktree has no node_modules (git worktrees do not copy it), so
+  // the app's pages otherwise fail deep in SSR with a raw
+  // `ERR_MODULE_NOT_FOUND: Cannot find package '@webjsdev/core'`. Probe up front
+  // and surface the cause + remedy instead. No-op (a cheap resolve) when the
+  // framework resolves, so the happy-path boot is untouched.
+  if (cmd === 'dev' || cmd === 'start') {
+    const { checkFrameworkResolves } = await import('../lib/doctor.js');
+    const probe = checkFrameworkResolves(process.cwd());
+    if (probe.status !== 'pass') {
+      console.error(`[webjs] ${probe.message}`);
+      if (probe.fix) console.error(`[webjs] Fix: ${probe.fix}`);
+      process.exit(1);
+    }
+  }
   switch (cmd) {
     case 'dev': {
       // If we're already inside the reload child (node --watch or bun --hot),

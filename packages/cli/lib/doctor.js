@@ -4,9 +4,10 @@
  * WebJs has unusually many fragile preconditions, each an independent failure
  * mode a contributor onboarding to an existing repo only hits at runtime: the
  * Node 24+ strip-types floor, the `erasableSyntaxOnly` TS flag, importmap pin
- * freshness, env drift vs `.env.example`, `@webjsdev/*` version coherence, and
- * the git pre-commit hook activation. `webjs doctor` verifies each one up front
- * and prints pass/warn/fail with an actionable fix line.
+ * freshness, env drift vs `.env.example`, `@webjsdev/*` version coherence,
+ * whether the framework even resolves from the app dir (the fresh-git-worktree
+ * trap, #954), and the git pre-commit hook activation. `webjs doctor` verifies
+ * each one up front and prints pass/warn/fail with an actionable fix line.
  *
  * This module is PURE: `runDoctorChecks(appDir, opts?)` reads files (and, for
  * the pin check, optionally the network), but NEVER calls `process.exit` and
@@ -25,7 +26,8 @@
  *     app's own runtime concern, never a doctor hard-fail: a missing tsconfig
  *     (a JS-only app legitimately has none), env drift, an outdated or
  *     unverifiable vendor pin, a `@webjsdev/*` version drift or missing install,
- *     and a missing/non-executable git hook.
+ *     an unresolvable framework (a worktree with no node_modules, #954), and a
+ *     missing/non-executable git hook.
  *   - 'pass' is the green path.
  *
  * Every NETWORK touch (only the vendor-pin freshness check) is BEST-EFFORT: a
@@ -37,6 +39,7 @@
 import { existsSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
+import { createRequire } from 'node:module';
 import { checkNodeInline } from './node-preflight.js';
 
 /**
@@ -878,6 +881,83 @@ async function checkScaffoldDesign(appDir) {
   };
 }
 
+/**
+ * Probe whether `@webjsdev/core` resolves from `appDir`. Node resolution is
+ * directory-relative, so this must probe FROM the app (not the CLI's own
+ * location, which resolves the framework fine from a global install even when
+ * the app cannot). A no-op-cheap resolve, no I/O beyond what Node's resolver
+ * does, no network. Returns true when the framework resolves, false otherwise.
+ * @param {string} appDir
+ * @returns {boolean}
+ */
+export function frameworkResolves(appDir) {
+  try {
+    // The base file need not exist; createRequire only uses it to anchor the
+    // node_modules lookup at appDir.
+    const require = createRequire(join(appDir, '__webjs_resolve_probe__.js'));
+    require.resolve('@webjsdev/core');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * CHECK 8, framework resolvability (#954). WARN when `@webjsdev/core` cannot be
+ * resolved FROM the app directory, which is the fresh-git-worktree trap: a
+ * worktree does not copy `node_modules`, so a plain `webjs dev` there dies at
+ * SSR with a raw `ERR_MODULE_NOT_FOUND: Cannot find package '@webjsdev/core'`
+ * whose remedy is not obvious. Silent PASS when the framework resolves (the
+ * common case), so this never slows a healthy app. WARN (not a hard fail): it
+ * is a setup/environment concern, the same tier as the version-coherence check.
+ * @param {string} appDir
+ * @returns {DoctorResult}
+ */
+export function checkFrameworkResolves(appDir) {
+  const name = 'framework-resolve';
+  if (frameworkResolves(appDir)) {
+    return { name, status: 'pass', message: '@webjsdev/core resolves from the app directory.' };
+  }
+  const hasNodeModules = existsSync(join(appDir, 'node_modules'));
+  // A git worktree checks out `.git` as a FILE (a gitdir pointer), not a
+  // directory. That, plus a missing node_modules, is the exact #954 cause.
+  let isWorktree = false;
+  try {
+    isWorktree = statSync(join(appDir, '.git')).isFile();
+  } catch {
+    isWorktree = false;
+  }
+  if (isWorktree && !hasNodeModules) {
+    return {
+      name,
+      status: 'warn',
+      message:
+        '@webjsdev/core cannot be resolved from this directory, and this is a git worktree with no ' +
+        'node_modules. Git worktrees do not copy node_modules, so the framework is unresolvable here ' +
+        'and `webjs dev` / `webjs start` would fail at SSR with a raw ERR_MODULE_NOT_FOUND.',
+      fix:
+        'Install dependencies in this worktree (`npm install`), or symlink node_modules from the ' +
+        'primary checkout (`ln -s ../<primary-checkout>/node_modules node_modules`).',
+    };
+  }
+  if (!hasNodeModules) {
+    return {
+      name,
+      status: 'warn',
+      message: '@webjsdev/core cannot be resolved from this directory (no node_modules present).',
+      fix: 'Run `npm install` in the app directory so the framework resolves.',
+    };
+  }
+  return {
+    name,
+    status: 'warn',
+    message:
+      '@webjsdev/core cannot be resolved from this directory even though node_modules exists ' +
+      '(a partial or corrupted install).',
+    fix: 'Reinstall dependencies (`npm install`, or remove node_modules and reinstall).',
+  };
+}
+
 export async function runDoctorChecks(appDir, opts = {}) {
   const cliDir = opts.cliDir || new URL('.', import.meta.url).pathname;
   const results = await Promise.all([
@@ -887,6 +967,7 @@ export async function runDoctorChecks(appDir, opts = {}) {
     checkVendorPin(appDir, opts),
     checkVendorGitignore(appDir),
     checkWebjsVersions(appDir),
+    Promise.resolve(checkFrameworkResolves(appDir)),
     checkImportmapCoherence(appDir, opts),
     Promise.resolve(checkGitHook(appDir)),
     checkElisionCarriers(appDir),

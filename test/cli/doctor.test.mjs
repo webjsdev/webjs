@@ -217,6 +217,55 @@ test('version check PASSES when installed satisfies the declared range', async (
 });
 
 // ---------------------------------------------------------------------------
+// framework resolvability (#954): the fresh-git-worktree trap.
+// ---------------------------------------------------------------------------
+const { frameworkResolves, checkFrameworkResolves } = await import(
+  resolve(CLI_LIB_DIR, 'doctor.js')
+);
+
+/** A tmp app whose node_modules has a genuinely resolvable @webjsdev/core. */
+function appWithResolvableCore() {
+  const dir = tmpDir();
+  write(dir, 'package.json', JSON.stringify({ name: 'app' }));
+  write(dir, 'node_modules/@webjsdev/core/package.json', JSON.stringify({
+    name: '@webjsdev/core', version: '0.7.4', main: 'index.js',
+  }));
+  write(dir, 'node_modules/@webjsdev/core/index.js', 'export const x = 1;\n');
+  return dir;
+}
+
+test('framework-resolve PASSES (silent) when @webjsdev/core resolves from the app dir', async () => {
+  const dir = appWithResolvableCore();
+  assert.equal(frameworkResolves(dir), true);
+  const results = await runDoctorChecks(dir, baseOpts({ nodeVersion: '24.0.0' }));
+  assert.equal(byName(results, 'framework-resolve').status, 'pass');
+});
+
+test('framework-resolve WARNS naming the worktree cause when node_modules is absent in a worktree', async () => {
+  const dir = tmpDir();
+  write(dir, 'package.json', JSON.stringify({ name: 'app' }));
+  // A git worktree checks out `.git` as a FILE (a gitdir pointer), not a dir.
+  write(dir, '.git', 'gitdir: /some/primary/.git/worktrees/x\n');
+  // Counterfactual anchor: with a resolvable core this would PASS; here there
+  // is no node_modules at all, the exact #954 condition.
+  assert.equal(frameworkResolves(dir), false);
+  const r = checkFrameworkResolves(dir);
+  assert.equal(r.status, 'warn');
+  assert.match(r.message, /git worktree/);
+  assert.match(r.message, /node_modules/);
+  assert.match(r.fix, /symlink node_modules|npm install/);
+});
+
+test('framework-resolve WARNS generically when node_modules is absent outside a worktree', async () => {
+  const dir = tmpDir();
+  write(dir, 'package.json', JSON.stringify({ name: 'app' }));
+  const r = checkFrameworkResolves(dir);
+  assert.equal(r.status, 'warn');
+  assert.doesNotMatch(r.message, /git worktree/);
+  assert.match(r.message, /no node_modules/);
+});
+
+// ---------------------------------------------------------------------------
 // vendor pin freshness (best-effort + network-tolerant).
 // ---------------------------------------------------------------------------
 test('vendor-pin PASSES (skips) when there is no pin file', async () => {
