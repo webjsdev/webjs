@@ -14,34 +14,51 @@ now (`app/page.ts` printing "Hello from {{APP_NAME}}", the example `User`
 model in `db/schema.server.ts`, the `theme-toggle` component, the
 example users module in api/saas templates) are **starting-point
 references, not the final product**. Your job is to replace them with
-the app the user actually asked for. That includes adapting
-`app/layout.ts`, not just the page. Set the real brand, replace the
-example `Home` nav, and pick a content-width container that fits. The
-default `<main class="max-w-[760px]">` is a reading column for prose and
-forms, so for a full-bleed app, dashboard, or board, widen the cap or
-remove it (keep the theme tokens). A wide layout left in the 760px
-reading column overflows into a horizontal scrollbar. **Give the app a
-unique design, and redesign means more than recolor.** When it has a UI,
-choose its palette, typography, LAYOUT, and chrome from what the app IS.
-Recoloring the scaffold and swapping the logo while keeping its skeleton (a
-fixed top header with a Home link and a theme toggle, the centered ~760px
-reading column, the "Built with webjs" footer) is NOT a unique design.
-Decide from scratch whether this app even needs a header or footer, what nav
-(if any), and what layout fits (a centered board, a full-bleed dashboard, a
-split, a single card). Before finishing, self-audit that nothing still reads
-as the scaffold example (no "Built with webjs" footer, no leftover example
-nav, no default reading column unless it truly fits). The `api` template has
-no UI, so this does not apply there. The design tokens and theme wiring are
-infrastructure to keep and restyle on top of. Style with Tailwind utilities
-wherever they reach, and use custom CSS only for what utilities cannot
-express (@theme tokens, @keyframes, scrollbar, complex color-mix or
-gradients). This is ENFORCED:
+the app the user actually asked for. That includes designing
+`app/layout.ts`, not just the page. It ships as a MINIMAL shell (theme,
+design tokens, and Tailwind infra, then `${children}` in a bare padded
+container) with NO header, nav, footer, or reading column, so design the
+app's own chrome from scratch. `LAYOUT-REFERENCE.md` at the project root is
+a complete worked layout (fixed header, brand, nav, theme toggle, reading
+column, footer) to learn the patterns from, then build your own. **Give the
+app a unique design, and redesign means more than recolor.** When it has a
+UI, choose its palette, typography, LAYOUT, and chrome from what the app IS.
+Decide whether it needs a header at all, a nav (or none), a footer, a
+sidebar, a centered reading column, or a full-bleed canvas (a centered
+board, a full-bleed dashboard, a split, a single card). The `api` template
+has no UI, so this does not apply there. The design tokens and theme wiring
+are infrastructure to keep and set your own palette VALUES on. Style with
+Tailwind utilities wherever they reach, and use custom CSS only for what
+utilities cannot express (@theme tokens, @keyframes, scrollbar, complex
+color-mix or gradients). This is ENFORCED:
 the example `app/page.ts` and `app/layout.ts` carry a
 `webjs-scaffold-placeholder` marker comment, and `webjs check` fails
 while any marker remains, so this freshly scaffolded app fails the check
 until you replace the example content (or deliberately keep it) and
-delete the marker line. The delivered app must contain only what the
-user asked for, never leftover scaffold code.
+delete the marker line. To keep the gallery and clear every marker at
+once, run `webjs check --clear-placeholders` (it strips the marker lines
+and keeps the demo code), then delete any demo you do not want. The
+delivered app must contain only what the user asked for, never leftover
+scaffold code.
+
+**Render the app and LOOK before you call UI work done (every agent, not
+just one harness).** You write CSS blind, so a layout or design defect
+ships silently: `webjs check` and `webjs typecheck` pass even when a
+component collapses, grid cells are uneven, the layout resizes as it fills,
+or the app just kept the scaffold's colors. Static tools give no failure
+signal for this. The only thing that catches it is rendering the app and
+looking at the pixels. So for ANY page, layout, or component work: run it
+(`webjs dev`), open every route you changed in a real browser (drive it
+with your harness's browser tool or MCP if it has one, otherwise open it
+yourself and screenshot), and PLAY THROUGH every state (empty, filled, win,
+draw, reload, narrow and wide, light and dark). Confirm nothing collapses
+or reflows, that cells stay equal, that the design is the app's OWN, and
+that both themes read. Ship a real-browser test (`webjs test --browser`)
+for the mechanical floor (measure `getBoundingClientRect()` and assert
+cells stay equal across a move). Fix and re-render until it holds, then
+state what you rendered and confirmed. Claude Code additionally ENFORCES
+this via the `webjs-design-review` skill plus a Stop hook, but the
+discipline is harness-agnostic and applies to every agent.
 
 **Non-negotiables for every webjs app:**
 

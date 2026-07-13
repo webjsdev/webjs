@@ -159,7 +159,7 @@ return { success: true, data: { ...formatPost(row), authorName: me.name } };
 ## Column helpers live in `db/columns.server.ts` (the one dialect seam)
 
 The schema is written against helpers (`table`, `pk`, `uuidPk`, `uuid`, `bool`,
-`timestamp`, `createdAt`, `updatedAt`, `index`) rather than raw drizzle
+`json`, `timestamp`, `createdAt`, `updatedAt`, `index`) rather than raw drizzle
 builders, so the same `db/schema.server.ts` runs on SQLite and Postgres. Only
 `db/columns.server.ts` differs per dialect. Two of those helpers exist because
 rc.3 has not yet exposed a stable no-arg overload.
@@ -172,6 +172,12 @@ rc.3 has not yet exposed a stable no-arg overload.
   argument the runtime auto-fills. The helper synthesizes drizzle-kit's own
   collision-free name, so schema authors call `index(t.createdAt)` with no name.
   Replace it with a bare `index()` once 1.0 stable ships the no-arg overload.
+- **`json<T>()`** persists a structured value (an array or object) as JSON,
+  typed by `T` so reads and writes are narrowed instead of `unknown`. It is
+  `text({ mode: 'json' }).$type<T>()` on SQLite and `jsonb().$type<T>()` on
+  Postgres, so `board: json<Cell[]>()` or `settings: json<{ theme?: string }>()`
+  works unchanged on both dialects. Reach for it whenever a column holds
+  structured data rather than a scalar (a board, a tag list, a settings blob).
 
 When you add a table, use the helpers (`pk()` for an integer autoincrement id,
 `uuidPk()` for an app-generated uuid string id, `createdAt()` for a

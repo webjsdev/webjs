@@ -534,6 +534,11 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     'AGENTS.md',
     'CONVENTIONS.md',
     'CLAUDE.md',
+    // A worked layout (header/nav/theme-toggle/reading-column/footer) the agent
+    // reads to learn the patterns, since app/layout.ts ships as a minimal shell
+    // so the app designs its own chrome. Shipped for every template (harmless
+    // for api, which has no app/layout.ts).
+    'LAYOUT-REFERENCE.md',
     // Starter tests under the new feature-folder layout.
     'test/hello/hello.test.ts',
     'test/hello/browser/hello.test.js',
@@ -563,6 +568,14 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     '.claude/hooks/require-tests-with-src.sh',
     '.claude/hooks/check-server-imports.sh',
     '.claude/hooks/check-server-imports.mjs',
+    // Render-and-look enforcement for UI work: a UserPromptSubmit router that
+    // points UI-building prompts at the webjs-design-review skill, a Stop-hook
+    // backstop that nudges a render-and-look before finishing UI changes, and
+    // the skill they route to. A design/layout defect has no failing test, so
+    // this vision-in-the-loop is the only thing that catches it.
+    '.claude/hooks/route-skills.sh',
+    '.claude/hooks/design-review-before-stop.sh',
+    '.claude/skills/webjs-design-review/SKILL.md',
     // Gemini CLI config + hooks
     '.gemini/settings.json',
     '.gemini/hooks/nudge-uncommitted.sh',
@@ -638,7 +651,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
 
   // Make hook scripts executable
   const { chmod } = await import('node:fs/promises');
-  for (const hook of ['block-prose-punctuation.sh', 'guard-branch-context.sh', 'nudge-uncommitted.sh', 'commit-before-stop.sh', 'cleanup-merged-worktree.sh', 'require-tests-with-src.sh']) {
+  for (const hook of ['block-prose-punctuation.sh', 'guard-branch-context.sh', 'nudge-uncommitted.sh', 'commit-before-stop.sh', 'cleanup-merged-worktree.sh', 'require-tests-with-src.sh', 'route-skills.sh', 'design-review-before-stop.sh']) {
     const hookPath = join(appDir, '.claude', 'hooks', hook);
     if (existsSync(hookPath)) await chmod(hookPath, 0o755);
   }
@@ -675,6 +688,9 @@ export const table = sqliteTableCreator((name) => name, 'snake_case');
 export const pk = () => integer().primaryKey({ autoIncrement: true });
 export const uuidPk = () => text().primaryKey().$defaultFn(() => crypto.randomUUID());
 export const uuid = () => text();
+// Structured value (array / object) stored as JSON. Type it with json<T>() so
+// the column is narrowed on read/write instead of \`unknown\`.
+export const json = <T>() => text({ mode: 'json' }).$type<T>();
 export const bool = () => integer({ mode: 'boolean' });
 export const timestamp = () => integer({ mode: 'timestamp_ms' });
 export const createdAt = () => timestamp().notNull().defaultNow();
@@ -686,7 +702,7 @@ export const index = (...cols: SQLiteColumn[]) =>
   _index(getTableName((cols[0] as unknown as { table: Table }).table) + '_' + cols.map((c) => c.name).join('_') + '_idx').on(...(cols as [SQLiteColumn, ...SQLiteColumn[]]));
 `;
 
-  const columnsPg = `import { pgTableCreator, serial, uuid as pgUuid, integer, text, real, boolean, timestamp as pgTimestamp, index as _index } from 'drizzle-orm/pg-core';
+  const columnsPg = `import { pgTableCreator, serial, uuid as pgUuid, integer, text, real, boolean, jsonb, timestamp as pgTimestamp, index as _index } from 'drizzle-orm/pg-core';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 import { getTableName, type Table } from 'drizzle-orm';
 
@@ -697,6 +713,9 @@ export const table = pgTableCreator((name) => name, 'snake_case');
 export const pk = () => serial().primaryKey();
 export const uuidPk = () => pgUuid().primaryKey().defaultRandom();
 export const uuid = () => pgUuid();
+// Structured value (array / object) stored as JSON. Type it with json<T>() so
+// the column is narrowed on read/write instead of \`unknown\`.
+export const json = <T>() => jsonb().$type<T>();
 export const bool = () => boolean();
 export const timestamp = () => pgTimestamp({ withTimezone: true });
 export const createdAt = () => timestamp().notNull().defaultNow();
@@ -710,13 +729,16 @@ export const index = (...cols: PgColumn[]) =>
 
   // Example schema (dialect-agnostic). Replace the User model with your own.
   await writeFile(join(appDir, 'db', 'schema.server.ts'), `import { defineRelations } from 'drizzle-orm';
-import { table, pk, ${isFullStack ? 'uuidPk, ' : ''}text, ${isFullStack ? 'bool, ' : ''}createdAt } from './columns.server.ts';
+import { table, pk, ${isFullStack ? 'uuidPk, ' : ''}text, ${isFullStack ? 'bool, ' : ''}json, createdAt } from './columns.server.ts';
 
 // Example model. Feel free to delete or extend.
 export const users = table('users', {
   id: pk(),
   email: text().notNull().unique(),
   name: text(),
+  // JSON column: a structured value persisted as JSON, typed via json<T>().
+  // Same helper works on SQLite and Postgres. Delete if you do not need it.
+  settings: json<{ theme?: string }>(),
   createdAt: createdAt(),
 });
 ${isFullStack ? `
@@ -1064,8 +1086,7 @@ export type ActionResult<T> =
       .replace(/`/g, '\\`')
       .replace(/\$\{/g, '\\${');
 
-  await writeFile(join(appDir, 'app', 'layout.ts'), `// webjs-scaffold-placeholder. This is the example app chrome (brand, nav, content-width container). Adapt it to your app, then delete this line. webjs check fails while the marker remains.
-import { html, cspNonce } from '@webjsdev/core';
+  await writeFile(join(appDir, 'app', 'layout.ts'), `import { html, cspNonce } from '@webjsdev/core';
 import '#components/theme-toggle.ts';
 // Webjs UI components are tiered:
 //   - Tier 1 (button, card, input, label, alert, badge, separator, etc.) are
@@ -1080,20 +1101,17 @@ import '#components/theme-toggle.ts';
 // extra needs to be registered. Add Tier-2 imports as you 'webjs ui add'.
 
 /**
- * Root layout: globals + chrome.
+ * Root layout: globals + a minimal shell.
  *
  * Light DOM + Tailwind by default. Design tokens live in :root and are
  * mapped into the Tailwind palette via @theme, so classes like
  * text-foreground, bg-card, font-serif, duration-fast, text-display all work.
  *
- * Nav + footer links repeat the same class bundle, so they're extracted
- * into small JS helpers below. Each helper runs at SSR time inside
- * html\\\`\\\`, producing static HTML in the response with no client runtime.
+ * This shell is deliberately MINIMAL: it wires the theme, tokens, and Tailwind,
+ * then renders \${children} in a bare container with no chrome, so you design the
+ * app's own layout. LAYOUT-REFERENCE.md (project root) is a complete worked
+ * layout (header, nav, theme toggle, reading column, footer) to learn from.
  */
-
-const navLink = (href: string, label: string) => html\`
-  <a href=\${href} class="text-muted-foreground no-underline font-medium text-[13px] leading-none tracking-[0.005em] transition-colors duration-fast hover:text-foreground">\${label}</a>
-\`;
 
 export default function RootLayout({ children }: { children: unknown }) {
   // Read the in-flight request's CSP nonce so the theme-detection
@@ -1111,7 +1129,8 @@ export default function RootLayout({ children }: { children: unknown }) {
       // Delete this IIFE, delete the dark and light style blocks below, and set
       // your palette once on the root selector. That removes the wiring so it
       // cannot fight your own colours (it will not override a plain root
-      // palette). The header-measure IIFE that follows is unrelated, keep it.
+      // palette). The header-measure IIFE that follows is unrelated, keep it
+      // (it is dormant until you add a fixed header, per LAYOUT-REFERENCE.md).
       (function(){
         try {
           var mq = window.matchMedia('(prefers-color-scheme: light)');
@@ -1132,11 +1151,13 @@ export default function RootLayout({ children }: { children: unknown }) {
         } catch (_) {}
       })();
       // ===== end optional theme apparatus =====
-      // The header is position:fixed (not sticky): a sticky header flickers on
-      // iOS WebKit during a client-router nav. fixed leaves normal flow, so
-      // --header-h reserves its height for the content below. Measured here so
-      // it tracks the real (responsive) height; degrades fine with no JS via
-      // the :root default.
+      // Header-measure script: DORMANT until you add a fixed header (the minimal
+      // shell has none). When you add one (see LAYOUT-REFERENCE.md), make it
+      // position:fixed (NOT sticky: a sticky header flickers on iOS WebKit during
+      // a client-router nav). fixed leaves normal flow, so --header-h reserves its
+      // height for the content below; this measures the real (responsive) height.
+      // With no header it is a no-op (querySelector returns null) and --header-h
+      // stays 0, so there is no phantom gap.
       (function(){
         function measure(){
           try {
@@ -1170,7 +1191,7 @@ ${UI_THEME}
          bg-background, text-foreground, bg-card, bg-primary, bg-accent,
          text-muted-foreground, border-border, ring-ring, and the rest. Here we
          set those tokens' VALUES to this app's brand palette, so the ui-*
-         components AND the example chrome read ONE source of truth. Any component
+         components AND your own chrome read ONE source of truth. Any component
          added later with webjs ui add <name> inherits it automatically. This
          block is emitted after the ui theme, so these values win on every Tailwind
          recompile. Dark-first, with light via the theme toggle (data-theme) or the
@@ -1188,11 +1209,16 @@ ${UI_THEME}
         --font-sans:  -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         --font-serif: ui-serif, 'Iowan Old Style', Palatino, Georgia, serif;
         --font-mono:  ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        --header-h: 56px;
+        /* 0 by default because the minimal shell has no fixed header. The
+           header-measure script below overrides it to the real height the moment
+           you add a fixed header element (see LAYOUT-REFERENCE.md), so body
+           padding tracks it automatically. */
+        --header-h: 0px;
         /* A translucent brand tint, derived from --primary so it tracks
            light/dark automatically. Used for the logo glow and focus ring. */
         --primary-tint: color-mix(in oklch, var(--primary) 20%, transparent);
       }
+      /* webjs-scaffold-placeholder. These are the scaffold's STARTER brand colors (the shadcn-style orange); they look finished on purpose. Own the palette: set the token VALUES below (dark AND light blocks) to colors that fit what THIS app IS, keeping the token NAMES. A recolor chosen for the app beats keeping the starter orange. Then delete this marker line (or run webjs check --clear-placeholders to keep the starter palette deliberately). webjs check fails while the marker remains. */
       /* dark (the default, and the explicit .dark the toggle sets) */
       :root, .dark {
         color-scheme: dark;
@@ -1300,42 +1326,10 @@ ${UI_THEME}
       ::selection { background: color-mix(in oklch, var(--primary) 22%, transparent); color: var(--foreground); }
     </style>
 
-    <header class="fixed inset-x-0 top-0 z-20 flex items-center gap-6 px-4 sm:px-6 py-3 border-b border-border bg-[color-mix(in_oklch,var(--background)_75%,transparent)] backdrop-blur-[18px]">
-      <a href="/" class="mr-auto inline-flex items-center gap-2 no-underline text-foreground font-semibold text-[15px] leading-none tracking-tight">
-        <span>${displayName}</span>
-      </a>
-      <nav class="flex gap-4 items-center">
-        <!-- Example nav. Replace with the real navigation for your app. -->
-        \${navLink('/', 'Home')}
-        <theme-toggle></theme-toggle>
-      </nav>
-    </header>
-
-    <!--
-      Content shell. The max-w-[760px] cap is a comfortable READING width,
-      right for prose, forms, and marketing. For a full-bleed app, dashboard,
-      or board, REPLACE it: widen the cap (for example max-w-[1400px]) or
-      drop the cap and mx-auto for an edge-to-edge layout. A wide layout left
-      inside the 760px reading column overflows into a horizontal scrollbar.
-    -->
-    <div class="flex flex-col min-h-[calc(100dvh-var(--header-h))]">
-      <main class="flex-1 w-full max-w-[760px] mx-auto px-4 sm:px-6 pt-[72px] pb-12">
-        \${children}
-      </main>
-      <!-- webjs-scaffold-placeholder. This "Built with webjs" footer is SCAFFOLD
-           branding, not your app's. REMOVE it, or replace it with your own
-           footer, before shipping a delivered app. Delete this line once done.
-           webjs check fails while the marker remains. -->
-      <footer class="border-t border-border">
-        <div class="max-w-[760px] mx-auto px-4 sm:px-6 py-6 flex items-center justify-center">
-          <a href="https://webjs.dev" class="inline-flex items-center gap-2 no-underline text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <span>Built with</span>
-            <span class="w-[18px] h-[18px] rounded-[6px] bg-gradient-to-br from-[var(--logo-from)] to-[var(--logo-to)] shadow-[0_2px_10px_var(--primary-tint)]"></span>
-            <span class="font-semibold text-foreground">webjs</span>
-          </a>
-        </div>
-      </footer>
-    </div>
+    <!-- webjs-scaffold-placeholder. MINIMAL SHELL, on purpose. Everything above (the theme apparatus, the design tokens, the Tailwind runtime) is infrastructure to keep. Below, \${children} drops into a bare full-height container with NO chrome: design THIS app's layout from scratch. Decide from what the app IS whether it needs a header, a nav, a footer, a sidebar, a centered reading column, or a full-bleed canvas, and build that here. A COMPLETE reference layout (fixed header, brand, nav, theme toggle, reading column, footer) ships at LAYOUT-REFERENCE.md in the project root: read it to learn the patterns, then write your own. Delete this line once your layout is designed. webjs check fails while the marker remains. -->
+    <main class="min-h-dvh px-4 sm:px-6 py-8">
+      \${children}
+    </main>
   \`;
 }
 `);
@@ -1406,9 +1400,9 @@ export default function Home() {
       \${rubric('welcome')}
       \${displayH1(html\`Hello from <span class="text-primary italic">${displayName}</span>.\`)}
       <p class="text-lede leading-[1.5] text-muted-foreground max-w-[56ch] m-0 mb-6">
-        This scaffold ships a gallery below: single-feature demos and one whole
-        example app, all small, idiomatic, and heavily commented. Browse them for
-        context, then replace this page with your own. See
+        This WebJs scaffold ships a gallery below: single-feature demos and one
+        whole example app, all small, idiomatic, and heavily commented. Browse
+        them for context, then replace this page with your own. See
         \${accentLink('https://docs.webjs.dev', 'the docs')} for the full reference.
       </p>
       <div class="flex gap-3 items-center">

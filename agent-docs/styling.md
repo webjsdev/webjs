@@ -277,3 +277,73 @@ For an app/dashboard layout, an alternative is an app-shell scroll container (a
 non-scrolling `100dvh` flex column with `<main>` as the internal scroller), which
 needs no offset at all but changes the scroll model (the window no longer
 scrolls, so the iOS URL bar stays visible).
+
+## Layout recipes: even grids, aspect-ratio, and no reflow
+
+These are the CSS traps that cause a visually-broken app (uneven cells, a
+collapsed board, a layout that resizes as it fills). They are not app-specific;
+they apply to any grid / board / gallery / card layout.
+
+**Light-DOM component hosts are `display: block` by default.** A custom element
+is `display: inline` in plain CSS, which collapses a component used as a block
+container (a board, a card) to its content size. WebJs marks every LIGHT-DOM host
+`data-wj-host` and defaults it to `display: block` via one rule in the document
+head, wrapped in a dedicated low-priority cascade layer (`@layer webjs-host {
+:where([data-wj-host]) { display: block } }`), so this does not bite you. The
+layer is what keeps it overridable: any author style, INCLUDING a Tailwind
+utility (`class="flex"`, `grid`, `hidden`), wins over it (Tailwind's utilities
+live in a later layer). So sizing a host with `class="flex ..."` just works.
+`[hidden]` still hides a host (a same-layer `[hidden]` carve-out), so
+`?hidden=${cond}` works. If you WANT an inline light-DOM component (a badge in
+flowing text), opt out with a tag-prefixed rule `my-badge { display: inline }`.
+
+**Shadow-DOM hosts are NOT marked; set their display via `:host`.** A document
+rule targeting the host would override the shadow tree's own `:host` (the
+encapsulation-context criterion outranks layer and specificity for normal
+declarations), so WebJs does not touch shadow hosts. A shadow-DOM component
+controls its host display the idiomatic way, `:host { display: block }` (or
+`flex` / `grid` / `inline`) in `static styles`. Because the framework does not
+mark it, that `:host` is fully respected. A shadow component used as a block
+container should set `:host { display: block }` itself (a shadow host with no
+`:host` display stays `display: inline`).
+
+**Size the HOST, not just an inner wrapper.** The host custom element is the box
+the parent lays out. `display: block` (above) stops the inline-collapse, but a
+host that is a flex/grid ITEM in a centering parent (`flex justify-center`, `grid
+place-items-center`) is still sized to its content unless it carries width
+itself. So put the sizing classes on the host, not only on an inner `<div>`. In a
+light-DOM component the host is the custom element rendering the template, so give
+it `w-full max-w-[...]` (or render your outermost element AS the sized box); an
+inner `<div class="w-full">` alone resolves `w-full` against a collapsed host and
+the whole component shrinks. Symptom: a board or card that renders tiny even
+though its inner grid says `w-full max-w-[400px]`. Fix: move `w-full
+max-w-[400px]` onto the host.
+
+**An even grid uses `1fr` tracks, never `auto` rows.** The reflow bug (a cell
+grows when it gets content while the others shrink) comes from `auto`-sized grid
+rows: the row with content is taller. Size the tracks explicitly so every cell is
+an equal fraction regardless of content:
+
+```html
+<!-- a 3x3 board whose cells stay equal and square as it fills -->
+<div class="grid gap-2 aspect-square [grid-template-columns:repeat(3,1fr)] [grid-template-rows:repeat(3,1fr)]">
+  ${cells.map((c) => html`
+    <button class="grid place-items-center min-h-0 overflow-hidden text-[clamp(1rem,8cqi,3rem)]">${c}</button>
+  `)}
+</div>
+```
+
+- `aspect-ratio` (e.g. `aspect-square`) on the CONTAINER, plus `repeat(N,1fr)`
+  columns AND rows, makes every cell an equal square that does not change size as
+  marks are placed. Putting `aspect-square` on the CELLS instead is the common
+  mistake that produces uneven rows.
+- `min-h-0` + `overflow-hidden` on a cell stops its content from forcing the
+  track taller (the other half of the reflow bug). A grid/flex child has an
+  implicit `min-height: auto` that lets content push it past its track.
+- Size text relative to the cell (`clamp()`, container-query units `cqi`) so the
+  glyph scales with the board rather than dictating the cell size.
+
+**Verify by USING it, not by glancing at the first paint.** A layout bug only
+shows mid-interaction: render the app, then play through every state (fill the
+board, win, draw, reload) and confirm nothing resizes or shifts and the cells
+stay equal. See the layout-stability test recipe in `agent-docs/testing.md`.

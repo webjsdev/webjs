@@ -502,6 +502,24 @@ async function injectDSD(html, ctx, ancestors = [], dev) {
       // this.hidden on the host). Reading after render() captures all three.
       // Appending keeps the original tag byte-identical when nothing changed.
       opening = appendReflectedAttrs(opening, instance, presentAttrNames);
+      // Mark LIGHT-DOM component hosts so the framework default
+      // `@layer webjs-host { :where([data-wj-host]) { display: block } }`
+      // (injected once in the document head) applies at first paint. A custom
+      // element is `display:inline` by default, which collapses a component used
+      // as a block container (a board / card) until an author style intervenes.
+      // The low-priority `@layer` keeps it overridable by any author style,
+      // INCLUDING Tailwind's layered utilities (`class="flex"` wins). Emitted
+      // uniformly regardless of elision, so the elision on-vs-off differential is
+      // preserved.
+      //
+      // Shadow hosts are NOT marked: a document-level rule targeting the host
+      // beats the shadow tree's own `:host { display: … }` (the encapsulation-
+      // context criterion outranks both layer and specificity for normal
+      // declarations), so marking them would silently override the shadow
+      // author's `:host` display. Shadow components set their own host display
+      // via `:host` in `static styles` (the idiomatic mechanism), which the
+      // framework must not clobber.
+      if (!isShadow) opening = withHostMarker(opening);
       // Render the template to HTML. injectDSD recurses on the result so
       // nested custom elements (e.g. <theme-toggle> inside <blog-shell>)
       // get their own DSD pass.
@@ -635,6 +653,14 @@ async function injectDSD(html, ctx, ancestors = [], dev) {
       // path), not land in light DOM. Otherwise the client renders the error
       // into the shadow root while the light error box lingers underneath.
       const isShadowErr = /** @type any */ (Cls).shadow === true;
+      // Mark the LIGHT host here too, so a component whose SSR render() throws
+      // paints its error state as display:block (not the inline default),
+      // matching the success path. When an `async render()` rejects, it throws
+      // before the success-path withHostMarker (above) ran, so `opening` is still
+      // unmarked; when a later template render throws, the success marker already
+      // ran and this call is a no-op (withHostMarker is idempotent). Shadow hosts
+      // stay unmarked (their :host must win).
+      if (!isShadowErr) opening = withHostMarker(opening);
       let text;
       if (isShadowErr) {
         const rawStyles = /** @type any */ (Cls).styles;
@@ -1032,6 +1058,18 @@ function seedServerAttrs(instance, attrs) {
  * @param {Set<string>} presentAttrNames  lowercased names already in the source tag
  * @returns {string}
  */
+/**
+ * Add the component host marker (`data-wj-host`) to an opening tag, unless it
+ * is already present. Insert before the closing `>` the same way
+ * `appendReflectedAttrs` does. Idempotent so a re-processed tag is unchanged.
+ * @param {string} opening  the element's opening tag, ending in `>`
+ * @returns {string}
+ */
+function withHostMarker(opening) {
+  if (/\sdata-wj-host(?=[\s>=])/i.test(opening)) return opening;
+  return `${opening.slice(0, -1)} data-wj-host>`;
+}
+
 function appendReflectedAttrs(opening, instance, presentAttrNames) {
   if (!instance || typeof instance.getAttributeNames !== 'function') return opening;
   let extra = '';

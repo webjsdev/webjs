@@ -910,7 +910,7 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       'shadow-parent should have DSD with inline <style>');
 
     // shadow-inner nested inside should also have DSD with <style>
-    assert.match(html, /<shadow-inner><template shadowrootmode="open"><style>/,
+    assert.match(html, /<shadow-inner[^>]*><template shadowrootmode="open"><style>/,
       'shadow-inner nested inside parent should have DSD with inline <style>');
 
     // light-parent should have hydration marker, NOT DSD
@@ -920,13 +920,13 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
       'light-parent should NOT have DSD template');
 
     // light-inner should have hydration marker, NOT DSD
-    assert.match(html, /<light-inner><!--webjs-hydrate-->/,
+    assert.match(html, /<light-inner[^>]*><!--webjs-hydrate-->/,
       'light-inner should have hydration marker');
     assert.ok(!html.includes('<light-inner><template shadowrootmode'),
       'light-inner should NOT have DSD template');
 
     // Verify the inline styles contain actual CSS (not empty)
-    assert.match(html, /shadow-inner><template shadowrootmode="open"><style>[^<]+<\/style>/,
+    assert.match(html, /shadow-inner[^>]*><template shadowrootmode="open"><style>[^<]+<\/style>/,
       'shadow-inner DSD should contain non-empty inline styles');
   });
 

@@ -333,6 +333,34 @@ the styling invariant. When a utility bundle repeats across light-DOM
 components, extract it into a `lib/utils/ui.ts` helper returning an
 `` html`...` `` fragment, never a shared CSS class.
 
+### 7b. Reaching for `:host { display: block }` on a light-DOM component
+
+A custom element is `display: inline` by default, so a component used as
+a block container (a board, a card, a panel) collapses to its content
+size. In lit the reflex is to fix this with `:host { display: block }` in
+`static styles`. That works in lit because lit is **shadow-DOM-first**, so
+every component has a shadow root and `:host` always exists. A WebJs
+component is **light-DOM by default**, and a light-DOM component has NO
+shadow root, so **there is no `:host` to write** (a `static styles`
+`:host` block without `static shadow = true` does nothing, per #7).
+
+**The webjs-shaped fix is: nothing to do.** The framework already defaults
+every LIGHT-DOM host to `display: block`, by stamping the host with a
+`data-wj-host` attribute and injecting one low-priority head rule
+(`@layer webjs-host { :where([data-wj-host]) { display: block } }`). It is
+overridable by any author style, INCLUDING a Tailwind utility (`class="flex"`,
+`grid`, `hidden` win, because their layer is ordered after `webjs-host`), and
+`[hidden]` still hides. So do not reach for `:host` on a light component; just
+use Tailwind on the host or let the block default stand.
+
+For a **shadow-DOM** WebJs component (`static shadow = true`), it works
+exactly like lit: the framework does NOT mark shadow hosts (a document rule
+would override the shadow tree's `:host`), so you set `:host { display: block }`
+in `static styles` yourself and it is fully respected. One reflex to keep for
+a shadow block container: set that `:host` display (an unstyled shadow host
+stays `display: inline`). See `agent-docs/components.md` and
+`agent-docs/styling.md`.
+
 ### 8. `<slot>` timing differs across DOM modes
 
 Both modes accept `<slot>` syntax in templates and provide

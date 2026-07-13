@@ -101,6 +101,27 @@ class MyCard extends WebComponent {
 
     <p>Pick one pattern and stay consistent across a component.</p>
 
+    <h2>Layout: block hosts and even grids (the CSS traps)</h2>
+    <p>Two layout defects ship silently because the checker and the type-checker are static (they never render the pixels), so both only show once you render and interact. Both have a one-line fix.</p>
+    <p><strong>Light-DOM component hosts are <code>display: block</code> by default.</strong> A custom element is <code>display: inline</code> in plain CSS, which would collapse a light-DOM component used as a block container (a board, a card, a panel) to its content size. The framework marks every light host <code>data-wj-host</code> and injects one rule in a low-priority cascade layer, <code>@layer webjs-host &#123; :where([data-wj-host]) &#123; display: block &#125; &#125;</code>, so a container fills its parent. The layer keeps it overridable by any author style, including Tailwind utilities (<code>class="flex"</code>, <code>grid</code>, <code>hidden</code>) whose layer wins; a <code>[hidden]</code> carve-out keeps <code>?hidden</code> working. Want an inline light component? Opt out with <code>my-badge &#123; display: inline &#125;</code>.</p>
+    <p><strong>Shadow-DOM hosts are NOT marked.</strong> A document rule targeting the host would override the shadow tree's own <code>:host</code> display, so the framework leaves shadow hosts alone. A shadow-DOM component sets its host display the idiomatic way, <code>:host &#123; display: block &#125;</code> (or <code>flex</code> / <code>grid</code>) in <code>static styles</code>, which is fully respected. Set it for a shadow block container (an unstyled shadow host stays <code>display: inline</code>).</p>
+    <p><strong>Size the HOST, not just an inner wrapper.</strong> The host custom element is the box the parent lays out. <code>display: block</code> stops the inline-collapse, but a host that is a flex/grid item in a centering parent (<code>flex justify-center</code>, <code>grid place-items-center</code>) is still sized to its content unless it carries width itself. Put <code>w-full max-w-[...]</code> on the host, not only on an inner <code>&lt;div&gt;</code> (an inner <code>w-full</code> resolves against a collapsed host and the whole component shrinks). Symptom: a board or card renders tiny even though its inner grid says <code>w-full max-w-[400px]</code>.</p>
+    <p><strong>An even grid uses <code>1fr</code> tracks, never <code>auto</code> rows.</strong> The reflow bug (a cell grows when it gets content while the others shrink) comes from <code>auto</code>-sized rows. Put <code>aspect-ratio</code> on the CONTAINER, size the tracks explicitly, and cap the cells:</p>
+
+    <pre>&lt;!-- a 3x3 board whose cells stay equal and square as it fills --&gt;
+&lt;div class="grid gap-2 aspect-square [grid-template-columns:repeat(3,1fr)] [grid-template-rows:repeat(3,1fr)]"&gt;
+  \${cells.map((c) =&gt; html\`
+    &lt;button class="grid place-items-center min-h-0 overflow-hidden text-[clamp(1rem,8cqi,3rem)]"&gt;\${c}&lt;/button&gt;
+  \`)}
+&lt;/div&gt;</pre>
+
+    <ul>
+      <li><code>aspect-square</code> on the CONTAINER plus <code>repeat(N,1fr)</code> columns AND rows makes every cell an equal square that does not resize as marks land. Putting <code>aspect-square</code> on the CELLS is the common mistake that produces uneven rows.</li>
+      <li><code>min-h-0</code> + <code>overflow-hidden</code> on a cell stops its content from forcing the track taller (a grid child's implicit <code>min-height: auto</code> otherwise lets content push past its track).</li>
+      <li>Size text relative to the cell (<code>clamp()</code>, container-query units <code>cqi</code>) so the glyph scales with the board, not the reverse.</li>
+    </ul>
+    <p><strong>Verify by USING it.</strong> A layout bug only shows mid-interaction. Render the app, play through every state (fill the board, win, draw, reload), and confirm nothing resizes and the cells stay equal.</p>
+
     <h2>Opting in to shadow DOM</h2>
     <p>Set <code>static shadow = true</code> when you want <code>adoptedStyleSheets</code>-scoped styles, real <code>&lt;slot&gt;</code> projection, or third-party-embed-proof CSS isolation:</p>
 

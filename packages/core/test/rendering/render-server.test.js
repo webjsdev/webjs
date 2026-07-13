@@ -183,7 +183,7 @@ test('nested DSD: shadow parent → light child gets hydration marker', async ()
   assert.match(out, /<sl-parent><template shadowrootmode="open">/);
 
   // Light DOM child inside parent's DSD gets hydration marker, no DSD template
-  assert.match(out, /<sl-child><!--webjs-hydrate--><span>light content<\/span>/);
+  assert.match(out, /<sl-child data-wj-host><!--webjs-hydrate--><span>light content<\/span>/);
   assert.ok(!out.includes('<sl-child><template shadowrootmode'));
 });
 
@@ -204,7 +204,7 @@ test('nested DSD: light parent → shadow child gets DSD with inline styles', as
   const out = await renderToString(html`<ls-parent></ls-parent>`);
 
   // Parent is light DOM: hydration marker, no DSD template
-  assert.match(out, /<ls-parent><!--webjs-hydrate-->/);
+  assert.match(out, /<ls-parent data-wj-host><!--webjs-hydrate-->/);
 
   // Shadow child inside light parent gets its own DSD with styles
   assert.match(out, /<ls-child><template shadowrootmode="open">/);
@@ -228,8 +228,8 @@ test('nested DSD: light parent → light child gets hydration marker', async () 
   const out = await renderToString(html`<ll-parent></ll-parent>`);
 
   // Both are light DOM: hydration markers, no DSD templates
-  assert.match(out, /<ll-parent><!--webjs-hydrate-->/);
-  assert.match(out, /<ll-child><!--webjs-hydrate--><em>inner light<\/em>/);
+  assert.match(out, /<ll-parent data-wj-host><!--webjs-hydrate-->/);
+  assert.match(out, /<ll-child data-wj-host><!--webjs-hydrate--><em>inner light<\/em>/);
   assert.ok(!out.includes('<ll-child><template shadowrootmode'));
   assert.ok(!out.includes('<ll-parent><template shadowrootmode'));
 });

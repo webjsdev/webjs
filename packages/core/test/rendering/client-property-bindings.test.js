@@ -176,7 +176,10 @@ test('multiple data-webjs-prop-* attributes on the same element all decode', () 
   assert.equal(el.first, 1);
   assert.equal(el.second, 2);
   assert.equal(el.third, 3);
-  assert.equal(el.attributes.length, 0, 'all data-webjs-prop-* attributes stripped');
+  assert.ok(
+    ![...el.attributes].some((a) => a.name.startsWith('data-webjs-prop-')),
+    'all data-webjs-prop-* attributes stripped',
+  );
 });
 
 test('a malformed data-webjs-prop-* attribute is skipped, others still apply', () => {

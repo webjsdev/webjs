@@ -3,6 +3,8 @@ import { resolve, join, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolveBin } from '../lib/resolve-bin.js';
+import { dbGenerateTtyHint } from '../lib/db-hints.js';
+import { DESIGN_REMINDER, hasUiLayout } from '../lib/design-bar.js';
 import { checkNodeInline, nodeInlineMessage } from '../lib/node-preflight.js';
 import { loadAppEnv, resolvePort } from '../lib/port.js';
 import { planDevSupervisor } from '../lib/dev-supervisor.js';
@@ -45,7 +47,7 @@ const USAGE = `webjs commands:
                                                   (--no-hot: run in-process, no hot-reload supervisor)
   webjs start [--port 8080]                       Start production server (serves source directly, no build step)
   webjs test  [--server|--browser]                 Run server + browser tests
-  webjs check [--json]                            Run correctness checks on the app (--json emits structured violations)
+  webjs check [--json] [--clear-placeholders]     Run correctness checks (--json emits structured violations; --clear-placeholders strips scaffold markers)
   webjs mcp                                       Start the read-only MCP server (routes / actions / components / check)
   webjs doctor                                    Verify project health (Node, tsconfig, env, vendor pins, importmap coherence, @webjsdev versions, git hook, page/layout elision)
   webjs types                                     Generate .webjs/routes.d.ts (typed Route union + per-route params)
@@ -240,8 +242,31 @@ async function main() {
         );
         process.exit(1);
       }
-      const child = spawn(process.execPath, [dkPath, ...kitArgs, ...args], { stdio: 'inherit', cwd: process.cwd() });
-      child.on('exit', (code) => process.exit(code ?? 0));
+      // For `generate` off a non-TTY, capture stderr (teed straight through) so
+      // the rename-prompt dead-end can be detected: drizzle-kit reports it on
+      // stderr but exits 0, so the exit code is useless. Every other case keeps
+      // plain inherit, and an interactive terminal still answers the prompt.
+      const captureStderr = sub === 'generate' && !process.stdin.isTTY;
+      const child = spawn(process.execPath, [dkPath, ...kitArgs, ...args], {
+        stdio: captureStderr ? ['inherit', 'inherit', 'pipe'] : 'inherit',
+        cwd: process.cwd(),
+      });
+      let errText = '';
+      if (captureStderr && child.stderr) {
+        child.stderr.on('data', (chunk) => { errText += chunk; process.stderr.write(chunk); });
+      }
+      // Read the captured stderr on `close`, NOT `exit`: `exit` can fire before
+      // the stderr pipe has drained its final chunk, which would miss the prompt
+      // signature (and tee the raw error AFTER the hint). `close` fires once all
+      // stdio has flushed, and still carries the exit code.
+      child.on('close', (code) => {
+        // Surface the escape hatch when `generate` dead-ends on a rename prompt
+        // with no TTY, instead of leaving the raw drizzle-kit error as the last
+        // word. Interactive and successful runs print nothing extra.
+        const hint = dbGenerateTtyHint(sub, process.stdin.isTTY, errText);
+        if (hint) console.error(hint);
+        process.exit(code ?? 0);
+      });
       break;
     }
     case 'ui': {
@@ -372,6 +397,29 @@ async function main() {
     case 'check': {
       const { checkConventions, RULES } = await import('@webjsdev/server/check');
 
+      // --clear-placeholders: acknowledge the whole scaffold gallery in one
+      // command (strip the marker comment lines, keep the demo code), instead of
+      // one hand-edit per file. The gate then reflects only real violations.
+      if (rest.includes('--clear-placeholders')) {
+        const { clearPlaceholders } = await import('../lib/clear-placeholders.js');
+        const report = clearPlaceholders(process.cwd());
+        const total = report.reduce((n, r) => n + r.markers, 0);
+        if (report.length === 0) {
+          console.log('webjs check: no scaffold-placeholder markers found (nothing to clear).');
+        } else {
+          console.log(`webjs check: cleared ${total} scaffold-placeholder marker(s) across ${report.length} file(s):`);
+          for (const r of report) console.log(`  ${r.file}`);
+          console.log('\nThe demo code is kept. Delete any gallery route/module you do not want, then re-run `webjs check`.');
+          // Re-surface the design bar the cleared markers carried. The
+          // layout/home marker was the just-in-time "adapt this chrome" reminder;
+          // stripping it silently is how an app ends up shipping the scaffold
+          // shell. Print the bar so clearing the markers cannot quietly drop it,
+          // but only for a UI app (the api template has no layout / no chrome).
+          if (hasUiLayout(process.cwd())) console.log(DESIGN_REMINDER);
+        }
+        break;
+      }
+
       if (rest.includes('--rules')) {
         console.log('webjs check, correctness rules:');
         console.log('  Every rule catches code that is wrong to ship: a crash, a');
@@ -406,10 +454,26 @@ async function main() {
         console.log('webjs check: all checks pass ✓');
       } else {
         console.log(`webjs check: ${violations.length} violation(s) found\n`);
+        // A fresh scaffold trips no-scaffold-placeholder on every unadapted demo
+        // file at once. Printing an identical block per file drowns the real
+        // feature violations, so collapse the sentinel to ONE grouped summary
+        // (with a one-command clear) and print every other rule per-violation.
+        // The returned violations and --json are unchanged; only this human
+        // printout groups, so agents/tools still see one entry per file.
+        const PLACEHOLDER = 'no-scaffold-placeholder';
+        const placeholders = violations.filter((v) => v.rule === PLACEHOLDER);
         for (const v of violations) {
+          if (v.rule === PLACEHOLDER) continue;
           console.log(`  ✗ [${v.rule}] ${v.file}`);
           console.log(`    ${v.message}`);
           if (v.fix) console.log(`    Fix: ${v.fix}`);
+          console.log();
+        }
+        if (placeholders.length > 0) {
+          console.log(`  ✗ [${PLACEHOLDER}] ${placeholders.length} file(s) still carry scaffold example content:`);
+          for (const v of placeholders) console.log(`      ${v.file}`);
+          console.log('    Fix: adapt or delete each file, then remove its marker comment line.');
+          console.log('         Keeping the gallery? Run `webjs check --clear-placeholders` to clear all markers at once.');
           console.log();
         }
         process.exit(1);

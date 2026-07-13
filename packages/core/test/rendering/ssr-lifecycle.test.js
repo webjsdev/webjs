@@ -150,9 +150,10 @@ test('a component that neither reflects nor sets attributes keeps a byte-identic
   Plain.register('ssr-plain');
 
   const out = await renderToString(html`<ssr-plain name="x" class="y"></ssr-plain>`);
-  // The opening tag is exactly the source tag (no appended attributes), which
-  // is what preserves the elision on-vs-off differential invariant.
-  assert.match(out, /<ssr-plain name="x" class="y"><!--webjs-hydrate-->/, 'opening tag unchanged');
+  // The authored attributes are preserved verbatim and the framework appends
+  // only `data-wj-host` (a light host, uniformly marked). That uniform append is
+  // what preserves the elision on-vs-off differential invariant.
+  assert.match(out, /<ssr-plain name="x" class="y" data-wj-host><!--webjs-hydrate-->/, 'authored attrs kept, marker appended');
 });
 
 test('the server element shim mirrors lit: attributes getter, toggleAttribute, double-attach throws', async () => {

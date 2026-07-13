@@ -48,21 +48,39 @@ cover what you need, the full hosted docs are at **https://docs.webjs.dev**.
   logic in `modules/`.
 - **Use a unique design, and redesign means more than recolor (UI apps).** Give
   the app a design of its own (palette, typography, LAYOUT, and chrome) chosen
-  from what the app IS. Recoloring the scaffold and swapping the logo while
-  keeping its skeleton (a fixed top header with a Home link and a theme toggle,
-  the centered ~760px reading column, the "Built with webjs" footer) is NOT a
-  unique design. Decide from scratch whether this app even needs a header or
-  footer, what nav (if any), and what layout fits (a centered board, a full-bleed
-  dashboard, a split, a single card). The scaffold ships a
-  `webjs-scaffold-placeholder` marker on its footer, so `webjs check` fails until
-  you remove or replace the "Built with webjs" branding. Self-audit before
-  finishing: nothing should read as the scaffold example (no "Built with webjs"
-  footer, no leftover example nav, no default reading column unless it truly
-  fits). Keep only the design TOKENS and theme wiring in `app/layout.ts`
-  (infrastructure the ui kit reads) and restyle on top. Style with Tailwind
-  utilities wherever they reach, and use custom CSS only for what utilities
-  cannot express (@theme tokens, @keyframes, scrollbar, complex color-mix or
-  gradients). The `api` template has no UI, so this does not apply there.
+  from what the app IS. `app/layout.ts` ships as a MINIMAL shell (theme, design
+  tokens, and Tailwind infra, then `${children}` in a bare padded container) with
+  NO header, nav, footer, or reading column: design the app's own chrome from
+  scratch. Decide whether it needs a header at all, a nav (or none), a footer, a
+  sidebar, a centered reading column, or a full-bleed canvas, from what fits the
+  app. `LAYOUT-REFERENCE.md` at the project root is a complete worked layout to
+  learn the patterns from, then build your own. Two `webjs-scaffold-placeholder`
+  markers gate `webjs check`: the minimal shell ("design your layout from
+  scratch") and the palette block ("own the colors"), so check fails until each
+  is addressed. Keep the design TOKENS and theme wiring in `app/layout.ts`
+  (infrastructure the ui kit reads) and set the token VALUES to your own palette;
+  run `webjs check --clear-placeholders` to keep the starter palette
+  deliberately. Style with Tailwind utilities wherever they reach, and use custom
+  CSS only for what utilities cannot express (@theme tokens, @keyframes,
+  scrollbar, complex color-mix or gradients). The `api` template has no UI, so
+  this does not apply there.
+- **Render the app and LOOK before you call UI work done (every agent, not just one harness).**
+  You write CSS blind, so a layout or design defect ships silently: `webjs check`
+  and `webjs typecheck` pass even when a component collapses, grid cells are
+  uneven, the layout resizes as it fills, or the app just kept the scaffold's
+  colors. Static tools give no failure signal for this. The only thing that
+  catches it is rendering the app and looking at the pixels. So for ANY page,
+  layout, or component work: run it (`webjs dev`), open every route you changed in
+  a real browser (drive it with your harness's browser tool or MCP if it has one,
+  otherwise open it yourself and screenshot), and PLAY THROUGH every state (empty,
+  filled, win, draw, reload, narrow and wide, light and dark). Confirm nothing
+  collapses or reflows, that cells stay equal, that the design is the app's OWN,
+  and that both themes read. Ship a real-browser test (`webjs test --browser`) for
+  the mechanical floor (measure `getBoundingClientRect()` and assert cells stay
+  equal across a move). Fix and re-render until it holds, then state in your final
+  message what you rendered and confirmed. Claude Code additionally ENFORCES this
+  via the `webjs-design-review` skill plus a Stop hook, but the discipline is
+  harness-agnostic and this rule is the source of truth for every agent.
 - **Only three templates exist:** `webjs create <name>` (default full-stack),
   `--template api`, `--template saas`. The CLI rejects any other `--template`
   value. Pick:

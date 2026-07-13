@@ -455,6 +455,45 @@ Both modes are fully SSR'd (shadow DOM via Declarative Shadow DOM, light
 DOM as direct HTML with a `<!--webjs-hydrate-->` marker) and hydrate
 without flash on the client.
 
+### Light-DOM hosts are `display: block` by default
+
+A custom element is `display: inline` in plain CSS, so a light-DOM component
+used as a block container (a board, a card, a panel) would otherwise collapse
+to its content size. WebJs marks every SSR'd and client-upgraded LIGHT-DOM host
+with a `data-wj-host` attribute and injects ONE rule into the document head,
+wrapped in a dedicated low-priority cascade layer, `@layer webjs-host {
+:where([data-wj-host]) { display: block } }`, so a container component fills
+its parent as expected. The layer (not the zero-specificity `:where()`) is
+what keeps it overridable: any author style wins, INCLUDING a Tailwind
+utility (`class="flex"`, `grid`, `hidden`) whose layer is ordered after
+`webjs-host`. A bare unlayered rule was NOT enough (unlayered beats layered
+regardless of specificity, so it silently overrode `class="flex"`). A same-layer
+`[hidden]` carve-out keeps `[hidden]` / `?hidden=${cond}` working. If you WANT an
+inline light-DOM component (a badge in flowing text), opt out with
+`my-badge { display: inline }` (tag-prefixed, per the class-prefix rule below).
+The marker is uniform across every light host, so it does not perturb the
+display-only elision verdict (the SSR output stays byte-identical with JS on or
+off).
+
+**Shadow-DOM hosts are NOT marked.** A document-level rule targeting the host
+would override the shadow tree's own `:host` display (the encapsulation-context
+criterion outranks layer and specificity for normal declarations), so WebJs
+leaves shadow hosts alone. A shadow component sets its host display the idiomatic
+way, `:host { display: block }` (or `flex` / `grid` / `inline`) in `static
+styles`, and because the framework does not mark it, that `:host` is fully
+respected. Set `:host { display: block }` for a shadow component used as a block
+container (an unstyled shadow host stays `display: inline`).
+
+**Size the HOST, not just an inner wrapper.** The host custom element is the box
+its parent lays out. `display: block` stops the inline-collapse, but a host that
+is a flex/grid ITEM in a centering parent (`flex justify-center`, `grid
+place-items-center`) is still sized to its content unless it carries width
+itself. So put `w-full max-w-[...]` on the host (the render root), not only on an
+inner `<div>` (an inner `w-full` resolves against a collapsed host and the whole
+component renders tiny). Symptom: a board or card renders small even though its
+inner grid says `w-full max-w-[400px]`. See `agent-docs/styling.md` for the
+even-grid / no-reflow layout recipes.
+
 ### Class-prefix rule for light-DOM components
 
 If a light-DOM component authors its own custom CSS (a `<style>` block

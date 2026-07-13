@@ -62,7 +62,7 @@ export default () => html\`<x-counter></x-counter>\`;`,
     assert.doesNotMatch(boot, /\/app\/page\.ts/, 'the import-only page module is dropped');
     assert.doesNotMatch(boot, /\/app\/layout\.ts/, 'the inert layout module is dropped');
     // Progressive enhancement is unaffected: the component is still SSR'd.
-    assert.match(html, /<x-counter>/, 'the component still renders server-side');
+    assert.match(html, /<x-counter[^>]*>/, 'the component still renders server-side');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
