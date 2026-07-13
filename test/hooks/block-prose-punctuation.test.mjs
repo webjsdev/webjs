@@ -106,6 +106,21 @@ test('allows every CLI subcommand family (kept lowercase)', () => {
   assert.equal(runContent(`${B} help prints the usage banner.`).status, 0);
 });
 
+test('allows a package.json script value ending in `webjs <subcmd>` before a quote', () => {
+  // A JSON script line puts a closing quote right after the subcommand, with no
+  // trailing flag. That is a command, not brand prose, so it must pass (#956).
+  const pkg = `{\n  "scripts": { "start": "${B} start", "test": "${B} test" }\n}`;
+  assert.equal(runContent(pkg).status, 0);
+  // Single-quoted shell form is a command too.
+  assert.equal(runContent(`command = '${B} dev'`).status, 0);
+});
+
+test('still blocks genuine lowercase-brand prose (counterfactual for #956)', () => {
+  // The quote widening must NOT let real brand prose through: the brand followed
+  // by a verb is not a `ship` subcommand, so it still blocks.
+  assert.equal(runContent(`${B} ships a listener.`).status, 2);
+});
+
 test('allows the brand as a domain / package / config-key / env / repo token', () => {
   assert.equal(runContent(`Set it in ${B}.dev config.`).status, 0);
   assert.equal(runContent(`Import from @${B}dev/core.`).status, 0);
