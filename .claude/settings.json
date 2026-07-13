@@ -42,6 +42,10 @@
           },
           {
             "type": "command",
+            "command": ".claude/hooks/require-scaffold-with-src.sh"
+          },
+          {
+            "type": "command",
             "command": ".claude/hooks/require-bun-parity-with-runtime-src.sh"
           }
         ]
