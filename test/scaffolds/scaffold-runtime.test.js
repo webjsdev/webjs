@@ -46,12 +46,20 @@ test('bun scaffold: package.json scripts, trustedDependencies, lockfile flavor',
     // The Tailwind compile MUST run under Bun on a Bun app (#947): the oven/bun:1
     // image has no Node and no npm, so `npm run css:build` or a bare (node-shebang)
     // `tailwindcss` would abort the boot. It runs via `bun --bun tailwindcss` in
-    // the css:build script AND the before / parallel hooks (never `npm run`).
-    assert.equal(p.scripts['css:build'], 'bun --bun tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify');
-    assert.deepEqual(p.webjs.start.before, ['webjs db migrate', 'bun --bun tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify']);
-    assert.deepEqual(p.webjs.dev.parallel, ['bun --bun tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch']);
-    for (const step of [...p.webjs.dev.before, ...p.webjs.start.before]) {
-      assert.doesNotMatch(step, /npm run/, 'no npm in a Bun app before-step (the image has no npm)');
+    // the css:build script AND the before / regenerate hooks (never `npm run`).
+    const bunCompile = 'bun --bun tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify';
+    assert.equal(p.scripts['css:build'], bunCompile);
+    assert.deepEqual(p.webjs.start.before, ['webjs db migrate', bunCompile]);
+    // On-request regenerate (#967), runtime-aware, replaces the --watch parallel.
+    assert.equal(p.webjs.dev.parallel, undefined, 'no --watch parallel task (#967)');
+    assert.deepEqual(p.webjs.dev.regenerate, [{
+      output: 'public/tailwind.css',
+      command: bunCompile,
+      inputs: ['app', 'components', 'modules', 'lib', 'public/input.css'],
+    }]);
+    const regenCmds = p.webjs.dev.regenerate.map((r) => r.command);
+    for (const step of [...p.webjs.dev.before, ...p.webjs.start.before, ...regenCmds]) {
+      assert.doesNotMatch(step, /npm run/, 'no npm in a Bun app before/regenerate step (the image has no npm)');
     }
   } finally {
     restore();

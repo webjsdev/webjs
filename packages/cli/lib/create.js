@@ -348,12 +348,11 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   // (not the browser runtime), so it renders styled with JavaScript off. The
   // compiler is a node-shebang CLI, so a Bun app (whose Dockerfile is a node-less
   // `oven/bun:1` image, #595) must run it under Bun via `bun --bun`; a Node app
-  // runs it directly (the before / parallel steps get node_modules/.bin on PATH
+  // runs it directly (the before / regenerate steps get node_modules/.bin on PATH
   // via envWithLocalBin). Deliberately NOT `npm run css:build` in the hooks: the
   // Bun image has no npm, so that step would exit 127 and abort the boot.
   const twBin = isBun ? 'bun --bun tailwindcss' : 'tailwindcss';
   const cssBuildCmd = `${twBin} -i ./public/input.css -o ./public/tailwind.css --minify`;
-  const cssWatchCmd = `${twBin} -i ./public/input.css -o ./public/tailwind.css --watch`;
   const appDir = join(cwd, name);
   if (existsSync(appDir)) {
     console.error(`Error: directory '${name}' already exists.`);
@@ -489,15 +488,31 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     // migrate` (idempotent, a no-op when the db is current), so a freshly
     // generated migration is applied without a manual step (#725). For a UI
     // template it ALSO compiles Tailwind in `before` so a freshly cloned app is
-    // styled on the very first boot with no manual step, and runs the Tailwind
-    // `--watch` under `parallel` for live recompiles in dev. The compile command
-    // is the runtime-aware `cssBuildCmd` (a Bun app runs it under Bun, since its
+    // styled on the very first boot with no manual step. The compile command is
+    // the runtime-aware `cssBuildCmd` (a Bun app runs it under Bun, since its
     // image has no npm or Node), NOT `npm run css:build`. The api template has no
     // CSS, so it gets neither.
+    //
+    // In dev the static public/tailwind.css is kept fresh by `dev.regenerate`
+    // (#967), NOT a background `tailwindcss --watch`. A watch that dies mid-
+    // session or never starts serves stale/missing CSS with no error (a newly
+    // added utility class has no backing rule, so the app renders unstyled
+    // locally while prod is fine). `regenerate` instead recompiles ON REQUEST
+    // when the output is older than a source (or missing): the framework rebuilds
+    // it before serving `/public/tailwind.css`, so there is no watch process to
+    // die and no staleness window. Same `cssBuildCmd` as prod, so dev and prod
+    // resolve classes identically (nothing to diverge). `inputs` mirrors the
+    // input.css @source globs (the dirs Tailwind scans for classes).
     webjs: {
       dev: {
         before: isApi ? ['webjs db migrate'] : ['webjs db migrate', cssBuildCmd],
-        ...(isApi ? {} : { parallel: [cssWatchCmd] }),
+        ...(isApi ? {} : {
+          regenerate: [{
+            output: 'public/tailwind.css',
+            command: cssBuildCmd,
+            inputs: ['app', 'components', 'modules', 'lib', 'public/input.css'],
+          }],
+        }),
       },
       start: { before: isApi ? ['webjs db migrate'] : ['webjs db migrate', cssBuildCmd] },
     },
@@ -1226,8 +1241,9 @@ export default function RootLayout({ children }: { children: unknown }) {
       })();
     </script>
     <!-- Tailwind: a STATIC stylesheet compiled from public/input.css to
-         public/tailwind.css by css:build / css:watch (run automatically by the
-         dev and start tasks). A real stylesheet, so the app is fully styled with
+         public/tailwind.css by css:build (run automatically by the dev and start
+         tasks; in dev it is also recompiled on request when a source changes, so
+         it never goes stale). A real stylesheet, so the app is fully styled with
          JavaScript DISABLED (no in-browser compile). -->
     <link rel="stylesheet" href="/public/tailwind.css">
     <style>

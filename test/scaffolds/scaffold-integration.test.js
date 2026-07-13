@@ -324,13 +324,21 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // migrated AND fully styled with no manual step.
     // The before-step calls the Tailwind CLI DIRECTLY (not `npm run css:build`),
     // so it works on the node-less / npm-less Bun image too (#947); node_modules/.bin
-    // is on PATH for before/parallel steps via envWithLocalBin.
+    // is on PATH for before/regenerate steps via envWithLocalBin.
     assert.deepEqual(pkg.webjs?.dev?.before, ['webjs db migrate', 'tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify'],
       'webjs.dev.before runs db migrate then the Tailwind compile (#725, #947)');
     assert.deepEqual(pkg.webjs?.start?.before, ['webjs db migrate', 'tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify'],
       'webjs.start.before runs db migrate then the Tailwind compile');
-    assert.deepEqual(pkg.webjs?.dev?.parallel, ['tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch'],
-      'webjs.dev.parallel runs the Tailwind watcher (#947)');
+    // Dev keeps the static CSS fresh via on-request regenerate (#967), NOT a
+    // background `tailwindcss --watch` (which could die mid-session and serve
+    // stale CSS). So there is no dev.parallel watcher, and a regenerate rule
+    // rebuilds public/tailwind.css on request when a source is newer.
+    assert.equal(pkg.webjs?.dev?.parallel, undefined, 'no --watch parallel task (#967)');
+    assert.deepEqual(pkg.webjs?.dev?.regenerate, [{
+      output: 'public/tailwind.css',
+      command: 'tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify',
+      inputs: ['app', 'components', 'modules', 'lib', 'public/input.css'],
+    }], 'webjs.dev.regenerate recompiles the static CSS on request (#967)');
     assert.equal(pkg.scripts['css:build'], 'tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify');
     assert.ok(pkg.devDependencies['@tailwindcss/cli'], 'the Tailwind CLI is a devDependency');
     assert.ok(pkg.dependencies['@webjsdev/core']);
