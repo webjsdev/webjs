@@ -129,6 +129,34 @@ describe('webjs vendor CLI', () => {
     assert.match(stderr, /Unknown vendor subcommand/);
     assert.match(stderr, /webjs vendor pin/);
   });
+
+  test('pin names a found-but-uninstalled specifier instead of "no bare imports" (#953)', async () => {
+    // A package imported from client code but not installed under node_modules
+    // (a CDN-only import like three). The scan finds it, the version gate
+    // drops it, and the CLI must NAME it and point at `npm install`, not claim
+    // there were none. No network: an unresolvable specifier never hits jspm.
+    const dir = await mkdtemp(join(tmpdir(), 'webjs-vendor-cli-drop-'));
+    try {
+      await symlink(join(REPO_ROOT, 'node_modules'), join(dir, 'node_modules'));
+      await writeFile(join(dir, 'package.json'), '{"name":"tmp","version":"0.0.0"}');
+      await mkdir(join(dir, 'app'), { recursive: true });
+      await writeFile(join(dir, 'app', 'page.ts'), `import * as THREE from 'three';\nexport default () => 'ok';`);
+
+      const { code, stdout, stderr } = await runCli(['vendor', 'pin'], dir);
+      const out = stdout + stderr;
+      assert.equal(code, 1, `expected non-zero exit, got ${code}: ${out}`);
+      assert.doesNotMatch(out, /no bare-specifier npm imports found/,
+        'must NOT print the misleading "none found" message');
+      assert.match(out, /could not resolve a version/);
+      assert.match(out, /three/, 'names the dropped specifier');
+      assert.match(out, /npm install three/, 'points at the remedy');
+      // No pin file written for an all-unresolvable set.
+      const { existsSync } = await import('node:fs');
+      assert.equal(existsSync(join(dir, '.webjs', 'vendor', 'importmap.json')), false);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 // #448: the opt-in pins `webjs vendor pin` writes must be committable. A

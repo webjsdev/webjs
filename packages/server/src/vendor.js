@@ -1176,9 +1176,16 @@ async function pruneOrphans(appDir, expected) {
  * instead. When the app has zero bare-specifier imports at all
  * (scanned source produced nothing), returns
  * `{ pins: [], pruned: [], downloaded: 0, noBareImports: true }`
- * WITHOUT writing the pin file. Callers that need to surface a
- * non-zero exit code key off `failed` or `noBareImports`; both
- * are absent on the success path.
+ * WITHOUT writing the pin file. When the scan DID find specifiers but
+ * every one was dropped because no local version resolved (the package
+ * is not installed under `node_modules`), returns
+ * `{ pins: [], pruned: [], downloaded: 0, droppedUnresolvable: [...] }`
+ * (also WITHOUT a pin file), so the caller can name the found-but-
+ * uninstalled specifiers instead of claiming there were none. A
+ * partial pin (some resolved, some dropped) still writes the file and
+ * carries `droppedUnresolvable` alongside `pins`. Callers that need to
+ * surface a non-zero exit code key off `failed`, `noBareImports`, or an
+ * all-dropped `droppedUnresolvable`; all are absent on a clean success.
  *
  * The `from` option mirrors importmap-rails's `bin/importmap pin foo
  * --from jsdelivr`. Default `jspm` resolves to jspm.io; other values
@@ -1196,6 +1203,7 @@ async function pruneOrphans(appDir, expected) {
  *   provider?: string,
  *   failed?: boolean,
  *   noBareImports?: boolean,
+ *   droppedUnresolvable?: string[],
  *   attemptedInstalls?: string[],
  * }>}
  */
@@ -1224,12 +1232,23 @@ export async function pinAll(appDir, opts = {}) {
    * @type {Map<string, { pkg: string, version: string, subpath: string }>}
    */
   const partsByInstall = new Map();
+  /**
+   * Bare specifiers the scan FOUND but that were dropped because no local
+   * version could be resolved (the package is not installed under the app's
+   * `node_modules`). Kept distinct from "scan found nothing" so the CLI can
+   * name them and point at the remedy instead of claiming there were none.
+   * @type {string[]}
+   */
+  const droppedUnresolvable = [];
   for (const spec of bare) {
     if (BUILTIN.has(spec)) continue;
     const pkg = extractPackageName(spec);
     if (!pkg || BUILTIN.has(pkg) || FRAMEWORK_SERVER_ONLY.has(pkg)) continue;
     const version = getPackageVersion(pkg, appDir);
-    if (!version) continue;
+    if (!version) {
+      droppedUnresolvable.push(spec);
+      continue;
+    }
     const subpath = spec.slice(pkg.length);
     const install = `${pkg}@${version}${subpath}`;
     installs.push(install);
@@ -1350,12 +1369,22 @@ export async function pinAll(appDir, opts = {}) {
   // -imports filter, so the file exists but does nothing. The CLI
   // surfaces this as a clearer "no bare imports found" message.
   if (installs.length === 0) {
+    // Distinguish the two empty-set causes the CLI must report differently:
+    // the scan genuinely found nothing (noBareImports) vs it found specifiers
+    // that were all dropped for a missing local version (droppedUnresolvable).
+    if (droppedUnresolvable.length > 0) {
+      return { pins, pruned: [], downloaded, droppedUnresolvable, provider: from };
+    }
     return { pins, pruned: [], downloaded, noBareImports: true, provider: from };
   }
 
   await writePinFile(appDir, importmap, integrity, from);
   const pruned = await pruneOrphans(appDir, expected);
-  return { pins, pruned, downloaded, provider: from };
+  // Some specifiers may have pinned while others were dropped for a missing
+  // version; surface the dropped ones so a partial pin is not silent.
+  return droppedUnresolvable.length > 0
+    ? { pins, pruned, downloaded, provider: from, droppedUnresolvable }
+    : { pins, pruned, downloaded, provider: from };
 }
 
 /**

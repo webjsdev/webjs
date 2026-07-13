@@ -953,6 +953,39 @@ test('pinAll: returns noBareImports without writing pin file when no bare import
   }
 });
 
+test('pinAll: reports found-but-uninstalled specifiers instead of noBareImports (#953)', async () => {
+  // The scan FINDS the specifier but the version gate drops it (no local
+  // install), so installs is empty. Previously that was reported identically
+  // to "scan found nothing" (noBareImports), which misled the user into
+  // thinking their import was never seen. It must now come back as
+  // droppedUnresolvable, naming the specifiers, with NO noBareImports and no
+  // pin file. No network: an uninstalled package never reaches jspm.
+  clearVendorCache();
+  const dir = await makeTempAppWithSource({
+    'app/page.ts': `import * as THREE from 'three';\nimport { OrbitControls } from 'three/addons/controls/OrbitControls.js';`,
+  });
+  try {
+    const result = await pinAll(dir);
+    assert.equal(result.noBareImports, undefined, 'must NOT claim there were no bare imports');
+    assert.ok(Array.isArray(result.droppedUnresolvable), 'droppedUnresolvable must be an array');
+    // Counterfactual anchor: reverting the version-gate collection drops this
+    // set back to undefined and reinstates the misleading noBareImports path.
+    assert.ok(
+      result.droppedUnresolvable.includes('three'),
+      `dropped set should name three, got ${JSON.stringify(result.droppedUnresolvable)}`,
+    );
+    assert.ok(
+      result.droppedUnresolvable.some((s) => s.startsWith('three/addons/')),
+      'dropped set should include the three/addons subpath specifier',
+    );
+    assert.deepEqual(result.pins, [], 'nothing pinned');
+    const file = await readPinFile(dir);
+    assert.equal(file, null, 'no pin file when every found specifier is unresolvable');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('pinAll: refuses to write empty pin file when every install fails', { skip: !NETWORK_OK }, async () => {
   // Regression: previously pinAll wrote `{ imports: {} }` when every
   // jspm.io call failed (e.g. brand-new package version not yet on

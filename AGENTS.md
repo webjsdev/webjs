@@ -52,6 +52,8 @@ cd ../<repo>-<slug>          # do ALL work for the task here
 # ... commit + push from this worktree; after merge: git worktree remove ../<repo>-<slug>
 ```
 
+**A fresh worktree has NO `node_modules`** (git worktrees do not copy it), so running an app from one (`webjs dev` / `webjs start`, the test runner, a scaffolded app) fails to resolve `@webjsdev/*` until you install or link it. `webjs doctor` warns for this exact case (#954) and `webjs dev` / `webjs start` print the cause + remedy instead of a raw `ERR_MODULE_NOT_FOUND`. Fix by installing in the worktree (`npm install`) or symlinking the primary checkout's modules (`ln -s ../<primary-checkout>/node_modules node_modules`). When only a subset of `@webjsdev/*` packages was edited, link those from the worktree and the rest from the primary checkout so a built `dist/` (e.g. `@webjsdev/core`) still resolves.
+
 Git enforces one-branch-per-worktree, so separate worktrees make the collision impossible. Before any commit in a shared checkout, confirm `git branch --show-current` is still the branch you created; if it moved, you are colliding, switch to a worktree. A lone agent in a clean checkout may still use a plain branch. The repo's `.hooks/pre-commit` additionally BLOCKS a published-library (`core`/`server`/`cli`/`mcp`/`ui`/`intellisense`) version bump on any non-`chore/release-*` branch, the canonical wrong-branch-release symptom.
 
 **Cleanup is automatic after a merge.** The `.claude/hooks/cleanup-merged-worktree.sh` PostToolUse hook fires after any `gh pr merge` and removes each linked worktree whose branch is merged AND whose tree is clean, so a merged branch's worktree never leaks (accumulated stale worktrees are exactly what it prevents). It is conservative: it KEEPS anything with uncommitted changes, an unmerged branch, or the worktree you ran the merge from (you cannot remove your current directory, so `cd` out and `git worktree remove` it yourself), and never touches the primary checkout. Disable with `WEBJS_NO_WORKTREE_CLEANUP=1`. Test: `test/hooks/cleanup-merged-worktree.test.mjs`.
@@ -460,7 +462,7 @@ webjs start  [--port N]            # prod server; source IS the runtime, plain H
 webjs test   [--server] [--browser] [--watch]
 webjs check  [--rules] [--json] [--clear-placeholders]  # correctness validator (report-only, no autofix); --json for an agent loop; --clear-placeholders strips scaffold markers in one shot
 webjs mcp                          # read-only MCP: routes, actions (RPC hashes), components, check
-webjs doctor                       # project-health checklist (incl. a page/layout elision advisory + a scaffold-shell design advisory that warns when a UI app still rides the scaffold chrome); non-zero exit on a hard fail
+webjs doctor                       # project-health checklist (incl. a framework-resolve check that warns when @webjsdev/core can't be resolved from the app dir, the fresh-worktree-without-node_modules trap #954; a page/layout elision advisory + a scaffold-shell design advisory that warns when a UI app still rides the scaffold chrome); non-zero exit on a hard fail
 webjs types                        # generate .webjs/routes.d.ts (typed Route union + per-route params, #258)
 webjs typecheck [tsc args...]      # the project's own tsc --noEmit
 webjs create <name> [--template api|saas]

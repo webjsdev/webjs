@@ -77,8 +77,10 @@ test('a well-configured app produces no failures', async () => {
   }));
   write(dir, '.env.example', 'DATABASE_URL=\nAUTH_SECRET=\n');
   write(dir, '.env', 'DATABASE_URL=file:./dev.db\nAUTH_SECRET=abc\n');
-  // node_modules installs satisfying `latest`.
-  write(dir, 'node_modules/@webjsdev/core/package.json', JSON.stringify({ version: '0.7.4' }));
+  // node_modules installs satisfying `latest`. core carries a resolvable entry
+  // (main + index.js) so a well-configured app is also green on framework-resolve.
+  write(dir, 'node_modules/@webjsdev/core/package.json', JSON.stringify({ version: '0.7.4', main: 'index.js' }));
+  write(dir, 'node_modules/@webjsdev/core/index.js', 'export const x = 1;\n');
   write(dir, 'node_modules/@webjsdev/server/package.json', JSON.stringify({ version: '0.8.0' }));
 
   const results = await runDoctorChecks(dir, baseOpts());
@@ -88,6 +90,7 @@ test('a well-configured app produces no failures', async () => {
   assert.equal(byName(results, 'env-drift').status, 'pass');
   assert.equal(byName(results, 'vendor-pin').status, 'pass');
   assert.equal(byName(results, 'webjs-versions').status, 'pass');
+  assert.equal(byName(results, 'framework-resolve').status, 'pass');
 });
 
 // ---------------------------------------------------------------------------
@@ -214,6 +217,55 @@ test('version check PASSES when installed satisfies the declared range', async (
   write(dir, 'node_modules/@webjsdev/cli/package.json', JSON.stringify({ version: '0.10.1' }));
   const results = await runDoctorChecks(dir, baseOpts({ nodeVersion: '24.0.0' }));
   assert.equal(byName(results, 'webjs-versions').status, 'pass');
+});
+
+// ---------------------------------------------------------------------------
+// framework resolvability (#954): the fresh-git-worktree trap.
+// ---------------------------------------------------------------------------
+const { frameworkResolves, checkFrameworkResolves } = await import(
+  resolve(CLI_LIB_DIR, 'doctor.js')
+);
+
+/** A tmp app whose node_modules has a genuinely resolvable @webjsdev/core. */
+function appWithResolvableCore() {
+  const dir = tmpDir();
+  write(dir, 'package.json', JSON.stringify({ name: 'app' }));
+  write(dir, 'node_modules/@webjsdev/core/package.json', JSON.stringify({
+    name: '@webjsdev/core', version: '0.7.4', main: 'index.js',
+  }));
+  write(dir, 'node_modules/@webjsdev/core/index.js', 'export const x = 1;\n');
+  return dir;
+}
+
+test('framework-resolve PASSES (silent) when @webjsdev/core resolves from the app dir', async () => {
+  const dir = appWithResolvableCore();
+  assert.equal(frameworkResolves(dir), true);
+  const results = await runDoctorChecks(dir, baseOpts({ nodeVersion: '24.0.0' }));
+  assert.equal(byName(results, 'framework-resolve').status, 'pass');
+});
+
+test('framework-resolve WARNS naming the worktree cause when node_modules is absent in a worktree', async () => {
+  const dir = tmpDir();
+  write(dir, 'package.json', JSON.stringify({ name: 'app' }));
+  // A git worktree checks out `.git` as a FILE (a gitdir pointer), not a dir.
+  write(dir, '.git', 'gitdir: /some/primary/.git/worktrees/x\n');
+  // Counterfactual anchor: with a resolvable core this would PASS; here there
+  // is no node_modules at all, the exact #954 condition.
+  assert.equal(frameworkResolves(dir), false);
+  const r = checkFrameworkResolves(dir);
+  assert.equal(r.status, 'warn');
+  assert.match(r.message, /git worktree/);
+  assert.match(r.message, /node_modules/);
+  assert.match(r.fix, /symlink node_modules|npm install/);
+});
+
+test('framework-resolve WARNS generically when node_modules is absent outside a worktree', async () => {
+  const dir = tmpDir();
+  write(dir, 'package.json', JSON.stringify({ name: 'app' }));
+  const r = checkFrameworkResolves(dir);
+  assert.equal(r.status, 'warn');
+  assert.doesNotMatch(r.message, /git worktree/);
+  assert.match(r.message, /no node_modules/);
 });
 
 // ---------------------------------------------------------------------------
