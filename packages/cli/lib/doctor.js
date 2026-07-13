@@ -903,6 +903,10 @@ function newestMtimeMs(abs) {
   try { entries = readdirSync(abs, { withFileTypes: true }); } catch { return newest; }
   for (const e of entries) {
     if (e.name.startsWith('.') || FRESHNESS_IGNORE.has(e.name)) continue;
+    // Skip symlinks: following one can cycle into unbounded recursion (a stack
+    // overflow here) or escape into node_modules. Same tradeoff as the server
+    // walker in dev-regenerate.js.
+    if (e.isSymbolicLink()) continue;
     const m = newestMtimeMs(join(abs, e.name));
     if (m > newest) newest = m;
   }

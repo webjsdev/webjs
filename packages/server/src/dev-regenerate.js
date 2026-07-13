@@ -108,6 +108,11 @@ async function maxMtimeMs(abs) {
   }
   for (const e of entries) {
     if (e.name.startsWith('.') || IGNORE_DIRS.has(e.name)) continue;
+    // Skip symlinks entirely: following one can cycle (a link back to an
+    // ancestor) into unbounded recursion, or escape into node_modules via a
+    // renamed link. A symlinked source file is rare in an app tree; not
+    // counting its mtime is a safe tradeoff for a walk that cannot hang.
+    if (e.isSymbolicLink()) continue;
     const m = await maxMtimeMs(join(abs, e.name));
     if (m > newest) newest = m;
   }
@@ -201,6 +206,26 @@ export async function maybeRegenerate(appDir, relPath, rules, opts = {}) {
   } finally {
     inFlight.delete(key);
   }
+}
+
+/**
+ * Whether a dev-watcher filename is a regenerate OUTPUT (#967). A regenerate
+ * output is a build product the dev server itself writes on request, so a write
+ * to it must NOT trigger a rebuild + SSE reload: that would spuriously reload
+ * the page mid-navigation (breaking a soft-nav / streaming interaction) and,
+ * worse, could reload -> refetch -> recompile -> reload. Same rationale as the
+ * `db/dev.db` carve-out in `shouldIgnoreWatchPath`. `fs.watch` reports a path
+ * relative to the watched root with OS separators, so it is normalized to `/`
+ * before matching the rule's already-normalized `output`.
+ *
+ * @param {string} filename  `event.filename` from the dev watcher (root-relative)
+ * @param {RegenerateRule[]} rules
+ * @returns {boolean}
+ */
+export function isRegenerateOutputPath(filename, rules) {
+  if (!filename || !rules || !rules.length) return false;
+  const norm = String(filename).replace(/\\/g, '/');
+  return rules.some((r) => r.output === norm);
 }
 
 /** Test-only: clear the in-flight coalescing map between cases. */

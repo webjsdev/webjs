@@ -27,7 +27,7 @@ import {
   hashFile,
 } from './actions.js';
 import { registerSeedHooks } from './action-seed.js';
-import { readRegenerateRules, maybeRegenerate } from './dev-regenerate.js';
+import { readRegenerateRules, maybeRegenerate, isRegenerateOutputPath } from './dev-regenerate.js';
 import { stripTypeScript, ensureStripper } from './ts-strip.js';
 import { defaultLogger } from './logger.js';
 import { assertNodeVersion } from './node-version.js';
@@ -1532,6 +1532,11 @@ export async function createRequestHandler(opts) {
      * startServer to a freshly-connected SSE client so the overlay shows even
      * after a navigation, not only on the breaking edit. Always null in prod. */
     getLastDevError: () => state.lastDevError,
+    /** Whether a dev-watcher filename is a `webjs.dev.regenerate` OUTPUT (#967),
+     * so `startServer`'s file watcher (a different scope, with no access to
+     * `state`) can skip a build product the server itself writes and avoid a
+     * spurious reload. Reads the live, rebuild-refreshed rules. */
+    isRegenerateOutput: (filename) => isRegenerateOutputPath(filename, state.regenerateRules),
     appDir,
     dev,
     logger,
@@ -1656,6 +1661,16 @@ export async function startServer(opts) {
         for await (const event of events) {
           const filename = event.filename || '';
           if (shouldIgnoreWatchPath(filename)) continue;
+          // A regenerate output (#967) is a build product the server itself
+          // writes on request; ignoring it stops a spurious rebuild + reload
+          // (and a reload -> refetch -> recompile -> reload cycle), same as the
+          // db/dev.db carve-out above.
+          // A regenerate output (#967) is a build product the server itself
+          // writes on request; ignoring it stops a spurious rebuild + reload
+          // (and a reload -> refetch -> recompile -> reload cycle), same as the
+          // db/dev.db carve-out above. `app` exposes the check because `state`
+          // lives in createRequestHandler's scope, not here.
+          if (app.isRegenerateOutput(filename)) continue;
           rebuild();
         }
       } catch (err) {

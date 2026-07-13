@@ -17,6 +17,7 @@ import { EventEmitter } from 'node:events';
 import {
   readRegenerateRules,
   maybeRegenerate,
+  isRegenerateOutputPath,
   _resetInFlight,
 } from '../../src/dev-regenerate.js';
 
@@ -132,6 +133,21 @@ test('maybeRegenerate: no-op when no rule matches the requested path', async () 
   const { spawn, calls } = recordingSpawn();
   await maybeRegenerate(dir, 'public/other.css', [TW], { spawn });
   assert.equal(calls.length, 0);
+});
+
+test('isRegenerateOutputPath: matches a watcher filename against rule outputs (dev-reload carve-out)', () => {
+  const rules = [{ output: 'public/tailwind.css', command: 'x', inputs: [] }];
+  // A write to the regenerate output must be recognized so the dev watcher
+  // ignores it (else the server-written file triggers a spurious reload).
+  assert.equal(isRegenerateOutputPath('public/tailwind.css', rules), true);
+  // Windows separators from fs.watch are normalized before matching.
+  assert.equal(isRegenerateOutputPath('public\\tailwind.css', rules), true);
+  // A real source edit is NOT an output, so it still triggers a reload.
+  assert.equal(isRegenerateOutputPath('app/page.ts', rules), false);
+  assert.equal(isRegenerateOutputPath('public/input.css', rules), false);
+  // No rules (a plain app) never matches, so the watcher is unaffected.
+  assert.equal(isRegenerateOutputPath('public/tailwind.css', []), false);
+  assert.equal(isRegenerateOutputPath('', rules), false);
 });
 
 test('maybeRegenerate: concurrent requests for the same stale output coalesce to ONE compile', async () => {
