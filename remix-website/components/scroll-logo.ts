@@ -55,7 +55,6 @@ export class ScrollLogo extends WebComponent {
   private _lastTime = 0;
   private _largeWidth = 0;
   private _reduced = false;
-  private _colorTimer = 0;
   private _onScroll = () => this._ensureLoop();
   private _onResize = () => {
     this._largeWidth = window.innerWidth - LEFT * 2;
@@ -80,19 +79,11 @@ export class ScrollLogo extends WebComponent {
     window.addEventListener('scroll', this._onScroll, { passive: true });
     window.addEventListener('resize', this._onResize);
     this._ensureLoop();
-
-    // The brand color is copied from the :root animation onto the span as an
-    // inline style: Chromium's paint pipeline keeps a stale snapshot of the
-    // animated registered property inside this subtree (paint uses the var()
-    // fallback while getComputedStyle returns the live value), and the inline
-    // mutation forces the repaint CSS alone was not getting.
-    const rootStyle = getComputedStyle(document.documentElement);
-    const applyBrand = () => {
-      const c = rootStyle.getPropertyValue('--brand-cycle');
-      if (c && this._main) this._main.style.background = c;
-    };
-    applyBrand();
-    if (!this._reduced) this._colorTimer = window.setInterval(applyBrand, 150);
+    // The wordmark's animated brand color is handled purely in CSS now: the
+    // masked span paints `currentColor`, which inherits the anchor's animated
+    // `color: var(--brand-cycle)`. See home.css and the styling docs gotcha
+    // (#961) for why a direct `background: var(--brand-cycle)` under an <a href>
+    // needed this and why currentColor sidesteps the Chromium paint bug.
   }
 
   disconnectedCallback() {
@@ -101,8 +92,6 @@ export class ScrollLogo extends WebComponent {
     window.removeEventListener('resize', this._onResize);
     if (this._rafId) cancelAnimationFrame(this._rafId);
     this._rafId = 0;
-    if (this._colorTimer) clearInterval(this._colorTimer);
-    this._colorTimer = 0;
   }
 
   private _ensureLoop() {

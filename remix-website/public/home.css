@@ -87,11 +87,15 @@ scroll-logo a:focus-visible {
    applies directly. */
 scroll-logo .rmx-wordmark {
   display: block;
-  /* currentColor here paints the var() FALLBACK in Chromium when the color
-     rides an animated registered property inherited from the anchor; binding
-     the var directly paints the live animated value. Ghosts override with
-     their own static currentColor below. */
-  background: var(--brand-cycle, #ebeff2);
+  /* Paint via currentColor, which inherits the anchor's animated
+     `color: var(--brand-cycle)`. Chromium paints the var() FALLBACK if a
+     descendant of an <a href> references the animated registered property
+     DIRECTLY (background: var(--brand-cycle)), a visited-link paint-isolation
+     bug, but its link paint path DOES invalidate `color`, so laundering the
+     value through currentColor animates correctly with no JS. See the styling
+     docs gotcha (webjsdev/webjs #961). Ghosts override with their own static
+     currentColor below. */
+  background: currentColor;
   mask-image: url(/public/landing/remix-wordmark.svg);
   -webkit-mask-image: url(/public/landing/remix-wordmark.svg);
   mask-repeat: no-repeat;
