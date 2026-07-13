@@ -561,8 +561,15 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     // Single cross-agent source: a thin AGENTS.md points at the skill; the
     // .agents/rules workflow rules and the Claude enforcement hooks back it up.
     'AGENTS.md',
-    'CLAUDE.md',
     '.agents/rules/workflow.md',
+    // Thin bridges for the tools that do NOT read AGENTS.md natively: Claude
+    // Code (CLAUDE.md @-imports it), Gemini CLI (GEMINI.md), and Copilot in VS
+    // Code (copilot-instructions.md, since AGENTS.md there is behind a setting).
+    // Cursor / opencode / Antigravity read AGENTS.md natively, so they get no
+    // per-tool file.
+    'CLAUDE.md',
+    'GEMINI.md',
+    '.github/copilot-instructions.md',
     // Claude Code config + the protective enforcement hooks (no design ceremony).
     '.claude.json',
     '.claude/settings.json',

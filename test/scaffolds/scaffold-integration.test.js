@@ -65,14 +65,23 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(existsSync(join(appDir, 'tsconfig.json')));
 
     // Single cross-agent source: a thin AGENTS.md plus the one skill and the
-    // .agents workflow rules. CLAUDE.md + the protective .claude hooks back it
-    // up for Claude Code.
-    for (const f of ['AGENTS.md', '.agents/skills/webjs/SKILL.md', '.agents/rules/workflow.md', 'CLAUDE.md', '.claude/settings.json', '.editorconfig']) {
+    // .agents workflow rules. Thin bridges (CLAUDE.md, GEMINI.md, copilot) point
+    // the tools that do NOT read AGENTS.md natively at that source; the
+    // protective .claude hooks back it up for Claude Code.
+    for (const f of ['AGENTS.md', '.agents/skills/webjs/SKILL.md', '.agents/rules/workflow.md', 'CLAUDE.md', 'GEMINI.md', '.github/copilot-instructions.md', '.claude/settings.json', '.editorconfig']) {
       assert.ok(existsSync(join(appDir, f)), `${f} should exist`);
     }
-    // No per-TOOL rule-file duplicates, no gallery, no design-review ceremony.
-    for (const f of ['CONVENTIONS.md', '.cursorrules', '.cursor', '.gemini', '.opencode', '.github/copilot-instructions.md', 'LAYOUT-REFERENCE.md', 'app/features', 'app/examples', '.claude/hooks/design-review-before-stop.sh', '.claude/hooks/route-skills.sh', '.claude/skills/webjs-design-review']) {
+    // No FULL per-tool rule duplicates (the bridges above are thin pointers, not
+    // copies), no gallery, no design-review ceremony. Cursor and opencode read
+    // AGENTS.md natively, so they get no per-tool file.
+    for (const f of ['CONVENTIONS.md', '.cursorrules', '.cursor', '.gemini', '.opencode', 'LAYOUT-REFERENCE.md', 'app/features', 'app/examples', '.claude/hooks/design-review-before-stop.sh', '.claude/hooks/route-skills.sh', '.claude/skills/webjs-design-review']) {
       assert.ok(!existsSync(join(appDir, f)), `${f} should NOT exist in the minimal scaffold`);
+    }
+    // The bridges are THIN (pointers to AGENTS.md), not the old full duplicates.
+    for (const f of ['CLAUDE.md', 'GEMINI.md', '.github/copilot-instructions.md']) {
+      const src = readFileSync(join(appDir, f), 'utf8');
+      assert.ok(src.length < 2000, `${f} is a thin bridge, not a full rule duplicate`);
+      assert.match(src, /AGENTS\.md/, `${f} points at AGENTS.md`);
     }
 
     // #271: the opt-in progressive-enhancement service worker + its offline
