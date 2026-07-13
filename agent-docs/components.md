@@ -257,7 +257,7 @@ classifies each sigil as a client-behaviour ship signal (`SSR_DROPPED_PREFIXES`,
 `.prop` / `?bool`, survives into the served HTML). The guard asserts that
 classification partitions `BINDING_PREFIXES` exactly, so a new sigil cannot be
 added without a deliberate ship-or-round-trip decision. Interactivity static
-fields live in the `INTERACTIVITY_STATIC_FIELDS` registry (`shadow`, `refresh`).
+fields live in the `INTERACTIVITY_STATIC_FIELDS` registry (`shadow`, `interactive`).
 If you add an interactivity feature to the framework, update the matching list
 in `component-elision.js` (and add a new static convention to both the
 `INTERACTIVITY_STATIC_FIELDS` registry and this lifecycle table).
