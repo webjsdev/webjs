@@ -128,6 +128,25 @@ if has '(doc|documentation) (gap|drift|sync|coverage|debt)' \
   add_match "webjs-doc-sync: the request is about documentation sync, drift, or a doc gap. Invoke the webjs-doc-sync skill BEFORE editing any doc. It holds the authoritative map of EVERY surface (AGENTS.md + the skill at .agents/skills/webjs/, README, the docs site under docs/app/docs/, the marketing website/, and the scaffold templates' per-agent rule files) and the change-type to surface mapping, so no surface is silently skipped. File each confirmed gap via webjs-file-issue."
 fi
 
+# --- webjs-scaffold-sync: keep every scaffold surface in sync -----------
+# Triggers: change what `webjs create` generates (a gallery/showcase demo, a
+# template, the generated layout/home/theme/schema), sync the scaffold,
+# "update all three templates", check the scaffold is consistent, teach
+# agents via the scaffold. The scaffold is webjs's PRIMARY teaching surface,
+# so a change must propagate across the generators (packages/cli/lib/*), the
+# scaffold tests, the framework template-matrix docs, and the preview apps,
+# with a mandatory "generate + boot + check".
+if has '(sync|update|check|fix|add to).{0,24}(the )?(scaffold|template)' \
+   || has '(all (three|3) )?(scaffold )?templates?\b' \
+   || has 'gallery.{0,40}(template|saas|api|full-?stack|scaffold)' \
+   || has '(ship|include|add|put).{0,30}(the )?(gallery|showcase)' \
+   || has '(add|new|update).{0,24}(gallery|showcase)' \
+   || has '(scaffold|gallery) (consistent|in sync|drift|gap)' \
+   || has 'what `?webjs create`? generates' \
+   || has '(feature|backend) gallery'; then
+  add_match "webjs-scaffold-sync: the request changes what \`webjs create\` generates (a gallery/showcase demo, a template, a generated file, a scaffold convention). Invoke the webjs-scaffold-sync skill BEFORE editing. It holds the authoritative map of every scaffold surface (the packages/cli/lib/* generators, the templates/, the scaffold tests, the framework template-matrix docs, the preview apps) plus the mandatory generate-boot-check verification, so no surface is silently skipped. It is the scaffold-side sibling of webjs-doc-sync."
+fi
+
 # --- webjs-blog-write: write a blog post in the author's voice ----------
 # Triggers: write/draft a blog post, an SEO blog, blog about a feature,
 # "we shipped X but never blogged it". The skill carries the author's voice
