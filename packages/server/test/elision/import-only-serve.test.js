@@ -230,3 +230,95 @@ export default () => html\`<x-counter></x-counter>\`;`;
     rmSync(on, { recursive: true, force: true });
   }
 });
+
+// Path-aware verdict (#963), at the serve layer: a module-scope signal bus
+// imported by the shipping component (never by the page) does not pin the
+// page. The boot emits only the frontier component; the page module is
+// dropped; the bus module is still served to the browser (the component
+// imports it) and the component still SSRs.
+test('a signal bus behind the shipping component keeps the page import-only (#963)', async () => {
+  const dir = makeApp({
+    'app/page.ts': `import { html } from '@webjsdev/core';
+import '../components/overlay.ts';
+export default () => html\`<x-overlay></x-overlay>\`;`,
+    'components/overlay.ts': `import { WebComponent, html } from '@webjsdev/core';
+import { bus } from '../lib/bus.ts';
+class O extends WebComponent { render() { return html\`<button @click=\${() => bus.set(1)}>go</button>\`; } }
+O.register('x-overlay');`,
+    'lib/bus.ts': `import { signal } from '@webjsdev/core';
+export const bus = signal(0);`,
+  });
+  try {
+    const app = await createRequestHandler({ appDir: dir, dev: true });
+    if (app.warmup) await app.warmup();
+    const html = await (await app.handle(new Request('http://x/'))).text();
+    const boot = bootOf(html);
+    assert.match(boot, /\/components\/overlay\.ts/, 'the frontier component is emitted');
+    assert.doesNotMatch(boot, /\/app\/page\.ts/, 'the page module is dropped despite the bus in its closure');
+    assert.doesNotMatch(boot, /\/lib\/bus\.ts/, 'the bus itself is not boot-emitted (the component imports it)');
+    const busResp = await app.handle(new Request('http://x/lib/bus.ts'));
+    assert.equal(busResp.status, 200, 'the bus module is still servable for the component import');
+    assert.match(html, /<x-overlay[^>]*>/, 'the component still renders server-side');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// A component nested behind the frontier component is NOT re-emitted in the
+// boot; it loads through its importer, so the wire stays minimal (#963).
+test('a nested shipping component is carried by its frontier importer, not re-emitted (#963)', async () => {
+  const dir = makeApp({
+    'app/page.ts': `import { html } from '@webjsdev/core';
+import '../components/outer.ts';
+export default () => html\`<x-outer></x-outer>\`;`,
+    'components/outer.ts': `import { WebComponent, html } from '@webjsdev/core';
+import './inner.ts';
+class Outer extends WebComponent { render() { return html\`<button @click=\${() => {}}><x-inner></x-inner></button>\`; } }
+Outer.register('x-outer');`,
+    'components/inner.ts': `import { WebComponent, html } from '@webjsdev/core';
+class Inner extends WebComponent { render() { return html\`<button @click=\${() => {}}>i</button>\`; } }
+Inner.register('x-inner');`,
+  });
+  try {
+    const app = await createRequestHandler({ appDir: dir, dev: true });
+    if (app.warmup) await app.warmup();
+    const html = await (await app.handle(new Request('http://x/'))).text();
+    const boot = bootOf(html);
+    assert.match(boot, /\/components\/outer\.ts/, 'the frontier component is emitted');
+    assert.doesNotMatch(boot, /\/components\/inner\.ts/, 'the nested component loads via its importer');
+    assert.doesNotMatch(boot, /\/app\/page\.ts/, 'the page module is dropped');
+    const innerResp = await app.handle(new Request('http://x/components/inner.ts'));
+    assert.equal(innerResp.status, 200, 'the nested component is still servable');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// The error-boundary render applies the SAME substitution (#963): an
+// import-only page with a bare server import is dropped from the ERROR
+// page's boot too, so the throw-at-load stub never crashes the error page.
+test('an error-boundary render drops the import-only page from its boot (#963)', async () => {
+  const dir = makeApp({
+    'lib/auth.server.ts': `export async function auth() { throw new Error('boom'); }`,
+    'app/error.ts': `import { html } from '@webjsdev/core';
+export default ({ error }) => html\`<p class="err">\${error.message}</p>\`;`,
+    'app/page.ts': `import { html } from '@webjsdev/core';
+import { auth } from '../lib/auth.server.ts';
+import '../components/counter.ts';
+export default async () => { await auth(); return html\`<x-counter></x-counter>\`; };`,
+    'components/counter.ts': COUNTER,
+  });
+  try {
+    const app = await createRequestHandler({ appDir: dir, dev: true });
+    if (app.warmup) await app.warmup();
+    const resp = await app.handle(new Request('http://x/'));
+    const html = await resp.text();
+    assert.equal(resp.status, 500, 'the page render throws into the error boundary');
+    assert.match(html, /class="err"/, 'the error boundary rendered');
+    const boot = bootOf(html);
+    assert.doesNotMatch(boot, /\/app\/page\.ts/, 'the import-only page module stays dropped on the error path');
+    assert.match(boot, /\/components\/counter\.ts/, 'the frontier component is emitted instead');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

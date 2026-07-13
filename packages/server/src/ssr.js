@@ -155,11 +155,13 @@ export async function ssrPage(route, params, url, opts) {
     // Import-only route modules (#605) go one step further: a page / layout
     // whose only client relevance is importing shipping components is itself
     // dead weight on the client (it never hydrates), so it is dropped and its
-    // component modules are emitted directly in its place. The component set is
-    // the STATIC closure the analyser computed (what loading the module would
-    // have registered), so a component imported but only conditionally rendered
-    // still registers. Dedup so a component shared across the page and a layout
-    // (or two layouts) is emitted once.
+    // component modules are emitted directly in its place. The component set
+    // is the FRONTIER of the analyser's path-aware walk (#963): the shipping
+    // components the module reaches without passing through another shipping
+    // component. A component imported but only conditionally rendered still
+    // registers; one nested behind an emitted component is absent here and
+    // loads via its importer's own imports. Dedup so a component shared
+    // across the page and a layout (or two layouts) is emitted once.
     const inert = opts.inertRouteModules;
     const importOnly = opts.importOnlyRouteModules;
     const moduleUrls = [];
@@ -329,8 +331,28 @@ export async function ssrPage(route, params, url, opts) {
         if (!mod.default) continue;
         const tree = await mod.default({ ...ctx, error: err });
         const body = await renderToString(tree, { ssr: true, dev: opts.dev });
-        const moduleUrls = [route.file, ...route.layouts].map((f) => toUrlPath(f, opts.appDir));
-        const html = wrapInDocument(body, { metadata, moduleUrls, dev: opts.dev, nonce: errNonce });
+        // Apply the SAME inert / import-only substitution as the happy-path
+        // boot (#963): the error page must not ship a page/layout module the
+        // normal render drops. Pre-substitution, an import-only page with a
+        // bare `.server.*` import (legal, it never loads client-side) would
+        // load here whole and crash the error page's boot on the throw-at-load
+        // stub, killing the sibling component registrations in the same
+        // module script.
+        const errModuleUrls = [];
+        {
+          const seen = new Set();
+          const push = (abs) => {
+            const u = toUrlPath(abs, opts.appDir);
+            if (!seen.has(u)) { seen.add(u); errModuleUrls.push(u); }
+          };
+          for (const f of [route.file, ...route.layouts]) {
+            if (opts.inertRouteModules && opts.inertRouteModules.has(f)) continue;
+            const emit = opts.importOnlyRouteModules && opts.importOnlyRouteModules.get(f);
+            if (emit) emit.forEach(push);
+            else push(f);
+          }
+        }
+        const html = wrapInDocument(body, { metadata, moduleUrls: errModuleUrls, dev: opts.dev, nonce: errNonce });
         return htmlResponse(html, 500, opts.req, url);
       } catch (nested) {
         // fall through to next error boundary

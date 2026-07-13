@@ -802,7 +802,7 @@ function checkGitHook(appDir) {
  * Advisory (#646): name why a page/layout SHIPS its module to the browser
  * instead of being elided. A page/layout that is a pure carrier (import-only
  * #605 / inert #179) stays out of the browser; one that ships whole is pinned
- * by a specific client-effecting NON-component in its closure (a util touching
+ * by a specific client-effecting NON-component on a component-free path from it, #963 (a util touching
  * a client global, a module-scope side effect, a bare side-effect import) or by
  * its own client work. This turns that invisible #605/#179 regression into a
  * named line. WARN only: a page legitimately MAY ship, and the analyser is

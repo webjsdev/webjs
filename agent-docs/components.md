@@ -287,13 +287,18 @@ global, #619). To keep a route's modules out of the network tab:
   page-template `@event` or inline `<script>` is fine: it is SSR output,
   never module client work (the analyser scans route-module template
   content as inert, #623 / #634).
-- Do not import a client-effecting NON-component util into a page/layout
-  (or into a component chain a page reaches). A helper that touches a
-  client global or self-executes drags the whole page in. Put client-only
-  behaviour inside a component; put server-only work in `.server.{js,ts}`
-  (it never enters the client closure); and if a util MIXES a pure helper
-  with client-global code (the `cn.ts` shape, #619), split the client part
-  into its own module so the pure helper does not pin every importer.
+- Do not import a client-effecting NON-component util DIRECTLY into a
+  page/layout (or reach one through a chain of plain helpers). A helper
+  that touches a client global or self-executes drags the whole page in.
+  Put client-only behaviour inside a component; put server-only work in
+  `.server.{js,ts}` (it never enters the client closure); and if a util
+  MIXES a pure helper with client-global code (the `cn.ts` shape, #619),
+  split the client part into its own module so the pure helper does not
+  pin every importer. The verdict is PATH-AWARE (#963): the same
+  client-effecting util imported by a SHIPPING COMPONENT the page renders
+  (a module-scope signal bus, the invariant-5 shared-state idiom) does NOT
+  pin the page, because the emitted component carries it. Only a
+  component-free path from the page to client work ships the page whole.
 
 Self-check: `page.ts` / `layout.ts` should NOT appear in the network tab
 or the boot `<script type="module">`. If one does, something in its
@@ -318,12 +323,15 @@ Elision is also why a page can call a server-only utility and stay
 browser-safe, and why the same code crashes once the page gains client
 work. A page that does `const s = await auth()` (where `auth` comes from
 a `lib/auth.server.ts` UTILITY, no `'use server'`) is fine while the page
-is display-only: the framework elides the page, strips the server import,
-and the browser never sees it. The moment the page also imports a
-component to register it (`import '../components/workspace.ts'`), enables
-the client router, or uses a reactive primitive, the page stops being
-display-only, must load in the browser to do that work, and drags the
-server import with it. In the browser that import is a throw-at-load
+is a dropped carrier: a display-only page is elided, and a page whose
+only client relevance is importing shipping components is import-only
+(#605/#963), dropped from the boot in favour of its components, so its
+server import never loads in a browser either way. The moment the page
+does its OWN client work (enables the client router, uses a reactive
+primitive, runs code at module scope, or reaches a client-effecting
+non-component util on a component-free path), the page ships whole, must
+load in the browser to do that work, and drags the server import with
+it. In the browser that import is a throw-at-load
 stub, so the page crashes the instant its module loads. `webjs typecheck`
 and the rest of `webjs check` pass; only the running page fails. This was
 the single biggest source of extra AI iterations when porting a real app.
@@ -336,8 +344,8 @@ never flagged, because its server import really is stripped. The fix it
 suggests is the three legitimate shapes: gate the route in
 `middleware.ts` (server-only, never shipped), call the server through a
 `'use server'` ACTION (its browser stub is a working RPC, so it is
-exempt), or register the component in a `layout.{ts,js}` so the page
-elides again. Server-to-server imports (`.server.ts` importing
+exempt), or move the page's own client work into a component so the page
+becomes a dropped carrier again. Server-to-server imports (`.server.ts` importing
 `.server.ts`) and `middleware.ts` / `route.ts` are never flagged. A
 TYPE-ONLY `import type { Row } from './x.server.ts'` is exempt too,
 because the stripper erases it before it reaches the browser, so sharing

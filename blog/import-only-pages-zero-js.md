@@ -33,14 +33,16 @@ Elision also touches the display-only component itself, the interactive-looking 
 
 # When a page ships whole anyway
 
-Import-only is a specific condition, and knowing when it breaks matters, because that is precisely when `page.ts` reappears in your network tab. A page or layout ships whole when it has a client side effect of its own, beyond just interactive imports. Any of these in the module's closure pins it to the browser:
+Import-only is a specific condition, and knowing when it breaks matters, because that is precisely when `page.ts` reappears in your network tab. A page or layout ships whole when it has a client side effect of its own, beyond just interactive imports. Any of these pins it to the browser:
 
 - An explicit client-router import.
 - A call at module scope, something that runs the instant the module loads.
 - A self-registering bare import, pulled in only for its side effect.
-- Importing a client-effecting non-component utility.
+- Importing a client-effecting non-component utility, directly or through a chain of plain helpers.
 
-That last one is the sneaky one. The usual offender is a `cn.ts` class-name helper that reads a browser global at module load. It looks completely innocent, a tiny string function. But importing it makes your page module do client work, and a page module that does client work ships whole. The fix is to keep client-only behavior inside a component and server-only work in a `.server.ts` file, and when a utility mixes a pure helper with client-global code, split the client part out so the pure helper does not drag in every page that imports it.
+The verdict is path-aware: client work sitting behind a component the page imports (say a shared module-scope signal the component uses) does not count against the page, because the emitted component carries it. Only a component-free path from the page to client work pins the page.
+
+That last bullet is the sneaky one. The usual offender is a `cn.ts` class-name helper that reads a browser global at module load. It looks completely innocent, a tiny string function. But importing it directly makes your page module do client work, and a page module that does client work ships whole. The fix is to keep client-only behavior inside a component and server-only work in a `.server.ts` file, and when a utility mixes a pure helper with client-global code, split the client part out so the pure helper does not drag in every page that imports it.
 
 # The tool that names the reason
 
