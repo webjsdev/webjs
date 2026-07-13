@@ -77,8 +77,10 @@ test('a well-configured app produces no failures', async () => {
   }));
   write(dir, '.env.example', 'DATABASE_URL=\nAUTH_SECRET=\n');
   write(dir, '.env', 'DATABASE_URL=file:./dev.db\nAUTH_SECRET=abc\n');
-  // node_modules installs satisfying `latest`.
-  write(dir, 'node_modules/@webjsdev/core/package.json', JSON.stringify({ version: '0.7.4' }));
+  // node_modules installs satisfying `latest`. core carries a resolvable entry
+  // (main + index.js) so a well-configured app is also green on framework-resolve.
+  write(dir, 'node_modules/@webjsdev/core/package.json', JSON.stringify({ version: '0.7.4', main: 'index.js' }));
+  write(dir, 'node_modules/@webjsdev/core/index.js', 'export const x = 1;\n');
   write(dir, 'node_modules/@webjsdev/server/package.json', JSON.stringify({ version: '0.8.0' }));
 
   const results = await runDoctorChecks(dir, baseOpts());
@@ -88,6 +90,7 @@ test('a well-configured app produces no failures', async () => {
   assert.equal(byName(results, 'env-drift').status, 'pass');
   assert.equal(byName(results, 'vendor-pin').status, 'pass');
   assert.equal(byName(results, 'webjs-versions').status, 'pass');
+  assert.equal(byName(results, 'framework-resolve').status, 'pass');
 });
 
 // ---------------------------------------------------------------------------
