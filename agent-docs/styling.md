@@ -278,6 +278,50 @@ non-scrolling `100dvh` flex column with `<main>` as the internal scroller), whic
 needs no offset at all but changes the scroll model (the window no longer
 scrolls, so the iOS URL bar stays visible).
 
+## Gotcha: an animated `@property` paints its `var()` fallback inside an `<a href>` (Chromium)
+
+An element that paints a registered `@property` custom property directly, e.g.
+`background: var(--brand-cycle, <fallback>)`, paints the **fallback** instead of
+the live animated value whenever it has an `<a href>` ancestor, if `--brand-cycle`
+is a registered `@property` animated by `@keyframes` on `:root` (or any ancestor).
+A registered `@property` always has a valid computed value, so it must NEVER paint
+its `var()` fallback; that it does here is a Chromium paint bug. Confirmed in
+Chromium (headless and headed); other engines are unaffected.
+
+The tell that it is a PAINT bug, not a style bug: `getComputedStyle` on the same
+element returns the correct live animated value (style recalc is right), only the
+painted pixels are stale/fallback. So verify with a screenshot or pixel sample,
+never with `getComputedStyle` (it lies here).
+
+The trigger is specifically an `<a>` with an `href` (a real link). The same
+subtree under a `<div>`, a `<button>`, or an `<a>` with NO `href` animates
+correctly, which points at Chromium's visited-link paint isolation (links paint
+through a separate path, for `:visited` history-sniffing defense, that does not
+invalidate on a registered-custom-property animation). It fires the same whether
+the value is painted on the link itself or on a descendant, masked or not,
+composited or not, inserted at parse time or later. None of `isolation: isolate`,
+`will-change`, `content-visibility`, a self-`animation`, or re-declaring the
+property fixes it.
+
+**The fix is to route the value through `color` + `currentColor` instead of a
+direct `var()` paint reference.** Consume the animated property in `color` (on the
+element or an ancestor) and paint with `currentColor`:
+
+```css
+/* BROKEN inside <a href>: paints the fallback, not the animated color */
+.wordmark { background: var(--brand-cycle, #ebeff2); }
+
+/* WORKS: the animated property rides `color`, the paint reads `currentColor` */
+.logo-link { color: var(--brand-cycle, #ebeff2); }   /* the <a> (or the element) */
+.wordmark  { background: currentColor; }             /* the painted descendant */
+```
+
+Chromium's link paint path DOES invalidate `color` (links animate their color
+normally), so laundering the animated property through `color`/`currentColor`
+sidesteps the bug with no JavaScript. Prefer this over the imperative escape hatch
+of copying the computed value onto an inline style on a timer, which forces a
+repaint but adds a JS loop for something CSS can express.
+
 ## Layout recipes: even grids, aspect-ratio, and no reflow
 
 These are the CSS traps that cause a visually-broken app (uneven cells, a
