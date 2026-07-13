@@ -29,12 +29,13 @@ import { fileURLToPath } from 'node:url';
  * @param {{ srcDocs: string, srcAgents: string, destRoot: string }} paths
  * @returns {void}
  */
-export function bundleDocs({ srcDocs, srcAgents, destRoot }) {
-  const destDocs = join(destRoot, 'agent-docs');
+export function bundleDocs({ srcRefs, srcAgents, srcSkill, destRoot }) {
+  const destRefs = join(destRoot, 'references');
   rmSync(destRoot, { recursive: true, force: true });
-  mkdirSync(destDocs, { recursive: true });
-  cpSync(srcDocs, destDocs, { recursive: true });
+  mkdirSync(destRefs, { recursive: true });
+  cpSync(srcRefs, destRefs, { recursive: true });
   copyFileSync(srcAgents, join(destRoot, 'AGENTS.md'));
+  copyFileSync(srcSkill, join(destRoot, 'SKILL.md'));
 }
 
 /** Run against the real repo paths when invoked as the prepack script. */
@@ -42,13 +43,15 @@ function main() {
   const here = dirname(fileURLToPath(import.meta.url));
   const pkgRoot = resolve(here, '..'); // packages/mcp/scripts -> packages/mcp
   const repoRoot = resolve(here, '..', '..', '..'); // -> monorepo root
+  const skill = join(repoRoot, '.agents', 'skills', 'webjs');
   bundleDocs({
-    srcDocs: join(repoRoot, 'agent-docs'),
+    srcRefs: join(skill, 'references'),
     srcAgents: join(repoRoot, 'AGENTS.md'),
+    srcSkill: join(skill, 'SKILL.md'),
     destRoot: join(pkgRoot, 'resources'),
   });
   // Diagnostics to stderr so they never pollute a tool parsing `npm pack --json` stdout.
-  console.error('[webjs] bundled MCP docs into resources/ (agent-docs + AGENTS.md)');
+  console.error('[webjs] bundled MCP knowledge into resources/ (references + SKILL.md + AGENTS.md)');
 }
 
 // Only run the side effect when invoked directly (not when imported by a test).

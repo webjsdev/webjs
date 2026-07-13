@@ -470,6 +470,7 @@ export async function runMcpServer(opts) {
     docsDeps = {
       docsDir: loc.docsDir,
       agentsPath: loc.agentsPath,
+      skillPath: loc.skillPath,
       listDir: readdirSync,
       exists: existsSync,
       readFile,

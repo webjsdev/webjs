@@ -373,7 +373,7 @@ test('mcp: resources/list + resources/read serve the framework docs; unknown uri
   const resources = frames[0].result.resources;
   assert.ok(Array.isArray(resources) && resources.length >= 5, 'a corpus of resources');
   assert.ok(resources.some((r) => r.uri === 'webjs-docs://AGENTS'), 'the AGENTS contract is a resource');
-  assert.ok(resources.some((r) => r.uri === 'webjs-docs://components'), 'agent-docs are resources');
+  assert.ok(resources.some((r) => r.uri === 'webjs-docs://components'), 'the skill references are resources');
   for (const r of resources) assert.equal(r.mimeType, 'text/markdown');
 
   // read one

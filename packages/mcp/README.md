@@ -31,7 +31,7 @@ subcommand) delegates to this same server, so both routes run identical code.
   `check` (the structured `webjs check` violations). Each projects an existing
   `@webjsdev/server` data function and mutates nothing.
 - **Knowledge layer**: an `init` mental-model primer, a `docs` retrieval tool,
-  MCP `resources` (the `agent-docs/*` corpus + `AGENTS.md` as `webjs-docs://*`),
+  MCP `resources` (the skill references + `SKILL.md` + `AGENTS.md` as `webjs-docs://*`),
   and `prompts` (the recipes as guided workflows).
 - **`source` tool**: reads the framework's own no-build source from
   `node_modules/@webjsdev/*/src` (read-only, traversal-guarded).
