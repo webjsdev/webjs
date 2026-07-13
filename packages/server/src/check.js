@@ -1219,11 +1219,12 @@ export async function checkConventions(appDir) {
   // --- Rule: no-server-import-in-browser-module ---
   // A page / layout / component module that SHIPS to the browser must not
   // transitively import a server-only `.server.{ts,js}` module. The browser
-  // gets a stub for the server file, so the import is harmless while the page
-  // is display-only and the framework ELIDES it (its server import is stripped
-  // from the served source). But the moment the page also does client work
-  // (imports a component to register, enables the client router, uses a
-  // reactive primitive, …) it stops being elided, must load in the browser,
+  // gets a stub for the server file, so the import is harmless while the
+  // module never loads client-side: a display-only page is elided, and an
+  // import-only page (#605/#963) is dropped from the boot in favour of its
+  // components. But the moment the page does its OWN client work (the client
+  // router, a reactive primitive, module-scope code, a client-effecting util
+  // on a component-free path) it ships whole, must load in the browser,
   // and drags the server import with it: the stub throws (or a server-only
   // export like `auth` is missing) the instant the module loads. That crash
   // only surfaces at runtime; typecheck and every other check pass.
