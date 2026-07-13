@@ -16,7 +16,7 @@
   "webjs": {
     "dev": {
       "before": ["node scripts/copy-registry.js", "npm run css:build"],
-      "parallel": ["tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch"]
+      "regenerate": [{ "output": "public/tailwind.css", "command": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify", "inputs": ["app", "components", "../../registry/components", "public/input.css"] }]
     },
     "start": { "before": ["node scripts/copy-registry.js", "npm run css:build"] }
   },

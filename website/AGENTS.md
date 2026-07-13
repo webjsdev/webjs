@@ -75,11 +75,11 @@ function. Edit the inline `<h1>` / `<p>` text.
 cd website && npm run dev       # http://localhost:5001
 ```
 
-`npm run dev` and `webjs dev` behave identically (#550): the Tailwind
-`--watch` (which produces `public/tailwind.css`) lives in the `webjs.dev.parallel`
-block of `package.json` and runs INSIDE `webjs dev`. In prod, `npm start` and
-`webjs start` are equivalent too: `webjs.start.before` runs `npm run css:build`
-before serving.
+`npm run dev` and `webjs dev` behave identically (#550): `webjs.dev.before`
+compiles `public/tailwind.css`, and `webjs.dev.regenerate` (#967) recompiles it
+on request when a source changes, so the stylesheet never goes stale without a
+live watcher. In prod, `npm start` and `webjs start` are equivalent too:
+`webjs.start.before` runs `npm run css:build` before serving.
 
 Set `DOCS_URL` / `UI_URL` / `EXAMPLE_BLOG_URL` env vars to point the header links at
 the right hosts when deploying. `EXAMPLE_BLOG_URL` is the live example-blog app
