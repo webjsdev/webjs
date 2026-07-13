@@ -66,7 +66,7 @@ export class NewPost extends WebComponent {
             <div class="grid gap-2">
               <label class=${labelClass()} for="new-post-body">Body</label>
               <textarea id="new-post-body"
-                        class="font-serif text-base leading-relaxed resize-y min-h-[220px] text-fg bg-transparent border border-border-strong rounded p-4 transition-all duration-150 focus:outline-none focus:border-accent focus:shadow-[0_0_0_3px_var(--accent-tint)]"
+                        class="font-serif text-base leading-relaxed resize-y min-h-[220px] text-foreground bg-transparent border border-border rounded p-4 transition-all duration-150 focus:outline-none focus:border-primary focus:shadow-[0_0_0_3px_var(--primary-tint)]"
                         name="body"
                         placeholder="Write your post: markdown not required."
                         required></textarea>

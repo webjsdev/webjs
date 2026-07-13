@@ -73,8 +73,8 @@ export class ChatBox extends WebComponent {
       status === 'live'
         ? 'w-[7px] h-[7px] rounded-full bg-success shadow-[0_0_0_3px_color-mix(in_oklch,var(--success)_30%,transparent)]'
         : status === 'reconnecting'
-          ? 'w-[7px] h-[7px] rounded-full bg-accent'
-          : 'w-[7px] h-[7px] rounded-full bg-fg-subtle/40 animate-pulse';
+          ? 'w-[7px] h-[7px] rounded-full bg-primary'
+          : 'w-[7px] h-[7px] rounded-full bg-muted-foreground/40 animate-pulse';
     const statusText =
       status === 'live'
         ? html`Live · ${Math.max(0, count - 1)} other${count - 1 !== 1 ? 's' : ''} online`
@@ -84,20 +84,20 @@ export class ChatBox extends WebComponent {
     const placeholder =
       status === 'live' ? 'Say hi…' : status === 'reconnecting' ? 'Disconnected' : 'Connecting…';
     return html`
-      <div class="block border border-border rounded-xl bg-bg-elev shadow overflow-hidden font-sans">
-        <div class="flex items-center gap-2 px-4 py-3 border-b border-border bg-bg-subtle font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-fg-subtle">
+      <div class="block border border-border rounded-xl bg-card shadow overflow-hidden font-sans">
+        <div class="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground/70">
           <span class=${dotClass}></span>
           ${statusText}
         </div>
-        <div class="h-[220px] overflow-y-auto p-4 text-sm leading-relaxed font-sans scroll-smooth bg-bg-sunken">
+        <div class="h-[220px] overflow-y-auto p-4 text-sm leading-relaxed font-sans scroll-smooth bg-secondary">
           ${lines.length === 0
-            ? html`<p class="m-0 text-fg-subtle italic">No messages yet: say something.</p>`
+            ? html`<p class="m-0 text-muted-foreground/70 italic">No messages yet: say something.</p>`
             : lines.map((l) =>
                 l.kind === 'meta'
-                  ? html`<p class="m-0 mb-2 text-fg"><em class="font-mono text-[10px] font-medium uppercase tracking-[0.15em] text-fg-subtle not-italic">${l.text}</em></p>`
-                  : html`<p class="m-0 mb-2 text-fg">${l.text}</p>`)}
+                  ? html`<p class="m-0 mb-2 text-foreground"><em class="font-mono text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground/70 not-italic">${l.text}</em></p>`
+                  : html`<p class="m-0 mb-2 text-foreground">${l.text}</p>`)}
         </div>
-        <form class="flex gap-2 px-4 py-3 border-t border-border bg-bg-subtle" @submit=${(e) => this.onSubmit(e)}>
+        <form class="flex gap-2 px-4 py-3 border-t border-border bg-muted" @submit=${(e) => this.onSubmit(e)}>
           <input name="message" class="${inputClass()} flex-1"
                  placeholder=${placeholder}
                  ?disabled=${!live} autocomplete="off">

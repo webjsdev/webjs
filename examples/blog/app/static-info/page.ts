@@ -22,8 +22,8 @@ export default function StaticInfo() {
       <h1 class="font-serif text-display leading-[1.02] tracking-[-0.035em] font-bold m-0 mb-4">
         Static info
       </h1>
-      <p class="text-lede leading-[1.5] text-fg-muted max-w-[56ch] m-0">
-        This route ships <strong class="text-fg font-bold">zero application JS</strong>.
+      <p class="text-lede leading-[1.5] text-muted-foreground max-w-[56ch] m-0">
+        This route ships <strong class="text-foreground font-bold">zero application JS</strong>.
         Its page module is inert, so the framework drops it from the boot
         script. What you see is the complete server-rendered output.
       </p>

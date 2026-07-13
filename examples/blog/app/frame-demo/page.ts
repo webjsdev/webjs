@@ -40,7 +40,7 @@ export default function FrameDemo({ searchParams }: PageProps) {
 
       <!-- A sentinel OUTSIDE the frame. A correct frame swap leaves it
            untouched; a wrong full-body swap would destroy it. -->
-      <p id="outside-sentinel" class="text-fg-muted text-sm">Outside the frame.</p>
+      <p id="outside-sentinel" class="text-muted-foreground text-sm">Outside the frame.</p>
 
       <!-- External tab links. NOT nested in the frame; they target it by id. -->
       <nav class="flex gap-3 text-sm" data-frame-tabs>
@@ -49,10 +49,10 @@ export default function FrameDemo({ searchParams }: PageProps) {
         <a id="tab-three" href="/frame-demo?tab=three" data-webjs-frame="panel" class="underline">Three</a>
       </nav>
 
-      <webjs-frame id="panel" class="block rounded-md border border-border bg-bg-elev p-4">
+      <webjs-frame id="panel" class="block rounded-md border border-border bg-card p-4">
         <p id="panel-body" data-tab=${tab}>${body}</p>
         <!-- A _top breakout link INSIDE the frame: a full-page nav home. -->
-        <a id="top-link" href="/" data-webjs-frame="_top" class="text-fg-subtle text-xs underline">Exit to home (full nav)</a>
+        <a id="top-link" href="/" data-webjs-frame="_top" class="text-muted-foreground/70 text-xs underline">Exit to home (full nav)</a>
       </webjs-frame>
 
       <!-- Deferred self-loading frame (#253). A lazy <webjs-frame src> that
@@ -66,9 +66,9 @@ export default function FrameDemo({ searchParams }: PageProps) {
         id="deferred"
         src="/frame-demo/deferred"
         loading="lazy"
-        class="block rounded-md border border-border bg-bg-elev p-4"
+        class="block rounded-md border border-border bg-card p-4"
       >
-        <p id="deferred-placeholder" class="text-fg-muted text-sm">Loading deferred content...</p>
+        <p id="deferred-placeholder" class="text-muted-foreground text-sm">Loading deferred content...</p>
       </webjs-frame>
     </section>
   `;

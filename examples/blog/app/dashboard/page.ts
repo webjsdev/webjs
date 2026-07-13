@@ -22,7 +22,7 @@ export default async function Dashboard() {
     <section>
       ${rubric('signed in', 'sm')}
       ${clampH1(`Hello, ${me.name || me.email.split('@')[0]}.`)}
-      <p class="text-fg-muted m-0 mb-8">You are ${me.name ? html`<strong class="text-fg">${me.email}</strong>` : ''}${me.name ? ' · ' : ''}a member since ${new Date(me.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })}.</p>
+      <p class="text-muted-foreground m-0 mb-8">You are ${me.name ? html`<strong class="text-foreground">${me.email}</strong>` : ''}${me.name ? ' · ' : ''}a member since ${new Date(me.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })}.</p>
     </section>
 
     <div class="flex gap-3 mb-18">
@@ -39,14 +39,14 @@ export default async function Dashboard() {
       </div>
       <div class=${cardContentClass()}>
         ${mine.length === 0
-          ? html`<div class="py-12 text-center border border-dashed border-border rounded-[14px] text-fg-muted italic font-serif text-[15px] leading-[1.6]">
+          ? html`<div class="py-12 text-center border border-dashed border-border rounded-[14px] text-muted-foreground italic font-serif text-[15px] leading-[1.6]">
               You haven't published anything yet.
               ${accentLink('/dashboard/posts/new', 'Write your first post →')}
             </div>`
           : html`<ul class="list-none p-0 m-0">
               ${repeat(mine, (p) => p.id, (p) => html`
                 <li class="flex items-baseline justify-between gap-4 py-4 border-b border-border first:border-t">
-                  <a href="/blog/${p.slug}" class="font-serif text-[1.1rem] no-underline text-fg font-semibold tracking-[-0.01em] transition-colors duration-fast hover:text-accent">${p.title}</a>
+                  <a href="/blog/${p.slug}" class="font-serif text-[1.1rem] no-underline text-foreground font-semibold tracking-[-0.01em] transition-colors duration-fast hover:text-primary">${p.title}</a>
                   <muted-text>${new Date(p.createdAt).toLocaleDateString()}</muted-text>
                 </li>`)}
             </ul>`}

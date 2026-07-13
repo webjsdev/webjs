@@ -31,6 +31,12 @@ export class ThemeToggle extends WebComponent {
     } catch {}
     if (next === 'system') delete document.documentElement.dataset.theme;
     else document.documentElement.dataset.theme = next;
+    // Mirror the effective theme onto the .dark class too. data-theme drives the
+    // app palette blocks; the .dark class is what the @webjsdev/ui kit's dark:
+    // variants read, so both signals must move together (see agent-docs/styling.md).
+    const osLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+    const dark = next === 'dark' || (next === 'system' && !osLight);
+    document.documentElement.classList.toggle('dark', dark);
   }
 
   render() {
@@ -39,7 +45,7 @@ export class ThemeToggle extends WebComponent {
     const icon = t === 'light' ? ICONS.sun : t === 'dark' ? ICONS.moon : ICONS.system;
     return html`
       <button
-        class="inline-flex items-center justify-center w-9 h-9 p-0 border border-border rounded-full bg-bg-elev text-fg-muted cursor-pointer transition-all duration-150 hover:text-fg hover:border-border-strong active:scale-[0.94] focus-visible:outline-none focus-visible:border-accent focus-visible:ring-[3px] focus-visible:ring-accent-tint"
+        class="inline-flex items-center justify-center w-9 h-9 p-0 border border-border rounded-full bg-card text-muted-foreground cursor-pointer transition-all duration-150 hover:text-foreground hover:border-border active:scale-[0.94] focus-visible:outline-none focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary-tint"
         @click=${() => this.cycle()}
         aria-label="Cycle theme (currently ${label})"
         title="Theme: ${label.toLowerCase()}"

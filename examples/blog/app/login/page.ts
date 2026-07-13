@@ -23,7 +23,7 @@ export default async function LoginPage({ searchParams }: Ctx) {
     <div class="max-w-[460px] mt-6 mx-auto text-center">
       ${rubric('access', 'sm')}
       <h1 class="font-serif text-[clamp(2rem,1.5rem+1.6vw,2.6rem)] leading-[1.1] tracking-[-0.03em] font-bold m-0 mb-3">${heading}</h1>
-      <p class="text-fg-muted m-0 mb-8 text-base">${subheading}</p>
+      <p class="text-muted-foreground m-0 mb-8 text-base">${subheading}</p>
       <auth-forms mode=${mode} then=${searchParams?.then || '/dashboard'}></auth-forms>
     </div>
   `;

@@ -20,7 +20,7 @@ export default function Observed() {
       <h1 class="font-serif text-display leading-[1.02] tracking-[-0.035em] font-bold m-0 mb-4">
         Observed badge
       </h1>
-      <p class="text-lede leading-[1.5] text-fg-muted max-w-[56ch] m-0 mb-6">
+      <p class="text-lede leading-[1.5] text-muted-foreground max-w-[56ch] m-0 mb-6">
         This page waits for the badge to upgrade, so the framework keeps its
         module on the wire even though the badge itself only renders static
         markup.

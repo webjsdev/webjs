@@ -14,12 +14,13 @@ export default function Styling() {
 // which the dev / start tasks run automatically). The @theme maps live here.
 @import "tailwindcss";
 @theme {
-  --color-fg:        var(--fg);
-  --color-bg:        var(--bg);
-  --color-accent:    var(--accent);
-  --font-serif:      var(--font-serif);
-  --text-display:    clamp(2.6rem, 1.6rem + 3.2vw, 4.25rem);
-  --duration-fast:   140ms;
+  --color-background:       var(--background);
+  --color-foreground:       var(--foreground);
+  --color-primary:          var(--primary);
+  --color-muted-foreground: var(--muted-foreground);
+  --font-serif:             var(--font-serif);
+  --text-display:           clamp(2.6rem, 1.6rem + 3.2vw, 4.25rem);
+  --duration-fast:          140ms;
 }
 
 // app/layout.ts excerpt
@@ -31,9 +32,9 @@ export default function RootLayout({ children }: { children: unknown }) {
     &lt;style&gt;
       /* Token VALUES: plain CSS custom properties, so they resolve with JS off. */
       :root {
-        --fg: oklch(0.96 0.015 60);
-        --bg: oklch(0.14 0.01 55);
-        --accent: oklch(0.78 0.14 55);
+        --background: oklch(0.14 0.01 55);
+        --foreground: oklch(0.96 0.015 60);
+        --primary:    oklch(0.78 0.14 55);
         /* …etc */
       }
     &lt;/style&gt;
@@ -44,9 +45,9 @@ export default function RootLayout({ children }: { children: unknown }) {
 }</pre>
 
     <p>From any page or component you now write things like:</p>
-    <pre>&lt;h1 class="font-serif text-display text-fg mb-6"&gt;Hello&lt;/h1&gt;
-&lt;p class="text-fg-muted font-sans"&gt;Lede copy&lt;/p&gt;
-&lt;a class="text-accent hover:underline duration-fast"&gt;Link&lt;/a&gt;</pre>
+    <pre>&lt;h1 class="font-serif text-display text-foreground mb-6"&gt;Hello&lt;/h1&gt;
+&lt;p class="text-muted-foreground font-sans"&gt;Lede copy&lt;/p&gt;
+&lt;a class="text-primary hover:underline duration-fast"&gt;Link&lt;/a&gt;</pre>
 
     <h2>Light-DOM components</h2>
     <p>Light DOM is the default for any <code>WebComponent</code>. Tailwind classes apply as they would on plain HTML:</p>
@@ -134,7 +135,7 @@ export class Card extends WebComponent {
   static styles = css\`
     :host { display: block; padding: 16px; border: 1px solid var(--border); border-radius: 8px; }
     h3 { margin: 0 0 8px; }
-    p  { color: var(--fg-muted); margin: 0; }
+    p  { color: var(--muted-foreground); margin: 0; }
   \`;
   render() {
     return html\`
@@ -148,7 +149,7 @@ Card.register('my-card');</pre>
     <p>Shadow-DOM components are SSR'd via Declarative Shadow DOM. Styles paint before JS loads, no hydration runtime, and the browser enforces the boundary. Light-DOM components are SSR'd as direct HTML with a <code>&lt;!--webjs-hydrate--&gt;</code> marker, and client-side rendering replaces the marker without flash.</p>
 
     <h2>Design tokens via CSS custom properties</h2>
-    <p>CSS custom properties <strong>inherit through shadow DOM boundaries</strong>. Define them once on <code>:root</code> (as the blog example does in its layout) and both light-DOM and shadow-DOM components can consume them via Tailwind classes (<code>text-fg</code>, <code>bg-bg-elev</code>) or bare CSS (<code>var(--fg)</code>).</p>
+    <p>CSS custom properties <strong>inherit through shadow DOM boundaries</strong>. Define them once on <code>:root</code> (as the blog example does in its layout) and both light-DOM and shadow-DOM components can consume them via Tailwind classes (<code>text-foreground</code>, <code>bg-card</code>) or bare CSS (<code>var(--foreground)</code>).</p>
 
     <h2>DRY'ing up repeated Tailwind classes via JS helpers</h2>
     <p>When the same bundle of Tailwind classes appears in 2+ places, extract it into a JS helper in <code>lib/utils/ui.ts</code>. The helper runs at SSR time inside <code>html\`\`</code>, so the browser sees fully materialised HTML. No client-side runtime, no diff from inline classes.</p>
@@ -159,14 +160,14 @@ import { html } from '@webjsdev/core';
 /** \`label\` kicker: small caps, accent colour, above headings. */
 export function rubric(label: string) {
   return html\`
-    &lt;span class="block font-mono text-[11px] leading-none font-semibold tracking-[0.2em] uppercase text-accent mb-4"&gt;● \${label}&lt;/span&gt;
+    &lt;span class="block font-mono text-[11px] leading-none font-semibold tracking-[0.2em] uppercase text-primary mb-4"&gt;● \${label}&lt;/span&gt;
   \`;
 }
 
 /** "← label" back link. */
 export function backLink(href: string, label: string) {
   return html\`
-    &lt;a href=\${href} class="inline-block mb-12 text-fg-subtle no-underline font-mono text-[11px] uppercase tracking-[0.15em] duration-fast hover:text-fg"&gt;← \${label}&lt;/a&gt;
+    &lt;a href=\${href} class="inline-block mb-12 text-muted-foreground/70 no-underline font-mono text-[11px] uppercase tracking-[0.15em] duration-fast hover:text-foreground"&gt;← \${label}&lt;/a&gt;
   \`;
 }</pre>
 
@@ -178,7 +179,7 @@ export default function Post({ params }) {
   return html\`
     \${backLink('/', 'Posts')}
     \${rubric('post')}
-    &lt;h1 class="font-serif text-display text-fg"&gt;Hello&lt;/h1&gt;
+    &lt;h1 class="font-serif text-display text-foreground"&gt;Hello&lt;/h1&gt;
   \`;
 }</pre>
 
@@ -193,13 +194,13 @@ export default function Post({ params }) {
 &lt;style&gt;
   html, body { margin: 0; }
   body {
-    background: var(--bg);
-    color: var(--fg);
+    background: var(--background);
+    color: var(--foreground);
     font: 16px/1.65 var(--font-sans);
   }
-  ::selection { background: var(--accent-tint); }
+  ::selection { background: var(--primary-tint); }
   ::-webkit-scrollbar { width: 10px; }
-  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
 &lt;/style&gt;</pre>
 
     <h2>Dark mode</h2>
@@ -233,7 +234,7 @@ const STYLES = css\`
   .page-dashboard {
     .actions     { display: flex; gap: 12px; }
     .btn         { padding: 12px 24px; border-radius: 999px; }
-    .btn-primary { background: var(--accent); color: var(--accent-fg); }
+    .btn-primary { background: var(--primary); color: var(--primary-foreground); }
   }
 \`;
 

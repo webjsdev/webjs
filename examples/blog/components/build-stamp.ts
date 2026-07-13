@@ -14,7 +14,7 @@ import { WebComponent, html } from '@webjsdev/core';
 export class BuildStamp extends WebComponent {
   render() {
     return html`<span
-      class="font-mono text-[11px] tracking-[0.12em] uppercase text-fg-subtle"
+      class="font-mono text-[11px] tracking-[0.12em] uppercase text-muted-foreground/70"
       >no-build · zero JS shipped for this badge</span
     >`;
   }

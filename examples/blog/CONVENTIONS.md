@@ -375,7 +375,7 @@ return html`
 // Avoid: hand-rolled Tailwind on every <button> loses visual
 // consistency. Tier-1 helpers give you the same control with one import.
 return html`
-  <button class="px-4 py-2 rounded-md bg-accent text-accent-fg">Save</button>
+  <button class="px-4 py-2 rounded-md bg-primary text-primary-foreground">Save</button>
 `;
 ```
 
@@ -418,7 +418,7 @@ export class MyWidget extends WebComponent({
   render() {
     return html`
       <div class="p-4 border border-border rounded-lg">
-        <p class="font-serif text-fg">${this.label}: ${this.count}</p>
+        <p class="font-serif text-foreground">${this.label}: ${this.count}</p>
       </div>
     `;
   }
@@ -496,7 +496,7 @@ Both hydrate without flash on the client.
 The scaffold ships with the **Tailwind CSS browser runtime** + `@theme`
 design tokens defined in the root layout. Every colour, font family,
 fluid type scale value, and motion duration is declared once in `@theme`
-and available everywhere via utility classes (`text-fg`, `bg-bg-elev`,
+and available everywhere via utility classes (`text-foreground`, `bg-card`,
 `font-serif`, `duration-fast`, `text-display`).
 
 **Dedup repeated Tailwind class bundles with JS helpers, not `@apply`.**
@@ -509,7 +509,7 @@ import { html } from '@webjsdev/core';
 
 export function rubric(label: string) {
   return html`
-    <span class="block font-mono text-[11px] leading-none font-semibold tracking-[0.2em] uppercase text-accent mb-4">● ${label}</span>
+    <span class="block font-mono text-[11px] leading-none font-semibold tracking-[0.2em] uppercase text-primary mb-4">● ${label}</span>
   `;
 }
 ```
@@ -571,7 +571,7 @@ const STYLES = css\`
   .page-dashboard {
     .actions     { display: flex; gap: 12px; }
     .btn         { padding: 12px 24px; border-radius: 999px; }
-    .btn-primary { background: var(--accent); color: var(--accent-fg); }
+    .btn-primary { background: var(--primary); color: var(--primary-foreground); }
   }
 \`;
 
