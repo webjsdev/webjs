@@ -31,6 +31,12 @@ export class ThemeToggle extends WebComponent {
     } catch {}
     if (next === 'system') delete document.documentElement.dataset.theme;
     else document.documentElement.dataset.theme = next;
+    // Mirror the effective theme onto the .dark class too. data-theme drives the
+    // app palette blocks; the .dark class is what the @webjsdev/ui kit's dark:
+    // variants read, so both signals must move together (see agent-docs/styling.md).
+    const osLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+    const dark = next === 'dark' || (next === 'system' && !osLight);
+    document.documentElement.classList.toggle('dark', dark);
   }
 
   render() {

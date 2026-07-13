@@ -80,10 +80,21 @@ export default function RootLayout({ children }: LayoutProps) {
     <script nonce="${nonce}">
       (function(){
         try {
-          var t = localStorage.getItem('webjs_theme');
-          if (t === 'light' || t === 'dark') {
-            document.documentElement.dataset.theme = t;
+          var mq = window.matchMedia('(prefers-color-scheme: light)');
+          function apply(){
+            var t = null;
+            try { t = localStorage.getItem('webjs_theme'); } catch (_) {}
+            var el = document.documentElement;
+            if (t === 'light' || t === 'dark') el.dataset.theme = t;
+            else delete el.dataset.theme;
+            // data-theme drives the app palette blocks; the .dark class is what
+            // the @webjsdev/ui kit's dark: variants read. Keep both in sync (see
+            // agent-docs/styling.md "two signals").
+            var dark = t === 'dark' || (t !== 'light' && !mq.matches);
+            el.classList.toggle('dark', dark);
           }
+          apply();
+          mq.addEventListener('change', apply);
         } catch (_) {}
       })();
       // #610: keep --header-h equal to the fixed header's real height. The
