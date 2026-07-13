@@ -93,10 +93,11 @@ npm run dev    # http://localhost:5003
 `npm run dev` and `webjs dev` behave identically (#550). This app's
 orchestration lives in the `webjs` block of `package.json` and runs INSIDE
 `webjs dev` / `webjs start`: `webjs.dev.before` runs `scripts/copy-registry.js`
-(populating `components/ui/` + `lib/utils.ts`), `webjs.dev.parallel` spawns
-`tailwindcss --watch` (producing `public/tailwind.css`), and
-`webjs.start.before` runs the registry copy + `npm run css:build` before prod
-serving. So a bare `webjs dev` is NOT degraded.
+(populating `components/ui/` + `lib/utils.ts`) then compiles the static CSS,
+`webjs.dev.regenerate` (#967) recompiles `public/tailwind.css` on request when a
+source changes (no `--watch` to die), and `webjs.start.before` runs the registry
+copy + `npm run css:build` before prod serving. So a bare `webjs dev` is NOT
+degraded.
 
 The `webjs.dev.before` step runs `scripts/copy-registry.js` (inside `webjs
 dev`, #550) to populate `components/ui/` and `lib/utils.ts` so the docs preview
