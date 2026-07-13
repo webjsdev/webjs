@@ -174,8 +174,9 @@ them per app.
    child) or one of the two static carve-outs in the
    `INTERACTIVITY_STATIC_FIELDS` registry: `static shadow = true`
    (Declarative Shadow DOM must re-attach on a client-side DOM insertion)
-   and `static refresh = true` (the explicit opt-in to keep the on-load
-   re-fetch). `renderFallback` stays a ship signal via
+   and `static interactive = true` (the explicit author override that
+   forces a ship when the analyser cannot see a component's interactivity
+   statically). `renderFallback` stays a ship signal via
    `CLIENT_LIFECYCLE_HOOKS`.
 
 7. **`<slot>` works identically in light and shadow DOM.** Light-DOM

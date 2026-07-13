@@ -79,6 +79,14 @@ abstract class WebComponentBase extends HTMLElement {
   static properties: Record<string, PropertyDeclaration>;
   static styles: CSSResult | CSSResult[] | null;
   static lazy?: boolean;
+  /**
+   * Force this component to ship (hydrate) even when the elision analyser would
+   * drop it as display-only. The escape hatch for interactivity the analyser
+   * cannot see statically: a dynamically-computed tag string, or a `:defined`
+   * rule in an external stylesheet outside the module graph. Leave unset for
+   * the automatic verdict.
+   */
+  static interactive?: boolean;
   /** Register this class as a custom element under `tag`. Tag must contain a hyphen. */
   static register(tag: string): void;
   static readonly observedAttributes: string[];
