@@ -60,86 +60,9 @@ export function generateMetadata(ctx: { url: string }) {
 const navLink = 'text-fg-muted no-underline font-medium text-sm px-[11px] py-2 rounded-lg transition-colors duration-[140ms] hover:text-fg hover:bg-bg-subtle';
 const panelLink = 'text-fg-muted no-underline font-medium text-sm px-3 py-[10px] rounded-[9px] hover:text-fg hover:bg-bg-subtle';
 
-export default function RootLayout({ children, url }: { children: unknown; url?: string | URL }) {
+export default function RootLayout({ children }: { children: unknown }) {
   const nonce = cspNonce();
-  // #936 fetch-capture diagnostic. Inert unless the entry page loads with
-  // ?diag=capture. Records the RAW bytes of each client-router nav fetch (an
-  // on-device proxy stripping HTML comments from fetch responses, but not from
-  // page loads, is the leading hypothesis) and shows them on a badge.
-  let diagOn = false;
-  try { diagOn = new URL(String(url ?? ''), 'http://x').searchParams.get('diag') === 'capture'; }
-  catch { /* no url */ }
   return html`
-    ${diagOn ? html`<script nonce="${nonce}">
-      (function () {
-        var reqLine = 'tap a nav link';
-        var respLine = '';
-        var postLine = '';
-        var openTok = '<!--wj:children:';
-        var closeTok = '<!--' + '/wj:children-->';
-        function headerGet(h, k) {
-          if (!h) return '';
-          if (typeof h.get === 'function') return h.get(k) || '';
-          return h[k] || h[k.toUpperCase()] || '';
-        }
-        var of = window.fetch;
-        window.fetch = function (input, init) {
-          init = init || {};
-          var h = init.headers;
-          var isRouter = !!headerGet(h, 'x-webjs-router');
-          var p = of.apply(this, arguments);
-          if (isRouter) {
-            var have = headerGet(h, 'x-webjs-have');
-            var pf = !!headerGet(h, 'x-webjs-prefetch');
-            reqLine = 'REQ ' + (pf ? '(prefetch) ' : '') + 'have="' + have + '"';
-            p.then(function (resp) {
-              try {
-                resp.clone().text().then(function (t) {
-                  respLine = 'RESP o' + (t.split(openTok).length - 1) + '/c' + (t.split(closeTok).length - 1)
-                    + ' nav=' + (t.indexOf('site-top') !== -1)
-                    + ' sheet=' + (t.indexOf('tailwind.css') !== -1)
-                    + ' doctype=' + (t.slice(0, 15).toLowerCase().indexOf('<!doctype') !== -1)
-                    + ' len=' + t.length + ' enc=' + (resp.headers.get('content-encoding') || '-');
-                  badge();
-                });
-              } catch (_) {}
-            });
-          }
-          return p;
-        };
-        function postProbe() {
-          var sheet = !!document.head.querySelector('link[rel="stylesheet"][href*="tailwind"]');
-          var navbar = !!document.querySelector('.site-top');
-          var o = 0, c = 0;
-          try {
-            var w = document.createTreeWalker(document.body, NodeFilter.SHOW_COMMENT, null), n;
-            while ((n = w.nextNode())) {
-              if (n.data.indexOf('wj:children:') === 0) o++;
-              else if (n.data.trim() === '/wj:children') c++;
-            }
-          } catch (_) {}
-          var bg = '';
-          try { bg = getComputedStyle(document.body).backgroundColor; } catch (_) {}
-          postLine = 'POST head-sheet=' + sheet + ' navbar=' + navbar + ' body-o' + o + '/c' + c + ' bg=' + bg;
-          badge();
-        }
-        document.addEventListener('webjs:navigate', function () {
-          requestAnimationFrame(function () { requestAnimationFrame(postProbe); });
-        });
-        function badge() {
-          var b = document.getElementById('wj-cap');
-          if (!b) {
-            b = document.createElement('div');
-            b.id = 'wj-cap';
-            b.style.cssText = 'position:fixed;left:6px;bottom:6px;z-index:99999;background:#111;color:#fff;font:600 11px/1.45 system-ui,sans-serif;padding:6px 8px;border-radius:8px;opacity:.94;pointer-events:none;max-width:92vw';
-            (document.body || document.documentElement).appendChild(b);
-          }
-          b.textContent = [reqLine, respLine, postLine].filter(Boolean).join('  //  ');
-        }
-        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', badge);
-        else badge();
-      })();
-    </script>` : ''}
     <link rel="icon" href="/public/favicon.svg" type="image/svg+xml" sizes="any">
     <link rel="icon" href="/public/favicon.png" type="image/png" sizes="32x32">
     <link rel="apple-touch-icon" href="/public/favicon.png">
