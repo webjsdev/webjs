@@ -639,11 +639,17 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     }
   }
 
-  // The agent skill is the one cross-agent source (AGENTS.md points to it). Copy
-  // the whole .agents/skills tree so every tool that reads AGENTS.md finds it.
-  const skillSrc = join(TEMPLATES, '.agents', 'skills');
+  // The agent skill is the one cross-agent source (AGENTS.md points to it). It
+  // lives ONCE, canonically, at the repo-root `.agents/skills/webjs/`. A
+  // published CLI bundles it under `templates/` at prepack (see
+  // scripts/sync-scaffold-skill.mjs, wired into this package's prepack), so copy
+  // that bundle when present; in the monorepo the bundle is gitignored, so fall
+  // back to the repo-root canonical.
+  const bundledSkill = join(TEMPLATES, '.agents', 'skills', 'webjs');
+  const repoRootSkill = resolve(__dirname, '..', '..', '..', '.agents', 'skills', 'webjs');
+  const skillSrc = existsSync(bundledSkill) ? bundledSkill : repoRootSkill;
   if (existsSync(skillSrc)) {
-    await cp(skillSrc, join(appDir, '.agents', 'skills'), { recursive: true });
+    await cp(skillSrc, join(appDir, '.agents', 'skills', 'webjs'), { recursive: true });
   }
 
   // Make the Claude enforcement hooks + the git pre-commit executable.
