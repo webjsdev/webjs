@@ -3,6 +3,7 @@ import '#components/particle-bg.ts';
 import '#components/loading-screen.ts';
 import '#components/section-nav.ts';
 import '#components/label-overlay.ts';
+import '#components/scroll-logo.ts';
 import { highlight } from '#lib/highlight.ts';
 
 /*
@@ -201,6 +202,8 @@ export default function LandingPage() {
     <particle-bg class="rmx-particle-canvas" aria-hidden="true"></particle-bg>
 
     <div class="rmx-content">
+      <scroll-logo></scroll-logo>
+
       <header class="rmx-nav">
         <span class="rmx-nav-hint">scroll or press &darr; and &uarr;</span>
         <nav class="rmx-nav-list" aria-label="Primary">

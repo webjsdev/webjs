@@ -56,6 +56,51 @@
   }
 }
 
+/* ---- Scroll logo (the wordmark that shrinks into the corner) ----------- */
+scroll-logo {
+  position: fixed;
+  top: 0;
+  left: 24px;
+  z-index: 25;
+  pointer-events: none;
+}
+scroll-logo a {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  color: var(--brand-cycle, #ebeff2);
+  pointer-events: none;
+  -webkit-tap-highlight-color: transparent;
+  will-change: transform;
+}
+scroll-logo a.is-collapsed {
+  pointer-events: auto;
+  cursor: pointer;
+}
+scroll-logo a:focus-visible {
+  outline: 2px solid var(--brand-cycle, #ebeff2);
+  outline-offset: 4px;
+}
+scroll-logo a svg {
+  display: block;
+  color: inherit;
+  /* SSR first paint: full-width wordmark; JS swaps in pixel widths. */
+  width: calc(100vw - 48px);
+  height: auto;
+}
+scroll-logo svg[data-ghost] {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  width: calc(100vw - 48px);
+  height: auto;
+  mix-blend-mode: screen;
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+
 /* ---- Nav --------------------------------------------------------------- */
 .rmx-nav {
   position: fixed;
