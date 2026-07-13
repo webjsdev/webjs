@@ -14,13 +14,16 @@ when a task needs them. The full hosted docs are at https://docs.webjs.dev.
 
 ## Grow this app in place
 
-This scaffold is a minimal starting point, not a demo to prune. It ships a home
-page (`app/page.ts`), a root layout with a neutral design-token palette
-(`app/layout.ts`), and a database wired up (`db/`). Build the app the user asked
-for by growing it here: add routes under `app/`, components under `components/`,
-features under `modules/<feature>/`, and keep server-only code behind
-`.server.ts`. Give the app its own design by setting the token values in
-`app/layout.ts`.
+This scaffold is a starting point. It ships a gallery index home
+(`app/page.ts`), a root layout with a neutral design-token palette
+(`app/layout.ts`), a database wired up (`db/`), and a densely-commented feature
+gallery: single-concept demos under `app/features/` plus the `app/examples/todo`
+app, with logic in `modules/`. Read the gallery to learn the idioms, then build
+the app the user asked for by growing this app here: add routes under `app/`,
+components under `components/`, features under `modules/<feature>/`, and keep
+server-only code behind `.server.ts`. Prune the demos the app does not use
+(delete the `app/features/<x>` route AND its `modules/<x>`). Give the app its own
+design by setting the token values in `app/layout.ts`.
 
 ## Commands
 

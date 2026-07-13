@@ -8,11 +8,14 @@ Read `AGENTS.md` first. Full hosted docs are at https://docs.webjs.dev.
 
 ## Grow the app in place (non-negotiable)
 
-- **The scaffold is a minimal starting point, not a demo to prune.** It ships a
-  home page, a root layout, and a database wired up. Build the app the user asked
-  for by growing it here: add routes under `app/`, components under `components/`,
-  and features under `modules/<feature>/`. Do not ship the placeholder home as
-  the deliverable.
+- **The scaffold is a starting point with a browsable feature gallery.** It ships
+  a gallery index home, a root layout, a database wired up, and single-concept
+  demos under `app/features/` plus the `app/examples/todo` app (logic in
+  `modules/`). Read the demos to learn the idioms, then build the app the user
+  asked for by growing it here: add routes under `app/`, components under
+  `components/`, and features under `modules/<feature>/`. Prune the demos the app
+  does not use (delete the `app/features/<x>` route AND its `modules/<x>`), and do
+  not ship the gallery index home as the deliverable.
 - **Use the wired-up database (Drizzle), never JSON files.** For any data the app
   stores, define a Drizzle table in `db/schema.server.ts`, then
   `npm run db:generate` and `npm run db:migrate`. Never use a JSON file, a

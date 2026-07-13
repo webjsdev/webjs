@@ -45,7 +45,7 @@ TypeScript with zero build step, real SSR with Declarative Shadow DOM.
 > - Backend-only HTTP/JSON API, no UI → **`--template api`**
 > - Auth, login/signup, protected dashboard, SaaS → **`--template saas`**
 >
-> **The scaffold is a minimal starting point, grown in place** (the Remix 3 model): a home page, a neutral-palette root layout, and database wiring, nothing more. The framework context ships as one cross-agent skill, `.agents/skills/webjs/SKILL.md` (a routing skill), alongside `AGENTS.md` and `.agents/rules/workflow.md`. Read the skill first, then build the app the user asked for directly on top of the scaffold.
+> **The scaffold is a starting point, grown in place.** It ships a gallery index home, a neutral-palette root layout, database wiring, and a densely-commented feature gallery (single-concept demos under `app/features/` plus the `app/examples/todo` app, with logic in `modules/`). The framework context ships as one cross-agent skill, `.agents/skills/webjs/SKILL.md` (a routing skill), alongside `AGENTS.md` and `.agents/rules/workflow.md`. Read the skill and browse the gallery, then build the app the user asked for on top of the scaffold, pruning the demos it does not use.
 >
 > Full rules: [`AGENTS.md` → How AI agents must scaffold](./AGENTS.md#how-ai-agents-must-scaffold).
 > Full framework docs (every API, every recipe): **https://docs.webjs.dev**.
