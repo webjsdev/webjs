@@ -200,7 +200,7 @@ export default function Post({ params }) {
   }
   ::selection { background: var(--primary-tint); }
   ::-webkit-scrollbar { width: 10px; }
-  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
 &lt;/style&gt;</pre>
 
     <h2>Dark mode</h2>
