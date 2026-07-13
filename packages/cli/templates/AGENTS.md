@@ -21,17 +21,25 @@ gallery: single-concept demos under `app/features/` plus the `app/examples/todo`
 app, with logic in `modules/`. The gallery is reference to learn the idioms
 from, not part of your product.
 
-**Building a real app? Run `npm run gallery:clear` first.** It sheds the whole
-demo gallery in one step (removes `app/features/`, `app/examples/`, the demo
-`modules/`, and the demo `todos` table, and resets `app/page.ts` to a minimal
-home), while KEEPING the agent skill, the layout, and the database wiring. Then
-regenerate the database (`npm run db:generate` then `npm run db:migrate`) and
-grow the app in place: add routes under `app/`, components under `components/`,
-features under `modules/<feature>/`, keep server-only code behind `.server.ts`,
-and give the app its own design by setting the token values in `app/layout.ts`.
+**Building a real app? Learn from the gallery FIRST, then clear it, then build.**
+The order matters:
 
-If you are exploring rather than building, keep the gallery and browse it. To
-learn one idiom before clearing, read its demo (or the skill's `references/`).
+1. **Gather context.** Skim the demos relevant to your task under
+   `app/features/<x>` (and `app/examples/todo`) for the runnable idiom. You do
+   not have to read all of it, and you never lose it: the skill at
+   `.agents/skills/webjs/` teaches the same patterns and SURVIVES the clear, so
+   clearing is not a knowledge-loss event, the gallery is just a runnable bonus.
+2. **Clear it.** Run `npm run gallery:clear` to shed the whole gallery in one
+   step (removes `app/features/`, `app/examples/`, the demo `modules/`, the demo
+   `todos` table, and resets `app/page.ts` to a minimal home), while KEEPING the
+   agent skill, the layout, and the database wiring.
+3. **Build.** Regenerate the database (`npm run db:generate` then `npm run
+   db:migrate`), then grow the app in place: routes under `app/`, components
+   under `components/`, features under `modules/<feature>/`, server-only code
+   behind `.server.ts`, and the app's own palette via the tokens in
+   `app/layout.ts`.
+
+If you are only exploring, keep the gallery and browse it.
 
 ## Commands
 

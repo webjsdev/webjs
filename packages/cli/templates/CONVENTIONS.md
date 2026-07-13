@@ -19,8 +19,10 @@ is the short version.
   Never persist to a JSON file, an in-memory array or Map, or localStorage.
 - **The scaffold ships a feature gallery to learn from.** Single-concept demos
   under `app/features/` plus the `app/examples/todo` app, with logic in
-  `modules/`. When you build a real app, run `npm run gallery:clear` first to
-  shed the demos and reset the home, then grow the app in place.
+  `modules/`. When you build a real app: learn from the gallery FIRST (skim the
+  demos relevant to your task; the skill teaches the same and survives the
+  clear), then run `npm run gallery:clear` to shed the demos and reset the home,
+  then grow the app in place.
 - **Progressive enhancement is the default.** Pages render as HTML, `<a>`
   navigates, `<form>` + a page action submits, all with JavaScript off; opt into
   interactivity per behaviour inside a component.

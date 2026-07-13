@@ -4,8 +4,10 @@
 // The scaffold ships a browsable gallery (single-concept demos under
 // app/features/, the app/examples/todo app, their modules/, and example
 // metadata routes) so an agent can learn the idioms from real, running code.
-// The gallery is reference, NOT part of your product. When you build a real app,
-// run this once to shed it, then grow the app in place.
+// The gallery is reference, NOT part of your product. Learn from the demos
+// relevant to your task first (the skill at .agents/skills/webjs/ teaches the
+// same patterns and SURVIVES this reset, so nothing is lost), then run this
+// once to shed the gallery, then grow the app in place.
 //
 // It removes the gallery routes + modules + demo metadata routes, resets
 // app/page.ts to a minimal home, and drops the demo `todos` table from the

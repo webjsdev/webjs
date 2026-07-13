@@ -12,11 +12,14 @@ Read `AGENTS.md` first. Full hosted docs are at https://docs.webjs.dev.
   a gallery index home, a root layout, a database wired up, and single-concept
   demos under `app/features/` plus the `app/examples/todo` app (logic in
   `modules/`). The gallery is reference, not part of your product. **Building a
-  real app? Run `npm run gallery:clear` first** to shed the whole gallery in one
-  step (it keeps the agent skill, the layout, and the database wiring, and resets
-  the home). Then regenerate the database and grow the app in place: add routes
-  under `app/`, components under `components/`, and features under
-  `modules/<feature>/`. Keep the gallery only while exploring, never ship it.
+  real app? Learn from the gallery FIRST, then clear it, then build:** (1) skim
+  the demos relevant to your task under `app/features/<x>` for the runnable idiom
+  (the skill teaches the same and SURVIVES the clear, so you never lose it);
+  (2) run `npm run gallery:clear` to shed the whole gallery in one step (it keeps
+  the agent skill, the layout, and the database wiring, and resets the home);
+  (3) regenerate the database and grow the app in place under `app/`,
+  `components/`, and `modules/<feature>/`. Keep the gallery only while exploring,
+  never ship it.
 - **Use the wired-up database (Drizzle), never JSON files.** For any data the app
   stores, define a Drizzle table in `db/schema.server.ts`, then
   `npm run db:generate` and `npm run db:migrate`. Never use a JSON file, a
