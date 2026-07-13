@@ -344,20 +344,28 @@ and the reader key set never diverge (a counterfactual unknown key proves
    display-only, (b) the set of page/layout route modules that are
    inert (do no client work even transitively), and (c) the set of
    **import-only** page/layout modules (#605): a module whose own code does no
-   client work and whose closure reaches ONLY shipping components, mapped to the
-   component files to emit in its place. Since a page/layout never hydrates, an
-   import-only module is just the import-graph carrier for its components, so the
-   boot emits those component modules directly and drops the module. The
-   condition is a positive subset test (every client-effecting closure member is
-   a component), NOT a hand-listed block list: any client-effecting NON-component
-   in the closure (a self-executing helper, a `client-router` import, a reactive
-   helper) keeps the whole module, because dropping it would lose that side
-   effect. The re-emit is the STATIC import closure (so a component imported but
-   only conditionally rendered still registers). A `static lazy` component is not
-   special-cased: it is in the static closure only when imported directly, and
+   client work and whose only paths to client work run through shipping
+   components, mapped to the component files to emit in its place. Since a
+   page/layout never hydrates, an import-only module is just the import-graph
+   carrier for its components, so the boot emits those component modules
+   directly and drops the module. The condition is a PATH-AWARE truncated walk
+   (#963), NOT a closure subset test: the BFS stops descending at a shipping
+   component (it is emitted in the module's place, so its subtree loads
+   regardless), which means a client-effecting NON-component reachable only
+   THROUGH shipping components (the module-scope-signal-in-its-own-file idiom
+   of invariant 5) does not block import-only. A client-effecting
+   non-component on a component-free path (a self-executing helper, a
+   `client-router` import, a reactive helper the page reaches directly or via
+   plain helpers) still keeps the whole module, because dropping it would lose
+   that side effect. The re-emit is the component FRONTIER of that walk: the
+   shipping components reached without passing through another shipping
+   component (so a component imported but only conditionally rendered still
+   registers; one nested behind another emitted component loads via its
+   importer instead of being re-emitted). A `static lazy` component is not
+   special-cased: it is on the static walk only when imported directly, and
    such an import already eager-loaded it before elision, so re-emitting it keeps
    that exact behaviour; a normally-used lazy component is tag-referenced (never
-   in the static closure) and still loads via the IntersectionObserver path. The serving branch in
+   on the static walk) and still loads via the IntersectionObserver path. The serving branch in
    `dev.js` strips side-effect imports of display-only components from the
    browser-served source; `ssr.js` drops inert page/layout modules from
    the boot script's `moduleUrls` entirely (and splices an import-only module's

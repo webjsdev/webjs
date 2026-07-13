@@ -287,13 +287,18 @@ global, #619). To keep a route's modules out of the network tab:
   page-template `@event` or inline `<script>` is fine: it is SSR output,
   never module client work (the analyser scans route-module template
   content as inert, #623 / #634).
-- Do not import a client-effecting NON-component util into a page/layout
-  (or into a component chain a page reaches). A helper that touches a
-  client global or self-executes drags the whole page in. Put client-only
-  behaviour inside a component; put server-only work in `.server.{js,ts}`
-  (it never enters the client closure); and if a util MIXES a pure helper
-  with client-global code (the `cn.ts` shape, #619), split the client part
-  into its own module so the pure helper does not pin every importer.
+- Do not import a client-effecting NON-component util DIRECTLY into a
+  page/layout (or reach one through a chain of plain helpers). A helper
+  that touches a client global or self-executes drags the whole page in.
+  Put client-only behaviour inside a component; put server-only work in
+  `.server.{js,ts}` (it never enters the client closure); and if a util
+  MIXES a pure helper with client-global code (the `cn.ts` shape, #619),
+  split the client part into its own module so the pure helper does not
+  pin every importer. The verdict is PATH-AWARE (#963): the same
+  client-effecting util imported by a SHIPPING COMPONENT the page renders
+  (a module-scope signal bus, the invariant-5 shared-state idiom) does NOT
+  pin the page, because the emitted component carries it. Only a
+  component-free path from the page to client work ships the page whole.
 
 Self-check: `page.ts` / `layout.ts` should NOT appear in the network tab
 or the boot `<script type="module">`. If one does, something in its
