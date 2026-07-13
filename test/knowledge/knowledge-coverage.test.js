@@ -1,10 +1,8 @@
 // Agent-knowledge coverage gate (tier-2, un-skippable CI enforcement).
 //
-// The scaffold gate (test/scaffolds/gallery-coverage.test.js) keeps the DEMO
-// surface honest. This is its sibling for the surfaces that counter agents'
-// WRONG PRIORS, which is where agents actually fail: the symptom-keyed
-// troubleshooting page, the muscle-memory gotcha docs, and the MCP `init`
-// primer. Two things are gated:
+// This keeps the surfaces that counter agents' WRONG PRIORS honest, which is
+// where agents actually fail: the symptom-keyed troubleshooting page and the
+// muscle-memory gotcha docs. Two things are gated:
 //
 //   1. Every LIVE `webjs check` RULE is explained in an agent-facing surface
 //      (the troubleshooting page or a gotcha doc, matched by rule name) OR

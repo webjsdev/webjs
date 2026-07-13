@@ -116,20 +116,6 @@ test('webjs-research-record routes on research/design phrases', () => {
   }
 });
 
-test('webjs-scaffold-sync routes on scaffold-change phrases', () => {
-  for (const p of [
-    'add a new demo to the feature gallery',
-    'the gallery should also ship in the saas template',
-    'update all three scaffold templates with this',
-    'add a backend gallery to the api template',
-    'sync the scaffold across every surface',
-    'is the scaffold consistent across templates',
-  ]) {
-    const { ctx } = run(p);
-    assert.ok(routed(ctx, 'webjs-scaffold-sync'), `expected scaffold-sync route for: ${p}`);
-  }
-});
-
 test('webjs-blog-write routes on blog-writing phrases', () => {
   for (const p of [
     'write a blog post about streaming actions',
