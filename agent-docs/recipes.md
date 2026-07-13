@@ -672,3 +672,16 @@ custom adapter) once at startup; the call sites above do not change. The default
 uploads directory is `<cwd>/.webjs/uploads`, which the app should `.gitignore`.
 See the "File storage" section in `agent-docs/built-ins.md` for the full
 interface and the traversal-safety + signed-URL guarantees.
+
+## Boot a heavy client-only engine (WebGL / canvas / a big imperative library)
+
+Integrate a WebGL scene, a canvas visualization, or any large imperative
+third-party module (a physics engine, a map renderer) without breaking SSR or
+adding a build step. The component SSRs a bare placeholder and boots the engine
+in `connectedCallback` (browser only) through a string-literal dynamic
+`import()`, so the library never runs at SSR; the library is vendored into the
+importmap (`npm install <lib>` then `webjs vendor pin`), no bundler; and
+cross-module state between the engine loop and a component rides a module-scope
+signal used as a mutate-in-place container. The full end-to-end recipe, with the
+type-only-import and mutate-without-`.set()` caveats, is in the "Heavy
+client-only engine behind a component" section of `agent-docs/advanced.md`.

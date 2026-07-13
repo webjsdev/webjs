@@ -1392,3 +1392,130 @@ first, then segment-scoped files.
 ## Raw-text templates
 
 `<script>` and `<style>` are parsed as raw-text. `<` and `>` inside them aren't tag starts. Holes interpolate verbatim (no HTML escaping).
+
+## Heavy client-only engine behind a component (WebGL, canvas, a big imperative library)
+
+A WebGL scene, a canvas visualization, or any large third-party imperative
+module (a physics engine, a charting core, a map renderer) is client-only and
+must never run at SSR. The idiomatic WebJs pattern is one path, not several
+tricks. Four moving parts:
+
+1. **A component SSRs a bare placeholder and boots the engine in the browser
+   only, through a string-literal dynamic `import()`.** The component's own
+   module stays SSR-safe because it never statically imports the library; the
+   engine module (which DOES import the library) is pulled in inside
+   `connectedCallback`, which runs only in the browser. Wrap the boot so a
+   failure degrades to the SSR placeholder instead of hanging the page.
+
+   ```ts
+   // components/particle-bg.ts
+   import { WebComponent, html } from '@webjsdev/core';
+
+   export class ParticleBg extends WebComponent {
+     #booted = false;
+
+     connectedCallback() {
+       super.connectedCallback();
+       if (this.#booted) return;
+       this.#booted = true;
+       // Defer past first paint; connectedCallback is browser-only, so the
+       // dynamic import (and the library it pulls) never reaches SSR.
+       queueMicrotask(() => this.#boot());
+     }
+
+     async #boot() {
+       const canvas = this.querySelector('canvas');
+       if (!canvas) return;
+       try {
+         const engine = await import('#app/scene/engine-boot.ts'); // string literal
+         await engine.start(canvas as HTMLCanvasElement);
+       } catch (err) {
+         // Engine unavailable (library not vendored yet, WebGL unsupported):
+         // keep the SSR placeholder rather than crash the page.
+         console.warn('[particle-bg] engine boot skipped:', err);
+       }
+     }
+
+     render() {
+       // SSR emits just this canvas, so the layout reserves the space and a
+       // no-JS reader sees a plain (empty) canvas. Never a hydration-only paint.
+       return html`<canvas style="width:100%;height:100%;display:block"></canvas>`;
+     }
+   }
+   ParticleBg.register('particle-bg');
+   ```
+
+   Why a string-literal dynamic `import('#app/scene/engine-boot.ts')` and not a
+   top-level `import`: a top-level import of the engine module drags the library
+   into the component's module graph, so it loads at SSR and crashes on the
+   first server-only or browser-only global the library touches. The dynamic
+   import defers that to the browser. The specifier is a plain string literal so
+   the dev server's import-graph walk still authorizes and serves the engine
+   module (a computed `import(expr)` cannot be resolved statically and 404s).
+
+2. **The engine module is framework-free and statically imports the library by
+   its bare specifier.** It is reached only through the browser-only dynamic
+   import above, so it never runs at SSR.
+
+   ```ts
+   // app/scene/engine-boot.ts
+   import * as THREE from 'three';                     // bare specifier
+   import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+
+   export async function start(canvas: HTMLCanvasElement) {
+     const renderer = new THREE.WebGLRenderer({ canvas });
+     // ... build the scene, start the rAF loop ...
+   }
+   ```
+
+3. **Vendor the library into the importmap with no bundler.** WebJs is no-build,
+   so `three` and its `three/addons/*` subpaths ride the importmap, not a
+   bundler. Install it, then pin:
+
+   ```sh
+   npm install three
+   webjs vendor pin          # writes .webjs/vendor/importmap.json (three + subpaths, single instance)
+   ```
+
+   The pins resolve to a single CDN-hosted instance of the library, so every
+   `import 'three'` and `import 'three/addons/...'` shares one copy. (If `three`
+   is imported straight from a CDN with no local install, `webjs vendor pin`
+   reports that it found the specifier but could not resolve a version and asks
+   you to `npm install three` first, see #953.)
+
+4. **Share state between the engine loop and a component through a module-scope
+   signal used as a container.** A module-scope `signal()` is the framework's
+   cross-module shared-state primitive (invariant 5): every module that imports
+   it gets the same instance, and it survives client navigations. The engine
+   writes into the held object; a component reads it.
+
+   ```ts
+   // app/scene/label-bus.ts
+   import { signal } from '@webjsdev/core';
+   import type { ProjectedLabel } from './engine/label-projection.ts'; // TYPE-ONLY
+
+   export interface LabelState { labels: ProjectedLabel[]; opacity: number; }
+   export const labelState = signal<LabelState>({ labels: [], opacity: 0 });
+   ```
+
+   Two caveats that make this SSR-safe and cheap:
+
+   - **Type-only import anything that transitively reaches the library.** The bus
+     is imported by a component (which ships and SSRs), so a VALUE import of the
+     engine or the library would pull `three` into SSR. `import type { ... }` is
+     erased by the TypeScript stripper before it can reach the browser or the
+     server render, so the bus stays clean.
+   - **Mutate the held object in place per frame; do NOT call `.set()` every
+     frame.** The engine writes `labelState.get().labels = ...` and
+     `labelState.get().opacity = ...` inside its animation loop, and the reading
+     component reads `labelState.get()` inside its OWN `requestAnimationFrame`
+     tick (outside any reactive render, so no subscription is created). A
+     per-frame `.set()` would fire the reactive re-render machinery 60 times a
+     second for nothing. The signal here is the shared, discoverable holder, not
+     a reactivity trigger. Use `.set()` only for a genuine state transition the
+     UI should react to (the engine finished loading, the active preset changed).
+
+Progressive enhancement holds throughout: the SSR baseline (the placeholder
+canvas plus any server-rendered content) reads without the engine, and the
+library rides the importmap rather than a bundler, so there is still no build
+step.
