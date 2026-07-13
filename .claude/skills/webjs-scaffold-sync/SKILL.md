@@ -145,19 +145,19 @@ it applies, then update or consciously skip each.
    ```sh
    # generate (files only is enough for structure/typecheck; install to boot)
    node -e "import('packages/cli/lib/create.js').then(m => m.scaffoldApp('probe', '/tmp/x', { template: 'saas', install: false }))"
-   # then in the generated app: webjs check (only no-scaffold-placeholder should
-   # remain), webjs typecheck (clean), and boot it to hit the new route(s).
+   # then in the generated app: webjs check (must be CLEAN, zero violations),
+   # webjs typecheck (clean), and boot it to hit the new route(s).
    ```
    A scaffold change is NOT done until a freshly generated app of each affected
-   template BOOTS, serves the new/changed route, passes `webjs check` (only the
-   intended `no-scaffold-placeholder` markers), and `webjs typecheck` is clean.
+   template BOOTS, serves the new/changed route, passes `webjs check` cleanly
+   (zero violations), and `webjs typecheck` is clean.
 5. Run the scaffold tests (`node --test 'test/scaffolds/*.test.js'`) and add/adjust
    assertions (a new demo in the FEATURES list, a per-template inclusion/exclusion
    test, the counterfactual).
 6. Respect the prose-punctuation invariant (#11) in every comment and doc, and
    keep each demo densely commented (a header stating the webjs concept + the
-   why, inline comments on the non-obvious idiom, a `webjs-scaffold-placeholder`
-   marker). The scaffold teaches by its comments; a thin demo is a bug.
+   why, inline comments on the non-obvious idiom). The scaffold teaches by its
+   comments; a thin demo is a bug.
 
 ## Audit-mode procedure (sweep the scaffold for drift)
 

@@ -88,12 +88,6 @@ The rules are the concrete failure modes an agent trips over. A few real ones:
 
 An agent runs `webjs check`, reads concrete violation messages, and fixes them before the code is anywhere near a review. The narrowness is deliberate. It is a short list of "this will break", not a hundred style opinions, so a green check actually means something.
 
-# The scaffold placeholder that refuses to ship
-
-One more small guard I like. When you scaffold an app, the example content (a demo page, a `User` model, a starter component) carries a `webjs-scaffold-placeholder` marker. The `no-scaffold-placeholder` rule fails until you replace that content and delete the marker.
-
-It exists because an agent will otherwise treat the scaffold as the finished product and ship the example todo app as if it were your feature. The sentinel forces the agent to actually build the thing you asked for, not decorate the demo.
-
 # Guardrails dull on purpose
 
 AI agents are fast and a little careless, and a framework built in 2026 has to plan for that. WebJs does it by moving the rules out of prose and into tooling, so an agent that skips the docs still cannot commit to main, ship untested source, drift the docs, or collide with another agent. The guardrails are dull on purpose (a few shell hooks, a correctness linter, one worktree per task), and dull is the point, because they catch mistakes at the seam where they happen instead of in a review three days later. If you want to see them work, scaffold an app with `npm create webjs@latest my-app` and watch your agent get corrected in real time. The friction you feel is the framework doing its job.

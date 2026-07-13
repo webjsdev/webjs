@@ -4,7 +4,6 @@
     "components-have-register": "basic setup requirement (call Class.register('tag')); framework invariant 3, not a distinctive error signature",
     "tag-name-has-hyphen": "HTML-spec basic; framework invariant 3, no muscle-memory divergence to counter",
     "no-duplicate-tag": "two components claim one tag name, a build-time collision surfaced by the check, not a runtime error signature",
-    "array-prop-uses-array-type": "shape hint (declare an array prop with Array not Object); the Array-vs-Object prop concept is taught in agent-docs/lit-muscle-memory-gotchas.md",
-    "no-scaffold-placeholder": "scaffold sentinel that fails check until example content is kept-or-pruned, not a code error signature"
+    "array-prop-uses-array-type": "shape hint (declare an array prop with Array not Object); the Array-vs-Object prop concept is taught in agent-docs/lit-muscle-memory-gotchas.md"
   }
 }

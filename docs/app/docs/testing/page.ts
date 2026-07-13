@@ -223,7 +223,7 @@ webjs check
 
 # List the checks and their descriptions
 webjs check --rules</pre>
-    <p>Checks include: no browser globals in <code>render()</code> (SSR crash), no non-public <code>process.env</code> in components (leaked secret), reactive props use <code>declare</code> (broken reactivity), <code>Class.register('tag')</code> present, tag names have hyphens, <code>'use server'</code> needs the <code>.server</code> extension, a server-only import in a shipping browser module, erasable TypeScript only, and the unreplaced-scaffold-placeholder sentinel. They always run. Project conventions (layout, testing, styling) are guidance in <code>CONVENTIONS.md</code>, not checks. <code>webjs check --rules</code> is the authoritative, current list.</p>
+    <p>Checks include: no browser globals in <code>render()</code> (SSR crash), no non-public <code>process.env</code> in components (leaked secret), reactive props use <code>declare</code> (broken reactivity), <code>Class.register('tag')</code> present, tag names have hyphens, <code>'use server'</code> needs the <code>.server</code> extension, a server-only import in a shipping browser module, and erasable TypeScript only. They always run. Project conventions (layout, testing, styling) are guidance in <code>CONVENTIONS.md</code>, not checks. <code>webjs check --rules</code> is the authoritative, current list.</p>
 
     <h2>Recommended Test Structure</h2>
     <p>Feature folders are primary, and the test kind is a subfolder inside the feature only when that kind is present:</p>

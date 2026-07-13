@@ -130,11 +130,6 @@ export const RULES = [
       'A `\'use server\'` action file that declares HTTP-verb config (any of `method` / `cache` / `tags` / `invalidates` / `validate`, #488) must export exactly ONE callable action function. The config is file-level (it applies to the action in the file), so a second exported function would silently inherit the same verb / cache, which is almost never intended and makes the contract ambiguous. Move the extra function to its own `.server.ts` file (the one-function-per-file convention), or, if it is a private helper, do not export it. Files with no verb config are unaffected.',
   },
   {
-    name: 'no-scaffold-placeholder',
-    description:
-      'The one sentinel-based check, and the deliberate exception to the "objectively broken code" framing of the other rules: it flags scaffold example content that has not been replaced, so a delivered app contains only what the user intended and never leftover scaffold code. `webjs create` marks its example/demo files (the example homepage in app/page.ts, the example app chrome in app/layout.ts) with a one-line marker comment carrying the literal token `webjs-scaffold-placeholder`. The rule scans raw source (the marker lives in a comment, which the redacted scan view would hide) and fails for every file that still carries the token. A freshly scaffolded app fails this rule BY DESIGN until its placeholders are addressed: replace the example content, or deliberately keep it, and in either case delete the marker line. No finished app legitimately ships a literal remove-me marker, so this still qualifies as a check rather than a convention. The marker is acknowledge-and-remove, so keeping a piece is a one-line deletion rather than a forced rewrite.',
-  },
-  {
     name: 'no-redirect-in-api-route',
     description:
       'API route handlers (`route.{js,ts}`) must NOT call `redirect()` from `@webjsdev/core`. That function throws a control-flow signal designed for the SSR page renderer; in a route handler it goes uncaught and produces a 500. Use `Response.redirect(url, 303)` for external redirects or return a 3xx Response directly. Page functions, layouts, and server actions may still use `redirect()` (caught by the SSR pipeline).',
@@ -665,27 +660,6 @@ export async function checkConventions(appDir) {
           }
         }
       }
-    }
-  }
-
-  // --- Rule: no-scaffold-placeholder ---
-  // `webjs create` marks its example/demo files (app/page.ts, app/layout.ts)
-  // with a one-line marker comment so a delivered app cannot silently ship
-  // leftover scaffold content. Scan RAW `content`: the marker lives in a
-  // comment, which the `scan` view redacts to whitespace. One violation per
-  // still-marked file. The token is assembled here so this source does not
-  // itself carry the contiguous literal.
-  {
-    const MARKER = 'webjs-scaffold-' + 'placeholder';
-    for (const { rel, content } of files) {
-      if (!content.includes(MARKER)) continue;
-      violations.push({
-        rule: 'no-scaffold-placeholder',
-        file: rel,
-        message:
-          'Scaffold placeholder marker still present. This file is unmodified example content from `webjs create`, and the delivered app should contain only what the user intended, not leftover scaffold code.',
-        fix: `Replace the example content (or deliberately keep it), then delete the marker comment line carrying the ${MARKER} token.`,
-      });
     }
   }
 
