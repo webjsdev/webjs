@@ -83,15 +83,40 @@ export default async function DashboardPage() {
   }
 });
 
-// (b) Page that imports auth AND a component (so it is NOT elided) -> violation.
-// Importing the interactive component to register it forces the page to load in
-// the browser, which drags the server-only auth import along: a runtime crash.
+// An IMPORT-ONLY page (its only client relevance is importing a shipping
+// component, #605/#963) is dropped from the boot in favour of its components,
+// so its bare server import never loads in a browser and must NOT be flagged.
+test('import-only page importing auth AND a component is NOT flagged (#963)', async () => {
+  const appDir = await makeApp({
+    'lib/auth.server.ts': AUTH_SERVER,
+    'modules/workspace/components/crisp-workspace.ts': INTERACTIVE_COMPONENT,
+    'app/project/page.ts': `import { auth } from '../../lib/auth.server.ts';
+import '../../modules/workspace/components/crisp-workspace.ts';
+export default async function ProjectPage() {
+  const session = await auth();
+  return \`<crisp-workspace></crisp-workspace>\`;
+}
+`,
+  });
+  try {
+    const violations = await checkConventions(appDir);
+    assert.equal(find(violations).length, 0, 'an import-only page must not be flagged');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
+// (b) Page that imports auth AND a component AND does its OWN client work (so
+// it ships whole under the path-aware verdict, #963) -> violation. The page's
+// own client signal forces it to load in the browser, which drags the
+// server-only auth import along: a runtime crash.
 test('non-elided page importing auth AND a component IS flagged', async () => {
   const appDir = await makeApp({
     'lib/auth.server.ts': AUTH_SERVER,
     'modules/workspace/components/crisp-workspace.ts': INTERACTIVE_COMPONENT,
     'app/project/page.ts': `import { auth } from '../../lib/auth.server.ts';
 import '../../modules/workspace/components/crisp-workspace.ts';
+import '@webjsdev/core/client-router'; // own client work: the page ships whole (#963)
 export default async function ProjectPage() {
   const session = await auth();
   return \`<crisp-workspace></crisp-workspace>\`;
@@ -106,11 +131,11 @@ export default async function ProjectPage() {
     assert.ok(v.file.includes('project/page.ts'), 'names the offending file');
     assert.ok(v.message.includes('auth.server.ts'), 'names the offending server import');
     assert.ok(/middleware|use server|layout/i.test(v.fix), 'fix names a concrete remedy');
-    // A page that became browser-bound by importing a component CAN elide, so it
-    // additionally gets the "register the component in a layout so it elides
-    // again" option (the boundary kinds do not).
-    assert.ok(/elide/i.test(v.fix) && /layout/.test(v.fix),
-      'a component-induced page is offered the elide-via-layout remedy');
+    // A page/layout CAN become a dropped carrier again by moving its own
+    // client work into a component (#963), so it additionally gets that
+    // remedy (the boundary kinds do not).
+    assert.ok(/elide/i.test(v.fix) && /own client work/.test(v.fix),
+      'a page is offered the become-a-dropped-carrier remedy');
   } finally {
     await rm(appDir, { recursive: true, force: true });
   }
@@ -232,6 +257,7 @@ export async function currentUser() { return (await auth()).user; }
     'modules/workspace/components/crisp-workspace.ts': INTERACTIVE_COMPONENT,
     'app/project/page.ts': `import { currentUser } from '../../lib/session.ts';
 import '../../modules/workspace/components/crisp-workspace.ts';
+import '@webjsdev/core/client-router'; // own client work: the page ships whole (#963)
 export default async function ProjectPage() {
   const u = await currentUser();
   return \`<crisp-workspace user="\${u}"></crisp-workspace>\`;
@@ -440,6 +466,7 @@ test('a real server import statement on a shipping page IS still flagged', async
     'modules/workspace/components/crisp-workspace.ts': INTERACTIVE_COMPONENT,
     'app/docs/page.ts': `import { db } from '../../lib/db.server.ts';
 import '../../modules/workspace/components/crisp-workspace.ts';
+import '@webjsdev/core/client-router'; // own client work: the page ships whole (#963)
 export default async function DocsPage() {
   const users = db.user.findMany();
   return \`<crisp-workspace count="\${users.length}"></crisp-workspace>\`;
@@ -506,6 +533,7 @@ test('a server import via a # alias into a shipping page IS flagged (alias does 
     'modules/workspace/components/crisp-workspace.ts': INTERACTIVE_COMPONENT,
     'app/project/page.ts': `import { auth } from '#lib/auth.server.ts';
 import '#modules/workspace/components/crisp-workspace.ts';
+import '@webjsdev/core/client-router'; // own client work: the page ships whole (#963)
 export default async function ProjectPage() {
   const session = await auth();
   return \`<crisp-workspace></crisp-workspace>\`;
@@ -624,7 +652,7 @@ export default function Home() { return '<todo-list></todo-list>'; }
 test('message prints the full import chain and names the types-module fix (#804)', async () => {
   const dir = await makeApp({
     'app/layout.ts': `import { html } from '@webjsdev/core';\nexport default function L({ children }) { return html\`<div>\${children}</div>\`; }\n`,
-    'app/page.ts': `import { html } from '@webjsdev/core';\nimport './widget.ts';\nimport { thing } from '../modules/todos/types.ts';\nexport default function P() { return html\`<my-widget></my-widget>\${thing}\`; }\n`,
+    'app/page.ts': `import { html } from '@webjsdev/core';\nimport '@webjsdev/core/client-router';\nimport './widget.ts';\nimport { thing } from '../modules/todos/types.ts';\nexport default function P() { return html\`<my-widget></my-widget>\${thing}\`; }\n`,
     'app/widget.ts': INTERACTIVE_COMPONENT.replace('crisp-workspace', 'my-widget').replace('CrispWorkspace', 'MyWidget'),
     'modules/todos/types.ts': `export { thing } from '../../lib/data.server.ts';\n`,
     'lib/data.server.ts': `export const thing = 'x';\n`,

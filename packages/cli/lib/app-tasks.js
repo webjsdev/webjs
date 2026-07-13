@@ -4,15 +4,20 @@ import { join } from 'node:path';
 /**
  * Read the dev/start task orchestration from an app's `package.json` `"webjs"`
  * block (#550). This is what lets `webjs dev` / `webjs start` behave identically
- * to `npm run dev` / `npm run start`: the orchestration (Tailwind's watcher, a
- * `db migrate` before prod boot) moves OUT of `concurrently` + `pre*` npm hooks
+ * to `npm run dev` / `npm run start`: the orchestration (a Tailwind compile, a
+ * `db migrate` before boot) moves OUT of `concurrently` + `pre*` npm hooks
  * and INTO the framework primitive, so a bare `webjs dev` is not a degraded run.
+ *
+ * Reads only `before` / `parallel` here (the CLI-run tasks). The dev-only
+ * `regenerate` key (#967, on-request rebuilds of a stale served output like
+ * `public/tailwind.css`) is read by the SERVER, not this reader, so the scaffold
+ * keeps its static CSS fresh WITHOUT a `--watch` under `parallel`.
  *
  * Shape:
  *   "webjs": {
  *     "dev":   {
- *       "before":   ["webjs db migrate"],
- *       "parallel": ["tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch"]
+ *       "before":   ["webjs db migrate", "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify"]
+ *       // dev.regenerate keeps the CSS fresh on request (server-read, see dev-regenerate.js)
  *     },
  *     "start": { "before": ["webjs db migrate"] }
  *   }
@@ -20,9 +25,10 @@ import { join } from 'node:path';
  * `before` commands run sequentially to completion BEFORE the server boots (the
  * old `predev` / `prestart` hooks: a one-shot `webjs db migrate`).
  * `parallel` (dev only) commands run as long-lived child processes ALONGSIDE the
- * server (the old `concurrently` watchers: Tailwind). Returns normalized arrays
- * (never undefined) so callers iterate without guards, and a missing/empty
- * config yields empty arrays so a plain app runs `webjs dev`/`start` unchanged.
+ * server (the old `concurrently` watchers), for a genuinely long-lived side
+ * process. Returns normalized arrays (never undefined) so callers iterate
+ * without guards, and a missing/empty config yields empty arrays so a plain app
+ * runs `webjs dev`/`start` unchanged.
  *
  * Pure (reads one file, never spawns / prints / exits) so it is unit-testable
  * without a process, matching `lib/port.js` and `lib/dev-supervisor.js`.

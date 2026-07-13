@@ -21,8 +21,12 @@
         "webjs db migrate",
         "npm run css:build"
       ],
-      "parallel": [
-        "tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch"
+      "regenerate": [
+        {
+          "output": "public/tailwind.css",
+          "command": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify",
+          "inputs": ["app", "components", "lib", "modules", "public/input.css"]
+        }
       ]
     },
     "start": {

@@ -16,7 +16,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -715,53 +715,65 @@ test('elision disabled (webjs.elide=false) skips the carrier advisory', async ()
 });
 
 // ---------------------------------------------------------------------------
-// App design advisory (own design, not the scaffold shell).
+// Static build-output freshness (dev.regenerate, #967): the parity backstop.
+// Dev recompiles on request; this WARNs when a committed / built output is
+// older than a source (the case that bites `webjs start` or a committed file).
 // ---------------------------------------------------------------------------
-const DESIGN_CHECK = 'App design (own design, not the scaffold shell)';
+const FRESHNESS_CHECK = 'Static build outputs (dev.regenerate freshness)';
 
-test('design advisory WARNS when the layout still rides the scaffold shell', async () => {
-  const dir = tmpDir();
-  // A layout keeping scaffold-shell tells (the exact 760px reading column + the
-  // scaffold's own "Built with webjs" attribution footer): the kept-shell case.
-  // (theme-toggle / --header-h are NOT tells: they are kept infrastructure.)
-  write(dir, 'app/layout.ts', `
-    export default function Layout({ children }) {
-      return html\`<main class="max-w-[760px] mx-auto">\${children}</main>
-        <footer><a href="https://webjs.dev">Built with webjs</a></footer>\`;
-    }
-  `);
-  const r = byName(await runDoctorChecks(dir, baseOpts()), DESIGN_CHECK);
-  assert.equal(r.status, 'warn', 'kept-shell layout should warn');
-  assert.match(r.message, /scaffold design signal/);
-  assert.match(r.fix, /item 6/);
+const regenPkg = () => JSON.stringify({
+  name: 'ui-app',
+  dependencies: { '@webjsdev/core': 'latest', '@webjsdev/server': 'latest' },
+  webjs: { dev: { regenerate: [{
+    output: 'public/tailwind.css',
+    command: 'tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify',
+    inputs: ['app', 'public/input.css'],
+  }] } },
 });
 
-test('design advisory PASSES on a bespoke layout (counterfactual: no false positive)', async () => {
+test('freshness advisory PASSES when no regenerate rules are declared', async () => {
   const dir = tmpDir();
-  // An app-specific layout: no reading column, no theme toggle, no --header-h,
-  // no attribution. A redesigned shell must NOT be flagged.
-  write(dir, 'app/layout.ts', `
-    export default function Layout({ children }) {
-      return html\`<div class="min-h-dvh grid place-items-center bg-slate-950">
-        <main class="w-[min(92vw,540px)]">\${children}</main></div>\`;
-    }
-  `);
-  const r = byName(await runDoctorChecks(dir, baseOpts()), DESIGN_CHECK);
-  assert.equal(r.status, 'pass', 'a bespoke layout must not be flagged');
+  write(dir, 'package.json', JSON.stringify({ name: 'plain' }));
+  const r = byName(await runDoctorChecks(dir, baseOpts()), FRESHNESS_CHECK);
+  assert.equal(r.status, 'pass');
+  assert.match(r.message, /no webjs\.dev\.regenerate/);
 });
 
-test('design advisory does not hard-fail (advisory only)', async () => {
+test('freshness advisory PASSES when the output is missing (built on first boot)', async () => {
   const dir = tmpDir();
-  write(dir, 'app/layout.ts', `<main class="max-w-[760px]"></main><a href="https://webjs.dev">Built with webjs</a>`);
+  write(dir, 'package.json', regenPkg());
+  write(dir, 'app/page.ts', 'export default () => 1;');
+  write(dir, 'public/input.css', '@import "tailwindcss";');
+  // No public/tailwind.css on disk: a fresh clone, not a staleness fail.
+  const r = byName(await runDoctorChecks(dir, baseOpts()), FRESHNESS_CHECK);
+  assert.equal(r.status, 'pass');
+});
+
+test('freshness advisory PASSES when the output is newer than every source', async () => {
+  const dir = tmpDir();
+  write(dir, 'package.json', regenPkg());
+  write(dir, 'app/page.ts', 'export default () => 1;');
+  write(dir, 'public/input.css', '@import "tailwindcss";');
+  write(dir, 'public/tailwind.css', '/* built */');
+  const past = new Date(Date.now() - 60_000);
+  utimesSync(join(dir, 'app/page.ts'), past, past);
+  utimesSync(join(dir, 'public/input.css'), past, past);
+  const r = byName(await runDoctorChecks(dir, baseOpts()), FRESHNESS_CHECK);
+  assert.equal(r.status, 'pass');
+});
+
+test('freshness advisory WARNs (never fails) when a source is newer than the output', async () => {
+  const dir = tmpDir();
+  write(dir, 'package.json', regenPkg());
+  write(dir, 'public/input.css', '@import "tailwindcss";');
+  write(dir, 'public/tailwind.css', '/* stale */');
+  const past = new Date(Date.now() - 60_000);
+  utimesSync(join(dir, 'public/tailwind.css'), past, past);
+  utimesSync(join(dir, 'public/input.css'), past, past);
+  write(dir, 'app/page.ts', 'export default () => "grid-cols-4";'); // edited now
   const results = await runDoctorChecks(dir, baseOpts());
-  assert.equal(byName(results, DESIGN_CHECK).status, 'warn');
-  assert.equal(results.filter((r) => r.status === 'fail').length, 0, 'never a hard fail');
-});
-
-test('design advisory PASSES (stays quiet) on a layout-less api app', async () => {
-  const dir = tmpDir();
-  write(dir, 'app/health/route.ts', 'export const GET = () => new Response("ok");');
-  const r = byName(await runDoctorChecks(dir, baseOpts()), DESIGN_CHECK);
-  assert.equal(r.status, 'pass', 'an api app with no app/layout must not be nudged');
-  assert.match(r.message, /no app\/layout/);
+  const r = byName(results, FRESHNESS_CHECK);
+  assert.equal(r.status, 'warn');
+  assert.match(r.message, /public\/tailwind\.css/);
+  assert.equal(results.filter((x) => x.status === 'fail').length, 0, 'advisory only, never a hard fail');
 });

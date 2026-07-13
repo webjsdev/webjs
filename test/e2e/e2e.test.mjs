@@ -323,9 +323,13 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     // which the fast (400ms) boundary could resolve before we read (the gap made
     // this flake under heavy load). A progressive swap satisfies both conditions
     // together; a buffered swap never shows the fallback at "/" and times out.
+    // Match case-INSENSITIVELY: the fallback is a <muted-text> whose Tailwind
+    // `uppercase` class renders "COMPUTING TIMESTAMP" once the stylesheet is
+    // applied, and `innerText` reflects `text-transform`, so a case-sensitive
+    // match would miss the (fully styled) fallback (#967).
     const fallbackLiveAtAdvance = await page
       .waitForFunction(
-        () => location.pathname === '/' && document.body.innerText.includes('computing timestamp'),
+        () => location.pathname === '/' && document.body.innerText.toLowerCase().includes('computing timestamp'),
         { timeout: 8000 },
       )
       .then(() => true)
@@ -337,11 +341,11 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
 
     // And the boundary eventually streams in, replacing the fallback.
     await page.waitForFunction(
-      () => !document.body.innerText.includes('computing timestamp'),
+      () => !document.body.innerText.toLowerCase().includes('computing timestamp'),
       { timeout: 8000 },
     );
     const resolvedNoFallback = await page.evaluate(() =>
-      !document.body.innerText.includes('computing timestamp'),
+      !document.body.innerText.toLowerCase().includes('computing timestamp'),
     );
     assert.ok(resolvedNoFallback, 'the streamed boundary replaced the fallback');
   });

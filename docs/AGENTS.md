@@ -79,10 +79,11 @@ they are correct in dev and prod). Integration test:
 cd docs && npm run dev          # http://localhost:5002
 ```
 
-`npm run dev` and `webjs dev` behave identically (#550): the Tailwind
-`--watch` (which produces `public/tailwind.css`) lives in `webjs.dev.parallel`
-and runs INSIDE `webjs dev`. In prod, `npm start` and `webjs start` are
-equivalent too: `webjs.start.before` runs `npm run css:build` before serving.
+`npm run dev` and `webjs dev` behave identically (#550): `webjs.dev.before`
+compiles `public/tailwind.css`, and `webjs.dev.regenerate` (#967) recompiles it
+on request when a source changes, so it never goes stale without a live
+watcher. In prod, `npm start` and `webjs start` are equivalent too:
+`webjs.start.before` runs `npm run css:build` before serving.
 
 ---
 

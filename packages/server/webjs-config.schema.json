@@ -160,7 +160,7 @@
       "default": 5000
     },
     "dev": {
-      "description": "Dev task orchestration (#550). Read by the CLI (readAppTasks in packages/cli/lib/app-tasks.js), NOT the server. webjs dev runs `before` (one-shot, e.g. webjs db migrate) to completion, then `parallel` (long-lived watchers, e.g. tailwindcss --watch) alongside the server. Replaces the old predev hook + concurrently watchers.",
+      "description": "Dev task orchestration (#550). `before`/`parallel` are read by the CLI (readAppTasks in packages/cli/lib/app-tasks.js); `regenerate` is read by the server (readRegenerateRules in dev-regenerate.js). webjs dev runs `before` (one-shot, e.g. webjs db migrate) to completion, then `parallel` (long-lived watchers) alongside the server. Replaces the old predev hook + concurrently watchers.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -173,6 +173,30 @@
           "description": "Long-lived commands run as child processes alongside the dev server, torn down on exit so a watcher cannot leak past it.",
           "type": "array",
           "items": { "type": "string" }
+        },
+        "regenerate": {
+          "description": "On-request build-output regeneration (#967), DEV-ONLY. Each rule rebuilds a stale `output` before the server serves it, instead of relying on a live watcher that can die and serve stale output. The scaffold uses this to keep the static public/tailwind.css fresh (#947) with no `tailwindcss --watch`. Read by the server (readRegenerateRules in dev-regenerate.js).",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["output", "command"],
+            "properties": {
+              "output": {
+                "description": "The appDir-relative served output file this rule rebuilds (e.g. public/tailwind.css). A leading slash is stripped.",
+                "type": "string"
+              },
+              "command": {
+                "description": "The shell command that rebuilds `output`. Run to completion before serving when the output is stale. The same command prod uses in start.before, so dev and prod outputs cannot diverge.",
+                "type": "string"
+              },
+              "inputs": {
+                "description": "Source paths (files or directories) whose newest mtime is compared to `output`'s. If any is newer (or the output is missing), the command runs. For Tailwind: the @source dirs plus public/input.css.",
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
         },
         "watch": {
           "description": "Extra directories the dev live-reload watcher follows in addition to the appDir (#894), for content the app reads from outside its own tree (e.g. blog markdown in a repo-root blog/ dir). Each entry is resolved relative to the app root and may escape it (../blog). Read by the server (readDevWatchPathsFromApp).",

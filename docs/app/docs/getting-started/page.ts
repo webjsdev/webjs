@@ -132,14 +132,17 @@ Counter.register('my-counter');</pre>
     <p>That's it. No build step, no bundler config, no compilation. Edit any <code>.ts</code> file, refresh, and see it.</p>
 
     <p>
-      <strong><code>npm run dev</code> and a bare <code>webjs dev</code> are
-      equivalent.</strong> The scaffold puts <code>webjs db migrate</code> under
-      <code>webjs.dev.before</code> in the <code>webjs</code> block of
-      package.json, and <code>webjs dev</code> runs it (and any
-      <code>webjs.dev.parallel</code> watcher) before serving, so a pending
-      migration is applied before the first request. So after you
-      <code>db:generate</code> a migration, <code>npm run dev</code> applies it
-      and either command boots a correctly-migrated database app.
+      <strong><code>npm run dev</code> and a bare <code>webjs&nbsp;dev</code>
+      are equivalent.</strong> The scaffold puts <code>webjs db migrate</code>
+      and the Tailwind compile under <code>webjs.dev.before</code> in the
+      <code>webjs</code> block of package.json, and the dev server runs them
+      before serving, so a pending migration is applied and the stylesheet is
+      built before the first request. In dev the stylesheet is then kept fresh
+      by <code>webjs.dev.regenerate</code>, which recompiles it on request
+      whenever a source changes, so a newly added utility class is never served
+      stale and there is no <code>--watch</code> process that can die. So after
+      you <code>db:generate</code> a migration, <code>npm run dev</code> applies
+      it and either command boots a correctly-migrated, fully styled app.
     </p>
 
     <h2>How It Works</h2>

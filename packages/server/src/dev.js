@@ -27,6 +27,7 @@ import {
   hashFile,
 } from './actions.js';
 import { registerSeedHooks } from './action-seed.js';
+import { readRegenerateRules, maybeRegenerate, isRegenerateOutputPath } from './dev-regenerate.js';
 import { stripTypeScript, ensureStripper } from './ts-strip.js';
 import { defaultLogger } from './logger.js';
 import { assertNodeVersion } from './node-version.js';
@@ -773,6 +774,11 @@ export async function createRequestHandler(opts) {
     // SSE channel for the live overlay and replayed to a freshly-connected tab.
     // Dev-only (never populated when !dev); cleared on a successful rebuild.
     lastDevError: null,
+    // On-request regeneration rules (#967): `webjs.dev.regenerate` from the app's
+    // package.json. Dev-only (prod builds its outputs via `start.before`). Loaded
+    // now and refreshed on each rebuild so a config edit takes effect without a
+    // restart; empty for a plain app, so the serving path is unaffected.
+    regenerateRules: dev ? await readRegenerateRules(appDir) : [],
   };
 
   /**
@@ -1121,6 +1127,10 @@ export async function createRequestHandler(opts) {
     readyDone = false;
     readyError = null;
     readinessFn = undefined; // reload readiness.{js,ts} after a rebuild
+    // Refresh the on-request regenerate rules (#967) so a `webjs.dev.regenerate`
+    // config edit takes effect without a restart, mirroring the elide/router
+    // re-reads above. Dev-only; a no-op array in prod.
+    if (dev) state.regenerateRules = await readRegenerateRules(appDir);
     // Optimistically clear the dev error (#264): the rebuild itself only
     // re-scans the route table and INVALIDATES the lazy analysis (the real
     // re-parse / re-strip / re-render happens on the next request), so we do
@@ -1522,6 +1532,11 @@ export async function createRequestHandler(opts) {
      * startServer to a freshly-connected SSE client so the overlay shows even
      * after a navigation, not only on the breaking edit. Always null in prod. */
     getLastDevError: () => state.lastDevError,
+    /** Whether a dev-watcher filename is a `webjs.dev.regenerate` OUTPUT (#967),
+     * so `startServer`'s file watcher (a different scope, with no access to
+     * `state`) can skip a build product the server itself writes and avoid a
+     * spurious reload. Reads the live, rebuild-refreshed rules. */
+    isRegenerateOutput: (filename) => isRegenerateOutputPath(filename, state.regenerateRules),
     appDir,
     dev,
     logger,
@@ -1646,6 +1661,12 @@ export async function startServer(opts) {
         for await (const event of events) {
           const filename = event.filename || '';
           if (shouldIgnoreWatchPath(filename)) continue;
+          // A regenerate output (#967) is a build product the server itself
+          // writes on request; ignoring it stops a spurious rebuild + reload
+          // (and a reload -> refetch -> recompile -> reload cycle), same as the
+          // db/dev.db carve-out above. `app` exposes the check because `state`
+          // lives in createRequestHandler's scope, not here.
+          if (app.isRegenerateOutput(filename)) continue;
           rebuild();
         }
       } catch (err) {
@@ -1983,6 +2004,15 @@ async function handleCore(req, ctx) {
     const publicRoot = join(appDir, 'public') + sep;
     if (!abs.startsWith(publicRoot)) {
       return new Response(null, { status: 404 });
+    }
+    // On-request regeneration (#967): in dev, if a `webjs.dev.regenerate` rule
+    // matches this output and it is stale (a source is newer, or it is missing),
+    // rebuild it to completion BEFORE serving, so a newly added utility class is
+    // never served stale. No-op when no rule matches or the output is fresh, and
+    // never runs in prod (rules are empty there). This replaces the fragile
+    // `tailwindcss --watch` that could die mid-session and serve stale CSS.
+    if (dev && state.regenerateRules.length) {
+      await maybeRegenerate(appDir, p.replace(/^\/+/, ''), state.regenerateRules);
     }
     // A `?v=<hash>` public asset is content-addressed -> immutable (#243).
     if (await exists(abs)) {

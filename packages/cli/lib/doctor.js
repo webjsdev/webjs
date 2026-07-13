@@ -36,7 +36,7 @@
  * fails CI because npm was briefly unreachable is worse than useless.
  */
 
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, statSync, readdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { createRequire } from 'node:module';
@@ -802,7 +802,7 @@ function checkGitHook(appDir) {
  * Advisory (#646): name why a page/layout SHIPS its module to the browser
  * instead of being elided. A page/layout that is a pure carrier (import-only
  * #605 / inert #179) stays out of the browser; one that ships whole is pinned
- * by a specific client-effecting NON-component in its closure (a util touching
+ * by a specific client-effecting NON-component on a component-free path from it, #963 (a util touching
  * a client global, a module-scope side effect, a bare side-effect import) or by
  * its own client work. This turns that invisible #605/#179 regression into a
  * named line. WARN only: a page legitimately MAY ship, and the analyser is
@@ -842,6 +842,89 @@ async function checkElisionCarriers(appDir) {
       `${report.shipped.length} page/layout module(s) ship to the browser instead of being elided:\n` +
       lines.map((l) => `    ${l}`).join('\n'),
     fix: 'Move the client work out of the page/layout closure (into a component, or a .server module reached through an action) so the carrier can be elided, or accept that it ships. See references/components.md in the skill.',
+  };
+}
+
+// Directories never worth walking for the CSS-freshness advisory (mirrors
+// dev-regenerate's IGNORE_DIRS): build output, deps, VCS + framework caches.
+const FRESHNESS_IGNORE = new Set(['node_modules', '.git', '.webjs', 'dist', '.next', 'coverage']);
+
+/**
+ * Newest mtime (ms) of any FILE under a path (a file's own, or the max over the
+ * files in a directory tree, skipping dependencies / dotfiles). Directory-node
+ * mtimes are NOT counted, matching dev-regenerate's walker: a content edit only
+ * shows through the file mtime, and a directory mtime is a flaky moving target.
+ * A missing path is 0. Best-effort: never throws.
+ * @param {string} abs
+ * @returns {number}
+ */
+function newestMtimeMs(abs) {
+  let st;
+  try { st = statSync(abs); } catch { return 0; }
+  if (!st.isDirectory()) return st.mtimeMs;
+  let newest = 0;
+  let entries;
+  try { entries = readdirSync(abs, { withFileTypes: true }); } catch { return newest; }
+  for (const e of entries) {
+    if (e.name.startsWith('.') || FRESHNESS_IGNORE.has(e.name)) continue;
+    // Skip symlinks: following one can cycle into unbounded recursion (a stack
+    // overflow here) or escape into node_modules. Same tradeoff as the server
+    // walker in dev-regenerate.js.
+    if (e.isSymbolicLink()) continue;
+    const m = newestMtimeMs(join(abs, e.name));
+    if (m > newest) newest = m;
+  }
+  return newest;
+}
+
+/**
+ * ADVISORY: a declared `webjs.dev.regenerate` output is STALE on disk (a source
+ * is newer than the committed/built output). In DEV the framework recompiles it
+ * on request (#967), so this never bites locally, but the check is the explicit
+ * dev/prod PARITY backstop: it catches a stale `public/tailwind.css` that would
+ * be served as-is by `webjs start` (prod does NOT recompile on request) or
+ * committed into the repo. WARN-level: the fix is a one-line rebuild, and a
+ * missing output (a fresh clone before the first `css:build`) is not this app's
+ * bug to hard-fail on.
+ * @param {string} appDir
+ * @returns {Promise<DoctorResult>}
+ */
+async function checkStaticAssetFreshness(appDir) {
+  const name = 'Static build outputs (dev.regenerate freshness)';
+  let pkg;
+  try {
+    pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
+  } catch {
+    return { name, status: 'pass', message: 'no package.json to analyse' };
+  }
+  const rules = pkg && pkg.webjs && pkg.webjs.dev ? pkg.webjs.dev.regenerate : null;
+  if (!Array.isArray(rules) || rules.length === 0) {
+    return { name, status: 'pass', message: 'no webjs.dev.regenerate rules declared' };
+  }
+  const stale = [];
+  for (const rule of rules) {
+    if (!rule || typeof rule.output !== 'string') continue;
+    const output = rule.output.replace(/^\/+/, '');
+    const outMtime = newestMtimeMs(join(appDir, output));
+    if (outMtime === 0) continue; // missing output: not a staleness fail (built on first boot)
+    let newestSrc = 0;
+    for (const inp of Array.isArray(rule.inputs) ? rule.inputs : []) {
+      const m = newestMtimeMs(join(appDir, inp));
+      if (m > newestSrc) newestSrc = m;
+    }
+    if (newestSrc > outMtime) stale.push({ output, command: rule.command });
+  }
+  if (stale.length === 0) {
+    return { name, status: 'pass', message: 'every declared build output is up to date with its sources' };
+  }
+  return {
+    name,
+    status: 'warn',
+    message:
+      `${stale.length} static build output(s) are older than a source file:\n` +
+      stale.map((s) => `    ${s.output} (rebuild: ${s.command})`).join('\n') +
+      '\n    In dev the framework recompiles these on request, so this only bites a `webjs start` (prod) or a committed stale file.',
+    fix: 'Rebuild the output(s) with the command shown (e.g. `npm run css:build`) before deploying or committing. `webjs dev` regenerates them on request automatically.',
   };
 }
 
@@ -935,6 +1018,7 @@ export async function runDoctorChecks(appDir, opts = {}) {
     checkImportmapCoherence(appDir, opts),
     Promise.resolve(checkGitHook(appDir)),
     checkElisionCarriers(appDir),
+    checkStaticAssetFreshness(appDir),
   ]);
   return results;
 }
