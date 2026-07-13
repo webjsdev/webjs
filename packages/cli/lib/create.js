@@ -558,7 +558,25 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   // --- Templates (AGENTS.md, CONVENTIONS.md, CLAUDE.md, test files, Claude hooks) ---
 
   const templateFiles = [
+    // Single cross-agent source: a thin AGENTS.md points at the skill; the
+    // .agents/rules workflow rules and the Claude enforcement hooks back it up.
     'AGENTS.md',
+    'CLAUDE.md',
+    '.agents/rules/workflow.md',
+    // Claude Code config + the protective enforcement hooks (no design ceremony).
+    '.claude.json',
+    '.claude/settings.json',
+    '.claude/hooks/block-prose-punctuation.sh',
+    '.claude/hooks/block-raw-htmlelement.sh',
+    '.claude/hooks/guard-branch-context.sh',
+    '.claude/hooks/nudge-uncommitted.sh',
+    '.claude/hooks/commit-before-stop.sh',
+    '.claude/hooks/cleanup-merged-worktree.sh',
+    '.claude/hooks/require-tests-with-src.sh',
+    '.claude/hooks/check-server-imports.sh',
+    '.claude/hooks/check-server-imports.mjs',
+    // Git pre-commit hook (blocks commits directly to main).
+    '.hooks/pre-commit',
     // Starter tests under the feature-folder layout.
     'test/hello/hello.test.ts',
     'test/hello/browser/hello.test.js',
@@ -586,7 +604,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   // rewrites; the three infra files get their file-specific transform. On Node,
   // every file is copied byte-identical (the map is empty).
   const PROSE_REWRITE = new Set([
-    'AGENTS.md',
+    'AGENTS.md', 'CLAUDE.md', '.agents/rules/workflow.md',
     'test/hello/browser/hello.test.js', 'test/hello/e2e/hello.test.ts',
   ]);
   // compose.yaml builds from the (pure oven/bun) Dockerfile and inherits its
@@ -620,6 +638,15 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   if (existsSync(skillSrc)) {
     await cp(skillSrc, join(appDir, '.agents', 'skills'), { recursive: true });
   }
+
+  // Make the Claude enforcement hooks + the git pre-commit executable.
+  const { chmod } = await import('node:fs/promises');
+  for (const hook of ['block-prose-punctuation.sh', 'block-raw-htmlelement.sh', 'guard-branch-context.sh', 'nudge-uncommitted.sh', 'commit-before-stop.sh', 'cleanup-merged-worktree.sh', 'require-tests-with-src.sh', 'check-server-imports.sh']) {
+    const hookPath = join(appDir, '.claude', 'hooks', hook);
+    if (existsSync(hookPath)) await chmod(hookPath, 0o755);
+  }
+  const preCommitPath = join(appDir, '.hooks', 'pre-commit');
+  if (existsSync(preCommitPath)) await chmod(preCommitPath, 0o755);
 
   // --- Drizzle db layer (all templates), dialect-selected (#563) ---
   //
@@ -1322,6 +1349,8 @@ ThemeToggle.register('theme-toggle');
   const { execSync } = await import('node:child_process');
   try {
     execSync('git init', { cwd: appDir, stdio: 'pipe' });
+    // Use the tracked .hooks/ dir (the pre-commit blocks commits to main).
+    execSync('git config core.hooksPath .hooks', { cwd: appDir, stdio: 'pipe' });
   } catch { /* git not available: skip */ }
 
   // --- Print success ---
