@@ -399,6 +399,12 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // / doctor) stay plain `webjs ...`: they spawn node tooling (`node --test`,
       // drizzle-kit, tsc) and forcing `--bun` there buys nothing (and `webjs
       // test` shells `node --test`, which a `bun --test` would not be).
+      // Compile Tailwind from public/input.css to a STATIC public/tailwind.css
+      // that app/layout.ts links, so the app is fully styled with JavaScript
+      // DISABLED (a real stylesheet, not an in-browser compile). Runs inside the
+      // dev and start tasks via the `before` hooks below. The compiler is Node
+      // tooling, so it stays plain even for a Bun app (like test / db / check).
+      ...(isApi ? {} : { 'css:build': 'tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify' }),
       dev: isBun ? 'bun --bun webjs dev' : 'webjs dev',
       start: isBun ? 'bun --bun webjs start' : 'webjs start',
       test: 'webjs test',
@@ -447,6 +453,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // assertNoA11yViolations() test helper from @webjsdev/core/testing.
       // Test-only: dynamically imported, never shipped to the app runtime.
       'axe-core': '^4.10.0',
+      // The Tailwind v4 CLI that css:build runs to compile public/input.css into
+      // the static public/tailwind.css the layout links. UI templates only (the
+      // api template has no CSS). Build tooling, never shipped to the runtime.
+      ...(isApi ? {} : { '@tailwindcss/cli': '^4.1.0' }),
       // tsserver plugin, wired into tsconfig below. Gives the language
       // INTELLIGENCE (go-to-def, completions, diagnostics, hover inside html``
       // templates) in any tsserver editor with NO editor plugin installed,
@@ -466,13 +476,17 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     // `before` and run it in-process, so `npm run dev` / `start` (thin aliases
     // above) behave identically. Both apply pending migrations via `webjs db
     // migrate` (idempotent, a no-op when the db is current), so a freshly
-    // generated migration is applied without a manual step (#725). The scaffold
-    // uses the Tailwind browser runtime (no CSS build step), so there is no dev
-    // `parallel` watcher here; an app that adds the Tailwind CLI puts its
-    // `--watch` command under `webjs.dev.parallel`.
+    // generated migration is applied without a manual step (#725). For a UI
+    // template it ALSO compiles Tailwind (`css:build`) in `before` so a freshly
+    // cloned app is styled on the very first boot with no manual step, and runs
+    // the Tailwind `--watch` under `parallel` for live recompiles in dev. The
+    // api template has no CSS, so it gets neither.
     webjs: {
-      dev: { before: ['webjs db migrate'] },
-      start: { before: ['webjs db migrate'] },
+      dev: {
+        before: isApi ? ['webjs db migrate'] : ['webjs db migrate', 'npm run css:build'],
+        ...(isApi ? {} : { parallel: ['tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch'] }),
+      },
+      start: { before: isApi ? ['webjs db migrate'] : ['webjs db migrate', 'npm run css:build'] },
     },
   }, null, 2) + '\n');
 
@@ -1020,15 +1034,13 @@ export type ActionResult<T> =
   if (!isApi) {
     // Full-stack and SaaS templates: layout + page + theme toggle + Tailwind
 
-    // Copy the Tailwind browser runtime + lib/utils/ui.ts helpers from
-    // the scaffold templates directory so the app boots with the exact
-    // blog example architecture: light DOM + Tailwind + JS helpers.
+    // The Tailwind stylesheet is compiled from public/input.css (written below)
+    // to a STATIC public/tailwind.css by css:build, and lib/utils/ui.ts helpers
+    // are copied below, so the app boots with the exact blog example
+    // architecture: light DOM + a real Tailwind stylesheet (styled with JS off)
+    // + JS helpers.
     const publicDir = join(appDir, 'public');
     await mkdir(publicDir, { recursive: true });
-    const tailwindSrc = join(TEMPLATES, 'public', 'tailwind-browser.js');
-    if (existsSync(tailwindSrc)) {
-      await cp(tailwindSrc, join(publicDir, 'tailwind-browser.js'));
-    }
     // Progressive-enhancement service worker (#271): ship the opt-in offline
     // primitive (the worker + its offline fallback) into the UI scaffolds
     // (full-stack / saas; this block is api-excluded since api has no UI).
@@ -1073,18 +1085,44 @@ export type ActionResult<T> =
     // use. See CONVENTIONS.md "prune what the app does not use".
     if (!isApi) await copyGallery(appDir);
 
-    // The @webjsdev/ui theme tokens (`--color-primary`, `--color-card`, …) the
-    // ui-* components consume. We read the registry's themes/index.css at
-    // create time and inline it into the layout's
-    // `<style type="text/tailwindcss">` block so the Tailwind browser
-    // runtime picks it up. Same content also lives at styles/globals.css for
-    // `webjsui` tooling.
-    const UI_THEME = (await readThemeCss())
-      // Escape backticks + ${} so the CSS survives interpolation into the
-      // layout's template literal below.
-      .replace(/\\/g, '\\\\')
-      .replace(/`/g, '\\`')
-      .replace(/\$\{/g, '\\${');
+    // The @webjsdev/ui theme (`--color-primary`, `--color-card`, the @theme maps,
+    // @custom-variant, @keyframes) plus the app @theme mappings are compiled from
+    // public/input.css into the STATIC public/tailwind.css that app/layout.ts
+    // links, so the app is fully styled with JavaScript disabled. Write input.css:
+    // `@import "tailwindcss"`, source globs, the ui theme (read from the registry
+    // themes/index.css), then the app @theme inline block. The token VALUES live
+    // on :root in app/layout.ts (plain CSS, so they resolve with JS off) and the
+    // @theme inline maps here reference them by var(), the same split the blog
+    // uses. Same theme also lives at styles/globals.css for `webjsui` tooling.
+    const uiThemeRaw = await readThemeCss();
+    await writeFile(join(publicDir, 'input.css'), `@import "tailwindcss";
+
+/* Scan app sources so their utility classes make it into the compiled bundle.
+   Tailwind v4 auto-scans the project too; these @source lines are explicit. */
+@source "../app/**/*.{ts,js}";
+@source "../components/**/*.{ts,js}";
+@source "../modules/**/*.{ts,js}";
+@source "../lib/**/*.{ts,js}";
+
+${uiThemeRaw}
+
+/* App @theme mappings. The token VALUES live on :root in app/layout.ts (plain
+   CSS custom properties, so they resolve with JavaScript disabled); these
+   @theme inline maps turn them into utilities (bg-primary, text-display, ...). */
+@theme inline {
+  --color-border-strong: var(--border-strong);
+  --color-primary-tint: var(--primary-tint);
+  --font-sans:  var(--font-sans);
+  --font-serif: var(--font-serif);
+  --font-mono:  var(--font-mono);
+  --text-display: clamp(2.6rem, 1.6rem + 3.2vw, 4.25rem);
+  --text-h1:      clamp(2rem, 1.5rem + 1.6vw, 2.85rem);
+  --text-h2:      clamp(1.35rem, 1.15rem + 0.7vw, 1.7rem);
+  --text-lede:    clamp(1.05rem, 0.95rem + 0.3vw, 1.2rem);
+  --duration-fast: 140ms;
+  --duration-slow: 380ms;
+}
+`);
 
   await writeFile(join(appDir, 'app', 'layout.ts'), `import { html, cspNonce } from '@webjsdev/core';
 import '#components/theme-toggle.ts';
@@ -1174,34 +1212,30 @@ export default function RootLayout({ children }: { children: unknown }) {
         else measure();
       })();
     </script>
-    <script src="/public/tailwind-browser.js"></script>
-    <!--
-      Webjs UI theme. Design tokens (--color-primary,
-      --color-card, --radius, etc.) the ui-* components consume.
-      The same content is also at styles/globals.css. We inline it here so
-      the Tailwind browser runtime resolves the tokens without a build step.
-      Edit base palette via the :root / .dark blocks below.
-    -->
-    <style type="text/tailwindcss">
-${UI_THEME}
-    </style>
-    <style type="text/tailwindcss">
-      /* ONE theme, canonical shadcn-style tokens. The @webjsdev/ui theme above
-         provides the token STRUCTURE and the @theme inline mappings that generate
+    <!-- Tailwind: a STATIC stylesheet compiled from public/input.css to
+         public/tailwind.css by css:build / css:watch (run automatically by the
+         dev and start tasks). A real stylesheet, so the app is fully styled with
+         JavaScript DISABLED (no in-browser compile). -->
+    <link rel="stylesheet" href="/public/tailwind.css">
+    <style>
+      /* ONE theme, canonical shadcn-style tokens. These are the token VALUES as
+         plain CSS custom properties, so the palette resolves with JavaScript
+         DISABLED and needs no build. public/input.css holds the token STRUCTURE
+         and the @theme inline mappings that generate
          bg-background, text-foreground, bg-card, bg-primary, bg-accent,
          text-muted-foreground, border-border, ring-ring, and the rest. Here we
          set those tokens' VALUES to this app's brand palette, so the ui-*
          components AND your own chrome read ONE source of truth. Any component
-         added later with webjs ui add <name> inherits it automatically. This
-         block is emitted after the ui theme, so these values win on every Tailwind
-         recompile. Dark-first, with light via the theme toggle (data-theme) or the
+         added later with webjs ui add <name> inherits it automatically. The
+         stylesheet is linked before this block, so these VALUES win over the ui
+         theme defaults. Dark-first, with light via the theme toggle (data-theme) or the
          OS. Follows the shadcn model: --primary is the BRAND color (orange, used
          for primary buttons, links, and emphasis), while --accent stays a NEUTRAL
          hover tint so the ui kit's outline/ghost/dropdown hover states keep proper
          contrast. Use bg-primary / text-primary for brand, bg-accent for hovers.
-         Add a new design token the canonical way, a --x variable below plus a
-         --color-x: var(--x) line in the @theme inline block, then use it as bg-x /
-         text-x. Reach for opacity modifiers
+         Add a new design token the canonical way, a --x VALUE below plus a
+         --color-x: var(--x) line in the @theme inline block in public/input.css,
+         then use it as bg-x / text-x. Reach for opacity modifiers
          (bg-primary/10, hover:bg-primary/90, border-border/60) before inventing a
          new token, but keep body text at full opacity so it stays above the AA
          contrast floor (a faded text-muted-foreground/70 measured 3.83:1). */
@@ -1295,22 +1329,6 @@ ${UI_THEME}
           --logo-from: oklch(0.63 0.17 50);
           --logo-to: oklch(0.44 0.11 52);
         }
-      }
-      @theme inline {
-        /* Only tokens the @webjsdev/ui theme does not already map live here. It
-           already maps --color-background/foreground/card/primary/secondary/
-           muted/accent/border/input/ring/destructive. */
-        --color-border-strong: var(--border-strong);
-        --color-primary-tint: var(--primary-tint);
-        --font-sans:  var(--font-sans);
-        --font-serif: var(--font-serif);
-        --font-mono:  var(--font-mono);
-        --text-display: clamp(2.6rem, 1.6rem + 3.2vw, 4.25rem);
-        --text-h1:      clamp(2rem, 1.5rem + 1.6vw, 2.85rem);
-        --text-h2:      clamp(1.35rem, 1.15rem + 0.7vw, 1.7rem);
-        --text-lede:    clamp(1.05rem, 0.95rem + 0.3vw, 1.2rem);
-        --duration-fast: 140ms;
-        --duration-slow: 380ms;
       }
     </style>
     <style>
