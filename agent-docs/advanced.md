@@ -419,11 +419,26 @@ navigation automatically.
    (`body.setHTMLUnsafe`, which also processes Declarative Shadow DOM),
    NOT as a document. Parsing such a fragment as a document would hoist
    that leading comment out of `<body>` (the HTML "before html" insertion
-   mode), the marker map would come up empty, and the nav would wrongly
-   fall to the full-body-swap fallback that strips head CSS and the outer
-   layout (#936).
+   mode) and the marker map would come up empty (#936).
 3. Picks the **longest shared path**, the deepest layout boundary
-   both pages have in common.
+   both pages have in common. When there is no shared path it falls to a
+   full-body swap (a genuine root-layout change). That fallback's head
+   merge **never removes a `<link rel=stylesheet>` or `<style>`**, with no
+   opt-out. This is a deliberate divergence from Turbo (which removes a
+   `data-turbo-track="dynamic"` sheet absent from the new head): a Turbo
+   visit compares COMPLETE heads, but WebJs's `X-Webjs-Have` optimization
+   returns a REDUCED head (the shared app stylesheet omitted because the
+   client already has it), so "absent from the incoming head" means
+   "optimized away", not "removed". Stripping it there is exactly what left
+   the page unstyled (#936). A genuinely stale stylesheet is dropped by the
+   deploy-level hard reload (build-id mismatch), not a soft swap.
+   Relatedly, the **viewport prefetch is skipped while the document is
+   still parsing** when `buildHaveHeader()` is empty: the closing
+   `<!--/wj:children-->` marker may not be parsed yet, so an empty
+   `X-Webjs-Have` there means "markers not ready", not "no layout", and
+   caching that full-page response would feed the fallback a body it should
+   never have applied. The click path re-fetches with a correct `have`
+   once the document has parsed.
 4. Replaces nodes between that marker pair using a keyed `data-key`
    reconciler. Elements with matching tag + matching key are reused
    with in-place attribute diffing. **Live attributes** (`value`,
@@ -436,11 +451,11 @@ navigation automatically.
    component. The one exception is a light-DOM component's projected
    `<slot>` content, which is page-authored rather than render-owned, so
    the router re-projects it to match the incoming page.
-5. Merges `<head>` (add-only on partial swaps so runtime-injected
-   styles like Tailwind survive, with a full merge on the
-   root-layout-change fallback), re-runs `<script>` elements,
-   `customElements.upgrade()`s the swapped subtree, `pushState`s the
-   URL, scrolls.
+5. Merges `<head>` (add-only on the shared-path swap so runtime-injected
+   styles like Tailwind survive; a remove-capable full merge on the
+   no-shared-path fallback, which still never removes a stylesheet or
+   `<style>`, #936), re-runs `<script>` elements, `customElements.upgrade()`s
+   the swapped subtree, `pushState`s the URL, scrolls.
 6. Dispatches `webjs:navigate` event on `document`.
 
 ### In-place navigation-error recovery (`webjs:navigation-error`)

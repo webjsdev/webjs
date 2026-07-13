@@ -1309,9 +1309,19 @@ function prefetch(href) {
     return;
   }
 
+  const have = buildHaveHeader();
+  // #936: while the document is still parsing, the closing `<!--/wj:children-->`
+  // marker at the bottom of the body may not exist yet, so `buildHaveHeader()`
+  // returns '' meaning "markers not parsed yet", NOT "this page has no layout".
+  // A touch-device viewport prefetch fires early enough (mid-parse) to hit this
+  // window on real Android Chrome. Caching that empty-`have` response (a full
+  // page) would later drive the destructive full-body swap fallback. Skip the
+  // speculative fetch; the click path re-fetches with a correct `have` once the
+  // document has parsed (and applySwap now falls back to a full load anyway).
+  if (!have && typeof document !== 'undefined' && document.readyState === 'loading') return;
+
   prefetchInflight.add(key);
   const headers = { 'x-webjs-router': '1', 'x-webjs-prefetch': '1' };
-  const have = buildHaveHeader();
   if (have) headers['x-webjs-have'] = have;
 
   fetch(href, { method: 'GET', headers, credentials: 'same-origin' })
@@ -2500,8 +2510,14 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
     return;
   }
 
-  // 3. Full body swap fallback. Use full head merge: different root
-  // layout, so stale head elements should be removed.
+  // 3. Full body swap fallback: no shared layout marker (a genuine root-layout
+  // change, or a same-layout nav whose markers could not be paired). Full head
+  // merge, so a real root-layout change removes stale head elements. `mergeHead`
+  // now PRESERVES stylesheets and `<style>` unconditionally (#936): even if the
+  // client reaches this path with an incoming head that lacks the app's
+  // `<link rel=stylesheet>` (a partial or mangled response, e.g. from a
+  // mid-parse empty-`have` prefetch), the live CSS is never stripped, so the
+  // swap can no longer leave the page unstyled.
   mergeHead(doc.head);
   // Persist permanent elements by node identity across the full-body
   // swap: move each live [data-webjs-permanent][id] node into the matching
@@ -3244,6 +3260,31 @@ function addNewHeadElements(newHead) {
   }
 }
 
+/**
+ * Is `el` a stylesheet the head merge must never remove: a `<style>` or a
+ * `<link rel~="stylesheet">`. WebJs ALWAYS keeps these on a soft nav, with no
+ * opt-out, and that is a deliberate divergence from Turbo. Turbo removes a
+ * stylesheet absent from the new head when it is tagged
+ * `data-turbo-track="dynamic"`, which is sound in Turbo because a Turbo visit
+ * always compares a COMPLETE old head to a COMPLETE new head, so "absent" means
+ * "this page removed it". WebJs's `X-Webjs-Have` optimization returns a REDUCED
+ * head (the shared app stylesheet is omitted because the client already has it),
+ * so "absent from the incoming head" means "optimized away", NOT "removed". A
+ * dynamic-removal opt-out would therefore re-introduce #936 (it would strip a
+ * still-needed sheet on any partial response), and WebJs is Tailwind-first (one
+ * global sheet, no page-specific sheets to drop), so the knob would be unsafe
+ * and unused. Keeping every stylesheet is correct here; a genuinely changed one
+ * is dropped by the deploy-level hard reload (build-id mismatch), not a soft swap.
+ *
+ * @param {Element} el
+ * @returns {boolean}
+ */
+function isPersistentHeadStyle(el) {
+  if (el.tagName === 'STYLE') return true;
+  return el.tagName === 'LINK' &&
+    (el.getAttribute('rel') || '').toLowerCase().split(/\s+/).includes('stylesheet');
+}
+
 /** @param {HTMLHeadElement} newHead */
 function mergeHead(newHead) {
   const currentHead = document.head;
@@ -3269,6 +3310,14 @@ function mergeHead(newHead) {
     if (el.tagName === 'SCRIPT' && el.getAttribute('type') === 'importmap') continue;
     if (el.tagName === 'BASE') continue;
     if (el.tagName === 'TITLE') continue;
+    // #936: NEVER remove a stylesheet or a `<style>` on a soft nav (Turbo's
+    // persistent-CSS model). The incoming head of a full-body-swap fallback can
+    // legitimately lack the app's `<link rel=stylesheet>` (a partial or mangled
+    // response, e.g. from a mid-parse empty-`have` prefetch): removing the live
+    // one there leaves the whole page unstyled until a manual refresh, the
+    // headline #936 symptom. Keeping it is safe: a genuinely stale sheet is
+    // dropped by the deploy-level hard reload (build-id mismatch), not here.
+    if (isPersistentHeadStyle(el)) continue;
     if (!newSet.has(outerHTMLForDiff(el))) el.remove();
   }
 
@@ -3509,6 +3558,7 @@ export {
   reconcileChildren as _reconcileChildren,
   onPopState as _onPopState,
   applySwap as _applySwap,
+  buildHaveHeader as _buildHaveHeader,
   snapshotCache as _snapshotCache,
   prefetchCache as _prefetchCache,
   LIVE_ATTRS as _LIVE_ATTRS,

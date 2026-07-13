@@ -606,24 +606,27 @@ test('addNewHeadElements: head diff ignores per-request nonce differences (no sp
  * mergeHead: full-merge head (used on full body swap)
  * ==================================================================== */
 
-test('mergeHead: removes elements not in the new head', () => {
+test('mergeHead: removes stale non-style elements but never a stylesheet (#936)', () => {
   document.head.innerHTML =
     '<title>Old</title>' +
-    '<link rel="stylesheet" href="/stale.css">' +
-    '<link rel="stylesheet" href="/shared.css">';
+    '<meta name="stale-meta" content="x">' +
+    '<link rel="stylesheet" href="/keep.css">';
   const newHead = document.createElement('head');
   newHead.innerHTML =
     '<title>New</title>' +
-    '<link rel="stylesheet" href="/shared.css">' +
+    '<meta name="fresh-meta" content="y">' +
     '<link rel="stylesheet" href="/fresh.css">';
   _merge(newHead);
   assert.equal(document.title, 'New');
-  assert.ok(!document.head.querySelector('link[href="/stale.css"]'), 'stale link removed');
-  assert.ok(document.head.querySelector('link[href="/shared.css"]'), 'shared link kept');
-  assert.ok(document.head.querySelector('link[href="/fresh.css"]'), 'fresh link added');
+  assert.ok(!document.head.querySelector('meta[name="stale-meta"]'), 'a stale non-style element is removed');
+  assert.ok(document.head.querySelector('meta[name="fresh-meta"]'), 'a fresh element is added');
+  // #936: a stylesheet the incoming head lacks must NOT be stripped (it would
+  // leave the page unstyled). It stays; a new one is still added.
+  assert.ok(document.head.querySelector('link[href="/keep.css"]'), 'the live stylesheet is preserved even though absent from the new head');
+  assert.ok(document.head.querySelector('link[href="/fresh.css"]'), 'a new stylesheet is added');
 });
 
-test('mergeHead: preserves importmap and base across full merges', () => {
+test('mergeHead: preserves importmap, base, AND stylesheets across full merges (#936)', () => {
   document.head.innerHTML =
     '<script type="importmap">{}</script>' +
     '<base href="/">' +
@@ -633,7 +636,7 @@ test('mergeHead: preserves importmap and base across full merges', () => {
   _merge(newHead);
   assert.ok(document.head.querySelector('script[type="importmap"]'), 'importmap kept');
   assert.ok(document.head.querySelector('base'), 'base kept');
-  assert.ok(!document.head.querySelector('link[href="/x.css"]'), 'x.css removed');
+  assert.ok(document.head.querySelector('link[href="/x.css"]'), 'the existing stylesheet is preserved (#936), not removed');
   assert.ok(document.head.querySelector('link[href="/y.css"]'), 'y.css added');
 });
 
