@@ -108,7 +108,6 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(existsSync(join(appDir, 'app', 'layout.ts')), 'layout.ts written');
     assert.ok(existsSync(join(appDir, 'app', 'page.ts')), 'page.ts written');
     assert.ok(existsSync(join(appDir, 'components', 'theme-toggle.ts')), 'theme-toggle written');
-    assert.ok(existsSync(join(appDir, 'components', 'prompt-button.ts')), 'prompt-button written');
 
     // Dark-mode wiring: the head init script (in layout) AND the theme-toggle
     // must toggle the shadcn `.dark` class, not only the `data-theme`
@@ -132,26 +131,17 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.doesNotMatch(layoutSrc, /oklch\(0\.7 0\.16 52\)/,
       'no orange brand color survives in the neutral scaffold');
 
-    // The home page is a gallery index: a masthead, a get-started + AI-prompts
-    // card row, and a grid linking every feature demo + the example app.
+    // The home page is a gallery index: a masthead, a grid linking every feature
+    // demo + the example app, and a footer with the docs + source links.
     const pageSrc = readFileSync(join(appDir, 'app', 'page.ts'), 'utf8');
     assert.match(pageSrc, /Welcome to/, 'home is a welcome page');
-    assert.match(pageSrc, /SKILL\.md/, 'home points the agent at the skill');
-    assert.match(pageSrc, /Get started/, 'home ships a get-started card');
-    assert.match(pageSrc, /Coding with AI\?/, 'home ships an AI-prompts card');
-    assert.match(pageSrc, /<prompt-button\b/, 'home renders the prompt-button component');
     assert.match(pageSrc, /Explore the gallery/, 'home indexes the gallery');
     assert.match(pageSrc, /\/features\/routing/, 'home links the feature demos');
     assert.match(pageSrc, /\/examples\/todo/, 'home links the example app');
-
-    // The prompt-button is a real interactive light-DOM component (copy to
-    // clipboard on click, state via a signal): the home page teaches an idiom.
-    const promptSrc = readFileSync(join(appDir, 'components', 'prompt-button.ts'), 'utf8');
-    assert.match(promptSrc, /clipboard\.writeText/, 'prompt-button copies to the clipboard');
-    assert.match(promptSrc, /signal\(/, 'prompt-button uses a signal for state');
-    assert.match(promptSrc, /@click=/, 'prompt-button hydrates a click handler');
-    assert.match(promptSrc, /PromptButton\.register\(['"]prompt-button['"]\)/,
-      'prompt-button registers its custom-element tag');
+    assert.match(pageSrc, /docs\.webjs\.dev/, 'footer links the docs');
+    assert.match(pageSrc, /github\.com\/webjsdev\/webjs/, 'footer links the source');
+    assert.doesNotMatch(pageSrc, /<prompt-button\b/, 'the AI-prompts card is gone');
+    assert.doesNotMatch(pageSrc, /Coding with AI/, 'the coding-with-AI section is gone');
 
     // The gallery ships: single-feature demos under app/features/, the example
     // app under app/examples/, and their logic under modules/, all without the
