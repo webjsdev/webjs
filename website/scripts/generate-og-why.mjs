@@ -78,12 +78,17 @@ const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
     color:${T.accent};
   }
   .top{ display:flex; align-items:center; justify-content:space-between; }
-  .mid{ flex:1; display:flex; flex-direction:column; justify-content:center; gap:34px; }
+  .mid{ flex:1; display:flex; flex-direction:column; justify-content:center; gap:34px; padding-top:40px; }
   h1{
     font-family:'Inter Tight',sans-serif; font-weight:800;
     font-size:52px; line-height:1.05; letter-spacing:-0.035em;
     max-width:20ch;
   }
+  .sub{
+    font-size:22px; line-height:1.4; color:${T.fgMuted}; font-weight:400;
+    max-width:34ch; margin-top:-14px;
+  }
+  .sub b{ color:${T.fg}; font-weight:600; }
   .accent{
     background:linear-gradient(105deg, ${T.accent}, color-mix(in oklch, ${T.accentLive} 72%, ${T.fg}));
     -webkit-background-clip:text; background-clip:text; color:transparent;
@@ -125,6 +130,7 @@ const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
     </div>
     <div class="mid">
       <h1>The framework your <span class="accent">AI agent</span> already understands</h1>
+      <div class="sub">A <b>full-stack JavaScript framework</b> your AI agent can read end to end.</div>
       <div class="cards">
         <div class="card">
           <div class="clabel"><span class="cnum">01</span> Framework source</div>

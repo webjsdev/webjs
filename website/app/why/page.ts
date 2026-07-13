@@ -22,7 +22,7 @@ export function generateMetadata(ctx: { url: string }) {
   const image = `${origin}/public/og-why.png`;
   const title = 'Why WebJs - The Framework Your AI Agent Already Understands';
   const description =
-    'WebJs serves the framework source and your app code exactly as written, so any AI model can read the whole stack from node_modules, reason about it, and debug it. No training data required, no single blessed model. Built on the web components, HTML, and JavaScript every model already knows.';
+    'WebJs is a full-stack JavaScript framework that serves the framework source and your app code exactly as written, so any AI model can read the whole stack from node_modules, reason about it, and debug it. No training data required, no single blessed model. Built on the web components, HTML, and JavaScript every model already knows.';
   return {
     title,
     description,
@@ -83,12 +83,12 @@ export default function Why() {
         The framework your AI agent already understands
       </h1>
       <p class="text-lede leading-[1.6] text-fg-muted max-w-[56ch] mx-auto mb-8 text-pretty">
-        WebJs has no build step, so nothing is hidden from your agent. The
-        framework ships in node_modules as plain JavaScript it can read end to
-        end, and your app code is served to the browser exactly as written. Any
-        model reasons about the whole stack and debugs it, with no training data
-        required and no single blessed model, on the web components and standard
-        HTML every model already knows.
+        WebJs is a full-stack JavaScript framework with no build step, so
+        nothing is hidden from your agent. The framework ships in node_modules as
+        plain JavaScript it can read end to end, and your app code is served to
+        the browser exactly as written. Any model reasons about the whole stack
+        and debugs it, with no training data required and no single blessed
+        model, on the web components and standard HTML every model already knows.
       </p>
       <div class="flex gap-3 justify-center flex-wrap mb-8">
         <a class="${BTN} bg-accent text-accent-fg border-transparent shadow-[var(--shadow-glow)] hover:bg-accent-hover hover:-translate-y-0.5" href=${DOCS_URL + '/docs/getting-started'} target="_blank" rel="noopener noreferrer">
