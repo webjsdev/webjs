@@ -5,7 +5,7 @@ export const metadata = { title: 'Styling | WebJs' };
 export default function Styling() {
   return html`
     <h1>Styling</h1>
-    <p>WebJs ships two styling models and lets you pick per component. The <strong>default is light DOM</strong> with <strong>Tailwind CSS</strong>: the browser runtime with <code>@theme</code> design tokens. Shadow DOM is opt-in when you need truly scoped styles or third-party-embed isolation. <code>&lt;slot&gt;</code> projection works identically in both modes (light DOM uses framework projection), so slot usage is not a reason to opt into shadow.</p>
+    <p>WebJs ships two styling models and lets you pick per component. The <strong>default is light DOM</strong> with <strong>Tailwind CSS</strong>: a static compiled stylesheet (so it works with JavaScript off) with <code>@theme</code> design tokens. Shadow DOM is opt-in when you need truly scoped styles or third-party-embed isolation. <code>&lt;slot&gt;</code> projection works identically in both modes (light DOM uses framework projection), so slot usage is not a reason to opt into shadow.</p>
 
     <h2>The default: light DOM + Tailwind</h2>
     <p>Pages, layouts, and components render into the normal document tree. Tailwind utility classes apply directly: no <code>:host</code>, no <code>::part</code>, no CSS-variable plumbing. Design tokens live in a single <code>@theme</code> block in <code>public/input.css</code>, which <code>css:build</code> compiles to a static <code>public/tailwind.css</code> the layout links, so the app is fully styled with JavaScript disabled (a real stylesheet, not an in-browser compile). The token VALUES stay inline in the layout as plain CSS custom properties, so they resolve with JS off too.</p>
@@ -211,7 +211,7 @@ export default function Post({ params }) {
     </ol>
 
     <h2>Vanilla CSS end-to-end (opt out of Tailwind)</h2>
-    <p>Tailwind is the default but not a requirement. If you prefer hand-written CSS everywhere, drop the Tailwind browser script + <code>@theme</code> block from the root layout and follow the <strong>wrapper-scoping convention</strong> below so generic class names (<code>.btn</code>, <code>.input</code>, <code>.header</code>) can't collide across pages, layouts, and components in the global light-DOM namespace.</p>
+    <p>Tailwind is the default but not a requirement. If you prefer hand-written CSS everywhere, drop the <code>&lt;link&gt;</code> to <code>public/tailwind.css</code> (and <code>public/input.css</code> + the <code>css:build</code> script) and follow the <strong>wrapper-scoping convention</strong> below so generic class names (<code>.btn</code>, <code>.input</code>, <code>.header</code>) can't collide across pages, layouts, and components in the global light-DOM namespace.</p>
 
     <h3>Three scopes, one rule each</h3>
     <table>

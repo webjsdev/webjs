@@ -828,10 +828,13 @@ Both hydrate without flash on the client.
 
 <!-- OVERRIDE -->
 
-The scaffold ships with the **Tailwind CSS browser runtime** + `@theme`
-design tokens defined in the root layout. Every colour, font family,
-fluid type scale value, and motion duration is declared once in `@theme`
-and available everywhere via utility classes (`text-foreground`,
+The scaffold compiles a **static Tailwind stylesheet** (`css:build` builds
+`public/input.css` into the `public/tailwind.css` the layout links, so the
+app is styled with JavaScript off) + `@theme` design tokens. The token
+VALUES live on `:root` in the root layout (plain CSS, JS-off safe); the
+`@theme` maps live in `public/input.css`. Every colour, font family,
+fluid type scale value, and motion duration is declared once and
+available everywhere via utility classes (`text-foreground`,
 `bg-card`, `font-serif`, `duration-fast`, `text-display`).
 
 **One theme, canonical tokens.** The app has a SINGLE theme, defined

@@ -56,8 +56,9 @@ shadow DOM.
 
 ## Tailwind + JS helpers (default convention)
 
-Default stack: Tailwind CSS browser runtime + `@theme` design tokens
-declared once in the root layout (palette, fonts, fluid type, motion
+Default stack: a static compiled Tailwind stylesheet (`css:build` compiles
+`public/input.css` to the linked `public/tailwind.css`, so it works with JS
+off) + `@theme` design tokens (palette, fonts, fluid type, motion
 durations). Consume via utility classes (`text-fg`, `bg-bg-elev`,
 `font-serif`, `duration-fast`, `text-display`).
 

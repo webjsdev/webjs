@@ -1,7 +1,7 @@
 # Layout reference
 
 `app/layout.ts` ships as a **minimal shell**: it wires the theme, design tokens,
-and the Tailwind runtime, then renders `${children}` in a bare full-height
+and the linked static Tailwind stylesheet, then renders `${children}` in a bare full-height
 container with no chrome. That is on purpose. A delivered app should design its
 own layout from what the app IS, not inherit a generic header and footer.
 
