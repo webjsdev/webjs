@@ -1138,16 +1138,24 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
   //   - INERT: neither the module nor its closure does any client work. Dropped
   //     from the boot script entirely (#179).
   //   - IMPORT-ONLY (#605): the module itself does no client work, and the ONLY
-  //     client work its closure reaches is SHIPPING COMPONENTS. Such a page /
-  //     layout module is just the import-graph carrier for its components; the
-  //     boot can emit those component modules directly and drop the module. The
-  //     condition is a positive subset test (every client-effecting closure
-  //     member is a component), NOT a hand-listed block list: any client-
-  //     effecting NON-component in the closure (a self-executing helper, a
-  //     client-router import, a reactive helper) keeps the whole module, since
-  //     dropping it would lose that side effect.
+  //     client work its closure reaches is SHIPPING COMPONENTS (or modules
+  //     those components carry). Such a page / layout module is just the
+  //     import-graph carrier for its components; the boot can emit those
+  //     component modules directly and drop the module.
   //   - SHIP: anything else (the module itself is client-effecting, or its
-  //     closure reaches a client-effecting non-component). Unchanged behaviour.
+  //     closure reaches a client-effecting non-component through a path that
+  //     does NOT pass through a shipping component). Unchanged behaviour.
+  //
+  // The walk is PATH-AWARE (#963): it stops descending at a shipping
+  // component, because that component is emitted in the module's place, so
+  // its whole subtree loads regardless of whether the page module ships.
+  // Consequently a client-effecting non-component reachable ONLY through
+  // shipping components (the module-scope-signal-in-its-own-file idiom of
+  // invariant 5, imported by a component the page renders) does not block
+  // import-only: dropping the page loses nothing, the emitted component
+  // still imports it. A client-effecting non-component reachable through a
+  // component-free path still ships the whole module, since dropping it
+  // would lose that side effect.
   /** @type {Set<string>} */
   const skip = new Set([...elidableComponents, ...serverFiles]);
   /** @type {Set<string>} */
@@ -1166,28 +1174,52 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
       shippedRouteModules.set(file, { blocker: null, reason: clientEffectReason(file) });
       continue;
     }
-    const closure = appDir ? transitiveDeps(moduleGraph, [file], appDir, skip) : [];
-    const effecting = closure.filter(isClientEffecting);
-    if (effecting.length === 0) { inertRouteModules.add(file); continue; }
-    // Import-only iff EVERY client-effecting closure member is a (shipping)
-    // component. isClientEffecting for a component already implies mustShip, so
-    // `effecting` is exactly the shipping components reachable from this module:
-    // re-emit that STATIC set (what loading the module would have registered, so
-    // a component imported but only conditionally rendered still registers).
+    // Truncated walk (path-aware, #963): BFS the module's import graph, but
+    // do NOT descend into shipping components (they are emitted in the
+    // module's place, so their subtrees load regardless). Collect those
+    // frontier components as the emit set: what loading the module would
+    // have registered, so a component imported but only conditionally
+    // rendered still registers. Skip elided components and server files
+    // exactly like transitiveDeps (they never load client-side; a stub is
+    // served instead). Non-appDir deps (core, vendor) are traversed but
+    // never classified, matching the old closure's appDir restriction.
     //
-    // A `static lazy` component is NOT special-cased here: it only appears in
-    // this STATIC closure when the route statically imports it, and in that case
-    // loading the module already eager-loaded it before elision, so emitting it
-    // directly preserves that exact behaviour. A normally-used lazy component is
-    // tag-referenced (never statically imported), so it is absent from this
-    // closure and still loads via the IntersectionObserver `observeLazy` path.
-    if (effecting.every((f) => componentFiles.has(f))) {
-      importOnlyRouteModules.set(file, effecting);
-    } else {
-      // A client-effecting non-component is reachable; ship the whole module.
-      // Name the FIRST such non-component as the blocker for the advisory.
-      const blocker = effecting.find((f) => !componentFiles.has(f));
+    // A `static lazy` component is NOT special-cased here: it only appears
+    // on this STATIC walk when the route statically imports it, and in that
+    // case loading the module already eager-loaded it before elision, so
+    // emitting it directly preserves that exact behaviour. A normally-used
+    // lazy component is tag-referenced (never statically imported), so it
+    // is absent from this walk and still loads via the IntersectionObserver
+    // `observeLazy` path.
+    /** @type {Set<string>} shipping components to emit in the module's place */
+    const frontier = new Set();
+    /** @type {string|null} first client-effecting non-component on a component-free path */
+    let blocker = null;
+    if (appDir) {
+      const visited = new Set([file]);
+      const queue = [file];
+      while (queue.length) {
+        const cur = /** @type {string} */ (queue.shift());
+        const deps = moduleGraph.get(cur);
+        if (!deps) continue;
+        for (const dep of deps) {
+          if (visited.has(dep)) continue;
+          visited.add(dep);
+          if (skip.has(dep)) continue; // elided component / server file: stub only
+          if (componentFiles.has(dep)) { frontier.add(dep); continue; } // emitted; subtree carried
+          if (dep.startsWith(appDir) && isClientEffecting(dep)) blocker ??= dep;
+          queue.push(dep);
+        }
+      }
+    }
+    if (blocker !== null) {
+      // A client-effecting non-component is reachable on a component-free
+      // path; ship the whole module and name the blocker for the advisory.
       shippedRouteModules.set(file, { blocker, reason: clientEffectReason(blocker) });
+    } else if (frontier.size === 0) {
+      inertRouteModules.add(file);
+    } else {
+      importOnlyRouteModules.set(file, [...frontier]);
     }
   }
 
