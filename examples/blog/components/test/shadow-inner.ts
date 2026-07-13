@@ -5,7 +5,7 @@ export class ShadowInner extends WebComponent {
   static shadow = true;
   static styles = css`
     :host { display: inline-flex; align-items: center; gap: 4px; }
-    span { font: 600 14px/1 monospace; color: var(--accent, #e66); }
+    span { font: 600 14px/1 monospace; color: var(--primary, #e66); }
   `;
   render() {
     return html`<span data-testid="shadow-inner">shadow-inner OK</span>`;

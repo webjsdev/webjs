@@ -59,7 +59,7 @@ shadow DOM.
 Default stack: a static compiled Tailwind stylesheet (`css:build` compiles
 `public/input.css` to the linked `public/tailwind.css`, so it works with JS
 off) + `@theme` design tokens (palette, fonts, fluid type, motion
-durations). Consume via utility classes (`text-fg`, `bg-bg-elev`,
+durations). Consume via utility classes (`text-foreground`, `bg-card`,
 `font-serif`, `duration-fast`, `text-display`).
 
 **DRY via JS helpers, not `@apply`.** When the same bundle of Tailwind
@@ -73,14 +73,14 @@ import { html } from '@webjsdev/core';
 export function rubric(label: string, mb: 'sm' | 'md' = 'md') {
   const mbCls = mb === 'sm' ? 'mb-3' : 'mb-4';
   return html`
-    <span class="block font-mono text-[11px] leading-none font-semibold tracking-[0.2em] uppercase text-accent ${mbCls}">● ${label}</span>
+    <span class="block font-mono text-[11px] leading-none font-semibold tracking-[0.2em] uppercase text-primary ${mbCls}">● ${label}</span>
   `;
 }
 
 /** "← label" back link: small caps, muted. */
 export function backLink(href: string, label: string) {
   return html`
-    <a href=${href} class="inline-block mb-12 text-fg-subtle no-underline font-mono text-[11px] leading-none font-medium tracking-[0.15em] uppercase transition-colors duration-fast hover:text-fg">← ${label}</a>
+    <a href=${href} class="inline-block mb-12 text-muted-foreground/70 no-underline font-mono text-[11px] leading-none font-medium tracking-[0.15em] uppercase transition-colors duration-fast hover:text-foreground">← ${label}</a>
   `;
 }
 ```
@@ -117,24 +117,23 @@ identical to inline classes, no client-side runtime.
 
 ## Dark mode: two signals, keep them in sync
 
-The default scaffold runs **two** theming systems, and a theme switch must
-drive **both** or one half goes stale (this is the single most common
-dark-mode bug in a scaffolded app):
+The theme uses ONE shadcn token vocabulary (`--background`, `--foreground`,
+`--primary`, ...), but a theme switch must drive **two signals** on `<html>`
+or half the styling goes stale (the single most common dark-mode bug in a
+scaffolded app):
 
-1. **Editorial chrome tokens** (`--fg`, `--bg`, `--accent`, ...) declared in
-   the root layout. They react to a **`data-theme` attribute** on `<html>`
-   (`data-theme="light"` vs absent) and default to dark.
-2. **Webjs UI (shadcn) component tokens** (`--background`, `--foreground`,
-   `--primary`, ...) used by everything under `components/ui/`. They react
-   to a **`.dark` class** on an ancestor (`@custom-variant dark (&:is(.dark *))`)
-   and default to light.
+1. **The `data-theme` attribute** (`data-theme="light"` vs absent, default
+   dark). The app palette blocks in the root layout react to it
+   (`:root` / `:root[data-theme='light']`).
+2. **The `.dark` class**. The `@webjsdev/ui` kit under `components/ui/` reacts
+   to it (`@custom-variant dark (&:is(.dark *))` plus its `.dark { ... }` token
+   defaults).
 
-The scaffold's head init script and `theme-toggle` set **both** signals on
-`<html>`: they write `data-theme` AND `classList.toggle('dark', isDark)`. If
-you wire your own theme switch or replace the toggle, you MUST set both.
-Setting only `data-theme` leaves the ui-* components rendering light tokens
-on a dark page (white buttons, white cards, invisible text) while the chrome
-looks correct.
+The head init script and `theme-toggle` set **both**: they write `data-theme`
+AND `classList.toggle('dark', isDark)`. If you wire your own theme switch or
+replace the toggle, you MUST set both. Setting only `data-theme` leaves the
+ui-* components rendering light tokens on a dark page (white buttons, white
+cards, invisible text) while the rest of the chrome looks correct.
 
 **Verify dark mode in a real browser, not just light.** Light mode passing
 proves nothing about dark mode: with neither signal set, both systems sit at
@@ -184,7 +183,7 @@ const STYLES = css`
   .page-dashboard {
     .actions      { display: flex; gap: 12px; }
     .btn          { padding: 12px 24px; border-radius: 999px; }
-    .btn-primary  { background: var(--accent); color: var(--accent-fg); }
+    .btn-primary  { background: var(--primary); color: var(--primary-foreground); }
   }
 `;
 
