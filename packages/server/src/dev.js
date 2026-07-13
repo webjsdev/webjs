@@ -1664,10 +1664,6 @@ export async function startServer(opts) {
           // A regenerate output (#967) is a build product the server itself
           // writes on request; ignoring it stops a spurious rebuild + reload
           // (and a reload -> refetch -> recompile -> reload cycle), same as the
-          // db/dev.db carve-out above.
-          // A regenerate output (#967) is a build product the server itself
-          // writes on request; ignoring it stops a spurious rebuild + reload
-          // (and a reload -> refetch -> recompile -> reload cycle), same as the
           // db/dev.db carve-out above. `app` exposes the check because `state`
           // lives in createRequestHandler's scope, not here.
           if (app.isRegenerateOutput(filename)) continue;
