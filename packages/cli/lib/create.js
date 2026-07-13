@@ -244,11 +244,11 @@ async function writeUiBootstrap(appDir) {
 }
 
 /**
- * Read the @webjsdev/ui theme CSS so we can inline it into the layout's
- * `<style type="text/tailwindcss">` block. The Tailwind browser runtime
- * picks up inline `<style type="text/tailwindcss">` content, so the theme
- * tokens (`--color-primary`, `--color-card`, …) the registry components
- * consume are available at runtime without a build step.
+ * Read the @webjsdev/ui theme CSS so we can write it into public/input.css,
+ * which css:build compiles into the static public/tailwind.css the layout
+ * links. The theme tokens (`--color-primary`, `--color-card`, …) the registry
+ * components consume become real utility classes in the compiled stylesheet,
+ * so the app is styled with JavaScript off.
  *
  * @returns {Promise<string>} theme CSS source
  */
@@ -344,6 +344,16 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     throw new Error(`Unknown --runtime '${runtime}'. Only ${VALID_RUNTIMES.join(' / ')} are supported.`);
   }
   const isBun = runtime === 'bun';
+  // Tailwind compile commands (#947). A UI scaffold compiles a STATIC stylesheet
+  // (not the browser runtime), so it renders styled with JavaScript off. The
+  // compiler is a node-shebang CLI, so a Bun app (whose Dockerfile is a node-less
+  // `oven/bun:1` image, #595) must run it under Bun via `bun --bun`; a Node app
+  // runs it directly (the before / parallel steps get node_modules/.bin on PATH
+  // via envWithLocalBin). Deliberately NOT `npm run css:build` in the hooks: the
+  // Bun image has no npm, so that step would exit 127 and abort the boot.
+  const twBin = isBun ? 'bun --bun tailwindcss' : 'tailwindcss';
+  const cssBuildCmd = `${twBin} -i ./public/input.css -o ./public/tailwind.css --minify`;
+  const cssWatchCmd = `${twBin} -i ./public/input.css -o ./public/tailwind.css --watch`;
   const appDir = join(cwd, name);
   if (existsSync(appDir)) {
     console.error(`Error: directory '${name}' already exists.`);
@@ -402,9 +412,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // Compile Tailwind from public/input.css to a STATIC public/tailwind.css
       // that app/layout.ts links, so the app is fully styled with JavaScript
       // DISABLED (a real stylesheet, not an in-browser compile). Runs inside the
-      // dev and start tasks via the `before` hooks below. The compiler is Node
-      // tooling, so it stays plain even for a Bun app (like test / db / check).
-      ...(isApi ? {} : { 'css:build': 'tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify' }),
+      // dev and start tasks via the `before` hooks below. Runtime-aware: a Bun
+      // app runs the compiler under Bun (its image has no Node), a Node app runs
+      // it directly.
+      ...(isApi ? {} : { 'css:build': cssBuildCmd }),
       dev: isBun ? 'bun --bun webjs dev' : 'webjs dev',
       start: isBun ? 'bun --bun webjs start' : 'webjs start',
       test: 'webjs test',
@@ -477,16 +488,18 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     // above) behave identically. Both apply pending migrations via `webjs db
     // migrate` (idempotent, a no-op when the db is current), so a freshly
     // generated migration is applied without a manual step (#725). For a UI
-    // template it ALSO compiles Tailwind (`css:build`) in `before` so a freshly
-    // cloned app is styled on the very first boot with no manual step, and runs
-    // the Tailwind `--watch` under `parallel` for live recompiles in dev. The
-    // api template has no CSS, so it gets neither.
+    // template it ALSO compiles Tailwind in `before` so a freshly cloned app is
+    // styled on the very first boot with no manual step, and runs the Tailwind
+    // `--watch` under `parallel` for live recompiles in dev. The compile command
+    // is the runtime-aware `cssBuildCmd` (a Bun app runs it under Bun, since its
+    // image has no npm or Node), NOT `npm run css:build`. The api template has no
+    // CSS, so it gets neither.
     webjs: {
       dev: {
-        before: isApi ? ['webjs db migrate'] : ['webjs db migrate', 'npm run css:build'],
-        ...(isApi ? {} : { parallel: ['tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch'] }),
+        before: isApi ? ['webjs db migrate'] : ['webjs db migrate', cssBuildCmd],
+        ...(isApi ? {} : { parallel: [cssWatchCmd] }),
       },
-      start: { before: isApi ? ['webjs db migrate'] : ['webjs db migrate', 'npm run css:build'] },
+      start: { before: isApi ? ['webjs db migrate'] : ['webjs db migrate', cssBuildCmd] },
     },
   }, null, 2) + '\n');
 

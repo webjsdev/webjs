@@ -322,10 +322,13 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // Both dev and start apply pending migrations before serving (#725), then
     // compile the static Tailwind stylesheet (#947), so a fresh clone boots
     // migrated AND fully styled with no manual step.
-    assert.deepEqual(pkg.webjs?.dev?.before, ['webjs db migrate', 'npm run css:build'],
-      'webjs.dev.before runs db migrate then css:build (#725, #947)');
-    assert.deepEqual(pkg.webjs?.start?.before, ['webjs db migrate', 'npm run css:build'],
-      'webjs.start.before runs db migrate then css:build');
+    // The before-step calls the Tailwind CLI DIRECTLY (not `npm run css:build`),
+    // so it works on the node-less / npm-less Bun image too (#947); node_modules/.bin
+    // is on PATH for before/parallel steps via envWithLocalBin.
+    assert.deepEqual(pkg.webjs?.dev?.before, ['webjs db migrate', 'tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify'],
+      'webjs.dev.before runs db migrate then the Tailwind compile (#725, #947)');
+    assert.deepEqual(pkg.webjs?.start?.before, ['webjs db migrate', 'tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify'],
+      'webjs.start.before runs db migrate then the Tailwind compile');
     assert.deepEqual(pkg.webjs?.dev?.parallel, ['tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch'],
       'webjs.dev.parallel runs the Tailwind watcher (#947)');
     assert.equal(pkg.scripts['css:build'], 'tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify');

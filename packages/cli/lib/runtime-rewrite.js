@@ -142,9 +142,10 @@ export function bunifyDockerfile(s) {
     .replace(
       /# `npm start` is a thin alias[\s\S]*?the migrate no longer depends on an npm `prestart` hook\.\nCMD \["npm", "start"\]/,
       '# `bun --bun run start` runs the `start` script on Bun (the server serves via\n' +
-      '# Bun.serve). `webjs start` runs the `webjs.start.before` step (`webjs db migrate`,\n' +
-      '# which resolves drizzle-kit and runs it under Bun, no npx, #570), idempotent / a\n' +
-      '# no-op with no pending migrations, then serves on $PORT.\n' +
+      '# Bun.serve). `webjs start` runs the `webjs.start.before` steps: `webjs db migrate`\n' +
+      '# (resolves drizzle-kit and runs it under Bun, no npx, #570) and, for a UI app,\n' +
+      '# the Tailwind compile under `bun --bun` (no Node / npm in the image, #947), both\n' +
+      '# idempotent, then serves on $PORT.\n' +
       'CMD ["bun", "--bun", "run", "start"]',
     );
 }
