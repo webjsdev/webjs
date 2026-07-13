@@ -331,8 +331,28 @@ export async function ssrPage(route, params, url, opts) {
         if (!mod.default) continue;
         const tree = await mod.default({ ...ctx, error: err });
         const body = await renderToString(tree, { ssr: true, dev: opts.dev });
-        const moduleUrls = [route.file, ...route.layouts].map((f) => toUrlPath(f, opts.appDir));
-        const html = wrapInDocument(body, { metadata, moduleUrls, dev: opts.dev, nonce: errNonce });
+        // Apply the SAME inert / import-only substitution as the happy-path
+        // boot (#963): the error page must not ship a page/layout module the
+        // normal render drops. Pre-substitution, an import-only page with a
+        // bare `.server.*` import (legal, it never loads client-side) would
+        // load here whole and crash the error page's boot on the throw-at-load
+        // stub, killing the sibling component registrations in the same
+        // module script.
+        const errModuleUrls = [];
+        {
+          const seen = new Set();
+          const push = (abs) => {
+            const u = toUrlPath(abs, opts.appDir);
+            if (!seen.has(u)) { seen.add(u); errModuleUrls.push(u); }
+          };
+          for (const f of [route.file, ...route.layouts]) {
+            if (opts.inertRouteModules && opts.inertRouteModules.has(f)) continue;
+            const emit = opts.importOnlyRouteModules && opts.importOnlyRouteModules.get(f);
+            if (emit) emit.forEach(push);
+            else push(f);
+          }
+        }
+        const html = wrapInDocument(body, { metadata, moduleUrls: errModuleUrls, dev: opts.dev, nonce: errNonce });
         return htmlResponse(html, 500, opts.req, url);
       } catch (nested) {
         // fall through to next error boundary

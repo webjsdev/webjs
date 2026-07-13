@@ -293,3 +293,32 @@ Inner.register('x-inner');`,
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// The error-boundary render applies the SAME substitution (#963): an
+// import-only page with a bare server import is dropped from the ERROR
+// page's boot too, so the throw-at-load stub never crashes the error page.
+test('an error-boundary render drops the import-only page from its boot (#963)', async () => {
+  const dir = makeApp({
+    'lib/auth.server.ts': `export async function auth() { throw new Error('boom'); }`,
+    'app/error.ts': `import { html } from '@webjsdev/core';
+export default ({ error }) => html\`<p class="err">\${error.message}</p>\`;`,
+    'app/page.ts': `import { html } from '@webjsdev/core';
+import { auth } from '../lib/auth.server.ts';
+import '../components/counter.ts';
+export default async () => { await auth(); return html\`<x-counter></x-counter>\`; };`,
+    'components/counter.ts': COUNTER,
+  });
+  try {
+    const app = await createRequestHandler({ appDir: dir, dev: true });
+    if (app.warmup) await app.warmup();
+    const resp = await app.handle(new Request('http://x/'));
+    const html = await resp.text();
+    assert.equal(resp.status, 500, 'the page render throws into the error boundary');
+    assert.match(html, /class="err"/, 'the error boundary rendered');
+    const boot = bootOf(html);
+    assert.doesNotMatch(boot, /\/app\/page\.ts/, 'the import-only page module stays dropped on the error path');
+    assert.match(boot, /\/components\/counter\.ts/, 'the frontier component is emitted instead');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
