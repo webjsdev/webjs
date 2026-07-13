@@ -101,7 +101,7 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     const inputCss = await readFile(join(appDir, 'public', 'input.css'), 'utf8');
     assert.match(inputCss, /@import "tailwindcss"/, 'input.css imports Tailwind');
     assert.match(inputCss, /color-primary/, 'input.css carries the @theme color maps');
-    assert.match(layout, /--primary:\s*oklch/, 'the palette VALUES stay inline (JS-off safe)');
+    assert.match(layout, /--primary:\s*#[0-9a-f]{6}/i, 'the palette VALUES stay inline (JS-off safe)');
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }

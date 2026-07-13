@@ -72,10 +72,11 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
       assert.ok(existsSync(join(appDir, f)), `${f} should exist`);
     }
     // No FULL per-tool rule duplicates (the bridges above are thin pointers, not
-    // copies), no gallery, no design-review ceremony. Cursor and opencode read
-    // AGENTS.md natively, so they get no per-tool file.
-    for (const f of ['CONVENTIONS.md', '.cursorrules', '.cursor', '.gemini', '.opencode', 'LAYOUT-REFERENCE.md', 'app/features', 'app/examples', '.claude/hooks/design-review-before-stop.sh', '.claude/hooks/route-skills.sh', '.claude/skills/webjs-design-review']) {
-      assert.ok(!existsSync(join(appDir, f)), `${f} should NOT exist in the minimal scaffold`);
+    // copies), no design-review ceremony. Cursor and opencode read AGENTS.md
+    // natively, so they get no per-tool file. (The feature gallery under
+    // app/features + app/examples DOES ship; it is asserted below.)
+    for (const f of ['CONVENTIONS.md', '.cursorrules', '.cursor', '.gemini', '.opencode', 'LAYOUT-REFERENCE.md', '.claude/hooks/design-review-before-stop.sh', '.claude/hooks/route-skills.sh', '.claude/skills/webjs-design-review']) {
+      assert.ok(!existsSync(join(appDir, f)), `${f} should NOT exist in the scaffold`);
     }
     // The bridges are THIN (pointers to AGENTS.md), not the old full duplicates.
     for (const f of ['CLAUDE.md', 'GEMINI.md', '.github/copilot-instructions.md']) {
@@ -121,25 +122,27 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(toggleSrc, /classList\.toggle\(['"]dark['"]/,
       'theme-toggle must toggle the .dark class (shadcn dark-mode signal)');
 
-    // Minimal shell: layout renders a bare full-height main with no chrome, and
-    // a NEUTRAL greyscale token palette (not the old orange brand).
+    // Re-skinned shell: a JetBrains Mono type system on a cool neutral-grey
+    // surface palette (not the old orange brand), a full-height main, no chrome.
     assert.match(layoutSrc, /<main class="min-h-dvh[^"]*">/,
-      'layout renders a minimal full-height main');
-    assert.doesNotMatch(layoutSrc, /<header\b/, 'the minimal shell ships no header');
-    assert.match(layoutSrc, /--primary:\s*oklch\(0\.922 0 0\)/,
-      'layout ships a neutral primary token, not the old orange brand');
+      'layout renders a full-height main');
+    assert.doesNotMatch(layoutSrc, /<header\b/, 'the shell ships no built-in header');
+    assert.match(layoutSrc, /JetBrains\+Mono/, 'layout loads the JetBrains Mono font');
+    assert.match(layoutSrc, /--primary:\s*#dee2e6/, 'layout ships the neutral surface palette');
     assert.doesNotMatch(layoutSrc, /oklch\(0\.7 0\.16 52\)/,
       'no orange brand color survives in the neutral scaffold');
 
-    // The home page is a polished welcome (masthead + a get-started card + an
-    // AI-prompts card) that points the agent at the skill, with no gallery links.
+    // The home page is a gallery index: a masthead, a get-started + AI-prompts
+    // card row, and a grid linking every feature demo + the example app.
     const pageSrc = readFileSync(join(appDir, 'app', 'page.ts'), 'utf8');
     assert.match(pageSrc, /Welcome to/, 'home is a welcome page');
     assert.match(pageSrc, /SKILL\.md/, 'home points the agent at the skill');
     assert.match(pageSrc, /Get started/, 'home ships a get-started card');
     assert.match(pageSrc, /Coding with AI\?/, 'home ships an AI-prompts card');
     assert.match(pageSrc, /<prompt-button\b/, 'home renders the prompt-button component');
-    assert.doesNotMatch(pageSrc, /\/features\//, 'home does not link a gallery');
+    assert.match(pageSrc, /Explore the gallery/, 'home indexes the gallery');
+    assert.match(pageSrc, /\/features\/routing/, 'home links the feature demos');
+    assert.match(pageSrc, /\/examples\/todo/, 'home links the example app');
 
     // The prompt-button is a real interactive light-DOM component (copy to
     // clipboard on click, state via a signal): the home page teaches an idiom.
@@ -149,6 +152,19 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(promptSrc, /@click=/, 'prompt-button hydrates a click handler');
     assert.match(promptSrc, /PromptButton\.register\(['"]prompt-button['"]\)/,
       'prompt-button registers its custom-element tag');
+
+    // The gallery ships: single-feature demos under app/features/, the example
+    // app under app/examples/, and their logic under modules/, all without the
+    // dead scaffold-placeholder markers (that gate was retired).
+    assert.ok(existsSync(join(appDir, 'app', 'features', 'routing', 'page.ts')),
+      'gallery feature demos ship under app/features/');
+    assert.ok(existsSync(join(appDir, 'app', 'examples', 'todo', 'page.ts')),
+      'the example app ships under app/examples/');
+    assert.ok(existsSync(join(appDir, 'modules', 'todo', 'components', 'todo-app.ts')),
+      'gallery module logic ships under modules/');
+    assert.doesNotMatch(
+      readFileSync(join(appDir, 'app', 'features', 'routing', 'page.ts'), 'utf8'),
+      /webjs-scaffold-placeholder/, 'gallery files ship without dead placeholder markers');
 
     // Drizzle db layer wired up
     assert.ok(existsSync(join(appDir, 'db', 'schema.server.ts')), 'db/schema.server.ts written');

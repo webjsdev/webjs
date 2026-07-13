@@ -1003,6 +1003,12 @@ export type ActionResult<T> =
   | { success: false; error: string; status: number };
 `);
 
+    // The api backend-features showcase: endpoints under app/api/features/**
+    // (the route() adapter + validation, rate limiting, streaming, file storage,
+    // WebSockets + broadcast) that the root api index above links. The api
+    // counterpart of the UI gallery. Prune what you skip.
+    const { writeApiGallery } = await import('./api-gallery.js');
+    await writeApiGallery(appDir);
   }
 
   if (!isApi) {
@@ -1084,6 +1090,14 @@ ${uiThemeRaw}
 }
 `);
 
+    // The gallery: idiomatic, densely-commented single-feature demos under
+    // app/features/ plus one whole example app under app/examples/, with logic
+    // in modules/, all linked from the home page below. Shipped in every UI
+    // scaffold (full-stack AND saas) so an agent gains context by browsing real
+    // working code; prune per-feature (delete the route + its module) for what
+    // the app does not use.
+    await copyGallery(appDir);
+
   await writeFile(join(appDir, 'app', 'layout.ts'), `import { html, cspNonce } from '@webjsdev/core';
 import '#components/theme-toggle.ts';
 
@@ -1141,89 +1155,97 @@ export default function RootLayout({ children }: { children: unknown }) {
         else measure();
       })();
     </script>
+    <meta name="color-scheme" content="light dark">
+    <!-- JetBrains Mono gives the scaffold its monospaced, developer-console
+         aesthetic. Swap this for your own font (and update --font-sans below). -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap">
     <!-- Tailwind: a STATIC stylesheet compiled from public/input.css to
          public/tailwind.css by css:build / css:watch (run by the dev and start
          tasks). A real stylesheet, so the app is styled with JavaScript OFF. -->
     <link rel="stylesheet" href="/public/tailwind.css">
     <style>
-      /* Neutral design tokens. The token NAMES are infrastructure (public/input.css
-         maps them into Tailwind via @theme). The VALUES are a neutral greyscale
-         base to build on: change them here to give the app its own palette. */
+      /* Design tokens. The token NAMES are infrastructure (public/input.css maps
+         them into Tailwind via @theme). The VALUES are a cool neutral-grey palette
+         with a monospaced type system: change them here to give the app its own
+         look. bg-background / text-foreground / bg-card / bg-primary / border-border
+         all resolve from these. */
       :root {
-        --font-sans:  -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-sans:  'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
         --font-serif: ui-serif, 'Iowan Old Style', Palatino, Georgia, serif;
-        --font-mono:  ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        --font-mono:  'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
         --header-h: 0px;
         /* A translucent tint of the primary, tracked automatically across
            light/dark. Used for focus rings (ring-primary-tint). */
-        --primary-tint: color-mix(in oklch, var(--primary) 25%, transparent);
+        --primary-tint: color-mix(in srgb, var(--primary) 22%, transparent);
       }
       /* dark (the default, and the explicit .dark the toggle sets) */
       :root, .dark {
         color-scheme: dark;
-        --background: oklch(0.145 0 0);
-        --foreground: oklch(0.985 0 0);
-        --card: oklch(0.205 0 0);
-        --card-foreground: oklch(0.985 0 0);
-        --popover: oklch(0.205 0 0);
-        --popover-foreground: oklch(0.985 0 0);
-        --primary: oklch(0.922 0 0);
-        --primary-foreground: oklch(0.205 0 0);
-        --secondary: oklch(0.269 0 0);
-        --secondary-foreground: oklch(0.985 0 0);
-        --muted: oklch(0.205 0 0);
-        --muted-foreground: oklch(0.708 0 0);
-        --accent: oklch(0.269 0 0);
-        --accent-foreground: oklch(0.985 0 0);
-        --border: oklch(1 0 0 / 0.1);
-        --border-strong: oklch(1 0 0 / 0.2);
-        --input: oklch(1 0 0 / 0.15);
-        --ring: oklch(0.556 0 0);
+        --background: #1e2226;
+        --foreground: #dee2e6;
+        --card: #313539;
+        --card-foreground: #dee2e6;
+        --popover: #313539;
+        --popover-foreground: #dee2e6;
+        --primary: #dee2e6;
+        --primary-foreground: #1e2226;
+        --secondary: #363a3e;
+        --secondary-foreground: #dee2e6;
+        --muted: #313539;
+        --muted-foreground: #94989c;
+        --accent: #363a3e;
+        --accent-foreground: #f7fbff;
+        --border: #34393e;
+        --border-strong: #454b51;
+        --input: #34393e;
+        --ring: #6b7075;
       }
       /* light (explicit via the toggle) */
       :root[data-theme='light'] {
         color-scheme: light;
-        --background: oklch(1 0 0);
-        --foreground: oklch(0.145 0 0);
-        --card: oklch(1 0 0);
-        --card-foreground: oklch(0.145 0 0);
-        --popover: oklch(1 0 0);
-        --popover-foreground: oklch(0.145 0 0);
-        --primary: oklch(0.205 0 0);
-        --primary-foreground: oklch(0.985 0 0);
-        --secondary: oklch(0.97 0 0);
-        --secondary-foreground: oklch(0.205 0 0);
-        --muted: oklch(0.97 0 0);
-        --muted-foreground: oklch(0.556 0 0);
-        --accent: oklch(0.97 0 0);
-        --accent-foreground: oklch(0.205 0 0);
-        --border: oklch(0.922 0 0);
-        --border-strong: oklch(0.87 0 0);
-        --input: oklch(0.922 0 0);
-        --ring: oklch(0.708 0 0);
+        --background: #dee2e6;
+        --foreground: #313539;
+        --card: #f0f4f7;
+        --card-foreground: #313539;
+        --popover: #f0f4f7;
+        --popover-foreground: #313539;
+        --primary: #313539;
+        --primary-foreground: #f7fbff;
+        --secondary: #f7fbff;
+        --secondary-foreground: #313539;
+        --muted: #eaeef1;
+        --muted-foreground: #767b80;
+        --accent: #f7fbff;
+        --accent-foreground: #313539;
+        --border: #c9d0d6;
+        --border-strong: #b3bbc2;
+        --input: #c9d0d6;
+        --ring: #9aa0a5;
       }
       /* light (OS preference, when the user has made no explicit choice) */
       @media (prefers-color-scheme: light) {
         :root:not(.dark):not([data-theme='dark']) {
           color-scheme: light;
-          --background: oklch(1 0 0);
-          --foreground: oklch(0.145 0 0);
-          --card: oklch(1 0 0);
-          --card-foreground: oklch(0.145 0 0);
-          --popover: oklch(1 0 0);
-          --popover-foreground: oklch(0.145 0 0);
-          --primary: oklch(0.205 0 0);
-          --primary-foreground: oklch(0.985 0 0);
-          --secondary: oklch(0.97 0 0);
-          --secondary-foreground: oklch(0.205 0 0);
-          --muted: oklch(0.97 0 0);
-          --muted-foreground: oklch(0.556 0 0);
-          --accent: oklch(0.97 0 0);
-          --accent-foreground: oklch(0.205 0 0);
-          --border: oklch(0.922 0 0);
-          --border-strong: oklch(0.87 0 0);
-          --input: oklch(0.922 0 0);
-          --ring: oklch(0.708 0 0);
+          --background: #dee2e6;
+          --foreground: #313539;
+          --card: #f0f4f7;
+          --card-foreground: #313539;
+          --popover: #f0f4f7;
+          --popover-foreground: #313539;
+          --primary: #313539;
+          --primary-foreground: #f7fbff;
+          --secondary: #f7fbff;
+          --secondary-foreground: #313539;
+          --muted: #eaeef1;
+          --muted-foreground: #767b80;
+          --accent: #f7fbff;
+          --accent-foreground: #313539;
+          --border: #c9d0d6;
+          --border-strong: #b3bbc2;
+          --input: #c9d0d6;
+          --ring: #9aa0a5;
         }
       }
     </style>
@@ -1234,8 +1256,9 @@ export default function RootLayout({ children }: { children: unknown }) {
         padding-top: var(--header-h);
         background: var(--background);
         color: var(--foreground);
-        font: 16px/1.65 var(--font-sans);
+        font: 15px/1.6 var(--font-sans);
         -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
     </style>
     <main class="min-h-dvh px-4 sm:px-6 py-8">
@@ -1245,10 +1268,12 @@ export default function RootLayout({ children }: { children: unknown }) {
 }
 `);
 
-  // Home page: a polished welcome (masthead + a "get started" card + an
-  // "AI prompts" card + footer). Treat it as a starting point and grow it into
-  // the app's real landing page. For the saas template, a login/signup CTA row
-  // is spliced under the tagline.
+  // Home page: a gallery index. A masthead, a "get started" + "coding with AI"
+  // card row (the fastest way in), then a grid that links every feature demo and
+  // the example app, and a footer. Treat it as a starting point: prune the demos
+  // you do not use (delete the app/features/<x> route AND its modules/<x>), then
+  // reshape this page into the app's real landing page. For the saas template a
+  // login/signup CTA row is spliced under the tagline.
   const homeAuthLinks = isSaas
     ? '\n          <div class="flex flex-wrap gap-3 items-center justify-center mt-2"><a href="/login" class="inline-flex items-center px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium no-underline hover:opacity-90">Log in</a><a href="/signup" class="inline-flex items-center px-4 py-2 rounded-lg border border-border text-foreground text-sm font-medium no-underline hover:bg-accent">Create an account</a></div>'
     : '';
@@ -1259,14 +1284,41 @@ export const metadata = {
   title: '${displayName}',
 };
 
-// Starter prompts to paste into your AI tool of choice. They exercise the WebJs
-// surfaces an agent reaches for first: a page + a SQLite-backed table, a server
-// action with validation, an interactive component, sessions + auth.
+// The gallery this page links. FEATURES are single-concept demos (one WebJs
+// concept each, under app/features/, logic in modules/). EXAMPLES are whole apps
+// composing several features (under app/examples/). Prune what you do not use
+// (delete the route AND its modules/<name>), then reshape this page.
+const FEATURES = [
+  { href: '/features/routing', title: 'Routing', blurb: 'A static route plus a dynamic [id] segment that reads params. The file-based router in miniature.' },
+  { href: '/features/boundaries', title: 'Boundaries', blurb: 'The control-flow throws (forbidden / unauthorized / notFound) and the nearest boundary file that catches each.' },
+  { href: '/features/components', title: 'Components', blurb: 'The WebComponent factory, reactive props, instance signals, and slot projection in light DOM.' },
+  { href: '/features/server-actions', title: 'Server actions', blurb: 'A use-server RPC action next to a server-only .server.ts utility, and why the boundary matters.' },
+  { href: '/features/optimistic-ui', title: 'Optimistic UI', blurb: 'The imperative optimistic(signal, value, action) flip: instant update, automatic rollback on failure.' },
+  { href: '/features/async-render', title: 'Async render', blurb: 'A component that awaits server data in async render(), so the resolved value is in the first paint.' },
+  { href: '/features/directives', title: 'Directives', blurb: 'The lit-html directive set: repeat for keyed lists, watch(signal) for a fine-grained node swap.' },
+  { href: '/features/route-handler', title: 'Route handlers', blurb: 'A server-only route.ts HTTP endpoint returning JSON, the WebJs equivalent of a Next route handler.' },
+  { href: '/features/forms', title: 'Forms', blurb: 'A no-JS progressive-enhancement form posting to the page action, with server-side validation errors.' },
+  { href: '/features/metadata', title: 'Metadata', blurb: 'Static metadata plus generateMetadata(ctx), which reads the request to compute the title and Open Graph tags.' },
+  { href: '/features/caching', title: 'Caching', blurb: 'export const revalidate caches the page HTML per URL, with the safety rule for when a shared cache is allowed.' },
+  { href: '/features/env', title: 'Env vars', blurb: 'The server-only vs WEBJS_PUBLIC_ boundary, read during SSR so secrets never reach the browser.' },
+  { href: '/features/client-router', title: 'Client router', blurb: 'Automatic soft navigation: fragment-only fetches, hover prefetch, scroll restore, and graceful no-JS fallback.' },
+  { href: '/features/service-worker', title: 'Service worker', blurb: 'The opt-in offline enhancement, registered from a browser-only lifecycle hook (never a page or layout).' },
+  { href: '/features/websockets', title: 'WebSockets', blurb: 'A WS(ws, req) route endpoint plus the connectWS() client, echoing messages over a live socket.' },
+  { href: '/features/broadcast', title: 'Broadcast', blurb: 'Fan a message out to every connected client on a WebSocket path, so all open tabs stay in sync.' },
+  { href: '/features/rate-limit', title: 'Rate limiting', blurb: 'The rateLimit() middleware scoped to one endpoint, returning a 429 with Retry-After past the window.' },
+  { href: '/features/file-storage', title: 'File storage', blurb: 'A no-JS multipart upload streamed into the FileStore, then served back through a streaming route.' },
+  { href: '/features/sessions', title: 'Sessions', blurb: 'A signed-cookie session applied by a segment middleware, read and written per visitor with getSession() in a route.' },
+];
+const EXAMPLES = [
+  { href: '/examples/todo', title: 'Optimistic todo', blurb: 'A whole app composing several features: the declarative optimistic() list API, progressive-enhancement forms, accessible labels, the modules split, and SQLite.' },
+];
+
+// Starter prompts to paste into your AI tool of choice.
 const PROMPTS = [
   'Add a /notes page backed by a SQLite table, with a form to create notes and a list of existing ones.',
   'Add a server action that validates its input and returns a typed result, then call it from a component.',
   'Add a signup and login flow with sessions and a dashboard that only signed-in users can see.',
-  'Add an API route at /api/health that returns JSON, and rate-limit it.',
+  'Add compression middleware in front of the whole app.',
 ];
 
 // The "get started" links. Icons are inline SVG so nothing is fetched.
@@ -1280,19 +1332,19 @@ export default function Home() {
   return html\`
     <div class="fixed top-4 right-4 z-10"><theme-toggle></theme-toggle></div>
 
-    <div class="min-h-[calc(100dvh-4rem)] flex flex-col items-center justify-center gap-16 py-12">
+    <div class="max-w-5xl mx-auto px-6 py-16 flex flex-col items-center gap-16">
       <!-- Masthead -->
       <section class="flex flex-col items-center text-center gap-5">
         <p class="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground m-0">Welcome to</p>
-        <h1 class="text-6xl sm:text-7xl font-bold tracking-tight m-0 bg-gradient-to-b from-foreground to-muted-foreground bg-clip-text text-transparent">
+        <h1 class="text-5xl sm:text-6xl font-bold uppercase tracking-tight leading-none m-0 break-words bg-gradient-to-b from-foreground to-muted-foreground bg-clip-text text-transparent">
           ${displayName}
         </h1>
-        <p class="text-base sm:text-lg text-muted-foreground max-w-md leading-relaxed m-0">
+        <p class="text-base sm:text-lg text-muted-foreground max-w-lg leading-relaxed m-0">
           AI-first and web-components-first. Server-rendered, progressively enhanced, and buildless.
         </p>${homeAuthLinks}
       </section>
 
-      <!-- Two cards: how to get oriented, and how to build with an agent -->
+      <!-- Get started + Coding with AI -->
       <section class="w-full max-w-3xl grid gap-4 md:grid-cols-2">
         <div class="rounded-2xl border border-border bg-card p-6 flex flex-col gap-5">
           <h2 class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground m-0">Get started</h2>
@@ -1300,10 +1352,10 @@ export default function Home() {
             \${LINKS.map(l => html\`
               <li>
                 <a href="\${l.href}" class="group flex items-center gap-3 -mx-2 px-2 py-2 rounded-lg hover:bg-accent transition-colors no-underline">
-                  <span class="shrink-0 w-9 h-9 grid place-items-center rounded-lg border border-border bg-background/40 text-muted-foreground group-hover:text-foreground transition-colors">\${l.icon}</span>
+                  <span class="shrink-0 w-9 h-9 grid place-items-center rounded-lg border border-border bg-secondary text-muted-foreground group-hover:text-foreground transition-colors">\${l.icon}</span>
                   <span class="flex flex-col">
                     <span class="text-sm font-medium text-foreground leading-tight">\${l.label}</span>
-                    <span class="text-xs font-mono text-muted-foreground leading-tight">\${l.sub}</span>
+                    <span class="text-xs text-muted-foreground leading-tight">\${l.sub}</span>
                   </span>
                 </a>
               </li>
@@ -1315,7 +1367,7 @@ export default function Home() {
           <h2 class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground m-0">Coding with AI?</h2>
           <p class="text-sm text-muted-foreground leading-relaxed m-0">
             Open this folder in your agent and paste a prompt. It reads
-            <code class="font-mono text-[0.85em] text-foreground">.agents/skills/webjs</code> to learn the framework.
+            <code class="text-[0.85em] text-foreground">.agents/skills/webjs</code> to learn the framework.
           </p>
           <div class="flex flex-col gap-2">
             \${PROMPTS.map(p => html\`<prompt-button .text=\${p}></prompt-button>\`)}
@@ -1323,10 +1375,46 @@ export default function Home() {
         </div>
       </section>
 
+      <!-- Gallery: every feature demo + the example app -->
+      <section class="w-full flex flex-col gap-6">
+        <div class="flex flex-col items-center gap-2 text-center">
+          <h2 class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground m-0">Explore the gallery</h2>
+          <p class="text-sm text-muted-foreground max-w-lg leading-relaxed m-0">
+            One WebJs concept per demo under <code class="text-[0.9em] text-foreground">app/features/</code>, with logic
+            in <code class="text-[0.9em] text-foreground">modules/</code>. Delete the ones you do not need.
+          </p>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          \${FEATURES.map(f => html\`
+            <a href="\${f.href}" class="group flex flex-col gap-1.5 rounded-xl border border-border bg-card p-4 no-underline transition-colors hover:border-border-strong hover:bg-accent">
+              <span class="flex items-center justify-between gap-2">
+                <span class="text-sm font-medium text-foreground">\${f.title}</span>
+                <span class="text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true">&rarr;</span>
+              </span>
+              <span class="text-xs leading-relaxed text-muted-foreground">\${f.blurb}</span>
+            </a>
+          \`)}
+        </div>
+        \${EXAMPLES.map(e => html\`
+          <a href="\${e.href}" class="group flex flex-col gap-2 rounded-xl border border-border bg-card p-5 no-underline transition-colors hover:border-border-strong hover:bg-accent">
+            <span class="flex items-center gap-2.5">
+              <span class="text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground rounded border border-border px-1.5 py-0.5">Example app</span>
+              <span class="text-sm font-medium text-foreground">\${e.title}</span>
+              <span class="ml-auto text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true">&rarr;</span>
+            </span>
+            <span class="text-xs leading-relaxed text-muted-foreground">\${e.blurb}</span>
+          </a>
+        \`)}
+      </section>
+
       <!-- Footer -->
-      <footer class="text-center">
-        <p class="text-sm text-muted-foreground m-0">
-          This page is <code class="font-mono text-[0.9em] text-foreground">app/page.ts</code>. Edit it, then build your app.
+      <footer class="flex flex-col items-center gap-3">
+        <nav class="flex items-center gap-4 text-muted-foreground" aria-label="WebJs links">
+          <a href="https://github.com/webjsdev/webjs" aria-label="GitHub" class="hover:text-foreground transition-colors">\${iconGithub()}</a>
+          <a href="https://www.npmjs.com/org/webjsdev" aria-label="npm" class="hover:text-foreground transition-colors">\${iconNpm()}</a>
+        </nav>
+        <p class="text-[0.7rem] uppercase tracking-[0.15em] text-muted-foreground m-0 text-center">
+          Built with WebJs &middot; Docs and examples licensed under MIT
         </p>
       </footer>
     </div>
@@ -1340,7 +1428,10 @@ function iconSpark() {
   return html\`<svg class="w-4 h-4 stroke-current fill-none" style="stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></svg>\`;
 }
 function iconGithub() {
-  return html\`<svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.94.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>\`;
+  return html\`<svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.94.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>\`;
+}
+function iconNpm() {
+  return html\`<svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M1.763 0C.786 0 0 .786 0 1.763v20.474C0 23.214.786 24 1.763 24h20.474c.977 0 1.763-.786 1.763-1.763V1.763C24 .786 23.214 0 22.237 0zM5.13 5.323l13.837.019-.009 13.836h-3.464l.01-10.382h-3.456L12.04 19.17H5.113z"/></svg>\`;
 }
 `);
 

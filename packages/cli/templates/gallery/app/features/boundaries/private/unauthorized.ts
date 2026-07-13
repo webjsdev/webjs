@@ -1,0 +1,17 @@
+// The nearest 401 boundary for a thrown unauthorized(). An unauthorized.ts
+// default-exports a function returning a TemplateResult, rendered at status 401
+// in place of the page that threw. Nearest wins: this one (inside private/) beats
+// any unauthorized.ts higher up the tree. A real one usually links to sign-in.
+import { html } from '@webjsdev/core';
+
+export default function Unauthorized() {
+  return html`
+    <h1 class="text-h2 font-bold mb-4">401 Unauthorized</h1>
+    <p class="text-muted-foreground mb-4">
+      You need to sign in to view this page. This is the nearest
+      <code class="font-mono">unauthorized.ts</code> boundary, rendered because the
+      page threw <code class="font-mono">unauthorized()</code>.
+    </p>
+    <p><a class="text-primary" href="/features/boundaries">Back to boundaries</a></p>
+  `;
+}
