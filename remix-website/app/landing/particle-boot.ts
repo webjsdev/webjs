@@ -4,11 +4,11 @@
  * This is a framework-free port of the Remix landing WebGL orchestration:
  * the `maybeInit()` + `animate()` loop from `particle-canvas.tsx` and the
  * scroll -> morphValue mapping + model loading from `landing-enhancements.tsx`,
- * collapsed into a single `startParticles(canvas)` entry point. The floating
- * text labels (label-projection / ControlManager) are intentionally dropped:
- * the homepage reads correctly without them and it removes a large slice of
- * per-frame work. Everything else (particle morph, camera lerp + parallax,
- * bloom, afterimage trail, fog, mouse sim) is ported faithfully.
+ * collapsed into a single `startParticles(canvas)` entry point. Everything
+ * (particle morph, camera lerp + parallax, bloom, afterimage trail, fog, mouse
+ * sim, and the floating text labels) is ported faithfully. Per-frame label
+ * projection writes into the shared `labelState` bus, which the separate
+ * <label-overlay> component reads to render the DOM labels + connector lines.
  */
 import { Matrix4, Vector3 } from 'three';
 import { Engine } from './engine/engine.ts';
@@ -16,6 +16,9 @@ import { ParticleSystem } from './engine/particles.ts';
 import { RestBaker } from './engine/rest-baker.ts';
 import { MouseSim } from './engine/mouse-sim.ts';
 import { presets } from './engine/presets.ts';
+import { ControlManager } from './engine/controls.ts';
+import { projectLabelsInto } from './engine/label-projection.ts';
+import { labelState } from './label-bus.ts';
 import { loadModelPoints, type ModelData } from './engine/model-loader.ts';
 import { createModelTexture } from './engine/model-texture.ts';
 import { getMorphBlend, type MorphBlend } from './engine/morph.ts';
@@ -119,6 +122,19 @@ function buildPresetRuntimeData(presetList: Preset[]): PresetRuntimeData {
 function copyControlsInto(source: number[], target: number[]) {
   for (let i = 0; i < 8; i++) {
     target[i] = source[i] ?? 0;
+  }
+}
+
+function copyManagedControlsInto(
+  preset: Preset,
+  controlMgr: ControlManager,
+  target: number[],
+) {
+  for (let i = 0; i < 8; i++) {
+    const control = preset.controls[i];
+    target[i] = control
+      ? (controlMgr.controls.get(control.id)?.value ?? control.initial)
+      : 0;
   }
 }
 
@@ -364,6 +380,12 @@ export async function startParticles(canvas: HTMLCanvasElement): Promise<void> {
   const scratchControlsB = [0, 0, 0, 0, 0, 0, 0, 0];
   const morphBlend: MorphBlend = { fromIndex: 0, toIndex: 0, blend: 0 };
   const presetRuntimeData = buildPresetRuntimeData(presets);
+
+  // Label projection state (ported from particle-canvas.tsx). Results are
+  // written into the shared `labelState` bus, which <label-overlay> renders.
+  const labelControlMgr = new ControlManager();
+  let previousNearest = -1;
+  const scratchLabelControls = [0, 0, 0, 0, 0, 0, 0, 0];
 
   // --- Pointer parallax ----------------------------------------------------
 
@@ -693,6 +715,41 @@ export async function startParticles(canvas: HTMLCanvasElement): Promise<void> {
     );
     mouseSim.step(dtSeconds);
     particles.setDispTexture(mouseSim.getDispTexture());
+
+    // --- Label projection (ported from particle-canvas.tsx) --------------
+    // Project the nearest preset's 3D label anchors to screen space and hand
+    // the result to <label-overlay> via the shared `labelState` bus.
+    const nearest = Math.round(clamp(morphValue, 0, maxValue));
+    if (nearest !== previousNearest) {
+      previousNearest = nearest;
+      labelControlMgr.loadPreset(presets[nearest]);
+    }
+
+    const nearestPreset = presets[nearest];
+    if (nearestPreset?.labels && nearestPreset.labels.length > 0 && container) {
+      let activeCtrls = presetData.controls[nearest];
+      if (blend < 0.001) {
+        copyManagedControlsInto(nearestPreset, labelControlMgr, scratchLabelControls);
+        activeCtrls = scratchLabelControls;
+      }
+
+      projectLabelsInto(
+        labelState.labels,
+        nearestPreset,
+        labelControlMgr,
+        activeCtrls,
+        visualTime,
+        engine.camera,
+        container.clientWidth,
+        container.clientHeight,
+      );
+
+      const distFromNearest = Math.abs(morphValue - nearest);
+      labelState.opacity = Math.max(0, 1 - distFromNearest * 4);
+    } else {
+      labelState.labels.length = 0;
+      labelState.opacity = 0;
+    }
 
     engine.render(time);
     if (!hasReportedReady) {

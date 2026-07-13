@@ -2,6 +2,7 @@ import { html } from '@webjsdev/core';
 import '#components/particle-bg.ts';
 import '#components/loading-screen.ts';
 import '#components/section-nav.ts';
+import '#components/label-overlay.ts';
 import { highlight } from '#lib/highlight.ts';
 
 /*
@@ -94,7 +95,8 @@ type Section = {
   rowOffset?: boolean;
   code?: string;
   cta?: { label: string; href: string };
-  newsletter?: boolean;
+  // A second card rendered beside the primary panel (the ending has two).
+  secondary?: { kicker: string; title: string; body: string };
 };
 
 const SECTIONS: Section[] = [
@@ -135,7 +137,11 @@ const SECTIONS: Section[] = [
     body: 'Remix 3 is currently available as a beta release.',
     panelClass: 'rmx-col-left-6',
     cta: { label: 'Watch the repo', href: GH_URL },
-    newsletter: true,
+    secondary: {
+      kicker: 'Subscribe to our newsletter',
+      title: 'Stay in the loop',
+      body: 'Once a month, we write about everything in the world of Remix. Sign up to be notified about progress on Remix 3. No spam. Unsubscribe anytime.',
+    },
   },
 ];
 
@@ -148,14 +154,19 @@ function renderSection(s: Section) {
           <h2 class="rmx-title">${s.title}</h2>
           <p class="rmx-body">${s.body}</p>
           ${s.cta ? html`<a class="rmx-cta" href=${s.cta.href} target="_blank" rel="noopener noreferrer">${s.cta.label} ${ARROW}</a>` : ''}
-          ${s.newsletter ? html`
+        </div>
+        ${s.secondary ? html`
+          <div class="rmx-panel rmx-col-right-news">
+            <p class="rmx-kicker">${s.secondary.kicker}</p>
+            <h2 class="rmx-title">${s.secondary.title}</h2>
+            <p class="rmx-body">${s.secondary.body}</p>
             <form class="rmx-subscribe" method="post" action="/_actions/newsletter">
               <label class="sr-only" for="newsletter">Email address</label>
               <input id="newsletter" name="email" type="email" placeholder="name@example.com" autocomplete="email" />
               <button type="submit">Subscribe</button>
             </form>
-          ` : ''}
-        </div>
+          </div>
+        ` : ''}
         ${s.code ? html`
           <div class="rmx-code-panel rmx-col-code">
             <pre class="rmx-code-pre" tabindex="0" aria-label="Code sample"><code>${highlight(s.code)}</code></pre>
@@ -207,6 +218,8 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      <label-overlay></label-overlay>
 
       <section-nav data-count=${String(SECTIONS.length + 1)}></section-nav>
     </div>
