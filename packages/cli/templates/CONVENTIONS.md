@@ -403,9 +403,13 @@ When the user asks the agent to build their actual app:
    despite `w-full max-w-[400px]` on its inner grid, move that sizing to the host.
    **Definition of done (design gate):** a UI app is NOT finished until you
    have (a) given it a design of its own (layout AND palette) and removed the
-   scaffold shell, and (b) run it and PLAYED THROUGH every state in a browser
+   scaffold shell, (b) run it and PLAYED THROUGH every state in a browser
    (fill the board, win, draw, reload), confirming nothing resizes or shifts as
-   it fills (even, stable squares) and it does not resemble the scaffold. A
+   it fills (even, stable squares) and it does not resemble the scaffold, and
+   (c) confirmed it still reads AND looks right with JavaScript OFF (SSR +
+   progressive enhancement): content shows, links navigate, forms submit, and
+   the CSS is fully applied (the app links a static compiled `public/tailwind.css`,
+   so utilities resolve with no JS). A
    glance at the empty first paint is not enough; the layout bugs show up
    mid-interaction.
    `webjs doctor` emits an advisory when `app/layout` still reproduces scaffold
