@@ -1,0 +1,10 @@
+{
+  "imports": {
+    "three": "https://ga.jspm.io/npm:three@0.184.0/build/three.module.js",
+    "three/addons/postprocessing/EffectComposer.js": "https://ga.jspm.io/npm:three@0.184.0/examples/jsm/postprocessing/EffectComposer.js",
+    "three/addons/postprocessing/RenderPass.js": "https://ga.jspm.io/npm:three@0.184.0/examples/jsm/postprocessing/RenderPass.js",
+    "three/addons/postprocessing/Pass.js": "https://ga.jspm.io/npm:three@0.184.0/examples/jsm/postprocessing/Pass.js",
+    "three/addons/postprocessing/UnrealBloomPass.js": "https://ga.jspm.io/npm:three@0.184.0/examples/jsm/postprocessing/UnrealBloomPass.js",
+    "three/addons/postprocessing/AfterimagePass.js": "https://ga.jspm.io/npm:three@0.184.0/examples/jsm/postprocessing/AfterimagePass.js"
+  }
+}
