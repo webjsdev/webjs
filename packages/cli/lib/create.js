@@ -580,9 +580,6 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     '.gemini/settings.json',
     '.gemini/hooks/nudge-uncommitted.sh',
     '.opencode/plugins/nudge-uncommitted.ts',
-    // One-step gallery reset: sheds the demo gallery to a clean, buildable base
-    // (wired as `gallery:clear` in package.json for the UI templates).
-    'scripts/clear-gallery.mjs',
     // Claude Code config + the protective enforcement hooks (no design ceremony).
     '.claude.json',
     '.claude/settings.json',
@@ -1048,6 +1045,15 @@ export type ActionResult<T> =
     // the gallery, so it survives `npm run gallery:clear`.
     const faviconSrc = join(TEMPLATES, 'public', 'favicon.svg');
     if (existsSync(faviconSrc)) await cp(faviconSrc, join(publicDir, 'favicon.svg'));
+
+    // The gallery-reset script (wired as `gallery:clear`). Only UI templates have
+    // a gallery, so it ships here (NOT in the flat templateFiles list, which would
+    // copy it into the api app where it has no gallery and would clobber app/).
+    const clearScriptSrc = join(TEMPLATES, 'scripts', 'clear-gallery.mjs');
+    if (existsSync(clearScriptSrc)) {
+      await mkdir(join(appDir, 'scripts'), { recursive: true });
+      await cp(clearScriptSrc, join(appDir, 'scripts', 'clear-gallery.mjs'));
+    }
 
     // Fail loudly if the @webjsdev/ui registry sources aren't on disk.
     // Without this, downstream copy helpers would silently skip and the

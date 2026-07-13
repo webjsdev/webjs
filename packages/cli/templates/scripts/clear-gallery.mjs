@@ -11,12 +11,22 @@
 // app/page.ts to a minimal home, and drops the demo `todos` table from the
 // schema. It KEEPS the agent skill (.agents/skills/webjs/), the layout, the
 // database wiring, the theme toggle, and (for the saas template) the auth
-// modules. It is safe to run more than once.
+// modules. It is a one-time reset: if the gallery is already gone (no
+// app/features/) it does nothing, so a rerun never clobbers an app you built.
 import { rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = process.cwd();
 const rm = (p) => { if (existsSync(join(root, p))) { rmSync(join(root, p), { recursive: true, force: true }); return true; } return false; };
+
+// Guard: the gallery is identified by app/features/. If it is absent, the gallery
+// was already cleared (or this is not a gallery scaffold), so exit before any
+// destructive write. This keeps a rerun safe and never clobbers a built app (a
+// customized app/page.ts, a same-named module, or real migrations).
+if (!existsSync(join(root, 'app/features'))) {
+  console.log('No gallery found (app/features/ is absent); nothing to clear.');
+  process.exit(0);
+}
 
 // 1) Gallery route trees + example metadata routes.
 const galleryPaths = [
@@ -42,7 +52,7 @@ writeFileSync(join(root, 'app/page.ts'), MINIMAL_PAGE());
 const schemaPath = join(root, 'db/schema.server.ts');
 if (existsSync(schemaPath)) {
   let s = readFileSync(schemaPath, 'utf8');
-  s = s.replace(/\nexport const todos = table\('todos',[\s\S]*?\n\}\);\n/, '\n');
+  s = s.replace(/\n(?:\/\/[^\n]*\n)*export const todos = table\('todos',[\s\S]*?\n\}\);\n/, '\n');
   s = s.replace(/defineRelations\(\{ users, todos \}/, 'defineRelations({ users }');
   writeFileSync(schemaPath, s);
 }
