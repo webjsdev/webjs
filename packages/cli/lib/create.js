@@ -1141,6 +1141,9 @@ export default function RootLayout({ children }: { children: unknown }) {
         --font-serif: ui-serif, 'Iowan Old Style', Palatino, Georgia, serif;
         --font-mono:  ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         --header-h: 0px;
+        /* A translucent tint of the primary, tracked automatically across
+           light/dark. Used for focus rings (ring-primary-tint). */
+        --primary-tint: color-mix(in oklch, var(--primary) 25%, transparent);
       }
       /* dark (the default, and the explicit .dark the toggle sets) */
       :root, .dark {

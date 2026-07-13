@@ -28,6 +28,9 @@ class TodoList extends WebComponent({
     source: () => this.todos,
     update: (state, title: string) => [
       ...state,
+      // A client-only placeholder id for the pending row; the real id arrives
+      // from the server on reconcile, so the `as any` cast on this temp row is
+      // fine (the row is dropped when the promise settles).
       { id: crypto.randomUUID() as any, title, completed: false, pending: true },
     ],
   });
@@ -43,11 +46,10 @@ class TodoList extends WebComponent({
 
     const result = await promise;
     if (result.success && result.data) {
-      this.todos = [
-        ...this.todos.filter(t => t.pending),
-        result.data,
-        ...this.todos.filter(t => !t.pending),
-      ];
+      // Reconcile: the optimistic entry has ALREADY auto-released (the promise
+      // settled), so `this.todos` holds only confirmed rows here. Append the
+      // server's canonical row, matching the order the `update` reducer used.
+      this.todos = [...this.todos, result.data];
     }
   }
 
@@ -64,6 +66,25 @@ TodoList.register('todo-list');
 
 - Multiple `.add()` calls stack independently. Each carries its own release by ID, so overlapping in-flight mutations do not clobber one another.
 - When `update` is omitted, the payload REPLACES the state directly (`Action = State`), matching the simple `useOptimistic(setState)` pattern.
+
+## Seed the list from the server for SSR plus optimistic
+
+For a page that server-renders a list AND lets the user add to it optimistically, let ONE component own both the list and the form, and seed it from the page through a `.prop` hole (a DOM property that round-trips through SSR on custom elements). The list is then fully server-rendered on first paint (readable with JS off) and re-renders optimistically on each add. A separate static list in the page would not update on an optimistic add.
+
+```ts
+// app/notes/page.ts (runs server-only; awaits the data so it is in the first paint)
+import { html } from '@webjsdev/core';
+import '#modules/notes/components/note-composer.ts'; // registers <note-composer>
+import { listNotes } from '#modules/notes/queries/list-notes.server.ts';
+
+export default async function NotesPage() {
+  const notes = await listNotes();
+  // .notes=${notes} seeds the component; the list SSRs through the component.
+  return html`<note-composer .notes=${notes}></note-composer>`;
+}
+```
+
+The component reads that seeded prop as its `optimistic()` `source`, so `source: () => this.notes` is both the SSR list and the base for optimistic additions.
 
 ## Imperative API (simple boolean flips)
 
