@@ -163,3 +163,34 @@ test('a component nested BEHIND another shipping component is not re-emitted (ca
     'only the frontier component is emitted; the nested one loads via its import',
   );
 });
+
+test('a .server.* file OUTSIDE appDir is a traversal stop, not a path to a blocker (#963)', async () => {
+  // /shared/db.server.ts sits outside the /app... appDir prefix, so it is not
+  // in the analyser's serverFiles set; the walk must still stop at it (its
+  // subtree only ever reaches the browser as a stub), or the reactive module
+  // behind it becomes a false blocker.
+  const page = `
+    import { html } from '@webjsdev/core';
+    import './components/overlay.js';
+    import { q } from '../shared/db.server.ts';
+    export default () => html\`<x-overlay></x-overlay>\`;
+  `;
+  const { importOnlyRouteModules, shippedRouteModules } = await run({
+    files: {
+      '/app/page.js': page,
+      '/app/components/overlay.js': INTERACTIVE,
+      '/shared/db.server.ts': 'export const q = 1;',
+      // Inside appDir, so it WOULD be a blocker if the walk descended into
+      // the out-of-appDir server file to reach it.
+      '/app/lib/reactive.js': SIGNAL_BUS,
+    },
+    components: [{ tag: 'x-overlay', file: '/app/components/overlay.js' }],
+    routeModules: ['/app/page.js'],
+    edges: {
+      '/app/page.js': ['/app/components/overlay.js', '/shared/db.server.ts'],
+      '/shared/db.server.ts': ['/app/lib/reactive.js'],
+    },
+  });
+  assert.ok(!shippedRouteModules.has('/app/page.js'), 'no false blocker through the server stub');
+  assert.ok(importOnlyRouteModules.has('/app/page.js'), 'page stays import-only');
+});

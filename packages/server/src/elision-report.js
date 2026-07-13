@@ -6,8 +6,9 @@
  * run at dev-server start and re-derived after each fs.watch rebuild). It
  * builds the module graph, runs `analyzeElision`, and returns the page / layout
  * route modules that SHIP WHOLE to the browser, each with the first
- * client-effecting blocker that pins it (or its own signal when the module
- * itself is the cause).
+ * client-effecting blocker that pins it (a non-component on a component-free
+ * path from the module, #963, or its own signal when the module itself is
+ * the cause).
  *
  * Consumed by `webjs doctor` to ADVISE why a page/layout is not elided (an
  * import-only #605 / inert #179 carrier stays out of the browser; a module that

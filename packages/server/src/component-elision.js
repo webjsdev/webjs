@@ -1205,7 +1205,12 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
         for (const dep of deps) {
           if (visited.has(dep)) continue;
           visited.add(dep);
-          if (skip.has(dep)) continue; // elided component / server file: stub only
+          // Elided components and appDir server files are in `skip`;
+          // SERVER_FILE_RE additionally stops at a `.server.*` OUTSIDE appDir
+          // (a relative import escaping the app dir), exactly like
+          // transitiveDeps: the browser only ever sees its stub, so its
+          // subtree never loads and must not contribute a blocker.
+          if (skip.has(dep) || SERVER_FILE_RE.test(dep)) continue;
           if (componentFiles.has(dep)) { frontier.add(dep); continue; } // emitted; subtree carried
           if (dep.startsWith(appDir) && isClientEffecting(dep)) blocker ??= dep;
           queue.push(dep);
