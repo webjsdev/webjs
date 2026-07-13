@@ -1044,6 +1044,10 @@ export type ActionResult<T> =
       const swSrc = join(TEMPLATES, 'public', swFile);
       if (existsSync(swSrc)) await cp(swSrc, join(publicDir, swFile));
     }
+    // A base SVG favicon (the root layout links it). It ships with the app, not
+    // the gallery, so it survives `npm run gallery:clear`.
+    const faviconSrc = join(TEMPLATES, 'public', 'favicon.svg');
+    if (existsSync(faviconSrc)) await cp(faviconSrc, join(publicDir, 'favicon.svg'));
 
     // Fail loudly if the @webjsdev/ui registry sources aren't on disk.
     // Without this, downstream copy helpers would silently skip and the
@@ -1170,6 +1174,7 @@ export default function RootLayout({ children }: { children: unknown }) {
       })();
     </script>
     <meta name="color-scheme" content="light dark">
+    <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
     <!-- JetBrains Mono for body/UI (its monospaced, developer-console feel) and
          Bricolage Grotesque for the display wordmark. Swap these for your own
          fonts (and update --font-sans / --font-display below). -->
