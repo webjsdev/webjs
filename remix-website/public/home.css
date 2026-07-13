@@ -82,20 +82,31 @@ scroll-logo a:focus-visible {
   outline: 2px solid var(--brand-cycle, #ebeff2);
   outline-offset: 4px;
 }
-scroll-logo a svg {
+/* The wordmark is a masked span painted with currentColor (the same
+   technique as the package badges), so the animated --brand-cycle color
+   applies directly. */
+scroll-logo .rmx-wordmark {
   display: block;
-  color: inherit;
-  /* SSR first paint: full-width wordmark; JS swaps in pixel widths. */
+  /* currentColor here paints the var() FALLBACK in Chromium when the color
+     rides an animated registered property inherited from the anchor; binding
+     the var directly paints the live animated value. Ghosts override with
+     their own static currentColor below. */
+  background: var(--brand-cycle, #ebeff2);
+  mask-image: url(/public/landing/remix-wordmark.svg);
+  -webkit-mask-image: url(/public/landing/remix-wordmark.svg);
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
+  mask-size: 100% 100%;
+  -webkit-mask-size: 100% 100%;
+  /* SSR first paint: full-width wordmark; JS swaps in pixel sizes. */
   width: calc(100vw - 48px);
-  height: auto;
+  height: calc((100vw - 48px) * 43 / 440);
 }
-scroll-logo svg[data-ghost] {
+scroll-logo span[data-ghost] {
   position: absolute;
   top: 0;
   left: 0;
-  display: block;
-  width: calc(100vw - 48px);
-  height: auto;
+  background: currentColor;
   mix-blend-mode: screen;
   will-change: transform, opacity;
   pointer-events: none;
@@ -123,7 +134,14 @@ scroll-logo svg[data-ghost] {
   white-space: nowrap;
   pointer-events: none;
   padding-top: 5px;
-  transition: opacity 200ms ease;
+  /* Fade out over the first 80px of scroll (the real site drives this from
+     JS), so the collapsed logo never overlaps the hint text. */
+  animation: rmx-hint-fade linear both;
+  animation-timeline: scroll();
+  animation-range: 0 80px;
+}
+@keyframes rmx-hint-fade {
+  to { opacity: 0; }
 }
 .rmx-nav-list {
   display: flex;
