@@ -141,18 +141,21 @@ export const CLIENT_METHOD_CALLS = ['addController', 'removeController', 'reques
  *     component that arrives via a client DOM insertion (a soft-nav swap, a
  *     streamed <webjs-suspense> boundary's replaceWith) would never re-attach
  *     its shadow root if elided. Context-free, so any shadow component ships.
- *   - `refresh`: `static refresh = true` is the explicit opt-in to ship a bare
- *     async component so its stale-while-revalidate refresh runs after SSR;
- *     eliding drops that on-load re-fetch (moot for request-stable data).
+ *   - `interactive`: `static interactive = true` is the explicit author
+ *     override that forces a component to ship even when the analyser would
+ *     elide it. It is the escape hatch for interactivity the analyser cannot
+ *     see statically (a dynamically-computed tag string, a `:defined` rule in
+ *     an external stylesheet outside the module graph). Context-free: any value
+ *     other than `false` ships.
  *
  * @type {readonly string[]}
  */
-export const INTERACTIVITY_STATIC_FIELDS = ['shadow', 'refresh'];
+export const INTERACTIVITY_STATIC_FIELDS = ['shadow', 'interactive'];
 
 /** Why each INTERACTIVITY_STATIC_FIELDS entry forces a ship (analyser reason). */
 const STATIC_FIELD_REASONS = {
   shadow: 'declares static shadow (DSD must re-attach on a client swap)',
-  refresh: 'declares static refresh = true (keeps the on-load re-fetch)',
+  interactive: 'declares static interactive = true (author-declared ship override)',
 };
 
 /**
@@ -163,14 +166,14 @@ const STATIC_FIELD_REASONS = {
  * module download plus a redundant on-hydration re-fetch. It ships only when
  * it ALSO carries an independent signal: an `@event`, a non-`state` reactive
  * prop, a reactive import, a lifecycle hook (`renderFallback()` included, via
- * CLIENT_LIFECYCLE_HOOKS), a `<slot>`, `static shadow = true`, `static refresh
- * = true`, cross-module observation, or a transitively-reachable interactive
- * dep / child (the fixpoint's import + render rules). The two genuinely new
- * carve-outs, both handled per-class below, are `static shadow` (Declarative
- * Shadow DOM only attaches during HTML parsing, so a streamed / soft-navigated
- * shadow component needs its module to re-run `attachShadow`) and the explicit
- * `static refresh = true` opt-in (keeps the stale-while-revalidate on-load
- * re-fetch that eliding would drop).
+ * CLIENT_LIFECYCLE_HOOKS), a `<slot>`, `static shadow = true`, `static
+ * interactive = true`, cross-module observation, or a transitively-reachable
+ * interactive dep / child (the fixpoint's import + render rules). The two
+ * per-class static-field carve-outs handled below are `static shadow`
+ * (Declarative Shadow DOM only attaches during HTML parsing, so a streamed or
+ * soft-navigated shadow component needs its module to re-run `attachShadow`)
+ * and the explicit `static interactive = true` override (forces a ship when
+ * the analyser cannot see a component's interactivity statically).
  */
 
 /**
@@ -564,8 +567,8 @@ export function analyzeComponentSource(src) {
 
   for (const { body, factoryArg } of bodies) {
     // Interactivity-signal static conventions (`static shadow` / `static
-    // refresh = true`), driven by the INTERACTIVITY_STATIC_FIELDS registry so a
-    // new convention is added in one place (see its doc for why each ships).
+    // interactive = true`), driven by the INTERACTIVITY_STATIC_FIELDS registry
+    // so a new convention is added in one place (see its doc for why each ships).
     for (const field of INTERACTIVITY_STATIC_FIELDS) {
       if (declaresStaticTrue(body, field)) {
         return { interactive: true, reason: STATIC_FIELD_REASONS[field] };
@@ -598,23 +601,23 @@ export function analyzeComponentSource(src) {
 /**
  * True if a class body declares a `static <name>` whose value is not the
  * literal `false`. Backs the `static shadow` (DSD-on-client-swap) and
- * `static refresh = true` (ship-the-async-refetch opt-in) ship signals (#474).
+ * `static interactive = true` (author-declared ship override) ship signals.
  *
  * Conservative on anything it cannot evaluate: a getter form
  * (`static get <name>()`) ships, and a non-`false` value of any shape
  * (`true`, a variable, an expression) ships. Only an absent declaration or a
  * literal `= false` is cleared as inert, matching the light-DOM /
- * no-refresh defaults.
+ * not-declared defaults.
  *
  * @param {string} classBody  redacted class body
- * @param {string} name       the static field name (`shadow` / `refresh`)
+ * @param {string} name       the static field name (`shadow` / `interactive`)
  * @returns {boolean}
  */
 function declaresStaticTrue(classBody, name) {
   // A getter cannot be evaluated statically; ship.
   if (new RegExp(`\\bstatic\\s+get\\s+${name}\\b`).test(classBody)) return true;
   const m = new RegExp(`\\bstatic\\s+${name}\\b\\s*=\\s*([^;\\n]*)`).exec(classBody);
-  if (!m) return false; // not declared: the default (light DOM / no refresh)
+  if (!m) return false; // not declared: the default (light DOM / not forced)
   return !/^false\b/.test(m[1].trim()); // `= false` is inert; anything else ships
 }
 

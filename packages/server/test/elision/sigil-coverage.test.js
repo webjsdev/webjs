@@ -11,7 +11,7 @@
  *      added to the renderers without teaching the analyser would let it
  *      wrongly elide a component whose only interactivity is that sigil, and
  *      the failure would be silent in production.
- *   2. Interactivity-signal static fields (`static shadow` / `static refresh`).
+ *   2. Interactivity-signal static fields (`static shadow` / `static interactive`).
  *
  * This test makes that drift LOUD. The renderers' sigil set lives in core's
  * BINDING_PREFIXES (single source of truth); the analyser classifies each as a
@@ -147,5 +147,5 @@ test('the interactivity static-field registry is the known set (change-detector)
   // interactivity static field must be a conscious edit here AND in
   // agent-docs/components.md. If this assertion fails because you added a real
   // convention, update both, then update this expected set.
-  assert.deepEqual([...INTERACTIVITY_STATIC_FIELDS].sort(), ['refresh', 'shadow']);
+  assert.deepEqual([...INTERACTIVITY_STATIC_FIELDS].sort(), ['interactive', 'shadow']);
 });

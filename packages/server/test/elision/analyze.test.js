@@ -263,27 +263,27 @@ test('a bare async render() + static shadow = true ships (shadow carve-out, #474
   assert.equal(analyzeComponentSource(src).interactive, true);
 });
 
-test('static refresh = true ships a bare async component (the on-load re-fetch opt-in, #474)', () => {
+test('static interactive = true forces a ship (the author-declared elision override, #962)', () => {
   const src = `
     import { WebComponent, html } from '@webjsdev/core';
     import { getFact } from '../actions/get-fact.server.ts';
     class FactBox extends WebComponent {
-      static refresh = true;
+      static interactive = true;
       async render() { const f = await getFact(); return html\`<p>\${f.text}</p>\`; }
     }
     FactBox.register('fact-box');
   `;
   const r = analyzeComponentSource(src);
   assert.equal(r.interactive, true);
-  assert.match(r.reason, /refresh/);
+  assert.match(r.reason, /interactive/);
 });
 
-test('static refresh = false does not ship (#474)', () => {
+test('static interactive = false does not force a ship (#962)', () => {
   const src = `
     import { WebComponent, html } from '@webjsdev/core';
     import { getFact } from '../actions/get-fact.server.ts';
     class FactBox extends WebComponent {
-      static refresh = false;
+      static interactive = false;
       async render() { const f = await getFact(); return html\`<p>\${f.text}</p>\`; }
     }
     FactBox.register('fact-box');
