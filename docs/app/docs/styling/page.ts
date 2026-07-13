@@ -10,6 +10,8 @@ export default function Styling() {
     <h2>The default: light DOM + Tailwind</h2>
     <p>Pages, layouts, and components render into the normal document tree. Tailwind utility classes apply directly: no <code>:host</code>, no <code>::part</code>, no CSS-variable plumbing. Design tokens live in a single <code>@theme</code> block in <code>public/input.css</code>, which <code>css:build</code> compiles to a static <code>public/tailwind.css</code> the layout links, so the app is fully styled with JavaScript disabled (a real stylesheet, not an in-browser compile). The token VALUES stay inline in the layout as plain CSS custom properties, so they resolve with JS off too.</p>
 
+    <p>In dev the scaffold keeps that stylesheet fresh with an on-request recompile (a <code>webjs.dev.regenerate</code> rule), not a background <code>tailwindcss --watch</code>. When a source changes, the dev server recompiles <code>public/tailwind.css</code> before serving it, so a newly added utility class is never rendered unstyled and there is no watch process that can die or lag. Prod builds the same file once before serving, so dev and prod share the identical compile.</p>
+
     <pre>// public/input.css (compiled to a static public/tailwind.css by css:build,
 // which the dev / start tasks run automatically). The @theme maps live here.
 @import "tailwindcss";

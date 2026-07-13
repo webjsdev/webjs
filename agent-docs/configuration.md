@@ -275,24 +275,30 @@ identically. This replaces the old `predev` / `prestart` npm hooks +
 ```jsonc
 "webjs": {
   "dev": {
-    "before":   ["webjs db migrate"],                                  // one-shot, runs to completion first
-    "parallel": ["tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch"], // long-lived, runs alongside the server
-    "watch":    ["../blog"]                                            // extra dirs to live-reload on, OUTSIDE the appDir
+    "before":     ["webjs db migrate"],                                // one-shot, runs to completion first
+    "regenerate": [                                                    // dev-only: rebuild a stale output ON REQUEST
+      { "output":  "public/tailwind.css",
+        "command": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify",
+        "inputs":  ["app", "components", "modules", "lib", "public/input.css"] }
+    ],
+    "parallel":   [],                                                  // long-lived children (rare; Tailwind uses regenerate instead)
+    "watch":      ["../blog"]                                          // extra dirs to live-reload on, OUTSIDE the appDir
   },
   "start": {
-    "before":   ["webjs db migrate"]                                   // one-shot, before serving
+    "before":     ["webjs db migrate"]                                 // one-shot, before serving
   }
 }
 ```
 
 - **`before`** (dev and start): commands run sequentially to completion BEFORE the server boots (the old `predev` / `prestart`: `webjs db migrate`, a registry copy). A non-zero exit ABORTS the boot with a clear message, so a failed migration never serves stale code/schema.
-- **`parallel`** (dev only): long-lived child processes that run ALONGSIDE the server (the old `concurrently` watchers: the Tailwind CLI `--watch`). They are spawned once in the parent (not on every hot-reload restart) and TORN DOWN on exit (SIGINT / SIGTERM / server exit), so a watcher cannot leak past the dev server.
+- **`regenerate`** (dev only, #967): on-request rebuilds of a stale build output, the durable way to keep a compiled asset fresh without a long-lived watcher. Each rule is `{ output, command, inputs }`: when the dev server is about to serve `output` and the newest mtime among `inputs` is newer than it (or the output is missing), the framework runs `command` to completion FIRST, then serves the fresh file. There is no watch process to die and no staleness window. Concurrent requests for the same output coalesce onto one compile. Read by the SERVER (`readRegenerateRules` in `dev-regenerate.js`), not the CLI. Prod does not recompile on request, so `start.before` builds the same output once; because dev and prod run the SAME command, their outputs cannot diverge. This is what the scaffold uses for Tailwind, in place of a `tailwindcss --watch`.
+- **`parallel`** (dev only): long-lived child processes that run ALONGSIDE the server (the old `concurrently` watchers). They are spawned once in the parent (not on every hot-reload restart) and TORN DOWN on exit (SIGINT / SIGTERM / server exit), so a watcher cannot leak past the dev server. Prefer `regenerate` for a build output that is served (it cannot go stale); reserve `parallel` for a genuinely long-lived side process.
 - **`watch`** (dev only, #894): extra directories the dev live-reload watcher follows IN ADDITION to the appDir. The dev server watches its appDir recursively, but an app that reads content from OUTSIDE its tree (the in-repo `website` renders posts from a repo-root `blog/` dir, a sibling of the app) sees no reload when that outside content changes. Each entry is resolved relative to the app root and MAY escape it (`"../blog"`); a change under one runs the same rebuild + browser reload as an in-tree edit. Opt-in: a missing/empty `watch` means the appDir is the only watched root, unchanged. A configured path that does not exist is skipped, an entry that overlaps the appDir (an ancestor or descendant) is dropped as redundant, and the usual `node_modules` / `.git` / `.webjs` / `db` noise is ignored under each extra root too.
 - Each command runs through a shell, so a normal command line works. An empty / absent block means `webjs dev` / `start` run unchanged, so a plain app with no Tailwind/DB needs no config.
-- A UI scaffold compiles a static Tailwind stylesheet, so `dev.before` / `start.before` run the Drizzle migration apply AND `npm run css:build` (compile `public/input.css` to the linked `public/tailwind.css`), and `webjs.dev.parallel` runs the Tailwind `--watch` for live recompiles. The app is fully styled with JavaScript disabled (a real stylesheet, not a browser-runtime compile). The in-repo apps (`examples/blog`, `website`, `docs`, ui-website) follow the same pattern.
+- A UI scaffold compiles a static Tailwind stylesheet, so `dev.before` / `start.before` run the Drizzle migration apply AND the Tailwind compile (`public/input.css` to the linked `public/tailwind.css`), and `dev.regenerate` recompiles that stylesheet on request in dev so a newly added utility class is never served stale (no `--watch` process to die). The app is fully styled with JavaScript disabled (a real stylesheet, not a browser-runtime compile). The in-repo apps (`examples/blog`, `website`, `docs`, ui-website) follow the same pattern.
 - **Prod note:** `before` runs at boot, so `webjs start` runs `webjs db migrate` in-process to apply pending migrations. Drizzle has no client-codegen step (the schema IS the types, inferred at compile time), so there is nothing to run at image-BUILD time. Authoring a new migration from a schema change is a dev-time `webjs db generate`, committed to source control, not a boot step. So `CMD ["npm", "start"]` and `CMD ["webjs", "start"]` are equivalent.
 
-Read by `readAppTasks` in `packages/cli/lib/app-tasks.js` (pure, unit-tested); orchestrated in `packages/cli/bin/webjs.js` (`runBeforeSteps` / `startParallelTasks`).
+`before` / `parallel` / `watch` are read by `readAppTasks` in `packages/cli/lib/app-tasks.js` (pure, unit-tested) and orchestrated in `packages/cli/bin/webjs.js` (`runBeforeSteps` / `startParallelTasks`); `regenerate` is read by the SERVER (`readRegenerateRules` in `packages/server/src/dev-regenerate.js`), which runs the compile inline on the request path.
 
 ---
 

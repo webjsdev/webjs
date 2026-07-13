@@ -493,22 +493,32 @@ npm run dev                   # webjs dev, then serves
 
 `npm run dev` and `npm start` are the documented entrypoints, and they
 are thin aliases for `webjs dev` / `webjs start`. The start orchestration
-(applying migrations, and any parallel watcher like the Tailwind CLI)
-lives in the `webjs` block of `package.json` and runs INSIDE
-`webjs dev` / `webjs start`:
+(applying migrations, and compiling Tailwind) lives in the `webjs` block
+of `package.json` and runs INSIDE `webjs dev` / `webjs start`:
 
 ```jsonc
 "webjs": {
-  "dev": { "before": ["webjs db migrate"] },
-  "start": { "before": ["webjs db migrate"] }
+  "dev": {
+    "before": ["webjs db migrate", "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify"],
+    "regenerate": [
+      { "output": "public/tailwind.css",
+        "command": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify",
+        "inputs": ["app", "components", "modules", "lib", "public/input.css"] }
+    ]
+  },
+  "start": { "before": ["webjs db migrate", "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify"] }
 }
 ```
 
 Both `dev` and `start` apply pending migrations via `webjs db migrate`
-(idempotent, a no-op when the db is current), so a freshly generated
-migration is applied without a manual step. An app that adds the Tailwind
-CLI puts its `--watch` command under `webjs.dev.parallel` and it runs
-alongside the server, torn down on exit.
+(idempotent, a no-op when the db is current) and compile the static
+`public/tailwind.css`, so a freshly generated migration is applied and
+the app is fully styled with no manual step. In dev the stylesheet is
+then kept fresh by `webjs.dev.regenerate`: the dev server recompiles it
+ON REQUEST whenever a source changes, so a newly added utility class is
+never served stale and there is no `tailwindcss --watch` process that can
+die mid-session (`webjs.dev.parallel` still exists for a genuinely
+long-lived side process, torn down on exit).
 `before` steps run to completion first; a failed `webjs db migrate`
 aborts the boot with a clear message rather than serving a stale schema.
 

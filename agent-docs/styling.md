@@ -62,6 +62,17 @@ off) + `@theme` design tokens (palette, fonts, fluid type, motion
 durations). Consume via utility classes (`text-foreground`, `bg-card`,
 `font-serif`, `duration-fast`, `text-display`).
 
+**Dev keeps the stylesheet fresh on request, not with a `--watch` (#967).**
+The scaffold declares a `webjs.dev.regenerate` rule for `public/tailwind.css`,
+so in dev the framework recompiles the stylesheet before serving it whenever a
+source file is newer. There is no `tailwindcss --watch` process to die or lag,
+so a newly added utility class never renders unstyled locally (the old
+watch-based failure: relocate the app dir or kill the watcher and the class had
+no backing rule). Prod builds the same file once via `start.before`, so dev and
+prod use the identical compile and cannot diverge. If you ever serve a committed
+stylesheet with `webjs start` in a build that skipped the compile, `webjs
+doctor` warns that the output is older than a source.
+
 **DRY via JS helpers, not `@apply`.** When the same bundle of Tailwind
 classes repeats across 2+ places, extract it into a helper in
 `lib/utils/ui.ts`:
