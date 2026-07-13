@@ -2,7 +2,7 @@
  * GET /llms-full.txt
  *
  * The full prose corpus (llmstxt.org standard): every doc page
- * concatenated as readable markdown, plus optional agent-docs
+ * concatenated as readable markdown, plus optional skill
  * enrichment when running inside the monorepo. Served as text/plain and
  * generated live from the doc pages (no build step, never drifts).
  */

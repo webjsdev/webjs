@@ -47,6 +47,8 @@ Classify the task first, then load the smallest useful reference set. Each refer
 | TypeScript at runtime, erasable syntax, full-stack types                     | `references/typescript.md`                     |
 | Unit, browser, e2e tests, the `handle()` harness, Bun parity                 | `references/testing.md`                        |
 | Auth, caching, env vars, rate limit, file storage, the `webjs` config block  | `references/built-ins.md`                      |
+| Node vs Bun, running the app, deploying, runtime-specific differences        | `references/runtime.md`                        |
+| Offline support, an asset cache, the opt-in service worker                   | `references/service-worker.md`                 |
 | A pattern that feels like Next.js or Lit but might not transfer              | `references/muscle-memory-gotchas.md`         |
 
 Common bundles:

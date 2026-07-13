@@ -4,7 +4,7 @@
  * This adds an offline fallback and an asset cache WITHOUT changing the
  * JavaScript-disabled baseline: with JS off no service worker registers, so
  * pages, links, and forms behave exactly as they do today. It is registered
- * explicitly (see the opt-in snippet in agent-docs/service-worker.md), never
+ * explicitly (see the opt-in snippet in the skill's references/service-worker.md), never
  * automatically.
  *
  * Strategy:

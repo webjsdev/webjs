@@ -201,7 +201,7 @@ Chromium, Firefox, and WebKit via web-test-runner).
 
 Cross-package tests that exercise core through the SSR pipeline
 or scaffolds live at the repo root in `test/ssr/`,
-`test/scaffolds/`, etc. See [`../../agent-docs/testing.md`](../../agent-docs/testing.md).
+`test/scaffolds/`, etc. See [`references/testing.md`](../../.agents/skills/webjs/references/testing.md).
 
 Run `npm test` from the repo root for node tests, `npm run test:browser`
 for the browser tests.

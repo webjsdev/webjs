@@ -442,8 +442,8 @@ and the reader key set never diverge (a counterfactual unknown key proves
    module observing a tag forces that component to ship. Verdict-safe (it
    only ever ships more). The residual caveat is the part static analysis
    cannot see (a dynamic tag string, a `:defined` rule in an external
-   stylesheet outside the module graph), documented in
-   `agent-docs/components.md`; for those, add an interactivity signal.
+   stylesheet outside the module graph), documented in the skill's
+   `references/components.md`; for those, add an interactivity signal.
 
 ## Tests
 
@@ -458,7 +458,7 @@ organised by feature: `routing/`, `api/`, `actions/`, `auth/`,
 Cross-package tests that exercise the SSR pipeline, scaffolds,
 or full app boots live at the repo root in `test/ssr/`,
 `test/scaffolds/`, `test/examples/blog/`, etc. See
-[`../../agent-docs/testing.md`](../../agent-docs/testing.md).
+[`references/testing.md`](../../.agents/skills/webjs/references/testing.md) in the skill.
 
 Run `npm test` from the repo root.
 

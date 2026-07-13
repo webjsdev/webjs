@@ -15,9 +15,9 @@
  * in-process without booting a server or touching the real filesystem.
  *
  * Docs resolution (so `npx @webjsdev/cli mcp` is self-contained): a published
- * install reads the corpus bundled under `<cli>/resources/agent-docs` (copied
+ * install reads the corpus bundled under `<cli>/resources/references` (copied
  * at `prepack`, see `scripts/copy-mcp-resources.js`); a monorepo dev run falls
- * back to the repo-root `agent-docs/`. {@link resolveDocsLocation} encodes that
+ * back to the repo-root skill. {@link resolveDocsLocation} encodes that
  * two-path lookup so source stays single (no committed duplicate docs).
  *
  * @module mcp-docs
@@ -33,8 +33,8 @@ const DOCS_SCHEME = 'webjs-docs://';
 /**
  * Resolve where the framework-docs corpus lives, plus the `AGENTS.md` contract
  * path. Tries the BUNDLED location first (a published `@webjsdev/mcp` ships
- * `resources/agent-docs/` + `resources/AGENTS.md` via `prepack`), then falls
- * back to the monorepo-root layout (`agent-docs/` + `AGENTS.md`) used in dev and
+ * `resources/references/` + `resources/SKILL.md` + `resources/AGENTS.md` via `prepack`), then falls
+ * back to the monorepo-root skill layout used in dev and
  * tests. Returns `{ docsDir, agentsPath }`; either path may not exist, callers
  * fail soft (an empty corpus is valid, never a crash).
  *
@@ -304,7 +304,7 @@ export const PROMPTS = [
 /**
  * The canonical recipe snippet + invariant reminders for each prompt. Kept
  * compact on purpose: the prompt orients + shows the shape, then points at the
- * full `webjs-docs://recipes` resource. The shapes mirror `agent-docs/recipes.md`.
+ * full `webjs-docs://recipes` resource. The shapes mirror `.agents/skills/webjs/references/data-and-actions.md`.
  *
  * @type {Record<string, string>}
  */

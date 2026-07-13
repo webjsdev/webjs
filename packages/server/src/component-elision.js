@@ -93,7 +93,7 @@ export const REACTIVE_IMPORTS = new Set([
  * defines `render`, and the SSR walker calls it directly. `constructor`
  * is absent for the same reason (it runs during SSR to seed first
  * paint). Keep this list in lockstep with the lifecycle table in
- * agent-docs/components.md.
+ * the skill's references/components.md.
  *
  * @type {readonly string[]}
  */
@@ -134,7 +134,7 @@ export const CLIENT_METHOD_CALLS = ['addController', 'removeController', 'reques
  * `lifecycle-coverage.test.js` via prototype introspection), there is no
  * enumerable runtime source of "all static conventions", so the contract is
  * a documented one: a new interactivity static field MUST be added here AND
- * to the lifecycle table in agent-docs/components.md. `sigil-coverage.test.js`
+ * to the lifecycle table in the skill's references/components.md. `sigil-coverage.test.js`
  * asserts each entry is honoured as a ship signal.
  *
  *   - `shadow`: Declarative Shadow DOM attaches ONLY during HTML parsing, so a
@@ -448,7 +448,7 @@ function importsClientRouter(src, literals) {
  * `customElements.define` at module top level) imported via a binding clause
  * is NOT caught here, so eliding the importer drops that registration and the
  * element silently does not upgrade. This is the cross-module-registration
- * caveat documented in agent-docs/components.md and server AGENTS invariant 7;
+ * caveat documented in the skill's references/components.md and server AGENTS invariant 7;
  * the fix is `.server.{js,ts}` for genuinely server-only deps, or an
  * interactivity signal on the consumer. (It is not caught by an SSR crash:
  * the SSR `customElements` shim makes `define` a no-op server-side.)

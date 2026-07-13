@@ -23,7 +23,7 @@ in [`CONVENTIONS.md`](../CONVENTIONS.md) for the full guidance.
 - [ ] **Every markdown file in the project** that describes the
       changed surface. Common cases (non-exhaustive): `AGENTS.md` (root
       + nested), `CONVENTIONS.md`, `README.md` (root + nested),
-      `CHANGELOG.md`, `docs/**/*.md`, `agent-docs/**/*.md`,
+      `CHANGELOG.md`, `docs/**/*.md`, `.agents/skills/webjs/**/*.md`,
       `.github/*.md`. The rule is generative: if a markdown file in
       this project mentions a thing this PR changed, it gets touched
       on this PR.

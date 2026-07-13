@@ -565,7 +565,7 @@ suite('Light-DOM slot projection (browser)', () => {
   // the next microtask, via `slotchange`, or in `updated()` after a subsequent
   // re-render.
   //
-  // Documented in agent-docs/lit-muscle-memory-gotchas.md gotcha #8.
+  // Documented in the skill's references/muscle-memory-gotchas.md gotcha #8.
   // ===========================================================================
 
   test('firstUpdated sees the <slot> element but light-DOM projection has NOT yet populated it', async () => {

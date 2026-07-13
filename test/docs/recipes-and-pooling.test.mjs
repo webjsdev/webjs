@@ -1,7 +1,7 @@
 /**
- * Tests for #272: the agent-docs/recipes.md restore (the schema-first recipe +
- * the anti-pattern warnings + the common recipes the root AGENTS.md references)
- * and the deployment-doc Postgres connection-pool section.
+ * Tests for #272 (updated in #969): the recipe content (the canonical recipes +
+ * the persistence anti-pattern) now lives in the WebJs skill, not the retired
+ * .agents/skills/webjs/references/data-and-actions.md, plus the deployment-doc Postgres connection-pool section.
  */
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
@@ -15,27 +15,23 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..', '..');
 const DOCS_DIR = resolve(ROOT, 'docs');
 
-test('agent-docs/recipes.md exists so the AGENTS.md references resolve', async () => {
-  const path = resolve(ROOT, 'agent-docs', 'recipes.md');
-  assert.ok(existsSync(path), 'agent-docs/recipes.md must exist');
-  // The root AGENTS.md references it; that link must point at a real file.
-  const agents = await readFile(resolve(ROOT, 'AGENTS.md'), 'utf8');
-  assert.ok(agents.includes('agent-docs/recipes.md'), 'AGENTS.md references recipes.md');
-});
-
-test('recipes.md has the schema-first recipe, the anti-pattern warnings, and the common recipes', async () => {
-  const md = await readFile(resolve(ROOT, 'agent-docs', 'recipes.md'), 'utf8');
-  // Schema-first recipe + its steps.
-  assert.ok(/Schema-first/i.test(md), 'has the schema-first recipe');
-  assert.ok(md.includes('db:migrate'), 'covers the migrate step');
-  assert.ok(/queries\/|actions\//.test(md), 'covers one-file-per query/action');
-  // The two non-negotiable anti-patterns are called out explicitly.
-  assert.ok(/NEVER leave the example/i.test(md), 'warns against the example User model');
-  assert.ok(/NEVER persist app data|JSON files/i.test(md), 'warns against JSON-file persistence');
-  // The common recipes the AGENTS.md recipes section points at are present.
-  for (const recipe of ['Add a page', 'Add a dynamic route', 'Add a server action', 'Add a component']) {
-    assert.ok(md.includes(recipe), `recipes.md must include "${recipe}"`);
+test('the skill carries the canonical recipes and the persistence rule (recipes.md was retired into the skill)', async () => {
+  const skill = await readFile(resolve(ROOT, '.agents', 'skills', 'webjs', 'SKILL.md'), 'utf8');
+  // The common recipes (a page, a server action, an interactive component, a
+  // dynamic route) live in the skill's Canonical Patterns, distributed from the
+  // retired recipes.md.
+  for (const p of ['A page', 'A server action', 'An interactive component']) {
+    assert.ok(skill.includes(p), `SKILL.md must include the "${p}" pattern`);
   }
+  assert.ok(/dynamic route/i.test(skill), 'SKILL.md covers a dynamic route');
+  // Schema-first + the data layer.
+  const data = await readFile(resolve(ROOT, '.agents', 'skills', 'webjs', 'references', 'data-and-actions.md'), 'utf8');
+  assert.ok(/schema\.server\.ts/.test(skill + data), 'covers the Drizzle schema');
+  assert.ok(/queries\/|actions\//.test(data), 'covers one-file-per query/action');
+  // The persistence anti-pattern (never JSON files) lives in the root AGENTS.md.
+  const agents = await readFile(resolve(ROOT, 'AGENTS.md'), 'utf8');
+  assert.ok(/NEVER use JSON files|never JSON files/i.test(agents), 'AGENTS.md warns against JSON-file persistence');
+  void existsSync;
 });
 
 test('the deployment doc documents Postgres connection pooling', async () => {

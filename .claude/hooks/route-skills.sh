@@ -101,7 +101,7 @@ fi
 # evaluate X vs Y, a design/decision record, write up the design, spike X.
 # The deliverable is a writeup with no code diff. It belongs in a CLOSED
 # `research`-labeled issue (the same issue if one already exists in the
-# backlog), never a file under agent-docs and never a comment on an
+# backlog), never a file in the reference docs and never a comment on an
 # unrelated PR (the #548 mistake this routing prevents).
 if has 'research (whether|if|into|on|the|to|question)' \
    || has '(design|decision|research) (record|note|write-?up|history|doc)' \
@@ -109,15 +109,15 @@ if has 'research (whether|if|into|on|the|to|question)' \
    || has 'investigate.{0,80}(write|design|approach|record|decision|trade-?off)' \
    || has '(evaluate|compare).{0,40}(vs|versus|against)' \
    || has 'spike (on|the|a|into|[a-z])'; then
-  add_match "webjs-research-record: the deliverable is a research/design/decision writeup with no code diff. Invoke the webjs-research-record skill. The record lives in a \`research\`-labeled issue (append to the existing backlog issue if there is one, else create one), writeup in the body + comments, then CLOSE it. NOT a file under agent-docs/, NOT a PR, NOT a comment on an unrelated PR. File the follow-up implementation via webjs-file-issue."
+  add_match "webjs-research-record: the deliverable is a research/design/decision writeup with no code diff. Invoke the webjs-research-record skill. The record lives in a \`research\`-labeled issue (append to the existing backlog issue if there is one, else create one), writeup in the body + comments, then CLOSE it. NOT a file in the reference docs, NOT a PR, NOT a comment on an unrelated PR. File the follow-up implementation via webjs-file-issue."
 fi
 
 # --- webjs-doc-sync: keep all doc surfaces in sync ----------------------
 # Triggers: sync the docs, update the docs/website/docs-site, doc gap or
 # drift, find missing docs, "did we update the docs", audit shipped work
 # for documentation. The skill carries the full surface map (AGENTS.md +
-# agent-docs, README, the docs site, the website, the scaffold per-agent
-# rule files) so a feature is never documented in only ONE place (the #488
+# the skill at .agents/skills/webjs/, README, the docs site, the website,
+# the scaffold per-agent rule files) so a feature is never documented in only ONE place (the #488
 # gap: HTTP-verb actions landed in AGENTS.md but the docs site stayed
 # stale).
 if has '(doc|documentation) (gap|drift|sync|coverage|debt)' \
@@ -125,7 +125,7 @@ if has '(doc|documentation) (gap|drift|sync|coverage|debt)' \
    || has '(missing|stale|outdated|out-of-date|out of date).{0,20}(doc|docs|documentation)' \
    || has 'did (we|you|i) (update|sync).{0,20}(doc|docs)' \
    || has '(audit|sweep|check).{0,40}(doc|docs|documentation)'; then
-  add_match "webjs-doc-sync: the request is about documentation sync, drift, or a doc gap. Invoke the webjs-doc-sync skill BEFORE editing any doc. It holds the authoritative map of EVERY surface (AGENTS.md + agent-docs/, README, the docs site under docs/app/docs/, the marketing website/, and the scaffold templates' per-agent rule files) and the change-type to surface mapping, so no surface is silently skipped. File each confirmed gap via webjs-file-issue."
+  add_match "webjs-doc-sync: the request is about documentation sync, drift, or a doc gap. Invoke the webjs-doc-sync skill BEFORE editing any doc. It holds the authoritative map of EVERY surface (AGENTS.md + the skill at .agents/skills/webjs/, README, the docs site under docs/app/docs/, the marketing website/, and the scaffold templates' per-agent rule files) and the change-type to surface mapping, so no surface is silently skipped. File each confirmed gap via webjs-file-issue."
 fi
 
 # --- webjs-blog-write: write a blog post in the author's voice ----------

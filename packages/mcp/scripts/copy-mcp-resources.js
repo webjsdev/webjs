@@ -1,6 +1,6 @@
 /**
  * Bundle the framework docs into `@webjsdev/mcp` so `npx @webjsdev/mcp` is
- * self-contained (#376, #415). The MCP knowledge layer serves the `agent-docs/*.md`
+ * self-contained (#376, #415). The MCP knowledge layer serves the the skill references
  * corpus + the root `AGENTS.md` as resources, but those live at the MONOREPO
  * ROOT, outside this package, so npm's `files` cannot reach them. This script
  * copies them into `packages/mcp/resources/` (which IS in `files`) at `prepack`,
@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 
 /**
  * Copy `srcDocs` (a dir of `*.md`) + `srcAgents` (a single file) into
- * `<destRoot>/agent-docs/` + `<destRoot>/AGENTS.md`. Cleans `destRoot` first so
+ * `<destRoot>/references/` + `<destRoot>/SKILL.md` + `<destRoot>/AGENTS.md`. Cleans `destRoot` first so
  * a removed/renamed doc never lingers in the bundle. PURE side effect on the
  * given paths, so it is testable against temp dirs without touching the package.
  *

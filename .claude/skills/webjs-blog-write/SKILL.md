@@ -99,5 +99,5 @@ The test before you ship: read the draft aloud and ask whether the author would 
 ## Related skills
 
 - **webjs-file-issue**: file the tracking issue for the blog work before writing, and file a framework issue if dogfooding surfaces a real bug.
-- **webjs-doc-sync**: for the framework's own reference docs (`AGENTS.md`, `agent-docs/`, the docs site under `docs/app/docs/`). A blog post is not a doc-sync surface, and reference docs are not a blog. Keep them separate.
+- **webjs-doc-sync**: for the framework's own reference docs (`AGENTS.md`, the skill at `.agents/skills/webjs/`, the docs site under `docs/app/docs/`). A blog post is not a doc-sync surface, and reference docs are not a blog. Keep them separate.
 - **webjs-list-todos**: to see what shipped work is open or recently done when hunting for a topic.

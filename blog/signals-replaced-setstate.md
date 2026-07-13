@@ -97,7 +97,7 @@ The PR removed setState references from:
 - The `Task` controller (`packages/core/src/task.js`)
 - The `Context` provider/consumer (`packages/core/src/context.js`)
 - All tests across `packages/core/test/`
-- AGENTS.md, agent-docs/, and the framework's docs site
+- AGENTS.md, the skill at `.agents/skills/webjs/`, and the framework's docs site
 
 The `@webjsdev/ui` library's `sonner` toast component used setState; it was rewritten to use instance signals. The `<webjs-frame>` element used setState; same treatment. The `examples/blog` app's counter, theme-toggle, and chat-box were all migrated.
 

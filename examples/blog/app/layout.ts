@@ -89,7 +89,7 @@ export default function RootLayout({ children }: LayoutProps) {
             else delete el.dataset.theme;
             // data-theme drives the app palette blocks; the .dark class is what
             // the @webjsdev/ui kit's dark: variants read. Keep both in sync (see
-            // agent-docs/styling.md "two signals").
+            // the skill's references/styling.md "two signals").
             var dark = t === 'dark' || (t !== 'light' && !mq.matches);
             el.classList.toggle('dark', dark);
           }

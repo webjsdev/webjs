@@ -27,8 +27,7 @@ const MANIFEST = JSON.parse(readFileSync(join(__dirname, 'knowledge-coverage.jso
 
 const EXPLAIN_SURFACES = [
   'docs/app/docs/troubleshooting/page.ts',
-  'agent-docs/nextjs-muscle-memory-gotchas.md',
-  'agent-docs/lit-muscle-memory-gotchas.md',
+  '.agents/skills/webjs/references/muscle-memory-gotchas.md',
 ].map((p) => join(REPO, p));
 const AGENTS_MD = join(REPO, 'AGENTS.md');
 const MCP_DOCS = join(REPO, 'packages', 'mcp', 'src', 'mcp-docs.js');

@@ -112,7 +112,7 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // must toggle the shadcn `.dark` class, not only the `data-theme`
     // attribute. Without `.dark`, the copied components/ui/* render light
     // tokens on the dark chrome (white buttons/cards, invisible text). Light
-    // mode hides this, so guard it here. See agent-docs/styling.md "Dark mode".
+    // mode hides this, so guard it here. See .agents/skills/webjs/references/styling.md "Dark mode".
     const layoutSrc = readFileSync(join(appDir, 'app', 'layout.ts'), 'utf8');
     const toggleSrc = readFileSync(join(appDir, 'components', 'theme-toggle.ts'), 'utf8');
     assert.match(layoutSrc, /classList\.toggle\(['"]dark['"]/,

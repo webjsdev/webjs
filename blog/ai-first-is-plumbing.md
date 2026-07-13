@@ -111,6 +111,6 @@ What is exciting is watching an agent take the framework as a given. No "where d
 
 The hooks fragment across tools. Every new agent CLI (Cline, Codex, Factory Droid, Aider, etc.) wants its own hook format. We can ship the same content in each format via the scaffold, but maintaining six near-identical files is brittle. The longer-term answer is for AGENTS.md to become the universal contract (which is happening, slowly) and the per-tool hooks to read from it.
 
-The other thing is the AGENTS.md size budget. We are at ~40k characters and growing. Each new feature adds a recipe, an invariant, or a doc-link. Agents have token windows that get pricey above ~50k. We are about to need a "load this section on demand" mechanism. The agent-docs/ directory is the start of that pattern: detail docs that get loaded only when relevant.
+The other thing is the AGENTS.md size budget. We are at ~40k characters and growing. Each new feature adds a recipe, an invariant, or a doc-link. Agents have token windows that get pricey above ~50k. We are about to need a "load this section on demand" mechanism. The skill at `.agents/skills/webjs/` (SKILL.md plus its `references/`) is the start of that pattern: detail references that load only when relevant.
 
 If you are building tooling for AI agents, the takeaway is to put the rules where the agent will find them, in a format the agent can parse, with enforcement at the seams where mistakes happen. Everything else is a marketing tag.
