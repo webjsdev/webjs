@@ -886,9 +886,11 @@ async function checkScaffoldDesign(appDir) {
 const FRESHNESS_IGNORE = new Set(['node_modules', '.git', '.webjs', 'dist', '.next', 'coverage']);
 
 /**
- * Newest mtime (ms) under a path (a file's own, or the max over a directory
- * tree, skipping dependencies / dotfiles). A missing path is 0. Best-effort:
- * never throws.
+ * Newest mtime (ms) of any FILE under a path (a file's own, or the max over the
+ * files in a directory tree, skipping dependencies / dotfiles). Directory-node
+ * mtimes are NOT counted, matching dev-regenerate's walker: a content edit only
+ * shows through the file mtime, and a directory mtime is a flaky moving target.
+ * A missing path is 0. Best-effort: never throws.
  * @param {string} abs
  * @returns {number}
  */
@@ -896,7 +898,7 @@ function newestMtimeMs(abs) {
   let st;
   try { st = statSync(abs); } catch { return 0; }
   if (!st.isDirectory()) return st.mtimeMs;
-  let newest = st.mtimeMs;
+  let newest = 0;
   let entries;
   try { entries = readdirSync(abs, { withFileTypes: true }); } catch { return newest; }
   for (const e of entries) {

@@ -75,9 +75,18 @@ export async function readRegenerateRules(appDir, read) {
 const IGNORE_DIRS = new Set(['node_modules', '.git', '.webjs', 'dist', '.next', 'coverage']);
 
 /**
- * Newest mtime (ms) under a path: the file's own mtime, or the max over a
- * directory tree (skipping IGNORE_DIRS and dotfiles). A missing path is 0, so it
- * never makes the output look stale. Pure I/O, no throw.
+ * Newest mtime (ms) of any FILE under a path: the file's own mtime, or the max
+ * over the files in a directory tree (skipping IGNORE_DIRS and dotfiles). A
+ * missing path is 0, so it never makes the output look stale.
+ *
+ * Directory-node mtimes are deliberately NOT counted: a directory's mtime bumps
+ * on a file add/remove but NOT on a content edit, so a content edit (the case
+ * that matters, a new utility class in an existing file) is only visible through
+ * the FILE mtime. Counting a new file's own mtime still catches an addition;
+ * only a pure deletion is missed, which is harmless (stale rules self-heal on
+ * the next real edit) and keeps the freshness check deterministic (a directory
+ * mtime is a moving target that made the comparison flaky across runtimes).
+ * Pure I/O, no throw.
  *
  * @param {string} abs
  * @returns {Promise<number>}
@@ -90,7 +99,7 @@ async function maxMtimeMs(abs) {
     return 0;
   }
   if (!st.isDirectory()) return st.mtimeMs;
-  let newest = st.mtimeMs;
+  let newest = 0;
   let entries;
   try {
     entries = await readdir(abs, { withFileTypes: true });
