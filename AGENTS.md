@@ -32,7 +32,7 @@ reference there.
 
 ## AI-driven development: guardrails for all agents
 
-**WebJs is AI-first. These rules apply to ALL agents (Claude, Cursor, Copilot, Antigravity, Aider), enforced via per-agent config the scaffold ships** (`AGENTS.md` + `CONVENTIONS.md` + `CLAUDE.md`, `.claude/settings.json` hooks, `.cursorrules`, `.agents/rules/workflow.md`, `.github/copilot-instructions.md`, a PR template, `.editorconfig`), all carrying the same rules in each agent's format.
+**WebJs is AI-first. These rules apply to ALL agents (Claude, Cursor, Copilot, Antigravity, Gemini, opencode) through a SINGLE cross-agent source the scaffold ships**: `AGENTS.md` (the open standard Cursor / opencode / Antigravity / the Copilot coding agent read natively) plus the skill at `.agents/skills/webjs/` and the workflow rules at `.agents/rules/workflow.md`. Tools that do not read `AGENTS.md` natively get a THIN bridge pointing at it (`CLAUDE.md` for Claude Code, `GEMINI.md` for Gemini CLI, `.github/copilot-instructions.md` for Copilot in VS Code), never a duplicated rule set. Claude Code additionally ships the protective enforcement hooks (`.claude/`, `.hooks/pre-commit`).
 
 ### Before starting ANY work: verify and sync the branch
 
@@ -450,7 +450,7 @@ const result = await optimistic(liked, true, () => likePost(postId));
 
 Three scaffolds exist (do not invent template names): `webjs create <name>` (full-stack: layout, page, components, modules, Drizzle+SQLite), `webjs create <name> --template api` (backend-only routes + modules + Drizzle, no SSR), `webjs create <name> --template saas` (auth + login/signup + protected dashboard + User model). The `--db sqlite|postgres` flag (default sqlite) picks the dialect; the schema/queries/actions are identical across dialects (see #563). The `--runtime node|bun` flag (default node, #541) is ORTHOGONAL to the template and re-flavors any of the three for Bun (`bun --bun` dev/start scripts so the SERVER runs on Bun, `bun.lock`, a pure `oven/bun:1` Dockerfile (#595; safe since cli@0.10.20's npx-free `webjs db migrate` (#570) needs no Node in the image) + bun-install CI, bun-command agent docs; the test/db/check tooling stays on Node); `bun create webjs <name>` auto-detects it. Pick from the request: default for any product with UI (todo, blog, dashboard, marketplace, social, e-commerce), `api` for an HTTP/JSON API with no UI, `saas` for accounts/login/signup; default to full-stack when ambiguous.
 
-Rules: **always scaffold via `webjs create`** (never hand-roll). **Default to a real database (Drizzle + SQLite); NEVER use JSON files, in-memory arrays, or localStorage for persistence.** Update `db/schema.server.ts` to real models FIRST, then `webjs db generate` + `webjs db migrate`, then build pages/actions/queries. **The scaffold is a LEARNING REFERENCE, not a starting point to edit in place.** Read it to learn how a WebJs app is put together (routing, components, actions, layout, the design tokens), then build the app the user asked for FROM SCRATCH: your own pages, your own `db/schema.server.ts` models, your own `app/layout.ts` chrome and palette chosen from what the app IS. Do not ship the scaffold's example home / `User` model / feature gallery as the delivered product; replace what you keep and delete the routes you do not use (the `app/features/<name>` / `app/examples/<name>` route AND its `modules/<name>`). There is no design gate and no placeholder gate: taste is the agent's job, not the checker's. **The scaffold IS the primary teaching surface:** every UI scaffold (full-stack AND saas) ships a densely commented feature gallery (one WebJs concept per demo under `app/features/`, logic in `modules/`, plus a whole example app under `app/examples/`), and the `api` template ships a backend-features showcase under `app/api/features/` (the `route()` adapter + validation, rate limiting, streaming, file storage, WebSockets + broadcast) listed in the root `app/route.ts` index; read the demos to learn the idioms, then build your own. Docs at https://docs.webjs.dev.
+Rules: **always scaffold via `webjs create`** (never hand-roll). **Default to a real database (Drizzle + SQLite); NEVER use JSON files, in-memory arrays, or localStorage for persistence.** Update `db/schema.server.ts` to real models FIRST, then `webjs db generate` + `webjs db migrate`, then build pages/actions/queries. **The scaffold is a MINIMAL starting point, grown in place** (the Remix 3 model): a home page, a neutral-palette root layout, and db wiring, plus the one cross-agent skill at `.agents/skills/webjs/` (a routing `SKILL.md` + on-demand `references/`) that teaches how to build. There is NO feature gallery. Build the app the user asked for by growing the scaffold: add routes under `app/`, components under `components/`, features under `modules/<feature>/`, keep server-only code behind `.server.ts`, and give a UI app its own palette by setting the token values in `app/layout.ts`. There is no design gate and no placeholder gate: taste is the agent's job, not the checker's. The upfront framework context lives in the skill, not in example code (an empirical test confirmed a skill-only agent builds correct WebJs with no gallery). Docs at https://docs.webjs.dev.
 
 ---
 
@@ -484,13 +484,13 @@ webjs vendor pin|unpin|list|audit|outdated|update [--from PROVIDER]   # importma
 
 ---
 
-## CONVENTIONS.md and webjs check: two surfaces, split by nature
+## Conventions and webjs check: two surfaces, split by nature
 
-Every app ships a root `CONVENTIONS.md`; AI agents MUST read it before writing code. It is the source of truth for **project conventions** (modules layout, action placement, one-function-per-file, testing, styling, git workflow), which are guidance a reasonable project could do differently, customizable directly in the prose (`<!-- OVERRIDE -->` sections), not tool-enforced.
+Every app ships the **conventions** as prose, in `.agents/skills/webjs/SKILL.md` (how to build) and `.agents/rules/workflow.md` (git, tests, review). These are guidance a reasonable project could do differently (modules layout, action placement, one-function-per-file, testing, styling, git workflow), followed by judgment, not tool-enforced.
 
 **`webjs check` is a separate, narrower tool: correctness checks only.** Every rule catches code that is wrong to ship (a crash, a security leak, a build/type-strip failure). They run unconditionally with no per-project disabling. The dividing line: could a sensible app legitimately want this to pass? If yes it is a convention (prose), if no it is a check (the tool). `webjs check --rules` lists them.
 
-So: read `CONVENTIONS.md` and follow it by judgment; run `webjs check` and fix every violation (correctness bugs, not style); change a convention by editing the prose.
+So: read the skill and follow its conventions by judgment; run `webjs check` and fix every violation (correctness bugs, not style).
 
 ---
 

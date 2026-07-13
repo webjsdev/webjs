@@ -98,7 +98,7 @@ export default function Troubleshooting() {
 
     <h2>An import of a symbol crashes at runtime, but the checker was green</h2>
     <p><strong>Symptom:</strong> a named import resolves to <code>undefined</code> and crashes on first use (often after renaming or removing a schema table), and type-checking reports <code>has no exported member</code> while the correctness checker passed.</p>
-    <p><strong>Cause:</strong> most check rules are elision-based and do not compile types, so a stale import used to slip past. Dropping the example <code>todos</code> table while a gallery module still imported it is the canonical case.</p>
+    <p><strong>Cause:</strong> most check rules are elision-based and do not compile types, so a stale import used to slip past. Dropping the example <code>todos</code> table while another module still imported it is the canonical case.</p>
     <p><strong>Fix:</strong> add the missing export, correct the imported name, or remove the import (and prune any orphaned module). The <code>no-missing-local-import</code> rule now flags a named value import of a symbol a resolvable app-internal module does not export, so it is caught before runtime. It is conservative by design (only app-internal specifiers, only named value imports, and it skips a module whose exports are not fully enumerable), so a re-export barrel and a <code>'use server'</code> action file resolve normally. Type-checking alongside the correctness checker stays the belt-and-suspenders habit.</p>
 
     <h2>Still stuck</h2>
