@@ -112,9 +112,11 @@ CLAUDE.md           # Claude Code quick-reference
 
 Contributing to the framework itself? Run the monorepo's apps from their
 own dir with `npm run dev`; as of #550 a bare `webjs dev` is equivalent
-(each app's Tailwind watcher and prep steps, `webjs db migrate`,
+(each app's Tailwind compile and prep steps, `webjs db migrate`,
 the registry copy, moved into its `webjs.dev` / `webjs.start` tasks config,
-which `webjs dev`/`start` run, so the npm scripts are thin aliases).
+which `webjs dev`/`start` run, so the npm scripts are thin aliases). In dev
+the Tailwind stylesheet is recompiled on request when a source changes
+(`webjs.dev.regenerate`, #967), so it never goes stale without a live watcher.
 
 ```sh
 npm install                          # once, from the repo root (installs every workspace)
@@ -253,7 +255,7 @@ const resp = await app.handle(new Request('http://x/api/hello'));
 The docs site is built on WebJs itself:
 
 ```sh
-cd docs && npm run dev    # runs webjs dev + tailwind --watch together (see AGENTS.md)
+cd docs && npm run dev    # webjs dev; compiles Tailwind, then recompiles on request (see AGENTS.md)
 ```
 
 37 pages covering: getting started, AI-first development, routing,

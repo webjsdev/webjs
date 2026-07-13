@@ -1349,6 +1349,65 @@ test('startServer dev=true: fs.watch fires reload event on file change', async (
   }
 });
 
+test('startServer dev=true: writing a webjs.dev.regenerate OUTPUT does NOT reload; a source edit DOES (#967)', async () => {
+  // The server writes public/tailwind.css itself when regenerating on request.
+  // The dev watcher must ignore that write, else it reloads the page mid-nav
+  // (this exact case broke the blog soft-nav streaming e2e). A real source edit
+  // must still reload.
+  const appDir = makeApp({
+    'app/page.js':
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export default function P() { return html\`<p>v1</p>\`; }\n`,
+    'public/tailwind.css': '/* built */',
+    'package.json': JSON.stringify({
+      name: 'regen-watch',
+      webjs: { dev: { regenerate: [{ output: 'public/tailwind.css', command: 'true', inputs: ['app'] }] } },
+    }),
+  });
+  const logger = { info: () => {}, warn: () => {}, error: () => {} };
+  const ac = new AbortController();
+  const { server, close } = await startServer({ appDir, dev: true, port: 0, logger, compress: false });
+  try {
+    const addr = server.address();
+    const resp = await fetch(`http://127.0.0.1:${addr.port}/__webjs/events`, {
+      headers: { accept: 'text/event-stream' },
+      signal: ac.signal,
+    });
+    // ONE continuous reader appends into a shared buffer; phases just wait and
+    // inspect the reload count (never call read() concurrently).
+    let buf = '';
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    (async () => {
+      try {
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+        }
+      } catch { /* aborted */ }
+    })();
+    const reloadCount = () => (buf.match(/event: reload/g) || []).length;
+    await new Promise((r) => setTimeout(r, 50));
+    // Write the regenerate OUTPUT: must NOT trigger a reload.
+    writeFileSync(join(appDir, 'public/tailwind.css'), '/* regenerated */');
+    await new Promise((r) => setTimeout(r, 1200));
+    assert.equal(reloadCount(), 0, 'writing a regenerate output must not reload');
+    // Now edit a real source file: MUST reload.
+    writeFileSync(
+      join(appDir, 'app/page.js'),
+      `import { html } from ${JSON.stringify(HTML_URL)};\n` +
+      `export default function P() { return html\`<p>v2</p>\`; }\n`,
+    );
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline && reloadCount() < 1) await new Promise((r) => setTimeout(r, 50));
+    assert.ok(reloadCount() >= 1, 'a real source edit must still reload');
+  } finally {
+    ac.abort();
+    await close();
+  }
+});
+
 test('fileResponse prod: ETag is a WEAK 16-char SHA-1 hex digest in quotes', async () => {
   // Regression coverage for the createHash → crypto.subtle.digest
   // migration. The Web Crypto path must produce a 16-character hex slice in

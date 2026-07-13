@@ -172,6 +172,31 @@ test('the WebjsConfig type top-level keys match the reader keys', () => {
   );
 });
 
+// The nested `webjs.dev.regenerate` key (#967) is read by the SERVER
+// (readRegenerateRules), not the CLI reader that drives KNOWN_KEYS, so it is not
+// covered by the top-level checks above. Guard its triad (schema + type)
+// directly so the three stay in lockstep for the nested key too.
+test('webjs.dev.regenerate is declared in both the schema and the WebjsConfig type (#967)', () => {
+  const schema = JSON.parse(readFileSync(schemaPath, 'utf8'));
+  const regen = schema.properties?.dev?.properties?.regenerate;
+  assert.ok(regen, 'schema declares webjs.dev.regenerate');
+  assert.equal(regen.type, 'array', 'regenerate is an array of rules');
+  const rule = regen.items || {};
+  assert.deepEqual(
+    (rule.required || []).sort(),
+    ['command', 'output'],
+    'a regenerate rule requires output + command',
+  );
+  assert.ok(rule.properties?.inputs, 'a regenerate rule has an inputs property');
+
+  const dtsPath = fileURLToPath(
+    new URL('../../../core/src/webjs-config.d.ts', import.meta.url),
+  );
+  const src = readFileSync(dtsPath, 'utf8');
+  assert.match(src, /interface WebjsRegenerateRule/, 'the type declares WebjsRegenerateRule');
+  assert.match(src, /regenerate\?:\s*WebjsRegenerateRule\[\]/, 'WebjsDevTasks carries regenerate');
+});
+
 /**
  * A tiny structural validator standing in for ajv (which the repo does not
  * ship). It only checks the constraints this schema relies on: known-key

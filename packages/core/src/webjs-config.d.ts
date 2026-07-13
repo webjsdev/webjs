@@ -81,7 +81,17 @@ export interface WebjsRedirectRule {
 /** The trailing-slash canonicalization policy in `webjs.trailingSlash`. */
 export type WebjsTrailingSlash = 'never' | 'always' | 'ignore';
 
-/** Dev task orchestration in `webjs.dev` (#550). Read by the CLI, not the server. */
+/** A single on-request regeneration rule in `webjs.dev.regenerate` (#967). */
+export interface WebjsRegenerateRule {
+  /** The appDir-relative served output this rule rebuilds (e.g. `"public/tailwind.css"`); a leading slash is stripped. */
+  output: string;
+  /** The shell command that rebuilds `output` (the same command prod uses in `start.before`, so dev and prod cannot diverge). */
+  command: string;
+  /** Source files/directories whose newest mtime is compared to `output`'s; a newer one (or a missing output) triggers the rebuild. */
+  inputs?: string[];
+}
+
+/** Dev task orchestration in `webjs.dev` (#550). `before`/`parallel` read by the CLI, `regenerate` by the server. */
 export interface WebjsDevTasks {
   /**
    * One-shot commands run sequentially to completion BEFORE the dev server
@@ -91,10 +101,18 @@ export interface WebjsDevTasks {
   before?: string[];
   /**
    * Long-lived commands run as child processes ALONGSIDE the dev server (the
-   * old `concurrently` watchers: the Tailwind CLI `--watch`). Spawned once in
-   * the parent and torn down on exit, so a watcher cannot leak past the server.
+   * old `concurrently` watchers). Spawned once in the parent and torn down on
+   * exit, so a watcher cannot leak past the server.
    */
   parallel?: string[];
+  /**
+   * On-request build-output regeneration (#967), DEV-ONLY. Each rule rebuilds a
+   * stale `output` before the dev server serves it, so a static build product
+   * (the scaffold's `public/tailwind.css`, #947) never goes stale without a
+   * live `--watch` process that can die mid-session. Prod builds the same output
+   * once via `start.before`. Read by the server (`readRegenerateRules`).
+   */
+  regenerate?: WebjsRegenerateRule[];
   /**
    * Extra directories the dev live-reload watcher follows IN ADDITION to the
    * appDir (#894). The dev server watches its appDir recursively, but an app

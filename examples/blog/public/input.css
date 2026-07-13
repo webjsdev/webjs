@@ -1,6 +1,7 @@
 /* Tailwind CSS v4 input file, compiled to public/tailwind.css by the
- * `css:watch` / `css:build` npm scripts. Authors shouldn't edit
- * public/tailwind.css directly; it's generated and gitignored. */
+ * `css:build` npm script (and recompiled on request in dev via
+ * webjs.dev.regenerate). Authors shouldn't edit public/tailwind.css
+ * directly; it's generated and gitignored. */
 @import "tailwindcss";
 
 /* Scan the shadcn-style component sources so their utility classes make it

@@ -189,22 +189,27 @@ npm run dev                   # http://localhost:5004
 ```
 
 `npm run dev` / `npm start` and `webjs dev` / `webjs start` behave
-identically (#550). The orchestration (applying migrations at start, and the
-Tailwind `--watch`) lives in the `webjs` block of `package.json` and runs
-INSIDE `webjs dev` / `webjs start`:
+identically (#550). The orchestration (applying migrations, compiling
+Tailwind) lives in the `webjs` block of `package.json` and runs INSIDE
+`webjs dev` / `webjs start`:
 
 ```jsonc
 "webjs": {
-  "dev":   { "parallel": ["tailwindcss -i ./public/input.css -o ./public/tailwind.css --watch"] },
-  "start": { "before": ["webjs db migrate"] }
+  "dev": {
+    "before": ["webjs db migrate", "npm run css:build"],
+    "regenerate": [{ "output": "public/tailwind.css", "command": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify", "inputs": ["app", "components", "lib", "modules", "public/input.css"] }]
+  },
+  "start": { "before": ["webjs db migrate", "npm run css:build"] }
 }
 ```
 
-Drizzle has no codegen, so there is no dev `before` step. A bare `webjs dev`
-spawns the Tailwind watcher (dev `parallel`, torn down on exit) then serves;
-`npm run dev` (a thin alias) does the same. In Docker / Railway,
-`CMD ["npm", "start"]` and `CMD ["webjs", "start"]` are equivalent: `webjs
-start` runs `webjs db migrate` (start `before`) in-process before serving.
+A bare `webjs dev` applies migrations and compiles the static Tailwind
+stylesheet, then serves; in dev `dev.regenerate` (#967) recompiles
+`public/tailwind.css` on request when a source changes, so it never goes
+stale without a live `--watch`. `npm run dev` (a thin alias) does the same. In
+Docker / Railway, `CMD ["npm", "start"]` and `CMD ["webjs", "start"]` are
+equivalent: `webjs start` runs `webjs db migrate` (start `before`) in-process
+before serving.
 
 ## Tests
 
