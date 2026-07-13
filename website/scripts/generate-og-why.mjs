@@ -78,7 +78,7 @@ const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
     color:${T.accent};
   }
   .top{ display:flex; align-items:center; justify-content:space-between; }
-  .mid{ flex:1; display:flex; flex-direction:column; justify-content:center; gap:34px; }
+  .mid{ flex:1; display:flex; flex-direction:column; justify-content:center; gap:34px; padding-top:40px; }
   h1{
     font-family:'Inter Tight',sans-serif; font-weight:800;
     font-size:52px; line-height:1.05; letter-spacing:-0.035em;
