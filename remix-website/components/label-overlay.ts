@@ -1,5 +1,30 @@
-import { WebComponent, html } from '@webjsdev/core';
-import { labelState } from '../app/landing/label-bus.ts';
+import { WebComponent, html, signal } from '@webjsdev/core';
+import type { ProjectedLabel } from '../app/landing/engine/label-projection.ts';
+
+/*
+ * Module-scope signal shared by the imperative particle boot loop (which
+ * projects the 3D label anchors to screen space each frame) and this
+ * component (which renders the DOM labels + connector lines). It lives in
+ * THIS module (not a standalone lib/label-bus.ts) so the page's client
+ * closure contains only component modules: a separate reactive util in the
+ * closure would block the import-only elision of app/page.ts (#605) and
+ * ship the whole page to the browser. particle-boot imports it from here.
+ *
+ * The held object is mutated IN PLACE every animation frame (its `labels`
+ * array and `opacity`), so we deliberately never call `.set()` per frame: a
+ * per-frame notification would drive re-render machinery the overlay does
+ * not use (it reads the value inside its own rAF, outside any reactive
+ * context, so no subscription is created).
+ *
+ * Only an `import type` reaches the engine, so this stays SSR-safe and
+ * never pulls in three at strip time.
+ */
+export interface LabelState {
+  labels: ProjectedLabel[];
+  opacity: number;
+}
+
+export const labelState = signal<LabelState>({ labels: [], opacity: 0 });
 
 /*
  * The floating "FRONTEND" / "EVERYTHING IN BETWEEN" text labels, ported from

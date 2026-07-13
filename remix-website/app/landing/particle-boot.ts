@@ -18,7 +18,7 @@ import { MouseSim } from './engine/mouse-sim.ts';
 import { presets } from './engine/presets.ts';
 import { ControlManager } from './engine/controls.ts';
 import { projectLabelsInto } from './engine/label-projection.ts';
-import { labelState } from './label-bus.ts';
+import { labelState } from '#components/label-overlay.ts';
 import { loadModelPoints, type ModelData } from './engine/model-loader.ts';
 import { createModelTexture } from './engine/model-texture.ts';
 import { getMorphBlend, type MorphBlend } from './engine/morph.ts';
@@ -726,7 +726,7 @@ export async function startParticles(canvas: HTMLCanvasElement): Promise<void> {
     }
 
     const nearestPreset = presets[nearest];
-    // Mutate the shared label state in place (no per-frame .set(); see label-bus).
+    // Mutate the shared label state in place (no per-frame .set(); see the labelState comment in label-overlay).
     const ls = labelState.get();
     if (nearestPreset?.labels && nearestPreset.labels.length > 0 && container) {
       let activeCtrls = presetData.controls[nearest];
