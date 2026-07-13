@@ -6,6 +6,10 @@
   "bin": {
     "webjs": "bin/webjs.js"
   },
+  "scripts": {
+    "prepack": "node ../../scripts/sync-scaffold-skill.mjs",
+    "postpack": "node ../../scripts/sync-scaffold-skill.mjs --clean"
+  },
   "files": [
     "bin",
     "lib",

@@ -1,4 +1,3 @@
-// webjs-scaffold-placeholder. Feature gallery route. Keep and adapt it, or prune it (delete this app/features/metadata route), then delete this marker line. webjs check fails while the marker remains.
 // Metadata: how a page declares its <title>, description, and Open Graph tags.
 // A static `metadata` export is read as-is. `generateMetadata(ctx)` takes
 // precedence and can read the request (params, searchParams, url) to compute

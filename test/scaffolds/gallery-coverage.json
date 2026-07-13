@@ -324,7 +324,7 @@
       "exempt": "internal: framework/CLI plumbing"
     },
     "Session": {
-      "demoed": true
+      "exempt": "internal: the session value type, configured not demoed on a page"
     },
     "acceptsStream": {
       "demoed": true
@@ -555,7 +555,7 @@
       "exempt": "internal: framework/CLI plumbing"
     },
     "redisStore": {
-      "demoed": true
+      "exempt": "internal: Redis session-store adapter, a deployment wiring choice not a page demo"
     },
     "requestId": {
       "demoed": true
@@ -621,7 +621,7 @@
       "exempt": "internal: framework/CLI plumbing"
     },
     "setStore": {
-      "demoed": true
+      "exempt": "internal: session-store wiring API, a deployment config choice not a page demo"
     },
     "setVendorEntries": {
       "exempt": "internal: framework/CLI plumbing"

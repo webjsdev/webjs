@@ -1,4 +1,3 @@
-// webjs-scaffold-placeholder. Feature gallery route (client-router page two). Pruned together with the parent app/features/client-router route. Delete this marker line once you adapt or remove it. webjs check fails while the marker remains.
 // The soft-navigation target for the client-router demo. A plain page: the
 // router needs no per-page code. The browser Back button restores this page and
 // its scroll position from the client-router snapshot cache.

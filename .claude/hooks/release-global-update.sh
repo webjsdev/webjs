@@ -19,7 +19,7 @@
 # Disable with WEBJS_NO_RELEASE_GLOBAL_UPDATE=1.
 #
 # Rule: the "Update global CLI after a release" memory + the release flow in
-# agent-docs/framework-dev.md.
+# framework-dev.md.
 
 set -uo pipefail
 

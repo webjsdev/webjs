@@ -715,58 +715,6 @@ test('elision disabled (webjs.elide=false) skips the carrier advisory', async ()
 });
 
 // ---------------------------------------------------------------------------
-// App design advisory (own design, not the scaffold shell).
-// ---------------------------------------------------------------------------
-const DESIGN_CHECK = 'App design (own design, not the scaffold shell)';
-
-test('design advisory WARNS when the layout still rides the scaffold shell', async () => {
-  const dir = tmpDir();
-  // A layout keeping scaffold-shell tells (the exact 760px reading column + the
-  // scaffold's own "Built with webjs" attribution footer): the kept-shell case.
-  // (theme-toggle / --header-h are NOT tells: they are kept infrastructure.)
-  write(dir, 'app/layout.ts', `
-    export default function Layout({ children }) {
-      return html\`<main class="max-w-[760px] mx-auto">\${children}</main>
-        <footer><a href="https://webjs.dev">Built with webjs</a></footer>\`;
-    }
-  `);
-  const r = byName(await runDoctorChecks(dir, baseOpts()), DESIGN_CHECK);
-  assert.equal(r.status, 'warn', 'kept-shell layout should warn');
-  assert.match(r.message, /scaffold design signal/);
-  assert.match(r.fix, /item 6/);
-});
-
-test('design advisory PASSES on a bespoke layout (counterfactual: no false positive)', async () => {
-  const dir = tmpDir();
-  // An app-specific layout: no reading column, no theme toggle, no --header-h,
-  // no attribution. A redesigned shell must NOT be flagged.
-  write(dir, 'app/layout.ts', `
-    export default function Layout({ children }) {
-      return html\`<div class="min-h-dvh grid place-items-center bg-slate-950">
-        <main class="w-[min(92vw,540px)]">\${children}</main></div>\`;
-    }
-  `);
-  const r = byName(await runDoctorChecks(dir, baseOpts()), DESIGN_CHECK);
-  assert.equal(r.status, 'pass', 'a bespoke layout must not be flagged');
-});
-
-test('design advisory does not hard-fail (advisory only)', async () => {
-  const dir = tmpDir();
-  write(dir, 'app/layout.ts', `<main class="max-w-[760px]"></main><a href="https://webjs.dev">Built with webjs</a>`);
-  const results = await runDoctorChecks(dir, baseOpts());
-  assert.equal(byName(results, DESIGN_CHECK).status, 'warn');
-  assert.equal(results.filter((r) => r.status === 'fail').length, 0, 'never a hard fail');
-});
-
-test('design advisory PASSES (stays quiet) on a layout-less api app', async () => {
-  const dir = tmpDir();
-  write(dir, 'app/health/route.ts', 'export const GET = () => new Response("ok");');
-  const r = byName(await runDoctorChecks(dir, baseOpts()), DESIGN_CHECK);
-  assert.equal(r.status, 'pass', 'an api app with no app/layout must not be nudged');
-  assert.match(r.message, /no app\/layout/);
-});
-
-// ---------------------------------------------------------------------------
 // Static build-output freshness (dev.regenerate, #967): the parity backstop.
 // Dev recompiles on request; this WARNs when a committed / built output is
 // older than a source (the case that bites `webjs start` or a committed file).

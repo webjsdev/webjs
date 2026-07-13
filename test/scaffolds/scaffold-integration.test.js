@@ -64,9 +64,23 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(existsSync(join(appDir, 'package.json')));
     assert.ok(existsSync(join(appDir, 'tsconfig.json')));
 
-    // Template files copied
-    for (const f of ['AGENTS.md', 'CONVENTIONS.md', 'CLAUDE.md', '.editorconfig']) {
+    // Single cross-agent source (AGENTS.md + the one skill + the .agents workflow
+    // rules), with a per-agent file for each tool: thin bridges for the ones that
+    // do not read AGENTS.md natively (CLAUDE.md, GEMINI.md, copilot), a .cursorrules
+    // bridge, CONVENTIONS.md, and a commit-nudge hook for Cursor / Gemini / opencode.
+    for (const f of ['AGENTS.md', '.agents/skills/webjs/SKILL.md', '.agents/rules/workflow.md', 'CLAUDE.md', 'GEMINI.md', '.github/copilot-instructions.md', 'CONVENTIONS.md', '.cursorrules', '.cursor/hooks/nudge-uncommitted.sh', '.gemini/hooks/nudge-uncommitted.sh', '.opencode/plugins/nudge-uncommitted.ts', '.claude/settings.json', '.editorconfig']) {
       assert.ok(existsSync(join(appDir, f)), `${f} should exist`);
+    }
+    // No design-distinctness ceremony (retired: gallery:clear does the reset job).
+    for (const f of ['LAYOUT-REFERENCE.md', '.claude/hooks/design-review-before-stop.sh', '.claude/skills/webjs-design-review']) {
+      assert.ok(!existsSync(join(appDir, f)), `${f} should NOT exist in the scaffold`);
+    }
+    // The rule bridges are THIN (pointers to AGENTS.md / the skill), not full
+    // duplicates. .cursorrules + CONVENTIONS.md point at the skill.
+    for (const f of ['CLAUDE.md', 'GEMINI.md', '.github/copilot-instructions.md', '.cursorrules', 'CONVENTIONS.md']) {
+      const src = readFileSync(join(appDir, f), 'utf8');
+      assert.ok(src.length < 2200, `${f} is a thin bridge, not a full rule duplicate`);
+      assert.match(src, /AGENTS\.md|\.agents\/skills\/webjs/, `${f} points at AGENTS.md or the skill`);
     }
 
     // #271: the opt-in progressive-enhancement service worker + its offline
@@ -97,7 +111,7 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // must toggle the shadcn `.dark` class, not only the `data-theme`
     // attribute. Without `.dark`, the copied components/ui/* render light
     // tokens on the dark chrome (white buttons/cards, invisible text). Light
-    // mode hides this, so guard it here. See agent-docs/styling.md "Dark mode".
+    // mode hides this, so guard it here. See .agents/skills/webjs/references/styling.md "Dark mode".
     const layoutSrc = readFileSync(join(appDir, 'app', 'layout.ts'), 'utf8');
     const toggleSrc = readFileSync(join(appDir, 'components', 'theme-toggle.ts'), 'utf8');
     assert.match(layoutSrc, /classList\.toggle\(['"]dark['"]/,
@@ -105,65 +119,40 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(toggleSrc, /classList\.toggle\(['"]dark['"]/,
       'theme-toggle must toggle the .dark class (shadcn dark-mode signal)');
 
-    // Minimal-shell layout: the scaffold ships app/layout.ts as a MINIMAL shell
-    // (theme + tokens + Tailwind infra, then {children} in a bare padded
-    // container) so a delivered app designs its OWN chrome from scratch rather
-    // than inheriting a header/nav/footer. The rich worked layout moved to
-    // LAYOUT-REFERENCE.md, which the agent reads to learn the patterns.
+    // Re-skinned shell: a JetBrains Mono type system on a cool neutral-grey
+    // surface palette (not the old orange brand), a full-height main, no chrome.
     assert.match(layoutSrc, /<main class="min-h-dvh[^"]*">/,
-      'layout renders a minimal full-height main, not a fixed-header reading-column shell');
-    assert.doesNotMatch(layoutSrc, /<header\b/,
-      'the minimal shell ships NO header (design your own; see LAYOUT-REFERENCE.md)');
-    assert.doesNotMatch(layoutSrc, /Built with/,
-      'the minimal shell ships NO scaffold "Built with webjs" footer');
-    assert.ok(existsSync(join(appDir, 'LAYOUT-REFERENCE.md')),
-      'the rich worked layout ships as LAYOUT-REFERENCE.md');
+      'layout renders a full-height main');
+    assert.doesNotMatch(layoutSrc, /<header\b/, 'the shell ships no built-in header');
+    assert.match(layoutSrc, /JetBrains\+Mono/, 'layout loads the JetBrains Mono font');
+    assert.match(layoutSrc, /--primary:\s*#dee2e6/, 'layout ships the neutral surface palette');
+    assert.doesNotMatch(layoutSrc, /oklch\(0\.7 0\.16 52\)/,
+      'no orange brand color survives in the neutral scaffold');
 
-    // Scaffold-removal enforcement (#359): the example homepage and the minimal
-    // layout shell carry a `webjs-scaffold-placeholder` marker, which the
-    // no-scaffold-placeholder check fails on until the agent replaces the content
-    // and deletes the marker. Token assembled so this test file does not carry
-    // the contiguous literal the rule scans for.
-    const marker = 'webjs-scaffold-' + 'placeholder';
+    // The home page is a gallery index: a masthead, a grid linking every feature
+    // demo + the example app, and a footer with the docs + source links.
     const pageSrc = readFileSync(join(appDir, 'app', 'page.ts'), 'utf8');
-    assert.ok(layoutSrc.includes(marker), 'layout.ts must carry the scaffold-placeholder marker');
-    assert.ok(pageSrc.includes(marker), 'page.ts must carry the scaffold-placeholder marker');
-    // The minimal shell carries a "design your layout from scratch" marker, so
-    // check stays red until the agent builds a real layout.
-    assert.match(layoutSrc, new RegExp(marker + '[^\\n]*MINIMAL SHELL'),
-      'layout.ts guards the minimal shell with a "design your layout" placeholder marker');
-    // The design PALETTE ships guarded by its own placeholder marker, so a
-    // delivered app cannot silently keep the scaffold's starter brand colors: the
-    // agent must own the palette (or run --clear-placeholders) to clear the file.
-    // The starter orange is kept (it looks finished); the marker forces a
-    // conscious palette decision, and the marker is a single-line CSS comment so
-    // --clear-placeholders strips it without breaking the <style> block.
-    assert.match(layoutSrc, new RegExp(marker + '[^\\n]*STARTER brand colors'),
-      'layout.ts guards the palette tokens with a scaffold-placeholder marker');
-    // Two markers (minimal-shell, palette): removing one still fails the check
-    // until both are addressed.
-    assert.ok(layoutSrc.split(marker).length - 1 >= 2,
-      'layout.ts carries the minimal-shell + palette placeholder markers');
+    assert.match(pageSrc, /Welcome to/, 'home is a welcome page');
+    assert.match(pageSrc, /Explore the gallery/, 'home indexes the gallery');
+    assert.match(pageSrc, /\/features\/routing/, 'home links the feature demos');
+    assert.match(pageSrc, /\/examples\/todo/, 'home links the example app');
+    assert.match(pageSrc, /docs\.webjs\.dev/, 'footer links the docs');
+    assert.match(pageSrc, /github\.com\/webjsdev\/webjs/, 'footer links the source');
+    assert.doesNotMatch(pageSrc, /<prompt-button\b/, 'the AI-prompts card is gone');
+    assert.doesNotMatch(pageSrc, /Coding with AI/, 'the coding-with-AI section is gone');
 
-    // GUARD (regression for a stripPlaceholderMarkers gap): `--clear-placeholders`
-    // has no /* */ block-comment continuation (only // and <!-- --> runs). So any
-    // marker emitted inside a CSS `/* */` comment MUST be single-line, or clearing
-    // it would strip only the opening line and orphan a dangling `*/`, corrupting
-    // every generated app's stylesheet. Assert every generated file keeps its
-    // block-comment markers on one line.
-    for (const rel of ['app/layout.ts', 'app/page.ts']) {
-      const src = readFileSync(join(appDir, rel), 'utf8');
-      for (const line of src.split('\n')) {
-        if (!line.includes(marker)) continue;
-        // A block-comment marker line opening `/*` must also close `*/` on the
-        // same line (single-line). `//` and `<!-- -->` markers are handled by the
-        // stripper's continuation logic and are exempt.
-        if (line.includes('/*')) {
-          assert.ok(line.includes('*/'),
-            `${rel}: a /* */ scaffold marker must be single-line (else --clear-placeholders orphans a */)`);
-        }
-      }
-    }
+    // The gallery ships: single-feature demos under app/features/, the example
+    // app under app/examples/, and their logic under modules/, all without the
+    // dead scaffold-placeholder markers (that gate was retired).
+    assert.ok(existsSync(join(appDir, 'app', 'features', 'routing', 'page.ts')),
+      'gallery feature demos ship under app/features/');
+    assert.ok(existsSync(join(appDir, 'app', 'examples', 'todo', 'page.ts')),
+      'the example app ships under app/examples/');
+    assert.ok(existsSync(join(appDir, 'modules', 'todo', 'components', 'todo-app.ts')),
+      'gallery module logic ships under modules/');
+    assert.doesNotMatch(
+      readFileSync(join(appDir, 'app', 'features', 'routing', 'page.ts'), 'utf8'),
+      /webjs-scaffold-placeholder/, 'gallery files ship without dead placeholder markers');
 
     // Drizzle db layer wired up
     assert.ok(existsSync(join(appDir, 'db', 'schema.server.ts')), 'db/schema.server.ts written');
@@ -196,7 +185,6 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // imports key and uses # aliases for app-internal imports, no within-app deep relatives.
     const aliasPkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
     assert.deepEqual(aliasPkg.imports, { '#*': './*' }, 'package.json ships the per-dir # imports aliases');
-    assert.match(pageSrc, /from '#[a-z]/, 'the example page imports via #');
     // No app-internal deep relative (../../) survives the codemod in any .ts.
     const tsFiles = [];
     (function walk(d) {
@@ -245,25 +233,8 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(postCommands.includes('.claude/hooks/cleanup-merged-worktree.sh'),
       'settings.json wires cleanup-merged-worktree into PostToolUse');
 
-    // Render-and-look enforcement for UI work: a design/layout defect has no
-    // failing test, so the scaffold ships a design-review skill, a
-    // UserPromptSubmit router that points UI prompts at it, and a Stop-hook
-    // backstop that nudges a render-and-look before finishing. All three must
-    // be scaffolded and wired, and the skill the router names must exist (else
-    // a fresh clone routes to a dangling skill).
-    for (const h of ['route-skills.sh', 'design-review-before-stop.sh']) {
-      assert.ok(existsSync(join(appDir, '.claude/hooks', h)), `${h} is scaffolded`);
-    }
-    assert.ok(
-      existsSync(join(appDir, '.claude/skills/webjs-design-review/SKILL.md')),
-      'the webjs-design-review skill is scaffolded',
-    );
-    const promptCommands = (claudeSettings.hooks?.UserPromptSubmit ?? [])
-      .flatMap((g) => g.hooks.map((h) => h.command));
-    assert.ok(promptCommands.includes('.claude/hooks/route-skills.sh'),
-      'settings.json wires route-skills into UserPromptSubmit');
-    assert.ok(stopCommands.includes('.claude/hooks/design-review-before-stop.sh'),
-      'settings.json wires design-review-before-stop into Stop');
+    // The design-review ceremony (a skill + a UserPromptSubmit router + a Stop
+    // hook) was retired in #969; only the protective hooks above ship now.
 
     // The local pre-commit hook is lightweight: it blocks commits to main
     // and nothing else. The test/convention gate runs in CI, not locally,
@@ -468,14 +439,14 @@ test('scaffoldApp saas: writes auth + dashboard + Drizzle User model', async () 
     assert.ok(existsSync(join(appDir, 'app', 'layout.ts')), 'layout.ts written');
     assert.ok(existsSync(join(appDir, 'app', 'page.ts')), 'page.ts written');
 
-    // saas shares the same minimal-shell root layout, so it too ships the bare
-    // full-height main (no header/reading-column) plus LAYOUT-REFERENCE.md, and
-    // designs its own chrome (the dashboard sub-nav lives in app/dashboard/layout.ts).
+    // saas shares the same minimal-shell root layout (bare full-height main, no
+    // header), and designs its own chrome (the dashboard sub-nav lives in
+    // app/dashboard/layout.ts).
     const saasLayoutSrc = readFileSync(join(appDir, 'app', 'layout.ts'), 'utf8');
     assert.match(saasLayoutSrc, /<main class="min-h-dvh[^"]*">/,
       'saas root layout is the minimal full-height shell');
-    assert.ok(existsSync(join(appDir, 'LAYOUT-REFERENCE.md')),
-      'saas ships LAYOUT-REFERENCE.md');
+    assert.ok(!existsSync(join(appDir, 'LAYOUT-REFERENCE.md')),
+      'saas ships no LAYOUT-REFERENCE.md (removed)');
 
     // #271: saas is a UI scaffold, so it ships the opt-in service worker.
     assert.ok(existsSync(join(appDir, 'public', 'sw.js')), 'saas ships public/sw.js');
@@ -527,31 +498,6 @@ test('scaffoldApp saas: writes auth + dashboard + Drizzle User model', async () 
       const pageSrc = readFileSync(join(appDir, 'app', ...p, 'page.ts'), 'utf8');
       assert.equal(h1Count(pageSrc), 1, `${p.join('/')} page has exactly one <h1>`);
     }
-
-    // #878: no gallery surface may drop label text below AA contrast. The
-    // `text-muted-foreground/70` opacity measured 3.83:1; full-opacity
-    // `text-muted-foreground` passes. Scan the WHOLE generated gallery (every
-    // component + feature page), not just one demo, so a stray low-contrast
-    // token anywhere reds this. Counterfactual: any `/NN` opacity fails.
-    const galleryDirs = [join(appDir, 'modules'), join(appDir, 'app', 'features')];
-    const walk = (dir) => {
-      for (const e of readdirSync(dir, { withFileTypes: true })) {
-        const full = join(dir, e.name);
-        if (e.isDirectory()) { walk(full); continue; }
-        if (!e.name.endsWith('.ts')) continue;
-        const src = readFileSync(full, 'utf8');
-        assert.doesNotMatch(src, /text-muted-foreground\/\d/, `${full} keeps full-contrast text-muted-foreground (no /NN opacity)`);
-      }
-    };
-    for (const d of galleryDirs) if (existsSync(d)) walk(d);
-
-    // #878: gallery form controls need an accessible name (axe `label`). The
-    // file-upload input and the directive-demo text input carried none, so a
-    // full axe sweep flagged them critical. Pin their aria-labels.
-    const fileStorage = readFileSync(join(appDir, 'app', 'features', 'file-storage', 'page.ts'), 'utf8');
-    assert.match(fileStorage, /type="file"[^>]*aria-label=/, 'the file input has an aria-label');
-    const directiveDemo = readFileSync(join(appDir, 'modules', 'directives', 'components', 'directive-demo.ts'), 'utf8');
-    assert.match(directiveDemo, /aria-label="Editable text/, 'the ref-focus input has an aria-label');
 
     // Drizzle User model (saas overwrites db/schema.server.ts to add passwordHash)
     const schema = readFileSync(join(appDir, 'db', 'schema.server.ts'), 'utf8');

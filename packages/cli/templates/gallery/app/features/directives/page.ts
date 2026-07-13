@@ -1,4 +1,3 @@
-// webjs-scaffold-placeholder. Feature gallery route. Keep and adapt it, or prune it (delete this app/features/directives route AND modules/directives), then delete this marker line. webjs check fails while the marker remains.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
 import '#modules/directives/components/directive-demo.ts';

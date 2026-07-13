@@ -1,0 +1,187 @@
+# Data and Actions
+
+## What This Covers
+
+- The `modules/<feature>/` architecture (thin `app/` adapters, `actions/` mutations, `queries/` reads, one function per file)
+- `'use server'` RPC actions, the serializer-safe wire, and how a client import becomes a typed stub
+- Input validation at the boundary via `export const validate`
+- HTTP-verb config exports (`method`, `cache`, `tags`, `invalidates`, `middleware`)
+- The `ActionResult<T>` envelope and its robust failure detection
+- The `route()` REST adapter that exposes an action over HTTP
+- Drizzle rc.3 reads (`db.query.*`) and mutations (`.returning()`)
+- Keeping server-only types off the client (`import type` vs a value import)
+
+Read this when a task touches a server mutation, a data read, input validation, a REST endpoint, or the shape a component consumes. Sibling refs: `routing-and-pages.md` (the page `action` write path, `route.ts` handlers), `auth-and-sessions.md` (protecting an action or endpoint), `optimistic-ui.md` (consuming `ActionResult` on the client), `typescript.md` (erasable syntax, full-stack types).
+
+## The Architecture (read this first)
+
+`app/` is routing ONLY: thin adapters that import from `modules/`. Feature logic lives under `modules/<feature>/`.
+
+- `modules/<feature>/actions/*.server.ts` mutations (create, update, delete)
+- `modules/<feature>/queries/*.server.ts` reads
+- `modules/<feature>/components/*.ts` feature-owned components (shared UI goes in top-level `components/`)
+- `modules/<feature>/utils/*.ts` pure helpers (no `'use server'`, no DB)
+- `modules/<feature>/types.ts` browser-safe typedefs (no runtime server import)
+
+**One exported function per action / query file, named after the file.** A configured `.server.ts` file with more than one callable function is a `webjs check` error. App-internal imports use the `#` root alias (`#modules/...`, `#db/...`), not deep `../../../` relatives.
+
+## The `.server.ts` boundary
+
+`.server.ts` is the one server boundary. It is BOTH source protection (the file router never serves the source) AND, with `'use server'`, an RPC mechanism.
+
+| File | `'use server'`? | What it is |
+|---|---|---|
+| `*.server.ts` | yes | Server action. Source-protected AND RPC-callable; the browser import becomes a stub POSTing to `/__webjs/action/<hash>/<fn>`. |
+| `*.server.ts` | no | Server-only utility. Source-protected; the browser import is a throw-at-load stub. |
+| plain `.ts` | yes | Lint violation (`use-server-needs-extension`). Rename to add `.server.`. |
+| plain `.ts` | no | Browser-safe. |
+
+**Importing the action IS the API.** The dev server rewrites a client import into a typed RPC stub, so you write `await createPost({ title })` and never hand-write `fetch()`. REST over HTTP is a `route.ts` that calls the action (below). Never import a no-`'use server'` utility directly into a shipping page / layout / component; its browser stub throws at load. Reach it through a `'use server'` action instead.
+
+## A query and an action
+
+Reads live in `queries/`, mutations in `actions/`. Both are `.server.ts` with `'use server'`, so their browser imports become typed RPC stubs. Args and returns round-trip through the serializer (it carries `Date` / `Map` / `Set` / `BigInt` / `Error` / typed arrays / `Blob` / `File` / `FormData` / cycles), so a query may return a `Date` and the client receives a real `Date`.
+
+```ts
+// modules/posts/queries/list-posts.server.ts
+'use server';
+import { db } from '#db/connection.server.ts';
+export async function listPosts() {
+  return db.query.posts.findMany({
+    where: { published: true },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+```
+
+```ts
+// modules/posts/actions/create-post.server.ts
+'use server';
+import { db } from '#db/connection.server.ts';
+import { posts } from '#db/schema.server.ts';
+export async function createPost(input: { title: string; body: string }) {
+  const title = String(input?.title || '').trim();
+  if (!title) return { success: false, error: 'title required', status: 400 };
+  const [row] = await db.insert(posts).values({ title, body: String(input?.body || '') }).returning();
+  return { success: true, data: row };
+}
+```
+
+A page runs on the server, so it imports the query directly and awaits it. A client component imports the action and calls it (rewritten to an RPC stub).
+
+## The Drizzle query surface (rc.3)
+
+**Reads go through the relational query API** (`db.query.<table>.findFirst` / `.findMany`), NOT `db.select().from()`. Filter with a plain object `where` (the RQBv2 shape), order with an `orderBy` object, and pull relations with `with`.
+
+```ts
+const post = await db.query.posts.findFirst({
+  where: { slug: input.slug },
+  with: { author: { columns: { name: true } } },
+});
+const rows = await db.query.posts.findMany({
+  where: { authorId: me.id },
+  orderBy: { createdAt: 'desc' },
+  columns: { id: true, slug: true, title: true },
+});
+```
+
+Two rc.3 removals trip older tutorials: `db.select({ ... })` with a projection object is a `TS2554` (call `select()` with NO argument for the full row, then narrow in JS), and `.returning({ ... })` with a field object is also `TS2554` (call `.returning()` bare).
+
+**Mutations** use the query-builder with the imported SQL operators (`eq`, `and`, `inArray` from `drizzle-orm`) and read back with a no-arg `.returning()`:
+
+```ts
+import { eq } from 'drizzle-orm';
+const [row] = await db.insert(posts).values({ title, body, authorId: me.id }).returning();
+const [updated] = await db.update(posts).set({ title }).where(eq(posts.id, id)).returning();
+await db.delete(posts).where(eq(posts.id, id));
+```
+
+A `.returning()` row is the table's own columns only, never `with` relations. When the caller wants a joined shape, re-read with `db.query.*` or splice the already-known related value in by hand. Full surface at https://docs.webjs.dev.
+
+## Input validation at the boundary
+
+Declare `export const validate` beside the action. It runs SERVER-SIDE before the action body on the RPC boundary, receiving the action's FIRST argument. The framework only CALLS the validator (it ships no validation library) and reads its return: `{ success: true, data? }` runs the action (an optional `data` replaces the input), `{ success: false, fieldErrors }` returns a 422 WITHOUT running the body, and a THROW becomes a sanitized error.
+
+```ts
+// modules/posts/actions/create-post.server.ts
+'use server';
+export const validate = (input: any) => {
+  const fieldErrors: Record<string, string> = {};
+  const title = String(input?.title || '').trim();
+  if (!title) fieldErrors.title = 'Title is required';
+  if (String(input?.body || '').length < 10) fieldErrors.body = 'Too short';
+  if (Object.keys(fieldErrors).length) return { success: false, fieldErrors };
+  return { success: true, data: { title, body: String(input.body) } };
+};
+export async function createPost(input: { title: string; body: string }) { /* runs only when valid */ }
+```
+
+A client call resolves with the failure envelope (it does NOT throw), so the component reads `result.fieldErrors`. A zod adapter wraps `safeParse` so its result becomes the envelope; the framework stays zod-free.
+
+## HTTP-verb config exports
+
+A `'use server'` action is a POST by default. Reserved sibling exports, read statically (the same way a page reads `export const revalidate`), change its HTTP semantics WITHOUT changing the call site (you still write `await getUser(7)`).
+
+```ts
+// modules/users/queries/get-user.server.ts: a cached, tagged GET read
+'use server';
+export const method = 'GET';                       // absent = POST
+export const cache = 60;                            // seconds, or { maxAge, swr, public }
+export const tags = (id: number) => ['user:' + id];
+export async function getUser(id: number) { return db.query.users.findFirst({ where: { id } }); }
+```
+
+```ts
+// a mutation evicts the tags it touches
+'use server';
+export const invalidates = (id: number) => ['user:' + id];
+export const middleware = [requireAuth];           // async (ctx, next) => result; read ctx via actionContext()
+export async function updateUser(id: number, patch: Partial<User>) { /* ... */ }
+```
+
+- A **GET** rides args in the URL (POST fallback over a 4KB cap), is CSRF-exempt, and carries `Cache-Control` + a weak `ETag` (304 on `If-None-Match`) + `X-Webjs-Tags`. A **mutation** (POST/PUT/PATCH/DELETE) sends the rich body (DELETE rides the URL), is CSRF-protected, and on success evicts its `invalidates` tags and reports them via `X-Webjs-Invalidate`. A method mismatch is a `405` + `Allow`.
+- **SAFETY.** `cache` with `public: true` SHARES one response across ALL users, keyed only by URL + args. Use it ONLY for data identical for every visitor (the same rule as a page's `export const revalidate`), never for a session or per-user read.
+- Per-action `middleware` short-circuits by returning an `ActionResult` instead of calling `next()`, and accumulates context the action reads via `actionContext()` from `@webjsdev/server`.
+
+## The `ActionResult<T>` envelope
+
+Every action returns this additive envelope.
+
+```ts
+type ActionResult<T> =
+  | { success: true; data?: T; redirect?: string }   // redirect MUST be a same-site local path
+  | { success: false; error?: string; fieldErrors?: Record<string, string>;
+      values?: Record<string, string>; status?: number };
+```
+
+**Failure detection is robust.** A result is a FAILURE when `result.success === false`, OR `result.fieldErrors` is present, OR `result.error` is present and `result.success !== true`. Everything else is a success (an explicit `success: true`, or a bare value with no error markers). This means an error is never swallowed just because the author omitted a literal `success: false`.
+
+**`result.redirect` must be a same-site local path** (a single leading `/`). A protocol-relative `//host` or an absolute `scheme://host` URL is rejected (open-redirect guard); for a real external redirect, throw `redirect(absoluteUrl)` instead. A user-facing error message belongs on the envelope (`{ success: false, error }`), never on a raw throw, because prod sanitizes a thrown action error to a generic message plus a digest.
+
+## Exposing an action over REST: the `route()` adapter
+
+A public REST endpoint is a `route.ts` that imports and calls the action, optionally through the `route()` adapter from `@webjsdev/server` (it merges query + route params + JSON body into one input object and JSON-responds).
+
+```ts
+// app/api/posts/route.ts
+import { route } from '@webjsdev/server';
+import * as postActions from '#modules/posts/actions/create-post.server.ts';
+export const POST = route(postActions);   // module namespace: applies the action's OWN validate + middleware
+```
+
+Passing the MODULE NAMESPACE lets the adapter read the action's declared `middleware` and `validate`, so a guard declared once next to the action protects the RPC and REST boundaries alike. Passing the imported FUNCTION (`route(createPost, { validate })`) cannot see sibling config exports, so it applies only what you pass. A `{ success: false, fieldErrors }` return becomes a 422 JSON response; a validator that THROWS becomes a 400.
+
+A `route.ts` endpoint is NOT covered by the RPC CSRF check, so authenticate every mutating endpoint, use `validate`, and rate-limit (see `auth-and-sessions.md`).
+
+## Keeping server-only types off the client
+
+An interactive component needs the SHAPE of the data it renders, and those shapes derive from server-only modules. The one rule: **a type crossing to the browser is a TYPE, never a runtime value.** An `import type { ... }` is erased by the TypeScript stripper before the module reaches the browser. A plain `import { ... }` (a value import) survives stripping, pins the server module into the browser closure, and trips the `no-server-import-in-browser-module` check.
+
+```ts
+// SAFE: type-only, erased before it reaches the browser.
+import type { Post } from '#db/schema.server.ts';
+// UNSAFE: a value import survives stripping and pins the server schema. Throws at load.
+import { posts } from '#db/schema.server.ts';
+```
+
+Keep the wire shape in a browser-safe `modules/<feature>/types.ts` with NO runtime import from a `.server.ts` file or from `db/`. Define a hand-written DTO, or a type-only derivation (`import type { Post } ...; export type PostFormatted = Omit<Post, 'createdAt'> & { createdAt: string }`). Never `export *` or a value re-export from a `.server.ts` in `types.ts`; that carries the runtime table bindings and breaks any component importing the types. Full reference at https://docs.webjs.dev.

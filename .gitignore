@@ -67,6 +67,10 @@ coverage/
 # Playwright/chrome-devtools MCP console-log output
 .playwright-mcp/
 
-# Bundled MCP docs (generated at prepack from agent-docs + AGENTS.md, #376;
+# Bundled MCP docs (generated at prepack from the skill references + SKILL.md + AGENTS.md, #376;
 # the MCP server moved to @webjsdev/mcp in #415, so the bundle is produced there)
 packages/mcp/resources/
+
+# Generated at prepack from the canonical .agents/skills/webjs/ (see
+# scripts/sync-scaffold-skill.mjs). Never commit this bundle.
+packages/cli/templates/.agents/skills/webjs/

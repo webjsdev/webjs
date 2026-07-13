@@ -7,7 +7,7 @@
 # default. But it is a CONVENTION, not a correctness check: a sensible
 # app can legitimately want a test-less commit (a spike, a vendored
 # file, a pure refactor). The convention-vs-check principle in this
-# app's AGENTS.md and CONVENTIONS.md says guidance like this WARNS, it
+# app's AGENTS.md says guidance like this WARNS, it
 # does not hard-block by default. So this hook surfaces a loud reminder
 # and lets the commit proceed.
 #

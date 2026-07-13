@@ -51,7 +51,7 @@ export default function AIFirst() {
       <li><code>check</code>: the structured <code>webjs check</code> violations.</li>
     </ul>
     <p>Use these to learn the real route, action, and component surface before editing, instead of grepping or assuming.</p>
-    <p><strong>Knowledge and authoring layer:</strong> an <code>init</code> tool (a read-first pointer with the mental model and invariants, the primer for a fresh setup), a <code>docs</code> tool (retrieve a topic or search the <code>agent-docs</code> corpus), and a <code>source</code> tool that reads the framework's OWN no-build source from <code>node_modules/@webjsdev/*/src</code> (what actually runs). On top of the tools, the server exposes MCP <code>resources</code> (the docs corpus plus this app's <code>AGENTS.md</code>) and recipe <code>prompts</code> (guided page, route, action, and component workflows), so the no-build framework source and the docs/recipes are surfaced directly to the agent.</p>
+    <p><strong>Knowledge and authoring layer:</strong> an <code>init</code> tool (a read-first pointer with the mental model and invariants, the primer for a fresh setup), a <code>docs</code> tool (retrieve a topic or search the <code>.agents/skills/webjs/</code> reference corpus), and a <code>source</code> tool that reads the framework's OWN no-build source from <code>node_modules/@webjsdev/*/src</code> (what actually runs). On top of the tools, the server exposes MCP <code>resources</code> (the docs corpus plus this app's <code>AGENTS.md</code>) and recipe <code>prompts</code> (guided page, route, action, and component workflows), so the no-build framework source and the docs/recipes are surfaced directly to the agent.</p>
     <p>An agent has two complementary ways to understand the framework, and either beats guessing from training data: grep the full no-build source under <code>node_modules/@webjsdev/*/src</code> (the real code that runs, no sourcemaps), and the MCP for live app introspection plus the curated <code>init</code> / <code>docs</code> / <code>source</code> knowledge tools.</p>
 
     <h3>3. Predictable File Layout</h3>
@@ -104,29 +104,28 @@ export async function createPost(
     <h3>8. JSDoc or TypeScript: Agent's Choice</h3>
     <p>Some AI agents work better with TypeScript, others prefer JSDoc. WebJs supports both equally. The type-checking story is identical either way, since the TS language server reads both. An agent can generate whichever format it's more fluent in.</p>
 
-    <h3>9. Cross-Agent Config Files</h3>
-    <p><code>webjs create</code> scaffolds guardrail config files for every major AI coding agent:</p>
+    <h3>9. Cross-Agent Config, One Source</h3>
+    <p>The scaffold ships a single cross-agent source of truth rather than a per-tool rule duplicate for each agent:</p>
     <ul>
-      <li><code>CLAUDE.md</code> + <code>.claude/settings.json</code> + hooks for Claude Code</li>
-      <li><code>.cursorrules</code> for Cursor</li>
-      <li><code>.agents/rules/workflow.md</code> for Antigravity (Google)</li>
-      <li><code>.github/copilot-instructions.md</code> for GitHub Copilot</li>
-      <li><code>AGENTS.md</code> + <code>CONVENTIONS.md</code> for all agents</li>
+      <li><code>AGENTS.md</code>, read natively by Cursor, opencode, Antigravity, and the Copilot coding agent</li>
+      <li><code>.agents/skills/webjs/SKILL.md</code>, the shipped routing skill carrying the framework context</li>
+      <li><code>.agents/rules/workflow.md</code>, the git, test, and review workflow rules</li>
+      <li>Thin bridges for tools that do not read <code>AGENTS.md</code> natively: <code>CLAUDE.md</code> (Claude Code), <code>GEMINI.md</code> (Gemini CLI), and <code>.github/copilot-instructions.md</code> (Copilot in VS Code), each pointing at <code>AGENTS.md</code></li>
     </ul>
-    <p>Every agent gets the same rules: check the branch before coding, sync with parent before starting, auto-generate tests, auto-update docs, ask before merging (with delete/keep prompt), no AI attribution in commits.</p>
+    <p>Every agent gets the same rules from that one source: check the branch before coding, sync with parent before starting, auto-generate tests, auto-update docs, ask before merging (with delete/keep prompt), no AI attribution in commits.</p>
 
     <h3>10. Autonomous Mode</h3>
     <p>In sandbox or bypass-permissions mode, agents auto-decide using best-practice defaults: create feature branches, rebase before starting, fix failing tests, generate meaningful commits, delete feature branches after merge. Same quality bar, no blocking on questions.</p>
 
     <h3>11. Automatic Tests and Docs</h3>
-    <p>In a WebJs project, the user never has to say "also write tests" or "also update the docs." Agents do this automatically with every code change. The convention is enforced via <code>CONVENTIONS.md</code>, <code>webjs test</code>, and <code>webjs check</code>. For an agent lint-and-fix loop, run <code>webjs check --json</code>: the structured output lets the agent parse violations, fix them, and re-run until the report is clean (the same correctness data the MCP <code>check</code> tool returns).</p>
+    <p>In a WebJs project, the user never has to say "also write tests" or "also update the docs." Agents do this automatically with every code change. The convention lives in <code>AGENTS.md</code> and the shipped skill (<code>.agents/skills/webjs/SKILL.md</code>), and is enforced via <code>webjs test</code>, and <code>webjs check</code>. For an agent lint-and-fix loop, run <code>webjs check --json</code>: the structured output lets the agent parse violations, fix them, and re-run until the report is clean (the same correctness data the MCP <code>check</code> tool returns).</p>
 
     <h3>12. Scaffold + Persistence Defaults</h3>
     <p>When a layman user says "create a todo app with webjs", the agent should produce a real full-stack app with a real database, not a JSON-file simulation. WebJs enforces this with three guardrails:</p>
     <ul>
       <li><strong>Exactly three scaffolds.</strong> <code>webjs create &lt;name&gt;</code> (full-stack default), <code>--template api</code>, <code>--template saas</code>. The CLI rejects any other <code>--template</code> value, so an agent can't hallucinate <code>--template todo</code> or <code>--template blog</code>.</li>
       <li><strong>Drizzle + SQLite wired up by default.</strong> Every scaffold ships <code>db/schema.server.ts</code>, <code>db/columns.server.ts</code>, <code>db/connection.server.ts</code> (exports <code>db</code>), the <code>webjs.dev.before</code> + <code>webjs.start.before</code> steps running <code>webjs db migrate</code> (idempotent, so a <code>db:generate</code>'d migration applies on the next boot), and <code>npm run db:generate</code> / <code>db:migrate</code> / <code>db:studio</code> / <code>db:seed</code>. The agent edits the schema, runs <code>db:generate</code>, and <code>npm run dev</code> applies it, and won't accidentally fall back to JSON files for persistence.</li>
-      <li><strong>Persist with Drizzle, not JSON files.</strong> A <code>data/todos.json</code> or <code>db.json</code> used as a database resets on reload and cannot scale. This is a project convention in CONVENTIONS.md, so an agent reading it takes the database path.</li>
+      <li><strong>Persist with Drizzle, not JSON files.</strong> A <code>data/todos.json</code> or <code>db.json</code> used as a database resets on reload and cannot scale. This is a project convention in <code>AGENTS.md</code> and the shipped skill, so an agent reading it takes the database path.</li>
     </ul>
     <p><strong>Picking the right scaffold from the user's prompt:</strong></p>
     <pre>User asks for…                                          Scaffold

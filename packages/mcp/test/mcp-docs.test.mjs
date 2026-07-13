@@ -54,7 +54,7 @@ function fixture() {
   };
 }
 
-test('catalogue: AGENTS first, then the agent-docs, each with a webjs-docs:// uri', () => {
+test('catalogue: AGENTS first, then SKILL, then the references, each with a webjs-docs:// uri', () => {
   const cat = catalogue(fixture());
   assert.deepEqual(cat.map((d) => d.name), ['AGENTS', 'components', 'recipes']);
   assert.equal(cat[0].uri, 'webjs-docs://AGENTS');
@@ -134,52 +134,58 @@ test('searchDocs: EXACTLY 40 matches does NOT claim truncation (boundary)', asyn
   assert.ok(!/truncated/.test(out), 'nothing was dropped, so no truncation notice');
 });
 
-test('resolveDocsLocation: prefers the bundled resources/, falls back to repo-root agent-docs', () => {
+test('resolveDocsLocation: prefers the bundled resources/, falls back to the repo-root skill', () => {
   // Build a fake package layout: <root>/packages/mcp/src (the module location),
-  // <root>/agent-docs (the dev fallback), <root>/packages/mcp/resources (bundled).
+  // <root>/.agents/skills/webjs (the dev fallback), <root>/packages/mcp/resources (bundled).
   const root = mkdtempSync(join(tmpdir(), 'mcp-resolve-'));
   _cleanup.push(root);
   const srcDir = join(root, 'packages', 'mcp', 'src');
-  const bundled = join(root, 'packages', 'mcp', 'resources', 'agent-docs');
+  const bundled = join(root, 'packages', 'mcp', 'resources', 'references');
+  const skill = join(root, '.agents', 'skills', 'webjs');
   mkdirSync(srcDir, { recursive: true });
-  mkdirSync(join(root, 'agent-docs'), { recursive: true });
+  mkdirSync(join(skill, 'references'), { recursive: true });
   writeFileSync(join(root, 'AGENTS.md'), '# root\n');
   const moduleUrl = pathToFileURL(join(srcDir, 'mcp-docs.js')).href;
 
-  // No bundle yet -> dev fallback to the repo-root agent-docs + AGENTS.md.
+  // No bundle yet -> dev fallback to the repo-root skill references + SKILL.md + AGENTS.md.
   let loc = resolveDocsLocation(moduleUrl);
-  assert.equal(loc.docsDir, join(root, 'agent-docs'), 'falls back to repo-root agent-docs');
+  assert.equal(loc.docsDir, join(skill, 'references'), 'falls back to the repo-root skill references');
   assert.equal(loc.agentsPath, join(root, 'AGENTS.md'));
+  assert.equal(loc.skillPath, join(skill, 'SKILL.md'), 'exposes the SKILL.md path');
 
   // Bundle present -> the published path wins.
   mkdirSync(bundled, { recursive: true });
   writeFileSync(join(root, 'packages', 'mcp', 'resources', 'AGENTS.md'), '# bundled\n');
   loc = resolveDocsLocation(moduleUrl);
-  assert.equal(loc.docsDir, bundled, 'prefers the bundled resources/agent-docs');
+  assert.equal(loc.docsDir, bundled, 'prefers the bundled resources/references');
   assert.equal(loc.agentsPath, join(root, 'packages', 'mcp', 'resources', 'AGENTS.md'));
+  assert.equal(loc.skillPath, join(root, 'packages', 'mcp', 'resources', 'SKILL.md'));
 });
 
-test('bundleDocs + cleanBundle: copy bundles agent-docs + AGENTS, clean removes it (temp dirs only)', () => {
+test('bundleDocs + cleanBundle: copy bundles references + SKILL + AGENTS, clean removes it (temp dirs only)', () => {
   // Operate entirely in a throwaway layout, NEVER the real packages/mcp/resources
   // (which would race the integration tests reading the live corpus).
   const root = mkdtempSync(join(tmpdir(), 'mcp-bundle-'));
   _cleanup.push(root);
-  const srcDocs = join(root, 'src', 'agent-docs');
+  const srcRefs = join(root, 'src', 'references');
   const srcAgents = join(root, 'src', 'AGENTS.md');
+  const srcSkill = join(root, 'src', 'SKILL.md');
   const destRoot = join(root, 'pkg', 'resources');
-  mkdirSync(srcDocs, { recursive: true });
-  writeFileSync(join(srcDocs, 'components.md'), '# Components\n');
-  writeFileSync(join(srcDocs, 'recipes.md'), '# Recipes\n');
+  mkdirSync(srcRefs, { recursive: true });
+  writeFileSync(join(srcRefs, 'components.md'), '# Components\n');
+  writeFileSync(join(srcRefs, 'testing.md'), '# Testing\n');
   writeFileSync(srcAgents, '# AGENTS\n');
+  writeFileSync(srcSkill, '# SKILL\n');
 
-  bundleDocs({ srcDocs, srcAgents, destRoot });
+  bundleDocs({ srcRefs, srcAgents, srcSkill, destRoot });
   assert.ok(existsSync(join(destRoot, 'AGENTS.md')), 'AGENTS.md bundled');
-  assert.deepEqual(readdirSync(join(destRoot, 'agent-docs')).sort(), ['components.md', 'recipes.md'], 'docs bundled');
+  assert.ok(existsSync(join(destRoot, 'SKILL.md')), 'SKILL.md bundled');
+  assert.deepEqual(readdirSync(join(destRoot, 'references')).sort(), ['components.md', 'testing.md'], 'references bundled');
 
-  // A re-bundle with a removed source doc must not leave the old one behind.
-  rmSync(join(srcDocs, 'recipes.md'));
-  bundleDocs({ srcDocs, srcAgents, destRoot });
-  assert.deepEqual(readdirSync(join(destRoot, 'agent-docs')), ['components.md'], 'stale doc cleaned on re-bundle');
+  // A re-bundle with a removed source reference must not leave the old one behind.
+  rmSync(join(srcRefs, 'testing.md'));
+  bundleDocs({ srcRefs, srcAgents, srcSkill, destRoot });
+  assert.deepEqual(readdirSync(join(destRoot, 'references')), ['components.md'], 'stale reference cleaned on re-bundle');
 
   cleanBundle(destRoot);
   assert.ok(!existsSync(destRoot), 'cleanBundle removed the transient bundle');
@@ -190,7 +196,7 @@ test('getPrompt: every listed prompt resolves to a user message; unknown throws'
     const got = getPrompt(p.name, {});
     assert.equal(got.messages[0].role, 'user');
     assert.ok(got.messages[0].content.text.length > 50);
-    assert.match(got.messages[0].content.text, /webjs-docs:\/\/recipes/, 'points at the full recipe set');
+    assert.match(got.messages[0].content.text, /webjs-docs:\/\/SKILL/, 'points at the skill for the full guide');
   }
   assert.throws(() => getPrompt('nope', {}), /Unknown prompt/);
 });

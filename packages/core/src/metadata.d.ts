@@ -11,8 +11,9 @@
  *     export const metadata: Metadata = { title: 'Home', description: '…' };
  *     export async function generateMetadata(ctx: MetadataContext): Promise<Metadata> { … }
  *
- * The shape mirrors what ssr.js actually consumes (and agent-docs/metadata.md
- * documents), NOT Next.js's full superset. Every field is optional. Zero
+ * The shape mirrors what ssr.js actually consumes (and the skill's
+ * references/routing-and-pages.md documents), NOT Next.js's full superset.
+ * Every field is optional. Zero
  * runtime cost: nothing in this file ships to the browser.
  */
 
@@ -177,7 +178,7 @@ export interface PreloadDescriptor {
  * optional. Where the framework accepts a string OR an object (`title`,
  * `viewport`, `robots`, `appleWebApp`, `icons`), the type is a union.
  *
- * @see agent-docs/metadata.md for the field-by-field emission reference.
+ * @see the skill's references/routing-and-pages.md for the field-by-field emission reference.
  */
 export interface Metadata {
   /** -> `<title>`. Plain string or `{ template, default, absolute }`. */

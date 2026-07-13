@@ -1,4 +1,3 @@
-// webjs-scaffold-placeholder. Feature gallery route. Keep and adapt it, or prune it (delete this app/features/websockets route AND modules/websockets), then delete this marker line. webjs check fails while the marker remains.
 // WebSockets: a route.ts exports WS(ws, req) for the server endpoint, and a
 // component uses connectWS() to talk to it. WebSockets are inherently JS-only
 // (there is no no-JS fallback for a live socket), so the component degrades to a

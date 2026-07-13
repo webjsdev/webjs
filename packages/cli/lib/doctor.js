@@ -841,43 +841,7 @@ async function checkElisionCarriers(appDir) {
     message:
       `${report.shipped.length} page/layout module(s) ship to the browser instead of being elided:\n` +
       lines.map((l) => `    ${l}`).join('\n'),
-    fix: 'Move the client work out of the page/layout closure (into a component, or a .server module reached through an action) so the carrier can be elided, or accept that it ships. See agent-docs/components.md.',
-  };
-}
-
-/**
- * ADVISORY: the delivered app still rides the scaffold shell. AGENTS.md /
- * CONVENTIONS.md item 6 asks a UI app to own its design (layout, palette,
- * typography, chrome); the scaffold is a teaching artifact, not a starting
- * design. WARN-level and never a hard fail: a reading column or a theme toggle
- * CAN be a legitimate choice, so this nudges, it does not gate. The signal is
- * objective (distinctive scaffold-authored chrome strings still present in the
- * root layout), not a judgment of taste. Two or more tells is the threshold.
- * @param {string} appDir
- * @returns {Promise<DoctorResult>}
- */
-async function checkScaffoldDesign(appDir) {
-  const name = 'App design (own design, not the scaffold shell)';
-  let layoutSrc = '';
-  for (const ext of ['ts', 'js', 'mts', 'mjs']) {
-    const p = join(appDir, 'app', `layout.${ext}`);
-    if (existsSync(p)) { layoutSrc = await readFile(p, 'utf8').catch(() => ''); break; }
-  }
-  if (!layoutSrc) {
-    return { name, status: 'pass', message: 'no app/layout to analyse' };
-  }
-  const { scaffoldShellTells } = await import('./design-bar.js');
-  const tells = scaffoldShellTells(layoutSrc);
-  if (tells.length < 2) {
-    return { name, status: 'pass', message: 'app/layout does not look like the unmodified scaffold shell' };
-  }
-  return {
-    name,
-    status: 'warn',
-    message:
-      `app/layout still carries ${tells.length} scaffold design signal(s): ${tells.join(', ')}. ` +
-      'A delivered UI app should own its design (layout AND palette), not adapt the scaffold.',
-    fix: 'Design the app\'s own layout, palette, typography, and chrome from what the app IS (a centered board, a full-bleed dashboard, ...), not the scaffold\'s exact 760px reading column, its "Built with webjs" attribution footer, or the unmodified starter palette values (the theme-toggle and --header-h are keep-infrastructure). Recoloring the scaffold is not a redesign. Render the app and look at it. See AGENTS.md / CONVENTIONS.md item 6.',
+    fix: 'Move the client work out of the page/layout closure (into a component, or a .server module reached through an action) so the carrier can be elided, or accept that it ships. See references/components.md in the skill.',
   };
 }
 
@@ -1054,7 +1018,6 @@ export async function runDoctorChecks(appDir, opts = {}) {
     checkImportmapCoherence(appDir, opts),
     Promise.resolve(checkGitHook(appDir)),
     checkElisionCarriers(appDir),
-    checkScaffoldDesign(appDir),
     checkStaticAssetFreshness(appDir),
   ]);
   return results;

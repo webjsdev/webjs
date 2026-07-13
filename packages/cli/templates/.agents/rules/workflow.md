@@ -1,287 +1,77 @@
-# Antigravity Workspace Rules: webjs app
+# Workspace workflow rules: WebJs app
 
-You are working on a webjs app, an AI-first, no-build, web-components-first
-framework. Read AGENTS.md for the full API reference and CONVENTIONS.md for
-project-specific conventions before writing any code. When AGENTS.md does not
-cover what you need, the full hosted docs are at **https://docs.webjs.dev**.
+You are working on a WebJs app (AI-first, no-build, web-components-first). This
+file is the WORKFLOW contract (git, tests, review). For HOW to build (routing,
+components, actions, styling, the framework API), read
+`.agents/skills/webjs/SKILL.md`, which routes to focused references on demand.
+Read `AGENTS.md` first. Full hosted docs are at https://docs.webjs.dev.
 
-## Persistence + scaffold rules (non-negotiable)
+## Grow the app in place (non-negotiable)
 
-- **Use Drizzle + SQLite for data, never JSON files.** It is already wired up
-  (`db/schema.server.ts`, `db/connection.server.ts`, `npm run db:generate` + `npm run db:migrate`). For
-  ANY data the app stores (todos, posts, messages, products, comments), define
-  a Drizzle table. NEVER create `data/*.json`, `db.json`, or any JSON file as a
-  fake database. NEVER use module-scope arrays / Maps as a substitute. NEVER
-  use localStorage for app data. These are project conventions in
-  CONVENTIONS.md (a JSON file used as a database resets on reload and
-  cannot scale).
-- **The scaffold is reference, not the final product.** Replace `app/page.ts`,
-  the example `User` model, the example users module, etc. with the app the
-  user actually asked for. Do not ship "Hello from <app-name>" as the
-  deliverable.
-- **Study the gallery first, prune it second.** The full-stack and saas scaffolds
-  ship single-feature demos under `app/features/` plus one whole example app under
-  `app/examples/` (logic in `modules/`). It is your PRIMARY webjs reference: read
-  every demo end to end (code AND comments) to learn the idioms BEFORE you write
-  or delete anything. Only after internalising the patterns should you prune,
-  keeping and adapting what you need and deleting the rest (the
-  `app/features/<name>` or `app/examples/<name>` route AND its `modules/<name>`;
-  for the todo app, also the `todos` table). Never delete blindly up front. Each
-  route page has a `webjs-scaffold-placeholder` marker so `webjs check` fails
-  until you resolve it. Delete now-empty directories after pruning. The `api`
-  template ships a BACKEND-features showcase instead (endpoints under
-  `app/api/features/`: the `route()` adapter + validation, rate limiting,
-  streaming, file storage, WebSockets + broadcast, plus `env.ts` validation),
-  listed in the root `app/route.ts` index; prune it the same way.
-- **Prune what the app does not use.** Keep the infrastructure the app USES
-  and delete the rest (files AND folders). No persistence means delete `db/`,
-  `drizzle.config.ts`, and the `db:*` scripts. No UI kit used means delete
-  `components/ui/`, `components.json`, and `lib/utils/cn.ts`. No PWA means
-  delete `public/sw.js` and `offline.html`. Always KEEP the durable knowledge
-  (`AGENTS.md`, `CONVENTIONS.md`, the rule files, the MCP), never prune it, so
-  removing example code never removes your context. Prune AFTER using the
-  features and examples as reference, never blindly up front. A no-op for the `api` template
-  (no UI kit, no PWA files).
+- **The scaffold is a starting point with a browsable feature gallery.** It ships
+  a gallery index home, a root layout, a database wired up, and single-concept
+  demos under `app/features/` plus the `app/examples/todo` app (logic in
+  `modules/`). The gallery is reference, not part of your product. **Building a
+  real app? Learn from the gallery FIRST, then clear it, then build:** (1) skim
+  the demos relevant to your task under `app/features/<x>` for the runnable idiom
+  (the skill teaches the same and SURVIVES the clear, so you never lose it);
+  (2) run `npm run gallery:clear` to shed the whole gallery in one step (it keeps
+  the agent skill, the layout, and the database wiring, and resets the home);
+  (3) regenerate the database and grow the app in place under `app/`,
+  `components/`, and `modules/<feature>/`. Keep the gallery only while exploring,
+  never ship it.
+- **Use the wired-up database (Drizzle), never JSON files.** For any data the app
+  stores, define a Drizzle table in `db/schema.server.ts`, then
+  `npm run db:generate` and `npm run db:migrate`. Never use a JSON file, a
+  module-scope array or Map, or localStorage as a database.
 - **`app/` is routing-only.** Only routing files live in `app/` (page, layout,
-  route, middleware, metadata routes). CSS, helpers, and constants do NOT:
-  `globals.css` is at `styles/`, browser-safe helpers at `lib/utils/`, feature
-  logic in `modules/`.
-- **Use a unique design, and redesign means more than recolor (UI apps).** Give
-  the app a design of its own (palette, typography, LAYOUT, and chrome) chosen
-  from what the app IS. `app/layout.ts` ships as a MINIMAL shell (theme, design
-  tokens, and Tailwind infra, then `${children}` in a bare padded container) with
-  NO header, nav, footer, or reading column: design the app's own chrome from
-  scratch. Decide whether it needs a header at all, a nav (or none), a footer, a
-  sidebar, a centered reading column, or a full-bleed canvas, from what fits the
-  app. `LAYOUT-REFERENCE.md` at the project root is a complete worked layout to
-  learn the patterns from, then build your own. Two `webjs-scaffold-placeholder`
-  markers gate `webjs check`: the minimal shell ("design your layout from
-  scratch") and the palette block ("own the colors"), so check fails until each
-  is addressed. Keep the design TOKENS and theme wiring in `app/layout.ts`
-  (infrastructure the ui kit reads) and set the token VALUES to your own palette;
-  run `webjs check --clear-placeholders` to keep the starter palette
-  deliberately. Style with Tailwind utilities wherever they reach, and use custom
-  CSS only for what utilities cannot express (@theme tokens, @keyframes,
-  scrollbar, complex color-mix or gradients). The `api` template has no UI, so
-  this does not apply there.
-- **Render the app and LOOK before you call UI work done (every agent, not just one harness).**
-  You write CSS blind, so a layout or design defect ships silently: `webjs check`
-  and `webjs typecheck` pass even when a component collapses, grid cells are
-  uneven, the layout resizes as it fills, or the app just kept the scaffold's
-  colors. Static tools give no failure signal for this. The only thing that
-  catches it is rendering the app and looking at the pixels. So for ANY page,
-  layout, or component work: run it (`webjs dev`), open every route you changed in
-  a real browser (drive it with your harness's browser tool or MCP if it has one,
-  otherwise open it yourself and screenshot), and PLAY THROUGH every state (empty,
-  filled, win, draw, reload, narrow and wide, light and dark). Confirm nothing
-  collapses or reflows, that cells stay equal, that the design is the app's OWN,
-  and that both themes read. Ship a real-browser test (`webjs test --browser`) for
-  the mechanical floor (measure `getBoundingClientRect()` and assert cells stay
-  equal across a move). Fix and re-render until it holds, then state in your final
-  message what you rendered and confirmed. Claude Code additionally ENFORCES this
-  via the `webjs-design-review` skill plus a Stop hook, but the discipline is
-  harness-agnostic and this rule is the source of truth for every agent.
-- **Only three templates exist:** `webjs create <name>` (default full-stack),
-  `--template api`, `--template saas`. The CLI rejects any other `--template`
-  value. Pick:
-  - Any product UI (todo, blog, dashboard, marketplace, social) goes through
-    the default template.
-  - HTTP/JSON API only, no UI, uses `--template api`.
-  - Auth / login / signup / SaaS uses `--template saas`.
+  route, middleware, metadata routes). Browser-safe helpers go in `lib/utils/`,
+  feature logic in `modules/`, server-only code behind `.server.ts`.
+- **Give a UI app its own design.** Set the design-token values in `app/layout.ts`
+  to a palette that fits the app. Render the app and LOOK before calling UI work
+  done: `webjs check` and `webjs typecheck` pass even when a layout collapses, so
+  open every route you changed in a real browser and play through its states.
 
 ## Before starting ANY work
 
-FIRST, before writing any code:
-1. Check `git branch --show-current`.
-   - If on main/master: create a feature branch before editing.
-   - If on a feature branch: verify it matches the current task.
-2. Sync: `git fetch origin && git rebase origin/main` if behind.
-3. If more than one agent may work this repo at once, use a DEDICATED git
-   worktree per task (`git worktree add -b <branch> ../<repo>-<slug> origin/main`,
-   `cd` in, work there, `git worktree remove` after merge), never a shared
-   checkout. Two agents in one directory collide: a `git checkout` in one moves
-   HEAD under the other, so commits land on the wrong branch. Git enforces
-   one-branch-per-worktree, so worktrees prevent it. A lone agent in a clean
-   checkout may use a plain branch.
+1. Check `git branch --show-current`. If on main or master, create a feature
+   branch before editing. If on a feature branch, verify it matches the task.
+2. Sync: `git fetch origin` and `git rebase origin/main` if behind.
+3. If more than one agent may work this repo at once, use a DEDICATED git worktree
+   per task (`git worktree add -b <branch> ../<repo>-<slug> origin/main`, work
+   there, `git worktree remove` after merge), never a shared checkout. Two agents
+   in one directory collide: a `git checkout` in one moves HEAD under the other,
+   so commits land on the wrong branch.
 
-## Autonomous mode (sandbox / no-prompt)
+## Every code change
 
-If running without interactive approval, auto-decide:
-- On main? Auto-create feature/<task-slug> branch.
-- Parent behind? Auto-rebase. Merge? Auto-merge + delete feature branches.
-- Auto-generate commit messages. Fix failing tests and violations.
-Quality bar stays the same, no blocking on questions.
-
-## Mandatory workflow (never skip)
-
-Every code change must include:
 1. Server tests in `test/<feature>/*.test.ts` (node:test).
-2. Browser tests in `test/<feature>/browser/*.test.js` (WTR + Playwright, real Chromium).
-3. Documentation updates. Walk every surface in the **Definition of done**
-   section of CONVENTIONS.md (AGENTS.md, CONVENTIONS.md, README.md, docs/,
-   website/, scaffold scripts) and either update it or write
-   "N/A because <reason>" in the PR body. Docs land on the same PR as the
-   code, never as a follow-up.
-4. Convention check: `webjs check` must pass.
-5. Pre-merge self-review loop. Before saying the PR is ready for merge, run
-   fresh-context review rounds until one round finds zero issues. Antigravity
-   primitive: open a new Cascade thread or a fresh side-panel session for
-   each round so the reviewer has no prior context on the implementation
-   decisions. Minimum two rounds; rotate focus each round. Skip the loop
-   only for one-line trivial changes; skipping on a change that touches
-   logic, public surface, build, security, or multiple files is the exact
-   failure mode the loop exists to prevent. The full rule, prompt template,
-   and reporting contract live in the **Pre-merge self-review loop** section
-   of CONVENTIONS.md.
-
-The user should never have to ask for tests, documentation, or the
-self-review loop.
+2. Browser tests in `test/<feature>/browser/*.test.js` for hydration, DOM, slots,
+   and the client router.
+3. Documentation stays in sync on the SAME PR as the code, never a follow-up.
+4. `webjs check` must pass.
+5. Pre-merge self-review: before saying a PR is ready, run fresh-context review
+   rounds until one round finds zero issues (minimum two rounds, rotate focus).
+   Skip only for a one-line trivial change.
 
 ## Git rules
 
-- COMMIT AND PUSH PER LOGICAL UNIT, NOT AT THE END. One feature, one fix, one
-  rename, one doc rewrite per commit. Always `git push` after committing.
-  The user should never have to ask for a commit.
-- HARD LIMIT: if you have 5+ unstaged files spanning different concerns,
-  commit before continuing. The Claude Code hook at
-  `.claude/hooks/nudge-uncommitted.sh` fires at threshold 4. Antigravity
-  users should self-enforce the same rule. Batching multiple logical units
-  into one commit is the failure mode this rule exists to prevent.
+- Commit and push per logical unit (one feature, one fix, one rename, one doc
+  rewrite), not at the end. Push after every commit.
+- If you have 5 or more unstaged files spanning different concerns, commit before
+  continuing.
 - Meaningful commit messages: what changed and why.
-- NEVER add Co-Authored-By or AI attribution trailers to commits.
-- NEVER use em-dashes (U+2014), a hyphen-as-pause (` - `), or a
-  semicolon-as-pause (` ; `) in commit messages or anywhere else. Rewrite the
-  sentence so no pause-punctuation crutch is needed. Use a period, comma,
-  colon, parentheses, or a restructured phrasing. Plain hyphens stay fine in
-  compound words, CLI flags, filenames, and ranges. Semicolons stay fine
-  inside code.
-- Work on feature branches, never push directly to main.
-- Create pull requests for review.
-- NEVER merge any branch without explicit user permission. Always ask:
-  "Ready to merge <branch> into <target>? Delete or keep <branch> after?"
-  Wait for approval AND the delete/keep preference. Applies to ALL merges.
-- Run `webjs test` before every commit.
+- Never add Co-Authored-By or AI-attribution trailers.
+- Never use an em-dash (U+2014), a space-surrounded hyphen as a pause, or a
+  space-surrounded semicolon as a pause, in commit messages or anywhere. Use a
+  period, comma, colon, parentheses, or a restructured phrasing.
+- Work on feature branches, never push directly to main. Open pull requests for
+  review. Never merge without explicit user permission (ask which target, and
+  whether to delete or keep the branch, then wait for both answers).
 
-## Framework rules
+## Autonomous mode (sandbox / no-prompt)
 
-- No build step: ES modules served directly.
-- **Erasable TypeScript only.** The runtime (Node 24+ or Bun) strips types via
-  `module.stripTypeScriptTypes` (whitespace replacement, byte-exact position
-  preservation, no sourcemap). The scaffold's `tsconfig.json` sets
-  `erasableSyntaxOnly: true`, so the TS compiler rejects `enum`, `namespace`
-  with values, constructor parameter properties, legacy decorators with
-  `emitDecoratorMetadata`, and `import = require`. Use erasable equivalents:
-  `const X = { ... } as const` plus a derived union type instead of `enum`;
-  explicit fields plus constructor body assignments instead of parameter
-  properties. If `erasableSyntaxOnly` is disabled and non-erasable syntax is
-  used, the dev server fails at strip time and returns a 500 pointing at the
-  `no-non-erasable-typescript` lint rule. WebJs is buildless end-to-end and
-  has no bundler fallback.
-- Web components render into light DOM by default (so Tailwind / global CSS
-  apply directly). Opt in to shadow DOM per component with
-  `static shadow = true` when you need scoped styles (via
-  `static styles = css\`...\``) or third-party-embed isolation. `<slot>`
-  projection works identically in both modes (named slots, fallback content,
-  `assignedNodes` / `slotchange`, first-wins resolution).
-- **Tailwind-first styling.** Tailwind utilities are the strong default for
-  pages AND light-DOM components: layout, spacing, color (via `@theme`
-  tokens), typography, borders, radius, shadows, interaction states. Light
-  DOM does not scope, so utilities apply directly. The lit reflex to scope
-  CSS (`static styles = css\`...\``) or write an inline `<style>` with
-  semantic class names (`.hero`, `.card`) in a light-DOM component is wrong:
-  the scoped block needs `static shadow = true`, and inline class names leak
-  globally. When a utility bundle repeats, extract a `lib/utils/ui.ts` helper
-  returning an `` html`...` `` fragment, not a CSS class. Reserve raw CSS for
-  the allowlist (design tokens / `@theme`, `@property` + `@keyframes`,
-  `::-webkit-scrollbar`, `prefers-reduced-motion`, complex `color-mix()` /
-  gradients); when unavoidable in a light-DOM component, prefix every class
-  selector with the component tag. Shadow-DOM components legitimately use
-  `static styles = css\`...\`` for scoped CSS.
-- **One theme, canonical tokens.** The app has a SINGLE theme, defined once in
-  `app/layout.ts` using the standard `@webjsdev/ui` (shadcn-compatible)
-  semantic tokens set to the brand palette. Use the canonical utility names
-  everywhere, in the page chrome AND inside components: `bg-background`,
-  `text-foreground`, `bg-card`, `bg-muted`, `text-muted-foreground`,
-  `bg-primary`, `text-primary-foreground`, `bg-accent`, `text-accent-foreground`,
-  `border-border`, `ring-ring`. These are exactly the tokens a component copied
-  in by `webjs ui add <name>` reads, so a scaffolded page and a later-added ui
-  component share one theme with no wiring. NEVER invent a parallel token
-  vocabulary (`--fg`, `--bg`, `text-fg`, `bg-elev`, a separate `--brand`): it
-  collides with the ui tokens (the accent once flipped to neutral on navigation
-  for exactly this reason) and diverges from the shadcn conventions the kit and
-  AI agents expect. Reach for opacity modifiers (`bg-primary/10`,
-  `hover:bg-primary/90`) before adding a token; add one the canonical way (a
-  `--x` var plus a `--color-x: var(--x)` line in `@theme inline`).
-- Custom-element tag names are passed to `.register('tag-name')`. They are NOT
-  a static field on the class.
-- **Never extend raw HTMLElement directly for app components.** Always subclass `WebComponent` (or the factory form `WebComponent({...})`) to hook into SSR, lifecycle, elision, and the reactive property system. Extend raw HTMLElement only for rare native-API edge cases (like form-associated `ElementInternals` or customized built-in elements), and add a `webjs-allow-htmlelement: <reason>` comment to acknowledge the exception.
-- One function per server action file (`*.server.ts`).
-- **`.server.ts` vs `'use server'`, the decision.** Will the client call it?
-  Add `'use server'` and the file becomes an RPC action (browser import
-  rewritten to a typed stub). Is it server-only infra instead (a DB driver,
-  secrets, `node:*`)? Use NO directive, and NEVER import it into a
-  page/layout/component. Reach it from a `'use server'` action, `route.ts`, or
-  `middleware.ts`. A `.server.ts` WITHOUT the directive is a server-only utility
-  whose browser import throws at module load.
-- **Label every interactive control.** Give each control an accessible name, and
-  make clickable text a `<label for="control-id">` (or the control itself) so a
-  text click activates the control on BOTH the JS path and the no-JS
-  form-submit path. Use `aria-label` and `aria-pressed` on icon-only controls.
-  `assertNoA11yViolations(el)` in a browser test catches missing labels.
-- Server-only code (a DB driver like `pg`, `node:*`, anything that needs Node APIs)
-  goes only in `.server.{js,ts}` files, `route.ts` handlers, or
-  `middleware.ts`. Never in pages, layouts, or components. Wrap the access in
-  a `.server.{js,ts}` file; the framework rewrites that import into an RPC
-  stub for the browser. `lib/` holds both server-only infra
-  (the DB in `db/*.server.ts`) and browser-safe utilities (`lib/utils/cn.ts` with
-  `cn`); follow the same rule per file. A TYPE-ONLY `import type { Todo } from
-  '#db/schema.server.ts'` is the exception, fine in a page or component because
-  the stripper erases it before it reaches the browser.
-- Keep pages and layouts as pure carriers so their modules stay out of the
-  network tab. A page/layout never hydrates; the framework drops its module
-  from the browser as long as its only browser job is registering the
-  components it imports. It starts shipping its own module (invisible in tests,
-  an elision verdict) the moment its closure does any OTHER client work. So do
-  not give a page/layout module-scope client work (a top-level call, a
-  `window` / `document` / `customElements` access, a bare side-effect import,
-  or a `@webjsdev/core/client-router` import: routing is automatic), and do not
-  import a client-global-touching non-component util into it. Put client
-  behaviour in a component, server-only code in `.server.{js,ts}`. Self-check:
-  `page.ts` / `layout.ts` should not appear in the browser's network tab.
-- Directives: webjs exports the lit directives with no clean native equivalent
-  (`repeat`, `unsafeHTML`, `live`, `keyed`, `guard`, `cache`, `until`, `ref` /
-  `createRef`, `templateContent`, `asyncAppend` / `asyncReplace`, `watch`).
-  `classMap` / `styleMap` / `ifDefined` / `when` / `choose` are NOT exported.
-  For those, use plain template-literal expressions
-  (`class=${active ? 'btn active' : 'btn'}`, `style=${'color:' + color}`,
-  `${cond ? a : b}`) and lifecycle hooks (`this.query('#el')` in
-  `firstUpdated`) instead of Lit's `classMap` / `styleMap` / `ref` / `when` /
-  `choose` / `guard`.
-- Use Context for cross-component data. For async data in a component, prefer
-  an `async render()` (`const u = await getUser(this.uid)`, awaited at SSR so
-  the data is in the first paint); keep `Task` for genuinely client-only data.
-- **Progressive enhancement is the default.** Pages AND every web component
-  are SSR'd to real HTML. Write components so the first paint is the right
-  content. Read SSR-meaningful defaults in `constructor()`. `connectedCallback`
-  is never called on the server, so anything there only runs after
-  hydration. Initial data for components comes from the page function
-  (server-side fetch plus pass as attribute/property) OR from an `async
-  render()` in the component itself (preferred over prop-drilling;
-  `renderFallback()` is the optional re-fetch loading state, never first
-  paint), NOT from `fetch` calls in `connectedCallback`. For write-paths, prefer `<form action=...>` plus
-  server action over `fetch` plus click handler. The framework upgrades plain
-  forms to partial-swap submissions automatically.
-- **Default to optimistic UI for feasible mutations.** Use `optimistic()` from
-  `@webjsdev/core` for create/toggle/like/reorder so the UI updates instantly
-  and rolls back on failure (no hand-written try-catch or temp-id bookkeeping).
-  Do NOT use it where it hurts: unpredictable or server-computed results,
-  side-effectful or OAuth/payment mutations, and destructive irreversible
-  actions (confirm-first instead).
-- **Client navigation is auto-magic.** Real `<a href>` and `<form action>`
-  get partial-swap behavior with no opt-in. Because layouts persist across
-  navigation, put shared chrome (sidenav, header) in `layout.ts` and
-  page-specific content in `page.ts`. For validation errors, return 4xx HTML
-  from a `route.ts` POST handler; the router renders it in place preserving
-  the user's input. For non-layout swap regions, wrap in `<webjs-frame id="...">`. See "Client
-  navigation patterns" in AGENTS.md.
-- Full API reference in AGENTS.md.
+If running without interactive approval, auto-decide: on main, auto-create a
+`feature/<task-slug>` branch; auto-rebase if the parent moved; auto-generate
+commit messages; fix failing tests and check violations rather than asking. The
+quality bar stays the same. Only merging into main is gated on user permission.

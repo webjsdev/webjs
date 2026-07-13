@@ -1,4 +1,3 @@
-// webjs-scaffold-placeholder. Feature gallery route. Keep and adapt it, or prune it (delete this app/features/route-handler route, including its data/route.ts handler), then delete this marker line. webjs check fails while the marker remains.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
 import '#modules/route-handler/components/rich-data.ts';

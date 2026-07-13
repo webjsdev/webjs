@@ -1,4 +1,3 @@
-// webjs-scaffold-placeholder. Feature gallery route. Keep and adapt it, or prune it (delete this app/features/file-storage route AND modules/file-storage), then delete this marker line. webjs check fails while the marker remains.
 // File storage: a no-JS upload. A multipart <form> posts to this page's `action`
 // (the progressive-enhancement write path); the action calls a 'use server'
 // helper that streams the bytes into the FileStore. On success it redirects

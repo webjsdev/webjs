@@ -1,4 +1,3 @@
-// webjs-scaffold-placeholder. Feature gallery route. Keep and adapt it, or prune it (delete this app/features/boundaries route), then delete this marker line. webjs check fails while the marker remains.
 // Boundaries: the four control-flow throws and their boundary files. A page (or
 // a page `action`) can THROW to short-circuit rendering, and the framework
 // renders the NEAREST matching boundary file in the route's ancestor chain

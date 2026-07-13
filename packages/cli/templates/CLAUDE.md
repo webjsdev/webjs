@@ -1,5 +1,4 @@
 @AGENTS.md
-@CONVENTIONS.md
 
 # Committing per logical unit (this OVERRIDES Claude Code's default)
 

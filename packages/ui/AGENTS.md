@@ -330,7 +330,7 @@ Real-browser tests for the kit live under
 `packages/ui/test/components/browser/`
 (`ui-overlay.test.js`, `ui-stateful.test.js`) and run via the
 top-level `npm run test:browser`. See
-[`../../agent-docs/testing.md`](../../agent-docs/testing.md) for
+[`references/testing.md`](../../.agents/skills/webjs/references/testing.md) for
 the overall layout.
 
 ## Building / running

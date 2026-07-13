@@ -1,4 +1,3 @@
-// webjs-scaffold-placeholder. Feature gallery route. Keep and adapt it, or prune it (delete this app/features/rate-limit route AND modules/rate-limit), then delete this marker line. webjs check fails while the marker remains.
 // Rate limiting: rateLimit() from '@webjsdev/server' is a middleware. It lives in
 // a middleware.ts scoped to the endpoint it protects (here app/features/
 // rate-limit/ping/middleware.ts, so it limits /features/rate-limit/ping WITHOUT

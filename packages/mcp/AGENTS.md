@@ -46,10 +46,10 @@ src/
                          `deps` / `docsDeps` / `sourceDeps` are injectable for
                          in-process tests.
   mcp-docs.js            KNOWLEDGE layer (#376): resolveDocsLocation (bundled
-                         resources/ first, repo-root agent-docs fallback in
+                         resources/ first, repo-root skill fallback in
                          dev), the init primer (sources the AGENTS.md
                          execution-model + invariants so it cannot drift), the
-                         docs tool, resources (the agent-docs corpus + AGENTS.md
+                         docs tool, resources (the skill references + SKILL.md + AGENTS.md
                          as webjs-docs://*), and the recipe PROMPTS.
   mcp-source.js          SOURCE tool (#378): reads the framework's own no-build
                          source from node_modules/@webjsdev/*/src (read-only,
@@ -61,7 +61,7 @@ src/
                          and `webjs check --json` (the CLI imports it from
                          `@webjsdev/mcp/check-report`), so the two are identical.
 scripts/
-  copy-mcp-resources.js  prepack: bundle the repo-root agent-docs/ + AGENTS.md
+  copy-mcp-resources.js  prepack: bundle the repo-root skill (references + SKILL.md) + AGENTS.md
                          into resources/ (in `files`) so npx is self-contained.
                          Exports the reusable bundleDocs(...).
   clean-mcp-resources.js postpack: remove the transient resources/ bundle so dev

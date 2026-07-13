@@ -1,6 +1,6 @@
 ---
 name: webjs-doc-sync
-description: Use this skill whenever a change ships a user-facing or agent-facing surface (a new export, CLI flag, package.json webjs.* config key, html hole prefix, lifecycle hook, convention, or a behaviour change to an already-documented feature) and the docs must be brought in sync, OR when the user asks to find documentation drift / doc gaps / "did we update the docs", audit shipped work for missing docs, or sync the docs surfaces. The skill carries the authoritative map of EVERY doc surface webjs ships and the change-type to surface mapping, so no surface (the docs site, the marketing website, agent-docs, README, AGENTS.md, the scaffold templates' per-agent rule files) is silently skipped.
+description: Use this skill whenever a change ships a user-facing or agent-facing surface (a new export, CLI flag, package.json webjs.* config key, html hole prefix, lifecycle hook, convention, or a behaviour change to an already-documented feature) and the docs must be brought in sync, OR when the user asks to find documentation drift / doc gaps / "did we update the docs", audit shipped work for missing docs, or sync the docs surfaces. The skill carries the authoritative map of EVERY doc surface webjs ships and the change-type to surface mapping, so no surface (the docs site, the marketing website, the skill at `.agents/skills/webjs/`, README, AGENTS.md, the scaffold templates' per-agent rule files) is silently skipped.
 when_to_use: |
   Examples that should trigger this skill:
     "we added HTTP verbs for server actions but never updated the docs"
@@ -33,12 +33,14 @@ work for drift and file follow-ups).
 Treat this list as the universe. For any change, decide per surface whether it
 applies, then update or consciously skip each.
 
-1. **`AGENTS.md`** (repo root) plus **`agent-docs/*.md`** (the 12 deep-reference
-   files: `metadata`, `components`, `styling`, `built-ins`, `configuration`,
-   `advanced`, `typescript`, `service-worker`, `testing`, `framework-dev`,
-   `recipes`, `lit-muscle-memory-gotchas`). `AGENTS.md` stays lean and points at
-   the matching `agent-docs/<x>.md` for the full reference. A new public API goes
-   in BOTH the `AGENTS.md` summary and the relevant `agent-docs` file.
+1. **`AGENTS.md`** (repo root) plus the skill at **`.agents/skills/webjs/`**
+   (SKILL.md plus its 13 `references/`: `routing-and-pages`, `components`,
+   `data-and-actions`, `auth-and-sessions`, `styling`,
+   `client-router-and-streaming`, `optimistic-ui`, `typescript`, `testing`,
+   `built-ins`, `runtime`, `service-worker`, `muscle-memory-gotchas`).
+   `AGENTS.md` stays lean and points at the matching `references/<x>.md` for the
+   full reference. A new public API goes in BOTH the `AGENTS.md` summary and the
+   relevant `references/` file.
 2. **`README.md`** (repo root). Update when a headline capability changes (the
    feature list, the quickstart, the runtime/template matrix).
 3. **The docs site: `docs/app/docs/<topic>/page.tsx`.** This is the
@@ -53,19 +55,18 @@ applies, then update or consciously skip each.
    auto-generated from conventional PR titles, so NEVER hand-write it; the blog is
    manual.
 5. **The scaffold templates: `packages/cli/templates/`.** Every new app ships
-   these, so a change to how apps are AUTHORED must propagate here:
-   `AGENTS.md`, `CLAUDE.md`, `CONVENTIONS.md`, `.cursorrules`,
-   `.github/copilot-instructions.md`, `.agents/rules/workflow.md`, and the
-   `.gemini` / `.opencode` / `.claude` rule files. These per-agent files all carry
-   the SAME rules in each agent's format; a workflow/convention change must land in
-   ALL of them in lockstep (the #134 / #136 divergence lesson). The CLI help text
-   in `packages/cli/` is part of this surface for a new command or flag. When the
-   change is to what `webjs create` GENERATES (a gallery/showcase demo, a
-   template, the generated layout/home/theme/schema, a scaffold convention),
-   this surface has more parts (the `packages/cli/lib/*` generators, the scaffold
-   tests, the framework template-matrix docs, the preview apps) and a mandatory
-   "generate + boot + check" step: use the dedicated **`webjs-scaffold-sync`**
-   skill for those, and treat this doc-sync entry as the docs-only slice.
+   these. The scaffold is single-source: `AGENTS.md` (a thin pointer) plus the one
+   cross-agent skill at `.agents/skills/webjs/` (SKILL.md + `references/`) that
+   every tool reads. There are no per-agent rule files to keep in lockstep. A
+   change to how apps are AUTHORED lands in the skill. When the change is to what
+   `webjs create` GENERATES (a gallery/showcase demo, a template, the generated
+   layout/home/theme/schema, a scaffold convention), this surface has more parts
+   (the `packages/cli/lib/*` generators, the `packages/cli/templates/gallery/**`
+   demos, the scaffold tests, the framework template-matrix docs, the preview
+   apps) and a mandatory `generate + boot + webjs check` step: use the dedicated
+   **`webjs-scaffold-sync`** skill for those, and treat this doc-sync entry as the
+   docs-only slice. The CLI help text in `packages/cli/` is part of this surface
+   for a new command or flag.
 6. **Example / dogfood apps** (`examples/blog/CONVENTIONS.md` and friends). Update
    when a convention the example demonstrates changes.
 
@@ -73,10 +74,10 @@ applies, then update or consciously skip each.
 
 | Change | Surfaces that MUST be checked |
 |---|---|
-| New / changed public export (`@webjsdev/core` or `/server`), `html` hole prefix, lifecycle hook | AGENTS.md + matching `agent-docs/*.md` + docs site topic page + README if headline |
+| New / changed public export (`@webjsdev/core` or `/server`), `html` hole prefix, lifecycle hook | AGENTS.md + matching `references/*.md` in the skill + docs site topic page + README if headline |
 | New / changed CLI command or flag | AGENTS.md CLI reference + docs site page + README + the CLI `--help` text in `packages/cli/` |
-| New `package.json` `webjs.*` config key | AGENTS.md configuration section + `agent-docs/configuration.md` + docs site `configuration` page + `WebjsConfig` type + the JSON Schema |
-| New convention or agent workflow rule | AGENTS.md + repo `CONVENTIONS.md` (if added) + ALL scaffold per-agent rule files in lockstep + `agent-docs` if relevant |
+| New `package.json` `webjs.*` config key | AGENTS.md configuration section + the skill's `references/built-ins.md` + docs site `configuration` page + `WebjsConfig` type + the JSON Schema |
+| New convention or agent workflow rule | AGENTS.md + repo `CONVENTIONS.md` (if added) + ALL scaffold per-agent rule files in lockstep + the skill's `references/` if relevant |
 | Behaviour change to an already-documented feature | EVERY surface that describes the old behaviour (grep the feature's tokens across all surfaces below) |
 | New file convention (`*.server.ts`, a routing file) | AGENTS.md file-conventions + docs site `routing` / relevant page + scaffold templates |
 | Pure internal (refactor, CI, release, test, perf with no behaviour change) | NONE. Consciously record that no doc surface applies. |
@@ -89,7 +90,7 @@ applies, then update or consciously skip each.
    be) described:
    ```sh
    git grep -n -iE '<token1>|<token2>' -- \
-     AGENTS.md 'agent-docs/**' README.md 'docs/app/docs/**' \
+     AGENTS.md '.agents/skills/webjs/**' README.md 'docs/app/docs/**' \
      'website/**' 'packages/cli/templates/**' 'examples/**/CONVENTIONS.md'
    ```
 3. For each surface in the mapping that applies, update it. For a behaviour

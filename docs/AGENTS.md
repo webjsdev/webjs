@@ -52,7 +52,7 @@ automatically):
 | URL | What it serves |
 |---|---|
 | `/llms.txt` | A structured INDEX. An `# WebJs documentation` H1, a one-line blurb, then a markdown bullet list of every doc page (title, blurb, absolute link). Ordered to match the sidebar nav. |
-| `/llms-full.txt` | The full prose CORPUS. Every doc page concatenated as lightweight markdown. In the monorepo it also folds in `agent-docs/*.md`; a standalone deploy that lacks the repo root simply skips that (try/catch read). |
+| `/llms-full.txt` | The full prose CORPUS. Every doc page concatenated as lightweight markdown. In the monorepo it also folds in the skill at `.agents/skills/webjs/` (SKILL.md + references/); a standalone deploy that lacks the repo root simply skips that (try/catch read). |
 | `/docs/<topic>/llms.txt` | One page's raw markdown. Every topic gets one via the `app/docs/[topic]/llms.txt/route.ts` dynamic route. |
 
 The generators live in `lib/llms.server.ts` (server-only `.server.ts`

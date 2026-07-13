@@ -132,7 +132,7 @@ fi
 runtime_sensitive=$(printf '%s\n' "$src_touched" | grep -E 'serialize|/json\.js|file-storage|listener|ts-strip|action|render-server|/ssr\.js|conditional-get|websocket|node-version|csrf|/auth\.js|/session\.js|/cors\.js|crypto|compression|body-limit|/dev\.js|stream' || true)
 if [ -n "$runtime_sensitive" ]; then
   rlist=$(printf '%s' "$runtime_sensitive" | tr '\n' ' ')
-  reminder="${reminder}Runtime-sensitive source changed ($rlist). webjs runs on Node AND Bun: run \`node scripts/run-bun-tests.js\` (needs bun installed) plus the test/bun/*.mjs scripts under Bun, and treat any divergence as a real framework bug to fix (not a skip). Add a test/bun/<feature>.mjs cross-runtime script for a new listener/serializer/streaming surface. See agent-docs/testing.md. "
+  reminder="${reminder}Runtime-sensitive source changed ($rlist). webjs runs on Node AND Bun: run \`node scripts/run-bun-tests.js\` (needs bun installed) plus the test/bun/*.mjs scripts under Bun, and treat any divergence as a real framework bug to fix (not a skip). Add a test/bun/<feature>.mjs cross-runtime script for a new listener/serializer/streaming surface. See .agents/skills/webjs/references/testing.md. "
 fi
 
 if [ -n "$reminder" ]; then

@@ -1,4 +1,3 @@
-// webjs-scaffold-placeholder. Feature gallery route. Keep and adapt it, or prune it (delete this app/features/service-worker route), then delete this marker line. webjs check fails while the marker remains.
 // Service worker: opt-in progressive enhancement. webjs does NOT register one by
 // default (an active SW caches aggressively and would confuse dev). You opt in
 // by adding public/sw.js and registering it from a component's connectedCallback

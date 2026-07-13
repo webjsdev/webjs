@@ -1,4 +1,3 @@
-// webjs-scaffold-placeholder. Feature gallery route. Keep and adapt it, or prune it (delete this app/features/caching route), then delete this marker line. webjs check fails while the marker remains.
 // Caching: `export const revalidate = N` opts the page into the server HTML
 // response cache, keyed by URL for N seconds. The rendered timestamp below only
 // changes once per window: reload inside 10s and it is identical, reload after

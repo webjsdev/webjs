@@ -1,4 +1,3 @@
-// webjs-scaffold-placeholder. Feature gallery route. Keep and adapt it, or prune it (delete this app/features/async-render route AND modules/async-render), then delete this marker line. webjs check fails while the marker remains.
 import { html, Suspense } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
 import '#modules/async-render/components/server-clock.ts';

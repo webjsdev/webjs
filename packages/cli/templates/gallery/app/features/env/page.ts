@@ -1,4 +1,3 @@
-// webjs-scaffold-placeholder. Feature gallery route. Keep and adapt it, or prune it (delete this app/features/env route), then delete this marker line. webjs check fails while the marker remains.
 // Environment variables: process.env.X reads are server-only. NODE_ENV is
 // defined on both sides. A name prefixed WEBJS_PUBLIC_ is exposed to the browser
 // through an inline script (no build step); everything else stays server-side

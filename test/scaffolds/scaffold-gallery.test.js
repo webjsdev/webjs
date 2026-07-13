@@ -1,14 +1,14 @@
 /**
  * Verifies the always-on gallery the full-stack scaffold ships (#824 / #821 /
  * #817), organized by KIND so features and whole apps are not mixed:
- *   - app/features/<name>  single-feature demos (one webjs concept each),
+ *   - app/features/<name>  single-feature demos (one WebJs concept each),
  *   - app/examples/<name>  whole example apps that compose several features.
- * Each has its logic in modules/<name>, is linked from the home page, and
- * carries a webjs-scaffold-placeholder marker so `webjs check` fails until an
- * agent keeps-and-adapts or prunes it.
+ * Each has its logic in modules/<name> and is linked from the home page. The
+ * placeholder-marker gate was retired: `npm run gallery:clear` sheds the gallery
+ * in one step instead.
  *
- * Also guards the scoping decision: api has no UI and saas overwrites the schema
- * with its own focused auth example, so the gallery ships in FULL-STACK ONLY.
+ * Also guards the scoping decision: api has no UI, so the gallery ships in every
+ * UI template (full-stack AND saas).
  *
  * The todo query assertion is a regression guard for the rc.3 relational-query
  * orderBy bug (`[desc(col)]` compiles to `no such column: d0.0`); the query must
@@ -87,13 +87,13 @@ test('full-stack scaffold ships feature demos and one example app', async () => 
   }
 });
 
-test('full-stack home page links every feature and the example app, keeps its marker', async () => {
+test('full-stack home page links every feature and the example app', async () => {
   const cwd = await tempCwd();
   try {
     await scaffoldApp('demo', cwd, { template: 'full-stack' });
     const home = await readFile(join(cwd, 'demo', 'app', 'page.ts'), 'utf8');
 
-    assert.match(home, /webjs-scaffold-placeholder/, 'home keeps its placeholder marker');
+    assert.doesNotMatch(home, /webjs-scaffold-placeholder/, 'the placeholder gate was retired');
     for (const name of FEATURES) {
       assert.match(home, new RegExp(`/features/${name}`), `home links /features/${name}`);
     }
@@ -105,18 +105,18 @@ test('full-stack home page links every feature and the example app, keeps its ma
   }
 });
 
-test('every gallery route page carries a webjs-scaffold-placeholder marker', async () => {
+test('no gallery route page carries a scaffold-placeholder marker (gate retired)', async () => {
   const cwd = await tempCwd();
   try {
     await scaffoldApp('demo', cwd, { template: 'full-stack' });
     const appDir = join(cwd, 'demo');
     for (const name of FEATURES) {
       const src = await readFile(join(appDir, 'app', 'features', name, 'page.ts'), 'utf8');
-      assert.match(src, /webjs-scaffold-placeholder/, `app/features/${name} marker`);
+      assert.doesNotMatch(src, /webjs-scaffold-placeholder/, `app/features/${name} has no marker`);
     }
     for (const name of EXAMPLE_APPS) {
       const src = await readFile(join(appDir, 'app', 'examples', name, 'page.ts'), 'utf8');
-      assert.match(src, /webjs-scaffold-placeholder/, `app/examples/${name} marker`);
+      assert.doesNotMatch(src, /webjs-scaffold-placeholder/, `app/examples/${name} has no marker`);
     }
   } finally {
     await rm(cwd, { recursive: true, force: true });

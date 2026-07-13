@@ -1,6 +1,6 @@
 ---
 name: webjs-research-record
-description: Use this skill to record a research, design, or decision investigation on the webjsdev/webjs project. A research/design record is a CLOSED GitHub issue labeled `research` (the durable writeup lives in the issue body plus comments), never a file under `agent-docs/` and never a comment buried on an unrelated PR. Trigger phrases include "research whether X", "investigate X", "evaluate X vs Y", "compare A and B and decide", "design record for Z", "decision record", "write up the design", "spike X", or any natural-language ask whose deliverable is a writeup of a comparison, options, or a decision rather than shipped code.
+description: Use this skill to record a research, design, or decision investigation on the webjsdev/webjs project. A research/design record is a CLOSED GitHub issue labeled `research` (the durable writeup lives in the issue body plus comments), never a file in the framework's reference docs (the skill at `.agents/skills/webjs/`) and never a comment buried on an unrelated PR. Trigger phrases include "research whether X", "investigate X", "evaluate X vs Y", "compare A and B and decide", "design record for Z", "decision record", "write up the design", "spike X", or any natural-language ask whose deliverable is a writeup of a comparison, options, or a decision rather than shipped code.
 when_to_use: |
   Examples that should trigger this skill:
     "research whether we should switch the default ORM"
@@ -15,11 +15,11 @@ when_to_use: |
 
 # Record a research / design investigation as a closed `research` issue
 
-`agent-docs/` exists ONLY to teach AI agents how to USE webjs. It is NOT a home for research write-ups, design records, or decision histories. Polluting it rots its purpose. So a research/design/decision investigation is recorded as a **GitHub issue**, labeled `research`, with the full writeup in the body plus deep-dive comments, then **CLOSED** to keep the record.
+The framework's reference docs (the skill at `.agents/skills/webjs/`) exist ONLY to teach AI agents how to USE WebJs. They are NOT a home for research write-ups, design records, or decision histories. Polluting them rots their purpose. So a research/design/decision investigation is recorded as a **GitHub issue**, labeled `research`, with the full writeup in the body plus deep-dive comments, then **CLOSED** to keep the record.
 
 ## The two mistakes this skill prevents
 
-1. **Do NOT write the record as a file under `agent-docs/`** (no `agent-docs/<topic>-design.md`, no `agent-docs/<topic>-research.md`). That was the #548 cleanup.
+1. **Do NOT write the record as a file in the framework's reference docs** (no `<topic>-design.md` / `<topic>-research.md` committed under the skill at `.agents/skills/webjs/` or any other doc surface). That was the #548 cleanup.
 2. **Do NOT bury the record as a comment on an unrelated PR or issue.** It must be its own labeled `research` issue, or it is not filterable. (This exact mistake happened on #548. The record was first archived as a comment on the cleanup PR #552, then mis-filed as a `research:` PR #559, before the convention settled on a labeled issue at #560.)
 
 ## Why an issue, not a PR
@@ -35,7 +35,7 @@ Research often starts as a planned **backlog item**, an OPEN `research`-labeled 
 3. When research concludes, **close** the issue. The question and its answer now live together, filterable by the label.
 
 So there are two entry points, same destination:
-- **No issue exists yet** (a record being captured after the fact, or relocated out of `agent-docs/`): create the `research`-labeled issue with the writeup, then close it.
+- **No issue exists yet** (a record being captured after the fact, or relocated out of the reference docs): create the `research`-labeled issue with the writeup, then close it.
 - **A backlog research issue already exists**: append findings to it (comments + curated body), then close it. Do not open a PR.
 
 ### The one carve-out where a PR is right
@@ -46,7 +46,7 @@ If the research produced **actual code** worth showing (a throwaway spike or pro
 
 Extract from the user's request:
 - A **title** prefixed `research:` (lowercase), short and descriptive of the question or decision.
-- A **body** capturing the full record: the question/problem, the options compared, the decision and its rationale, and any "what shipped vs what was recommended" reversal. If the record is being relocated out of `agent-docs/`, recover the original file content from git history and preserve it verbatim in the body.
+- A **body** capturing the full record: the question/problem, the options compared, the decision and its rationale, and any "what shipped vs what was recommended" reversal. If the record is being relocated out of the reference docs, recover the original file content from git history and preserve it verbatim in the body.
 - **Deep-dive comments** for threaded detail (key reversals, the motivating bug, cross-references to related issues/PRs).
 
 ## Steps

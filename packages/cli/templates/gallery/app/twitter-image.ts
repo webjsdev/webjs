@@ -1,4 +1,3 @@
-// webjs-scaffold-placeholder. Metadata route. Keep and adapt it, or prune it
 // (delete this file), then delete this marker line. webjs check fails while the
 // marker remains.
 //

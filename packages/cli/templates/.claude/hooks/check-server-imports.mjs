@@ -75,7 +75,7 @@ const msg =
   `A .server.{ts,js} file with NO 'use server' directive throws at load in the browser, ` +
   `so this would crash the page (webjs check flags it as no-server-import-in-browser-module). ` +
   `Fix: add 'use server' to make it an RPC action, or reach it from a 'use server' action / route.ts / ` +
-  `middleware.ts, or share only a type via 'import type'. See agent-docs/types-and-mutations.md.`;
+  `middleware.ts, or share only a type via 'import type'. See the skill's references/data-and-actions.md.`;
 
 if (process.env.WEBJS_SERVER_IMPORT_GATE === 'block') {
   process.stderr.write(`BLOCKED: ${msg}\n`);

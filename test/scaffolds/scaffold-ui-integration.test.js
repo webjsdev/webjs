@@ -68,13 +68,15 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     await scaffoldApp('demo', cwd, { template: 'full-stack' });
     const appDir = join(cwd, 'demo');
 
-    // Bootstrap files
+    // Bootstrap for `webjs ui add`: the config + cn() helper + theme ship, but
+    // NOT the pre-copied component kit (a full-stack app adds components on
+    // demand with `webjs ui add <name>`; only saas pre-copies its auth kit).
     assert.ok(await exists(join(appDir, 'components.json')), 'components.json should exist');
     assert.ok(await exists(join(appDir, 'lib', 'utils', 'cn.ts')), 'lib/utils/cn.ts should exist');
-    assert.ok(await exists(join(appDir, 'lib', 'utils', 'ui.ts')), 'lib/utils/ui.ts should exist');
     assert.ok(await exists(join(appDir, 'styles', 'globals.css')), 'styles/globals.css should exist');
-    // app/ is routing-only: the theme must NOT live in app/.
     assert.equal(existsSync(join(appDir, 'app', 'globals.css')), false, 'globals.css must not be in routing-only app/');
+    assert.ok(!(await exists(join(appDir, 'components', 'ui'))), 'full-stack pre-copies no ui-* kit');
+    assert.ok(!(await exists(join(appDir, 'lib', 'utils', 'ui.ts'))), 'the ui.ts class-bundle helper is removed');
 
     // components.json shape matches what webjsui init writes for webjs
     const cfg = JSON.parse(await readFile(join(appDir, 'components.json'), 'utf8'));
@@ -83,40 +85,11 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     assert.equal(cfg.aliases.ui, 'components/ui');
     assert.equal(cfg.aliases.utils, 'lib/utils/cn');
 
-    // Standard component kit
-    for (const name of ['button', 'card', 'alert', 'badge', 'separator', 'label', 'input']) {
-      assert.ok(
-        await exists(join(appDir, 'components', 'ui', `${name}.ts`)),
-        `components/ui/${name}.ts should exist`,
-      );
-    }
-
-    // The registry's relative cn import is rewritten to the app's #lib alias
-    // (#555/#556): #lib/utils/cn.ts, not the registry's `../lib/utils.ts`.
-    const button = await readFile(join(appDir, 'components', 'ui', 'button.ts'), 'utf8');
-    assert.match(button, /from '#lib\/utils\/cn\.ts'/);
-    assert.doesNotMatch(button, /from '\.\.\/lib\/utils\.ts'/);
-
-    // Tier-1 button source exports the buttonClass function (no custom element).
-    assert.match(button, /export\s+function\s+buttonClass\b/);
-    assert.doesNotMatch(button, /customElements\.define|defineElement\(['"]ui-button['"]/);
-
-    // Layout no longer pre-imports Tier-1 sources by side effect (they
-    // don't register custom elements; the imports were dead code).
+    // The minimal home is a plain welcome page, using no ui-* helpers.
     const layout = await readFile(join(appDir, 'app', 'layout.ts'), 'utf8');
-    assert.doesNotMatch(
-      layout,
-      /import\s+['"]\.\.\/components\/ui\/button\.ts['"]/,
-      'Tier-1 side-effect imports should be removed from layout',
-    );
-
-    // Homepage (the gallery index) calls Tier-1 class helpers on native elements
     const page = await readFile(join(appDir, 'app', 'page.ts'), 'utf8');
-    for (const fn of [...TIER1_HELPERS_BUTTON, 'badgeClass', 'cardClass', 'cardHeaderClass', 'cardTitleClass', 'cardDescriptionClass']) {
-      assert.match(page, new RegExp(`\\b${fn}\\b`), `homepage should call ${fn}()`);
-    }
-    // …and contains no Tier-1 custom element tags
-    assertTier1HygieneOnFile(page, 'app/page.ts');
+    assert.match(page, /Welcome to/, 'home is the minimal welcome page');
+    assert.doesNotMatch(page, /buttonClass|cardClass|rubric/, 'home uses no ui-* class helpers');
 
     // CSS delivery (#947): the layout links a STATIC compiled stylesheet (works
     // with JS off), not the browser runtime. The Tailwind @theme maps live in
@@ -128,7 +101,7 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     const inputCss = await readFile(join(appDir, 'public', 'input.css'), 'utf8');
     assert.match(inputCss, /@import "tailwindcss"/, 'input.css imports Tailwind');
     assert.match(inputCss, /color-primary/, 'input.css carries the @theme color maps');
-    assert.match(layout, /--primary:\s*oklch/, 'the palette VALUES stay inline (JS-off safe)');
+    assert.match(layout, /--primary:\s*#[0-9a-f]{6}/i, 'the palette VALUES stay inline (JS-off safe)');
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }

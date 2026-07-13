@@ -1,4 +1,3 @@
-// webjs-scaffold-placeholder. Feature gallery route. Keep and adapt it, or prune it (delete this app/features/optimistic-ui route AND modules/optimistic-ui), then delete this marker line. webjs check fails while the marker remains.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
 import '#modules/optimistic-ui/components/like-button.ts';

@@ -4,8 +4,8 @@
 # framework source but stages NO documentation surface. In webjs,
 # documentation is part of the definition of done, not an afterthought:
 # the docs app PLUS every monorepo markdown surface (AGENTS.md / CLAUDE.md /
-# CONVENTIONS.md, agent-docs/, README, the docs site, the marketing
-# website, the scaffold templates' per-agent rule files). The recurring
+# CONVENTIONS.md, the skill at .agents/skills/webjs/, README, the docs site,
+# the marketing website, the scaffold templates' per-agent rule files). The recurring
 # failure was updating ONE surface (or none) and shipping the rest stale,
 # so the docs drift behind the framework. HTTP-verb server actions (#488)
 # shipped with AGENTS.md updated but the docs site untouched.
@@ -61,11 +61,11 @@ if [ -z "$src_touched" ]; then exit 0; fi
 
 # Any documentation surface staged in the same commit? The curated set of
 # real doc surfaces: AGENTS / CLAUDE / CONVENTIONS / README markdown at any
-# depth (root, per-package, per-example), agent-docs/, the docs site, the
-# marketing website, and the scaffold templates. NOT every *.md, so a stray
-# note cannot be staged to slip the gate.
+# depth (root, per-package, per-example), the skill at .agents/skills/webjs/,
+# the docs site, the marketing website, and the scaffold templates. NOT every
+# *.md, so a stray note cannot be staged to slip the gate.
 doc_staged=$(printf '%s\n' "$staged" | grep -E \
-  '(^|/)(AGENTS|CLAUDE|CONVENTIONS|README)\.md$|^agent-docs/|^docs/|^website/|^packages/cli/templates/' || true)
+  '(^|/)(AGENTS|CLAUDE|CONVENTIONS|README)\.md$|^\.agents/skills/webjs/|^docs/|^website/|^packages/cli/templates/' || true)
 if [ -n "$doc_staged" ]; then exit 0; fi
 
 cat >&2 <<'EOF'
@@ -79,7 +79,7 @@ If this changed a PUBLIC or AGENT-FACING surface (an export, a CLI flag, a
 package.json webjs.* key, an html hole, a lifecycle hook, a convention, or
 the behaviour of an already-documented feature), invoke the webjs-doc-sync
 skill, then `git add` EVERY applicable surface and commit again:
-  AGENTS.md + agent-docs/*.md            agent reference
+  AGENTS.md + .agents/skills/webjs/      agent reference (SKILL.md + references/)
   docs/app/docs/<topic>                  the docs site
   README.md                              if a headline capability
   website/                               marketing copy, if headline

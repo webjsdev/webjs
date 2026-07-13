@@ -1,4 +1,3 @@
-// webjs-scaffold-placeholder. Example gallery route. Keep and adapt it, or prune it (delete this app/examples/todo route, modules/todo, AND the todos table in db/schema.server.ts), then delete this marker line. webjs check fails while the marker remains.
 // A THIN route adapter: app/ is routing only. It fetches the initial data
 // (server-side) via the 'use server' query and renders the interactive
 // component, plus a page `action` for the no-JS write path. All the real logic

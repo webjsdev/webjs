@@ -83,7 +83,7 @@ Do BOTH:
        bun test/bun/<the relevant script>.mjs
   2. Add or update a test/bun/<feature>.mjs cross-runtime assertion for the
      surface you changed (and \`git add\` it), so the parity is covered going
-     forward. See agent-docs/testing.md.
+     forward. See .agents/skills/webjs/references/testing.md.
 
 Already covered by an existing test/bun script that you ran under Bun and that
 needs no change? Re-run with WEBJS_BUN_VERIFIED=1 to acknowledge it.

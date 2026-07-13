@@ -1,4 +1,3 @@
-// webjs-scaffold-placeholder. Feature gallery route. Keep and adapt it, or prune it (delete this app/features/broadcast route AND modules/broadcast), then delete this marker line. webjs check fails while the marker remains.
 // Broadcast: fan a message out to EVERY client connected to a WebSocket path,
 // not just the sender. The framework auto-registers each connection to its path,
 // so broadcast(path, data) from '@webjsdev/server' reaches all of them. This is

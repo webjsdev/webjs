@@ -1,4 +1,3 @@
-// webjs-scaffold-placeholder. Feature gallery route. Keep and adapt it, or prune it (delete this app/features/sessions route AND modules/sessions), then delete this marker line. webjs check fails while the marker remains.
 // Sessions: a per-segment middleware.ts applies session() (a signed cookie by
 // default; store-backed for larger sessions), and a route.ts reads/writes it
 // with getSession(req). Session state is per-user, so it lives on the server

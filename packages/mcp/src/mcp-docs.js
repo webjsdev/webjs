@@ -4,7 +4,7 @@
  * `webjs mcp` (lib/mcp.js) started as four READ-ONLY introspection tools. This
  * module adds the second layer the Next.js MCP (`next-devtools-mcp`) showed is
  * the high-leverage one: the framework knowledge an agent needs to author
- * idiomatic WebJs code, surfaced as MCP RESOURCES (the `agent-docs/*.md` corpus
+ * idiomatic WebJs code, surfaced as MCP RESOURCES (the WebJs skill references
  * plus the `AGENTS.md` contract), an `init` "read first" primer that fights the
  * React/RSC mental model, a `docs` retrieval tool, and guided-workflow PROMPTS
  * built from the recipes.
@@ -15,9 +15,9 @@
  * in-process without booting a server or touching the real filesystem.
  *
  * Docs resolution (so `npx @webjsdev/cli mcp` is self-contained): a published
- * install reads the corpus bundled under `<cli>/resources/agent-docs` (copied
+ * install reads the corpus bundled under `<cli>/resources/references` (copied
  * at `prepack`, see `scripts/copy-mcp-resources.js`); a monorepo dev run falls
- * back to the repo-root `agent-docs/`. {@link resolveDocsLocation} encodes that
+ * back to the repo-root skill. {@link resolveDocsLocation} encodes that
  * two-path lookup so source stays single (no committed duplicate docs).
  *
  * @module mcp-docs
@@ -33,8 +33,8 @@ const DOCS_SCHEME = 'webjs-docs://';
 /**
  * Resolve where the framework-docs corpus lives, plus the `AGENTS.md` contract
  * path. Tries the BUNDLED location first (a published `@webjsdev/mcp` ships
- * `resources/agent-docs/` + `resources/AGENTS.md` via `prepack`), then falls
- * back to the monorepo-root layout (`agent-docs/` + `AGENTS.md`) used in dev and
+ * `resources/references/` + `resources/SKILL.md` + `resources/AGENTS.md` via `prepack`), then falls
+ * back to the monorepo-root skill layout used in dev and
  * tests. Returns `{ docsDir, agentsPath }`; either path may not exist, callers
  * fail soft (an empty corpus is valid, never a crash).
  *
@@ -46,11 +46,20 @@ export function resolveDocsLocation(moduleUrl) {
   const pkgRoot = resolve(here, '..'); // packages/mcp/src -> packages/mcp
   const repoRoot = resolve(here, '..', '..', '..'); // -> monorepo root
 
-  const bundledDocs = join(pkgRoot, 'resources', 'agent-docs');
-  if (existsSync(bundledDocs)) {
-    return { docsDir: bundledDocs, agentsPath: join(pkgRoot, 'resources', 'AGENTS.md') };
+  const bundledRefs = join(pkgRoot, 'resources', 'references');
+  if (existsSync(bundledRefs)) {
+    return {
+      docsDir: bundledRefs,
+      agentsPath: join(pkgRoot, 'resources', 'AGENTS.md'),
+      skillPath: join(pkgRoot, 'resources', 'SKILL.md'),
+    };
   }
-  return { docsDir: join(repoRoot, 'agent-docs'), agentsPath: join(repoRoot, 'AGENTS.md') };
+  const skill = join(repoRoot, '.agents', 'skills', 'webjs');
+  return {
+    docsDir: join(skill, 'references'),
+    agentsPath: join(repoRoot, 'AGENTS.md'),
+    skillPath: join(skill, 'SKILL.md'),
+  };
 }
 
 /**
@@ -74,6 +83,7 @@ function docName(file) {
  */
 function titleFor(name) {
   if (name === 'AGENTS') return 'AGENTS.md (the framework contract + invariants)';
+  if (name === 'SKILL') return 'SKILL.md (the WebJs agent skill: how to build)';
   return name
     .split('-')
     .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
@@ -89,11 +99,14 @@ function titleFor(name) {
  * @returns {Array<{ name: string, file: string, uri: string, title: string }>}
  */
 export function catalogue(deps) {
-  const { docsDir, agentsPath, listDir, exists } = deps;
+  const { docsDir, agentsPath, skillPath, listDir, exists } = deps;
   /** @type {Array<{ name: string, file: string, uri: string, title: string }>} */
   const out = [];
   if (exists(agentsPath)) {
     out.push({ name: 'AGENTS', file: agentsPath, uri: `${DOCS_SCHEME}AGENTS`, title: titleFor('AGENTS') });
+  }
+  if (skillPath && exists(skillPath)) {
+    out.push({ name: 'SKILL', file: skillPath, uri: `${DOCS_SCHEME}SKILL`, title: titleFor('SKILL') });
   }
   let files = [];
   try { files = listDir(docsDir).filter((f) => /\.md$/i.test(f)).sort(); } catch { files = []; }
@@ -291,7 +304,7 @@ export const PROMPTS = [
 /**
  * The canonical recipe snippet + invariant reminders for each prompt. Kept
  * compact on purpose: the prompt orients + shows the shape, then points at the
- * full `webjs-docs://recipes` resource. The shapes mirror `agent-docs/recipes.md`.
+ * full `webjs-docs://recipes` resource. The shapes mirror `.agents/skills/webjs/references/data-and-actions.md`.
  *
  * @type {Record<string, string>}
  */
@@ -417,7 +430,7 @@ export function getPrompt(name, args) {
     ? `Context: ${provided.map(([k, v]) => `${k}=${v}`).join(', ')}.\n\n`
     : '';
 
-  const text = `${argLine}${body}\n\nSee \`webjs-docs://recipes\` for the full recipe set and \`webjs-docs://AGENTS\` for the invariants.`;
+  const text = `${argLine}${body}\n\nSee \`webjs-docs://SKILL\` for the full guide (it routes to the reference for each task) and \`webjs-docs://AGENTS\` for the invariants.`;
   return {
     description: meta.description,
     messages: [{ role: 'user', content: { type: 'text', text } }],

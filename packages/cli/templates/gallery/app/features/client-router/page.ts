@@ -1,4 +1,3 @@
-// webjs-scaffold-placeholder. Feature gallery route. Keep and adapt it, or prune it (delete this app/features/client-router route AND its second/ subpage), then delete this marker line. webjs check fails while the marker remains.
 // Client router: automatic. It auto-enables the moment @webjsdev/core loads in
 // the browser (the bundle every component pulls, so any page with a component
 // gets it for free). There is nothing to import. An <a href> to another page

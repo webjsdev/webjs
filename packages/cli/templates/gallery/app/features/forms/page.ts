@@ -1,4 +1,3 @@
-// webjs-scaffold-placeholder. Feature gallery route. Keep and adapt it, or prune it (delete this app/features/forms route), then delete this marker line. webjs check fails while the marker remains.
 // forms: the no-JS write path. A real <form method="post"> posts to this page's
 // `action` export, and the framework re-renders the SAME page with the result on
 // `actionData`. WHY it matters: the form works with JS OFF (server round-trip),

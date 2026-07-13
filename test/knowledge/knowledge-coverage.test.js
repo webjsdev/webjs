@@ -1,10 +1,8 @@
 // Agent-knowledge coverage gate (tier-2, un-skippable CI enforcement).
 //
-// The scaffold gate (test/scaffolds/gallery-coverage.test.js) keeps the DEMO
-// surface honest. This is its sibling for the surfaces that counter agents'
-// WRONG PRIORS, which is where agents actually fail: the symptom-keyed
-// troubleshooting page, the muscle-memory gotcha docs, and the MCP `init`
-// primer. Two things are gated:
+// This keeps the surfaces that counter agents' WRONG PRIORS honest, which is
+// where agents actually fail: the symptom-keyed troubleshooting page and the
+// muscle-memory gotcha docs. Two things are gated:
 //
 //   1. Every LIVE `webjs check` RULE is explained in an agent-facing surface
 //      (the troubleshooting page or a gotcha doc, matched by rule name) OR
@@ -29,8 +27,7 @@ const MANIFEST = JSON.parse(readFileSync(join(__dirname, 'knowledge-coverage.jso
 
 const EXPLAIN_SURFACES = [
   'docs/app/docs/troubleshooting/page.ts',
-  'agent-docs/nextjs-muscle-memory-gotchas.md',
-  'agent-docs/lit-muscle-memory-gotchas.md',
+  '.agents/skills/webjs/references/muscle-memory-gotchas.md',
 ].map((p) => join(REPO, p));
 const AGENTS_MD = join(REPO, 'AGENTS.md');
 const MCP_DOCS = join(REPO, 'packages', 'mcp', 'src', 'mcp-docs.js');
