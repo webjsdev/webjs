@@ -1245,38 +1245,102 @@ export default function RootLayout({ children }: { children: unknown }) {
 }
 `);
 
-  // Home page: a minimal welcome. Grow it into the app's real landing page.
+  // Home page: a polished welcome (masthead + a "get started" card + an
+  // "AI prompts" card + footer). Treat it as a starting point and grow it into
+  // the app's real landing page. For the saas template, a login/signup CTA row
+  // is spliced under the tagline.
   const homeAuthLinks = isSaas
-    ? '<div class="mt-8 flex flex-wrap gap-4 items-center text-sm"><a href="/login" class="inline-flex items-center px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium no-underline hover:opacity-90">Log in</a><a href="/signup" class="text-foreground no-underline hover:underline underline-offset-4">Create an account</a><a href="/dashboard" class="text-muted-foreground no-underline hover:text-foreground">Dashboard</a></div>'
+    ? '\n          <div class="flex flex-wrap gap-3 items-center justify-center mt-2"><a href="/login" class="inline-flex items-center px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium no-underline hover:opacity-90">Log in</a><a href="/signup" class="inline-flex items-center px-4 py-2 rounded-lg border border-border text-foreground text-sm font-medium no-underline hover:bg-accent">Create an account</a></div>'
     : '';
   await writeFile(join(appDir, 'app', 'page.ts'), `import { html } from '@webjsdev/core';
+import '#components/prompt-button.ts';
 
 export const metadata = {
   title: '${displayName}',
 };
 
+// Starter prompts to paste into your AI tool of choice. They exercise the WebJs
+// surfaces an agent reaches for first: a page + a SQLite-backed table, a server
+// action with validation, an interactive component, sessions + auth.
+const PROMPTS = [
+  'Add a /notes page backed by a SQLite table, with a form to create notes and a list of existing ones.',
+  'Add a server action that validates its input and returns a typed result, then call it from a component.',
+  'Add a signup and login flow with sessions and a dashboard that only signed-in users can see.',
+  'Add an API route at /api/health that returns JSON, and rate-limit it.',
+];
+
+// The "get started" links. Icons are inline SVG so nothing is fetched.
+const LINKS = [
+  { href: 'https://docs.webjs.dev', label: 'Read the docs', sub: 'docs.webjs.dev', icon: iconBook() },
+  { href: '.agents/skills/webjs/SKILL.md', label: 'The agent skill', sub: '.agents/skills/webjs', icon: iconSpark() },
+  { href: 'https://github.com/webjsdev/webjs', label: 'Source on GitHub', sub: 'webjsdev/webjs', icon: iconGithub() },
+];
+
 export default function Home() {
   return html\`
-    <div class="max-w-2xl mx-auto py-16">
-      <div class="flex items-center justify-between mb-10">
-        <span class="text-sm font-mono text-muted-foreground">${displayName}</span>
-        <theme-toggle></theme-toggle>
-      </div>
-      <h1 class="text-4xl font-semibold tracking-tight m-0 mb-4">Welcome to ${displayName}.</h1>
-      <p class="text-lg text-muted-foreground leading-relaxed m-0 mb-6">
-        A WebJs app: server-rendered, progressively enhanced, and buildless. This
-        page is <code class="font-mono text-[0.9em] text-foreground">app/page.ts</code>.
-        Edit it, add routes under <code class="font-mono text-[0.9em] text-foreground">app/</code>,
-        and keep server-only code behind <code class="font-mono text-[0.9em] text-foreground">.server.ts</code>.
-      </p>
-      <p class="text-muted-foreground leading-relaxed m-0">
-        Building with an AI agent? It reads
-        <code class="font-mono text-[0.9em] text-foreground">.agents/skills/webjs/SKILL.md</code>
-        to learn the framework, then builds your app here. Full docs at
-        <a href="https://docs.webjs.dev" class="text-foreground underline underline-offset-4">docs.webjs.dev</a>.
-      </p>${homeAuthLinks}
+    <div class="fixed top-4 right-4 z-10"><theme-toggle></theme-toggle></div>
+
+    <div class="min-h-[calc(100dvh-4rem)] flex flex-col items-center justify-center gap-16 py-12">
+      <!-- Masthead -->
+      <section class="flex flex-col items-center text-center gap-5">
+        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground m-0">Welcome to</p>
+        <h1 class="text-6xl sm:text-7xl font-bold tracking-tight m-0 bg-gradient-to-b from-foreground to-muted-foreground bg-clip-text text-transparent">
+          ${displayName}
+        </h1>
+        <p class="text-base sm:text-lg text-muted-foreground max-w-md leading-relaxed m-0">
+          AI-first and web-components-first. Server-rendered, progressively enhanced, and buildless.
+        </p>${homeAuthLinks}
+      </section>
+
+      <!-- Two cards: how to get oriented, and how to build with an agent -->
+      <section class="w-full max-w-3xl grid gap-4 md:grid-cols-2">
+        <div class="rounded-2xl border border-border bg-card p-6 flex flex-col gap-5">
+          <h2 class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground m-0">Get started</h2>
+          <ul class="flex flex-col gap-1 list-none p-0 m-0">
+            \${LINKS.map(l => html\`
+              <li>
+                <a href="\${l.href}" class="group flex items-center gap-3 -mx-2 px-2 py-2 rounded-lg hover:bg-accent transition-colors no-underline">
+                  <span class="shrink-0 w-9 h-9 grid place-items-center rounded-lg border border-border bg-background/40 text-muted-foreground group-hover:text-foreground transition-colors">\${l.icon}</span>
+                  <span class="flex flex-col">
+                    <span class="text-sm font-medium text-foreground leading-tight">\${l.label}</span>
+                    <span class="text-xs font-mono text-muted-foreground leading-tight">\${l.sub}</span>
+                  </span>
+                </a>
+              </li>
+            \`)}
+          </ul>
+        </div>
+
+        <div class="rounded-2xl border border-border bg-card p-6 flex flex-col gap-4">
+          <h2 class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground m-0">Coding with AI?</h2>
+          <p class="text-sm text-muted-foreground leading-relaxed m-0">
+            Open this folder in your agent and paste a prompt. It reads
+            <code class="font-mono text-[0.85em] text-foreground">.agents/skills/webjs</code> to learn the framework.
+          </p>
+          <div class="flex flex-col gap-2">
+            \${PROMPTS.map(p => html\`<prompt-button .text=\${p}></prompt-button>\`)}
+          </div>
+        </div>
+      </section>
+
+      <!-- Footer -->
+      <footer class="text-center">
+        <p class="text-sm text-muted-foreground m-0">
+          This page is <code class="font-mono text-[0.9em] text-foreground">app/page.ts</code>. Edit it, then build your app.
+        </p>
+      </footer>
     </div>
   \`;
+}
+
+function iconBook() {
+  return html\`<svg class="w-4 h-4 stroke-current fill-none" style="stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19a2 2 0 0 1 2-2h13"/></svg>\`;
+}
+function iconSpark() {
+  return html\`<svg class="w-4 h-4 stroke-current fill-none" style="stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></svg>\`;
+}
+function iconGithub() {
+  return html\`<svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.94.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>\`;
 }
 `);
 
@@ -1349,6 +1413,44 @@ const ICONS = {
 };
 
 ThemeToggle.register('theme-toggle');
+`);
+
+  // --- Prompt-button component (a small interactive light-DOM element) ---
+
+  await writeFile(join(appDir, 'components', 'prompt-button.ts'), `import { WebComponent, prop, signal, html } from '@webjsdev/core';
+
+/**
+ * <prompt-button .text=\${'...'}> renders a copyable AI prompt. Clicking copies
+ * the text to the clipboard and flips the label to "Copied" for a moment. A
+ * small interactive light-DOM component: SSR'd for the first paint, then it
+ * hydrates for the click behaviour. Reactive state is a signal (the default
+ * state primitive); the reactive .text prop rides SSR hydration.
+ */
+class PromptButton extends WebComponent({ text: prop(String) }) {
+  copied = signal(false);
+
+  async copy() {
+    try { await navigator.clipboard.writeText(this.text); } catch {}
+    this.copied.set(true);
+    setTimeout(() => this.copied.set(false), 1600);
+  }
+
+  render() {
+    const copied = this.copied.get();
+    return html\`
+      <button
+        @click=\${() => this.copy()}
+        class="group w-full flex items-center gap-3 text-left px-3.5 py-3 rounded-xl border border-border bg-background/40 hover:bg-accent hover:border-border-strong transition-colors cursor-pointer"
+      >
+        <span class="flex-1 text-[0.8125rem] leading-snug text-foreground">\${this.text}</span>
+        <span class="shrink-0 text-[0.6875rem] font-semibold uppercase tracking-wider \${copied ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'} transition-colors">
+          \${copied ? 'Copied' : 'Copy'}
+        </span>
+      </button>
+    \`;
+  }
+}
+PromptButton.register('prompt-button');
 `);
   } // end if (!isApi)
 

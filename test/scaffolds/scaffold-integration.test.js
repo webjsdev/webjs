@@ -107,6 +107,7 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(existsSync(join(appDir, 'app', 'layout.ts')), 'layout.ts written');
     assert.ok(existsSync(join(appDir, 'app', 'page.ts')), 'page.ts written');
     assert.ok(existsSync(join(appDir, 'components', 'theme-toggle.ts')), 'theme-toggle written');
+    assert.ok(existsSync(join(appDir, 'components', 'prompt-button.ts')), 'prompt-button written');
 
     // Dark-mode wiring: the head init script (in layout) AND the theme-toggle
     // must toggle the shadcn `.dark` class, not only the `data-theme`
@@ -130,12 +131,24 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.doesNotMatch(layoutSrc, /oklch\(0\.7 0\.16 52\)/,
       'no orange brand color survives in the neutral scaffold');
 
-    // The home page is a minimal welcome that points the agent at the skill,
-    // with no gallery links.
+    // The home page is a polished welcome (masthead + a get-started card + an
+    // AI-prompts card) that points the agent at the skill, with no gallery links.
     const pageSrc = readFileSync(join(appDir, 'app', 'page.ts'), 'utf8');
-    assert.match(pageSrc, /Welcome to/, 'home is a minimal welcome page');
+    assert.match(pageSrc, /Welcome to/, 'home is a welcome page');
     assert.match(pageSrc, /SKILL\.md/, 'home points the agent at the skill');
+    assert.match(pageSrc, /Get started/, 'home ships a get-started card');
+    assert.match(pageSrc, /Coding with AI\?/, 'home ships an AI-prompts card');
+    assert.match(pageSrc, /<prompt-button\b/, 'home renders the prompt-button component');
     assert.doesNotMatch(pageSrc, /\/features\//, 'home does not link a gallery');
+
+    // The prompt-button is a real interactive light-DOM component (copy to
+    // clipboard on click, state via a signal): the home page teaches an idiom.
+    const promptSrc = readFileSync(join(appDir, 'components', 'prompt-button.ts'), 'utf8');
+    assert.match(promptSrc, /clipboard\.writeText/, 'prompt-button copies to the clipboard');
+    assert.match(promptSrc, /signal\(/, 'prompt-button uses a signal for state');
+    assert.match(promptSrc, /@click=/, 'prompt-button hydrates a click handler');
+    assert.match(promptSrc, /PromptButton\.register\(['"]prompt-button['"]\)/,
+      'prompt-button registers its custom-element tag');
 
     // Drizzle db layer wired up
     assert.ok(existsSync(join(appDir, 'db', 'schema.server.ts')), 'db/schema.server.ts written');
