@@ -559,79 +559,22 @@ export async function scaffoldApp(name, cwd, opts = {}) {
 
   const templateFiles = [
     'AGENTS.md',
-    'CONVENTIONS.md',
-    'CLAUDE.md',
-    // A worked layout (header/nav/theme-toggle/reading-column/footer) the agent
-    // reads to learn the patterns, since app/layout.ts ships as a minimal shell
-    // so the app designs its own chrome. Shipped for every template (harmless
-    // for api, which has no app/layout.ts).
-    'LAYOUT-REFERENCE.md',
-    // Starter tests under the new feature-folder layout.
+    // Starter tests under the feature-folder layout.
     'test/hello/hello.test.ts',
     'test/hello/browser/hello.test.js',
     'test/hello/e2e/hello.test.ts',
     'web-test-runner.config.js',
     // Optional boot-time APM hook (setOnError). Delete if unused.
     'instrumentation.ts',
-    // Environment variables
     '.env.example',
-    // Project-level gitignore (node_modules, .webjs, .env, OS junk).
-    // Shipped as `gitignore` (no dot) and renamed to `.gitignore` on copy:
-    // npm STRIPS a `.gitignore` from a published tarball, so a dotfile name
-    // would arrive missing and the app would ship without a `.env` ignore
-    // (dogfood #845). The SQLite dev.db rule is appended programmatically
-    // below so it only appears for the sqlite dialect.
+    // Shipped without a dot (npm strips a published .gitignore) and renamed on copy.
     'gitignore',
-    // Git hooks (blocks commits on main)
-    '.hooks/pre-commit',
-    // Claude Code config + hooks
-    '.claude.json',
-    '.claude/settings.json',
-    '.claude/hooks/block-prose-punctuation.sh',
-    '.claude/hooks/guard-branch-context.sh',
-    '.claude/hooks/nudge-uncommitted.sh',
-    '.claude/hooks/commit-before-stop.sh',
-    '.claude/hooks/cleanup-merged-worktree.sh',
-    '.claude/hooks/require-tests-with-src.sh',
-    '.claude/hooks/check-server-imports.sh',
-    '.claude/hooks/check-server-imports.mjs',
-    // Render-and-look enforcement for UI work: a UserPromptSubmit router that
-    // points UI-building prompts at the webjs-design-review skill, a Stop-hook
-    // backstop that nudges a render-and-look before finishing UI changes, and
-    // the skill they route to. A design/layout defect has no failing test, so
-    // this vision-in-the-loop is the only thing that catches it.
-    '.claude/hooks/route-skills.sh',
-    '.claude/hooks/design-review-before-stop.sh',
-    '.claude/skills/webjs-design-review/SKILL.md',
-    // Gemini CLI config + hooks
-    '.gemini/settings.json',
-    '.gemini/hooks/nudge-uncommitted.sh',
-    // Cursor config + hooks
-    '.cursor/hooks.json',
-    '.cursor/hooks/nudge-uncommitted.sh',
-    // OpenCode plugins (loaded as TS by Bun at runtime)
-    '.opencode/plugins/nudge-uncommitted.ts',
-    // Antigravity workspace rules (Google's documented convention is
-    // `.agents/rules/*.md`, lowercase, per the Codelab
-    // "Build Autonomous Developer Pipelines using agents.md and skills.md
-    // in Antigravity"). Replaced the legacy `.windsurfrules` ship when
-    // Windsurf was acquired by Google.
-    '.agents/rules/workflow.md',
-    // Cross-agent config files
-    '.cursorrules',
-    '.github/copilot-instructions.md',
     '.github/pull_request_template.md',
-    // CI is the test gate (the pre-commit hook only blocks main). Runs
-    // webjs check + the unit / browser / e2e layers on every PR and push
-    // to main, mirroring the WebJs framework's own CI.
+    // CI runs webjs check + the test layers on every PR and push to main.
     '.github/workflows/ci.yml',
     '.editorconfig',
-    // VS Code: associate the published webjs-config JSON Schema with the
-    // package.json `webjs` block, so an unknown / typo'd key (#259) is
-    // flagged natively in the editor instead of silently dropped.
     '.vscode/settings.json',
-    // Production / deploy scaffolding. `docker compose up --build` runs
-    // the app locally with the same Dockerfile production builds from.
+    // Production / deploy scaffolding.
     'Dockerfile',
     'compose.yaml',
     '.dockerignore',
@@ -643,12 +586,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   // rewrites; the three infra files get their file-specific transform. On Node,
   // every file is copied byte-identical (the map is empty).
   const PROSE_REWRITE = new Set([
-    'AGENTS.md', 'CONVENTIONS.md', '.cursorrules',
-    '.agents/rules/workflow.md', '.github/copilot-instructions.md',
-    // The starter tests carry header comments with run commands (`npx wtr`,
-    // `npm i -D puppeteer-core`); bun-ify those too so a bun app's test files
-    // do not tell the user to run npm/npx (#541 review). The transform only
-    // touches npm/npx command tokens, so the test code itself is unaffected.
+    'AGENTS.md',
     'test/hello/browser/hello.test.js', 'test/hello/e2e/hello.test.ts',
   ]);
   // compose.yaml builds from the (pure oven/bun) Dockerfile and inherits its
@@ -676,23 +614,12 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     }
   }
 
-  // Make hook scripts executable
-  const { chmod } = await import('node:fs/promises');
-  for (const hook of ['block-prose-punctuation.sh', 'guard-branch-context.sh', 'nudge-uncommitted.sh', 'commit-before-stop.sh', 'cleanup-merged-worktree.sh', 'require-tests-with-src.sh', 'route-skills.sh', 'design-review-before-stop.sh']) {
-    const hookPath = join(appDir, '.claude', 'hooks', hook);
-    if (existsSync(hookPath)) await chmod(hookPath, 0o755);
+  // The agent skill is the one cross-agent source (AGENTS.md points to it). Copy
+  // the whole .agents/skills tree so every tool that reads AGENTS.md finds it.
+  const skillSrc = join(TEMPLATES, '.agents', 'skills');
+  if (existsSync(skillSrc)) {
+    await cp(skillSrc, join(appDir, '.agents', 'skills'), { recursive: true });
   }
-  for (const hook of ['nudge-uncommitted.sh']) {
-    const hookPath = join(appDir, '.gemini', 'hooks', hook);
-    if (existsSync(hookPath)) await chmod(hookPath, 0o755);
-  }
-  for (const hook of ['nudge-uncommitted.sh']) {
-    const hookPath = join(appDir, '.cursor', 'hooks', hook);
-    if (existsSync(hookPath)) await chmod(hookPath, 0o755);
-  }
-  // Make git pre-commit hook executable
-  const preCommitPath = join(appDir, '.hooks', 'pre-commit');
-  if (existsSync(preCommitPath)) await chmod(preCommitPath, 0o755);
 
   // --- Drizzle db layer (all templates), dialect-selected (#563) ---
   //
@@ -1036,12 +963,6 @@ export type ActionResult<T> =
   | { success: false; error: string; status: number };
 `);
 
-    // The api backend-features showcase: endpoints under app/api/features/**
-    // demonstrating the server-side surface (route() adapter + validation, rate
-    // limiting, streaming, file storage, WebSockets + broadcast) plus env
-    // validation. The api counterpart of the UI gallery. Prune what you skip.
-    const { writeApiGallery } = await import('./api-gallery.js');
-    await writeApiGallery(appDir);
   }
 
   if (!isApi) {
@@ -1064,13 +985,6 @@ export type ActionResult<T> =
       if (existsSync(swSrc)) await cp(swSrc, join(publicDir, swFile));
     }
 
-    const utilsDir = join(appDir, 'lib', 'utils');
-    await mkdir(utilsDir, { recursive: true });
-    const uiSrc = join(TEMPLATES, 'lib', 'utils', 'ui.ts');
-    if (existsSync(uiSrc)) {
-      await cp(uiSrc, join(utilsDir, 'ui.ts'));
-    }
-
     // Fail loudly if the @webjsdev/ui registry sources aren't on disk.
     // Without this, downstream copy helpers would silently skip and the
     // generated app would boot to ERR_MODULE_NOT_FOUND on the first page
@@ -1083,20 +997,13 @@ export type ActionResult<T> =
     // styles/globals.css (the @webjsdev/ui theme).
     await writeUiBootstrap(appDir);
 
-    // Copy the standard ui-* component kit the scaffold's example pages
-    // use. Sources are read from packages/ui/packages/registry/ in this
-    // monorepo. Users can `webjs ui add <name>` for anything else.
-    await copyUiComponents(appDir, [
-      'button', 'card', 'alert', 'badge', 'separator', 'label', 'input',
-    ]);
-
-    // The gallery: idiomatic, densely-commented single-feature demos under
-    // app/features/ plus one whole example app under app/examples/, with logic
-    // in modules/, linked from the home page. Shipped in the default full-stack
-    // scaffold so an agent gains context by browsing real code; prune
-    // per-feature (delete the route + its module) for what the app does not
-    // use. See CONVENTIONS.md "prune what the app does not use".
-    if (!isApi) await copyGallery(appDir);
+    // The saas auth pages import a few ui-* primitives. A full-stack app adds
+    // any component on demand with `webjs ui add <name>`.
+    if (isSaas) {
+      await copyUiComponents(appDir, [
+        'button', 'card', 'alert', 'badge', 'separator', 'label', 'input',
+      ]);
+    }
 
     // The @webjsdev/ui theme (`--color-primary`, `--color-card`, the @theme maps,
     // @custom-variant, @keyframes) plus the app @theme mappings are compiled from
@@ -1139,49 +1046,25 @@ ${uiThemeRaw}
 
   await writeFile(join(appDir, 'app', 'layout.ts'), `import { html, cspNonce } from '@webjsdev/core';
 import '#components/theme-toggle.ts';
-// Webjs UI components are tiered:
-//   - Tier 1 (button, card, input, label, alert, badge, separator, etc.) are
-//     class-helper FUNCTIONS, with no custom element to register. Each page
-//     imports the specific helpers it needs (e.g.
-//     \`import { buttonClass } from '#components/ui/button.ts'\`).
-//   - Tier 2 (dialog, popover, tooltip, tabs, accordion, etc.) ARE custom
-//     elements. Register them by side-effect-importing here once so they
-//     work transitively across every page:
-//       import '#components/ui/dialog.ts';
-// The example app/page.ts below uses only Tier-1 helpers, so nothing
-// extra needs to be registered. Add Tier-2 imports as you 'webjs ui add'.
 
 /**
- * Root layout: globals + a minimal shell.
- *
- * Light DOM + Tailwind by default. Design tokens live in :root and are
- * mapped into the Tailwind palette via @theme, so classes like
- * text-foreground, bg-card, font-serif, duration-fast, text-display all work.
- *
- * This shell is deliberately MINIMAL: it wires the theme, tokens, and Tailwind,
- * then renders \${children} in a bare container with no chrome, so you design the
- * app's own layout. LAYOUT-REFERENCE.md (project root) is a complete worked
- * layout (header, nav, theme toggle, reading column, footer) to learn from.
+ * Root layout: the ONLY file that writes the document shell. It wires a neutral
+ * design-token palette, the light/dark theme, and the Tailwind stylesheet, then
+ * renders \${children} in a bare container. Grow it in place: add a header, nav,
+ * footer, or reading column here as your app needs them. Design tokens live as
+ * plain CSS custom properties (they resolve with JavaScript disabled) and are
+ * mapped into Tailwind via @theme in public/input.css, so bg-background,
+ * text-foreground, bg-card, bg-primary, and border-border all work.
  */
-
 export default function RootLayout({ children }: { children: unknown }) {
-  // Read the in-flight request's CSP nonce so the theme-detection
-  // inline script below passes strict CSP (script-src 'nonce-...').
-  // Returns '' when no CSP nonce is set, in which case the attribute
-  // is empty and the browser ignores it.
+  // Read the in-flight request's CSP nonce so the theme-detection inline script
+  // passes strict CSP. Returns '' when no CSP nonce is set.
   const nonce = cspNonce();
   return html\`
     <script nonce="\${nonce}">
-      // ===== OPTIONAL: light/dark theme apparatus (remove as one unit) =====
-      // This IIFE reads the saved or OS theme and toggles the data-theme
-      // attribute plus the dark class the ui kit reads, so the token VALUES in
-      // the root, dark, and data-theme style blocks below switch. It is what
-      // makes the app theme-aware. Building a SINGLE-theme app of your own?
-      // Delete this IIFE, delete the dark and light style blocks below, and set
-      // your palette once on the root selector. That removes the wiring so it
-      // cannot fight your own colours (it will not override a plain root
-      // palette). The header-measure IIFE that follows is unrelated, keep it
-      // (it is dormant until you add a fixed header, per LAYOUT-REFERENCE.md).
+      // Light/dark theme: read the saved or OS choice and set data-theme plus the
+      // .dark class the tokens key off. Delete this block (and the light blocks
+      // below) for a single-theme app.
       (function(){
         try {
           var mq = window.matchMedia('(prefers-color-scheme: light)');
@@ -1191,9 +1074,6 @@ export default function RootLayout({ children }: { children: unknown }) {
             var el = document.documentElement;
             if (t === 'light' || t === 'dark') el.dataset.theme = t;
             else delete el.dataset.theme;
-            // Keep the .dark class the @webjsdev/ui kit uses in sync with the effective theme so the
-            // copied ui-* components (button, card, etc.) follow light/dark too.
-            // Dark is the default unless the OS prefers light or 'light' is set.
             var dark = t === 'dark' || (t !== 'light' && !mq.matches);
             el.classList.toggle('dark', dark);
           }
@@ -1201,14 +1081,10 @@ export default function RootLayout({ children }: { children: unknown }) {
           mq.addEventListener('change', apply);
         } catch (_) {}
       })();
-      // ===== end optional theme apparatus =====
-      // Header-measure script: DORMANT until you add a fixed header (the minimal
-      // shell has none). When you add one (see LAYOUT-REFERENCE.md), make it
-      // position:fixed (NOT sticky: a sticky header flickers on iOS WebKit during
-      // a client-router nav). fixed leaves normal flow, so --header-h reserves its
-      // height for the content below; this measures the real (responsive) height.
-      // With no header it is a no-op (querySelector returns null) and --header-h
-      // stays 0, so there is no phantom gap.
+      // Header-measure: dormant until you add a fixed header. A fixed header
+      // (use position:fixed, NOT sticky, which flickers on iOS WebKit during a
+      // client-router nav) leaves normal flow, so --header-h reserves its height
+      // for the content below. No header means a no-op and --header-h stays 0.
       (function(){
         function measure(){
           try {
@@ -1226,121 +1102,85 @@ export default function RootLayout({ children }: { children: unknown }) {
       })();
     </script>
     <!-- Tailwind: a STATIC stylesheet compiled from public/input.css to
-         public/tailwind.css by css:build / css:watch (run automatically by the
-         dev and start tasks). A real stylesheet, so the app is fully styled with
-         JavaScript DISABLED (no in-browser compile). -->
+         public/tailwind.css by css:build / css:watch (run by the dev and start
+         tasks). A real stylesheet, so the app is styled with JavaScript OFF. -->
     <link rel="stylesheet" href="/public/tailwind.css">
     <style>
-      /* ONE theme, canonical shadcn-style tokens. These are the token VALUES as
-         plain CSS custom properties, so the palette resolves with JavaScript
-         DISABLED and needs no build. public/input.css holds the token STRUCTURE
-         and the @theme inline mappings that generate
-         bg-background, text-foreground, bg-card, bg-primary, bg-accent,
-         text-muted-foreground, border-border, ring-ring, and the rest. Here we
-         set those tokens' VALUES to this app's brand palette, so the ui-*
-         components AND your own chrome read ONE source of truth. Any component
-         added later with webjs ui add <name> inherits it automatically. The
-         stylesheet is linked before this block, so these VALUES win over the ui
-         theme defaults. Dark-first, with light via the theme toggle (data-theme) or the
-         OS. Follows the shadcn model: --primary is the BRAND color (orange, used
-         for primary buttons, links, and emphasis), while --accent stays a NEUTRAL
-         hover tint so the ui kit's outline/ghost/dropdown hover states keep proper
-         contrast. Use bg-primary / text-primary for brand, bg-accent for hovers.
-         Add a new design token the canonical way, a --x VALUE below plus a
-         --color-x: var(--x) line in the @theme inline block in public/input.css,
-         then use it as bg-x / text-x. Reach for opacity modifiers
-         (bg-primary/10, hover:bg-primary/90, border-border/60) before inventing a
-         new token, but keep body text at full opacity so it stays above the AA
-         contrast floor (a faded text-muted-foreground/70 measured 3.83:1). */
+      /* Neutral design tokens. The token NAMES are infrastructure (public/input.css
+         maps them into Tailwind via @theme). The VALUES are a neutral greyscale
+         base to build on: change them here to give the app its own palette. */
       :root {
         --font-sans:  -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         --font-serif: ui-serif, 'Iowan Old Style', Palatino, Georgia, serif;
         --font-mono:  ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        /* 0 by default because the minimal shell has no fixed header. The
-           header-measure script below overrides it to the real height the moment
-           you add a fixed header element (see LAYOUT-REFERENCE.md), so body
-           padding tracks it automatically. */
         --header-h: 0px;
-        /* A translucent brand tint, derived from --primary so it tracks
-           light/dark automatically. Used for the logo glow and focus ring. */
-        --primary-tint: color-mix(in oklch, var(--primary) 20%, transparent);
       }
-      /* webjs-scaffold-placeholder. These are the scaffold's STARTER brand colors (the shadcn-style orange); they look finished on purpose. Own the palette: set the token VALUES below (dark AND light blocks) to colors that fit what THIS app IS, keeping the token NAMES. A recolor chosen for the app beats keeping the starter orange. Then delete this marker line (or run webjs check --clear-placeholders to keep the starter palette deliberately). webjs check fails while the marker remains. */
       /* dark (the default, and the explicit .dark the toggle sets) */
       :root, .dark {
         color-scheme: dark;
-        --background: oklch(0.14 0.01 55);
-        --foreground: oklch(0.96 0.015 60);
-        --card: oklch(0.18 0.01 55);
-        --card-foreground: oklch(0.96 0.015 60);
-        --popover: oklch(0.18 0.01 55);
-        --popover-foreground: oklch(0.96 0.015 60);
-        /* --primary is the orange BRAND color (shadcn model: primary = brand). */
-        --primary: oklch(0.7 0.16 52);
-        --primary-foreground: oklch(0.17 0.02 52);
-        --secondary: oklch(0.22 0.01 55);
-        --secondary-foreground: oklch(0.96 0.015 60);
-        --muted: oklch(0.16 0.01 55);
-        --muted-foreground: oklch(0.72 0.02 60);
-        /* --accent stays a NEUTRAL hover tint (shadcn model), so the ui kit's
-           outline/ghost/dropdown hover states keep proper contrast. */
-        --accent: oklch(0.27 0.008 55);
-        --accent-foreground: oklch(0.96 0.015 60);
-        --border: oklch(0.26 0.012 55 / 0.9);
-        --border-strong: oklch(0.38 0.012 55 / 0.9);
-        --input: oklch(0.26 0.012 55 / 0.9);
-        --ring: oklch(0.7 0.16 52);
-        --logo-from: oklch(0.8 0.16 58);
-        --logo-to: oklch(0.62 0.18 44);
+        --background: oklch(0.145 0 0);
+        --foreground: oklch(0.985 0 0);
+        --card: oklch(0.205 0 0);
+        --card-foreground: oklch(0.985 0 0);
+        --popover: oklch(0.205 0 0);
+        --popover-foreground: oklch(0.985 0 0);
+        --primary: oklch(0.922 0 0);
+        --primary-foreground: oklch(0.205 0 0);
+        --secondary: oklch(0.269 0 0);
+        --secondary-foreground: oklch(0.985 0 0);
+        --muted: oklch(0.205 0 0);
+        --muted-foreground: oklch(0.708 0 0);
+        --accent: oklch(0.269 0 0);
+        --accent-foreground: oklch(0.985 0 0);
+        --border: oklch(1 0 0 / 0.1);
+        --border-strong: oklch(1 0 0 / 0.2);
+        --input: oklch(1 0 0 / 0.15);
+        --ring: oklch(0.556 0 0);
       }
       /* light (explicit via the toggle) */
       :root[data-theme='light'] {
         color-scheme: light;
-        --background: oklch(0.985 0.008 80);
-        --foreground: oklch(0.18 0.015 60);
+        --background: oklch(1 0 0);
+        --foreground: oklch(0.145 0 0);
         --card: oklch(1 0 0);
-        --card-foreground: oklch(0.18 0.015 60);
+        --card-foreground: oklch(0.145 0 0);
         --popover: oklch(1 0 0);
-        --popover-foreground: oklch(0.18 0.015 60);
-        --primary: oklch(0.54 0.16 52);
-        --primary-foreground: oklch(1 0 0);
-        --secondary: oklch(0.96 0.008 80);
-        --secondary-foreground: oklch(0.18 0.015 60);
-        --muted: oklch(0.96 0.008 80);
-        --muted-foreground: oklch(0.42 0.02 65);
-        --accent: oklch(0.955 0.006 80);
-        --accent-foreground: oklch(0.18 0.015 60);
-        --border: oklch(0.88 0.01 75 / 0.95);
-        --border-strong: oklch(0.78 0.01 75 / 0.95);
-        --input: oklch(0.88 0.01 75 / 0.95);
-        --ring: oklch(0.54 0.16 52);
-        --logo-from: oklch(0.63 0.17 50);
-        --logo-to: oklch(0.44 0.11 52);
+        --popover-foreground: oklch(0.145 0 0);
+        --primary: oklch(0.205 0 0);
+        --primary-foreground: oklch(0.985 0 0);
+        --secondary: oklch(0.97 0 0);
+        --secondary-foreground: oklch(0.205 0 0);
+        --muted: oklch(0.97 0 0);
+        --muted-foreground: oklch(0.556 0 0);
+        --accent: oklch(0.97 0 0);
+        --accent-foreground: oklch(0.205 0 0);
+        --border: oklch(0.922 0 0);
+        --border-strong: oklch(0.87 0 0);
+        --input: oklch(0.922 0 0);
+        --ring: oklch(0.708 0 0);
       }
       /* light (OS preference, when the user has made no explicit choice) */
       @media (prefers-color-scheme: light) {
         :root:not(.dark):not([data-theme='dark']) {
           color-scheme: light;
-          --background: oklch(0.985 0.008 80);
-          --foreground: oklch(0.18 0.015 60);
+          --background: oklch(1 0 0);
+          --foreground: oklch(0.145 0 0);
           --card: oklch(1 0 0);
-          --card-foreground: oklch(0.18 0.015 60);
+          --card-foreground: oklch(0.145 0 0);
           --popover: oklch(1 0 0);
-          --popover-foreground: oklch(0.18 0.015 60);
-          --primary: oklch(0.54 0.16 52);
-          --primary-foreground: oklch(1 0 0);
-          --secondary: oklch(0.96 0.008 80);
-          --secondary-foreground: oklch(0.18 0.015 60);
-          --muted: oklch(0.96 0.008 80);
-          --muted-foreground: oklch(0.42 0.02 65);
-          --accent: oklch(0.955 0.006 80);
-          --accent-foreground: oklch(0.18 0.015 60);
-          --border: oklch(0.88 0.01 75 / 0.95);
-          --border-strong: oklch(0.78 0.01 75 / 0.95);
-          --input: oklch(0.88 0.01 75 / 0.95);
-          --ring: oklch(0.54 0.16 52);
-          --logo-from: oklch(0.63 0.17 50);
-          --logo-to: oklch(0.44 0.11 52);
+          --popover-foreground: oklch(0.145 0 0);
+          --primary: oklch(0.205 0 0);
+          --primary-foreground: oklch(0.985 0 0);
+          --secondary: oklch(0.97 0 0);
+          --secondary-foreground: oklch(0.205 0 0);
+          --muted: oklch(0.97 0 0);
+          --muted-foreground: oklch(0.556 0 0);
+          --accent: oklch(0.97 0 0);
+          --accent-foreground: oklch(0.205 0 0);
+          --border: oklch(0.922 0 0);
+          --border-strong: oklch(0.87 0 0);
+          --input: oklch(0.922 0 0);
+          --ring: oklch(0.708 0 0);
         }
       }
     </style>
@@ -1354,10 +1194,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         font: 16px/1.65 var(--font-sans);
         -webkit-font-smoothing: antialiased;
       }
-      ::selection { background: color-mix(in oklch, var(--primary) 22%, transparent); color: var(--foreground); }
     </style>
-
-    <!-- webjs-scaffold-placeholder. MINIMAL SHELL, on purpose. Everything above (the theme apparatus, the design tokens, the linked Tailwind stylesheet) is infrastructure to keep. Below, \${children} drops into a bare full-height container with NO chrome: design THIS app's layout from scratch. Decide from what the app IS whether it needs a header, a nav, a footer, a sidebar, a centered reading column, or a full-bleed canvas, and build that here. A COMPLETE reference layout (fixed header, brand, nav, theme toggle, reading column, footer) ships at LAYOUT-REFERENCE.md in the project root: read it to learn the patterns, then write your own. Delete this line once your layout is designed. webjs check fails while the marker remains. -->
     <main class="min-h-dvh px-4 sm:px-6 py-8">
       \${children}
     </main>
@@ -1365,207 +1202,40 @@ export default function RootLayout({ children }: { children: unknown }) {
 }
 `);
 
-  // The gallery-index home (links every feature demo + the example app) ships
-  // only in the full-stack scaffold, which is the only one that ships the
-  // gallery. saas gets its own landing below.
-  if (isFullStack) {
-  await writeFile(join(appDir, 'app', 'page.ts'), `// webjs-scaffold-placeholder. This is the example homepage. Replace it with your app's real page, then delete this line. webjs check fails while the marker remains.
-import { html } from '@webjsdev/core';
-import { rubric, displayH1, accentLink } from '#lib/utils/ui.ts';
-import { buttonClass } from '#components/ui/button.ts';
-import { badgeClass } from '#components/ui/badge.ts';
-import {
-  cardClass,
-  cardHeaderClass,
-  cardTitleClass,
-  cardDescriptionClass,
-} from '#components/ui/card.ts';
+  // Home page: a minimal welcome. Grow it into the app's real landing page.
+  const homeAuthLinks = isSaas
+    ? '<div class="mt-8 flex flex-wrap gap-4 items-center text-sm"><a href="/login" class="inline-flex items-center px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium no-underline hover:opacity-90">Log in</a><a href="/signup" class="text-foreground no-underline hover:underline underline-offset-4">Create an account</a><a href="/dashboard" class="text-muted-foreground no-underline hover:text-foreground">Dashboard</a></div>'
+    : '';
+  await writeFile(join(appDir, 'app', 'page.ts'), `import { html } from '@webjsdev/core';
 
 export const metadata = {
-  title: '${displayName}: built with webjs',
+  title: '${displayName}',
 };
-
-// Two kinds of reference the scaffold ships. FEATURES are single-concept demos
-// (one WebJs feature each, under app/features/, logic in modules/). EXAMPLES are
-// whole apps that compose several features (under app/examples/). Prune what you
-// do not use (delete the route AND its modules/<name>), then reshape this page.
-const features = [
-  { href: '/features/routing', title: 'Routing', blurb: 'A static route plus a dynamic [id] segment that reads params. The file-based router in miniature.' },
-  { href: '/features/boundaries', title: 'Boundaries', blurb: 'The control-flow throws (forbidden / unauthorized / notFound) and the nearest boundary file that catches each.' },
-  { href: '/features/components', title: 'Components', blurb: 'The WebComponent factory, reactive props, instance signals, and slot projection in light DOM.' },
-  { href: '/features/server-actions', title: 'Server actions', blurb: 'A use-server RPC action next to a server-only .server.ts utility, and why the boundary matters.' },
-  { href: '/features/optimistic-ui', title: 'Optimistic UI', blurb: 'The imperative optimistic(signal, value, action) flip: instant update, automatic rollback on failure.' },
-  { href: '/features/async-render', title: 'Async render', blurb: 'A component that awaits server data in async render(), so the resolved value is in the first paint.' },
-  { href: '/features/directives', title: 'Directives', blurb: 'The lit-html directive set: repeat for keyed lists, watch(signal) for a fine-grained node swap.' },
-  { href: '/features/route-handler', title: 'Route handlers', blurb: 'A server-only route.ts HTTP endpoint returning JSON, the webjs equivalent of a Next route handler.' },
-  { href: '/features/forms', title: 'Forms', blurb: 'A no-JS progressive-enhancement form posting to the page action, with server-side validation errors.' },
-  { href: '/features/metadata', title: 'Metadata', blurb: 'Static metadata plus generateMetadata(ctx), which reads the request to compute the title and Open Graph tags.' },
-  { href: '/features/caching', title: 'Caching', blurb: 'export const revalidate caches the page HTML per URL, with the safety rule for when a shared cache is allowed.' },
-  { href: '/features/env', title: 'Env vars', blurb: 'The server-only vs WEBJS_PUBLIC_ boundary, read during SSR so secrets never reach the browser.' },
-  { href: '/features/client-router', title: 'Client router', blurb: 'Automatic soft navigation: fragment-only fetches, hover prefetch, scroll restore, and graceful no-JS fallback.' },
-  { href: '/features/service-worker', title: 'Service worker', blurb: 'The opt-in offline enhancement, registered from a browser-only lifecycle hook (never a page or layout).' },
-  { href: '/features/websockets', title: 'WebSockets', blurb: 'A WS(ws, req) route endpoint plus the connectWS() client, echoing messages over a live socket.' },
-  { href: '/features/broadcast', title: 'Broadcast', blurb: 'Fan a message out to every connected client on a WebSocket path, so all open tabs stay in sync.' },
-  { href: '/features/rate-limit', title: 'Rate limiting', blurb: 'The rateLimit() middleware scoped to one endpoint, returning a 429 with Retry-After past the window.' },
-  { href: '/features/file-storage', title: 'File storage', blurb: 'A no-JS multipart upload streamed into the FileStore, then served back through a streaming route.' },
-  { href: '/features/sessions', title: 'Sessions', blurb: 'A signed-cookie session applied by a segment middleware, read and written per visitor with getSession() in a route.' },
-];
-const examples = [
-  { href: '/examples/todo', title: 'Optimistic todo', blurb: 'A whole app composing several features: the declarative optimistic() list API, progressive-enhancement forms, accessible labels, the modules split, and SQLite.' },
-];
-
-const galleryCard = (item: { href: string; title: string; blurb: string }) => html\`
-  <a href=\${item.href} class="block no-underline">
-    <div class="\${cardClass()} h-full transition-colors hover:border-border-strong">
-      <div class=\${cardHeaderClass()}>
-        <h3 class=\${cardTitleClass()}>\${item.title}</h3>
-        <p class=\${cardDescriptionClass()}>\${item.blurb}</p>
-      </div>
-    </div>
-  </a>
-\`;
 
 export default function Home() {
   return html\`
-    <section class="mb-14">
-      \${rubric('welcome')}
-      \${displayH1(html\`Hello from <span class="text-primary italic">${displayName}</span>.\`)}
-      <p class="text-lede leading-[1.5] text-muted-foreground max-w-[56ch] m-0 mb-6">
-        This WebJs scaffold ships a gallery below: single-feature demos and one
-        whole example app, all small, idiomatic, and heavily commented. Browse
-        them for context, then replace this page with your own. See
-        \${accentLink('https://docs.webjs.dev', 'the docs')} for the full reference.
+    <div class="max-w-2xl mx-auto py-16">
+      <div class="flex items-center justify-between mb-10">
+        <span class="text-sm font-mono text-muted-foreground">${displayName}</span>
+        <theme-toggle></theme-toggle>
+      </div>
+      <h1 class="text-4xl font-semibold tracking-tight m-0 mb-4">Welcome to ${displayName}.</h1>
+      <p class="text-lg text-muted-foreground leading-relaxed m-0 mb-6">
+        A WebJs app: server-rendered, progressively enhanced, and buildless. This
+        page is <code class="font-mono text-[0.9em] text-foreground">app/page.ts</code>.
+        Edit it, add routes under <code class="font-mono text-[0.9em] text-foreground">app/</code>,
+        and keep server-only code behind <code class="font-mono text-[0.9em] text-foreground">.server.ts</code>.
       </p>
-      <div class="flex gap-3 items-center">
-        <a href="/examples/todo" class=\${buttonClass()}>Open the todo app</a>
-        <span class=\${badgeClass({ variant: 'secondary' })}>v0.1</span>
-      </div>
-    </section>
-
-    <section class="mb-12">
-      <h2 class="font-serif text-[1.6rem] tracking-[-0.02em] font-bold m-0 mb-1">Features</h2>
-      <p class="text-muted-foreground text-sm m-0 mb-5">
-        One webjs concept each, under <code class="font-mono text-[0.9em]">app/features/</code>
-        with logic in <code class="font-mono text-[0.9em]">modules/</code>. Delete the ones you do not need.
-      </p>
-      <div class="grid gap-4 sm:grid-cols-2">
-        \${features.map(galleryCard)}
-      </div>
-    </section>
-
-    <section>
-      <h2 class="font-serif text-[1.6rem] tracking-[-0.02em] font-bold m-0 mb-1">Example apps</h2>
-      <p class="text-muted-foreground text-sm m-0 mb-5">
-        Whole apps that compose several features, under <code class="font-mono text-[0.9em]">app/examples/</code>.
-      </p>
-      <div class="grid gap-4 sm:grid-cols-2">
-        \${examples.map(galleryCard)}
-      </div>
-    </section>
-  \`;
-}
-`);
-  } else {
-    // saas home: the auth landing (hero + login/signup/dashboard) stays the
-    // headline, and the WebJs feature gallery sits BELOW it, so a saas app is
-    // also a learning surface. Keep the `features` list in sync with the
-    // full-stack home above (both ship the same gallery).
-    await writeFile(join(appDir, 'app', 'page.ts'), `// webjs-scaffold-placeholder. This is the example homepage. Replace it with your app's real landing page, then delete this line. webjs check fails while the marker remains.
-import { html } from '@webjsdev/core';
-import { rubric, displayH1, accentLink } from '#lib/utils/ui.ts';
-import {
-  cardClass,
-  cardHeaderClass,
-  cardTitleClass,
-  cardDescriptionClass,
-} from '#components/ui/card.ts';
-
-export const metadata = {
-  title: '${displayName}: built with webjs',
-};
-
-// The WebJs feature gallery, shown below the auth landing. FEATURES are
-// single-concept demos (under app/features/, logic in modules/); EXAMPLES are
-// whole apps (under app/examples/). Prune what you do not use (delete the route
-// AND its modules/<name>). Keep this list in sync with the full-stack home.
-const features = [
-  { href: '/features/routing', title: 'Routing', blurb: 'A static route plus a dynamic [id] segment that reads params. The file-based router in miniature.' },
-  { href: '/features/boundaries', title: 'Boundaries', blurb: 'The control-flow throws (forbidden / unauthorized / notFound) and the nearest boundary file that catches each.' },
-  { href: '/features/components', title: 'Components', blurb: 'The WebComponent factory, reactive props, instance signals, and slot projection in light DOM.' },
-  { href: '/features/server-actions', title: 'Server actions', blurb: 'A use-server RPC action next to a server-only .server.ts utility, and why the boundary matters.' },
-  { href: '/features/optimistic-ui', title: 'Optimistic UI', blurb: 'The imperative optimistic(signal, value, action) flip: instant update, automatic rollback on failure.' },
-  { href: '/features/async-render', title: 'Async render', blurb: 'A component that awaits server data in async render(), so the resolved value is in the first paint.' },
-  { href: '/features/directives', title: 'Directives', blurb: 'The lit-html directive set: repeat for keyed lists, watch(signal) for a fine-grained node swap.' },
-  { href: '/features/route-handler', title: 'Route handlers', blurb: 'A server-only route.ts HTTP endpoint returning JSON, the webjs equivalent of a Next route handler.' },
-  { href: '/features/forms', title: 'Forms', blurb: 'A no-JS progressive-enhancement form posting to the page action, with server-side validation errors.' },
-  { href: '/features/metadata', title: 'Metadata', blurb: 'Static metadata plus generateMetadata(ctx), which reads the request to compute the title and Open Graph tags.' },
-  { href: '/features/caching', title: 'Caching', blurb: 'export const revalidate caches the page HTML per URL, with the safety rule for when a shared cache is allowed.' },
-  { href: '/features/env', title: 'Env vars', blurb: 'The server-only vs WEBJS_PUBLIC_ boundary, read during SSR so secrets never reach the browser.' },
-  { href: '/features/client-router', title: 'Client router', blurb: 'Automatic soft navigation: fragment-only fetches, hover prefetch, scroll restore, and graceful no-JS fallback.' },
-  { href: '/features/service-worker', title: 'Service worker', blurb: 'The opt-in offline enhancement, registered from a browser-only lifecycle hook (never a page or layout).' },
-  { href: '/features/websockets', title: 'WebSockets', blurb: 'A WS(ws, req) route endpoint plus the connectWS() client, echoing messages over a live socket.' },
-  { href: '/features/broadcast', title: 'Broadcast', blurb: 'Fan a message out to every connected client on a WebSocket path, so all open tabs stay in sync.' },
-  { href: '/features/rate-limit', title: 'Rate limiting', blurb: 'The rateLimit() middleware scoped to one endpoint, returning a 429 with Retry-After past the window.' },
-  { href: '/features/file-storage', title: 'File storage', blurb: 'A no-JS multipart upload streamed into the FileStore, then served back through a streaming route.' },
-  { href: '/features/sessions', title: 'Sessions', blurb: 'A signed-cookie session applied by a segment middleware, read and written per visitor with getSession() in a route.' },
-];
-const examples = [
-  { href: '/examples/todo', title: 'Optimistic todo', blurb: 'A whole app composing several features: the declarative optimistic() list API, progressive-enhancement forms, accessible labels, the modules split, and SQLite.' },
-];
-
-const galleryCard = (item: { href: string; title: string; blurb: string }) => html\`
-  <a href=\${item.href} class="block no-underline">
-    <div class="\${cardClass()} h-full transition-colors hover:border-border-strong">
-      <div class=\${cardHeaderClass()}>
-        <h3 class=\${cardTitleClass()}>\${item.title}</h3>
-        <p class=\${cardDescriptionClass()}>\${item.blurb}</p>
-      </div>
+      <p class="text-muted-foreground leading-relaxed m-0">
+        Building with an AI agent? It reads
+        <code class="font-mono text-[0.9em] text-foreground">.agents/skills/webjs/SKILL.md</code>
+        to learn the framework, then builds your app here. Full docs at
+        <a href="https://docs.webjs.dev" class="text-foreground underline underline-offset-4">docs.webjs.dev</a>.
+      </p>${homeAuthLinks}
     </div>
-  </a>
-\`;
-
-export default function Home() {
-  return html\`
-    <section class="mb-14">
-      \${rubric('welcome')}
-      \${displayH1(html\`Hello from <span class="text-primary italic">${displayName}</span>.\`)}
-      <p class="text-lede leading-[1.5] text-muted-foreground max-w-[56ch] m-0 mb-6">
-        The saas starter: email and password auth, a protected dashboard, and a
-        User model, all wired up. Replace this hero with your product's landing;
-        the webjs feature gallery below is reference, prune what you do not need.
-        See \${accentLink('https://docs.webjs.dev', 'the docs')} for the full reference.
-      </p>
-      <div class="flex gap-3 items-center">
-        <a href="/login" class="inline-flex items-center px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm no-underline transition-all hover:bg-primary/90 active:scale-[0.97]">Log in</a>
-        <a href="/signup" class="text-primary no-underline font-medium text-sm">Create an account</a>
-        <a href="/dashboard" class="text-muted-foreground no-underline font-medium text-sm hover:text-foreground transition-colors">Dashboard</a>
-      </div>
-    </section>
-
-    <section class="mb-12">
-      <h2 class="font-serif text-[1.6rem] tracking-[-0.02em] font-bold m-0 mb-1">Features</h2>
-      <p class="text-muted-foreground text-sm m-0 mb-5">
-        One webjs concept each, under <code class="font-mono text-[0.9em]">app/features/</code>
-        with logic in <code class="font-mono text-[0.9em]">modules/</code>. Delete the ones you do not need.
-      </p>
-      <div class="grid gap-4 sm:grid-cols-2">
-        \${features.map(galleryCard)}
-      </div>
-    </section>
-
-    <section>
-      <h2 class="font-serif text-[1.6rem] tracking-[-0.02em] font-bold m-0 mb-1">Example apps</h2>
-      <p class="text-muted-foreground text-sm m-0 mb-5">
-        Whole apps that compose several features, under <code class="font-mono text-[0.9em]">app/examples/</code>.
-      </p>
-      <div class="grid gap-4 sm:grid-cols-2">
-        \${examples.map(galleryCard)}
-      </div>
-    </section>
   \`;
 }
 `);
-  }
 
   // AGENTS.md is copied via the `templateFiles` loop above, from
   // `packages/cli/templates/AGENTS.md` with `{{APP_NAME}}` substitution.
@@ -1652,90 +1322,47 @@ ThemeToggle.register('theme-toggle');
   const { execSync } = await import('node:child_process');
   try {
     execSync('git init', { cwd: appDir, stdio: 'pipe' });
-    // Tell git to use .hooks/ as the hooks directory (tracked in the repo)
-    execSync('git config core.hooksPath .hooks', { cwd: appDir, stdio: 'pipe' });
   } catch { /* git not available: skip */ }
 
   // --- Print success ---
 
+  const guide = 'AGENTS.md, .agents/skills/webjs/   ← the agent guide';
   if (isApi) {
     console.log(`  ${name}/
-    app/api/health/route.ts
-    app/api/users/route.ts               ← thin wrapper over server actions
-    modules/users/{actions,queries,types.ts}
-    CONVENTIONS.md, AGENTS.md, CLAUDE.md
+    app/api/{health,users}/route.ts
+    modules/users/{actions,queries,types.ts}   ← routes over server actions
+    db/{schema,columns,connection}.server.ts   ← Drizzle (User model)
+    ${guide}
 `);
   } else if (isSaas) {
     console.log(`  ${name}/
-    app/layout.ts, page.ts, login/, signup/
+    app/{layout,page}.ts, login/, signup/
     app/dashboard/{page,settings,middleware}.ts  ← protected
-    app/api/auth/[...path]/route.ts      ← auth API
-    styles/globals.css                   ← @webjsdev/ui theme tokens
-    components.json                      ← preconfigured for \`webjs ui add\`
-    components/ui/{button,card,alert,badge,separator,label,input,
-                    dialog,form,field,switch,checkbox}.ts
-    components/theme-toggle.ts
-    modules/auth/{actions,queries,types.ts}
-    lib/{auth,password}.server.ts
-    lib/utils/cn.ts                      ← cn() helper for ui-* components
-    db/{schema,columns,connection}.server.ts  ← Drizzle (User model)
-    CONVENTIONS.md, AGENTS.md, CLAUDE.md
+    app/api/auth/[...path]/route.ts              ← auth API
+    components/ui/*, components/theme-toggle.ts
+    modules/auth/*, lib/{auth,password}.server.ts
+    db/{schema,columns,connection}.server.ts     ← Drizzle (User model)
+    ${guide}
 `);
   } else {
     console.log(`  ${name}/
-    app/layout.ts, page.ts       ← home links to the gallery
-    app/features/{routing,components,server-actions,optimistic-ui,
-                  async-render,directives,route-handler}/
-                                 ← single-feature demos
-    app/examples/todo/           ← one whole example app (composes features)
-    styles/globals.css           ← @webjsdev/ui theme tokens
-    components.json              ← preconfigured for \`webjs ui add\`
-    components/ui/{button,card,alert,badge,separator,label,input}.ts
-    components/theme-toggle.ts   ← light DOM web component
-    lib/utils/cn.ts              ← cn() helper for ui-* components
-    lib/utils/ui.ts              ← Tailwind class-bundle helpers
-    public/input.css             ← Tailwind entry (compiled to public/tailwind.css)
-    modules/{components,server-actions,optimistic-ui,async-render,
-             directives,todo}/  ← feature + example logic (prune what you skip)
-    db/{schema,columns,connection}.server.ts  ← Drizzle (User + Todo)
-    CONVENTIONS.md, AGENTS.md, CLAUDE.md
+    app/{layout,page}.ts          ← a minimal home to grow in place
+    components/theme-toggle.ts
+    public/input.css              ← Tailwind entry (compiles to public/tailwind.css)
+    db/{schema,columns,connection}.server.ts  ← Drizzle
+    ${guide}
 `);
   }
-  // AI-agent guidance comes first so it scrolls past in the terminal
-  // (long reading material, not actionable). The actionable run
-  // command lands LAST in the output so it is the final thing on
-  // screen after the install completes.
-  console.log(`AI-driven development (enforced for all AI agents):
-  ✓ Tests auto-generated with every feature
-  ✓ Docs auto-updated with every change
-  ✓ Git merges/pushes to main require approval
-  ✓ Commits are automatic, small, and meaningful
-  ✓ No AI attribution in commit messages
-  ✓ Convention validation via \`webjs check\`
-
-For AI agents, read this before editing scaffolded files:
-  • The example layout, home page, the gallery under app/features/ and
-    app/examples/ (+ their modules) and schema are REFERENCE ONLY. Replace
-    them with the app the user asked for, and prune the routes you do not
-    use (delete the app/features/<name> or app/examples/<name> route AND
-    its modules/<name>). Don't ship the scaffold's examples as the final
-    product.
-  • This fresh app intentionally FAILS \`webjs check\` with
-    no-scaffold-placeholder violations on the example content (the home
-    page, the layout, and each gallery route). That is the signal to
-    replace or prune each. Delete the marker comment line as you do, and
-    the check goes green.
-  • Use Drizzle + SQLite for app data. It's already wired up. Define
-    real models in db/schema.server.ts, then run \`webjs db generate\`
-    and \`webjs db migrate\`. NEVER store app data in JSON files,
-    in-memory arrays, or localStorage as a substitute for the database.
-  • Only three scaffolds exist: full-stack (default), api, saas. Don't
-    invent template names. If you need a different kind of app, pick
-    the closest scaffold and adapt it.
-  • Read AGENTS.md + CONVENTIONS.md in the new project before writing
-    any code. They are the contract.
-  • Need more detail? Full hosted docs are at https://docs.webjs.dev
-    (every API, directive, recipe, and deployment guide).
+  console.log(`For AI agents, read this before editing:
+  • Read AGENTS.md, then .agents/skills/webjs/SKILL.md. The skill is the guide
+    to building a WebJs app and routes to focused references on demand.
+  • This scaffold is a minimal starting point, not a demo to prune. Grow the app
+    in place: add routes under app/, components under components/, and features
+    under modules/<feature>/, and keep server-only code behind .server.ts.
+  • Use the wired-up database (Drizzle): define real models in
+    db/schema.server.ts, then run 'npm run db:generate' and 'npm run db:migrate'.
+    Never store app data in JSON files, in-memory arrays, or localStorage.
+  • Full hosted docs are at https://docs.webjs.dev.
 `);
 
   // Auto-install (default). Detect the package manager from the env so
