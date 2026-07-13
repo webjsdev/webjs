@@ -1388,7 +1388,7 @@ export default function Home() {
           <a href="https://github.com/webjsdev/webjs" class="inline-flex items-center gap-2 hover:text-foreground transition-colors no-underline">\${iconGithub()}<span>GitHub</span></a>
         </nav>
         <p class="text-[0.7rem] uppercase tracking-[0.15em] text-muted-foreground m-0 text-center">
-          Built with WebJs &middot; Docs and examples licensed under MIT
+          Built with WebJs &middot; MIT License
         </p>
       </footer>
     </div>
