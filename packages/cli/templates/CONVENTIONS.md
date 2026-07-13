@@ -1,0 +1,30 @@
+# Conventions for {{APP_NAME}}
+
+The conventions for building a WebJs app live in the agent skill. **Read
+`AGENTS.md` first, then `.agents/skills/webjs/SKILL.md`** (it routes to focused
+references under `.agents/skills/webjs/references/`, loaded on demand). This file
+is the short version.
+
+## The essentials
+
+- **`app/` is routing only.** Only routing files live there (page, layout, route,
+  middleware, metadata routes). Feature logic goes in `modules/<feature>/`
+  (`actions/`, `queries/`, `components/`, `utils/`); shared UI primitives go in
+  top-level `components/`; browser-safe helpers in `lib/utils/`.
+- **Server-only code goes behind `.server.ts`.** Reach it from a page or component
+  through a `'use server'` action, never by importing a server-only utility
+  directly into browser-bound code.
+- **Use the wired-up database (Drizzle).** Define real models in
+  `db/schema.server.ts`, then `npm run db:generate` and `npm run db:migrate`.
+  Never persist to a JSON file, an in-memory array or Map, or localStorage.
+- **The scaffold ships a feature gallery to learn from.** Single-concept demos
+  under `app/features/` plus the `app/examples/todo` app, with logic in
+  `modules/`. When you build a real app, run `npm run gallery:clear` first to
+  shed the demos and reset the home, then grow the app in place.
+- **Progressive enhancement is the default.** Pages render as HTML, `<a>`
+  navigates, `<form>` + a page action submits, all with JavaScript off; opt into
+  interactivity per behaviour inside a component.
+- **Commit per logical unit** as soon as it is complete, and never push to `main`.
+
+Everything else (the module architecture, the `ActionResult` envelope, styling,
+testing, the client router, optimistic UI) is in the skill's references.

@@ -1,0 +1,19 @@
+# WebJs app rules (Cursor)
+
+Cursor reads `AGENTS.md` natively; this file points you at it and the agent
+skill, and carries the commit rule.
+
+- **Read `AGENTS.md` first, then `.agents/skills/webjs/SKILL.md`** (the guide to
+  building a WebJs app; it routes to focused references under
+  `.agents/skills/webjs/references/` that you load only when a task needs them).
+- **The scaffold ships a browsable feature gallery** (single-concept demos under
+  `app/features/` plus the `app/examples/todo` app, with logic in `modules/`).
+  It is reference to learn the idioms from, not part of your product.
+- **Building a real app? Run `npm run gallery:clear` first** to shed the demo
+  gallery and reset the home, then grow the app in place: add routes under
+  `app/`, components under `components/`, features under `modules/<feature>/`,
+  and keep server-only code behind `.server.ts`.
+- **Use the wired-up database (Drizzle)** for persistence. Never a JSON file, an
+  in-memory array, or localStorage.
+- **Commit per logical unit** as soon as it is complete, and never commit to
+  `main`.

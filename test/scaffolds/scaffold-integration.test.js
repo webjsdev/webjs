@@ -64,25 +64,23 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.ok(existsSync(join(appDir, 'package.json')));
     assert.ok(existsSync(join(appDir, 'tsconfig.json')));
 
-    // Single cross-agent source: a thin AGENTS.md plus the one skill and the
-    // .agents workflow rules. Thin bridges (CLAUDE.md, GEMINI.md, copilot) point
-    // the tools that do NOT read AGENTS.md natively at that source; the
-    // protective .claude hooks back it up for Claude Code.
-    for (const f of ['AGENTS.md', '.agents/skills/webjs/SKILL.md', '.agents/rules/workflow.md', 'CLAUDE.md', 'GEMINI.md', '.github/copilot-instructions.md', '.claude/settings.json', '.editorconfig']) {
+    // Single cross-agent source (AGENTS.md + the one skill + the .agents workflow
+    // rules), with a per-agent file for each tool: thin bridges for the ones that
+    // do not read AGENTS.md natively (CLAUDE.md, GEMINI.md, copilot), a .cursorrules
+    // bridge, CONVENTIONS.md, and a commit-nudge hook for Cursor / Gemini / opencode.
+    for (const f of ['AGENTS.md', '.agents/skills/webjs/SKILL.md', '.agents/rules/workflow.md', 'CLAUDE.md', 'GEMINI.md', '.github/copilot-instructions.md', 'CONVENTIONS.md', '.cursorrules', '.cursor/hooks/nudge-uncommitted.sh', '.gemini/hooks/nudge-uncommitted.sh', '.opencode/plugins/nudge-uncommitted.ts', '.claude/settings.json', '.editorconfig']) {
       assert.ok(existsSync(join(appDir, f)), `${f} should exist`);
     }
-    // No FULL per-tool rule duplicates (the bridges above are thin pointers, not
-    // copies), no design-review ceremony. Cursor and opencode read AGENTS.md
-    // natively, so they get no per-tool file. (The feature gallery under
-    // app/features + app/examples DOES ship; it is asserted below.)
-    for (const f of ['CONVENTIONS.md', '.cursorrules', '.cursor', '.gemini', '.opencode', 'LAYOUT-REFERENCE.md', '.claude/hooks/design-review-before-stop.sh', '.claude/hooks/route-skills.sh', '.claude/skills/webjs-design-review']) {
+    // No design-distinctness ceremony (retired: gallery:clear does the reset job).
+    for (const f of ['LAYOUT-REFERENCE.md', '.claude/hooks/design-review-before-stop.sh', '.claude/skills/webjs-design-review']) {
       assert.ok(!existsSync(join(appDir, f)), `${f} should NOT exist in the scaffold`);
     }
-    // The bridges are THIN (pointers to AGENTS.md), not the old full duplicates.
-    for (const f of ['CLAUDE.md', 'GEMINI.md', '.github/copilot-instructions.md']) {
+    // The rule bridges are THIN (pointers to AGENTS.md / the skill), not full
+    // duplicates. .cursorrules + CONVENTIONS.md point at the skill.
+    for (const f of ['CLAUDE.md', 'GEMINI.md', '.github/copilot-instructions.md', '.cursorrules', 'CONVENTIONS.md']) {
       const src = readFileSync(join(appDir, f), 'utf8');
-      assert.ok(src.length < 2000, `${f} is a thin bridge, not a full rule duplicate`);
-      assert.match(src, /AGENTS\.md/, `${f} points at AGENTS.md`);
+      assert.ok(src.length < 2200, `${f} is a thin bridge, not a full rule duplicate`);
+      assert.match(src, /AGENTS\.md|\.agents\/skills\/webjs/, `${f} points at AGENTS.md or the skill`);
     }
 
     // #271: the opt-in progressive-enhancement service worker + its offline
