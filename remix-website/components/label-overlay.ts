@@ -50,10 +50,13 @@ export class LabelOverlay extends WebComponent {
       return;
     }
 
-    shell.style.opacity = String(labelState.opacity);
+    // Read the shared signal's held value once per frame (outside a reactive
+    // context, so this creates no subscription and forces no re-render).
+    const ls = labelState.get();
+    shell.style.opacity = String(ls.opacity);
     const activeIds = new Set<string>();
 
-    for (const label of labelState.labels) {
+    for (const label of ls.labels) {
       activeIds.add(label.id);
 
       if (!label.visible) {

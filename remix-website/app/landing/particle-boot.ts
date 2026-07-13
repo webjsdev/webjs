@@ -726,6 +726,8 @@ export async function startParticles(canvas: HTMLCanvasElement): Promise<void> {
     }
 
     const nearestPreset = presets[nearest];
+    // Mutate the shared label state in place (no per-frame .set(); see label-bus).
+    const ls = labelState.get();
     if (nearestPreset?.labels && nearestPreset.labels.length > 0 && container) {
       let activeCtrls = presetData.controls[nearest];
       if (blend < 0.001) {
@@ -734,7 +736,7 @@ export async function startParticles(canvas: HTMLCanvasElement): Promise<void> {
       }
 
       projectLabelsInto(
-        labelState.labels,
+        ls.labels,
         nearestPreset,
         labelControlMgr,
         activeCtrls,
@@ -745,10 +747,10 @@ export async function startParticles(canvas: HTMLCanvasElement): Promise<void> {
       );
 
       const distFromNearest = Math.abs(morphValue - nearest);
-      labelState.opacity = Math.max(0, 1 - distFromNearest * 4);
+      ls.opacity = Math.max(0, 1 - distFromNearest * 4);
     } else {
-      labelState.labels.length = 0;
-      labelState.opacity = 0;
+      ls.labels.length = 0;
+      ls.opacity = 0;
     }
 
     engine.render(time);
