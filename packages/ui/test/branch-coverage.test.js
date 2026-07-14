@@ -63,8 +63,19 @@ test('detectProject: webjs via app/layout.ts (no @webjsdev dep)', () => {
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('init: warns gracefully when lib-utils fetch fails', async () => {
-  globalThis.fetch = async (url) => new Response('not found', { status: 404 });
+test('init: warns gracefully when lib-utils fetch fails but the theme succeeds', async () => {
+  // lib-utils / lib-dom 404 (soft warn), but the theme resolves: the theme is
+  // the hard-fail gate (#983), so init must still complete and write config.
+  globalThis.fetch = async (url) => {
+    const name = String(url).split('/').pop().replace('.json', '');
+    if (name.startsWith('theme-')) {
+      return new Response(JSON.stringify({
+        name, type: 'registry:theme',
+        files: [{ path: 'themes/index.css', type: 'registry:file', target: 'app/globals.css', content: '/* @webjsdev/ui theme */\n:root{}' }],
+      }), { status: 200 });
+    }
+    return new Response('not found', { status: 404 });
+  };
   console.log = () => {};
   const out = [];
   console.warn = (...args) => out.push(args.join(' '));

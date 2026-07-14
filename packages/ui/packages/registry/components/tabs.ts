@@ -11,16 +11,6 @@
  *   TabsTrigger    → <ui-tabs-trigger value>
  *   TabsContent    → <ui-tabs-content value>
  *
- * Usage:
- *   <ui-tabs value="account">
- *     <ui-tabs-list>
- *       <ui-tabs-trigger value="account">Account</ui-tabs-trigger>
- *       <ui-tabs-trigger value="password">Password</ui-tabs-trigger>
- *     </ui-tabs-list>
- *     <ui-tabs-content value="account">…</ui-tabs-content>
- *     <ui-tabs-content value="password">…</ui-tabs-content>
- *   </ui-tabs>
- *
  * Attributes on <ui-tabs>:
  *   `value`:       string (reflected, controlled). Active tab value.
  *   `orientation`: "horizontal" (default) | "vertical".
@@ -42,6 +32,22 @@
  *
  * Design tokens used: --muted, --muted-foreground, --foreground, --background,
  * --input, --ring.
+ *
+ * @example
+ * ```html
+ * <ui-tabs value="account">
+ *   <ui-tabs-list>
+ *     <ui-tabs-trigger value="account">Account</ui-tabs-trigger>
+ *     <ui-tabs-trigger value="password">Password</ui-tabs-trigger>
+ *   </ui-tabs-list>
+ *   <ui-tabs-content value="account">
+ *     <p class="text-sm">Update your name and email here.</p>
+ *   </ui-tabs-content>
+ *   <ui-tabs-content value="password">
+ *     <p class="text-sm">Change your password here.</p>
+ *   </ui-tabs-content>
+ * </ui-tabs>
+ * ```
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
 import { cn, ensureId } from '../lib/utils.ts';

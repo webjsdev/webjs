@@ -9,19 +9,21 @@
  *                          → radioGroupClass({ orientation }) on a <div role="radiogroup">
  *   RadioGroupItem         → radioClass() on a native <input type="radio">
  *
- * Usage:
- *   <div role="radiogroup" class=${radioGroupClass()}>
- *     <div class="flex items-center gap-2">
- *       <input type="radio" name="plan" value="basic" id="plan-basic" class=${radioClass()}>
- *       <label class=${labelClass()} for="plan-basic">Basic</label>
- *     </div>
- *     <div class="flex items-center gap-2">
- *       <input type="radio" name="plan" value="pro" id="plan-pro" class=${radioClass()}>
- *       <label class=${labelClass()} for="plan-pro">Pro</label>
- *     </div>
- *   </div>
- *
  * Design tokens used: --input, --primary, --ring, --destructive.
+ *
+ * @example
+ * ```html
+ * <div role="radiogroup" class=${radioGroupClass()}>
+ *   <div class="flex items-center gap-2">
+ *     <input type="radio" name="plan" value="basic" id="plan-basic" class=${radioClass()}>
+ *     <label class=${labelClass()} for="plan-basic">Basic</label>
+ *   </div>
+ *   <div class="flex items-center gap-2">
+ *     <input type="radio" name="plan" value="pro" id="plan-pro" class=${radioClass()}>
+ *     <label class=${labelClass()} for="plan-pro">Pro</label>
+ *   </div>
+ * </div>
+ * ```
  */
 import { cn } from '../lib/utils.ts';
 

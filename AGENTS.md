@@ -133,7 +133,7 @@ Self-check: `page.ts` / `layout.ts` should NOT appear in the network tab or the 
 
 ## Framework source: where to find it
 
-Plain JS with JSDoc lives in `node_modules/@webjsdev/` (`core/`, `server/`, `cli/`, `mcp/`, `intellisense/`, `ui/`); what you read is what runs. Starting points: SSR `@webjsdev/server/src/ssr.js`, client hydration `@webjsdev/core/src/render-client.js`, client router `@webjsdev/core/src/router-client.js`, convention rules `@webjsdev/server/src/check.js`. For UI debugging use the Playwright MCP server; for live introspection the scaffold wires the read-only `@webjsdev/mcp` server (`npx @webjsdev/mcp`, also reachable as `webjs mcp`): `list_routes`, `list_actions`, `list_components`, `check`, plus a knowledge layer (docs / recipes / framework source).
+Plain JS with JSDoc lives in `node_modules/@webjsdev/` (`core/`, `server/`, `cli/`, `mcp/`, `intellisense/`, `ui/`); what you read is what runs. Starting points: SSR `@webjsdev/server/src/ssr.js`, client hydration `@webjsdev/core/src/render-client.js`, client router `@webjsdev/core/src/router-client.js`, convention rules `@webjsdev/server/src/check.js`. For UI debugging use the Playwright MCP server; for live introspection the scaffold wires the read-only `@webjsdev/mcp` server (`npx @webjsdev/mcp`, also reachable as `webjs mcp`): `list_routes`, `list_actions`, `list_components`, `check`, `ui` (the `@webjsdev/ui` kit inventory + a component's helpers / paste-ready example / a11y header), plus a knowledge layer (docs / recipes / framework source).
 
 ---
 
@@ -463,7 +463,7 @@ webjs start  [--port N]            # prod server; source IS the runtime, plain H
 webjs test   [--server] [--browser] [--watch]
 webjs check  [--rules] [--json]    # correctness validator (report-only, no autofix); --json for an agent loop
 webjs routes [--json] [--table] [--no-headers]   # print the route table (path / owner file / methods, #975). Default tree; --json is byte-identical to the MCP list_routes tool; --no-headers drops the --table header for piping
-webjs mcp                          # read-only MCP: routes, actions (RPC hashes), components, check
+webjs mcp                          # read-only MCP: routes, actions (RPC hashes), components, check, ui kit
 webjs doctor [--json] [--strict]   # project-health checklist (incl. a framework-resolve check that warns when @webjsdev/core can't be resolved from the app dir, the fresh-worktree-without-node_modules trap #954; a page/layout elision advisory); non-zero exit on a hard fail. --json emits `{ results, summary }` (results is the DoctorResult[], each carrying a stable code); --strict also fails the exit on warnings (#975)
 webjs types                        # generate .webjs/routes.d.ts (typed Route union + per-route params, #258)
 webjs version                      # print the installed @webjsdev/cli version (also: webjs --version / -v, #975)

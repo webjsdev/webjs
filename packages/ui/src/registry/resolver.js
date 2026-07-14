@@ -1,4 +1,4 @@
-import { fetchRegistryItem } from './fetcher.js';
+import { getRegistryItem } from './fetcher.js';
 
 /**
  * Walk `registryDependencies` transitively. Returns a flat array of items in
@@ -16,7 +16,7 @@ export async function resolveTree(names, baseUrl) {
   async function visit(name) {
     if (seen.has(name)) return;
     seen.set(name, true);
-    const item = await fetchRegistryItem(name, baseUrl);
+    const item = await getRegistryItem(name, baseUrl);
     for (const dep of item.registryDependencies || []) await visit(dep);
     ordered.push(item);
   }

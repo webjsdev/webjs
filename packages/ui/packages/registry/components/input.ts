@@ -8,16 +8,18 @@
  * shadcn parity:
  *   Input  → inputClass()
  *
- * Usage:
- *   <input class=${inputClass()} type="email" name="email" id="email" required
- *          aria-describedby="email-hint">
- *
  * Pair with `<label class=${labelClass()} for="...">` and a hint paragraph
  * (`<p class=${hintClass()} id="...-hint">`). Wrap all three in
  * `<div class=${fieldClass()}>` for the canonical field rhythm.
  *
  * Design tokens used: --input, --background, --primary, --primary-foreground,
  * --muted-foreground, --foreground, --ring, --destructive.
+ *
+ * @example
+ * ```html
+ * <input class=${inputClass()} type="email" name="email" id="email" required
+ *        aria-describedby="email-hint">
+ * ```
  */
 import { cn } from '../lib/utils.ts';
 

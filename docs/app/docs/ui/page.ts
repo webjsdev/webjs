@@ -41,14 +41,20 @@ npx webjsui add button card dialog</pre>
     <table>
       <thead><tr><th>Command</th><th>What it does</th></tr></thead>
       <tbody>
-        <tr><td><code>init</code></td><td>Writes <code>components.json</code>, copies <code>lib/utils.ts</code>, appends theme CSS</td></tr>
-        <tr><td><code>add &lt;names...&gt;</code></td><td>Copy components into your project, install needed deps</td></tr>
+        <tr><td><code>init</code></td><td>Writes <code>components.json</code>, copies <code>lib/utils.ts</code>, installs the theme tokens (exits non-zero if they cannot be written)</td></tr>
+        <tr><td><code>add &lt;names...&gt;</code></td><td>Copy components in, install needed deps, self-heal the theme tokens (Tier-1 files keep the helpers plus a pointer, not the worked example)</td></tr>
         <tr><td><code>list</code></td><td>List all components in the registry</td></tr>
-        <tr><td><code>view &lt;name&gt;</code></td><td>Print a component's source</td></tr>
-        <tr><td><code>diff [name]</code></td><td>Show differences between local and registry</td></tr>
+        <tr><td><code>view &lt;name&gt;</code></td><td>Print a component's projected view (helpers plus the paste-ready example) and full source</td></tr>
+        <tr><td><code>diff [name]</code></td><td>Show differences between your local copy and the live registry</td></tr>
         <tr><td><code>info</code></td><td>Project diagnostics</td></tr>
       </tbody>
     </table>
+    <p>
+      Resolution is local-first: <code>init</code> / <code>add</code> / <code>list</code> / <code>view</code>
+      read the registry that ships inside the installed <code>@webjsdev/ui</code> package, so they need no
+      network. A Tier-1 component's worked structural example is served on demand by
+      <code>webjsui view &lt;name&gt;</code> (and the read-only MCP <code>ui</code> tool), not copied into your file.
+    </p>
 
     <h2>Usage</h2>
     <p>Every component is a standards-compliant custom element. Tag convention: single <code>ui-</code> prefix, sub-components hyphenated.</p>

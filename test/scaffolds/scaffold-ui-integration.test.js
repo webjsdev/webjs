@@ -118,6 +118,14 @@ test('saas scaffold uses Tier-1 helpers on native elements', async () => {
       assert.ok(await exists(join(appDir, 'components', 'ui', `${name}.ts`)));
     }
 
+    // #983: a scaffolded Tier-1 component is LEAN, same as `webjs ui add`: the
+    // worked @example is stripped and a pointer is left, so the copied file is
+    // not dead boilerplate (the example is served on demand by view / MCP).
+    const scaffoldButton = await readFile(join(appDir, 'components', 'ui', 'button.ts'), 'utf8');
+    assert.doesNotMatch(scaffoldButton, /@example/, 'scaffolded Tier-1 component has no worked example');
+    assert.match(scaffoldButton, /npx @webjsdev\/ui view button/, 'scaffolded Tier-1 component carries the pointer');
+    assert.match(scaffoldButton, /export function buttonClass/, 'the helper code is preserved');
+
     // Saas extras: only Tier-2 (dialog) + form-control class helpers
     // (switch, checkbox). form + field are v2-deferred (see ui AGENTS.md).
     for (const name of ['dialog', 'switch', 'checkbox']) {
@@ -125,6 +133,17 @@ test('saas scaffold uses Tier-1 helpers on native elements', async () => {
         await exists(join(appDir, 'components', 'ui', `${name}.ts`)),
         `saas should include components/ui/${name}.ts`,
       );
+    }
+    // A Tier-2 element keeps its file whole (the element IS the component).
+    const scaffoldDialog = await readFile(join(appDir, 'components', 'ui', 'dialog.ts'), 'utf8');
+    assert.match(scaffoldDialog, /@example/, 'scaffolded Tier-2 element keeps its example');
+
+    // #983: the saas-only Tier-1 extras (switch, checkbox) go through the SAME
+    // lean-copy, not just the base set, so a fresh saas scaffold diffs clean.
+    for (const name of ['switch', 'checkbox']) {
+      const src = await readFile(join(appDir, 'components', 'ui', `${name}.ts`), 'utf8');
+      assert.doesNotMatch(src, /@example/, `scaffolded ${name} (Tier-1) has no worked example`);
+      assert.match(src, new RegExp(`npx @webjsdev\\/ui view ${name}`), `scaffolded ${name} carries the pointer`);
     }
 
     // Login page: imports + uses Tier-1 helpers, no stale Tier-1 tags

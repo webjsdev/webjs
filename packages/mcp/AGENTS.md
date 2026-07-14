@@ -44,8 +44,15 @@ src/
                          are extracted LEXICALLY (extractExportNames /
                          extractRouteMethods / extractActionConfig) so no app
                          module is loaded.
-                         `deps` / `docsDeps` / `sourceDeps` are injectable for
-                         in-process tests.
+                         The `ui` tool (#983) is KIT-scoped, not appDir-scoped:
+                         it projects the shared `@webjsdev/ui/registry/extract`
+                         leaf (the kit inventory, or one component's helper
+                         signatures + paste-ready @example + a11y header + deps),
+                         the SAME leaf `webjsui view` renders. A drift test in
+                         mcp.test.mjs asserts the tool output equals that leaf's
+                         output.
+                         `deps` / `docsDeps` / `sourceDeps` / `uiDeps` are
+                         injectable for in-process tests.
   mcp-docs.js            KNOWLEDGE layer (#376): resolveDocsLocation (bundled
                          resources/ first, repo-root skill fallback in
                          dev), the init primer (sources the AGENTS.md

@@ -11,24 +11,32 @@
  *   AvatarGroup                       → avatarGroupClass()
  *   AvatarGroupCount                  → avatarGroupCountClass()
  *
- * Usage:
- *   <span class=${avatarClass()} data-size="default" data-slot="avatar">
- *     <img class=${avatarImageClass()} src="…" alt="…">
- *     <span class=${avatarFallbackClass()}>VK</span>
- *   </span>
- *
- *   <div class=${avatarGroupClass()}>
- *     <span class=${avatarClass()} data-size="default" data-slot="avatar">…</span>
- *     <span class=${avatarClass()} data-size="default" data-slot="avatar">…</span>
- *     <div class=${avatarGroupCountClass()}>+3</div>
- *   </div>
- *
  * A11y (required for accessible output): the <img> MUST have an alt that
  * names the person (alt="Vivek Khandelwal"), or alt="" when a visible text
  * fallback already names them. Always provide the fallback <span> so the
  * avatar is still named if the image fails to load.
  *
  * Design tokens used: --muted, --muted-foreground, --primary, --background.
+ *
+ * @example
+ * ```html
+ * <span class=${avatarClass()} data-size="default" data-slot="avatar">
+ *   <img class=${avatarImageClass()} src="/avatars/vivek.jpg" alt="Vivek Khandelwal">
+ *   <span class=${avatarFallbackClass()}>VK</span>
+ * </span>
+ *
+ * <div class=${avatarGroupClass()}>
+ *   <span class=${avatarClass()} data-size="default" data-slot="avatar">
+ *     <img class=${avatarImageClass()} src="/avatars/vivek.jpg" alt="Vivek Khandelwal">
+ *     <span class=${avatarFallbackClass()}>VK</span>
+ *   </span>
+ *   <span class=${avatarClass()} data-size="default" data-slot="avatar">
+ *     <img class=${avatarImageClass()} src="/avatars/amir.jpg" alt="Amir Rao">
+ *     <span class=${avatarFallbackClass()}>AR</span>
+ *   </span>
+ *   <div class=${avatarGroupCountClass()}>+3</div>
+ * </div>
+ * ```
  */
 import { cn } from '../lib/utils.ts';
 

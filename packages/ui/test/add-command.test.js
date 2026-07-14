@@ -167,6 +167,101 @@ test('add: --overwrite replaces existing files without prompt', async () => {
   }
 });
 
+/* -------------------- example strip / lean copied file (#983) -------------------- */
+
+test('add: strips the worked @example from a Tier-1 helper and leaves a pointer', async () => {
+  globalThis.fetch = async (url) => {
+    const name = String(url).split('/').pop().replace('.json', '');
+    if (name === 'accordion') {
+      return new Response(JSON.stringify({
+        name: 'accordion', type: 'registry:ui',
+        files: [{
+          path: 'components/accordion.ts', type: 'registry:ui',
+          content:
+            '/**\n * Accordion helpers.\n *\n * a11y: same name on each <details> for exclusive-open.\n *\n * @example\n * ```html\n * <div class=${accordionClass()}></div>\n * ```\n */\nexport const accordionClass = () => \'w-full\';\n',
+        }],
+      }), { status: 200 });
+    }
+    return new Response('not found', { status: 404 });
+  };
+  const d = tmp();
+  try {
+    await add.parseAsync(['accordion', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/strip'], { from: 'user' });
+    const body = readFileSync(join(d, 'components', 'ui', 'accordion.ts'), 'utf8');
+    assert.doesNotMatch(body, /@example/, 'the worked example is stripped');
+    assert.doesNotMatch(body, /<div class=/, 'the structural snippet does not persist');
+    assert.match(body, /npx @webjsdev\/ui view accordion/, 'a pointer to the full example is left');
+    assert.match(body, /a11y: same name/, 'the lean header (a11y note) is kept');
+    assert.match(body, /export const accordionClass/, 'the helper code is untouched');
+  } finally {
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});
+
+test('add: leaves a Tier-2 custom-element file whole (no example strip)', async () => {
+  globalThis.fetch = async (url) => {
+    const name = String(url).split('/').pop().replace('.json', '');
+    if (name === 'my-dialog') {
+      return new Response(JSON.stringify({
+        name: 'my-dialog', type: 'registry:ui',
+        files: [{
+          path: 'components/my-dialog.ts', type: 'registry:ui',
+          content:
+            '/**\n * Dialog element.\n *\n * @example\n * ```html\n * <ui-dialog></ui-dialog>\n * ```\n */\nclass Dialog extends WebComponent({}) {}\nDialog.register(\'ui-dialog\');\n',
+        }],
+      }), { status: 200 });
+    }
+    return new Response('not found', { status: 404 });
+  };
+  const d = tmp();
+  try {
+    await add.parseAsync(['my-dialog', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/keep'], { from: 'user' });
+    const body = readFileSync(join(d, 'components', 'ui', 'my-dialog.ts'), 'utf8');
+    assert.match(body, /@example/, 'a Tier-2 element keeps its example');
+    assert.match(body, /<ui-dialog>/);
+  } finally {
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});
+
+test('add: local-first (no --registry) installs a real component, strips its example, self-heals theme', async () => {
+  // No fetch stub and no --registry: resolves from the PACKAGED registry.
+  globalThis.fetch = async () => { throw new Error('should not fetch (local-first)'); };
+  const d = mkdtempSync(join(tmpdir(), 'webjsui-add-real-'));
+  writeFileSync(join(d, 'components.json'), JSON.stringify({
+    style: 'default',
+    tailwind: { css: 'styles/globals.css', baseColor: 'neutral', cssVariables: true },
+    aliases: { components: 'components', utils: 'lib/utils', ui: 'components/ui', lib: 'lib' },
+  }));
+  const origLog = console.log;
+  console.log = () => {};
+  try {
+    await add.parseAsync(['accordion', '--yes', '--no-deps', '--cwd', d], { from: 'user' });
+    const body = readFileSync(join(d, 'components', 'ui', 'accordion.ts'), 'utf8');
+    assert.doesNotMatch(body, /@example/, 'the real example is stripped from the copied file');
+    assert.match(body, /npx @webjsdev\/ui view accordion/, 'the pointer is left');
+    assert.match(body, /export const accordionClass/, 'the helper code is preserved');
+    // Self-heal planted the theme tokens.
+    assert.match(readFileSync(join(d, 'styles', 'globals.css'), 'utf8'), /@webjsdev\/ui theme/);
+  } finally {
+    console.log = origLog;
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});
+
+test('ensureTheme: returns a failure (does not throw) when css path / baseColor is missing', async () => {
+  // Defensive: a direct caller passing an incomplete config must get a
+  // structured failure, never a synchronous crash on join(cwd, undefined). #983.
+  const { ensureTheme } = await import('../src/utils/theme.js');
+  const r1 = await ensureTheme('/tmp/x', 'neutral', undefined);
+  assert.equal(r1.status, 'failed');
+  const r2 = await ensureTheme('/tmp/x', undefined, 'styles/globals.css');
+  assert.equal(r2.status, 'failed');
+});
+
 /* -------------------- rewriteUtilsImport (unit tests) -------------------- */
 
 test('rewriteUtilsImport: maps to lib/utils/cn alias for a Tier-1 file', () => {
