@@ -33,6 +33,7 @@ import {
   getPrompt,
 } from './mcp-docs.js';
 import { resolveFrameworkRoots, runSourceTool } from './mcp-source.js';
+import { projectRoutes } from './routes-report.js';
 
 const PROTOCOL_VERSION = '2024-11-05';
 
@@ -275,22 +276,6 @@ export function extractActionConfig(src) {
 }
 
 /**
- * The literal URL path for a page/api directory: `blog/[slug]` -> `/blog/[slug]`,
- * the root `.` -> `/`. Route groups `(group)` and `_private` segments drop, the
- * same normalization `buildRouteTable` uses for matching.
- *
- * @param {string} routeDir  POSIX-style, `.` for the app root.
- * @returns {string}
- */
-function routePathFromDir(routeDir) {
-  if (!routeDir || routeDir === '.') return '/';
-  const segs = routeDir
-    .split('/')
-    .filter((s) => !(s.startsWith('(') && s.endsWith(')')) && !s.startsWith('_'));
-  return segs.length ? '/' + segs.join('/') : '/';
-}
-
-/**
  * The tool runners. Each is async, takes `(appDir)`, and returns a plain
  * JSON-serialisable projection of an existing server data function. All are
  * read-only.
@@ -311,34 +296,10 @@ export function makeToolRunners(deps) {
   return {
     async list_routes(appDir) {
       const table = await buildRouteTable(appDir);
-      const pages = await Promise.all(
-        table.pages.map(async (r) => {
-          /** @type {{ path: string, file: string, dynamic?: boolean, params?: string[] }} */
-          const out = {
-            path: routePathFromDir(r.routeDir),
-            file: relative(appDir, r.file),
-          };
-          if (r.paramNames && r.paramNames.length) {
-            out.dynamic = true;
-            out.params = r.paramNames;
-          }
-          return out;
-        }),
-      );
-      const apis = await Promise.all(
-        table.apis.map(async (r) => {
-          let methods = [];
-          try {
-            methods = extractRouteMethods(await readFile(r.file, 'utf8'));
-          } catch {}
-          return {
-            path: routePathFromDir(r.routeDir),
-            file: relative(appDir, r.file),
-            methods,
-          };
-        }),
-      );
-      return { pages, apis };
+      // The projection lives in `routes-report.js` so `list_routes` and the CLI
+      // `webjs routes --json` stay byte-identical (#975), the same split as
+      // `check-report.js` for the `check` tool.
+      return projectRoutes(table, { appDir, readFile, extractRouteMethods });
     },
 
     async list_actions(appDir) {
