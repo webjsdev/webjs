@@ -35,7 +35,8 @@ src/
                          reply; tools/list, tools/call, resources/*, prompts/*.
                          INTROSPECTION tools (read-only, appDir-scoped), each
                          projecting a @webjsdev/server function: list_routes
-                         (buildRouteTable), list_actions (buildActionIndex +
+                         (buildRouteTable, via the shared projectRoutes from
+                         routes-report.js), list_actions (buildActionIndex +
                          hashFile, now reports verb/cache/tags/invalidates per
                          #488 and excludes reserved config exports from the
                          callable-action list), list_components (scanComponents),
@@ -60,6 +61,15 @@ src/
                          The shared shape returned by BOTH the MCP `check` tool
                          and `webjs check --json` (the CLI imports it from
                          `@webjsdev/mcp/check-report`), so the two are identical.
+  routes-report.js       routePathFromDir(routeDir) + projectRoutes(table,
+                         { appDir, readFile, extractRouteMethods }) ->
+                         { pages, apis } (#975). The shared route projector
+                         returned by BOTH the MCP `list_routes` tool and
+                         `webjs routes --json` (the CLI imports it from
+                         `@webjsdev/mcp/routes-report`), so the two are identical.
+                         A leaf module: the two effectful deps are injected so it
+                         needs no `mcp.js` import (no cycle). A drift test asserts
+                         `list_routes` output equals `projectRoutes`.
 scripts/
   copy-mcp-resources.js  prepack: bundle the repo-root skill (references + SKILL.md) + AGENTS.md
                          into resources/ (in `files`) so npx is self-contained.
