@@ -55,4 +55,4 @@ Declarative Shadow DOM is a way to write a shadow root as HTML, using a `<templa
 
 ### Does server-side rendering web components help SEO?
 
-Yes. When the content is in the first HTML response, a crawler reads it immediately with no need to execute JavaScript or reassemble a shadow tree. WebJs renders in light DOM by default, so the post body, headings, and navigation are plain HTML in the response, which is the most reliable path to being indexed across the full range of crawlers.
+Yes. When the content is in the first HTML response, a crawler reads it immediately with no JavaScript to execute. WebJs server-renders components whether they use light DOM or shadow DOM, so the content is in that first response either way: light-DOM output is plain HTML, and shadow-DOM output is server-rendered too, shipped as Declarative Shadow DOM in the same response. The post body, headings, and navigation are in the initial HTML, which is what search engines index.
