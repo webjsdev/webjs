@@ -6,15 +6,17 @@
  * shadcn parity:
  *   Label  → labelClass()
  *
- * Usage:
- *   <label class=${labelClass()} for="email">Email</label>
- *   <input class=${inputClass()} id="email" name="email" type="email">
- *
  * Disabled-state inheritance: when the label is inside a container with
  * `data-disabled="true"` (the "field" pattern), or next to a peer-disabled
  * control, it dims automatically.
  *
  * Design tokens used: none (typography only).
+ *
+ * @example
+ * ```html
+ * <label class=${labelClass()} for="email">Email</label>
+ * <input class=${inputClass()} id="email" name="email" type="email">
+ * ```
  */
 
 /** Compose Tailwind classes for a native `<label>`. */

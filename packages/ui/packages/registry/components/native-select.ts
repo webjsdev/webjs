@@ -13,16 +13,6 @@
  *                              stylesheet sets Canvas / CanvasText on
  *                              every <option> automatically)
  *
- * Usage:
- *   <div class=${nativeSelectWrapperClass()}>
- *     <select class=${nativeSelectClass()} name="plan">
- *       <option>Basic</option>
- *       <option>Pro</option>
- *     </select>
- *     <!-- chevron icon, decorative -->
- *     <svg class="${nativeSelectIconClass()}" aria-hidden="true">…</svg>
- *   </div>
- *
  * Importing this module installs a stylesheet that forces Canvas /
  * CanvasText on every <option> inside the wrapper so the dropdown reads
  * in both light and dark themes regardless of OS preference; advanced
@@ -30,6 +20,18 @@
  *
  * Design tokens used: --input, --background, --primary, --primary-foreground,
  * --muted-foreground, --ring, --destructive.
+ *
+ * @example
+ * ```html
+ * <div class=${nativeSelectWrapperClass()}>
+ *   <select class=${nativeSelectClass()} name="plan">
+ *     <option>Basic</option>
+ *     <option>Pro</option>
+ *   </select>
+ *   <!-- chevron icon, decorative -->
+ *   <svg class="${nativeSelectIconClass()}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+ * </div>
+ * ```
  */
 import { cn } from '../lib/utils.ts';
 

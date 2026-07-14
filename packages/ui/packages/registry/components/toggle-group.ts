@@ -12,19 +12,6 @@
  *                                 → <ui-toggle-group type variant size value>
  *   ToggleGroupItem               → <ui-toggle-group-item value>
  *
- * Usage:
- *   <ui-toggle-group type="single" value="bold">
- *     <ui-toggle-group-item value="bold" aria-label="Bold"><b>B</b></ui-toggle-group-item>
- *     <ui-toggle-group-item value="italic" aria-label="Italic"><i>I</i></ui-toggle-group-item>
- *     <ui-toggle-group-item value="underline" aria-label="Underline"><u>U</u></ui-toggle-group-item>
- *   </ui-toggle-group>
- *
- *   <!-- Multiple selection (comma-separated value): -->
- *   <ui-toggle-group type="multiple" value="bold,italic">
- *     <ui-toggle-group-item value="bold">B</ui-toggle-group-item>
- *     <ui-toggle-group-item value="italic">I</ui-toggle-group-item>
- *   </ui-toggle-group>
- *
  * Attributes on <ui-toggle-group>:
  *   `type`:        "single" (default) | "multiple".
  *   `value`:       string. Selected value(s). Single: a single value;
@@ -47,6 +34,21 @@
  *
  * Design tokens used: inherited from toggleClass (--muted, --accent, --ring,
  * --input, --destructive).
+ *
+ * @example
+ * ```html
+ * <ui-toggle-group type="single" value="bold">
+ *   <ui-toggle-group-item value="bold" aria-label="Bold"><b>B</b></ui-toggle-group-item>
+ *   <ui-toggle-group-item value="italic" aria-label="Italic"><i>I</i></ui-toggle-group-item>
+ *   <ui-toggle-group-item value="underline" aria-label="Underline"><u>U</u></ui-toggle-group-item>
+ * </ui-toggle-group>
+ *
+ * <!-- Multiple selection, with a comma-separated value. -->
+ * <ui-toggle-group type="multiple" value="bold,italic">
+ *   <ui-toggle-group-item value="bold">B</ui-toggle-group-item>
+ *   <ui-toggle-group-item value="italic">I</ui-toggle-group-item>
+ * </ui-toggle-group>
+ * ```
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';

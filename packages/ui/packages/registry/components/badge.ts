@@ -6,11 +6,6 @@
  *   Badge (variant: default | secondary | destructive | outline | ghost | link)
  *                                  → badgeClass({ variant })
  *
- * Usage:
- *   <span class=${badgeClass()}>New</span>
- *   <span class=${badgeClass({ variant: 'destructive' })}>Error</span>
- *   <a    class=${badgeClass({ variant: 'link' })} href="/profile">@vivek</a>
- *
  * The `[a&]:hover:...` hover styles only apply when the element is an `<a>`,
  * so a static `<span>` doesn't pick up an unwanted hover.
  *
@@ -20,6 +15,13 @@
  *
  * Design tokens used: --primary, --secondary, --destructive, --foreground,
  * --accent, --border, --ring.
+ *
+ * @example
+ * ```html
+ * <span class=${badgeClass()}>New</span>
+ * <span class=${badgeClass({ variant: 'destructive' })}>Error</span>
+ * <a class=${badgeClass({ variant: 'link' })} href="/profile">@vivek</a>
+ * ```
  */
 import { cn } from '../lib/utils.ts';
 

@@ -6,15 +6,17 @@
  * shadcn parity:
  *   Textarea  → textareaClass()
  *
- * Usage:
- *   <textarea class=${textareaClass()} name="message" rows="4" placeholder="Your message…">
- *   </textarea>
- *
  * Pair with `<label class=${labelClass()} for="...">` and wrap in
  * `<div class=${fieldClass()}>` for the canonical field rhythm.
  *
  * Design tokens used: --input, --background, --muted-foreground, --ring,
  * --destructive.
+ *
+ * @example
+ * ```html
+ * <textarea class=${textareaClass()} name="message" rows="4" placeholder="Your message">
+ * </textarea>
+ * ```
  */
 import { cn } from '../lib/utils.ts';
 

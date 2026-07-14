@@ -11,27 +11,29 @@
  *   BreadcrumbSeparator  → breadcrumbSeparatorClass() (aria-hidden + role="presentation")
  *   BreadcrumbEllipsis   → breadcrumbEllipsisClass()
  *
- * Usage:
- *   <nav aria-label="breadcrumb" data-slot="breadcrumb">
- *     <ol class=${breadcrumbListClass()}>
- *       <li class=${breadcrumbItemClass()}>
- *         <a class=${breadcrumbLinkClass()} href="/">Home</a>
- *       </li>
- *       <li class=${breadcrumbSeparatorClass()} role="presentation" aria-hidden="true">
- *         <svg>›</svg>
- *       </li>
- *       <li class=${breadcrumbItemClass()}>
- *         <span class=${breadcrumbPageClass()} aria-current="page">Posts</span>
- *       </li>
- *     </ol>
- *   </nav>
- *
  * A11y (required for accessible output): wrap the list in <nav
  * aria-label="breadcrumb">, set aria-current="page" on the current-page
  * element, and mark each separator role="presentation" aria-hidden="true".
  * The class helpers emit none of these.
  *
  * Design tokens used: --muted-foreground, --foreground.
+ *
+ * @example
+ * ```html
+ * <nav aria-label="breadcrumb" data-slot="breadcrumb">
+ *   <ol class=${breadcrumbListClass()}>
+ *     <li class=${breadcrumbItemClass()}>
+ *       <a class=${breadcrumbLinkClass()} href="/">Home</a>
+ *     </li>
+ *     <li class=${breadcrumbSeparatorClass()} role="presentation" aria-hidden="true">
+ *       <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+ *     </li>
+ *     <li class=${breadcrumbItemClass()}>
+ *       <span class=${breadcrumbPageClass()} aria-current="page">Posts</span>
+ *     </li>
+ *   </ol>
+ * </nav>
+ * ```
  */
 
 export const breadcrumbListClass = (): string =>

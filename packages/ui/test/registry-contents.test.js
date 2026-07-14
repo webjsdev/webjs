@@ -72,6 +72,25 @@ test('every v1 component source file exists and is non-trivial', { skip }, () =>
   }
 });
 
+// #983: every component's module JSDoc must carry a complete, machine-
+// extractable @example (the structural snippet served by `webjsui view` / the
+// MCP `ui` tool, and stripped from the copied file). This test fires when one
+// is missing, empty, or still elided.
+test('every v1 component has a complete, extractable @example', { skip }, async () => {
+  const { extractExample, hasExample } = await import('../src/registry/example.js');
+  const ELLIPSIS = String.fromCharCode(0x2026);
+  for (const name of V1_COMPONENTS) {
+    const src = readSource(name);
+    assert.ok(hasExample(src), `${name}: module JSDoc has no @example block`);
+    const ex = extractExample(src);
+    assert.ok(ex && ex.length > 20, `${name}: @example extracts empty/too short`);
+    assert.ok(!ex.includes(ELLIPSIS) && !ex.includes('...'), `${name}: @example still has an elision`);
+    // The example should reference the component (a tag or a helper call), so
+    // it is a real usage snippet, not placeholder prose.
+    assert.ok(/[<$]/.test(ex), `${name}: @example has no markup / helper call`);
+  }
+});
+
 test('every v1 component is declared in registry.json', { skip }, () => {
   const m = readManifest();
   const names = new Set(m.items.map((it) => it.name));

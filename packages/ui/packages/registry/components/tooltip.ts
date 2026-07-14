@@ -11,14 +11,6 @@
  *   TooltipProvider       → not needed; delay state is per-tooltip (and globally
  *                           shared via `skip-delay-duration` cooldown).
  *
- * Usage:
- *   <ui-tooltip delay-duration="500" skip-delay-duration="300">
- *     <ui-tooltip-trigger>
- *       <button class=${buttonClass({ size: 'icon', variant: 'ghost' })} aria-label="Help">?</button>
- *     </ui-tooltip-trigger>
- *     <ui-tooltip-content side="top">Helpful tip</ui-tooltip-content>
- *   </ui-tooltip>
- *
  * Attributes on <ui-tooltip>:
  *   `open`:                boolean (reflected). Open state.
  *   `delay-duration`:      ms, default 700. Initial hover delay before opening.
@@ -39,6 +31,16 @@
  * Programmatic API on <ui-tooltip>: `.show()` · `.hide()`.
  *
  * Design tokens used: --foreground, --background.
+ *
+ * @example
+ * ```html
+ * <ui-tooltip delay-duration="500" skip-delay-duration="300">
+ *   <ui-tooltip-trigger>
+ *     <button class=${buttonClass({ size: 'icon', variant: 'ghost' })} aria-label="Help">?</button>
+ *   </ui-tooltip-trigger>
+ *   <ui-tooltip-content side="top">Helpful tip</ui-tooltip-content>
+ * </ui-tooltip>
+ * ```
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
 import { ensureId } from '../lib/utils.ts';

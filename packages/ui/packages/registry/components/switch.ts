@@ -8,19 +8,21 @@
  *   Switch (size: default | sm)  → switchInputClass() on a hidden <input> +
  *                                   switchTrackClass({ size }) on a sibling <span>
  *
- * Usage:
- *   <label class="inline-flex items-center gap-2">
- *     <input type="checkbox" role="switch" name="notify" class=${switchInputClass()}>
- *     <span class=${switchTrackClass()}></span>
- *     <span class=${labelClass()}>Notifications</span>
- *   </label>
- *
- *   <!-- Small size: -->
- *   <input type="checkbox" role="switch" name="x" class=${cn(switchInputClass(), 'peer/sm')}>
- *   <span class=${switchTrackClass({ size: 'sm' })}></span>
- *
  * Design tokens used: --primary, --input, --background, --foreground, --ring,
  * --primary-foreground.
+ *
+ * @example
+ * ```html
+ * <label class="inline-flex items-center gap-2">
+ *   <input type="checkbox" role="switch" name="notify" class=${switchInputClass()}>
+ *   <span class=${switchTrackClass()}></span>
+ *   <span class=${labelClass()}>Notifications</span>
+ * </label>
+ *
+ * <!-- Small size. -->
+ * <input type="checkbox" role="switch" name="x" class=${cn(switchInputClass(), 'peer/sm')}>
+ * <span class=${switchTrackClass({ size: 'sm' })}></span>
+ * ```
  */
 import { cn } from '../lib/utils.ts';
 

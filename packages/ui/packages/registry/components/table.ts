@@ -13,31 +13,33 @@
  *   TableHead / TableCell / TableCaption
  *                                     → tableHeadClass() / tableCellClass() / tableCaptionClass()
  *
- * Usage:
- *   <div class=${tableContainerClass()}>
- *     <table class=${tableClass()}>
- *       <thead class=${tableHeaderClass()}>
- *         <tr class=${tableRowClass()}>
- *           <th scope="col" class=${tableHeadClass()}>Name</th>
- *           <th scope="col" class=${tableHeadClass()}>Status</th>
- *         </tr>
- *       </thead>
- *       <tbody class=${tableBodyClass()}>
- *         <tr class=${tableRowClass()}>
- *           <td class=${tableCellClass()}>Vivek</td>
- *           <td class=${tableCellClass()}>Active</td>
- *         </tr>
- *       </tbody>
- *       <caption class=${tableCaptionClass()}>Users</caption>
- *     </table>
- *   </div>
- *
  * A11y (required for accessible output): every header cell needs a scope
  * (scope="col" on a column header, scope="row" on a row header) so screen
  * readers map cells to their headers. Add a <caption> naming the table's
  * purpose (it can be visually hidden if a heading already names it).
  *
  * Design tokens used: --muted, --muted-foreground, --foreground.
+ *
+ * @example
+ * ```html
+ * <div class=${tableContainerClass()}>
+ *   <table class=${tableClass()}>
+ *     <thead class=${tableHeaderClass()}>
+ *       <tr class=${tableRowClass()}>
+ *         <th scope="col" class=${tableHeadClass()}>Name</th>
+ *         <th scope="col" class=${tableHeadClass()}>Status</th>
+ *       </tr>
+ *     </thead>
+ *     <tbody class=${tableBodyClass()}>
+ *       <tr class=${tableRowClass()}>
+ *         <td class=${tableCellClass()}>Vivek</td>
+ *         <td class=${tableCellClass()}>Active</td>
+ *       </tr>
+ *     </tbody>
+ *     <caption class=${tableCaptionClass()}>Users</caption>
+ *   </table>
+ * </div>
+ * ```
  */
 
 export const tableContainerClass = (): string => 'relative w-full overflow-x-auto';

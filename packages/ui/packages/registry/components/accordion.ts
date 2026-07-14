@@ -15,21 +15,6 @@
  *   <AccordionTrigger>                    → <summary class=${accordionTriggerClass()}>
  *   <AccordionContent>                    → <div class=${accordionContentClass()}>
  *
- * Usage (single-open, exclusive):
- *   <div class=${accordionClass()}>
- *     <details name="faq" class=${accordionItemClass()}>
- *       <summary class=${accordionTriggerClass()}>
- *         <span>Is it accessible?</span>
- *         <svg class="size-4 transition-transform group-open:rotate-180">…</svg>
- *       </summary>
- *       <div class=${accordionContentClass()}>Yes, native disclosure widget.</div>
- *     </details>
- *     <details name="faq" class=${accordionItemClass()} open>
- *       <summary class=${accordionTriggerClass()}>Is it styled?</summary>
- *       <div class=${accordionContentClass()}>Yes, shadcn design tokens.</div>
- *     </details>
- *   </div>
- *
  * Initial state: add `open` on the <details> that should render expanded
  * on first paint. Programmatic toggling: `el.open = true | false`.
  *
@@ -38,6 +23,26 @@
  * <ui-accordion> custom element set.
  *
  * Design tokens used: --border, --ring, --foreground.
+ *
+ * @example
+ * ```html
+ * <div class=${accordionClass()}>
+ *   <details name="faq" class=${accordionItemClass()} open>
+ *     <summary class=${accordionTriggerClass()}>
+ *       <span>Is it accessible?</span>
+ *       <svg class="size-4 shrink-0 transition-transform group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+ *     </summary>
+ *     <div class=${accordionContentClass()}>Yes, it uses a native disclosure widget.</div>
+ *   </details>
+ *   <details name="faq" class=${accordionItemClass()}>
+ *     <summary class=${accordionTriggerClass()}>
+ *       <span>Is it styled?</span>
+ *       <svg class="size-4 shrink-0 transition-transform group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+ *     </summary>
+ *     <div class=${accordionContentClass()}>Yes, with the shadcn design tokens.</div>
+ *   </details>
+ * </div>
+ * ```
  */
 
 /** Root wrapper. Holds the column-of-items rhythm; no display: rules. */

@@ -226,6 +226,32 @@ test('add: leaves a Tier-2 custom-element file whole (no example strip)', async 
   }
 });
 
+test('add: local-first (no --registry) installs a real component, strips its example, self-heals theme', async () => {
+  // No fetch stub and no --registry: resolves from the PACKAGED registry.
+  globalThis.fetch = async () => { throw new Error('should not fetch (local-first)'); };
+  const d = mkdtempSync(join(tmpdir(), 'webjsui-add-real-'));
+  writeFileSync(join(d, 'components.json'), JSON.stringify({
+    style: 'default',
+    tailwind: { css: 'styles/globals.css', baseColor: 'neutral', cssVariables: true },
+    aliases: { components: 'components', utils: 'lib/utils', ui: 'components/ui', lib: 'lib' },
+  }));
+  const origLog = console.log;
+  console.log = () => {};
+  try {
+    await add.parseAsync(['accordion', '--yes', '--no-deps', '--cwd', d], { from: 'user' });
+    const body = readFileSync(join(d, 'components', 'ui', 'accordion.ts'), 'utf8');
+    assert.doesNotMatch(body, /@example/, 'the real example is stripped from the copied file');
+    assert.match(body, /npx webjsui view accordion/, 'the pointer is left');
+    assert.match(body, /export const accordionClass/, 'the helper code is preserved');
+    // Self-heal planted the theme tokens.
+    assert.match(readFileSync(join(d, 'styles', 'globals.css'), 'utf8'), /@webjsdev\/ui theme/);
+  } finally {
+    console.log = origLog;
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});
+
 /* -------------------- rewriteUtilsImport (unit tests) -------------------- */
 
 test('rewriteUtilsImport: maps to lib/utils/cn alias for a Tier-1 file', () => {

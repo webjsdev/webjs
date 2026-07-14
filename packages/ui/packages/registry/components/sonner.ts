@@ -12,18 +12,6 @@
  *                   → toast()  (plus toast.success / .error / .info / .warning /
  *                     .loading / .promise / .dismiss)
  *
- * Usage:
- *   <!-- Mount once at the root of your app (typically in layout.ts): -->
- *   <ui-sonner position="bottom-right"></ui-sonner>
- *
- *   // Then from anywhere (server or client component):
- *   import { toast } from '@/components/ui/sonner.ts';
- *   toast('Saved!');
- *   toast.success('Account created');
- *   toast.error('Failed to save', { description: 'Try again' });
- *   toast.promise(savePost(), { loading: 'Saving…', success: 'Saved', error: 'Failed' });
- *   toast.dismiss(id);
- *
  * Attributes on <ui-sonner>:
  *   `position`: "top-left" | "top-center" | "top-right" |
  *               "bottom-left" | "bottom-center" | "bottom-right" (default).
@@ -42,6 +30,22 @@
  * uses); typically only needed when mounting multiple viewports.
  *
  * Design tokens used: --popover, --popover-foreground, --border, --radius.
+ *
+ * @example
+ * ```html
+ * <!-- Mount once at the root of your app, typically in layout.ts. -->
+ * <ui-sonner position="bottom-right"></ui-sonner>
+ *
+ * <!-- Then from anywhere, in a server or client component, call the API. -->
+ * <script type="module">
+ *   import { toast } from '@/components/ui/sonner.ts';
+ *   toast('Saved!');
+ *   toast.success('Account created');
+ *   toast.error('Failed to save', { description: 'Try again' });
+ *   toast.promise(savePost(), { loading: 'Saving', success: 'Saved', error: 'Failed' });
+ *   toast.dismiss(id);
+ * </script>
+ * ```
  */
 import { WebComponent, html, repeat, unsafeHTML, signal, prop } from '@webjsdev/core';
 import { onBeforeCache } from '../lib/dom.ts';

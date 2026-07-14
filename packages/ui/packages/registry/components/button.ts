@@ -8,12 +8,6 @@
  *         (size:    default | xs | sm | lg | icon | icon-xs | icon-sm | icon-lg)
  *                                            → buttonClass({ variant, size })
  *
- * Usage:
- *   <button class=${buttonClass()} type="submit">Save</button>
- *   <button class=${buttonClass({ variant: 'outline', size: 'sm' })}>Cancel</button>
- *   <button class=${buttonClass({ size: 'icon' })} aria-label="Settings">⚙</button>
- *   <a       class=${buttonClass({ variant: 'link' })} href="/about">About</a>
- *
  * shadcn React's `asChild` (Slot) prop has no equivalent here: just call
  * `buttonClass(...)` and spread the classes onto whatever element you want.
  *
@@ -26,6 +20,14 @@
  * Design tokens used: --primary, --primary-foreground, --destructive,
  * --secondary, --secondary-foreground, --accent, --accent-foreground,
  * --background, --input, --ring.
+ *
+ * @example
+ * ```html
+ * <button class=${buttonClass()} type="submit">Save</button>
+ * <button class=${buttonClass({ variant: 'outline', size: 'sm' })}>Cancel</button>
+ * <button class=${buttonClass({ size: 'icon' })} aria-label="Settings">⚙</button>
+ * <a class=${buttonClass({ variant: 'link' })} href="/about">About</a>
+ * ```
  */
 import { cn } from '../lib/utils.ts';
 

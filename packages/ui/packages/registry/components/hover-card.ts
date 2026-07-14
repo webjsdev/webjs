@@ -9,16 +9,6 @@
  *   HoverCardTrigger   → <ui-hover-card-trigger>
  *   HoverCardContent   → <ui-hover-card-content side align side-offset align-offset>
  *
- * Usage:
- *   <ui-hover-card open-delay="700" close-delay="300">
- *     <ui-hover-card-trigger>
- *       <a href="/user/vivek">@vivek</a>
- *     </ui-hover-card-trigger>
- *     <ui-hover-card-content>
- *       <div class="flex gap-3">…</div>
- *     </ui-hover-card-content>
- *   </ui-hover-card>
- *
  * Attributes on <ui-hover-card>:
  *   `open`:        boolean (reflected). Open state.
  *   `open-delay`:  ms, default 700. Hover delay before opening.
@@ -37,6 +27,24 @@
  * Programmatic API on <ui-hover-card>: `.show()` · `.hide()`.
  *
  * Design tokens used: --popover, --popover-foreground, --border.
+ *
+ * @example
+ * ```html
+ * <ui-hover-card open-delay="700" close-delay="300">
+ *   <ui-hover-card-trigger>
+ *     <a href="/user/vivek">@vivek</a>
+ *   </ui-hover-card-trigger>
+ *   <ui-hover-card-content>
+ *     <div class="flex gap-3">
+ *       <img class="size-10 rounded-full" src="/avatars/vivek.jpg" alt="Vivek Khandelwal">
+ *       <div>
+ *         <div class="text-sm font-semibold">Vivek Khandelwal</div>
+ *         <p class="text-sm text-muted-foreground">Builds the platform, not against it.</p>
+ *       </div>
+ *     </div>
+ *   </ui-hover-card-content>
+ * </ui-hover-card>
+ * ```
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
 import { ensureId } from '../lib/utils.ts';
