@@ -386,6 +386,30 @@ export function makeToolRunners(deps) {
  * @param {{ uiInventory: Function, uiComponent: Function }} uiDeps
  * @param {{ name?: string }} args
  */
+/**
+ * Resolve the `ui` tool's deps from the shared `@webjsdev/ui/registry/extract`
+ * leaf, GUARDED (#983): if `@webjsdev/ui` is absent or too old to carry the
+ * `./registry/extract` subpath (a cross-package version skew), only the `ui`
+ * tool degrades (its deps throw a clear "unavailable" error, surfaced as an
+ * isError tool result) while the rest of the server keeps working. An unguarded
+ * top-level import would instead reject during bootstrap and sink the whole
+ * server. `importer` is injected so the failure path is unit-testable.
+ *
+ * @param {() => Promise<{ uiInventory: Function, uiComponent: Function }>} importer
+ * @returns {Promise<{ uiInventory: Function, uiComponent: Function }>}
+ */
+export async function loadUiDeps(importer) {
+  try {
+    const ui = await importer();
+    return { uiInventory: ui.uiInventory, uiComponent: ui.uiComponent };
+  } catch {
+    const unavailable = () => {
+      throw new Error('@webjsdev/ui is not available (install/upgrade @webjsdev/ui to use the ui tool)');
+    };
+    return { uiInventory: unavailable, uiComponent: unavailable };
+  }
+}
+
 export function runUiTool(uiDeps, args) {
   const name = typeof args.name === 'string' && args.name ? args.name : null;
   if (!name) return { inventory: uiDeps.uiInventory() };
@@ -494,23 +518,10 @@ export async function runMcpServer(opts) {
 
   // The `ui` tool (#983): the @webjsdev/ui kit inventory / per-component
   // projection, read from the shared `@webjsdev/ui/registry/extract` leaf.
-  // Injectable for tests; otherwise resolved from the installed package. The
-  // import is GUARDED: if @webjsdev/ui is absent or too old to carry the
-  // `./registry/extract` subpath (a cross-package version skew), only the `ui`
-  // tool degrades (it reports the kit is unavailable), the rest of the server
-  // keeps working. An unguarded import here would sink the whole server.
+  // Injectable for tests; otherwise resolved (guarded) from the installed
+  // package. See {@link loadUiDeps} for why the import is guarded.
   let uiDeps = opts.uiDeps;
-  if (!uiDeps) {
-    try {
-      const ui = await import('@webjsdev/ui/registry/extract');
-      uiDeps = { uiInventory: ui.uiInventory, uiComponent: ui.uiComponent };
-    } catch {
-      const unavailable = () => {
-        throw new Error('@webjsdev/ui is not available (install/upgrade @webjsdev/ui to use the ui tool)');
-      };
-      uiDeps = { uiInventory: unavailable, uiComponent: unavailable };
-    }
-  }
+  if (!uiDeps) uiDeps = await loadUiDeps(() => import('@webjsdev/ui/registry/extract'));
 
   /** Write one JSON-RPC frame as a single line to stdout. */
   const send = (frame) => {

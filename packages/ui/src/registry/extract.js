@@ -21,8 +21,10 @@
 import { loadRegistryItem, loadRegistryIndex, isCustomElementSource } from './local.js';
 import { extractExample, stripExample } from './example.js';
 
-// Re-export the lean-copy primitives so a copier (the CLI's `add`, the scaffold
-// generator) has one import surface for the shared example-strip behaviour.
+// Re-export the lean-copy primitives so the scaffold generator (via
+// `packages/cli/lib/lean-copy.js`) has one import surface for the shared
+// example-strip. (The CLI's own `add` imports them directly from local.js /
+// example.js.)
 export { isCustomElementSource, stripExample };
 
 /**

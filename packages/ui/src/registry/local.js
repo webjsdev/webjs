@@ -167,11 +167,14 @@ export function loadRegistryIndex() {
 }
 
 /**
- * The list of Tier-1 helper component names (registry:ui items that are NOT
- * custom elements). Derived from the manifest + source, so it stays correct as
- * components migrate between tiers. See {@link isCustomElementSource}.
+ * The tier of a `registry:ui` component: `1` for a class-helper file, `2` for a
+ * file that defines/registers a custom element. Returns `null` for a name that
+ * is not a `registry:ui` item. Derived from the source (via
+ * {@link isCustomElementSource}), so it stays correct as components migrate
+ * between tiers.
  *
- * @returns {string[]}
+ * @param {string} name
+ * @returns {1 | 2 | null}
  */
 export function tierOfItem(name) {
   const item = loadRegistryItem(name);

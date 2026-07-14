@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(__dirname, '..', '..', '..');
-const { runMcpServer, extractExportNames, extractRouteMethods, extractActionConfig } = await import(
+const { runMcpServer, extractExportNames, extractRouteMethods, extractActionConfig, loadUiDeps } = await import(
   resolve(REPO, 'packages', 'mcp', 'src', 'mcp.js')
 );
 
@@ -375,10 +375,24 @@ test('mcp: tools/call ui returns the kit inventory and matches the shared extrac
   assert.ok(err.result.isError, 'an unknown component is a tool error, not a crash');
 });
 
-test('mcp: an unavailable @webjsdev/ui degrades only the ui tool, the server stays up', async () => {
-  // Simulate the version-skew case (the ./registry/extract subpath missing) by
-  // injecting uiDeps whose functions throw. The ui tool must report an error,
-  // but the rest of the server (here list_routes) must still answer.
+test('loadUiDeps: a failing import (version skew / missing subpath) degrades to throwing stubs, does not reject', async () => {
+  // This drives the REAL guard: the importer rejects (as it would when the
+  // ./registry/extract subpath is missing), and loadUiDeps must resolve to a
+  // stub whose functions throw a clear error, NOT reject (which would sink the
+  // whole server at bootstrap).
+  const deps = await loadUiDeps(async () => { throw new Error('Cannot find package @webjsdev/ui'); });
+  assert.equal(typeof deps.uiInventory, 'function');
+  assert.throws(() => deps.uiInventory(), /@webjsdev\/ui is not available/);
+  assert.throws(() => deps.uiComponent('button'), /@webjsdev\/ui is not available/);
+  // The happy path passes the module's exports through unchanged.
+  const ok = await loadUiDeps(async () => ({ uiInventory: () => 'INV', uiComponent: () => 'C' }));
+  assert.equal(ok.uiInventory(), 'INV');
+});
+
+test('mcp: throwing ui deps degrade only the ui tool, the server stays up', async () => {
+  // With the ui deps unavailable (stubs that throw, as loadUiDeps returns on a
+  // skew), the ui tool must report an error while the rest of the server (here
+  // list_routes) still answers. Complements the loadUiDeps guard test above.
   const dir = tmpDir();
   write(dir, 'app/page.ts', 'export default function P() {}\n');
   const throwing = () => { throw new Error('@webjsdev/ui is not available'); };
