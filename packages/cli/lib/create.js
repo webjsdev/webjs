@@ -18,6 +18,7 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { bunifyProse, bunifyDockerfile, bunifyCompose, bunifyCi } from './runtime-rewrite.js';
+import { leanComponentSource } from './lean-copy.js';
 
 /**
  * Detect which package manager invoked us. Reads `npm_config_user_agent`,
@@ -115,42 +116,21 @@ const UI_REGISTRY_ROOT = resolveUiRegistryRoot();
  * @param {string} name  component name without `.ts` (e.g. 'button')
  * @returns {Promise<string>} source with import rewritten
  */
-/**
- * Lazily load the @webjsdev/ui lean-copy primitives (the example-strip + the
- * Tier detection), so a scaffolded Tier-1 component matches what `webjs ui add`
- * writes (helpers + a pointer, no worked example, #983). Falls back to a no-op
- * (keep the example) if the subpath cannot be resolved, so the strip is never a
- * reason `webjs create` fails.
- */
-let _leanCopy = null;
-async function loadLeanCopy() {
-  if (_leanCopy) return _leanCopy;
-  try {
-    const m = await import('@webjsdev/ui/registry/extract');
-    _leanCopy = { stripExample: m.stripExample, isCustomElementSource: m.isCustomElementSource };
-  } catch {
-    _leanCopy = { stripExample: (s) => s, isCustomElementSource: () => true };
-  }
-  return _leanCopy;
-}
-
 async function readUiComponent(name) {
   const src = join(UI_REGISTRY_ROOT, 'components', `${name}.ts`);
   const raw = await readFile(src, 'utf8');
   // The registry component imports cn() via a relative `../lib/utils.ts`; rewrite
   // it to the scaffolded app's aliased path (cn lives at lib/utils/cn.ts).
-  let out = raw
+  const rewritten = raw
     .replaceAll("'../lib/utils.ts'", "'#lib/utils/cn.ts'")
     .replaceAll('"../lib/utils.ts"', '"#lib/utils/cn.ts"')
     // onBeforeCache lives in its own client-only module so cn() stays pure (#819).
     .replaceAll("'../lib/dom.ts'", "'#lib/utils/dom.ts'")
     .replaceAll('"../lib/dom.ts"', '"#lib/utils/dom.ts"');
-  // Strip the worked @example from a Tier-1 helper, same as `webjs ui add`, so
-  // the scaffolded component is lean and the example is served on demand by
-  // `webjs ui view` / the MCP `ui` tool. Tier-2 elements are left whole.
-  const { stripExample, isCustomElementSource } = await loadLeanCopy();
-  if (!isCustomElementSource(out)) out = stripExample(out, name);
-  return out;
+  // Strip the worked @example from a Tier-1 helper (same as `webjs ui add`), so
+  // the scaffolded component is lean and the example is served on demand. The
+  // shared helper is used by the saas-template copier too, so they cannot drift.
+  return leanComponentSource(rewritten, name);
 }
 
 /**

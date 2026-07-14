@@ -77,9 +77,15 @@ export function extractExample(src) {
   return body.replace(/^\n+/, '').replace(/\s+$/, '');
 }
 
-/** The one-line pointer left in place of a stripped example. */
+/**
+ * The one-line pointer left in place of a stripped example. Uses the EXPLICIT
+ * `npx @webjsdev/ui view` form (not the bare `webjsui` bin name, which npx would
+ * resolve to an unrelated `webjsui` package when it is not a direct dep, e.g. in
+ * a scaffolded app where `@webjsdev/ui` is only transitive). Works in a webjs
+ * app and a standalone project alike.
+ */
 export function pointerLine(name) {
-  return `Full usage example: npx webjsui view ${name}  (or the MCP tool: ui ${name})`;
+  return `Full usage example: npx @webjsdev/ui view ${name}  (or the MCP tool: ui ${name})`;
 }
 
 /**

@@ -190,7 +190,7 @@ test('add: strips the worked @example from a Tier-1 helper and leaves a pointer'
     const body = readFileSync(join(d, 'components', 'ui', 'accordion.ts'), 'utf8');
     assert.doesNotMatch(body, /@example/, 'the worked example is stripped');
     assert.doesNotMatch(body, /<div class=/, 'the structural snippet does not persist');
-    assert.match(body, /npx webjsui view accordion/, 'a pointer to the full example is left');
+    assert.match(body, /npx @webjsdev\/ui view accordion/, 'a pointer to the full example is left');
     assert.match(body, /a11y: same name/, 'the lean header (a11y note) is kept');
     assert.match(body, /export const accordionClass/, 'the helper code is untouched');
   } finally {
@@ -241,7 +241,7 @@ test('add: local-first (no --registry) installs a real component, strips its exa
     await add.parseAsync(['accordion', '--yes', '--no-deps', '--cwd', d], { from: 'user' });
     const body = readFileSync(join(d, 'components', 'ui', 'accordion.ts'), 'utf8');
     assert.doesNotMatch(body, /@example/, 'the real example is stripped from the copied file');
-    assert.match(body, /npx webjsui view accordion/, 'the pointer is left');
+    assert.match(body, /npx @webjsdev\/ui view accordion/, 'the pointer is left');
     assert.match(body, /export const accordionClass/, 'the helper code is preserved');
     // Self-heal planted the theme tokens.
     assert.match(readFileSync(join(d, 'styles', 'globals.css'), 'utf8'), /@webjsdev\/ui theme/);

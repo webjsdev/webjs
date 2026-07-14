@@ -255,10 +255,14 @@ when the caller passes an explicit custom `--registry <url>`.
 - **On-demand example delivery**: a Tier-1 helper file's accessible structure
   lives in its module-JSDoc `@example` block. That worked example is build-time
   guidance, so `add` STRIPS it from the copied file and leaves a one-line pointer
-  (`example.js`); the full snippet is served on demand by `webjsui view` and the
-  MCP `ui` tool. Tier-2 custom-element files are left whole (the element IS the
-  component). A version-skew note: local-first pins `add`/`view` to the INSTALLED
-  ui version, and `diff` is how a user detects upstream drift.
+  (`example.js` `pointerLine`, the explicit `npx @webjsdev/ui view <name>` form
+  so it resolves whether or not the bin is a direct dep); the full snippet is
+  served on demand by `webjsui view` and the MCP `ui` tool. Tier-2
+  custom-element files are left whole (the element IS the component). A
+  version-skew note: local-first pins `add`/`view` to the INSTALLED ui version,
+  and `diff` is how a user detects upstream drift. The scaffold copiers
+  (`create.js`, `saas-template.js`) go through the same lean-copy
+  (`packages/cli/lib/lean-copy.js`), so a scaffolded component matches `add`.
 
 ## Webjs‑CLI subcommand
 
