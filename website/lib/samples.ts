@@ -23,7 +23,11 @@ export async function getPost(id) {
   return post;
 }`;
 
-export const PAGE_SAMPLE = `export default async function Post({ params }) {
+export const PAGE_SAMPLE = `import { html, notFound } from '@webjsdev/core';
+import { getPost } from '#modules/posts/get-post.server.ts';
+import '#components/like-button.ts';
+
+export default async function Post({ params }) {
   const post = await getPost(params.id);
   if (!post) notFound();
   return html\`<article>
