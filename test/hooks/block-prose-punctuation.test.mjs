@@ -115,6 +115,18 @@ test('allows a package.json script value ending in `webjs <subcmd>` before a quo
   assert.equal(runContent(`command = '${B} dev'`).status, 0);
 });
 
+test('allows `webjs <subcmd>` inside an HTML tag boundary (docs headings / code)', () => {
+  // The docs pages reference commands as `<h3>webjs routes</h3>` and
+  // `<code>webjs types</code>`, where the subcommand is immediately followed by
+  // a `<` (or `>`). That is a command, not brand prose, so it must pass (#975).
+  assert.equal(runContent(`<h3>${B} routes</h3>`).status, 0);
+  assert.equal(runContent(`<code>${B} types</code>`).status, 0);
+  assert.equal(runContent(`<h3>${B} doctor</h3>`).status, 0);
+  // Counterfactual: a real verb after the brand before a tag still blocks (the
+  // widening admits only known subcommands, not arbitrary words).
+  assert.equal(runContent(`<p>${B} powers</p>`).status, 2);
+});
+
 test('still blocks genuine lowercase-brand prose (counterfactual for #956)', () => {
   // The quote widening must NOT let real brand prose through: the brand followed
   // by a verb is not a `ship` subcommand, so it still blocks.

@@ -288,9 +288,11 @@ brand_hits=$(printf '%s\n' "$brand_scan" \
 if [ -n "$brand_hits" ]; then
   # Drop lines whose "webjs" is a `webjs <subcommand>` CLI reference. The
   # trailing class also admits a closing quote (" or ') so a package.json
-  # script value ending in a bare subcommand is a command, not brand prose.
+  # script value ending in a bare subcommand is a command, not brand prose,
+  # and an HTML tag boundary (< or >) so a docs `<h3>webjs routes</h3>` or
+  # `<code>webjs types</code>` reads as a command, not brand prose.
   offending=$(printf '%s\n' "$brand_hits" \
-    | grep -vE "webjs[[:space:]]+(${webjs_cli})([[:space:]]|[.,:;)\"']|\$)" 2>/dev/null || true)
+    | grep -vE "webjs[[:space:]]+(${webjs_cli})([[:space:]]|[.,:;)\"'<>]|\$)" 2>/dev/null || true)
   if [ -n "$offending" ]; then
     cat >&2 <<'EOF'
 BLOCKED: lowercase "webjs" naming the brand in prose.
