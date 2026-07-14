@@ -34,7 +34,6 @@ test('/llms.txt is a valid llmstxt.org document listing guides and comparisons',
   const body = await res.text();
   assert.match(body, /^# WebJs/m, 'starts with the H1 name');
   assert.match(body, /^> /m, 'has the blockquote summary');
-  assert.match(body, /\/guides\/ai-first-web-framework/, 'lists the AI-first guide');
   assert.match(body, /\/guides\/web-components-framework/, 'lists the web components guide');
   assert.match(body, /\/compare\/webjs-vs-/, 'lists at least one comparison');
   // Guides must be ENUMERATED from listGuides (each line carries the guide's
@@ -47,19 +46,18 @@ test('/llms.txt is a valid llmstxt.org document listing guides and comparisons',
 test('the guides hub SSRs cards for the published guides', async () => {
   const out = await renderToString(await GuidesHub());
   assert.ok(out.includes('<main id="main"'), 'wraps content in a main landmark');
-  assert.match(out, /href="\/guides\/ai-first-web-framework"/, 'links the AI-first guide');
   assert.match(out, /href="\/guides\/web-components-framework"/, 'links the web components guide');
 });
 
 test('a guide page emits TechArticle + BreadcrumbList + FAQPage JSON-LD with a canonical URL', async () => {
-  const m = await guideMeta({ params: { slug: 'ai-first-web-framework' } });
+  const m = await guideMeta({ params: { slug: 'web-components-framework' } });
   const t = types(m.jsonLd);
   assert.ok(t.includes('TechArticle'), 'has TechArticle');
   assert.ok(t.includes('BreadcrumbList'), 'has BreadcrumbList');
   assert.ok(t.includes('FAQPage'), 'has FAQPage (the guide body carries a ## FAQ section)');
   const article = (m.jsonLd as any[]).find((o) => o['@type'] === 'TechArticle');
-  assert.equal(article.url, 'https://webjs.dev/guides/ai-first-web-framework', 'canonical self URL');
-  assert.equal(article.keywords, 'AI-first web framework', 'carries the target keyword');
+  assert.equal(article.url, 'https://webjs.dev/guides/web-components-framework', 'canonical self URL');
+  assert.equal(article.keywords, 'web components framework', 'carries the target keyword');
 });
 
 test('a compare page emits TechArticle + BreadcrumbList + FAQPage JSON-LD', async () => {

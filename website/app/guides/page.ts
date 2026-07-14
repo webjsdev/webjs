@@ -14,11 +14,15 @@ import { listGuides } from '#modules/guides/queries/list-guides.server.ts';
  * This hub is the single tasteful home the site chrome links to (rather
  * than dumping raw keyword phrases into the header nav), and it can rank
  * for broader "WebJs guides" queries in its own right.
+ *
+ * Guides exist ONLY where there is real search demand for the term. A
+ * topic with no matching search intent does not belong here (it lives on
+ * the home page, /why, or the blog instead).
  */
 
 export const metadata = {
-  title: 'WebJs guides: AI-first frameworks, web components, and more · WebJs',
-  description: 'Plain-English explainers on the ideas behind WebJs: what an AI-first web framework is, what a web components framework is, building without a build step, and progressive enhancement on web standards.',
+  title: 'WebJs guides: web components, no-build, and web standards · WebJs',
+  description: 'Plain-English explainers on the ideas behind WebJs: what a web components framework is, building a full-stack app without a build step, and progressive enhancement on web standards.',
 };
 
 export default async function Guides() {
@@ -29,7 +33,7 @@ export default async function Guides() {
         <p class="font-mono text-[11px] uppercase tracking-[0.15em] text-accent font-semibold mb-2">Guides</p>
         <h1 class="font-serif text-[clamp(28px,4vw,40px)] leading-[1.05] tracking-tight text-fg mb-3">Guides</h1>
         <p class="text-fg-muted text-[15px] leading-relaxed max-w-[640px]">
-          Plain-English explainers on the ideas WebJs is built on: what an AI-first web framework actually is, what it means to build on web components, and how a full-stack app runs with no build step. Read these to understand the why before the how.
+          Plain-English explainers on the ideas WebJs is built on: what it means to build on web components, how a full-stack app runs with no build step, and how progressive enhancement works on web standards. Read these to understand the why before the how.
         </p>
       </header>
 
