@@ -40,8 +40,8 @@ const galleryPaths = [
 // 2) The gallery's feature modules (by name, so saas auth modules survive).
 const galleryModules = [
   'async-render', 'broadcast', 'caching', 'client-router', 'components',
-  'directives', 'file-storage', 'optimistic-ui', 'rate-limit', 'route-handler',
-  'server-actions', 'sessions', 'todo', 'websockets',
+  'directives', 'file-storage', 'frames', 'optimistic-ui', 'rate-limit',
+  'route-handler', 'server-actions', 'sessions', 'todo', 'websockets',
 ].map((m) => `modules/${m}`);
 
 let removed = 0;
