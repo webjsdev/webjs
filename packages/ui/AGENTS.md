@@ -97,6 +97,7 @@ packages/ui/
       local.js                    LOCAL-FIRST composer: read the packaged registry from disk (no network)
       fetcher.js                  network GET + cache; local-vs-network dispatch (getRegistryItem/Index)
       example.js                  extract / strip the module-JSDoc @example block
+      extract.js                  shared kit projector (view + MCP `ui` tool): inventory + per-component helpers/example/deps
       resolver.js                 walk registryDependencies transitively
     utils/
       get-config.js               read components.json

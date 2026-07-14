@@ -35,6 +35,10 @@ subcommand) delegates to this same server, so both routes run identical code.
   and `prompts` (the recipes as guided workflows).
 - **`source` tool**: reads the framework's own no-build source from
   `node_modules/@webjsdev/*/src` (read-only, traversal-guarded).
+- **`ui` tool**: the `@webjsdev/ui` kit inventory (no args) or one component's
+  helper signatures, paste-ready structural example, a11y header, and deps (pass
+  `name`). Kit-scoped (not `appDir`-scoped); shares one projector with
+  `webjsui view`.
 
 The docs corpus is bundled into the package at `prepack`, so `npx @webjsdev/mcp`
 is self-contained; in the monorepo it falls back to the live repo-root docs.

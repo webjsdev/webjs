@@ -375,6 +375,34 @@ test('mcp: tools/call ui returns the kit inventory and matches the shared extrac
   assert.ok(err.result.isError, 'an unknown component is a tool error, not a crash');
 });
 
+test('mcp: an unavailable @webjsdev/ui degrades only the ui tool, the server stays up', async () => {
+  // Simulate the version-skew case (the ./registry/extract subpath missing) by
+  // injecting uiDeps whose functions throw. The ui tool must report an error,
+  // but the rest of the server (here list_routes) must still answer.
+  const dir = tmpDir();
+  write(dir, 'app/page.ts', 'export default function P() {}\n');
+  const throwing = () => { throw new Error('@webjsdev/ui is not available'); };
+  const stdin = new PassThrough();
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  let outBuf = '';
+  stdout.on('data', (c) => { outBuf += c.toString(); });
+  const done = runMcpServer({
+    stdin, stdout, stderr, cwd: dir, version: '9.9.9',
+    uiDeps: { uiInventory: throwing, uiComponent: throwing },
+  });
+  stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 70, method: 'tools/call', params: { name: 'ui', arguments: {} } }) + '\n');
+  stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 71, method: 'tools/call', params: { name: 'list_routes', arguments: {} } }) + '\n');
+  stdin.end();
+  await done;
+  const frames = outBuf.split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l));
+  const uiFrame = frames.find((f) => f.id === 70);
+  assert.ok(uiFrame.result.isError, 'the ui tool reports an error when the kit is unavailable');
+  const routesFrame = frames.find((f) => f.id === 71);
+  assert.ok(!routesFrame.result.isError, 'list_routes still works');
+  assert.ok(Array.isArray(JSON.parse(routesFrame.result.content[0].text).pages), 'list_routes returns the route projection');
+});
+
 /* ---------------- knowledge layer (#376): init / docs / resources / prompts ---------------- */
 
 test('mcp: tools/call init returns the read-first primer (NOT-React mental model + invariants)', async () => {

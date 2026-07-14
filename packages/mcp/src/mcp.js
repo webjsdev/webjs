@@ -494,11 +494,22 @@ export async function runMcpServer(opts) {
 
   // The `ui` tool (#983): the @webjsdev/ui kit inventory / per-component
   // projection, read from the shared `@webjsdev/ui/registry/extract` leaf.
-  // Injectable for tests; otherwise resolved from the installed package.
+  // Injectable for tests; otherwise resolved from the installed package. The
+  // import is GUARDED: if @webjsdev/ui is absent or too old to carry the
+  // `./registry/extract` subpath (a cross-package version skew), only the `ui`
+  // tool degrades (it reports the kit is unavailable), the rest of the server
+  // keeps working. An unguarded import here would sink the whole server.
   let uiDeps = opts.uiDeps;
   if (!uiDeps) {
-    const ui = await import('@webjsdev/ui/registry/extract');
-    uiDeps = { uiInventory: ui.uiInventory, uiComponent: ui.uiComponent };
+    try {
+      const ui = await import('@webjsdev/ui/registry/extract');
+      uiDeps = { uiInventory: ui.uiInventory, uiComponent: ui.uiComponent };
+    } catch {
+      const unavailable = () => {
+        throw new Error('@webjsdev/ui is not available (install/upgrade @webjsdev/ui to use the ui tool)');
+      };
+      uiDeps = { uiInventory: unavailable, uiComponent: unavailable };
+    }
   }
 
   /** Write one JSON-RPC frame as a single line to stdout. */
