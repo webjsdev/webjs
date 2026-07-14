@@ -17,7 +17,8 @@ import {
   DEFAULT_REGISTRY_URL,
   HOSTED_REGISTRY_URL,
 } from '../src/registry/fetcher.js';
-import { loadRegistryItem, loadRegistryIndex, isCustomElementSource, tierOfItem } from '../src/registry/local.js';
+import { loadRegistryItem, loadRegistryIndex, isCustomElementSource } from '../src/registry/local.js';
+import { uiComponent } from '../src/registry/extract.js';
 
 const origFetch = globalThis.fetch;
 
@@ -134,7 +135,7 @@ test('isCustomElementSource: a JSDoc that MENTIONS register()/WebComponent does 
   assert.equal(isCustomElementSource(src), false);
 });
 
-test('tierOfItem: dialog is Tier-2, button is Tier-1', () => {
-  assert.equal(tierOfItem('dialog'), 2);
-  assert.equal(tierOfItem('button'), 1);
+test('tier classification: dialog is Tier-2, button is Tier-1 (production path)', () => {
+  assert.equal(uiComponent('dialog').tier, 2);
+  assert.equal(uiComponent('button').tier, 1);
 });

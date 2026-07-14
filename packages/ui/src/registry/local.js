@@ -167,23 +167,6 @@ export function loadRegistryIndex() {
 }
 
 /**
- * The tier of a `registry:ui` component: `1` for a class-helper file, `2` for a
- * file that defines/registers a custom element. Returns `null` for a name that
- * is not a `registry:ui` item. Derived from the source (via
- * {@link isCustomElementSource}), so it stays correct as components migrate
- * between tiers.
- *
- * @param {string} name
- * @returns {1 | 2 | null}
- */
-export function tierOfItem(name) {
-  const item = loadRegistryItem(name);
-  if (!item || item.type !== 'registry:ui') return null;
-  const src = (item.files || []).map((f) => f.content || '').join('\n');
-  return isCustomElementSource(src) ? 2 : 1;
-}
-
-/**
  * Strip `/* *​/` block comments and `//` line comments so a token check keys on
  * CODE, not prose. Rough (does not honour a `//` inside a string), but a
  * component's JSDoc is the realistic false-positive source, and the leading
