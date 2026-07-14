@@ -1,0 +1,104 @@
+/**
+ * The registry component `@example` block: extract it, strip it (#983).
+ *
+ * A Tier-1 component file is a handful of class-helper functions plus a module
+ * JSDoc whose `@example` block carries the ACCESSIBLE STRUCTURE an author
+ * composes (the `<details name>` exclusive-open wiring, the `group-open`
+ * chevron, the `aria-*` attributes). That worked example is BUILD-TIME
+ * guidance, consumed once while composing, so it should NOT persist in the
+ * copied project file as dead boilerplate. This module is the single source of
+ * truth for that block:
+ *
+ * - {@link extractExample} pulls the paste-ready snippet out (for `webjsui view`
+ *   and the MCP `ui` tool, which serve it on demand without copying it in).
+ * - {@link stripExample} removes it from the file `add` writes and leaves a
+ *   one-line pointer, so the copied file keeps only the helpers + a lean header.
+ *
+ * Both key on the SAME `@example` delimiter in the module JSDoc, so the snippet
+ * has exactly one home (the JSDoc) and cannot drift from a parallel field.
+ * Hand-rolled (no JSDoc/markdown parser dependency: `@webjsdev/ui` ships no
+ * third-party runtime deps).
+ *
+ * @module registry/example
+ */
+
+/**
+ * Locate the first block comment (`/** ... *\/`), i.e. the module JSDoc.
+ *
+ * @param {string} src
+ * @returns {{ start: number, end: number, text: string } | null}
+ */
+function firstBlockComment(src) {
+  const start = src.indexOf('/**');
+  if (start === -1) return null;
+  const end = src.indexOf('*/', start + 3);
+  if (end === -1) return null;
+  return { start, end: end + 2, text: src.slice(start, end + 2) };
+}
+
+/**
+ * True when the module JSDoc carries an `@example` block.
+ *
+ * @param {string} src
+ * @returns {boolean}
+ */
+export function hasExample(src) {
+  const block = firstBlockComment(src);
+  return !!block && /^\s*\*\s*@example\b/m.test(block.text);
+}
+
+/**
+ * Extract the paste-ready example snippet from the module JSDoc. Returns the
+ * fenced code (unwrapped) when the `@example` body is a ```` ```lang ```` block,
+ * else the de-indented text. Empty string when there is no `@example`.
+ *
+ * @param {string} src
+ * @returns {string}
+ */
+export function extractExample(src) {
+  const block = firstBlockComment(src);
+  if (!block) return '';
+  const lines = block.text.split('\n');
+  const exIdx = lines.findIndex((l) => /^\s*\*\s*@example\b/.test(l));
+  if (exIdx === -1) return '';
+  // Everything after the @example line, up to the closing */ line.
+  const bodyLines = [];
+  for (let i = exIdx + 1; i < lines.length; i++) {
+    if (/^\s*\*\/\s*$/.test(lines[i])) break; // closing */
+    // Strip the leading ` * ` JSDoc gutter, preserving inner indentation.
+    bodyLines.push(lines[i].replace(/^\s*\*\s?/, ''));
+  }
+  let body = bodyLines.join('\n').replace(/\s+$/, '');
+  // Unwrap a fenced code block if the example is wrapped in one.
+  const fence = body.match(/^\s*```[A-Za-z0-9]*\n([\s\S]*?)\n```\s*$/);
+  if (fence) body = fence[1];
+  return body.replace(/^\n+/, '').replace(/\s+$/, '');
+}
+
+/** The one-line pointer left in place of a stripped example. */
+export function pointerLine(name) {
+  return `Full usage example: npx webjsui view ${name}  (or the MCP tool: ui ${name})`;
+}
+
+/**
+ * Remove the `@example` block from the module JSDoc and leave a one-line
+ * pointer to `webjsui view` / the MCP `ui` tool. No-op when there is no
+ * `@example`. This runs at `add` write-time so the copied project file keeps
+ * only the helpers + a lean header, not the worked example.
+ *
+ * @param {string} src
+ * @param {string} name  the component name, for the pointer
+ * @returns {string}
+ */
+export function stripExample(src, name) {
+  const block = firstBlockComment(src);
+  if (!block) return src;
+  const lines = block.text.split('\n');
+  const exIdx = lines.findIndex((l) => /^\s*\*\s*@example\b/.test(l));
+  if (exIdx === -1) return src;
+  const head = lines.slice(0, exIdx);
+  // Drop trailing blank JSDoc gutter lines (` *`) so we don't double the gap.
+  while (head.length && /^\s*\*\s*$/.test(head[head.length - 1])) head.pop();
+  const rebuilt = [...head, ' *', ` * ${pointerLine(name)}`, ' */'].join('\n');
+  return src.slice(0, block.start) + rebuilt + src.slice(block.end);
+}

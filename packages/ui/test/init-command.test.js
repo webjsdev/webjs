@@ -130,3 +130,58 @@ test('init: accepts --css override', async () => {
     rmSync(d, { recursive: true });
   }
 });
+
+// #983: init must exit non-zero when the theme tokens could not be written
+// (the old soft-fail left an unstyled install with a clean exit code). The
+// counterfactual is the local-first success case just above it.
+test('init: hard-fails (exit non-zero) when the theme cannot be written', async () => {
+  globalThis.fetch = async () => new Response('nope', { status: 404 });
+  const origExit = process.exit;
+  const origErr = console.error;
+  const origLog = console.log;
+  let code = null;
+  process.exit = (c) => { code = c; throw new Error('__exit__'); };
+  console.log = () => {};
+  console.error = () => {};
+  const d = tmp();
+  try {
+    // A registry URL not used elsewhere, so the fetcher's per-URL cache can't
+    // shadow this 404 with an earlier test's cached success.
+    await init
+      .parseAsync(['--yes', '--cwd', d, '--registry', 'http://hardfail/r'], { from: 'user' })
+      .catch((e) => { if (e.message !== '__exit__') throw e; });
+    assert.equal(code, 1, 'init exits non-zero on an unwritten theme');
+  } finally {
+    process.exit = origExit;
+    console.error = origErr;
+    console.log = origLog;
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});
+
+test('init: local-first (default registry) writes the theme and exits 0', async () => {
+  // No fetch stub: proves the theme resolves from the PACKAGED registry with no
+  // network. This is the counterfactual to the hard-fail test above.
+  globalThis.fetch = async () => { throw new Error('should not fetch'); };
+  const origExit = process.exit;
+  let exited = false;
+  process.exit = () => { exited = true; throw new Error('__exit__'); };
+  const origLog = console.log;
+  console.log = () => {};
+  const d = tmp();
+  try {
+    const { mkdirSync } = await import('node:fs');
+    mkdirSync(join(d, 'styles'), { recursive: true });
+    writeFileSync(join(d, 'styles', 'globals.css'), '/* existing */\n');
+    await init.parseAsync(['--yes', '--cwd', d], { from: 'user' });
+    assert.equal(exited, false, 'init did not exit non-zero');
+    const css = readFileSync(join(d, 'styles', 'globals.css'), 'utf8');
+    assert.match(css, /@webjsdev\/ui theme/);
+  } finally {
+    process.exit = origExit;
+    console.log = origLog;
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});

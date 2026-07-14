@@ -1,11 +1,12 @@
 import { Command } from 'commander';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import prompts from 'prompts';
 import { defaultsForProject } from '../utils/detect-project.js';
 import { writeConfig, CONFIG_FILE } from '../utils/get-config.js';
 import { logger } from '../utils/logger.js';
-import { fetchRegistryItem, DEFAULT_REGISTRY_URL } from '../registry/fetcher.js';
+import { getRegistryItem, DEFAULT_REGISTRY_URL } from '../registry/fetcher.js';
+import { ensureTheme } from '../utils/theme.js';
 
 const BASE_COLORS = ['neutral', 'stone', 'zinc', 'mauve', 'olive', 'mist', 'taupe'];
 
@@ -66,7 +67,18 @@ export const init = new Command()
 
     // Pull lib/utils + the chosen theme from the registry and write them in.
     await writeLibUtils(cwd, defaults.aliases.utils, opts.registry);
-    await writeTheme(cwd, answers.baseColor, answers.css, opts.registry);
+
+    // The theme tokens are what the class helpers render against. A silent
+    // failure here (the old behaviour) left an unstyled install with a clean
+    // exit code, the exact trap for an autonomous agent, so hard-fail (#983).
+    const theme = await ensureTheme(cwd, answers.baseColor, answers.css, opts.registry);
+    if (theme.status === 'failed') {
+      logger.error(`Could not write theme tokens into ${answers.css}: ${theme.error}`);
+      logger.info('The class helpers render against these tokens, so this must succeed.');
+      process.exit(1);
+    }
+    if (theme.status === 'written') logger.success(`Wrote theme into ${answers.css}`);
+    else logger.info(`Theme already present in ${answers.css}: skipping.`);
 
     logger.break();
     logger.success('Done.');
@@ -79,7 +91,7 @@ async function writeLibUtils(cwd, utilsAlias, registryUrl) {
   const utilsRel = utilsAlias.replace(/^@\//, '') + '.ts';
   const utilsTarget = join(cwd, utilsRel);
   try {
-    const item = await fetchRegistryItem('lib-utils', registryUrl);
+    const item = await getRegistryItem('lib-utils', registryUrl);
     if (item.files) {
       for (const f of item.files) {
         ensureDir(dirname(utilsTarget));
@@ -98,7 +110,7 @@ async function writeLibUtils(cwd, utilsAlias, registryUrl) {
   // sibling of the utils file (e.g. lib/utils/dom.ts next to cn.ts).
   const domTarget = join(dirname(utilsTarget), 'dom.ts');
   try {
-    const item = await fetchRegistryItem('lib-dom', registryUrl);
+    const item = await getRegistryItem('lib-dom', registryUrl);
     if (!item.files) return;
     for (const f of item.files) {
       ensureDir(dirname(domTarget));
@@ -112,26 +124,6 @@ async function writeLibUtils(cwd, utilsAlias, registryUrl) {
 
 function relative(cwd, p) {
   return p.startsWith(cwd) ? p.slice(cwd.length + 1) : p;
-}
-
-async function writeTheme(cwd, baseColor, cssPath, registryUrl) {
-  try {
-    const item = await fetchRegistryItem(`theme-${baseColor}`, registryUrl);
-    if (!item.files) return;
-    const target = join(cwd, cssPath);
-    ensureDir(dirname(target));
-    const existing = existsSync(target) ? readFileSync(target, 'utf8') : '';
-    const themeBlock = item.files[0]?.content || '';
-    // Idempotent: only append if our marker isn't already present.
-    if (existing.includes('/* @webjsdev/ui theme */')) {
-      logger.info(`Theme already present in ${cssPath}: skipping.`);
-      return;
-    }
-    writeFileSync(target, existing + (existing && !existing.endsWith('\n') ? '\n' : '') + themeBlock, 'utf8');
-    logger.success(`Wrote theme into ${cssPath}`);
-  } catch (e) {
-    logger.warn(`Could not fetch theme-${baseColor} (${e.message}). Skipping theme install.`);
-  }
 }
 
 function ensureDir(d) {

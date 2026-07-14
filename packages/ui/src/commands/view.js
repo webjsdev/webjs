@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { fetchRegistryItem, DEFAULT_REGISTRY_URL } from '../registry/fetcher.js';
+import { getRegistryItem, DEFAULT_REGISTRY_URL } from '../registry/fetcher.js';
 import { logger } from '../utils/logger.js';
 
 export const view = new Command()
@@ -8,7 +8,7 @@ export const view = new Command()
   .argument('<name>', 'component name')
   .option('--registry <url>', 'registry base URL', DEFAULT_REGISTRY_URL)
   .action(async (name, opts) => {
-    const item = await fetchRegistryItem(name, opts.registry);
+    const item = await getRegistryItem(name, opts.registry);
     logger.info(logger.dim(`# ${item.name}: ${item.type}`));
     if (item.description) logger.info(logger.dim(`# ${item.description}`));
     for (const f of item.files || []) {

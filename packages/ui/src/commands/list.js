@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { fetchRegistryIndex, DEFAULT_REGISTRY_URL } from '../registry/fetcher.js';
+import { getRegistryIndex, DEFAULT_REGISTRY_URL } from '../registry/fetcher.js';
 import { logger } from '../utils/logger.js';
 
 export const list = new Command()
@@ -9,7 +9,7 @@ export const list = new Command()
   .argument('[filter]', 'filter by substring')
   .option('--registry <url>', 'registry base URL', DEFAULT_REGISTRY_URL)
   .action(async (filter, opts) => {
-    const items = await fetchRegistryIndex(opts.registry);
+    const items = await getRegistryIndex(opts.registry);
     const ui = items.filter((i) => i.type === 'registry:ui');
     const filtered = filter ? ui.filter((i) => i.name.includes(filter)) : ui;
     if (!filtered.length) {

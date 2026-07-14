@@ -167,6 +167,65 @@ test('add: --overwrite replaces existing files without prompt', async () => {
   }
 });
 
+/* -------------------- example strip / lean copied file (#983) -------------------- */
+
+test('add: strips the worked @example from a Tier-1 helper and leaves a pointer', async () => {
+  globalThis.fetch = async (url) => {
+    const name = String(url).split('/').pop().replace('.json', '');
+    if (name === 'accordion') {
+      return new Response(JSON.stringify({
+        name: 'accordion', type: 'registry:ui',
+        files: [{
+          path: 'components/accordion.ts', type: 'registry:ui',
+          content:
+            '/**\n * Accordion helpers.\n *\n * a11y: same name on each <details> for exclusive-open.\n *\n * @example\n * ```html\n * <div class=${accordionClass()}></div>\n * ```\n */\nexport const accordionClass = () => \'w-full\';\n',
+        }],
+      }), { status: 200 });
+    }
+    return new Response('not found', { status: 404 });
+  };
+  const d = tmp();
+  try {
+    await add.parseAsync(['accordion', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/strip'], { from: 'user' });
+    const body = readFileSync(join(d, 'components', 'ui', 'accordion.ts'), 'utf8');
+    assert.doesNotMatch(body, /@example/, 'the worked example is stripped');
+    assert.doesNotMatch(body, /<div class=/, 'the structural snippet does not persist');
+    assert.match(body, /npx webjsui view accordion/, 'a pointer to the full example is left');
+    assert.match(body, /a11y: same name/, 'the lean header (a11y note) is kept');
+    assert.match(body, /export const accordionClass/, 'the helper code is untouched');
+  } finally {
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});
+
+test('add: leaves a Tier-2 custom-element file whole (no example strip)', async () => {
+  globalThis.fetch = async (url) => {
+    const name = String(url).split('/').pop().replace('.json', '');
+    if (name === 'my-dialog') {
+      return new Response(JSON.stringify({
+        name: 'my-dialog', type: 'registry:ui',
+        files: [{
+          path: 'components/my-dialog.ts', type: 'registry:ui',
+          content:
+            '/**\n * Dialog element.\n *\n * @example\n * ```html\n * <ui-dialog></ui-dialog>\n * ```\n */\nclass Dialog extends WebComponent({}) {}\nDialog.register(\'ui-dialog\');\n',
+        }],
+      }), { status: 200 });
+    }
+    return new Response('not found', { status: 404 });
+  };
+  const d = tmp();
+  try {
+    await add.parseAsync(['my-dialog', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/keep'], { from: 'user' });
+    const body = readFileSync(join(d, 'components', 'ui', 'my-dialog.ts'), 'utf8');
+    assert.match(body, /@example/, 'a Tier-2 element keeps its example');
+    assert.match(body, /<ui-dialog>/);
+  } finally {
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});
+
 /* -------------------- rewriteUtilsImport (unit tests) -------------------- */
 
 test('rewriteUtilsImport: maps to lib/utils/cn alias for a Tier-1 file', () => {
