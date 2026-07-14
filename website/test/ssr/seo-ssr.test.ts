@@ -43,10 +43,13 @@ test('/llms.txt is a valid llmstxt.org document listing guides and comparisons',
   assert.match(body, /\/guides\/web-components-framework\): Build your UI on the browser/, 'guide line includes the enumerated tagline');
 });
 
-test('the guides hub SSRs cards for the published guides', async () => {
+test('the guides hub SSRs cards with keyword tags for the published guides', async () => {
   const out = await renderToString(await GuidesHub());
   assert.ok(out.includes('<main id="main"'), 'wraps content in a main landmark');
   assert.match(out, /href="\/guides\/web-components-framework"/, 'links the web components guide');
+  // Cards surface the guide's keyword-rich tags (SEO), not a static "Guide" label.
+  assert.ok(out.includes('web components framework'), 'renders a keyword tag on the card');
+  assert.doesNotMatch(out, /font-semibold">Guide</, 'no static "Guide" eyebrow');
 });
 
 test('a guide page emits TechArticle + BreadcrumbList + FAQPage JSON-LD with a canonical URL', async () => {
