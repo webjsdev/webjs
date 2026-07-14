@@ -21,12 +21,19 @@ test('the landing page SSRs with its command, highlighted code, and a main landm
 });
 
 test('home metadata is single-source and consistent across title, og, and twitter', () => {
-  // The home page must declare no diverging static metadata: the layout's
-  // generateMetadata is the one source, so the tab <title> and the social-card
-  // title cannot split (a page title override would win for <title> while the
-  // layout still supplied the whole og/twitter objects, exactly the gap this
-  // guards). The home page IS the canonical share target.
-  assert.equal(PageModule.metadata, undefined, 'the home page declares no diverging static metadata');
+  // The home page must declare no diverging static metadata for the SHARE
+  // target: the layout's generateMetadata is the one source, so the tab
+  // <title> and the social-card title cannot split (a page title override
+  // would win for <title> while the layout still supplied the whole og/twitter
+  // objects, exactly the gap this guards). The home page IS the canonical
+  // share target. It MAY contribute site-level JSON-LD, since metadata is
+  // shallow-merged layout-then-page and a jsonLd-only object leaves the
+  // layout's title/og untouched.
+  const pm = PageModule.metadata;
+  if (pm !== undefined) {
+    assert.deepEqual(Object.keys(pm), ['jsonLd'], 'home page metadata is jsonLd-only (no title/description/og override)');
+    assert.ok(Array.isArray(pm.jsonLd) && pm.jsonLd.length > 0, 'home jsonLd is a non-empty array');
+  }
   const m = generateMetadata({ url: 'https://webjs.dev/' });
   assert.equal(m.openGraph.title, m.title, 'og:title matches the <title>');
   assert.equal(m.twitter.title, m.title, 'twitter:title matches the <title>');
