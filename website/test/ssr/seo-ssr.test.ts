@@ -35,7 +35,13 @@ test('/llms.txt is a valid llmstxt.org document listing guides and comparisons',
   assert.match(body, /^# WebJs/m, 'starts with the H1 name');
   assert.match(body, /^> /m, 'has the blockquote summary');
   assert.match(body, /\/guides\/ai-first-web-framework/, 'lists the AI-first guide');
+  assert.match(body, /\/guides\/web-components-framework/, 'lists the web components guide');
   assert.match(body, /\/compare\/webjs-vs-/, 'lists at least one comparison');
+  // Guides must be ENUMERATED from listGuides (each line carries the guide's
+  // tagline), not a hardcoded list. Counterfactual: a hardcoded guides block
+  // would drop this tagline suffix, and a newly added guide would silently
+  // never appear in /llms.txt.
+  assert.match(body, /\/guides\/web-components-framework\): Build your UI on the browser/, 'guide line includes the enumerated tagline');
 });
 
 test('the guides hub SSRs cards for the published guides', async () => {

@@ -1,4 +1,5 @@
 import { listComparisons } from '#modules/compare/queries/list-comparisons.server.ts';
+import { listGuides } from '#modules/guides/queries/list-guides.server.ts';
 import { listPosts } from '#modules/blog/queries/list-posts.server.ts';
 
 /**
@@ -22,7 +23,7 @@ const SITE_URL = (env.SITE_URL || 'https://webjs.dev').replace(/\/$/, '');
 const DOCS_URL = (env.DOCS_URL || 'https://docs.webjs.dev').replace(/\/$/, '');
 
 export async function GET(): Promise<Response> {
-  const [comparisons, posts] = await Promise.all([listComparisons(), listPosts()]);
+  const [comparisons, guides, posts] = await Promise.all([listComparisons(), listGuides(), listPosts()]);
 
   const lines: string[] = [
     '# WebJs',
@@ -36,8 +37,7 @@ export async function GET(): Promise<Response> {
     `- [Documentation](${DOCS_URL}/docs): the full reference`,
     '',
     '## Guides',
-    `- [What is an AI-first web framework?](${SITE_URL}/guides/ai-first-web-framework)`,
-    `- [What is a web components framework?](${SITE_URL}/guides/web-components-framework)`,
+    ...guides.map((g) => `- [${g.title}](${SITE_URL}/guides/${g.slug}): ${g.tagline}`),
     `- [All guides](${SITE_URL}/guides)`,
     '',
     '## Comparisons',
