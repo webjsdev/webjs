@@ -39,16 +39,18 @@ test('rawActionRequest fires the greet action through the pipeline', async () =>
 test('the middleware sets the caller on the context and greet reads it via actionContext()', async () => {
   const app = await createRequestHandler({ appDir, dev: true });
   if (app.warmup) await app.warmup();
-  const r = await invokeActionForTest(
+  // invokeActionForTest returns the deserialized result as unknown; cast to the
+  // action's ActionResult shape to read it.
+  const r = (await invokeActionForTest(
     app,
     'modules/server-actions/actions/greet.server.ts',
     'greet',
     [{ name: 'Bob' }],
-  );
+  )) as { success: boolean; data?: { message: string }; error?: string; status?: number };
   assert.equal(r.success, true);
   // The message carries BOTH the input (Bob) and the middleware-set caller (Ada).
-  assert.match(r.data.message, /BOB/);
-  assert.match(r.data.message, /Ada/);
+  assert.match(r.data?.message ?? '', /BOB/);
+  assert.match(r.data?.message ?? '', /Ada/);
 });
 
 test('the auth middleware short-circuits a signed-out request before greet runs', async () => {
@@ -56,13 +58,13 @@ test('the auth middleware short-circuits a signed-out request before greet runs'
   if (app.warmup) await app.warmup();
   // A middleware short-circuit rides as a normal failure envelope (200 with the
   // status inside), so read the result rather than expecting a thrown non-2xx.
-  const r = await invokeActionForTest(
+  const r = (await invokeActionForTest(
     app,
     'modules/server-actions/actions/greet.server.ts',
     'greet',
     [{ name: 'Bob', signedOut: true }],
     { throwOnError: false },
-  );
+  )) as { success: boolean; data?: { message: string }; error?: string; status?: number };
   assert.equal(r.success, false);
   assert.equal(r.status, 401);
 });
