@@ -64,6 +64,34 @@ test('a `--help` flag on typecheck is NOT intercepted (forwards to tsc)', () => 
   assert.doesNotMatch(r.stdout, /^Usage: webjs typecheck /m, 'typecheck --help is not the framework help');
 });
 
+test('a `--help` flag on a passthrough command (db/ui) is NOT intercepted', () => {
+  // db forwards to drizzle-kit and ui forwards to @webjsdev/ui; --help there
+  // must reach the wrapped tool, not print the framework command help.
+  for (const c of ['db', 'ui']) {
+    const r = cli(c, '--help');
+    assert.doesNotMatch(r.stdout, new RegExp(`^Usage: webjs ${c} `, 'm'), `${c} --help is not the framework help`);
+  }
+});
+
+test('an unknown command with `--help` still errors (not silently intercepted)', () => {
+  // `webjs bogus --help` must NOT become a silent success: only known,
+  // non-passthrough commands are intercepted, so this falls to Unknown-command.
+  const r = cli('bogus', '--help');
+  assert.equal(r.status, 1, 'an unknown command is an error even with --help');
+  assert.match(r.stderr, /Unknown command: bogus/);
+});
+
+// --- version -------------------------------------------------------------
+test('`webjs version`, `--version`, and `-v` print the CLI version', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const pkg = JSON.parse(await readFile(resolve(REPO, 'packages', 'cli', 'package.json'), 'utf8'));
+  for (const form of [['version'], ['--version'], ['-v']]) {
+    const r = cli(...form);
+    assert.equal(r.status, 0, `${form.join(' ')}: ${r.stderr}`);
+    assert.equal(r.stdout.trim(), pkg.version, `${form.join(' ')} prints ${pkg.version}`);
+  }
+});
+
 test('bare `webjs help` prints the full USAGE banner', () => {
   const r = help();
   assert.equal(r.status, 0, r.stderr);
@@ -71,13 +99,18 @@ test('bare `webjs help` prints the full USAGE banner', () => {
   assert.match(r.stdout, /webjs routes/);
 });
 
-test('`webjs help routes` prints usage + summary + examples', () => {
+test('`webjs help routes` prints usage + summary + an Options table + examples', () => {
   const r = help('routes');
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /^Usage: webjs routes \[--json\] \[--table\]/m);
+  assert.match(r.stdout, /^Usage: webjs routes /m);
+  // The Options section documents each flag (Remix-CLI parity), incl. --no-headers
+  // and a universal -h, --help row.
+  assert.match(r.stdout, /^Options:/m);
+  assert.match(r.stdout, /^ {2}--json\s+Emit/m);
+  assert.match(r.stdout, /^ {2}--no-headers\s+/m);
+  assert.match(r.stdout, /^ {2}-h, --help\s+Show this help\./m);
   assert.match(r.stdout, /^Examples:/m);
   assert.match(r.stdout, /webjs routes --json/);
-  assert.match(r.stdout, /webjs routes --table/);
 });
 
 test('`webjs help doctor` documents --json and --strict', () => {
@@ -88,11 +121,12 @@ test('`webjs help doctor` documents --json and --strict', () => {
   assert.match(r.stdout, /webjs doctor --json/);
 });
 
-test('`webjs help <unknown>` falls back to the banner with a note', () => {
+test('`webjs help <unknown>` exits non-zero with an error (Remix CLI parity)', () => {
   const r = help('bogus');
-  assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /No per-command help for "bogus"/);
-  assert.match(r.stdout, /webjs commands:/);
+  assert.equal(r.status, 1, 'an unknown help topic is an error, not a silent success');
+  assert.match(r.stderr, /Unknown help topic "bogus"/);
+  // Still prints the banner (to stderr) so the caller sees the real commands.
+  assert.match(r.stderr, /webjs commands:/);
 });
 
 // Drift guard: every command in the HELP map must carry a usage + at least one

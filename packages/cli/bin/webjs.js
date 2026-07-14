@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { resolve, join, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolveBin } from '../lib/resolve-bin.js';
 import { dbGenerateTtyHint } from '../lib/db-hints.js';
@@ -11,6 +12,11 @@ import { planDevSupervisor } from '../lib/dev-supervisor.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const [cmd, ...rest] = process.argv.slice(2);
 
+// A `--help`/`-h` or `--version`/`-v` request (top-level or after a subcommand)
+// must not be gated by the Node-version preflight, so it works on an old Node.
+const wantsHelp = cmd === '--help' || cmd === '-h' || rest.includes('--help') || rest.includes('-h');
+const wantsVersion = cmd === '--version' || cmd === '-v' || cmd === 'version';
+
 // Node-version preflight (issue #238), INLINE and dependency-free.
 // This MUST run before any `import @webjsdev/server`: importing the server
 // package links `src/dev.js`, which references Node 24+ builtins, so on an old
@@ -19,9 +25,9 @@ const [cmd, ...rest] = process.argv.slice(2);
 // `../lib/node-preflight.js`, which imports nothing), depending only on
 // `process.versions.node`. The richer `assertNodeVersion` import inside main()
 // stays as belt-and-suspenders for the link-ok (>= 22.13) cases.
-// `help` / no-arg / a `--help`|`-h` flag is exempt so a user on an old Node can
-// still read usage.
-if (cmd !== 'help' && cmd !== undefined && cmd !== '--help' && cmd !== '-h') {
+// `help` / no-arg / any `--help`|`-h` / `version`|`--version`|`-v` request is
+// exempt so a user on an old Node can still read usage and the version.
+if (cmd !== 'help' && cmd !== undefined && !wantsHelp && !wantsVersion) {
   let engines = '>=24.0.0';
   try {
     const { readFileSync } = await import('node:fs');
@@ -48,7 +54,7 @@ const USAGE = `webjs commands:
   webjs start [--port 8080]                       Start production server (serves source directly, no build step)
   webjs test  [--server|--browser]                 Run server + browser tests
   webjs check [--json]                            Run correctness checks (--json emits structured violations)
-  webjs routes [--json|--table]                   Print the route table (path / owner file / methods). Default tree; --json matches the MCP list_routes shape
+  webjs routes [--json|--table] [--no-headers]    Print the route table (path / owner file / methods). Default tree; --json matches the MCP list_routes shape; --no-headers drops the --table header
   webjs mcp                                       Start the read-only MCP server (routes / actions / components / check)
   webjs doctor [--json] [--strict]                Verify project health (Node, tsconfig, env, vendor pins, importmap coherence, @webjsdev versions, git hook, page/layout elision).
                                                   --json emits the structured results (with stable codes). --strict also fails the exit on warnings
@@ -73,45 +79,74 @@ const USAGE = `webjs commands:
                                                   --download: also downloads bundles for offline production
   webjs vendor unpin <pkg>                        Remove a specific package from the pin file
   webjs vendor list                               Show pinned packages with versions and URLs
+  webjs version                                   Print the installed @webjsdev/cli version (also: webjs --version / -v)
   webjs help [command]                            Show this help, or per-command usage + examples (e.g. webjs help routes).
                                                   The flag forms work too: webjs --help / -h for this banner, webjs <command> --help / -h for one command`;
 
 /**
- * Per-command help: usage line, one-line summary, and an Examples block
- * (#975). `webjs help <cmd>` renders this so an agent sees the exact flags +
- * worked examples instead of guessing from the one-line USAGE row. Keyed by the
- * top-level command; `db` / `ui` / `vendor` document their subcommand shape.
- * @type {Record<string, { usage: string, summary: string, examples: string[] }>}
+ * Per-command help: usage line, one-line summary, an Options table, and an
+ * Examples block (#975). `webjs help <cmd>` (and `webjs <cmd> --help`) renders
+ * this so an agent sees the exact flags + worked examples instead of guessing
+ * from the one-line USAGE row. Keyed by the top-level command; `db` / `ui` /
+ * `vendor` document their subcommand shape. Every entry that takes flags lists
+ * them in `options` so the flag surface is machine-readable, matching the Remix
+ * CLI's per-command Options section.
+ * @type {Record<string, { usage: string, summary: string, options?: Array<{ flag: string, description: string }>, examples: string[] }>}
  */
 const HELP = {
   dev: {
     usage: 'webjs dev [--port <n>] [--no-hot]',
     summary: 'Start the dev server with live reload (source is the runtime, no build step).',
+    options: [
+      { flag: '--port <n>', description: 'Port to listen on (else PORT, else 8080).' },
+      { flag: '--no-hot', description: 'Run in-process, without the hot-reload supervisor.' },
+    ],
     examples: ['webjs dev', 'webjs dev --port 3000', 'webjs dev --no-hot'],
   },
   start: {
     usage: 'webjs start [--port <n>]',
     summary: 'Start the production server (serves source directly, plain HTTP/1.1).',
+    options: [
+      { flag: '--port <n>', description: 'Port to listen on (else PORT, else 8080).' },
+    ],
     examples: ['webjs start', 'webjs start --port 8080', 'PORT=8080 webjs start'],
   },
   test: {
     usage: 'webjs test [--server] [--browser] [--watch]',
     summary: 'Run the app test suites (server-side node:test and/or browser via web-test-runner).',
+    options: [
+      { flag: '--server', description: 'Run only the server-side tests.' },
+      { flag: '--browser', description: 'Run only the browser tests.' },
+      { flag: '--watch', description: 'Re-run on change.' },
+    ],
     examples: ['webjs test', 'webjs test --server', 'webjs test --browser --watch'],
   },
   check: {
     usage: 'webjs check [--rules] [--json]',
     summary: 'Run the correctness checks (report-only, no autofix). Exits non-zero on any violation.',
+    options: [
+      { flag: '--json', description: 'Emit the structured violations + summary as JSON (agent-friendly).' },
+      { flag: '--rules', description: 'List the correctness rules instead of running them.' },
+    ],
     examples: ['webjs check', 'webjs check --json', 'webjs check --rules'],
   },
   routes: {
-    usage: 'webjs routes [--json] [--table]',
+    usage: 'webjs routes [--json | --table] [--no-headers]',
     summary: 'Print the route table: each page/route path, its owner file, and (for route handlers) its HTTP methods.',
-    examples: ['webjs routes', 'webjs routes --table', 'webjs routes --json'],
+    options: [
+      { flag: '--json', description: 'Emit { pages, apis } as JSON (byte-identical to the MCP list_routes tool).' },
+      { flag: '--table', description: 'Flat aligned KIND / PATH / METHODS / FILE columns.' },
+      { flag: '--no-headers', description: 'Omit the header row (only with --table); easier to pipe.' },
+    ],
+    examples: ['webjs routes', 'webjs routes --table', 'webjs routes --table --no-headers', 'webjs routes --json'],
   },
   doctor: {
     usage: 'webjs doctor [--json] [--strict]',
-    summary: 'Verify project health. --json emits DoctorResult[] with stable codes; --strict fails the exit on warnings too.',
+    summary: 'Verify project health. Each result carries a stable code so an agent branches on the failure kind.',
+    options: [
+      { flag: '--json', description: 'Emit the DoctorResult[] (with stable codes) + a summary as JSON.' },
+      { flag: '--strict', description: 'Also fail the exit on warnings, not just hard failures.' },
+    ],
     examples: ['webjs doctor', 'webjs doctor --json', 'webjs doctor --strict', 'webjs doctor --json --strict'],
   },
   types: {
@@ -121,12 +156,18 @@ const HELP = {
   },
   typecheck: {
     usage: 'webjs typecheck [tsc args...]',
-    summary: "Type-check the app with the project's own tsc --noEmit. Extra args pass through.",
+    summary: "Type-check the app with the project's own tsc --noEmit. Extra args pass through to tsc.",
     examples: ['webjs typecheck', 'webjs typecheck --watch'],
   },
   create: {
     usage: 'webjs create <name> [--template full-stack|api|saas] [--db sqlite|postgres] [--runtime node|bun] [--no-install]',
     summary: 'Scaffold a new app. Defaults: full-stack template, Drizzle + SQLite, Node runtime.',
+    options: [
+      { flag: '--template <t>', description: 'full-stack (default), api, or saas.' },
+      { flag: '--db <d>', description: 'sqlite (default) or postgres.' },
+      { flag: '--runtime <r>', description: 'node (default) or bun.' },
+      { flag: '--no-install', description: 'Skip the package-manager install step.' },
+    ],
     examples: [
       'webjs create my-app',
       'webjs create my-api --template api',
@@ -147,6 +188,10 @@ const HELP = {
   vendor: {
     usage: 'webjs vendor <pin|unpin|list|audit|outdated|update> [--from <provider>] [--download]',
     summary: 'Pin client-side npm packages into .webjs/vendor/importmap.json.',
+    options: [
+      { flag: '--from <provider>', description: 'jspm (default), jsdelivr, unpkg, or skypack.' },
+      { flag: '--download', description: 'Also download the bundles for offline production (with pin).' },
+    ],
     examples: ['webjs vendor pin', 'webjs vendor pin --download', 'webjs vendor list', 'webjs vendor outdated'],
   },
   mcp: {
@@ -154,24 +199,62 @@ const HELP = {
     summary: 'Start the read-only MCP server (routes / actions / components / check + a docs/source knowledge layer).',
     examples: ['webjs mcp'],
   },
+  version: {
+    usage: 'webjs version',
+    summary: 'Print the installed @webjsdev/cli version. Also available as webjs --version / -v.',
+    examples: ['webjs version', 'webjs --version'],
+  },
 };
 
 /**
- * Render `webjs help <cmd>` to stdout: usage, summary, and examples. Falls back
- * to the full USAGE banner for an unknown command (with a short note).
+ * Render `webjs help <cmd>` to stdout: usage, summary, an Options table (when
+ * the command takes flags), and Examples, in the Remix-CLI section shape. A
+ * universal `-h, --help` option row is appended so every command advertises it.
+ * Returns true if the command was found, false otherwise (so the caller can
+ * exit non-zero on an unknown help topic, matching the Remix CLI).
  * @param {string} name
+ * @returns {boolean}
  */
 function printCommandHelp(name) {
   const h = HELP[name];
   if (!h) {
-    console.log(`No per-command help for "${name}".\n`);
-    console.log(USAGE);
-    return;
+    console.error(`Unknown help topic "${name}".\n`);
+    console.error(USAGE);
+    return false;
   }
   console.log(`Usage: ${h.usage}\n`);
   console.log(`  ${h.summary}\n`);
-  console.log('Examples:');
+  const options = [
+    ...(h.options || []),
+    { flag: '-h, --help', description: 'Show this help.' },
+  ];
+  const width = Math.max(...options.map((o) => o.flag.length));
+  console.log('Options:');
+  for (const o of options) console.log(`  ${o.flag.padEnd(width)}  ${o.description}`);
+  console.log('\nExamples:');
   for (const ex of h.examples) console.log(`  ${ex}`);
+  return true;
+}
+
+/**
+ * Commands that forward their remaining args to an external CLI, so a trailing
+ * `--help` / `-h` should reach THAT tool's own help, not webjs's: `typecheck`
+ * (tsc), `db` (drizzle-kit), `ui` (@webjsdev/ui). They are skipped by the
+ * per-command help-flag intercept.
+ */
+const HELP_FLAG_PASSTHROUGH = new Set(['typecheck', 'db', 'ui']);
+
+/**
+ * The installed `@webjsdev/cli` version, read from this package's own
+ * package.json. Falls back to `0.0.0` if unreadable (never throws).
+ * @returns {string}
+ */
+function readCliVersion() {
+  try {
+    return JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8')).version || '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
 }
 
 /** @param {string[]} args */
@@ -218,17 +301,24 @@ async function startDevParallelTasks(commands, cwd) {
 }
 
 async function main() {
+  // `--version` / `-v` (top level): print the installed CLI version and exit.
+  if (cmd === '--version' || cmd === '-v') {
+    console.log(readCliVersion());
+    return;
+  }
   // `--help` / `-h` (#975): a top-level flag (webjs --help / -h) prints the
   // banner; the same flag AFTER a subcommand (webjs routes --help) prints that
-  // command's help. Handled before the Node preflight so `--help` works even on
-  // an old Node, and before the command body so it short-circuits the command.
-  // `typecheck` is excluded because it forwards its args to `tsc`, where
-  // `--help` idiomatically means tsc's own help there.
+  // command's help and short-circuits it. Handled before the Node preflight so
+  // it works even on an old Node. A command that forwards its args to an
+  // external CLI (typecheck/db/ui, in HELP_FLAG_PASSTHROUGH) is skipped so the
+  // tool's own --help still reaches it; an UNRECOGNISED command is not
+  // intercepted either, so it falls through to the Unknown-command error
+  // (exit 1) rather than a silent 0.
   if (cmd === '--help' || cmd === '-h') {
     console.log(USAGE);
     return;
   }
-  if (cmd && cmd !== 'help' && cmd !== 'typecheck' && (rest.includes('--help') || rest.includes('-h'))) {
+  if (cmd && HELP[cmd] && !HELP_FLAG_PASSTHROUGH.has(cmd) && (rest.includes('--help') || rest.includes('-h'))) {
     printCommandHelp(cmd);
     return;
   }
@@ -236,9 +326,9 @@ async function main() {
   // Node preflight: WebJs needs Node 24+ (built-in TS strip + recursive fs.watch).
   // Run before any subcommand so an older Node fails fast with a clear,
   // actionable message naming the found + required version, exiting non-zero
-  // instead of crashing cryptically later. `help` is exempt so a user on an
-  // old Node can still read usage.
-  if (cmd !== 'help' && cmd !== undefined) {
+  // instead of crashing cryptically later. `help` / a help or version request
+  // is exempt so a user on an old Node can still read usage and the version.
+  if (cmd !== 'help' && cmd !== undefined && !wantsHelp && !wantsVersion) {
     const { assertNodeVersion } = await import('@webjsdev/server');
     assertNodeVersion({ onFail: 'exit' });
   }
@@ -651,16 +741,20 @@ async function main() {
       const pageMethods = 'GET';
 
       // --table: flat, aligned columns (KIND / PATH / METHODS / FILE), the
-      // easiest shape for an agent to scan or a human to grep.
+      // easiest shape for an agent to scan or a human to grep. `--no-headers`
+      // drops the header row so the output pipes cleanly into awk/cut.
       if (rest.includes('--table')) {
         /** @type {Array<[string,string,string,string]>} */
-        const rows = [['KIND', 'PATH', 'METHODS', 'FILE']];
+        const rows = [];
+        if (!rest.includes('--no-headers')) rows.push(['KIND', 'PATH', 'METHODS', 'FILE']);
         for (const p of pages) {
           rows.push(['page', p.path + (p.params ? ` [${p.params.join(', ')}]` : ''), pageMethods, p.file]);
         }
         for (const a of apis) {
           rows.push(['api', a.path, a.methods.join(', ') || '(none)', a.file]);
         }
+        // With --no-headers and no routes there are no rows; nothing to print.
+        if (rows.length === 0) break;
         const widths = [0, 1, 2].map((c) => Math.max(...rows.map((r) => r[c].length)));
         for (const r of rows) {
           console.log(
@@ -1110,11 +1204,20 @@ Full docs: https://docs.webjs.dev`);
       });
       break;
     }
+    case 'version':
+      // Print the installed CLI version (#975). Also reachable as the top-level
+      // `webjs --version` / `-v` flag, handled at the top of main().
+      console.log(readCliVersion());
+      break;
     case 'help':
-      // `webjs help <cmd>` prints that command's usage + Examples (#975);
-      // a bare `webjs help` prints the full banner.
-      if (rest[0]) printCommandHelp(rest[0]);
-      else console.log(USAGE);
+      // `webjs help <cmd>` prints that command's usage + Options + Examples
+      // (#975); a bare `webjs help` prints the full banner. An unknown topic
+      // exits non-zero (printCommandHelp returns false), matching the Remix CLI.
+      if (rest[0]) {
+        if (!printCommandHelp(rest[0])) process.exit(1);
+      } else {
+        console.log(USAGE);
+      }
       break;
     case undefined:
       console.log(USAGE);
