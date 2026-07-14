@@ -25,7 +25,8 @@
     "resources"
   ],
   "dependencies": {
-    "@webjsdev/server": "^0.8.0"
+    "@webjsdev/server": "^0.8.0",
+    "@webjsdev/ui": "^0.3.8"
   },
   "publishConfig": {
     "access": "public"

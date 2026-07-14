@@ -10,18 +10,20 @@
  *                                 `::-webkit-progress-value`, and
  *                                 `::-moz-progress-bar`)
  *
- * Usage:
- *   <progress value="42" max="100" class=${progressClass()}></progress>
- *
- *   <!-- Indeterminate (no `value` attribute): -->
- *   <progress class=${progressClass()}></progress>
- *
  * A11y (required for accessible output): give the <progress> an accessible
  * name with aria-label (or a <label for>), e.g. aria-label="Upload
  * progress". The native element supplies the role and value; only the name
  * is the author's responsibility.
  *
  * Design tokens used: --primary.
+ *
+ * @example
+ * ```html
+ * <progress value="42" max="100" class=${progressClass()}></progress>
+ *
+ * <!-- Indeterminate state, with no value attribute. -->
+ * <progress class=${progressClass()}></progress>
+ * ```
  */
 
 /**

@@ -5,6 +5,7 @@
 
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { bunifyProse } from './runtime-rewrite.js';
+import { leanComponentSource } from './lean-copy.js';
 import { existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,7 +26,7 @@ async function readUiComponent(name) {
   const raw = await readFile(src, 'utf8');
   // The registry component imports cn() via a relative `../lib/utils.ts`; rewrite
   // it to the scaffolded app's aliased path (cn lives at lib/utils/cn.ts).
-  return raw
+  const rewritten = raw
     .replaceAll("'../lib/utils.ts'", "'#lib/utils/cn.ts'")
     .replaceAll('"../lib/utils.ts"', '"#lib/utils/cn.ts"')
     // onBeforeCache lives in its own client-only module so cn() stays pure (#819).
@@ -33,6 +34,9 @@ async function readUiComponent(name) {
     // (which resolves to a nonexistent components/lib/dom.ts) and fails typecheck.
     .replaceAll("'../lib/dom.ts'", "'#lib/utils/dom.ts'")
     .replaceAll('"../lib/dom.ts"', '"#lib/utils/dom.ts"');
+  // Strip a Tier-1 helper's worked @example (same as create.js + `webjs ui add`)
+  // so switch / checkbox are lean, not just the full-stack base set (#983).
+  return leanComponentSource(rewritten, name);
 }
 
 /** Copy named registry components into `<appDir>/components/ui/`. */

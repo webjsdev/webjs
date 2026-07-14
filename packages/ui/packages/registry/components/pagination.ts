@@ -12,23 +12,27 @@
  *   PaginationNext       → paginationNextClass()
  *   PaginationEllipsis   → paginationEllipsisClass()
  *
- * Usage:
- *   <nav role="navigation" aria-label="pagination" class=${paginationClass()}>
- *     <ul class=${paginationContentClass()}>
- *       <li><a class=${paginationPreviousClass()} href="?page=1">‹ Previous</a></li>
- *       <li><a class=${paginationLinkClass({ isActive: false })} href="?page=2">2</a></li>
- *       <li><a class=${paginationLinkClass({ isActive: true })} aria-current="page">3</a></li>
- *       <li class=${paginationEllipsisClass()} aria-hidden="true">…</li>
- *       <li><a class=${paginationNextClass()} href="?page=4">Next ›</a></li>
- *     </ul>
- *   </nav>
- *
  * A11y (required for accessible output): wrap the list in <nav
  * aria-label="pagination">, set aria-current="page" on the active page
  * link, give an icon-only Previous / Next control an aria-label, and mark
  * the ellipsis aria-hidden="true". The class helpers emit none of these.
  *
  * Design tokens used: inherited from buttonClass.
+ *
+ * @example
+ * ```html
+ * <nav role="navigation" aria-label="pagination" class=${paginationClass()}>
+ *   <ul class=${paginationContentClass()}>
+ *     <li><a class=${paginationPreviousClass()} href="?page=1">‹ Previous</a></li>
+ *     <li><a class=${paginationLinkClass({ isActive: false })} href="?page=2">2</a></li>
+ *     <li><a class=${paginationLinkClass({ isActive: true })} aria-current="page">3</a></li>
+ *     <li class=${paginationEllipsisClass()} aria-hidden="true">
+ *       <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></svg>
+ *     </li>
+ *     <li><a class=${paginationNextClass()} href="?page=4">Next ›</a></li>
+ *   </ul>
+ * </nav>
+ * ```
  */
 import { cn } from '../lib/utils.ts';
 import { buttonClass, type ButtonSize } from './button.ts';

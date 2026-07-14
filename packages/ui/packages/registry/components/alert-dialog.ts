@@ -25,23 +25,6 @@
  *   AlertDialogAction        → <ui-alert-dialog-action variant size>
  *   AlertDialogCancel        → <ui-alert-dialog-cancel variant size>
  *
- * Usage:
- *   <ui-alert-dialog>
- *     <ui-alert-dialog-trigger>
- *       <button class=${buttonClass({ variant: 'destructive' })}>Delete</button>
- *     </ui-alert-dialog-trigger>
- *     <ui-alert-dialog-content>
- *       <div class=${alertDialogHeaderClass()}>
- *         <h2 data-slot="alert-dialog-title" class=${alertDialogTitleClass()}>Delete account?</h2>
- *         <p data-slot="alert-dialog-description" class=${alertDialogDescriptionClass()}>This cannot be undone.</p>
- *       </div>
- *       <div class=${alertDialogFooterClass()}>
- *         <ui-alert-dialog-cancel>Cancel</ui-alert-dialog-cancel>
- *         <ui-alert-dialog-action variant="destructive">Delete</ui-alert-dialog-action>
- *       </div>
- *     </ui-alert-dialog-content>
- *   </ui-alert-dialog>
- *
  * Attributes on <ui-alert-dialog>:
  *   `open`:  boolean (reflected). Presence shows the dialog.
  *
@@ -62,6 +45,25 @@
  * Tab cycles trapped within the dialog (native focus trap).
  *
  * Design tokens used: --background, --border, --muted-foreground.
+ *
+ * @example
+ * ```html
+ * <ui-alert-dialog>
+ *   <ui-alert-dialog-trigger>
+ *     <button class=${buttonClass({ variant: 'destructive' })}>Delete</button>
+ *   </ui-alert-dialog-trigger>
+ *   <ui-alert-dialog-content>
+ *     <div class=${alertDialogHeaderClass()}>
+ *       <h2 data-slot="alert-dialog-title" class=${alertDialogTitleClass()}>Delete account?</h2>
+ *       <p data-slot="alert-dialog-description" class=${alertDialogDescriptionClass()}>This cannot be undone.</p>
+ *     </div>
+ *     <div class=${alertDialogFooterClass()}>
+ *       <ui-alert-dialog-cancel>Cancel</ui-alert-dialog-cancel>
+ *       <ui-alert-dialog-action variant="destructive">Delete</ui-alert-dialog-action>
+ *     </div>
+ *   </ui-alert-dialog-content>
+ * </ui-alert-dialog>
+ * ```
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
 import { ref, createRef } from '@webjsdev/core/directives';

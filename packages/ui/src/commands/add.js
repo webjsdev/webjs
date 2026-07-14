@@ -7,6 +7,9 @@ import { getConfig } from '../utils/get-config.js';
 import { logger } from '../utils/logger.js';
 import { resolveTree, collectNpmDeps } from '../registry/resolver.js';
 import { DEFAULT_REGISTRY_URL } from '../registry/fetcher.js';
+import { isCustomElementSource } from '../registry/local.js';
+import { stripExample } from '../registry/example.js';
+import { ensureTheme } from '../utils/theme.js';
 
 export const add = new Command()
   .name('add')
@@ -34,6 +37,20 @@ export const add = new Command()
 
     const tree = await resolveTree(components, opts.registry);
     logger.info(`Installing ${logger.bold(components.join(', '))}…`);
+
+    // Self-heal missing theme tokens (#983): the helpers render against CSS
+    // design tokens; if the app never ran (or lost) the theme block, plant it
+    // so a copied component is not unstyled. Idempotent when already present.
+    // Skip if the config predates / lacks the tailwind fields (never crash add).
+    const tw = config.tailwind || {};
+    if (tw.css && tw.baseColor) {
+      const theme = await ensureTheme(cwd, tw.baseColor, tw.css, opts.registry);
+      if (theme.status === 'written') {
+        logger.success(`Planted missing theme tokens into ${tw.css}`);
+      } else if (theme.status === 'failed') {
+        logger.warn(`Could not verify theme tokens in ${tw.css}: ${theme.error}`);
+      }
+    }
 
     for (const item of tree) {
       for (const file of item.files || []) {
@@ -70,9 +87,36 @@ async function writeRegistryFile(cwd, config, item, file, opts) {
     }
   }
 
-  const content = rewriteUtilsImport(file.content || '', target, config);
+  const content = transformForProject(file.content || '', target, config, item);
   writeFileSync(target, content, 'utf8');
   logger.success(`Wrote ${relative(cwd, target)}`);
+}
+
+/**
+ * The single transform that turns a registry file's raw content into what
+ * lands in the user's project. `add` writes this; `diff` compares against it,
+ * so the two cannot disagree (#983). Two steps:
+ *
+ *  1. Retarget the registry-relative `../lib/utils.ts` / `../lib/dom.ts` imports
+ *     to the project's resolved helper paths (see {@link rewriteUtilsImport}).
+ *  2. For a Tier-1 helper component (a `registry:ui` file that is NOT a custom
+ *     element), strip the worked `@example` and leave a one-line pointer, so the
+ *     copied file keeps only the helpers + a lean header. Tier-2 custom-element
+ *     files are left whole (the element IS the component), and lib/theme files
+ *     have no example so the strip is a no-op.
+ *
+ * @param {string} content raw registry file content
+ * @param {string} target absolute path where the file will be written
+ * @param {{ resolvedPaths: { utils: string } }} config parsed components.json
+ * @param {{ name: string, type?: string }} [item] the registry item
+ * @returns {string}
+ */
+export function transformForProject(content, target, config, item) {
+  let out = rewriteUtilsImport(content, target, config);
+  if (item && item.type === 'registry:ui' && !isCustomElementSource(content)) {
+    out = stripExample(out, item.name);
+  }
+  return out;
 }
 
 /**

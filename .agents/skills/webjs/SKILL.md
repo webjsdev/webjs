@@ -44,6 +44,7 @@ Classify the task first, then load the smallest useful reference set. Each refer
 | Tailwind, light-DOM tag-prefix rule, tokens, fixed headers, no-reflow layout | `references/styling.md`                        |
 | Client router, prefetch, frames, view transitions, Suspense streaming        | `references/client-router-and-streaming.md`   |
 | Optimistic UI for a user-facing mutation                                     | `references/optimistic-ui.md`                 |
+| The `@webjsdev/ui` component kit (a `components.json` is present): class helpers, tokens, `add` / `view`, the MCP `ui` tool | `references/ui-kit.md`                         |
 | TypeScript at runtime, erasable syntax, full-stack types                     | `references/typescript.md`                     |
 | Unit, browser, e2e tests, the `handle()` harness, Bun parity                 | `references/testing.md`                        |
 | Auth, caching, env vars, rate limit, file storage, the `webjs` config block  | `references/built-ins.md`                      |

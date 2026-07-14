@@ -49,6 +49,7 @@ export default function AIFirst() {
       <li><code>list_actions</code>: server actions with their <code>/__webjs/action/&lt;hash&gt;/&lt;fn&gt;</code> RPC endpoints (the real hashes).</li>
       <li><code>list_components</code>: the registered custom-element tags.</li>
       <li><code>check</code>: the structured <code>webjs check</code> violations.</li>
+      <li><code>ui</code>: the <code>@webjsdev/ui</code> kit inventory, or one component's helper signatures, paste-ready example, and a11y header.</li>
     </ul>
     <p>Use these to learn the real route, action, and component surface before editing, instead of grepping or assuming.</p>
     <p><strong>Knowledge and authoring layer:</strong> an <code>init</code> tool (a read-first pointer with the mental model and invariants, the primer for a fresh setup), a <code>docs</code> tool (retrieve a topic or search the <code>.agents/skills/webjs/</code> reference corpus), and a <code>source</code> tool that reads the framework's OWN no-build source from <code>node_modules/@webjsdev/*/src</code> (what actually runs). On top of the tools, the server exposes MCP <code>resources</code> (the docs corpus plus this app's <code>AGENTS.md</code>) and recipe <code>prompts</code> (guided page, route, action, and component workflows), so the no-build framework source and the docs/recipes are surfaced directly to the agent.</p>

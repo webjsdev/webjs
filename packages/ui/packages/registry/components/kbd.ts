@@ -6,17 +6,19 @@
  *   Kbd       → kbdClass()
  *   KbdGroup  → kbdGroupClass()
  *
- * Usage:
- *   <kbd class=${kbdClass()}>⌘</kbd>
- *   <kbd class=${kbdClass()}>K</kbd>
- *
- *   <div class=${kbdGroupClass()}>
- *     <kbd class=${kbdClass()}>⌘</kbd>
- *     <kbd class=${kbdClass()}>Shift</kbd>
- *     <kbd class=${kbdClass()}>P</kbd>
- *   </div>
- *
  * Design tokens used: --muted, --muted-foreground, --background.
+ *
+ * @example
+ * ```html
+ * <kbd class=${kbdClass()}>⌘</kbd>
+ * <kbd class=${kbdClass()}>K</kbd>
+ *
+ * <div class=${kbdGroupClass()}>
+ *   <kbd class=${kbdClass()}>⌘</kbd>
+ *   <kbd class=${kbdClass()}>Shift</kbd>
+ *   <kbd class=${kbdClass()}>P</kbd>
+ * </div>
+ * ```
  */
 
 export const kbdClass = (): string =>

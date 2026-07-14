@@ -11,22 +11,26 @@
  *   CardContent                → cardContentClass()
  *   CardFooter                 → cardFooterClass()
  *
- * Usage:
- *   <div class=${cardClass()}>
- *     <div class=${cardHeaderClass()}>
- *       <div class=${cardTitleClass()}>Notifications</div>
- *       <div class=${cardDescriptionClass()}>You have 3 unread messages.</div>
- *       <div class=${cardActionClass()}>
- *         <button class=${buttonClass({ variant: 'ghost', size: 'sm' })}>Mark all read</button>
- *       </div>
- *     </div>
- *     <div class=${cardContentClass()}>…</div>
- *     <div class=${cardFooterClass()}>
- *       <button class=${buttonClass()}>Save</button>
+ * Design tokens used: --card, --card-foreground, --muted-foreground, --border.
+ *
+ * @example
+ * ```html
+ * <div class=${cardClass()}>
+ *   <div class=${cardHeaderClass()}>
+ *     <div class=${cardTitleClass()}>Notifications</div>
+ *     <div class=${cardDescriptionClass()}>You have 3 unread messages.</div>
+ *     <div class=${cardActionClass()}>
+ *       <button class=${buttonClass({ variant: 'ghost', size: 'sm' })}>Mark all read</button>
  *     </div>
  *   </div>
- *
- * Design tokens used: --card, --card-foreground, --muted-foreground, --border.
+ *   <div class=${cardContentClass()}>
+ *     <p class="text-sm">Your weekly digest is ready to review.</p>
+ *   </div>
+ *   <div class=${cardFooterClass()}>
+ *     <button class=${buttonClass()}>Save</button>
+ *   </div>
+ * </div>
+ * ```
  */
 
 export type CardSize = 'default' | 'sm';

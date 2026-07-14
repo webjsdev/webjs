@@ -22,30 +22,6 @@
  *   DialogDescription  → <p class=${dialogDescriptionClass()}>
  *   DialogFooter       → <div class=${dialogFooterClass()}>
  *
- * Usage:
- *   <ui-dialog>
- *     <ui-dialog-trigger>
- *       <button class=${buttonClass({ variant: 'outline' })}>Edit profile</button>
- *     </ui-dialog-trigger>
- *     <ui-dialog-content>
- *       <div class=${dialogHeaderClass()}>
- *         <h2 data-slot="dialog-title" class=${dialogTitleClass()}>Edit profile</h2>
- *         <p data-slot="dialog-description" class=${dialogDescriptionClass()}>Make changes and click save.</p>
- *       </div>
- *       <div class="grid gap-3">
- *         <label class=${labelClass()} for="dlg-name">Name</label>
- *         <input class=${inputClass()} id="dlg-name" placeholder="Your name">
- *       </div>
- *       <div class=${dialogFooterClass()}>
- *         <ui-dialog-close><button class=${buttonClass({ variant: 'outline' })}>Cancel</button></ui-dialog-close>
- *         <button class=${buttonClass()}>Save</button>
- *       </div>
- *     </ui-dialog-content>
- *   </ui-dialog>
- *
- *   <!-- Suppress the auto-injected top-right X close: -->
- *   <ui-dialog-content show-close-button="false">…</ui-dialog-content>
- *
  * Attributes on <ui-dialog>:
  *   `open`:  boolean (reflected). Presence shows the dialog.
  *
@@ -62,6 +38,36 @@
  * within the dialog (native focus trap).
  *
  * Design tokens used: --background, --border, --muted-foreground.
+ *
+ * @example
+ * ```html
+ * <ui-dialog>
+ *   <ui-dialog-trigger>
+ *     <button class=${buttonClass({ variant: 'outline' })}>Edit profile</button>
+ *   </ui-dialog-trigger>
+ *   <ui-dialog-content>
+ *     <div class=${dialogHeaderClass()}>
+ *       <h2 data-slot="dialog-title" class=${dialogTitleClass()}>Edit profile</h2>
+ *       <p data-slot="dialog-description" class=${dialogDescriptionClass()}>Make changes and click save.</p>
+ *     </div>
+ *     <div class="grid gap-3">
+ *       <label class=${labelClass()} for="dlg-name">Name</label>
+ *       <input class=${inputClass()} id="dlg-name" placeholder="Your name">
+ *     </div>
+ *     <div class=${dialogFooterClass()}>
+ *       <ui-dialog-close><button class=${buttonClass({ variant: 'outline' })}>Cancel</button></ui-dialog-close>
+ *       <button class=${buttonClass()}>Save</button>
+ *     </div>
+ *   </ui-dialog-content>
+ * </ui-dialog>
+ *
+ * <!-- Suppress the auto-injected top-right X close button. -->
+ * <ui-dialog-content show-close-button="false">
+ *   <div class=${dialogHeaderClass()}>
+ *     <h2 data-slot="dialog-title" class=${dialogTitleClass()}>Quiet dialog</h2>
+ *   </div>
+ * </ui-dialog-content>
+ * ```
  */
 import { WebComponent, html, unsafeHTML, prop } from '@webjsdev/core';
 import { ref, createRef } from '@webjsdev/core/directives';

@@ -10,24 +10,26 @@
  *   CollapsibleTrigger  → <summary class=${collapsibleTriggerClass()}>
  *   CollapsibleContent  → <div class=${collapsibleContentClass()}>
  *
- * Usage:
- *   <details class=${collapsibleClass()}>
- *     <summary class=${collapsibleTriggerClass()}>
- *       Show details
- *       <svg class="size-4 transition-transform group-open:rotate-180">…</svg>
- *     </summary>
- *     <div class=${collapsibleContentClass()}>
- *       Hidden until <summary> is clicked, Enter / Space pressed, or the
- *       <details> element's `open` property is set via JS.
- *     </div>
- *   </details>
- *
  * Initial state: add `open` on <details> to render expanded on first
  * paint. Programmatic toggling: `el.open = true | false`. Migrated from
  * the prior <ui-collapsible> custom element; the trigger class hides
  * the native disclosure marker so callers can render their own chevron.
  *
  * Design tokens used: --border, --ring, --foreground.
+ *
+ * @example
+ * ```html
+ * <details class=${collapsibleClass()}>
+ *   <summary class=${collapsibleTriggerClass()}>
+ *     Show details
+ *     <svg class="size-4 transition-transform group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+ *   </summary>
+ *   <div class=${collapsibleContentClass()}>
+ *     Hidden until <summary> is clicked, Enter / Space pressed, or the
+ *     <details> element's `open` property is set via JS.
+ *   </div>
+ * </details>
+ * ```
  */
 
 /**

@@ -94,11 +94,15 @@ packages/ui/
       build.js                    build, compile a custom registry (for registry authors)
     registry/
       schema.js                   zod schemas (wire-compatible with shadcn's)
-      fetcher.js                  HTTP GET + cache for registry items
+      local.js                    LOCAL-FIRST composer: read the packaged registry from disk (no network)
+      fetcher.js                  network GET + cache; local-vs-network dispatch (getRegistryItem/Index)
+      example.js                  extract / strip the module-JSDoc @example block
+      extract.js                  shared kit projector (view + MCP `ui` tool): inventory + per-component helpers/example/deps
       resolver.js                 walk registryDependencies transitively
     utils/
       get-config.js               read components.json
       detect-project.js           webjs / next / vite / astro / plain detection
+      theme.js                    ensureTheme(): install the design tokens (init hard-fails, add self-heals)
       logger.js                   kleur-based logger
   test/
     schema.test.js                schema validation
@@ -170,7 +174,7 @@ full per-directory breakdown.
 | 1a | `aspect-ratio` | `aspectRatioClass`, use Tailwind `aspect-[16/9]` directly |
 | 1a | `kbd` | `kbdClass`, `kbdGroupClass` |
 | 1a | `table` | `tableContainerClass`, `tableClass`, `tableHeaderClass`, `tableBodyClass`, `tableFooterClass`, `tableRowClass`, `tableHeadClass`, `tableCellClass`, `tableCaptionClass` |
-| 1a | `toggle` | `toggleClass({ variant, size })`, pair with native `<button>` |
+| 1a/2 | `toggle` | Hybrid: exports `toggleClass({ variant, size })` (pair with a native `<button>`) AND registers `<ui-toggle>`. Because it registers an element, the kit tooling (`webjs ui view` / the MCP `ui` tool / the `add` strip) treats it as Tier-2 and keeps its file whole. |
 | 1a | `breadcrumb` | `breadcrumbListClass`, `breadcrumbItemClass`, `breadcrumbLinkClass`, `breadcrumbPageClass`, `breadcrumbSeparatorClass`, `breadcrumbEllipsisClass` |
 | 1a | `pagination` | `paginationClass`, `paginationContentClass`, `paginationLinkClass({ isActive, size })`, `paginationPreviousClass`, `paginationNextClass`, `paginationEllipsisClass` |
 | 1b | `popover` | `popoverContentClass`, `popoverHeaderClass`, `popoverTitleClass`, `popoverDescriptionClass`. Compose with `<button popovertarget="id">` + `<div popover id="id">`; positioning via CSS anchor positioning or the exported `positionFloating` helper. |
@@ -224,13 +228,42 @@ Browser tests for the Tier-2 guarantees live in
 
 | Command | What it does |
 |---|---|
-| `webjsui init` | Initialize a project, writes `components.json`, copies `lib/utils.ts`, appends theme CSS |
-| `webjsui add <names...>` | Resolve transitive deps, copy component sources, install npm deps |
+| `webjsui init` | Initialize a project, writes `components.json`, copies `lib/utils.ts`, installs the theme tokens. HARD-FAILS (non-zero exit) when the tokens cannot be written (an unstyled install with a clean exit code was the old trap). |
+| `webjsui add <names...>` | Resolve transitive deps, copy component sources, install npm deps. Self-heals missing theme tokens. For a Tier-1 helper it strips the worked `@example` and leaves a pointer (see Registry resolution). |
 | `webjsui list [filter]` | List components in the registry |
-| `webjsui view <name>` | Print a component's source to stdout |
-| `webjsui diff [name]` | Show diffs between local and registry |
+| `webjsui view <name>` | Print a component's source to stdout (the human / offline path to the full example) |
+| `webjsui diff [name]` | Show diffs between local and registry (against the LIVE upstream) |
 | `webjsui info` | Print project type + config + registry URL |
 | `webjsui build [file]` | Compile a custom registry (for registry authors) |
+
+### Registry resolution: LOCAL-FIRST (#983)
+
+The registry sources ship inside this npm package (`package.json` `files`
+includes `packages/registry`), so `init` / `add` / `list` / `view` resolve
+components from disk with NO network round-trip. This makes an agent's install
+deterministic and offline-safe. The network path (`fetcher.js`) is used ONLY
+when the caller passes an explicit custom `--registry <url>`.
+
+- `getRegistryItem(name, url)` / `getRegistryIndex(url)` in `fetcher.js` are the
+  dispatch: local unless `url` is a custom (non-default) registry. `local.js` is
+  the on-disk composer (the plain-JS twin of the ui-website's
+  `_lib/registry.server.ts`).
+- **`webjsui diff` is the deliberate carve-out**: it compares local files
+  against the LIVE upstream, so it stays on the network path (local-first would
+  compare the package against itself). It also compares each local file against
+  what `add` WOULD write (import-rewrite + example-strip via
+  `transformForProject`, shared with `add`), so a pristine install diffs clean.
+- **On-demand example delivery**: a Tier-1 helper file's accessible structure
+  lives in its module-JSDoc `@example` block. That worked example is build-time
+  guidance, so `add` STRIPS it from the copied file and leaves a one-line pointer
+  (`example.js` `pointerLine`, the explicit `npx @webjsdev/ui view <name>` form
+  so it resolves whether or not the bin is a direct dep); the full snippet is
+  served on demand by `webjsui view` and the MCP `ui` tool. Tier-2
+  custom-element files are left whole (the element IS the component). A
+  version-skew note: local-first pins `add`/`view` to the INSTALLED ui version,
+  and `diff` is how a user detects upstream drift. The scaffold copiers
+  (`create.js`, `saas-template.js`) go through the same lean-copy
+  (`packages/cli/lib/lean-copy.js`), so a scaffolded component matches `add`.
 
 ## Webjs‑CLI subcommand
 

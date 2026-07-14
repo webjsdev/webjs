@@ -9,12 +9,14 @@
  *                                 when checked, inset shadow, focus ring;
  *                                 bypasses Radix)
  *
- * Usage:
- *   <input type="checkbox" name="terms" id="terms" class=${checkboxClass()}>
- *   <label class=${labelClass()} for="terms">I accept the terms</label>
- *
  * Design tokens used: --input, --primary, --primary-foreground, --background,
  * --ring, --destructive.
+ *
+ * @example
+ * ```html
+ * <input type="checkbox" name="terms" id="terms" class=${checkboxClass()}>
+ * <label class=${labelClass()} for="terms">I accept the terms</label>
+ * ```
  */
 import { cn } from '../lib/utils.ts';
 

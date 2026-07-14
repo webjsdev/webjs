@@ -7,18 +7,20 @@
  *   Separator (orientation: horizontal | vertical, decorative: bool)
  *                          → separatorClass({ orientation }) + role + data-orientation
  *
- * Usage:
- *   <div role="none" class=${separatorClass()} data-orientation="horizontal"></div>
- *   <div role="separator" aria-orientation="vertical"
- *        class=${separatorClass({ orientation: 'vertical' })}
- *        data-orientation="vertical"></div>
- *
  * A11y (required for accessible output): a meaningful divider needs
  * role="separator" plus aria-orientation. A purely decorative one needs
  * role="none" (or aria-hidden="true") so assistive tech does not announce
  * an empty separator.
  *
  * Design tokens used: --border.
+ *
+ * @example
+ * ```html
+ * <div role="none" class=${separatorClass()} data-orientation="horizontal"></div>
+ * <div role="separator" aria-orientation="vertical"
+ *      class=${separatorClass({ orientation: 'vertical' })}
+ *      data-orientation="vertical"></div>
+ * ```
  */
 import { cn } from '../lib/utils.ts';
 

@@ -10,6 +10,7 @@
   "exports": {
     ".": "./src/index.js",
     "./registry/schema": "./src/registry/schema.js",
+    "./registry/extract": "./src/registry/extract.js",
     "./utils": "./src/utils/index.js"
   },
   "files": [

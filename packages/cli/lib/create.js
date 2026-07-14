@@ -18,6 +18,7 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { bunifyProse, bunifyDockerfile, bunifyCompose, bunifyCi } from './runtime-rewrite.js';
+import { leanComponentSource } from './lean-copy.js';
 
 /**
  * Detect which package manager invoked us. Reads `npm_config_user_agent`,
@@ -120,12 +121,16 @@ async function readUiComponent(name) {
   const raw = await readFile(src, 'utf8');
   // The registry component imports cn() via a relative `../lib/utils.ts`; rewrite
   // it to the scaffolded app's aliased path (cn lives at lib/utils/cn.ts).
-  return raw
+  const rewritten = raw
     .replaceAll("'../lib/utils.ts'", "'#lib/utils/cn.ts'")
     .replaceAll('"../lib/utils.ts"', '"#lib/utils/cn.ts"')
     // onBeforeCache lives in its own client-only module so cn() stays pure (#819).
     .replaceAll("'../lib/dom.ts'", "'#lib/utils/dom.ts'")
     .replaceAll('"../lib/dom.ts"', '"#lib/utils/dom.ts"');
+  // Strip the worked @example from a Tier-1 helper (same as `webjs ui add`), so
+  // the scaffolded component is lean and the example is served on demand. The
+  // shared helper is used by the saas-template copier too, so they cannot drift.
+  return leanComponentSource(rewritten, name);
 }
 
 /**

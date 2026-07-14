@@ -10,20 +10,6 @@
  *                                 → toggleClass({ variant, size })  (class helper)
  *                                 → <ui-toggle pressed variant size>  (custom element)
  *
- * Usage (Tier-1 class helper, caller owns state):
- *   <button class=${toggleClass()} data-state="off" aria-pressed="false"
- *           onclick="this.dataset.state = this.dataset.state==='on'?'off':'on'">
- *     <svg>…</svg>
- *   </button>
- *
- * Usage (Tier-2 custom element, state managed):
- *   <ui-toggle aria-label="Toggle bold">
- *     <svg>…</svg>
- *   </ui-toggle>
- *
- *   <!-- Controlled / initial: -->
- *   <ui-toggle variant="outline" size="sm" pressed>B</ui-toggle>
- *
  * Attributes on <ui-toggle>:
  *   `pressed`:  boolean (reflected). Active state.
  *   `variant`:  "default" (default) | "outline".
@@ -37,6 +23,23 @@
  *
  * Design tokens used: --muted, --muted-foreground, --accent, --accent-foreground,
  * --input, --background, --ring, --destructive.
+ *
+ * @example
+ * ```html
+ * <!-- Tier-1 class helper, caller owns state. -->
+ * <button class=${toggleClass()} data-state="off" aria-pressed="false"
+ *         onclick="this.dataset.state = this.dataset.state==='on'?'off':'on'">
+ *   <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 12a4 4 0 0 0 0-8H6v8" /><path d="M15 20a4 4 0 0 0 0-8H6v8Z" /></svg>
+ * </button>
+ *
+ * <!-- Tier-2 custom element, state managed. -->
+ * <ui-toggle aria-label="Toggle bold">
+ *   <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 12a4 4 0 0 0 0-8H6v8" /><path d="M15 20a4 4 0 0 0 0-8H6v8Z" /></svg>
+ * </ui-toggle>
+ *
+ * <!-- Controlled or initial state. -->
+ * <ui-toggle variant="outline" size="sm" pressed>B</ui-toggle>
+ * ```
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';

@@ -18,28 +18,36 @@
  *   PopoverTitle          → popoverTitleClass()
  *   PopoverDescription    → popoverDescriptionClass()
  *
- * Usage (single invoker, implicit anchor, zero inline style):
- *   <button popovertarget="filter" class=${buttonClass({ variant: 'outline' })}>Filter</button>
- *   <div id="filter" popover
- *        class=${popoverContentClass({ side: 'bottom', align: 'start', sideOffset: 4 })}>
- *     <div class=${popoverHeaderClass()}>
- *       <h3 class=${popoverTitleClass()}>Filter posts</h3>
- *       <p class=${popoverDescriptionClass()}>By tag and status.</p>
- *     </div>
- *   </div>
- *
- *   <!-- Explicit anchor (multiple invokers / anchoring to a different element): -->
- *   <span style="anchor-name: --picker">@vivek</span>
- *   <button popovertarget="profile">Show</button>
- *   <div id="profile" popover style="position-anchor: --picker"
- *        class=${popoverContentClass({ side: 'bottom' })}>…</div>
- *
  * The `positionFloating` helper is also exported (used by the Tier-2
  * tooltip / hover-card / dropdown-menu components for imperative
  * positioning where CSS Anchor Positioning isn't enough). Migrated from
  * the prior <ui-popover> custom element set.
  *
  * Design tokens used: --popover, --popover-foreground, --border.
+ *
+ * @example
+ * ```html
+ * <!-- Single invoker, implicit anchor, zero inline style. -->
+ * <button popovertarget="filter" class=${buttonClass({ variant: 'outline' })}>Filter</button>
+ * <div id="filter" popover
+ *      class=${popoverContentClass({ side: 'bottom', align: 'start', sideOffset: 4 })}>
+ *   <div class=${popoverHeaderClass()}>
+ *     <h3 class=${popoverTitleClass()}>Filter posts</h3>
+ *     <p class=${popoverDescriptionClass()}>By tag and status.</p>
+ *   </div>
+ * </div>
+ *
+ * <!-- Explicit anchor, for multiple invokers or anchoring to a different element. -->
+ * <span style="anchor-name: --picker">@vivek</span>
+ * <button popovertarget="profile">Show</button>
+ * <div id="profile" popover style="position-anchor: --picker"
+ *      class=${popoverContentClass({ side: 'bottom' })}>
+ *   <div class=${popoverHeaderClass()}>
+ *     <h3 class=${popoverTitleClass()}>Vivek Khandelwal</h3>
+ *     <p class=${popoverDescriptionClass()}>@vivek</p>
+ *   </div>
+ * </div>
+ * ```
  */
 
 // --------------------------------------------------------------------------

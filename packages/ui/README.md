@@ -94,17 +94,26 @@ and picks sensible defaults.
 
 Copies the component's `.ts` source into `components/ui/<name>.ts` (or your
 configured alias). Resolves transitive deps via `registryDependencies` and
-auto-installs npm deps like `@floating-ui/dom` for popover-style components.
+auto-installs npm deps like `@floating-ui/dom` for popover-style components. For
+a Tier-1 class-helper component it copies the helpers plus a lean header and a
+one-line pointer, and leaves the worked structural example OUT of the file (get
+it on demand with `webjsui view <name>`). It also self-heals the theme tokens if
+they are missing.
+
+Resolution is LOCAL-FIRST: `init` / `add` / `list` / `view` read the registry
+that ships inside the installed `@webjsdev/ui` package, so they work with no
+network. Point at a custom registry with `--registry <url>`; `webjsui diff`
+always compares against the live upstream.
 
 ## Commands
 
 | Command | Effect |
 |---|---|
-| `webjsui init` | Initialize a project (writes `components.json`, theme CSS, `lib/utils.ts`) |
-| `webjsui add <names...>` | Add components to your project |
+| `webjsui init` | Initialize a project (writes `components.json`, `lib/utils.ts`, the theme tokens). Exits non-zero if the tokens cannot be written. |
+| `webjsui add <names...>` | Add components (copies helpers + a pointer for Tier-1, self-heals theme tokens) |
 | `webjsui list` | List all available components |
-| `webjsui view <name>` | Print a component's source to stdout |
-| `webjsui diff [name]` | Show diff between your local copy and the registry |
+| `webjsui view <name>` | Print a component's projected view (helpers + paste-ready example) and full source |
+| `webjsui diff [name]` | Show diff between your local copy and the live registry |
 | `webjsui info` | Print project diagnostics |
 | `webjsui build` | (For registry authors) Compile a custom registry |
 

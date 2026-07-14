@@ -1,0 +1,68 @@
+# The `@webjsdev/ui` component kit
+
+Load this when the app has a `components.json` (it uses `@webjsdev/ui`, the
+shadcn-style kit for WebJs). The source is copied into your repo (`components/ui/`),
+so you own and edit it. Two tiers:
+
+- **Tier 1, class helpers (23 components).** Pure functions returning Tailwind
+  class strings (`buttonClass({ variant })`, `cardClass()`), composed with
+  whatever native element you write. Reach for these instead of expanding
+  Tailwind by hand: the call site is a fraction of the tokens and the class list
+  cannot drift.
+- **Tier 2, stateful custom elements (9 components).** `<ui-dialog>`, `<ui-tabs>`,
+  `<ui-dropdown-menu>`, and friends own their ARIA (focus trap, roving tabindex,
+  `aria-controls` / `inert`, live regions). Write the tag and the accessible
+  behaviour comes with it. Do NOT hand-roll these; the wiring is easy to get
+  subtly wrong.
+
+## The workflow: query for the structure, do not guess it
+
+`add` copies a Tier-1 component's class helpers plus a lean header (what each
+helper is, the accessibility obligations) and a one-line pointer. It does NOT
+copy the worked structural example, because that example is guidance you consume
+once while composing, not code that should sit in your repo. Get the full
+paste-ready structure on demand:
+
+- **MCP `ui` tool** (preferred when available): call `ui` with no args for the
+  kit inventory (each component's tier, helper signatures, npm deps); pass
+  `{ name: "accordion" }` for one component's helper signatures, the paste-ready
+  structural example, the accessibility header, and deps.
+- **CLI**: `webjs ui list` (inventory), `webjs ui view <name>` (the projected
+  view plus the full source). Same data as the MCP tool (one shared projector).
+
+So the loop is: `add` the component, then query `ui <name>` (MCP) or
+`webjs ui view <name>` for the accessible structure, paste it, and fill it in.
+
+## Setup and resolution
+
+- `webjs ui init` writes `components.json`, `lib/utils.ts`, and the CSS design
+  tokens the helpers render against (`--background`, `--foreground`,
+  `--destructive`, ...). It HARD-FAILS if the tokens cannot be written, so a
+  clean exit means the kit is styled. `add` self-heals the tokens if they go
+  missing.
+- Resolution is LOCAL-FIRST: `init` / `add` / `list` / `view` read the registry
+  that ships inside the installed `@webjsdev/ui`, with no network. This pins you
+  to the installed version; run `webjs ui diff` to see where your local copies
+  drift from the upstream (that command alone compares against the live registry).
+
+## Inventory (run `webjs ui list` or the MCP `ui` tool for the authoritative, current set)
+
+**Tier 1 (class helpers):** accordion, alert, aspect-ratio, avatar, badge,
+breadcrumb, button, card, checkbox, collapsible, input, kbd, label,
+native-select, pagination, popover, progress, radio-group, separator, skeleton,
+switch, table, textarea.
+
+**Tier 2 (custom elements, own their ARIA):** alert-dialog, dialog,
+dropdown-menu, hover-card, sonner, tabs, tooltip, plus toggle and toggle-group
+(these two register an element AND export a `*Class` helper).
+
+## Idioms
+
+- A helper is a function, so compose it: `class=${buttonClass({ variant: 'outline' })}`.
+  The unquoted `${...}` is a normal `html` attribute hole.
+- Tier-1 helpers assume the design tokens exist; if a component paints unstyled,
+  the tokens are missing (re-run `webjs ui init` or let `add` self-heal them).
+- Custom elements are display-only-safe at SSR and hydrate in the browser, the
+  standard WebJs component model (`references/components.md`).
+
+Full per-package reference lives in the installed `@webjsdev/ui/AGENTS.md`.
