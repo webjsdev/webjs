@@ -1,43 +1,43 @@
 ---
-title: "How to run TypeScript without a build step"
+title: "How to Run TypeScript Without a Build Step"
 date: 2026-07-09T09:00:00+05:30
 slug: run-typescript-without-a-build-step
-description: "How to run TypeScript without compiling it, why type stripping is faster than tsc, and how WebJs serves .ts files straight to Node, Bun, and the browser with no build step."
+description: "You can run TypeScript without compiling it by stripping the types at load. Why stripping is faster than tsc, the one real constraint, and how WebJs serves .ts files straight to Node, Bun, and the browser."
 keyword: "run TypeScript without a build step"
 tagline: "Strip the types at load and run the file. No tsc, no dist folder, no sourcemaps."
 tags: run typescript without a build step, type stripping, no build, node, bun
 author: Vivek
 ---
 
-You can now run TypeScript without compiling it first. Not with `ts-node`, not with a watch task rebuilding a `dist/` folder, but by handing the `.ts` file straight to the runtime and letting it strip the types at load. This changed recently enough that a lot of setups still carry a build step they no longer need, so let me explain how it works and where it holds up.
+For years I ran a `tsc` watch task in the background of every project, rebuilding a `dist/` folder just so I could execute my own code. It turns out I did not need it, and neither do you. You can run TypeScript without compiling it first: hand the `.ts` file straight to the runtime and let it strip the types at load. This changed recently enough that a lot of setups still carry a build step that no longer earns its keep, so let me explain how it works and, more importantly, where it holds up.
 
 # Compiling versus stripping
 
-The old way to run TypeScript was to compile it. `tsc` reads your code, checks every type, resolves the whole type graph, and emits JavaScript plus declaration files and sourcemaps. That is a real amount of work, and it is why a TypeScript project has a build step and a `dist/` folder that has to stay in sync with the source.
+The old way to run TypeScript was to compile it. `tsc` reads your code, checks every type, resolves the whole type graph, and emits JavaScript plus declaration files and sourcemaps. That is real work, and it is why a TypeScript project grows a build step and a `dist/` folder that has to stay in sync with the source you actually edit.
 
-The insight behind running TypeScript without a build step is that most of that work is not needed to execute the code. TypeScript's types are erasable, meaning if you delete the type annotations you are left with valid JavaScript. You do not have to check the types to run the program, you only have to remove them. Stripping is orders of magnitude faster than compiling, because it parses and deletes rather than resolving and checking.
+The insight that makes the build step optional is that almost none of that work is needed to run the code. TypeScript's types are erasable, which means if you delete the annotations you are left with valid JavaScript. You do not have to check the types to execute the program, you only have to remove them. Stripping is orders of magnitude faster than compiling, because it parses and deletes rather than resolving and checking.
 
 # How the runtimes do it now
 
-The platform moved on this fast.
+The platform moved on this fast, and it is worth knowing who does what.
 
-- **Node.** Node 24 strips TypeScript types natively. Run `node app.ts` and it removes the annotations at load and executes the result. It does this in place, preserving line and column positions, so a stack trace points at the exact line you wrote with no sourcemap indirection.
-- **Bun.** Bun has run TypeScript directly since the beginning, stripping types as it loads.
-- **The browser.** Browsers do not run TypeScript, but a server can strip a `.ts` file to JavaScript before serving it, so the browser fetches valid modules. This is how a no-build framework ships TypeScript to the client without a bundler.
+- **Node.** Node 24 strips TypeScript types natively. Run `node app.ts` and it removes the annotations at load and executes the result. It does this in place, preserving line and column positions, so a stack trace points at the exact line you wrote with no sourcemap in between.
+- **Bun.** Bun has run TypeScript directly since the start, stripping types as it loads.
+- **The browser.** Browsers do not run TypeScript, but a server can strip a `.ts` file to JavaScript before serving it, so the browser fetches valid modules. This is how a no-build framework ships TypeScript to the client with no bundler.
 
-The one thing stripping does not do is check your types. That is a feature, not a gap. Type checking is a separate concern you run in your editor and in CI (`tsc --noEmit`), where a slow, thorough check belongs. Running the program does not need to wait on it.
+The one thing stripping does not do is check your types, and that is a feature, not a hole. Type checking is a separate concern you run in your editor and in CI (`tsc --noEmit`), where a slow, thorough check belongs. Running the program should not have to wait on it, and now it does not.
 
 # The catch: your TypeScript has to be erasable
 
-There is a real constraint. Stripping only works if removing the types leaves valid JavaScript, which means you cannot use TypeScript features that generate runtime code. No `enum`, no `namespace` with a value, no constructor parameter properties, no legacy decorators with metadata. These emit JavaScript that has no plain-JS equivalent, so there is nothing to strip them down to. TypeScript ships an `erasableSyntaxOnly` flag that flags exactly these, so you find out in your editor rather than at runtime.
+There is a real constraint, and I would rather you hear it from me than from a runtime error. Stripping only works if removing the types leaves valid JavaScript, which rules out TypeScript features that generate runtime code. No `enum`, no `namespace` with a value, no constructor parameter properties, no legacy decorators with metadata. Each of those emits JavaScript that has no plain-JS equivalent, so there is nothing to strip them down to. TypeScript ships an `erasableSyntaxOnly` flag that flags exactly these, so you find out in your editor instead of at runtime.
 
-For most modern TypeScript this costs you nothing, because the erasable subset is what most code already uses. But it is a genuine constraint worth knowing before you rip out your build step.
+For most modern TypeScript this costs you nothing, because the erasable subset is what the code you write already uses. But it is a genuine constraint, and it is worth checking before you rip out your build step and assume everything just works.
 
 # How WebJs runs on this
 
-WebJs is built entirely on type stripping, with no build step anywhere. The `.ts` files you write are the files that run on the server and the files the browser fetches, with the types stripped at load by Node's built-in stripper or Bun's. There is no `tsc` in the serving path, no `dist/` folder, and no sourcemap layer, so an error in the browser console points at `app/posts/[id]/page.ts` at the real line. The framework enforces the erasable-TypeScript constraint with a check, so a non-erasable construct is caught before it ships rather than crashing at strip time. The longer story of why WebJs strips instead of bundling is in [strip the types, do not run esbuild](/blog/strip-types-not-esbuild).
+WebJs is built entirely on type stripping, with no build step anywhere. The `.ts` files you write are the files that run on the server and the files the browser fetches, with the types stripped at load by Node's built-in stripper or Bun's. There is no `tsc` in the serving path, no `dist/` folder, and no sourcemap layer, so an error in the browser console points at `app/posts/[id]/page.ts` at the real line. The framework enforces the erasable constraint with a check, so a non-erasable construct is caught before it ships rather than blowing up at strip time. Why I chose stripping over running esbuild, and what that cost, is in [strip the types, not esbuild](/blog/strip-types-not-esbuild).
 
-If your project still runs `tsc` in a watch loop just to execute your code, you can probably delete that step. Keep `tsc --noEmit` for checking, and let the runtime strip and run.
+If your project still runs `tsc` in a watch loop only to execute your code, you can almost certainly delete that step today. Keep `tsc --noEmit` for checking, and let the runtime strip and run. That was the change that made my own dev loop feel immediate again.
 
 ## FAQ
 
