@@ -81,7 +81,7 @@ export function extractExample(src) {
  * The one-line pointer left in place of a stripped example. Uses the EXPLICIT
  * `npx @webjsdev/ui view` form (not the bare `webjsui` bin name, which npx would
  * resolve to an unrelated `webjsui` package when it is not a direct dep, e.g. in
- * a scaffolded app where `@webjsdev/ui` is only transitive). Works in a webjs
+ * a scaffolded app where `@webjsdev/ui` is only transitive). Works in a WebJs
  * app and a standalone project alike.
  */
 export function pointerLine(name) {
