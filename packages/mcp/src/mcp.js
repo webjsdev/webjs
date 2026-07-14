@@ -81,6 +81,18 @@ const DOCS_SCHEMA = {
   required: [],
 };
 
+/** `ui` lists the @webjsdev/ui kit, or details one component by `name`. */
+const UI_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: {
+      type: 'string',
+      description: 'A component name (e.g. button, accordion, dialog). Omit for the full kit inventory.',
+    },
+  },
+  required: [],
+};
+
 /** `source` reads the framework source: a `path` to read, a `query` to grep, or a `package` to list. */
 const SOURCE_SCHEMA = {
   type: 'object',
@@ -126,6 +138,12 @@ const TOOL_DEFS = [
     description:
       'Read the FRAMEWORK authored source (webjs is buildless: node_modules/@webjsdev/*/src is the JSDoc source, run directly server-side; only the core browser bundle is built into dist/, which this skips). Pass `path` to read a file (e.g. server/src/ssr.js), `query` to grep the @webjsdev/* src trees, or no args to list the packages + entry points. Use when the docs do not answer something. Read-only.',
     inputSchema: SOURCE_SCHEMA,
+  },
+  {
+    name: 'ui',
+    description:
+      'The @webjsdev/ui component kit (shadcn-style, copied into your repo). No args returns the inventory (each component: tier, helper signatures, npm deps); pass `name` for one component: helper signatures, the paste-ready structural example, the a11y/description header, and deps. Use before hand-writing UI so you reach for a helper (e.g. buttonClass()) and the accessible structure instead of expanding Tailwind blind. Reads the kit, not your app. Read-only.',
+    inputSchema: UI_SCHEMA,
   },
   {
     name: 'list_routes',
@@ -359,6 +377,26 @@ export function makeToolRunners(deps) {
 }
 
 /**
+ * Run the `ui` tool: the @webjsdev/ui kit inventory (no args) or one component's
+ * projection (helper signatures + paste-ready example + a11y/description header
+ * + deps). Projects the SHARED `@webjsdev/ui/registry/extract` leaf, the same
+ * one `webjsui view` renders, so the CLI and MCP cannot drift (#983, the #979
+ * shared-projector pattern). `uiDeps` is injected so tests need no real package.
+ *
+ * @param {{ uiInventory: Function, uiComponent: Function }} uiDeps
+ * @param {{ name?: string }} args
+ */
+export function runUiTool(uiDeps, args) {
+  const name = typeof args.name === 'string' && args.name ? args.name : null;
+  if (!name) return { inventory: uiDeps.uiInventory() };
+  const component = uiDeps.uiComponent(name);
+  if (!component) {
+    throw new Error(`Unknown component "${String(name)}". Call ui with no args for the inventory.`);
+  }
+  return component;
+}
+
+/**
  * A JSON-RPC 2.0 result frame.
  * @param {string|number|null} id
  * @param {any} result
@@ -454,6 +492,15 @@ export async function runMcpServer(opts) {
     };
   }
 
+  // The `ui` tool (#983): the @webjsdev/ui kit inventory / per-component
+  // projection, read from the shared `@webjsdev/ui/registry/extract` leaf.
+  // Injectable for tests; otherwise resolved from the installed package.
+  let uiDeps = opts.uiDeps;
+  if (!uiDeps) {
+    const ui = await import('@webjsdev/ui/registry/extract');
+    uiDeps = { uiInventory: ui.uiInventory, uiComponent: ui.uiComponent };
+  }
+
   /** Write one JSON-RPC frame as a single line to stdout. */
   const send = (frame) => {
     stdout.write(JSON.stringify(frame) + '\n');
@@ -526,7 +573,9 @@ export async function runMcpServer(opts) {
       const args = params.arguments || {};
       // The knowledge tools route to the docs / source layer; they return text.
       const isKnowledgeTool = name === 'init' || name === 'docs' || name === 'source';
-      if (!isKnowledgeTool && !runners[name]) {
+      // `ui` is kit-scoped (not app-scoped), so it is dispatched separately.
+      const isUiTool = name === 'ui';
+      if (!isKnowledgeTool && !isUiTool && !runners[name]) {
         return rpcError(id, -32602, `Unknown tool: ${String(name)}`);
       }
       const appDir = typeof args.appDir === 'string' && args.appDir ? args.appDir : cwd;
@@ -537,7 +586,9 @@ export async function runMcpServer(opts) {
             : name === 'docs'
               ? await searchDocs(docsDeps, args)
               : await runSourceTool(sourceDeps, args)
-          : await runners[name](appDir);
+          : isUiTool
+            ? runUiTool(uiDeps, args)
+            : await runners[name](appDir);
         // Knowledge tools return a markdown string; introspection tools return
         // a JSON-serialisable object.
         const text = typeof result === 'string' ? result : JSON.stringify(result, null, 2);

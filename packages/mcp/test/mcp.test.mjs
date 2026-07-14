@@ -112,7 +112,7 @@ test('mcp: tools/list returns the introspection + knowledge tools with inputSche
   ]);
   const tools = frames[0].result.tools;
   const names = tools.map((t) => t.name).sort();
-  assert.deepEqual(names, ['check', 'docs', 'init', 'list_actions', 'list_components', 'list_routes', 'source']);
+  assert.deepEqual(names, ['check', 'docs', 'init', 'list_actions', 'list_components', 'list_routes', 'source', 'ui']);
   for (const t of tools) {
     assert.equal(typeof t.description, 'string');
     assert.equal(t.inputSchema.type, 'object');
@@ -123,6 +123,7 @@ test('mcp: tools/list returns the introspection + knowledge tools with inputSche
   assert.deepEqual(byName.init.inputSchema.properties, {}, 'init takes no args');
   assert.ok(byName.docs.inputSchema.properties.topic && byName.docs.inputSchema.properties.query, 'docs takes topic/query');
   assert.ok(byName.source.inputSchema.properties.path && byName.source.inputSchema.properties.query, 'source takes path/query/package');
+  assert.ok(byName.ui.inputSchema.properties.name, 'ui takes an optional component name');
 });
 
 test('mcp: tools/call check returns a content array parsing to { violations, summary }', async () => {
@@ -345,6 +346,33 @@ test('mcp: tools/call source reads/greps/lists the framework source (driven agai
     { jsonrpc: '2.0', id: 44, method: 'tools/call', params: { name: 'source', arguments: { path: 'core/dist/webjs-core-browser.js' } } },
   ]));
   assert.match(frames[0].result.content[0].text, /Refusing to read outside/, 'dist (built bundle) not exposed, only src');
+});
+
+/* ---------------- the ui tool (#983): kit inventory + drift-guard ---------------- */
+
+test('mcp: tools/call ui returns the kit inventory and matches the shared extractor (drift-guard)', async () => {
+  // The ui tool projects @webjsdev/ui/registry/extract, the SAME leaf webjsui
+  // view renders. Assert the tool output IS that projection, so the CLI and MCP
+  // cannot drift (the #979 shared-projector pattern applied to the kit).
+  const { uiInventory, uiComponent } = await import('@webjsdev/ui/registry/extract');
+  const dir = tmpDir();
+  const { frames } = await driveMcp(dir, [
+    { jsonrpc: '2.0', id: 60, method: 'tools/call', params: { name: 'ui', arguments: {} } },
+    { jsonrpc: '2.0', id: 61, method: 'tools/call', params: { name: 'ui', arguments: { name: 'accordion' } } },
+    { jsonrpc: '2.0', id: 62, method: 'tools/call', params: { name: 'ui', arguments: { name: 'not-a-component' } } },
+  ]);
+
+  const inv = JSON.parse(frames.find((f) => f.id === 60).result.content[0].text);
+  assert.deepEqual(inv.inventory, uiInventory(), 'inventory matches the shared extractor');
+  assert.ok(inv.inventory.some((c) => c.name === 'button' && c.tier === 1));
+  assert.ok(inv.inventory.some((c) => c.name === 'dialog' && c.tier === 2));
+
+  const acc = JSON.parse(frames.find((f) => f.id === 61).result.content[0].text);
+  assert.deepEqual(acc, uiComponent('accordion'), 'per-component payload matches the shared extractor');
+  assert.ok(acc.helpers.length >= 4, 'accordion helper signatures are projected');
+
+  const err = frames.find((f) => f.id === 62);
+  assert.ok(err.result.isError, 'an unknown component is a tool error, not a crash');
 });
 
 /* ---------------- knowledge layer (#376): init / docs / resources / prompts ---------------- */
