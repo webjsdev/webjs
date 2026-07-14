@@ -44,8 +44,47 @@ import { checkNodeInline } from './node-preflight.js';
 
 /**
  * @typedef {'pass' | 'warn' | 'fail'} DoctorStatus
- * @typedef {{ name: string, status: DoctorStatus, message: string, fix?: string }} DoctorResult
+ * @typedef {{ name: string, code: string, status: DoctorStatus, message: string, fix?: string }} DoctorResult
  */
+
+/**
+ * Stable machine-readable code per check (#975), so an agent consuming
+ * `webjs doctor --json` branches on the failure KIND, not the human message
+ * text (which is free to change). The `name` stays the display identity (some
+ * are kebab-case, two are prose); the `code` is the durable contract, a
+ * SCREAMING_SNAKE_CASE constant that never changes for a given check. Attached
+ * centrally in `runDoctorChecks` so every check function stays focused on its
+ * own logic. Mirrors Remix's `DoctorFindingCode` enum (its `doctor/types.ts`).
+ *
+ * Keyed by each check's `name`. A missing entry falls back to a name-derived
+ * code (see `codeForName`), but every shipped check is listed here explicitly
+ * and a drift test asserts each result carries one of these codes.
+ * @type {Record<string, string>}
+ */
+export const DOCTOR_CODES = {
+  'node-version': 'NODE_VERSION',
+  'tsconfig-erasable': 'TSCONFIG_ERASABLE',
+  'env-drift': 'ENV_DRIFT',
+  'vendor-pin': 'VENDOR_PIN',
+  'vendor-gitignore': 'VENDOR_GITIGNORE',
+  'webjs-versions': 'WEBJS_VERSIONS',
+  'framework-resolve': 'FRAMEWORK_RESOLVE',
+  'importmap-coherence': 'IMPORTMAP_COHERENCE',
+  'git-hook': 'GIT_HOOK',
+  'Page/layout elision (carrier hygiene)': 'ELISION_CARRIERS',
+  'Static build outputs (dev.regenerate freshness)': 'STATIC_ASSET_FRESHNESS',
+};
+
+/**
+ * The stable code for a check name: the explicit `DOCTOR_CODES` entry, else a
+ * best-effort derivation (uppercased, non-alphanumerics collapsed to `_`) so a
+ * newly-added check that forgets its map entry still gets a non-empty code.
+ * @param {string} name
+ * @returns {string}
+ */
+export function codeForName(name) {
+  return DOCTOR_CODES[name] || name.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+}
 
 /**
  * Read the CLI package's own `engines.node` so the required Node major lives in
@@ -1020,5 +1059,8 @@ export async function runDoctorChecks(appDir, opts = {}) {
     checkElisionCarriers(appDir),
     checkStaticAssetFreshness(appDir),
   ]);
+  // Attach the stable machine code to every result (#975). Centralized here so
+  // each check function stays free of the code-contract concern.
+  for (const r of results) r.code = codeForName(r.name);
   return results;
 }

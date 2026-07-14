@@ -36,6 +36,31 @@ webjs db push         # drizzle-kit push
 webjs db studio       # drizzle-kit studio
 webjs db seed         # run db/seed.server.ts</pre>
 
+    <h3>webjs routes</h3>
+    <pre>webjs routes                    # a grouped tree of pages + route handlers
+webjs routes --table            # aligned KIND / PATH / METHODS / FILE columns
+webjs routes --table --no-headers   # same, without the header row (pipe-friendly)
+webjs routes --json             # structured JSON (matches the MCP list_routes tool)</pre>
+    <p>Prints the route table to stdout: every page (path, owner file, dynamic params) and every <code>route.&#123;js,ts&#125;</code> handler (path, owner file, HTTP methods). It reuses the same route walker that backs the typed-routes generator and the dev server, so it always reflects exactly what the framework will serve. The <code>--json</code> shape is byte-identical to the read-only MCP <code>list_routes</code> tool, so an agent gets the same data whether it shells out or calls the MCP.</p>
+
+    <h3>webjs doctor</h3>
+    <pre>webjs doctor            # human-readable project-health checklist
+webjs doctor --json     # structured results (each with a stable code) + a summary
+webjs doctor --strict   # also fail the exit on warnings, not just hard failures</pre>
+    <p>Verifies project health: the Node version floor, <code>erasableSyntaxOnly</code>, <code>.env</code> drift, vendor-pin freshness, importmap coherence, <code>@webjsdev/*</code> version coherence, framework resolvability, the git hook, and a page/layout elision advisory. Each result carries a stable machine <code>code</code> (for example <code>NODE_VERSION</code>, <code>TSCONFIG_ERASABLE</code>, <code>IMPORTMAP_COHERENCE</code>) so an agent branches on the failure kind, not the message text. The <code>--json</code> payload is an object <code>&#123; results, summary &#125;</code> (the <code>results</code> array holds the per-check objects, each with its <code>code</code>). By default the exit is non-zero only on a hard <em>toolchain</em> failure; <code>--strict</code> also fails on warnings, so it can gate a fully-clean fix loop the way <code>webjs check --json</code> does.</p>
+
+    <h3>webjs version</h3>
+    <pre>webjs version           # print the installed @webjsdev/cli version
+webjs --version  /  -v  # the same, flag form</pre>
+    <p>Prints the installed <code>@webjsdev/cli</code> version, so an agent can detect the toolchain version before relying on a command.</p>
+
+    <h3>webjs help</h3>
+    <pre>webjs help              # the full command banner
+webjs help routes       # usage + summary + an Options table + Examples for one command
+webjs --help  /  -h     # the banner (flag form)
+webjs routes --help     # one command's help (flag form)</pre>
+    <p><code>webjs help &lt;command&gt;</code> prints that command's exact usage line, a one-line summary, an Options table documenting every flag, and worked examples, so you (or an agent) read the real invocation instead of guessing flags. The <code>--help</code> / <code>-h</code> flag forms are equivalent: bare at the top level for the banner, or after a command for that command's help. Commands that wrap an external tool (<code>typecheck</code> to <code>tsc</code>, <code>db</code> to drizzle-kit, <code>ui</code> to <code>@webjsdev/ui</code>) forward <code>--help</code> to that tool. An unknown help topic exits non-zero.</p>
+
     <h2>tsconfig.json</h2>
     <p>Optional but recommended for editor + CI type-checking:</p>
     <pre>{

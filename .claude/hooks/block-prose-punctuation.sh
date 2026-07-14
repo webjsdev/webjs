@@ -264,7 +264,7 @@ fi
 # positives (a wrongly blocked write), the same tradeoff as the rules above:
 # e.g. a sentence-ending "built on webjs." is not flagged (trailing period),
 # and the `bin/webjs.js` "webjs commands:" usage banner may rarely trip it.
-webjs_cli='create|dev|start|test|check|db|ui|doctor|types|typecheck|mcp|vendor|help|add|init|generate|migrate|push|studio|seed|pin|unpin|list|audit|outdated|update|view|diff|info|build'
+webjs_cli='create|dev|start|test|check|routes|db|ui|doctor|types|typecheck|mcp|vendor|help|version|add|init|generate|migrate|push|studio|seed|pin|unpin|list|audit|outdated|update|view|diff|info|build'
 
 # Scan copy: drop fenced code blocks, inline code spans, and emphasis markers
 # so a `webjs` inside code is never considered and **webjs** still matches.
@@ -288,9 +288,11 @@ brand_hits=$(printf '%s\n' "$brand_scan" \
 if [ -n "$brand_hits" ]; then
   # Drop lines whose "webjs" is a `webjs <subcommand>` CLI reference. The
   # trailing class also admits a closing quote (" or ') so a package.json
-  # script value ending in a bare subcommand is a command, not brand prose.
+  # script value ending in a bare subcommand is a command, not brand prose,
+  # and an HTML tag boundary (< or >) so a docs `<h3>webjs routes</h3>` or
+  # `<code>webjs types</code>` reads as a command, not brand prose.
   offending=$(printf '%s\n' "$brand_hits" \
-    | grep -vE "webjs[[:space:]]+(${webjs_cli})([[:space:]]|[.,:;)\"']|\$)" 2>/dev/null || true)
+    | grep -vE "webjs[[:space:]]+(${webjs_cli})([[:space:]]|[.,:;)\"'<>]|\$)" 2>/dev/null || true)
   if [ -n "$offending" ]; then
     cat >&2 <<'EOF'
 BLOCKED: lowercase "webjs" naming the brand in prose.

@@ -462,9 +462,12 @@ webjs dev    [--port N] [--no-hot] # dev server with live reload (node --watch o
 webjs start  [--port N]            # prod server; source IS the runtime, plain HTTP/1.1 (reverse-proxy for TLS + HTTP/2). Runs webjs.start.before first (#550)
 webjs test   [--server] [--browser] [--watch]
 webjs check  [--rules] [--json]    # correctness validator (report-only, no autofix); --json for an agent loop
+webjs routes [--json] [--table] [--no-headers]   # print the route table (path / owner file / methods, #975). Default tree; --json is byte-identical to the MCP list_routes tool; --no-headers drops the --table header for piping
 webjs mcp                          # read-only MCP: routes, actions (RPC hashes), components, check
-webjs doctor                       # project-health checklist (incl. a framework-resolve check that warns when @webjsdev/core can't be resolved from the app dir, the fresh-worktree-without-node_modules trap #954; a page/layout elision advisory); non-zero exit on a hard fail
+webjs doctor [--json] [--strict]   # project-health checklist (incl. a framework-resolve check that warns when @webjsdev/core can't be resolved from the app dir, the fresh-worktree-without-node_modules trap #954; a page/layout elision advisory); non-zero exit on a hard fail. --json emits `{ results, summary }` (results is the DoctorResult[], each carrying a stable code); --strict also fails the exit on warnings (#975)
 webjs types                        # generate .webjs/routes.d.ts (typed Route union + per-route params, #258)
+webjs version                      # print the installed @webjsdev/cli version (also: webjs --version / -v, #975)
+webjs help   [command]             # full usage banner, or per-command usage + Options + Examples (e.g. webjs help routes, #975). Flag forms: webjs --help / -h (banner), webjs <command> --help / -h (that command). typecheck/db/ui --help forward to their wrapped tool; an unknown topic exits 1
 webjs typecheck [tsc args...]      # the project's own tsc --noEmit
 webjs create <name> [--template api|saas]
 webjs db <generate|migrate|push|studio|seed>   # wraps drizzle-kit (+ runs db/seed.server.ts)

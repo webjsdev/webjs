@@ -171,6 +171,27 @@ test('mcp: tools/call list_routes returns the route projection', async () => {
   assert.deepEqual(api.methods.sort(), ['GET', 'POST']);
 });
 
+test('mcp: list_routes output equals the shared projectRoutes (no drift with the CLI)', async () => {
+  // The MCP tool and `webjs routes --json` both project through
+  // routes-report.js, so the tool output MUST equal projectRoutes over the same
+  // app. This locks the shared-projector guarantee (#975): if the MCP tool ever
+  // stops delegating to projectRoutes, this fails.
+  const { projectRoutes } = await import(resolve(REPO, 'packages', 'mcp', 'src', 'routes-report.js'));
+  const { buildRouteTable } = await import('@webjsdev/server');
+  const { readFile } = await import('node:fs/promises');
+  const dir = tmpDir();
+  write(dir, 'app/page.ts', `export default function P() {}\n`);
+  write(dir, 'app/blog/[slug]/page.ts', `export default function B() {}\n`);
+  write(dir, 'app/api/users/route.ts', `export async function GET() {}\nexport async function POST() {}\n`);
+
+  const { frames } = await driveMcp(dir, [
+    { jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'list_routes', arguments: {} } },
+  ]);
+  const toolOut = JSON.parse(frames[0].result.content[0].text);
+  const expected = await projectRoutes(await buildRouteTable(dir), { appDir: dir, readFile, extractRouteMethods });
+  assert.deepEqual(toolOut, expected);
+});
+
 test('mcp: tools/call list_actions reports file + fn + RPC endpoint', async () => {
   const dir = tmpDir();
   write(

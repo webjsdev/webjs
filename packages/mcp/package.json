@@ -13,6 +13,9 @@
     "./check-report": {
       "default": "./src/check-report.js"
     },
+    "./routes-report": {
+      "default": "./src/routes-report.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

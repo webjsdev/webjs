@@ -544,6 +544,99 @@ test('CLI exits non-zero when a hard check fails (bad tsconfig)', () => {
   assert.match(r.stdout + r.stderr, /\[fail\] tsconfig-erasable/);
 });
 
+// ---------------------------------------------------------------------------
+// Stable codes (#975): every result carries a machine `code`.
+// ---------------------------------------------------------------------------
+const { DOCTOR_CODES, codeForName } = await import(resolve(CLI_LIB_DIR, 'doctor.js'));
+
+test('every DoctorResult carries a stable non-empty code', async () => {
+  const dir = tmpDir();
+  write(dir, 'package.json', JSON.stringify({ name: 'x' }));
+  const results = await runDoctorChecks(dir, baseOpts({ nodeVersion: '24.0.0' }));
+  const codes = new Set(Object.values(DOCTOR_CODES));
+  for (const r of results) {
+    assert.ok(r.code && typeof r.code === 'string', `${r.name} has a code`);
+    assert.ok(codes.has(r.code), `${r.name} code "${r.code}" is a declared DOCTOR_CODE`);
+  }
+  // The code is stable per check name, independent of the human message.
+  assert.equal(byName(results, 'node-version').code, 'NODE_VERSION');
+  assert.equal(byName(results, 'tsconfig-erasable').code, 'TSCONFIG_ERASABLE');
+});
+
+test('codeForName falls back to a derived code for an unmapped name', () => {
+  assert.equal(codeForName('node-version'), 'NODE_VERSION');
+  assert.equal(codeForName('Some New Check!'), 'SOME_NEW_CHECK');
+});
+
+// ---------------------------------------------------------------------------
+// CLI --json + --strict (#975).
+// ---------------------------------------------------------------------------
+function runCliArgs(cwd, args) {
+  return spawnSync(process.execPath, [CLI, 'doctor', ...args], { cwd, encoding: 'utf8' });
+}
+
+test('doctor --json emits the results (with codes) + a summary, valid JSON', () => {
+  const dir = tmpDir();
+  write(dir, 'package.json', JSON.stringify({ name: 'x' }));
+  write(dir, 'tsconfig.json', JSON.stringify({ compilerOptions: { erasableSyntaxOnly: true } }));
+  const r = runCliArgs(dir, ['--json']);
+  assert.equal(r.status, 0, `no hard fail -> exit 0, got ${r.status}\n${r.stderr}`);
+  const out = JSON.parse(r.stdout);
+  assert.ok(Array.isArray(out.results), 'results is an array');
+  assert.ok(out.results.every((x) => x.code), 'every result carries a code');
+  assert.equal(typeof out.summary.pass, 'number');
+  assert.equal(out.summary.strict, false);
+  assert.equal(out.summary.ok, true);
+  // --json emits ONLY the JSON object (no human banner leaking onto stdout).
+  assert.doesNotMatch(r.stdout, /project-health checklist/);
+});
+
+test('doctor --json still exits non-zero on a hard fail', () => {
+  const dir = tmpDir();
+  write(dir, 'package.json', JSON.stringify({ name: 'x' }));
+  write(dir, 'tsconfig.json', JSON.stringify({ compilerOptions: { strict: true } }));
+  const r = runCliArgs(dir, ['--json']);
+  assert.notEqual(r.status, 0, 'a hard fail exits non-zero even in --json mode');
+  const out = JSON.parse(r.stdout);
+  assert.equal(out.summary.ok, false);
+  assert.ok(out.results.some((x) => x.code === 'TSCONFIG_ERASABLE' && x.status === 'fail'));
+});
+
+// The --strict counterfactual: an app with a WARN but NO hard fail exits 0
+// normally, and 1 under --strict. Proving BOTH sides is what shows --strict is
+// what flips it (not some unrelated hard fail).
+test('--strict flips a warning-only app from exit 0 to exit 1', () => {
+  const dir = tmpDir();
+  write(dir, 'package.json', JSON.stringify({ name: 'x' }));
+  write(dir, 'tsconfig.json', JSON.stringify({ compilerOptions: { erasableSyntaxOnly: true } }));
+  // Seed a guaranteed WARN with no hard fail: an .env.example whose key is
+  // absent from .env is the env-drift warn.
+  write(dir, '.env.example', 'DATABASE_URL=\nAUTH_SECRET=\n');
+  write(dir, '.env', 'DATABASE_URL=x\n');
+
+  const plain = runCliArgs(dir, []);
+  assert.equal(plain.status, 0, `without --strict a warn does NOT fail: got ${plain.status}\n${plain.stdout}`);
+
+  const strict = runCliArgs(dir, ['--strict']);
+  assert.equal(strict.status, 1, 'with --strict the same warn fails the exit');
+  assert.match(strict.stderr, /--strict was set/);
+});
+
+test('--strict with --json reports ok:false and exits 1 on a warning', () => {
+  const dir = tmpDir();
+  write(dir, 'package.json', JSON.stringify({ name: 'x' }));
+  write(dir, 'tsconfig.json', JSON.stringify({ compilerOptions: { erasableSyntaxOnly: true } }));
+  write(dir, '.env.example', 'AUTH_SECRET=\n');
+  write(dir, '.env', '\n');
+  const r = runCliArgs(dir, ['--json', '--strict']);
+  assert.equal(r.status, 1, 'strict + a warn -> exit 1');
+  const out = JSON.parse(r.stdout);
+  assert.equal(out.summary.strict, true);
+  assert.equal(out.summary.ok, false);
+  assert.ok(out.summary.warn > 0, 'a warning was present');
+  assert.equal(out.summary.fail, 0, 'and it was a warn, not a hard fail');
+});
+
 // Regression: the doctor pin check imports hasVendorPin from @webjsdev/server on
 // the REAL (un-stubbed) path. If it is not re-exported, the check silently
 // reports "no pin file" for a pinned app and the freshness check is inert. The
