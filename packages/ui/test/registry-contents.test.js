@@ -91,6 +91,31 @@ test('every v1 component has a complete, extractable @example', { skip }, async 
   }
 });
 
+// #983: guard the assumptions the hand-rolled JSDoc micro-parser (example.js,
+// extract.js) relies on. These hold for every current component; this test
+// turns a future violation (which would silently MIS-strip / mis-extract) into
+// a clear CI failure at authoring time rather than a latent trap.
+test('every component @example is safe for the JSDoc micro-parser', { skip }, () => {
+  for (const name of V1_COMPONENTS) {
+    const src = readSource(name);
+    // The module JSDoc must be a single block: a `*/` inside the @example would
+    // make firstBlockComment() terminate the block early.
+    const start = src.indexOf('/**');
+    const firstEnd = src.indexOf('*/', start + 3);
+    const exAt = src.indexOf('@example', start);
+    assert.ok(exAt !== -1 && exAt < firstEnd, `${name}: @example must sit inside the first JSDoc block (no */ before it)`);
+    // No example line may begin (after the ` * ` gutter) with a JSDoc-tag-shaped
+    // token (`@word`): the extractor/stripper treat such a line as the next tag
+    // and would truncate the example. The ```html fence line is fine.
+    const block = src.slice(start, firstEnd);
+    const exampleLines = block.slice(block.indexOf('@example') + '@example'.length).split('\n').slice(1);
+    for (const line of exampleLines) {
+      const body = line.replace(/^\s*\*\s?/, '');
+      assert.ok(!/^@\w+/.test(body), `${name}: an @example line starts with a tag-shaped token ("${body.slice(0, 20)}"), which the parser would treat as the next JSDoc tag`);
+    }
+  }
+});
+
 test('every v1 component is declared in registry.json', { skip }, () => {
   const m = readManifest();
   const names = new Set(m.items.map((it) => it.name));
