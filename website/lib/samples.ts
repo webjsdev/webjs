@@ -24,7 +24,7 @@ export async function getPost(id) {
 }`;
 
 export const PAGE_SAMPLE = `import { html, notFound } from '@webjsdev/core';
-import { getPost } from '#modules/posts/get-post.server.ts';
+import { getPost } from '#actions/get-post.server.ts';
 import '#components/like-button.ts';
 
 export default async function Post({ params }) {
