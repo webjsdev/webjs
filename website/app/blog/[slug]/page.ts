@@ -9,13 +9,41 @@ import { renderPostBody } from '#modules/blog/utils/render-post.ts';
  * rendering live in `modules/blog/`. This page composes them.
  *
  * `generateMetadata` derives <head> from the post's frontmatter so
- * each post gets its own title / description / og:* tags for SEO.
- * Canonical URL per post at `/blog/<slug>`.
+ * each post gets its own title / description / og:* tags for SEO,
+ * a canonical URL per post at `/blog/<slug>`, and JSON-LD
+ * (`BlogPosting` + `BreadcrumbList`) for rich results.
  */
+
+const SITE_URL = 'https://webjs.dev';
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {
   const post = await getPost(params.slug);
   if (!post) return { title: 'Post not found · WebJs' };
+
+  const canonical = `${SITE_URL}/blog/${post.slug}`;
+  const jsonLd = [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BlogPosting',
+      headline: post.title,
+      description: post.description,
+      author: { '@type': 'Person', name: post.author },
+      publisher: { '@type': 'Organization', name: 'WebJs', url: SITE_URL },
+      datePublished: post.date || undefined,
+      mainEntityOfPage: canonical,
+      url: canonical,
+      keywords: (post.tags || []).join(', '),
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Blog', item: `${SITE_URL}/blog` },
+        { '@type': 'ListItem', position: 2, name: post.title, item: canonical },
+      ],
+    },
+  ];
+
   return {
     title: `${post.title} · WebJs Blog`,
     description: post.description,
@@ -23,12 +51,13 @@ export async function generateMetadata({ params }: { params: { slug: string } })
       title: post.title,
       description: post.description,
       type: 'article',
-      url: `https://webjs.dev/blog/${post.slug}`,
+      url: canonical,
       publishedTime: post.date,
       authors: [post.author],
       tags: post.tags,
     },
     twitter: { card: 'summary_large_image' },
+    jsonLd,
   };
 }
 

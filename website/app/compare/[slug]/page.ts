@@ -1,6 +1,7 @@
 import { html, unsafeHTML, notFound } from '@webjsdev/core';
 import { getComparison } from '#modules/compare/queries/get-comparison.server.ts';
 import { renderPostBody } from '#modules/blog/utils/render-post.ts';
+import { parseFaq, faqJsonLd } from '#lib/faq.ts';
 import { NEW_TAB } from '#lib/links.ts';
 
 /**
@@ -11,13 +12,45 @@ import { NEW_TAB } from '#lib/links.ts';
  * `renderPostBody` (same typography, no need for a second renderer).
  *
  * `generateMetadata` gives each comparison its own title / description /
- * og:* tags, with a canonical URL at `/compare/<slug>`, which is what
- * makes these pages rank for "WebJs vs <framework>" queries.
+ * og:* tags, a canonical URL at `/compare/<slug>`, and JSON-LD
+ * (`TechArticle` + `BreadcrumbList` + optional `FAQPage`, the last built
+ * from a `## FAQ` section in the body), which is what makes these pages
+ * rank for "WebJs vs <framework>" queries and feed AI answer engines.
  */
+
+const SITE_URL = 'https://webjs.dev';
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {
   const c = await getComparison(params.slug);
   if (!c) return { title: 'Comparison not found · WebJs' };
+
+  const canonical = `${SITE_URL}/compare/${c.slug}`;
+  const faq = faqJsonLd(parseFaq(c.body));
+
+  const jsonLd: Record<string, unknown>[] = [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'TechArticle',
+      headline: c.title,
+      description: c.description,
+      author: { '@type': 'Person', name: c.author },
+      publisher: { '@type': 'Organization', name: 'WebJs', url: SITE_URL },
+      datePublished: c.date || undefined,
+      mainEntityOfPage: canonical,
+      url: canonical,
+      keywords: [`WebJs vs ${c.competitor}`, ...c.tags].join(', '),
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Compare', item: `${SITE_URL}/compare` },
+        { '@type': 'ListItem', position: 2, name: `WebJs vs ${c.competitor}`, item: canonical },
+      ],
+    },
+  ];
+  if (faq) jsonLd.push(faq);
+
   return {
     title: `${c.title} · WebJs`,
     description: c.description,
@@ -25,12 +58,13 @@ export async function generateMetadata({ params }: { params: { slug: string } })
       title: c.title,
       description: c.description,
       type: 'article',
-      url: `https://webjs.dev/compare/${c.slug}`,
+      url: canonical,
       publishedTime: c.date,
       authors: [c.author],
       tags: c.tags,
     },
     twitter: { card: 'summary_large_image' },
+    jsonLd,
   };
 }
 
