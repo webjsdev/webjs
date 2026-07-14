@@ -60,3 +60,19 @@ test('stripExample: no-op when there is no @example', () => {
 test('extractExample: empty string when there is no @example', () => {
   assert.equal(extractExample('/** docs */\nexport const x = 1;'), '');
 });
+
+test('example: robust to a tag AFTER @example (extract stops at it, strip preserves it)', () => {
+  const src = '/**\n * Doc.\n *\n * @example\n * ```html\n * <x-y></x-y>\n * ```\n * @see other\n */\nexport const y = () => "z";';
+  // extract stops at @see, so no trailing tag leaks into the snippet
+  const ex = extractExample(src);
+  assert.match(ex, /<x-y><\/x-y>/);
+  assert.doesNotMatch(ex, /@see/);
+  assert.doesNotMatch(ex, /```/);
+  // strip removes the example but preserves the trailing @see tag
+  const out = stripExample(src, 'y');
+  assert.doesNotMatch(out, /@example/);
+  assert.doesNotMatch(out, /<x-y>/);
+  assert.match(out, /@see other/, 'trailing tag survives the strip');
+  assert.ok(out.includes(pointerLine('y')));
+  assert.match(out, /export const y/);
+});

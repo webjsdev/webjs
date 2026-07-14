@@ -181,19 +181,34 @@ export function tierOfItem(name) {
 }
 
 /**
+ * Strip `/* *​/` block comments and `//` line comments so a token check keys on
+ * CODE, not prose. Rough (does not honour a `//` inside a string), but a
+ * component's JSDoc is the realistic false-positive source, and the leading
+ * module JSDoc is exactly what this removes.
+ *
+ * @param {string} src
+ * @returns {string}
+ */
+function stripComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+}
+
+/**
  * True when a component source defines/registers a custom element (Tier-2). A
  * Tier-1 helper file exports only class-string functions and matches none of
  * these. Used to gate the example-strip (Tier-2 files are left whole) and to
- * label the kit inventory.
+ * label the kit inventory. Comments are stripped first so a JSDoc that merely
+ * MENTIONS `.register(` or `WebComponent` does not misclassify a Tier-1 helper.
  *
  * @param {string} src
  * @returns {boolean}
  */
 export function isCustomElementSource(src) {
+  const code = stripComments(src);
   return (
-    /\bextends\s+WebComponent\b/.test(src) ||
-    /\bcustomElements\.define\b/.test(src) ||
-    /\.register\(/.test(src)
+    /\bextends\s+WebComponent\b/.test(code) ||
+    /\bcustomElements\.define\b/.test(code) ||
+    /\.register\(/.test(code)
   );
 }
 

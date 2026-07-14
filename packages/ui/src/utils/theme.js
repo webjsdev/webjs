@@ -36,6 +36,9 @@ function ensureDir(d) {
  * @returns {Promise<{ status: 'written'|'present'|'failed', cssPath: string, error?: string }>}
  */
 export async function ensureTheme(cwd, baseColor, cssPath, registryUrl) {
+  if (!cssPath || !baseColor) {
+    return { status: 'failed', cssPath: cssPath || '', error: 'missing tailwind.css / tailwind.baseColor in components.json' };
+  }
   const target = join(cwd, cssPath);
   const existing = existsSync(target) ? readFileSync(target, 'utf8') : '';
   if (existing.includes(THEME_MARKER)) {

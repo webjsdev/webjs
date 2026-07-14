@@ -7,11 +7,15 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import {
   getRegistryItem,
   getRegistryIndex,
   isDefaultRegistry,
   DEFAULT_REGISTRY_URL,
+  HOSTED_REGISTRY_URL,
 } from '../src/registry/fetcher.js';
 import { loadRegistryItem, loadRegistryIndex, isCustomElementSource, tierOfItem } from '../src/registry/local.js';
 
@@ -88,8 +92,25 @@ test('getRegistryItem: throws a helpful error for an unknown local item', async 
 
 test('isDefaultRegistry: only the hosted URL (or unset) is default', () => {
   assert.equal(isDefaultRegistry(undefined), true);
-  assert.equal(isDefaultRegistry(DEFAULT_REGISTRY_URL), true);
+  assert.equal(isDefaultRegistry(HOSTED_REGISTRY_URL), true);
+  assert.equal(isDefaultRegistry(DEFAULT_REGISTRY_URL), true); // no env override here
   assert.equal(isDefaultRegistry('http://custom/registry'), false);
+});
+
+test('REGISTRY_URL env override forces the network path (not silently local)', () => {
+  // Set in a child process so DEFAULT_REGISTRY_URL is computed with the env
+  // present. A custom REGISTRY_URL must NOT be treated as the (local-first)
+  // default, so a self-hosted registry is never shadowed by the packaged one.
+  const fetcherPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'registry', 'fetcher.js');
+  const script = `import { isDefaultRegistry, DEFAULT_REGISTRY_URL } from ${JSON.stringify(fetcherPath)};
+    process.stdout.write(JSON.stringify({ def: DEFAULT_REGISTRY_URL, isDefault: isDefaultRegistry(DEFAULT_REGISTRY_URL) }));`;
+  const out = execFileSync(process.execPath, ['--input-type=module', '-e', script], {
+    env: { ...process.env, REGISTRY_URL: 'https://my.registry/r' },
+    encoding: 'utf8',
+  });
+  const r = JSON.parse(out);
+  assert.equal(r.def, 'https://my.registry/r');
+  assert.equal(r.isDefault, false, 'a custom REGISTRY_URL is NOT local-first');
 });
 
 test('loadRegistryItem: returns null for an unknown name', () => {
@@ -106,6 +127,11 @@ test('loadRegistryIndex: metadata-only entries (no inlined content)', () => {
 test('isCustomElementSource: distinguishes Tier-2 elements from Tier-1 helpers', () => {
   assert.equal(isCustomElementSource('class X extends WebComponent({}) {}\nX.register("x-y");'), true);
   assert.equal(isCustomElementSource('export const buttonClass = () => "px-4";'), false);
+});
+
+test('isCustomElementSource: a JSDoc that MENTIONS register()/WebComponent does not misclassify a Tier-1 helper', () => {
+  const src = '/**\n * Migrated from the prior <ui-accordion> set: it used to call\n * `.register()` and `extends WebComponent`, but is now a pure helper.\n */\nexport const accordionClass = () => "w-full";';
+  assert.equal(isCustomElementSource(src), false);
 });
 
 test('tierOfItem: dialog is Tier-2, button is Tier-1', () => {

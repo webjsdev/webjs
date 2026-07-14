@@ -41,11 +41,15 @@ export const add = new Command()
     // Self-heal missing theme tokens (#983): the helpers render against CSS
     // design tokens; if the app never ran (or lost) the theme block, plant it
     // so a copied component is not unstyled. Idempotent when already present.
-    const theme = await ensureTheme(cwd, config.tailwind.baseColor, config.tailwind.css, opts.registry);
-    if (theme.status === 'written') {
-      logger.success(`Planted missing theme tokens into ${config.tailwind.css}`);
-    } else if (theme.status === 'failed') {
-      logger.warn(`Could not verify theme tokens in ${config.tailwind.css}: ${theme.error}`);
+    // Skip if the config predates / lacks the tailwind fields (never crash add).
+    const tw = config.tailwind || {};
+    if (tw.css && tw.baseColor) {
+      const theme = await ensureTheme(cwd, tw.baseColor, tw.css, opts.registry);
+      if (theme.status === 'written') {
+        logger.success(`Planted missing theme tokens into ${tw.css}`);
+      } else if (theme.status === 'failed') {
+        logger.warn(`Could not verify theme tokens in ${tw.css}: ${theme.error}`);
+      }
     }
 
     for (const item of tree) {

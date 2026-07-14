@@ -19,7 +19,11 @@
  */
 
 import { loadRegistryItem, loadRegistryIndex, isCustomElementSource } from './local.js';
-import { extractExample } from './example.js';
+import { extractExample, stripExample } from './example.js';
+
+// Re-export the lean-copy primitives so a copier (the CLI's `add`, the scaffold
+// generator) has one import surface for the shared example-strip behaviour.
+export { isCustomElementSource, stripExample };
 
 /**
  * Extract the exported class-helper signatures from a Tier-1 source, e.g.

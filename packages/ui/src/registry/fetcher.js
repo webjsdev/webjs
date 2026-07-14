@@ -2,21 +2,32 @@ import { registryItemSchema, registryIndexSchema } from './schema.js';
 import { loadRegistryItem, loadRegistryIndex } from './local.js';
 
 /**
- * Default registry URL. Override via REGISTRY_URL env var, or per-call.
+ * The canonical hosted registry. Local-first resolution applies ONLY for this
+ * exact URL: it is the one registry whose sources ship inside the package.
  */
-export const DEFAULT_REGISTRY_URL = process.env.REGISTRY_URL || 'https://ui.webjs.dev/registry';
+export const HOSTED_REGISTRY_URL = 'https://ui.webjs.dev/registry';
+
+/**
+ * Default registry URL. A `REGISTRY_URL` env var points at a CUSTOM registry,
+ * which (like an explicit `--registry`) forces the NETWORK path, since its
+ * sources are not the packaged ones.
+ */
+export const DEFAULT_REGISTRY_URL = process.env.REGISTRY_URL || HOSTED_REGISTRY_URL;
 
 const cache = new Map();
 
 /**
- * True when `url` is the default hosted registry (or unset), meaning a caller
- * did not point at a CUSTOM registry. Local-first resolution kicks in here;
- * an explicit `--registry <url>` forces the network path.
+ * True when the effective registry is the hosted one whose sources ship in the
+ * package, i.e. local-first resolution applies. A custom registry (via
+ * `--registry <url>` OR a `REGISTRY_URL` env override) is NOT default and forces
+ * the network path, so a self-hosted registry is never silently shadowed by the
+ * packaged sources.
  *
  * @param {string} [url]
  */
 export function isDefaultRegistry(url) {
-  return !url || url === DEFAULT_REGISTRY_URL;
+  const effective = url || DEFAULT_REGISTRY_URL;
+  return effective === HOSTED_REGISTRY_URL;
 }
 
 /**

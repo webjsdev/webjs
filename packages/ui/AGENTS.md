@@ -173,7 +173,7 @@ full per-directory breakdown.
 | 1a | `aspect-ratio` | `aspectRatioClass`, use Tailwind `aspect-[16/9]` directly |
 | 1a | `kbd` | `kbdClass`, `kbdGroupClass` |
 | 1a | `table` | `tableContainerClass`, `tableClass`, `tableHeaderClass`, `tableBodyClass`, `tableFooterClass`, `tableRowClass`, `tableHeadClass`, `tableCellClass`, `tableCaptionClass` |
-| 1a | `toggle` | `toggleClass({ variant, size })`, pair with native `<button>` |
+| 1a/2 | `toggle` | Hybrid: exports `toggleClass({ variant, size })` (pair with a native `<button>`) AND registers `<ui-toggle>`. Because it registers an element, the kit tooling (`webjs ui view` / the MCP `ui` tool / the `add` strip) treats it as Tier-2 and keeps its file whole. |
 | 1a | `breadcrumb` | `breadcrumbListClass`, `breadcrumbItemClass`, `breadcrumbLinkClass`, `breadcrumbPageClass`, `breadcrumbSeparatorClass`, `breadcrumbEllipsisClass` |
 | 1a | `pagination` | `paginationClass`, `paginationContentClass`, `paginationLinkClass({ isActive, size })`, `paginationPreviousClass`, `paginationNextClass`, `paginationEllipsisClass` |
 | 1b | `popover` | `popoverContentClass`, `popoverHeaderClass`, `popoverTitleClass`, `popoverDescriptionClass`. Compose with `<button popovertarget="id">` + `<div popover id="id">`; positioning via CSS anchor positioning or the exported `positionFloating` helper. |

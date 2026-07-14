@@ -252,6 +252,16 @@ test('add: local-first (no --registry) installs a real component, strips its exa
   }
 });
 
+test('ensureTheme: returns a failure (does not throw) when css path / baseColor is missing', async () => {
+  // Defensive: a direct caller passing an incomplete config must get a
+  // structured failure, never a synchronous crash on join(cwd, undefined). #983.
+  const { ensureTheme } = await import('../src/utils/theme.js');
+  const r1 = await ensureTheme('/tmp/x', 'neutral', undefined);
+  assert.equal(r1.status, 'failed');
+  const r2 = await ensureTheme('/tmp/x', undefined, 'styles/globals.css');
+  assert.equal(r2.status, 'failed');
+});
+
 /* -------------------- rewriteUtilsImport (unit tests) -------------------- */
 
 test('rewriteUtilsImport: maps to lib/utils/cn alias for a Tier-1 file', () => {

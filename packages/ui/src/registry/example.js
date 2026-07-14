@@ -61,10 +61,12 @@ export function extractExample(src) {
   const lines = block.text.split('\n');
   const exIdx = lines.findIndex((l) => /^\s*\*\s*@example\b/.test(l));
   if (exIdx === -1) return '';
-  // Everything after the @example line, up to the closing */ line.
+  // Everything after the @example line, up to the closing */ OR the next JSDoc
+  // tag (so a trailing @see / @module after the example is not captured).
   const bodyLines = [];
   for (let i = exIdx + 1; i < lines.length; i++) {
     if (/^\s*\*\/\s*$/.test(lines[i])) break; // closing */
+    if (/^\s*\*\s*@\w+/.test(lines[i])) break; // next tag ends the example body
     // Strip the leading ` * ` JSDoc gutter, preserving inner indentation.
     bodyLines.push(lines[i].replace(/^\s*\*\s?/, ''));
   }
@@ -97,8 +99,16 @@ export function stripExample(src, name) {
   const exIdx = lines.findIndex((l) => /^\s*\*\s*@example\b/.test(l));
   if (exIdx === -1) return src;
   const head = lines.slice(0, exIdx);
+  // Preserve any JSDoc tags that follow the @example block (so a trailing
+  // @see / @module survives the strip). The example body ends at the next tag
+  // line or the closing */.
+  const tail = [];
+  for (let i = exIdx + 1; i < lines.length; i++) {
+    if (/^\s*\*\/\s*$/.test(lines[i])) break;
+    if (/^\s*\*\s*@\w+/.test(lines[i])) { tail.push(...lines.slice(i, lines.length - 1)); break; }
+  }
   // Drop trailing blank JSDoc gutter lines (` *`) so we don't double the gap.
   while (head.length && /^\s*\*\s*$/.test(head[head.length - 1])) head.pop();
-  const rebuilt = [...head, ' *', ` * ${pointerLine(name)}`, ' */'].join('\n');
+  const rebuilt = [...head, ' *', ` * ${pointerLine(name)}`, ...tail, ' */'].join('\n');
   return src.slice(0, block.start) + rebuilt + src.slice(block.end);
 }
