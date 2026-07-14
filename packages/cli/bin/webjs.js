@@ -47,8 +47,10 @@ const USAGE = `webjs commands:
   webjs start [--port 8080]                       Start production server (serves source directly, no build step)
   webjs test  [--server|--browser]                 Run server + browser tests
   webjs check [--json]                            Run correctness checks (--json emits structured violations)
+  webjs routes [--json|--table]                   Print the route table (path / owner file / methods). Default tree; --json matches the MCP list_routes shape
   webjs mcp                                       Start the read-only MCP server (routes / actions / components / check)
-  webjs doctor                                    Verify project health (Node, tsconfig, env, vendor pins, importmap coherence, @webjsdev versions, git hook, page/layout elision)
+  webjs doctor [--json] [--strict]                Verify project health (Node, tsconfig, env, vendor pins, importmap coherence, @webjsdev versions, git hook, page/layout elision).
+                                                  --json emits the structured results (with stable codes). --strict also fails the exit on warnings
   webjs types                                     Generate .webjs/routes.d.ts (typed Route union + per-route params)
   webjs typecheck [tsc args...]                   Type-check the app with the project's tsc --noEmit (non-zero on errors)
   webjs create <name> [--template full-stack|api|saas] [--db sqlite|postgres] [--runtime node|bun] [--no-install]  Scaffold a new webjs app
@@ -70,7 +72,105 @@ const USAGE = `webjs commands:
                                                   --download: also downloads bundles for offline production
   webjs vendor unpin <pkg>                        Remove a specific package from the pin file
   webjs vendor list                               Show pinned packages with versions and URLs
-  webjs help                                      Show this help`;
+  webjs help [command]                            Show this help, or per-command usage + examples (e.g. webjs help routes)`;
+
+/**
+ * Per-command help: usage line, one-line summary, and an Examples block
+ * (#975). `webjs help <cmd>` renders this so an agent sees the exact flags +
+ * worked examples instead of guessing from the one-line USAGE row. Keyed by the
+ * top-level command; `db` / `ui` / `vendor` document their subcommand shape.
+ * @type {Record<string, { usage: string, summary: string, examples: string[] }>}
+ */
+const HELP = {
+  dev: {
+    usage: 'webjs dev [--port <n>] [--no-hot]',
+    summary: 'Start the dev server with live reload (source is the runtime, no build step).',
+    examples: ['webjs dev', 'webjs dev --port 3000', 'webjs dev --no-hot'],
+  },
+  start: {
+    usage: 'webjs start [--port <n>]',
+    summary: 'Start the production server (serves source directly, plain HTTP/1.1).',
+    examples: ['webjs start', 'webjs start --port 8080', 'PORT=8080 webjs start'],
+  },
+  test: {
+    usage: 'webjs test [--server] [--browser] [--watch]',
+    summary: 'Run the app test suites (server-side node:test and/or browser via web-test-runner).',
+    examples: ['webjs test', 'webjs test --server', 'webjs test --browser --watch'],
+  },
+  check: {
+    usage: 'webjs check [--rules] [--json]',
+    summary: 'Run the correctness checks (report-only, no autofix). Exits non-zero on any violation.',
+    examples: ['webjs check', 'webjs check --json', 'webjs check --rules'],
+  },
+  routes: {
+    usage: 'webjs routes [--json] [--table]',
+    summary: 'Print the route table: each page/route path, its owner file, and (for route handlers) its HTTP methods.',
+    examples: ['webjs routes', 'webjs routes --table', 'webjs routes --json'],
+  },
+  doctor: {
+    usage: 'webjs doctor [--json] [--strict]',
+    summary: 'Verify project health. --json emits DoctorResult[] with stable codes; --strict fails the exit on warnings too.',
+    examples: ['webjs doctor', 'webjs doctor --json', 'webjs doctor --strict', 'webjs doctor --json --strict'],
+  },
+  types: {
+    usage: 'webjs types',
+    summary: 'Generate .webjs/routes.d.ts (the typed Route href union + per-route params).',
+    examples: ['webjs types'],
+  },
+  typecheck: {
+    usage: 'webjs typecheck [tsc args...]',
+    summary: "Type-check the app with the project's own tsc --noEmit. Extra args pass through.",
+    examples: ['webjs typecheck', 'webjs typecheck --watch'],
+  },
+  create: {
+    usage: 'webjs create <name> [--template full-stack|api|saas] [--db sqlite|postgres] [--runtime node|bun] [--no-install]',
+    summary: 'Scaffold a new app. Defaults: full-stack template, Drizzle + SQLite, Node runtime.',
+    examples: [
+      'webjs create my-app',
+      'webjs create my-api --template api',
+      'webjs create my-saas --template saas --db postgres',
+      'webjs create my-app --runtime bun',
+    ],
+  },
+  db: {
+    usage: 'webjs db <generate|migrate|push|studio|seed>',
+    summary: 'Database tasks (wraps drizzle-kit); seed runs db/seed.server.ts.',
+    examples: ['webjs db generate', 'webjs db migrate', 'webjs db studio', 'webjs db seed'],
+  },
+  ui: {
+    usage: 'webjs ui <init|add|list|view|diff|info> [names...]',
+    summary: 'AI-first component library CLI. Requires @webjsdev/ui installed in the project.',
+    examples: ['webjs ui init', 'webjs ui add button card', 'webjs ui list'],
+  },
+  vendor: {
+    usage: 'webjs vendor <pin|unpin|list|audit|outdated|update> [--from <provider>] [--download]',
+    summary: 'Pin client-side npm packages into .webjs/vendor/importmap.json.',
+    examples: ['webjs vendor pin', 'webjs vendor pin --download', 'webjs vendor list', 'webjs vendor outdated'],
+  },
+  mcp: {
+    usage: 'webjs mcp',
+    summary: 'Start the read-only MCP server (routes / actions / components / check + a docs/source knowledge layer).',
+    examples: ['webjs mcp'],
+  },
+};
+
+/**
+ * Render `webjs help <cmd>` to stdout: usage, summary, and examples. Falls back
+ * to the full USAGE banner for an unknown command (with a short note).
+ * @param {string} name
+ */
+function printCommandHelp(name) {
+  const h = HELP[name];
+  if (!h) {
+    console.log(`No per-command help for "${name}".\n`);
+    console.log(USAGE);
+    return;
+  }
+  console.log(`Usage: ${h.usage}\n`);
+  console.log(`  ${h.summary}\n`);
+  console.log('Examples:');
+  for (const ex of h.examples) console.log(`  ${ex}`);
+}
 
 /** @param {string[]} args */
 function flag(args, name, def) {
@@ -461,14 +561,6 @@ async function main() {
       // app's concern, not a broken toolchain).
       const { runDoctorChecks } = await import('../lib/doctor.js');
       const results = await runDoctorChecks(process.cwd());
-      const marker = { pass: '[pass]', warn: '[warn]', fail: '[fail]' };
-      console.log('webjs doctor: project-health checklist\n');
-      for (const r of results) {
-        console.log(`  ${marker[r.status]} ${r.name}`);
-        console.log(`    ${r.message}`);
-        if (r.fix && r.status !== 'pass') console.log(`    Fix: ${r.fix}`);
-        console.log();
-      }
       const counts = results.reduce((acc, r) => {
         acc[r.status] = (acc[r.status] || 0) + 1;
         return acc;
@@ -476,12 +568,114 @@ async function main() {
       const pass = counts.pass || 0;
       const warn = counts.warn || 0;
       const fail = counts.fail || 0;
+      // `--strict` also fails the exit on warnings, so an agent can gate on a
+      // fully-clean toolchain (drift / staleness / pin freshness) in a fix loop,
+      // not just on a hard toolchain break. Default keeps warnings non-fatal.
+      const strict = rest.includes('--strict');
+      const failing = fail > 0 || (strict && warn > 0);
+
+      // --json emits the raw DoctorResult[] (each carries a stable `code`) plus
+      // a summary, so an agent consumes structured data instead of scraping the
+      // text. Shape mirrors `check --json`: a top-level array-bearing object
+      // with a `summary` count. The non-zero exit is preserved (an agent gates
+      // on the exit code AND parses the report).
+      if (rest.includes('--json')) {
+        console.log(JSON.stringify({
+          results,
+          summary: { pass, warn, fail, strict, ok: !failing },
+        }));
+        if (failing) process.exit(1);
+        break;
+      }
+
+      const marker = { pass: '[pass]', warn: '[warn]', fail: '[fail]' };
+      console.log('webjs doctor: project-health checklist\n');
+      for (const r of results) {
+        console.log(`  ${marker[r.status]} ${r.name} (${r.code})`);
+        console.log(`    ${r.message}`);
+        if (r.fix && r.status !== 'pass') console.log(`    Fix: ${r.fix}`);
+        console.log();
+      }
       console.log(`  ${pass} passed, ${warn} warning(s), ${fail} failed.`);
-      if (fail > 0) {
-        console.error(
-          `\nwebjs doctor: ${fail} hard check(s) failed. Fix the toolchain issue(s) above.`,
-        );
+      if (failing) {
+        const reason = fail > 0
+          ? `${fail} hard check(s) failed. Fix the toolchain issue(s) above.`
+          : `${warn} warning(s) found and --strict was set.`;
+        console.error(`\nwebjs doctor: ${reason}`);
         process.exit(1);
+      }
+      break;
+    }
+    case 'routes': {
+      // Print the app route table to stdout (#975): every page (path, owner
+      // file, dynamic params) and every route.{js,ts} API handler (path, owner
+      // file, HTTP methods). Reuses the ONE route walker (`buildRouteTable`, the
+      // same walk that backs `webjs types` and the dev server) and the shared
+      // `projectRoutes` projector, so `--json` is byte-identical to the MCP
+      // `list_routes` tool. Read-only: no module load, no autofix.
+      const { buildRouteTable } = await import('@webjsdev/server');
+      const { projectRoutes } = await import('@webjsdev/mcp/routes-report');
+      const { extractRouteMethods } = await import('@webjsdev/mcp');
+      const { readFile } = await import('node:fs/promises');
+      const appDir = process.cwd();
+      const table = await buildRouteTable(appDir);
+      const report = await projectRoutes(table, { appDir, readFile, extractRouteMethods });
+
+      // --json: the machine contract, identical to the MCP `list_routes` shape.
+      if (rest.includes('--json')) {
+        console.log(JSON.stringify(report));
+        break;
+      }
+
+      const { pages, apis } = report;
+      // A page is reached via GET (its server render); a route.{js,ts} exposes
+      // exactly its exported verbs. Present both as one path -> methods -> file
+      // view. Dynamic pages append their param names.
+      const pageMethods = 'GET';
+
+      // --table: flat, aligned columns (KIND / PATH / METHODS / FILE), the
+      // easiest shape for an agent to scan or a human to grep.
+      if (rest.includes('--table')) {
+        /** @type {Array<[string,string,string,string]>} */
+        const rows = [['KIND', 'PATH', 'METHODS', 'FILE']];
+        for (const p of pages) {
+          rows.push(['page', p.path + (p.params ? ` [${p.params.join(', ')}]` : ''), pageMethods, p.file]);
+        }
+        for (const a of apis) {
+          rows.push(['api', a.path, a.methods.join(', ') || '(none)', a.file]);
+        }
+        const widths = [0, 1, 2].map((c) => Math.max(...rows.map((r) => r[c].length)));
+        for (const r of rows) {
+          console.log(
+            `${r[0].padEnd(widths[0])}  ${r[1].padEnd(widths[1])}  ${r[2].padEnd(widths[2])}  ${r[3]}`,
+          );
+        }
+        break;
+      }
+
+      // Default: a grouped tree.
+      console.log(`webjs routes: ${pages.length} page(s), ${apis.length} API route(s)\n`);
+      if (pages.length) {
+        console.log('Pages');
+        const pathW = Math.max(...pages.map((p) => p.path.length));
+        for (const p of pages) {
+          const params = p.params ? `  ${p.params.map((n) => `[${n}]`).join(' ')}` : '';
+          console.log(`  ${p.path.padEnd(pathW)}  ${p.file}${params}`);
+        }
+        console.log();
+      }
+      if (apis.length) {
+        console.log('API routes');
+        const pathW = Math.max(...apis.map((a) => a.path.length));
+        const methW = Math.max(...apis.map((a) => (a.methods.join(', ') || '(none)').length));
+        for (const a of apis) {
+          const methods = a.methods.join(', ') || '(none)';
+          console.log(`  ${a.path.padEnd(pathW)}  ${methods.padEnd(methW)}  ${a.file}`);
+        }
+        console.log();
+      }
+      if (!pages.length && !apis.length) {
+        console.log('  No routes found. Add an app/page.ts or an app/**/route.ts.');
       }
       break;
     }
@@ -900,6 +1094,11 @@ Full docs: https://docs.webjs.dev`);
       break;
     }
     case 'help':
+      // `webjs help <cmd>` prints that command's usage + Examples (#975);
+      // a bare `webjs help` prints the full banner.
+      if (rest[0]) printCommandHelp(rest[0]);
+      else console.log(USAGE);
+      break;
     case undefined:
       console.log(USAGE);
       break;
