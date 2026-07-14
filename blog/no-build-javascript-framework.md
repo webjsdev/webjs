@@ -1,6 +1,6 @@
 ---
 title: "What a No-Build JavaScript Framework Actually Is"
-date: 2026-07-12T10:00:00+05:30
+date: 2026-07-13T12:00:00+05:30
 slug: no-build-javascript-framework
 description: "A no-build JavaScript framework serves the code you wrote straight to the browser, no bundler and no compile step. What replaced the bundler, the honest tradeoff, and how WebJs runs a full-stack app this way."
 keyword: "no-build JavaScript framework"
@@ -44,21 +44,3 @@ WebJs runs a full-stack app this way, on Node 24+ or Bun: file-based routing, se
 No-build is not free, and I would rather say so than pretend. You give up build-time optimizations like tree-shaking dead code out of a dependency and aggressive minification. For a large app pulling in heavy third-party libraries, a bundler can still ship fewer bytes. My answer is to lean on the platform (HTTP/2, module preload, caching) and to keep the framework itself small, rather than to bundle. For most apps that is the better trade. For a few it is not, and that is a real decision to make with your eyes open, not a slogan to repeat.
 
 If your instinct is that a build step is just how frontend works, that instinct is a couple of years out of date. The platform caught up. A no-build framework is what you get when you take that seriously and stop paying for a step you no longer need.
-
-## FAQ
-
-### What is a no-build JavaScript framework?
-
-It is a framework that serves your source directly to the browser with no bundler or compile step. Native ES modules load the code by its import statements, an import map resolves bare package names, and TypeScript types are stripped at load rather than compiled ahead of time. WebJs is a full-stack example: the `.ts` file you write is the file that runs, with no generated build output.
-
-### Do no-build frameworks have worse performance?
-
-Not necessarily. The reason bundlers existed was to cut network requests, and HTTP/2 multiplexing plus module-preload hints cover most of that gap by loading the module graph in parallel over one connection. You do give up build-time tree-shaking and minification, so a very large app with heavy dependencies can still ship fewer bytes bundled. For most apps the no-build path is competitive and much simpler.
-
-### How does a no-build framework run TypeScript?
-
-By stripping the types instead of compiling. TypeScript's type annotations are erasable, so removing them leaves valid JavaScript. Node 24 has a built-in stripper that does this in place and preserves line numbers, so stack traces stay accurate with no sourcemap. There is no `tsc` step and no compiled output to keep in sync with your source.
-
-### Is Lit a no-build framework?
-
-Lit can be used without a build step (it works from a CDN with import maps), but it is a component library, not a full-stack framework, so you assemble the server, routing, and data layer yourself. WebJs is a full-stack no-build framework: routing, server actions, SSR, and auth are built in, all served without a bundler.

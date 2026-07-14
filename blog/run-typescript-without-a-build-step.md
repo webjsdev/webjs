@@ -1,6 +1,6 @@
 ---
 title: "How to Run TypeScript Without a Build Step"
-date: 2026-07-09T09:00:00+05:30
+date: 2026-07-12T10:00:00+05:30
 slug: run-typescript-without-a-build-step
 description: "You can run TypeScript without compiling it by stripping the types at load. Why stripping is faster than tsc, the one real constraint, and how WebJs serves .ts files straight to Node, Bun, and the browser."
 keyword: "run TypeScript without a build step"
@@ -38,21 +38,3 @@ For most modern TypeScript this costs you nothing, because the erasable subset i
 WebJs is built entirely on type stripping, with no build step anywhere. The `.ts` files you write are the files that run on the server and the files the browser fetches, with the types stripped at load by Node's built-in stripper or Bun's. There is no `tsc` in the serving path, no `dist/` folder, and no sourcemap layer, so an error in the browser console points at `app/posts/[id]/page.ts` at the real line. The framework enforces the erasable constraint with a check, so a non-erasable construct is caught before it ships rather than blowing up at strip time. Why I chose stripping over running esbuild, and what that cost, is in [strip the types, not esbuild](/blog/strip-types-not-esbuild).
 
 If your project still runs `tsc` in a watch loop only to execute your code, you can almost certainly delete that step today. Keep `tsc --noEmit` for checking, and let the runtime strip and run. That was the change that made my own dev loop feel immediate again.
-
-## FAQ
-
-### Can you run TypeScript without compiling it?
-
-Yes. Modern runtimes strip the type annotations at load and run the resulting JavaScript, with no compile step. Node 24 does this natively (`node app.ts`), Bun has always done it, and a server can strip a `.ts` file before sending it to the browser. Stripping is much faster than compiling because it deletes types rather than checking and resolving them. WebJs runs a full-stack app this way.
-
-### Is type stripping the same as compiling TypeScript?
-
-No. Compiling (`tsc`) checks all your types, resolves the type graph, and emits JavaScript plus declaration files and sourcemaps. Stripping only removes the type annotations, leaving valid JavaScript, and does no type checking. Stripping is far faster and is enough to run the code. You still run `tsc --noEmit` separately in your editor and CI to check types.
-
-### What are the limitations of running TypeScript without a build step?
-
-Your TypeScript has to be erasable, meaning removing the types must leave valid JavaScript. That rules out features that emit runtime code: `enum`, value `namespace`, constructor parameter properties, and legacy decorators with metadata. The `erasableSyntaxOnly` compiler flag flags these so you catch them in the editor. Type checking also does not happen at runtime, so you run it separately in CI.
-
-### Does WebJs need a build step to run TypeScript?
-
-No. WebJs strips TypeScript types at load using Node's built-in stripper or Bun, so the `.ts` files you write run directly on the server and ship to the browser with no bundler, no `tsc` in the serving path, and no `dist/` folder. Stack traces point at your real source lines because stripping preserves positions with no sourcemap.

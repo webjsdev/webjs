@@ -50,21 +50,17 @@ test('a compare page emits TechArticle + BreadcrumbList + FAQPage JSON-LD with a
   assert.equal(article.url, 'https://webjs.dev/compare/webjs-vs-nextjs', 'canonical self URL');
 });
 
-test('a blog post with a ## FAQ emits BlogPosting + BreadcrumbList + FAQPage JSON-LD', async () => {
+test('a blog post emits BlogPosting + BreadcrumbList JSON-LD, and no FAQPage', async () => {
   const m = await blogMeta({ params: { slug: 'web-components-framework' } });
   const t = types(m.jsonLd);
   assert.ok(t.includes('BlogPosting'), 'has BlogPosting');
   assert.ok(t.includes('BreadcrumbList'), 'has BreadcrumbList');
-  assert.ok(t.includes('FAQPage'), 'has FAQPage (this SEO post carries a ## FAQ section)');
+  // Blog posts do not carry a ## FAQ section (that reads as SEO-marketing and
+  // is not the author's style), so no FAQPage is emitted. The FAQPage code
+  // path is still exercised by the /compare pages, which do carry FAQs.
+  assert.ok(!t.includes('FAQPage'), 'blog posts carry no FAQ, so no FAQPage');
   const article = (m.jsonLd as any[]).find((o) => o['@type'] === 'BlogPosting');
   assert.equal(article.url, 'https://webjs.dev/blog/web-components-framework', 'canonical self URL');
-});
-
-test('a blog post without a ## FAQ omits FAQPage (counterfactual)', async () => {
-  const m = await blogMeta({ params: { slug: 'why-webjs' } });
-  const t = types(m.jsonLd);
-  assert.ok(t.includes('BlogPosting'), 'still has BlogPosting');
-  assert.ok(!t.includes('FAQPage'), 'no FAQPage when the post has no ## FAQ section');
 });
 
 test('a missing blog slug yields a safe not-found metadata, no JSON-LD', async () => {
