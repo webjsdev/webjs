@@ -7,7 +7,7 @@
 // URL against it, params included. See the testing docs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRequestHandler, buildRouteTable, matchPage, matchApi, rawActionRequest } from '@webjsdev/server';
+import { createRequestHandler, buildRouteTable, matchPage, matchApi, rawActionRequest, invokeActionForTest } from '@webjsdev/server';
 
 const appDir = process.cwd();
 
@@ -34,4 +34,35 @@ test('rawActionRequest fires the greet action through the pipeline', async () =>
     [{ name: 'Ada' }],
   );
   assert.equal(res.status, 200);
+});
+
+test('the middleware sets the caller on the context and greet reads it via actionContext()', async () => {
+  const app = await createRequestHandler({ appDir, dev: true });
+  if (app.warmup) await app.warmup();
+  const r = await invokeActionForTest(
+    app,
+    'modules/server-actions/actions/greet.server.ts',
+    'greet',
+    [{ name: 'Bob' }],
+  );
+  assert.equal(r.success, true);
+  // The message carries BOTH the input (Bob) and the middleware-set caller (Ada).
+  assert.match(r.data.message, /BOB/);
+  assert.match(r.data.message, /Ada/);
+});
+
+test('the auth middleware short-circuits a signed-out request before greet runs', async () => {
+  const app = await createRequestHandler({ appDir, dev: true });
+  if (app.warmup) await app.warmup();
+  // A middleware short-circuit rides as a normal failure envelope (200 with the
+  // status inside), so read the result rather than expecting a thrown non-2xx.
+  const r = await invokeActionForTest(
+    app,
+    'modules/server-actions/actions/greet.server.ts',
+    'greet',
+    [{ name: 'Bob', signedOut: true }],
+    { throwOnError: false },
+  );
+  assert.equal(r.success, false);
+  assert.equal(r.status, 401);
 });
