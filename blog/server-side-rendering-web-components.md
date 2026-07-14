@@ -21,7 +21,7 @@ So for years web components were a client-only story. The page shipped empty tag
 
 # Declarative Shadow DOM was the missing piece
 
-The browsers fixed the hard part, and it is worth knowing the name because it is doing the heavy lifting. Declarative Shadow DOM (a way to write a shadow root directly in HTML, with `<template shadowrootmode="open">`) lets the server ship a shadow tree as markup. The browser reads it while parsing the HTML and attaches the shadow root then and there, with no script involved. In current Chrome and Safari, a server-rendered component shows up, shadow DOM and all, before a single byte of JavaScript executes.
+The browsers fixed the hard part, and it is worth knowing the name because it is doing the heavy lifting. Declarative Shadow DOM (a way to write a shadow root directly in HTML, with `<template shadowrootmode="open">`) lets the server ship a shadow tree as markup. The browser reads it while parsing the HTML and attaches the shadow root then and there, with no script involved. In every current browser (Chrome and Safari for years, Firefox since version 123), a server-rendered component shows up, shadow DOM and all, before a single byte of JavaScript executes.
 
 That is the primitive that makes server-side rendering for web components real. Everything left is a framework's job: walk the component tree on the server, run each component's render, emit the right HTML, and wire the client up so the already-rendered element becomes interactive without redrawing it.
 

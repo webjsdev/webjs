@@ -48,6 +48,7 @@ test('a compare page emits TechArticle + BreadcrumbList + FAQPage JSON-LD with a
   assert.ok(t.includes('FAQPage'), 'has FAQPage (the compare body carries a ## FAQ section)');
   const article = (m.jsonLd as any[]).find((o) => o['@type'] === 'TechArticle');
   assert.equal(article.url, 'https://webjs.dev/compare/webjs-vs-nextjs', 'canonical self URL');
+  assert.equal(article.image, 'https://webjs.dev/public/og.png', 'Article carries an image for rich results');
 });
 
 test('a blog post emits BlogPosting + BreadcrumbList JSON-LD, and no FAQPage', async () => {
@@ -61,6 +62,7 @@ test('a blog post emits BlogPosting + BreadcrumbList JSON-LD, and no FAQPage', a
   assert.ok(!t.includes('FAQPage'), 'blog posts carry no FAQ, so no FAQPage');
   const article = (m.jsonLd as any[]).find((o) => o['@type'] === 'BlogPosting');
   assert.equal(article.url, 'https://webjs.dev/blog/web-components-framework', 'canonical self URL');
+  assert.equal(article.image, 'https://webjs.dev/public/og.png', 'Article carries an image for rich results');
 });
 
 test('a missing blog slug yields a safe not-found metadata, no JSON-LD', async () => {
