@@ -24,6 +24,9 @@ website/
                        changelog/ tree at the repo root, the
                        Dockerfile's `COPY changelog ./changelog` line
                        is what ships it on Railway.
+    blog/              /blog hub + /blog/[slug]. Reads ../../../blog/*.md.
+                       Home of the keyword-targeted SEO posts. Emits
+                       per-post JSON-LD (BlogPosting + BreadcrumbList).
     compare/           /compare hub + /compare/[slug]. Reads
                        ../../../compare/*.md. Emits per-page JSON-LD
                        (TechArticle + BreadcrumbList + FAQPage).
