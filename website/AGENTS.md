@@ -24,12 +24,22 @@ website/
                        changelog/ tree at the repo root, the
                        Dockerfile's `COPY changelog ./changelog` line
                        is what ships it on Railway.
+    blog/              /blog hub + /blog/[slug]. Reads ../../../blog/*.md.
+                       Home of the keyword-targeted SEO posts. Emits
+                       per-post JSON-LD (BlogPosting + BreadcrumbList).
+    compare/           /compare hub + /compare/[slug]. Reads
+                       ../../../compare/*.md. Emits per-page JSON-LD
+                       (TechArticle + BreadcrumbList + FAQPage).
+    sitemap.ts         /sitemap.xml (enumerates compare + blog)
+    robots.ts          /robots.txt (allow-all, points at the sitemap)
+    llms.txt/route.ts  /llms.txt (llmstxt.org overview for AI agents)
   components/
     theme-toggle.ts    system/light/dark cycle
     copy-cmd.ts        click-to-copy command line (light DOM, always-on button)
   lib/
     highlight.ts       SSR syntax highlighter for the code samples
     frontmatter.ts     parse changelog/blog markdown frontmatter
+    faq.ts             parse a `## FAQ` markdown section into FAQPage JSON-LD
   scripts/             manual dev tools, NOT part of build/deploy
     fetch-fonts.mjs    download the self-hosted variable woff2 fonts
     generate-og.mjs    regenerate the OG social card (needs playwright + ImageMagick)
@@ -47,6 +57,39 @@ The features grid is driven by the `PILLARS` array near the top of
 key into the local `ICON` map (for example `ICON.bolt`). Add a new entry
 in the correct order and the grid reflows automatically. If no existing
 icon fits, add one to the `ICON` map first.
+
+## SEO surfaces (blog, comparisons, structured data)
+
+The site targets real search keywords ("web components framework", "no
+build javascript framework", and so on) and "WebJs vs X" queries. There
+is deliberately NO separate `/guides` section: keyword-targeted explainer
+articles are just blog posts. A page ranks the same under `/blog` as
+under any other path, so a second near-identical section only adds upkeep
+and risks the two competing for the same term. The moving parts:
+
+- **SEO explainer posts and comparisons.** An evergreen, keyword-targeted
+  explainer is a normal `blog/<slug>.md` post. Only write one for a term
+  with real search demand where WebJs is a legitimate answer (validate
+  the query first; a coined phrase nobody searches does not belong here).
+  A "WebJs vs <framework>" head-to-head is a `compare/<slug>.md` under
+  `/compare`. Do NOT let a blog post and a compare page chase the same
+  exact keyword (cannibalization).
+- **FAQ convention.** End a blog or comparison body with a `## FAQ`
+  section, each question a `### <question>` heading followed by its
+  answer paragraph. `lib/faq.ts` (`parseFaq`) turns that into a
+  `FAQPage` JSON-LD block. The FAQ is BOTH rendered (normal markdown)
+  and emitted as schema, so the two never drift (Google discounts FAQ
+  schema that is not visible on the page).
+- **JSON-LD** is set via `metadata.jsonLd` (the framework emits a
+  `<script type="application/ld+json">`): `BlogPosting` + `BreadcrumbList`
+  (+ `FAQPage`) on blog posts, `TechArticle` + `BreadcrumbList` (+
+  `FAQPage`) on comparisons, and `WebSite` + `Organization` +
+  `SoftwareApplication` on the home page (jsonLd-only `export const
+  metadata`, so it does not split the layout-sourced title). Keep the
+  schema honest: it must match the visible page content.
+- **`/robots.txt`, `/sitemap.xml`, `/llms.txt`** are generated from the
+  live content queries, so a new comparison or post needs no edit to
+  those files.
 
 ## Announcement banner
 

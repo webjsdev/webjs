@@ -59,3 +59,17 @@ WebJs defaults to Drizzle with SQLite (or Postgres by swapping one file), a type
 - You are building with AI agents and want a framework small enough to read end to end, with conventions the tooling enforces.
 
 WebJs took the parts of Rails it admired most, the no-build importmap model and the sensible defaults that let you start fast, and rebuilt them for a single-language TypeScript stack on web components, while staying flexible about the rest of the architecture. If you love how Rails thinks but want to stay in one language on web standards, that is the trade WebJs is offering.
+
+## FAQ
+
+### Is WebJs like Rails for JavaScript?
+
+In spirit, yes. WebJs borrows the Rails ideas of no build step (the importmap model), sensible defaults, and convention over configuration, but applies them to a single-language TypeScript stack built on web components. It is not a port of Rails, and it stays more flexible about the rest of the architecture.
+
+### What language does WebJs use instead of Ruby?
+
+TypeScript and JavaScript, end to end. The same language runs on the server, in server actions, and in components, so there is no context switch between a Ruby backend and a JavaScript frontend. Types can span the client and server through the server-action boundary.
+
+### Should I switch from Rails to WebJs?
+
+Only if the single-language, web-standards story matters to you. Rails has a vast mature ecosystem and Active Record. Pick WebJs when you want the Rails feeling of fast, opinionated defaults but prefer to stay in TypeScript on native web components, and when building with AI agents benefits from a small readable framework.

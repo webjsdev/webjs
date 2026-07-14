@@ -15,11 +15,44 @@ import { DOCS_URL, UI_URL, EXAMPLE_BLOG_URL, GH_URL, DISCORD_URL, NEW_TAB } from
 // single tiny module fetch.
 import { highlight } from '#lib/highlight.ts';
 
-// The home page intentionally has no `metadata` export. The root layout's
-// generateMetadata is the single source for the <title>, description, and the
-// og/twitter tags, so they stay consistent (a page-level title override would
-// win for <title> but leave og:/twitter: showing the layout's title, splitting
-// the canonical share target's name across the tab and the social card).
+// The home page intentionally sets NO title/description/og here. The root
+// layout's generateMetadata is the single source for the <title>, description,
+// and the og/twitter tags, so they stay consistent (a page-level title override
+// would win for <title> but leave og:/twitter: showing the layout's title,
+// splitting the canonical share target's name across the tab and the social
+// card). It DOES contribute site-level JSON-LD (WebSite + Organization +
+// SoftwareApplication): metadata is shallow-merged layout-then-page, so adding
+// only `jsonLd` leaves the layout's title/og untouched while emitting the
+// structured data on the site's most-linked page.
+const SITE_URL = 'https://webjs.dev';
+export const metadata = {
+  jsonLd: [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'WebSite',
+      name: 'WebJs',
+      url: SITE_URL,
+      description: 'An AI-first, web-components-first full-stack web framework with no build step.',
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'Organization',
+      name: 'WebJs',
+      url: SITE_URL,
+      logo: `${SITE_URL}/public/favicon.png`,
+      sameAs: ['https://github.com/webjsdev/webjs', 'https://discord.gg/qZScjWWNA8'],
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'SoftwareApplication',
+      name: 'WebJs',
+      applicationCategory: 'DeveloperApplication',
+      operatingSystem: 'Node.js 24+, Bun',
+      url: SITE_URL,
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    },
+  ],
+};
 
 // Framework-weight stats. Measured: gzipped production browser bundle,
 // npm package metadata, and framework source line counts. Kept honest

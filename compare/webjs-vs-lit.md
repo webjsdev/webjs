@@ -82,3 +82,17 @@ Because WebJs owns the SSR path, it can do things a component library on its own
 - You want no build step across the entire stack, not just clever templates in the browser.
 
 The short version: if you love the Lit way of writing components but want a framework around it, WebJs is that framework. You keep the model and stop hand-rolling everything above it.
+
+## FAQ
+
+### Is WebJs built on Lit?
+
+No. WebJs ships its own no-build component runtime, but its component API matches Lit closely (reactive properties, the Lit lifecycle hooks, reactive controllers, and the `html` / `css` template tags), so Lit knowledge transfers directly. The one deliberate difference is how reactive properties are declared.
+
+### What does WebJs add over Lit?
+
+Lit is a component library; WebJs is a full-stack framework. On top of the Lit-style component model, WebJs adds server-side rendering, file-based routing, typed server actions, streaming SSR, auth, sessions, and caching, all with no build step. With Lit you assemble those pieces yourself.
+
+### Can I migrate my Lit components to WebJs?
+
+Mostly yes. The template syntax and lifecycle are the same, so the render logic ports with little change. The main edit is swapping Lit's `@property()` decorator or `static properties` block for the WebJs reactive-property declaration, and letting WebJs handle SSR and routing.

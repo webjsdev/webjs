@@ -7,8 +7,9 @@ import { listPosts } from '#modules/blog/queries/list-posts.server.ts';
  *
  * Serialized from the live content queries so newly added comparison and
  * blog markdown is discoverable without touching this file. The compare
- * pages are the SEO reason this exists: each `/compare/<slug>` is a
- * canonical head-to-head we want search engines to crawl and index.
+ * pages and the SEO blog posts are the reason this exists: each
+ * `/compare/<slug>` and `/blog/<slug>` is a canonical page we want
+ * search engines to crawl and index.
  *
  * `SITE_URL` falls back to the production origin; override it per
  * deployment the same way the header/footer links are configured.
@@ -18,7 +19,7 @@ const SITE_URL = ((globalThis as any).process?.env?.SITE_URL || 'https://webjs.d
 export default async function Sitemap() {
   const [comparisons, posts] = await Promise.all([listComparisons(), listPosts()]);
 
-  const staticRoutes = ['/', '/blog', '/compare', '/changelog'].map((path) => ({
+  const staticRoutes = ['/', '/blog', '/compare', '/why', '/changelog'].map((path) => ({
     url: `${SITE_URL}${path}`,
     changeFrequency: 'weekly' as const,
     priority: path === '/' ? 1.0 : 0.7,

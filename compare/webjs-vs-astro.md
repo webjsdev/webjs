@@ -59,3 +59,17 @@ WebJs is a full-stack framework first. Server actions are the core mechanism, wi
 - You want auth, sessions, caching, a data layer, and a typed server-action boundary built in rather than assembled.
 
 Astro and WebJs both refuse to ship JavaScript you do not need. Astro reaches that as a build-time content framework you add islands to; WebJs reaches it as a no-build full-stack framework where the interactive web component is the unit and the server is built in.
+
+## FAQ
+
+### Do WebJs and Astro both use islands?
+
+Yes, both send mostly static HTML and hydrate only the interactive parts. The difference is how. Astro uses `client:*` directives you annotate at build time; WebJs treats every interactive web component as an island automatically and elides display-only components to zero JavaScript with no annotation.
+
+### Does WebJs need a build step like Astro?
+
+No. Astro compiles your site with a build step. WebJs serves native ES modules directly and strips TypeScript at load, so there is nothing to build. Both aim for minimal client JavaScript, but WebJs reaches it without a compile phase.
+
+### Should I pick Astro or WebJs for a content site?
+
+Astro is excellent for content-heavy, largely static sites and has a mature content and integrations ecosystem. Pick WebJs when the app needs a built-in server story (auth, sessions, a typed server-action data boundary) and you want interactivity to be native web components with no build step.
