@@ -574,6 +574,48 @@ Methods.register('methods-prop');
   }
 });
 
+test('reactive-props-no-class-field: does not trip on object-literal keys inside a method (#934)', async () => {
+  // A multi-line object literal built inside a method body whose keys match a
+  // factory prop name (`game:` / `scoreboard:`) is NOT a class-field
+  // declaration. The brace-depth walker must count the method's and the
+  // literal's opening braces so those keys are seen at depth > 0, never depth 0.
+  const appDir = await makeTempApp();
+  try {
+    await mkdir(join(appDir, 'components'), { recursive: true });
+    await writeFile(
+      join(appDir, 'components', 'board.ts'),
+      `import { WebComponent, prop, html } from '@webjsdev/core';
+class Board extends WebComponent({
+  game: prop(Object),
+  scoreboard: prop(Object),
+}) {
+  constructor() {
+    super();
+    this.game = null;
+    this.scoreboard = null;
+  }
+
+  makeMove(op) {
+    const next = {
+      game: { ...this.game, board: op },
+      scoreboard: { ...this.scoreboard, x: 1 },
+    };
+    return next;
+  }
+
+  render() { return html\`<div>\${this.game}</div>\`; }
+}
+Board.register('x-board');
+`,
+    );
+    const violations = await checkConventions(appDir);
+    const v = violations.find((v) => v.rule === 'reactive-props-no-class-field');
+    assert.equal(v, undefined, 'object-literal keys inside a method are not class fields');
+  } finally {
+    await rm(appDir, { recursive: true, force: true });
+  }
+});
+
 test('reactive-props-no-class-field: flags a type-only declaration (`count!: number`)', async () => {
   const appDir = await makeTempApp();
   try {

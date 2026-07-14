@@ -235,74 +235,70 @@ function isArrayTypeText(type) {
 function findFieldInitializers(classBody, props) {
   /** @type {string[]} */
   const out = [];
-  // Walk the body, tracking brace depth. At depth 0, look for
-  // class-field-shaped lines.
+  const n = classBody.length;
+  // Match class-field declarations. Two shapes:
+  // 1. With initializer: `count = 0`, `count: number = 0`, `public count = 0`
+  // 2. Type-only (no initializer): `count!: number`, `count?: number`, `count: number`
+  // Both compile to Object.defineProperty after super() under modern class-field
+  // semantics, clobbering the reactive accessor.
+  // The initializer regex: optional modifier, identifier, optional type, then `=`.
+  const initRe = /^\s*(?:(public|private|protected|readonly)\s+)?([A-Za-z_$][\w$]*)\s*(?::\s*[^=;]+)?\s*=\s*[^=>]/;
+  // The type-only regex: optional modifier, identifier, then `!:` or `?:` or `:` with a type.
+  const typeOnlyRe = /^\s*(?:(public|private|protected|readonly)\s+)?([A-Za-z_$][\w$]*)\s*[!?]?\s*:\s*\S/;
+  const examineLine = (lineStart) => {
+    let j = lineStart;
+    while (j < n && classBody[j] !== '\n') j++;
+    const line = classBody.slice(lineStart, j);
+    const initM = initRe.exec(line);
+    const typeM = typeOnlyRe.exec(line);
+    // Prefer the initializer match; if neither, skip.
+    const name = initM ? initM[2] : (typeM ? typeM[2] : null);
+    // `declare`, `static`, and `this.` patterns shouldn't reach here
+    // (declare/static start with their keyword, this.x has the dot in
+    // the regex group), but guard against matching keywords as names:
+    if (name && name !== 'declare' && name !== 'static' && props.has(name)) out.push(name);
+  };
+  // Walk the body char by char, tracking brace depth. A class field lives at
+  // the class-body top level (depth 0). We examine a line ONCE, at its first
+  // non-whitespace char, only while depth is 0, and WITHOUT skipping the braces
+  // on that line: an opening brace on the line (`method() {`, `field = {`) must
+  // still be counted so the lines inside its block are seen at depth > 0. The
+  // earlier version jumped `i` past the whole examined line, which dropped that
+  // line's braces and let object-literal keys inside a method body (`{ game:
+  // ..., scoreboard: ... }`) be misread as depth-0 class fields (#934).
   let depth = 0;
   let i = 0;
   let lineStart = 0;
+  let examined = false;
   let str = '';
-  while (i < classBody.length) {
+  while (i < n) {
     const c = classBody[i];
     if (str) {
       if (c === '\\') { i += 2; continue; }
       if (c === str) str = '';
-      else if (str === '`' && c === '$' && classBody[i + 1] === '{') {
-        depth++;
-        i += 2;
-        continue;
-      }
       i++;
       continue;
     }
-    if (c === '\n') {
-      lineStart = i + 1;
-      i++;
-      continue;
-    }
+    if (c === '\n') { lineStart = i + 1; examined = false; i++; continue; }
     if (c === '/' && classBody[i + 1] === '/') {
-      while (i < classBody.length && classBody[i] !== '\n') i++;
+      while (i < n && classBody[i] !== '\n') i++;
       continue;
     }
     if (c === '/' && classBody[i + 1] === '*') {
       i += 2;
-      while (i < classBody.length && !(classBody[i] === '*' && classBody[i + 1] === '/')) i++;
+      while (i < n && !(classBody[i] === '*' && classBody[i + 1] === '/')) i++;
       i += 2;
       continue;
     }
     if (c === "'" || c === '"' || c === '`') { str = c; i++; continue; }
+    // First non-whitespace char of a class-body top-level line: examine it for
+    // a field declaration BEFORE consuming any brace it opens.
+    if (depth === 0 && !examined && !/\s/.test(c)) {
+      examined = true;
+      examineLine(lineStart);
+    }
     if (c === '{') { depth++; i++; continue; }
     if (c === '}') { depth--; i++; continue; }
-    // At class-body top level, examine candidate lines starting at lineStart.
-    if (depth === 0 && i === lineStart || (depth === 0 && /\s/.test(c) && i === lineStart)) {
-      // Take the rest of the line up to a newline.
-      let j = lineStart;
-      while (j < classBody.length && classBody[j] !== '\n') j++;
-      const line = classBody.slice(lineStart, j);
-      // Match class-field declarations. Two shapes:
-      // 1. With initializer: `count = 0`, `count: number = 0`, `public count = 0`
-      // 2. Type-only (no initializer): `count!: number`, `count?: number`, `count: number`
-      // Both compile to Object.defineProperty after super() under modern class-field
-      // semantics, clobbering the reactive accessor.
-      // The initializer regex: optional modifier, identifier, optional type, then `=`.
-      const initRe = /^\s*(?:(public|private|protected|readonly)\s+)?([A-Za-z_$][\w$]*)\s*(?::\s*[^=;]+)?\s*=\s*[^=>]/;
-      // The type-only regex: optional modifier, identifier, then `!:` or `?:` or `:` with a type.
-      const typeOnlyRe = /^\s*(?:(public|private|protected|readonly)\s+)?([A-Za-z_$][\w$]*)\s*[!?]?\s*:\s*\S/;
-      const initM = initRe.exec(line);
-      const typeM = typeOnlyRe.exec(line);
-      // Prefer the initializer match; if neither, skip.
-      const name = initM ? initM[2] : (typeM ? typeM[2] : null);
-      if (name) {
-        // `declare`, `static`, and `this.` patterns shouldn't reach here
-        // (declare/static start with their keyword, this.x has the dot in
-        // the regex group), but guard against matching keywords as names:
-        if (name !== 'declare' && name !== 'static' && props.has(name)) {
-          out.push(name);
-        }
-      }
-      // Advance past this line so we don't re-match.
-      i = j;
-      continue;
-    }
     i++;
   }
   return out;
