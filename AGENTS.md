@@ -466,7 +466,7 @@ webjs routes [--json] [--table]    # print the route table (path / owner file / 
 webjs mcp                          # read-only MCP: routes, actions (RPC hashes), components, check
 webjs doctor [--json] [--strict]   # project-health checklist (incl. a framework-resolve check that warns when @webjsdev/core can't be resolved from the app dir, the fresh-worktree-without-node_modules trap #954; a page/layout elision advisory); non-zero exit on a hard fail. --json emits DoctorResult[] with stable codes; --strict also fails the exit on warnings (#975)
 webjs types                        # generate .webjs/routes.d.ts (typed Route union + per-route params, #258)
-webjs help   [command]             # full usage banner, or per-command usage + Examples (e.g. webjs help routes, #975)
+webjs help   [command]             # full usage banner, or per-command usage + Examples (e.g. webjs help routes, #975). Flag forms: webjs --help / -h (banner), webjs <command> --help / -h (that command). typecheck --help forwards to tsc
 webjs typecheck [tsc args...]      # the project's own tsc --noEmit
 webjs create <name> [--template api|saas]
 webjs db <generate|migrate|push|studio|seed>   # wraps drizzle-kit (+ runs db/seed.server.ts)

@@ -50,8 +50,10 @@ webjs doctor --strict   # also fail the exit on warnings, not just hard failures
 
     <h3>webjs help</h3>
     <pre>webjs help              # the full command banner
-webjs help routes       # usage + a summary + an Examples block for one command</pre>
-    <p><code>webjs help &lt;command&gt;</code> prints that command's exact usage line, a one-line summary, and worked examples, so you (or an agent) read the real invocation instead of guessing flags.</p>
+webjs help routes       # usage + a summary + an Examples block for one command
+webjs --help  /  -h     # the banner (flag form)
+webjs routes --help     # one command's help (flag form)</pre>
+    <p><code>webjs help &lt;command&gt;</code> prints that command's exact usage line, a one-line summary, and worked examples, so you (or an agent) read the real invocation instead of guessing flags. The <code>--help</code> / <code>-h</code> flag forms are equivalent: bare at the top level for the banner, or after a command for that command's help. The one exception is <code>webjs typecheck --help</code>, which forwards to <code>tsc</code>'s own help (typecheck is a thin tsc wrapper).</p>
 
     <h2>tsconfig.json</h2>
     <p>Optional but recommended for editor + CI type-checking:</p>

@@ -19,8 +19,9 @@ const [cmd, ...rest] = process.argv.slice(2);
 // `../lib/node-preflight.js`, which imports nothing), depending only on
 // `process.versions.node`. The richer `assertNodeVersion` import inside main()
 // stays as belt-and-suspenders for the link-ok (>= 22.13) cases.
-// `help` / no-arg is exempt so a user on an old Node can still read usage.
-if (cmd !== 'help' && cmd !== undefined) {
+// `help` / no-arg / a `--help`|`-h` flag is exempt so a user on an old Node can
+// still read usage.
+if (cmd !== 'help' && cmd !== undefined && cmd !== '--help' && cmd !== '-h') {
   let engines = '>=24.0.0';
   try {
     const { readFileSync } = await import('node:fs');
@@ -72,7 +73,8 @@ const USAGE = `webjs commands:
                                                   --download: also downloads bundles for offline production
   webjs vendor unpin <pkg>                        Remove a specific package from the pin file
   webjs vendor list                               Show pinned packages with versions and URLs
-  webjs help [command]                            Show this help, or per-command usage + examples (e.g. webjs help routes)`;
+  webjs help [command]                            Show this help, or per-command usage + examples (e.g. webjs help routes).
+                                                  The flag forms work too: webjs --help / -h for this banner, webjs <command> --help / -h for one command`;
 
 /**
  * Per-command help: usage line, one-line summary, and an Examples block
@@ -216,7 +218,22 @@ async function startDevParallelTasks(commands, cwd) {
 }
 
 async function main() {
-  // Preflight: webjs needs Node 24+ (built-in TS strip + recursive fs.watch).
+  // `--help` / `-h` (#975): a top-level flag (webjs --help / -h) prints the
+  // banner; the same flag AFTER a subcommand (webjs routes --help) prints that
+  // command's help. Handled before the Node preflight so `--help` works even on
+  // an old Node, and before the command body so it short-circuits the command.
+  // `typecheck` is excluded because it forwards its args to `tsc`, where
+  // `--help` idiomatically means tsc's own help there.
+  if (cmd === '--help' || cmd === '-h') {
+    console.log(USAGE);
+    return;
+  }
+  if (cmd && cmd !== 'help' && cmd !== 'typecheck' && (rest.includes('--help') || rest.includes('-h'))) {
+    printCommandHelp(cmd);
+    return;
+  }
+
+  // Node preflight: WebJs needs Node 24+ (built-in TS strip + recursive fs.watch).
   // Run before any subcommand so an older Node fails fast with a clear,
   // actionable message naming the found + required version, exiting non-zero
   // instead of crashing cryptically later. `help` is exempt so a user on an

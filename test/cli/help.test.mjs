@@ -21,6 +21,49 @@ function help(...args) {
   return spawnSync(process.execPath, [CLI, 'help', ...args], { encoding: 'utf8' });
 }
 
+/** Run the CLI with arbitrary argv (for the --help / -h flag forms). */
+function cli(...args) {
+  return spawnSync(process.execPath, [CLI, ...args], { encoding: 'utf8' });
+}
+
+// A stable banner fragment that does not read as brand prose.
+const BANNER = /per-command usage \+ examples/;
+
+test('`--help` and `-h` at the top level print the banner', () => {
+  for (const flag of ['--help', '-h']) {
+    const r = cli(flag);
+    assert.equal(r.status, 0, `${flag}: ${r.stderr}`);
+    assert.match(r.stdout, BANNER, `${flag} prints the banner`);
+  }
+});
+
+test('a `--help` / `-h` flag after a command prints that command\'s help', () => {
+  for (const flag of ['--help', '-h']) {
+    const routes = cli('routes', flag);
+    assert.equal(routes.status, 0, `routes ${flag}: ${routes.stderr}`);
+    assert.match(routes.stdout, /^Usage: webjs routes /m, `routes ${flag} shows routes help`);
+    assert.match(routes.stdout, /^Examples:/m);
+
+    const doctor = cli('doctor', flag);
+    assert.match(doctor.stdout, /^Usage: webjs doctor \[--json\] \[--strict\]/m, `doctor ${flag} shows doctor help`);
+  }
+});
+
+test('a `--help` flag short-circuits (does NOT run the command)', () => {
+  // A route printer would emit "N page(s)"; the help intercept must fire first,
+  // so `routes --help` in any directory prints help, never a route table.
+  const r = cli('routes', '--help');
+  assert.doesNotMatch(r.stdout, /page\(s\)/, 'help short-circuits before the routes body runs');
+  assert.match(r.stdout, /^Usage: /m);
+});
+
+test('a `--help` flag on typecheck is NOT intercepted (forwards to tsc)', () => {
+  // typecheck is a thin tsc wrapper, so --help idiomatically means tsc's own
+  // help. The intercept must skip it: our Usage line must NOT appear.
+  const r = cli('typecheck', '--help');
+  assert.doesNotMatch(r.stdout, /^Usage: webjs typecheck /m, 'typecheck --help is not the framework help');
+});
+
 test('bare `webjs help` prints the full USAGE banner', () => {
   const r = help();
   assert.equal(r.status, 0, r.stderr);
