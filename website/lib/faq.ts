@@ -1,5 +1,6 @@
 /**
- * Shared FAQ convention parser for markdown content (guides + comparisons).
+ * Shared FAQ convention parser for markdown content (comparisons; blog
+ * posts may use it too, though they currently carry no FAQ).
  *
  * An author writes an FAQ as a `## FAQ` section near the end of the body,
  * with each question a `### <question>` heading followed by its answer

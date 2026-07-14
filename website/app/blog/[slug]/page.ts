@@ -35,6 +35,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
       datePublished: post.date || undefined,
       mainEntityOfPage: canonical,
       url: canonical,
+      image: `${SITE_URL}/public/og.png`,
       keywords: (post.tags || []).join(', '),
     },
     {

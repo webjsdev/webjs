@@ -38,6 +38,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
       datePublished: c.date || undefined,
       mainEntityOfPage: canonical,
       url: canonical,
+      image: `${SITE_URL}/public/og.png`,
       keywords: [`WebJs vs ${c.competitor}`, ...c.tags].join(', '),
     },
     {

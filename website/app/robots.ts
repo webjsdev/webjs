@@ -3,8 +3,8 @@
  *
  * Metadata route (default-exports a function returning a string, served
  * as text/plain at /robots.txt). Allows all crawlers and points them at
- * the sitemap, which enumerates every page, blog post, comparison, and
- * guide. There is nothing private on the marketing site, so a blanket
+ * the sitemap, which enumerates every page, blog post, and comparison.
+ * There is nothing private on the marketing site, so a blanket
  * allow is correct; the internal `/__webjs/*` action endpoints are POST
  * RPC routes with no crawlable GET surface, so they need no disallow.
  *
