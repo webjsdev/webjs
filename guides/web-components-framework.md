@@ -1,5 +1,5 @@
 ---
-title: "What is a web components framework?"
+title: "Web components frameworks, explained"
 date: 2026-07-14T09:00:00+05:30
 slug: web-components-framework
 description: "A web components framework builds your UI on native custom elements instead of a proprietary runtime. What that buys you, and how WebJs turns web components into a full-stack framework."

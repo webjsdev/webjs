@@ -1,5 +1,5 @@
 ---
-title: "What is an AI-first web framework?"
+title: "What makes a web framework AI-first"
 date: 2026-07-14T10:00:00+05:30
 slug: ai-first-web-framework
 description: "An AI-first web framework is designed so AI coding agents can read a whole app and write correct code on the first try. What that actually means, and how WebJs is built for it."
