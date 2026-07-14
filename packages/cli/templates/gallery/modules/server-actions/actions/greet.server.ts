@@ -14,31 +14,38 @@ import { requireAuth, type AuthUser } from '../middleware/require-auth.server.ts
 export const middleware = [requireAuth];
 
 export async function greet(input: { name: string; signedOut?: boolean }): Promise<ActionResult<{ message: string }>> {
-  // Non-empty and typed: requireAuth guaranteed a user before greet() ran (a
-  // signed-out request short-circuited and never reached here), so no optional
-  // chaining, the middleware contract owns the type. NOTE actionContext() is only
-  // populated on a boundary that runs the chain; a direct server-to-server greet()
-  // call skips middleware and would read an empty context, so a server-internal
-  // caller should pass the caller in explicitly rather than rely on it.
-  const who = (actionContext().user as AuthUser).name;
+  // actionContext() is populated ONLY on a boundary that runs the middleware
+  // chain (the RPC stub here, or a route() adapter). requireAuth runs there and
+  // guarantees a user, so `caller` is set on every real call. A DIRECT
+  // server-to-server greet() call skips middleware and leaves it undefined, so
+  // GUARD rather than assume the cast (from server code, pass the caller in
+  // explicitly instead of relying on the context).
+  const caller = actionContext().user as AuthUser | undefined;
+  if (!caller) return { success: false, error: 'Unauthorized.', status: 401 };
 
   const name = String(input?.name ?? '').trim();
   if (!name) return { success: false, error: 'Name required.', status: 400 };
 
   // actionSignal() is the request's AbortSignal (fires on a client disconnect or a
-  // superseded render). Thread it into the awaited work and re-check AFTER, so a
-  // slow action stops wasted work. This is the real use: a guard BEFORE any await
-  // can never have fired yet, since nothing has been awaited.
-  const message = await compose(name, who, actionSignal());
-  if (actionSignal().aborted) return { success: false, error: 'Request cancelled.', status: 499 };
-
-  return { success: true, data: { message } };
+  // superseded render). Thread it into the slow work so the work itself aborts
+  // (a real fetch(url, { signal: actionSignal() }) or a DB driver rejects on
+  // abort). lookupGreeting models that, and we map an abort to a cancelled
+  // envelope. A guard BEFORE any await can never fire, since nothing has been
+  // awaited yet, which is why the re-check lives after the await.
+  try {
+    const message = await lookupGreeting(name, caller.name, actionSignal());
+    return { success: true, data: { message } };
+  } catch (e) {
+    if (actionSignal().aborted) return { success: false, error: 'Request cancelled.', status: 499 };
+    throw e;
+  }
 }
 
-// A private (non-exported) stand-in for a slow lookup or upstream fetch that
-// honours the signal (a real fetch would pass { signal }). Not exported, so the
-// file still has exactly one action (the one-action-per-configured-file rule).
-async function compose(name: string, who: string, signal: AbortSignal): Promise<string> {
-  if (signal.aborted) throw new Error('aborted');
+// A private (non-exported) stand-in for a slow lookup or upstream fetch, so the
+// file still has exactly one action (the one-action-per-configured-file rule). A
+// real fetch / DB call rejects with an AbortError when the request aborts; greet()
+// catches that and returns the 499 envelope.
+async function lookupGreeting(name: string, who: string, signal: AbortSignal): Promise<string> {
+  if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
   return shout('hello ' + name) + ' (greeted by ' + who + ')';
 }
