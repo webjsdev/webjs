@@ -27,10 +27,7 @@ website/
     compare/           /compare hub + /compare/[slug]. Reads
                        ../../../compare/*.md. Emits per-page JSON-LD
                        (TechArticle + BreadcrumbList + FAQPage).
-    guides/            /guides hub + /guides/[slug]. Reads
-                       ../../../guides/*.md. Keyword/explainer landing
-                       pages (mirrors compare). Same JSON-LD set.
-    sitemap.ts         /sitemap.xml (enumerates compare + guides + blog)
+    sitemap.ts         /sitemap.xml (enumerates compare + blog)
     robots.ts          /robots.txt (allow-all, points at the sitemap)
     llms.txt/route.ts  /llms.txt (llmstxt.org overview for AI agents)
   components/
@@ -58,38 +55,38 @@ key into the local `ICON` map (for example `ICON.bolt`). Add a new entry
 in the correct order and the grid reflows automatically. If no existing
 icon fits, add one to the `ICON` map first.
 
-## SEO surfaces (guides, comparisons, structured data)
+## SEO surfaces (blog, comparisons, structured data)
 
-The site targets positioning keywords ("AI-first web framework", "web
-components framework") and "WebJs vs X" queries. The moving parts:
+The site targets real search keywords ("web components framework", "no
+build javascript framework", and so on) and "WebJs vs X" queries. There
+is deliberately NO separate `/guides` section: keyword-targeted explainer
+articles are just blog posts. A page ranks the same under `/blog` as
+under any other path, so a second near-identical section only adds upkeep
+and risks the two competing for the same term. The moving parts:
 
-- **Guides** (`/guides`, keyword/explainer landing pages) live as
-  `guides/<slug>.md` at the REPO ROOT (a sibling of `blog/` and
-  `compare/`), read by `modules/guides/queries/`. To add one, drop a
-  markdown file with `title`, `tagline`, `keyword`, and `description`
-  frontmatter; the hub, sitemap, and `/llms.txt` pick it up
-  automatically. Put the exact target keyword in the `keyword`
-  frontmatter and in the H1 / first paragraph. URL rule (recorded on
-  #985): keyword/explainer pages go under `/guides/<slug>`, comparisons
-  stay under `/compare/<slug>`; `/essays` and `/learn` are reserved.
-- **Comparisons** (`/compare/<slug>`) work the same way from
-  `compare/<slug>.md`.
-- **FAQ convention.** End a guide or comparison body with a `## FAQ`
+- **SEO explainer posts and comparisons.** An evergreen, keyword-targeted
+  explainer is a normal `blog/<slug>.md` post. Only write one for a term
+  with real search demand where WebJs is a legitimate answer (validate
+  the query first; a coined phrase nobody searches does not belong here).
+  A "WebJs vs <framework>" head-to-head is a `compare/<slug>.md` under
+  `/compare`. Do NOT let a blog post and a compare page chase the same
+  exact keyword (cannibalization).
+- **FAQ convention.** End a blog or comparison body with a `## FAQ`
   section, each question a `### <question>` heading followed by its
   answer paragraph. `lib/faq.ts` (`parseFaq`) turns that into a
   `FAQPage` JSON-LD block. The FAQ is BOTH rendered (normal markdown)
   and emitted as schema, so the two never drift (Google discounts FAQ
   schema that is not visible on the page).
 - **JSON-LD** is set via `metadata.jsonLd` (the framework emits a
-  `<script type="application/ld+json">`): `TechArticle` +
-  `BreadcrumbList` (+ `FAQPage`) on guide, comparison, and blog pages;
-  `WebSite` + `Organization` + `SoftwareApplication` on the home page
-  (jsonLd-only `export const metadata`, so it does not split the
-  layout-sourced title). Keep the schema honest: it must match the
-  visible page content.
+  `<script type="application/ld+json">`): `BlogPosting` + `BreadcrumbList`
+  (+ `FAQPage`) on blog posts, `TechArticle` + `BreadcrumbList` (+
+  `FAQPage`) on comparisons, and `WebSite` + `Organization` +
+  `SoftwareApplication` on the home page (jsonLd-only `export const
+  metadata`, so it does not split the layout-sourced title). Keep the
+  schema honest: it must match the visible page content.
 - **`/robots.txt`, `/sitemap.xml`, `/llms.txt`** are generated from the
-  live content queries, so a new guide / comparison / post needs no edit
-  to those files.
+  live content queries, so a new comparison or post needs no edit to
+  those files.
 
 ## Announcement banner
 

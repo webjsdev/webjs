@@ -421,7 +421,6 @@ lib/session.server.ts</pre>
           </div>
           <div class="flex flex-col gap-3">
             <h4 class="text-xs font-bold uppercase tracking-wider text-fg">Resources</h4>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/guides">Guides</a>
             <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/blog">Blog</a>
             <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/changelog">Changelog</a>
             <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${GH_URL + '/releases'} target="_blank" rel="noopener noreferrer">Releases${NEW_TAB}</a>

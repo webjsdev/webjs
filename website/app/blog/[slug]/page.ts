@@ -1,6 +1,7 @@
 import { html, unsafeHTML, notFound } from '@webjsdev/core';
 import { getPost } from '#modules/blog/queries/get-post.server.ts';
 import { renderPostBody } from '#modules/blog/utils/render-post.ts';
+import { parseFaq, faqJsonLd } from '#lib/faq.ts';
 
 /**
  * /blog/[slug]
@@ -11,7 +12,8 @@ import { renderPostBody } from '#modules/blog/utils/render-post.ts';
  * `generateMetadata` derives <head> from the post's frontmatter so
  * each post gets its own title / description / og:* tags for SEO,
  * a canonical URL per post at `/blog/<slug>`, and JSON-LD
- * (`BlogPosting` + `BreadcrumbList`) for rich results.
+ * (`BlogPosting` + `BreadcrumbList`, plus `FAQPage` when the post body
+ * carries a `## FAQ` section) for rich results.
  */
 
 const SITE_URL = 'https://webjs.dev';
@@ -21,7 +23,8 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   if (!post) return { title: 'Post not found · WebJs' };
 
   const canonical = `${SITE_URL}/blog/${post.slug}`;
-  const jsonLd = [
+  const faq = faqJsonLd(parseFaq(post.body));
+  const jsonLd: Record<string, unknown>[] = [
     {
       '@context': 'https://schema.org',
       '@type': 'BlogPosting',
@@ -43,6 +46,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
       ],
     },
   ];
+  if (faq) jsonLd.push(faq);
 
   return {
     title: `${post.title} · WebJs Blog`,

@@ -1,5 +1,4 @@
 import { listComparisons } from '#modules/compare/queries/list-comparisons.server.ts';
-import { listGuides } from '#modules/guides/queries/list-guides.server.ts';
 import { listPosts } from '#modules/blog/queries/list-posts.server.ts';
 
 /**
@@ -23,7 +22,7 @@ const SITE_URL = (env.SITE_URL || 'https://webjs.dev').replace(/\/$/, '');
 const DOCS_URL = (env.DOCS_URL || 'https://docs.webjs.dev').replace(/\/$/, '');
 
 export async function GET(): Promise<Response> {
-  const [comparisons, guides, posts] = await Promise.all([listComparisons(), listGuides(), listPosts()]);
+  const [comparisons, posts] = await Promise.all([listComparisons(), listPosts()]);
 
   const lines: string[] = [
     '# WebJs',
@@ -36,15 +35,11 @@ export async function GET(): Promise<Response> {
     `- [Getting started](${DOCS_URL}/docs/getting-started): install, scaffold, and run your first app`,
     `- [Documentation](${DOCS_URL}/docs): the full reference`,
     '',
-    '## Guides',
-    ...guides.map((g) => `- [${g.title}](${SITE_URL}/guides/${g.slug}): ${g.tagline}`),
-    `- [All guides](${SITE_URL}/guides)`,
-    '',
     '## Comparisons',
     ...comparisons.map((c) => `- [WebJs vs ${c.competitor}](${SITE_URL}/compare/${c.slug}): ${c.tagline}`),
     '',
     '## Blog',
-    ...posts.slice(0, 15).map((p) => `- [${p.title}](${SITE_URL}/blog/${p.slug})`),
+    ...posts.slice(0, 20).map((p) => `- [${p.title}](${SITE_URL}/blog/${p.slug})`),
     '',
   ];
 
