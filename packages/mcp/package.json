@@ -1,6 +1,6 @@
 {
   "name": "@webjsdev/mcp",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "type": "module",
   "description": "The webjs Model Context Protocol server: live app introspection (routes / actions / components / check) plus the framework knowledge layer (docs, recipes, source) for AI coding agents",
   "bin": {
