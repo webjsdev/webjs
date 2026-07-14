@@ -41,7 +41,7 @@ The short version is that the reason SSR for web components felt impossible was 
 
 ## FAQ
 
-### Can web components be server-side rendered?
+### Can web components be server rendered?
 
 Yes. The obstacle used to be that shadow DOM could only be attached with JavaScript, so a custom element could not be expressed as server HTML. Declarative Shadow DOM removed that limit by letting a shadow root be written directly in markup, so browsers attach it during parsing with no script. A framework like WebJs walks the component tree on the server, runs each render, and emits the HTML.
 
