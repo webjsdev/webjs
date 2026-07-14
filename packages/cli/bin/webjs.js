@@ -224,10 +224,14 @@ function printCommandHelp(name) {
   }
   console.log(`Usage: ${h.usage}\n`);
   console.log(`  ${h.summary}\n`);
-  const options = [
-    ...(h.options || []),
-    { flag: '-h, --help', description: 'Show this help.' },
-  ];
+  // A command that forwards to an external tool does NOT show webjs's own help
+  // for `--help`; word its `-h, --help` row to say so, rather than the generic
+  // "Show this help." which would be false for those three commands.
+  const tool = HELP_FLAG_PASSTHROUGH_TOOL[name];
+  const helpRow = tool
+    ? { flag: '-h, --help', description: `Forwarded to ${tool} (this command wraps it).` }
+    : { flag: '-h, --help', description: 'Show this help.' };
+  const options = [...(h.options || []), helpRow];
   const width = Math.max(...options.map((o) => o.flag.length));
   console.log('Options:');
   for (const o of options) console.log(`  ${o.flag.padEnd(width)}  ${o.description}`);
@@ -238,11 +242,13 @@ function printCommandHelp(name) {
 
 /**
  * Commands that forward their remaining args to an external CLI, so a trailing
- * `--help` / `-h` should reach THAT tool's own help, not webjs's: `typecheck`
- * (tsc), `db` (drizzle-kit), `ui` (@webjsdev/ui). They are skipped by the
- * per-command help-flag intercept.
+ * `--help` / `-h` should reach THAT tool's own help, not webjs's. Maps the
+ * command to the tool it wraps (used both to skip the help-flag intercept and
+ * to word the `-h, --help` row in that command's help accurately).
+ * @type {Record<string, string>}
  */
-const HELP_FLAG_PASSTHROUGH = new Set(['typecheck', 'db', 'ui']);
+const HELP_FLAG_PASSTHROUGH_TOOL = { typecheck: 'tsc', db: 'drizzle-kit', ui: '@webjsdev/ui' };
+const HELP_FLAG_PASSTHROUGH = new Set(Object.keys(HELP_FLAG_PASSTHROUGH_TOOL));
 
 /**
  * The installed `@webjsdev/cli` version, read from this package's own

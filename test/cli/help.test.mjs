@@ -113,6 +113,18 @@ test('`webjs help routes` prints usage + summary + an Options table + examples',
   assert.match(r.stdout, /webjs routes --json/);
 });
 
+test('a passthrough command\'s help says -h/--help forwards to the wrapped tool', () => {
+  // `webjs help typecheck` must NOT claim "-h, --help  Show this help." because
+  // typecheck --help actually forwards to tsc. The row is worded accordingly.
+  const tc = help('typecheck');
+  assert.match(tc.stdout, /-h, --help\s+Forwarded to tsc/);
+  const db = help('db');
+  assert.match(db.stdout, /-h, --help\s+Forwarded to drizzle-kit/);
+  // A non-passthrough command keeps the generic wording.
+  const routes = help('routes');
+  assert.match(routes.stdout, /-h, --help\s+Show this help\./);
+});
+
 test('`webjs help doctor` documents --json and --strict', () => {
   const r = help('doctor');
   assert.equal(r.status, 0, r.stderr);
