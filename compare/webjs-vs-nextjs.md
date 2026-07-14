@@ -77,3 +77,17 @@ A WebJs page is server-rendered HTML that reads, navigates, and submits forms wi
 - You build with AI agents and want a framework small enough (roughly 5 to 10 percent of Next.js by source) for an agent to read end to end, with conventions the tooling enforces.
 
 WebJs is the framework I wanted to exist: the good parts of the Next.js experience, rebuilt on the platform instead of on top of a compiler and a component runtime.
+
+## FAQ
+
+### Is WebJs a drop-in replacement for Next.js?
+
+No. WebJs keeps many Next.js conventions (file-based routing, server actions, streaming SSR) so the app shape feels familiar, but the view layer is native web components rather than React, and there is no build step or React Server Component split. You port the ideas, not the React components.
+
+### Does WebJs support server-side rendering like Next.js?
+
+Yes. Pages are server-rendered HTML by default and components render to HTML on the server, then hydrate as islands in the browser. Unlike Next.js, WebJs pages also work with JavaScript disabled, because progressive enhancement is the default rather than an add-on.
+
+### Why would I choose WebJs over Next.js?
+
+Choose WebJs when you want the Next.js developer experience without the build step and the RSC mental model, when you want to ship less JavaScript with progressive enhancement by default, or when you are building with AI agents and want a framework small enough to read end to end. Stay on Next.js when you need its ecosystem, its React component libraries, or its hosting integrations.

@@ -67,3 +67,17 @@ Remix 3 is in [beta preview](https://remix.run/blog/remix-3-beta-preview). Its i
 - You want a single typed server-action boundary for reads and writes, with types spanning the client and server, and file-routing conventions you already know from the Next.js app router.
 
 WebJs and Remix 3 arrived at the same crossroads, no bundler, beyond React, web standards, built for agents, and then took different roads through the view layer. The choice is largely native web components with declarative reactivity, versus a runtime-first virtual DOM with an imperative model.
+
+## FAQ
+
+### How is WebJs different from Remix 3?
+
+Both drop the bundler, move beyond React, and lean on web standards. The main divergence is the view layer: WebJs builds on native web components with declarative reactivity, while Remix 3 uses a runtime-first virtual DOM with a more imperative model. WebJs also elides display-only components to zero JavaScript automatically.
+
+### Do both WebJs and Remix work without a build step?
+
+Yes, both aim for a no-bundler developer experience on web standards. WebJs serves native ES modules directly and strips TypeScript at load. The frameworks differ less on the build story and more on the component and reactivity model you write against.
+
+### Which should I choose, WebJs or Remix 3?
+
+Choose WebJs when you want native web components, declarative reactivity, automatic zero-JavaScript elision, and a single typed server-action boundary for reads and writes. Choose Remix 3 if its virtual-DOM view layer and its ecosystem fit how you prefer to build. Both are strong web-standards bets.
