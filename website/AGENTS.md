@@ -25,12 +25,16 @@ website/
                        Dockerfile's `COPY changelog ./changelog` line
                        is what ships it on Railway.
     blog/              /blog hub + /blog/[slug]. Reads ../../../blog/*.md.
-                       Home of the keyword-targeted SEO posts. Emits
-                       per-post JSON-LD (BlogPosting + BreadcrumbList).
+                       WebJs design notes (dated). Emits per-post JSON-LD
+                       (BlogPosting + BreadcrumbList). No FAQ.
+    articles/          /articles hub + /articles/[slug]. Reads
+                       ../../../articles/*.md. Evergreen keyword explainers
+                       (tags, no dates). Emits TechArticle + BreadcrumbList
+                       + FAQPage.
     compare/           /compare hub + /compare/[slug]. Reads
                        ../../../compare/*.md. Emits per-page JSON-LD
                        (TechArticle + BreadcrumbList + FAQPage).
-    sitemap.ts         /sitemap.xml (enumerates compare + blog)
+    sitemap.ts         /sitemap.xml (enumerates articles + compare + blog)
     robots.ts          /robots.txt (allow-all, points at the sitemap)
     llms.txt/route.ts  /llms.txt (llmstxt.org overview for AI agents)
   components/
@@ -58,38 +62,42 @@ key into the local `ICON` map (for example `ICON.bolt`). Add a new entry
 in the correct order and the grid reflows automatically. If no existing
 icon fits, add one to the `ICON` map first.
 
-## SEO surfaces (blog, comparisons, structured data)
+## SEO surfaces (articles, blog, comparisons, structured data)
 
 The site targets real search keywords ("web components framework", "no
-build javascript framework", and so on) and "WebJs vs X" queries. There
-is deliberately NO separate `/guides` section: keyword-targeted explainer
-articles are just blog posts. A page ranks the same under `/blog` as
-under any other path, so a second near-identical section only adds upkeep
-and risks the two competing for the same term. The moving parts:
+build javascript framework", and so on) and "WebJs vs X" queries. Content
+is split by editorial intent, which is what decides where a piece goes:
 
-- **SEO explainer posts and comparisons.** An evergreen, keyword-targeted
-  explainer is a normal `blog/<slug>.md` post. Only write one for a term
-  with real search demand where WebJs is a legitimate answer (validate
-  the query first; a coined phrase nobody searches does not belong here).
-  A "WebJs vs <framework>" head-to-head is a `compare/<slug>.md` under
-  `/compare`. Do NOT let a blog post and a compare page chase the same
-  exact keyword (cannibalization).
-- **FAQ convention.** End a blog or comparison body with a `## FAQ`
-  section, each question a `### <question>` heading followed by its
-  answer paragraph. `lib/faq.ts` (`parseFaq`) turns that into a
-  `FAQPage` JSON-LD block. The FAQ is BOTH rendered (normal markdown)
-  and emitted as schema, so the two never drift (Google discounts FAQ
-  schema that is not visible on the page).
+- **`/articles`** is evergreen, keyword-targeted explainers on the web
+  platform ("what a web components framework is", "run TypeScript with no
+  build step"). Timeless reference, presented WITHOUT dates. An article is
+  an `articles/<slug>.md` file. Only write one for a term with real search
+  demand where WebJs is a legitimate answer (validate the query first; a
+  coined phrase nobody searches does not belong here). Articles carry a
+  `## FAQ` (SEO landing pages, like `/compare`).
+- **`/blog`** is dated WebJs design notes ("the decisions, the trade-offs,
+  the things that did not work"). A `blog/<slug>.md` post, FAQ-free, in
+  the author's first-person voice. A general web-platform explainer does
+  NOT belong here (that is why the split exists); it goes in `/articles`.
+- **`/compare`** is "WebJs vs <framework>" head-to-heads (`compare/<slug>.md`).
+- Do NOT let two pages chase the same exact keyword (cannibalization);
+  an article owns the general term, a blog post owns the WebJs-specific angle.
+- **FAQ convention.** End an article or comparison body with a `## FAQ`
+  section, each question a `### <question>` heading followed by its answer
+  paragraph. `lib/faq.ts` (`parseFaq`) turns that into a `FAQPage` JSON-LD
+  block. The FAQ is BOTH rendered (normal markdown) and emitted as schema,
+  so the two never drift (Google discounts FAQ schema that is not visible
+  on the page). Blog posts do NOT use FAQ.
 - **JSON-LD** is set via `metadata.jsonLd` (the framework emits a
-  `<script type="application/ld+json">`): `BlogPosting` + `BreadcrumbList`
-  (+ `FAQPage`) on blog posts, `TechArticle` + `BreadcrumbList` (+
-  `FAQPage`) on comparisons, and `WebSite` + `Organization` +
-  `SoftwareApplication` on the home page (jsonLd-only `export const
-  metadata`, so it does not split the layout-sourced title). Keep the
+  `<script type="application/ld+json">`): `TechArticle` + `BreadcrumbList`
+  + `FAQPage` on articles and comparisons, `BlogPosting` + `BreadcrumbList`
+  on blog posts, and `WebSite` + `Organization` + `SoftwareApplication` on
+  the home page (jsonLd-only `export const metadata`, so it does not split
+  the layout-sourced title). Article schemas carry an `image`. Keep the
   schema honest: it must match the visible page content.
 - **`/robots.txt`, `/sitemap.xml`, `/llms.txt`** are generated from the
-  live content queries, so a new comparison or post needs no edit to
-  those files.
+  live content queries, so a new article, comparison, or post needs no
+  edit to those files.
 
 ## Announcement banner
 

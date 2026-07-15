@@ -23,7 +23,7 @@ There is also less to learn. A React component lives inside React's virtual DOM 
 
 Native custom elements give you the component and nothing above it. That gap is real, and closing it is the entire job of a web components framework.
 
-**Server-side rendering.** Hand-written custom elements usually render on the client, which hurts first paint and indexing. WebJs renders components to HTML on the server, using Declarative Shadow DOM for the ones that opt into shadow DOM, so the first response carries real content and the element hydrates in place. One code path produces the server HTML and the client render, so the two do not drift. I went deeper on this in [server-side rendering for web components](/blog/server-side-rendering-web-components).
+**Server-side rendering.** Hand-written custom elements usually render on the client, which hurts first paint and indexing. WebJs renders components to HTML on the server, using Declarative Shadow DOM for the ones that opt into shadow DOM, so the first response carries real content and the element hydrates in place. One code path produces the server HTML and the client render, so the two do not drift. I went deeper on this in [server-side rendering for web components](/articles/server-side-rendering-web-components).
 
 **Progressive enhancement.** A WebJs page works with JavaScript turned off. Content reads, links navigate, forms submit through server actions. Interactivity is added per behaviour, so you never ship a first paint that depends on hydration to show anything.
 
@@ -42,3 +42,21 @@ Here is the distinction that trips people up, and it is why "just use Lit" is no
 WebJs uses a Lit-compatible component API on purpose, so the authoring experience feels familiar, and then wraps it in the pieces you would otherwise stitch together by hand. If you already reach for custom elements and keep wishing the full-stack story around them were as solid as the component model itself, that gap is the reason WebJs exists.
 
 None of it couples you to a particular database or CSS approach. The scaffold ships Drizzle, SQLite, and Tailwind as defaults because they pair well, but each is swappable. The constant is the foundation: native web components, server-rendered, with the framework filling in everything the platform leaves out.
+
+## FAQ
+
+### What is the difference between a web components framework and React?
+
+React uses its own component model, a virtual DOM and a proprietary runtime that only exists inside React. A web components framework builds on native custom elements, which the browser understands directly. React components run only inside React; web components run anywhere the DOM runs. WebJs is a full-stack web components framework, so it gives you the app-level pieces (SSR, routing, data) on top of the standard component model.
+
+### Is Lit a web components framework?
+
+Lit is a component library, not a full framework. It is an excellent way to author individual custom elements, but you still assemble server rendering, routing, and a data layer yourself. WebJs uses a Lit-compatible component API and adds those full-stack pieces around it, so you keep the authoring feel and get the whole app.
+
+### Do web components work with server-side rendering?
+
+Yes, and it is a core job of a good web components framework. WebJs renders components to HTML on the server, using Declarative Shadow DOM for components that opt into shadow DOM, so the first paint is real content and the element hydrates in place. Raw hand-written custom elements usually render only on the client, which is the gap the framework closes.
+
+### Do I need a build step for a web components framework?
+
+Not with WebJs. It serves native ES modules directly and strips TypeScript types at load, so there is no bundler and no compiled output to keep in sync with your source. Some other web-components setups still use a bundler, but a build step is not inherent to the approach.
