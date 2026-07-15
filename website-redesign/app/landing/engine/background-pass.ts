@@ -200,9 +200,9 @@ interface BlobDef {
 // where matter has clumped, surrounded by cool low-density filaments
 // (magenta-violet, cobalt, indigo) and a dead-black void in the far corner.
 const DEFAULT_BLOBS: BlobDef[] = [
-  { pos: [0.45, 0.56], sigma: [0.085, 0.08], color: "#fff1d6", gain: 1.35 }, // hot white-gold node core (ignited)
-  { pos: [0.45, 0.56], sigma: [0.19, 0.17], color: "#f0a041", gain: 0.9 }, // amber node glow
-  { pos: [0.42, 0.58], sigma: [0.4, 0.36], color: "#5a1f83", gain: 0.72 }, // magenta-violet filament halo
+  { pos: [0.45, 0.56], sigma: [0.075, 0.07], color: "#ffe6c8", gain: 0.55 }, // small warm highlight (dimmed)
+  { pos: [0.45, 0.56], sigma: [0.2, 0.18], color: "#a8306a", gain: 0.95 }, // deep rose-magenta core glow
+  { pos: [0.42, 0.58], sigma: [0.4, 0.36], color: "#5a1f83", gain: 0.9 }, // magenta-violet filament halo
   { pos: [0.74, 0.4], sigma: [0.32, 0.34], color: "#14336e", gain: 0.85 }, // deep cobalt gas band
   { pos: [0.84, 0.66], sigma: [0.24, 0.26], color: "#8a2f6f", gain: 0.42 }, // hot-pink pocket (H-alpha)
   { pos: [0.12, 0.28], sigma: [0.28, 0.3], color: "#2a1c66", gain: 0.62 }, // indigo lower-left filament
