@@ -87,38 +87,65 @@ export const PRESET_GLSL = /* glsl */ `
 
   /* == preset 0: Cosmic-web simulation flythrough (hero) === */
 
-  // Deterministic position of web node k inside a normalized [-1,1]^3 cell.
-  // Three decorrelated hashes so the nodes scatter like a real large-scale
-  // structure rather than sitting on a grid.
+  // Deterministic position of web node k, CLUSTERED into superclusters. Each
+  // node hangs off one of a handful of supercluster seeds with a falloff, so
+  // the nodes lump into dense regions separated by large empty voids the way
+  // real large-scale structure does, instead of spreading evenly.
   vec3 webNode(float k) {
-    return vec3(
+    const float M = 10.0;              // supercluster seeds
+    float parent = floor(grHash(k, 0.913) * M);
+    vec3 seed = vec3(
+      grHash(parent, 0.137) * 2.0 - 1.0,
+      grHash(parent, 0.641) * 2.0 - 1.0,
+      grHash(parent, 0.319) * 2.0 - 1.0
+    ) * 0.8;
+    vec3 off = vec3(
       grHash(k, 0.1237) * 2.0 - 1.0,
       grHash(k, 0.7411) * 2.0 - 1.0,
       grHash(k, 0.3319) * 2.0 - 1.0
     );
+    float spread = 0.34 * pow(grHash(k, 0.55), 0.6);
+    return clamp(seed + off * spread, vec3(-1.05), vec3(1.05));
   }
 
-  // A cosmic-web slice: bright warm NODES (where matter has clumped and
-  // ignited) sit at the ends of cool violet FILAMENTS (the diffuse gas + dark
-  // matter threads), with faint dust in the VOIDS between. Density maps to
-  // colour the way an IllustrisTNG / Millennium false-colour render does:
-  // dense = warm/white/gold, diffuse = cool/violet, empty = near-black.
+  // Node A's chosen neighbour: one of its three nearest nodes (weighted toward
+  // the nearest), so filaments branch into a connected web.
+  float webNeighbour(float ka, vec3 na, float pick) {
+    float best1 = 1e9, best2 = 1e9, best3 = 1e9;
+    float b1 = 0.0, b2 = 0.0, b3 = 0.0;
+    for (int j = 0; j < 54; j++) {
+      float kj = float(j);
+      if (kj == ka) continue;
+      float dj = distance(na, webNode(kj));
+      if (dj < best1)      { best3 = best2; b3 = b2; best2 = best1; b2 = b1; best1 = dj; b1 = kj; }
+      else if (dj < best2) { best3 = best2; b3 = b2; best2 = dj; b2 = kj; }
+      else if (dj < best3) { best3 = dj; b3 = kj; }
+    }
+    return (pick < 0.5) ? b1 : ((pick < 0.82) ? b2 : b3);
+  }
+
+  // A cosmic-web slice: bright warm NODES (clumps that have ignited) linked by
+  // FILAMENTS strung with galaxy beads, faint dust in the VOIDS, and a
+  // volumetric depth haze. Density maps to colour the way an IllustrisTNG /
+  // Millennium false-colour render does: dense = warm/white/gold, diffuse =
+  // cool violet/pink, empty = near-black.
   void presetRacetrack(float fi, int cnt, float time,
     float c0, float c1, float c2, float c3,
     float c4, float c5, float c6, float c7,
     out vec3 pos, out vec3 col)
   {
-    const float N = 28.0;              // number of web nodes
-    const vec3 WEB_SIZE = vec3(72.0, 52.0, 70.0);
-    const vec3 WEB_CENTER = vec3(0.0, -4.0, -30.0);
+    const float N = 54.0;              // number of web nodes
+    const vec3 WEB_SIZE = vec3(80.0, 60.0, 80.0);
+    const vec3 WEB_CENTER = vec3(0.0, 2.0, -34.0);
 
     float fcnt = float(cnt);
     int idx = int(fi);
-    float ang = time * 0.035;          // slow survey rotation of the volume
+    float ang = time * 0.03;           // slow survey rotation of the volume
 
-    // Budget: 22% node clumps, 58% filament threads, 20% void dust.
-    int nodeCnt = int(fcnt * 0.22);
-    int voidStart = int(fcnt * 0.80);
+    // Budget: 17% node clumps, 15% galaxy beads, 54% filament threads, 14% void.
+    int nodeCnt = int(fcnt * 0.17);
+    int haloCnt = nodeCnt + int(fcnt * 0.15);
+    int voidStart = int(fcnt * 0.86);
 
     vec3 lp;                           // local position in the [-1,1]^3 cell
     vec3 c;
@@ -127,13 +154,13 @@ export const PRESET_GLSL = /* glsl */ `
       // Dense node clump: a tight sphere, centre saturating to white-hot gold.
       float ni = float(idx);
       float k = floor(grHash(ni, 0.53) * N);
-      vec3 s = onSphere(grHash(ni, 0.618), grHash(ni, 0.271));
-      float rr = pow(grHash(ni, 0.913), 2.0) * 0.085;
+      vec3 s = onSphere(grHash(ni, 0.618), grHash(ni, 0.412));
+      float rr = pow(grHash(ni, 0.913), 2.2) * 0.10;
       lp = webNode(k) + s * rr;
-      float dens = 1.0 - clamp(rr / 0.085, 0.0, 1.0);   // 1 at centre, 0 at edge
-      float hue = mix(0.115, 0.07, grHash(ni, 0.3));     // gold -> amber
-      float sat = mix(0.78, 0.10, dens);                 // centre desaturates to white
-      float lum = 0.42 + 0.5 * dens;
+      float dens = 1.0 - clamp(rr / 0.10, 0.0, 1.0);     // 1 at centre, 0 at edge
+      float hue = mix(0.12, 0.07, grHash(ni, 0.3));      // gold -> amber
+      float sat = mix(0.80, 0.08, dens);                 // centre desaturates to white
+      float lum = 0.5 + 0.6 * dens;
       c = hsl2rgb(hue, sat, lum);
 
     } else if (idx >= voidStart) {
@@ -145,51 +172,63 @@ export const PRESET_GLSL = /* glsl */ `
         grHash(vi, 0.53) * 2.0 - 1.0,
         grHash(vi, 0.87) * 2.0 - 1.0
       ) * 1.12;
-      float lum = 0.012 + 0.03 * grHash(vi, 0.4);
+      float lum = 0.010 + 0.028 * grHash(vi, 0.4);
       c = hsl2rgb(mix(0.62, 0.72, grHash(vi, 0.6)), 0.5, lum);
 
     } else {
-      // Filament thread: connect node A to one of its three nearest neighbours,
-      // so the threads form a branching web rather than isolated pairs.
-      float li = float(idx - nodeCnt);
-      float ka = floor(grHash(li, 0.53) * N);
-      vec3 na = webNode(ka);
+      // Filament particles (diffuse thread) and galaxy beads both ride the same
+      // node-to-neighbour segment; beads are tight bright clumps along it.
+      bool isHalo = idx < haloCnt;
+      float seed = isHalo ? float(idx - nodeCnt) + 1000.0 : float(idx - haloCnt);
 
-      float best1 = 1e9, best2 = 1e9, best3 = 1e9;
-      float b1 = 0.0, b2 = 0.0, b3 = 0.0;
-      for (int j = 0; j < 28; j++) {
-        float kj = float(j);
-        if (kj == ka) continue;
-        float dj = distance(na, webNode(kj));
-        if (dj < best1)      { best3 = best2; b3 = b2; best2 = best1; b2 = b1; best1 = dj; b1 = kj; }
-        else if (dj < best2) { best3 = best2; b3 = b2; best2 = dj; b2 = kj; }
-        else if (dj < best3) { best3 = dj; b3 = kj; }
-      }
-      float pick = grHash(li, 0.87);
-      float kb = (pick < 0.5) ? b1 : ((pick < 0.82) ? b2 : b3);
+      float ka = floor(grHash(seed, 0.53) * N);
+      vec3 na = webNode(ka);
+      float kb = webNeighbour(ka, na, grHash(seed, 0.87));
       vec3 nb = webNode(kb);
 
-      float t = grHash(li, 0.271);
-      vec3 base = mix(na, nb, t);
       float d = max(distance(na, nb), 1e-4);
       vec3 dir = (nb - na) / d;
       vec3 up = (abs(dir.y) > 0.9) ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
       vec3 perp1 = normalize(cross(dir, up));
       vec3 perp2 = cross(dir, perp1);
-      float th = grHash(li, 0.913) * 6.28318530718;
-      float ends = abs(t - 0.5) * 2.0;            // 0 mid-thread, 1 at the nodes
-      float rr = sqrt(grHash(li, 0.33)) * 0.045 * (0.5 + ends * 1.3);  // thin mid, swelling into nodes
-      lp = base + (perp1 * cos(th) + perp2 * sin(th)) * rr;
 
-      // Cool violet mid-thread, warming toward the nodes. Sweep the hue the
-      // long way round the wheel (violet -> magenta -> red -> gold) so it
-      // passes through H-alpha pink, NEVER through green/cyan.
-      float hue = fract(0.72 + pow(ends, 2.0) * 0.38);
-      float lum = 0.13 + 0.30 * pow(ends, 1.5) + 0.05 * grHash(li, 0.77);
-      c = hsl2rgb(hue, 0.74, lum);
+      // Coherent per-filament bow so threads curve gently, not dead straight.
+      float seedF = ka * 64.0 + kb;
+      float bowAng = grHash(seedF, 0.66) * 6.28318530718;
+      vec3 bowDir = perp1 * cos(bowAng) + perp2 * sin(bowAng);
+
+      float t = grHash(seed, 0.271);
+      float bow = sin(t * 3.14159265) * 0.14 * (grHash(seedF, 0.5) - 0.15);
+      vec3 base = mix(na, nb, t) + bowDir * bow;
+      float ends = abs(t - 0.5) * 2.0;             // 0 mid-thread, 1 at the nodes
+
+      if (isHalo) {
+        // Galaxy bead: a tight bright clump seated on the filament.
+        vec3 s = onSphere(grHash(seed, 0.618), grHash(seed, 0.412));
+        float rr = pow(grHash(seed, 0.913), 2.0) * 0.05;
+        lp = base + s * rr;
+        float dens = 1.0 - clamp(rr / 0.05, 0.0, 1.0);
+        c = hsl2rgb(mix(0.12, 0.08, grHash(seed, 0.3)), mix(0.72, 0.14, dens), 0.5 + 0.55 * dens);
+      } else {
+        // Diffuse thread: thin mid-filament, swelling into the nodes.
+        float th = grHash(seed, 0.913) * 6.28318530718;
+        float rr = sqrt(grHash(seed, 0.33)) * 0.04 * (0.45 + ends * 1.4);
+        lp = base + (perp1 * cos(th) + perp2 * sin(th)) * rr;
+        // Cool violet mid-thread warming toward the nodes; sweep the hue the
+        // long way (violet -> H-alpha pink -> gold), NEVER through green/cyan.
+        float hue = fract(0.70 + pow(ends, 2.2) * 0.40);
+        float lum = 0.17 + 0.36 * pow(ends, 1.5) + 0.06 * grHash(seed, 0.77);
+        c = hsl2rgb(hue, 0.62, lum);
+      }
     }
 
-    pos = rotY(lp, ang) * WEB_SIZE + WEB_CENTER;
+    vec3 wp = rotY(lp, ang) * WEB_SIZE + WEB_CENTER;
+    // Volumetric depth haze: the far side of the volume dims into the dark, so
+    // the structure reads with real depth instead of a flat sheet.
+    float depth01 = clamp((wp.z + 128.0) / 170.0, 0.0, 1.0);   // 0 far, 1 near
+    c *= mix(0.55, 1.0, depth01);
+
+    pos = wp;
     col = c;
   }
 
