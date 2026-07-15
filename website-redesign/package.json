@@ -1,0 +1,25 @@
+{
+  "name": "@webjsdev/website-redesign",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Website redesign candidate: the Remix 3 marketing site rebuilt on web components, as the starting point for the WebJs site redesign.",
+  "imports": {
+    "#*": "./*"
+  },
+  "scripts": {
+    "dev": "webjs dev --port ${PORT:-5010}",
+    "start": "webjs start --port ${PORT:-3000}"
+  },
+  "dependencies": {
+    "@webjsdev/cli": "^0.10.0",
+    "@webjsdev/core": "^0.7.0",
+    "@webjsdev/server": "^0.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

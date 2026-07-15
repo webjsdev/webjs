@@ -1,0 +1,209 @@
+/*
+ * Global foundation for the WebJs-3 clone experiment, ported from the
+ * WebJs marketing site (app/styles/global.css + home.css) to plain CSS
+ * served unbundled. Asset URLs are rewritten to the /public/ prefix that
+ * the framework serves static files under.
+ */
+
+/* ---- Fonts (self-hosted, one variable file per family) ---------------- */
+@font-face {
+  font-family: "Inter";
+  font-weight: 100 900;
+  font-display: swap;
+  font-style: normal;
+  src: url("/public/font/inter-roman-latin-var.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-weight: 100 900;
+  font-display: swap;
+  font-style: italic;
+  src: url("/public/font/inter-italic-latin-var.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-display: swap;
+  src: url("/public/font/jet-brains-mono.woff2") format("woff2");
+}
+
+/* ---- The brand cycle: a single animated <color> the whole page rides -- */
+@property --brand-cycle {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #2dacf9;
+}
+
+@keyframes brand-cycle {
+  0%   { --brand-cycle: #2dacf9; }
+  20%  { --brand-cycle: #7ce95a; }
+  40%  { --brand-cycle: #ffdf5f; }
+  60%  { --brand-cycle: #fa73da; }
+  80%  { --brand-cycle: #ff3c32; }
+  100% { --brand-cycle: #2dacf9; }
+}
+
+:root {
+  color-scheme: dark;
+  animation: brand-cycle 10s linear infinite;
+  scrollbar-width: thin;
+  scrollbar-color: gray transparent;
+
+  /* Design tokens (from the landing tokens module). */
+  --bg: #000000;
+  --fg: #dee2e6;
+  --muted: rgba(214, 227, 255, 0.68);
+  --line: rgba(255, 255, 255, 0.12);
+  --panel-strong: rgba(5, 8, 16, 0.82);
+  --accent: #2dacf9;
+  --surface0: #1e2226;
+  --section-nav-bg: rgba(0, 0, 0, 0.2);
+
+  --glow-white:
+    0px 0px 2px rgba(255, 255, 255, 0.15), 0px 0px 4px rgba(255, 255, 255, 0.15),
+    0px 0px 12px rgba(255, 255, 255, 0.15), 0px 0px 16px rgba(255, 255, 255, 0.15),
+    0px 0px 24px rgba(255, 255, 255, 0.15);
+  --page-max-width: calc(100vw - 48px);
+}
+
+/* ---- Reset (adapted from Tailwind Preflight, as the source ships) ----- */
+*,
+::before,
+::after {
+  box-sizing: border-box;
+  border: 0 solid #c8c8c8;
+}
+::before,
+::after {
+  --tw-content: "";
+}
+html {
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+  font-family:
+    "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  tab-size: 4;
+  -webkit-tap-highlight-color: transparent;
+}
+body {
+  margin: 0;
+  line-height: inherit;
+}
+h1, h2, h3, h4, h5, h6 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+a {
+  color: inherit;
+  text-decoration: inherit;
+}
+b, strong {
+  font-weight: bolder;
+}
+code, kbd, samp, pre {
+  font-family:
+    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-size: 1em;
+}
+button, input, optgroup, select, textarea {
+  font-family: inherit;
+  font-feature-settings: inherit;
+  font-variation-settings: inherit;
+  font-size: 100%;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  margin: 0;
+  padding: 0;
+}
+button, select {
+  text-transform: none;
+}
+button,
+input:where([type="button"]),
+input:where([type="reset"]),
+input:where([type="submit"]) {
+  appearance: button;
+  background-color: transparent;
+  background-image: none;
+}
+blockquote, dl, dd, h1, h2, h3, h4, h5, h6, hr, figure, p, pre {
+  margin: 0;
+}
+ol, ul, menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+button, [role="button"] {
+  cursor: pointer;
+}
+:disabled {
+  cursor: default;
+}
+img, svg, video, canvas, audio, iframe, embed, object {
+  display: block;
+  vertical-align: middle;
+}
+img, video {
+  max-width: 100%;
+  height: auto;
+}
+[hidden]:where(:not([hidden="until-found"])) {
+  display: none;
+}
+
+/* ---- Base page --------------------------------------------------------- */
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+body {
+  overflow-x: hidden;
+  font-family:
+    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  color: #000;
+  background: var(--brand-cycle);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* With JS off the loading overlay can never dismiss, so hide it up front. */
+
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --brand-cycle: #2dacf9;
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
