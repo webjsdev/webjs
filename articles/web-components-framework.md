@@ -23,7 +23,7 @@ There is also less to learn. A React component lives inside React's virtual DOM 
 
 Native custom elements give you the component and nothing above it. That gap is real, and closing it is the entire job of a web components framework.
 
-**Server-side rendering.** Hand-written custom elements usually render on the client, which hurts first paint and indexing. WebJs renders components to HTML on the server, using Declarative Shadow DOM for the ones that opt into shadow DOM, so the first response carries real content and the element hydrates in place. One code path produces the server HTML and the client render, so the two do not drift. I went deeper on this in [server-side rendering for web components](/blog/server-side-rendering-web-components).
+**Server-side rendering.** Hand-written custom elements usually render on the client, which hurts first paint and indexing. WebJs renders components to HTML on the server, using Declarative Shadow DOM for the ones that opt into shadow DOM, so the first response carries real content and the element hydrates in place. One code path produces the server HTML and the client render, so the two do not drift. I went deeper on this in [server-side rendering for web components](/articles/server-side-rendering-web-components).
 
 **Progressive enhancement.** A WebJs page works with JavaScript turned off. Content reads, links navigate, forms submit through server actions. Interactivity is added per behaviour, so you never ship a first paint that depends on hydration to show anything.
 
