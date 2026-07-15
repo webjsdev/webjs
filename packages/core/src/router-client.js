@@ -1073,15 +1073,18 @@ async function performSubmission(href, method, body, frameId, form) {
  * @returns {string}
  */
 function buildHaveHeader() {
-  // Strict pairing here, deliberately (#994): if the live page's close marker was
-  // dropped, its orphaned open is NOT reported, so `have` omits that layout and
-  // the server returns the FULL page (with the outer layout's trailing chrome)
-  // rather than a reduced marker-pair-only fragment. `applySwap` then recovers
-  // the orphan and bounds the swap against that full page's trailing-sibling
-  // count, preserving BOTH the navbar and the footer for any layout. Recovering
-  // here would send `have=/`, get back a reduced fragment with no trailing chrome
+  // Strict pairing here, deliberately (#994): if the SOLE or OUTERMOST close
+  // marker was dropped, its orphaned open is NOT reported, so `have` omits that
+  // layout and the server returns the FULL page (with the outer layout's trailing
+  // chrome) rather than a reduced marker-pair-only fragment. `applySwap` then
+  // recovers the orphan and bounds the swap against that full page's
+  // trailing-sibling count, preserving the navbar and the footer. Recovering here
+  // would send `have=/`, get back a reduced fragment with no trailing chrome
   // (`tail === 0`), and sweep an unwrapped layout's footer. The extra bytes of a
-  // full page on the rare orphaned nav are the price of that correctness.
+  // full page on the rare orphaned nav are the price of that correctness. A
+  // dropped INNER close in a nested layout is a separate, unfixed mispairing
+  // limitation (the surviving outer close pairs with the inner open); the wrapped
+  // `${children}` idiom keeps it harmless.
   const slots = collectChildrenSlots(document.body);
   return [...slots.keys()].join(',');
 }
@@ -2636,13 +2639,16 @@ function trailingSiblingCount(marker) {
  * child) leaves `end: null` and the sweep-to-parent-end stays correct. Both-side
  * orphans keep `null` on both (symmetric sweep, nothing to align against).
  *
- * This works because `buildHaveHeader` reports STRICTLY paired markers, so an
- * orphaned live page omits the layout from `have` and the server returns the FULL
- * page (trailing chrome included, `tail > 0`) rather than a reduced marker-pair-
- * only fragment. The one case `tail` cannot cover is an incoming side whose close
- * was lost during parse (rare: the response is parsed from a complete string, not
- * streamed); there the orphan sweeps to its own parent end, which the wrapped
- * idiom keeps safe.
+ * This works for a SOLE or OUTERMOST dropped close because `buildHaveHeader`
+ * reports STRICTLY paired markers, so an orphaned live page omits the layout from
+ * `have` and the server returns the FULL page (trailing chrome included,
+ * `tail > 0`) rather than a reduced marker-pair-only fragment. Two cases it does
+ * NOT cover: an incoming side whose close was lost during parse (rare: the
+ * response is parsed from a complete string, not streamed), and a dropped INNER
+ * close in a nested layout (the surviving outer close mispairs with the inner
+ * open, so both slot ends are non-null and this bounding is skipped). The wrapped
+ * `${children}` idiom keeps both harmless (the marker's parent holds only the
+ * children, so any sweep stays inside it).
  *
  * @param {{ start: Comment, end: Comment | null } | undefined} target
  * @param {{ start: Comment, end: Comment | null } | undefined} source

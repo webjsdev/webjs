@@ -3511,9 +3511,12 @@ test('applySwap: an INCOMING-side dropped close does not duplicate trailing oute
 });
 
 test('applySwap: a degenerate trailing-count mismatch sweeps to parent end, never blanks or duplicates (#994)', () => {
-  // The well-formed side claims MORE trailing siblings than the orphan has nodes
-  // (cut <= 0). boundOrphanEnd falls back to a full-region swap (end=null), so the
-  // children region is neither blanked nor duplicated.
+  // Exercise the exact boundary cut===0 (tail === the orphan's node count), where
+  // `nodes[cut]` is `orphanStart.nextSibling`, an EMPTY exclusive range. The
+  // `cut <= 0 -> null` fallback must sweep the whole children region instead, so
+  // the children are neither duplicated (empty live range removes nothing) nor
+  // blanked. Any non-null return here (the old `orphanStart.nextSibling`, or a
+  // bare `nodes[cut]`) reintroduces the empty-range bug and fails this test.
   const savedBody = globalThis.document.body.innerHTML;
   const savedHead = globalThis.document.head.innerHTML;
   const savedLocation = globalThis.location;
@@ -3521,27 +3524,28 @@ test('applySwap: a degenerate trailing-count mismatch sweeps to parent end, neve
     globalThis.document.head.innerHTML = '';
     globalThis.location = /** @type any */ ({ get href() { return 'http://x/current'; }, set href(_v) {} });
 
-    // Live orphan with a SINGLE child node (close dropped, no trailing content).
+    // Live orphan with TWO child nodes (close dropped, no trailing content).
     globalThis.document.body.innerHTML =
       '<nav id="nav6">navbar</nav>' +
       '<!--wj:children:/-->' +
-      '<main id="only6">only</main>';
+      '<main id="old6a">a</main><main id="old6b">b</main>';
 
-    // Well-formed incoming with THREE trailing siblings after the close (tail=3 >
-    // the orphan's 1 node), forcing the cut<=0 branch.
+    // Well-formed incoming with TWO trailing siblings after the close, so
+    // tail === 2 === the orphan's node count, i.e. cut === 0.
     const incoming = new globalThis.DOMParser().parseFromString(
       '<!doctype html><html><head></head><body>' +
       '<nav id="nav6">navbar</nav>' +
       '<!--wj:children:/-->' +
       '<main id="new6">new</main>' +
       '<!--/wj:children-->' +
-      '<footer id="a6">a</footer><aside id="b6">b</aside><div id="c6">c</div>' +
+      '<footer id="a6">a</footer><aside id="b6">b</aside>' +
       '</body></html>', 'text/html');
 
     _applySwap(incoming, null, false, 'http://x/blog');
 
     assert.ok(globalThis.document.getElementById('new6'), 'the new children were applied');
-    assert.ok(!globalThis.document.getElementById('only6'), 'the old child was replaced (not duplicated)');
+    assert.ok(!globalThis.document.getElementById('old6a'), 'old child a replaced (not duplicated)');
+    assert.ok(!globalThis.document.getElementById('old6b'), 'old child b replaced (not duplicated)');
     assert.equal(globalThis.document.querySelectorAll('#new6').length, 1, 'no duplication of the children');
     assert.equal(globalThis.document.getElementById('nav6').textContent, 'navbar', 'navbar intact');
   } finally {
