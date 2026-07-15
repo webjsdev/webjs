@@ -27,6 +27,42 @@
   z-index: 10;
 }
 
+/* Top scrim: a fixed gradient that darkens the top band of the viewport so
+   scrolling content never crowds the fixed logo (left) or menu (right). It
+   sits ABOVE the page content (z 20) but BELOW the scroll-logo (z 25) and the
+   nav (z 30), so it separates them without ever covering them. Ported from the
+   source site's `topFadeGradientStyles`. pointer-events:none keeps the hero
+   fully interactive underneath. */
+.rmx-content::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: min(40vh, 340px);
+  z-index: 20;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    var(--bg) 0%,
+    rgba(0, 0, 0, 0.6) 36%,
+    rgba(0, 0, 0, 0.12) 70%,
+    transparent 100%
+  );
+}
+@media (max-width: 880px) {
+  .rmx-content::before {
+    height: min(24vh, 180px);
+    background: linear-gradient(
+      to bottom,
+      var(--bg) 0%,
+      rgba(0, 0, 0, 0.45) 40%,
+      rgba(0, 0, 0, 0.1) 74%,
+      transparent 100%
+    );
+  }
+}
+
 /* ---- Loading screen ---------------------------------------------------- */
 .loading-screen-overlay {
   position: fixed;
