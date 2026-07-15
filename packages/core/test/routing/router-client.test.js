@@ -196,7 +196,7 @@ test('collectChildrenSlots: route-group paths preserve their (group) segments', 
 });
 
 test('collectChildrenSlots: an orphaned open marker (dropped close) is NOT paired by default', () => {
-  // The #994 precondition: the device parser dropped the trailing
+  // The #994 precondition: the browser's parser dropped the trailing
   // `<!--/wj:children-->`, so the open marker survives with no close. Strict
   // pairing (the default) registers no slot, which is what forced the
   // destructive full-body swap that wiped the navbar.
@@ -3399,7 +3399,7 @@ test('applySwap: a dropped incoming close marker still scoped-swaps and keeps th
     const liveNav = globalThis.document.getElementById('site-top');
 
     // The incoming partial-nav fragment lost its trailing `<!--/wj:children-->`
-    // (the device parser drop). Parsed as a body it has an orphaned open marker.
+    // (the browser parser drop). Parsed as a body it has an orphaned open marker.
     const incoming = new globalThis.DOMParser().parseFromString(
       '<!doctype html><html><head></head><body>' +
       '<!--wj:children:/-->' +

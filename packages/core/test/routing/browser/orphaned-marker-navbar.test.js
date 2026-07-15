@@ -3,14 +3,16 @@
  * must keep the outer-layout navbar even when the incoming response's closing
  * `<!--/wj:children-->` marker was lost.
  *
- * The device failure: on real Android Chrome a soft nav to `/blog` randomly
- * dropped the persistent top navbar. The on-device `?diag=` harness (#939/#940)
- * showed the live body still carried the OPEN `wj:children` marker (`markers:1`)
- * yet the router fell to the destructive full-body swap, which only happens when
- * `collectChildrenSlots` cannot pair a slot, i.e. the trailing CLOSE comment was
- * dropped by the device HTML parser. `collectChildrenSlots` needed BOTH comments
- * to register a slot, so a dropped close meant no shared path and the full-body
- * `replaceChildren` wiped the outer layout (navbar and all).
+ * The failure: a soft nav to `/blog` randomly dropped the persistent top navbar.
+ * It surfaced first on Android Chrome (the `?diag=` harness #939/#940 showed the
+ * live body still carried the OPEN `wj:children` marker, `markers:1`, yet the
+ * router fell to the destructive full-body swap) and was later reproduced on
+ * desktop Chromium too, so it is a parse/timing race, not a browser-specific
+ * quirk. The full-body swap only happens when `collectChildrenSlots` cannot pair
+ * a slot, i.e. the trailing CLOSE comment was dropped by the browser's parser.
+ * `collectChildrenSlots` needed BOTH comments to register a slot, so a dropped
+ * close meant no shared path and the full-body `replaceChildren` wiped the outer
+ * layout (navbar and all).
  *
  * The fix (#994) recovers an orphaned open marker (end=null, "children run to the
  * parent end"), so the correct scoped swap runs and the navbar (which sits BEFORE
@@ -47,7 +49,7 @@ suite('Client router: soft nav keeps the navbar when the close marker is dropped
 
     try {
       // The incoming partial-nav fragment lost its trailing `<!--/wj:children-->`
-      // (the Android parser drop). Parsed in body context it is an orphaned open
+      // (the browser's parser drop). Parsed in body context it is an orphaned open
       // marker, exactly the state that used to force the full-body fallback.
       const doc = _parseHTML(
         '<!--wj:children:/-->' +

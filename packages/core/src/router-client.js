@@ -720,16 +720,20 @@ function setNavigating(on) {
  *
  * `recoverOrphans` (#994): register an OPEN marker whose closing
  * `<!--/wj:children-->` comment is missing, using `end: null` (meaning "the
- * children run to the end of the containing element"). On real Android Chrome a
- * soft nav to `/blog` randomly dropped the navbar: the device HTML parser
- * intermittently lost the trailing close comment (#939/#940 confirmed the OPEN
+ * children run to the end of the containing element"). Some browsers
+ * intermittently DROP the trailing close comment while parsing a soft-nav
+ * response, a parse/timing race that surfaced first on Android Chrome (a soft
+ * nav to `/blog` randomly dropped the navbar; #939/#940 confirmed the OPEN
  * marker survived, `markers:1`, yet the router still fell to the destructive
- * full-body swap). Without both comments this walk registers no slot, so
- * `longestSharedPath` finds nothing and `applySwap` wipes the outer layout
- * (navbar). Recovering the orphaned open lets the correct scoped swap run and
- * keeps the navbar (it sits BEFORE the open marker, so it is never in the swap
- * range). Off by default so the exported helper's strict pairing is unchanged;
- * the swap-decision and `X-Webjs-Have` call sites opt in.
+ * full-body swap) and was later reproduced on DESKTOP Chromium too, so this is
+ * NOT browser-specific, only rarer on faster hardware. Without both comments
+ * this walk registers no slot, so `longestSharedPath` finds nothing and
+ * `applySwap` wipes the outer layout (navbar). Recovering the orphaned open lets
+ * the correct scoped swap run and keeps the navbar (it sits BEFORE the open
+ * marker, so it is never in the swap range). The recovery keys off the SYMPTOM
+ * (a missing close), never any user-agent check, so it fixes every engine
+ * uniformly. Off by default so the exported helper's strict pairing is
+ * unchanged; the swap-decision and `X-Webjs-Have` call sites opt in.
  *
  * @param {ParentNode} root
  * @param {{ recoverOrphans?: boolean }} [options]
@@ -773,10 +777,11 @@ export function collectChildrenSlots(root, options) {
   visit(/** @type {Node} */ (root));
 
   // #994: any open marker still on the stack was never closed (its
-  // `<!--/wj:children-->` was dropped by the device parser). Register it with a
-  // null end so the shared-path match succeeds and the scoped swap preserves the
-  // outer layout, instead of the destructive full-body fallback. Outermost first
-  // (stack order), never overwriting a slot a proper close already paired.
+  // `<!--/wj:children-->` was dropped by the browser's parser, any engine).
+  // Register it with a null end so the shared-path match succeeds and the scoped
+  // swap preserves the outer layout, instead of the destructive full-body
+  // fallback. Outermost first (stack order), never overwriting a slot a proper
+  // close already paired.
   if (recoverOrphans) {
     for (const frame of stack) {
       if (!slots.has(frame.path)) slots.set(frame.path, { start: frame.start, end: null });

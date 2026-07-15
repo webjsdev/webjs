@@ -1347,13 +1347,13 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
   test('client nav: the outer-layout navbar keeps node identity across a soft nav (#994)', async () => {
     // The persistent top navbar (`<header class="site-header">`) is OUTER-layout
     // chrome, emitted BEFORE the `wj:children` marker, so the deepest-shared-
-    // layout swap must never touch it. #994: on Android Chrome a dropped close
-    // marker forced the destructive full-body swap that wiped this header; the
-    // orphaned-open recovery keeps the scoped swap so the header node survives.
-    // This is the happy-path end-to-end guard (markers intact); the dropped-
+    // layout swap must never touch it. #994: a dropped close marker forced the
+    // destructive full-body swap that wiped this header; the orphaned-open
+    // recovery keeps the scoped swap so the header node survives. The drop is a
+    // parse race (seen on Android Chrome and desktop Chromium), so this happy-path
+    // end-to-end guard (markers intact) cannot trigger it on demand; the dropped-
     // close divergence is covered deterministically by the core browser test
-    // (packages/core/test/routing/browser/orphaned-marker-navbar.test.js), which
-    // real Chromium cannot reproduce on its own. Proven by stamping a JS
+    // (packages/core/test/routing/browser/orphaned-marker-navbar.test.js). Proven by stamping a JS
     // property on the live header and asserting the SAME node persists.
     await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
     await sleep(1500);
