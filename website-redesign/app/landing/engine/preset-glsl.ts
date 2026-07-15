@@ -119,8 +119,8 @@ export const PRESET_GLSL = /* glsl */ `
       pos = vec3(x, y, zc);
 
       float temp = grHash(fi, 0.2917);
-      float hue = mix(0.05, 0.12, temp);
-      if (temp > 0.86) hue = 0.02;
+      float hue = mix(0.55, 0.70, temp);
+      if (temp > 0.86) hue = 0.08;
       float twinkle = 0.8 + 0.2 * sin(time * (2.0 + grHash(fi, 0.51) * 6.0) + fi * 1.31);
       float bright = pow(near01, 1.6) * (0.45 + 0.55 * grHash(fi, 0.77));
       float lum = (0.12 + 0.9 * bright) * twinkle;
@@ -142,9 +142,9 @@ export const PRESET_GLSL = /* glsl */ `
       float ox = off.x * cos(sw) - off.z * sin(sw);
       float oz = off.x * sin(sw) + off.z * cos(sw);
       pos = cc + vec3(ox, off.y, oz);
-      float hue = fract(0.02 + cluster * 0.035 + r * 0.06);
+      float hue = fract(0.74 + cluster * 0.07 + r * 0.12);
       float lum = 0.04 + 0.09 * (1.0 - r);
-      col = hsl2rgb(hue, 0.75, lum);
+      col = hsl2rgb(hue, 0.72, lum);
     }
   }
 
@@ -174,7 +174,7 @@ export const PRESET_GLSL = /* glsl */ `
       p = vec3(cos(th) * rr, -0.03 + sin(th * 9.0) * 0.012, sin(th) * rr);
       float seg = floor(th / 6.28318530718 * 22.0);
       float pulse = 0.5 + 0.5 * sin(time * 3.2 + seg * 1.7);
-      float hue = mix(0.02, 0.13, hash11(seg));
+      float hue = mix(0.50, 0.86, hash11(seg));
       c = hsl2rgb(hue, 0.95, 0.32 + 0.5 * pulse);
 
     } else if (idx < domeEnd) {
@@ -187,7 +187,7 @@ export const PRESET_GLSL = /* glsl */ `
       float th = v * 6.28318530718;
       float sr = rd * sin(phi);
       p = vec3(cos(th) * sr, rd * cos(phi) * 0.92 + 0.13, sin(th) * sr);
-      c = hsl2rgb(0.09, 0.65, 0.42 + 0.22 * cos(phi));
+      c = hsl2rgb(0.52, 0.55, 0.42 + 0.22 * cos(phi));
 
     } else {
       // Biconvex hull lens.
@@ -200,7 +200,7 @@ export const PRESET_GLSL = /* glsl */ `
       p = vec3(cos(th) * rr, yy, sin(th) * rr);
       float ring = 0.5 + 0.5 * sin(rr * 42.0);
       float lum = 0.20 + 0.12 * ring + 0.16 * (1.0 - rr / R);
-      c = hsl2rgb(0.07, 0.22, lum);
+      c = hsl2rgb(0.60, 0.18, lum);
     }
 
     // Slow spin about Y with a fixed tilt so the disc reads as 3D.
@@ -233,8 +233,8 @@ export const PRESET_GLSL = /* glsl */ `
     vec3 p;
     vec3 c;
     // Kept dim so the additive bloom does not blow the suit to a solid mass;
-    // the visor and accent lights carry the brightness. Warm cream tint.
-    vec3 white = vec3(0.46, 0.38, 0.3);
+    // the visor and accent lights carry the brightness.
+    vec3 white = vec3(0.34, 0.36, 0.44);
 
     if (idx < helmetEnd) {
       float hh = float(idx);
@@ -242,7 +242,7 @@ export const PRESET_GLSL = /* glsl */ `
       p = vec3(0.0, 0.66, 0.0) + s * 0.27;
       // Gold visor on the front-facing cap.
       float visor = smoothstep(0.15, 0.55, s.z) * step(-0.15, s.y) * step(s.y, 0.45);
-      c = mix(white * 1.05, hsl2rgb(0.08, 0.9, 0.55), visor);
+      c = mix(white * 1.05, hsl2rgb(0.11, 0.85, 0.52), visor);
 
     } else if (idx < torsoEnd) {
       float ti = float(idx - helmetEnd);
@@ -251,13 +251,13 @@ export const PRESET_GLSL = /* glsl */ `
       p = vec3(0.0, 0.28, 0.0) + s * vec3(0.27, 0.28, 0.2);
       // A small chest control light.
       float chest = smoothstep(0.9, 1.0, s.z) * step(0.0, s.y);
-      c = mix(white, hsl2rgb(0.09, 0.95, 0.6), chest * 0.8);
+      c = mix(white, hsl2rgb(0.5, 0.9, 0.6), chest * 0.8);
 
     } else if (idx < packEnd) {
       float bi = float(idx - torsoEnd);
       vec3 s = vec3(grHash(bi, 0.618), grHash(bi, 0.271), grHash(bi, 0.913)) - 0.5;
       p = vec3(0.0, 0.34, -0.24) + s * vec3(0.4, 0.44, 0.2);
-      c = hsl2rgb(0.08, 0.1, 0.32) + hsl2rgb(0.04, 0.9, 0.55) * step(0.42, grHash(bi, 0.5)) * 0.14;
+      c = hsl2rgb(0.6, 0.06, 0.34) + hsl2rgb(0.86, 0.8, 0.5) * step(0.42, grHash(bi, 0.5)) * 0.12;
 
     } else if (idx < hipEnd) {
       float pi = float(idx - packEnd);
@@ -323,9 +323,9 @@ export const PRESET_GLSL = /* glsl */ `
       p = s * 1.0;
       float lat = s.y;
       float band = sin(lat * 9.0 + sin(lat * 3.0 + time * 0.2) * 1.2);
-      float hue = mix(0.02, 0.13, 0.5 + 0.5 * band);
+      float hue = mix(0.5, 0.86, 0.5 + 0.5 * band);
       float lum = 0.28 + 0.14 * band + 0.1 * s.z;
-      c = hsl2rgb(hue, 0.72, clamp(lum, 0.1, 0.7));
+      c = hsl2rgb(hue, 0.6, clamp(lum, 0.1, 0.7));
       p = rotY(p, time * 0.12);
 
     } else if (idx < ringEnd) {
@@ -337,8 +337,8 @@ export const PRESET_GLSL = /* glsl */ `
       float yy = (grHash(ri, 0.913) - 0.5) * 0.02;
       p = vec3(cos(th) * rr, yy, sin(th) * rr);
       float bandN = 0.5 + 0.5 * sin(rr * 26.0);
-      float hue = mix(0.04, 0.12, bandN);
-      c = hsl2rgb(hue, 0.6, (0.18 + 0.2 * bandN) * gap);
+      float hue = mix(0.52, 0.8, bandN);
+      c = hsl2rgb(hue, 0.5, (0.18 + 0.2 * bandN) * gap);
 
     } else {
       // A couple of small moons on inclined orbits.
@@ -349,7 +349,7 @@ export const PRESET_GLSL = /* glsl */ `
       vec3 s = onSphere(grHash(mi, 0.618), grHash(mi, 0.271)) * 0.16;
       vec3 ctr = vec3(cos(orbA) * orbR, sin(orbA) * orbR * 0.35, sin(orbA) * orbR);
       p = ctr + s;
-      c = hsl2rgb(0.08, 0.08, 0.42);
+      c = hsl2rgb(0.6, 0.05, 0.4);
     }
 
     p = rotX(p, axisTilt);
@@ -405,7 +405,7 @@ export const PRESET_GLSL = /* glsl */ `
       float thick = (grHash(ai, 0.29) - 0.5) * 0.12 * (0.4 + r * 0.3);
       p = vec3(cos(a) * r, thick, sin(a) * r);
       float rn = clamp(r / 2.6, 0.0, 1.0);
-      float hue = mix(0.03, 0.13, rn) + (grHash(ai, 0.41) - 0.5) * 0.05;
+      float hue = mix(0.09, 0.6, rn) + (grHash(ai, 0.41) - 0.5) * 0.08;
       float lum = 0.2 + 0.4 * (1.0 - rn) + 0.1 * grHash(ai, 0.87);
       c = hsl2rgb(hue, 0.75, lum);
 
@@ -415,7 +415,7 @@ export const PRESET_GLSL = /* glsl */ `
       vec3 s = onSphere(grHash(hi, 0.618), grHash(hi, 0.271));
       p = s * (2.6 + grHash(hi, 0.913) * 2.0) * vec3(1.0, 0.4, 1.0);
       float lum = 0.15 + 0.4 * pow(grHash(hi, 0.5), 3.0);
-      c = hsl2rgb(mix(0.05, 0.12, grHash(hi, 0.37)), 0.35, lum);
+      c = hsl2rgb(mix(0.55, 0.72, grHash(hi, 0.37)), 0.3, lum);
     }
 
     p = rotX(p, 1.05);
