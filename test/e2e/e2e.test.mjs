@@ -520,19 +520,39 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     try {
       await page.goto(baseUrl + '/rpc-stream', { waitUntil: 'domcontentloaded', timeout: 12000 });
       await page.waitForFunction(() => document.querySelector('token-stream .ts-start'), { timeout: 8000 });
+      // Install a MutationObserver BEFORE clicking that records the token count at
+      // the FIRST DOM update. This is race-free (it fires whenever the first token
+      // appends, so it cannot be missed by snapshotting too late) and still proves
+      // incremental delivery: a real stream first-paints ONE token (the server
+      // spaces tokens 60ms apart), while a single buffered flush would first-paint
+      // all 8 at once. A prior version snapshotted the count "mid-stream" and
+      // asserted it was below the final, which raced completion on a fast runner
+      // (mid==final) and flaked on the Bun E2E lane (#1004).
+      await page.evaluate(() => {
+        const el = document.querySelector('token-stream');
+        /** @type {any} */ (window).__tsFirst = 0;
+        const obs = new MutationObserver(() => {
+          const n = document.querySelectorAll('token-stream .ts-item').length;
+          if (n > 0 && !(/** @type {any} */ (window).__tsFirst)) /** @type {any} */ (window).__tsFirst = n;
+        });
+        obs.observe(el, { childList: true, subtree: true });
+        /** @type {any} */ (window).__tsObs = obs;
+      });
       await page.evaluate(() => document.querySelector('token-stream .ts-start').click());
-      // Catch the list partway: wait until at least 2 tokens have rendered, then
-      // snapshot the count while more are still streaming in.
-      await page.waitForFunction(() => document.querySelectorAll('token-stream .ts-item').length >= 2, { timeout: 8000 });
-      const mid = await page.evaluate(() => document.querySelectorAll('token-stream .ts-item').length);
-      // Then wait for the stream to finish (the button re-enables) and read final.
+      // Wait for the stream to finish (the button re-enables with all 8 rendered).
       await page.waitForFunction(() => {
         const b = document.querySelector('token-stream .ts-start');
         return b && !b.disabled && document.querySelectorAll('token-stream .ts-item').length === 8;
       }, { timeout: 8000 });
+      const first = await page.evaluate(() => {
+        const w = /** @type {any} */ (window);
+        if (w.__tsObs) w.__tsObs.disconnect();
+        return w.__tsFirst;
+      });
       const final = await page.evaluate(() => document.querySelectorAll('token-stream .ts-item').length);
       assert.equal(final, 8, 'all 8 streamed tokens rendered');
-      assert.ok(mid < final, `the count climbed incrementally (mid=${mid} < final=${final})`);
+      assert.ok(first > 0 && first < final,
+        `tokens rendered incrementally (first paint showed ${first} of ${final}, not one buffered flush)`);
       assert.ok(streamCt && streamCt.includes('application/vnd.webjs+stream'), `the action streamed a framed body; got content-type ${streamCt}`);
     } finally {
       page.off('response', onResponse);
