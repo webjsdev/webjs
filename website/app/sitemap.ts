@@ -1,14 +1,15 @@
 import { sitemap } from '@webjsdev/server';
 import { listComparisons } from '#modules/compare/queries/list-comparisons.server.ts';
+import { listArticles } from '#modules/articles/queries/list-articles.server.ts';
 import { listPosts } from '#modules/blog/queries/list-posts.server.ts';
 
 /**
  * /sitemap.xml
  *
- * Serialized from the live content queries so newly added comparison and
- * blog markdown is discoverable without touching this file. The compare
- * pages and the SEO blog posts are the reason this exists: each
- * `/compare/<slug>` and `/blog/<slug>` is a canonical page we want
+ * Serialized from the live content queries so newly added comparison,
+ * article, and blog markdown is discoverable without touching this file.
+ * The compare pages, the evergreen `/articles` explainers, and the blog
+ * posts are the reason this exists: each is a canonical page we want
  * search engines to crawl and index.
  *
  * `SITE_URL` falls back to the production origin; override it per
@@ -17,9 +18,9 @@ import { listPosts } from '#modules/blog/queries/list-posts.server.ts';
 const SITE_URL = ((globalThis as any).process?.env?.SITE_URL || 'https://webjs.dev').replace(/\/$/, '');
 
 export default async function Sitemap() {
-  const [comparisons, posts] = await Promise.all([listComparisons(), listPosts()]);
+  const [comparisons, articles, posts] = await Promise.all([listComparisons(), listArticles(), listPosts()]);
 
-  const staticRoutes = ['/', '/blog', '/compare', '/why', '/changelog'].map((path) => ({
+  const staticRoutes = ['/', '/blog', '/articles', '/compare', '/why', '/changelog'].map((path) => ({
     url: `${SITE_URL}${path}`,
     changeFrequency: 'weekly' as const,
     priority: path === '/' ? 1.0 : 0.7,
@@ -32,6 +33,13 @@ export default async function Sitemap() {
     priority: 0.8,
   }));
 
+  const articleRoutes = articles.map((a) => ({
+    url: `${SITE_URL}/articles/${a.slug}`,
+    lastModified: a.date || undefined,
+    changeFrequency: 'monthly' as const,
+    priority: 0.8,
+  }));
+
   const blogRoutes = posts.map((p) => ({
     url: `${SITE_URL}/blog/${p.slug}`,
     lastModified: p.date || undefined,
@@ -39,5 +47,5 @@ export default async function Sitemap() {
     priority: 0.6,
   }));
 
-  return sitemap([...staticRoutes, ...compareRoutes, ...blogRoutes]);
+  return sitemap([...staticRoutes, ...compareRoutes, ...articleRoutes, ...blogRoutes]);
 }

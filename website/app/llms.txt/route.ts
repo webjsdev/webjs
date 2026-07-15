@@ -1,4 +1,5 @@
 import { listComparisons } from '#modules/compare/queries/list-comparisons.server.ts';
+import { listArticles } from '#modules/articles/queries/list-articles.server.ts';
 import { listPosts } from '#modules/blog/queries/list-posts.server.ts';
 
 /**
@@ -22,7 +23,7 @@ const SITE_URL = (env.SITE_URL || 'https://webjs.dev').replace(/\/$/, '');
 const DOCS_URL = (env.DOCS_URL || 'https://docs.webjs.dev').replace(/\/$/, '');
 
 export async function GET(): Promise<Response> {
-  const [comparisons, posts] = await Promise.all([listComparisons(), listPosts()]);
+  const [comparisons, articles, posts] = await Promise.all([listComparisons(), listArticles(), listPosts()]);
 
   const lines: string[] = [
     '# WebJs',
@@ -34,6 +35,9 @@ export async function GET(): Promise<Response> {
     '## Docs',
     `- [Getting started](${DOCS_URL}/docs/getting-started): install, scaffold, and run your first app`,
     `- [Documentation](${DOCS_URL}/docs): the full reference`,
+    '',
+    '## Articles',
+    ...articles.map((a) => `- [${a.title}](${SITE_URL}/articles/${a.slug}): ${a.tagline}`),
     '',
     '## Comparisons',
     ...comparisons.map((c) => `- [WebJs vs ${c.competitor}](${SITE_URL}/compare/${c.slug}): ${c.tagline}`),
