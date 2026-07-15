@@ -1073,10 +1073,16 @@ async function performSubmission(href, method, body, frameId, form) {
  * @returns {string}
  */
 function buildHaveHeader() {
-  // Recover an orphaned open marker (#994) so a dropped close comment does not
-  // hide a layout the client actually has: the server would then send a full
-  // page instead of the reduced fragment, and applying it destroys the navbar.
-  const slots = collectChildrenSlots(document.body, { recoverOrphans: true });
+  // Strict pairing here, deliberately (#994): if the live page's close marker was
+  // dropped, its orphaned open is NOT reported, so `have` omits that layout and
+  // the server returns the FULL page (with the outer layout's trailing chrome)
+  // rather than a reduced marker-pair-only fragment. `applySwap` then recovers
+  // the orphan and bounds the swap against that full page's trailing-sibling
+  // count, preserving BOTH the navbar and the footer for any layout. Recovering
+  // here would send `have=/`, get back a reduced fragment with no trailing chrome
+  // (`tail === 0`), and sweep an unwrapped layout's footer. The extra bytes of a
+  // full page on the rare orphaned nav are the price of that correctness.
+  const slots = collectChildrenSlots(document.body);
   return [...slots.keys()].join(',');
 }
 
@@ -2630,10 +2636,13 @@ function trailingSiblingCount(marker) {
  * child) leaves `end: null` and the sweep-to-parent-end stays correct. Both-side
  * orphans keep `null` on both (symmetric sweep, nothing to align against).
  *
- * The residual gap: a REDUCED partial-nav fragment carries no trailing chrome, so
- * its `tail` is zero even for an unwrapped layout, and a live orphan there still
- * sweeps its own trailing chrome. The shipped idiom (children wrapped) avoids it;
- * an unwrapped layout should wrap its children to be safe.
+ * This works because `buildHaveHeader` reports STRICTLY paired markers, so an
+ * orphaned live page omits the layout from `have` and the server returns the FULL
+ * page (trailing chrome included, `tail > 0`) rather than a reduced marker-pair-
+ * only fragment. The one case `tail` cannot cover is an incoming side whose close
+ * was lost during parse (rare: the response is parsed from a complete string, not
+ * streamed); there the orphan sweeps to its own parent end, which the wrapped
+ * idiom keeps safe.
  *
  * @param {{ start: Comment, end: Comment | null } | undefined} target
  * @param {{ start: Comment, end: Comment | null } | undefined} source
@@ -2660,11 +2669,14 @@ function boundOrphanEnd(orphanStart, wellFormedEnd) {
   /** @type {Node[]} */
   const nodes = [];
   for (let n = orphanStart.nextSibling; n; n = n.nextSibling) nodes.push(n);
-  // Preserve the last `tail` nodes by stopping before index `cut`. When the
-  // orphan holds no more nodes than the tail, keep everything (defensive: bound
-  // at the first sibling so nothing outside the children is swept).
+  // Preserve the last `tail` nodes by stopping before index `cut`. A `cut` at or
+  // below zero is a degenerate mismatch (the well-formed side claims more
+  // trailing siblings than the orphan has nodes at all, which a same-layout nav
+  // should never produce): fall back to `null` (sweep to the parent end, a normal
+  // full-region swap) rather than an empty range, which would duplicate or blank
+  // the children.
   const cut = nodes.length - tail;
-  if (cut <= 0) return orphanStart.nextSibling;
+  if (cut <= 0) return null;
   return nodes[cut];
 }
 

@@ -27,6 +27,7 @@ import {
   _applySwap,
   _parseHTML,
   _collectChildrenSlots,
+  _buildHaveHeader,
 } from '../../../src/router-client.js';
 
 import { assert } from '../../../../../test/browser-assert.js';
@@ -93,6 +94,36 @@ suite('Client router: soft nav keeps the navbar when the close marker is dropped
       assert.equal(document.getElementById('site-top-2'), liveNav, 'navbar identity preserved');
       assert.ok(document.getElementById('new2'), 'children swapped');
       assert.ok(!document.getElementById('old2'), 'old children replaced');
+    } finally {
+      document.body.innerHTML = '';
+    }
+  });
+
+  test('buildHaveHeader reports STRICT pairs, so an orphaned page fetches a full page (not a reduced fragment)', () => {
+    // #994: `have` must NOT recover the orphan. A dropped live close means the
+    // layout is omitted from `have`, so the server returns the FULL page (with
+    // trailing chrome) and the swap bounds against it. Recovering here would send
+    // `have=/` and get back a reduced marker-pair-only fragment (no footer), which
+    // would sweep an unwrapped layout's footer.
+    enableClientRouter();
+    document.body.innerHTML =
+      '<nav>navbar</nav>' +
+      '<!--wj:children:/-->' +
+      '<main>orphaned</main>' +
+      '<footer>footer</footer>'; // close comment dropped: the open is orphaned
+    try {
+      assert.equal(_buildHaveHeader(), '',
+        'an orphaned page reports an empty have, so the server sends a full page');
+    } finally {
+      document.body.innerHTML = '';
+    }
+
+    document.body.innerHTML =
+      '<!--wj:children:/-->' +
+      '<main>ok</main>' +
+      '<!--/wj:children-->';
+    try {
+      assert.equal(_buildHaveHeader(), '/', 'a well-formed page reports its layout normally');
     } finally {
       document.body.innerHTML = '';
     }

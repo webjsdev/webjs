@@ -3510,6 +3510,47 @@ test('applySwap: an INCOMING-side dropped close does not duplicate trailing oute
   }
 });
 
+test('applySwap: a degenerate trailing-count mismatch sweeps to parent end, never blanks or duplicates (#994)', () => {
+  // The well-formed side claims MORE trailing siblings than the orphan has nodes
+  // (cut <= 0). boundOrphanEnd falls back to a full-region swap (end=null), so the
+  // children region is neither blanked nor duplicated.
+  const savedBody = globalThis.document.body.innerHTML;
+  const savedHead = globalThis.document.head.innerHTML;
+  const savedLocation = globalThis.location;
+  try {
+    globalThis.document.head.innerHTML = '';
+    globalThis.location = /** @type any */ ({ get href() { return 'http://x/current'; }, set href(_v) {} });
+
+    // Live orphan with a SINGLE child node (close dropped, no trailing content).
+    globalThis.document.body.innerHTML =
+      '<nav id="nav6">navbar</nav>' +
+      '<!--wj:children:/-->' +
+      '<main id="only6">only</main>';
+
+    // Well-formed incoming with THREE trailing siblings after the close (tail=3 >
+    // the orphan's 1 node), forcing the cut<=0 branch.
+    const incoming = new globalThis.DOMParser().parseFromString(
+      '<!doctype html><html><head></head><body>' +
+      '<nav id="nav6">navbar</nav>' +
+      '<!--wj:children:/-->' +
+      '<main id="new6">new</main>' +
+      '<!--/wj:children-->' +
+      '<footer id="a6">a</footer><aside id="b6">b</aside><div id="c6">c</div>' +
+      '</body></html>', 'text/html');
+
+    _applySwap(incoming, null, false, 'http://x/blog');
+
+    assert.ok(globalThis.document.getElementById('new6'), 'the new children were applied');
+    assert.ok(!globalThis.document.getElementById('only6'), 'the old child was replaced (not duplicated)');
+    assert.equal(globalThis.document.querySelectorAll('#new6').length, 1, 'no duplication of the children');
+    assert.equal(globalThis.document.getElementById('nav6').textContent, 'navbar', 'navbar intact');
+  } finally {
+    globalThis.location = savedLocation;
+    globalThis.document.head.innerHTML = savedHead;
+    globalThis.document.body.innerHTML = savedBody;
+  }
+});
+
 test('a prefetch that reveals a NEW build id evicts stale pre-deploy caches (#899)', async () => {
   const origFetch = globalThis.fetch;
   const savedHead = globalThis.document.head.innerHTML;
