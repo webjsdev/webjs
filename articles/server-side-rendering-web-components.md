@@ -38,3 +38,21 @@ Because the content is in the first response, a WebJs page reads with JavaScript
 The old browser-global problem still bites during a server render, and this is the one thing people trip on. Code that touches `window` or `localStorage` at render time has no browser to touch. WebJs runs only the constructor, attribute wiring, and `render()` on the server, and it flags browser-global access that would crash there, so you get a clear message instead of a mystery 500. If you want the render-time data story (fetching in the component and still landing it in the first paint), that is [async rendering in web components](/blog/async-render-in-web-components).
 
 The short version is that the reason SSR for web components felt impossible was a genuine platform gap, and the platform closed it. What is left is a framework choosing to render on the server by default, which is the choice I made.
+
+## FAQ
+
+### Can web components be server rendered?
+
+Yes. The obstacle used to be that shadow DOM could only be attached with JavaScript, so a custom element could not be expressed as server HTML. Declarative Shadow DOM removed that limit by letting a shadow root be written directly in markup, so browsers attach it during parsing with no script. A framework like WebJs walks the component tree on the server, runs each render, and emits the HTML.
+
+### Do I need shadow DOM to server-render a web component?
+
+No. Shadow DOM is one option, and it ships as Declarative Shadow DOM when you use it. WebJs renders components in light DOM by default, where the output is ordinary page HTML with no shadow root at all, which sidesteps the whole shadow-serialization question and lets global CSS cascade in. Shadow DOM stays a per-component opt-in for the cases that want isolation.
+
+### What is Declarative Shadow DOM?
+
+Declarative Shadow DOM is a way to write a shadow root as HTML, using a `<template shadowrootmode="open">` element, instead of attaching it imperatively with JavaScript. The browser reads it during HTML parsing and attaches the shadow tree before any script runs. It is what makes server-side rendering of shadow-DOM web components possible, and it is supported in every current browser (Chrome and Safari for years, Firefox since version 123).
+
+### Does server-side rendering web components help SEO?
+
+Yes. When the content is in the first HTML response, a crawler reads it immediately with no JavaScript to execute. WebJs server-renders components whether they use light DOM or shadow DOM, so the content is in that first response either way: light-DOM output is plain HTML, and shadow-DOM output is server-rendered too, shipped as Declarative Shadow DOM in the same response. The post body, headings, and navigation are in the initial HTML, which is what search engines index.

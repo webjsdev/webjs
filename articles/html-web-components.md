@@ -35,3 +35,21 @@ I did not want this to be a discipline you have to remember, so WebJs is built a
 The payoff is resilience for free. You are not picking between a rich interactive component and one that survives JavaScript failing. The HTML-web-components shape gives you both, because the baseline is real HTML and the component only ever adds to it.
 
 If you have been writing custom elements as empty tags that build everything on the client, the shift is mostly in your head. Render the content, then reach for a component to enhance it, instead of reaching for a component to produce it. Once it clicks, the empty-tag version starts to look like a liability.
+
+## FAQ
+
+### What is the difference between HTML web components and regular web components?
+
+Regular custom elements are often written as empty tags that render all their content from JavaScript once loaded. An HTML web component instead wraps real, server-rendered markup and enhances it, so the content exists before the script runs. The term describes a usage pattern (augmentation over replacement), not a different browser API. WebJs makes this pattern the default by server-rendering components in light DOM.
+
+### Why are HTML web components better for progressive enhancement?
+
+Because the meaningful content is real HTML that exists before the component's JavaScript runs. If the script is slow or fails, the text still reads, links still navigate, and forms still submit. The custom element is the enhancement layer rather than the source of the content, so nothing essential depends on JavaScript executing successfully.
+
+### Do HTML web components use shadow DOM?
+
+Usually not. The pattern is about enhancing real page markup, which fits light DOM, where the component's content is ordinary HTML that global CSS styles and crawlers read. WebJs defaults to light DOM for this reason and keeps shadow DOM as an opt-in for components that genuinely need style isolation.
+
+### Can I use HTML web components with server-side rendering?
+
+Yes, and server-side rendering is what makes them work. The markup the element wraps has to be in the first HTML response, which means the server renders it. WebJs server-renders components by default, so the content is present before any JavaScript loads and the element enhances it once its module runs.

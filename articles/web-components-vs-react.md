@@ -36,3 +36,21 @@ The honest problem with "just use web components" is the reactivity and full-sta
 That gap is the reason I built WebJs. It stands on native web components, so you keep the portability and the platform-standard model, and it adds the pieces React users take for granted: reactive properties and signals for state, server-side rendering with hydration, file-based routing, typed server actions, and progressive enhancement by default. The component model is the browser's; the framework fills in everything above it. The authoring API is deliberately close to Lit, so web-component knowledge transfers directly, which I wrote about in [WebJs vs Lit](/blog/betting-on-lits-mental-model).
 
 So the real choice is not "web components or React" as raw technologies. It is whether you want your UI built on a portable browser standard with a framework filling the gaps, or on React's library runtime with its ecosystem. Both are defensible. WebJs is my bet that the standard is the better foundation once the gaps are actually filled.
+
+## FAQ
+
+### What is the difference between web components and React?
+
+Web components are native browser APIs (custom elements, shadow DOM, templates) for building reusable elements the browser understands directly. React is a JavaScript library with its own virtual DOM and component model that exists only inside React. Web components run anywhere the DOM runs; React components run only in React. They sit at different layers, which is why they are more complementary than competing.
+
+### Can web components replace React?
+
+For the component layer, often yes, but not on their own. Raw web components give you the element without React's automatic state-to-UI reactivity, server rendering, or routing, which is why teams reach for React plus a framework instead. A web components framework like WebJs closes that gap by adding reactivity, SSR, and routing on top of the native element, which is what makes replacing React practical rather than just possible.
+
+### Are web components faster than React?
+
+It depends more on the framework around them than on the primitive. Native custom elements avoid React's virtual-DOM diffing overhead and ship no library runtime by default, which can mean less JavaScript. But raw web components without a reactivity layer are not automatically faster in practice. The bigger performance lever is server rendering and shipping less JavaScript, which WebJs does by default.
+
+### Should I use web components or React?
+
+Use React when its ecosystem, hiring pool, and library selection are the priority, or when your team is already fluent in it. Use web components, through a framework like WebJs, when you want a portable, platform-standard component model, less JavaScript, progressive enhancement, and no build step. Both are defensible; the choice is about which foundation fits your constraints.
