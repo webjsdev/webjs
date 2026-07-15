@@ -85,67 +85,112 @@ export const PRESET_GLSL = /* glsl */ `
     return vec3(p.x, p.y * c - p.z * s, p.y * s + p.z * c);
   }
 
-  /* == preset 0: Deep-space starfield flythrough (hero) ==== */
+  /* == preset 0: Cosmic-web simulation flythrough (hero) === */
 
+  // Deterministic position of web node k inside a normalized [-1,1]^3 cell.
+  // Three decorrelated hashes so the nodes scatter like a real large-scale
+  // structure rather than sitting on a grid.
+  vec3 webNode(float k) {
+    return vec3(
+      grHash(k, 0.1237) * 2.0 - 1.0,
+      grHash(k, 0.7411) * 2.0 - 1.0,
+      grHash(k, 0.3319) * 2.0 - 1.0
+    );
+  }
+
+  // A cosmic-web slice: bright warm NODES (where matter has clumped and
+  // ignited) sit at the ends of cool violet FILAMENTS (the diffuse gas + dark
+  // matter threads), with faint dust in the VOIDS between. Density maps to
+  // colour the way an IllustrisTNG / Millennium false-colour render does:
+  // dense = warm/white/gold, diffuse = cool/violet, empty = near-black.
   void presetRacetrack(float fi, int cnt, float time,
     float c0, float c1, float c2, float c3,
     float c4, float c5, float c6, float c7,
     out vec3 pos, out vec3 col)
   {
-    float speed = c0 + c7;
+    const float N = 28.0;              // number of web nodes
+    const vec3 WEB_SIZE = vec3(72.0, 52.0, 70.0);
+    const vec3 WEB_CENTER = vec3(0.0, -4.0, -30.0);
+
     float fcnt = float(cnt);
     int idx = int(fi);
+    float ang = time * 0.035;          // slow survey rotation of the volume
 
-    // 82 percent streaming stars, 18 percent drifting nebula dust.
-    int nebStart = int(floor(fcnt * 0.82));
+    // Budget: 22% node clumps, 58% filament threads, 20% void dust.
+    int nodeCnt = int(fcnt * 0.22);
+    int voidStart = int(fcnt * 0.80);
 
-    if (idx < nebStart) {
-      float depth = 320.0;
-      float zNear = 72.0;
-      float zFar = zNear - depth;
+    vec3 lp;                           // local position in the [-1,1]^3 cell
+    vec3 c;
 
-      // Each star cycles forward in z over time, wrapping when it passes.
-      float phase = grHash(fi, 0.6180339887);
-      float cyc = fract(phase + time * speed * 0.028);
-      float zc = zFar + cyc * depth;
-      float near01 = cyc;
+    if (idx < nodeCnt) {
+      // Dense node clump: a tight sphere, centre saturating to white-hot gold.
+      float ni = float(idx);
+      float k = floor(grHash(ni, 0.53) * N);
+      vec3 s = onSphere(grHash(ni, 0.618), grHash(ni, 0.271));
+      float rr = pow(grHash(ni, 0.913), 2.0) * 0.085;
+      lp = webNode(k) + s * rr;
+      float dens = 1.0 - clamp(rr / 0.085, 0.0, 1.0);   // 1 at centre, 0 at edge
+      float hue = mix(0.115, 0.07, grHash(ni, 0.3));     // gold -> amber
+      float sat = mix(0.78, 0.10, dens);                 // centre desaturates to white
+      float lum = 0.42 + 0.5 * dens;
+      c = hsl2rgb(hue, sat, lum);
 
-      // Radial layout so stars stream outward as they approach the camera.
-      float ang = grHash(fi, 0.3571) * 6.28318530718;
-      float rad = 6.0 + grHash(fi, 0.9137) * 150.0;
-      float expand = 0.55 + near01 * near01 * 0.9;
-      float x = cos(ang) * rad * expand;
-      float y = sin(ang) * rad * expand;
-      pos = vec3(x, y, zc);
-
-      float temp = grHash(fi, 0.2917);
-      float hue = mix(0.55, 0.70, temp);
-      if (temp > 0.86) hue = 0.08;
-      float twinkle = 0.8 + 0.2 * sin(time * (2.0 + grHash(fi, 0.51) * 6.0) + fi * 1.31);
-      float bright = pow(near01, 1.6) * (0.45 + 0.55 * grHash(fi, 0.77));
-      float lum = (0.12 + 0.9 * bright) * twinkle;
-      float sat = 0.25 + 0.35 * (1.0 - near01);
-      col = hsl2rgb(hue, sat, clamp(lum, 0.0, 1.0));
+    } else if (idx >= voidStart) {
+      // Faint void dust: fills the box dimly so the voids are not dead flat,
+      // but stays dark enough to read as empty space.
+      float vi = float(idx - voidStart);
+      lp = vec3(
+        grHash(vi, 0.19) * 2.0 - 1.0,
+        grHash(vi, 0.53) * 2.0 - 1.0,
+        grHash(vi, 0.87) * 2.0 - 1.0
+      ) * 1.12;
+      float lum = 0.012 + 0.03 * grHash(vi, 0.4);
+      c = hsl2rgb(mix(0.62, 0.72, grHash(vi, 0.6)), 0.5, lum);
 
     } else {
-      float ni = float(idx - nebStart);
-      float cluster = floor(grHash(ni, 0.19) * 5.0);
-      vec3 cc = vec3(
-        sin(cluster * 1.7) * 66.0,
-        cos(cluster * 2.3) * 30.0 - 4.0,
-        -55.0 - cluster * 26.0
-      );
-      float r = grHash(ni, 0.41);
-      vec3 dir = onSphere(grHash(ni, 0.73), grHash(ni, 0.29));
-      vec3 off = dir * pow(r, 0.5) * 48.0;
-      float sw = time * 0.05;
-      float ox = off.x * cos(sw) - off.z * sin(sw);
-      float oz = off.x * sin(sw) + off.z * cos(sw);
-      pos = cc + vec3(ox, off.y, oz);
-      float hue = fract(0.74 + cluster * 0.07 + r * 0.12);
-      float lum = 0.04 + 0.09 * (1.0 - r);
-      col = hsl2rgb(hue, 0.72, lum);
+      // Filament thread: connect node A to one of its three nearest neighbours,
+      // so the threads form a branching web rather than isolated pairs.
+      float li = float(idx - nodeCnt);
+      float ka = floor(grHash(li, 0.53) * N);
+      vec3 na = webNode(ka);
+
+      float best1 = 1e9, best2 = 1e9, best3 = 1e9;
+      float b1 = 0.0, b2 = 0.0, b3 = 0.0;
+      for (int j = 0; j < 28; j++) {
+        float kj = float(j);
+        if (kj == ka) continue;
+        float dj = distance(na, webNode(kj));
+        if (dj < best1)      { best3 = best2; b3 = b2; best2 = best1; b2 = b1; best1 = dj; b1 = kj; }
+        else if (dj < best2) { best3 = best2; b3 = b2; best2 = dj; b2 = kj; }
+        else if (dj < best3) { best3 = dj; b3 = kj; }
+      }
+      float pick = grHash(li, 0.87);
+      float kb = (pick < 0.5) ? b1 : ((pick < 0.82) ? b2 : b3);
+      vec3 nb = webNode(kb);
+
+      float t = grHash(li, 0.271);
+      vec3 base = mix(na, nb, t);
+      float d = max(distance(na, nb), 1e-4);
+      vec3 dir = (nb - na) / d;
+      vec3 up = (abs(dir.y) > 0.9) ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+      vec3 perp1 = normalize(cross(dir, up));
+      vec3 perp2 = cross(dir, perp1);
+      float th = grHash(li, 0.913) * 6.28318530718;
+      float ends = abs(t - 0.5) * 2.0;            // 0 mid-thread, 1 at the nodes
+      float rr = sqrt(grHash(li, 0.33)) * 0.045 * (0.5 + ends * 1.3);  // thin mid, swelling into nodes
+      lp = base + (perp1 * cos(th) + perp2 * sin(th)) * rr;
+
+      // Cool violet mid-thread, warming toward the nodes. Sweep the hue the
+      // long way round the wheel (violet -> magenta -> red -> gold) so it
+      // passes through H-alpha pink, NEVER through green/cyan.
+      float hue = fract(0.72 + pow(ends, 2.0) * 0.38);
+      float lum = 0.13 + 0.30 * pow(ends, 1.5) + 0.05 * grHash(li, 0.77);
+      c = hsl2rgb(hue, 0.74, lum);
     }
+
+    pos = rotY(lp, ang) * WEB_SIZE + WEB_CENTER;
+    col = c;
   }
 
   /* == preset 1: Alien spacecraft (saucer) ================ */

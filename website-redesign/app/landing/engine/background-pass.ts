@@ -29,7 +29,7 @@ import { Pass, FullScreenQuad } from "three/addons/postprocessing/Pass.js";
  * `UnrealBloomPass` is still 10× more expensive.
  */
 
-const NUM_BLOBS = 9;
+const NUM_BLOBS = 6;
 
 const VERTEX_SHADER = /* glsl */ `
   varying vec2 vUv;
@@ -196,19 +196,17 @@ interface BlobDef {
   gain: number; // relative weight multiplier
 }
 
-// Cosmic-web false colour: a warm ignited node (white-gold core, amber glow)
-// where matter has clumped, surrounded by cool low-density filaments
-// (magenta-violet, cobalt, indigo) and a dead-black void in the far corner.
+// Dim intergalactic backdrop behind the particle cosmic web. The bright warm
+// nodes and cool filaments are drawn by the PARTICLE preset now, so this is a
+// faint large-scale wash (violet into cobalt into indigo) with the corners
+// pushed to dead-black voids. Kept low-gain so the particle web reads on top.
 const DEFAULT_BLOBS: BlobDef[] = [
-  { pos: [0.45, 0.56], sigma: [0.085, 0.08], color: "#fff1d6", gain: 1.35 }, // hot white-gold node core (ignited)
-  { pos: [0.45, 0.56], sigma: [0.19, 0.17], color: "#f0a041", gain: 0.9 }, // amber node glow
-  { pos: [0.42, 0.58], sigma: [0.4, 0.36], color: "#5a1f83", gain: 0.72 }, // magenta-violet filament halo
-  { pos: [0.74, 0.4], sigma: [0.32, 0.34], color: "#14336e", gain: 0.85 }, // deep cobalt gas band
-  { pos: [0.84, 0.66], sigma: [0.24, 0.26], color: "#8a2f6f", gain: 0.42 }, // hot-pink pocket (H-alpha)
-  { pos: [0.12, 0.28], sigma: [0.28, 0.3], color: "#2a1c66", gain: 0.62 }, // indigo lower-left filament
-  { pos: [0.5, 0.05], sigma: [0.5, 0.16], color: "#04030f", gain: 0.7 }, // bottom rim falloff (deeper)
-  { pos: [0.92, 0.94], sigma: [0.34, 0.3], color: "#000004", gain: 0.95 }, // pull top-right to dead-black void
-  { pos: [0.08, 0.9], sigma: [0.3, 0.28], color: "#01000a", gain: 0.75 }, // top-left void deepening
+  { pos: [0.42, 0.58], sigma: [0.5, 0.44], color: "#3a1560", gain: 0.5 }, // faint violet large-scale wash
+  { pos: [0.74, 0.4], sigma: [0.34, 0.36], color: "#101f4a", gain: 0.45 }, // faint cobalt band
+  { pos: [0.12, 0.28], sigma: [0.3, 0.32], color: "#1a1350", gain: 0.4 }, // faint indigo lower-left
+  { pos: [0.5, 0.05], sigma: [0.5, 0.16], color: "#04030f", gain: 0.8 }, // bottom void
+  { pos: [0.92, 0.94], sigma: [0.34, 0.3], color: "#000004", gain: 1.0 }, // top-right dead-black void
+  { pos: [0.08, 0.9], sigma: [0.3, 0.28], color: "#01000a", gain: 0.85 }, // top-left dead-black void
 ];
 
 const BASE_HEX = "#02010a";
