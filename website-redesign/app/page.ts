@@ -187,6 +187,17 @@ export default function LandingPage() {
         <nav class="rmx-nav-list" aria-label="Primary">
           ${NAV_ITEMS.map(n => html`<a class="rmx-nav-item" href=${n.href}>[${n.key}] ${n.label}</a>`)}
         </nav>
+        <!-- Mobile menu (<=720px). Native <details> so it opens without JS,
+             since the page never hydrates. -->
+        <details class="rmx-nav-mobile">
+          <summary class="rmx-nav-item rmx-nav-toggle">
+            <span class="rmx-nav-toggle-closed">menu</span>
+            <span class="rmx-nav-toggle-open">close</span>
+          </summary>
+          <nav class="rmx-nav-menu" aria-label="Primary">
+            ${NAV_ITEMS.map(n => html`<a class="rmx-nav-item rmx-nav-menu-item" href=${n.href}>[${n.key}] ${n.label}</a>`)}
+          </nav>
+        </details>
       </header>
 
       <main id="main-content" tabindex="-1">
@@ -194,7 +205,7 @@ export default function LandingPage() {
           <div class="rmx-hero-group">
             <h1 class="rmx-hero-title">A web framework for the AI era</h1>
             <p class="rmx-hero-body">
-              Build at the speed you think, with an AI agent or on your own.<br />
+              Build at the speed you think, with an AI agent or on your own.
               Off to the cosmic web with
               <copy-cmd>npm create webjs@latest my-app</copy-cmd>
             </p>

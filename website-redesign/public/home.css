@@ -236,8 +236,41 @@ scroll-logo span[data-ghost] {
 .rmx-nav-item:hover {
   color: var(--brand-cycle, var(--accent));
 }
+
+/* Mobile menu: a native <details> that toggles without JS (the page never
+   hydrates). Hidden on desktop; the desktop .rmx-nav-list is hidden and this
+   is shown at <=720px. */
+.rmx-nav-mobile {
+  display: none;
+  position: relative;
+  margin-left: auto;
+  pointer-events: auto;
+}
+.rmx-nav-toggle {
+  list-style: none;
+  user-select: none;
+}
+.rmx-nav-toggle::-webkit-details-marker { display: none; }
+.rmx-nav-toggle::marker { content: ""; }
+.rmx-nav-toggle-open { display: none; }
+.rmx-nav-mobile[open] .rmx-nav-toggle-closed { display: none; }
+.rmx-nav-mobile[open] .rmx-nav-toggle-open { display: inline; }
+.rmx-nav-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 150px;
+}
+.rmx-nav-menu-item { justify-content: flex-end; padding: 10px 12px; }
+
 @media (max-width: 720px) {
   .rmx-nav-hint { display: none; }
+  .rmx-nav-list { display: none; }
+  .rmx-nav-mobile { display: block; }
 }
 
 /* ---- Hero -------------------------------------------------------------- */
@@ -247,7 +280,13 @@ scroll-logo span[data-ghost] {
   position: relative;
   display: flex;
   align-items: flex-start;
-  padding-top: calc(clamp(128px, 92px + 7vw, 188px) + (100vw - 48px) * 43 / 440);
+  /* Clear the fixed scroll-logo wordmark, which sits at top: 170px (LARGE_TOP)
+     and is `min(100vw - 48px, 560px)` wide with a 760:170 aspect. So its
+     bottom edge is 170px + that width * 170/760; the title starts a 24px gap
+     below it. The upstream Remix formula baked in Remix's thin 440:43 wordmark
+     and top: 92px, so a verbatim port overlapped our taller mark below ~1300px
+     wide (mobile AND tablet). This tracks our wordmark's real geometry. */
+  padding-top: calc(170px + 24px + min(100vw - 48px, 560px) * 170 / 760);
 }
 .rmx-hero-group {
   width: 100%;
@@ -288,8 +327,8 @@ scroll-logo span[data-ghost] {
   text-wrap: pretty;
 }
 @media (max-width: 880px) {
-  .rmx-hero-group { align-items: stretch; text-align: left; gap: 24px; }
-  .rmx-hero-body { max-width: 480px; text-align: left; }
+  .rmx-hero-group { gap: 24px; }
+  .rmx-hero-body { max-width: 480px; }
 }
 
 /* Inline code chip used in prose (npx webjs create). */
