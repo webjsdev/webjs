@@ -26,7 +26,7 @@ export default async function Articles() {
     <main id="main" tabindex="-1" class="max-w-[840px] mx-auto px-6 py-12 focus:outline-none">
       <header class="mb-10">
         <p class="font-mono text-[11px] uppercase tracking-[0.15em] text-accent font-semibold mb-2">Articles</p>
-        <h1 class="font-serif text-[clamp(28px,4vw,40px)] leading-[1.05] tracking-tight text-fg mb-3">Articles</h1>
+        <h1 class="font-serif text-[clamp(28px,4vw,40px)] leading-[1.05] tracking-tight text-fg mb-3">Explainers for the web platform</h1>
         <p class="text-fg-muted text-[15px] leading-relaxed max-w-[640px]">
           Evergreen explainers on how the web platform works and the ideas WebJs is built on: web components, building with no build step, server-side rendering, and running TypeScript straight from the runtime. Reference reading, not release notes.
         </p>
