@@ -3419,6 +3419,97 @@ test('applySwap: a dropped incoming close marker still scoped-swaps and keeps th
   }
 });
 
+test('applySwap: a LIVE-side dropped close does not sweep trailing outer-layout content into the swap (#994)', () => {
+  // The reviewer-flagged content-loss case: the marker's siblings include a
+  // FOOTER after the (dropped) close within the SAME parent (an unwrapped
+  // layout). The live side is orphaned; the incoming side is well-formed, so its
+  // trailing-sibling count bounds the recovered range and the live footer is
+  // preserved (not swept), while the navbar (before the open marker) also stays.
+  const savedBody = globalThis.document.body.innerHTML;
+  const savedHead = globalThis.document.head.innerHTML;
+  const savedLocation = globalThis.location;
+  try {
+    globalThis.document.head.innerHTML = '';
+    globalThis.location = /** @type any */ ({ get href() { return 'http://x/current'; }, set href(_v) {} });
+
+    // Unwrapped layout: nav, open, children, [close dropped], footer, all direct
+    // body children. Stamp the navbar and footer to assert identity survives.
+    globalThis.document.body.innerHTML =
+      '<nav id="nav2">navbar</nav>' +
+      '<!--wj:children:/-->' +
+      '<main id="old3">old</main>' +
+      '<footer id="ft2">footer</footer>';
+    const liveNav = globalThis.document.getElementById('nav2');
+    const liveFooter = globalThis.document.getElementById('ft2');
+
+    // Well-formed incoming full page: nav, open, children, close, footer.
+    const incoming = new globalThis.DOMParser().parseFromString(
+      '<!doctype html><html><head></head><body>' +
+      '<nav id="nav2">navbar</nav>' +
+      '<!--wj:children:/-->' +
+      '<main id="new3">new</main>' +
+      '<!--/wj:children-->' +
+      '<footer id="ft2">footer</footer>' +
+      '</body></html>', 'text/html');
+
+    _applySwap(incoming, null, false, 'http://x/blog');
+
+    assert.equal(globalThis.document.getElementById('nav2'), liveNav, 'navbar identity preserved');
+    assert.equal(globalThis.document.getElementById('ft2'), liveFooter,
+      'the trailing footer node was NOT swept by the recovered range (identity preserved)');
+    assert.ok(globalThis.document.getElementById('new3'), 'the children slot swapped');
+    assert.ok(!globalThis.document.getElementById('old3'), 'old children replaced');
+  } finally {
+    globalThis.location = savedLocation;
+    globalThis.document.head.innerHTML = savedHead;
+    globalThis.document.body.innerHTML = savedBody;
+  }
+});
+
+test('applySwap: an INCOMING-side dropped close does not duplicate trailing outer-layout content (#994)', () => {
+  // The symmetric case: the INCOMING side is orphaned with a trailing footer in
+  // the marker's parent. Bounding it against the well-formed LIVE side's
+  // trailing-sibling count keeps the incoming footer OUT of the children region,
+  // so the page does not end up with two footers.
+  const savedBody = globalThis.document.body.innerHTML;
+  const savedHead = globalThis.document.head.innerHTML;
+  const savedLocation = globalThis.location;
+  try {
+    globalThis.document.head.innerHTML = '';
+    globalThis.location = /** @type any */ ({ get href() { return 'http://x/current'; }, set href(_v) {} });
+
+    // Well-formed live page: nav, open, children, close, footer.
+    globalThis.document.body.innerHTML =
+      '<nav id="nav4">navbar</nav>' +
+      '<!--wj:children:/-->' +
+      '<main id="old5">old</main>' +
+      '<!--/wj:children-->' +
+      '<footer id="ft4">footer</footer>';
+    const liveFooter = globalThis.document.getElementById('ft4');
+
+    // Incoming full page whose close marker was dropped (orphaned), footer after.
+    const incoming = new globalThis.DOMParser().parseFromString(
+      '<!doctype html><html><head></head><body>' +
+      '<nav id="nav4">navbar</nav>' +
+      '<!--wj:children:/-->' +
+      '<main id="new5">new</main>' +
+      '<footer id="ft4">footer</footer>' +
+      '</body></html>', 'text/html');
+
+    _applySwap(incoming, null, false, 'http://x/blog');
+
+    assert.equal(globalThis.document.querySelectorAll('#ft4').length, 1,
+      'exactly one footer (the incoming footer was not duplicated into the children region)');
+    assert.equal(globalThis.document.getElementById('ft4'), liveFooter, 'the live footer is the one kept');
+    assert.ok(globalThis.document.getElementById('new5'), 'the children slot swapped');
+    assert.ok(!globalThis.document.getElementById('old5'), 'old children replaced');
+  } finally {
+    globalThis.location = savedLocation;
+    globalThis.document.head.innerHTML = savedHead;
+    globalThis.document.body.innerHTML = savedBody;
+  }
+});
+
 test('a prefetch that reveals a NEW build id evicts stale pre-deploy caches (#899)', async () => {
   const origFetch = globalThis.fetch;
   const savedHead = globalThis.document.head.innerHTML;

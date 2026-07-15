@@ -97,4 +97,41 @@ suite('Client router: soft nav keeps the navbar when the close marker is dropped
       document.body.innerHTML = '';
     }
   });
+
+  test('trailing outer-layout content in the marker parent is preserved when the live close is dropped', () => {
+    // An UNWRAPPED layout: nav, open, children, [close dropped], footer, all
+    // direct body children. The recovered live range must NOT sweep the footer
+    // (it is bounded by the well-formed incoming side's trailing-sibling count).
+    enableClientRouter();
+    document.body.innerHTML =
+      '<nav id="nav-f">navbar</nav>' +
+      '<!--wj:children:/-->' +
+      '<main id="oldf">old</main>' +
+      '<footer id="foot-f">footer</footer>';
+    const liveNav = document.getElementById('nav-f');
+    const liveFooter = document.getElementById('foot-f');
+
+    try {
+      // Well-formed incoming full page: nav, open, children, close, footer.
+      const doc = _parseHTML(
+        '<!doctype html><html><head></head><body>' +
+        '<nav id="nav-f">navbar</nav>' +
+        '<!--wj:children:/-->' +
+        '<main id="newf">new</main>' +
+        '<!--/wj:children-->' +
+        '<footer id="foot-f">footer</footer>' +
+        '</body></html>'
+      );
+      _applySwap(doc, null, false, location.origin + '/blog');
+
+      assert.equal(document.getElementById('nav-f'), liveNav, 'navbar identity preserved');
+      assert.equal(document.getElementById('foot-f'), liveFooter,
+        'the trailing footer was NOT swept by the recovered range (identity preserved)');
+      assert.equal(document.querySelectorAll('#foot-f').length, 1, 'exactly one footer (no duplication)');
+      assert.ok(document.getElementById('newf'), 'children swapped');
+      assert.ok(!document.getElementById('oldf'), 'old children replaced');
+    } finally {
+      document.body.innerHTML = '';
+    }
+  });
 });

@@ -2530,13 +2530,25 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
   const sharedPath = longestSharedPath(here, there);
 
   if (sharedPath) {
+    const target = here.get(sharedPath);
+    const source = there.get(sharedPath);
+    // #994: a recovered orphan carries `end: null` (children run to the marker's
+    // PARENT end). That is exactly right when the children fill their parent (the
+    // shipped idiom wraps `${children}` in a `<main>`, so the close marker is the
+    // parent's last child and trailing chrome like `<footer>` is a sibling
+    // OUTSIDE it). But a layout that puts trailing content in the marker's OWN
+    // parent would have that content swept (a live orphan) or duplicated (an
+    // incoming orphan). When exactly one side is orphaned, bound it against the
+    // well-formed side's trailing-sibling count so the trailing chrome is
+    // preserved either way.
+    boundRecoveredEnds(target, source);
     // ADD-ONLY head merge for the same reason: outer layout stays
     // mounted, its head-bound runtime state must not be invalidated.
     addNewHeadElements(doc.head);
     runWithTransition(() => {
-      swapMarkerRange(here.get(sharedPath), there.get(sharedPath), doc);
+      swapMarkerRange(target, source, doc);
       blurOutgoingFocus();
-    }, () => upgradeCustomElementsInRange(here.get(sharedPath)));
+    }, () => upgradeCustomElementsInRange(target));
     forwardSuspenseResolvers(doc.body);
     return;
   }
@@ -2591,6 +2603,69 @@ function blurOutgoingFocus() {
   if (!a || a === document.body || a === document.documentElement) return;
   if (typeof (/** @type any */ (a).blur) !== 'function') return;
   /** @type any */ (a).blur();
+}
+
+/**
+ * Count the siblings after `marker` up to the end of its parent. Used to
+ * measure how much trailing outer-layout chrome sits after a close marker
+ * WITHIN the marker's own parent (#994).
+ *
+ * @param {Comment} marker
+ * @returns {number}
+ */
+function trailingSiblingCount(marker) {
+  let n = 0;
+  for (let s = marker.nextSibling; s; s = s.nextSibling) n++;
+  return n;
+}
+
+/**
+ * Give a recovered orphan (`end: null`, #994) a concrete bounded end so trailing
+ * outer-layout chrome in the marker's own parent is preserved. Runs only when
+ * EXACTLY one side is orphaned: the well-formed side's close marker reveals how
+ * many trailing siblings sit after the children within the parent (`tail`), and
+ * a same-layout nav shares that outer-layout structure, so the orphan's children
+ * end `tail` nodes before its parent's end. A `tail` of zero (the shipped
+ * wrap-`${children}`-in-`<main>` idiom, where the close is the parent's last
+ * child) leaves `end: null` and the sweep-to-parent-end stays correct. Both-side
+ * orphans keep `null` on both (symmetric sweep, nothing to align against).
+ *
+ * The residual gap: a REDUCED partial-nav fragment carries no trailing chrome, so
+ * its `tail` is zero even for an unwrapped layout, and a live orphan there still
+ * sweeps its own trailing chrome. The shipped idiom (children wrapped) avoids it;
+ * an unwrapped layout should wrap its children to be safe.
+ *
+ * @param {{ start: Comment, end: Comment | null } | undefined} target
+ * @param {{ start: Comment, end: Comment | null } | undefined} source
+ */
+function boundRecoveredEnds(target, source) {
+  if (!target || !source) return;
+  if (target.end === null && source.end !== null) target.end = boundOrphanEnd(target.start, source.end);
+  else if (source.end === null && target.end !== null) source.end = boundOrphanEnd(source.start, target.end);
+}
+
+/**
+ * Compute the bounded end sentinel (exclusive) for an orphaned open marker,
+ * preserving `tail` trailing siblings at the end of the marker's parent, where
+ * `tail` is the well-formed counterpart's trailing-sibling count (#994).
+ *
+ * @param {Comment} orphanStart  The orphan's open marker.
+ * @param {Comment} wellFormedEnd  The counterpart's real close marker.
+ * @returns {Comment | Node | null}  A node to stop before, or null (sweep to end).
+ */
+function boundOrphanEnd(orphanStart, wellFormedEnd) {
+  const tail = trailingSiblingCount(wellFormedEnd);
+  if (tail === 0) return null;
+  // Collect the orphan's children region (start.nextSibling to parent end).
+  /** @type {Node[]} */
+  const nodes = [];
+  for (let n = orphanStart.nextSibling; n; n = n.nextSibling) nodes.push(n);
+  // Preserve the last `tail` nodes by stopping before index `cut`. When the
+  // orphan holds no more nodes than the tail, keep everything (defensive: bound
+  // at the first sibling so nothing outside the children is swept).
+  const cut = nodes.length - tail;
+  if (cut <= 0) return orphanStart.nextSibling;
+  return nodes[cut];
 }
 
 /**
