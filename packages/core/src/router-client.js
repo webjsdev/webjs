@@ -718,11 +718,26 @@ function setNavigating(on) {
  * appear multiple times in a document only if a layout transitively
  * includes itself (pathological; we take the outermost).
  *
+ * `recoverOrphans` (#994): register an OPEN marker whose closing
+ * `<!--/wj:children-->` comment is missing, using `end: null` (meaning "the
+ * children run to the end of the containing element"). On real Android Chrome a
+ * soft nav to `/blog` randomly dropped the navbar: the device HTML parser
+ * intermittently lost the trailing close comment (#939/#940 confirmed the OPEN
+ * marker survived, `markers:1`, yet the router still fell to the destructive
+ * full-body swap). Without both comments this walk registers no slot, so
+ * `longestSharedPath` finds nothing and `applySwap` wipes the outer layout
+ * (navbar). Recovering the orphaned open lets the correct scoped swap run and
+ * keeps the navbar (it sits BEFORE the open marker, so it is never in the swap
+ * range). Off by default so the exported helper's strict pairing is unchanged;
+ * the swap-decision and `X-Webjs-Have` call sites opt in.
+ *
  * @param {ParentNode} root
- * @returns {Map<string, { start: Comment, end: Comment }>}
+ * @param {{ recoverOrphans?: boolean }} [options]
+ * @returns {Map<string, { start: Comment, end: Comment | null }>}
  */
-export function collectChildrenSlots(root) {
-  /** @type {Map<string, { start: Comment, end: Comment }>} */
+export function collectChildrenSlots(root, options) {
+  const recoverOrphans = !!(options && options.recoverOrphans);
+  /** @type {Map<string, { start: Comment, end: Comment | null }>} */
   const slots = new Map();
   /** @type {{ path: string, start: Comment }[]} */
   const stack = [];
@@ -756,6 +771,17 @@ export function collectChildrenSlots(root) {
     }
   }
   visit(/** @type {Node} */ (root));
+
+  // #994: any open marker still on the stack was never closed (its
+  // `<!--/wj:children-->` was dropped by the device parser). Register it with a
+  // null end so the shared-path match succeeds and the scoped swap preserves the
+  // outer layout, instead of the destructive full-body fallback. Outermost first
+  // (stack order), never overwriting a slot a proper close already paired.
+  if (recoverOrphans) {
+    for (const frame of stack) {
+      if (!slots.has(frame.path)) slots.set(frame.path, { start: frame.start, end: null });
+    }
+  }
   return slots;
 }
 
@@ -1047,7 +1073,10 @@ async function performSubmission(href, method, body, frameId, form) {
  * @returns {string}
  */
 function buildHaveHeader() {
-  const slots = collectChildrenSlots(document.body);
+  // Recover an orphaned open marker (#994) so a dropped close comment does not
+  // hide a layout the client actually has: the server would then send a full
+  // page instead of the reduced fragment, and applying it destroys the navbar.
+  const slots = collectChildrenSlots(document.body, { recoverOrphans: true });
   return [...slots.keys()].join(',');
 }
 
@@ -2493,9 +2522,11 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
     return;
   }
 
-  // 2. Auto-derived layout-marker swap.
-  const here = collectChildrenSlots(document.body);
-  const there = collectChildrenSlots(doc.body);
+  // 2. Auto-derived layout-marker swap. Recover an orphaned open marker on
+  // either side (#994): a dropped close comment must not force the destructive
+  // path-3 fallback that wipes the outer layout (navbar).
+  const here = collectChildrenSlots(document.body, { recoverOrphans: true });
+  const there = collectChildrenSlots(doc.body, { recoverOrphans: true });
   const sharedPath = longestSharedPath(here, there);
 
   if (sharedPath) {
@@ -2569,8 +2600,13 @@ function blurOutgoingFocus() {
  * identity for matched elements + their live attributes (scroll, value,
  * etc.).
  *
- * @param {{ start: Comment, end: Comment } | undefined} target
- * @param {{ start: Comment, end: Comment } | undefined} source
+ * A null `end` (an orphaned open marker recovered per #994) means "run to the
+ * end of the containing element": the slice-collection loops stop at the natural
+ * sibling end and `reconcileSiblings` appends before `null` (end of parent), so
+ * a dropped close comment swaps the whole children region without a close marker.
+ *
+ * @param {{ start: Comment, end: Comment | null } | undefined} target
+ * @param {{ start: Comment, end: Comment | null } | undefined} source
  * @param {Document} _doc
  */
 function swapMarkerRange(target, source, _doc) {
@@ -2634,7 +2670,7 @@ function swapMarkerRange(target, source, _doc) {
  *
  * @param {Node} parent
  * @param {Comment} startMarker
- * @param {Comment} endMarker
+ * @param {Comment | null} endMarker  Null (recovered orphan, #994) appends at the parent end.
  * @param {Node[]} live
  * @param {Node[]} incoming
  */

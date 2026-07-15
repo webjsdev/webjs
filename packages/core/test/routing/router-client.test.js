@@ -195,6 +195,65 @@ test('collectChildrenSlots: route-group paths preserve their (group) segments', 
   assert.ok(!slots.has('/about'));
 });
 
+test('collectChildrenSlots: an orphaned open marker (dropped close) is NOT paired by default', () => {
+  // The #994 precondition: the device parser dropped the trailing
+  // `<!--/wj:children-->`, so the open marker survives with no close. Strict
+  // pairing (the default) registers no slot, which is what forced the
+  // destructive full-body swap that wiped the navbar.
+  const body = bodyFrom(
+    '<nav>navbar</nav>' +
+    '<!--wj:children:/-->' +
+    '<p>page</p>'
+    // close comment dropped
+  );
+  assert.equal(_collect(body).size, 0, 'no slot without recovery (the bug precondition)');
+});
+
+test('collectChildrenSlots: recoverOrphans registers a dropped-close open with a null end (#994)', () => {
+  const body = bodyFrom(
+    '<nav>navbar</nav>' +
+    '<!--wj:children:/-->' +
+    '<p>page</p>'
+    // close comment dropped
+  );
+  const slots = _collect(body, { recoverOrphans: true });
+  assert.equal(slots.size, 1);
+  assert.ok(slots.has('/'));
+  const { start, end } = slots.get('/');
+  assert.equal(start.data, 'wj:children:/');
+  assert.equal(end, null, 'a recovered orphan carries end=null (children run to the parent end)');
+});
+
+test('collectChildrenSlots: recoverOrphans leaves a well-formed pair untouched (real close wins)', () => {
+  const body = bodyFrom(
+    '<!--wj:children:/-->' +
+    '<p>page</p>' +
+    '<!--/wj:children-->'
+  );
+  const slots = _collect(body, { recoverOrphans: true });
+  assert.equal(slots.size, 1);
+  const { end } = slots.get('/');
+  assert.equal(end.nodeType, 8, 'the real close comment is the end, not null');
+});
+
+test('collectChildrenSlots: recoverOrphans keeps a properly-closed inner while recovering a dropped outer close', () => {
+  // Outer close dropped, inner pair intact: the navbar-owning outer layout is
+  // the one that loses its close, exactly the #994 shape.
+  const body = bodyFrom(
+    '<nav>navbar</nav>' +
+    '<!--wj:children:/-->' +
+      '<aside>docs sidenav</aside>' +
+      '<!--wj:children:/docs-->' +
+        '<h1>page</h1>' +
+      '<!--/wj:children-->'
+    // outer close dropped
+  );
+  const slots = _collect(body, { recoverOrphans: true });
+  assert.equal(slots.size, 2);
+  assert.equal(slots.get('/').end, null, 'the outer orphan is recovered with a null end');
+  assert.equal(slots.get('/docs').end.nodeType, 8, 'the intact inner pair keeps its real close');
+});
+
 /* ====================================================================
  * longestSharedPath
  * ==================================================================== */
@@ -3318,6 +3377,45 @@ test('applySwap does NOT evict when the app-source id is unchanged (no churn)', 
     globalThis.document.head.innerHTML = savedHead;
     _snapshotCache.clear();
     _prefetchCache.clear();
+  }
+});
+
+test('applySwap: a dropped incoming close marker still scoped-swaps and keeps the navbar node (#994)', () => {
+  const savedBody = globalThis.document.body.innerHTML;
+  const savedHead = globalThis.document.head.innerHTML;
+  const savedLocation = globalThis.location;
+  try {
+    globalThis.document.head.innerHTML = '';
+    globalThis.location = /** @type any */ ({ get href() { return 'http://x/current'; }, set href(_v) {} });
+
+    // Live page: the outer layout owns a persistent navbar that sits BEFORE the
+    // children marker, then the children region. Give the navbar a stable
+    // identity we can assert survives.
+    globalThis.document.body.innerHTML =
+      '<nav id="site-top">navbar</nav>' +
+      '<!--wj:children:/-->' +
+      '<main id="old">old page</main>' +
+      '<!--/wj:children-->';
+    const liveNav = globalThis.document.getElementById('site-top');
+
+    // The incoming partial-nav fragment lost its trailing `<!--/wj:children-->`
+    // (the device parser drop). Parsed as a body it has an orphaned open marker.
+    const incoming = new globalThis.DOMParser().parseFromString(
+      '<!doctype html><html><head></head><body>' +
+      '<!--wj:children:/-->' +
+      '<main id="new">new page</main>' +
+      '</body></html>', 'text/html');
+
+    _applySwap(incoming, null, false, 'http://x/blog');
+
+    assert.equal(globalThis.document.getElementById('site-top'), liveNav,
+      'the navbar node retains identity across the soft nav (not wiped by a full-body swap)');
+    assert.ok(globalThis.document.getElementById('new'), 'the children slot swapped to the new page');
+    assert.ok(!globalThis.document.getElementById('old'), 'the old children content was replaced');
+  } finally {
+    globalThis.location = savedLocation;
+    globalThis.document.head.innerHTML = savedHead;
+    globalThis.document.body.innerHTML = savedBody;
   }
 });
 

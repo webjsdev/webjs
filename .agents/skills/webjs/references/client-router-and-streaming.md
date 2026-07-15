@@ -17,6 +17,8 @@ Read this when a task touches client navigation, prefetch, partial-page swaps, s
 
 The router auto-enables the moment `@webjsdev/core` loads in the browser, which is any page that ships a component. There is nothing to import or opt into. It intercepts same-origin `<a>` clicks (including inside shadow DOM), fetches the target HTML, and replaces only the inside of the deepest shared layout. Outer header, sidenav, and footer DOM is never re-rendered, so scroll positions, input values, and `<details>` state survive a navigation.
 
+**Mobile-browser constraint: a dropped layout-marker comment.** SSR wraps each layout's children in a `<!--wj:children:<path>-->...<!--/wj:children-->` comment pair, and the deepest-shared-layout swap matches on those markers. Real Android Chrome was observed to intermittently DROP the trailing `<!--/wj:children-->` comment while parsing a soft-nav response (the open marker survived, the close did not), which left the router with no pairable slot and forced the destructive full-body swap that wiped the outer layout (the top navbar). The router now recovers an orphaned open marker (treating the children as running to the end of the containing element), so a lost close comment still takes the correct scoped swap and the outer chrome keeps its DOM identity. This sits alongside the iOS-WebKit repaint note in [styling.md](./styling.md): both are real mobile-browser divergences from headless Chromium that only surface on-device, so a mobile-only soft-nav regression is worth reproducing against a real device (or the deterministic dropped-close browser test) rather than desktop Playwright alone.
+
 **Opting out.** App-wide with config, or per moment at runtime.
 
 ```jsonc

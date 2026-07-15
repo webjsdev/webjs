@@ -1,0 +1,100 @@
+/**
+ * Real-browser regression for #994 (a #936 residual): a client-router soft nav
+ * must keep the outer-layout navbar even when the incoming response's closing
+ * `<!--/wj:children-->` marker was lost.
+ *
+ * The device failure: on real Android Chrome a soft nav to `/blog` randomly
+ * dropped the persistent top navbar. The on-device `?diag=` harness (#939/#940)
+ * showed the live body still carried the OPEN `wj:children` marker (`markers:1`)
+ * yet the router fell to the destructive full-body swap, which only happens when
+ * `collectChildrenSlots` cannot pair a slot, i.e. the trailing CLOSE comment was
+ * dropped by the device HTML parser. `collectChildrenSlots` needed BOTH comments
+ * to register a slot, so a dropped close meant no shared path and the full-body
+ * `replaceChildren` wiped the outer layout (navbar and all).
+ *
+ * The fix (#994) recovers an orphaned open marker (end=null, "children run to the
+ * parent end"), so the correct scoped swap runs and the navbar (which sits BEFORE
+ * the open marker) is never in the swap range. This test drives a soft swap whose
+ * incoming fragment has NO close marker and asserts the navbar node RETAINS
+ * IDENTITY while the children slot swaps.
+ *
+ * MUST run in a real browser: it asserts DOM node identity after a real parse +
+ * swap, which linkedom does not model. Revert the recoverOrphans wiring in
+ * `applySwap` and this fails (the counterfactual: the navbar node is replaced).
+ */
+import {
+  enableClientRouter,
+  _applySwap,
+  _parseHTML,
+  _collectChildrenSlots,
+} from '../../../src/router-client.js';
+
+import { assert } from '../../../../../test/browser-assert.js';
+
+suite('Client router: soft nav keeps the navbar when the close marker is dropped (#994)', () => {
+  test('a dropped incoming close marker takes the scoped swap and preserves the navbar node', () => {
+    enableClientRouter();
+
+    // Live page: outer layout with a persistent navbar BEFORE the children
+    // marker, then the children region (properly closed on the live side).
+    document.body.innerHTML =
+      '<nav id="site-top">navbar</nav>' +
+      '<!--wj:children:/-->' +
+      '<main id="old">old page</main>' +
+      '<!--/wj:children-->';
+    const liveNav = document.getElementById('site-top');
+
+    try {
+      // The incoming partial-nav fragment lost its trailing `<!--/wj:children-->`
+      // (the Android parser drop). Parsed in body context it is an orphaned open
+      // marker, exactly the state that used to force the full-body fallback.
+      const doc = _parseHTML(
+        '<!--wj:children:/-->' +
+        '<main id="new">new page</main>'
+      );
+
+      // Sanity: the incoming fragment has an unpaired open marker.
+      assert.equal(_collectChildrenSlots(doc.body).size, 0,
+        'strict pairing finds no slot for the orphaned open (the bug precondition)');
+      const recovered = _collectChildrenSlots(doc.body, { recoverOrphans: true });
+      assert.ok(recovered.has('/'), 'recovery registers the orphaned open marker');
+      assert.equal(recovered.get('/').end, null, 'the recovered slot ends at the parent boundary');
+
+      _applySwap(doc, null, false, location.origin + '/blog');
+
+      assert.equal(document.getElementById('site-top'), liveNav,
+        'the navbar node retains identity across the soft nav (not wiped by a full-body swap)');
+      assert.equal(document.getElementById('site-top').textContent, 'navbar',
+        'the preserved navbar is intact');
+      assert.ok(document.getElementById('new'), 'the children slot swapped to the new page');
+      assert.ok(!document.getElementById('old'), 'the old children content was replaced');
+    } finally {
+      document.body.innerHTML = '';
+    }
+  });
+
+  test('a well-formed soft nav is unaffected (both markers present, scoped swap, navbar kept)', () => {
+    enableClientRouter();
+    document.body.innerHTML =
+      '<nav id="site-top-2">navbar</nav>' +
+      '<!--wj:children:/-->' +
+      '<main id="old2">old</main>' +
+      '<!--/wj:children-->';
+    const liveNav = document.getElementById('site-top-2');
+
+    try {
+      const doc = _parseHTML(
+        '<!--wj:children:/-->' +
+        '<main id="new2">new</main>' +
+        '<!--/wj:children-->'
+      );
+      _applySwap(doc, null, false, location.origin + '/blog');
+
+      assert.equal(document.getElementById('site-top-2'), liveNav, 'navbar identity preserved');
+      assert.ok(document.getElementById('new2'), 'children swapped');
+      assert.ok(!document.getElementById('old2'), 'old children replaced');
+    } finally {
+      document.body.innerHTML = '';
+    }
+  });
+});
