@@ -718,11 +718,30 @@ function setNavigating(on) {
  * appear multiple times in a document only if a layout transitively
  * includes itself (pathological; we take the outermost).
  *
+ * `recoverOrphans` (#994): register an OPEN marker whose closing
+ * `<!--/wj:children-->` comment is missing, using `end: null` (meaning "the
+ * children run to the end of the containing element"). Some browsers
+ * intermittently DROP the trailing close comment while parsing a soft-nav
+ * response, a parse/timing race that surfaced first on Android Chrome (a soft
+ * nav to `/blog` randomly dropped the navbar; #939/#940 confirmed the OPEN
+ * marker survived, `markers:1`, yet the router still fell to the destructive
+ * full-body swap) and was later reproduced on DESKTOP Chromium too, so this is
+ * NOT browser-specific, only rarer on faster hardware. Without both comments
+ * this walk registers no slot, so `longestSharedPath` finds nothing and
+ * `applySwap` wipes the outer layout (navbar). Recovering the orphaned open lets
+ * the correct scoped swap run and keeps the navbar (it sits BEFORE the open
+ * marker, so it is never in the swap range). The recovery keys off the SYMPTOM
+ * (a missing close), never any user-agent check, so it fixes every engine
+ * uniformly. Off by default so the exported helper's strict pairing is
+ * unchanged; the swap-decision and `X-Webjs-Have` call sites opt in.
+ *
  * @param {ParentNode} root
- * @returns {Map<string, { start: Comment, end: Comment }>}
+ * @param {{ recoverOrphans?: boolean }} [options]
+ * @returns {Map<string, { start: Comment, end: Comment | null }>}
  */
-export function collectChildrenSlots(root) {
-  /** @type {Map<string, { start: Comment, end: Comment }>} */
+export function collectChildrenSlots(root, options) {
+  const recoverOrphans = !!(options && options.recoverOrphans);
+  /** @type {Map<string, { start: Comment, end: Comment | null }>} */
   const slots = new Map();
   /** @type {{ path: string, start: Comment }[]} */
   const stack = [];
@@ -756,6 +775,18 @@ export function collectChildrenSlots(root) {
     }
   }
   visit(/** @type {Node} */ (root));
+
+  // #994: any open marker still on the stack was never closed (its
+  // `<!--/wj:children-->` was dropped by the browser's parser, any engine).
+  // Register it with a null end so the shared-path match succeeds and the scoped
+  // swap preserves the outer layout, instead of the destructive full-body
+  // fallback. Outermost first (stack order), never overwriting a slot a proper
+  // close already paired.
+  if (recoverOrphans) {
+    for (const frame of stack) {
+      if (!slots.has(frame.path)) slots.set(frame.path, { start: frame.start, end: null });
+    }
+  }
   return slots;
 }
 
@@ -1047,6 +1078,18 @@ async function performSubmission(href, method, body, frameId, form) {
  * @returns {string}
  */
 function buildHaveHeader() {
+  // Strict pairing here, deliberately (#994): if the SOLE or OUTERMOST close
+  // marker was dropped, its orphaned open is NOT reported, so `have` omits that
+  // layout and the server returns the FULL page (with the outer layout's trailing
+  // chrome) rather than a reduced marker-pair-only fragment. `applySwap` then
+  // recovers the orphan and bounds the swap against that full page's
+  // trailing-sibling count, preserving the navbar and the footer. Recovering here
+  // would send `have=/`, get back a reduced fragment with no trailing chrome
+  // (`tail === 0`), and sweep an unwrapped layout's footer. The extra bytes of a
+  // full page on the rare orphaned nav are the price of that correctness. A
+  // dropped INNER close in a nested layout is a separate, unfixed mispairing
+  // limitation (the surviving outer close pairs with the inner open); the wrapped
+  // `${children}` idiom keeps it harmless.
   const slots = collectChildrenSlots(document.body);
   return [...slots.keys()].join(',');
 }
@@ -2299,7 +2342,7 @@ function findInSlice(slice, id) {
  * swap settles. The View Transitions API snapshots and replaces DOM, so
  * elements can need a re-upgrade once the animation finishes.
  *
- * @param {{ start: Comment, end: Comment } | undefined} range
+ * @param {{ start: Comment, end: Comment | null } | undefined} range
  */
 function upgradeCustomElementsInRange(range) {
   if (!range || !range.start) return;
@@ -2493,19 +2536,33 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
     return;
   }
 
-  // 2. Auto-derived layout-marker swap.
-  const here = collectChildrenSlots(document.body);
-  const there = collectChildrenSlots(doc.body);
+  // 2. Auto-derived layout-marker swap. Recover an orphaned open marker on
+  // either side (#994): a dropped close comment must not force the destructive
+  // path-3 fallback that wipes the outer layout (navbar).
+  const here = collectChildrenSlots(document.body, { recoverOrphans: true });
+  const there = collectChildrenSlots(doc.body, { recoverOrphans: true });
   const sharedPath = longestSharedPath(here, there);
 
   if (sharedPath) {
+    const target = here.get(sharedPath);
+    const source = there.get(sharedPath);
+    // #994: a recovered orphan carries `end: null` (children run to the marker's
+    // PARENT end). That is exactly right when the children fill their parent (the
+    // shipped idiom wraps `${children}` in a `<main>`, so the close marker is the
+    // parent's last child and trailing chrome like `<footer>` is a sibling
+    // OUTSIDE it). But a layout that puts trailing content in the marker's OWN
+    // parent would have that content swept (a live orphan) or duplicated (an
+    // incoming orphan). When exactly one side is orphaned, bound it against the
+    // well-formed side's trailing-sibling count so the trailing chrome is
+    // preserved either way.
+    boundRecoveredEnds(target, source);
     // ADD-ONLY head merge for the same reason: outer layout stays
     // mounted, its head-bound runtime state must not be invalidated.
     addNewHeadElements(doc.head);
     runWithTransition(() => {
-      swapMarkerRange(here.get(sharedPath), there.get(sharedPath), doc);
+      swapMarkerRange(target, source, doc);
       blurOutgoingFocus();
-    }, () => upgradeCustomElementsInRange(here.get(sharedPath)));
+    }, () => upgradeCustomElementsInRange(target));
     forwardSuspenseResolvers(doc.body);
     return;
   }
@@ -2563,14 +2620,91 @@ function blurOutgoingFocus() {
 }
 
 /**
+ * Count the siblings after `marker` up to the end of its parent. Used to
+ * measure how much trailing outer-layout chrome sits after a close marker
+ * WITHIN the marker's own parent (#994).
+ *
+ * @param {Comment} marker
+ * @returns {number}
+ */
+function trailingSiblingCount(marker) {
+  let n = 0;
+  for (let s = marker.nextSibling; s; s = s.nextSibling) n++;
+  return n;
+}
+
+/**
+ * Give a recovered orphan (`end: null`, #994) a concrete bounded end so trailing
+ * outer-layout chrome in the marker's own parent is preserved. Runs only when
+ * EXACTLY one side is orphaned: the well-formed side's close marker reveals how
+ * many trailing siblings sit after the children within the parent (`tail`), and
+ * a same-layout nav shares that outer-layout structure, so the orphan's children
+ * end `tail` nodes before its parent's end. A `tail` of zero (the shipped
+ * wrap-`${children}`-in-`<main>` idiom, where the close is the parent's last
+ * child) leaves `end: null` and the sweep-to-parent-end stays correct. Both-side
+ * orphans keep `null` on both (symmetric sweep, nothing to align against).
+ *
+ * This works for a SOLE or OUTERMOST dropped close because `buildHaveHeader`
+ * reports STRICTLY paired markers, so an orphaned live page omits the layout from
+ * `have` and the server returns the FULL page (trailing chrome included,
+ * `tail > 0`) rather than a reduced marker-pair-only fragment. Two cases it does
+ * NOT cover: an incoming side whose close was lost during parse (rare: the
+ * response is parsed from a complete string, not streamed), and a dropped INNER
+ * close in a nested layout (the surviving outer close mispairs with the inner
+ * open, so both slot ends are non-null and this bounding is skipped). The wrapped
+ * `${children}` idiom keeps both harmless (the marker's parent holds only the
+ * children, so any sweep stays inside it).
+ *
+ * @param {{ start: Comment, end: Comment | null } | undefined} target
+ * @param {{ start: Comment, end: Comment | null } | undefined} source
+ */
+function boundRecoveredEnds(target, source) {
+  if (!target || !source) return;
+  if (target.end === null && source.end !== null) target.end = boundOrphanEnd(target.start, source.end);
+  else if (source.end === null && target.end !== null) source.end = boundOrphanEnd(source.start, target.end);
+}
+
+/**
+ * Compute the bounded end sentinel (exclusive) for an orphaned open marker,
+ * preserving `tail` trailing siblings at the end of the marker's parent, where
+ * `tail` is the well-formed counterpart's trailing-sibling count (#994).
+ *
+ * @param {Comment} orphanStart  The orphan's open marker.
+ * @param {Comment} wellFormedEnd  The counterpart's real close marker.
+ * @returns {Comment | Node | null}  A node to stop before, or null (sweep to end).
+ */
+function boundOrphanEnd(orphanStart, wellFormedEnd) {
+  const tail = trailingSiblingCount(wellFormedEnd);
+  if (tail === 0) return null;
+  // Collect the orphan's children region (start.nextSibling to parent end).
+  /** @type {Node[]} */
+  const nodes = [];
+  for (let n = orphanStart.nextSibling; n; n = n.nextSibling) nodes.push(n);
+  // Preserve the last `tail` nodes by stopping before index `cut`. A `cut` at or
+  // below zero is a degenerate mismatch (the well-formed side claims more
+  // trailing siblings than the orphan has nodes at all, which a same-layout nav
+  // should never produce): fall back to `null` (sweep to the parent end, a normal
+  // full-region swap) rather than an empty range, which would duplicate or blank
+  // the children.
+  const cut = nodes.length - tail;
+  if (cut <= 0) return null;
+  return nodes[cut];
+}
+
+/**
  * Replace nodes between `target.start` and `target.end` (exclusive) in the
  * live document with the nodes between `source.start` and `source.end` in
  * the parsed Document. Uses a keyed reconciler that preserves DOM
  * identity for matched elements + their live attributes (scroll, value,
  * etc.).
  *
- * @param {{ start: Comment, end: Comment } | undefined} target
- * @param {{ start: Comment, end: Comment } | undefined} source
+ * A null `end` (an orphaned open marker recovered per #994) means "run to the
+ * end of the containing element": the slice-collection loops stop at the natural
+ * sibling end and `reconcileSiblings` appends before `null` (end of parent), so
+ * a dropped close comment swaps the whole children region without a close marker.
+ *
+ * @param {{ start: Comment, end: Comment | null } | undefined} target
+ * @param {{ start: Comment, end: Comment | null } | undefined} source
  * @param {Document} _doc
  */
 function swapMarkerRange(target, source, _doc) {
@@ -2634,7 +2768,7 @@ function swapMarkerRange(target, source, _doc) {
  *
  * @param {Node} parent
  * @param {Comment} startMarker
- * @param {Comment} endMarker
+ * @param {Comment | null} endMarker  Null (recovered orphan, #994) appends at the parent end.
  * @param {Node[]} live
  * @param {Node[]} incoming
  */

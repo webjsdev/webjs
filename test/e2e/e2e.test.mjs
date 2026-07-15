@@ -506,9 +506,9 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
   test('a streaming-RPC action renders tokens incrementally (#489)', async () => {
     // <token-stream> calls an async-generator action; each yielded token streams
     // over the single RPC response and is appended as it arrives. We assert (1)
-    // the action response is the framed stream content type, and (2) the rendered
-    // count climbs over time (a snapshot mid-stream is below the final count),
-    // proving incremental arrival rather than one buffered result.
+    // the action response is the framed stream content type, and (2) the FIRST
+    // DOM paint shows fewer tokens than the final count (captured race-free via a
+    // MutationObserver), proving incremental arrival rather than one buffered result.
     /** @type {string|null} */
     let streamCt = null;
     const onResponse = (res) => {
@@ -520,19 +520,39 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     try {
       await page.goto(baseUrl + '/rpc-stream', { waitUntil: 'domcontentloaded', timeout: 12000 });
       await page.waitForFunction(() => document.querySelector('token-stream .ts-start'), { timeout: 8000 });
+      // Install a MutationObserver BEFORE clicking that records the token count at
+      // the FIRST DOM update. This is race-free (it fires whenever the first token
+      // appends, so it cannot be missed by snapshotting too late) and still proves
+      // incremental delivery: a real stream first-paints ONE token (the server
+      // spaces tokens 60ms apart), while a single buffered flush would first-paint
+      // all 8 at once. A prior version snapshotted the count "mid-stream" and
+      // asserted it was below the final, which raced completion on a fast runner
+      // (mid==final) and flaked on the Bun E2E lane (#1004).
+      await page.evaluate(() => {
+        const el = document.querySelector('token-stream');
+        /** @type {any} */ (window).__tsFirst = 0;
+        const obs = new MutationObserver(() => {
+          const n = document.querySelectorAll('token-stream .ts-item').length;
+          if (n > 0 && !(/** @type {any} */ (window).__tsFirst)) /** @type {any} */ (window).__tsFirst = n;
+        });
+        obs.observe(el, { childList: true, subtree: true });
+        /** @type {any} */ (window).__tsObs = obs;
+      });
       await page.evaluate(() => document.querySelector('token-stream .ts-start').click());
-      // Catch the list partway: wait until at least 2 tokens have rendered, then
-      // snapshot the count while more are still streaming in.
-      await page.waitForFunction(() => document.querySelectorAll('token-stream .ts-item').length >= 2, { timeout: 8000 });
-      const mid = await page.evaluate(() => document.querySelectorAll('token-stream .ts-item').length);
-      // Then wait for the stream to finish (the button re-enables) and read final.
+      // Wait for the stream to finish (the button re-enables with all 8 rendered).
       await page.waitForFunction(() => {
         const b = document.querySelector('token-stream .ts-start');
         return b && !b.disabled && document.querySelectorAll('token-stream .ts-item').length === 8;
       }, { timeout: 8000 });
+      const first = await page.evaluate(() => {
+        const w = /** @type {any} */ (window);
+        if (w.__tsObs) w.__tsObs.disconnect();
+        return w.__tsFirst;
+      });
       const final = await page.evaluate(() => document.querySelectorAll('token-stream .ts-item').length);
       assert.equal(final, 8, 'all 8 streamed tokens rendered');
-      assert.ok(mid < final, `the count climbed incrementally (mid=${mid} < final=${final})`);
+      assert.ok(first > 0 && first < final,
+        `tokens rendered incrementally (first paint showed ${first} of ${final}, not one buffered flush)`);
       assert.ok(streamCt && streamCt.includes('application/vnd.webjs+stream'), `the action streamed a framed body; got content-type ${streamCt}`);
     } finally {
       page.off('response', onResponse);
@@ -1342,6 +1362,44 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     assert.ok(result.present, 'the permanent element is present after the swap');
     assert.ok(result.identityKept,
       'the permanent element kept its NODE IDENTITY across the partial swap (regrafted, not recreated)');
+  });
+
+  test('client nav: the outer-layout navbar keeps node identity across a soft nav (#994)', async () => {
+    // The persistent top navbar (`<header class="site-header">`) is OUTER-layout
+    // chrome, emitted BEFORE the `wj:children` marker, so the deepest-shared-
+    // layout swap must never touch it. #994: a dropped close marker forced the
+    // destructive full-body swap that wiped this header; the orphaned-open
+    // recovery keeps the scoped swap so the header node survives. The drop is a
+    // parse race (seen on Android Chrome and desktop Chromium), so this happy-path
+    // end-to-end guard (markers intact) cannot trigger it on demand; the dropped-
+    // close divergence is covered deterministically by the core browser test
+    // (packages/core/test/routing/browser/orphaned-marker-navbar.test.js). Proven by stamping a JS
+    // property on the live header and asserting the SAME node persists.
+    await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
+    await sleep(1500);
+    const stamped = await page.evaluate(() => {
+      const el = document.querySelector('header.site-header');
+      if (!el) return false;
+      /** @type any */ (el).__navProbe = 'outer-layout-kept';
+      return true;
+    });
+    assert.ok(stamped, 'the outer-layout navbar header is present on the home page');
+
+    await clickNavLink(page, 'About');
+    await sleep(2000);
+
+    const result = await page.evaluate(() => {
+      const el = document.querySelector('header.site-header');
+      return {
+        present: !!el,
+        identityKept: !!el && /** @type any */ (el).__navProbe === 'outer-layout-kept',
+        onAbout: location.pathname === '/about',
+      };
+    });
+    assert.ok(result.onAbout, 'navigated to /about via the client router');
+    assert.ok(result.present, 'the navbar is still present after the soft nav');
+    assert.ok(result.identityKept,
+      'the outer-layout navbar kept its NODE IDENTITY across the soft nav (not wiped by a full-body swap)');
   });
 
   // ---------------------------------------------------------------------------

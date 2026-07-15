@@ -195,6 +195,65 @@ test('collectChildrenSlots: route-group paths preserve their (group) segments', 
   assert.ok(!slots.has('/about'));
 });
 
+test('collectChildrenSlots: an orphaned open marker (dropped close) is NOT paired by default', () => {
+  // The #994 precondition: the browser's parser dropped the trailing
+  // `<!--/wj:children-->`, so the open marker survives with no close. Strict
+  // pairing (the default) registers no slot, which is what forced the
+  // destructive full-body swap that wiped the navbar.
+  const body = bodyFrom(
+    '<nav>navbar</nav>' +
+    '<!--wj:children:/-->' +
+    '<p>page</p>'
+    // close comment dropped
+  );
+  assert.equal(_collect(body).size, 0, 'no slot without recovery (the bug precondition)');
+});
+
+test('collectChildrenSlots: recoverOrphans registers a dropped-close open with a null end (#994)', () => {
+  const body = bodyFrom(
+    '<nav>navbar</nav>' +
+    '<!--wj:children:/-->' +
+    '<p>page</p>'
+    // close comment dropped
+  );
+  const slots = _collect(body, { recoverOrphans: true });
+  assert.equal(slots.size, 1);
+  assert.ok(slots.has('/'));
+  const { start, end } = slots.get('/');
+  assert.equal(start.data, 'wj:children:/');
+  assert.equal(end, null, 'a recovered orphan carries end=null (children run to the parent end)');
+});
+
+test('collectChildrenSlots: recoverOrphans leaves a well-formed pair untouched (real close wins)', () => {
+  const body = bodyFrom(
+    '<!--wj:children:/-->' +
+    '<p>page</p>' +
+    '<!--/wj:children-->'
+  );
+  const slots = _collect(body, { recoverOrphans: true });
+  assert.equal(slots.size, 1);
+  const { end } = slots.get('/');
+  assert.equal(end.nodeType, 8, 'the real close comment is the end, not null');
+});
+
+test('collectChildrenSlots: recoverOrphans keeps a properly-closed inner while recovering a dropped outer close', () => {
+  // Outer close dropped, inner pair intact: the navbar-owning outer layout is
+  // the one that loses its close, exactly the #994 shape.
+  const body = bodyFrom(
+    '<nav>navbar</nav>' +
+    '<!--wj:children:/-->' +
+      '<aside>docs sidenav</aside>' +
+      '<!--wj:children:/docs-->' +
+        '<h1>page</h1>' +
+      '<!--/wj:children-->'
+    // outer close dropped
+  );
+  const slots = _collect(body, { recoverOrphans: true });
+  assert.equal(slots.size, 2);
+  assert.equal(slots.get('/').end, null, 'the outer orphan is recovered with a null end');
+  assert.equal(slots.get('/docs').end.nodeType, 8, 'the intact inner pair keeps its real close');
+});
+
 /* ====================================================================
  * longestSharedPath
  * ==================================================================== */
@@ -3318,6 +3377,181 @@ test('applySwap does NOT evict when the app-source id is unchanged (no churn)', 
     globalThis.document.head.innerHTML = savedHead;
     _snapshotCache.clear();
     _prefetchCache.clear();
+  }
+});
+
+test('applySwap: a dropped incoming close marker still scoped-swaps and keeps the navbar node (#994)', () => {
+  const savedBody = globalThis.document.body.innerHTML;
+  const savedHead = globalThis.document.head.innerHTML;
+  const savedLocation = globalThis.location;
+  try {
+    globalThis.document.head.innerHTML = '';
+    globalThis.location = /** @type any */ ({ get href() { return 'http://x/current'; }, set href(_v) {} });
+
+    // Live page: the outer layout owns a persistent navbar that sits BEFORE the
+    // children marker, then the children region. Give the navbar a stable
+    // identity we can assert survives.
+    globalThis.document.body.innerHTML =
+      '<nav id="site-top">navbar</nav>' +
+      '<!--wj:children:/-->' +
+      '<main id="old">old page</main>' +
+      '<!--/wj:children-->';
+    const liveNav = globalThis.document.getElementById('site-top');
+
+    // The incoming partial-nav fragment lost its trailing `<!--/wj:children-->`
+    // (the browser parser drop). Parsed as a body it has an orphaned open marker.
+    const incoming = new globalThis.DOMParser().parseFromString(
+      '<!doctype html><html><head></head><body>' +
+      '<!--wj:children:/-->' +
+      '<main id="new">new page</main>' +
+      '</body></html>', 'text/html');
+
+    _applySwap(incoming, null, false, 'http://x/blog');
+
+    assert.equal(globalThis.document.getElementById('site-top'), liveNav,
+      'the navbar node retains identity across the soft nav (not wiped by a full-body swap)');
+    assert.ok(globalThis.document.getElementById('new'), 'the children slot swapped to the new page');
+    assert.ok(!globalThis.document.getElementById('old'), 'the old children content was replaced');
+  } finally {
+    globalThis.location = savedLocation;
+    globalThis.document.head.innerHTML = savedHead;
+    globalThis.document.body.innerHTML = savedBody;
+  }
+});
+
+test('applySwap: a LIVE-side dropped close does not sweep trailing outer-layout content into the swap (#994)', () => {
+  // The reviewer-flagged content-loss case: the marker's siblings include a
+  // FOOTER after the (dropped) close within the SAME parent (an unwrapped
+  // layout). The live side is orphaned; the incoming side is well-formed, so its
+  // trailing-sibling count bounds the recovered range and the live footer is
+  // preserved (not swept), while the navbar (before the open marker) also stays.
+  const savedBody = globalThis.document.body.innerHTML;
+  const savedHead = globalThis.document.head.innerHTML;
+  const savedLocation = globalThis.location;
+  try {
+    globalThis.document.head.innerHTML = '';
+    globalThis.location = /** @type any */ ({ get href() { return 'http://x/current'; }, set href(_v) {} });
+
+    // Unwrapped layout: nav, open, children, [close dropped], footer, all direct
+    // body children. Stamp the navbar and footer to assert identity survives.
+    globalThis.document.body.innerHTML =
+      '<nav id="nav2">navbar</nav>' +
+      '<!--wj:children:/-->' +
+      '<main id="old3">old</main>' +
+      '<footer id="ft2">footer</footer>';
+    const liveNav = globalThis.document.getElementById('nav2');
+    const liveFooter = globalThis.document.getElementById('ft2');
+
+    // Well-formed incoming full page: nav, open, children, close, footer.
+    const incoming = new globalThis.DOMParser().parseFromString(
+      '<!doctype html><html><head></head><body>' +
+      '<nav id="nav2">navbar</nav>' +
+      '<!--wj:children:/-->' +
+      '<main id="new3">new</main>' +
+      '<!--/wj:children-->' +
+      '<footer id="ft2">footer</footer>' +
+      '</body></html>', 'text/html');
+
+    _applySwap(incoming, null, false, 'http://x/blog');
+
+    assert.equal(globalThis.document.getElementById('nav2'), liveNav, 'navbar identity preserved');
+    assert.equal(globalThis.document.getElementById('ft2'), liveFooter,
+      'the trailing footer node was NOT swept by the recovered range (identity preserved)');
+    assert.ok(globalThis.document.getElementById('new3'), 'the children slot swapped');
+    assert.ok(!globalThis.document.getElementById('old3'), 'old children replaced');
+  } finally {
+    globalThis.location = savedLocation;
+    globalThis.document.head.innerHTML = savedHead;
+    globalThis.document.body.innerHTML = savedBody;
+  }
+});
+
+test('applySwap: an INCOMING-side dropped close does not duplicate trailing outer-layout content (#994)', () => {
+  // The symmetric case: the INCOMING side is orphaned with a trailing footer in
+  // the marker's parent. Bounding it against the well-formed LIVE side's
+  // trailing-sibling count keeps the incoming footer OUT of the children region,
+  // so the page does not end up with two footers.
+  const savedBody = globalThis.document.body.innerHTML;
+  const savedHead = globalThis.document.head.innerHTML;
+  const savedLocation = globalThis.location;
+  try {
+    globalThis.document.head.innerHTML = '';
+    globalThis.location = /** @type any */ ({ get href() { return 'http://x/current'; }, set href(_v) {} });
+
+    // Well-formed live page: nav, open, children, close, footer.
+    globalThis.document.body.innerHTML =
+      '<nav id="nav4">navbar</nav>' +
+      '<!--wj:children:/-->' +
+      '<main id="old5">old</main>' +
+      '<!--/wj:children-->' +
+      '<footer id="ft4">footer</footer>';
+    const liveFooter = globalThis.document.getElementById('ft4');
+
+    // Incoming full page whose close marker was dropped (orphaned), footer after.
+    const incoming = new globalThis.DOMParser().parseFromString(
+      '<!doctype html><html><head></head><body>' +
+      '<nav id="nav4">navbar</nav>' +
+      '<!--wj:children:/-->' +
+      '<main id="new5">new</main>' +
+      '<footer id="ft4">footer</footer>' +
+      '</body></html>', 'text/html');
+
+    _applySwap(incoming, null, false, 'http://x/blog');
+
+    assert.equal(globalThis.document.querySelectorAll('#ft4').length, 1,
+      'exactly one footer (the incoming footer was not duplicated into the children region)');
+    assert.equal(globalThis.document.getElementById('ft4'), liveFooter, 'the live footer is the one kept');
+    assert.ok(globalThis.document.getElementById('new5'), 'the children slot swapped');
+    assert.ok(!globalThis.document.getElementById('old5'), 'old children replaced');
+  } finally {
+    globalThis.location = savedLocation;
+    globalThis.document.head.innerHTML = savedHead;
+    globalThis.document.body.innerHTML = savedBody;
+  }
+});
+
+test('applySwap: a degenerate trailing-count mismatch sweeps to parent end, never blanks or duplicates (#994)', () => {
+  // Exercise the exact boundary cut===0 (tail === the orphan's node count), where
+  // `nodes[cut]` is `orphanStart.nextSibling`, an EMPTY exclusive range. The
+  // `cut <= 0 -> null` fallback must sweep the whole children region instead, so
+  // the children are neither duplicated (empty live range removes nothing) nor
+  // blanked. Any non-null return here (the old `orphanStart.nextSibling`, or a
+  // bare `nodes[cut]`) reintroduces the empty-range bug and fails this test.
+  const savedBody = globalThis.document.body.innerHTML;
+  const savedHead = globalThis.document.head.innerHTML;
+  const savedLocation = globalThis.location;
+  try {
+    globalThis.document.head.innerHTML = '';
+    globalThis.location = /** @type any */ ({ get href() { return 'http://x/current'; }, set href(_v) {} });
+
+    // Live orphan with TWO child nodes (close dropped, no trailing content).
+    globalThis.document.body.innerHTML =
+      '<nav id="nav6">navbar</nav>' +
+      '<!--wj:children:/-->' +
+      '<main id="old6a">a</main><main id="old6b">b</main>';
+
+    // Well-formed incoming with TWO trailing siblings after the close, so
+    // tail === 2 === the orphan's node count, i.e. cut === 0.
+    const incoming = new globalThis.DOMParser().parseFromString(
+      '<!doctype html><html><head></head><body>' +
+      '<nav id="nav6">navbar</nav>' +
+      '<!--wj:children:/-->' +
+      '<main id="new6">new</main>' +
+      '<!--/wj:children-->' +
+      '<footer id="a6">a</footer><aside id="b6">b</aside>' +
+      '</body></html>', 'text/html');
+
+    _applySwap(incoming, null, false, 'http://x/blog');
+
+    assert.ok(globalThis.document.getElementById('new6'), 'the new children were applied');
+    assert.ok(!globalThis.document.getElementById('old6a'), 'old child a replaced (not duplicated)');
+    assert.ok(!globalThis.document.getElementById('old6b'), 'old child b replaced (not duplicated)');
+    assert.equal(globalThis.document.querySelectorAll('#new6').length, 1, 'no duplication of the children');
+    assert.equal(globalThis.document.getElementById('nav6').textContent, 'navbar', 'navbar intact');
+  } finally {
+    globalThis.location = savedLocation;
+    globalThis.document.head.innerHTML = savedHead;
+    globalThis.document.body.innerHTML = savedBody;
   }
 });
 
