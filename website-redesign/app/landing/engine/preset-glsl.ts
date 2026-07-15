@@ -122,15 +122,15 @@ export const PRESET_GLSL = /* glsl */ `
       float hue = mix(0.55, 0.70, temp);
       float sat = 0.25 + 0.35 * (1.0 - near01);
       float lumBoost = 1.0;
-      // Baryonic-gas temperature scale: recolour ~45% of the stars (the field
-      // stays majority white) in realistic proportions, the hottest gas being
-      // rarest. Hottest, densest gas reads bright white-gold, warm-hot filament
-      // gas orange-red, cold void gas blue-violet. An independent hash keeps
-      // this a clean, still-minority slice.
+      // Baryonic-gas temperature scale: recolour ~10% of the stars (the field
+      // stays overwhelmingly white) in realistic proportions, the hottest gas
+      // being rarest. Hottest, densest gas reads bright white-gold, warm-hot
+      // filament gas orange-red, cold void gas blue-violet. An independent hash
+      // keeps this a clean, small slice.
       float tcol = grHash(fi, 0.417);
-      if (tcol > 0.960)      { hue = 0.14;  sat = max(sat, 0.60); lumBoost = 1.6; } // ~4% hottest: white-gold
-      else if (tcol > 0.840) { hue = 0.045; sat = max(sat, 0.85); lumBoost = 1.25; } // ~12% warm-hot: orange-red
-      else if (tcol > 0.550) { hue = 0.71;  sat = max(sat, 0.65); }                // ~29% cold void: blue-violet
+      if (tcol > 0.990)      { hue = 0.14;  sat = max(sat, 0.60); lumBoost = 1.6; } // ~1% hottest: white-gold
+      else if (tcol > 0.960) { hue = 0.045; sat = max(sat, 0.85); lumBoost = 1.25; } // ~3% warm-hot: orange-red
+      else if (tcol > 0.900) { hue = 0.71;  sat = max(sat, 0.65); }                // ~6% cold void: blue-violet
       float twinkle = 0.8 + 0.2 * sin(time * (2.0 + grHash(fi, 0.51) * 6.0) + fi * 1.31);
       float bright = pow(near01, 1.6) * (0.45 + 0.55 * grHash(fi, 0.77));
       float lum = (0.12 + 0.9 * bright) * twinkle * lumBoost;
