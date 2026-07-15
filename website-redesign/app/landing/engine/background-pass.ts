@@ -196,20 +196,20 @@ interface BlobDef {
   gain: number; // relative weight multiplier
 }
 
-// Deep-space nebula. A magenta/violet cloud core off to one side, a cold blue
-// gas band, cyan and pink wisps for accent, and the opposite corner pushed to
-// black so stars and foreground particles read against it.
+// Deep-space nebula, warm cast. An amber-orange cloud core, a burnt-orange
+// band, a bright gold wisp for accent, an ember-red pocket, and the opposite
+// corner pushed to black so stars and foreground particles read against it.
 const DEFAULT_BLOBS: BlobDef[] = [
-  { pos: [0.3, 0.6], sigma: [0.4, 0.36], color: "#5a1f83", gain: 1.0 }, // magenta-violet nebula core
-  { pos: [0.7, 0.4], sigma: [0.32, 0.34], color: "#14336e", gain: 0.9 }, // deep cobalt gas band
-  { pos: [0.52, 0.74], sigma: [0.22, 0.2], color: "#1f8f9a", gain: 0.5 }, // cyan wisp (bright accent)
-  { pos: [0.82, 0.64], sigma: [0.24, 0.26], color: "#8a2f6f", gain: 0.55 }, // hot-pink pocket
-  { pos: [0.12, 0.28], sigma: [0.28, 0.3], color: "#2a1c66", gain: 0.7 }, // indigo lower-left
-  { pos: [0.5, 0.05], sigma: [0.5, 0.16], color: "#04030f", gain: 0.7 }, // bottom rim falloff (deeper)
-  { pos: [0.92, 0.94], sigma: [0.34, 0.3], color: "#000004", gain: 0.95 }, // pull top-right to dead black
+  { pos: [0.3, 0.6], sigma: [0.4, 0.36], color: "#c87424", gain: 1.0 }, // bright amber nebula core
+  { pos: [0.7, 0.4], sigma: [0.32, 0.34], color: "#96551a", gain: 0.9 }, // burnt-amber band
+  { pos: [0.52, 0.74], sigma: [0.22, 0.2], color: "#e0a238", gain: 0.55 }, // gold wisp (bright accent)
+  { pos: [0.82, 0.64], sigma: [0.24, 0.26], color: "#a5461a", gain: 0.5 }, // deep-orange pocket
+  { pos: [0.12, 0.28], sigma: [0.28, 0.3], color: "#5a2c0c", gain: 0.7 }, // brown-amber lower-left
+  { pos: [0.5, 0.05], sigma: [0.5, 0.16], color: "#0e0602", gain: 0.7 }, // bottom rim falloff (deeper)
+  { pos: [0.92, 0.94], sigma: [0.34, 0.3], color: "#040100", gain: 0.95 }, // pull top-right to dead black
 ];
 
-const BASE_HEX = "#02010a";
+const BASE_HEX = "#0a0402";
 
 export class BackgroundPass extends Pass {
   private material: ShaderMaterial;
@@ -244,8 +244,8 @@ export class BackgroundPass extends Pass {
         uBlobGain: { value: gains },
         uGrainStrength: { value: 0.012 },
         uWarpAmount: { value: 0.055 },
-        uBrightness: { value: 0.42 },
-        uSaturation: { value: 1.95 },
+        uBrightness: { value: 0.5 },
+        uSaturation: { value: 1.4 },
       },
       depthTest: false,
       depthWrite: false,
