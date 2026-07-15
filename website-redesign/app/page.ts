@@ -4,6 +4,7 @@ import '#components/loading-screen.ts';
 import '#components/section-nav.ts';
 import '#components/label-overlay.ts';
 import '#components/scroll-logo.ts';
+import '#components/copy-cmd.ts';
 import { highlight } from '#lib/highlight.ts';
 
 /*
@@ -193,9 +194,9 @@ export default function LandingPage() {
           <div class="rmx-hero-group">
             <h1 class="rmx-hero-title">A web framework for the AI era</h1>
             <p class="rmx-hero-body">
-              WebJs gives you the power and tools to build anything you can dream
-              of. To get started, just <span class="rmx-code">npx webjs create my-app</span>
-              and you're off to the races.
+              Build at the speed you think, with an AI agent or on your own.<br />
+              Off to the cosmic web with
+              <copy-cmd>npm create webjs@latest my-app</copy-cmd>
             </p>
           </div>
         </section>

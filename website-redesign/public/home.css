@@ -267,6 +267,36 @@ scroll-logo span[data-ghost] {
   white-space: nowrap;
 }
 
+/* Click-to-copy command chip (<copy-cmd>). */
+copy-cmd { display: inline-block; vertical-align: baseline; }
+.ccmd {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.9em;
+  padding: 3px 9px 3px 10px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  white-space: nowrap;
+  cursor: copy;
+  outline: none;
+  transition: background 140ms ease;
+}
+.ccmd:hover { background: rgba(255, 255, 255, 0.17); }
+.ccmd:focus-visible {
+  outline: 2px solid var(--brand-cycle, #ffffff);
+  outline-offset: 2px;
+}
+.ccmd-icon {
+  display: inline-flex;
+  color: rgba(255, 255, 255, 0.55);
+  transition: color 140ms ease;
+}
+.ccmd:hover .ccmd-icon { color: #ffffff; }
+.ccmd.is-copied .ccmd-icon { color: #7ce95a; }
+
 /* ---- Feature sections -------------------------------------------------- */
 .rmx-section {
   width: var(--page-max-width);
