@@ -86,6 +86,11 @@ COPY blog ./blog
 # modules/compare/queries/*.server.ts). Same reason as blog: without the
 # tree in the image, /compare renders "No comparisons yet."
 COPY compare ./compare
+# website/app/articles/[slug]/page.ts and app/sitemap.ts read
+# ../../../../articles/<slug>.md at SSR time (via
+# modules/articles/queries/*.server.ts). Same reason as compare: without
+# the tree in the image, /articles renders "No articles yet."
+COPY articles ./articles
 
 # --- 3. Build-time work --------------------------------------------------
 # Core: build the dist/ bundles. The package.json `prepare` hook is a
