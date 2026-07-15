@@ -9,14 +9,19 @@
 //   uniform float     uCarPosY;
 //
 // The `id` passed to `computePreset` is the ShaderId enum from
-// `particle-canvas.tsx` (SHADER_ID_TO_INT). Keep that map and this file's
+// `particle-boot.ts` (SHADER_ID_TO_INT). Keep that map and this file's
 // dispatch branches in sync.
+//
+// This is the space / universe theme: a deep-space starfield flythrough, an
+// alien spacecraft, an astronaut, a ringed planet, and a galaxy. Every scene
+// is generated procedurally from the particle index, so no point-cloud models
+// are needed (the model samplers stay declared but unused).
 
 export const MODEL_TEX_W = 512;
 export const MODEL_TEX_H = 256;
 
 export const PRESET_GLSL = /* glsl */ `
-  /* ── helpers ───────────────────────────────────────────── */
+  /* == helpers ============================================= */
 
   vec3 hsl2rgb(float h, float s, float l) {
     float c = (1.0 - abs(2.0 * l - 1.0)) * s;
@@ -53,10 +58,6 @@ export const PRESET_GLSL = /* glsl */ `
     return hsl2rgb(hue, clamp(sat, 0.5, 1.0), clamp(lum, 0.2, 0.85));
   }
 
-  // Each preset binds a fixed model slot (Logo→0, Racecar→1, Runner→2,
-  // RacetrackCar→3), so callers pass the matching sampler+count directly
-  // instead of routing through a runtime if-cascade. This avoids two
-  // dynamic-uniform branches per particle for every model-driven preset.
   vec3 sampleModelTex(sampler2D tex, float cnt, float fi) {
     float idx = (cnt > 0.0) ? mod(fi, cnt) : 0.0;
     float u = (mod(idx, ${MODEL_TEX_W}.0) + 0.5) / ${MODEL_TEX_W}.0;
@@ -64,47 +65,90 @@ export const PRESET_GLSL = /* glsl */ `
     return texture(tex, vec2(u, v)).xyz;
   }
 
-  /* ── preset 0: Remix Logo ─────────────────────────────── */
+  // A point on the unit sphere from two 0..1 samples (uniform by area).
+  vec3 onSphere(float u, float v) {
+    float ct = 2.0 * u - 1.0;
+    float st = sqrt(max(0.0, 1.0 - ct * ct));
+    float ph = v * 6.28318530718;
+    return vec3(st * cos(ph), ct, st * sin(ph));
+  }
 
-  void presetRemixLogo(float fi, int cnt, float time,
+  // Rotate a point about the Y axis.
+  vec3 rotY(vec3 p, float a) {
+    float c = cos(a), s = sin(a);
+    return vec3(p.x * c - p.z * s, p.y, p.x * s + p.z * c);
+  }
+
+  // Rotate a point about the X axis.
+  vec3 rotX(vec3 p, float a) {
+    float c = cos(a), s = sin(a);
+    return vec3(p.x, p.y * c - p.z * s, p.y * s + p.z * c);
+  }
+
+  /* == preset 0: Deep-space starfield flythrough (hero) ==== */
+
+  void presetRacetrack(float fi, int cnt, float time,
     float c0, float c1, float c2, float c3,
     float c4, float c5, float c6, float c7,
     out vec3 pos, out vec3 col)
   {
-    float scale = c0;
-    float rX = c1 * 0.01745329;
-    float rY = c2 * 0.01745329 - time * c4;
-    float rZ = c3 * 0.01745329;
+    float speed = c0 + c7;
+    float fcnt = float(cnt);
+    int idx = int(fi);
 
-    vec3 mp = sampleModelTex(uModelTex0, uModelCount0, fi);
-    float px = mp.x * scale;
-    float py = mp.y * scale;
-    float pz = mp.z * scale;
+    // 82 percent streaming stars, 18 percent drifting nebula dust.
+    int nebStart = int(floor(fcnt * 0.82));
 
-    float cx = cos(rX), sx = sin(rX);
-    float t1y = py * cx - pz * sx;
-    float t1z = py * sx + pz * cx;
-    py = t1y; pz = t1z;
+    if (idx < nebStart) {
+      float depth = 320.0;
+      float zNear = 72.0;
+      float zFar = zNear - depth;
 
-    float cy = cos(rY), sy = sin(rY);
-    float t2x = px * cy + pz * sy;
-    float t2z = -px * sy + pz * cy;
-    px = t2x; pz = t2z;
+      // Each star cycles forward in z over time, wrapping when it passes.
+      float phase = grHash(fi, 0.6180339887);
+      float cyc = fract(phase + time * speed * 0.028);
+      float zc = zFar + cyc * depth;
+      float near01 = cyc;
 
-    float cz = cos(rZ), sz = sin(rZ);
-    float t3x = px * cz - py * sz;
-    float t3y = px * sz + py * cz;
-    px = t3x; py = t3y;
+      // Radial layout so stars stream outward as they approach the camera.
+      float ang = grHash(fi, 0.3571) * 6.28318530718;
+      float rad = 6.0 + grHash(fi, 0.9137) * 150.0;
+      float expand = 0.55 + near01 * near01 * 0.9;
+      float x = cos(ang) * rad * expand;
+      float y = sin(ang) * rad * expand;
+      pos = vec3(x, y, zc);
 
-    pos = vec3(px, py, pz);
+      float temp = grHash(fi, 0.2917);
+      float hue = mix(0.55, 0.70, temp);
+      if (temp > 0.86) hue = 0.08;
+      float twinkle = 0.8 + 0.2 * sin(time * (2.0 + grHash(fi, 0.51) * 6.0) + fi * 1.31);
+      float bright = pow(near01, 1.6) * (0.45 + 0.55 * grHash(fi, 0.77));
+      float lum = (0.12 + 0.9 * bright) * twinkle;
+      float sat = 0.25 + 0.35 * (1.0 - near01);
+      col = hsl2rgb(hue, sat, clamp(lum, 0.0, 1.0));
 
-    float height = mp.y * 0.5 + 0.5;
-    float pulse = 1.0 + 0.1 * sin(time * 2.5 + fi * 0.02);
-    float lum = (0.3 + 0.5 * height) * pulse;
-    col = hsl2rgb(0.55 + 0.1 * height, 0.6, lum);
+    } else {
+      float ni = float(idx - nebStart);
+      float cluster = floor(grHash(ni, 0.19) * 5.0);
+      vec3 cc = vec3(
+        sin(cluster * 1.7) * 66.0,
+        cos(cluster * 2.3) * 30.0 - 4.0,
+        -55.0 - cluster * 26.0
+      );
+      float r = grHash(ni, 0.41);
+      vec3 dir = onSphere(grHash(ni, 0.73), grHash(ni, 0.29));
+      vec3 off = dir * pow(r, 0.5) * 48.0;
+      float sw = time * 0.05;
+      float ox = off.x * cos(sw) - off.z * sin(sw);
+      float oz = off.x * sin(sw) + off.z * cos(sw);
+      pos = cc + vec3(ox, off.y, oz);
+      float hue = fract(0.74 + cluster * 0.07 + r * 0.12);
+      float lum = 0.04 + 0.09 * (1.0 - r);
+      col = hsl2rgb(hue, 0.72, lum);
+    }
   }
 
-  /* ── preset 1: Racecar ────────────────────────────────── */
+  /* == preset 1: Alien spacecraft (saucer) ================ */
 
   void presetRacecar(float fi, int cnt, float time,
     float c0, float c1, float c2, float c3,
@@ -113,297 +157,217 @@ export const PRESET_GLSL = /* glsl */ `
   {
     float scale = c0;
     float spin = c1;
-    float shimmer = c2;
-    float rotZ = c3 * 0.01745329;
-
-    float angle = time * spin;
-    float cosA = cos(angle), sinA = sin(angle);
-
-    vec3 mp = sampleModelTex(uModelTex1, uModelCount1, fi);
-    float mx = mp.x * scale;
-    float my = mp.y * scale;
-    float mz = mp.z * scale;
-
-    float px = mx * cosA - mz * sinA;
-    float py = my;
-    float pz = mx * sinA + mz * cosA;
-
-    float cz = cos(rotZ), sz = sin(rotZ);
-    float qx = px * cz - py * sz;
-    float qy = px * sz + py * cz;
-    pos = vec3(qx, qy, pz);
-
-    float height = mp.y * 0.5 + 0.5;
-    float pulse = 1.0 + shimmer * 0.1 * sin(time * 2.5 + fi * 0.02);
-    float lum = (0.3 + 0.5 * height) * pulse;
-    col = hsl2rgb(0.55 + 0.1 * height, 0.6, lum);
-  }
-
-  /* ── preset 2: Racetrack ──────────────────────────────── */
-
-  void presetRacetrack(float fi, int cnt, float time,
-    float c0, float c1, float c2, float c3,
-    float c4, float c5, float c6, float c7,
-    out vec3 pos, out vec3 col)
-  {
-    float speed = c0 + c7;
-    float baseSpeed = c0;
-    float trackW = c1;
-    float curveAmp = c2;
-    float hillH = c3;
-    float fogMode = c4;
-    float curveSway = c6;
-
-    if (curveSway > 0.0) {
-      curveAmp *= sin(time * curveSway * baseSpeed);
-    }
-
-    float zNear = 72.0;
-    float zFar  = -100.0;
-    float trackY = -24.0;
-    float PI = 3.14159265;
-    float hillWidth = 50.0;
     float fcnt = float(cnt);
-
-    float starFrac = c5;
-    float groundFrac = 1.0 - starFrac;
-
-    int surfaceEnd   = int(floor(fcnt * 0.10 * groundFrac));
-    int leftCurbEnd  = surfaceEnd + int(floor(fcnt * 0.05 * groundFrac));
-    int rightCurbEnd = leftCurbEnd + int(floor(fcnt * 0.05 * groundFrac));
-    int leftHillEnd  = rightCurbEnd + int(floor(fcnt * 0.40 * groundFrac));
-    int rightHillEnd = leftHillEnd + int(floor(fcnt * 0.40 * groundFrac));
     int idx = int(fi);
 
-    if (idx < surfaceEnd) {
-      float along = fract(grHash(fi, 0.6180339887) - time * speed * 0.12);
-      float across = hash11(fi + 0.5);
-      float z = zNear + (zFar - zNear) * along * along;
-      float cx = sin(along * PI * 3.0) * curveAmp
-               + sin(along * PI * 5.5 + 2.0) * curveAmp * 0.3;
-      float perspN = 1.0 - along * 0.5;
-      float lane = (across - 0.5) * trackW * perspN;
-      float jX = (hash11(fi * 1.731) - 0.5) * 1.4;
-      float jY = (hash11(fi * 3.917) - 0.5) * 0.35;
-      pos = vec3(cx + lane + jX, trackY + jY, z);
-      float tarmac = 0.06 + 0.03 * hash11(fi * 2.473);
-      col = vec3(tarmac);
-      if (fogMode < 0.5) col *= (1.0 - along);
+    int rimEnd = int(floor(fcnt * 0.16));
+    int domeEnd = rimEnd + int(floor(fcnt * 0.20));
+    float R = 1.0;
+    vec3 p;
+    vec3 c;
 
-    } else if (idx < leftCurbEnd) {
-      float bi = float(idx - surfaceEnd);
-      float bHash = grHash(bi, 0.6180339887);
-      float bt = fract(bHash - time * speed * 0.12);
-      float bz = zNear + (zFar - zNear) * bt * bt;
-      float bcx = sin(bt * PI * 3.0) * curveAmp
-                + sin(bt * PI * 5.5 + 2.0) * curveAmp * 0.3;
-      float bN = 1.0 - bt * 0.5;
-      float strip = mod(bi, 8.0) / 8.0 * 1.5;
-      pos = vec3(bcx - trackW * 0.5 * bN - strip, trackY, bz);
-      col = (mod(floor(bHash * 35.0), 2.0) < 0.5)
-        ? hsl2rgb(0.0, 0.85, 0.45) : vec3(0.85);
-      if (fogMode < 0.5) col *= (1.0 - bt);
+    if (idx < rimEnd) {
+      // Ring of running lights under the hull rim.
+      float ri = float(idx);
+      float th = grHash(ri, 0.618) * 6.28318530718;
+      float rr = R * 1.03;
+      p = vec3(cos(th) * rr, -0.03 + sin(th * 9.0) * 0.012, sin(th) * rr);
+      float seg = floor(th / 6.28318530718 * 22.0);
+      float pulse = 0.5 + 0.5 * sin(time * 3.2 + seg * 1.7);
+      float hue = mix(0.50, 0.86, hash11(seg));
+      c = hsl2rgb(hue, 0.95, 0.32 + 0.5 * pulse);
 
-    } else if (idx < rightCurbEnd) {
-      float bi = float(idx - leftCurbEnd);
-      float bHash = grHash(bi, 0.6180339887);
-      float bt = fract(bHash - time * speed * 0.12);
-      float bz = zNear + (zFar - zNear) * bt * bt;
-      float bcx = sin(bt * PI * 3.0) * curveAmp
-                + sin(bt * PI * 5.5 + 2.0) * curveAmp * 0.3;
-      float bN = 1.0 - bt * 0.5;
-      float strip = mod(bi, 8.0) / 8.0 * 1.5;
-      pos = vec3(bcx + trackW * 0.5 * bN + strip, trackY, bz);
-      col = (mod(floor(bHash * 35.0), 2.0) < 0.5)
-        ? hsl2rgb(0.0, 0.85, 0.45) : vec3(0.85);
-      if (fogMode < 0.5) col *= (1.0 - bt);
-
-    } else if (idx < leftHillEnd) {
-      float hi = float(idx - rightCurbEnd);
-      float ht = fract(grHash(hi, 0.6180339887) - time * speed * 0.12);
-      float hz = zNear + (zFar - zNear) * ht * ht;
-      float hcx = sin(ht * PI * 3.0) * curveAmp
-                + sin(ht * PI * 5.5 + 2.0) * curveAmp * 0.3;
-      float hN = 1.0 - ht * 0.5;
-      float lat = hash11(hi + 0.5);
-      float xOff = (trackW * 0.5 + 1.5 + lat * hillWidth) * hN;
-      float jX = (hash11(hi * 2.317) - 0.5) * 1.2;
-      float jZ = (hash11(hi * 4.193) - 0.5) * 1.0;
-      float nx = lat * 3.5;
-      float nz = ht * 8.0;
-      float ridge = sin(nz * 1.1 + nx * 0.7) * 0.5 + 0.5;
-      float broad = sin(nz * 0.4 + nx * 1.3 + 2.0) * 0.5 + 0.5;
-      float fine  = sin(nz * 3.7 + nx * 2.1 + 5.0) * 0.3;
-      float slope = lat * 0.4 + 0.1;
-      float nearCurb = 1.0 - exp(-lat * 6.0);
-      float elev = (ridge * 0.5 + broad * 0.35 + fine * 0.15 + slope) * hillH * nearCurb;
-      pos = vec3(hcx - xOff + jX, trackY + elev, hz + jZ);
-      float eN = min(elev / hillH, 1.0);
-      col = hsl2rgb(0.30 - eN * 0.06, 0.75 - eN * 0.35, 0.08 + eN * 0.14 + 0.03 * hash11(hi * 1.73));
-      if (fogMode < 0.5) col *= (1.0 - ht);
-
-    } else if (idx < rightHillEnd) {
-      float hi = float(idx - leftHillEnd);
-      float ht = fract(grHash(hi, 0.6180339887) - time * speed * 0.12);
-      float hz = zNear + (zFar - zNear) * ht * ht;
-      float hcx = sin(ht * PI * 3.0) * curveAmp
-                + sin(ht * PI * 5.5 + 2.0) * curveAmp * 0.3;
-      float hN = 1.0 - ht * 0.5;
-      float lat = hash11(hi + 7.1);
-      float xOff = (trackW * 0.5 + 1.5 + lat * hillWidth) * hN;
-      float jX = (hash11(hi * 2.713) - 0.5) * 1.2;
-      float jZ = (hash11(hi * 5.371) - 0.5) * 1.0;
-      float nx = lat * 3.5;
-      float nz = ht * 8.0;
-      float ridge = sin(nz * 1.1 + nx * 0.7 + 1.5) * 0.5 + 0.5;
-      float broad = sin(nz * 0.4 + nx * 1.3 + 4.0) * 0.5 + 0.5;
-      float fine  = sin(nz * 3.7 + nx * 2.1 + 8.0) * 0.3;
-      float slope = lat * 0.4 + 0.1;
-      float nearCurb = 1.0 - exp(-lat * 6.0);
-      float elev = (ridge * 0.5 + broad * 0.35 + fine * 0.15 + slope) * hillH * nearCurb;
-      pos = vec3(hcx + xOff + jX, trackY + elev, hz + jZ);
-      float eN = min(elev / hillH, 1.0);
-      col = hsl2rgb(0.30 - eN * 0.06, 0.75 - eN * 0.35, 0.08 + eN * 0.14 + 0.03 * hash11(hi * 1.73));
-      if (fogMode < 0.5) col *= (1.0 - ht);
+    } else if (idx < domeEnd) {
+      // Glass dome cockpit (upper cap, tighter radius).
+      float di = float(idx - rimEnd);
+      float u = grHash(di, 0.618);
+      float v = grHash(di, 0.271);
+      float rd = 0.44;
+      float phi = acos(mix(0.12, 1.0, u));
+      float th = v * 6.28318530718;
+      float sr = rd * sin(phi);
+      p = vec3(cos(th) * sr, rd * cos(phi) * 0.92 + 0.13, sin(th) * sr);
+      c = hsl2rgb(0.52, 0.55, 0.42 + 0.22 * cos(phi));
 
     } else {
-      float si = float(idx - rightHillEnd);
-      float st = fract(grHash(si, 0.6180339887) - time * speed * 0.12);
-      float sz = zNear + (zFar - zNear) * st * st;
-      float perspN = 1.0 - st * 0.5;
-
-      float sx = (grHash(si, 0.5381) - 0.5) * 180.0 * perspN;
-      float rawY = grHash(si, 0.3571);
-      float sy = trackY + hillH * 0.8 + rawY * 48.0;
-
-      pos = vec3(sx, sy, sz);
-
-      float brightness = pow(grHash(si, 0.4231), 2.5);
-      float twinkle = 0.9 + 0.1 * sin(time * (3.0 + grHash(si, 0.9137) * 5.0) + si * 1.73);
-      float lum = (0.15 + 0.85 * brightness) * twinkle;
-      float warmth = grHash(si, 0.2917);
-      float hue = mix(0.6, 0.12, warmth);
-      float sat = 0.1 + 0.15 * abs(warmth - 0.5);
-      col = hsl2rgb(hue, sat, lum);
-      if (fogMode < 0.5) col *= (1.0 - st * 0.3);
+      // Biconvex hull lens.
+      float hi = float(idx - domeEnd);
+      float rr = sqrt(grHash(hi, 0.618)) * R;
+      float th = grHash(hi, 0.271) * 6.28318530718;
+      float top = step(0.5, hash11(hi * 1.7));
+      float k = 1.0 - (rr / R) * (rr / R);
+      float yy = (top > 0.5) ? 0.19 * pow(k, 0.7) : -0.12 * pow(k, 0.6);
+      p = vec3(cos(th) * rr, yy, sin(th) * rr);
+      float ring = 0.5 + 0.5 * sin(rr * 42.0);
+      float lum = 0.20 + 0.12 * ring + 0.16 * (1.0 - rr / R);
+      c = hsl2rgb(0.60, 0.18, lum);
     }
+
+    // Slow spin about Y with a fixed tilt so the disc reads as 3D.
+    p = rotY(p, time * spin * 0.5);
+    p = rotX(p, 0.34);
+    pos = p * scale;
+    col = c;
   }
 
-  /* ── preset 3: Model Kit Runner ──────────────────────── */
+  /* == preset 2: Astronaut ================================ */
 
   void presetRunner(float fi, int cnt, float time,
     float c0, float c1, float c2, float c3,
     float c4, float c5, float c6, float c7,
     out vec3 pos, out vec3 col)
   {
-    float scale = c0;
+    float scale = c0 * 0.62;
     float spin = c1;
-    float shimmer = c2;
-    float rotZ = c3 * 0.01745329;
+    float fcnt = float(cnt);
+    int idx = int(fi);
 
-    float angle = time * spin;
-    float cosA = cos(angle), sinA = sin(angle);
+    // Body-part index ranges (fractions of the particle budget).
+    int helmetEnd = int(floor(fcnt * 0.16));
+    int torsoEnd  = helmetEnd + int(floor(fcnt * 0.28));
+    int packEnd   = torsoEnd  + int(floor(fcnt * 0.10));
+    int hipEnd    = packEnd   + int(floor(fcnt * 0.06));
+    int armEnd    = hipEnd    + int(floor(fcnt * 0.18));
+    // remainder: legs
 
-    vec3 mp = sampleModelTex(uModelTex2, uModelCount2, fi);
-    float mx = mp.x * scale;
-    float my = mp.y * scale;
-    float mz = mp.z * scale;
+    vec3 p;
+    vec3 c;
+    // Kept dim so the additive bloom does not blow the suit to a solid mass;
+    // the visor and accent lights carry the brightness.
+    vec3 white = vec3(0.34, 0.36, 0.44);
 
-    float px = mx * cosA - mz * sinA;
-    float py = my;
-    float pz = mx * sinA + mz * cosA;
+    if (idx < helmetEnd) {
+      float hh = float(idx);
+      vec3 s = onSphere(grHash(hh, 0.618), grHash(hh, 0.271));
+      p = vec3(0.0, 0.66, 0.0) + s * 0.27;
+      // Gold visor on the front-facing cap.
+      float visor = smoothstep(0.15, 0.55, s.z) * step(-0.15, s.y) * step(s.y, 0.45);
+      c = mix(white * 1.05, hsl2rgb(0.11, 0.85, 0.52), visor);
 
-    float cz = cos(rotZ), sz = sin(rotZ);
-    float qx = px * cz - py * sz;
-    float qy = px * sz + py * cz;
-    pos = vec3(qx, qy, pz);
+    } else if (idx < torsoEnd) {
+      float ti = float(idx - helmetEnd);
+      vec3 s = onSphere(grHash(ti, 0.618), grHash(ti, 0.271));
+      s *= pow(grHash(ti, 0.913), 0.5);
+      p = vec3(0.0, 0.28, 0.0) + s * vec3(0.27, 0.28, 0.2);
+      // A small chest control light.
+      float chest = smoothstep(0.9, 1.0, s.z) * step(0.0, s.y);
+      c = mix(white, hsl2rgb(0.5, 0.9, 0.6), chest * 0.8);
 
-    float t = fi / float(cnt);
-    float height = mp.y * 0.5 + 0.5;
-    float pulse = 1.0 + shimmer * 0.1 * sin(time * 2.5 + fi * 0.02);
-    float lum = (0.3 + 0.5 * height) * pulse;
-    col = hsl2rgb(0.55 + 0.1 * height, 0.6, lum);
-  }
+    } else if (idx < packEnd) {
+      float bi = float(idx - torsoEnd);
+      vec3 s = vec3(grHash(bi, 0.618), grHash(bi, 0.271), grHash(bi, 0.913)) - 0.5;
+      p = vec3(0.0, 0.34, -0.24) + s * vec3(0.4, 0.44, 0.2);
+      c = hsl2rgb(0.6, 0.06, 0.34) + hsl2rgb(0.86, 0.8, 0.5) * step(0.42, grHash(bi, 0.5)) * 0.12;
 
-  /* ── preset 4: 4D Tesseract ───────────────────────────── */
+    } else if (idx < hipEnd) {
+      float pi = float(idx - packEnd);
+      vec3 s = onSphere(grHash(pi, 0.618), grHash(pi, 0.271));
+      s *= pow(grHash(pi, 0.913), 0.5);
+      p = vec3(0.0, 0.02, 0.0) + s * vec3(0.24, 0.13, 0.19);
+      c = white * 0.95;
 
-  vec4 tessVert(int idx) {
-    float fi = float(idx);
-    return vec4(
-      mod(fi, 2.0) * 2.0 - 1.0,
-      mod(floor(fi / 2.0), 2.0) * 2.0 - 1.0,
-      mod(floor(fi / 4.0), 2.0) * 2.0 - 1.0,
-      floor(fi / 8.0) * 2.0 - 1.0
-    );
-  }
+    } else if (idx < armEnd) {
+      float ai = float(idx - hipEnd);
+      float side = (hash11(ai) < 0.5) ? -1.0 : 1.0;
+      float t = grHash(ai, 0.618);
+      vec3 sh = vec3(side * 0.28, 0.46, 0.0);
+      vec3 hand = vec3(side * 0.34, 0.02, 0.06);
+      vec3 ctr = mix(sh, hand, t);
+      float th = grHash(ai, 0.271) * 6.28318530718;
+      float rr = sqrt(grHash(ai, 0.913)) * 0.095;
+      p = ctr + vec3(cos(th) * rr, 0.0, sin(th) * rr);
+      c = white;
 
-  void tessEdge(int eIdx, out vec4 vA, out vec4 vB) {
-    int dim = eIdx / 8;
-    int sub = eIdx - dim * 8;
-    int idxA, idxB;
-    if (dim == 0) {
-      idxA = sub * 2;
-      idxB = idxA + 1;
-    } else if (dim == 1) {
-      int lo = sub - (sub / 2) * 2;
-      int hi = sub / 2;
-      idxA = lo + hi * 4;
-      idxB = idxA + 2;
-    } else if (dim == 2) {
-      int lo = sub - (sub / 4) * 4;
-      int hi = sub / 4;
-      idxA = lo + hi * 8;
-      idxB = idxA + 4;
     } else {
-      idxA = sub;
-      idxB = sub + 8;
+      float li = float(idx - armEnd);
+      float side = (hash11(li) < 0.5) ? -1.0 : 1.0;
+      float t = grHash(li, 0.618);
+      vec3 hipp = vec3(side * 0.13, 0.0, 0.0);
+      vec3 foot = vec3(side * 0.14, -0.64, 0.03);
+      vec3 ctr = mix(hipp, foot, t);
+      float th = grHash(li, 0.271) * 6.28318530718;
+      float rr = sqrt(grHash(li, 0.913)) * 0.115;
+      p = ctr + vec3(cos(th) * rr, 0.0, sin(th) * rr);
+      // Boots read slightly darker.
+      c = white * mix(1.0, 0.7, step(0.85, t));
     }
-    vA = tessVert(idxA);
-    vB = tessVert(idxB);
+
+    // Gentle float and slow turn.
+    p.y += sin(time * 0.8) * 0.03;
+    p = rotY(p, time * spin * 0.4 + 0.3);
+    pos = p * scale;
+    col = c;
   }
+
+  /* == preset 3: Ringed planet ============================ */
+
+  void presetRemixLogo(float fi, int cnt, float time,
+    float c0, float c1, float c2, float c3,
+    float c4, float c5, float c6, float c7,
+    out vec3 pos, out vec3 col)
+  {
+    float scale = c0 * 0.5;
+    float fcnt = float(cnt);
+    int idx = int(fi);
+
+    int planetEnd = int(floor(fcnt * 0.6));
+    int ringEnd = planetEnd + int(floor(fcnt * 0.36));
+    vec3 p;
+    vec3 c;
+    float axisTilt = 0.42;
+
+    if (idx < planetEnd) {
+      // Gas-giant surface with latitude bands and a swirl.
+      float pi = float(idx);
+      vec3 s = onSphere(grHash(pi, 0.618), grHash(pi, 0.271));
+      p = s * 1.0;
+      float lat = s.y;
+      float band = sin(lat * 9.0 + sin(lat * 3.0 + time * 0.2) * 1.2);
+      float hue = mix(0.5, 0.86, 0.5 + 0.5 * band);
+      float lum = 0.28 + 0.14 * band + 0.1 * s.z;
+      c = hsl2rgb(hue, 0.6, clamp(lum, 0.1, 0.7));
+      p = rotY(p, time * 0.12);
+
+    } else if (idx < ringEnd) {
+      // Flat ring belt with gaps and brightness banding.
+      float ri = float(idx - planetEnd);
+      float rr = mix(1.45, 2.5, grHash(ri, 0.618));
+      float th = grHash(ri, 0.271) * 6.28318530718 + time * (0.3 / rr);
+      float gap = smoothstep(0.02, 0.08, abs(fract(rr * 3.0) - 0.5));
+      float yy = (grHash(ri, 0.913) - 0.5) * 0.02;
+      p = vec3(cos(th) * rr, yy, sin(th) * rr);
+      float bandN = 0.5 + 0.5 * sin(rr * 26.0);
+      float hue = mix(0.52, 0.8, bandN);
+      c = hsl2rgb(hue, 0.5, (0.18 + 0.2 * bandN) * gap);
+
+    } else {
+      // A couple of small moons on inclined orbits.
+      float mi = float(idx - ringEnd);
+      float moon = floor(grHash(mi, 0.19) * 2.0);
+      float orbR = 3.0 + moon * 0.9;
+      float orbA = time * (0.25 - moon * 0.08) + moon * 2.1;
+      vec3 s = onSphere(grHash(mi, 0.618), grHash(mi, 0.271)) * 0.16;
+      vec3 ctr = vec3(cos(orbA) * orbR, sin(orbA) * orbR * 0.35, sin(orbA) * orbR);
+      p = ctr + s;
+      c = hsl2rgb(0.6, 0.05, 0.4);
+    }
+
+    p = rotX(p, axisTilt);
+    pos = p * scale;
+    col = c;
+  }
+
+  /* == preset 4: Galaxy ==================================== */
 
   void presetTesseract(float fi, int cnt, float time,
     float c0, float c1, float c2, float c3,
     float c4, float c5, float c6, float c7,
     out vec3 pos, out vec3 col)
   {
-    float speedXW = c0;
-    float speedYZ = c1;
-    float projDist = c2;
-    float edgeDens = c3;
-
-    float ppef = max(float(cnt) / 32.0, 1.0);
-    int eIdx = int(min(fi / ppef, 31.0));
-    float t = mod(fi, ppef) / ppef;
-
-    vec4 vA, vB;
-    tessEdge(eIdx, vA, vB);
-
-    float noise = sin(fi * 7.37) * 0.1 * edgeDens;
-    float px = vA.x + (vB.x - vA.x) * t + noise;
-    float py = vA.y + (vB.y - vA.y) * t + cos(fi * 3.91) * 0.1 * edgeDens;
-    float pz = vA.z + (vB.z - vA.z) * t + sin(fi * 5.13) * 0.1 * edgeDens;
-    float pw = vA.w + (vB.w - vA.w) * t + cos(fi * 2.17) * 0.1 * edgeDens;
-
-    float axw = time * speedXW;
-    float cXW = cos(axw), sXW = sin(axw);
-    float rx = px * cXW - pw * sXW;
-    float rw = px * sXW + pw * cXW;
-
-    float ayz = time * speedYZ;
-    float cYZ = cos(ayz), sYZ = sin(ayz);
-    float ry = py * cYZ - pz * sYZ;
-    float rz = py * sYZ + pz * cYZ;
-
-    float sc = projDist / (projDist - rw);
-    pos = vec3(rx * sc * 20.0, ry * sc * 20.0, rz * sc * 20.0);
-
-    float h = (float(eIdx) / 32.0) * 0.8 + 0.1;
-    float l = 0.4 + 0.3 * sc + 0.1 * sin(time + float(eIdx));
-    col = hsl2rgb(h, 0.7, clamp(l, 0.2, 1.0));
+    // Retained but unused (kept out of the dispatcher).
+    pos = vec3(0.0);
+    col = vec3(0.0);
   }
-
-  /* ── preset 5: Racetrack + Car ─────────────────────────── */
 
   void presetRacetrackCar(float fi, int cnt, float time,
     float c0, float c1, float c2, float c3,
@@ -411,142 +375,63 @@ export const PRESET_GLSL = /* glsl */ `
     out vec3 pos, out vec3 col)
   {
     float fcnt = float(cnt);
-    int trackEnd = int(floor(fcnt * 0.88));
-    int carStart = int(floor(fcnt * 0.92));
+    int idx = int(fi);
+    float scale = 26.0;
 
-    float carScale = 7.5;
-    float trackY = -24.0;
-    float carZ = 52.0;
-    float carY = trackY + carScale * 0.35 + uCarPosY;
+    int coreEnd = int(floor(fcnt * 0.2));
+    int armEnd = int(floor(fcnt * 0.92));
+    vec3 p;
+    vec3 c;
+    float rot = time * 0.08;
 
-    float along = sqrt((72.0 - carZ) / (72.0 - (-100.0)));
-    float perspN = 1.0 - along * 0.5;
-    float halfW = c1 * 0.5 * perspN;
-    float laneX = clamp(uCarLaneOffset, -1.0, 1.0) * halfW;
+    if (idx < coreEnd) {
+      // Bright central bulge.
+      float ci = float(idx);
+      vec3 s = onSphere(grHash(ci, 0.618), grHash(ci, 0.271));
+      float r = pow(grHash(ci, 0.913), 1.5) * 0.4;
+      p = s * r * vec3(1.0, 0.55, 1.0);
+      float lum = 0.5 + 0.4 * (1.0 - r / 0.4);
+      c = hsl2rgb(mix(0.12, 0.06, grHash(ci, 0.5)), 0.7, lum);
 
-    int carCount = int(fcnt) - carStart;
-    int wheelTotal = carCount / 5;
-    int wheelStart = int(fcnt) - wheelTotal;
-
-    float wheelWidth = c3;
-    float wheelBase = c4;
-    float wheelTrk = c5;
-    float wheelYPos = c6;
-    float wheelZOff = c7;
-    float halfTrk = wheelTrk * 0.5;
-    float frontZ = wheelBase * 0.5 - 0.02 + wheelZOff;
-    float rearZ = -wheelBase * 0.5 - 0.02 + wheelZOff;
-
-    vec3 wheels[4];
-    wheels[0] = vec3(-halfTrk, wheelYPos,  frontZ);
-    wheels[1] = vec3( halfTrk, wheelYPos,  frontZ);
-    wheels[2] = vec3(-halfTrk, wheelYPos,  rearZ);
-    wheels[3] = vec3( halfTrk, wheelYPos,  rearZ);
-
-    float wheelDiscR = 0.12;
-    float spinAngle = time * c0 * 20.0;
-    float goldenAngle = 2.39996323;
-
-    if (int(fi) >= wheelStart) {
-      int wfi = int(fi) - wheelStart;
-      int perWheel = wheelTotal / 4;
-      int wIdx = min(wfi / perWheel, 3);
-      int localIdx = wfi - wIdx * perWheel;
-      float t = float(localIdx) / float(perWheel);
-      float r = sqrt(t) * wheelDiscR;
-      float theta = float(localIdx) * goldenAngle + spinAngle;
-      float xSpread = (fract(float(localIdx) * 0.7071) - 0.5) * wheelWidth;
-
-      vec3 wc = wheels[wIdx];
-      vec3 mp = vec3(wc.x + xSpread, wc.y + r * cos(theta), wc.z + r * sin(theta));
-
-      float mx = mp.x * carScale;
-      float my = mp.y * carScale;
-      float mz = mp.z * carScale;
-
-      pos = vec3(mx + laneX, my + carY, -mz + carZ);
-
-      float height = wc.y * 0.5 + 0.5;
-      float pulse = 1.0 + 0.1 * sin(time * 2.5 + float(localIdx) * 0.02);
-      float lum = (0.3 + 0.5 * height) * pulse;
-      col = hsl2rgb(0.55 + 0.1 * height, 0.6, lum);
-
-    } else if (int(fi) >= carStart) {
-      float carFi = float(int(fi) - carStart);
-      float spreadFi = floor(fract(carFi * 0.6180339887) * uModelCount3);
-      vec3 mp = sampleModelTex(uModelTex3, uModelCount3, spreadFi);
-
-      float mx = mp.x * carScale;
-      float my = mp.y * carScale;
-      float mz = mp.z * carScale;
-
-      pos = vec3(mx + laneX, my + carY, -mz + carZ);
-
-      float height = mp.y * 0.5 + 0.5;
-      float pulse = 1.0 + 0.1 * sin(time * 2.5 + carFi * 0.02);
-      float lum = (0.3 + 0.5 * height) * pulse;
-      col = hsl2rgb(0.55 + 0.1 * height, 0.6, lum);
-
-    } else if (int(fi) >= trackEnd) {
-      float trailFi = float(int(fi) - trackEnd);
-      float speed = c0;
-
-      float ringCount = 9.0;
-      float ringSlot = floor(hash11(trailFi) * ringCount);
-      float age = fract(ringSlot / ringCount + time * speed * 0.15);
-      float trailDepth = 9.0;
-      float rearOffset = carScale * 1.0;
-      float tz = carZ + rearOffset + age * trailDepth;
-
-      float rectW = 6.0 * (1.0 - age);
-      float rectH = 3.0 * (1.0 - age);
-      float halfRW = rectW * 0.5;
-      float halfRH = rectH * 0.5;
-      float perim = 2.0 * (rectW + rectH);
-      float d = hash11(trailFi + 0.5) * perim;
-      float px, py;
-      if (d < rectW) {
-        px = d - halfRW;
-        py = halfRH;
-      } else if (d < rectW + rectH) {
-        px = halfRW;
-        py = halfRH - (d - rectW);
-      } else if (d < 2.0 * rectW + rectH) {
-        px = halfRW - (d - rectW - rectH);
-        py = -halfRH;
-      } else {
-        px = -halfRW;
-        py = -halfRH + (d - 2.0 * rectW - rectH);
-      }
-      float jit = (hash11(trailFi * 2.317) - 0.5) * 0.05;
-      px += jit;
-      py += (hash11(trailFi * 3.491) - 0.5) * 0.05;
-
-      float trailLaneX = laneX;
-      float waveSway = sin(time * speed * 2.0 - age * 8.0) * laneX * age * 0.5 * uCarLaneActivity;
-      float tx = trailLaneX + waveSway + px;
-      float ty = carY + py;
-
-      pos = vec3(tx, ty, tz);
-
-      float ratio = fract(age + time * 0.08);
-      vec3 gradCol = brandGradient(ratio, time * 0.25);
-      float fade = (1.0 - age * age) * 0.1;
-      col = gradCol * fade;
+    } else if (idx < armEnd) {
+      // Two logarithmic spiral arms with scatter.
+      float ai = float(idx - coreEnd);
+      float r = pow(grHash(ai, 0.618), 0.6) * 2.4 + 0.2;
+      float arm = floor(grHash(ai, 0.19) * 2.0);
+      float winds = 2.4;
+      float baseA = r * winds + arm * 3.14159265 + rot * (0.6 / (0.25 + r));
+      float scatter = (grHash(ai, 0.73) - 0.5) * (0.5 + 0.5 / r);
+      float a = baseA + scatter;
+      float thick = (grHash(ai, 0.29) - 0.5) * 0.12 * (0.4 + r * 0.3);
+      p = vec3(cos(a) * r, thick, sin(a) * r);
+      float rn = clamp(r / 2.6, 0.0, 1.0);
+      float hue = mix(0.09, 0.6, rn) + (grHash(ai, 0.41) - 0.5) * 0.08;
+      float lum = 0.2 + 0.4 * (1.0 - rn) + 0.1 * grHash(ai, 0.87);
+      c = hsl2rgb(hue, 0.75, lum);
 
     } else {
-      presetRacetrack(fi, trackEnd, time, c0, c1, c2, 7.8, 1.0, 0.02, 0.0, 0.0, pos, col);
+      // Sparse halo stars around the disk.
+      float hi = float(idx - armEnd);
+      vec3 s = onSphere(grHash(hi, 0.618), grHash(hi, 0.271));
+      p = s * (2.6 + grHash(hi, 0.913) * 2.0) * vec3(1.0, 0.4, 1.0);
+      float lum = 0.15 + 0.4 * pow(grHash(hi, 0.5), 3.0);
+      c = hsl2rgb(mix(0.55, 0.72, grHash(hi, 0.37)), 0.3, lum);
     }
+
+    p = rotX(p, 1.05);
+    p = rotY(p, rot);
+    pos = p * scale;
+    col = c;
   }
 
-  /* ── dispatch ─────────────────────────────────────────── */
+  /* == dispatch =========================================== */
 
   void computePreset(int id, float fi, int cnt, float time,
     float c0, float c1, float c2, float c3,
     float c4, float c5, float c6, float c7,
     out vec3 pos, out vec3 col)
   {
-    // The integer 'id' is a ShaderId enum set up in ParticleCanvas
+    // The integer 'id' is a ShaderId enum set up in particle-boot.ts
     // (SHADER_ID_TO_INT), not a position in the presets array. Keep the
     // JS-side map in sync whenever a branch is added or reordered here.
     if      (id == 0) presetRacetrack    (fi, cnt, time, c0,c1,c2,c3,c4,c5,c6,c7, pos, col);

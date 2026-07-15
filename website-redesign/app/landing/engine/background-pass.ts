@@ -196,17 +196,20 @@ interface BlobDef {
   gain: number; // relative weight multiplier
 }
 
+// Deep-space nebula. A magenta/violet cloud core off to one side, a cold blue
+// gas band, cyan and pink wisps for accent, and the opposite corner pushed to
+// black so stars and foreground particles read against it.
 const DEFAULT_BLOBS: BlobDef[] = [
-  { pos: [0.62, 0.48], sigma: [0.38, 0.34], color: "#5d778f", gain: 1.0 }, // main diffuse highlight (brighter)
-  { pos: [0.74, 0.44], sigma: [0.16, 0.2], color: "#88a2bc", gain: 0.55 }, // tight accent on the right (peak highlight)
-  { pos: [0.3, 0.7], sigma: [0.32, 0.3], color: "#2b3a4c", gain: 0.9 }, // cool upper band
-  { pos: [0.18, 0.26], sigma: [0.26, 0.26], color: "#3a3230", gain: 0.65 }, // subtly warmer lower-left hint
-  { pos: [0.08, 0.52], sigma: [0.22, 0.28], color: "#0c111a", gain: 0.55 }, // mid-left shadow (deeper)
-  { pos: [0.5, 0.06], sigma: [0.4, 0.16], color: "#0e1420", gain: 0.65 }, // bottom rim falloff (deeper)
-  { pos: [0.9, 0.92], sigma: [0.32, 0.3], color: "#010204", gain: 0.9 }, // pull the top-right to dead black (harder)
+  { pos: [0.3, 0.6], sigma: [0.4, 0.36], color: "#5a1f83", gain: 1.0 }, // magenta-violet nebula core
+  { pos: [0.7, 0.4], sigma: [0.32, 0.34], color: "#14336e", gain: 0.9 }, // deep cobalt gas band
+  { pos: [0.52, 0.74], sigma: [0.22, 0.2], color: "#1f8f9a", gain: 0.5 }, // cyan wisp (bright accent)
+  { pos: [0.82, 0.64], sigma: [0.24, 0.26], color: "#8a2f6f", gain: 0.55 }, // hot-pink pocket
+  { pos: [0.12, 0.28], sigma: [0.28, 0.3], color: "#2a1c66", gain: 0.7 }, // indigo lower-left
+  { pos: [0.5, 0.05], sigma: [0.5, 0.16], color: "#04030f", gain: 0.7 }, // bottom rim falloff (deeper)
+  { pos: [0.92, 0.94], sigma: [0.34, 0.3], color: "#000004", gain: 0.95 }, // pull top-right to dead black
 ];
 
-const BASE_HEX = "#020407";
+const BASE_HEX = "#02010a";
 
 export class BackgroundPass extends Pass {
   private material: ShaderMaterial;
@@ -239,10 +242,10 @@ export class BackgroundPass extends Pass {
         uBlobSigma: { value: sigmas },
         uBlobColor: { value: colors },
         uBlobGain: { value: gains },
-        uGrainStrength: { value: 0.01 },
-        uWarpAmount: { value: 0.035 },
-        uBrightness: { value: 0.3 },
-        uSaturation: { value: 1.8 },
+        uGrainStrength: { value: 0.012 },
+        uWarpAmount: { value: 0.055 },
+        uBrightness: { value: 0.42 },
+        uSaturation: { value: 1.95 },
       },
       depthTest: false,
       depthWrite: false,

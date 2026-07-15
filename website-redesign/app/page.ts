@@ -94,20 +94,7 @@ type Section = {
   cta?: { label: string; href: string };
   // A second card rendered beside the primary panel (the ending has two).
   secondary?: { kicker: string; title: string; body: string };
-  // The "batteries included" package badges, on the full-stack section.
-  packages?: boolean;
 };
-
-// The five stacked package badges (auth, routing, data, session, component)
-// masked in the cycling brand color on the right of the full-stack section.
-// top/height are fractions of the badge container; data sits left of session.
-const PACKAGES = [
-  { name: 'auth', top: '0%', h: '24.2%', right: '24px', ratio: '904 / 245' },
-  { name: 'routing', top: '26.5%', h: '17.9%', right: '24px', ratio: '1440 / 288' },
-  { name: 'data', top: '50%', h: '16%', right: '250px', ratio: '577 / 290' },
-  { name: 'session', top: '50%', h: '16%', right: '24px', ratio: '797 / 288' },
-  { name: 'component', top: '75%', h: '25%', right: '24px', ratio: '1438 / 414' },
-];
 
 const SECTIONS: Section[] = [
   {
@@ -116,7 +103,6 @@ const SECTIONS: Section[] = [
     title: 'Closing the gap between the initial spark and shipping',
     body: "WebJs is the world's first truly full-stack JavaScript framework. It includes a server, router, data layer, UI components, testing, and much more. Everything you need to go from idea to launch in a single dependency.",
     panelClass: 'rmx-col-left-4',
-    packages: true,
   },
   {
     id: 'ai-ready',
@@ -176,11 +162,6 @@ function renderSection(s: Section) {
               <input id="newsletter" name="email" type="email" placeholder="name@example.com" autocomplete="email" />
               <button type="submit">Subscribe</button>
             </form>
-          </div>
-        ` : ''}
-        ${s.packages ? html`
-          <div class="rmx-packages" aria-hidden="true">
-            ${PACKAGES.map(p => html`<span class="rmx-package" style="top:${p.top};height:${p.h};right:${p.right};aspect-ratio:${p.ratio};mask-image:url(/public/landing/remix-package-${p.name}.svg);-webkit-mask-image:url(/public/landing/remix-package-${p.name}.svg)"></span>`)}
           </div>
         ` : ''}
         ${s.code ? html`
