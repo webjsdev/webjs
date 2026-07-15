@@ -506,9 +506,9 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
   test('a streaming-RPC action renders tokens incrementally (#489)', async () => {
     // <token-stream> calls an async-generator action; each yielded token streams
     // over the single RPC response and is appended as it arrives. We assert (1)
-    // the action response is the framed stream content type, and (2) the rendered
-    // count climbs over time (a snapshot mid-stream is below the final count),
-    // proving incremental arrival rather than one buffered result.
+    // the action response is the framed stream content type, and (2) the FIRST
+    // DOM paint shows fewer tokens than the final count (captured race-free via a
+    // MutationObserver), proving incremental arrival rather than one buffered result.
     /** @type {string|null} */
     let streamCt = null;
     const onResponse = (res) => {
