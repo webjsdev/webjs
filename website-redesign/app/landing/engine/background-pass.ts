@@ -29,7 +29,7 @@ import { Pass, FullScreenQuad } from "three/addons/postprocessing/Pass.js";
  * `UnrealBloomPass` is still 10× more expensive.
  */
 
-const NUM_BLOBS = 7;
+const NUM_BLOBS = 6;
 
 const VERTEX_SHADER = /* glsl */ `
   varying vec2 vUv;
@@ -196,19 +196,17 @@ interface BlobDef {
   gain: number; // relative weight multiplier
 }
 
-// The dark-matter glow, mapped like the JWST Abell 2744 composite: soft
-// BLUE-VIOLET clumps sitting on the dense galaxy clusters, a diffuse
-// MAGENTA/PINK bridge threading through the centre between them, and the
-// corners pushed to black void. The white/gold galaxies are drawn on top by
-// the PARTICLE preset; this pass is the coloured haze behind them.
+// Dim intergalactic backdrop behind the particle cosmic web. The bright warm
+// nodes and cool filaments are drawn by the PARTICLE preset now, so this is a
+// faint large-scale wash (violet into cobalt into indigo) with the corners
+// pushed to dead-black voids. Kept low-gain so the particle web reads on top.
 const DEFAULT_BLOBS: BlobDef[] = [
-  { pos: [0.26, 0.5], sigma: [0.19, 0.22], color: "#3d2ad6", gain: 1.0 }, // left blue-violet dark-matter clump
-  { pos: [0.8, 0.44], sigma: [0.2, 0.2], color: "#4634cc", gain: 0.85 }, // right blue clump
-  { pos: [0.52, 0.58], sigma: [0.36, 0.34], color: "#bd2c86", gain: 0.95 }, // central magenta diffuse bridge
-  { pos: [0.66, 0.32], sigma: [0.24, 0.22], color: "#d13f8e", gain: 0.6 }, // pink pocket
-  { pos: [0.12, 0.78], sigma: [0.22, 0.24], color: "#7a1f9e", gain: 0.5 }, // violet lower-left
-  { pos: [0.5, 0.04], sigma: [0.5, 0.16], color: "#05030f", gain: 0.7 }, // bottom void
-  { pos: [0.94, 0.95], sigma: [0.32, 0.3], color: "#020008", gain: 0.85 }, // top-right black void
+  { pos: [0.42, 0.58], sigma: [0.5, 0.44], color: "#3a1560", gain: 0.5 }, // faint violet large-scale wash
+  { pos: [0.74, 0.4], sigma: [0.34, 0.36], color: "#101f4a", gain: 0.45 }, // faint cobalt band
+  { pos: [0.12, 0.28], sigma: [0.3, 0.32], color: "#1a1350", gain: 0.4 }, // faint indigo lower-left
+  { pos: [0.5, 0.05], sigma: [0.5, 0.16], color: "#04030f", gain: 0.8 }, // bottom void
+  { pos: [0.92, 0.94], sigma: [0.34, 0.3], color: "#000004", gain: 1.0 }, // top-right dead-black void
+  { pos: [0.08, 0.9], sigma: [0.3, 0.28], color: "#01000a", gain: 0.85 }, // top-left dead-black void
 ];
 
 const BASE_HEX = "#02010a";
@@ -246,7 +244,7 @@ export class BackgroundPass extends Pass {
         uBlobGain: { value: gains },
         uGrainStrength: { value: 0.012 },
         uWarpAmount: { value: 0.055 },
-        uBrightness: { value: 0.46 },
+        uBrightness: { value: 0.42 },
         uSaturation: { value: 1.95 },
       },
       depthTest: false,
