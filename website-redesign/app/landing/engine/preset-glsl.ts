@@ -391,7 +391,10 @@ export const PRESET_GLSL = /* glsl */ `
       float r = pow(grHash(ci, 0.913), 1.5) * 0.4;
       p = s * r * vec3(1.0, 0.55, 1.0);
       float lum = 0.5 + 0.4 * (1.0 - r / 0.4);
-      c = hsl2rgb(mix(0.12, 0.06, grHash(ci, 0.5)), 0.7, lum);
+      // Densest centre saturates toward white-hot, fading out to gold: the
+      // ignited-node gradient (white -> gold) at the galaxy core.
+      float sat = mix(0.12, 0.72, clamp(r / 0.4, 0.0, 1.0));
+      c = hsl2rgb(mix(0.12, 0.06, grHash(ci, 0.5)), sat, lum);
 
     } else if (idx < armEnd) {
       // Two logarithmic spiral arms with scatter.

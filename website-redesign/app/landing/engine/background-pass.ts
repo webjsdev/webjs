@@ -29,7 +29,7 @@ import { Pass, FullScreenQuad } from "three/addons/postprocessing/Pass.js";
  * `UnrealBloomPass` is still 10× more expensive.
  */
 
-const NUM_BLOBS = 7;
+const NUM_BLOBS = 9;
 
 const VERTEX_SHADER = /* glsl */ `
   varying vec2 vUv;
@@ -182,12 +182,12 @@ function hexToOklab(hex: string): [number, number, number] {
  * 0.25 means the blob reaches roughly a quarter of the viewport before
  * falling off.
  *
- * The composition is a near-monochromatic slate-blue field: a diffuse
- * highlight band running diagonally across the middle, a small brighter
- * accent on the right, a faintly warmer pocket in the lower-left, and
- * the top-right pushed toward dead black. The colours all sit in a
- * narrow Oklab lightness band so the result reads as one cohesive wash
- * rather than distinct spots.
+ * The composition follows the astrophysics false-colour convention for the
+ * cosmic web: a dense central NODE that has ignited warm (a near-white gold
+ * core fading through amber, where matter has clumped enough to light up),
+ * ringed by cool low-density FILAMENTS (magenta-violet into deep cobalt into
+ * indigo, the diffuse gas and dark matter), with the far corner pushed toward
+ * a dead-black VOID. Hot bright node, cold dark filaments, black void.
  */
 interface BlobDef {
   pos: [number, number];
@@ -196,17 +196,19 @@ interface BlobDef {
   gain: number; // relative weight multiplier
 }
 
-// Deep-space nebula. A magenta/violet cloud core off to one side, a cold blue
-// gas band, cyan and pink wisps for accent, and the opposite corner pushed to
-// black so stars and foreground particles read against it.
+// Cosmic-web false colour: a warm ignited node (white-gold core, amber glow)
+// where matter has clumped, surrounded by cool low-density filaments
+// (magenta-violet, cobalt, indigo) and a dead-black void in the far corner.
 const DEFAULT_BLOBS: BlobDef[] = [
-  { pos: [0.3, 0.6], sigma: [0.4, 0.36], color: "#5a1f83", gain: 1.0 }, // magenta-violet nebula core
-  { pos: [0.7, 0.4], sigma: [0.32, 0.34], color: "#14336e", gain: 0.9 }, // deep cobalt gas band
-  { pos: [0.52, 0.74], sigma: [0.22, 0.2], color: "#1f8f9a", gain: 0.5 }, // cyan wisp (bright accent)
-  { pos: [0.82, 0.64], sigma: [0.24, 0.26], color: "#8a2f6f", gain: 0.55 }, // hot-pink pocket
-  { pos: [0.12, 0.28], sigma: [0.28, 0.3], color: "#2a1c66", gain: 0.7 }, // indigo lower-left
+  { pos: [0.45, 0.56], sigma: [0.085, 0.08], color: "#fff1d6", gain: 1.35 }, // hot white-gold node core (ignited)
+  { pos: [0.45, 0.56], sigma: [0.19, 0.17], color: "#f0a041", gain: 0.9 }, // amber node glow
+  { pos: [0.42, 0.58], sigma: [0.4, 0.36], color: "#5a1f83", gain: 0.72 }, // magenta-violet filament halo
+  { pos: [0.74, 0.4], sigma: [0.32, 0.34], color: "#14336e", gain: 0.85 }, // deep cobalt gas band
+  { pos: [0.84, 0.66], sigma: [0.24, 0.26], color: "#8a2f6f", gain: 0.42 }, // hot-pink pocket (H-alpha)
+  { pos: [0.12, 0.28], sigma: [0.28, 0.3], color: "#2a1c66", gain: 0.62 }, // indigo lower-left filament
   { pos: [0.5, 0.05], sigma: [0.5, 0.16], color: "#04030f", gain: 0.7 }, // bottom rim falloff (deeper)
-  { pos: [0.92, 0.94], sigma: [0.34, 0.3], color: "#000004", gain: 0.95 }, // pull top-right to dead black
+  { pos: [0.92, 0.94], sigma: [0.34, 0.3], color: "#000004", gain: 0.95 }, // pull top-right to dead-black void
+  { pos: [0.08, 0.9], sigma: [0.3, 0.28], color: "#01000a", gain: 0.75 }, // top-left void deepening
 ];
 
 const BASE_HEX = "#02010a";
