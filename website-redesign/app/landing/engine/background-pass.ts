@@ -196,18 +196,21 @@ interface BlobDef {
   gain: number; // relative weight multiplier
 }
 
-// Cosmic-web false colour: a warm ignited node (white-gold core, amber glow)
-// where matter has clumped, surrounded by cool low-density filaments
-// (magenta-violet, cobalt, indigo) and a dead-black void in the far corner.
+// Colours sampled directly from the JWST Abell 2744 dark-matter composite
+// (mean of each region). The concentrated centre is a purple-magenta, the
+// flanking lobes blue-violet, the corners near-black void. Positions, sizes,
+// and gains are unchanged; only the hues are set to the measured values. The
+// shader boosts chroma (uSaturation) and scales brightness, and Oklab chroma
+// scaling preserves hue, so the on-screen hues match these samples.
 const DEFAULT_BLOBS: BlobDef[] = [
-  { pos: [0.45, 0.56], sigma: [0.075, 0.07], color: "#ffe6c8", gain: 0.55 }, // small warm highlight (dimmed)
-  { pos: [0.45, 0.56], sigma: [0.2, 0.18], color: "#a8306a", gain: 0.95 }, // deep rose-magenta core glow
-  { pos: [0.42, 0.58], sigma: [0.4, 0.36], color: "#5a1f83", gain: 0.9 }, // magenta-violet filament halo
-  { pos: [0.74, 0.4], sigma: [0.32, 0.34], color: "#14336e", gain: 0.85 }, // deep cobalt gas band
-  { pos: [0.84, 0.66], sigma: [0.24, 0.26], color: "#8a2f6f", gain: 0.42 }, // hot-pink pocket (H-alpha)
-  { pos: [0.12, 0.28], sigma: [0.28, 0.3], color: "#2a1c66", gain: 0.62 }, // indigo lower-left filament
-  { pos: [0.5, 0.05], sigma: [0.5, 0.16], color: "#04030f", gain: 0.7 }, // bottom rim falloff (deeper)
-  { pos: [0.92, 0.94], sigma: [0.34, 0.3], color: "#000004", gain: 0.95 }, // pull top-right to dead-black void
+  { pos: [0.45, 0.56], sigma: [0.075, 0.07], color: "#cf63ca", gain: 0.55 }, // light magenta highlight
+  { pos: [0.45, 0.56], sigma: [0.2, 0.18], color: "#9f1e9e", gain: 0.95 }, // central purple-magenta core
+  { pos: [0.42, 0.58], sigma: [0.4, 0.36], color: "#84247b", gain: 0.9 }, // deep magenta halo
+  { pos: [0.74, 0.4], sigma: [0.32, 0.34], color: "#4b42b1", gain: 0.85 }, // right blue-violet clump
+  { pos: [0.84, 0.66], sigma: [0.24, 0.26], color: "#8d29a2", gain: 0.42 }, // magenta-purple pocket
+  { pos: [0.12, 0.28], sigma: [0.28, 0.3], color: "#7149df", gain: 0.62 }, // lower-left blue-violet clump
+  { pos: [0.5, 0.05], sigma: [0.5, 0.16], color: "#04030f", gain: 0.7 }, // bottom rim falloff (void)
+  { pos: [0.92, 0.94], sigma: [0.34, 0.3], color: "#000004", gain: 0.95 }, // top-right dead-black void
   { pos: [0.08, 0.9], sigma: [0.3, 0.28], color: "#01000a", gain: 0.75 }, // top-left void deepening
 ];
 
