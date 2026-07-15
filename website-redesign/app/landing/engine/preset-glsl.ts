@@ -124,6 +124,19 @@ export const PRESET_GLSL = /* glsl */ `
     return (pick < 0.5) ? b1 : ((pick < 0.82) ? b2 : b3);
   }
 
+  // Colour of a single galaxy at the given brightness. Matches the JWST field:
+  // mostly white / blue-white, a large minority warm gold-orange (redshifted
+  // background galaxies), a few blue. The dark-matter GLOW (blue/magenta) is
+  // the background pass; the galaxies themselves are white/gold/blue points.
+  vec3 galaxyColor(float s, float lum) {
+    float pick = grHash(s, 0.234);
+    float hue, sat;
+    if (pick < 0.60)      { hue = 0.62; sat = 0.07; }                        // white / blue-white
+    else if (pick < 0.86) { hue = mix(0.055, 0.11, grHash(s, 0.5)); sat = 0.78; } // gold / orange
+    else                  { hue = 0.60; sat = 0.5; }                         // blue
+    return hsl2rgb(hue, sat, lum);
+  }
+
   // A cosmic-web slice: bright warm NODES (clumps that have ignited) linked by
   // FILAMENTS strung with galaxy beads, faint dust in the VOIDS, and a
   // volumetric depth haze. Density maps to colour the way an IllustrisTNG /
@@ -142,38 +155,39 @@ export const PRESET_GLSL = /* glsl */ `
     int idx = int(fi);
     float ang = time * 0.03;           // slow survey rotation of the volume
 
-    // Budget: 17% node clumps, 15% galaxy beads, 54% filament threads, 14% void.
-    int nodeCnt = int(fcnt * 0.17);
+    // Budget: 15% cluster galaxies, 15% filament galaxy beads, 38% filament
+    // galaxies, 32% scattered background-galaxy field. Every particle is a
+    // galaxy; density (not hue) marks the structure, the way the real field is
+    // packed with galaxies everywhere and densest on the clusters.
+    int nodeCnt = int(fcnt * 0.15);
     int haloCnt = nodeCnt + int(fcnt * 0.15);
-    int voidStart = int(fcnt * 0.86);
+    int voidStart = int(fcnt * 0.68);
 
     vec3 lp;                           // local position in the [-1,1]^3 cell
     vec3 c;
 
     if (idx < nodeCnt) {
-      // Dense node clump: a tight sphere, centre saturating to white-hot gold.
+      // Cluster galaxies: a tight clump of galaxies on a node, densest and
+      // brightest at the centre (the intracluster light washes to white).
       float ni = float(idx);
       float k = floor(grHash(ni, 0.53) * N);
       vec3 s = onSphere(grHash(ni, 0.618), grHash(ni, 0.412));
       float rr = pow(grHash(ni, 0.913), 2.2) * 0.10;
       lp = webNode(k) + s * rr;
       float dens = 1.0 - clamp(rr / 0.10, 0.0, 1.0);     // 1 at centre, 0 at edge
-      float hue = mix(0.12, 0.07, grHash(ni, 0.3));      // gold -> amber
-      float sat = mix(0.80, 0.08, dens);                 // centre desaturates to white
-      float lum = 0.5 + 0.6 * dens;
-      c = hsl2rgb(hue, sat, lum);
+      c = galaxyColor(ni, 0.55 + 0.5 * dens);
 
     } else if (idx >= voidStart) {
-      // Faint void dust: fills the box dimly so the voids are not dead flat,
-      // but stays dark enough to read as empty space.
+      // Scattered background-galaxy field: fills the whole frame (voids
+      // included) with faint galaxies, a few brighter, like the real image.
       float vi = float(idx - voidStart);
       lp = vec3(
         grHash(vi, 0.19) * 2.0 - 1.0,
         grHash(vi, 0.53) * 2.0 - 1.0,
         grHash(vi, 0.87) * 2.0 - 1.0
-      ) * 1.12;
-      float lum = 0.010 + 0.028 * grHash(vi, 0.4);
-      c = hsl2rgb(mix(0.62, 0.72, grHash(vi, 0.6)), 0.5, lum);
+      ) * 1.15;
+      float lum = 0.10 + 0.6 * pow(grHash(vi, 0.4), 3.0);
+      c = galaxyColor(vi + 7.0, lum);
 
     } else {
       // Filament particles (diffuse thread) and galaxy beads both ride the same
@@ -203,22 +217,20 @@ export const PRESET_GLSL = /* glsl */ `
       float ends = abs(t - 0.5) * 2.0;             // 0 mid-thread, 1 at the nodes
 
       if (isHalo) {
-        // Galaxy bead: a tight bright clump seated on the filament.
+        // Galaxy bead: a tight bright clump of galaxies seated on the filament.
         vec3 s = onSphere(grHash(seed, 0.618), grHash(seed, 0.412));
         float rr = pow(grHash(seed, 0.913), 2.0) * 0.05;
         lp = base + s * rr;
         float dens = 1.0 - clamp(rr / 0.05, 0.0, 1.0);
-        c = hsl2rgb(mix(0.12, 0.08, grHash(seed, 0.3)), mix(0.72, 0.14, dens), 0.5 + 0.55 * dens);
+        c = galaxyColor(seed, 0.5 + 0.5 * dens);
       } else {
-        // Diffuse thread: thin mid-filament, swelling into the nodes.
+        // Filament galaxies: thin mid-filament, swelling into the nodes.
+        // Fainter than the clusters; brightening toward the nodes.
         float th = grHash(seed, 0.913) * 6.28318530718;
         float rr = sqrt(grHash(seed, 0.33)) * 0.04 * (0.45 + ends * 1.4);
         lp = base + (perp1 * cos(th) + perp2 * sin(th)) * rr;
-        // Cool violet mid-thread warming toward the nodes; sweep the hue the
-        // long way (violet -> H-alpha pink -> gold), NEVER through green/cyan.
-        float hue = fract(0.70 + pow(ends, 2.2) * 0.40);
-        float lum = 0.17 + 0.36 * pow(ends, 1.5) + 0.06 * grHash(seed, 0.77);
-        c = hsl2rgb(hue, 0.62, lum);
+        float lum = 0.16 + 0.42 * pow(ends, 1.5) + 0.08 * grHash(seed, 0.77);
+        c = galaxyColor(seed, lum);
       }
     }
 
