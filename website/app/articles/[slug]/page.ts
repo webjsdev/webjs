@@ -83,7 +83,6 @@ export default async function ArticlePage({ params }: { params: { slug: string }
       </nav>
 
       <header class="mb-[64px]">
-        <p class="font-mono text-[12px] uppercase tracking-[0.14em] text-accent font-semibold mb-[20px]">Article</p>
         <h1 class="font-serif text-[clamp(36px,6vw,56px)] leading-[1.05] tracking-tight text-fg m-0 mb-[24px]">${a.title}</h1>
         <p class="text-fg-muted text-[19px] leading-[1.55] m-0 font-serif italic">${a.tagline}</p>
       </header>
