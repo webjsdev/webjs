@@ -41,6 +41,30 @@
   max-height: 128px;
   width: auto;
 }
+
+/* Loader: the Velocity W, with its strikethrough drawing across live. Pure SVG
+   + CSS, no asset. The global prefers-reduced-motion rule clamps the animation
+   so it settles to the whole W for motion-sensitive users. */
+.loading-w {
+  width: 200px;
+  height: auto;
+  display: block;
+  overflow: visible;
+  filter: drop-shadow(0 0 16px rgba(150, 170, 255, 0.22));
+}
+.loading-w .lw-strike {
+  transform-box: view-box;
+  transform-origin: 18px 85px;
+  animation: lw-strike 1.6s ease-in-out infinite;
+}
+@keyframes lw-strike {
+  0%   { transform: scaleX(0); opacity: 0; }
+  8%   { opacity: 1; }
+  50%  { transform: scaleX(1); opacity: 1; }
+  80%  { transform: scaleX(1); opacity: 1; }
+  95%  { transform: scaleX(1); opacity: 0; }
+  100% { transform: scaleX(0); opacity: 0; }
+}
 @keyframes loading-screen-dismiss {
   from { opacity: 1; }
   to { opacity: 0; visibility: hidden; }
@@ -107,7 +131,7 @@ scroll-logo .rmx-wordmark {
      not stretch to full width; JS swaps in pixel sizes. Aspect matches the
      wordmark SVG viewBox (684 x 150) so mask-size does not distort it. */
   width: min(calc(100vw - 48px), 560px);
-  height: calc(min(100vw - 48px, 560px) * 150 / 684);
+  height: calc(min(100vw - 48px, 560px) * 170 / 760);
 }
 scroll-logo span[data-ghost] {
   position: absolute;

@@ -18,7 +18,7 @@ const LARGE_TOP = 170;
 const SMALL_TOP = 24;
 const LEFT = 24;
 const SCROLL_PX = 120;
-const SVG_RATIO = 684 / 150;
+const SVG_RATIO = 760 / 170;
 // Cap the large (top) wordmark so a short word keeps natural proportions
 // instead of stretching edge to edge. Matches the CSS SSR clamp in home.css.
 const MAX_LARGE_WIDTH = 560;

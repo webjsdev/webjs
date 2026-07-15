@@ -1,0 +1,7 @@
+# Local brand-exploration scratch. Embeds third-party trademarked logos
+# (Next.js / Astro / Remix) and a commercial font (Obviously); keep it local.
+/public/brand-explore.html
+/public/brand-assets/
+# Throwaway wordmark variants used only during the logo exploration.
+/public/landing/webjs-wordmark-caps.svg
+/public/landing/webjs-wordmark-inter.bak.svg

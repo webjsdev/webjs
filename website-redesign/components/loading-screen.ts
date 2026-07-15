@@ -53,12 +53,12 @@ export class LoadingScreen extends WebComponent {
     const cls = phase === 'dismissing' ? 'loading-screen-overlay is-dismissed' : 'loading-screen-overlay';
     return html`
       <div class=${cls}>
-        <picture>
-          <source media="(prefers-reduced-motion: reduce)" srcset="/public/landing/remix-runner-static.png" type="image/png" />
-          <source srcset="/public/landing/remix-runner.avif" type="image/avif" />
-          <source srcset="/public/landing/remix-runner.webp" type="image/webp" />
-          <img class="loading-runner" src="/public/landing/remix-runner.gif" alt="Loading WebJs homepage" width="384" height="384" loading="eager" fetchpriority="high" />
-        </picture>
+        <svg class="loading-w" viewBox="20 -6 260 176" role="img" aria-label="Loading WebJs">
+          <g transform="translate(40,0) skewX(-14)">
+            <path class="lw-mark" d="M10 10 L60 150 L110 66 L160 150 L210 10" fill="none" stroke="#fff" stroke-width="32" stroke-linejoin="miter" stroke-linecap="butt"/>
+          </g>
+          <rect class="lw-strike" x="18" y="79" width="248" height="13" fill="#000"/>
+        </svg>
       </div>
     `;
   }

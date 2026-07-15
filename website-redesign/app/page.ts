@@ -191,7 +191,7 @@ export default function LandingPage() {
       <main id="main-content" tabindex="-1">
         <section id="the-framework" class="rmx-hero">
           <div class="rmx-hero-group">
-            <h1 class="rmx-hero-title">A web framework for building anything</h1>
+            <h1 class="rmx-hero-title">A web framework for the AI era</h1>
             <p class="rmx-hero-body">
               WebJs gives you the power and tools to build anything you can dream
               of. To get started, just <span class="rmx-code">npx webjs create my-app</span>
@@ -206,7 +206,7 @@ export default function LandingPage() {
       <footer class="rmx-footer">
         <div class="rmx-footer-content">
           <div class="rmx-brand-row">
-            <span class="rmx-footer-wordmark" role="img" aria-label="WebJs" style="font-family:'Inter',sans-serif;font-weight:800;font-size:16px;letter-spacing:-0.03em;color:#fff">WebJs</span>
+            <img class="rmx-footer-wordmark" src="/public/landing/webjs-wordmark.svg" alt="WebJs" style="height:24px;width:auto;display:block" />
             <div class="rmx-social">
               ${SOCIAL.map(l => html`<a href=${l.href} aria-label=${l.label} target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d=${l.path}></path></svg></a>`)}
             </div>

@@ -34,27 +34,6 @@ const racecar: Preset = {
     { id: "shimmer", label: "Shimmer", min: 0, max: 2, initial: 0.6 },
     { id: "rotZ", label: "Rotate Z", min: -180, max: 180, initial: 15 },
   ],
-  labels: [
-    {
-      id: "frontend",
-      text: "FRONTEND",
-      anchor: [0, 0.08, 0.5],
-      offset: [-90, -58],
-    },
-    {
-      id: "between",
-      text: "EVERYTHING IN BETWEEN",
-      anchor: [0.0, 0.04, -0.04],
-      offset: [-110, -72],
-    },
-    {
-      id: "backend",
-      text: "BACKEND",
-      anchor: [0, 0.18, -0.25],
-      offset: [-160, -104],
-    },
-  ],
-  labelColor: "#BFC7E2",
   info: {
     title: "Racecar",
     description: "Race car rendered as a particle cloud",
@@ -112,21 +91,6 @@ const runner: Preset = {
     { id: "shimmer", label: "Shimmer", min: 0, max: 2, initial: 0.5 },
     { id: "rotZ", label: "Rotate Z", min: -180, max: 180, initial: 15 },
   ],
-  labels: [
-    {
-      id: "humans",
-      text: "EASY FOR HUMANS AND MODELS",
-      anchor: [0.28, 0.5, -0.04],
-      offset: [-130, -84],
-    },
-    {
-      id: "parts",
-      text: "ALL THE PARTS YOU NEED",
-      anchor: [0.36, -0.2, -0.06],
-      offset: [-110, -72],
-    },
-  ],
-  labelColor: "#BFC7E2",
   info: {
     title: "Model Kit Runner",
     description: "Runner figure rendered as a particle cloud",
