@@ -2337,7 +2337,7 @@ function findInSlice(slice, id) {
  * swap settles. The View Transitions API snapshots and replaces DOM, so
  * elements can need a re-upgrade once the animation finishes.
  *
- * @param {{ start: Comment, end: Comment } | undefined} range
+ * @param {{ start: Comment, end: Comment | null } | undefined} range
  */
 function upgradeCustomElementsInRange(range) {
   if (!range || !range.start) return;
