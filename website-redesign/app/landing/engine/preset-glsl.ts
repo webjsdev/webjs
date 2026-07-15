@@ -120,11 +120,19 @@ export const PRESET_GLSL = /* glsl */ `
 
       float temp = grHash(fi, 0.2917);
       float hue = mix(0.55, 0.70, temp);
-      if (temp > 0.86) hue = 0.08;
+      float sat = 0.25 + 0.35 * (1.0 - near01);
+      float lumBoost = 1.0;
+      // Baryonic-gas temperature scale, applied to only a FEW particles so the
+      // field stays mostly pale white: the hottest, densest gas reads bright
+      // white-gold, warm-hot filament gas orange-red, cold void gas
+      // blue-violet. An independent hash keeps this a clean small slice.
+      float tcol = grHash(fi, 0.417);
+      if (tcol > 0.985)      { hue = 0.14;  sat = max(sat, 0.60); lumBoost = 1.6; } // hottest: white-gold
+      else if (tcol > 0.965) { hue = 0.045; sat = max(sat, 0.85); lumBoost = 1.25; } // warm-hot: orange-red
+      else if (tcol > 0.930) { hue = 0.71;  sat = max(sat, 0.65); }                // cold void: blue-violet
       float twinkle = 0.8 + 0.2 * sin(time * (2.0 + grHash(fi, 0.51) * 6.0) + fi * 1.31);
       float bright = pow(near01, 1.6) * (0.45 + 0.55 * grHash(fi, 0.77));
-      float lum = (0.12 + 0.9 * bright) * twinkle;
-      float sat = 0.25 + 0.35 * (1.0 - near01);
+      float lum = (0.12 + 0.9 * bright) * twinkle * lumBoost;
       col = hsl2rgb(hue, sat, clamp(lum, 0.0, 1.0));
 
     } else {
