@@ -15,10 +15,12 @@
  *
  * These tests SIMULATE the stripping parser rather than depending on the
  * runner's browser being an affected version. That is deliberate and is the
- * whole point: this repo's web-test-runner pins Chromium 148, which is LOSSLESS,
- * so a test that merely asserted "markers survive" would pass here whether or
- * not the fix exists, and CI would never catch a regression. It is also why CI
- * never caught the original bug. By stubbing a lossy `parseHTMLUnsafe` we assert
+ * whole point: the Chromium this repo's web-test-runner currently resolves (148)
+ * is LOSSLESS, so a test that merely asserted "markers survive" would pass here
+ * whether or not the fix exists, and CI would never catch a regression. It is
+ * also why CI never caught the original bug. Note `playwright` is a caret range,
+ * so that version is a lockfile artifact and moves on any dependency refresh:
+ * simulating the defect is what makes this suite hold either way. By stubbing a lossy `parseHTMLUnsafe` we assert
  * the behaviour that actually matters (parseHTML must not INHERIT the loss) on
  * every browser, today and after the browser is fixed.
  *
@@ -152,8 +154,8 @@ suite('Client router: the nav parse preserves comment markers (#1007)', () => {
   // corruption: a soft nav would submit different bytes than a hard refresh.
   //
   // So compare the fallback against the browser's own single-pass parse and
-  // require equality. This is the class of guard CI CAN run (Chromium 148 shares
-  // the serializer defect even though it does not strip comments).
+  // require equality. This is the class of guard CI CAN run whatever Chromium it
+  // resolves, because the serializer behaviour is not tied to the comment defect.
   suite('the comment-preserving fallback is lossless for content', () => {
     const cases = [
       ['textarea leading newline', '<textarea id="t">\n\nfoo</textarea>'],
