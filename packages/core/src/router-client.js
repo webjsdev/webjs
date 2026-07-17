@@ -116,14 +116,80 @@ function parseHTML(html) {
       // Fall through to a document parse (still functional, just the #936 path).
     }
   }
-  if (typeof Document !== 'undefined' && typeof Document.parseHTMLUnsafe === 'function') {
+  if (
+    typeof Document !== 'undefined' &&
+    typeof Document.parseHTMLUnsafe === 'function' &&
+    parseHTMLUnsafePreservesComments()
+  ) {
     return Document.parseHTMLUnsafe(html);
   }
-  if (typeof DOMParser !== 'undefined') {
-    return new DOMParser().parseFromString(html, 'text/html');
-  }
-  return null;
+  return parseDocumentPreservingComments(html);
 }
+
+/**
+ * Is `Document.parseHTMLUnsafe` lossless for comments?
+ *
+ * Chromium 150 strips EVERY comment from `Document.parseHTMLUnsafe` output
+ * (#1007). No other parse API does: `DOMParser`, `setHTMLUnsafe`,
+ * `template.innerHTML`, and plain `innerHTML` all preserve them, and the
+ * document's own navigation parser preserves them (which is why a hard refresh
+ * always looked fine and only soft nav broke). MDN documents parseHTMLUnsafe as
+ * the parse-WITHOUT-sanitization entry point, so this reads as a browser defect
+ * rather than intent, but the whole router rides on comments (`wj:children`
+ * layout markers) and so does hydration (`webjs-hydrate`), so we cannot take
+ * the risk either way.
+ *
+ * Probed once, lazily, rather than version-sniffed: when the browser is fixed
+ * we silently return to the fast single-pass native path, and a future browser
+ * that regresses the same way is caught with no code change.
+ *
+ * @returns {boolean}
+ */
+let _parseUnsafeLossless = null;
+function parseHTMLUnsafePreservesComments() {
+  if (_parseUnsafeLossless !== null) return _parseUnsafeLossless;
+  try {
+    const probe = Document.parseHTMLUnsafe('<!doctype html><body><!--c--><i></i>');
+    _parseUnsafeLossless = probe?.body?.firstChild?.nodeType === 8;
+  } catch {
+    _parseUnsafeLossless = false;
+  }
+  return _parseUnsafeLossless;
+}
+
+/**
+ * Parse a FULL document while preserving comments.
+ *
+ * `DOMParser` keeps comments but does NOT process Declarative Shadow DOM, which
+ * `Document.parseHTMLUnsafe` does in one pass. So when the response actually
+ * carries DSD, re-run the body through `setHTMLUnsafe` (which preserves comments
+ * AND attaches shadow roots). That second pass is skipped entirely for the
+ * common no-DSD response, so the usual nav stays single-parse.
+ *
+ * @param {string} html
+ * @returns {Document | null}
+ */
+function parseDocumentPreservingComments(html) {
+  if (typeof DOMParser === 'undefined') return null;
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  if (
+    doc &&
+    doc.body &&
+    typeof doc.body.setHTMLUnsafe === 'function' &&
+    DSD_TEMPLATE_RE.test(html)
+  ) {
+    try {
+      doc.body.setHTMLUnsafe(doc.body.innerHTML);
+    } catch {
+      // Keep the DOMParser tree: markers intact, DSD unattached. That matches
+      // the pre-setHTMLUnsafe baseline and is never worse than dropping markers.
+    }
+  }
+  return doc;
+}
+
+/** Declarative Shadow DOM opt-in, the only case needing the second parse pass. */
+const DSD_TEMPLATE_RE = /<template[^>]*\sshadowrootmode\s*=/i;
 
 let enabled = false;
 
