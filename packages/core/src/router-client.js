@@ -87,7 +87,8 @@ const STREAM_MIME = 'text/vnd.webjs-stream.html';
  * single-pass API that also processes Declarative Shadow DOM) but it STRIPS
  * EVERY COMMENT in Chromium 150 (#1007), which deletes both. So it is used only
  * when a one-time probe proves it lossless on this engine, and otherwise we parse
- * with DOMParser (comments preserved, DSD attached separately).
+ * with DOMParser (comments preserved; DSD is left unprocessed, see
+ * `parseDocumentPreservingComments` for why that gap beats both ways of closing it).
  *
  * A partial-nav response (#936) is an INNER fragment that BEGINS with the
  * `<!--wj:children:<path>-->` layout marker and carries no `<!doctype>`/`<html>`.
@@ -168,7 +169,7 @@ function parseHTMLUnsafePreservesComments() {
  * Clear the memoized losslessness probe. Test-only: a browser cannot change
  * mid-session, so nothing in the runtime needs this. Tests SIMULATE a stripping
  * parser (rather than depending on the runner's browser actually being an
- * affected version, which this repo's pinned Chromium 148 is not) and reset the
+ * affected version, which the Chromium web-test-runner currently resolves is not) and reset the
  * memo around that stub.
  */
 function resetParseProbe() {
