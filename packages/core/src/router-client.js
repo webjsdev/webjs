@@ -79,8 +79,15 @@ const STREAM_MIME = 'text/vnd.webjs-stream.html';
  */
 
 /**
- * Parse HTML into a Document. Prefers Document.parseHTMLUnsafe (processes
- * Declarative Shadow DOM) over DOMParser (does NOT process DSD).
+ * Parse a navigation response into a Document, PRESERVING COMMENTS.
+ *
+ * Comments are load-bearing here, not incidental: the partial swap pairs on
+ * `<!--wj:children:<path>-->` markers and hydration keys off `<!--webjs-hydrate-->`.
+ * `Document.parseHTMLUnsafe` would be the natural choice (it is the only
+ * single-pass API that also processes Declarative Shadow DOM) but it STRIPS
+ * EVERY COMMENT in Chromium 150 (#1007), which deletes both. So it is used only
+ * when a one-time probe proves it lossless on this engine, and otherwise we parse
+ * with DOMParser (comments preserved, DSD attached separately).
  *
  * A partial-nav response (#936) is an INNER fragment that BEGINS with the
  * `<!--wj:children:<path>-->` layout marker and carries no `<!doctype>`/`<html>`.
@@ -172,10 +179,20 @@ function resetParseProbe() {
  * Parse a FULL document while preserving comments.
  *
  * `DOMParser` keeps comments but does NOT process Declarative Shadow DOM, which
- * `Document.parseHTMLUnsafe` does in one pass. So when the response actually
- * carries DSD, re-run the body through `setHTMLUnsafe` (which preserves comments
- * AND attaches shadow roots). That second pass is skipped entirely for the
- * common no-DSD response, so the usual nav stays single-parse.
+ * `Document.parseHTMLUnsafe` does in one pass. So the DSD templates are attached
+ * afterwards, by MOVING each `<template shadowrootmode>`'s already-parsed nodes
+ * into a real shadow root.
+ *
+ * Deliberately NOT `body.setHTMLUnsafe(body.innerHTML)`, which looks like the
+ * obvious way to get DSD from an already-parsed tree and is a content-corrupting
+ * trap: that round-trip is not idempotent, because Chromium does not implement
+ * the spec's fragment-serializing LF-compensation rule (append U+000A when a
+ * `pre` / `textarea` / `listing` element's first Text child starts with one). So
+ * serializing and reparsing silently eats a leading newline:
+ * `<textarea>\n\nfoo</textarea>` parses to `"\nfoo"` natively but `"foo"` after a
+ * round-trip. In a `<textarea>` that is silent form-data corruption, and it would
+ * make a soft nav submit different bytes than a hard refresh. Moving the nodes
+ * never re-serializes, so content is bit-identical to the single-pass parse.
  *
  * @param {string} html
  * @returns {Document | null}
@@ -183,24 +200,46 @@ function resetParseProbe() {
 function parseDocumentPreservingComments(html) {
   if (typeof DOMParser === 'undefined') return null;
   const doc = new DOMParser().parseFromString(html, 'text/html');
-  if (
-    doc &&
-    doc.body &&
-    typeof doc.body.setHTMLUnsafe === 'function' &&
-    DSD_TEMPLATE_RE.test(html)
-  ) {
-    try {
-      doc.body.setHTMLUnsafe(doc.body.innerHTML);
-    } catch {
-      // Keep the DOMParser tree: markers intact, DSD unattached. That matches
-      // the pre-setHTMLUnsafe baseline and is never worse than dropping markers.
-    }
-  }
+  if (doc && doc.body) attachDeclarativeShadowRoots(doc.body);
   return doc;
 }
 
-/** Declarative Shadow DOM opt-in, the only case needing the second parse pass. */
-const DSD_TEMPLATE_RE = /<template[^>]*\sshadowrootmode\s*=/i;
+/**
+ * Attach every `<template shadowrootmode>` under `root` as a real shadow root,
+ * recursing so nested DSD inside a shadow root is attached too.
+ *
+ * DOMParser leaves a DSD template inert (an ordinary `<template>` element), so
+ * without this a `static shadow = true` component soft-navigated in would never
+ * get its root. `sr.append(t.content)` MOVES the already-parsed nodes, so there
+ * is no serialize/reparse and nothing can be lost in translation.
+ *
+ * @param {ParentNode} root
+ */
+function attachDeclarativeShadowRoots(root) {
+  for (const t of [...root.querySelectorAll('template[shadowrootmode]')]) {
+    const mode = t.getAttribute('shadowrootmode');
+    if (mode !== 'open' && mode !== 'closed') continue;
+    const host = t.parentElement;
+    // A host may legitimately already have a root (nothing else attaches one on
+    // this detached tree, but a malformed response could carry two templates).
+    if (!host || host.shadowRoot) continue;
+    try {
+      const shadow = host.attachShadow({
+        mode,
+        delegatesFocus: t.hasAttribute('shadowrootdelegatesfocus'),
+        clonable: t.hasAttribute('shadowrootclonable'),
+        serializable: t.hasAttribute('shadowrootserializable'),
+      });
+      shadow.append(t.content);
+      t.remove();
+      attachDeclarativeShadowRoots(shadow);
+    } catch {
+      // attachShadow throws for an element that cannot host one. Leave the
+      // template in place: markers still intact, which is never worse than the
+      // pre-setHTMLUnsafe baseline.
+    }
+  }
+}
 
 let enabled = false;
 

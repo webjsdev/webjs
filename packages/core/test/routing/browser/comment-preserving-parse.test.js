@@ -133,6 +133,74 @@ suite('Client router: the nav parse preserves comment markers (#1007)', () => {
     });
   });
 
+  // The fallback must be lossless for NON-comment content too, not just markers.
+  // Asserting only "markers survive" is what let a real content-corrupting bug
+  // through review once: `setHTMLUnsafe(innerHTML)` looks like a free way to get
+  // DSD out of an already-parsed tree, but Chromium omits the spec's
+  // LF-compensation on fragment serialization, so the round-trip silently ate a
+  // leading newline in <pre>/<textarea>. In a <textarea> that is form-data
+  // corruption: a soft nav would submit different bytes than a hard refresh.
+  //
+  // So compare the fallback against the browser's own single-pass parse and
+  // require equality. This is the class of guard CI CAN run (Chromium 148 shares
+  // the serializer defect even though it does not strip comments).
+  suite('the comment-preserving fallback is lossless for content', () => {
+    const cases = [
+      ['textarea leading newline', '<textarea id="t">\n\nfoo</textarea>'],
+      ['pre leading newline', '<pre id="t">\n\ncode</pre>'],
+      ['textarea with only a newline', '<textarea id="t">\n</textarea>'],
+      ['escaped markup in pre', '<pre id="t">&lt;div&gt;&amp;amp;</pre>'],
+      ['script raw text', '<script id="t" type="application/json">{"a":"&lt;b&gt;"}</script>'],
+      ['attribute quoting', '<div id="t" data-x=\'a"b\' data-y="c&amp;d">z</div>'],
+      ['rich prop attribute', '<my-el id="t" data-webjs-prop-v=\'{"n":[1,2],"s":"a\\u000ab"}\'></my-el>'],
+      ['noscript', '<noscript id="t"><img src="x.png"></noscript>'],
+    ];
+
+    for (const [name, body] of cases) {
+      test(name, () => {
+        const html = DOC(body);
+        // The browser's own single-pass parse is the reference: it is what a hard
+        // refresh produces, and a soft nav must not diverge from it.
+        const reference = new DOMParser().parseFromString(html, 'text/html');
+        const actual = withStrippingParseHTMLUnsafe(() => _parseHTML(html));
+        const ref = reference.querySelector('#t');
+        const act = actual.querySelector('#t');
+        assert.ok(act, 'element survived the fallback parse');
+        assert.equal(act.textContent, ref.textContent, 'textContent identical to a single-pass parse');
+        assert.equal(act.outerHTML, ref.outerHTML, 'serialization identical to a single-pass parse');
+        if (ref.tagName === 'TEXTAREA') {
+          assert.equal(act.value, ref.value, 'textarea value identical (form data must not shift)');
+        }
+      });
+    }
+  });
+
+  test('attaches NESTED Declarative Shadow DOM', () => {
+    // The manual attach recurses; a shadow root inside a shadow root must attach
+    // too, or a nested `static shadow` component loses its root on soft nav.
+    withStrippingParseHTMLUnsafe(() => {
+      const doc = _parseHTML(
+        DOC('<x-outer><template shadowrootmode="open"><p>o</p><x-inner><template shadowrootmode="open"><b>i</b></template></x-inner></template></x-outer>'),
+      );
+      const outer = doc.querySelector('x-outer');
+      assert.ok(outer.shadowRoot, 'outer shadow attached');
+      const inner = outer.shadowRoot.querySelector('x-inner');
+      assert.ok(inner.shadowRoot, 'nested shadow attached');
+      assert.equal(inner.shadowRoot.querySelector('b').textContent, 'i');
+    });
+  });
+
+  test('leaves a DSD template alone when the host cannot take a shadow root', () => {
+    // attachShadow throws on e.g. a <div>? No: it throws on elements not on the
+    // valid-host list. Whatever the engine rejects, the parse must still return a
+    // usable document with markers rather than throwing out of parseHTML.
+    withStrippingParseHTMLUnsafe(() => {
+      const doc = _parseHTML(DOC('<!--wj:children:/--><input><span><template shadowrootmode="open"><i>x</i></template></span><!--/wj:children-->'));
+      assert.deepEqual(comments(doc.body), ['wj:children:/', '/wj:children'], 'markers still intact');
+      assert.ok(doc.body.querySelector('span'), 'document still usable');
+    });
+  });
+
   test('uses the native fast path when the browser is lossless', () => {
     // The probe must not permanently exile a correct browser onto the fallback.
     // On a lossless browser parseHTML should still round-trip markers, and this
