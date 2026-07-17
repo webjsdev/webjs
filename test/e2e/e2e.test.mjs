@@ -1369,9 +1369,10 @@ describe('E2E: Blog example', { skip: !process.env.WEBJS_E2E && 'set WEBJS_E2E=1
     // chrome, emitted BEFORE the `wj:children` marker, so the deepest-shared-
     // layout swap must never touch it. #994: a dropped close marker forced the
     // destructive full-body swap that wiped this header; the orphaned-open
-    // recovery keeps the scoped swap so the header node survives. The drop is a
-    // parse race (seen on Android Chrome and desktop Chromium), so this happy-path
-    // end-to-end guard (markers intact) cannot trigger it on demand; the dropped-
+    // recovery keeps the scoped swap so the header node survives. A missing close is
+    // not reproducible on demand from a well-formed response (#1007 found the
+    // original cause was our own parse stripping comments, now fixed), so this
+    // happy-path end-to-end guard (markers intact) cannot trigger it; the dropped-
     // close divergence is covered deterministically by the core browser test
     // (packages/core/test/routing/browser/orphaned-marker-navbar.test.js). Proven by stamping a JS
     // property on the live header and asserting the SAME node persists.

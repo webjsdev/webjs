@@ -881,7 +881,9 @@ export function collectChildrenSlots(root, options) {
   visit(/** @type {Node} */ (root));
 
   // #994: any open marker still on the stack was never closed (its
-  // `<!--/wj:children-->` was dropped by the browser's parser, any engine).
+  // `<!--/wj:children-->` is absent from the response). The original cause was
+  // our own parse stripping every comment (#1007, now fixed); this stays as
+  // defence in depth against a genuinely malformed or truncated payload.
   // Register it with a null end so the shared-path match succeeds and the scoped
   // swap preserves the outer layout, instead of the destructive full-body
   // fallback. Outermost first (stack order), never overwriting a slot a proper
