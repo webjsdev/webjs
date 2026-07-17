@@ -797,15 +797,25 @@ function setNavigating(on) {
  *
  * `recoverOrphans` (#994): register an OPEN marker whose closing
  * `<!--/wj:children-->` comment is missing, using `end: null` (meaning "the
- * children run to the end of the containing element"). Some browsers
- * intermittently DROP the trailing close comment while parsing a soft-nav
- * response, a parse/timing race that surfaced first on Android Chrome (a soft
- * nav to `/blog` randomly dropped the navbar; #939/#940 confirmed the OPEN
- * marker survived, `markers:1`, yet the router still fell to the destructive
- * full-body swap) and was later reproduced on DESKTOP Chromium too, so this is
- * NOT browser-specific, only rarer on faster hardware. Without both comments
+ * children run to the end of the containing element"). Without both comments
  * this walk registers no slot, so `longestSharedPath` finds nothing and
- * `applySwap` wipes the outer layout (navbar). Recovering the orphaned open lets
+ * `applySwap` wipes the outer layout (navbar).
+ *
+ * HISTORICAL NOTE, since this comment previously asserted otherwise and #994 /
+ * #1003 were reasoned from it: this recovery was built on the belief that
+ * browsers "intermittently drop the trailing close comment while parsing", a
+ * parse/timing race inferred from Android Chrome reports (#939/#940 saw the OPEN
+ * marker survive, `markers:1`, yet still got the destructive swap) that seemed
+ * "rarer on faster hardware". That premise did not survive investigation
+ * (#1007). The real cause was deterministic and universal: `parseHTML` fed every
+ * doctype'd response through `Document.parseHTMLUnsafe`, which STRIPS every
+ * comment in Chromium 150, so the markers were destroyed by us on the JS-side
+ * parse rather than dropped by the browser mid-parse. That also fits the
+ * evidence better: the sweep reproduces on a fully settled desktop page
+ * (`readyState: "complete"`) whose live markers are present and correctly
+ * paired, which no timing race explains. `parseHTML` now probes for that and
+ * routes around it, so this recovery is DEFENCE IN DEPTH, not the load-bearing
+ * fix it was thought to be. Recovering the orphaned open lets
  * the correct scoped swap run and keeps the navbar (it sits BEFORE the open
  * marker, so it is never in the swap range). The recovery keys off the SYMPTOM
  * (a missing close), never any user-agent check, so it fixes every engine
