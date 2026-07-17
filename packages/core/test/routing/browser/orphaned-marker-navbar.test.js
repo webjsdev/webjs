@@ -58,7 +58,7 @@ suite('Client router: soft nav keeps the navbar when the close marker is dropped
 
     try {
       // The incoming partial-nav fragment lost its trailing `<!--/wj:children-->`
-      // (the browser's parser drop). Parsed in body context it is an orphaned open
+      // (a malformed response). Parsed in body context it is an orphaned open
       // marker, exactly the state that used to force the full-body fallback.
       const doc = _parseHTML(
         '<!--wj:children:/-->' +
