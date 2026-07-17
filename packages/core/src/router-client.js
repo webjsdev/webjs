@@ -178,67 +178,44 @@ function resetParseProbe() {
 /**
  * Parse a FULL document while preserving comments.
  *
- * `DOMParser` keeps comments but does NOT process Declarative Shadow DOM, which
- * `Document.parseHTMLUnsafe` does in one pass. So the DSD templates are attached
- * afterwards, by MOVING each `<template shadowrootmode>`'s already-parsed nodes
- * into a real shadow root.
+ * `DOMParser` keeps comments but does NOT process Declarative Shadow DOM, so a
+ * `<template shadowrootmode>` stays an inert template here. That is a DELIBERATE
+ * limitation on this path, and both obvious ways to "fix" it are worse than the
+ * gap (measured on Chromium 150, not reasoned about):
  *
- * Deliberately NOT `body.setHTMLUnsafe(body.innerHTML)`, which looks like the
- * obvious way to get DSD from an already-parsed tree and is a content-corrupting
- * trap: that round-trip is not idempotent, because Chromium does not implement
- * the spec's fragment-serializing LF-compensation rule (append U+000A when a
- * `pre` / `textarea` / `listing` element's first Text child starts with one). So
- * serializing and reparsing silently eats a leading newline:
- * `<textarea>\n\nfoo</textarea>` parses to `"\nfoo"` natively but `"foo"` after a
- * round-trip. In a `<textarea>` that is silent form-data corruption, and it would
- * make a soft nav submit different bytes than a hard refresh. Moving the nodes
- * never re-serializes, so content is bit-identical to the single-pass parse.
+ *   - `body.setHTMLUnsafe(body.innerHTML)` re-serializes, and that round-trip is
+ *     not idempotent: Chromium omits the spec's LF-compensation rule (append
+ *     U+000A when a `pre` / `textarea` / `listing` element's first Text child
+ *     starts with one), so `<textarea>\n\nfoo</textarea>` parses to `"\nfoo"`
+ *     natively but `"foo"` after a round-trip. In a `<textarea>` that is silent
+ *     form-data corruption: a soft nav would submit different bytes than a hard
+ *     refresh.
+ *   - Attaching each root by hand (`host.attachShadow()` + move the template's
+ *     nodes) is USELESS on the common path and HARMFUL on the other. Useless
+ *     because the marker swap imports with `document.importNode(n, true)`, which
+ *     drops a shadow root unless it is `clonable`, and SSR emits a bare
+ *     `<template shadowrootmode="open">`, so the root never survives the import
+ *     and `component.js` re-attaches from scratch exactly as it always did.
+ *     Harmful because the full-body-swap path ADOPTS instead, so a script-created
+ *     root does survive, and a script-created root is not `declarative`: the spec
+ *     only permits a second `attachShadow()` over an existing root when that root
+ *     is declarative, so any element whose constructor unconditionally calls
+ *     `attachShadow()` then throws `NotSupportedError` on upgrade, where the
+ *     native parse it replaced worked fine.
+ *
+ * The gap this leaves is narrow and strictly better than the bug it replaces: on
+ * a comment-stripping browser only, an element that depends on DSD content and
+ * ships NO JavaScript loses that content on a full-body-swap navigation. Every
+ * WebJs `static shadow = true` component is unaffected, because it attaches and
+ * renders its own root on upgrade (`component.js`, guarded by `if
+ * (!this.shadowRoot)`), and a soft nav runs JS by definition. Tracked separately.
  *
  * @param {string} html
  * @returns {Document | null}
  */
 function parseDocumentPreservingComments(html) {
   if (typeof DOMParser === 'undefined') return null;
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  if (doc && doc.body) attachDeclarativeShadowRoots(doc.body);
-  return doc;
-}
-
-/**
- * Attach every `<template shadowrootmode>` under `root` as a real shadow root,
- * recursing so nested DSD inside a shadow root is attached too.
- *
- * DOMParser leaves a DSD template inert (an ordinary `<template>` element), so
- * without this a `static shadow = true` component soft-navigated in would never
- * get its root. `sr.append(t.content)` MOVES the already-parsed nodes, so there
- * is no serialize/reparse and nothing can be lost in translation.
- *
- * @param {ParentNode} root
- */
-function attachDeclarativeShadowRoots(root) {
-  for (const t of [...root.querySelectorAll('template[shadowrootmode]')]) {
-    const mode = t.getAttribute('shadowrootmode');
-    if (mode !== 'open' && mode !== 'closed') continue;
-    const host = t.parentElement;
-    // A host may legitimately already have a root (nothing else attaches one on
-    // this detached tree, but a malformed response could carry two templates).
-    if (!host || host.shadowRoot) continue;
-    try {
-      const shadow = host.attachShadow({
-        mode,
-        delegatesFocus: t.hasAttribute('shadowrootdelegatesfocus'),
-        clonable: t.hasAttribute('shadowrootclonable'),
-        serializable: t.hasAttribute('shadowrootserializable'),
-      });
-      shadow.append(t.content);
-      t.remove();
-      attachDeclarativeShadowRoots(shadow);
-    } catch {
-      // attachShadow throws for an element that cannot host one. Leave the
-      // template in place: markers still intact, which is never worse than the
-      // pre-setHTMLUnsafe baseline.
-    }
-  }
+  return new DOMParser().parseFromString(html, 'text/html');
 }
 
 let enabled = false;

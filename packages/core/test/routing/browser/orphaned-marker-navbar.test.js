@@ -4,15 +4,24 @@
  * `<!--/wj:children-->` marker was lost.
  *
  * The failure: a soft nav to `/blog` randomly dropped the persistent top navbar.
- * It surfaced first on Android Chrome (the `?diag=` harness #939/#940 showed the
- * live body still carried the OPEN `wj:children` marker, `markers:1`, yet the
- * router fell to the destructive full-body swap) and was later reproduced on
- * desktop Chromium too, so it is a parse/timing race, not a browser-specific
- * quirk. The full-body swap only happens when `collectChildrenSlots` cannot pair
- * a slot, i.e. the trailing CLOSE comment was dropped by the browser's parser.
- * `collectChildrenSlots` needed BOTH comments to register a slot, so a dropped
- * close meant no shared path and the full-body `replaceChildren` wiped the outer
- * layout (navbar and all).
+ * The full-body swap only happens when `collectChildrenSlots` cannot pair a slot,
+ * and it needed BOTH comments to register one, so a missing close meant no shared
+ * path and the full-body `replaceChildren` wiped the outer layout (navbar and
+ * all).
+ *
+ * HISTORICAL NOTE (#1007), because this file previously asserted otherwise: the
+ * missing comment was read as the browser's parser "dropping" it under CPU
+ * pressure, a parse/timing race inferred from Android Chrome reports (#939/#940
+ * saw the OPEN marker survive, `markers:1`, yet still got the destructive swap).
+ * That premise did not survive investigation. The real cause was deterministic
+ * and ours: `parseHTML` fed every doctype'd response through
+ * `Document.parseHTMLUnsafe`, which STRIPS every comment in Chromium 150, so the
+ * markers were deleted on the JS-side parse rather than lost mid-parse by the
+ * browser. The sweep reproduces on a fully settled desktop page whose live
+ * markers are present and correctly paired, which no timing race explains.
+ * `parseHTML` now probes for that and routes around it, so the recovery this file
+ * covers is DEFENCE IN DEPTH against a genuinely malformed response, not the
+ * load-bearing fix it was believed to be.
  *
  * The fix (#994) recovers an orphaned open marker (end=null, "children run to the
  * parent end"), so the correct scoped swap runs and the navbar (which sits BEFORE

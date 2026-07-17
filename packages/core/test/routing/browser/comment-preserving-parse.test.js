@@ -109,18 +109,28 @@ suite('Client router: the nav parse preserves comment markers (#1007)', () => {
     });
   });
 
-  test('still attaches Declarative Shadow DOM while preserving comments', () => {
-    // Why parseHTMLUnsafe was chosen originally: it processes DSD in one pass.
-    // The comment-preserving path must not regress that, or a `static shadow`
-    // component soft-navigated in loses its root.
+  test('leaves DSD unprocessed on the fallback, without breaking the parse', () => {
+    // A DELIBERATE, documented limitation, pinned so nobody "fixes" it back into
+    // one of the two worse options. DOMParser does not process DSD, and neither
+    // way of adding it afterwards is safe: re-serializing corrupts pre/textarea
+    // content, and attaching by hand yields a NON-declarative root, which makes a
+    // component whose constructor unconditionally calls attachShadow() throw
+    // NotSupportedError on upgrade (the spec only allows re-attach over a
+    // DECLARATIVE root). It is also pointless on the marker-swap path, where
+    // importNode drops a non-clonable root anyway.
+    //
+    // Cost of the gap: on a stripping browser only, a JS-less element depending
+    // on DSD content loses it on a full-body-swap nav. Every WebJs
+    // `static shadow = true` component attaches and renders its own root on
+    // upgrade, and a soft nav runs JS by definition.
     withStrippingParseHTMLUnsafe(() => {
       const doc = _parseHTML(
         DOC('<!--wj:children:/-->\n<x-shadow><template shadowrootmode="open"><p>inside</p></template></x-shadow>\n<!--/wj:children-->'),
       );
-      assert.deepEqual(comments(doc.body), ['wj:children:/', '/wj:children'], 'markers survive');
+      assert.deepEqual(comments(doc.body), ['wj:children:/', '/wj:children'], 'markers survive, which is the point');
       const host = doc.querySelector('x-shadow');
-      assert.ok(host.shadowRoot, 'DSD attached');
-      assert.equal(host.shadowRoot.querySelector('p').textContent, 'inside');
+      assert.ok(!host.shadowRoot, 'no script-created root: it would be non-declarative');
+      assert.ok(host.querySelector('template[shadowrootmode]'), 'template left intact for the component to use');
     });
   });
 
@@ -159,9 +169,13 @@ suite('Client router: the nav parse preserves comment markers (#1007)', () => {
     for (const [name, body] of cases) {
       test(name, () => {
         const html = DOC(body);
-        // The browser's own single-pass parse is the reference: it is what a hard
-        // refresh produces, and a soft nav must not diverge from it.
-        const reference = new DOMParser().parseFromString(html, 'text/html');
+        // The reference is the browser's REAL single-pass parseHTMLUnsafe, taken
+        // BEFORE any stub is installed. That is the parse a hard refresh is
+        // equivalent to, and the one parseHTML uses when the engine is lossless,
+        // so the fallback must agree with it on content. Using DOMParser as the
+        // reference would be tautological: the fallback IS a DOMParser parse, so
+        // the comparison could never fail.
+        const reference = Document.parseHTMLUnsafe(html);
         const actual = withStrippingParseHTMLUnsafe(() => _parseHTML(html));
         const ref = reference.querySelector('#t');
         const act = actual.querySelector('#t');
@@ -175,38 +189,30 @@ suite('Client router: the nav parse preserves comment markers (#1007)', () => {
     }
   });
 
-  test('attaches NESTED Declarative Shadow DOM', () => {
-    // The manual attach recurses; a shadow root inside a shadow root must attach
-    // too, or a nested `static shadow` component loses its root on soft nav.
-    withStrippingParseHTMLUnsafe(() => {
-      const doc = _parseHTML(
-        DOC('<x-outer><template shadowrootmode="open"><p>o</p><x-inner><template shadowrootmode="open"><b>i</b></template></x-inner></template></x-outer>'),
-      );
-      const outer = doc.querySelector('x-outer');
-      assert.ok(outer.shadowRoot, 'outer shadow attached');
-      const inner = outer.shadowRoot.querySelector('x-inner');
-      assert.ok(inner.shadowRoot, 'nested shadow attached');
-      assert.equal(inner.shadowRoot.querySelector('b').textContent, 'i');
-    });
-  });
+  test('uses the native fast path when the browser is lossless, and skips it when not', () => {
+    // Assert WHICH path ran, not just that markers survived (the fallback
+    // guarantees markers identically, so a marker assertion cannot tell the two
+    // apart and would pass either way). Spy on parseHTMLUnsafe to count calls.
+    const orig = Document.parseHTMLUnsafe;
+    const html = DOC('<!--wj:children:/-->\n<main>x</main>\n<!--/wj:children-->');
+    const nativeIsLossless = orig.call(Document, '<!doctype html><body><!--c--><i></i>')?.body?.firstChild?.nodeType === 8;
 
-  test('leaves a DSD template alone when the host cannot take a shadow root', () => {
-    // attachShadow throws on e.g. a <div>? No: it throws on elements not on the
-    // valid-host list. Whatever the engine rejects, the parse must still return a
-    // usable document with markers rather than throwing out of parseHTML.
-    withStrippingParseHTMLUnsafe(() => {
-      const doc = _parseHTML(DOC('<!--wj:children:/--><input><span><template shadowrootmode="open"><i>x</i></template></span><!--/wj:children-->'));
-      assert.deepEqual(comments(doc.body), ['wj:children:/', '/wj:children'], 'markers still intact');
-      assert.ok(doc.body.querySelector('span'), 'document still usable');
-    });
-  });
-
-  test('uses the native fast path when the browser is lossless', () => {
-    // The probe must not permanently exile a correct browser onto the fallback.
-    // On a lossless browser parseHTML should still round-trip markers, and this
-    // is the path CI's Chromium 148 / Firefox / WebKit actually take.
-    _resetParseProbe();
-    const doc = _parseHTML(DOC('<!--wj:children:/-->\n<main>x</main>\n<!--/wj:children-->'));
-    assert.deepEqual(comments(doc.body), ['wj:children:/', '/wj:children']);
+    let calls = 0;
+    Document.parseHTMLUnsafe = (h) => { calls++; return orig.call(Document, h); };
+    try {
+      _resetParseProbe();
+      const doc = _parseHTML(html);
+      assert.deepEqual(comments(doc.body), ['wj:children:/', '/wj:children'], 'markers survive either way');
+      if (nativeIsLossless) {
+        // 1 probe + 1 real parse: the correct browser is NOT exiled to the fallback.
+        assert.equal(calls, 2, 'lossless browser takes the native fast path');
+      } else {
+        // Probe only; the real parse must NOT go through the lossy API.
+        assert.equal(calls, 1, 'stripping browser is routed around the native path');
+      }
+    } finally {
+      Document.parseHTMLUnsafe = orig;
+      _resetParseProbe();
+    }
   });
 });
