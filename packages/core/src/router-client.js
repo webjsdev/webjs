@@ -158,6 +158,17 @@ function parseHTMLUnsafePreservesComments() {
 }
 
 /**
+ * Clear the memoized losslessness probe. Test-only: a browser cannot change
+ * mid-session, so nothing in the runtime needs this. Tests SIMULATE a stripping
+ * parser (rather than depending on the runner's browser actually being an
+ * affected version, which this repo's pinned Chromium 148 is not) and reset the
+ * memo around that stub.
+ */
+function resetParseProbe() {
+  _parseUnsafeLossless = null;
+}
+
+/**
  * Parse a FULL document while preserving comments.
  *
  * `DOMParser` keeps comments but does NOT process Declarative Shadow DOM, which
@@ -3753,6 +3764,7 @@ export {
   collectChildrenSlots as _collectChildrenSlots,
   longestSharedPath as _longestSharedPath,
   parseHTML as _parseHTML,
+  resetParseProbe as _resetParseProbe,
   keyOf as _keyOf,
   diffElementInPlace as _diffElementInPlace,
   reconcileChildren as _reconcileChildren,
