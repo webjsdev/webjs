@@ -1060,6 +1060,46 @@ export function planRegionSwap(here, there) {
   };
 }
 
+/**
+ * Apply a region swap plan to the DOM (#1013, Pillar 2). Mutates ONLY the
+ * children of the plan's live `<wj-region>`; the region element itself and
+ * everything above it (outer layouts, root chrome) is never touched, which is
+ * how the "preserve outer-layout DOM identity" invariant holds structurally.
+ *
+ *  - `replace` (route-key changed, or a structural divergence below the deepest
+ *    shared region): wholesale `replaceChildren` with the imported incoming
+ *    nodes. This is Next's remount and Turbo's replace: no reconciler runs, so
+ *    no stale hydrated state survives a real route change. `data-webjs-permanent`
+ *    nodes are regrafted by identity first so they persist across the remount.
+ *  - `morph` (searchParams-only / refresh, same route-key, page region is the
+ *    leaf on both sides): the bounded same-route morph via `reconcileChildren`,
+ *    which reuses keyed + positional nodes, treats a hydrated component as an
+ *    opaque island (its render-owned subtree is never descended into, so its
+ *    state and instance survive while its attributes are synced), and regrafts
+ *    permanents. This is the only path that preserves component state, matching
+ *    React reconciliation for a client component at the same position.
+ *
+ * Script reactivation + custom-element upgrade run for the replace path (fresh
+ * nodes); the morph path's `reconcileChildren` handles its own upgrades. The
+ * caller wraps this in `runWithTransition` and does the head merge / focus blur.
+ *
+ * @param {{mode:'replace'|'morph', live:Element, incoming:Element}} plan
+ */
+function applyRegionContent(plan) {
+  const { mode, live, incoming } = plan;
+  if (mode === 'morph') {
+    reconcileChildren(live, incoming);
+    return;
+  }
+  // Wholesale replace (remount). Import incoming children, regraft live
+  // permanents into them by identity, then swap in one shot.
+  const imported = [...incoming.childNodes].map((n) => document.importNode(n, true));
+  regraftPermanentInSlice([...live.childNodes], imported);
+  live.replaceChildren(...imported);
+  reactivateScripts(live);
+  upgradeCustomElements(live);
+}
+
 /* ====================================================================
  * Snapshot cache (Turbo SnapshotCache pattern)
  * ==================================================================== */
@@ -3954,6 +3994,7 @@ export {
   collectChildrenSlots as _collectChildrenSlots,
   collectRegions as _collectRegions,
   planRegionSwap as _planRegionSwap,
+  applyRegionContent as _applyRegionContent,
   longestSharedPath as _longestSharedPath,
   parseHTML as _parseHTML,
   resetParseProbe as _resetParseProbe,
