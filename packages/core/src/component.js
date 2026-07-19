@@ -837,8 +837,15 @@ class WebComponentBase extends Base {
       //    the freshly-cloned slot. DOM identity preserved through the
       //    hydration round-trip.
       //
-      // c. First mount, no SSR. Move authored children into the
-      //    assignment table before _performRender wipes the host.
+      // c. First mount, no SSR: move authored children into the
+      //    assignment table before _performRender wipes the host. This
+      //    branch ALSO catches a client-router re-entry where the
+      //    boot-time webjs-hydrate marker is gone (a forward soft nav on a
+      //    marker-stripping parse, or a back/forward snapshot restore of
+      //    the already-hydrated DOM). captureAuthoredChildren is idempotent
+      //    over that already-projected HTML: it adopts the existing slot
+      //    assignments instead of hoovering its own render output into a
+      //    fresh slot (#1006).
       if (hasSlotState(this)) {
         // (a) Reconnection. State already populated; nothing to do here.
       } else if (this.__isHydrating()) {

@@ -337,15 +337,73 @@ export function hasSlotState(host) {
 // ---------------------------------------------------------------------------
 
 /**
+ * True when `slot` belongs directly to `host`, i.e. no OTHER custom element
+ * sits between them. A slot nested inside a child custom element belongs to
+ * THAT component (its own slot state owns it), so the host must not adopt or
+ * capture it. Mirrors the router's own `isOwnLightSlot` (#906).
+ *
+ * @param {Element} slot
+ * @param {Element} host
+ * @returns {boolean}
+ */
+function isOwnLightSlot(slot, host) {
+  for (let p = slot.parentElement; p && p !== host; p = p.parentElement) {
+    if (p.tagName.includes('-')) return false;
+  }
+  return true;
+}
+
+/**
+ * True when `host` already carries its own projected render tree, i.e. its
+ * subtree contains a `slot[data-webjs-light][data-projection]` that belongs
+ * to THIS host (not a nested child component's slot). This is the durable
+ * structural signal that the host's children are its own rendered output with
+ * the authored content already sitting inside its slots, NOT freshly-authored
+ * light children waiting to be captured.
+ *
+ * Unlike the boot-time `webjs-hydrate` first-child marker (which hydration
+ * deletes, so it cannot answer this question after the first render), the
+ * `data-projection` attribute survives serialization into a client-router
+ * snapshot and a soft-nav fragment, so it is reliable on every re-entry into
+ * `connectedCallback` (a forward nav, a back/forward snapshot restore). See
+ * #1006.
+ *
+ * @param {Element} host
+ * @returns {boolean}
+ */
+function isAlreadyProjected(host) {
+  const slots = host.querySelectorAll(
+    `slot[${LIGHT_SLOT_ATTR}][${PROJECTION_ATTR}]`
+  );
+  for (const slot of slots) {
+    if (isOwnLightSlot(slot, host)) return true;
+  }
+  return false;
+}
+
+/**
  * Move every authored child of `host` into the slot state, partitioning
  * by each child's `slot=""` attribute. After this runs, `host` has no
  * children; the framework re-inserts them at projection time inside the
- * correct <slot> elements. Idempotent.
+ * correct <slot> elements.
+ *
+ * Idempotent over already-projected HTML. When `host` already carries its
+ * own rendered subtree (the soft-nav and snapshot-restore paths, where the
+ * boot-time `webjs-hydrate` marker is absent so `connectedCallback` reaches
+ * here instead of the hydration branch), hoovering every host child would
+ * capture the render output itself and re-project it into a fresh <slot>,
+ * nesting the whole tree one level inside itself (#1006). Detect that case
+ * via the durable `data-projection` marker and adopt the existing slot
+ * assignments in place instead of moving DOM.
  *
  * @param {Element} host
  */
 export function captureAuthoredChildren(host) {
   const state = ensureSlotState(host);
+  if (isAlreadyProjected(host)) {
+    adoptSSRAssignments(host);
+    return;
+  }
   while (host.firstChild) {
     const node = host.firstChild;
     const name = slotNameOf(node);
@@ -359,6 +417,10 @@ export function captureAuthoredChildren(host) {
  * <slot data-webjs-light> elements. Walk the host's render tree and
  * record those existing assignments in the state without moving DOM.
  *
+ * Only the host's OWN slots are adopted; a `data-webjs-light` slot nested
+ * inside a child custom element belongs to that component's slot state, so
+ * reaching into it here would clobber render-owned nodes (#906).
+ *
  * @param {Element} host
  */
 export function adoptSSRAssignments(host) {
@@ -368,6 +430,7 @@ export function adoptSSRAssignments(host) {
     /** @type {HTMLSlotElement} */
     const s = /** @type {any} */ (slot);
     if (s.getAttribute(PROJECTION_ATTR) !== PROJECTION_ACTUAL) continue;
+    if (!isOwnLightSlot(s, host)) continue;
     const name = s.getAttribute('name') || null;
     if (!state.assignedByName.has(name)) {
       const children = Array.from(s.childNodes);
