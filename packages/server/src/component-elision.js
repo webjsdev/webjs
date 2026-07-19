@@ -120,11 +120,14 @@ export const CLIENT_LIFECYCLE_HOOKS = [
 /**
  * Method calls that only make sense on the client. `addController`
  * registers a ReactiveController (client lifecycle). `requestUpdate`
- * schedules a re-render. Either implies the component is not inert.
+ * schedules a re-render. `setSlotContent` pushes dynamic slot values
+ * (#1015) and `hasSlot` conditions a render on the slot record, both of
+ * which need the client slot runtime to apply. Any of these implies the
+ * component is not inert.
  *
  * @type {readonly string[]}
  */
-export const CLIENT_METHOD_CALLS = ['addController', 'removeController', 'requestUpdate'];
+export const CLIENT_METHOD_CALLS = ['addController', 'removeController', 'requestUpdate', 'setSlotContent', 'hasSlot'];
 
 /**
  * Static class fields whose declaration (to a non-`false` value) marks a
@@ -211,8 +214,18 @@ const EVENT_BINDING_RE = new RegExp(
 /** Match a `.onclick=${...}` (native event-handler property) binding. */
 const EVENT_PROP_RE = /\.on[a-z]+\s*=\s*\$\{/;
 
-/** Match a rendered `<slot>` / `<slot ` / `<slot/>`, but not `<slot-machine>`. */
-const SLOT_RE = /<slot[\s/>]/;
+/**
+ * Narrow dynamic-slot signals (#1015). The old blanket rule shipped ANY
+ * component that merely RENDERS a `<slot>`, but under children-as-values the
+ * SSR output already carries the placed children, so a display-only slotted
+ * wrapper is byte-identical with or without its JS and is elidable. What
+ * genuinely needs the client slot runtime is the DYNAMIC surface: a
+ * `slotchange` listener, the assignedNodes/assignedElements/assignedSlot
+ * reads, a `this.slots` record read, or the setSlotContent/hasSlot calls
+ * (those two are also covered as CLIENT_METHOD_CALLS inside class bodies;
+ * this regex catches external callers too).
+ */
+const SLOT_DYNAMIC_RE = /\bslotchange\b|\bassignedNodes\s*\(|\bassignedElements\s*\(|\bassignedSlot\b|\.slots\b|\bsetSlotContent\s*\(|\bhasSlot\s*\(/;
 
 /** A `.server.{js,ts,mjs,mts}` file: a stub on the client, inert there. */
 const SERVER_FILE_RE = /\.server\.m?[jt]s$/;
@@ -527,14 +540,14 @@ export function analyzeComponentSource(src) {
     return { interactive: true, reason: 'template sets a native event-handler property' };
   }
 
-  // A rendered `<slot>` relies on webjs's client slot-projection runtime
-  // for the slot API (assignedNodes, slotchange) and dynamic re-
-  // projection. Shadow DOM slots are native via Declarative Shadow DOM,
-  // but proving a given slot is purely native is beyond static analysis,
-  // so any rendered slot ships. Tag names like `<slot-machine>` are
-  // excluded by requiring a slot-closing character.
-  if (SLOT_RE.test(src)) {
-    return { interactive: true, reason: 'renders a <slot> (needs the projection runtime)' };
+  // Dynamic slot usage (#1015). Merely RENDERING a `<slot>` no longer
+  // ships: the SSR output carries the placed children, and with no
+  // observers in the runtime a display-only slotted wrapper is
+  // byte-identical with or without its JS. Only the dynamic slot surface
+  // (slotchange, the assigned* reads, the slots record, setSlotContent /
+  // hasSlot) needs the client runtime.
+  if (SLOT_DYNAMIC_RE.test(src)) {
+    return { interactive: true, reason: 'uses the dynamic slot API (slotchange / assignedNodes / slots record)' };
   }
 
   // Top-level client work the render/lifecycle checks would miss: a

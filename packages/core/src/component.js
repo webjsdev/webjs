@@ -7,10 +7,11 @@ import { Signal } from './signal.js';
 import {
   captureAuthoredChildren,
   adoptSSRAssignments,
-  attachSlotObservers,
-  detachSlotObservers,
   ensureSlotState,
   hasSlotState,
+  slotsView,
+  hasSlotContent,
+  setSlotContent,
 } from './slot.js';
 
 const isBrowser = typeof window !== 'undefined' && typeof HTMLElement !== 'undefined';
@@ -818,29 +819,35 @@ class WebComponentBase extends Base {
           `For light DOM, use global CSS or <style> in render().`
         );
       }
-      // Light-DOM slot lifecycle phase one. Three sub-paths:
+      // Light-DOM slot capture: ONCE per host lifetime (#1015). Three
+      // sub-paths, all of which resolve to "the record is populated
+      // exactly once and never re-captured":
       //
-      // a. Reconnection. Slot state already exists from a prior mount.
+      // a. Reconnection. The record already exists from a prior mount.
       //    The host still carries the rendered template DOM (plus
-      //    projected children) from before the disconnect. Skip
+      //    placed slot children) from before the disconnect. Skip
       //    capture (would wrongly hoover up rendered nodes) and skip
       //    SSR adoption. clientRender will see the existing INSTANCE
       //    and updateInstance instead of recreating; the DOM stays.
       //
       // b. SSR hydration (first mount, <!--webjs-hydrate--> marker
-      //    present). Children are already projected into
+      //    present). Children are already inside their
       //    <slot data-webjs-light data-projection="actual"> elements
-      //    by injectDSD. Adopt those assignments BEFORE _performRender
-      //    so we retain references to the SSR'd nodes; the renderer's
-      //    createInstance().replaceChildren() will detach them, but
-      //    projection re-attaches by moving the same Node refs into
-      //    the freshly-cloned slot. DOM identity preserved through the
-      //    hydration round-trip.
+      //    (injectDSD placed them). Adopt those assignments BEFORE
+      //    _performRender so we retain references to the SSR'd nodes;
+      //    the renderer's createInstance().replaceChildren() will
+      //    detach them, but the slot-apply step re-attaches the same
+      //    Node refs into the freshly-cloned slot. DOM identity
+      //    preserved through the hydration round-trip.
       //
-      // c. First mount, no SSR. Move authored children into the
-      //    assignment table before _performRender wipes the host.
+      // c. First mount, no SSR. Partition authored children into the
+      //    record before _performRender wipes the host.
+      //
+      // There are NO mutation observers: an external appendChild or a
+      // slot=""-attribute flip after mount is inert by design, and the
+      // dynamic path is setSlotContent() (children as values).
       if (hasSlotState(this)) {
-        // (a) Reconnection. State already populated; nothing to do here.
+        // (a) Reconnection. Record already populated; nothing to do here.
       } else if (this.__isHydrating()) {
         ensureSlotState(this);
         adoptSSRAssignments(this);
@@ -881,15 +888,48 @@ class WebComponentBase extends Base {
       } catch (err) {
         console.error(`[webjs] lifecycle hook threw during initial render:`, err);
       }
-      // Light-DOM slot lifecycle phase two: after the first render
-      // commits, the live <slot> elements exist. Attach mutation
-      // observers so authored-child + slot-name changes drive
-      // incremental projection. (Shadow DOM uses native slot
-      // projection; nothing to attach.)
-      if (this._renderRoot === this) {
-        attachSlotObservers(this);
-      }
+      // No slot observers to attach (#1015): the renderer's slot parts
+      // place the record content as part of the commit, and the only
+      // dynamic path is setSlotContent().
     });
+  }
+
+  /**
+   * Read view of this host's slot record (#1015): captured (or
+   * programmatically set) children per slot name, e.g.
+   * `this.slots.default` / `this.slots.header`. Fresh arrays each read.
+   * Enables conditional-on-slot rendering:
+   * `this.slots.header ? html\`...\` : ''`.
+   *
+   * @returns {Record<string, Node[]>}
+   */
+  get slots() {
+    return slotsView(this);
+  }
+
+  /**
+   * Does this host's slot record carry content for `name` (#1015)?
+   * `hasSlot()` / `hasSlot('default')` query the default slot.
+   *
+   * @param {string | null} [name]
+   * @returns {boolean}
+   */
+  hasSlot(name) {
+    return hasSlotContent(this, name);
+  }
+
+  /**
+   * Replace a slot's content (#1015): the ONE dynamic path for slotted
+   * children (external appendChild / slot="" flips after mount are inert
+   * by design). Accepts a Node, Node[], a string, or null to reset the
+   * slot to its fallback content. Fires `slotchange` when the assignment
+   * changes.
+   *
+   * @param {string | null} name
+   * @param {Node | Node[] | string | null} value
+   */
+  setSlotContent(name, value) {
+    setSlotContent(this, name, value);
   }
 
   /**
@@ -929,10 +969,8 @@ class WebComponentBase extends Base {
       this.__hydrationObserver.disconnect();
       this.__hydrationObserver = null;
     }
-    // Pause slot observers. The per-host state (assignment table,
-    // pending fragments, last snapshots) is preserved so a subsequent
-    // reconnection picks up where it left off.
-    if (this._renderRoot === this) detachSlotObservers(this);
+    // No slot observers to detach (#1015). The per-host slot record is
+    // preserved so a subsequent reconnection picks up where it left off.
     // Dispose the signal watcher so dependency edges drop. Without
     // this the element holds references to module-scope signals
     // (and vice versa) forever.

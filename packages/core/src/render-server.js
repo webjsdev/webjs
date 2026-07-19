@@ -8,6 +8,7 @@ import { isSuspense } from './suspense.js';
 import { unsafeHTML, isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace, isWatch } from './directives.js';
 import { stringify, parse } from './serialize.js';
 import { cspNonce } from './csp-nonce.js';
+import { ensureSlotState } from './slot.js';
 
 /**
  * Render a TemplateResult (or any renderable value) to an HTML string.
@@ -486,6 +487,44 @@ async function injectDSD(html, ctx, ancestors = [], dev) {
       seedServerAttrs(instance, attrMap);
       applyAttrsToInstance(instance, attrMap, Cls);
       for (const [k, v] of Object.entries(propValues)) instance[k] = v;
+      // Extract the authored inner HTML BEFORE the render (#1015, the
+      // injectDSD reorder): the source scan needs no render output, and
+      // hoisting it lets the slot record be seeded so `this.hasSlot()` /
+      // `this.slots` inside render() see the authored children at SSR
+      // exactly as they will on the client (conditional-on-slot parity).
+      // The light-DOM branch below reuses these for the slot pipeline;
+      // the shadow branch is a read-only peek (its authored children stay
+      // in place for native projection, and its edit keeps the old end).
+      let authoredInner = '';
+      let closeEnd = m.index + match.length;
+      if (!selfClose) {
+        const innerStart = m.index + match.length;
+        const closeIdx = findClosingTagInString(html, innerStart, tag);
+        if (closeIdx !== -1) {
+          authoredInner = html.slice(innerStart, closeIdx);
+          const closeRe = new RegExp(`</${escapeRegex(tag)}\\s*>`, 'i');
+          const tail = html.slice(closeIdx);
+          const closeMatch = closeRe.exec(tail);
+          const closeLen = closeMatch ? closeMatch[0].length : `</${tag}>`.length;
+          closeEnd = closeIdx + closeLen;
+        } else {
+          // Unclosed in source. Take rest of html as authored content
+          // and synthesize a closing tag on output.
+          authoredInner = html.slice(innerStart);
+          closeEnd = html.length;
+        }
+      }
+      const partitioned = partitionAuthoredBySlot(authoredInner);
+      // Seed the slot record for SSR-side reads. At SSR the record values
+      // are the authored RAW HTML strings (there is no DOM to hold Nodes);
+      // presence, keys, and counts match the client record, which is the
+      // conditional-on-slot contract. Node access is client-side.
+      {
+        const slotState = ensureSlotState(instance);
+        for (const [name, htmlChunk] of partitioned) {
+          if (htmlChunk && htmlChunk.length) slotState.assignedByName.set(name, [htmlChunk]);
+        }
+      }
       // Run the pre-render lifecycle (willUpdate, controllers' hostUpdate,
       // then reflect reflect:true props) so derived state computed there is
       // correct in the SSR'd HTML, matching how lit runs the update cycle at
@@ -561,36 +600,15 @@ async function injectDSD(html, ctx, ancestors = [], dev) {
           continue;
         }
         //
-        // 1. Find the matching closing tag in the source HTML (depth-
-        //    tracked for nested same-tag elements).
-        // 2. Extract authored inner HTML, partition by slot="" attr.
-        // 3. Substitute each <slot> in the rendered output with a
+        // The authored inner HTML + slot partition were extracted BEFORE
+        // the render (the #1015 reorder, see above), so here:
+        // 1. Substitute each <slot> in the rendered output with a
         //    framework-marked <slot data-webjs-light data-projection
         //    ="actual|fallback"> element carrying projection or
         //    fallback content per first-wins rule.
-        // 4. Recursively run injectDSD on the substituted output so
+        // 2. Recursively run injectDSD on the substituted output so
         //    nested custom elements (inside projected children) get
         //    their own DSD pass.
-        let authoredInner = '';
-        let closeEnd = m.index + match.length;
-        if (!selfClose) {
-          const innerStart = m.index + match.length;
-          const closeIdx = findClosingTagInString(html, innerStart, tag);
-          if (closeIdx !== -1) {
-            authoredInner = html.slice(innerStart, closeIdx);
-            const closeRe = new RegExp(`</${escapeRegex(tag)}\\s*>`, 'i');
-            const tail = html.slice(closeIdx);
-            const closeMatch = closeRe.exec(tail);
-            const closeLen = closeMatch ? closeMatch[0].length : `</${tag}>`.length;
-            closeEnd = closeIdx + closeLen;
-          } else {
-            // Unclosed in source. Take rest of html as authored content
-            // and synthesize a closing tag on output.
-            authoredInner = html.slice(innerStart);
-            closeEnd = html.length;
-          }
-        }
-        const partitioned = partitionAuthoredBySlot(authoredInner);
         const innerWithSlots = substituteSlotsInRender(rawInner, partitioned);
         const innerProcessed = await injectDSD(innerWithSlots, ctx, [...ancestors, instance], dev);
         edits.push({

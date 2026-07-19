@@ -10,8 +10,8 @@ import {
   PROJECTION_FALLBACK,
   SLOT_FALLBACK_FRAG,
   SLOT_STATE,
-  scheduleProjection,
-  moveSlotChildrenToPending,
+  applySlotAssignments,
+  rescueAssignedNodes,
   ensureSlotState,
 } from './slot.js';
 
@@ -582,8 +582,11 @@ function clearInstance(inst, container) {
       }
     }
     if (p.kind === 'slot') {
+      // Detach record-owned children before the teardown disposes the
+      // slot subtree; the record keeps the refs, so a re-created slot
+      // re-places the SAME nodes (children are values, #1015).
       const host = findSlotHost(p.slotEl);
-      if (host) moveSlotChildrenToPending(host, p.slotEl);
+      if (host) rescueAssignedNodes(host, p.slotEl);
     }
   }
   /** @type any */ (container).replaceChildren();
@@ -668,11 +671,14 @@ function applyPart(part, value, _prev, allValues) {
         // Shadow DOM: native projection. Leave fallback in place.
         if (isInShadowRootEl(slotEl)) return;
         // Light DOM: harvest the cloned fallback into a holding
-        // fragment, then trigger projection.
+        // fragment, then place the host's slot record (#1015). The
+        // application is deferred one microtask so the documented
+        // lifecycle timing holds: firstUpdated() sees the <slot>
+        // element itself, the populated content lands right after.
         const frag = document.createDocumentFragment();
         while (slotEl.firstChild) frag.appendChild(slotEl.firstChild);
         /** @type {any} */ (slotEl)[SLOT_FALLBACK_FRAG] = frag;
-        scheduleProjection(host);
+        queueMicrotask(() => applySlotAssignments(host));
       };
       const directHost = findSlotHost(slotEl);
       if (directHost) {
@@ -719,7 +725,14 @@ function isInShadowRootEl(el) {
     const parent = n.parentNode;
     if (!parent) return false;
     if (parent === n) return false;
-    if (/** @type any */ (parent).host) return true;
+    // A real ShadowRoot is a DocumentFragment (nodeType 11) exposing its
+    // owner as `.host`. Checking `.host` truthiness ALONE misfires on
+    // ordinary elements: HTMLAnchorElement/HTMLAreaElement expose a
+    // URL-derived `.host` ('example.com'), so a slot nested inside an
+    // <a> card was misread as shadow DOM and its light-DOM application
+    // silently skipped (surfaced by #1015's removal of the redundant
+    // observer repair paths that used to mask it).
+    if (parent.nodeType === 11 && /** @type any */ (parent).host) return true;
     n = parent;
   }
   return false;

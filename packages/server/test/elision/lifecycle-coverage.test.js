@@ -54,6 +54,10 @@ const CLASSIFICATION = {
   requestUpdate: 'call',
   addController: 'call',
   removeController: 'call',
+  // Children-as-values slot API (#1015): pushing dynamic slot content or
+  // conditioning a render on the record both need the client slot runtime.
+  setSlotContent: 'call',
+  hasSlot: 'call',
   render: 'inert',
   // Server-only: runs the pre-render lifecycle at SSR. Never a client-ship
   // signal (it executes during SSR regardless of whether the module is

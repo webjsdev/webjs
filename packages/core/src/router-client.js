@@ -18,7 +18,7 @@ import { scanSeeds } from './action-seed-client.js';
 // reused hydrated light-DOM component across a soft nav (#908).
 import {
   SLOT_STATE, LIGHT_SLOT_ATTR, PROJECTION_ATTR, PROJECTION_ACTUAL,
-  applyActualAssignment, applyFallback, fireSlotChange,
+  setSlotContent,
 } from './slot.js';
 
 /** The content type a content-negotiated stream-action response carries (#248). */
@@ -1138,7 +1138,7 @@ async function performNavigation(href, isPopState, frameId) {
           // Fire-and-forget revalidation. Uses a fresh AbortController
           // since this background fetch is allowed to overlap with the
           // next foreground nav (it'll get aborted if a new nav lands).
-          fetchAndApply(href, frameId, /* recordHistory */ false, optimisticState, 'GET', null, signal, myToken)
+          fetchAndApply(href, frameId, /* recordHistory */ false, optimisticState, 'GET', null, signal, myToken, /* revalidating */ true)
             .catch(() => {});
           return;
         }
@@ -1903,6 +1903,9 @@ function handleNavigationError(href, status, error) {
  * @param {BodyInit | null} [body]  Request body for non-GET methods.
  * @param {AbortSignal | null} [signal]  Abort signal. A newer nav cancels this fetch.
  * @param {number} [token]  Nav-token captured at the caller's entry; stale → skip apply.
+ * @param {boolean} [revalidating]  True for the BACKGROUND refresh after a
+ *   snapshot restore: the user is already viewing a page, so a boundary
+ *   mismatch must degrade in place (never a jarring `location.href` load).
  * @returns {Promise<{ ok: boolean, status: number | null, aborted: boolean }>}
  *   The fetch outcome, so a caller (the form-submission busy/event lifecycle)
  *   can report whether the submission settled as a success, an error, or an
@@ -1911,7 +1914,7 @@ function handleNavigationError(href, status, error) {
  *   for an abort (which also sets `aborted:true`). `status` is the HTTP status
  *   or `null` when the request never produced one.
  */
-async function fetchAndApply(href, frameId, recordHistory, optimisticState, method, body, signal, token) {
+async function fetchAndApply(href, frameId, recordHistory, optimisticState, method, body, signal, token, revalidating) {
   method = method || 'GET';
   const myToken = typeof token === 'number' ? token : currentNavigationToken;
   let html;
@@ -2078,7 +2081,7 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   // recover in place rather than a destructive full reload.
   if (!doc) { restoreOptimistic(optimisticState); handleNavigationError(href, null, new Error('navigation response did not parse as HTML')); return { ok: false, status: respStatus, aborted: false }; }
 
-  applySwap(doc, frameId, false, finalUrl, incomingBuild, incomingSrc);
+  applySwap(doc, frameId, !!revalidating, finalUrl, incomingBuild, incomingSrc);
 
   if (recordHistory) history.pushState(null, '', finalUrl);
 
@@ -2765,11 +2768,14 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
 
   // 3. Integrity degradation (#1015). No trustworthy shared boundary exists:
   // one side is poisoned, or the trees share no segment (a divergent shell).
-  // For a foreground nav, degrade to a FULL PAGE LOAD: bounded, correct, and
+  // For a FOREGROUND nav, degrade to a FULL PAGE LOAD: bounded, correct, and
   // exactly what an MPA would do, where the deleted heuristic recovery could
   // guess wrong and corrupt silently. Dev logs the cause so a systematic
-  // producer of malformed boundaries is visible immediately.
-  if (href && typeof location !== 'undefined') {
+  // producer of malformed boundaries is visible immediately. A REVALIDATION
+  // (the background refresh after a snapshot restore) is excluded: the user
+  // is already viewing a page, so a background op must never yank them
+  // through a hard load; it takes the in-place path below.
+  if (href && !revalidating && typeof location !== 'undefined') {
     devWarnFallback(!here ? 'live-boundaries-malformed'
       : !there ? 'incoming-boundaries-malformed'
       : 'no-shared-boundary', href);
@@ -2777,11 +2783,11 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
     return;
   }
 
-  // 4. In-place full-body swap: the no-URL path only (a revalidation of the
-  // current URL, where a full load is not an option because the caller is a
-  // background refresh). Full head merge; `mergeHead` PRESERVES stylesheets
-  // and `<style>` unconditionally (#936) so the swap can never leave the page
-  // unstyled.
+  // 4. In-place full-body swap: the background paths only (a snapshot
+  // restore or its revalidation, where a full load is not an option
+  // because the user is already viewing the page). Full head merge;
+  // `mergeHead` PRESERVES stylesheets and `<style>` unconditionally
+  // (#936) so the swap can never leave the page unstyled.
   mergeHead(doc.head);
   // Persist permanent elements by node identity across the full-body
   // swap: move each live [data-webjs-permanent][id] node into the matching
@@ -3111,39 +3117,7 @@ function ownActualLightSlots(host) {
   return byName;
 }
 
-/**
- * The component's own light slot for `name`, whatever its projection state
- * (first-wins by document order). Used to resolve the slot to fill on a
- * fallback->actual transition, where the target slot is currently `fallback`
- * so it is absent from `ownActualLightSlots`. Nested-child slots are excluded.
- *
- * @param {Element} host
- * @param {string|null} name
- * @returns {HTMLSlotElement | null}
- */
-function ownLightSlotForName(host, name) {
-  for (const slot of host.querySelectorAll(`slot[${LIGHT_SLOT_ATTR}]`)) {
-    const s = /** @type {HTMLSlotElement} */ (slot);
-    if (!isOwnLightSlot(s, host)) continue;
-    if ((s.getAttribute('name') || null) === name) return s;
-  }
-  return null;
-}
 
-/**
- * Per-index node-identity equality of two node lists. Used to decide whether a
- * slot's assigned-node SET actually changed (so `slotchange` should fire); an
- * in-place text edit that reuses the same node is NOT a set change.
- *
- * @param {ArrayLike<Node>} a
- * @param {ArrayLike<Node>} b
- * @returns {boolean}
- */
-function sameNodeList(a, b) {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-  return true;
-}
 
 /**
  * Re-project the page-authored slotted content of a REUSED hydrated light-DOM
@@ -3177,54 +3151,39 @@ function sameNodeList(a, b) {
  * @param {Element} src  Incoming SSR copy of the same component.
  */
 function reprojectSlottedContent(dst, src) {
-  // Only a light-DOM component that tracks slot assignments has projected
+  // Only a light-DOM component that tracks slot assignments has placed
   // page-authored content to update. No slot state (no <slot>, or a shadow-DOM
   // component whose slotted nodes are ordinary light children) means nothing
-  // to re-project here.
-  const state = /** @type {any} */ (dst)[SLOT_STATE];
-  if (!state) return;
+  // to update here.
+  if (!(/** @type {any} */ (dst)[SLOT_STATE])) return;
 
   const liveSlots = ownActualLightSlots(dst);
   const incSlots = ownActualLightSlots(src);
   if (liveSlots.size === 0 && incSlots.size === 0) return;
 
-  // A slot name is `actual` on the live side, the incoming side, or both. Walk
-  // the union so a boundary transition (present on only one side) is handled.
+  // #1015: slotted children are VALUES pushed through the ONE public seam,
+  // setSlotContent (no cross-module state surgery; the slot runtime owns the
+  // record, fires slotchange on a genuine set change, and re-applies). The
+  // union walk covers boundary transitions (a name present on only one side).
   const names = new Set([...liveSlots.keys(), ...incSlots.keys()]);
   for (const name of names) {
     const liveSlot = liveSlots.get(name);
     const incSlot = incSlots.get(name);
     if (liveSlot && incSlot) {
-      // actual->actual: the slot's children are page-authored, so
-      // reconcileChildren is safe: it preserves node identity where it can and
-      // never touches lit-html parts. Keep the slot runtime's assignment
-      // bookkeeping in sync so a later re-render materialises THESE nodes.
-      const prevAssigned = state.lastSnapshot.get(liveSlot) || [];
+      // actual->actual: reconcile IN PLACE first so page-authored slotted
+      // nodes keep DOM identity where they match (#908: a nested live
+      // component survives; an in-place text edit reuses the same node),
+      // then push the resulting set through the public API. The runtime's
+      // set-equality check makes slotchange fire exactly on an
+      // add/remove/replace and stay silent on a pure text edit (#912).
       reconcileChildren(liveSlot, incSlot);
-      const children = [...liveSlot.childNodes];
-      state.assignedByName.set(name, children);
-      state.lastSnapshot.set(liveSlot, children.slice());
-      // Fire slotchange on an assigned-node-SET change (add / remove / reorder),
-      // not an in-place text edit that reuses the same node: that matches the
-      // spec and keeps this branch uniform with the boundary branches below.
-      if (!sameNodeList(prevAssigned, children)) fireSlotChange(liveSlot);
-    } else if (liveSlot && !incSlot) {
-      // actual->fallback: incoming REMOVED this slot's content. Clear the
-      // assignment and flip THIS slot to fallback; applyFallback restores the
-      // render-owned fallback from the slot-part holding fragment.
-      state.assignedByName.delete(name);
-      if (applyFallback(state, liveSlot)) fireSlotChange(liveSlot);
+      setSlotContent(dst, name, [...liveSlot.childNodes]);
+    } else if (incSlot) {
+      // fallback->actual: incoming ADDED content. Import and push.
+      setSlotContent(dst, name, [...incSlot.childNodes].map((n) => document.importNode(n, true)));
     } else {
-      // fallback->actual: incoming ADDED content where the live slot shows
-      // fallback. The target slot is currently fallback, so resolve it directly
-      // (it is absent from the actual-only map) and fill it with the imported
-      // page-authored nodes; applyActualAssignment tucks the render-owned
-      // fallback into the holding fragment first.
-      const targetSlot = ownLightSlotForName(dst, name);
-      if (!targetSlot) continue;
-      const nodes = [...incSlot.childNodes].map((n) => document.importNode(n, true));
-      state.assignedByName.set(name, nodes);
-      if (applyActualAssignment(state, targetSlot, nodes)) fireSlotChange(targetSlot);
+      // actual->fallback: incoming DROPPED the content. Reset to fallback.
+      setSlotContent(dst, name, null);
     }
   }
 }
