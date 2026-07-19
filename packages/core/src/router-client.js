@@ -2843,9 +2843,38 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
     return;
   }
 
-  // 2. Auto-derived layout-marker swap. Recover an orphaned open marker on
+  // 2. Structural region swap (#1013, Pillar 1 + 2). When BOTH the live DOM and
+  // the response carry <wj-region> boundary ELEMENTS, use the element-based
+  // two-tier swap. A real element delimits its own subtree, so an over-wide or
+  // corrupt swap is structurally impossible (no LIFO comment pairing, no
+  // orphaned close); the plan is: wholesale replace on a route-key change (Next
+  // remount), bounded morph on a searchParams-only nav (hydrated component state
+  // preserved). A response with no shared region degrades to the full-body swap
+  // below (the ladder). Dormant until the server emits regions, so the comment
+  // path below still runs for a marker-only response during the migration.
+  const liveRegions = collectRegions(document.body);
+  const incomingRegions = collectRegions(doc.body);
+  if (liveRegions.size && incomingRegions.size) {
+    const plan = planRegionSwap(liveRegions, incomingRegions);
+    if (plan) {
+      // ADD-ONLY head merge: outer layouts stay mounted, so their head-bound
+      // runtime state (Tailwind injection, etc.) must not be invalidated.
+      addNewHeadElements(doc.head);
+      runWithTransition(() => {
+        applyRegionContent(plan);
+        blurOutgoingFocus();
+      }, () => upgradeCustomElements(plan.live));
+      forwardSuspenseResolvers(doc.body);
+      return;
+    }
+    // Regions present but no shared region: fall through to the full-body swap
+    // (a genuine root-layout change). The root `/` region normally exists on
+    // both sides, so this is reached only for a divergent or malformed shell.
+  }
+
+  // 3. Auto-derived layout-marker swap. Recover an orphaned open marker on
   // either side (#994): a dropped close comment must not force the destructive
-  // path-3 fallback that wipes the outer layout (navbar).
+  // full-body fallback that wipes the outer layout (navbar).
   const here = collectChildrenSlots(document.body, { recoverOrphans: true });
   const there = collectChildrenSlots(doc.body, { recoverOrphans: true });
   const sharedPath = longestSharedPath(here, there);
@@ -2874,7 +2903,7 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
     return;
   }
 
-  // 3. Full body swap fallback: no shared layout marker (a genuine root-layout
+  // 4. Full body swap fallback: no shared layout marker (a genuine root-layout
   // change, or a same-layout nav whose markers could not be paired). Full head
   // merge, so a real root-layout change removes stale head elements. `mergeHead`
   // now PRESERVES stylesheets and `<style>` unconditionally (#936): even if the

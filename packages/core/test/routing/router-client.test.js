@@ -3555,6 +3555,89 @@ test('applySwap: a degenerate trailing-count mismatch sweeps to parent end, neve
   }
 });
 
+test('applySwap: region REPLACE remounts the page region and preserves outer chrome (#1013)', () => {
+  // A dynamic page-param change (/blog/a -> /blog/b): the page region route-key
+  // changed, so the swap wholesale-replaces the page region's children (Next
+  // remount) while the root region and the header chrome ABOVE it stay put.
+  const savedBody = globalThis.document.body.innerHTML;
+  const savedHead = globalThis.document.head.innerHTML;
+  const savedLocation = globalThis.location;
+  try {
+    globalThis.document.head.innerHTML = '';
+    globalThis.location = /** @type any */ ({ get href() { return 'http://x/blog/a'; }, set href(_v) {} });
+
+    globalThis.document.body.innerHTML =
+      '<header id="chrome">chrome</header>' +
+      '<wj-region segment="/" route-key="/">' +
+      '  <wj-region segment="/blog/[slug]" route-key="/blog/a"><article id="old">a</article></wj-region>' +
+      '</wj-region>';
+    const liveChrome = globalThis.document.getElementById('chrome');
+
+    const incoming = new globalThis.DOMParser().parseFromString(
+      '<!doctype html><html><head></head><body>' +
+      '<header id="chrome">chrome</header>' +
+      '<wj-region segment="/" route-key="/">' +
+      '  <wj-region segment="/blog/[slug]" route-key="/blog/b"><article id="new">b</article></wj-region>' +
+      '</wj-region>' +
+      '</body></html>', 'text/html');
+
+    _applySwap(incoming, null, false, 'http://x/blog/b');
+
+    assert.equal(globalThis.document.getElementById('chrome'), liveChrome, 'outer chrome identity preserved');
+    assert.ok(globalThis.document.getElementById('new'), 'page region children replaced with incoming');
+    assert.ok(!globalThis.document.getElementById('old'), 'old page children remounted away');
+    assert.equal(globalThis.document.querySelectorAll('wj-region[segment="/"]').length, 1, 'root region not duplicated');
+  } finally {
+    globalThis.location = savedLocation;
+    globalThis.document.head.innerHTML = savedHead;
+    globalThis.document.body.innerHTML = savedBody;
+  }
+});
+
+test('applySwap: region MORPH preserves node identity on a searchParams-only nav (#1013)', () => {
+  // /blog/a?x=1 -> /blog/a?x=2: no route-key changes, the page region is the
+  // leaf on both sides, so the swap MORPHS its children. A keyed node keeps its
+  // identity (the state-preservation guarantee) while its text updates.
+  const savedBody = globalThis.document.body.innerHTML;
+  const savedHead = globalThis.document.head.innerHTML;
+  const savedLocation = globalThis.location;
+  try {
+    globalThis.document.head.innerHTML = '';
+    globalThis.location = /** @type any */ ({ get href() { return 'http://x/blog/a?x=1'; }, set href(_v) {} });
+
+    globalThis.document.body.innerHTML =
+      '<header id="chrome">chrome</header>' +
+      '<wj-region segment="/" route-key="/">' +
+      '  <wj-region segment="/blog/[slug]" route-key="/blog/a"><li data-key="1" id="k1">a</li></wj-region>' +
+      '</wj-region>';
+    const keptNode = globalThis.document.getElementById('k1');
+
+    // The server re-emits the SAME keyed node with the same stable attributes
+    // (data-key + id); only the searchParam-driven text differs. The morph must
+    // reuse the live node by its data-key match, so its identity survives.
+    const incoming = new globalThis.DOMParser().parseFromString(
+      '<!doctype html><html><head></head><body>' +
+      '<header id="chrome">chrome</header>' +
+      '<wj-region segment="/" route-key="/">' +
+      '  <wj-region segment="/blog/[slug]" route-key="/blog/a"><li data-key="1" id="k1">a-updated</li></wj-region>' +
+      '</wj-region>' +
+      '</body></html>', 'text/html');
+
+    _applySwap(incoming, null, false, 'http://x/blog/a?x=2');
+
+    const got = globalThis.document.getElementById('k1');
+    // Compare identity via `===` (not assert.equal on the nodes): a failing
+    // assert.equal would util.inspect the linkedom node, which spins on its
+    // circular parent refs.
+    assert.ok(got === keptNode, 'keyed node identity preserved across the morph');
+    assert.equal(got.textContent, 'a-updated', 'morphed content updated');
+  } finally {
+    globalThis.location = savedLocation;
+    globalThis.document.head.innerHTML = savedHead;
+    globalThis.document.body.innerHTML = savedBody;
+  }
+});
+
 test('a prefetch that reveals a NEW build id evicts stale pre-deploy caches (#899)', async () => {
   const origFetch = globalThis.fetch;
   const savedHead = globalThis.document.head.innerHTML;
