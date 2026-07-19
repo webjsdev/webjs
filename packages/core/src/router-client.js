@@ -1000,6 +1000,66 @@ export function collectRegions(root) {
   return regions;
 }
 
+/** Deepest (longest-segment) region in a map, or null. */
+function deepestSegment(regions) {
+  let best = null;
+  for (const s of regions.keys()) if (best === null || s.length > best.length) best = s;
+  return best;
+}
+
+/**
+ * Plan the two-tier region swap from the live + incoming region maps (#1013,
+ * Pillar 2). Region segments are nested path prefixes, so the shared segments
+ * form a chain from `/` down to the deepest shared region D.
+ *
+ * Rules (exact Next.js remount-vs-preserve parity):
+ *  - REPLACE at the SHALLOWEST shared region whose route-key changed. A param
+ *    change at a segment remounts that segment AND its whole subtree, so the
+ *    boundary is the shallowest changed region, not the deepest (`/blog/a` ->
+ *    `/blog/b` replaces the page region; `/a/settings` -> `/b/settings`
+ *    replaces the dynamic `[org]` layout region and everything under it).
+ *  - No route-key changed but the subtree below D diverges (D is a LAYOUT, not
+ *    the leaf, on either side, for example `/about` -> `/contact` under a shared
+ *    static root layout): REPLACE D's children wholesale.
+ *  - No route-key changed and D is the leaf (page) region on BOTH sides: MORPH
+ *    D. This is the searchParams-only / refresh / revalidate nav that must
+ *    preserve hydrated component state while updating searchParam-driven DOM.
+ *  - No shared region at all: null (caller degrades down the ladder to a full
+ *    load). In practice the root `/` region exists on both sides, so this is
+ *    reached only for a malformed / truncated response.
+ *
+ * The returned `live` / `incoming` are the `<wj-region>` ELEMENTS; the swap
+ * operates on their children (`replaceChildren` for `replace`, a bounded morph
+ * for `morph`), never on the region element itself.
+ *
+ * @param {Map<string,{el:Element,routeKey:string}>} here  live regions
+ * @param {Map<string,{el:Element,routeKey:string}>} there incoming regions
+ * @returns {{mode:'replace'|'morph', segment:string, live:Element, incoming:Element}|null}
+ */
+export function planRegionSwap(here, there) {
+  // Shared segments, shallowest first (a nested path prefix is shorter).
+  const shared = [...here.keys()].filter((s) => there.has(s)).sort((a, b) => a.length - b.length);
+  if (shared.length === 0) return null;
+  // Shallowest shared region whose route-key changed is the remount boundary.
+  for (const seg of shared) {
+    if (here.get(seg).routeKey !== there.get(seg).routeKey) {
+      return { mode: 'replace', segment: seg, live: here.get(seg).el, incoming: there.get(seg).el };
+    }
+  }
+  // No route-key changed. D = deepest shared region.
+  const D = shared[shared.length - 1];
+  const leafOnBoth = deepestSegment(here) === D && deepestSegment(there) === D;
+  // Leaf on both -> searchParams-only nav -> morph (state preserved). Otherwise
+  // the subtree below D diverges (a page change under a shared static layout)
+  // -> replace D's children wholesale.
+  return {
+    mode: leafOnBoth ? 'morph' : 'replace',
+    segment: D,
+    live: here.get(D).el,
+    incoming: there.get(D).el,
+  };
+}
+
 /* ====================================================================
  * Snapshot cache (Turbo SnapshotCache pattern)
  * ==================================================================== */
@@ -3893,6 +3953,7 @@ export {
   clearFormBusy as _clearFormBusy,
   collectChildrenSlots as _collectChildrenSlots,
   collectRegions as _collectRegions,
+  planRegionSwap as _planRegionSwap,
   longestSharedPath as _longestSharedPath,
   parseHTML as _parseHTML,
   resetParseProbe as _resetParseProbe,
