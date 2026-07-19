@@ -51,9 +51,9 @@ suite('Client router: soft nav keeps the navbar when the close marker is dropped
     // marker, then the children region (properly closed on the live side).
     document.body.innerHTML =
       '<nav id="site-top">navbar</nav>' +
-      '<!--wj:children:/-->' +
+      '<!--wj:children:/:/-->' +
       '<main id="old">old page</main>' +
-      '<!--/wj:children-->';
+      '<!--/wj:children:/-->';
     const liveNav = document.getElementById('site-top');
 
     try {
@@ -61,7 +61,7 @@ suite('Client router: soft nav keeps the navbar when the close marker is dropped
       // (a malformed response). Parsed in body context it is an orphaned open
       // marker, exactly the state that used to force the full-body fallback.
       const doc = _parseHTML(
-        '<!--wj:children:/-->' +
+        '<!--wj:children:/:/-->' +
         '<main id="new">new page</main>'
       );
 
@@ -89,16 +89,16 @@ suite('Client router: soft nav keeps the navbar when the close marker is dropped
     enableClientRouter();
     document.body.innerHTML =
       '<nav id="site-top-2">navbar</nav>' +
-      '<!--wj:children:/-->' +
+      '<!--wj:children:/:/-->' +
       '<main id="old2">old</main>' +
-      '<!--/wj:children-->';
+      '<!--/wj:children:/-->';
     const liveNav = document.getElementById('site-top-2');
 
     try {
       const doc = _parseHTML(
-        '<!--wj:children:/-->' +
+        '<!--wj:children:/:/-->' +
         '<main id="new2">new</main>' +
-        '<!--/wj:children-->'
+        '<!--/wj:children:/-->'
       );
       _applySwap(doc, null, false, location.origin + '/blog');
 
@@ -119,7 +119,7 @@ suite('Client router: soft nav keeps the navbar when the close marker is dropped
     enableClientRouter();
     document.body.innerHTML =
       '<nav>navbar</nav>' +
-      '<!--wj:children:/-->' +
+      '<!--wj:children:/:/-->' +
       '<main>orphaned</main>' +
       '<footer>footer</footer>'; // close comment dropped: the open is orphaned
     try {
@@ -130,9 +130,9 @@ suite('Client router: soft nav keeps the navbar when the close marker is dropped
     }
 
     document.body.innerHTML =
-      '<!--wj:children:/-->' +
+      '<!--wj:children:/:/-->' +
       '<main>ok</main>' +
-      '<!--/wj:children-->';
+      '<!--/wj:children:/-->';
     try {
       assert.equal(_buildHaveHeader(), '/', 'a well-formed page reports its layout normally');
     } finally {
@@ -147,7 +147,7 @@ suite('Client router: soft nav keeps the navbar when the close marker is dropped
     enableClientRouter();
     document.body.innerHTML =
       '<nav id="nav-f">navbar</nav>' +
-      '<!--wj:children:/-->' +
+      '<!--wj:children:/:/-->' +
       '<main id="oldf">old</main>' +
       '<footer id="foot-f">footer</footer>';
     const liveNav = document.getElementById('nav-f');
@@ -158,9 +158,9 @@ suite('Client router: soft nav keeps the navbar when the close marker is dropped
       const doc = _parseHTML(
         '<!doctype html><html><head></head><body>' +
         '<nav id="nav-f">navbar</nav>' +
-        '<!--wj:children:/-->' +
+        '<!--wj:children:/:/-->' +
         '<main id="newf">new</main>' +
-        '<!--/wj:children-->' +
+        '<!--/wj:children:/-->' +
         '<footer id="foot-f">footer</footer>' +
         '</body></html>'
       );

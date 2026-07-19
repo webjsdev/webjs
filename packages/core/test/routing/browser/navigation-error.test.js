@@ -48,10 +48,10 @@ suite('Client router: in-place navigation-error recovery (#249)', () => {
     // the proof that no full-body reload/swap destroyed the SPA shell.
     container.innerHTML =
       '<header id="outer-chrome">CHROME</header>' +
-      '<!--wj:children:/-->' +
+      '<!--wj:children:/:/-->' +
         '<a id="nav-link" href="/boom">go</a>' +
         '<span id="slot-content">ORIGINAL</span>' +
-      '<!--/wj:children-->';
+      '<!--/wj:children:/-->';
     document.body.appendChild(container);
 
     origFetch = window.fetch;

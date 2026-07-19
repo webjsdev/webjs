@@ -42,10 +42,10 @@ suite('Client router: soft nav keeps CSS + empty-have prefetch gate (#936)', () 
     // Live DOM has a layout; incoming document has a DIFFERENT layout marker
     // (so no shared path -> the full-body-swap fallback runs) AND an empty head
     // that lacks the stylesheet, exactly the shape that used to strip the CSS.
-    document.body.innerHTML = '<!--wj:children:/docs-->old<!--/wj:children-->';
+    document.body.innerHTML = '<!--wj:children:/docs:/docs-->old<!--/wj:children:/docs-->';
 
     try {
-      const doc = _parseHTML('<!doctype html><html><head></head><body><!--wj:children:/admin--><main>new</main><!--/wj:children--></body></html>');
+      const doc = _parseHTML('<!doctype html><html><head></head><body><!--wj:children:/admin:/admin--><main>new</main><!--/wj:children:/admin--></body></html>');
       _applySwap(doc, null, false, location.origin + '/admin/y');
 
       // The swap ran (cross-layout), but the head merge preserved the CSS.

@@ -93,14 +93,14 @@ suite('Client router: View Transitions on partial swaps (#250)', () => {
       stubSVT();
       // A nested-layout marker shared by both pages.
       container.innerHTML =
-        '<!--wj:children:/x-->' +
+        '<!--wj:children:/x:/x-->' +
         '<a id="m-link" href="/m-target"></a>' +
         '<span id="m-content">OLD</span>' +
-        '<!--/wj:children-->';
+        '<!--/wj:children:/x-->';
 
       window.fetch = () => htmlResponse(
         '<!doctype html><html><head></head><body>' +
-        '<!--wj:children:/x--><span id="m-content">NEW</span><!--/wj:children-->' +
+        '<!--wj:children:/x:/x--><span id="m-content">NEW</span><!--/wj:children:/x-->' +
         '</body></html>'
       );
 
@@ -146,14 +146,14 @@ suite('Client router: View Transitions on partial swaps (#250)', () => {
       setViewTransitionMeta(false); // explicit: no opt-in
       stubSVT();
       container.innerHTML =
-        '<!--wj:children:/y-->' +
+        '<!--wj:children:/y:/y-->' +
         '<a id="n-link" href="/n-target"></a>' +
         '<span id="n-content">OLD</span>' +
-        '<!--/wj:children-->';
+        '<!--/wj:children:/y-->';
 
       window.fetch = () => htmlResponse(
         '<!doctype html><html><head></head><body>' +
-        '<!--wj:children:/y--><span id="n-content">NEW</span><!--/wj:children-->' +
+        '<!--wj:children:/y:/y--><span id="n-content">NEW</span><!--/wj:children:/y-->' +
         '</body></html>'
       );
 
@@ -173,14 +173,14 @@ suite('Client router: View Transitions on partial swaps (#250)', () => {
       setViewTransitionMeta(true); // opted in, but the API is missing
       removeSVT();
       container.innerHTML =
-        '<!--wj:children:/z-->' +
+        '<!--wj:children:/z:/z-->' +
         '<a id="u-link" href="/u-target"></a>' +
         '<span id="u-content">OLD</span>' +
-        '<!--/wj:children-->';
+        '<!--/wj:children:/z-->';
 
       window.fetch = () => htmlResponse(
         '<!doctype html><html><head></head><body>' +
-        '<!--wj:children:/z--><span id="u-content">NEW</span><!--/wj:children-->' +
+        '<!--wj:children:/z:/z--><span id="u-content">NEW</span><!--/wj:children:/z-->' +
         '</body></html>'
       );
 
@@ -284,21 +284,21 @@ suite('Client router: data-webjs-permanent persistence (#250)', () => {
     setup();
     try {
       container.innerHTML =
-        '<!--wj:children:/r-->' +
+        '<!--wj:children:/r:/r-->' +
           '<div id="m-widget" data-webjs-permanent>LIVE</div>' +
           '<span id="r-content">OLD</span>' +
           '<a id="r-link" href="/r-target"></a>' +
-        '<!--/wj:children-->';
+        '<!--/wj:children:/r-->';
       const liveNode = document.getElementById('m-widget');
       const probe = {};
       liveNode.__webjsLiveProbe = probe;
 
       window.fetch = () => htmlResponse(
         '<!doctype html><html><head></head><body>' +
-        '<!--wj:children:/r-->' +
+        '<!--wj:children:/r:/r-->' +
           '<div id="m-widget" data-webjs-permanent>PLACEHOLDER</div>' +
           '<span id="r-content">NEW</span>' +
-        '<!--/wj:children-->' +
+        '<!--/wj:children:/r-->' +
         '</body></html>'
       );
 

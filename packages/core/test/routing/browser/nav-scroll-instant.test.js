@@ -21,7 +21,7 @@ suite('Client router: nav scroll is instant under scroll-behavior:smooth (#601)'
   function setup() {
     enableClientRouter(); // idempotent; ensures the document listeners are attached
     document.documentElement.style.scrollBehavior = 'smooth';
-    document.body.innerHTML = '<!--wj:children:/-->before<!--/wj:children-->';
+    document.body.innerHTML = '<!--wj:children:/:/-->before<!--/wj:children:/-->';
     calls = [];
     origScrollTo = window.scrollTo;
     // Record every scroll the router issues (and skip the real scroll so the
@@ -30,7 +30,7 @@ suite('Client router: nav scroll is instant under scroll-behavior:smooth (#601)'
     origFetch = window.fetch;
     window.fetch = () => Promise.resolve(new Response(
       '<!doctype html><html><head></head><body>' +
-      '<!--wj:children:/-->after<!--/wj:children--></body></html>',
+      '<!--wj:children:/:/-->after<!--/wj:children:/--></body></html>',
       { headers: { 'content-type': 'text/html', 'x-webjs-build': '' } },
     ));
   }

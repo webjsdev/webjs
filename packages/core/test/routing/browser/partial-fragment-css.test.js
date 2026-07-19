@@ -3,7 +3,7 @@
  * the head stylesheets and the outer layout, not wipe them.
  *
  * The server's X-Webjs-Have partial response for a same-layout nav is an INNER
- * fragment that BEGINS with the `<!--wj:children:/-->` marker and carries no
+ * fragment that BEGINS with the `<!--wj:children:/:/-->` marker and carries no
  * `<!doctype>`/`<html>` (see packages/server/src/ssr.js `wrapWithChildrenMarker`
  * + the `have.has(segmentPath)` short-circuit). Parsing that fragment as a
  * DOCUMENT hoists the leading comment OUT of `<body>` (the HTML "before html"
@@ -32,7 +32,7 @@ const tick = () => new Promise((r) => setTimeout(r, 25));
 
 /** The inner fragment a same-layout partial nav returns: marker-first, no
  *  <!doctype>/<html>/<head>, no outer layout. Exactly what the server sends. */
-const FRAGMENT = '<!--wj:children:/--><main id="inner">AFTER</main><!--/wj:children-->';
+const FRAGMENT = '<!--wj:children:/:/--><main id="inner">AFTER</main><!--/wj:children:/-->';
 
 suite('Client router: same-layout nav keeps head CSS + outer layout (#936)', () => {
   test('parseHTML keeps the leading wj:children marker inside <body> for a bare fragment', () => {
@@ -43,7 +43,7 @@ suite('Client router: same-layout nav keeps head CSS + outer layout (#936)', () 
     assert.ok(slots.has('/'), 'the "/" children slot is found in the parsed fragment body');
     assert.ok(doc.querySelector('#inner'), 'the inner content parsed into the body');
     // A full document still parses as before (regression guard).
-    const full = _parseHTML('<!doctype html><html><head><link rel="stylesheet" href="/x.css"></head><body><!--wj:children:/-->x<!--/wj:children--></body></html>');
+    const full = _parseHTML('<!doctype html><html><head><link rel="stylesheet" href="/x.css"></head><body><!--wj:children:/:/-->x<!--/wj:children:/--></body></html>');
     assert.ok(_collectChildrenSlots(full.body).has('/'), 'a full document body still yields the slot');
     assert.ok(full.querySelector('link[rel="stylesheet"]'), 'a full document keeps its head stylesheet');
   });
@@ -62,7 +62,7 @@ suite('Client router: same-layout nav keeps head CSS + outer layout (#936)', () 
     // the children slot the nav should swap. Mirrors the SSR layout structure.
     document.body.innerHTML =
       '<header class="site-top" id="navbar">NAV</header>' +
-      '<!--wj:children:/--><main id="inner">BEFORE</main><!--/wj:children-->';
+      '<!--wj:children:/:/--><main id="inner">BEFORE</main><!--/wj:children:/-->';
 
     const before = location.href;
     const origFetch = window.fetch;
