@@ -962,6 +962,44 @@ export function longestSharedPath(here, there) {
   return best;
 }
 
+/**
+ * Collect `<wj-region segment route-key>` boundary elements into a Map keyed
+ * by segment path. Regions are the structural replacement for the wj:children
+ * comment markers (#1013): SSR emits one around each layout's `${children}`
+ * and one around the page, for example
+ * `<wj-region segment="/blog/[slug]" route-key="/blog/a">`.
+ *
+ * Because the boundary is a real element, the HTML parser itself delimits the
+ * subtree: there is no LIFO pairing, no orphaned close, no over-wide range. A
+ * missing region is simply absent from the Map (the swap degrades to a wider
+ * shared region or a full load per the ladder), never a corrupt swap. The
+ * element's own children ARE the swap target, so the swap becomes
+ * `region.el.replaceChildren(...)` on a route-key change or a bounded morph of
+ * those children when the route-key is unchanged (searchParams-only nav).
+ *
+ * `segment` is the layout scope (route groups kept, so distinct `(group)`
+ * layouts at the same URL prefix stay distinct); `route-key` is the concrete
+ * resolved path the two-tier swap compares (see server `regionRouteKey`). A
+ * segment appears once per document (a self-including layout is pathological);
+ * first wins, matching `collectChildrenSlots`. The returned Map's KEYS are
+ * segment paths, so `longestSharedPath` picks the deepest shared region
+ * unchanged.
+ *
+ * @param {ParentNode} root
+ * @returns {Map<string, { el: Element, routeKey: string }>}
+ */
+export function collectRegions(root) {
+  /** @type {Map<string, { el: Element, routeKey: string }>} */
+  const regions = new Map();
+  if (!root || !root.querySelectorAll) return regions;
+  for (const el of root.querySelectorAll('wj-region[segment]')) {
+    const segment = el.getAttribute('segment');
+    if (!segment || regions.has(segment)) continue;
+    regions.set(segment, { el, routeKey: el.getAttribute('route-key') || segment });
+  }
+  return regions;
+}
+
 /* ====================================================================
  * Snapshot cache (Turbo SnapshotCache pattern)
  * ==================================================================== */
@@ -3854,6 +3892,7 @@ export {
   markFormBusy as _markFormBusy,
   clearFormBusy as _clearFormBusy,
   collectChildrenSlots as _collectChildrenSlots,
+  collectRegions as _collectRegions,
   longestSharedPath as _longestSharedPath,
   parseHTML as _parseHTML,
   resetParseProbe as _resetParseProbe,
