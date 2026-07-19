@@ -216,25 +216,30 @@ suite('Client router: data-webjs-permanent persistence (#250)', () => {
   test('boundary REPLACE (remount): a permanent element keeps NODE IDENTITY across the nav', async () => {
     setup();
     try {
-      // A route-key change at the page boundary (#1015): the REPLACE tier
-      // remounts everything in the range EXCEPT regrafted permanents. This is
-      // where permanence matters most (a fresh remount would restart the
-      // player), replacing the deleted full-body foreground path.
+      // A route-key change at the page boundary (#1015): the REPLACE tier,
+      // anchored at the PARENT ('/') boundary, remounts everything in the
+      // range EXCEPT regrafted permanents. This is where permanence matters
+      // most (a fresh remount would restart the player), replacing the
+      // deleted full-body foreground path.
       container.innerHTML =
+        '<!--wj:children:/:/-->' +
         '<!--wj:children:/page/[x]:/page/a-->' +
         '<div id="player" data-webjs-permanent>PLAYING</div>' +
         '<a id="fb-link" href="/fb-target"></a>' +
-        '<!--/wj:children:/page/[x]-->';
+        '<!--/wj:children:/page/[x]-->' +
+        '<!--/wj:children:/-->';
       const liveNode = document.getElementById('player');
       const probe = {};
       liveNode.__webjsLiveProbe = probe;
 
       window.fetch = () => htmlResponse(
         '<!doctype html><html><head></head><body>' +
+        '<!--wj:children:/:/-->' +
         '<!--wj:children:/page/[x]:/page/b-->' +
         '<div id="player" data-webjs-permanent>PLACEHOLDER</div>' +
         '<h1 id="fb-new">New page</h1>' +
         '<!--/wj:children:/page/[x]-->' +
+        '<!--/wj:children:/-->' +
         '</body></html>'
       );
 

@@ -237,6 +237,16 @@ test('collectBoundaries: a duplicate segment POISONS the scan', () => {
   assert.equal(_collect(body), null);
 });
 
+test('collectBoundaries: a pair split across PARENTS poisons the scan (parser reparenting)', () => {
+  // HTML parser reparenting (a <p> auto-closed by block content, table
+  // foster-parenting) can strand a close in a different parent from its
+  // open, identically on both sides. The range ops walk nextSibling from
+  // start and insert before end, so a cross-parent pair would empty the
+  // region and then throw mid-swap. It must poison up front instead.
+  const body = bodyFrom('<div><!--wj:children:/:/--><p>x</p></div><!--/wj:children:/-->');
+  assert.equal(_collect(body), null);
+});
+
 test('collectBoundaries: the legacy anonymous format POISONS the scan (no route-key)', () => {
   // A pre-#1015 response (or a truncated open) has no route-key. There is no
   // legacy fallback by design: server and client ship together, so a mixed
@@ -252,18 +262,28 @@ test('collectBoundaries: the legacy anonymous format POISONS the scan (no route-
 /** Helper: boundary-map entry with only what the planner reads. */
 function bEntry(routeKey) { return { routeKey, start: null, end: null }; }
 
-test('planBoundarySwap: REPLACE at the shallowest shared boundary whose route-key changed', () => {
-  // /blog/a -> /blog/b: the page boundary's key changed, the root's did not.
-  const here = new Map([['/', bEntry('/')], ['/blog/[slug]', bEntry('/blog/a')]]);
-  const there = new Map([['/', bEntry('/')], ['/blog/[slug]', bEntry('/blog/b')]]);
+test('planBoundarySwap: a changed route-key REPLACES at the PARENT boundary', () => {
+  // /blog/a -> /blog/b under a /blog layout: the page boundary's key changed;
+  // the anchor is its PARENT (/blog), whose range contains the page. The
+  // /blog layout's own chrome (inside the '/' range but outside '/blog') and
+  // the root chrome are preserved: exactly Next's remount scope.
+  const here = new Map([
+    ['/', bEntry('/')], ['/blog', bEntry('/blog')], ['/blog/[slug]', bEntry('/blog/a')],
+  ]);
+  const there = new Map([
+    ['/', bEntry('/')], ['/blog', bEntry('/blog')], ['/blog/[slug]', bEntry('/blog/b')],
+  ]);
   const plan = _plan(here, there);
   assert.equal(plan.mode, 'replace');
-  assert.equal(plan.segment, '/blog/[slug]');
+  assert.equal(plan.segment, '/blog', 'the parent of the changed boundary is the anchor');
 });
 
-test('planBoundarySwap: a changed LAYOUT param remounts at the layout, not the page', () => {
-  // /a/settings -> /b/settings: the [org] layout's key changed, so the
-  // remount boundary is the layout (its whole subtree remounts), Next parity.
+test('planBoundarySwap: a changed LAYOUT param remounts at the layout PARENT (the layout chrome remounts too)', () => {
+  // /a/settings -> /b/settings: the [org] layout's key changed. The layout's
+  // OWN markup (an org-name header) lives inside the PARENT boundary, outside
+  // its own children slot, so the anchor must be the parent ('/') or the
+  // org-b page would render under org-a chrome. Next re-renders the layout
+  // with new params; anchoring at the parent reproduces that.
   const here = new Map([
     ['/', bEntry('/')],
     ['/[org]', bEntry('/a')],
@@ -276,7 +296,15 @@ test('planBoundarySwap: a changed LAYOUT param remounts at the layout, not the p
   ]);
   const plan = _plan(here, there);
   assert.equal(plan.mode, 'replace');
-  assert.equal(plan.segment, '/[org]', 'shallowest changed boundary wins');
+  assert.equal(plan.segment, '/', 'the parent of the shallowest changed boundary is the anchor');
+});
+
+test('planBoundarySwap: a changed boundary with NO shared parent degrades (null)', () => {
+  // Only the changed boundary itself is shared: nothing contains the changed
+  // markup, so there is no safe anchor. Degrade to a full load.
+  const here = new Map([['/[org]', bEntry('/a')]]);
+  const there = new Map([['/[org]', bEntry('/b')]]);
+  assert.equal(_plan(here, there), null);
 });
 
 test('planBoundarySwap: MORPH when no key changed and the deepest shared boundary is the leaf on both sides', () => {
@@ -1925,8 +1953,10 @@ test('navigate: sends X-Webjs-Have header listing current marker paths', async (
     await navigate('http://localhost/docs/components/b');
     const have = mocks.captured.headers && mocks.captured.headers['x-webjs-have'];
     assert.ok(have, 'X-Webjs-Have header should be set');
-    assert.ok(have.includes('/'), 'X-Webjs-Have includes root path');
-    assert.ok(have.includes('/docs'), 'X-Webjs-Have includes /docs path');
+    // Keyed entries: `<segment>:<route-key>` so the server can distinguish
+    // "has this layout" from "has it rendered for OTHER params" (#1015).
+    assert.ok(have.includes('/:/'), 'X-Webjs-Have includes the keyed root entry');
+    assert.ok(have.includes('/docs:/docs'), 'X-Webjs-Have includes the keyed /docs entry');
   } finally {
     mocks.restore();
     document.body.innerHTML = '';
@@ -3505,6 +3535,37 @@ test('applySwap: a MISPAIRED close (outer close facing an inner open) degrades t
       '<!--wj:children:/docs:/docs--><h1 id="pg">page</h1>' +
     '<!--/wj:children:/-->',
     '<!--wj:children:/:/--><p id="new7">new</p><!--/wj:children:/-->');
+});
+
+test('applySwap: a BACKGROUND revalidation with no plan DISCARDS the response (no hard load, no swap)', () => {
+  // The revalidation after a snapshot restore may get a reduced or malformed
+  // fragment. It must neither location.href (a background op yanking the
+  // user) nor full-body-swap (wiping the shell with a chrome-less fragment):
+  // the restored snapshot the user is viewing stays untouched.
+  const savedBody = globalThis.document.body.innerHTML;
+  const savedHead = globalThis.document.head.innerHTML;
+  const savedLocation = globalThis.location;
+  try {
+    globalThis.document.head.innerHTML = '';
+    let assigned = null;
+    globalThis.location = /** @type any */ ({ get href() { return 'http://x/current'; }, set href(v) { assigned = v; } });
+    globalThis.sessionStorage.clear();
+    globalThis.document.body.innerHTML =
+      '<nav id="rv-nav">navbar</nav><!--wj:children:/:/--><p id="rv-old">page</p><!--/wj:children:/-->';
+    const beforeHTML = globalThis.document.body.innerHTML;
+    // A truncated fragment (poisoned incoming scan).
+    const incoming = new globalThis.DOMParser().parseFromString(
+      '<!doctype html><html><head></head><body><!--wj:children:/:/--><p>new</p></body></html>', 'text/html');
+
+    _applySwap(incoming, null, /* revalidating */ true, 'http://x/current');
+
+    assert.equal(assigned, null, 'a background revalidation never hard-loads');
+    assert.equal(globalThis.document.body.innerHTML, beforeHTML, 'the restored page is untouched');
+  } finally {
+    globalThis.location = savedLocation;
+    globalThis.document.head.innerHTML = savedHead;
+    globalThis.document.body.innerHTML = savedBody;
+  }
 });
 
 test('applySwap: a DUPLICATE boundary segment degrades to a full load (#1015)', (t) => {

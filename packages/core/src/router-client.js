@@ -741,15 +741,6 @@ function warnOnce(key, message) {
 }
 
 /**
- * Dev-only diagnostic: the client router degraded a soft navigation to a full
- * page load. Records WHY (the `cause`) so the "why did my SPA nav do a full
- * reload?" question is answerable from the console instead of guessed at. Silent
- * in production and deduped per cause so a repeated trigger does not spam.
- *
- * @param {string} cause a short stable slug for the degradation reason
- * @param {string} href the destination the router fell back to loading
- */
-/**
  * True when a nav must degrade to a full page load because the document is
  * still parsing. A forward, main-document nav fired at `readyState: 'loading'`
  * races the DOM: the leaving page's closing layout markers may not be attached
@@ -919,6 +910,15 @@ export function collectBoundaries(root) {
         const seg = data.slice('/wj:children'.length).replace(/^:/, '');
         const frame = stack.pop();
         if (!frame || frame.segment !== seg) { poisoned = true; return; }
+        // Same-parent integrity: HTML parser reparenting (a <p> auto-closed
+        // by block content, table foster-parenting) can split a pair across
+        // parents. The range operations walk nextSibling from start and
+        // insert before end, so a cross-parent pair would empty the region
+        // and then throw mid-swap. Poison instead: degrade up front.
+        if (frame.start.parentNode !== /** @type {Comment} */ (node).parentNode) {
+          poisoned = true;
+          return;
+        }
         out.set(frame.segment, {
           routeKey: frame.routeKey,
           start: frame.start,
@@ -946,11 +946,18 @@ export function collectBoundaries(root) {
  * form a chain from `/` down to the deepest shared boundary D.
  *
  * Rules (Next.js remount-vs-preserve parity):
- *  - REPLACE at the SHALLOWEST shared boundary whose route-key changed. A
- *    param change at a segment remounts that segment AND its whole subtree,
- *    so the remount boundary is the shallowest changed one (`/blog/a` ->
- *    `/blog/b` replaces the page boundary; `/a/settings` -> `/b/settings`
- *    replaces the dynamic `[org]` layout boundary and everything under it).
+ *  - A changed route-key REPLACES at the PARENT of the shallowest changed
+ *    boundary. The parent, not the changed boundary itself: a LAYOUT's
+ *    boundary wraps its CHILDREN slot, so the layout's OWN markup (an
+ *    `[org]`-name header it renders around `${children}`) lives inside the
+ *    PARENT's range. Anchoring at the parent remounts the changed layout's
+ *    chrome AND its subtree, exactly like Next re-rendering the layout with
+ *    new params. The page boundary composes the same way: its parent is the
+ *    nearest layout's children slot, so `/blog/a` -> `/blog/b` under a
+ *    `/blog` layout remounts just the page while the `/blog` layout chrome
+ *    is preserved; with no intermediate layout the anchor is `/` and the
+ *    root layout's chrome (outside its own children boundary) is still
+ *    preserved. A changed boundary with NO shared parent degrades (null).
  *  - No route-key changed but the subtree below D diverges (D is a LAYOUT,
  *    not the deepest boundary, on either side, e.g. `/about` -> `/contact`
  *    under a shared static root layout): REPLACE D's contents wholesale.
@@ -971,10 +978,16 @@ export function planBoundarySwap(here, there) {
   // Shared segments, shallowest first (a nested path prefix is shorter).
   const shared = [...here.keys()].filter((s) => there.has(s)).sort((a, b) => a.length - b.length);
   if (shared.length === 0) return null;
-  // Shallowest shared boundary whose route-key changed is the remount boundary.
+  // A changed route-key remounts at the PARENT of the shallowest change.
   for (const seg of shared) {
     if (here.get(seg).routeKey !== there.get(seg).routeKey) {
-      return { mode: 'replace', segment: seg, live: here.get(seg), incoming: there.get(seg) };
+      let parent = null;
+      for (const p of shared) {
+        if (p === seg) break;
+        if (seg.startsWith(p === '/' ? p : p + '/')) parent = p;
+      }
+      if (!parent) return null; // no anchored parent: degrade
+      return { mode: 'replace', segment: parent, live: here.get(parent), incoming: there.get(parent) };
     }
   }
   // No route-key changed. D = deepest shared boundary.
@@ -1272,10 +1285,14 @@ async function performSubmission(href, method, body, frameId, form) {
 }
 
 /**
- * Build the X-Webjs-Have header value from the live DOM's boundary segments.
- * Comma-separated, in document order (no canonicalization needed; the
- * server intersects with the target's layout chain and harmlessly ignores
- * the page-boundary segment, which is never a layout segment).
+ * Build the X-Webjs-Have header value from the live DOM's boundaries.
+ * Comma-separated `<segment>:<route-key>` entries in document order. The
+ * ROUTE-KEY rides along so the server's short-circuit can distinguish "the
+ * client has this layout" from "the client has this layout rendered for
+ * DIFFERENT params": a dynamic `[org]` layout the client holds for org-a
+ * must be re-rendered (and re-shipped) on an org-b navigation, or the
+ * parent-anchored REPLACE would have no fresh layout markup to swap in.
+ * The server ignores the page-boundary entry (never a layout segment).
  *
  * A poisoned live DOM (malformed boundaries) reports an EMPTY have, so the
  * server returns the full page. The subsequent applySwap re-scans, sees the
@@ -1288,7 +1305,7 @@ async function performSubmission(href, method, body, frameId, form) {
 function buildHaveHeader() {
   const boundaries = collectBoundaries(document.body);
   if (!boundaries) return '';
-  return [...boundaries.keys()].join(',');
+  return [...boundaries.entries()].map(([seg, b]) => `${seg}:${b.routeKey}`).join(',');
 }
 
 /* ====================================================================
@@ -2783,6 +2800,16 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
     return;
   }
 
+  // A BACKGROUND revalidation (revalidating + href) with no trustworthy plan
+  // DISCARDS the response outright: the user is viewing a valid restored
+  // snapshot, and the response may be a reduced (chrome-less) X-Webjs-Have
+  // fragment, so the full-body swap below would wipe the shell from a
+  // background op. Doing nothing is the only safe degradation here.
+  if (href && revalidating) {
+    devWarnFallback('revalidation-discarded', href);
+    return;
+  }
+
   // 4. In-place full-body swap: the background paths only (a snapshot
   // restore or its revalidation, where a full load is not an option
   // because the user is already viewing the page). Full head merge;
@@ -3141,8 +3168,8 @@ function ownActualLightSlots(host) {
  *     slot runtime's own primitives (`applyFallback` / `applyActualAssignment`)
  *     on the ONE resolved own slot, which restore or swap the render-owned
  *     fallback without reconciling any lit-html part (#912). This is applied
- *     surgically to the target slot, NOT via a whole-host `projectChildren`
- *     pass: `projectChildren` selects EVERY `data-webjs-light` slot in the
+ *     surgically to the target slot, NOT via a whole-host application
+ *     pass: a whole-host pass selects EVERY `data-webjs-light` slot in the
  *     subtree (including a nested child component's), so running it here would
  *     let this component's assignment reach into a nested child's same-named
  *     slot and clobber its render-owned nodes (the #906 hazard, one level down).

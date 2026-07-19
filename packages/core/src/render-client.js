@@ -353,7 +353,7 @@ function compile(tr) {
   templateEl.innerHTML = html;
 
   // Mark every <slot> in the template for framework projection and
-  // register a SLOT part for each so projectChildren can find them on
+  // register a SLOT part for each so the slot-apply step can find them on
   // clones. This runs BEFORE assignPaths so the sentinel attributes the
   // discovery step adds are picked up in the same path-recording walk.
   discoverSlots(templateEl.content, parts);

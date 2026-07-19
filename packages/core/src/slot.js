@@ -330,13 +330,28 @@ export function adoptSSRAssignments(host) {
     /** @type {HTMLSlotElement} */
     const s = /** @type {any} */ (slot);
     if (s.getAttribute(PROJECTION_ATTR) !== PROJECTION_ACTUAL) continue;
-    const name = s.getAttribute('name') || null;
+    const name = keyOfName(s.getAttribute('name'));
     if (!state.assignedByName.has(name)) {
       const children = Array.from(s.childNodes);
       state.assignedByName.set(name, children);
       state.lastSnapshot.set(s, children.slice());
     }
   }
+}
+
+/**
+ * Normalise a slot name to the record key, applied at EVERY name read
+ * (capture, adopt, application, rescue, and the public API) so the record
+ * key is uniform end to end. The default slot is stored under `null`;
+ * `''` and `'default'` are aliases for it. Consequence: `default` is a
+ * RESERVED slot name (a literal `name="default"` slot addresses the
+ * default slot); the SSR substitution applies the same rule.
+ *
+ * @param {string | null | undefined} name
+ * @returns {string | null}
+ */
+function keyOfName(name) {
+  return name == null || name === '' || name === 'default' ? null : name;
 }
 
 /**
@@ -349,8 +364,7 @@ export function adoptSSRAssignments(host) {
 function slotNameOf(node) {
   if (node.nodeType !== 1) return null;
   const el = /** @type {Element} */ (node);
-  const v = el.getAttribute('slot');
-  return v ? v : null;
+  return keyOfName(el.getAttribute('slot'));
 }
 
 /** Append a value to a Map<K, V[]>, creating the array on first hit. */
@@ -366,17 +380,6 @@ function appendToMap(map, key, value) {
 // ---------------------------------------------------------------------------
 // The public children-as-values API (#1015)
 // ---------------------------------------------------------------------------
-
-/**
- * Normalise a slot name to the record key. The default slot is stored
- * under `null`; `''` and `'default'` are accepted aliases for it.
- *
- * @param {string | null | undefined} name
- * @returns {string | null}
- */
-function keyOfName(name) {
-  return name == null || name === '' || name === 'default' ? null : name;
-}
 
 /**
  * A read view of the host's slot record: `{ default: Node[], [name]: Node[] }`.
@@ -489,7 +492,7 @@ export function applySlotAssignments(host) {
   /** @type {Map<string|null, HTMLSlotElement[]>} */
   const groups = new Map();
   for (const slot of slots) {
-    const name = slot.getAttribute('name') || null;
+    const name = keyOfName(slot.getAttribute('name'));
     let arr = groups.get(name);
     if (!arr) {
       arr = [];
@@ -643,7 +646,7 @@ function restoreFallbackInto(slot) {
 export function rescueAssignedNodes(host, slot) {
   if (!hasSlotState(host)) return;
   const state = ensureSlotState(host);
-  const name = slot.getAttribute('name') || null;
+  const name = keyOfName(slot.getAttribute('name'));
   const assigned = state.assignedByName.get(name);
   if (assigned) {
     for (const node of assigned) {

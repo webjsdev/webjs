@@ -106,7 +106,7 @@ suite('Client router: strict boundary integrity after a real parse (#1015)', () 
       '<main>ok</main>' +
       '<!--/wj:children:/-->';
     try {
-      assert.equal(_buildHaveHeader(), '/', 'a well-formed page reports its segments normally');
+      assert.equal(_buildHaveHeader(), '/:/', 'a well-formed page reports its keyed entries normally');
     } finally {
       document.body.innerHTML = '';
     }

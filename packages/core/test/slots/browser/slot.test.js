@@ -166,6 +166,29 @@ suite('Light-DOM slot projection (browser)', () => {
     a.remove();
   });
 
+  test('the reserved `default` alias addresses the default slot everywhere (#1015)', async () => {
+    // 'default', '', and null all address the default slot, uniformly across
+    // capture, application, and the public API, so a router morph that reads
+    // a name attribute of "default" cannot strand content on a mismatched key.
+    const tag = tagName('default-alias');
+    class C extends WebComponent {
+      render() { return html`<main><slot name="default">fb</slot></main>`; }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    host.appendChild(document.createTextNode('captured'));
+    document.body.appendChild(host);
+    await tick();
+    await tick();
+    const slot = host.querySelector('slot[data-webjs-light]');
+    assert.equal(slot.textContent, 'captured', 'unnamed children land in the name="default" slot');
+    assert.equal(host.hasSlot('default'), true, 'hasSlot(default) reads the default record');
+    host.setSlotContent('default', 'replaced');
+    await tick();
+    assert.equal(slot.textContent, 'replaced', 'setSlotContent(default) targets the same slot');
+    host.remove();
+  });
+
   test('slotchange fires when content is set at runtime via setSlotContent (#1015)', async () => {
     const tag = tagName('slotchange-add');
     class C extends WebComponent {

@@ -965,7 +965,7 @@ test('ssrPage: X-Webjs-Have skips rendering layouts above the deepest match', as
 
   const url = new URL('http://localhost/');
   const req = new Request(url.toString(), {
-    headers: { 'x-webjs-have': '/' },
+    headers: { 'x-webjs-have': '/:/' },
   });
   const resp = await ssrPage(route, {}, url, { dev: false, appDir, req });
   const body = await resp.text();
@@ -994,7 +994,7 @@ test('ssrPage: a REDUCED have-response carries Vary: X-Webjs-Have; a full one do
   const url = new URL('http://localhost/');
 
   // Reduced: the client already has '/'.
-  const haveReq = new Request(url.toString(), { headers: { 'x-webjs-have': '/' } });
+  const haveReq = new Request(url.toString(), { headers: { 'x-webjs-have': '/:/' } });
   const reducedResp = await ssrPage(route, {}, url, { dev: false, appDir, req: haveReq });
   assert.ok((reducedResp.headers.get('vary') || '').includes('X-Webjs-Have'),
     `a reduced response varies on X-Webjs-Have, got: ${reducedResp.headers.get('vary')}`);
@@ -1002,7 +1002,7 @@ test('ssrPage: a REDUCED have-response carries Vary: X-Webjs-Have; a full one do
   assert.ok(!reducedBody.includes('OUTER'), 'sanity: the response really was reduced');
 
   // A have header that matches NOTHING renders the full page: no Vary.
-  const missReq = new Request(url.toString(), { headers: { 'x-webjs-have': '/nomatch' } });
+  const missReq = new Request(url.toString(), { headers: { 'x-webjs-have': '/nomatch:/nomatch' } });
   const missResp = await ssrPage(route, {}, url, { dev: false, appDir, req: missReq });
   assert.ok(!(missResp.headers.get('vary') || '').includes('X-Webjs-Have'),
     'a non-matching have renders full and must NOT vary');
@@ -1013,6 +1013,63 @@ test('ssrPage: a REDUCED have-response carries Vary: X-Webjs-Have; a full one do
     'a plain full-page response must NOT vary on X-Webjs-Have');
   const fullBody = await fullResp.text();
   assert.ok(fullBody.includes('OUTER'), 'sanity: the full response has the chrome');
+});
+
+test('ssrPage: a DYNAMIC layout the client has for OTHER params is re-rendered, not short-circuited (#1015)', async () => {
+  // The have entry carries the route-key: '/[org]:/a' means "I hold the [org]
+  // layout rendered for org-a". Navigating to org-b, the server must NOT
+  // short-circuit at [org] (the client's copy shows the wrong org chrome);
+  // it re-renders the layout so the client's parent-anchored REPLACE has the
+  // fresh markup. The static root ('/:/') still short-circuits.
+  const sub = mkdtempSync(join(tmpDir, 'have-dynkey-'));
+  const appDir = join(sub, 'app');
+  mkdirSync(join(appDir, '[org]', 'settings'), { recursive: true });
+  const rootLayout = join(appDir, 'layout.js');
+  const orgLayout = join(appDir, '[org]', 'layout.js');
+  const pageFile = join(appDir, '[org]', 'settings', 'page.js');
+  writeFileSync(rootLayout,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+    `export default function Root({ children }) { return html\`<div class="ROOT-CHROME">\${children}</div>\`; }\n`);
+  writeFileSync(orgLayout,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+    `export default function Org({ children, params }) { return html\`<h1 class="ORG-CHROME">\${params.org}</h1>\${children}\`; }\n`);
+  writeFileSync(pageFile,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+    `export default function Page() { return html\`<p>settings</p>\`; }\n`);
+  const route = { file: pageFile, layouts: [rootLayout, orgLayout], errors: [], metadataFiles: [] };
+  const url = new URL('http://localhost/b/settings');
+  const req = new Request(url.toString(), {
+    // The client holds the root (static, key matches) and the [org] layout
+    // rendered for org-a (key MISMATCH for this org-b navigation).
+    headers: { 'x-webjs-have': '/:/,/[org]:/a' },
+  });
+  const resp = await ssrPage(route, { org: 'b' }, url, { dev: false, appDir, req });
+  const body = await resp.text();
+  assert.ok(!body.includes('ROOT-CHROME'),
+    `the static root layout still short-circuits, got: ${body.slice(0, 500)}`);
+  assert.ok(body.includes('ORG-CHROME'),
+    `the [org] layout was RE-RENDERED for org-b (key mismatch), got: ${body.slice(0, 500)}`);
+  assert.ok(body.includes('>b</h1>'), 'the re-rendered layout carries the NEW param');
+  assert.ok(body.includes('<!--wj:children:/[org]:/b-->'),
+    'the re-rendered layout children boundary carries the new route-key');
+});
+
+test('ssrPage: a frame-subtree response varies on X-Webjs-Frame (shared-cache safety)', async () => {
+  // The subtree is sliced by the x-webjs-frame REQUEST header, so a shared
+  // cache must key on it or a full-page navigation could be served the lone
+  // frame subtree (the #1009 poisoning shape).
+  const { route, appDir } = await makeRoute({
+    pageSrc:
+      `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+      `export default function Page() { return html\`<webjs-frame id="panel"><p>frame body</p></webjs-frame>\`; }\n`,
+  });
+  const url = new URL('http://localhost/');
+  const req = new Request(url.toString(), { headers: { 'x-webjs-frame': 'panel' } });
+  const resp = await ssrPage(route, {}, url, { dev: false, appDir, req });
+  assert.ok((resp.headers.get('vary') || '').includes('X-Webjs-Frame'),
+    `a frame subtree varies on X-Webjs-Frame, got: ${resp.headers.get('vary')}`);
+  const body = await resp.text();
+  assert.ok(body.includes('frame body'), 'sanity: the frame subtree was returned');
 });
 
 test('ssrPage: X-Webjs-Have picks deepest match (not just any match)', async () => {
@@ -1044,7 +1101,7 @@ test('ssrPage: X-Webjs-Have picks deepest match (not just any match)', async () 
 
   const url = new URL('http://localhost/docs');
   const req = new Request(url.toString(), {
-    headers: { 'x-webjs-have': '/,/docs' },
+    headers: { 'x-webjs-have': '/:/,/docs:/docs' },
   });
   const resp = await ssrPage(route, {}, url, { dev: false, appDir, req });
   const body = await resp.text();

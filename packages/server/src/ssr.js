@@ -95,9 +95,27 @@ export async function ssrPage(route, params, url, opts) {
     // matched layout's marker pair. Real wire-byte savings: the outer
     // layouts' HTML is never re-serialized for same-shell navigations.
     const haveHeader = opts.req?.headers.get('x-webjs-have') || '';
-    const have = haveHeader
-      ? new Set(haveHeader.split(',').map((s) => s.trim()).filter(Boolean))
-      : null;
+    // Entries are `<segment>:<route-key>` (#1015). The route-key is required
+    // for a correct short-circuit: a dynamic layout the client holds for
+    // OTHER params ('/[org]' rendered for org-a on an org-b navigation) must
+    // be re-rendered and re-shipped, or the client's parent-anchored REPLACE
+    // has no fresh layout markup to swap in. Split at the LAST ':' (segments
+    // come from folder names; encoded route-keys cannot contain ':'). An
+    // entry with no key (a malformed or legacy client) is ignored, which
+    // degrades to a full render: always correct.
+    /** @type {Map<string, string> | null} */
+    let have = null;
+    if (haveHeader) {
+      have = new Map();
+      for (const entry of haveHeader.split(',')) {
+        const e = entry.trim();
+        if (!e) continue;
+        const cut = e.lastIndexOf(':');
+        if (cut <= 0 || cut === e.length - 1) continue;
+        have.set(e.slice(0, cut), e.slice(cut + 1));
+      }
+      if (have.size === 0) have = null;
+    }
     // SSR action-result seeding (#472). When enabled, run the whole render
     // inside an ambient seed collector so every `'use server'` action a
     // component awaits in `async render()` records its (args -> result) for the
@@ -140,6 +158,10 @@ export async function ssrPage(route, params, url, opts) {
       const subtree = extractFrameSubtree(body, frameId);
       if (subtree !== null) {
         const frameRes = htmlResponse(subtree, opts.status || 200, opts.req, url);
+        // The subtree is sliced by the x-webjs-frame REQUEST header, so a
+        // shared cache must never serve it to a request that did not send
+        // one (the same #1009 poisoning shape as the reduced-have case).
+        frameRes.headers.append('vary', 'X-Webjs-Frame');
         // #1009: a subtree sliced from a REDUCED render inherits its variance.
         if (reduced) frameRes.headers.append('vary', 'X-Webjs-Have');
         return frameRes;
@@ -619,7 +641,10 @@ async function renderChain(route, ctx, dev, suspenseCtx, have, pageModule) {
   // saving CPU and wire bytes.
   for (let i = route.layouts.length - 1; i >= 0; i--) {
     const segmentPath = layoutSegmentPath(route.layouts[i]);
-    if (have && have.has(segmentPath)) {
+    // Short-circuit ONLY when the client's copy of this layout was rendered
+    // for the SAME route-key: a param change at a dynamic layout must
+    // re-render the layout's own markup (#1015).
+    if (have && have.get(segmentPath) === regionRouteKey(segmentPath, params)) {
       tree = wrapWithChildrenMarker(tree, segmentPath, params);
       const body = await renderToString(tree, { ssr: true, suspenseCtx });
       // REDUCED response (#1009): the outer layouts were skipped, so these

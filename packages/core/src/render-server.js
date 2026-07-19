@@ -515,11 +515,15 @@ async function injectDSD(html, ctx, ancestors = [], dev) {
         }
       }
       const partitioned = partitionAuthoredBySlot(authoredInner);
-      // Seed the slot record for SSR-side reads. At SSR the record values
-      // are the authored RAW HTML strings (there is no DOM to hold Nodes);
-      // presence, keys, and counts match the client record, which is the
-      // conditional-on-slot contract. Node access is client-side.
-      {
+      // Seed the slot record for SSR-side reads: LIGHT DOM only, matching the
+      // client (which only creates slot state on the light-DOM path, since
+      // shadow slots are native browser projection). Seeding shadow here
+      // would make hasSlot() true at SSR and false after hydration, flipping
+      // conditional-on-slot markup on the first client render. At SSR the
+      // record value is the authored RAW HTML (one string per name; there is
+      // no DOM to hold Nodes), so PRESENCE and KEYS match the client record,
+      // which is the conditional-on-slot contract. Node access is client-side.
+      if (!isShadow) {
         const slotState = ensureSlotState(instance);
         for (const [name, htmlChunk] of partitioned) {
           if (htmlChunk && htmlChunk.length) slotState.assignedByName.set(name, [htmlChunk]);
@@ -856,9 +860,11 @@ function extractSlotAttr(attrsRaw) {
   const m = /\bslot\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrsRaw);
   if (!m) return null;
   const value = m[1] ?? m[2] ?? m[3] ?? '';
-  // Per shadow DOM spec, slot="" (empty) and missing slot attribute
-  // both route to the default slot.
-  return value === '' ? null : value;
+  // Per shadow DOM spec, slot="" (empty) and missing slot attribute both
+  // route to the default slot. `default` is the framework's reserved alias
+  // for it (#1015: the client record normalizes it identically, so both
+  // sides agree end to end).
+  return value === '' || value === 'default' ? null : value;
 }
 
 /**
@@ -1000,11 +1006,15 @@ function substituteSlotsInRender(rendered, partitioned) {
         totalEnd = closeIdx + closeLen;
       }
     }
-    const projected = partitioned.get(name);
+    // `default` is the reserved alias for the default slot (#1015): the
+    // LOOKUP key normalizes, while the emitted name attribute stays as
+    // authored so the output bytes are unchanged for every other app.
+    const slotKey = name === 'default' ? null : name;
+    const projected = partitioned.get(slotKey);
     const nameAttr = name !== null ? ` name="${escapeAttr(name)}"` : '';
     const extraAttrs = otherAttrs ? ` ${otherAttrs}` : '';
-    if (projected !== undefined && !consumedNames.has(name)) {
-      consumedNames.add(name);
+    if (projected !== undefined && !consumedNames.has(slotKey)) {
+      consumedNames.add(slotKey);
       result += `<slot data-webjs-light data-projection="actual"${nameAttr}${extraAttrs}>${projected}</slot>`;
     } else {
       result += `<slot data-webjs-light data-projection="fallback"${nameAttr}${extraAttrs}>${fallback}</slot>`;

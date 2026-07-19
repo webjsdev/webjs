@@ -1,12 +1,13 @@
 /**
  * Unit tests for the region route-key derivation (Pillar 1, #1013).
  *
- * The client router's structural rebuild replaces comment layout markers with
- * `<wj-region segment="..." route-key="...">` elements and picks its swap tier
- * by comparing a region's OLD vs NEW route-key: changed -> wholesale replace
- * (Next page-remount parity), same -> bounded same-route morph (state kept, the
- * searchParams-only-nav case). These are the pure server-side building blocks
- * that emit `segment` (the pattern) and `route-key` (the resolved path).
+ * The client router's structural rebuild keys each children-boundary COMMENT
+ * pair with a segment + route-key (#1015) and picks its swap tier by comparing
+ * a boundary's OLD vs NEW route-key: changed -> wholesale replace anchored at
+ * the parent boundary (Next remount parity), same -> bounded same-route morph
+ * (state kept, the searchParams-only-nav case). These are the pure server-side
+ * building blocks that derive `segment` (the pattern) and `route-key` (the
+ * resolved path).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
