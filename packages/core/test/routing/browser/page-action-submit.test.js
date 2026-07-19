@@ -29,10 +29,18 @@ suite('Client router: page-action form submissions (#244)', () => {
   // throws. Null when no redefine is active.
   let restoreHref;
 
+  let bOpen, bClose;
   function setup(responder) {
     enableClientRouter(); // idempotent
     container = document.createElement('div');
+    // Bracket the container with a live keyed boundary pair (#1015): the swap
+    // needs a shared boundary on both sides, else the router (correctly)
+    // degrades to a full page load, which would navigate the test page away.
+    bOpen = document.createComment('wj:children:/:/');
+    bClose = document.createComment('/wj:children:/');
+    document.body.appendChild(bOpen);
     document.body.appendChild(container);
+    document.body.appendChild(bClose);
     calls = [];
     restoreHref = null;
     origFetch = window.fetch;
@@ -45,6 +53,8 @@ suite('Client router: page-action form submissions (#244)', () => {
     window.fetch = origFetch;
     if (restoreHref) { try { restoreHref(); } catch { /* ignore */ } restoreHref = null; }
     container.remove();
+    if (bOpen) bOpen.remove();
+    if (bClose) bClose.remove();
   }
 
   /**
@@ -75,7 +85,7 @@ suite('Client router: page-action form submissions (#244)', () => {
   }
 
   test('a POST form sends FormData as the request body (enhanced path engages)', async () => {
-    setup(() => new Response('<p>ok</p>', {
+    setup(() => new Response('<!--wj:children:/:/--><p>ok</p><!--/wj:children:/-->', {
       headers: { 'content-type': 'text/html', 'x-webjs-build': '' },
     }));
     try {
@@ -103,8 +113,8 @@ suite('Client router: page-action form submissions (#244)', () => {
     // than leaning on a single inline flag.
     const marker = `pa-422-${Math.random().toString(36).slice(2)}`;
     setup(() => new Response(
-      `<main><form method="POST" action="/signup"><p class="error" id="${marker}">Enter a valid email</p>` +
-      '<input name="email" value="bad"></form></main>',
+      `<!--wj:children:/:/--><main><form method="POST" action="/signup"><p class="error" id="${marker}">Enter a valid email</p>` +
+      '<input name="email" value="bad"></form></main><!--/wj:children:/-->',
       { status: 422, headers: { 'content-type': 'text/html', 'x-webjs-build': '' } },
     ));
     const reload = spyOnReload();
@@ -133,7 +143,7 @@ suite('Client router: page-action form submissions (#244)', () => {
     // redirected=true and url=<final>. The router records that, not the POST
     // target. We simulate by returning a redirected-shaped Response.
     setup(() => {
-      const r = new Response('<p>welcome</p>', {
+      const r = new Response('<!--wj:children:/:/--><p>welcome</p><!--/wj:children:/-->', {
         status: 200, headers: { 'content-type': 'text/html', 'x-webjs-build': '' },
       });
       Object.defineProperty(r, 'redirected', { value: true });

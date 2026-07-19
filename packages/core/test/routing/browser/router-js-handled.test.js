@@ -22,22 +22,29 @@ import { assert } from '../../../../../test/browser-assert.js';
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
 suite('Client router: JS-handled links/forms are not hijacked (#150, #153)', () => {
-  let container, origFetch, fetched;
+  let container, origFetch, fetched, bOpen, bClose;
 
   function setup() {
     enableClientRouter(); // idempotent; ensures the document listeners are attached
     container = document.createElement('div');
+    // Bracket the container with a live keyed boundary pair (#1015) and return
+    // a boundary-carrying body, so an intercepted nav swaps softly instead of
+    // degrading to a full load (which would navigate the test page away).
+    bOpen = document.createComment('wj:children:/:/');
+    bClose = document.createComment('/wj:children:/');
+    document.body.appendChild(bOpen);
     document.body.appendChild(container);
+    document.body.appendChild(bClose);
     fetched = [];
     origFetch = window.fetch;
     window.fetch = (url) => {
       fetched.push(String(url));
-      return Promise.resolve(new Response('<p>x</p>', {
+      return Promise.resolve(new Response('<!--wj:children:/:/--><p>x</p><!--/wj:children:/-->', {
         headers: { 'content-type': 'text/html', 'x-webjs-build': '' },
       }));
     };
   }
-  function teardown() { window.fetch = origFetch; container.remove(); }
+  function teardown() { window.fetch = origFetch; container.remove(); bOpen.remove(); bClose.remove(); }
 
   test('a @click=preventDefault link is NOT navigated by the router', async () => {
     setup();
