@@ -49,10 +49,11 @@ const STREAM_MIME = 'text/vnd.webjs-stream.html';
  *   2. On link click, STRICTLY scan both the live DOM and the incoming HTML
  *      into segment → {routeKey, range} maps. Any pairing violation poisons
  *      the scan.
- *   3. Two-tier decision (Next.js remount parity): REPLACE (fresh remount)
- *      at the shallowest shared boundary whose route-key changed, else MORPH
- *      (keyed reconcile preserving input values, scroll, popover state, and
- *      node identity) at the deepest shared boundary.
+ *   3. Two-tier decision (Next.js remount parity): a CHANGED route-key
+ *      REPLACES (fresh remount) at the PARENT of the shallowest changed
+ *      boundary (whose range contains the changed layout's own markup),
+ *      else MORPH (keyed reconcile preserving input values, scroll, popover
+ *      state, and node identity) at the deepest shared boundary.
  *   4. A poisoned scan or no shared boundary degrades to a FULL PAGE LOAD:
  *      bounded and correct, never a guessed recovery.
  *   5. Merge head, re-run scripts, upgrade custom elements, pushState.
@@ -2784,9 +2785,10 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
   // 2. Two-tier keyed boundary swap (#1015). Scan both trees STRICTLY: a
   // poisoned side (malformed, truncated, or mispaired boundaries) yields null
   // and falls through to the integrity degradation below. A valid pair of
-  // scans picks the swap tier by route-key comparison: REPLACE (remount, Next
-  // param-change parity) at the shallowest changed boundary, else MORPH
-  // (state-preserving keyed reconcile) at the deepest shared one.
+  // scans picks the swap tier by route-key comparison: a CHANGED key REPLACES
+  // (remount, Next param-change parity) at the PARENT of the shallowest
+  // change, else MORPH (state-preserving keyed reconcile) at the deepest
+  // shared boundary.
   const here = collectBoundaries(document.body);
   const there = collectBoundaries(doc.body);
   const plan = here && there ? planBoundarySwap(here, there) : null;

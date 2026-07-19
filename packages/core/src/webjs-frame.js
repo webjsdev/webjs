@@ -3,7 +3,7 @@
  *
  * The framework's primary partial-nav mechanism auto-derives swap
  * boundaries from the folder structure (each `layout.{js,ts}`'s
- * children-slot is wrapped in a `<!--wj:children:<segment>-->` marker
+ * children-slot is wrapped in a keyed `<!--wj:children:<segment>:<route-key>-->` boundary
  * pair). For 99% of apps that's all you need.
  *
  * `<webjs-frame>` is the escape hatch for the 1%: partial-swap

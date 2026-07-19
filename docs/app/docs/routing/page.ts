@@ -155,9 +155,10 @@ export default function DashboardLayout({ children }: { children: unknown }) {
       (<code>&lt;!--wj:children:&lt;segment&gt;:&lt;route-key&gt;--&gt;</code> ...
       <code>&lt;!--/wj:children:&lt;segment&gt;--&gt;</code>) around each layout's
       <code>\${children}</code> interpolation and around the page itself. When a user
-      clicks a link, the router compares route-keys: a changed key remounts that
-      boundary fresh (Next.js param-change parity), an unchanged one swaps only the
-      deepest shared boundary's children. The outer layouts' DOM (and any state inside
+      clicks a link, the router compares route-keys: a changed key remounts fresh at
+      the parent boundary (whose range contains the changed layout's own markup,
+      Next.js param-change parity), an unchanged one swaps only the deepest shared
+      boundary's children. The outer layouts' DOM (and any state inside
       them: sidenav scroll, input values, mounted custom elements) stays mounted.
       Authors write nothing extra; the boundary emission is invisible.
     </p>

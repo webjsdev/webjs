@@ -1889,7 +1889,7 @@ test('navigate: deepest shared marker wins (inner swap, not outer)', async () =>
   }
 });
 
-test('navigate: cross-layout nav falls through to full body swap', async () => {
+test('navigate: cross-layout nav REPLACES at the shared root boundary (soft, chrome kept)', async () => {
   // /docs/x → /admin/y under the shared root: '/' is shared with an equal
   // key, but the subtree below it diverges (different page segments), so the
   // plan is REPLACE at '/'. The nav stays soft and the root chrome outside
@@ -1944,7 +1944,7 @@ test('navigate: NO shared boundary at all degrades to a full page load (#1015)',
   }
 });
 
-test('navigate: sends X-Webjs-Have header listing current marker paths', async () => {
+test('navigate: sends X-Webjs-Have header with keyed segment:route-key entries', async () => {
   document.body.innerHTML =
     '<!--wj:children:/:/-->' +
       '<!--wj:children:/docs:/docs-->page<!--/wj:children:/docs-->' +

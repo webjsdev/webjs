@@ -87,13 +87,12 @@ export async function ssrPage(route, params, url, opts) {
 
   try {
     const suspenseCtx = { pending: [], nextId: 1, usedComponents: new Set(), dev: opts.dev };
-    // Parse the partial-nav "have" header from the client. The header
-    // lists comma-separated marker paths the client already has rendered
-    // in its DOM. The server walks the target route's layout chain
-    // innermost → outermost and SHORT-CIRCUITS at the first match -
-    // returning only the content below that layout, wrapped in the
-    // matched layout's marker pair. Real wire-byte savings: the outer
-    // layouts' HTML is never re-serialized for same-shell navigations.
+    // Parse the partial-nav "have" header from the client. The server walks
+    // the target route's layout chain innermost → outermost and
+    // SHORT-CIRCUITS at the first FULL match (segment AND route-key),
+    // returning only the content below that layout, wrapped in the matched
+    // layout's boundary pair. Real wire-byte savings: the outer layouts'
+    // HTML is never re-serialized for same-shell navigations.
     const haveHeader = opts.req?.headers.get('x-webjs-have') || '';
     // Entries are `<segment>:<route-key>` (#1015). The route-key is required
     // for a correct short-circuit: a dynamic layout the client holds for
@@ -629,8 +628,9 @@ async function renderChain(route, ctx, dev, suspenseCtx, have, pageModule) {
   // comment pair (open `<!--wj:children:<segment>:<route-key>-->`, close
   // `<!--/wj:children:<segment>-->`, #1015). The client router scans both the
   // live and incoming DOM for these boundaries (strict id-matched pairing, no
-  // LIFO guessing) and applies the two-tier swap: REPLACE at the shallowest
-  // boundary whose route-key changed, else MORPH the deepest shared one. Outer
+  // LIFO guessing) and applies the two-tier swap: a changed route-key
+  // REPLACES at the PARENT of the shallowest change, else the deepest shared
+  // boundary MORPHS. Outer
   // layout DOM (and the scroll position of anything inside it: sidenavs,
   // fixed headers, inner scroll containers) is preserved. Auto-derived from
   // folder structure: no opt-in required from layout authors.
