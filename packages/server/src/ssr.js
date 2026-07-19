@@ -669,6 +669,86 @@ function layoutSegmentPath(layoutFile) {
 }
 
 /**
+ * Like layoutSegmentPath but for the PAGE file. Strips the `page.ext`
+ * filename, yielding the page's own segment path (the full route pattern,
+ * dynamic tokens included):
+ *
+ *   app/page.ts                    -> '/'
+ *   app/blog/[slug]/page.ts        -> '/blog/[slug]'
+ *   app/files/[...rest]/page.ts    -> '/files/[...rest]'
+ *
+ * This is the segment for the PAGE-level region (Pillar 1 / #1013): the page
+ * needs its own region keyed by the full resolved path so a dynamic-param
+ * change remounts the page (Next parity) while a shared parent LAYOUT (a
+ * shorter segment path whose route-key does not change) is preserved.
+ *
+ * @param {string} pageFile  Absolute path to the page source file.
+ * @returns {string}
+ */
+function pageSegmentPath(pageFile) {
+  const p = pageFile
+    .replace(/^.*\/app\//, '')
+    .replace(/\/?page\.[jt]sx?$/, '');
+  return p === '' ? '/' : '/' + p;
+}
+
+/**
+ * Derive a region's ROUTE-KEY from its segment path pattern and the render's
+ * resolved params. The route-key is the CONCRETE resolved URL path for the
+ * region: dynamic `[param]` / catch-all `[...param]` / optional-catch-all
+ * `[[...param]]` tokens are substituted with their param values, and `(group)`
+ * segments are dropped (they scope layouts but never appear in the URL).
+ * searchParams are excluded by construction (params carries route params only).
+ *
+ * The client router compares a region's OLD vs NEW route-key to pick the swap
+ * tier: route-key CHANGED -> wholesale replace (Next page-remount parity),
+ * route-key SAME -> bounded same-route morph (hydrated component state kept, the
+ * searchParams-only-nav case). A static segment (`/`, `/docs`) has a constant
+ * route-key, so that layout's region never remounts and its chrome always
+ * survives.
+ *
+ *   regionRouteKey('/', {})                          -> '/'
+ *   regionRouteKey('/docs', {})                      -> '/docs'
+ *   regionRouteKey('/blog/[slug]', {slug:'a'})       -> '/blog/a'
+ *   regionRouteKey('/(marketing)/about', {})         -> '/about'
+ *   regionRouteKey('/files/[...rest]', {rest:'a/b'}) -> '/files/a/b'
+ *   regionRouteKey('/shop/[[...slug]]', {})          -> '/shop'
+ *
+ * @param {string} segmentPath  Region segment pattern, e.g. '/blog/[slug]'.
+ * @param {Record<string,string>} params  Resolved route params (values are
+ *   strings; a catch-all value is already slash-joined, e.g. 'a/b/c').
+ * @returns {string}
+ */
+function regionRouteKey(segmentPath, params) {
+  const p = params || {};
+  const out = [];
+  for (const seg of segmentPath.split('/')) {
+    if (!seg) continue;
+    // Route group `(marketing)`: scopes layouts, absent from the URL.
+    if (seg.startsWith('(') && seg.endsWith(')')) continue;
+    // Optional catch-all `[[...name]]` / catch-all `[...name]`: the value is
+    // the already-slash-joined tail (may be '' for an empty optional one).
+    if (seg.startsWith('[[...') && seg.endsWith(']]')) {
+      const v = p[seg.slice(5, -2)];
+      if (v) out.push(v);
+      continue;
+    }
+    if (seg.startsWith('[...') && seg.endsWith(']')) {
+      const v = p[seg.slice(4, -1)];
+      if (v) out.push(v);
+      continue;
+    }
+    // Dynamic `[name]`.
+    if (seg.startsWith('[') && seg.endsWith(']')) {
+      out.push(p[seg.slice(1, -1)] ?? '');
+      continue;
+    }
+    out.push(seg);
+  }
+  return '/' + out.join('/');
+}
+
+/**
  * Wrap a TemplateResult-or-renderable child in the partial-nav children
  * marker pair. Returns a synthetic TemplateResult: server `renderToString`
  * walks `.strings` and `.values` exactly the same way as for the `html` tag.
@@ -694,6 +774,8 @@ function wrapWithChildrenMarker(tree, segmentPath) {
 // Re-export for unit testing.
 export {
   layoutSegmentPath as _layoutSegmentPath,
+  pageSegmentPath as _pageSegmentPath,
+  regionRouteKey as _regionRouteKey,
   wrapWithChildrenMarker as _wrapWithChildrenMarker,
 };
 
