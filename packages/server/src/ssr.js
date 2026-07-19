@@ -104,14 +104,18 @@ export async function ssrPage(route, params, url, opts) {
     // hydration payload. Disabled -> the plain render, byte-identical to before.
     let seedCollector = null;
     let body;
+    let reduced = false;
     if (seedingEnabled()) {
       const seeded = await collectSeeds(() =>
         renderChain(route, ctx, opts.dev, suspenseCtx, have, opts.pageModule),
       );
-      body = seeded.value;
+      body = seeded.value.html;
+      reduced = seeded.value.reduced;
       seedCollector = seeded.collector;
     } else {
-      body = await renderChain(route, ctx, opts.dev, suspenseCtx, have, opts.pageModule);
+      const chain = await renderChain(route, ctx, opts.dev, suspenseCtx, have, opts.pageModule);
+      body = chain.html;
+      reduced = chain.reduced;
     }
 
     // Frame subtree render (#253). A `<webjs-frame src>` self-load (or a
@@ -135,7 +139,10 @@ export async function ssrPage(route, params, url, opts) {
     if (frameId && suspenseCtx.pending.length === 0) {
       const subtree = extractFrameSubtree(body, frameId);
       if (subtree !== null) {
-        return htmlResponse(subtree, opts.status || 200, opts.req, url);
+        const frameRes = htmlResponse(subtree, opts.status || 200, opts.req, url);
+        // #1009: a subtree sliced from a REDUCED render inherits its variance.
+        if (reduced) frameRes.headers.append('vary', 'X-Webjs-Have');
+        return frameRes;
       }
     }
     // Module URLs for the page + every layout in its chain. These ride
@@ -273,6 +280,17 @@ export async function ssrPage(route, params, url, opts) {
       nonce,
       opts.dev,
     );
+    // REDUCED response (#1009): the X-Webjs-Have short-circuit omitted the
+    // outer-layout chrome, so these bytes are only valid for a request that
+    // sent a matching `have`. Without `Vary: X-Webjs-Have`, a shared cache
+    // (CDN edge) could store the reduced body under the URL and serve a
+    // chrome-less fragment to a fresh full-page navigation (measured live:
+    // GET / was 73,534 bytes, GET / + have was 57,035, byte-identical headers
+    // otherwise). Scoped to genuinely reduced responses so a normal page's
+    // cache key is unchanged. The internal #241 revalidate cache is already
+    // safe by construction: `cacheEligible` excludes any request that carries
+    // x-webjs-have, so a reduced body is never stored under the URL-only key.
+    if (reduced) res.headers.append('vary', 'X-Webjs-Have');
     // Server HTML cache write (#241). The page opted in via `revalidate`, so
     // FLAG this candidate for the response funnel rather than writing here: the
     // store decision must see the FINAL response (after segment middleware,
@@ -604,7 +622,11 @@ async function renderChain(route, ctx, dev, suspenseCtx, have, pageModule) {
     if (have && have.has(segmentPath)) {
       tree = wrapWithChildrenMarker(tree, segmentPath, params);
       const body = await renderToString(tree, { ssr: true, suspenseCtx });
-      return body + (await loadingTemplates(route, ctx, dev));
+      // REDUCED response (#1009): the outer layouts were skipped, so these
+      // bytes are only valid for a client that already HAS them. The caller
+      // marks the response `Vary: X-Webjs-Have` so no shared cache can serve
+      // this fragment to a fresh full-page navigation.
+      return { html: body + (await loadingTemplates(route, ctx, dev)), reduced: true };
     }
     const mod = await loadModule(route.layouts[i], dev);
     if (!mod.default) continue;
@@ -614,7 +636,7 @@ async function renderChain(route, ctx, dev, suspenseCtx, have, pageModule) {
     });
   }
   const body = await renderToString(tree, { ssr: true, suspenseCtx });
-  return body + (await loadingTemplates(route, ctx, dev));
+  return { html: body + (await loadingTemplates(route, ctx, dev)), reduced: false };
 }
 
 /**

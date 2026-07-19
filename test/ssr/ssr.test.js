@@ -978,6 +978,43 @@ test('ssrPage: X-Webjs-Have skips rendering layouts above the deepest match', as
   assert.ok(body.includes('page body'), 'page content present');
 });
 
+test('ssrPage: a REDUCED have-response carries Vary: X-Webjs-Have; a full one does not (#1009)', async () => {
+  // A reduced response (outer chrome omitted) under a URL-only cache key is
+  // latent cache poisoning: a shared cache could serve the fragment to a
+  // fresh full-page navigation. Vary scopes the key. A normal full response
+  // must NOT grow the header (its cache key stays URL-only).
+  const { route, appDir } = await makeRoute({
+    pageSrc:
+      `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+      `export default function Page() { return html\`<p>page body</p>\`; }\n`,
+    layoutSrc:
+      `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+      `export default function Layout({ children }) { return html\`<div class="OUTER">\${children}</div>\`; }\n`,
+  });
+  const url = new URL('http://localhost/');
+
+  // Reduced: the client already has '/'.
+  const haveReq = new Request(url.toString(), { headers: { 'x-webjs-have': '/' } });
+  const reducedResp = await ssrPage(route, {}, url, { dev: false, appDir, req: haveReq });
+  assert.ok((reducedResp.headers.get('vary') || '').includes('X-Webjs-Have'),
+    `a reduced response varies on X-Webjs-Have, got: ${reducedResp.headers.get('vary')}`);
+  const reducedBody = await reducedResp.text();
+  assert.ok(!reducedBody.includes('OUTER'), 'sanity: the response really was reduced');
+
+  // A have header that matches NOTHING renders the full page: no Vary.
+  const missReq = new Request(url.toString(), { headers: { 'x-webjs-have': '/nomatch' } });
+  const missResp = await ssrPage(route, {}, url, { dev: false, appDir, req: missReq });
+  assert.ok(!(missResp.headers.get('vary') || '').includes('X-Webjs-Have'),
+    'a non-matching have renders full and must NOT vary');
+
+  // No have header at all: full page, no Vary.
+  const fullResp = await ssrPage(route, {}, url, { dev: false, appDir });
+  assert.ok(!(fullResp.headers.get('vary') || '').includes('X-Webjs-Have'),
+    'a plain full-page response must NOT vary on X-Webjs-Have');
+  const fullBody = await fullResp.text();
+  assert.ok(fullBody.includes('OUTER'), 'sanity: the full response has the chrome');
+});
+
 test('ssrPage: X-Webjs-Have picks deepest match (not just any match)', async () => {
   // Two-level layout chain: root and docs. Client has both.
   // Server should match at /docs (deepest), not / (shallower).
