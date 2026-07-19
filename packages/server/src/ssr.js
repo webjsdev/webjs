@@ -99,10 +99,11 @@ export async function ssrPage(route, params, url, opts) {
     // for a correct short-circuit: a dynamic layout the client holds for
     // OTHER params ('/[org]' rendered for org-a on an org-b navigation) must
     // be re-rendered and re-shipped, or the client's parent-anchored REPLACE
-    // has no fresh layout markup to swap in. Split at the LAST ':' (segments
-    // come from folder names; encoded route-keys cannot contain ':'). An
-    // entry with no key (a malformed or legacy client) is ignored, which
-    // degrades to a full render: always correct.
+    // has no fresh layout markup to swap in. Split at the LAST ':' (encoded
+    // route-keys contain no ':'; a hand-authored folder name that smuggles a
+    // delimiter through the SEGMENT half can only fail to match, which
+    // degrades to a full render: always correct). An entry with no key (a
+    // malformed or legacy client) is ignored, degrading the same way.
     /** @type {Map<string, string> | null} */
     let have = null;
     if (haveHeader) {
@@ -806,6 +807,12 @@ function regionRouteKey(segmentPath, params) {
   /** Encode one substituted value, per slash-piece (catch-alls keep their
    *  literal separators; each piece is comment-safe + delimiter-safe). */
   const enc = (v) => String(v).split('/').map((s) => encodeURIComponent(s)).join('/');
+  /** A STATIC piece is a folder name emitted as-is EXCEPT the boundary/header
+   *  delimiter characters (':' would mis-split the `segment:route-key` parses,
+   *  ',' the have-entry list, '%' the decode); percent-encode just those so
+   *  the no-delimiter invariant holds for every emitted route-key while
+   *  normal folder names stay byte-identical. */
+  const encStatic = (v) => v.replace(/[%:,]/g, (c) => encodeURIComponent(c));
   const out = [];
   for (const seg of segmentPath.split('/')) {
     if (!seg) continue;
@@ -828,7 +835,7 @@ function regionRouteKey(segmentPath, params) {
       out.push(enc(p[seg.slice(1, -1)] ?? ''));
       continue;
     }
-    out.push(seg);
+    out.push(encStatic(seg));
   }
   return '/' + out.join('/');
 }

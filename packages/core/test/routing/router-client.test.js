@@ -247,6 +247,15 @@ test('collectBoundaries: a pair split across PARENTS poisons the scan (parser re
   assert.equal(_collect(body), null);
 });
 
+test('collectBoundaries: a boundary in TABLE context poisons (foster-parenting strands the content)', () => {
+  // Comment tokens in table insertion mode stay in the current node while
+  // CONTENT is fostered out before the table, so the pair shares a parent
+  // (passing the same-parent check) while its children live OUTSIDE the
+  // range: swapping it would silently leave stale visible content.
+  const body = bodyFrom('<table><tbody><!--wj:children:/:/--><!--/wj:children:/--></tbody></table>');
+  assert.equal(_collect(body), null);
+});
+
 test('collectBoundaries: the legacy anonymous format POISONS the scan (no route-key)', () => {
   // A pre-#1015 response (or a truncated open) has no route-key. There is no
   // legacy fallback by design: server and client ship together, so a mixed
@@ -3557,10 +3566,12 @@ test('applySwap: a BACKGROUND revalidation with no plan DISCARDS the response (n
     const incoming = new globalThis.DOMParser().parseFromString(
       '<!doctype html><html><head></head><body><!--wj:children:/:/--><p>new</p></body></html>', 'text/html');
 
-    _applySwap(incoming, null, /* revalidating */ true, 'http://x/current');
+    const disposition = _applySwap(incoming, null, /* revalidating */ true, 'http://x/current');
 
     assert.equal(assigned, null, 'a background revalidation never hard-loads');
     assert.equal(globalThis.document.body.innerHTML, beforeHTML, 'the restored page is untouched');
+    assert.equal(disposition, 'discard',
+      'the discard is REPORTED so the caller cancels a streamed response instead of applying its boundaries');
   } finally {
     globalThis.location = savedLocation;
     globalThis.document.head.innerHTML = savedHead;

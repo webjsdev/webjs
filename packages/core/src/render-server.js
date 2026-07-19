@@ -1006,10 +1006,11 @@ function substituteSlotsInRender(rendered, partitioned) {
         totalEnd = closeIdx + closeLen;
       }
     }
-    // `default` is the reserved alias for the default slot (#1015): the
-    // LOOKUP key normalizes, while the emitted name attribute stays as
-    // authored so the output bytes are unchanged for every other app.
-    const slotKey = name === 'default' ? null : name;
+    // `default` and `''` are the reserved aliases for the default slot
+    // (#1015), matching the client's keyOfName exactly: the LOOKUP key
+    // normalizes, while the emitted name attribute stays as authored so the
+    // output bytes are unchanged for every other app.
+    const slotKey = name === 'default' || name === '' ? null : name;
     const projected = partitioned.get(slotKey);
     const nameAttr = name !== null ? ` name="${escapeAttr(name)}"` : '';
     const extraAttrs = otherAttrs ? ` ${otherAttrs}` : '';

@@ -58,11 +58,12 @@ const STREAM_MIME = 'text/vnd.webjs-stream.html';
  *   5. Merge head, re-run scripts, upgrade custom elements, pushState.
  *
  * Optimizations bundled into the same response cycle:
- *   - `X-Webjs-Have` request header lists the boundary segments the client
- *     already has. Server walks the target's layout chain, skips
- *     layouts at-or-above the deepest match, returns only the
- *     divergent fragment (wrapped in the deepest shared boundary). Real
- *     wire-byte savings: the layout chain is never re-serialized for
+ *   - `X-Webjs-Have` request header lists `segment:route-key` entries for
+ *     the boundaries the client already has. The server walks the target's
+ *     layout chain and short-circuits at the deepest FULL match (segment AND
+ *     key, so a dynamic layout held for other params is re-rendered), then
+ *     returns only the divergent fragment (wrapped in the matched boundary).
+ *     Real wire-byte savings: the layout chain is never re-serialized for
  *     same-shell navigations.
  *   - URL-keyed snapshot cache (Turbo SnapshotCache pattern). Back/
  *     forward via popstate restores from cache instantly, then
@@ -892,9 +893,13 @@ export function collectBoundaries(root) {
       const data = /** @type {Comment} */ (node).data.trim();
       if (data.startsWith('wj:children:')) {
         const rest = data.slice('wj:children:'.length);
-        // The route-key is everything after the LAST ':'. Encoded param
-        // values cannot contain ':' (percent-encoded at emit), so the last
-        // colon is unambiguous; segments come from folder names.
+        // The route-key is everything after the LAST ':'. Substituted param
+        // values are percent-encoded at emit and static pieces have their
+        // delimiter characters encoded too, so the last colon is unambiguous
+        // for framework-emitted boundaries. A hand-authored folder name that
+        // still smuggles a delimiter through can only MIS-SPLIT here, which
+        // mismatches the close and poisons the scan: degrade-only, never a
+        // wrong pairing.
         const cut = rest.lastIndexOf(':');
         if (cut <= 0 || cut === rest.length - 1) { poisoned = true; return; }
         const segment = rest.slice(0, cut);
@@ -911,13 +916,27 @@ export function collectBoundaries(root) {
         const frame = stack.pop();
         if (!frame || frame.segment !== seg) { poisoned = true; return; }
         // Same-parent integrity: HTML parser reparenting (a <p> auto-closed
-        // by block content, table foster-parenting) can split a pair across
-        // parents. The range operations walk nextSibling from start and
-        // insert before end, so a cross-parent pair would empty the region
-        // and then throw mid-swap. Poison instead: degrade up front.
+        // by block content) can split a pair across parents. The range
+        // operations walk nextSibling from start and insert before end, so a
+        // cross-parent pair would empty the region and then throw mid-swap.
+        // Poison instead: degrade up front.
         if (frame.start.parentNode !== /** @type {Comment} */ (node).parentNode) {
           poisoned = true;
           return;
+        }
+        // Table-context integrity: foster-parenting moves CONTENT out of the
+        // table while comment tokens stay put, so a boundary emitted in table
+        // context shares a parent (passing the check above) while its actual
+        // children were fostered OUTSIDE the range. Swapping that empty range
+        // would silently leave stale visible content. A `${children}` slot
+        // directly in table context cannot work as a swap boundary at all,
+        // so poison it.
+        {
+          const pt = /** @type {Element} */ (frame.start.parentNode).tagName;
+          if (pt === 'TABLE' || pt === 'TBODY' || pt === 'THEAD' || pt === 'TFOOT' || pt === 'TR') {
+            poisoned = true;
+            return;
+          }
         }
         out.set(frame.segment, {
           routeKey: frame.routeKey,
@@ -2098,7 +2117,15 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   // recover in place rather than a destructive full reload.
   if (!doc) { restoreOptimistic(optimisticState); handleNavigationError(href, null, new Error('navigation response did not parse as HTML')); return { ok: false, status: respStatus, aborted: false }; }
 
-  applySwap(doc, frameId, !!revalidating, finalUrl, incomingBuild, incomingSrc);
+  const disposition = applySwap(doc, frameId, !!revalidating, finalUrl, incomingBuild, incomingSrc);
+  // A discarded revalidation must be discarded OUTRIGHT: a streamed response's
+  // boundary templates must not splice into the restored snapshot afterward
+  // (boundary ids are per-render sequential, so a reduced render's numbering
+  // need not line up with the snapshot's). Cancel the reader and stop here.
+  if (disposition === 'discard') {
+    if (streamCtx && streamCtx.reader) { try { streamCtx.reader.cancel(); } catch { /* ignore */ } }
+    return { ok: respOk, status: respStatus, aborted: false };
+  }
 
   if (recordHistory) history.pushState(null, '', finalUrl);
 
@@ -2807,7 +2834,7 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
   // background op. Doing nothing is the only safe degradation here.
   if (href && revalidating) {
     devWarnFallback('revalidation-discarded', href);
-    return;
+    return 'discard';
   }
 
   // 4. In-place full-body swap: the background paths only (a snapshot

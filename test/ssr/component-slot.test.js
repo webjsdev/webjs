@@ -749,3 +749,16 @@ describe('SSR slot record parity (#1015)', () => {
     assert.ok(!out.includes('fallback'), 'the default-aliased slot shows content, not fallback');
   });
 });
+
+test('the empty-string alias also routes to the default slot at SSR (#1015)', async () => {
+  // <slot name=""> is the same default-slot alias as <slot name="default">,
+  // matching the client's keyOfName exactly; SSR must not render fallback.
+  class C extends WebComponent {
+    render() { return html`<main><slot name="">fallback</slot></main>`; }
+  }
+  C.register('slot-ssr-record-4');
+  const out = await renderToString(
+    html`<slot-ssr-record-4><i>unnamed child</i></slot-ssr-record-4>`);
+  assert.ok(out.includes('unnamed child'), 'unnamed children land in the name="" slot');
+  assert.ok(!out.includes('fallback'), 'the empty-string-aliased slot shows content, not fallback');
+});

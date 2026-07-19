@@ -72,6 +72,16 @@ test('regionRouteKey: param values are encoded so a comment can never be termina
   assert.equal(_regionRouteKey('/files/[...rest]', { rest: 'a/b-->c' }), '/files/a/b--%3Ec');
 });
 
+test('regionRouteKey: STATIC pieces encode only the delimiter characters', () => {
+  // ':' would mis-split the segment:route-key parses, ',' the have-entry
+  // list, '%' the decode. Normal folder names stay byte-identical; a weird
+  // one keeps the no-delimiter invariant every parse relies on.
+  assert.equal(_regionRouteKey('/v1.2/docs', {}), '/v1.2/docs');
+  assert.equal(_regionRouteKey('/a:b', {}), '/a%3Ab');
+  assert.equal(_regionRouteKey('/a,b', {}), '/a%2Cb');
+  assert.equal(_regionRouteKey('/a%b', {}), '/a%25b');
+});
+
 test('wrapWithChildrenMarker: emits the keyed boundary pair (segment + route-key open, segment close)', () => {
   const r = _wrapWithChildrenMarker('CHILD', '/blog/[slug]', { slug: 'a' });
   assert.equal(r._$webjs, 'template');
