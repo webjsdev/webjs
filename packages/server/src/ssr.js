@@ -564,24 +564,45 @@ async function renderChain(route, ctx, dev, suspenseCtx, have, pageModule) {
     } catch { /* loading file failed: skip, render page directly */ }
   }
 
-  // Wrap each layout's `${children}` interpolation in
-  // `<!--wj:children:<segment-path>-->...<!--/wj:children-->` comment
-  // markers. The client router walks both old + new DOM for these
-  // markers and swaps only the children-slot of the deepest shared
-  // layout: preserving outer-layout DOM (and the scroll position of
-  // anything inside it: sidenavs, sticky headers, inner scroll
-  // containers). Auto-derived from folder structure: no opt-in
-  // required from layout authors.
+  // Resolved route params drive every boundary's route-key. ctx.params is
+  // thenable (#848) but its `then` is non-enumerable, so a spread yields the
+  // plain param map the route-key derivation expects.
+  const params = { ...(/** @type {Record<string,string>} */ (ctx.params) || {}) };
+
+  // Page-level boundary (#1015). The page gets its own keyed boundary pair
+  // whose route-key is its full resolved path, so a dynamic-param change
+  // (`/blog/a` -> `/blog/b`) REPLACES (remounts) the page on the client (Next
+  // parity) while a shared parent layout (a shorter segment whose key did not
+  // change) is preserved. Skipped when the page's segment equals the innermost
+  // layout's: the layout's children-slot boundary already delimits that exact
+  // range, and two boundaries with one segment id would break keyed pairing.
+  const pageSeg = pageSegmentPath(route.file);
+  const innermostLayoutSeg = route.layouts && route.layouts.length
+    ? layoutSegmentPath(route.layouts[route.layouts.length - 1])
+    : null;
+  if (pageSeg !== innermostLayoutSeg) {
+    tree = wrapWithChildrenMarker(tree, pageSeg, params);
+  }
+
+  // Wrap each layout's `${children}` interpolation in the KEYED boundary
+  // comment pair (open `<!--wj:children:<segment>:<route-key>-->`, close
+  // `<!--/wj:children:<segment>-->`, #1015). The client router scans both the
+  // live and incoming DOM for these boundaries (strict id-matched pairing, no
+  // LIFO guessing) and applies the two-tier swap: REPLACE at the shallowest
+  // boundary whose route-key changed, else MORPH the deepest shared one. Outer
+  // layout DOM (and the scroll position of anything inside it: sidenavs,
+  // fixed headers, inner scroll containers) is preserved. Auto-derived from
+  // folder structure: no opt-in required from layout authors.
   // X-Webjs-Have optimization: iterate from innermost → outermost and
   // SHORT-CIRCUIT at the first layout whose segment path the client
   // already has rendered. Wrap the accumulated inner tree in that
-  // layout's marker pair (so the client can identify the splice
+  // layout's boundary pair (so the client can identify the splice
   // target) and return: outer layouts are not rendered at all,
   // saving CPU and wire bytes.
   for (let i = route.layouts.length - 1; i >= 0; i--) {
     const segmentPath = layoutSegmentPath(route.layouts[i]);
     if (have && have.has(segmentPath)) {
-      tree = wrapWithChildrenMarker(tree, segmentPath);
+      tree = wrapWithChildrenMarker(tree, segmentPath, params);
       const body = await renderToString(tree, { ssr: true, suspenseCtx });
       return body + (await loadingTemplates(route, ctx, dev));
     }
@@ -589,7 +610,7 @@ async function renderChain(route, ctx, dev, suspenseCtx, have, pageModule) {
     if (!mod.default) continue;
     tree = await mod.default({
       ...ctx,
-      children: wrapWithChildrenMarker(tree, segmentPath),
+      children: wrapWithChildrenMarker(tree, segmentPath, params),
     });
   }
   const body = await renderToString(tree, { ssr: true, suspenseCtx });
@@ -707,12 +728,26 @@ function pageSegmentPath(pageFile) {
  * route-key, so that layout's region never remounts and its chrome always
  * survives.
  *
+ * PARAM VALUES ARE ENCODED (`encodeURIComponent`, per path piece). The
+ * route-key rides inside the boundary COMMENT, and param values are
+ * user-controlled, so an unencoded value could carry `-->` and terminate the
+ * comment mid-boundary. Encoding removes `<`, `>`, `:`, `/` from every
+ * substituted piece, which makes all three HTML-forbidden comment sequences
+ * (`<!--`, `-->`, `--!>`) impossible (each needs `<` or `>`) and keeps `:`
+ * unambiguous as the boundary-format delimiter. A catch-all's value is encoded
+ * per PIECE (split on `/`), so its literal separators stay readable. Static
+ * segments come from folder names and are emitted as-is. A bare `--` can
+ * survive encoding (`-` is unreserved) and is legal inside an HTML5 comment.
+ * The key is only ever compared for equality, so encoding does not affect the
+ * swap-tier decision.
+ *
  *   regionRouteKey('/', {})                          -> '/'
  *   regionRouteKey('/docs', {})                      -> '/docs'
  *   regionRouteKey('/blog/[slug]', {slug:'a'})       -> '/blog/a'
  *   regionRouteKey('/(marketing)/about', {})         -> '/about'
  *   regionRouteKey('/files/[...rest]', {rest:'a/b'}) -> '/files/a/b'
  *   regionRouteKey('/shop/[[...slug]]', {})          -> '/shop'
+ *   regionRouteKey('/blog/[slug]', {slug:'a-->b'})   -> '/blog/a--%3Eb'
  *
  * @param {string} segmentPath  Region segment pattern, e.g. '/blog/[slug]'.
  * @param {Record<string,string>} params  Resolved route params (values are
@@ -721,6 +756,9 @@ function pageSegmentPath(pageFile) {
  */
 function regionRouteKey(segmentPath, params) {
   const p = params || {};
+  /** Encode one substituted value, per slash-piece (catch-alls keep their
+   *  literal separators; each piece is comment-safe + delimiter-safe). */
+  const enc = (v) => String(v).split('/').map((s) => encodeURIComponent(s)).join('/');
   const out = [];
   for (const seg of segmentPath.split('/')) {
     if (!seg) continue;
@@ -730,17 +768,17 @@ function regionRouteKey(segmentPath, params) {
     // the already-slash-joined tail (may be '' for an empty optional one).
     if (seg.startsWith('[[...') && seg.endsWith(']]')) {
       const v = p[seg.slice(5, -2)];
-      if (v) out.push(v);
+      if (v) out.push(enc(v));
       continue;
     }
     if (seg.startsWith('[...') && seg.endsWith(']')) {
       const v = p[seg.slice(4, -1)];
-      if (v) out.push(v);
+      if (v) out.push(enc(v));
       continue;
     }
     // Dynamic `[name]`.
     if (seg.startsWith('[') && seg.endsWith(']')) {
-      out.push(p[seg.slice(1, -1)] ?? '');
+      out.push(enc(p[seg.slice(1, -1)] ?? ''));
       continue;
     }
     out.push(seg);
@@ -749,23 +787,39 @@ function regionRouteKey(segmentPath, params) {
 }
 
 /**
- * Wrap a TemplateResult-or-renderable child in the partial-nav children
- * marker pair. Returns a synthetic TemplateResult: server `renderToString`
- * walks `.strings` and `.values` exactly the same way as for the `html` tag.
+ * Wrap a TemplateResult-or-renderable child in a KEYED partial-nav boundary
+ * comment pair (#1015). Returns a synthetic TemplateResult: server
+ * `renderToString` walks `.strings` and `.values` exactly the same way as for
+ * the `html` tag.
+ *
+ * Format:
+ *   open   <!--wj:children:<segment>:<route-key>-->
+ *   close  <!--/wj:children:<segment>-->
+ *
+ * The close carries the SEGMENT, so client-side pairing is deterministic
+ * id-matching instead of the LIFO reconstruction that produced the #994 class
+ * of silent mispair. The open additionally carries the resolved ROUTE-KEY
+ * (param values encoded, see `regionRouteKey`), which drives the client's
+ * two-tier swap decision: key changed -> wholesale replace (Next remount
+ * parity), key same -> bounded morph (hydrated state preserved). A comment is
+ * invisible to structural CSS (`>`, `:nth-child`, flex/grid item enumeration),
+ * so unlike a wrapper element this boundary is layout-free by construction.
  *
  * The marker text lives in `strings` (static template parts), NOT in
  * `values`: `values` get HTML-escaped on render, comments wouldn't survive.
  *
  * @param {unknown} tree  A TemplateResult, string, array, or Promise.
- * @param {string} segmentPath  The layout's segment path, used as marker id.
+ * @param {string} segmentPath  The boundary's segment pattern (pairing id).
+ * @param {Record<string,string>} params  Resolved route params for the key.
  * @returns {{ _$webjs: 'template', strings: string[], values: unknown[] }}
  */
-function wrapWithChildrenMarker(tree, segmentPath) {
+function wrapWithChildrenMarker(tree, segmentPath, params) {
+  const routeKey = regionRouteKey(segmentPath, params);
   return {
     _$webjs: 'template',
     strings: [
-      `<!--wj:children:${segmentPath}-->`,
-      `<!--/wj:children-->`,
+      `<!--wj:children:${segmentPath}:${routeKey}-->`,
+      `<!--/wj:children:${segmentPath}-->`,
     ],
     values: [tree],
   };

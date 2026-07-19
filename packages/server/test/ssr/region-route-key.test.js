@@ -10,7 +10,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { _pageSegmentPath, _regionRouteKey } from '../../src/ssr.js';
+import { _pageSegmentPath, _regionRouteKey, _wrapWithChildrenMarker } from '../../src/ssr.js';
 
 test('pageSegmentPath derives the page own segment (full route pattern)', () => {
   assert.equal(_pageSegmentPath('/x/app/page.ts'), '/');
@@ -59,4 +59,28 @@ test('regionRouteKey: Next remount-vs-preserve semantics by construction', () =>
   // /blog/a -> /blog/a?x=1 : params are identical (searchParams excluded by
   // construction), so every region key is unchanged -> morph, state preserved.
   assert.equal(pageA, _regionRouteKey('/blog/[slug]', { slug: 'a' }));
+});
+
+test('regionRouteKey: param values are encoded so a comment can never be terminated', () => {
+  // The route-key rides inside the boundary COMMENT and params are
+  // user-controlled: '-->' in a value must not close the comment early.
+  // encodeURIComponent removes '<', '>', ':' (comment + delimiter safety).
+  assert.equal(_regionRouteKey('/blog/[slug]', { slug: 'a-->b' }), '/blog/a--%3Eb');
+  assert.equal(_regionRouteKey('/blog/[slug]', { slug: 'a:b' }), '/blog/a%3Ab');
+  // Catch-all values are encoded per piece: literal '/' separators survive.
+  assert.equal(_regionRouteKey('/files/[...rest]', { rest: 'a/b-->c' }), '/files/a/b--%3Ec');
+});
+
+test('wrapWithChildrenMarker: emits the keyed boundary pair (segment + route-key open, segment close)', () => {
+  const r = _wrapWithChildrenMarker('CHILD', '/blog/[slug]', { slug: 'a' });
+  assert.equal(r._$webjs, 'template');
+  assert.equal(r.strings[0], '<!--wj:children:/blog/[slug]:/blog/a-->');
+  assert.equal(r.strings[1], '<!--/wj:children:/blog/[slug]-->');
+  assert.deepEqual(r.values, ['CHILD']);
+});
+
+test('wrapWithChildrenMarker: a static segment has a constant route-key', () => {
+  const r = _wrapWithChildrenMarker('X', '/', {});
+  assert.equal(r.strings[0], '<!--wj:children:/:/-->');
+  assert.equal(r.strings[1], '<!--/wj:children:/-->');
 });

@@ -77,13 +77,13 @@ test('a webjs client-router marker terminates the run (not swallowed)', () => {
   // comment.
   const body =
     '<link rel="stylesheet" href="/s.css">' +
-    '<!--wj:children:/-->' +
+    '<!--wj:children:/:/-->' +
     '<p>page</p>' +
-    '<!--/wj:children-->';
+    '<!--/wj:children:/-->';
   const { head, body: out } = _hoistHeadTags(HEAD, body);
   assert.ok(head.includes('rel="stylesheet"'), 'stylesheet still hoists');
-  assert.ok(out.includes('<!--wj:children:/-->'), 'children marker preserved in body');
-  assert.ok(out.includes('<!--/wj:children-->'), 'closing children marker preserved');
+  assert.ok(out.includes('<!--wj:children:/:/-->'), 'children boundary preserved in body');
+  assert.ok(out.includes('<!--/wj:children:/-->'), 'closing children boundary preserved');
 });
 
 test('a comment with no following head tag leaves the body untouched', () => {
