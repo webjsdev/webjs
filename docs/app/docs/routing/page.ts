@@ -151,13 +151,15 @@ export default function DashboardLayout({ children }: { children: unknown }) {
     <h3>Layouts and client navigation</h3>
     <p>
       Nested layouts double as <strong>partial-swap boundaries</strong> for the client
-      router. The SSR pipeline auto-emits
-      <code>&lt;!--wj:children:&lt;segment-path&gt;--&gt;</code> comment markers around each
-      layout's <code>\${children}</code> interpolation. When a user clicks a link, the
-      router picks the deepest layout the source and target pages share and swaps only
-      <em>its</em> children. The outer layouts' DOM (and any state inside them: sidenav
-      scroll, input values, mounted custom elements) stays mounted. Authors write
-      nothing extra; the marker emission is invisible.
+      router. The SSR pipeline auto-emits keyed boundary comment pairs
+      (<code>&lt;!--wj:children:&lt;segment&gt;:&lt;route-key&gt;--&gt;</code> ...
+      <code>&lt;!--/wj:children:&lt;segment&gt;--&gt;</code>) around each layout's
+      <code>\${children}</code> interpolation and around the page itself. When a user
+      clicks a link, the router compares route-keys: a changed key remounts that
+      boundary fresh (Next.js param-change parity), an unchanged one swaps only the
+      deepest shared boundary's children. The outer layouts' DOM (and any state inside
+      them: sidenav scroll, input values, mounted custom elements) stays mounted.
+      Authors write nothing extra; the boundary emission is invisible.
     </p>
     <p>
       See the <a href="/docs/client-router">client router</a> docs for the full
