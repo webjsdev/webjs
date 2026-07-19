@@ -2801,11 +2801,11 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
     runWithTransition(() => {
       if (mode === 'replace') replaceBoundaryRange(live, incoming);
       else swapMarkerRange(live, incoming, doc);
-      // Sync the live open comment to the incoming's data: after a REPLACE the
-      // live boundary's route-key is the incoming page's key, and the NEXT
-      // nav's tier decision must compare against it, not the stale one. (A
-      // MORPH has equal keys, so this is a no-op there.)
-      live.start.data = incoming.start.data;
+      // No key sync is needed on the anchor's own comments: the plan's anchor
+      // carries EQUAL live/incoming route-keys in every tier (a changed-key
+      // REPLACE anchors at a parent already compared equal; the other tiers
+      // require no change at all), and the fresh deeper keys arrive via the
+      // physically replaced boundary comments inside the range.
       blurOutgoingFocus();
     }, () => upgradeCustomElementsInRange(live));
     forwardSuspenseResolvers(doc.body);
