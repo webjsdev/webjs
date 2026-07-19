@@ -737,6 +737,53 @@ function warnOnce(key, message) {
 }
 
 /**
+ * Dev-only diagnostic: the client router degraded a soft navigation to a full
+ * page load. Records WHY (the `cause`) so the "why did my SPA nav do a full
+ * reload?" question is answerable from the console instead of guessed at. Silent
+ * in production and deduped per cause so a repeated trigger does not spam.
+ *
+ * @param {string} cause a short stable slug for the degradation reason
+ * @param {string} href the destination the router fell back to loading
+ */
+/**
+ * True when a nav must degrade to a full page load because the document is
+ * still parsing. A forward, main-document nav fired at `readyState: 'loading'`
+ * races the DOM: the leaving page's closing layout markers may not be attached
+ * yet, so a soft swap would snapshot an incomplete tree and corrupt the DOM
+ * (#1008 / #936). Scoped to frameless forward navs (popstate is browser-driven,
+ * a frame nav carries its own boundary element).
+ *
+ * @param {boolean} isPopState
+ * @param {string | null | undefined} frameId
+ * @returns {boolean}
+ */
+function shouldFullLoadDuringParse(isPopState, frameId) {
+  return (
+    !isPopState &&
+    !frameId &&
+    typeof document !== 'undefined' &&
+    document.readyState === 'loading'
+  );
+}
+
+/**
+ * Dev-only diagnostic: the client router degraded a soft navigation to a full
+ * page load. Records WHY (the `cause`) so the "why did my SPA nav do a full
+ * reload?" question is answerable from the console instead of guessed at. Silent
+ * in production and deduped per cause so a repeated trigger does not spam.
+ *
+ * @param {string} cause a short stable slug for the degradation reason
+ * @param {string} href the destination the router fell back to loading
+ */
+function devWarnFallback(cause, href) {
+  if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production') return;
+  warnOnce(
+    `fallback:${cause}`,
+    `[webjs] client router fell back to a full page load (${cause}) navigating to ${href}. This is correct (no DOM corruption), just not a soft nav.`
+  );
+}
+
+/**
  * Dev-only, fire-once hint: the router forces an INSTANT scroll-to-top on a
  * forward navigation (matching a native page load), so an app-level
  * `scroll-behavior: smooth` on <html> does not affect route transitions (it
@@ -996,6 +1043,22 @@ function cacheKey(url) {
  * @param {string | null} frameId  Active <webjs-frame> id, or null.
  */
 async function performNavigation(href, isPopState, frameId) {
+  // #1008 / #936: a forward, main-document nav fired while the document is
+  // still parsing (`readyState === 'loading'`) races the DOM. The leaving
+  // page's closing layout markers at the bottom of the body may not exist yet,
+  // so `snapshotCurrent` plus region discovery would capture an incomplete tree
+  // and drive a corrupt or over-wide swap (the suspected root cause of the
+  // dropped-marker reports). The PREFETCH path already skips this window (see
+  // the `buildHaveHeader` call site); the click / `navigate()` path did not.
+  // Degrade to a correct full-page load, which is what an MPA would do anyway.
+  // Scoped to frameless forward navs: popstate is browser-driven, and a frame
+  // nav carries its own boundary element.
+  if (shouldFullLoadDuringParse(isPopState, frameId) && typeof location !== 'undefined') {
+    devWarnFallback('readyState-loading', href);
+    location.href = href;
+    return;
+  }
+
   // Cancel any in-flight fetch: Turbo Drive's navigator.stop().
   if (activeAbortController) activeAbortController.abort();
   activeAbortController = new AbortController();
@@ -3850,6 +3913,11 @@ export function _currentPageUrl() { return currentPageUrl; }
 export function _setCurrentPageUrl(u) { currentPageUrl = u; }
 /** Test-only: clear the fire-once warning guards so a case can be re-exercised. */
 export function _resetWarnOnce() { warnedKeys.clear(); smoothScrollChecked = false; }
+
+/** Test-only: the readyState-loading full-load degradation predicate (#1008). */
+export function _shouldFullLoadDuringParse(isPopState, frameId) {
+  return shouldFullLoadDuringParse(isPopState, frameId);
+}
 
 /**
  * Predicate used by the onClick handler to decide whether a same-origin
