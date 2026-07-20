@@ -315,8 +315,12 @@ suite('Light-DOM slot projection (browser)', () => {
     slot.addEventListener('slotchange', () => { fireCount++; });
     const burst = Array.from({ length: 10 }, () => document.createElement('p'));
     host.setSlotContent(null, burst);
+    // Native timing: the slotchange EVENT is async (microtask), so it has not
+    // fired yet on this synchronous line even though placement already ran.
+    assert.equal(fireCount, 0, 'slotchange is async: not fired synchronously');
+    assert.equal(slot.children.length, 10, 'placement is synchronous');
     await tick();
-    assert.equal(fireCount, 1, 'one setSlotContent call, one slotchange');
+    assert.equal(fireCount, 1, 'one setSlotContent call, one coalesced slotchange');
     assert.equal(slot.children.length, 10, 'the whole burst placed');
     assert.equal(host.hasSlot(), true, 'the record now has default content');
     assert.equal(host.slots.default.length, 10, 'this.slots reads the record');

@@ -264,6 +264,10 @@ function findLightAssignedSlot(el) {
  *   default slot). The single source of truth for what each slot shows.
  * @property {WeakMap<HTMLSlotElement, Node[]>} lastSnapshot Per-slot
  *   record of the previous assigned-node set for slotchange equality.
+ * @property {Set<HTMLSlotElement>} [pendingSlotChanges] Slots whose
+ *   assignment changed since the last microtask flush (coalesced slotchange).
+ * @property {boolean} [slotChangeScheduled] True while a coalesced
+ *   slotchange flush is queued for this host.
  */
 
 /**
@@ -527,8 +531,13 @@ export function applySlotAssignments(host) {
     }
   }
 
-  // 4. Dispatch slotchange on slots whose assignment actually changed.
-  for (const slot of slotsChanged) fireSlotChange(slot);
+  // 4. Queue slotchange on slots whose assignment actually changed. Native
+  //    timing: assignment recomputes synchronously (placement above already
+  //    ran) but the slotchange EVENT is async and coalesced (one per slot per
+  //    microtask). Synchronous dispatch here would let an author mutation
+  //    inside a slotchange handler recurse into this writer mid-loop, and
+  //    would fire N events for an N-node loop; coalescing matches the spec.
+  for (const slot of slotsChanged) queueSlotChange(state, slot);
 }
 
 /**
@@ -672,6 +681,30 @@ export function rescueAssignedNodes(host, slot) {
 /** Fire a `slotchange` event on the slot (bubbles, not composed; per spec). */
 export function fireSlotChange(slot) {
   slot.dispatchEvent(new Event('slotchange', { bubbles: true, composed: false }));
+}
+
+/**
+ * Queue a coalesced `slotchange` for a slot. The event is dispatched on a
+ * microtask, and a slot that changes more than once before the flush fires
+ * exactly once (native `slotchange` timing: async and coalesced per slot).
+ * A slot detached before the flush is skipped.
+ *
+ * @param {SlotState} state
+ * @param {HTMLSlotElement} slot
+ */
+export function queueSlotChange(state, slot) {
+  if (!state.pendingSlotChanges) state.pendingSlotChanges = new Set();
+  state.pendingSlotChanges.add(slot);
+  if (state.slotChangeScheduled) return;
+  state.slotChangeScheduled = true;
+  queueMicrotask(() => {
+    state.slotChangeScheduled = false;
+    const pending = state.pendingSlotChanges || new Set();
+    state.pendingSlotChanges = new Set();
+    for (const s of pending) {
+      if (s.isConnected) fireSlotChange(s);
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
