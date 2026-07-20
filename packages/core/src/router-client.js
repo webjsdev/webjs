@@ -18,7 +18,7 @@ import { scanSeeds } from './action-seed-client.js';
 // reused hydrated light-DOM component across a soft nav (#908).
 import {
   SLOT_STATE, LIGHT_SLOT_ATTR, PROJECTION_ATTR, PROJECTION_ACTUAL,
-  setSlotContent,
+  projectAuthored,
 } from './slot.js';
 
 /** The content type a content-negotiated stream-action response carries (#248). */
@@ -3133,7 +3133,12 @@ function diffElementInPlace(dst, src) {
  * @returns {boolean}
  */
 function isHydratedComponent(el) {
-  return /** @type {any} */ (el)[Symbol.for('webjs.instance')] != null;
+  // Opaque to the router when it has rendered (INSTANCE) OR merely has slot
+  // state installed but has not yet run its deferred first render (SLOT_STATE):
+  // in that window a same-task morph would otherwise reconcile INTO the host
+  // through the slot interception.
+  const a = /** @type {any} */ (el);
+  return a[Symbol.for('webjs.instance')] != null || a[SLOT_STATE] != null;
 }
 
 /**
@@ -3218,7 +3223,7 @@ function reprojectSlottedContent(dst, src) {
   if (liveSlots.size === 0 && incSlots.size === 0) return;
 
   // #1015: slotted children are VALUES pushed through the ONE public seam,
-  // setSlotContent (no cross-module state surgery; the slot runtime owns the
+  // projectAuthored (no cross-module state surgery; the slot runtime owns the
   // record, fires slotchange on a genuine set change, and re-applies). The
   // union walk covers boundary transitions (a name present on only one side).
   const names = new Set([...liveSlots.keys(), ...incSlots.keys()]);
@@ -3233,13 +3238,13 @@ function reprojectSlottedContent(dst, src) {
       // set-equality check makes slotchange fire exactly on an
       // add/remove/replace and stay silent on a pure text edit (#912).
       reconcileChildren(liveSlot, incSlot);
-      setSlotContent(dst, name, [...liveSlot.childNodes]);
+      projectAuthored(dst, name, [...liveSlot.childNodes]);
     } else if (incSlot) {
       // fallback->actual: incoming ADDED content. Import and push.
-      setSlotContent(dst, name, [...incSlot.childNodes].map((n) => document.importNode(n, true)));
+      projectAuthored(dst, name, [...incSlot.childNodes].map((n) => document.importNode(n, true)));
     } else {
       // actual->fallback: incoming DROPPED the content. Reset to fallback.
-      setSlotContent(dst, name, null);
+      projectAuthored(dst, name, null);
     }
   }
 }

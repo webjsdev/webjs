@@ -365,18 +365,14 @@ test('a display-only rendered <slot> is ELIDABLE under children-as-values (#1015
   assert.equal(analyzeComponentSource(src).interactive, false);
 });
 
-test('the dynamic slot API forces interactive (#1015 narrow signals)', () => {
+test('the dynamic slot read surface forces interactive (native slot API)', () => {
   const cases = [
     // slotchange listener wiring (string appears in the module source).
     `this.querySelector('slot').addEventListener('slotchange', () => {})`,
     // assigned* reads.
     `const n = this.querySelector('slot').assignedNodes()`,
     `const e = this.querySelector('slot').assignedElements()`,
-    // The slot record read (conditional-on-slot rendering).
-    `const has = this.slots.header`,
-    // The dynamic write + the record query.
-    `this.setSlotContent('header', [])`,
-    `if (this.hasSlot('header')) {}`,
+    `const s = this.querySelector('span').assignedSlot`,
   ];
   for (const line of cases) {
     const src = `

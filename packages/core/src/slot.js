@@ -94,6 +94,7 @@ const FLATTEN_MAX_DEPTH = 64;
 let NATIVE_assignedNodes = null;
 let NATIVE_assignedElements = null;
 let NATIVE_assignedSlot_desc = null;
+let NATIVE_assign = null;
 let polyfillsInstalled = false;
 
 /**
@@ -144,7 +145,34 @@ export function installSlotPolyfills() {
       return findLightAssignedSlot(this);
     },
   });
+
+  NATIVE_assign = HTMLSlotElement.prototype.assign;
+  HTMLSlotElement.prototype.assign = function patchedAssign(...nodes) {
+    if (this.hasAttribute(LIGHT_SLOT_ATTR) && !isInShadowRoot(this)) {
+      // Manual slot assignment (imperative, overrides attribute mode). Record
+      // the manual list for this slot's name in a per-host overlay that
+      // repartition honors, then re-derive + re-place through the one writer.
+      const host = hostOfSlot(this);
+      if (host) {
+        const state = ensureSlotState(host);
+        if (!state.manualByName) state.manualByName = new Map();
+        state.manualByName.set(keyOfName(this.getAttribute('name')), nodes.filter(Boolean));
+        repartition(state);
+        applySlotAssignments(host);
+      }
+      return undefined;
+    }
+    return NATIVE_assign ? NATIVE_assign.apply(this, nodes) : undefined;
+  };
   polyfillsInstalled = true;
+}
+
+/** Walk up from a light slot to its owning host (the nearest SLOT_STATE). */
+function hostOfSlot(slot) {
+  for (let p = slot.parentElement; p; p = p.parentElement) {
+    if (/** @type {any} */ (p)[SLOT_STATE]) return p;
+  }
+  return null;
 }
 
 // First-chance install at module load.
@@ -276,6 +304,9 @@ function findLightAssignedSlot(el) {
  *   that bypass the patched methods (never moves nodes; folds into `authored`).
  * @property {MutationObserver} [flipSensor] Sensor for `slot=` / `name=`
  *   attribute flips (never moves nodes; re-derives + re-places).
+ * @property {Map<string|null, Node[]>} [manualByName] Overlay for
+ *   `HTMLSlotElement.assign()` manual assignment: a node here goes to the named
+ *   slot regardless of its `slot=` attribute.
  */
 
 /**
@@ -342,8 +373,20 @@ export function captureAuthoredChildren(host) {
 export function repartition(state) {
   const byName = state.assignedByName;
   byName.clear();
+  const manual = state.manualByName;
   for (const node of state.authored) {
-    appendToMap(byName, slotNameOf(node), node);
+    let key = slotNameOf(node);
+    // A node named in a manual `HTMLSlotElement.assign()` overlay goes to that
+    // slot, overriding its `slot=` attribute (native manual-assignment mode).
+    if (manual && manual.size) {
+      for (const [mname, mnodes] of manual) {
+        if (mnodes.indexOf(node) !== -1) {
+          key = mname;
+          break;
+        }
+      }
+    }
+    appendToMap(byName, key, node);
   }
 }
 
@@ -426,94 +469,39 @@ function appendToMap(map, key, value) {
 }
 
 // ---------------------------------------------------------------------------
-// The public children-as-values API (#1015)
+// Router coordination seam
 // ---------------------------------------------------------------------------
 
 /**
- * A read view of the host's slot record: `{ default: Node[], [name]: Node[] }`.
- * Fresh arrays each call, so callers cannot corrupt the record. Enables
- * conditional-on-slot rendering (`this.slots.header ? ... : ...`).
- *
- * @param {Element} host
- * @returns {Record<string, Node[]>}
- */
-export function slotsView(host) {
-  /** @type {Record<string, Node[]>} */
-  const view = {};
-  const state = /** @type {SlotState | undefined} */ (/** @type {any} */ (host)[SLOT_STATE]);
-  if (!state) return view;
-  for (const [name, nodes] of state.assignedByName) {
-    view[name == null ? 'default' : name] = nodes.slice();
-  }
-  return view;
-}
-
-/**
- * Does the host's slot record carry content for `name`?
- *
- * @param {Element} host
- * @param {string | null} [name]
- * @returns {boolean}
- */
-export function hasSlotContent(host, name) {
-  const state = /** @type {SlotState | undefined} */ (/** @type {any} */ (host)[SLOT_STATE]);
-  if (!state) return false;
-  const arr = state.assignedByName.get(keyOfName(name));
-  return Boolean(arr && arr.length);
-}
-
-/**
- * Replace a slot's content (#1015): THE dynamic path for slotted children.
- * Updates the record, re-applies the host's slot assignments, and fires
- * `slotchange` on any slot whose assignment changed. Accepts a Node, a
- * Node[], a string (becomes a Text node), or null/[] to clear the slot
- * back to its fallback content.
- *
- * This replaces the deleted live re-projection observers: an external
- * `appendChild` or `slot=""` flip on a mounted host is inert by design;
- * the owner of dynamic slot content calls this API instead (the client
- * router does exactly that during a same-route morph).
+ * Replace the authored content assigned to slot `name` with `nodes`, in place
+ * of the old slice's position (a new name appends). The ONE public seam the
+ * client router uses to reconcile a reused light host's projected content
+ * during a same-route morph (replacing the deleted `setSlotContent`): the
+ * router never touches `authored` / `assignedByName` / `lastSnapshot` directly,
+ * and this is the same record-then-place primitive the interception layer runs.
  *
  * @param {Element} host
  * @param {string | null} name
- * @param {Node | Node[] | string | null} value
+ * @param {Node[] | Node | null} nodes
  */
-export function setSlotContent(host, name, value) {
+export function projectAuthored(host, name, nodes) {
   const state = ensureSlotState(host);
   const key = keyOfName(name);
-  const nodes = normalizeSlotValue(host, value);
-  // `authored` is the source of truth and is partitioned by each node's
-  // `slot=` attribute, so express "content for <name>" by (1) dropping the
-  // authored nodes currently assigned to <name> and (2) tagging the new nodes
-  // with that slot name (default = no attribute) before inserting them. The
-  // by-name replacement semantics of the old direct-set API are preserved,
-  // and `repartition` re-derives `assignedByName` from the result.
+  const list = Array.isArray(nodes) ? nodes.filter(Boolean) : nodes ? [nodes] : [];
+  // Position of the old slice for this name (so cross-name ordering survives).
+  let at = state.authored.findIndex((n) => slotNameOf(n) === key);
   state.authored = state.authored.filter((n) => slotNameOf(n) !== key);
-  for (const n of nodes) {
+  if (at === -1 || at > state.authored.length) at = state.authored.length;
+  for (const n of list) {
     if (n.nodeType === 1) {
       if (key == null) /** @type {Element} */ (n).removeAttribute('slot');
       else /** @type {Element} */ (n).setAttribute('slot', key);
     }
     FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
-    state.authored.push(n);
   }
+  state.authored.splice(at, 0, ...list);
   repartition(state);
   applySlotAssignments(host);
-}
-
-/**
- * @param {Element} host
- * @param {Node | Node[] | string | null} value
- * @returns {Node[]}
- */
-function normalizeSlotValue(host, value) {
-  if (value == null) return [];
-  if (typeof value === 'string') {
-    const doc = host.ownerDocument || (typeof document !== 'undefined' ? document : null);
-    return doc ? [doc.createTextNode(value)] : [];
-  }
-  if (Array.isArray(value)) return value.filter(Boolean);
-  return [value];
 }
 
 // ---------------------------------------------------------------------------

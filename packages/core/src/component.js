@@ -9,9 +9,6 @@ import {
   adoptSSRAssignments,
   ensureSlotState,
   hasSlotState,
-  slotsView,
-  hasSlotContent,
-  setSlotContent,
   installSlotInterception,
   installSlotSensors,
   teardownSlotSensors,
@@ -903,48 +900,11 @@ class WebComponentBase extends Base {
       } catch (err) {
         console.error(`[webjs] lifecycle hook threw during initial render:`, err);
       }
-      // No slot observers to attach (#1015): the renderer's slot parts
-      // place the record content as part of the commit, and the only
-      // dynamic path is setSlotContent().
+      // The renderer's slot parts place the record content as part of the
+      // commit; native DOM writes on the host (appendChild, slot= flips,
+      // innerHTML) drive the record live through the interception + sensors
+      // installed on connect. There is no WebJs-specific slot API.
     });
-  }
-
-  /**
-   * Read view of this host's slot record (#1015): captured (or
-   * programmatically set) children per slot name, e.g.
-   * `this.slots.default` / `this.slots.header`. Fresh arrays each read.
-   * Enables conditional-on-slot rendering:
-   * `this.slots.header ? html\`...\` : ''`.
-   *
-   * @returns {Record<string, Node[]>}
-   */
-  get slots() {
-    return slotsView(this);
-  }
-
-  /**
-   * Does this host's slot record carry content for `name` (#1015)?
-   * `hasSlot()` / `hasSlot('default')` query the default slot.
-   *
-   * @param {string | null} [name]
-   * @returns {boolean}
-   */
-  hasSlot(name) {
-    return hasSlotContent(this, name);
-  }
-
-  /**
-   * Replace a slot's content (#1015): the ONE dynamic path for slotted
-   * children (external appendChild / slot="" flips after mount are inert
-   * by design). Accepts a Node, Node[], a string, or null to reset the
-   * slot to its fallback content. Fires `slotchange` when the assignment
-   * changes.
-   *
-   * @param {string | null} name
-   * @param {Node | Node[] | string | null} value
-   */
-  setSlotContent(name, value) {
-    setSlotContent(this, name, value);
   }
 
   /**

@@ -120,14 +120,12 @@ export const CLIENT_LIFECYCLE_HOOKS = [
 /**
  * Method calls that only make sense on the client. `addController`
  * registers a ReactiveController (client lifecycle). `requestUpdate`
- * schedules a re-render. `setSlotContent` pushes dynamic slot values
- * (#1015) and `hasSlot` conditions a render on the slot record, both of
- * which need the client slot runtime to apply. Any of these implies the
+ * schedules a re-render. the assigned* reads and slotchange are dynamic slot surface which need the client slot runtime to apply. Any of these implies the
  * component is not inert.
  *
  * @type {readonly string[]}
  */
-export const CLIENT_METHOD_CALLS = ['addController', 'removeController', 'requestUpdate', 'setSlotContent', 'hasSlot'];
+export const CLIENT_METHOD_CALLS = ['addController', 'removeController', 'requestUpdate'];
 
 /**
  * Static class fields whose declaration (to a non-`false` value) marks a
@@ -225,7 +223,7 @@ const EVENT_PROP_RE = /\.on[a-z]+\s*=\s*\$\{/;
  * (those two are also covered as CLIENT_METHOD_CALLS inside class bodies;
  * this regex catches external callers too).
  */
-const SLOT_DYNAMIC_RE = /\bslotchange\b|\bassignedNodes\s*\(|\bassignedElements\s*\(|\bassignedSlot\b|\.slots\b|\bsetSlotContent\s*\(|\bhasSlot\s*\(/;
+const SLOT_DYNAMIC_RE = /\bslotchange\b|\bassignedNodes\s*\(|\bassignedElements\s*\(|\bassignedSlot\b/;
 
 /** A `.server.{js,ts,mjs,mts}` file: a stub on the client, inert there. */
 const SERVER_FILE_RE = /\.server\.m?[jt]s$/;

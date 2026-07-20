@@ -9,7 +9,7 @@
  *
  * Runs in a REAL browser via WTR + Playwright.
  */
-import { adoptSSRAssignments, slotsView } from '../../../src/slot.js';
+import { adoptSSRAssignments, ensureSlotState } from '../../../src/slot.js';
 
 import { assert } from '../../../../../test/browser-assert.js';
 
@@ -34,7 +34,7 @@ suite('adoptSSRAssignments: own-slot filter', () => {
 
     adoptSSRAssignments(host);
 
-    const label = slotsView(host).label || [];
+    const label = ensureSlotState(host).assignedByName.get('label') || [];
     const ids = label.filter((n) => n.nodeType === 1).map((n) => n.id);
 
     // The outer host must have adopted its OWN slot's child, never the nested
