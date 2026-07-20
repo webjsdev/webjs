@@ -223,6 +223,22 @@ suite('Native-write liveness (light-DOM slot parity)', () => {
     host.remove();
   });
 
+  test('HTMLSlotElement.assign() manually assigns a child, overriding its slot attribute', async () => {
+    const tag = tagName('manual-assign');
+    const host = await mount(tag, () => html`<div><slot name="a"></slot><slot name="b"></slot></div>`);
+    const slotA = host.querySelector('slot[name="a"]');
+    const slotB = host.querySelector('slot[name="b"]');
+    const child = document.createElement('x-el');
+    child.setAttribute('slot', 'a');
+    host.appendChild(child);
+    assert.equal(child.parentElement, slotA, 'attribute-assigned to slot a');
+    // Manual assignment overrides the slot="a" attribute (native assign()).
+    slotB.assign(child);
+    await tick();
+    assert.equal(child.parentElement, slotB, 'assign() moved it to slot b, overriding slot=a');
+    host.remove();
+  });
+
   test('name= flip on a projected child is a documented gap without the sensor (phase 4)', async () => {
     // The interception layer alone covers method writes; a raw `slot=` attribute
     // flip is caught by the flip sensor (phase 4). This test asserts the method

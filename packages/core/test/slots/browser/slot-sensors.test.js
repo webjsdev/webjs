@@ -46,6 +46,24 @@ suite('Slot sensors', () => {
     host.remove();
   });
 
+  test('flip sensor: a slot name= change re-projects the matching child', async () => {
+    const tag = tagName('name-flip');
+    const host = await mount(tag, () => html`<div><slot name="a"></slot></div>`);
+    const slotA = host.querySelector('slot[name="a"]');
+    const child = document.createElement('x-el');
+    child.setAttribute('slot', 'b');
+    host.appendChild(child); // no slot "b" yet: parked, connected but unrendered
+    await tick();
+    assert.ok(child.parentElement !== slotA, 'not in slot a (its slot= is b)');
+    assert.equal(child.isConnected, true, 'parked, still connected');
+    // Rename the slot a -> b (the shape a dynamic name=${...} produces). Only
+    // the flip sensor catches a raw name= change; it must NOT be drained.
+    slotA.setAttribute('name', 'b');
+    await tick();
+    assert.equal(child.parentElement, slotA, 'the renamed slot now shows the slot=b child');
+    host.remove();
+  });
+
   test('bypass backstop: Node.prototype.appendChild.call folds into the record', async () => {
     const tag = tagName('bypass-add');
     const host = await mount(tag, () => html`<div><slot></slot></div>`);
