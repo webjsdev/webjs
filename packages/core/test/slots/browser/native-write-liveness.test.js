@@ -55,6 +55,13 @@ suite('Native-write liveness (light-DOM slot parity)', () => {
     } catch (e) { threw = e; }
     assert.ok(threw, 'insertBefore threw');
     assert.equal(threw.name, 'NotFoundError', 'threw NotFoundError like native');
+    // insertBefore(x, x) where x is NOT a child also throws (ref check first).
+    let threwSelf = null;
+    try {
+      const orphan = document.createElement('p');
+      host.insertBefore(orphan, orphan);
+    } catch (e) { threwSelf = e; }
+    assert.equal(threwSelf && threwSelf.name, 'NotFoundError', 'insertBefore(x, x) on a non-child throws');
     host.remove();
   });
 

@@ -844,9 +844,10 @@ class WebComponentBase extends Base {
       // c. First mount, no SSR. Partition authored children into the
       //    record before _performRender wipes the host.
       //
-      // There are NO mutation observers: an external appendChild or a
-      // slot=""-attribute flip after mount is inert by design, and the
-      // dynamic path is the native DOM API (interception + sensors).
+      // After capture, installSlotInterception + installSlotSensors below make
+      // native DOM writes on a mounted host live (appendChild, slot= flips,
+      // innerHTML, HTMLSlotElement.assign), so light-DOM slots match shadow DOM
+      // through the standard API.
       if (hasSlotState(this)) {
         // (a) Reconnection. Record already populated. Sweep any direct child
         //     added by a raw bypass write while the host was disconnected (no

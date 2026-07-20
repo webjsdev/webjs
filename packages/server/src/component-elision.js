@@ -118,10 +118,10 @@ export const CLIENT_LIFECYCLE_HOOKS = [
 ];
 
 /**
- * Method calls that only make sense on the client. `addController`
- * registers a ReactiveController (client lifecycle). `requestUpdate`
- * schedules a re-render. the assigned* reads and slotchange are dynamic slot surface which need the client slot runtime to apply. Any of these implies the
- * component is not inert.
+ * Method calls that only make sense on the client. `addController` registers a
+ * ReactiveController (client lifecycle); `requestUpdate` schedules a re-render.
+ * Any of these implies the component is not inert. (The dynamic slot read
+ * surface lives in `SLOT_DYNAMIC_RE`, not here.)
  *
  * @type {readonly string[]}
  */
@@ -217,11 +217,11 @@ const EVENT_PROP_RE = /\.on[a-z]+\s*=\s*\$\{/;
  * component that merely RENDERS a `<slot>`, but under children-as-values the
  * SSR output already carries the placed children, so a display-only slotted
  * wrapper is byte-identical with or without its JS and is elidable. What
- * genuinely needs the client slot runtime is the DYNAMIC surface: a
- * `slotchange` listener, the assignedNodes/assignedElements/assignedSlot
- * reads (assignedNodes / assignedElements / assignedSlot / slotchange)
- * (those two are also covered as CLIENT_METHOD_CALLS inside class bodies;
- * this regex catches external callers too).
+ * genuinely needs the client slot runtime is the DYNAMIC READ surface: a
+ * `slotchange` listener or an `assignedNodes` / `assignedElements` /
+ * `assignedSlot` read. Native WRITE liveness (appendChild, slot= flips) is
+ * consumer-driven, and a consumer that mutates a component's slots references
+ * its tag, which already forces the ship.
  */
 const SLOT_DYNAMIC_RE = /\bslotchange\b|\bassignedNodes\s*\(|\bassignedElements\s*\(|\bassignedSlot\b/;
 
@@ -544,7 +544,7 @@ export function analyzeComponentSource(src) {
   // byte-identical with or without its JS. Only the dynamic slot surface
   // (slotchange, the assigned* reads) needs the client runtime.
   if (SLOT_DYNAMIC_RE.test(src)) {
-    return { interactive: true, reason: 'uses the dynamic slot API (slotchange / assignedNodes / slots record)' };
+    return { interactive: true, reason: 'reads the dynamic slot surface (slotchange / assignedNodes / assignedElements / assignedSlot)' };
   }
 
   // Top-level client work the render/lifecycle checks would miss: a

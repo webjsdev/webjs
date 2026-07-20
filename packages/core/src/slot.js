@@ -855,14 +855,17 @@ export function installSlotInterception(host) {
 
   h.insertBefore = function (node, ref) {
     if (h[RENDERING]) return N_insertBefore.call(this, node, ref);
-    // insertBefore(n, n) is a native no-op (the node is already before itself).
-    if (node === ref) return node;
+    // A non-null ref MUST be an assigned child (native throws NotFoundError
+    // otherwise), checked before the self-ref no-op so insertBefore(x, x) on a
+    // NON-child still throws like native.
     if (ref != null && state.authored.indexOf(ref) === -1) {
       throw new DOMException(
         'insertBefore: reference node is not an assigned child of this host',
         'NotFoundError',
       );
     }
+    // insertBefore(n, n) with n an existing child is a native no-op.
+    if (node === ref) return node;
     const nodes = expandArg(host, node, false);
     guardInsertable(host, nodes);
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
