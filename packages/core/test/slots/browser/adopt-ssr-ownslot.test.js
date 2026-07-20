@@ -20,14 +20,16 @@ suite('adoptSSRAssignments: own-slot filter', () => {
 
     // SSR shape: a nested component's actual slot (name="label") comes FIRST in
     // document order, then the outer host's OWN actual slot (name="label").
+    // The projected children retain their own slot="label" attribute exactly
+    // as SSR emits them (substituteSlotsInRender does not strip it).
     host.innerHTML =
       '<inner-widget>' +
       '<slot data-webjs-light data-projection="actual" name="label">' +
-      '<span id="inner-child">inner</span>' +
+      '<span id="inner-child" slot="label">inner</span>' +
       '</slot>' +
       '</inner-widget>' +
       '<slot data-webjs-light data-projection="actual" name="label">' +
-      '<span id="outer-child">outer</span>' +
+      '<span id="outer-child" slot="label">outer</span>' +
       '</slot>';
 
     adoptSSRAssignments(host);

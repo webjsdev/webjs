@@ -259,9 +259,13 @@ function findLightAssignedSlot(el) {
 
 /**
  * @typedef {Object} SlotState
- * @property {Map<string|null, Node[]>} assignedByName The slot record:
- *   captured (or programmatically set) content per slot name (null is the
- *   default slot). The single source of truth for what each slot shows.
+ * @property {Node[]} authored The ordered source of truth: every authored
+ *   child of the host, in host-child order. `assignedByName` is DERIVED from
+ *   this by `repartition` (grouping each node by its current `slot=`
+ *   attribute), so there is one place a node's assignment is decided.
+ * @property {Map<string|null, Node[]>} assignedByName The DERIVED slot record:
+ *   `authored` grouped per slot name (null is the default slot). Never mutated
+ *   directly; always rebuilt by `repartition`.
  * @property {WeakMap<HTMLSlotElement, Node[]>} lastSnapshot Per-slot
  *   record of the previous assigned-node set for slotchange equality.
  * @property {Set<HTMLSlotElement>} [pendingSlotChanges] Slots whose
@@ -282,6 +286,7 @@ export function ensureSlotState(host) {
   let state = h[SLOT_STATE];
   if (!state) {
     state = {
+      authored: [],
       assignedByName: new Map(),
       lastSnapshot: new WeakMap(),
     };
@@ -313,9 +318,25 @@ export function captureAuthoredChildren(host) {
   const state = ensureSlotState(host);
   while (host.firstChild) {
     const node = host.firstChild;
-    const name = slotNameOf(node);
-    appendToMap(state.assignedByName, name, node);
+    state.authored.push(node);
     host.removeChild(node);
+  }
+  repartition(state);
+}
+
+/**
+ * Rebuild `assignedByName` from `authored`: group every authored node by its
+ * current `slot=""` attribute (default = null key). Pure and idempotent, the
+ * single place a node's slot assignment is decided. Called after any change
+ * to `authored` and at the top of `applySlotAssignments`.
+ *
+ * @param {SlotState} state
+ */
+export function repartition(state) {
+  const byName = state.assignedByName;
+  byName.clear();
+  for (const node of state.authored) {
+    appendToMap(byName, slotNameOf(node), node);
   }
 }
 
@@ -329,6 +350,8 @@ export function captureAuthoredChildren(host) {
  */
 export function adoptSSRAssignments(host) {
   const state = ensureSlotState(host);
+  /** @type {Set<string|null>} first-wins per name across the host's own slots */
+  const seen = new Set();
   const slots = host.querySelectorAll(`slot[${LIGHT_SLOT_ATTR}]`);
   for (const slot of slots) {
     /** @type {HTMLSlotElement} */
@@ -344,12 +367,17 @@ export function adoptSSRAssignments(host) {
     if (!isOwnSlot(host, s)) continue;
     if (s.getAttribute(PROJECTION_ATTR) !== PROJECTION_ACTUAL) continue;
     const name = keyOfName(s.getAttribute('name'));
-    if (!state.assignedByName.has(name)) {
+    if (!seen.has(name)) {
+      seen.add(name);
       const children = Array.from(s.childNodes);
-      state.assignedByName.set(name, children);
+      // The SSR'd projected children retain their own `slot=` attribute, so
+      // pushing them into `authored` and re-deriving reproduces the same
+      // per-name grouping without moving any DOM (no flash).
+      for (const child of children) state.authored.push(child);
       state.lastSnapshot.set(s, children.slice());
     }
   }
+  repartition(state);
 }
 
 /**
@@ -447,8 +475,21 @@ export function setSlotContent(host, name, value) {
   const state = ensureSlotState(host);
   const key = keyOfName(name);
   const nodes = normalizeSlotValue(host, value);
-  if (nodes.length) state.assignedByName.set(key, nodes);
-  else state.assignedByName.delete(key);
+  // `authored` is the source of truth and is partitioned by each node's
+  // `slot=` attribute, so express "content for <name>" by (1) dropping the
+  // authored nodes currently assigned to <name> and (2) tagging the new nodes
+  // with that slot name (default = no attribute) before inserting them. The
+  // by-name replacement semantics of the old direct-set API are preserved,
+  // and `repartition` re-derives `assignedByName` from the result.
+  state.authored = state.authored.filter((n) => slotNameOf(n) !== key);
+  for (const n of nodes) {
+    if (n.nodeType === 1) {
+      if (key == null) /** @type {Element} */ (n).removeAttribute('slot');
+      else /** @type {Element} */ (n).setAttribute('slot', key);
+    }
+    state.authored.push(n);
+  }
+  repartition(state);
   applySlotAssignments(host);
 }
 
@@ -493,6 +534,10 @@ export function applySlotAssignments(host) {
     /** @type {any} */ (host)[SLOT_STATE]
   );
   if (!state) return;
+
+  // 0. Re-derive the record from `authored` so a `slot=` change on an authored
+  //    node (or any other authored mutation) is reflected before placement.
+  repartition(state);
 
   // 1. The host's own slots, document order.
   /** @type {HTMLSlotElement[]} */
