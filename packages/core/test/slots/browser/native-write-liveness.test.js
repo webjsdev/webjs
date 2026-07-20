@@ -129,6 +129,20 @@ suite('Native-write liveness (light-DOM slot parity)', () => {
     host.remove();
   });
 
+  test('removing a parked (unmatched-name) child detaches it (isConnected false)', async () => {
+    const tag = tagName('park-remove');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    const orphan = document.createElement('orphan-el');
+    orphan.setAttribute('slot', 'nonexistent');
+    host.appendChild(orphan);
+    await tick();
+    assert.equal(orphan.isConnected, true, 'parked child starts connected');
+    host.removeChild(orphan); // remove from the record
+    await tick();
+    assert.equal(orphan.isConnected, false, 'the removed parked child is detached, like native removeChild');
+    host.remove();
+  });
+
   test('name= flip on a projected child is a documented gap without the sensor (phase 4)', async () => {
     // The interception layer alone covers method writes; a raw `slot=` attribute
     // flip is caught by the flip sensor (phase 4). This test asserts the method

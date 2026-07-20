@@ -606,41 +606,10 @@ export function installSlotSensors(host) {
   const state = ensureSlotState(host);
   if (state.backstop) return;
 
-  state.backstop = new MutationObserver((records) => {
-    let dirty = false;
-    for (const r of records) {
-      for (const node of r.addedNodes) {
-        if (node === h[PARK]) continue;
-        if (state.authored.indexOf(node) !== -1) continue;
-        // A raw direct-child insert that bypassed the patched methods. Records
-        // reaching this async callback are never renderer commits (those are
-        // drained at the window close), so fold it in as authored content.
-        FRAMEWORK_DETACHED.add(node);
-        state.authored.push(node);
-        dirty = true;
-      }
-      for (const node of r.removedNodes) {
-        const i = state.authored.indexOf(node);
-        if (i !== -1 && !host.contains(node)) {
-          state.authored.splice(i, 1);
-          dirty = true;
-        }
-      }
-    }
-    if (dirty) applySlotAssignments(host);
-  });
+  state.backstop = new MutationObserver((records) => processBackstop(host, state, records));
   state.backstop.observe(host, { childList: true, subtree: false });
 
-  state.flipSensor = new MutationObserver((records) => {
-    for (const r of records) {
-      if (r.type === 'attributes') {
-        // A slot=/name= flip somewhere in the tree. Re-derive + re-place; the
-        // writer is idempotent, so an unrelated flip settles to a no-op.
-        applySlotAssignments(host);
-        return;
-      }
-    }
-  });
+  state.flipSensor = new MutationObserver((records) => processFlip(host, records));
   state.flipSensor.observe(host, {
     attributes: true,
     attributeFilter: ['slot', 'name'],
@@ -648,10 +617,46 @@ export function installSlotSensors(host) {
   });
 }
 
+/** Backstop callback body: fold raw direct-child adds / un-author raw removes. */
+function processBackstop(host, state, records) {
+  const park = /** @type {any} */ (host)[PARK];
+  let dirty = false;
+  for (const r of records) {
+    for (const node of r.addedNodes) {
+      if (node === park) continue;
+      if (state.authored.indexOf(node) !== -1) continue;
+      // A raw direct-child insert that bypassed the patched methods. Records
+      // reaching this callback are never renderer commits (those are drained at
+      // the window close), so fold it in as authored content.
+      FRAMEWORK_DETACHED.add(node);
+      state.authored.push(node);
+      dirty = true;
+    }
+    for (const node of r.removedNodes) {
+      const i = state.authored.indexOf(node);
+      if (i !== -1 && !host.contains(node)) {
+        state.authored.splice(i, 1);
+        dirty = true;
+      }
+    }
+  }
+  if (dirty) applySlotAssignments(host);
+}
+
+/** Flip-sensor callback body: a slot=/name= flip re-derives + re-places. */
+function processFlip(host, records) {
+  for (const r of records) {
+    if (r.type === 'attributes') {
+      applySlotAssignments(host);
+      return;
+    }
+  }
+}
+
 /**
- * Tear down the sensors, processing any queued records FIRST (a bare
- * `disconnect()` drops them, which would lose an inner flip queued mid-apply
- * when a nested element bounces through disconnect/connect).
+ * Tear down the sensors, PROCESSING any queued records first (a bare
+ * `disconnect()` drops them, which would lose a flip or bypass write captured
+ * but not yet delivered when the host disconnects).
  *
  * @param {Element} host
  */
@@ -661,12 +666,12 @@ export function teardownSlotSensors(host) {
   );
   if (!state) return;
   if (state.backstop) {
-    state.backstop.takeRecords();
+    processBackstop(host, state, state.backstop.takeRecords());
     state.backstop.disconnect();
     state.backstop = undefined;
   }
   if (state.flipSensor) {
-    state.flipSensor.takeRecords();
+    processFlip(host, state.flipSensor.takeRecords());
     state.flipSensor.disconnect();
     state.flipSensor = undefined;
   }
@@ -997,15 +1002,24 @@ export function applySlotAssignments(host) {
   //    shadow keeps an unassigned child connected but unrendered (a nested
   //    custom element still upgrades and runs connectedCallback); a hidden
   //    holding element inside the host reproduces that. Parked nodes have
-  //    parentNode === park, so the prune rule keeps them.
+  //    parentNode === park, so the prune rule keeps them. The park is
+  //    RECONCILED to exactly the current unmatched set: a node that left the
+  //    record (or now matches a slot) is detached from the park, so a removed
+  //    parked child ends up isConnected === false like native removeChild.
   const matched = new Set(groups.keys());
-  const toPark = [];
+  const shouldPark = new Set();
   for (const n of state.authored) {
-    if (!matched.has(slotNameOf(n))) toPark.push(n);
+    if (!matched.has(slotNameOf(n))) shouldPark.add(n);
   }
-  if (toPark.length) {
+  const existingPark = /** @type {any} */ (host)[PARK];
+  if (existingPark) {
+    for (const n of Array.from(existingPark.childNodes)) {
+      if (!shouldPark.has(n)) N_removeChild.call(existingPark, n);
+    }
+  }
+  if (shouldPark.size) {
     const park = parkFor(host);
-    for (const n of toPark) {
+    for (const n of shouldPark) {
       if (n.parentNode !== park) {
         FRAMEWORK_DETACHED.delete(n);
         withRendererWrites(host, () => N_appendChild.call(park, n));
