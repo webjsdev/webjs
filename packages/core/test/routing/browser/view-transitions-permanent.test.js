@@ -93,14 +93,14 @@ suite('Client router: View Transitions on partial swaps (#250)', () => {
       stubSVT();
       // A nested-layout marker shared by both pages.
       container.innerHTML =
-        '<!--wj:children:/x-->' +
+        '<!--wj:children:/x:/x-->' +
         '<a id="m-link" href="/m-target"></a>' +
         '<span id="m-content">OLD</span>' +
-        '<!--/wj:children-->';
+        '<!--/wj:children:/x-->';
 
       window.fetch = () => htmlResponse(
         '<!doctype html><html><head></head><body>' +
-        '<!--wj:children:/x--><span id="m-content">NEW</span><!--/wj:children-->' +
+        '<!--wj:children:/x:/x--><span id="m-content">NEW</span><!--/wj:children:/x-->' +
         '</body></html>'
       );
 
@@ -146,14 +146,14 @@ suite('Client router: View Transitions on partial swaps (#250)', () => {
       setViewTransitionMeta(false); // explicit: no opt-in
       stubSVT();
       container.innerHTML =
-        '<!--wj:children:/y-->' +
+        '<!--wj:children:/y:/y-->' +
         '<a id="n-link" href="/n-target"></a>' +
         '<span id="n-content">OLD</span>' +
-        '<!--/wj:children-->';
+        '<!--/wj:children:/y-->';
 
       window.fetch = () => htmlResponse(
         '<!doctype html><html><head></head><body>' +
-        '<!--wj:children:/y--><span id="n-content">NEW</span><!--/wj:children-->' +
+        '<!--wj:children:/y:/y--><span id="n-content">NEW</span><!--/wj:children:/y-->' +
         '</body></html>'
       );
 
@@ -173,14 +173,14 @@ suite('Client router: View Transitions on partial swaps (#250)', () => {
       setViewTransitionMeta(true); // opted in, but the API is missing
       removeSVT();
       container.innerHTML =
-        '<!--wj:children:/z-->' +
+        '<!--wj:children:/z:/z-->' +
         '<a id="u-link" href="/u-target"></a>' +
         '<span id="u-content">OLD</span>' +
-        '<!--/wj:children-->';
+        '<!--/wj:children:/z-->';
 
       window.fetch = () => htmlResponse(
         '<!doctype html><html><head></head><body>' +
-        '<!--wj:children:/z--><span id="u-content">NEW</span><!--/wj:children-->' +
+        '<!--wj:children:/z:/z--><span id="u-content">NEW</span><!--/wj:children:/z-->' +
         '</body></html>'
       );
 
@@ -213,21 +213,33 @@ suite('Client router: data-webjs-permanent persistence (#250)', () => {
     if (s) s.remove();
   }
 
-  test('full-body swap: a permanent element keeps NODE IDENTITY across the nav', async () => {
+  test('boundary REPLACE (remount): a permanent element keeps NODE IDENTITY across the nav', async () => {
     setup();
     try {
-      // No shared marker, no frame => full-body swap path.
+      // A route-key change at the page boundary (#1015): the REPLACE tier,
+      // anchored at the PARENT ('/') boundary, remounts everything in the
+      // range EXCEPT regrafted permanents. This is where permanence matters
+      // most (a fresh remount would restart the player), replacing the
+      // deleted full-body foreground path.
       container.innerHTML =
+        '<!--wj:children:/:/-->' +
+        '<!--wj:children:/page/[x]:/page/a-->' +
         '<div id="player" data-webjs-permanent>PLAYING</div>' +
-        '<a id="fb-link" href="/fb-target"></a>';
+        '<a id="fb-link" href="/fb-target"></a>' +
+        '<!--/wj:children:/page/[x]-->' +
+        '<!--/wj:children:/-->';
       const liveNode = document.getElementById('player');
       const probe = {};
       liveNode.__webjsLiveProbe = probe;
 
       window.fetch = () => htmlResponse(
         '<!doctype html><html><head></head><body>' +
+        '<!--wj:children:/:/-->' +
+        '<!--wj:children:/page/[x]:/page/b-->' +
         '<div id="player" data-webjs-permanent>PLACEHOLDER</div>' +
         '<h1 id="fb-new">New page</h1>' +
+        '<!--/wj:children:/page/[x]-->' +
+        '<!--/wj:children:/-->' +
         '</body></html>'
       );
 
@@ -235,13 +247,15 @@ suite('Client router: data-webjs-permanent persistence (#250)', () => {
       await settle();
 
       const after = document.getElementById('player');
-      assert.ok(after, 'the permanent element survives the full-body swap');
+      assert.ok(after, 'the permanent element survives the REPLACE remount');
       assert.equal(after, liveNode, 'it is the SAME node instance (regrafted, not recreated)');
       assert.equal(after.__webjsLiveProbe, probe, 'the live JS state on the node is intact');
       assert.equal(after.textContent, 'PLAYING',
         'the live content is kept, NOT replaced by the incoming placeholder');
-      // The rest of the page did swap to the incoming body.
+      // The rest of the range did remount to the incoming content.
       assert.ok(document.getElementById('fb-new'), 'the non-permanent content swapped in');
+      assert.ok(document.getElementById('perm-sibling'),
+        'content OUTSIDE the boundary is untouched by the remount');
     } finally { teardown(); }
   });
 
@@ -284,21 +298,21 @@ suite('Client router: data-webjs-permanent persistence (#250)', () => {
     setup();
     try {
       container.innerHTML =
-        '<!--wj:children:/r-->' +
+        '<!--wj:children:/r:/r-->' +
           '<div id="m-widget" data-webjs-permanent>LIVE</div>' +
           '<span id="r-content">OLD</span>' +
           '<a id="r-link" href="/r-target"></a>' +
-        '<!--/wj:children-->';
+        '<!--/wj:children:/r-->';
       const liveNode = document.getElementById('m-widget');
       const probe = {};
       liveNode.__webjsLiveProbe = probe;
 
       window.fetch = () => htmlResponse(
         '<!doctype html><html><head></head><body>' +
-        '<!--wj:children:/r-->' +
+        '<!--wj:children:/r:/r-->' +
           '<div id="m-widget" data-webjs-permanent>PLACEHOLDER</div>' +
           '<span id="r-content">NEW</span>' +
-        '<!--/wj:children-->' +
+        '<!--/wj:children:/r-->' +
         '</body></html>'
       );
 
@@ -319,15 +333,17 @@ suite('Client router: data-webjs-permanent persistence (#250)', () => {
     setup();
     try {
       container.innerHTML =
+        '<!--wj:children:/:/-->' +
         '<div id="gone" data-webjs-permanent>HERE</div>' +
-        '<a id="cf-link" href="/cf-target"></a>';
+        '<a id="cf-link" href="/cf-target"></a>' +
+        '<!--/wj:children:/-->';
       const liveNode = document.getElementById('gone');
       liveNode.__webjsLiveProbe = {};
 
       // The incoming doc has NO #gone at all.
       window.fetch = () => htmlResponse(
         '<!doctype html><html><head></head><body>' +
-        '<h1 id="cf-new">No permanent here</h1>' +
+        '<!--wj:children:/:/--><h1 id="cf-new">No permanent here</h1><!--/wj:children:/-->' +
         '</body></html>'
       );
 

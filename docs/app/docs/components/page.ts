@@ -464,6 +464,31 @@ UserProfile.register('user-profile');</pre>
     <h2>Slots: Content Projection</h2>
     <p>Slots are how a parent passes content into a component. If you are coming from React, think of the default slot as <code>children</code>. <strong>WebJs supports the full shadow-DOM <code>&lt;slot&gt;</code> surface in light DOM as well as shadow DOM</strong>, so every example below works identically whether the component sets <code>static shadow = true</code> or leaves it at the default (light DOM). The light-DOM runtime mirrors <code>HTMLSlotElement.assignedNodes()</code>, <code>assignedElements()</code>, <code>assignedSlot</code>, and the <code>slotchange</code> event, plus named slots, fallback content, and first-wins resolution. To our knowledge no other web-components framework offers this complete parity in light DOM. Lit's slot APIs only work inside shadow roots, and Stencil's light-DOM slot polyfill has known gaps around fallback content and mixed shadow / non-shadow trees.</p>
 
+    <h3>Children as Values</h3>
+    <p>In light DOM, slotted children follow the React children model: the component captures its authored children <strong>once at mount</strong> into a per-instance record, and its own renderer places them into the <code>&lt;slot&gt;</code> containers. The record is a public API:</p>
+
+    <pre>class MyCard extends WebComponent {
+  render() {
+    // Conditional-on-slot rendering. hasSlot() and this.slots work at SSR
+    // too (the server seeds the record from the authored children before
+    // the component renders), so the first paint is already correct.
+    return html\`
+      \${this.hasSlot('header') ? html\`&lt;header&gt;&lt;slot name="header"&gt;&lt;/slot&gt;&lt;/header&gt;\` : ''}
+      &lt;main&gt;&lt;slot&gt;&lt;/slot&gt;&lt;/main&gt;
+    \`;
+  }
+}
+
+// Reading the record:
+card.slots.default   // Node[] of the default-slot content
+card.hasSlot('header')
+
+// The ONE dynamic path (fires slotchange when the assignment changes):
+card.setSlotContent('header', someNodeOrArrayOrString);
+card.setSlotContent('header', null); // reset to the slot's fallback content</pre>
+
+    <p><strong>What no longer works (by design)</strong>: calling <code>appendChild</code> on a mounted host, or flipping a child's <code>slot=""</code> attribute after mount, does not live re-project. Content set after mount goes through <code>setSlotContent()</code>. The reads (<code>assignedNodes</code>, <code>assignedElements</code>, <code>assignedSlot</code>, <code>slotchange</code>) are unaffected.</p>
+
     <h3>Default Slot</h3>
     <p>The <code>&lt;slot&gt;&lt;/slot&gt;</code> element in a component's <code>render()</code> is where the parent's child content appears:</p>
 

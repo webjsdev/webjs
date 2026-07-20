@@ -24,7 +24,7 @@ import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseHTML } from 'linkedom';
 
-let _collect, _longest, _keyOf, _diffEl, _reconcile,
+let _collect, _plan, _keyOf, _diffEl, _reconcile,
   _addNewHead, _merge, _isNonHtmlPath, navigate,
   _reactivateScripts, _findAnchorInPath, _activeFrameId, _resolveTargetFrameId, _onPopState,
   _applySwap, _prefetchCache,
@@ -73,8 +73,8 @@ before(async () => {
   }
 
   ({
-    _collectChildrenSlots: _collect,
-    _longestSharedPath: _longest,
+    _collectBoundaries: _collect,
+    _planBoundarySwap: _plan,
     _keyOf,
     _diffElementInPlace: _diffEl,
     _reconcileChildren: _reconcile,
@@ -124,7 +124,7 @@ before(async () => {
 });
 
 /* ====================================================================
- * collectChildrenSlots: marker discovery
+ * collectBoundaries: strict keyed boundary discovery (#1015)
  * ==================================================================== */
 
 /** Helper: parse an HTML body string into a real body element via DOMParser. */
@@ -136,149 +136,209 @@ function bodyFrom(html) {
   return doc.body;
 }
 
-test('collectChildrenSlots: single-layout pair builds one entry', () => {
+test('collectBoundaries: single keyed pair builds one entry with its route-key', () => {
   const body = bodyFrom(
     '<header>hdr</header>' +
-    '<!--wj:children:/-->' +
+    '<!--wj:children:/:/-->' +
     '<p>page</p>' +
-    '<!--/wj:children-->'
+    '<!--/wj:children:/-->'
   );
   const slots = _collect(body);
+  assert.ok(slots, 'valid tree scans');
   assert.equal(slots.size, 1);
   assert.ok(slots.has('/'));
-  const { start, end } = slots.get('/');
+  const { routeKey, start, end } = slots.get('/');
+  assert.equal(routeKey, '/');
   assert.equal(start.nodeType, 8);
   assert.equal(end.nodeType, 8);
-  assert.equal(start.data, 'wj:children:/');
 });
 
-test('collectChildrenSlots: nested layouts build two entries (outer + inner)', () => {
+test('collectBoundaries: nested boundaries build two entries (outer + inner)', () => {
   const body = bodyFrom(
     '<header>root</header>' +
-    '<!--wj:children:/-->' +
+    '<!--wj:children:/:/-->' +
       '<aside>docs sidenav</aside>' +
-      '<!--wj:children:/docs-->' +
+      '<!--wj:children:/docs/[slug]:/docs/a-->' +
         '<h1>page A</h1>' +
-      '<!--/wj:children-->' +
-    '<!--/wj:children-->'
+      '<!--/wj:children:/docs/[slug]-->' +
+    '<!--/wj:children:/-->'
   );
   const slots = _collect(body);
+  assert.ok(slots);
   assert.equal(slots.size, 2);
-  assert.ok(slots.has('/'));
-  assert.ok(slots.has('/docs'));
+  assert.equal(slots.get('/').routeKey, '/');
+  assert.equal(slots.get('/docs/[slug]').routeKey, '/docs/a',
+    'a dynamic segment carries its RESOLVED route-key');
 });
 
-test('collectChildrenSlots: no markers → empty map (no crash)', () => {
+test('collectBoundaries: no boundaries → empty map (valid, not poisoned)', () => {
   const body = bodyFrom('<p>just a page</p>');
   const slots = _collect(body);
+  assert.ok(slots, 'a boundary-less tree is valid');
   assert.equal(slots.size, 0);
 });
 
-test('collectChildrenSlots: stale closing marker without open is ignored', () => {
-  // Defensive: a malformed `<!--/wj:children-->` without a matching opener
-  // shouldn't crash the walker.
-  const body = bodyFrom('<p>x</p><!--/wj:children--><p>y</p>');
-  const slots = _collect(body);
-  assert.equal(slots.size, 0);
-});
-
-test('collectChildrenSlots: route-group paths preserve their (group) segments', () => {
+test('collectBoundaries: route-group paths preserve their (group) segments', () => {
   // Two different `(group)` layouts at the same URL produce DIFFERENT
-  // marker paths, so the client never falsely matches them as shared.
+  // boundary segments, so the client never falsely matches them as shared.
   const body = bodyFrom(
-    '<!--wj:children:/(marketing)/about-->' +
+    '<!--wj:children:/(marketing)/about:/about-->' +
     '<p>about</p>' +
-    '<!--/wj:children-->'
+    '<!--/wj:children:/(marketing)/about-->'
   );
   const slots = _collect(body);
+  assert.ok(slots);
   assert.ok(slots.has('/(marketing)/about'));
   assert.ok(!slots.has('/about'));
+  assert.equal(slots.get('/(marketing)/about').routeKey, '/about',
+    'the route-key drops the (group), matching the URL');
 });
 
-test('collectChildrenSlots: an orphaned open marker (dropped close) is NOT paired by default', () => {
-  // The #994 precondition: the response is missing the trailing
-  // `<!--/wj:children-->`, so the open marker survives with no close. Strict
-  // pairing (the default) registers no slot, which is what forced the
-  // destructive full-body swap that wiped the navbar.
+/* Integrity gate (#1015): every malformed shape poisons the scan (null),
+ * never a guessed pairing. The caller degrades a poisoned side to a full
+ * page load, so silent DOM corruption is structurally impossible. */
+
+test('collectBoundaries: a stale close without an open POISONS the scan', () => {
+  const body = bodyFrom('<p>x</p><!--/wj:children:/--><p>y</p>');
+  assert.equal(_collect(body), null);
+});
+
+test('collectBoundaries: an orphaned open (dropped close) POISONS the scan', () => {
+  // The #994 precondition, under the #1015 model: no orphan recovery, no
+  // trailing-count guessing. The truncated tree is untrustworthy, period.
   const body = bodyFrom(
     '<nav>navbar</nav>' +
-    '<!--wj:children:/-->' +
+    '<!--wj:children:/:/-->' +
     '<p>page</p>'
     // close comment dropped
   );
-  assert.equal(_collect(body).size, 0, 'no slot without recovery (the bug precondition)');
+  assert.equal(_collect(body), null);
 });
 
-test('collectChildrenSlots: recoverOrphans registers a dropped-close open with a null end (#994)', () => {
+test('collectBoundaries: a close whose segment mismatches the innermost open POISONS the scan', () => {
+  // The exact shape the LIFO pairing used to get WRONG silently: outer close
+  // dropped, so the surviving outer close would have paired with the inner
+  // open. Keyed closes detect it instead.
   const body = bodyFrom(
-    '<nav>navbar</nav>' +
-    '<!--wj:children:/-->' +
-    '<p>page</p>'
-    // close comment dropped
-  );
-  const slots = _collect(body, { recoverOrphans: true });
-  assert.equal(slots.size, 1);
-  assert.ok(slots.has('/'));
-  const { start, end } = slots.get('/');
-  assert.equal(start.data, 'wj:children:/');
-  assert.equal(end, null, 'a recovered orphan carries end=null (children run to the parent end)');
-});
-
-test('collectChildrenSlots: recoverOrphans leaves a well-formed pair untouched (real close wins)', () => {
-  const body = bodyFrom(
-    '<!--wj:children:/-->' +
-    '<p>page</p>' +
-    '<!--/wj:children-->'
-  );
-  const slots = _collect(body, { recoverOrphans: true });
-  assert.equal(slots.size, 1);
-  const { end } = slots.get('/');
-  assert.equal(end.nodeType, 8, 'the real close comment is the end, not null');
-});
-
-test('collectChildrenSlots: recoverOrphans keeps a properly-closed inner while recovering a dropped outer close', () => {
-  // Outer close dropped, inner pair intact: the navbar-owning outer layout is
-  // the one that loses its close, exactly the #994 shape.
-  const body = bodyFrom(
-    '<nav>navbar</nav>' +
-    '<!--wj:children:/-->' +
-      '<aside>docs sidenav</aside>' +
-      '<!--wj:children:/docs-->' +
+    '<!--wj:children:/:/-->' +
+      '<!--wj:children:/docs:/docs-->' +
         '<h1>page</h1>' +
-      '<!--/wj:children-->'
-    // outer close dropped
+    '<!--/wj:children:/-->'
+    // /docs close dropped; '/' close now faces the '/docs' open
   );
-  const slots = _collect(body, { recoverOrphans: true });
-  assert.equal(slots.size, 2);
-  assert.equal(slots.get('/').end, null, 'the outer orphan is recovered with a null end');
-  assert.equal(slots.get('/docs').end.nodeType, 8, 'the intact inner pair keeps its real close');
+  assert.equal(_collect(body), null);
+});
+
+test('collectBoundaries: a duplicate segment POISONS the scan', () => {
+  const body = bodyFrom(
+    '<!--wj:children:/:/--><p>a</p><!--/wj:children:/-->' +
+    '<!--wj:children:/:/--><p>b</p><!--/wj:children:/-->'
+  );
+  assert.equal(_collect(body), null);
+});
+
+test('collectBoundaries: a pair split across PARENTS poisons the scan (parser reparenting)', () => {
+  // HTML parser reparenting (a <p> auto-closed by block content, table
+  // foster-parenting) can strand a close in a different parent from its
+  // open, identically on both sides. The range ops walk nextSibling from
+  // start and insert before end, so a cross-parent pair would empty the
+  // region and then throw mid-swap. It must poison up front instead.
+  const body = bodyFrom('<div><!--wj:children:/:/--><p>x</p></div><!--/wj:children:/-->');
+  assert.equal(_collect(body), null);
+});
+
+test('collectBoundaries: a boundary in TABLE context poisons (foster-parenting strands the content)', () => {
+  // Comment tokens in table insertion mode stay in the current node while
+  // CONTENT is fostered out before the table, so the pair shares a parent
+  // (passing the same-parent check) while its children live OUTSIDE the
+  // range: swapping it would silently leave stale visible content.
+  const body = bodyFrom('<table><tbody><!--wj:children:/:/--><!--/wj:children:/--></tbody></table>');
+  assert.equal(_collect(body), null);
+});
+
+test('collectBoundaries: the legacy anonymous format POISONS the scan (no route-key)', () => {
+  // A pre-#1015 response (or a truncated open) has no route-key. There is no
+  // legacy fallback by design: server and client ship together, so a mixed
+  // format means something is genuinely wrong.
+  const body = bodyFrom('<!--wj:children:/docs--><p>x</p><!--/wj:children-->');
+  assert.equal(_collect(body), null);
 });
 
 /* ====================================================================
- * longestSharedPath
+ * planBoundarySwap: the two-tier route-keyed decision (#1015)
  * ==================================================================== */
 
-test('longestSharedPath: picks the longest path present in both maps', () => {
-  const here = new Map([['/', null], ['/docs', null], ['/docs/components', null]]);
-  const there = new Map([['/', null], ['/docs', null], ['/docs/components', null]]);
-  assert.equal(_longest(here, there), '/docs/components');
+/** Helper: boundary-map entry with only what the planner reads. */
+function bEntry(routeKey) { return { routeKey, start: null, end: null }; }
+
+test('planBoundarySwap: a changed route-key REPLACES at the PARENT boundary', () => {
+  // /blog/a -> /blog/b under a /blog layout: the page boundary's key changed;
+  // the anchor is its PARENT (/blog), whose range contains the page. The
+  // /blog layout's own chrome (inside the '/' range but outside '/blog') and
+  // the root chrome are preserved: exactly Next's remount scope.
+  const here = new Map([
+    ['/', bEntry('/')], ['/blog', bEntry('/blog')], ['/blog/[slug]', bEntry('/blog/a')],
+  ]);
+  const there = new Map([
+    ['/', bEntry('/')], ['/blog', bEntry('/blog')], ['/blog/[slug]', bEntry('/blog/b')],
+  ]);
+  const plan = _plan(here, there);
+  assert.equal(plan.mode, 'replace');
+  assert.equal(plan.segment, '/blog', 'the parent of the changed boundary is the anchor');
 });
 
-test('longestSharedPath: cross-layout nav drops to shallowest common ancestor', () => {
-  // /docs/components/a → /about: only root layout is shared.
-  const here = new Map([['/', null], ['/docs', null], ['/docs/components', null]]);
-  const there = new Map([['/', null]]);
-  assert.equal(_longest(here, there), '/');
+test('planBoundarySwap: a changed LAYOUT param remounts at the layout PARENT (the layout chrome remounts too)', () => {
+  // /a/settings -> /b/settings: the [org] layout's key changed. The layout's
+  // OWN markup (an org-name header) lives inside the PARENT boundary, outside
+  // its own children slot, so the anchor must be the parent ('/') or the
+  // org-b page would render under org-a chrome. Next re-renders the layout
+  // with new params; anchoring at the parent reproduces that.
+  const here = new Map([
+    ['/', bEntry('/')],
+    ['/[org]', bEntry('/a')],
+    ['/[org]/settings', bEntry('/a/settings')],
+  ]);
+  const there = new Map([
+    ['/', bEntry('/')],
+    ['/[org]', bEntry('/b')],
+    ['/[org]/settings', bEntry('/b/settings')],
+  ]);
+  const plan = _plan(here, there);
+  assert.equal(plan.mode, 'replace');
+  assert.equal(plan.segment, '/', 'the parent of the shallowest changed boundary is the anchor');
 });
 
-test('longestSharedPath: no overlap → null', () => {
-  const here = new Map([['/blog', null]]);
-  const there = new Map([['/admin', null]]);
-  assert.equal(_longest(here, there), null);
+test('planBoundarySwap: a changed boundary with NO shared parent degrades (null)', () => {
+  // Only the changed boundary itself is shared: nothing contains the changed
+  // markup, so there is no safe anchor. Degrade to a full load.
+  const here = new Map([['/[org]', bEntry('/a')]]);
+  const there = new Map([['/[org]', bEntry('/b')]]);
+  assert.equal(_plan(here, there), null);
 });
 
-test('longestSharedPath: empty maps → null', () => {
-  assert.equal(_longest(new Map(), new Map()), null);
+test('planBoundarySwap: MORPH when no key changed and the deepest shared boundary is the leaf on both sides', () => {
+  // /blog/a?x=1 -> /blog/a?x=2: searchParams-only. State must be preserved.
+  const here = new Map([['/', bEntry('/')], ['/blog/[slug]', bEntry('/blog/a')]]);
+  const there = new Map([['/', bEntry('/')], ['/blog/[slug]', bEntry('/blog/a')]]);
+  const plan = _plan(here, there);
+  assert.equal(plan.mode, 'morph');
+  assert.equal(plan.segment, '/blog/[slug]');
+});
+
+test('planBoundarySwap: REPLACE the deepest shared boundary when the subtree below it diverges', () => {
+  // /about -> /contact under a shared static root: no key changed, but the
+  // page boundaries differ in SEGMENT, so D='/' is not the leaf on either
+  // side. Its contents are a different page: wholesale replace.
+  const here = new Map([['/', bEntry('/')], ['/about', bEntry('/about')]]);
+  const there = new Map([['/', bEntry('/')], ['/contact', bEntry('/contact')]]);
+  const plan = _plan(here, there);
+  assert.equal(plan.mode, 'replace');
+  assert.equal(plan.segment, '/');
+});
+
+test('planBoundarySwap: no shared segment → null (caller degrades to a full load)', () => {
+  assert.equal(_plan(new Map([['/blog', bEntry('/blog')]]), new Map([['/admin', bEntry('/admin')]])), null);
+  assert.equal(_plan(new Map(), new Map()), null);
 });
 
 /* ====================================================================
@@ -899,14 +959,14 @@ test('navigate: text/html response proceeds with router swap (no fallback)', asy
     contentType: 'text/html; charset=utf-8',
     body:
       '<!doctype html><html><head><title>ok</title></head><body>' +
-      '<!--wj:children:/-->content<!--/wj:children-->' +
+      '<!--wj:children:/:/-->content<!--/wj:children:/-->' +
       '</body></html>',
   });
   const seen = [];
   const onNav = (e) => seen.push(e.detail);
   document.addEventListener('webjs:navigate', onNav);
   try {
-    document.body.innerHTML = '<!--wj:children:/-->old<!--/wj:children-->';
+    document.body.innerHTML = '<!--wj:children:/:/-->old<!--/wj:children:/-->';
     await navigate('http://localhost/ok');
     assert.equal(redirect.href, null, 'text/html response should not trigger location.href fallback');
     // The navigate event carries a `from: 'navigate'` tag, symmetric with
@@ -947,7 +1007,7 @@ test('navigate: importmap mismatch triggers full-page reload (no partial swap)',
   // cross-deploy is two DIFFERENT, non-empty published build ids: the
   // old process published "oldbuild", the new one publishes "newbuild".
   document.head.innerHTML = '<script type="importmap" data-webjs-build="oldbuild">{"imports":{"dayjs":"https://ga.jspm.io/npm:dayjs@1.11.13/index.js"}}</script>';
-  document.body.innerHTML = '<p>current</p>';
+  document.body.innerHTML = '<!--wj:children:/:/--><p>current</p><!--/wj:children:/-->';
   const newBody =
     '<!doctype html><html><head>' +
     '<script type="importmap" data-webjs-build="newbuild">{"imports":{"dayjs":"https://ga.jspm.io/npm:dayjs@1.11.20/dayjs.min.js"}}</script>' +
@@ -983,9 +1043,9 @@ test('navigate: empty build id during warmup stays soft and preserves page state
   document.head.innerHTML = '<script type="importmap" data-webjs-build="">{"imports":{"dayjs":"https://ga.jspm.io/npm:dayjs@1.11.13/index.js"}}</script>';
   document.body.innerHTML =
     '<input id="search">' +
-    '<!--wj:children:/-->' +
+    '<!--wj:children:/:/-->' +
     '<p>page content</p>' +
-    '<!--/wj:children-->';
+    '<!--/wj:children:/-->';
   // Simulate the user typing into the preserved outer region: sets the IDL
   // value, not the attribute, which is what a hard reload would discard.
   document.getElementById('search').value = 'outer kept';
@@ -994,9 +1054,9 @@ test('navigate: empty build id during warmup stays soft and preserves page state
     '<script type="importmap" data-webjs-build="warmbuild">{"imports":{"dayjs":"https://ga.jspm.io/npm:dayjs@1.11.20/dayjs.min.js"}}</script>' +
     '</head><body>' +
     '<input id="search">' +
-    '<!--wj:children:/-->' +
+    '<!--wj:children:/:/-->' +
     '<p>after warm</p>' +
-    '<!--/wj:children-->' +
+    '<!--/wj:children:/-->' +
     '</body></html>';
   // Clear the infinite-reload guard flag a prior reload test may have left in
   // sessionStorage; otherwise a regression could be masked (the guard would bail
@@ -1016,10 +1076,10 @@ test('navigate: empty build id during warmup stays soft and preserves page state
 test('navigate: identical importmap proceeds with partial swap (no reload)', async () => {
   const map = '{"imports":{"dayjs":"https://ga.jspm.io/npm:dayjs@1.11.13/index.js"}}';
   document.head.innerHTML = `<script type="importmap">${map}</script>`;
-  document.body.innerHTML = '<p>current</p>';
+  document.body.innerHTML = '<!--wj:children:/:/--><p>current</p><!--/wj:children:/-->';
   const newBody =
     `<!doctype html><html><head><script type="importmap">${map}</script></head>` +
-    `<body><p>new</p></body></html>`;
+    `<body><!--wj:children:/:/--><p>new</p><!--/wj:children:/--></body></html>`;
   const { redirect, restore } = installNavigationMocks({ contentType: 'text/html', body: newBody });
   try {
     await navigate('http://localhost/about');
@@ -1035,7 +1095,7 @@ test('navigate: response-header lookup is case-insensitive (mock contract)', asy
   // casing reaches the production code that calls
   // `resp.headers.get('x-webjs-build')`.
   document.head.innerHTML = '<script type="importmap" data-webjs-build="A">{"imports":{"x":"/x"}}</script>';
-  document.body.innerHTML = '<p>current</p>';
+  document.body.innerHTML = '<!--wj:children:/:/--><p>current</p><!--/wj:children:/-->';
   sessionStorage.removeItem('webjs:importmap-reload');
   const { redirect, restore } = installNavigationMocks({
     contentType: 'text/html',
@@ -1059,7 +1119,7 @@ test('navigate: data-webjs-track="reload" signature change triggers hard reload'
   // head marked data-webjs-track="reload" gets included in a signature.
   // Mismatch between current and incoming signature triggers reload.
   document.head.innerHTML = '<meta data-webjs-track="reload" name="build-id" content="rev-1">';
-  document.body.innerHTML = '<p>current</p>';
+  document.body.innerHTML = '<!--wj:children:/:/--><p>current</p><!--/wj:children:/-->';
   sessionStorage.removeItem('webjs:importmap-reload');
   const newBody =
     '<!doctype html><html><head>' +
@@ -1089,13 +1149,13 @@ test('navigate: data-webjs-track="reload" added between deploys triggers reload'
   // currentSig is empty, incomingSig is non-empty. Different.
   // Must reload.
   document.head.innerHTML = '<meta charset="utf-8">';
-  document.body.innerHTML = '<p>current</p>';
+  document.body.innerHTML = '<!--wj:children:/:/--><p>current</p><!--/wj:children:/-->';
   sessionStorage.removeItem('webjs:importmap-reload');
   const newBody =
     '<!doctype html><html><head>' +
     '<meta charset="utf-8">' +
     '<meta data-webjs-track="reload" name="build-id" content="rev-2">' +
-    '</head><body><p>after</p></body></html>';
+    '</head><body><!--wj:children:/:/--><p>after</p><!--/wj:children:/--></body></html>';
   const { redirect, restore } = installNavigationMocks({
     contentType: 'text/html',
     body: newBody,
@@ -1117,12 +1177,12 @@ test('navigate: data-webjs-track="reload" removed between deploys triggers reloa
   document.head.innerHTML =
     '<meta charset="utf-8">' +
     '<meta data-webjs-track="reload" name="build-id" content="rev-1">';
-  document.body.innerHTML = '<p>current</p>';
+  document.body.innerHTML = '<!--wj:children:/:/--><p>current</p><!--/wj:children:/-->';
   sessionStorage.removeItem('webjs:importmap-reload');
   const newBody =
     '<!doctype html><html><head>' +
     '<meta charset="utf-8">' +
-    '</head><body><p>after</p></body></html>';
+    '</head><body><!--wj:children:/:/--><p>after</p><!--/wj:children:/--></body></html>';
   const { redirect, restore } = installNavigationMocks({
     contentType: 'text/html',
     body: newBody,
@@ -1149,10 +1209,10 @@ test('navigate: X-Webjs-Have partial response (no head) does NOT reload due to t
   document.head.innerHTML =
     '<meta charset="utf-8">' +
     '<meta data-webjs-track="reload" name="build-id" content="rev-1">';
-  document.body.innerHTML = '<p>current</p>';
+  document.body.innerHTML = '<!--wj:children:/:/--><p>current</p><!--/wj:children:/-->';
   sessionStorage.removeItem('webjs:importmap-reload');
   // Partial fragment: no <head>, no <html>, just inner content.
-  const partialBody = '<p>partial</p>';
+  const partialBody = '<!doctype html><html><head></head><body><!--wj:children:/:/--><p>partial</p><!--/wj:children:/--></body></html>';
   const { redirect, restore } = installNavigationMocks({
     contentType: 'text/html',
     body: partialBody,
@@ -1176,14 +1236,14 @@ test('navigate: data-webjs-track="reload" strips nonce from signature (per-reque
   // outerHTMLForDiff strips the nonce attr before signature
   // comparison so only content changes count.
   document.head.innerHTML = '<script nonce="abc" data-webjs-track="reload" src="/build-42.js"></script>';
-  document.body.innerHTML = '<p>current</p>';
+  document.body.innerHTML = '<!--wj:children:/:/--><p>current</p><!--/wj:children:/-->';
   sessionStorage.removeItem('webjs:importmap-reload');
   // Incoming has the SAME script but a DIFFERENT per-request nonce
   // (the build hash and src are unchanged). Must NOT reload.
   const newBody =
     '<!doctype html><html><head>' +
     '<script nonce="xyz" data-webjs-track="reload" src="/build-42.js"></script>' +
-    '</head><body><p>after</p></body></html>';
+    '</head><body><!--wj:children:/:/--><p>after</p><!--/wj:children:/--></body></html>';
   const { redirect, restore } = installNavigationMocks({
     contentType: 'text/html',
     body: newBody,
@@ -1202,12 +1262,12 @@ test('navigate: data-webjs-track="reload" strips nonce from signature (per-reque
 
 test('navigate: matching data-webjs-track="reload" elements proceed with partial swap', async () => {
   document.head.innerHTML = '<meta data-webjs-track="reload" name="build-id" content="rev-1">';
-  document.body.innerHTML = '<p>current</p>';
+  document.body.innerHTML = '<!--wj:children:/:/--><p>current</p><!--/wj:children:/-->';
   sessionStorage.removeItem('webjs:importmap-reload');
   const newBody =
     '<!doctype html><html><head>' +
     '<meta data-webjs-track="reload" name="build-id" content="rev-1">' +
-    '</head><body><p>after</p></body></html>';
+    '</head><body><!--wj:children:/:/--><p>after</p><!--/wj:children:/--></body></html>';
   const { redirect, restore } = installNavigationMocks({
     contentType: 'text/html',
     body: newBody,
@@ -1231,7 +1291,7 @@ test('navigate: importmap drift detected via X-Webjs-Build header on partial res
   // a stale importmap. With the header, the server-side hash is
   // sufficient to detect drift even when the body has no importmap.
   document.head.innerHTML = '<script type="importmap" data-webjs-build="OLDHASH">{"imports":{"dayjs":"/__webjs/vendor/dayjs@1.11.13.js"}}</script>';
-  document.body.innerHTML = '<p>current</p>';
+  document.body.innerHTML = '<!--wj:children:/:/--><p>current</p><!--/wj:children:/-->';
   // Simulate a partial response: just the inner body fragment, no
   // <head>, no importmap tag.
   const partialBody = '<p>after deploy</p>';
@@ -1258,11 +1318,11 @@ test('navigate: importmap drift detected via X-Webjs-Build header on partial res
 
 test('navigate: matching X-Webjs-Build proceeds with partial swap (no reload)', async () => {
   document.head.innerHTML = '<script type="importmap" data-webjs-build="SAMEHASH">{"imports":{"dayjs":"/__webjs/vendor/dayjs@1.11.13.js"}}</script>';
-  document.body.innerHTML = '<p>current</p>';
+  document.body.innerHTML = '<!--wj:children:/:/--><p>current</p><!--/wj:children:/-->';
   sessionStorage.removeItem('webjs:importmap-reload');
   const { redirect, restore } = installNavigationMocks({
     contentType: 'text/html',
-    body: '<p>after nav</p>',
+    body: '<!doctype html><html><head></head><body><!--wj:children:/:/--><p>after nav</p><!--/wj:children:/--></body></html>',
     responseHeaders: { 'x-webjs-build': 'SAMEHASH' },
   });
   try {
@@ -1282,12 +1342,12 @@ test('navigate: two consecutive importmap mismatches → second falls through (i
   // loop if the importmap genuinely changes on every nav (live pin
   // editing in dev, etc).
   document.head.innerHTML = '<script type="importmap" data-webjs-build="HASH0">{"imports":{"a":"/a"}}</script>';
-  document.body.innerHTML = '<p>current</p>';
+  document.body.innerHTML = '<!--wj:children:/:/--><p>current</p><!--/wj:children:/-->';
   sessionStorage.removeItem('webjs:importmap-reload');
   let buildVersion = 1;
   const { redirect, restore } = installNavigationMocks({
     contentType: 'text/html',
-    body: '<p>partial</p>',
+    body: '<!doctype html><html><head></head><body><!--wj:children:/:/--><p>partial</p><!--/wj:children:/--></body></html>',
     // Each call returns a different x-webjs-build, simulating churn.
     responseHeaders: () => ({ 'x-webjs-build': `HASH${buildVersion++}` }),
   });
@@ -1326,7 +1386,7 @@ test('popstate cache restore clears the importmap-reload flag', async () => {
   const prevPageUrl = _currentPageUrl();
   sessionStorage.setItem('webjs:importmap-reload', '1');
   _snapshotCache.set('/cached-here', {
-    html: '<!doctype html><html><head></head><body><!--wj:children:/-->cached<!--/wj:children--></body></html>',
+    html: '<!doctype html><html><head></head><body><!--wj:children:/:/-->cached<!--/wj:children:/--></body></html>',
     scrollX: 0,
     scrollY: 0,
   });
@@ -1344,7 +1404,7 @@ test('popstate cache restore clears the importmap-reload flag', async () => {
   const origScrollTo = globalThis.window?.scrollTo;
   if (globalThis.window) globalThis.window.scrollTo = () => {};
   document.head.innerHTML = '';
-  document.body.innerHTML = '<!--wj:children:/-->before-pop<!--/wj:children-->';
+  document.body.innerHTML = '<!--wj:children:/:/-->before-pop<!--/wj:children:/-->';
   try {
     // Synchronous assertion: _onPopState calls performNavigation
     // which runs synchronously until its first await. For a cache-
@@ -1381,7 +1441,7 @@ test('popstate cache restore scrolls instantly, not animated (#601)', async () =
   const origFetch = globalThis.fetch;
   const prevPageUrl = _currentPageUrl();
   _snapshotCache.set('/restore-here', {
-    html: '<!doctype html><html><head></head><body><!--wj:children:/-->cached<!--/wj:children--></body></html>',
+    html: '<!doctype html><html><head></head><body><!--wj:children:/:/-->cached<!--/wj:children:/--></body></html>',
     scrollX: 0,
     scrollY: 640,
   });
@@ -1400,7 +1460,7 @@ test('popstate cache restore scrolls instantly, not animated (#601)', async () =
   globalThis.scrollTo = /** @type any */ (spy);
   if (globalThis.window) globalThis.window.scrollTo = /** @type any */ (spy);
   document.head.innerHTML = '';
-  document.body.innerHTML = '<!--wj:children:/-->before-pop<!--/wj:children-->';
+  document.body.innerHTML = '<!--wj:children:/:/-->before-pop<!--/wj:children:/-->';
   try {
     _onPopState({});
     assert.ok(arg && typeof arg === 'object',
@@ -1424,12 +1484,12 @@ test('popstate cache restore scrolls instantly, not animated (#601)', async () =
 });
 
 test('navigate: forward-nav scroll-to-top is instant, not animated (#601)', async () => {
-  document.body.innerHTML = '<!--wj:children:/-->before<!--/wj:children-->';
+  document.body.innerHTML = '<!--wj:children:/:/-->before<!--/wj:children:/-->';
   const { restore } = installNavigationMocks({
     contentType: 'text/html',
     body:
       '<!doctype html><html><head></head><body>' +
-      '<!--wj:children:/-->after<!--/wj:children--></body></html>',
+      '<!--wj:children:/:/-->after<!--/wj:children:/--></body></html>',
   });
   let arg;
   const spy = (a) => { arg = a; };
@@ -1459,12 +1519,12 @@ test('navigate: a found hash anchor stays SMOOTH, not forced instant (#601)', as
   // forced-instant scrollTo. This guards against a later "tidy-up" that makes
   // section links jump.
   document.body.innerHTML =
-    '<!--wj:children:/--><section id="sec">S</section><!--/wj:children-->';
+    '<!--wj:children:/:/--><section id="sec">S</section><!--/wj:children:/-->';
   const { restore } = installNavigationMocks({
     contentType: 'text/html',
     body:
       '<!doctype html><html><head></head><body>' +
-      '<!--wj:children:/--><section id="sec">S</section><!--/wj:children--></body></html>',
+      '<!--wj:children:/:/--><section id="sec">S</section><!--/wj:children:/--></body></html>',
   });
   let intoViewCalls = 0;
   const scrollToArgs = [];
@@ -1499,11 +1559,11 @@ test('warns once in dev when <html> has scroll-behavior: smooth, suppressed in p
   console.warn = (...a) => { warnings.push(a.join(' ')); };
   if (globalThis.window) globalThis.window.scrollTo = () => {};
   globalThis.scrollTo = () => {};
-  document.body.innerHTML = '<!--wj:children:/-->before<!--/wj:children-->';
+  document.body.innerHTML = '<!--wj:children:/:/-->before<!--/wj:children:/-->';
   const smoothWarns = () => warnings.filter((w) => /scroll-behavior: smooth/.test(w)).length;
   const navMock = () => installNavigationMocks({
     contentType: 'text/html',
-    body: '<!doctype html><html><head></head><body><!--wj:children:/-->after<!--/wj:children--></body></html>',
+    body: '<!doctype html><html><head></head><body><!--wj:children:/:/-->after<!--/wj:children:/--></body></html>',
   });
   try {
     // dev + smooth => warns exactly once across two navs (fire-once guard)
@@ -1544,12 +1604,12 @@ test('navigate: clean swap clears reload flag so a later mismatch reloads again'
   // suppressed the legitimate later reload.
   sessionStorage.removeItem('webjs:importmap-reload');
   document.head.innerHTML = '<script type="importmap" data-webjs-build="HASH1">{"imports":{"a":"/a"}}</script>';
-  document.body.innerHTML = '<p>current</p>';
+  document.body.innerHTML = '<!--wj:children:/:/--><p>current</p><!--/wj:children:/-->';
 
   // Step 1: mismatch → reload, flag set.
   let mocks = installNavigationMocks({
     contentType: 'text/html',
-    body: '<p>partial</p>',
+    body: '<!doctype html><html><head></head><body><!--wj:children:/:/--><p>partial</p><!--/wj:children:/--></body></html>',
     responseHeaders: { 'x-webjs-build': 'HASH2' },
   });
   try {
@@ -1562,7 +1622,7 @@ test('navigate: clean swap clears reload flag so a later mismatch reloads again'
   document.head.innerHTML = '<script type="importmap" data-webjs-build="HASH2">{"imports":{"a":"/a"}}</script>';
   mocks = installNavigationMocks({
     contentType: 'text/html',
-    body: '<p>clean</p>',
+    body: '<!doctype html><html><head></head><body><!--wj:children:/:/--><p>clean</p><!--/wj:children:/--></body></html>',
     responseHeaders: { 'x-webjs-build': 'HASH2' },
   });
   try {
@@ -1621,11 +1681,11 @@ test('navigate: non-ok HTML response is rendered in place (validation errors, 40
   // formSubmissionFailedWithResponse behavior.
   const { redirect, restore } = installNavigationMocks({
     contentType: 'text/html',
-    body: '<!doctype html><html><body><h1 id="err-marker">Validation failed</h1></body></html>',
+    body: '<!doctype html><html><body><!--wj:children:/:/--><h1 id="err-marker">Validation failed</h1><!--/wj:children:/--></body></html>',
     ok: false,
   });
   try {
-    document.body.innerHTML = '<p>old</p>';
+    document.body.innerHTML = '<!--wj:children:/:/--><p>old</p><!--/wj:children:/-->';
     await navigate('http://localhost/missing');
     // No full-page fallback: location.href was NOT reassigned.
     assert.equal(redirect.href, null,
@@ -1638,7 +1698,10 @@ test('navigate: non-ok HTML response is rendered in place (validation errors, 40
 
 test('navigate: non-ok response with NON-HTML body falls back to full nav', async () => {
   // 500 returning `{"error": "..."}` (JSON) is not something we can
-  // render as a page. Hand off to the browser.
+  // render as a page. Hand off to the browser. (Body cleared first: the
+  // hard-load branch is the LAST resort, taken only when no boundary
+  // exists to render the in-place error surface into.)
+  document.body.innerHTML = '';
   const { redirect, restore } = installNavigationMocks({
     contentType: 'application/json',
     body: '{"error":"boom"}',
@@ -1702,7 +1765,7 @@ test('navigate: server-side redirect records the final URL in history (PRG patte
     redirected: true,
     url: 'http://localhost/dashboard',
     headers: { get: () => 'text/html' },
-    text: async () => '<!doctype html><html><body><h1 id="dash">Dashboard</h1></body></html>',
+    text: async () => '<!doctype html><html><body><!--wj:children:/:/--><h1 id="dash">Dashboard</h1><!--/wj:children:/--></body></html>',
   });
   globalThis.location = /** @type any */ ({ origin: 'http://localhost', href: 'http://localhost/' });
   Object.defineProperty(globalThis.location, 'href', {
@@ -1714,6 +1777,7 @@ test('navigate: server-side redirect records the final URL in history (PRG patte
   });
   globalThis.scrollTo = /** @type any */ (() => {});
   try {
+    document.body.innerHTML = '<!--wj:children:/:/--><p>signup</p><!--/wj:children:/-->';
     await navigate('http://localhost/signup');
     assert.equal(pushed.url, 'http://localhost/dashboard',
       'history recorded the final (post-redirect) URL, not the originally-requested one');
@@ -1738,14 +1802,14 @@ test('navigate: marker-based partial swap preserves outer layout DOM', async () 
   document.body.innerHTML =
     '<header id="hdr">root header</header>' +
     '<main>' +
-      '<!--wj:children:/-->' +
+      '<!--wj:children:/:/-->' +
         '<aside id="sidenav">docs sidenav</aside>' +
         '<section>' +
-          '<!--wj:children:/docs-->' +
+          '<!--wj:children:/docs:/docs-->' +
             '<h1>page A</h1>' +
-          '<!--/wj:children-->' +
+          '<!--/wj:children:/docs-->' +
         '</section>' +
-      '<!--/wj:children-->' +
+      '<!--/wj:children:/-->' +
     '</main>' +
     '<footer id="ftr">root footer</footer>';
 
@@ -1758,14 +1822,14 @@ test('navigate: marker-based partial swap preserves outer layout DOM', async () 
       '<!doctype html><html><head></head><body>' +
       '<header>root header</header>' +
       '<main>' +
-        '<!--wj:children:/-->' +
+        '<!--wj:children:/:/-->' +
           '<aside>docs sidenav</aside>' +
           '<section>' +
-            '<!--wj:children:/docs-->' +
+            '<!--wj:children:/docs:/docs-->' +
               '<h1>page B</h1>' +
-            '<!--/wj:children-->' +
+            '<!--/wj:children:/docs-->' +
           '</section>' +
-        '<!--/wj:children-->' +
+        '<!--/wj:children:/-->' +
       '</main>' +
       '<footer>root footer</footer>' +
       '</body></html>',
@@ -1793,20 +1857,20 @@ test('navigate: deepest shared marker wins (inner swap, not outer)', async () =>
   // /docs/components/a → /docs/components/b: both share / AND /docs.
   // The router must pick /docs (deeper), not / (shallower).
   document.body.innerHTML =
-    '<!--wj:children:/-->' +
+    '<!--wj:children:/:/-->' +
       '<aside class="docs-shell"></aside>' +
-      '<!--wj:children:/docs-->old<!--/wj:children-->' +
-    '<!--/wj:children-->';
+      '<!--wj:children:/docs:/docs-->old<!--/wj:children:/docs-->' +
+    '<!--/wj:children:/-->';
   const sidenav = document.querySelector('.docs-shell');
 
   const { restore } = installNavigationMocks({
     contentType: 'text/html',
     body:
       '<!doctype html><html><head></head><body>' +
-      '<!--wj:children:/-->' +
+      '<!--wj:children:/:/-->' +
         '<aside class="docs-shell">REPLACED</aside>' +
-        '<!--wj:children:/docs-->new<!--/wj:children-->' +
-      '<!--/wj:children-->' +
+        '<!--wj:children:/docs:/docs-->new<!--/wj:children:/docs-->' +
+      '<!--/wj:children:/-->' +
       '</body></html>',
   });
 
@@ -1825,46 +1889,83 @@ test('navigate: deepest shared marker wins (inner swap, not outer)', async () =>
   }
 });
 
-test('navigate: cross-layout nav falls through to full body swap', async () => {
-  // /docs/x → /admin/y: no shared marker path → full body swap.
-  document.body.innerHTML = '<!--wj:children:/docs-->old<!--/wj:children-->';
-  const { restore } = installNavigationMocks({
+test('navigate: cross-layout nav REPLACES at the shared root boundary (soft, chrome kept)', async () => {
+  // /docs/x → /admin/y under the shared root: '/' is shared with an equal
+  // key, but the subtree below it diverges (different page segments), so the
+  // plan is REPLACE at '/'. The nav stays soft and the root chrome outside
+  // the '/' boundary survives.
+  document.body.innerHTML =
+    '<nav id="chrome">nav</nav>' +
+    '<!--wj:children:/:/-->' +
+      '<!--wj:children:/docs:/docs-->old<!--/wj:children:/docs-->' +
+    '<!--/wj:children:/-->';
+  const liveChrome = document.getElementById('chrome');
+  const { redirect, restore } = installNavigationMocks({
     contentType: 'text/html',
     body:
       '<!doctype html><html><head></head><body>' +
-      '<!--wj:children:/admin--><p>new</p><!--/wj:children-->' +
+      '<nav id="chrome">nav</nav>' +
+      '<!--wj:children:/:/-->' +
+        '<!--wj:children:/admin:/admin--><p>new</p><!--/wj:children:/admin-->' +
+      '<!--/wj:children:/-->' +
       '</body></html>',
   });
   try {
     await navigate('http://localhost/admin/y');
+    assert.equal(redirect.href, null, 'a shared root boundary keeps the nav soft');
     assert.ok(document.body.textContent.includes('new'));
     assert.ok(!document.body.textContent.includes('old'));
+    assert.ok(document.getElementById('chrome') === liveChrome,
+      'chrome outside the root boundary keeps its identity');
   } finally {
     restore();
     document.body.innerHTML = '';
   }
 });
 
-test('navigate: sends X-Webjs-Have header listing current marker paths', async () => {
+test('navigate: NO shared boundary at all degrades to a full page load (#1015)', async () => {
+  // A divergent shell (no segment in common, not even '/'): the router
+  // refuses to guess and hands the nav to the browser.
+  document.body.innerHTML = '<!--wj:children:/docs:/docs-->old<!--/wj:children:/docs-->';
+  const { redirect, restore } = installNavigationMocks({
+    contentType: 'text/html',
+    body:
+      '<!doctype html><html><head></head><body>' +
+      '<!--wj:children:/admin:/admin--><p>new</p><!--/wj:children:/admin-->' +
+      '</body></html>',
+  });
+  try {
+    await navigate('http://localhost/admin/y');
+    assert.equal(redirect.href, 'http://localhost/admin/y', 'full load, not a guessed swap');
+    assert.ok(document.body.textContent.includes('old'), 'live DOM untouched');
+  } finally {
+    restore();
+    document.body.innerHTML = '';
+  }
+});
+
+test('navigate: sends X-Webjs-Have header with keyed segment:route-key entries', async () => {
   document.body.innerHTML =
-    '<!--wj:children:/-->' +
-      '<!--wj:children:/docs-->page<!--/wj:children-->' +
-    '<!--/wj:children-->';
+    '<!--wj:children:/:/-->' +
+      '<!--wj:children:/docs:/docs-->page<!--/wj:children:/docs-->' +
+    '<!--/wj:children:/-->';
   const mocks = installNavigationMocks({
     contentType: 'text/html',
     body:
       '<!doctype html><html><head></head><body>' +
-      '<!--wj:children:/-->' +
-        '<!--wj:children:/docs-->page2<!--/wj:children-->' +
-      '<!--/wj:children-->' +
+      '<!--wj:children:/:/-->' +
+        '<!--wj:children:/docs:/docs-->page2<!--/wj:children:/docs-->' +
+      '<!--/wj:children:/-->' +
       '</body></html>',
   });
   try {
     await navigate('http://localhost/docs/components/b');
     const have = mocks.captured.headers && mocks.captured.headers['x-webjs-have'];
     assert.ok(have, 'X-Webjs-Have header should be set');
-    assert.ok(have.includes('/'), 'X-Webjs-Have includes root path');
-    assert.ok(have.includes('/docs'), 'X-Webjs-Have includes /docs path');
+    // Keyed entries: `<segment>:<route-key>` so the server can distinguish
+    // "has this layout" from "has it rendered for OTHER params" (#1015).
+    assert.ok(have.includes('/:/'), 'X-Webjs-Have includes the keyed root entry');
+    assert.ok(have.includes('/docs:/docs'), 'X-Webjs-Have includes the keyed /docs entry');
   } finally {
     mocks.restore();
     document.body.innerHTML = '';
@@ -1877,12 +1978,12 @@ test('navigate: sends X-Webjs-Have header listing current marker paths', async (
 
 test('navigate: marker-based swap forwards <template data-webjs-resolve> nodes', async () => {
   document.body.innerHTML =
-    '<!--wj:children:/--><p>old</p><!--/wj:children-->';
+    '<!--wj:children:/:/--><p>old</p><!--/wj:children:/-->';
   const { restore } = installNavigationMocks({
     contentType: 'text/html',
     body:
       '<!doctype html><html><head></head><body>' +
-      '<!--wj:children:/--><p>new</p><!--/wj:children-->' +
+      '<!--wj:children:/:/--><p>new</p><!--/wj:children:/-->' +
       '<template data-webjs-resolve="s1"><p>resolved</p></template>' +
       '</body></html>',
   });
@@ -1921,7 +2022,7 @@ test('navigate: unparseable HTML body falls back to full navigation', async () =
 
 test('navigate: hash portion triggers scroll (target found or top)', async () => {
   document.body.innerHTML =
-    '<!--wj:children:/--><section id="anchor">A</section><!--/wj:children-->';
+    '<!--wj:children:/:/--><section id="anchor">A</section><!--/wj:children:/-->';
   let scrolledToTop = false;
   let scrolledIntoView = false;
   globalThis.scrollTo = () => { scrolledToTop = true; };
@@ -1931,7 +2032,7 @@ test('navigate: hash portion triggers scroll (target found or top)', async () =>
     contentType: 'text/html',
     body:
       '<!doctype html><html><head></head><body>' +
-      '<!--wj:children:/--><section id="anchor">A</section><!--/wj:children-->' +
+      '<!--wj:children:/:/--><section id="anchor">A</section><!--/wj:children:/-->' +
       '</body></html>',
   });
   try {
@@ -2042,13 +2143,13 @@ test('onPopState: triggers a router navigation to location.href', async () => {
     fetched = String(url);
     return new Response(
       '<!doctype html><html><body>' +
-      '<!--wj:children:/-->popped<!--/wj:children-->' +
+      '<!--wj:children:/:/-->popped<!--/wj:children:/-->' +
       '</body></html>',
       { status: 200, headers: { 'content-type': 'text/html' } }
     );
   };
   try {
-    document.body.innerHTML = '<!--wj:children:/-->before<!--/wj:children-->';
+    document.body.innerHTML = '<!--wj:children:/:/-->before<!--/wj:children:/-->';
     _onPopState({});
     await new Promise((r) => setTimeout(r, 10));
     assert.equal(fetched, 'http://localhost/popped');
@@ -2265,11 +2366,11 @@ test('restoreOptimistic: stale token is a no-op (newer nav already settled)', ()
   // Set up a real marker pair in the document so the function has
   // somewhere to restore into.
   document.body.innerHTML =
-    '<!--wj:children:/-->' +
+    '<!--wj:children:/:/-->' +
     '<p id="loading">loading</p>' +
-    '<!--/wj:children-->';
-  const start = [...document.body.childNodes].find(n => n.nodeType === 8 && n.data === 'wj:children:/');
-  const end = [...document.body.childNodes].find(n => n.nodeType === 8 && n.data === '/wj:children');
+    '<!--/wj:children:/-->';
+  const start = [...document.body.childNodes].find(n => n.nodeType === 8 && n.data === 'wj:children:/:/');
+  const end = [...document.body.childNodes].find(n => n.nodeType === 8 && n.data === '/wj:children:/');
 
   // Construct stale state: token from a navigation that already passed.
   const staleToken = _navToken();
@@ -2292,11 +2393,11 @@ test('restoreOptimistic: stale token is a no-op (newer nav already settled)', ()
 
 test('restoreOptimistic: current token applies the restore', () => {
   document.body.innerHTML =
-    '<!--wj:children:/-->' +
+    '<!--wj:children:/:/-->' +
     '<p id="loading2">loading</p>' +
-    '<!--/wj:children-->';
-  const start = [...document.body.childNodes].find(n => n.nodeType === 8 && n.data === 'wj:children:/');
-  const end = [...document.body.childNodes].find(n => n.nodeType === 8 && n.data === '/wj:children');
+    '<!--/wj:children:/-->';
+  const start = [...document.body.childNodes].find(n => n.nodeType === 8 && n.data === 'wj:children:/:/');
+  const end = [...document.body.childNodes].find(n => n.nodeType === 8 && n.data === '/wj:children:/');
 
   const oldChild = document.createElement('p');
   oldChild.id = 'restored';
@@ -2435,7 +2536,7 @@ test('popstate: snapshotCurrent must NOT overwrite the cached snapshot for the d
   // Seed the destination's cached snapshot: what we want preserved.
   const goodSnapshot = {
     html: '<!doctype html><html><head><title>Original A</title></head>' +
-          '<body><!--wj:children:/-->original-a-content<!--/wj:children--></body></html>',
+          '<body><!--wj:children:/:/-->original-a-content<!--/wj:children:/--></body></html>',
     scrollX: 0,
     scrollY: 800,
   };
@@ -2458,7 +2559,7 @@ test('popstate: snapshotCurrent must NOT overwrite the cached snapshot for the d
     status: 200, headers: { 'content-type': 'text/html' },
   });
 
-  document.body.innerHTML = '<!--wj:children:/-->b-content<!--/wj:children-->';
+  document.body.innerHTML = '<!--wj:children:/:/-->b-content<!--/wj:children:/-->';
 
   try {
     _onPopState({});
@@ -2499,7 +2600,7 @@ test('popstate: page being LEFT is snapshotted under its own URL (so forward-nav
   //    leaving page" step before returning)
   //  - clear /b snapshot so we can verify it was newly written
   _snapshotCache.set('/a', {
-    html: '<!doctype html><html><body><!--wj:children:/-->a<!--/wj:children--></body></html>',
+    html: '<!doctype html><html><body><!--wj:children:/:/-->a<!--/wj:children:/--></body></html>',
     scrollX: 0, scrollY: 0,
   });
   _snapshotCache.delete('/b');
@@ -2514,7 +2615,7 @@ test('popstate: page being LEFT is snapshotted under its own URL (so forward-nav
     status: 200, headers: { 'content-type': 'text/html' },
   });
 
-  document.body.innerHTML = '<!--wj:children:/-->b-content<!--/wj:children-->';
+  document.body.innerHTML = '<!--wj:children:/:/-->b-content<!--/wj:children:/-->';
 
   try {
     _onPopState({});
@@ -2581,20 +2682,20 @@ test('partial-swap: outer-layout component instance survives when inner segment 
   outer.id = 'outer-tracker';
   document.body.appendChild(outer);
 
-  document.body.appendChild(document.createComment('wj:children:/'));
+  document.body.appendChild(document.createComment('wj:children:/:/'));
 
   const middle = document.createElement(tag);
   middle.id = 'middle-tracker';
   document.body.appendChild(middle);
 
-  document.body.appendChild(document.createComment('wj:children:/docs'));
+  document.body.appendChild(document.createComment('wj:children:/docs:/docs'));
 
   const innerOld = document.createElement(tag);
   innerOld.id = 'inner-old';
   document.body.appendChild(innerOld);
 
-  document.body.appendChild(document.createComment('/wj:children'));
-  document.body.appendChild(document.createComment('/wj:children'));
+  document.body.appendChild(document.createComment('/wj:children:/docs'));
+  document.body.appendChild(document.createComment('/wj:children:/'));
 
   await Promise.resolve();
   await Promise.resolve();
@@ -2617,12 +2718,12 @@ test('partial-swap: outer-layout component instance survives when inner segment 
   // fresh element with a different id.
   const newBody =
     `<${tag} id="outer-tracker"></${tag}>` +
-    '<!--wj:children:/-->' +
+    '<!--wj:children:/:/-->' +
       `<${tag} id="middle-tracker"></${tag}>` +
-      '<!--wj:children:/docs-->' +
+      '<!--wj:children:/docs:/docs-->' +
         `<${tag} id="inner-new"></${tag}>` +
-      '<!--/wj:children-->' +
-    '<!--/wj:children-->';
+      '<!--/wj:children:/docs-->' +
+    '<!--/wj:children:/-->';
 
   const { redirect, restore } = installNavigationMocks({
     contentType: 'text/html; charset=utf-8',
@@ -2695,7 +2796,7 @@ test('partial-swap: keyed inner element preserves DOM identity inside the swap r
 
   // Single-layout setup. The "kept" element shares its id with the
   // incoming element, the "removed" element does not.
-  document.body.appendChild(document.createComment('wj:children:/'));
+  document.body.appendChild(document.createComment('wj:children:/:/'));
 
   const kept = document.createElement(tag);
   kept.id = 'kept';
@@ -2705,7 +2806,7 @@ test('partial-swap: keyed inner element preserves DOM identity inside the swap r
   removed.id = 'removed-old';
   document.body.appendChild(removed);
 
-  document.body.appendChild(document.createComment('/wj:children'));
+  document.body.appendChild(document.createComment('/wj:children:/'));
 
   await Promise.resolve();
   await Promise.resolve();
@@ -2713,10 +2814,10 @@ test('partial-swap: keyed inner element preserves DOM identity inside the swap r
   records.length = 0;
 
   const newBody =
-    '<!--wj:children:/-->' +
+    '<!--wj:children:/:/-->' +
       `<${tag} id="kept"></${tag}>` +
       `<${tag} id="added"></${tag}>` +
-    '<!--/wj:children-->';
+    '<!--/wj:children:/-->';
 
   const { restore } = installNavigationMocks({
     contentType: 'text/html; charset=utf-8',
@@ -3307,10 +3408,11 @@ test('applySwap does NOT evict caches when the build id is unchanged (same deplo
       set href(v) { assigned = v; },
     });
     globalThis.sessionStorage.clear();
+    globalThis.document.body.innerHTML = '<!--wj:children:/:/--><p>c</p><!--/wj:children:/-->';
     _snapshotCache.set('http://x/a', { html: 'A', at: 1 });
 
     const incoming = new globalThis.DOMParser().parseFromString(
-      '<!doctype html><html><head><script type="importmap" data-webjs-build="SAME">{}</script></head><body></body></html>', 'text/html');
+      '<!doctype html><html><head><script type="importmap" data-webjs-build="SAME">{}</script></head><body><!--wj:children:/:/--><p>c</p><!--/wj:children:/--></body></html>', 'text/html');
     _applySwap(incoming, null, false, 'http://x/next', 'SAME');
 
     assert.equal(assigned, null, 'same build id means no hard reload');
@@ -3338,10 +3440,11 @@ test('applySwap on an APP-SOURCE mismatch evicts caches but does NOT hard reload
     _snapshotCache.set('http://x/a', { html: 'A', at: 1 });
     _prefetchCache.set('http://x/b', { html: 'B', build: 'SAME', src: 'SRC_OLD', at: 1 });
 
+    globalThis.document.body.innerHTML = '<!--wj:children:/:/--><p>c</p><!--/wj:children:/-->';
     // Incoming: SAME build, NEW src. Empty head so the tracked-signature check
     // is skipped and only the id comparison decides.
     const incoming = new globalThis.DOMParser().parseFromString(
-      '<!doctype html><html><head></head><body></body></html>', 'text/html');
+      '<!doctype html><html><head></head><body><!--wj:children:/:/--><p>c</p><!--/wj:children:/--></body></html>', 'text/html');
     _applySwap(incoming, null, false, 'http://x/next', 'SAME', 'SRC_NEW');
 
     assert.equal(assigned, null, 'an app-source change does NOT hard reload');
@@ -3364,10 +3467,11 @@ test('applySwap does NOT evict when the app-source id is unchanged (no churn)', 
     let assigned = null;
     globalThis.location = /** @type any */ ({ get href() { return 'http://x/current'; }, set href(v) { assigned = v; } });
     globalThis.sessionStorage.clear();
+    globalThis.document.body.innerHTML = '<!--wj:children:/:/--><p>c</p><!--/wj:children:/-->';
     _snapshotCache.set('http://x/a', { html: 'A', at: 1 });
 
     const incoming = new globalThis.DOMParser().parseFromString(
-      '<!doctype html><html><head></head><body></body></html>', 'text/html');
+      '<!doctype html><html><head></head><body><!--wj:children:/:/--><p>c</p><!--/wj:children:/--></body></html>', 'text/html');
     _applySwap(incoming, null, false, 'http://x/next', 'SAME', 'SRC_SAME');
 
     assert.equal(assigned, null, 'no build change, no reload');
@@ -3380,38 +3484,94 @@ test('applySwap does NOT evict when the app-source id is unchanged (no churn)', 
   }
 });
 
-test('applySwap: a dropped incoming close marker still scoped-swaps and keeps the navbar node (#994)', () => {
+/* Integrity-gate fault injection (#1015). Each malformed-boundary shape that
+ * the deleted #994 orphan-recovery machinery used to GUESS through now
+ * degrades to a full page load with the live DOM untouched: bounded, correct,
+ * and observable (dev logs the cause). These are the #994 fixtures
+ * re-expressed as degradation counterfactuals: if a future change resurrects
+ * a guessed recovery, the `assigned` assertions here fail. */
+
+function faultInjectionCase(t, liveBody, incomingBody) {
   const savedBody = globalThis.document.body.innerHTML;
   const savedHead = globalThis.document.head.innerHTML;
   const savedLocation = globalThis.location;
   try {
     globalThis.document.head.innerHTML = '';
-    globalThis.location = /** @type any */ ({ get href() { return 'http://x/current'; }, set href(_v) {} });
-
-    // Live page: the outer layout owns a persistent navbar that sits BEFORE the
-    // children marker, then the children region. Give the navbar a stable
-    // identity we can assert survives.
-    globalThis.document.body.innerHTML =
-      '<nav id="site-top">navbar</nav>' +
-      '<!--wj:children:/-->' +
-      '<main id="old">old page</main>' +
-      '<!--/wj:children-->';
-    const liveNav = globalThis.document.getElementById('site-top');
-
-    // The incoming partial-nav fragment lost its trailing `<!--/wj:children-->`
-    // (a malformed response). Parsed as a body it has an orphaned open marker.
+    let assigned = null;
+    globalThis.location = /** @type any */ ({ get href() { return 'http://x/current'; }, set href(v) { assigned = v; } });
+    globalThis.sessionStorage.clear();
+    globalThis.document.body.innerHTML = liveBody;
+    const beforeHTML = globalThis.document.body.innerHTML;
     const incoming = new globalThis.DOMParser().parseFromString(
-      '<!doctype html><html><head></head><body>' +
-      '<!--wj:children:/-->' +
-      '<main id="new">new page</main>' +
-      '</body></html>', 'text/html');
+      `<!doctype html><html><head></head><body>${incomingBody}</body></html>`, 'text/html');
 
     _applySwap(incoming, null, false, 'http://x/blog');
 
-    assert.equal(globalThis.document.getElementById('site-top'), liveNav,
-      'the navbar node retains identity across the soft nav (not wiped by a full-body swap)');
-    assert.ok(globalThis.document.getElementById('new'), 'the children slot swapped to the new page');
-    assert.ok(!globalThis.document.getElementById('old'), 'the old children content was replaced');
+    assert.equal(assigned, 'http://x/blog', 'degrades to a full page load, never a guessed swap');
+    assert.equal(globalThis.document.body.innerHTML, beforeHTML,
+      'the live DOM is byte-identical (no corruption, no partial application)');
+  } finally {
+    globalThis.location = savedLocation;
+    globalThis.document.head.innerHTML = savedHead;
+    globalThis.document.body.innerHTML = savedBody;
+  }
+}
+
+test('applySwap: a truncated INCOMING boundary (dropped close) degrades to a full load (#1015)', (t) => {
+  faultInjectionCase(t,
+    '<nav id="site-top">navbar</nav>' +
+    '<!--wj:children:/:/--><main id="old">old page</main><!--/wj:children:/-->',
+    // Incoming lost its trailing close: poisoned.
+    '<!--wj:children:/:/--><main id="new">new page</main>');
+});
+
+test('applySwap: a truncated LIVE boundary (dropped close) degrades to a full load (#1015)', (t) => {
+  faultInjectionCase(t,
+    // Live side orphaned, trailing footer in the same parent: the shape whose
+    // trailing-count recovery guess used to decide what got swept.
+    '<nav id="nav2">navbar</nav>' +
+    '<!--wj:children:/:/--><main id="old3">old</main><footer id="ft2">footer</footer>',
+    '<nav id="nav2">navbar</nav>' +
+    '<!--wj:children:/:/--><main id="new3">new</main><!--/wj:children:/-->' +
+    '<footer id="ft2">footer</footer>');
+});
+
+test('applySwap: a MISPAIRED close (outer close facing an inner open) degrades to a full load (#1015)', (t) => {
+  faultInjectionCase(t,
+    // The silent-mispair class: /docs close dropped, so the '/' close faces
+    // the '/docs' open. LIFO pairing used to swallow this and swap over-wide.
+    '<!--wj:children:/:/-->' +
+      '<!--wj:children:/docs:/docs--><h1 id="pg">page</h1>' +
+    '<!--/wj:children:/-->',
+    '<!--wj:children:/:/--><p id="new7">new</p><!--/wj:children:/-->');
+});
+
+test('applySwap: a BACKGROUND revalidation with no plan DISCARDS the response (no hard load, no swap)', () => {
+  // The revalidation after a snapshot restore may get a reduced or malformed
+  // fragment. It must neither location.href (a background op yanking the
+  // user) nor full-body-swap (wiping the shell with a chrome-less fragment):
+  // the restored snapshot the user is viewing stays untouched.
+  const savedBody = globalThis.document.body.innerHTML;
+  const savedHead = globalThis.document.head.innerHTML;
+  const savedLocation = globalThis.location;
+  try {
+    globalThis.document.head.innerHTML = '';
+    let assigned = null;
+    globalThis.location = /** @type any */ ({ get href() { return 'http://x/current'; }, set href(v) { assigned = v; } });
+    globalThis.sessionStorage.clear();
+    globalThis.document.body.innerHTML =
+      '<nav id="rv-nav">navbar</nav><!--wj:children:/:/--><p id="rv-old">page</p><!--/wj:children:/-->';
+    const beforeHTML = globalThis.document.body.innerHTML;
+    // A truncated fragment (poisoned incoming scan).
+    const incoming = new globalThis.DOMParser().parseFromString(
+      '<!doctype html><html><head></head><body><!--wj:children:/:/--><p>new</p></body></html>', 'text/html');
+
+    const disposition = _applySwap(incoming, null, /* revalidating */ true, 'http://x/current');
+
+    assert.equal(assigned, null, 'a background revalidation never hard-loads');
+    assert.equal(globalThis.document.body.innerHTML, beforeHTML, 'the restored page is untouched');
+    assert.equal(disposition, 'discard',
+      'the discard is REPORTED so the caller cancels a streamed response instead of applying its boundaries');
   } finally {
     globalThis.location = savedLocation;
     globalThis.document.head.innerHTML = savedHead;
@@ -3419,140 +3579,11 @@ test('applySwap: a dropped incoming close marker still scoped-swaps and keeps th
   }
 });
 
-test('applySwap: a LIVE-side dropped close does not sweep trailing outer-layout content into the swap (#994)', () => {
-  // The reviewer-flagged content-loss case: the marker's siblings include a
-  // FOOTER after the (dropped) close within the SAME parent (an unwrapped
-  // layout). The live side is orphaned; the incoming side is well-formed, so its
-  // trailing-sibling count bounds the recovered range and the live footer is
-  // preserved (not swept), while the navbar (before the open marker) also stays.
-  const savedBody = globalThis.document.body.innerHTML;
-  const savedHead = globalThis.document.head.innerHTML;
-  const savedLocation = globalThis.location;
-  try {
-    globalThis.document.head.innerHTML = '';
-    globalThis.location = /** @type any */ ({ get href() { return 'http://x/current'; }, set href(_v) {} });
-
-    // Unwrapped layout: nav, open, children, [close dropped], footer, all direct
-    // body children. Stamp the navbar and footer to assert identity survives.
-    globalThis.document.body.innerHTML =
-      '<nav id="nav2">navbar</nav>' +
-      '<!--wj:children:/-->' +
-      '<main id="old3">old</main>' +
-      '<footer id="ft2">footer</footer>';
-    const liveNav = globalThis.document.getElementById('nav2');
-    const liveFooter = globalThis.document.getElementById('ft2');
-
-    // Well-formed incoming full page: nav, open, children, close, footer.
-    const incoming = new globalThis.DOMParser().parseFromString(
-      '<!doctype html><html><head></head><body>' +
-      '<nav id="nav2">navbar</nav>' +
-      '<!--wj:children:/-->' +
-      '<main id="new3">new</main>' +
-      '<!--/wj:children-->' +
-      '<footer id="ft2">footer</footer>' +
-      '</body></html>', 'text/html');
-
-    _applySwap(incoming, null, false, 'http://x/blog');
-
-    assert.equal(globalThis.document.getElementById('nav2'), liveNav, 'navbar identity preserved');
-    assert.equal(globalThis.document.getElementById('ft2'), liveFooter,
-      'the trailing footer node was NOT swept by the recovered range (identity preserved)');
-    assert.ok(globalThis.document.getElementById('new3'), 'the children slot swapped');
-    assert.ok(!globalThis.document.getElementById('old3'), 'old children replaced');
-  } finally {
-    globalThis.location = savedLocation;
-    globalThis.document.head.innerHTML = savedHead;
-    globalThis.document.body.innerHTML = savedBody;
-  }
-});
-
-test('applySwap: an INCOMING-side dropped close does not duplicate trailing outer-layout content (#994)', () => {
-  // The symmetric case: the INCOMING side is orphaned with a trailing footer in
-  // the marker's parent. Bounding it against the well-formed LIVE side's
-  // trailing-sibling count keeps the incoming footer OUT of the children region,
-  // so the page does not end up with two footers.
-  const savedBody = globalThis.document.body.innerHTML;
-  const savedHead = globalThis.document.head.innerHTML;
-  const savedLocation = globalThis.location;
-  try {
-    globalThis.document.head.innerHTML = '';
-    globalThis.location = /** @type any */ ({ get href() { return 'http://x/current'; }, set href(_v) {} });
-
-    // Well-formed live page: nav, open, children, close, footer.
-    globalThis.document.body.innerHTML =
-      '<nav id="nav4">navbar</nav>' +
-      '<!--wj:children:/-->' +
-      '<main id="old5">old</main>' +
-      '<!--/wj:children-->' +
-      '<footer id="ft4">footer</footer>';
-    const liveFooter = globalThis.document.getElementById('ft4');
-
-    // Incoming full page whose close marker was dropped (orphaned), footer after.
-    const incoming = new globalThis.DOMParser().parseFromString(
-      '<!doctype html><html><head></head><body>' +
-      '<nav id="nav4">navbar</nav>' +
-      '<!--wj:children:/-->' +
-      '<main id="new5">new</main>' +
-      '<footer id="ft4">footer</footer>' +
-      '</body></html>', 'text/html');
-
-    _applySwap(incoming, null, false, 'http://x/blog');
-
-    assert.equal(globalThis.document.querySelectorAll('#ft4').length, 1,
-      'exactly one footer (the incoming footer was not duplicated into the children region)');
-    assert.equal(globalThis.document.getElementById('ft4'), liveFooter, 'the live footer is the one kept');
-    assert.ok(globalThis.document.getElementById('new5'), 'the children slot swapped');
-    assert.ok(!globalThis.document.getElementById('old5'), 'old children replaced');
-  } finally {
-    globalThis.location = savedLocation;
-    globalThis.document.head.innerHTML = savedHead;
-    globalThis.document.body.innerHTML = savedBody;
-  }
-});
-
-test('applySwap: a degenerate trailing-count mismatch sweeps to parent end, never blanks or duplicates (#994)', () => {
-  // Exercise the exact boundary cut===0 (tail === the orphan's node count), where
-  // `nodes[cut]` is `orphanStart.nextSibling`, an EMPTY exclusive range. The
-  // `cut <= 0 -> null` fallback must sweep the whole children region instead, so
-  // the children are neither duplicated (empty live range removes nothing) nor
-  // blanked. Any non-null return here (the old `orphanStart.nextSibling`, or a
-  // bare `nodes[cut]`) reintroduces the empty-range bug and fails this test.
-  const savedBody = globalThis.document.body.innerHTML;
-  const savedHead = globalThis.document.head.innerHTML;
-  const savedLocation = globalThis.location;
-  try {
-    globalThis.document.head.innerHTML = '';
-    globalThis.location = /** @type any */ ({ get href() { return 'http://x/current'; }, set href(_v) {} });
-
-    // Live orphan with TWO child nodes (close dropped, no trailing content).
-    globalThis.document.body.innerHTML =
-      '<nav id="nav6">navbar</nav>' +
-      '<!--wj:children:/-->' +
-      '<main id="old6a">a</main><main id="old6b">b</main>';
-
-    // Well-formed incoming with TWO trailing siblings after the close, so
-    // tail === 2 === the orphan's node count, i.e. cut === 0.
-    const incoming = new globalThis.DOMParser().parseFromString(
-      '<!doctype html><html><head></head><body>' +
-      '<nav id="nav6">navbar</nav>' +
-      '<!--wj:children:/-->' +
-      '<main id="new6">new</main>' +
-      '<!--/wj:children-->' +
-      '<footer id="a6">a</footer><aside id="b6">b</aside>' +
-      '</body></html>', 'text/html');
-
-    _applySwap(incoming, null, false, 'http://x/blog');
-
-    assert.ok(globalThis.document.getElementById('new6'), 'the new children were applied');
-    assert.ok(!globalThis.document.getElementById('old6a'), 'old child a replaced (not duplicated)');
-    assert.ok(!globalThis.document.getElementById('old6b'), 'old child b replaced (not duplicated)');
-    assert.equal(globalThis.document.querySelectorAll('#new6').length, 1, 'no duplication of the children');
-    assert.equal(globalThis.document.getElementById('nav6').textContent, 'navbar', 'navbar intact');
-  } finally {
-    globalThis.location = savedLocation;
-    globalThis.document.head.innerHTML = savedHead;
-    globalThis.document.body.innerHTML = savedBody;
-  }
+test('applySwap: a DUPLICATE boundary segment degrades to a full load (#1015)', (t) => {
+  faultInjectionCase(t,
+    '<!--wj:children:/:/--><p>a</p><!--/wj:children:/-->' +
+    '<!--wj:children:/:/--><p>b</p><!--/wj:children:/-->',
+    '<!--wj:children:/:/--><p id="new8">new</p><!--/wj:children:/-->');
 });
 
 test('a prefetch that reveals a NEW build id evicts stale pre-deploy caches (#899)', async () => {

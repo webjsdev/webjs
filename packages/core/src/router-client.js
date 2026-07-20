@@ -18,7 +18,7 @@ import { scanSeeds } from './action-seed-client.js';
 // reused hydrated light-DOM component across a soft nav (#908).
 import {
   SLOT_STATE, LIGHT_SLOT_ATTR, PROJECTION_ATTR, PROJECTION_ACTUAL,
-  applyActualAssignment, applyFallback, fireSlotChange,
+  setSlotContent,
 } from './slot.js';
 
 /** The content type a content-negotiated stream-action response carries (#248). */
@@ -39,26 +39,32 @@ const STREAM_MIME = 'text/vnd.webjs-stream.html';
  * `disableClientRouter()` to opt out, or `enableClientRouter()` for
  * programmatic control.
  *
- * Mechanism: auto-derived from folder structure:
- *   1. SSR injects `<!--wj:children:<segment-path>-->...<!--/wj:children-->`
- *      comment markers around each layout's `${children}` interpolation
- *      (one pair per layout in the chain).
- *   2. On link click, walk both the live DOM and the incoming HTML for
- *      these markers and build path → range maps.
- *   3. Find the longest shared marker path. That's the deepest layout
- *      both pages have in common.
- *   4. Replace nodes between that marker pair in the live DOM with the
- *      equivalent range from the incoming HTML, using a keyed reconciler
- *      that preserves input values, scroll, popover state, and the
- *      identity of any matched DOM nodes.
+ * Mechanism: auto-derived from folder structure (#1015):
+ *   1. SSR injects KEYED boundary comment pairs around each layout's
+ *      `${children}` interpolation and around the page itself:
+ *      `<!--wj:children:<segment>:<route-key>-->` ... `<!--/wj:children:<segment>-->`.
+ *      The close carries the segment (deterministic id-matched pairing, no
+ *      LIFO), the open carries the resolved route-key (param values
+ *      percent-encoded).
+ *   2. On link click, STRICTLY scan both the live DOM and the incoming HTML
+ *      into segment → {routeKey, range} maps. Any pairing violation poisons
+ *      the scan.
+ *   3. Two-tier decision (Next.js remount parity): a CHANGED route-key
+ *      REPLACES (fresh remount) at the PARENT of the shallowest changed
+ *      boundary (whose range contains the changed layout's own markup),
+ *      else MORPH (keyed reconcile preserving input values, scroll, popover
+ *      state, and node identity) at the deepest shared boundary.
+ *   4. A poisoned scan or no shared boundary degrades to a FULL PAGE LOAD:
+ *      bounded and correct, never a guessed recovery.
  *   5. Merge head, re-run scripts, upgrade custom elements, pushState.
  *
  * Optimizations bundled into the same response cycle:
- *   - `X-Webjs-Have` request header lists the marker paths the client
- *     already has. Server walks the target's layout chain, skips
- *     layouts at-or-above the deepest match, returns only the
- *     divergent fragment (wrapped in the deepest shared marker). Real
- *     wire-byte savings: the layout chain is never re-serialized for
+ *   - `X-Webjs-Have` request header lists `segment:route-key` entries for
+ *     the boundaries the client already has. The server walks the target's
+ *     layout chain and short-circuits at the deepest FULL match (segment AND
+ *     key, so a dynamic layout held for other params is re-rendered), then
+ *     returns only the divergent fragment (wrapped in the matched boundary).
+ *     Real wire-byte savings: the layout chain is never re-serialized for
  *     same-shell navigations.
  *   - URL-keyed snapshot cache (Turbo SnapshotCache pattern). Back/
  *     forward via popstate restores from cache instantly, then
@@ -91,14 +97,14 @@ const STREAM_MIME = 'text/vnd.webjs-stream.html';
  * `parseDocumentPreservingComments` for why that gap beats both ways of closing it).
  *
  * A partial-nav response (#936) is an INNER fragment that BEGINS with the
- * `<!--wj:children:<path>-->` layout marker and carries no `<!doctype>`/`<html>`.
- * Parsing such a fragment as a DOCUMENT hoists that leading comment OUT of
- * `<body>` (the HTML parser's "before html" insertion mode makes a leading
- * comment a child of the document, before `<html>`), so
- * `collectChildrenSlots(doc.body)` never sees the opening marker, finds no
- * shared slot, and `applySwap` falls to the destructive full-body swap that
- * strips the head stylesheets and the outer layout. So a fragment is parsed in
- * BODY (fragment) context instead, keeping the marker with its content.
+ * `<!--wj:children:<segment>:<route-key>-->` boundary open and carries no
+ * `<!doctype>`/`<html>`. Parsing such a fragment as a DOCUMENT hoists that
+ * leading comment OUT of `<body>` (the HTML parser's "before html" insertion
+ * mode makes a leading comment a child of the document, before `<html>`), so
+ * `collectBoundaries(doc.body)` never sees the opening boundary, finds no
+ * shared segment, and `applySwap` degrades to a full load. So a fragment is
+ * parsed in BODY (fragment) context instead, keeping the boundary with its
+ * content.
  * `body.setHTMLUnsafe` also processes Declarative Shadow DOM, so a shadow
  * component inside the swapped content still re-attaches its root; the
  * `<template>` path is the fallback for browsers without it (markers preserved,
@@ -737,6 +743,44 @@ function warnOnce(key, message) {
 }
 
 /**
+ * True when a nav must degrade to a full page load because the document is
+ * still parsing. A forward, main-document nav fired at `readyState: 'loading'`
+ * races the DOM: the leaving page's closing layout markers may not be attached
+ * yet, so a soft swap would snapshot an incomplete tree and corrupt the DOM
+ * (#1008 / #936). Scoped to frameless forward navs (popstate is browser-driven,
+ * a frame nav carries its own boundary element).
+ *
+ * @param {boolean} isPopState
+ * @param {string | null | undefined} frameId
+ * @returns {boolean}
+ */
+function shouldFullLoadDuringParse(isPopState, frameId) {
+  return (
+    !isPopState &&
+    !frameId &&
+    typeof document !== 'undefined' &&
+    document.readyState === 'loading'
+  );
+}
+
+/**
+ * Dev-only diagnostic: the client router degraded a soft navigation to a full
+ * page load. Records WHY (the `cause`) so the "why did my SPA nav do a full
+ * reload?" question is answerable from the console instead of guessed at. Silent
+ * in production and deduped per cause so a repeated trigger does not spam.
+ *
+ * @param {string} cause a short stable slug for the degradation reason
+ * @param {string} href the destination the router fell back to loading
+ */
+function devWarnFallback(cause, href) {
+  if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production') return;
+  warnOnce(
+    `fallback:${cause}`,
+    `[webjs] client router fell back to a full page load (${cause}) navigating to ${href}. This is correct (no DOM corruption), just not a soft nav.`
+  );
+}
+
+/**
  * Dev-only, fire-once hint: the router forces an INSTANT scroll-to-top on a
  * forward navigation (matching a native page load), so an app-level
  * `scroll-behavior: smooth` on <html> does not affect route transitions (it
@@ -795,124 +839,192 @@ function setNavigating(on) {
 }
 
 /* ====================================================================
- * Marker discovery (the heart of the partial-swap mechanism)
+ * Boundary discovery (the heart of the partial-swap mechanism, #1015)
  * ==================================================================== */
 
 /**
- * Walk a node tree collecting wj:children marker pairs into a Map
+ * Walk a node tree collecting KEYED children-boundary pairs into a Map
  * keyed by segment path.
  *
- * Markers are HTML comments emitted by SSR around each layout's
- * children interpolation:
- *   <!--wj:children:/docs-->
+ * Boundaries are HTML comments emitted by SSR around each layout's
+ * children interpolation AND around the page itself:
+ *   <!--wj:children:/docs:/docs-->            (open: segment + route-key)
  *     <page content>
- *   <!--/wj:children-->
+ *   <!--/wj:children:/docs-->                 (close: segment)
  *
- * The walk uses a stack to track nested marker pairs: a path can
- * appear multiple times in a document only if a layout transitively
- * includes itself (pathological; we take the outermost).
+ * The close carries the SEGMENT, so pairing is deterministic id-matching:
+ * a close must match the segment of the INNERMOST open boundary (proper
+ * nesting), never a positional LIFO guess. The open additionally carries
+ * the resolved ROUTE-KEY (param values percent-encoded at emit), which
+ * `planBoundarySwap` compares between the live and incoming DOM to pick
+ * the swap tier.
  *
- * `recoverOrphans` (#994): register an OPEN marker whose closing
- * `<!--/wj:children-->` comment is missing, using `end: null` (meaning "the
- * children run to the end of the containing element"). Without both comments
- * this walk registers no slot, so `longestSharedPath` finds nothing and
- * `applySwap` wipes the outer layout (navbar).
- *
- * HISTORICAL NOTE, since this comment previously asserted otherwise and #994 /
- * #1003 were reasoned from it: this recovery was built on the belief that
- * browsers "intermittently drop the trailing close comment while parsing", a
- * parse/timing race inferred from Android Chrome reports (#939/#940 saw the OPEN
- * marker survive, `markers:1`, yet still got the destructive swap) that seemed
- * "rarer on faster hardware". That premise did not survive investigation
- * (#1007). The real cause was deterministic and universal: `parseHTML` fed every
- * doctype'd response through `Document.parseHTMLUnsafe`, which STRIPS every
- * comment in Chromium 150, so the markers were destroyed by us on the JS-side
- * parse rather than dropped by the browser mid-parse. That also fits the
- * evidence better: the sweep reproduces on a fully settled desktop page
- * (`readyState: "complete"`) whose live markers are present and correctly
- * paired, which no timing race explains. `parseHTML` now probes for that and
- * routes around it, so this recovery is DEFENCE IN DEPTH, not the load-bearing
- * fix it was thought to be. Recovering the orphaned open lets
- * the correct scoped swap run and keeps the navbar (it sits BEFORE the open
- * marker, so it is never in the swap range). The recovery keys off the SYMPTOM
- * (a missing close), never any user-agent check, so it fixes every engine
- * uniformly. Off by default so the exported helper's strict pairing is
- * unchanged; the swap-decision and `X-Webjs-Have` call sites opt in.
+ * STRICT INTEGRITY, by design (#1015): this scanner never guesses. ANY
+ * violation poisons the whole scan and returns null:
+ *   - an open with no route-key (the legacy anonymous format, or truncation)
+ *   - a close whose segment does not match the innermost open boundary
+ *   - a close with no open boundary at all
+ *   - a duplicate segment (two boundaries claiming one id)
+ *   - an open boundary never closed (truncated response)
+ * The caller degrades a poisoned side to a FULL PAGE LOAD: bounded, correct,
+ * and honest, where the deleted heuristic recovery (#994's orphan recovery +
+ * trailing-count bounding) could guess wrong and corrupt silently. The main
+ * PRODUCER of mispairing (our own comment-stripping parse, #1007, and
+ * mid-parse soft navs, #1008) is already fixed upstream, so poisoning is a
+ * rare backstop, not a common path.
  *
  * @param {ParentNode} root
- * @param {{ recoverOrphans?: boolean }} [options]
- * @returns {Map<string, { start: Comment, end: Comment | null }>}
+ * @returns {Map<string, { routeKey: string, start: Comment, end: Comment }> | null}
+ *   The boundary map, or null when the tree's boundaries are malformed.
  */
-export function collectChildrenSlots(root, options) {
-  const recoverOrphans = !!(options && options.recoverOrphans);
-  /** @type {Map<string, { start: Comment, end: Comment | null }>} */
-  const slots = new Map();
-  /** @type {{ path: string, start: Comment }[]} */
+export function collectBoundaries(root) {
+  /** @type {Map<string, { routeKey: string, start: Comment, end: Comment }>} */
+  const out = new Map();
+  /** @type {{ segment: string, routeKey: string, start: Comment }[]} */
   const stack = [];
+  let poisoned = false;
 
   // Plain recursive comment walk: TreeWalker/NodeFilter aren't available
   // in every DOM polyfill (notably linkedom in tests). Iterative depth-
   // first traversal keeps us portable across linkedom + native + jsdom.
   /** @param {Node} node */
   function visit(node) {
+    if (poisoned) return;
     if (node.nodeType === 8 /* COMMENT_NODE */) {
-      const c = /** @type {Comment} */ (node);
-      const data = c.data;
-      const open = /^wj:children:(.+)$/.exec(data);
-      if (open) {
-        stack.push({ path: open[1], start: c });
+      const data = /** @type {Comment} */ (node).data.trim();
+      if (data.startsWith('wj:children:')) {
+        const rest = data.slice('wj:children:'.length);
+        // The route-key is everything after the LAST ':'. Substituted param
+        // values are percent-encoded at emit and static pieces have their
+        // delimiter characters encoded too, so the last colon is unambiguous
+        // for framework-emitted boundaries. A hand-authored folder name that
+        // still smuggles a delimiter through can only MIS-SPLIT here, which
+        // mismatches the close and poisons the scan: degrade-only, never a
+        // wrong pairing.
+        const cut = rest.lastIndexOf(':');
+        if (cut <= 0 || cut === rest.length - 1) { poisoned = true; return; }
+        const segment = rest.slice(0, cut);
+        const routeKey = rest.slice(cut + 1);
+        if (out.has(segment) || stack.some((f) => f.segment === segment)) {
+          poisoned = true;
+          return;
+        }
+        stack.push({ segment, routeKey, start: /** @type {Comment} */ (node) });
         return;
       }
-      if (data.trim() === '/wj:children') {
+      if (data.startsWith('/wj:children')) {
+        const seg = data.slice('/wj:children'.length).replace(/^:/, '');
         const frame = stack.pop();
-        if (frame && !slots.has(frame.path)) {
-          slots.set(frame.path, { start: frame.start, end: c });
+        if (!frame || frame.segment !== seg) { poisoned = true; return; }
+        // Same-parent integrity: HTML parser reparenting (a <p> auto-closed
+        // by block content) can split a pair across parents. The range
+        // operations walk nextSibling from start and insert before end, so a
+        // cross-parent pair would empty the region and then throw mid-swap.
+        // Poison instead: degrade up front.
+        if (frame.start.parentNode !== /** @type {Comment} */ (node).parentNode) {
+          poisoned = true;
+          return;
         }
+        // Table-context integrity: foster-parenting moves CONTENT out of the
+        // table while comment tokens stay put, so a boundary emitted in table
+        // context shares a parent (passing the check above) while its actual
+        // children were fostered OUTSIDE the range. Swapping that empty range
+        // would silently leave stale visible content. A `${children}` slot
+        // directly in table context cannot work as a swap boundary at all,
+        // so poison it.
+        {
+          const pt = /** @type {Element} */ (frame.start.parentNode).tagName;
+          if (pt === 'TABLE' || pt === 'TBODY' || pt === 'THEAD' || pt === 'TFOOT' || pt === 'TR') {
+            poisoned = true;
+            return;
+          }
+        }
+        out.set(frame.segment, {
+          routeKey: frame.routeKey,
+          start: frame.start,
+          end: /** @type {Comment} */ (node),
+        });
         return;
       }
       return;
     }
     if (node.hasChildNodes && node.hasChildNodes()) {
-      for (let child = node.firstChild; child; child = child.nextSibling) {
+      for (let child = node.firstChild; child && !poisoned; child = child.nextSibling) {
         visit(child);
       }
     }
   }
   visit(/** @type {Node} */ (root));
 
-  // #994: any open marker still on the stack was never closed (its
-  // `<!--/wj:children-->` is absent from the response). The original cause was
-  // our own parse stripping every comment (#1007, now fixed); this stays as
-  // defence in depth against a genuinely malformed or truncated payload.
-  // Register it with a null end so the shared-path match succeeds and the scoped
-  // swap preserves the outer layout, instead of the destructive full-body
-  // fallback. Outermost first (stack order), never overwriting a slot a proper
-  // close already paired.
-  if (recoverOrphans) {
-    for (const frame of stack) {
-      if (!slots.has(frame.path)) slots.set(frame.path, { start: frame.start, end: null });
-    }
-  }
-  return slots;
+  if (poisoned || stack.length > 0) return null;
+  return out;
 }
 
 /**
- * Pick the longest path that exists in both maps.
+ * Plan the two-tier boundary swap from the live + incoming boundary maps
+ * (#1015). Boundary segments are nested path prefixes, so the shared segments
+ * form a chain from `/` down to the deepest shared boundary D.
  *
- * Path comparison is plain string equality (matches Next.js's
- * `matchSegment`). Longest wins so the swap is as scoped as possible.
+ * Rules (Next.js remount-vs-preserve parity):
+ *  - A changed route-key REPLACES at the PARENT of the shallowest changed
+ *    boundary. The parent, not the changed boundary itself: a LAYOUT's
+ *    boundary wraps its CHILDREN slot, so the layout's OWN markup (an
+ *    `[org]`-name header it renders around `${children}`) lives inside the
+ *    PARENT's range. Anchoring at the parent remounts the changed layout's
+ *    chrome AND its subtree, exactly like Next re-rendering the layout with
+ *    new params. The page boundary composes the same way: its parent is the
+ *    nearest layout's children slot, so `/blog/a` -> `/blog/b` under a
+ *    `/blog` layout remounts just the page while the `/blog` layout chrome
+ *    is preserved; with no intermediate layout the anchor is `/` and the
+ *    root layout's chrome (outside its own children boundary) is still
+ *    preserved. A changed boundary with NO shared parent degrades (null).
+ *  - No route-key changed but the subtree below D diverges (D is a LAYOUT,
+ *    not the deepest boundary, on either side, e.g. `/about` -> `/contact`
+ *    under a shared static root layout): REPLACE D's contents wholesale.
+ *  - No route-key changed and D is the deepest boundary on BOTH sides: MORPH
+ *    D. The searchParams-only / refresh / revalidate nav, which must preserve
+ *    hydrated component state while updating searchParam-driven DOM.
+ *  - No shared segment at all: null (the caller degrades to a full load). In
+ *    practice the page boundary exists on both sides of any same-app nav, so
+ *    this is reached only for a divergent or malformed shell.
  *
- * @param {Map<string, unknown>} here
- * @param {Map<string, unknown>} there
- * @returns {string | null}
+ * @param {Map<string, { routeKey: string, start: Comment, end: Comment }>} here
+ * @param {Map<string, { routeKey: string, start: Comment, end: Comment }>} there
+ * @returns {{ mode: 'replace' | 'morph', segment: string,
+ *   live: { routeKey: string, start: Comment, end: Comment },
+ *   incoming: { routeKey: string, start: Comment, end: Comment } } | null}
  */
-export function longestSharedPath(here, there) {
-  let best = null;
-  for (const p of here.keys()) {
-    if (!there.has(p)) continue;
-    if (best === null || p.length > best.length) best = p;
+export function planBoundarySwap(here, there) {
+  // Shared segments, shallowest first (a nested path prefix is shorter).
+  const shared = [...here.keys()].filter((s) => there.has(s)).sort((a, b) => a.length - b.length);
+  if (shared.length === 0) return null;
+  // A changed route-key remounts at the PARENT of the shallowest change.
+  for (const seg of shared) {
+    if (here.get(seg).routeKey !== there.get(seg).routeKey) {
+      let parent = null;
+      for (const p of shared) {
+        if (p === seg) break;
+        if (seg.startsWith(p === '/' ? p : p + '/')) parent = p;
+      }
+      if (!parent) return null; // no anchored parent: degrade
+      return { mode: 'replace', segment: parent, live: here.get(parent), incoming: there.get(parent) };
+    }
   }
-  return best;
+  // No route-key changed. D = deepest shared boundary.
+  const D = shared[shared.length - 1];
+  /** @param {Map<string, unknown>} m */
+  const deepestOf = (m) => {
+    let best = null;
+    for (const s of m.keys()) if (best === null || s.length > best.length) best = s;
+    return best;
+  };
+  const leafOnBoth = deepestOf(here) === D && deepestOf(there) === D;
+  return {
+    mode: leafOnBoth ? 'morph' : 'replace',
+    segment: D,
+    live: here.get(D),
+    incoming: there.get(D),
+  };
 }
 
 /* ====================================================================
@@ -996,6 +1108,22 @@ function cacheKey(url) {
  * @param {string | null} frameId  Active <webjs-frame> id, or null.
  */
 async function performNavigation(href, isPopState, frameId) {
+  // #1008 / #936: a forward, main-document nav fired while the document is
+  // still parsing (`readyState === 'loading'`) races the DOM. The leaving
+  // page's closing layout markers at the bottom of the body may not exist yet,
+  // so `snapshotCurrent` plus region discovery would capture an incomplete tree
+  // and drive a corrupt or over-wide swap (the suspected root cause of the
+  // dropped-marker reports). The PREFETCH path already skips this window (see
+  // the `buildHaveHeader` call site); the click / `navigate()` path did not.
+  // Degrade to a correct full-page load, which is what an MPA would do anyway.
+  // Scoped to frameless forward navs: popstate is browser-driven, and a frame
+  // nav carries its own boundary element.
+  if (shouldFullLoadDuringParse(isPopState, frameId) && typeof location !== 'undefined') {
+    devWarnFallback('readyState-loading', href);
+    location.href = href;
+    return;
+  }
+
   // Cancel any in-flight fetch: Turbo Drive's navigator.stop().
   if (activeAbortController) activeAbortController.abort();
   activeAbortController = new AbortController();
@@ -1043,7 +1171,7 @@ async function performNavigation(href, isPopState, frameId) {
           // Fire-and-forget revalidation. Uses a fresh AbortController
           // since this background fetch is allowed to overlap with the
           // next foreground nav (it'll get aborted if a new nav lands).
-          fetchAndApply(href, frameId, /* recordHistory */ false, optimisticState, 'GET', null, signal, myToken)
+          fetchAndApply(href, frameId, /* recordHistory */ false, optimisticState, 'GET', null, signal, myToken, /* revalidating */ true)
             .catch(() => {});
           return;
         }
@@ -1177,27 +1305,27 @@ async function performSubmission(href, method, body, frameId, form) {
 }
 
 /**
- * Build the X-Webjs-Have header value from the live DOM's marker paths.
- * Comma-separated, in document order (no canonicalization needed; the
- * server intersects with the target's layout chain).
+ * Build the X-Webjs-Have header value from the live DOM's boundaries.
+ * Comma-separated `<segment>:<route-key>` entries in document order. The
+ * ROUTE-KEY rides along so the server's short-circuit can distinguish "the
+ * client has this layout" from "the client has this layout rendered for
+ * DIFFERENT params": a dynamic `[org]` layout the client holds for org-a
+ * must be re-rendered (and re-shipped) on an org-b navigation, or the
+ * parent-anchored REPLACE would have no fresh layout markup to swap in.
+ * The server ignores the page-boundary entry (never a layout segment).
+ *
+ * A poisoned live DOM (malformed boundaries) reports an EMPTY have, so the
+ * server returns the full page. The subsequent applySwap re-scans, sees the
+ * same poisoned live tree, and degrades to a full load: consistent with the
+ * integrity-gate model, never a reduced fragment spliced against a tree we
+ * cannot trust (#1015).
  *
  * @returns {string}
  */
 function buildHaveHeader() {
-  // Strict pairing here, deliberately (#994): if the SOLE or OUTERMOST close
-  // marker was dropped, its orphaned open is NOT reported, so `have` omits that
-  // layout and the server returns the FULL page (with the outer layout's trailing
-  // chrome) rather than a reduced marker-pair-only fragment. `applySwap` then
-  // recovers the orphan and bounds the swap against that full page's
-  // trailing-sibling count, preserving the navbar and the footer. Recovering here
-  // would send `have=/`, get back a reduced fragment with no trailing chrome
-  // (`tail === 0`), and sweep an unwrapped layout's footer. The extra bytes of a
-  // full page on the rare orphaned nav are the price of that correctness. A
-  // dropped INNER close in a nested layout is a separate, unfixed mispairing
-  // limitation (the surviving outer close pairs with the inner open); the wrapped
-  // `${children}` idiom keeps it harmless.
-  const slots = collectChildrenSlots(document.body);
-  return [...slots.keys()].join(',');
+  const boundaries = collectBoundaries(document.body);
+  if (!boundaries) return '';
+  return [...boundaries.entries()].map(([seg, b]) => `${seg}:${b.routeKey}`).join(',');
 }
 
 /* ====================================================================
@@ -1729,8 +1857,9 @@ function refreshPrefetchObservers() {
  */
 function renderInPlaceNavError(status) {
   if (typeof document === 'undefined' || !document.body) return false;
-  const here = collectChildrenSlots(document.body);
-  // The deepest slot is the same swap target a normal partial swap writes
+  const here = collectBoundaries(document.body);
+  if (!here) return false; // poisoned live tree: let the caller hard-load
+  // The deepest boundary is the same swap target a normal partial swap writes
   // to (longest path wins), so the outer chrome / nav are preserved.
   /** @type {{ start: Comment, end: Comment } | undefined} */
   let deepest;
@@ -1811,6 +1940,9 @@ function handleNavigationError(href, status, error) {
  * @param {BodyInit | null} [body]  Request body for non-GET methods.
  * @param {AbortSignal | null} [signal]  Abort signal. A newer nav cancels this fetch.
  * @param {number} [token]  Nav-token captured at the caller's entry; stale → skip apply.
+ * @param {boolean} [revalidating]  True for the BACKGROUND refresh after a
+ *   snapshot restore: the user is already viewing a page, so a boundary
+ *   mismatch must degrade in place (never a jarring `location.href` load).
  * @returns {Promise<{ ok: boolean, status: number | null, aborted: boolean }>}
  *   The fetch outcome, so a caller (the form-submission busy/event lifecycle)
  *   can report whether the submission settled as a success, an error, or an
@@ -1819,7 +1951,7 @@ function handleNavigationError(href, status, error) {
  *   for an abort (which also sets `aborted:true`). `status` is the HTTP status
  *   or `null` when the request never produced one.
  */
-async function fetchAndApply(href, frameId, recordHistory, optimisticState, method, body, signal, token) {
+async function fetchAndApply(href, frameId, recordHistory, optimisticState, method, body, signal, token, revalidating) {
   method = method || 'GET';
   const myToken = typeof token === 'number' ? token : currentNavigationToken;
   let html;
@@ -1986,7 +2118,15 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   // recover in place rather than a destructive full reload.
   if (!doc) { restoreOptimistic(optimisticState); handleNavigationError(href, null, new Error('navigation response did not parse as HTML')); return { ok: false, status: respStatus, aborted: false }; }
 
-  applySwap(doc, frameId, false, finalUrl, incomingBuild, incomingSrc);
+  const disposition = applySwap(doc, frameId, !!revalidating, finalUrl, incomingBuild, incomingSrc);
+  // A discarded revalidation must be discarded OUTRIGHT: a streamed response's
+  // boundary templates must not splice into the restored snapshot afterward
+  // (boundary ids are per-render sequential, so a reduced render's numbering
+  // need not line up with the snapshot's). Cancel the reader and stop here.
+  if (disposition === 'discard') {
+    if (streamCtx && streamCtx.reader) { try { streamCtx.reader.cancel(); } catch { /* ignore */ } }
+    return { ok: respOk, status: respStatus, aborted: false };
+  }
 
   if (recordHistory) history.pushState(null, '', finalUrl);
 
@@ -2642,45 +2782,68 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
     return;
   }
 
-  // 2. Auto-derived layout-marker swap. Recover an orphaned open marker on
-  // either side (#994): a dropped close comment must not force the destructive
-  // path-3 fallback that wipes the outer layout (navbar).
-  const here = collectChildrenSlots(document.body, { recoverOrphans: true });
-  const there = collectChildrenSlots(doc.body, { recoverOrphans: true });
-  const sharedPath = longestSharedPath(here, there);
+  // 2. Two-tier keyed boundary swap (#1015). Scan both trees STRICTLY: a
+  // poisoned side (malformed, truncated, or mispaired boundaries) yields null
+  // and falls through to the integrity degradation below. A valid pair of
+  // scans picks the swap tier by route-key comparison: a CHANGED key REPLACES
+  // (remount, Next param-change parity) at the PARENT of the shallowest
+  // change, else MORPH (state-preserving keyed reconcile) at the deepest
+  // shared boundary.
+  const here = collectBoundaries(document.body);
+  const there = collectBoundaries(doc.body);
+  const plan = here && there ? planBoundarySwap(here, there) : null;
 
-  if (sharedPath) {
-    const target = here.get(sharedPath);
-    const source = there.get(sharedPath);
-    // #994: a recovered orphan carries `end: null` (children run to the marker's
-    // PARENT end). That is exactly right when the children fill their parent (the
-    // shipped idiom wraps `${children}` in a `<main>`, so the close marker is the
-    // parent's last child and trailing chrome like `<footer>` is a sibling
-    // OUTSIDE it). But a layout that puts trailing content in the marker's OWN
-    // parent would have that content swept (a live orphan) or duplicated (an
-    // incoming orphan). When exactly one side is orphaned, bound it against the
-    // well-formed side's trailing-sibling count so the trailing chrome is
-    // preserved either way.
-    boundRecoveredEnds(target, source);
-    // ADD-ONLY head merge for the same reason: outer layout stays
-    // mounted, its head-bound runtime state must not be invalidated.
+  if (plan) {
+    const { mode, live, incoming } = plan;
+    // ADD-ONLY head merge: the outer layout stays mounted, so its head-bound
+    // runtime state (Tailwind injection, etc.) must not be invalidated.
     addNewHeadElements(doc.head);
     runWithTransition(() => {
-      swapMarkerRange(target, source, doc);
+      if (mode === 'replace') replaceBoundaryRange(live, incoming);
+      else swapMarkerRange(live, incoming, doc);
+      // No key sync is needed on the anchor's own comments: the plan's anchor
+      // carries EQUAL live/incoming route-keys in every tier (a changed-key
+      // REPLACE anchors at a parent already compared equal; the other tiers
+      // require no change at all), and the fresh deeper keys arrive via the
+      // physically replaced boundary comments inside the range.
       blurOutgoingFocus();
-    }, () => upgradeCustomElementsInRange(target));
+    }, () => upgradeCustomElementsInRange(live));
     forwardSuspenseResolvers(doc.body);
     return;
   }
 
-  // 3. Full body swap fallback: no shared layout marker (a genuine root-layout
-  // change, or a same-layout nav whose markers could not be paired). Full head
-  // merge, so a real root-layout change removes stale head elements. `mergeHead`
-  // now PRESERVES stylesheets and `<style>` unconditionally (#936): even if the
-  // client reaches this path with an incoming head that lacks the app's
-  // `<link rel=stylesheet>` (a partial or mangled response, e.g. from a
-  // mid-parse empty-`have` prefetch), the live CSS is never stripped, so the
-  // swap can no longer leave the page unstyled.
+  // 3. Integrity degradation (#1015). No trustworthy shared boundary exists:
+  // one side is poisoned, or the trees share no segment (a divergent shell).
+  // For a FOREGROUND nav, degrade to a FULL PAGE LOAD: bounded, correct, and
+  // exactly what an MPA would do, where the deleted heuristic recovery could
+  // guess wrong and corrupt silently. Dev logs the cause so a systematic
+  // producer of malformed boundaries is visible immediately. A REVALIDATION
+  // (the background refresh after a snapshot restore) is excluded: the user
+  // is already viewing a page, so a background op must never yank them
+  // through a hard load; it takes the in-place path below.
+  if (href && !revalidating && typeof location !== 'undefined') {
+    devWarnFallback(!here ? 'live-boundaries-malformed'
+      : !there ? 'incoming-boundaries-malformed'
+      : 'no-shared-boundary', href);
+    location.href = href;
+    return;
+  }
+
+  // A BACKGROUND revalidation (revalidating + href) with no trustworthy plan
+  // DISCARDS the response outright: the user is viewing a valid restored
+  // snapshot, and the response may be a reduced (chrome-less) X-Webjs-Have
+  // fragment, so the full-body swap below would wipe the shell from a
+  // background op. Doing nothing is the only safe degradation here.
+  if (href && revalidating) {
+    devWarnFallback('revalidation-discarded', href);
+    return 'discard';
+  }
+
+  // 4. In-place full-body swap: the background paths only (a snapshot
+  // restore or its revalidation, where a full load is not an option
+  // because the user is already viewing the page). Full head merge;
+  // `mergeHead` PRESERVES stylesheets and `<style>` unconditionally
+  // (#936) so the swap can never leave the page unstyled.
   mergeHead(doc.head);
   // Persist permanent elements by node identity across the full-body
   // swap: move each live [data-webjs-permanent][id] node into the matching
@@ -2726,91 +2889,61 @@ function blurOutgoingFocus() {
 }
 
 /**
- * Count the siblings after `marker` up to the end of its parent. Used to
- * measure how much trailing outer-layout chrome sits after a close marker
- * WITHIN the marker's own parent (#994).
+ * Wholesale-REPLACE the contents of a boundary range (#1015): remove every
+ * live node between `target.start` and `target.end` (exclusive) and insert a
+ * fresh import of the incoming range. This is the REMOUNT tier: the boundary's
+ * route-key changed (a param change, or a different page under a shared static
+ * layout), so Next.js parity demands fresh component instances, not a keyed
+ * reuse of old-page DOM. The only nodes that survive by identity are
+ * `data-webjs-permanent` elements, regrafted into the imported slice before
+ * insertion so a playing `<audio>`/widget keeps running.
  *
- * @param {Comment} marker
- * @returns {number}
+ * @param {{ start: Comment, end: Comment }} target  The live boundary.
+ * @param {{ start: Comment, end: Comment }} source  The incoming boundary.
  */
-function trailingSiblingCount(marker) {
-  let n = 0;
-  for (let s = marker.nextSibling; s; s = s.nextSibling) n++;
-  return n;
-}
-
-/**
- * Give a recovered orphan (`end: null`, #994) a concrete bounded end so trailing
- * outer-layout chrome in the marker's own parent is preserved. Runs only when
- * EXACTLY one side is orphaned: the well-formed side's close marker reveals how
- * many trailing siblings sit after the children within the parent (`tail`), and
- * a same-layout nav shares that outer-layout structure, so the orphan's children
- * end `tail` nodes before its parent's end. A `tail` of zero (the shipped
- * wrap-`${children}`-in-`<main>` idiom, where the close is the parent's last
- * child) leaves `end: null` and the sweep-to-parent-end stays correct. Both-side
- * orphans keep `null` on both (symmetric sweep, nothing to align against).
- *
- * This works for a SOLE or OUTERMOST dropped close because `buildHaveHeader`
- * reports STRICTLY paired markers, so an orphaned live page omits the layout from
- * `have` and the server returns the FULL page (trailing chrome included,
- * `tail > 0`) rather than a reduced marker-pair-only fragment. Two cases it does
- * NOT cover: an incoming side whose close was lost during parse (rare: the
- * response is parsed from a complete string, not streamed), and a dropped INNER
- * close in a nested layout (the surviving outer close mispairs with the inner
- * open, so both slot ends are non-null and this bounding is skipped). The wrapped
- * `${children}` idiom keeps both harmless (the marker's parent holds only the
- * children, so any sweep stays inside it).
- *
- * @param {{ start: Comment, end: Comment | null } | undefined} target
- * @param {{ start: Comment, end: Comment | null } | undefined} source
- */
-function boundRecoveredEnds(target, source) {
-  if (!target || !source) return;
-  if (target.end === null && source.end !== null) target.end = boundOrphanEnd(target.start, source.end);
-  else if (source.end === null && target.end !== null) source.end = boundOrphanEnd(source.start, target.end);
-}
-
-/**
- * Compute the bounded end sentinel (exclusive) for an orphaned open marker,
- * preserving `tail` trailing siblings at the end of the marker's parent, where
- * `tail` is the well-formed counterpart's trailing-sibling count (#994).
- *
- * @param {Comment} orphanStart  The orphan's open marker.
- * @param {Comment} wellFormedEnd  The counterpart's real close marker.
- * @returns {Comment | Node | null}  A node to stop before, or null (sweep to end).
- */
-function boundOrphanEnd(orphanStart, wellFormedEnd) {
-  const tail = trailingSiblingCount(wellFormedEnd);
-  if (tail === 0) return null;
-  // Collect the orphan's children region (start.nextSibling to parent end).
+function replaceBoundaryRange(target, source) {
+  const liveParent = target.start.parentNode;
+  if (!liveParent) return;
   /** @type {Node[]} */
-  const nodes = [];
-  for (let n = orphanStart.nextSibling; n; n = n.nextSibling) nodes.push(n);
-  // Preserve the last `tail` nodes by stopping before index `cut`. A `cut` at or
-  // below zero is a degenerate mismatch (the well-formed side claims more
-  // trailing siblings than the orphan has nodes at all, which a same-layout nav
-  // should never produce): fall back to `null` (sweep to the parent end, a normal
-  // full-region swap) rather than an empty range, which would duplicate or blank
-  // the children.
-  const cut = nodes.length - tail;
-  if (cut <= 0) return null;
-  return nodes[cut];
+  const liveSlice = [];
+  for (let n = target.start.nextSibling; n && n !== target.end; n = n.nextSibling) {
+    liveSlice.push(n);
+  }
+  /** @type {Node[]} */
+  const incomingSlice = [];
+  for (let n = source.start.nextSibling; n && n !== source.end; n = n.nextSibling) {
+    incomingSlice.push(document.importNode(n, true));
+  }
+  regraftPermanentInSlice(liveSlice, incomingSlice);
+  for (const n of liveSlice) {
+    if (n.parentNode === liveParent) liveParent.removeChild(n);
+  }
+  for (const n of incomingSlice) {
+    liveParent.insertBefore(n, target.end);
+  }
+  for (let n = target.start.nextSibling; n && n !== target.end; n = n.nextSibling) {
+    if (n.nodeType === 1) {
+      reactivateScripts(/** @type {Element} */ (n));
+      upgradeCustomElements(/** @type {Element} */ (n));
+    }
+  }
 }
 
 /**
- * Replace nodes between `target.start` and `target.end` (exclusive) in the
- * live document with the nodes between `source.start` and `source.end` in
- * the parsed Document. Uses a keyed reconciler that preserves DOM
- * identity for matched elements + their live attributes (scroll, value,
- * etc.).
+ * MORPH the contents of a boundary range (#1015): reconcile the nodes between
+ * `target.start` and `target.end` (exclusive) in the live document against the
+ * nodes between `source.start` and `source.end` in the parsed Document, using
+ * a keyed reconciler that preserves DOM identity for matched elements + their
+ * live attributes (scroll, value, etc.). This is the state-preserving tier for
+ * a searchParams-only / refresh nav, where the route-key is unchanged and
+ * hydrated component state must survive.
  *
- * A null `end` (an orphaned open marker recovered per #994) means "run to the
- * end of the containing element": the slice-collection loops stop at the natural
- * sibling end and `reconcileSiblings` appends before `null` (end of parent), so
- * a dropped close comment swaps the whole children region without a close marker.
+ * Boundaries are strictly paired by the scanner (#1015), so `end` is always a
+ * real close comment here (the null-orphan tolerance of the deleted #994
+ * recovery is gone with it).
  *
- * @param {{ start: Comment, end: Comment | null } | undefined} target
- * @param {{ start: Comment, end: Comment | null } | undefined} source
+ * @param {{ start: Comment, end: Comment } | undefined} target
+ * @param {{ start: Comment, end: Comment } | undefined} source
  * @param {Document} _doc
  */
 function swapMarkerRange(target, source, _doc) {
@@ -3040,39 +3173,7 @@ function ownActualLightSlots(host) {
   return byName;
 }
 
-/**
- * The component's own light slot for `name`, whatever its projection state
- * (first-wins by document order). Used to resolve the slot to fill on a
- * fallback->actual transition, where the target slot is currently `fallback`
- * so it is absent from `ownActualLightSlots`. Nested-child slots are excluded.
- *
- * @param {Element} host
- * @param {string|null} name
- * @returns {HTMLSlotElement | null}
- */
-function ownLightSlotForName(host, name) {
-  for (const slot of host.querySelectorAll(`slot[${LIGHT_SLOT_ATTR}]`)) {
-    const s = /** @type {HTMLSlotElement} */ (slot);
-    if (!isOwnLightSlot(s, host)) continue;
-    if ((s.getAttribute('name') || null) === name) return s;
-  }
-  return null;
-}
 
-/**
- * Per-index node-identity equality of two node lists. Used to decide whether a
- * slot's assigned-node SET actually changed (so `slotchange` should fire); an
- * in-place text edit that reuses the same node is NOT a set change.
- *
- * @param {ArrayLike<Node>} a
- * @param {ArrayLike<Node>} b
- * @returns {boolean}
- */
-function sameNodeList(a, b) {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-  return true;
-}
 
 /**
  * Re-project the page-authored slotted content of a REUSED hydrated light-DOM
@@ -3096,8 +3197,8 @@ function sameNodeList(a, b) {
  *     slot runtime's own primitives (`applyFallback` / `applyActualAssignment`)
  *     on the ONE resolved own slot, which restore or swap the render-owned
  *     fallback without reconciling any lit-html part (#912). This is applied
- *     surgically to the target slot, NOT via a whole-host `projectChildren`
- *     pass: `projectChildren` selects EVERY `data-webjs-light` slot in the
+ *     surgically to the target slot, NOT via a whole-host application
+ *     pass: a whole-host pass selects EVERY `data-webjs-light` slot in the
  *     subtree (including a nested child component's), so running it here would
  *     let this component's assignment reach into a nested child's same-named
  *     slot and clobber its render-owned nodes (the #906 hazard, one level down).
@@ -3106,54 +3207,39 @@ function sameNodeList(a, b) {
  * @param {Element} src  Incoming SSR copy of the same component.
  */
 function reprojectSlottedContent(dst, src) {
-  // Only a light-DOM component that tracks slot assignments has projected
+  // Only a light-DOM component that tracks slot assignments has placed
   // page-authored content to update. No slot state (no <slot>, or a shadow-DOM
   // component whose slotted nodes are ordinary light children) means nothing
-  // to re-project here.
-  const state = /** @type {any} */ (dst)[SLOT_STATE];
-  if (!state) return;
+  // to update here.
+  if (!(/** @type {any} */ (dst)[SLOT_STATE])) return;
 
   const liveSlots = ownActualLightSlots(dst);
   const incSlots = ownActualLightSlots(src);
   if (liveSlots.size === 0 && incSlots.size === 0) return;
 
-  // A slot name is `actual` on the live side, the incoming side, or both. Walk
-  // the union so a boundary transition (present on only one side) is handled.
+  // #1015: slotted children are VALUES pushed through the ONE public seam,
+  // setSlotContent (no cross-module state surgery; the slot runtime owns the
+  // record, fires slotchange on a genuine set change, and re-applies). The
+  // union walk covers boundary transitions (a name present on only one side).
   const names = new Set([...liveSlots.keys(), ...incSlots.keys()]);
   for (const name of names) {
     const liveSlot = liveSlots.get(name);
     const incSlot = incSlots.get(name);
     if (liveSlot && incSlot) {
-      // actual->actual: the slot's children are page-authored, so
-      // reconcileChildren is safe: it preserves node identity where it can and
-      // never touches lit-html parts. Keep the slot runtime's assignment
-      // bookkeeping in sync so a later re-render materialises THESE nodes.
-      const prevAssigned = state.lastSnapshot.get(liveSlot) || [];
+      // actual->actual: reconcile IN PLACE first so page-authored slotted
+      // nodes keep DOM identity where they match (#908: a nested live
+      // component survives; an in-place text edit reuses the same node),
+      // then push the resulting set through the public API. The runtime's
+      // set-equality check makes slotchange fire exactly on an
+      // add/remove/replace and stay silent on a pure text edit (#912).
       reconcileChildren(liveSlot, incSlot);
-      const children = [...liveSlot.childNodes];
-      state.assignedByName.set(name, children);
-      state.lastSnapshot.set(liveSlot, children.slice());
-      // Fire slotchange on an assigned-node-SET change (add / remove / reorder),
-      // not an in-place text edit that reuses the same node: that matches the
-      // spec and keeps this branch uniform with the boundary branches below.
-      if (!sameNodeList(prevAssigned, children)) fireSlotChange(liveSlot);
-    } else if (liveSlot && !incSlot) {
-      // actual->fallback: incoming REMOVED this slot's content. Clear the
-      // assignment and flip THIS slot to fallback; applyFallback restores the
-      // render-owned fallback from the slot-part holding fragment.
-      state.assignedByName.delete(name);
-      if (applyFallback(state, liveSlot)) fireSlotChange(liveSlot);
+      setSlotContent(dst, name, [...liveSlot.childNodes]);
+    } else if (incSlot) {
+      // fallback->actual: incoming ADDED content. Import and push.
+      setSlotContent(dst, name, [...incSlot.childNodes].map((n) => document.importNode(n, true)));
     } else {
-      // fallback->actual: incoming ADDED content where the live slot shows
-      // fallback. The target slot is currently fallback, so resolve it directly
-      // (it is absent from the actual-only map) and fill it with the imported
-      // page-authored nodes; applyActualAssignment tucks the render-owned
-      // fallback into the holding fragment first.
-      const targetSlot = ownLightSlotForName(dst, name);
-      if (!targetSlot) continue;
-      const nodes = [...incSlot.childNodes].map((n) => document.importNode(n, true));
-      state.assignedByName.set(name, nodes);
-      if (applyActualAssignment(state, targetSlot, nodes)) fireSlotChange(targetSlot);
+      // actual->fallback: incoming DROPPED the content. Reset to fallback.
+      setSlotContent(dst, name, null);
     }
   }
 }
@@ -3287,16 +3373,21 @@ const LIVE_ATTRS = new Set([
  * @returns {{ slot: { start: Comment, end: Comment }, oldChildren: Node[], token: number } | null}
  */
 function applyOptimisticLoading() {
-  const slots = collectChildrenSlots(document.body);
-  if (slots.size === 0) return null;
-  // Pick the deepest current slot (longest path).
+  const slots = collectBoundaries(document.body);
+  if (!slots || slots.size === 0) return null;
+  // Walk boundaries deepest-first and use the first whose segment has a
+  // loading template. Loading templates are keyed by LAYOUT segment
+  // (loading.ts files live next to layouts), while the deepest boundary is
+  // usually the PAGE's own (#1015), which has no template: skipping over it
+  // finds the innermost layout skeleton, matching the pre-#1015 behaviour.
+  const bySegment = [...slots.keys()].sort((a, b) => b.length - a.length);
   let deepest = null;
-  for (const p of slots.keys()) {
-    if (deepest === null || p.length > deepest.length) deepest = p;
+  let tpl = null;
+  for (const p of bySegment) {
+    const t = document.getElementById(`wj-loading:${p}`);
+    if (t instanceof HTMLTemplateElement) { deepest = p; tpl = t; break; }
   }
-  if (deepest === null) return null;
-  const tpl = document.getElementById(`wj-loading:${deepest}`);
-  if (!(tpl instanceof HTMLTemplateElement)) return null;
+  if (deepest === null || tpl === null) return null;
 
   const slot = slots.get(deepest);
   /** @type {Node[]} */
@@ -3790,8 +3881,8 @@ export {
   clearFrameBusy as _clearFrameBusy,
   markFormBusy as _markFormBusy,
   clearFormBusy as _clearFormBusy,
-  collectChildrenSlots as _collectChildrenSlots,
-  longestSharedPath as _longestSharedPath,
+  collectBoundaries as _collectBoundaries,
+  planBoundarySwap as _planBoundarySwap,
   parseHTML as _parseHTML,
   resetParseProbe as _resetParseProbe,
   keyOf as _keyOf,
@@ -3850,6 +3941,11 @@ export function _currentPageUrl() { return currentPageUrl; }
 export function _setCurrentPageUrl(u) { currentPageUrl = u; }
 /** Test-only: clear the fire-once warning guards so a case can be re-exercised. */
 export function _resetWarnOnce() { warnedKeys.clear(); smoothScrollChecked = false; }
+
+/** Test-only: the readyState-loading full-load degradation predicate (#1008). */
+export function _shouldFullLoadDuringParse(isPopState, frameId) {
+  return shouldFullLoadDuringParse(isPopState, frameId);
+}
 
 /**
  * Predicate used by the onClick handler to decide whether a same-origin

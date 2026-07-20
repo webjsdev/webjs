@@ -24,8 +24,14 @@ import { assert } from '../../../../../test/browser-assert.js';
 const tick = () => new Promise((r) => setTimeout(r, 0));
 async function settle() { for (let i = 0; i < 6; i++) await tick(); }
 /** Poll until `cond()` is truthy (or a generous timeout), for a step gated on
- *  an async dynamic import whose timing varies under full-suite concurrency. */
-async function waitUntil(cond) { for (let i = 0; i < 100 && !cond(); i++) await tick(); }
+ *  an async dynamic import whose timing varies under full-suite concurrency.
+ *  Deadline-based (wall clock, not tick count): 100 zero-delay ticks can
+ *  elapse in a few ms while a cold dynamic import under full-suite load
+ *  (Firefox especially) takes longer, which flaked this file. */
+async function waitUntil(cond) {
+  const deadline = Date.now() + 5000;
+  while (!cond() && Date.now() < deadline) await new Promise((r) => setTimeout(r, 20));
+}
 
 /** A frame-bearing HTML response carrying the matched frame subtree. */
 const frameResponse = (id, inner) => Promise.resolve(new Response(

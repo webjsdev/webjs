@@ -23,13 +23,13 @@ suite('Client router: data-navigating is opt-in (#610)', () => {
   // default case proves the attribute is withheld even when the timer fires.
   function setup(fetchDelayMs) {
     enableClientRouter();
-    document.body.innerHTML = '<!--wj:children:/-->before<!--/wj:children-->';
+    document.body.innerHTML = '<!--wj:children:/:/-->before<!--/wj:children:/-->';
     origScrollTo = window.scrollTo;
     window.scrollTo = () => {};
     origFetch = window.fetch;
     window.fetch = () => sleep(fetchDelayMs).then(() => new Response(
       '<!doctype html><html><head></head><body>' +
-      '<!--wj:children:/-->after<!--/wj:children--></body></html>',
+      '<!--wj:children:/:/-->after<!--/wj:children:/--></body></html>',
       { headers: { 'content-type': 'text/html', 'x-webjs-build': '' } },
     ));
   }

@@ -1,13 +1,35 @@
 /**
- * Light-DOM <slot> runtime for @webjsdev/core.
+ * Light-DOM <slot> runtime for @webjsdev/core: CHILDREN AS VALUES (#1015).
  *
  * Provides functional parity with shadow-DOM <slot> projection inside
- * light-DOM WebComponents (those with static shadow = false). The framework
- * physically projects authored children into <slot> elements at render
- * time and fires slotchange events. The DOM API surface (assignedNodes,
- * assignedElements, assignedSlot) is polyfilled on HTMLSlotElement and
- * Element prototypes so user code reads the same against light-DOM slots
- * as it does against native shadow-DOM slots.
+ * light-DOM WebComponents (those with static shadow = false), on the React
+ * children model: authored children are captured ONCE per host lifetime into
+ * a per-host slot record (name -> Node[]), and the component's own renderer
+ * places that content into its `<slot data-webjs-light>` containers as an
+ * ordinary render-owned value. ONE renderer owns all nodes.
+ *
+ * What this deliberately is NOT (the pre-#1015 model, deleted): an
+ * observer-driven projection runtime. There are no MutationObservers, no
+ * microtask projection scheduler, no framework-marker record sniffing, and no
+ * pending-children shuffling. Those made light-DOM slots a third DOM-mutating
+ * actor beside the renderer and the client router, which is exactly the
+ * ownership overlap behind the #906/#908/#912/#914 cascade and the #1006
+ * non-idempotent projection class. Capture-once closes #1006 by construction:
+ * there is no second capture that could misclassify rendered nodes as
+ * authored children.
+ *
+ * SEMANTICS CHANGE (deliberate, breaking): an external `appendChild` on a
+ * mounted host, or a `slot=""`/`name=""` attribute flip, no longer live
+ * re-projects. The dynamic path is the public API:
+ *
+ *   host.slots            read view of the record ({ default, [name] })
+ *   host.hasSlot(name)    does the record carry content for `name`
+ *   host.setSlotContent(name, value)   replace a slot's content (Node,
+ *                         Node[], string, or null/[] to reset to fallback)
+ *
+ * The READS survive as derived shims: `assignedNodes()`,
+ * `assignedElements()`, `assignedSlot`, and `slotchange` all keep working
+ * against light-DOM slots exactly as before.
  *
  * Polyfill safety. Every prototype patch checks for the `data-webjs-light`
  * attribute on the slot element and falls through to the saved native
@@ -19,65 +41,11 @@
  * loads slot.js without blowing up. Server-side slot substitution lives
  * in render-server.js (injectDSD); slot.js drives the client runtime
  * only.
- *
- * Cross-file coordination. Two pieces of behaviour live partly here and
- * partly in render-client.js:
- *   1. Fallback content restoration. When a slot transitions to
- *      data-projection="fallback", slot.js clears the actual-assigned
- *      children; the slot-part's apply step in render-client.js
- *      restores the compiled fallback template into the slot.
- *   2. Slot-part teardown (slot inside a conditional that collapsed).
- *      render-client.js calls movePendingFromTorndownSlot() before
- *      removing the slot from the DOM so its assigned children survive
- *      to be re-projected on the next render.
  */
-
-import { MARKER } from './html.js';
 
 // ---------------------------------------------------------------------------
 // Module-scope constants
 // ---------------------------------------------------------------------------
-
-// Comment-node values used by render-client.js to bookend every
-// rendered template instance. Used to distinguish framework-driven
-// childList mutations from user-driven appendChild / removeChild in
-// the host's MutationObserver below.
-const FRAMEWORK_MARKER_START = `${MARKER}s`;
-const FRAMEWORK_MARKER_END = `${MARKER}e`;
-
-/**
- * True when the node is one of the framework's render-instance bookend
- * comment markers. The render-client.js paths that insert into or
- * remove from a slot host always include such a marker in the same
- * MutationRecord (either by `replaceChildren(start, ...content, end)`
- * at the top level or by `insertBefore(frag, marker)` where `frag`
- * itself is built from a `nodesToFrag([start, ...content, end])`).
- * Mutation records that touch one of these markers therefore belong
- * to the framework's render commit, not user authoring.
- *
- * @param {Node} node
- * @returns {boolean}
- */
-function isFrameworkMarker(node) {
-  if (!node || node.nodeType !== 8 /* COMMENT_NODE */) return false;
-  const v = node.nodeValue;
-  return v === FRAMEWORK_MARKER_START || v === FRAMEWORK_MARKER_END;
-}
-
-/**
- * True when a MutationRecord's added or removed nodes include a
- * framework bookend marker. Used by the host's childList observer
- * to drop renderer-driven records that would otherwise be
- * misinterpreted as authored-child changes.
- *
- * @param {MutationRecord} record
- * @returns {boolean}
- */
-function isFrameworkRecord(record) {
-  for (const n of record.addedNodes) if (isFrameworkMarker(n)) return true;
-  for (const n of record.removedNodes) if (isFrameworkMarker(n)) return true;
-  return false;
-}
 
 function detectBrowser() {
   return typeof HTMLElement !== 'undefined' && typeof HTMLSlotElement !== 'undefined';
@@ -103,8 +71,8 @@ export const PROJECTION_FALLBACK = 'fallback';
 /**
  * Symbol-keyed property on a slot element that holds a DocumentFragment
  * containing the slot's fallback content (cloned from the compiled template
- * by render-client.js at slot-part bind time). slot.js swaps these nodes
- * into and out of the slot as the projection state toggles between
+ * by render-client.js at slot-part bind time). The apply step swaps these
+ * nodes into and out of the slot as the projection state toggles between
  * "actual" and "fallback".
  */
 export const SLOT_FALLBACK_FRAG = Symbol('webjs.slot.fallbackFrag');
@@ -198,7 +166,11 @@ function isInShadowRoot(node) {
     const parent = n.parentNode;
     if (!parent) return false;
     if (parent === n) return false;
-    if (/** @type {any} */ (parent).host) return true;
+    // A real ShadowRoot is a DocumentFragment (nodeType 11) exposing its
+    // owner as `.host`. `.host` truthiness ALONE misfires on ordinary
+    // elements: HTMLAnchorElement/HTMLAreaElement expose a URL-derived
+    // `.host`, so a slot inside an <a> card read as "in shadow DOM".
+    if (parent.nodeType === 11 && /** @type {any} */ (parent).host) return true;
     n = parent;
   }
   return false;
@@ -282,24 +254,16 @@ function findLightAssignedSlot(el) {
 }
 
 // ---------------------------------------------------------------------------
-// Per-host state
+// Per-host state: the slot record
 // ---------------------------------------------------------------------------
 
 /**
  * @typedef {Object} SlotState
- * @property {Map<string|null, Node[]>} assignedByName Captured authored
- *   children per slot name (null is the default slot).
- * @property {Map<string|null, Node[]>} pendingByName Children awaiting a
- *   slot to be (re-)created. Populated when a slot is torn down by a
- *   conditional collapse or removed from the render tree.
+ * @property {Map<string|null, Node[]>} assignedByName The slot record:
+ *   captured (or programmatically set) content per slot name (null is the
+ *   default slot). The single source of truth for what each slot shows.
  * @property {WeakMap<HTMLSlotElement, Node[]>} lastSnapshot Per-slot
  *   record of the previous assigned-node set for slotchange equality.
- * @property {WeakMap<HTMLSlotElement, MutationObserver>} nameObservers
- *   Per-slot `name` attribute observers.
- * @property {MutationObserver | null} childObserver Host's childList +
- *   child `slot` attribute observer.
- * @property {boolean} scheduled Microtask flag for batched projection.
- * @property {Set<HTMLSlotElement>} ownedSlots Slots we currently track.
  */
 
 /**
@@ -315,12 +279,7 @@ export function ensureSlotState(host) {
   if (!state) {
     state = {
       assignedByName: new Map(),
-      pendingByName: new Map(),
       lastSnapshot: new WeakMap(),
-      nameObservers: new WeakMap(),
-      childObserver: null,
-      scheduled: false,
-      ownedSlots: new Set(),
     };
     h[SLOT_STATE] = state;
   }
@@ -333,14 +292,16 @@ export function hasSlotState(host) {
 }
 
 // ---------------------------------------------------------------------------
-// Authored-child capture
+// Capture: once per host lifetime
 // ---------------------------------------------------------------------------
 
 /**
- * Move every authored child of `host` into the slot state, partitioning
+ * Move every authored child of `host` into the slot record, partitioning
  * by each child's `slot=""` attribute. After this runs, `host` has no
- * children; the framework re-inserts them at projection time inside the
- * correct <slot> elements. Idempotent.
+ * children; the renderer re-inserts them at slot-apply time inside the
+ * correct <slot> elements. Runs ONCE per host lifetime (first mount, no
+ * SSR); there is no later re-capture, so rendered nodes can never be
+ * misclassified as authored children (#1006, closed by construction).
  *
  * @param {Element} host
  */
@@ -357,7 +318,8 @@ export function captureAuthoredChildren(host) {
 /**
  * After SSR + hydration, projected children already live inside their
  * <slot data-webjs-light> elements. Walk the host's render tree and
- * record those existing assignments in the state without moving DOM.
+ * record those existing assignments in the record without moving DOM.
+ * The capture-once counterpart for the hydration path.
  *
  * @param {Element} host
  */
@@ -368,13 +330,28 @@ export function adoptSSRAssignments(host) {
     /** @type {HTMLSlotElement} */
     const s = /** @type {any} */ (slot);
     if (s.getAttribute(PROJECTION_ATTR) !== PROJECTION_ACTUAL) continue;
-    const name = s.getAttribute('name') || null;
+    const name = keyOfName(s.getAttribute('name'));
     if (!state.assignedByName.has(name)) {
       const children = Array.from(s.childNodes);
       state.assignedByName.set(name, children);
       state.lastSnapshot.set(s, children.slice());
     }
   }
+}
+
+/**
+ * Normalise a slot name to the record key, applied at EVERY name read
+ * (capture, adopt, application, rescue, and the public API) so the record
+ * key is uniform end to end. The default slot is stored under `null`;
+ * `''` and `'default'` are aliases for it. Consequence: `default` is a
+ * RESERVED slot name (a literal `name="default"` slot addresses the
+ * default slot); the SSR substitution applies the same rule.
+ *
+ * @param {string | null | undefined} name
+ * @returns {string | null}
+ */
+function keyOfName(name) {
+  return name == null || name === '' || name === 'default' ? null : name;
 }
 
 /**
@@ -387,8 +364,7 @@ export function adoptSSRAssignments(host) {
 function slotNameOf(node) {
   if (node.nodeType !== 1) return null;
   const el = /** @type {Element} */ (node);
-  const v = el.getAttribute('slot');
-  return v ? v : null;
+  return keyOfName(el.getAttribute('slot'));
 }
 
 /** Append a value to a Map<K, V[]>, creating the array on first hit. */
@@ -401,235 +377,122 @@ function appendToMap(map, key, value) {
   arr.push(value);
 }
 
-/** Append a list of values to a Map<K, V[]>. */
-function appendArrayToMap(map, key, values) {
-  if (!values.length) return;
-  let arr = map.get(key);
-  if (!arr) {
-    arr = [];
-    map.set(key, arr);
-  }
-  for (const v of values) arr.push(v);
-}
-
 // ---------------------------------------------------------------------------
-// Observers
+// The public children-as-values API (#1015)
 // ---------------------------------------------------------------------------
 
 /**
- * Attach mutation observers to a host. Watches:
- *   1. Host's childList for authored children added or removed at runtime.
- *   2. Host's children's `slot` attribute for children moving between slots.
- *
- * Slot-name observers are attached separately by projectChildren when it
- * discovers a new slot element.
+ * A read view of the host's slot record: `{ default: Node[], [name]: Node[] }`.
+ * Fresh arrays each call, so callers cannot corrupt the record. Enables
+ * conditional-on-slot rendering (`this.slots.header ? ... : ...`).
  *
  * @param {Element} host
+ * @returns {Record<string, Node[]>}
  */
-export function attachSlotObservers(host) {
-  if (!inBrowser) return;
+export function slotsView(host) {
+  /** @type {Record<string, Node[]>} */
+  const view = {};
+  const state = /** @type {SlotState | undefined} */ (/** @type {any} */ (host)[SLOT_STATE]);
+  if (!state) return view;
+  for (const [name, nodes] of state.assignedByName) {
+    view[name == null ? 'default' : name] = nodes.slice();
+  }
+  return view;
+}
+
+/**
+ * Does the host's slot record carry content for `name`?
+ *
+ * @param {Element} host
+ * @param {string | null} [name]
+ * @returns {boolean}
+ */
+export function hasSlotContent(host, name) {
+  const state = /** @type {SlotState | undefined} */ (/** @type {any} */ (host)[SLOT_STATE]);
+  if (!state) return false;
+  const arr = state.assignedByName.get(keyOfName(name));
+  return Boolean(arr && arr.length);
+}
+
+/**
+ * Replace a slot's content (#1015): THE dynamic path for slotted children.
+ * Updates the record, re-applies the host's slot assignments, and fires
+ * `slotchange` on any slot whose assignment changed. Accepts a Node, a
+ * Node[], a string (becomes a Text node), or null/[] to clear the slot
+ * back to its fallback content.
+ *
+ * This replaces the deleted live re-projection observers: an external
+ * `appendChild` or `slot=""` flip on a mounted host is inert by design;
+ * the owner of dynamic slot content calls this API instead (the client
+ * router does exactly that during a same-route morph).
+ *
+ * @param {Element} host
+ * @param {string | null} name
+ * @param {Node | Node[] | string | null} value
+ */
+export function setSlotContent(host, name, value) {
   const state = ensureSlotState(host);
-  if (state.childObserver) return;
-  state.childObserver = new MutationObserver((records) => {
-    let dirty = false;
-    for (const r of records) {
-      // Skip records produced by the framework's own renderer. Each
-      // top-level TemplateInstance commit (`createInstance`) and each
-      // child-part template swap (`applyChildPart`) inserts and removes
-      // its content as a unit bounded by `wjm-s`/`wjm-e` comment markers
-      // (see render-client.js). When such a record reaches the host's
-      // childList observer, treating its addedNodes as authored
-      // children pollutes assignedByName with the renderer's own
-      // wrapper elements; projectChildren then tries to append those
-      // wrappers into a <slot> they contain, raising a
-      // HierarchyRequestError ("new child element contains the
-      // parent"). Filtering on marker presence isolates renderer
-      // commits from real authoring (which never inserts framework
-      // markers).
-      if (isFrameworkRecord(r)) continue;
-      if (r.type === 'childList') {
-        for (const node of r.addedNodes) {
-          // A new child appeared directly under host (not via slot.append
-          // inside our own projection routine, which appends deep inside
-          // the rendered template and isn't visible with subtree:false).
-          // Record it in the assignment table and let projection move it.
-          if (node.parentElement === host) {
-            appendToMap(state.assignedByName, slotNameOf(node), node);
-            dirty = true;
-          }
-        }
-        for (const node of r.removedNodes) {
-          // Skip when the node is still inside the host's subtree. That
-          // means projection moved it from host's direct children into
-          // a slot deeper down; the assignment table should keep the
-          // entry. Only treat as a user-removal when the node truly left.
-          if (host.contains(node)) continue;
-          if (removeFromAssignments(state, node)) dirty = true;
-        }
-      } else if (r.type === 'attributes' && r.attributeName === 'slot') {
-        const target = /** @type {Element} */ (r.target);
-        // A child's slot=" " attribute changed. If it's an authored
-        // child currently in the assignment table (either still a
-        // direct child of host or already projected into a slot deeper
-        // down), re-partition by the new name.
-        if (removeFromAssignments(state, target)) {
-          appendToMap(state.assignedByName, slotNameOf(target), target);
-          dirty = true;
-        } else if (target.parentElement === host) {
-          // Edge case where state.removeFromAssignments missed it: still
-          // direct on host and not yet captured.
-          appendToMap(state.assignedByName, slotNameOf(target), target);
-          dirty = true;
-        }
-      }
-    }
-    if (dirty) scheduleProjection(host);
-  });
-  // subtree: true so children moved into <slot> deeper in the tree are
-  // still observed when their slot=" " attribute changes (which would
-  // otherwise be invisible under subtree: false). The attribute filter
-  // keeps the observed surface small. childList stays scoped to host's
-  // direct children: appending a node to host is the user-level entry
-  // point for authoring; projection's slot.appendChild is on a node
-  // deeper in the tree and the filter does not fire on those.
-  state.childObserver.observe(host, {
-    childList: true,
-    attributes: true,
-    attributeFilter: ['slot'],
-    subtree: true,
-  });
+  const key = keyOfName(name);
+  const nodes = normalizeSlotValue(host, value);
+  if (nodes.length) state.assignedByName.set(key, nodes);
+  else state.assignedByName.delete(key);
+  applySlotAssignments(host);
 }
 
 /**
- * Detach the host's child observer and every slot-name observer. Called
- * from disconnectedCallback. The state itself is preserved so that a
- * subsequent reconnection picks up where it left off.
+ * @param {Element} host
+ * @param {Node | Node[] | string | null} value
+ * @returns {Node[]}
+ */
+function normalizeSlotValue(host, value) {
+  if (value == null) return [];
+  if (typeof value === 'string') {
+    const doc = host.ownerDocument || (typeof document !== 'undefined' ? document : null);
+    return doc ? [doc.createTextNode(value)] : [];
+  }
+  if (Array.isArray(value)) return value.filter(Boolean);
+  return [value];
+}
+
+// ---------------------------------------------------------------------------
+// Render-owned slot application
+// ---------------------------------------------------------------------------
+
+/**
+ * Place the slot record into the host's OWN light-DOM slots (#1015). The
+ * renderer's slot parts call this after the template commits, and
+ * `setSlotContent` calls it after a record update. Idempotent and cheap on
+ * no-change passes.
+ *
+ *   1. Collect the host's OWN slots (no other custom element between the
+ *      slot and the host; a nested component's slots belong to it).
+ *   2. Group by `name`, first-wins: the first slot of each name shows the
+ *      record content, later duplicates show fallback.
+ *   3. `data-projection` is stamped "actual" or "fallback" accordingly;
+ *      fallback content swaps through the part-owned holding fragment.
+ *   4. `slotchange` fires on slots whose assigned set actually changed.
  *
  * @param {Element} host
  */
-export function detachSlotObservers(host) {
-  /** @type {SlotState | undefined} */
-  const state = /** @type {any} */ (host)[SLOT_STATE];
-  if (!state) return;
-  if (state.childObserver) {
-    state.childObserver.disconnect();
-    state.childObserver = null;
-  }
-  for (const slot of state.ownedSlots) {
-    const obs = state.nameObservers.get(slot);
-    if (obs) {
-      obs.disconnect();
-      state.nameObservers.delete(slot);
-    }
-  }
-}
-
-/** Remove a node from the assignedByName map. Returns true if removed. */
-function removeFromAssignments(state, node) {
-  for (const [key, arr] of state.assignedByName) {
-    const idx = arr.indexOf(node);
-    if (idx !== -1) {
-      arr.splice(idx, 1);
-      if (arr.length === 0) state.assignedByName.delete(key);
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
- * True when `node` is currently slotted inside one of the host's owned
- * slots. Used to decide whether a `slot` attribute mutation on an
- * already-projected node should trigger a re-projection.
- */
-function hostOwnsAssignedNode(host, node) {
-  let p = node.parentElement;
-  while (p && p !== host) {
-    if (p.tagName === 'SLOT' && p.hasAttribute(LIGHT_SLOT_ATTR)) {
-      let q = p.parentElement;
-      while (q && q !== host) q = q.parentElement;
-      return q === host;
-    }
-    p = p.parentElement;
-  }
-  return false;
-}
-
-// ---------------------------------------------------------------------------
-// Microtask-batched projection scheduler
-// ---------------------------------------------------------------------------
-
-/**
- * Schedule a projection pass for the host on the next microtask. Multiple
- * calls within one synchronous task collapse to one projection. This is
- * the entry point every observer callback uses.
- *
- * @param {Element} host
- */
-export function scheduleProjection(host) {
-  const state = ensureSlotState(host);
-  if (state.scheduled) return;
-  state.scheduled = true;
-  queueMicrotask(() => {
-    state.scheduled = false;
-    projectChildren(host);
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Core projection routine
-// ---------------------------------------------------------------------------
-
-/**
- * Walk the host's render tree for light-DOM slots, group by their current
- * `name` attribute, apply the first-wins assignment rule, then materialise
- * the result in DOM. Idempotent and cheap on no-change passes.
- *
- *   1. Each slot is marked data-projection="actual" or "fallback".
- *   2. Each "actual" slot has its current children replaced by the
- *      assigned nodes (Node identity preserved for already-projected
- *      refs by reusing the same Node objects).
- *   3. Each "fallback" slot is reset by the framework's slot-part apply
- *      step in render-client.js, which restores the compiled fallback
- *      template.
- *   4. slotchange fires on slots whose assigned-node set changed.
- *
- * @param {Element} host
- */
-export function projectChildren(host) {
+export function applySlotAssignments(host) {
   if (!inBrowser) return;
   const state = /** @type {SlotState | undefined} */ (
     /** @type {any} */ (host)[SLOT_STATE]
   );
   if (!state) return;
 
-  // 1. Collect every owned slot in document order.
-  const slots = /** @type {HTMLSlotElement[]} */ (
-    Array.from(host.querySelectorAll(`slot[${LIGHT_SLOT_ATTR}]`))
-  );
-
-  // 2. Reconcile ownedSlots membership. Slots that disappeared from the
-  // render tree have their assigned children moved to pending so a future
-  // re-render can re-project them (slot inside a conditional that
-  // collapsed, etc.).
-  const newOwned = new Set(slots);
-  for (const slot of state.ownedSlots) {
-    if (!newOwned.has(slot)) {
-      handleSlotRemoved(state, slot);
-    }
+  // 1. The host's own slots, document order.
+  /** @type {HTMLSlotElement[]} */
+  const slots = [];
+  for (const el of host.querySelectorAll(`slot[${LIGHT_SLOT_ATTR}]`)) {
+    if (isOwnSlot(host, el)) slots.push(/** @type {HTMLSlotElement} */ (el));
   }
-  for (const slot of newOwned) {
-    if (!state.ownedSlots.has(slot)) {
-      attachNameObserver(host, slot);
-    }
-  }
-  state.ownedSlots = newOwned;
 
-  // 3. Group slots by current `name` attribute in document order.
+  // 2. Group by current `name` attribute in document order.
   /** @type {Map<string|null, HTMLSlotElement[]>} */
   const groups = new Map();
   for (const slot of slots) {
-    const name = slot.getAttribute('name') || null;
+    const name = keyOfName(slot.getAttribute('name'));
     let arr = groups.get(name);
     if (!arr) {
       arr = [];
@@ -638,24 +501,7 @@ export function projectChildren(host) {
     arr.push(slot);
   }
 
-  // 4. Drain pending children into assignedByName per group. Pending
-  // represents previously-displayed projection (a slot disappeared and
-  // is reappearing); putting it ahead of newer captured children keeps
-  // visual order stable across conditional toggles.
-  for (const name of groups.keys()) {
-    const pending = state.pendingByName.get(name);
-    if (pending && pending.length) {
-      const current = state.assignedByName.get(name) || [];
-      const merged = [];
-      for (const n of pending) merged.push(n);
-      for (const n of current) if (merged.indexOf(n) === -1) merged.push(n);
-      state.assignedByName.set(name, merged);
-      state.pendingByName.delete(name);
-    }
-  }
-
-  // 5. Assign per the first-wins rule. Primary (index 0) of each group
-  // gets the actual children; the rest show fallback.
+  // 3. Assign per the first-wins rule.
   /** @type {HTMLSlotElement[]} */
   const slotsChanged = [];
   for (const [name, group] of groups) {
@@ -672,30 +518,24 @@ export function projectChildren(host) {
     }
   }
 
-  // 6. Dispatch slotchange on slots whose assignment actually changed.
+  // 4. Dispatch slotchange on slots whose assignment actually changed.
   for (const slot of slotsChanged) fireSlotChange(slot);
 }
 
 /**
- * Move a slot's previous assignment to the pending map keyed by the
- * slot's last-known name. Used when the slot itself disappears from the
- * render tree (e.g., conditional collapse).
+ * True when `slot` belongs to `host` directly: no OTHER custom element
+ * sits between them. A slot nested inside a child custom element belongs
+ * to THAT component and is applied from its own record.
  *
- * @param {SlotState} state
- * @param {HTMLSlotElement} slot
+ * @param {Element} host
+ * @param {Element} slot
+ * @returns {boolean}
  */
-function handleSlotRemoved(state, slot) {
-  const obs = state.nameObservers.get(slot);
-  if (obs) {
-    obs.disconnect();
-    state.nameObservers.delete(slot);
+function isOwnSlot(host, slot) {
+  for (let p = slot.parentElement; p && p !== host; p = p.parentElement) {
+    if (p.tagName.includes('-')) return false;
   }
-  const prev = state.lastSnapshot.get(slot);
-  if (prev && prev.length > 0) {
-    const lastName = slot.getAttribute('name') || null;
-    appendArrayToMap(state.pendingByName, lastName, prev);
-  }
-  state.lastSnapshot.delete(slot);
+  return true;
 }
 
 /**
@@ -714,6 +554,17 @@ export function applyActualAssignment(state, slot, assigned) {
   const prev = state.lastSnapshot.get(slot) || [];
   const equal = !wasFallback && arraysEqual(prev, assigned);
   if (equal) return false;
+
+  // Fast path: the assigned nodes are ALREADY the slot's children in the
+  // same order (the router's morph reconciles in place, then syncs the
+  // record). Skip the detach/re-append churn (which would bounce nested
+  // custom elements through a disconnect/connect cycle) and just settle
+  // the snapshot; slotchange still reflects the set change vs the
+  // previous snapshot.
+  if (!wasFallback && arraysEqual(Array.from(slot.childNodes), assigned)) {
+    state.lastSnapshot.set(slot, assigned.slice());
+    return !arraysEqual(prev, assigned);
+  }
 
   // Preserve fallback content. If the slot currently holds fallback nodes
   // (either because we just hydrated from SSR's data-projection="fallback"
@@ -736,11 +587,10 @@ export function applyActualAssignment(state, slot, assigned) {
 }
 
 /**
- * Set a slot to fallback mode. slot.js clears any actual-assignment
- * children (moving them to pending for re-projection later) and sets the
- * marker attribute. The compiled fallback template is restored by the
- * slot-part's apply step in render-client.js, since the fallback content
- * may include template holes that the renderer needs to bind.
+ * Set a slot to fallback mode: clear any actual-assignment children and
+ * restore the part-owned fallback fragment. The record keeps the nodes
+ * (they are values now), so a later `setSlotContent` or slot re-creation
+ * re-places them.
  *
  * @param {SlotState} state
  * @param {HTMLSlotElement} slot
@@ -757,12 +607,8 @@ export function applyFallback(state, slot) {
     return false;
   }
 
-  // Slot transitioning from actual to fallback. This happens when the
-  // host's assignment for this slot's name is empty (e.g., user removed
-  // all matching children). Drop the lastSnapshot record; do NOT push
-  // children to the pending map (that path is for slot destruction
-  // during a conditional collapse, handled separately by
-  // moveSlotChildrenToPending).
+  // Slot transitioning from actual to fallback (the record no longer has
+  // content for this name).
   state.lastSnapshot.delete(slot);
   while (slot.firstChild) slot.removeChild(slot.firstChild);
   restoreFallbackInto(slot);
@@ -783,57 +629,31 @@ function restoreFallbackInto(slot) {
   slot.appendChild(frag);
 }
 
+// ---------------------------------------------------------------------------
+// Renderer teardown hook (called from render-client.js)
+// ---------------------------------------------------------------------------
+
 /**
- * Attach a MutationObserver to a slot's `name` attribute so re-targeting
- * (via dynamic name change) triggers re-projection.
+ * Detach a slot's record-owned children from the slot element before the
+ * renderer's template teardown disposes the slot's subtree (a conditional
+ * fragment collapsing). The RECORD keeps the node references, so when a
+ * re-render re-creates the slot, `applySlotAssignments` re-places the very
+ * same nodes: children are values, teardown never disposes consumer nodes.
  *
  * @param {Element} host
  * @param {HTMLSlotElement} slot
  */
-function attachNameObserver(host, slot) {
-  if (!inBrowser) return;
-  const state = ensureSlotState(host);
-  if (state.nameObservers.has(slot)) return;
-  const obs = new MutationObserver(() => scheduleProjection(host));
-  obs.observe(slot, { attributes: true, attributeFilter: ['name'] });
-  state.nameObservers.set(slot, obs);
-}
-
-// ---------------------------------------------------------------------------
-// Slot-part teardown hook (called from render-client.js)
-// ---------------------------------------------------------------------------
-
-/**
- * Move a slot's currently-projected children to the host's pending map
- * before the slot DOM element is removed by the framework's template
- * teardown (e.g., a conditional fragment collapsing). Called by
- * render-client.js immediately before disposing the slot-part.
- *
- * Without this hook the children would be torn down by the renderer's
- * generic clearInstance() and lose DOM identity.
- *
- * @param {Element} host
- * @param {HTMLSlotElement} slot
- */
-export function moveSlotChildrenToPending(host, slot) {
+export function rescueAssignedNodes(host, slot) {
   if (!hasSlotState(host)) return;
   const state = ensureSlotState(host);
-  const projected = state.lastSnapshot.get(slot);
-  if (!projected || projected.length === 0) return;
-  const name = slot.getAttribute('name') || null;
-  // Detach nodes from the slot so the renderer's clearInstance doesn't
-  // dispose them.
-  for (const node of projected) {
-    if (node.parentNode === slot) slot.removeChild(node);
+  const name = keyOfName(slot.getAttribute('name'));
+  const assigned = state.assignedByName.get(name);
+  if (assigned) {
+    for (const node of assigned) {
+      if (node.parentNode === slot) slot.removeChild(node);
+    }
   }
-  appendArrayToMap(state.pendingByName, name, projected);
   state.lastSnapshot.delete(slot);
-  const obs = state.nameObservers.get(slot);
-  if (obs) {
-    obs.disconnect();
-    state.nameObservers.delete(slot);
-  }
-  state.ownedSlots.delete(slot);
 }
 
 // ---------------------------------------------------------------------------

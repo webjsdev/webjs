@@ -87,31 +87,53 @@ export async function ssrPage(route, params, url, opts) {
 
   try {
     const suspenseCtx = { pending: [], nextId: 1, usedComponents: new Set(), dev: opts.dev };
-    // Parse the partial-nav "have" header from the client. The header
-    // lists comma-separated marker paths the client already has rendered
-    // in its DOM. The server walks the target route's layout chain
-    // innermost → outermost and SHORT-CIRCUITS at the first match -
-    // returning only the content below that layout, wrapped in the
-    // matched layout's marker pair. Real wire-byte savings: the outer
-    // layouts' HTML is never re-serialized for same-shell navigations.
+    // Parse the partial-nav "have" header from the client. The server walks
+    // the target route's layout chain innermost → outermost and
+    // SHORT-CIRCUITS at the first FULL match (segment AND route-key),
+    // returning only the content below that layout, wrapped in the matched
+    // layout's boundary pair. Real wire-byte savings: the outer layouts'
+    // HTML is never re-serialized for same-shell navigations.
     const haveHeader = opts.req?.headers.get('x-webjs-have') || '';
-    const have = haveHeader
-      ? new Set(haveHeader.split(',').map((s) => s.trim()).filter(Boolean))
-      : null;
+    // Entries are `<segment>:<route-key>` (#1015). The route-key is required
+    // for a correct short-circuit: a dynamic layout the client holds for
+    // OTHER params ('/[org]' rendered for org-a on an org-b navigation) must
+    // be re-rendered and re-shipped, or the client's parent-anchored REPLACE
+    // has no fresh layout markup to swap in. Split at the LAST ':' (encoded
+    // route-keys contain no ':'; a hand-authored folder name that smuggles a
+    // delimiter through the SEGMENT half can only fail to match, which
+    // degrades to a full render: always correct). An entry with no key (a
+    // malformed or legacy client) is ignored, degrading the same way.
+    /** @type {Map<string, string> | null} */
+    let have = null;
+    if (haveHeader) {
+      have = new Map();
+      for (const entry of haveHeader.split(',')) {
+        const e = entry.trim();
+        if (!e) continue;
+        const cut = e.lastIndexOf(':');
+        if (cut <= 0 || cut === e.length - 1) continue;
+        have.set(e.slice(0, cut), e.slice(cut + 1));
+      }
+      if (have.size === 0) have = null;
+    }
     // SSR action-result seeding (#472). When enabled, run the whole render
     // inside an ambient seed collector so every `'use server'` action a
     // component awaits in `async render()` records its (args -> result) for the
     // hydration payload. Disabled -> the plain render, byte-identical to before.
     let seedCollector = null;
     let body;
+    let reduced = false;
     if (seedingEnabled()) {
       const seeded = await collectSeeds(() =>
         renderChain(route, ctx, opts.dev, suspenseCtx, have, opts.pageModule),
       );
-      body = seeded.value;
+      body = seeded.value.html;
+      reduced = seeded.value.reduced;
       seedCollector = seeded.collector;
     } else {
-      body = await renderChain(route, ctx, opts.dev, suspenseCtx, have, opts.pageModule);
+      const chain = await renderChain(route, ctx, opts.dev, suspenseCtx, have, opts.pageModule);
+      body = chain.html;
+      reduced = chain.reduced;
     }
 
     // Frame subtree render (#253). A `<webjs-frame src>` self-load (or a
@@ -135,7 +157,14 @@ export async function ssrPage(route, params, url, opts) {
     if (frameId && suspenseCtx.pending.length === 0) {
       const subtree = extractFrameSubtree(body, frameId);
       if (subtree !== null) {
-        return htmlResponse(subtree, opts.status || 200, opts.req, url);
+        const frameRes = htmlResponse(subtree, opts.status || 200, opts.req, url);
+        // The subtree is sliced by the x-webjs-frame REQUEST header, so a
+        // shared cache must never serve it to a request that did not send
+        // one (the same #1009 poisoning shape as the reduced-have case).
+        frameRes.headers.append('vary', 'X-Webjs-Frame');
+        // #1009: a subtree sliced from a REDUCED render inherits its variance.
+        if (reduced) frameRes.headers.append('vary', 'X-Webjs-Have');
+        return frameRes;
       }
     }
     // Module URLs for the page + every layout in its chain. These ride
@@ -273,6 +302,17 @@ export async function ssrPage(route, params, url, opts) {
       nonce,
       opts.dev,
     );
+    // REDUCED response (#1009): the X-Webjs-Have short-circuit omitted the
+    // outer-layout chrome, so these bytes are only valid for a request that
+    // sent a matching `have`. Without `Vary: X-Webjs-Have`, a shared cache
+    // (CDN edge) could store the reduced body under the URL and serve a
+    // chrome-less fragment to a fresh full-page navigation (measured live:
+    // GET / was 73,534 bytes, GET / + have was 57,035, byte-identical headers
+    // otherwise). Scoped to genuinely reduced responses so a normal page's
+    // cache key is unchanged. The internal #241 revalidate cache is already
+    // safe by construction: `cacheEligible` excludes any request that carries
+    // x-webjs-have, so a reduced body is never stored under the URL-only key.
+    if (reduced) res.headers.append('vary', 'X-Webjs-Have');
     // Server HTML cache write (#241). The page opted in via `revalidate`, so
     // FLAG this candidate for the response funnel rather than writing here: the
     // store decision must see the FINAL response (after segment middleware,
@@ -564,36 +604,65 @@ async function renderChain(route, ctx, dev, suspenseCtx, have, pageModule) {
     } catch { /* loading file failed: skip, render page directly */ }
   }
 
-  // Wrap each layout's `${children}` interpolation in
-  // `<!--wj:children:<segment-path>-->...<!--/wj:children-->` comment
-  // markers. The client router walks both old + new DOM for these
-  // markers and swaps only the children-slot of the deepest shared
-  // layout: preserving outer-layout DOM (and the scroll position of
-  // anything inside it: sidenavs, sticky headers, inner scroll
-  // containers). Auto-derived from folder structure: no opt-in
-  // required from layout authors.
+  // Resolved route params drive every boundary's route-key. ctx.params is
+  // thenable (#848) but its `then` is non-enumerable, so a spread yields the
+  // plain param map the route-key derivation expects.
+  const params = { ...(/** @type {Record<string,string>} */ (ctx.params) || {}) };
+
+  // Page-level boundary (#1015). The page gets its own keyed boundary pair
+  // whose route-key is its full resolved path, so a dynamic-param change
+  // (`/blog/a` -> `/blog/b`) REPLACES (remounts) the page on the client (Next
+  // parity) while a shared parent layout (a shorter segment whose key did not
+  // change) is preserved. Skipped when the page's segment equals the innermost
+  // layout's: the layout's children-slot boundary already delimits that exact
+  // range, and two boundaries with one segment id would break keyed pairing.
+  const pageSeg = pageSegmentPath(route.file);
+  const innermostLayoutSeg = route.layouts && route.layouts.length
+    ? layoutSegmentPath(route.layouts[route.layouts.length - 1])
+    : null;
+  if (pageSeg !== innermostLayoutSeg) {
+    tree = wrapWithChildrenMarker(tree, pageSeg, params);
+  }
+
+  // Wrap each layout's `${children}` interpolation in the KEYED boundary
+  // comment pair (open `<!--wj:children:<segment>:<route-key>-->`, close
+  // `<!--/wj:children:<segment>-->`, #1015). The client router scans both the
+  // live and incoming DOM for these boundaries (strict id-matched pairing, no
+  // LIFO guessing) and applies the two-tier swap: a changed route-key
+  // REPLACES at the PARENT of the shallowest change, else the deepest shared
+  // boundary MORPHS. Outer
+  // layout DOM (and the scroll position of anything inside it: sidenavs,
+  // fixed headers, inner scroll containers) is preserved. Auto-derived from
+  // folder structure: no opt-in required from layout authors.
   // X-Webjs-Have optimization: iterate from innermost → outermost and
   // SHORT-CIRCUIT at the first layout whose segment path the client
   // already has rendered. Wrap the accumulated inner tree in that
-  // layout's marker pair (so the client can identify the splice
+  // layout's boundary pair (so the client can identify the splice
   // target) and return: outer layouts are not rendered at all,
   // saving CPU and wire bytes.
   for (let i = route.layouts.length - 1; i >= 0; i--) {
     const segmentPath = layoutSegmentPath(route.layouts[i]);
-    if (have && have.has(segmentPath)) {
-      tree = wrapWithChildrenMarker(tree, segmentPath);
+    // Short-circuit ONLY when the client's copy of this layout was rendered
+    // for the SAME route-key: a param change at a dynamic layout must
+    // re-render the layout's own markup (#1015).
+    if (have && have.get(segmentPath) === regionRouteKey(segmentPath, params)) {
+      tree = wrapWithChildrenMarker(tree, segmentPath, params);
       const body = await renderToString(tree, { ssr: true, suspenseCtx });
-      return body + (await loadingTemplates(route, ctx, dev));
+      // REDUCED response (#1009): the outer layouts were skipped, so these
+      // bytes are only valid for a client that already HAS them. The caller
+      // marks the response `Vary: X-Webjs-Have` so no shared cache can serve
+      // this fragment to a fresh full-page navigation.
+      return { html: body + (await loadingTemplates(route, ctx, dev)), reduced: true };
     }
     const mod = await loadModule(route.layouts[i], dev);
     if (!mod.default) continue;
     tree = await mod.default({
       ...ctx,
-      children: wrapWithChildrenMarker(tree, segmentPath),
+      children: wrapWithChildrenMarker(tree, segmentPath, params),
     });
   }
   const body = await renderToString(tree, { ssr: true, suspenseCtx });
-  return body + (await loadingTemplates(route, ctx, dev));
+  return { html: body + (await loadingTemplates(route, ctx, dev)), reduced: false };
 }
 
 /**
@@ -669,23 +738,142 @@ function layoutSegmentPath(layoutFile) {
 }
 
 /**
- * Wrap a TemplateResult-or-renderable child in the partial-nav children
- * marker pair. Returns a synthetic TemplateResult: server `renderToString`
- * walks `.strings` and `.values` exactly the same way as for the `html` tag.
+ * Like layoutSegmentPath but for the PAGE file. Strips the `page.ext`
+ * filename, yielding the page's own segment path (the full route pattern,
+ * dynamic tokens included):
+ *
+ *   app/page.ts                    -> '/'
+ *   app/blog/[slug]/page.ts        -> '/blog/[slug]'
+ *   app/files/[...rest]/page.ts    -> '/files/[...rest]'
+ *
+ * This is the segment for the PAGE-level region (Pillar 1 / #1013): the page
+ * needs its own region keyed by the full resolved path so a dynamic-param
+ * change remounts the page (Next parity) while a shared parent LAYOUT (a
+ * shorter segment path whose route-key does not change) is preserved.
+ *
+ * @param {string} pageFile  Absolute path to the page source file.
+ * @returns {string}
+ */
+function pageSegmentPath(pageFile) {
+  const p = pageFile
+    .replace(/^.*\/app\//, '')
+    .replace(/\/?page\.[jt]sx?$/, '');
+  return p === '' ? '/' : '/' + p;
+}
+
+/**
+ * Derive a region's ROUTE-KEY from its segment path pattern and the render's
+ * resolved params. The route-key is the CONCRETE resolved URL path for the
+ * region: dynamic `[param]` / catch-all `[...param]` / optional-catch-all
+ * `[[...param]]` tokens are substituted with their param values, and `(group)`
+ * segments are dropped (they scope layouts but never appear in the URL).
+ * searchParams are excluded by construction (params carries route params only).
+ *
+ * The client router compares a region's OLD vs NEW route-key to pick the swap
+ * tier: route-key CHANGED -> wholesale replace (Next page-remount parity),
+ * route-key SAME -> bounded same-route morph (hydrated component state kept, the
+ * searchParams-only-nav case). A static segment (`/`, `/docs`) has a constant
+ * route-key, so that layout's region never remounts and its chrome always
+ * survives.
+ *
+ * PARAM VALUES ARE ENCODED (`encodeURIComponent`, per path piece). The
+ * route-key rides inside the boundary COMMENT, and param values are
+ * user-controlled, so an unencoded value could carry `-->` and terminate the
+ * comment mid-boundary. Encoding removes `<`, `>`, `:`, `/` from every
+ * substituted piece, which makes all three HTML-forbidden comment sequences
+ * (`<!--`, `-->`, `--!>`) impossible (each needs `<` or `>`) and keeps `:`
+ * unambiguous as the boundary-format delimiter. A catch-all's value is encoded
+ * per PIECE (split on `/`), so its literal separators stay readable. Static
+ * segments come from folder names and are emitted as-is. A bare `--` can
+ * survive encoding (`-` is unreserved) and is legal inside an HTML5 comment.
+ * The key is only ever compared for equality, so encoding does not affect the
+ * swap-tier decision.
+ *
+ *   regionRouteKey('/', {})                          -> '/'
+ *   regionRouteKey('/docs', {})                      -> '/docs'
+ *   regionRouteKey('/blog/[slug]', {slug:'a'})       -> '/blog/a'
+ *   regionRouteKey('/(marketing)/about', {})         -> '/about'
+ *   regionRouteKey('/files/[...rest]', {rest:'a/b'}) -> '/files/a/b'
+ *   regionRouteKey('/shop/[[...slug]]', {})          -> '/shop'
+ *   regionRouteKey('/blog/[slug]', {slug:'a-->b'})   -> '/blog/a--%3Eb'
+ *
+ * @param {string} segmentPath  Region segment pattern, e.g. '/blog/[slug]'.
+ * @param {Record<string,string>} params  Resolved route params (values are
+ *   strings; a catch-all value is already slash-joined, e.g. 'a/b/c').
+ * @returns {string}
+ */
+function regionRouteKey(segmentPath, params) {
+  const p = params || {};
+  /** Encode one substituted value, per slash-piece (catch-alls keep their
+   *  literal separators; each piece is comment-safe + delimiter-safe). */
+  const enc = (v) => String(v).split('/').map((s) => encodeURIComponent(s)).join('/');
+  /** A STATIC piece is a folder name emitted as-is EXCEPT the boundary/header
+   *  delimiter characters (':' would mis-split the `segment:route-key` parses,
+   *  ',' the have-entry list, '%' the decode); percent-encode just those so
+   *  the no-delimiter invariant holds for every emitted route-key while
+   *  normal folder names stay byte-identical. */
+  const encStatic = (v) => v.replace(/[%:,]/g, (c) => encodeURIComponent(c));
+  const out = [];
+  for (const seg of segmentPath.split('/')) {
+    if (!seg) continue;
+    // Route group `(marketing)`: scopes layouts, absent from the URL.
+    if (seg.startsWith('(') && seg.endsWith(')')) continue;
+    // Optional catch-all `[[...name]]` / catch-all `[...name]`: the value is
+    // the already-slash-joined tail (may be '' for an empty optional one).
+    if (seg.startsWith('[[...') && seg.endsWith(']]')) {
+      const v = p[seg.slice(5, -2)];
+      if (v) out.push(enc(v));
+      continue;
+    }
+    if (seg.startsWith('[...') && seg.endsWith(']')) {
+      const v = p[seg.slice(4, -1)];
+      if (v) out.push(enc(v));
+      continue;
+    }
+    // Dynamic `[name]`.
+    if (seg.startsWith('[') && seg.endsWith(']')) {
+      out.push(enc(p[seg.slice(1, -1)] ?? ''));
+      continue;
+    }
+    out.push(encStatic(seg));
+  }
+  return '/' + out.join('/');
+}
+
+/**
+ * Wrap a TemplateResult-or-renderable child in a KEYED partial-nav boundary
+ * comment pair (#1015). Returns a synthetic TemplateResult: server
+ * `renderToString` walks `.strings` and `.values` exactly the same way as for
+ * the `html` tag.
+ *
+ * Format:
+ *   open   <!--wj:children:<segment>:<route-key>-->
+ *   close  <!--/wj:children:<segment>-->
+ *
+ * The close carries the SEGMENT, so client-side pairing is deterministic
+ * id-matching instead of the LIFO reconstruction that produced the #994 class
+ * of silent mispair. The open additionally carries the resolved ROUTE-KEY
+ * (param values encoded, see `regionRouteKey`), which drives the client's
+ * two-tier swap decision: key changed -> wholesale replace (Next remount
+ * parity), key same -> bounded morph (hydrated state preserved). A comment is
+ * invisible to structural CSS (`>`, `:nth-child`, flex/grid item enumeration),
+ * so unlike a wrapper element this boundary is layout-free by construction.
  *
  * The marker text lives in `strings` (static template parts), NOT in
  * `values`: `values` get HTML-escaped on render, comments wouldn't survive.
  *
  * @param {unknown} tree  A TemplateResult, string, array, or Promise.
- * @param {string} segmentPath  The layout's segment path, used as marker id.
+ * @param {string} segmentPath  The boundary's segment pattern (pairing id).
+ * @param {Record<string,string>} params  Resolved route params for the key.
  * @returns {{ _$webjs: 'template', strings: string[], values: unknown[] }}
  */
-function wrapWithChildrenMarker(tree, segmentPath) {
+function wrapWithChildrenMarker(tree, segmentPath, params) {
+  const routeKey = regionRouteKey(segmentPath, params);
   return {
     _$webjs: 'template',
     strings: [
-      `<!--wj:children:${segmentPath}-->`,
-      `<!--/wj:children-->`,
+      `<!--wj:children:${segmentPath}:${routeKey}-->`,
+      `<!--/wj:children:${segmentPath}-->`,
     ],
     values: [tree],
   };
@@ -694,6 +882,8 @@ function wrapWithChildrenMarker(tree, segmentPath) {
 // Re-export for unit testing.
 export {
   layoutSegmentPath as _layoutSegmentPath,
+  pageSegmentPath as _pageSegmentPath,
+  regionRouteKey as _regionRouteKey,
   wrapWithChildrenMarker as _wrapWithChildrenMarker,
 };
 

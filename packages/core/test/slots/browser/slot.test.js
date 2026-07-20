@@ -138,7 +138,58 @@ suite('Light-DOM slot projection (browser)', () => {
     host.remove();
   });
 
-  test('slotchange fires when a child is added at runtime', async () => {
+  test('a slotted host nested inside an <a> is NOT misread as shadow DOM (anchor .host bug)', async () => {
+    // HTMLAnchorElement exposes a URL-derived `.host` ('example.com'), so a
+    // shadow-root walk that checks `.host` truthiness alone bails at the
+    // anchor and silently skips the light-DOM slot application. The real
+    // check requires a DocumentFragment (nodeType 11). This is exactly the
+    // blog's post-card shape (<a><muted-text>meta</muted-text></a>), where
+    // the author line vanished post-hydration.
+    const tag = tagName('anchor-nested');
+    class C extends WebComponent {
+      render() { return html`<slot></slot>`; }
+    }
+    C.register(tag);
+    const a = document.createElement('a');
+    a.href = '/somewhere';
+    const host = document.createElement(tag);
+    host.appendChild(document.createTextNode('Demo Author'));
+    a.appendChild(host);
+    document.body.appendChild(a);
+    await tick();
+    await tick();
+    const slot = host.querySelector('slot[data-webjs-light]');
+    assert.ok(slot, 'the slot rendered');
+    assert.equal(slot.getAttribute('data-projection'), 'actual',
+      'the slot was applied as light DOM (not skipped as shadow)');
+    assert.equal(slot.textContent, 'Demo Author', 'the authored content was placed');
+    a.remove();
+  });
+
+  test('the reserved `default` alias addresses the default slot everywhere (#1015)', async () => {
+    // 'default', '', and null all address the default slot, uniformly across
+    // capture, application, and the public API, so a router morph that reads
+    // a name attribute of "default" cannot strand content on a mismatched key.
+    const tag = tagName('default-alias');
+    class C extends WebComponent {
+      render() { return html`<main><slot name="default">fb</slot></main>`; }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    host.appendChild(document.createTextNode('captured'));
+    document.body.appendChild(host);
+    await tick();
+    await tick();
+    const slot = host.querySelector('slot[data-webjs-light]');
+    assert.equal(slot.textContent, 'captured', 'unnamed children land in the name="default" slot');
+    assert.equal(host.hasSlot('default'), true, 'hasSlot(default) reads the default record');
+    host.setSlotContent('default', 'replaced');
+    await tick();
+    assert.equal(slot.textContent, 'replaced', 'setSlotContent(default) targets the same slot');
+    host.remove();
+  });
+
+  test('slotchange fires when content is set at runtime via setSlotContent (#1015)', async () => {
     const tag = tagName('slotchange-add');
     class C extends WebComponent {
       render() { return html`<div><slot></slot></div>`; }
@@ -151,13 +202,38 @@ suite('Light-DOM slot projection (browser)', () => {
     let fireCount = 0;
     slot.addEventListener('slotchange', () => { fireCount++; });
     const p = document.createElement('p');
-    host.appendChild(p);
+    host.setSlotContent(null, p);
     await tick();
     assert.ok(fireCount >= 1, 'slotchange should fire at least once');
+    assert.equal(p.parentElement, slot, 'the pushed node was placed in the slot');
     host.remove();
   });
 
-  test('slotchange fires when a child is removed', async () => {
+  test('an external appendChild on a mounted host is INERT by design (#1015)', async () => {
+    // The pre-#1015 observers live-re-projected any appendChild. Children
+    // are values now: the record was captured once at mount, so a later
+    // external append neither moves into the slot nor fires slotchange.
+    // The dynamic path is setSlotContent (previous test).
+    const tag = tagName('append-inert');
+    class C extends WebComponent {
+      render() { return html`<div><slot></slot></div>`; }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    document.body.appendChild(host);
+    await tick();
+    const slot = host.querySelector('slot[data-webjs-light]');
+    let fireCount = 0;
+    slot.addEventListener('slotchange', () => { fireCount++; });
+    host.appendChild(document.createElement('p'));
+    await tick();
+    await tick();
+    assert.equal(fireCount, 0, 'no slotchange: external appends are not observed');
+    assert.equal(slot.children.length, 0, 'the appended child was not projected');
+    host.remove();
+  });
+
+  test('slotchange fires when content is cleared via setSlotContent(null) (#1015)', async () => {
     const tag = tagName('slotchange-remove');
     class C extends WebComponent {
       render() { return html`<div><slot></slot></div>`; }
@@ -171,9 +247,10 @@ suite('Light-DOM slot projection (browser)', () => {
     const slot = host.querySelector('slot[data-webjs-light]');
     let fireCount = 0;
     slot.addEventListener('slotchange', () => { fireCount++; });
-    slot.removeChild(p);
+    host.setSlotContent(null, null);
     await tick();
-    assert.ok(fireCount >= 1, 'slotchange should fire on removal');
+    assert.ok(fireCount >= 1, 'slotchange should fire on clearing to fallback');
+    assert.equal(slot.children.length, 0, 'the slot reset to (empty) fallback');
     host.remove();
   });
 
@@ -199,7 +276,9 @@ suite('Light-DOM slot projection (browser)', () => {
     host.remove();
   });
 
-  test('child slot attribute change re-routes between slots', async () => {
+  test('setSlotContent re-routes content between named slots (#1015)', async () => {
+    // The pre-#1015 slot=""-attribute observer is gone; moving content
+    // between slots is an explicit two-call operation on the record.
     const tag = tagName('child-slot-change');
     class C extends WebComponent {
       render() { return html`<div><slot name="a"></slot><slot name="b"></slot></div>`; }
@@ -214,13 +293,14 @@ suite('Light-DOM slot projection (browser)', () => {
     const slotA = host.querySelector('slot[name="a"]');
     const slotB = host.querySelector('slot[name="b"]');
     assert.equal(child.parentElement, slotA, 'initially in slot a');
-    child.setAttribute('slot', 'b');
+    host.setSlotContent('a', null);
+    host.setSlotContent('b', child);
     await tick();
-    assert.equal(child.parentElement, slotB, 'after mutation, in slot b');
+    assert.equal(child.parentElement, slotB, 'after the record update, in slot b');
     host.remove();
   });
 
-  test('multiple mutations in one tick batch into a single re-projection', async () => {
+  test('this.slots + hasSlot read the record; setSlotContent(array) places a burst at once (#1015)', async () => {
     const tag = tagName('batch');
     class C extends WebComponent {
       render() { return html`<div><slot></slot></div>`; }
@@ -230,36 +310,16 @@ suite('Light-DOM slot projection (browser)', () => {
     document.body.appendChild(host);
     await tick();
     const slot = host.querySelector('slot[data-webjs-light]');
+    assert.equal(host.hasSlot(), false, 'no default content yet');
     let fireCount = 0;
     slot.addEventListener('slotchange', () => { fireCount++; });
-    // Burst of 10 mutations in one synchronous task.
-    for (let i = 0; i < 10; i++) host.appendChild(document.createElement('p'));
+    const burst = Array.from({ length: 10 }, () => document.createElement('p'));
+    host.setSlotContent(null, burst);
     await tick();
-    await tick();
-    // Microtask batching collapses these to one projection. The slotchange
-    // event fires once (assigned-set changed from empty → 10 nodes).
-    assert.equal(fireCount, 1, 'expected single slotchange event for batched burst');
-    host.remove();
-  });
-
-  test('dynamic slot name attribute change re-projects', async () => {
-    const tag = tagName('dyn-name');
-    class C extends WebComponent {
-      render() { return html`<div><slot></slot></div>`; }
-    }
-    C.register(tag);
-    const host = document.createElement(tag);
-    host.innerHTML = '<p slot="x">P</p>';
-    document.body.appendChild(host);
-    await tick();
-    const slot = host.querySelector('slot[data-webjs-light]');
-    // Initially the default slot has no children with slot="x", so empty.
-    assert.equal(slot.children.length, 0);
-    // Re-target the slot to name "x".
-    slot.setAttribute('name', 'x');
-    await tick();
-    assert.equal(slot.children.length, 1);
-    assert.equal(slot.children[0].tagName, 'P');
+    assert.equal(fireCount, 1, 'one setSlotContent call, one slotchange');
+    assert.equal(slot.children.length, 10, 'the whole burst placed');
+    assert.equal(host.hasSlot(), true, 'the record now has default content');
+    assert.equal(host.slots.default.length, 10, 'this.slots reads the record');
     host.remove();
   });
 

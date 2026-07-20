@@ -81,9 +81,9 @@ suite('Client router: the nav parse preserves comment markers (#1007)', () => {
 
   test('preserves the wj:children layout markers on a stripping browser', () => {
     withStrippingParseHTMLUnsafe(() => {
-      const doc = _parseHTML(DOC('<!--wj:children:/-->\n<main>page</main>\n<!--/wj:children-->'));
+      const doc = _parseHTML(DOC('<!--wj:children:/:/-->\n<main>page</main>\n<!--/wj:children:/-->'));
       assert.ok(doc, 'parse returned a document');
-      assert.deepEqual(comments(doc.body), ['wj:children:/', '/wj:children']);
+      assert.deepEqual(comments(doc.body), ['wj:children:/:/', '/wj:children:/']);
     });
   });
 
@@ -104,9 +104,9 @@ suite('Client router: the nav parse preserves comment markers (#1007)', () => {
     // is the exact payload shape that swept the navbar on webjs.dev.
     withStrippingParseHTMLUnsafe(() => {
       const doc = _parseHTML(
-        DOC('<!--wj:children:/-->\n<style>i{color:red}</style>\n<main>home</main>\n<footer>f</footer>\n<!--/wj:children-->'),
+        DOC('<!--wj:children:/:/-->\n<style>i{color:red}</style>\n<main>home</main>\n<footer>f</footer>\n<!--/wj:children:/-->'),
       );
-      assert.deepEqual(comments(doc.body), ['wj:children:/', '/wj:children']);
+      assert.deepEqual(comments(doc.body), ['wj:children:/:/', '/wj:children:/']);
       assert.ok(doc.body.querySelector('main'), 'content survives too');
     });
   });
@@ -127,9 +127,9 @@ suite('Client router: the nav parse preserves comment markers (#1007)', () => {
     // upgrade, and a soft nav runs JS by definition.
     withStrippingParseHTMLUnsafe(() => {
       const doc = _parseHTML(
-        DOC('<!--wj:children:/-->\n<x-shadow><template shadowrootmode="open"><p>inside</p></template></x-shadow>\n<!--/wj:children-->'),
+        DOC('<!--wj:children:/:/-->\n<x-shadow><template shadowrootmode="open"><p>inside</p></template></x-shadow>\n<!--/wj:children:/-->'),
       );
-      assert.deepEqual(comments(doc.body), ['wj:children:/', '/wj:children'], 'markers survive, which is the point');
+      assert.deepEqual(comments(doc.body), ['wj:children:/:/', '/wj:children:/'], 'markers survive, which is the point');
       const host = doc.querySelector('x-shadow');
       assert.ok(!host.shadowRoot, 'no script-created root: it would be non-declarative');
       assert.ok(host.querySelector('template[shadowrootmode]'), 'template left intact for the component to use');
@@ -140,8 +140,8 @@ suite('Client router: the nav parse preserves comment markers (#1007)', () => {
     // The fragment branch never used parseHTMLUnsafe, so it was accidentally
     // immune. Pin it so a future refactor cannot route it through the lossy API.
     withStrippingParseHTMLUnsafe(() => {
-      const doc = _parseHTML('<!--wj:children:/docs-->\n<main>d</main>\n<!--/wj:children-->');
-      assert.deepEqual(comments(doc.body), ['wj:children:/docs', '/wj:children']);
+      const doc = _parseHTML('<!--wj:children:/docs:/docs-->\n<main>d</main>\n<!--/wj:children:/docs-->');
+      assert.deepEqual(comments(doc.body), ['wj:children:/docs:/docs', '/wj:children:/docs']);
     });
   });
 
@@ -196,7 +196,7 @@ suite('Client router: the nav parse preserves comment markers (#1007)', () => {
     // guarantees markers identically, so a marker assertion cannot tell the two
     // apart and would pass either way). Spy on parseHTMLUnsafe to count calls.
     const orig = Document.parseHTMLUnsafe;
-    const html = DOC('<!--wj:children:/-->\n<main>x</main>\n<!--/wj:children-->');
+    const html = DOC('<!--wj:children:/:/-->\n<main>x</main>\n<!--/wj:children:/-->');
     const nativeIsLossless = orig.call(Document, '<!doctype html><body><!--c--><i></i>')?.body?.firstChild?.nodeType === 8;
 
     let calls = 0;
@@ -204,7 +204,7 @@ suite('Client router: the nav parse preserves comment markers (#1007)', () => {
     try {
       _resetParseProbe();
       const doc = _parseHTML(html);
-      assert.deepEqual(comments(doc.body), ['wj:children:/', '/wj:children'], 'markers survive either way');
+      assert.deepEqual(comments(doc.body), ['wj:children:/:/', '/wj:children:/'], 'markers survive either way');
       if (nativeIsLossless) {
         // 1 probe + 1 real parse: the correct browser is NOT exiled to the fallback.
         assert.equal(calls, 2, 'lossless browser takes the native fast path');

@@ -36,10 +36,19 @@ suite('Client router: form submission-state events + aria-busy (#246)', () => {
   // mid-flight, then resolve it to observe the settle.
   let pending;
 
+  let bOpen, bClose;
   function setup() {
     enableClientRouter(); // idempotent
     container = document.createElement('div');
+    // Bracket the container with a live keyed boundary pair (#1015): the
+    // settle responses carry the matching pair, so the applied swap stays
+    // soft instead of degrading to a full load (which would navigate the
+    // test page away).
+    bOpen = document.createComment('wj:children:/:/');
+    bClose = document.createComment('/wj:children:/');
+    document.body.appendChild(bOpen);
     document.body.appendChild(container);
+    document.body.appendChild(bClose);
     pending = [];
     origFetch = window.fetch;
     window.fetch = (url) => new Promise((resolve, reject) => {
@@ -49,6 +58,8 @@ suite('Client router: form submission-state events + aria-busy (#246)', () => {
   function teardown() {
     window.fetch = origFetch;
     container.remove();
+    bOpen.remove();
+    bClose.remove();
   }
 
   // Resolve the Nth (default last) in-flight fetch with the given Response.
@@ -86,7 +97,7 @@ suite('Client router: form submission-state events + aria-busy (#246)', () => {
       assert.ok(events[0][1].url.includes('/save'), 'detail.url is the action target');
 
       // Settle with a 200 success.
-      settle(htmlResponse('<main><p>saved</p></main>', 200));
+      settle(htmlResponse('<!--wj:children:/:/--><main><p>saved</p></main><!--/wj:children:/-->', 200));
       await tick();
 
       assert.equal(form.getAttribute('aria-busy'), 'false', 'aria-busy cleared on settle');
@@ -120,7 +131,7 @@ suite('Client router: form submission-state events + aria-busy (#246)', () => {
       await tick();
       assert.equal(form.getAttribute('aria-busy'), 'true', 'busy during the 422 round-trip');
 
-      settle(htmlResponse('<main><form method="POST" action="/save"><p>required</p></form></main>', 422));
+      settle(htmlResponse('<!--wj:children:/:/--><main><form method="POST" action="/save"><p>required</p></form></main><!--/wj:children:/-->', 422));
       await tick();
 
       assert.equal(form.getAttribute('aria-busy'), 'false', 'busy cleared after 422 settle');
@@ -173,7 +184,7 @@ suite('Client router: form submission-state events + aria-busy (#246)', () => {
       assert.ok(pending.length >= 2, 'second fetch issued');
 
       // Settle the SECOND (latest) fetch -> the live submission completes.
-      settle(htmlResponse('<main><p>saved</p></main>', 200));
+      settle(htmlResponse('<!--wj:children:/:/--><main><p>saved</p></main><!--/wj:children:/-->', 200));
       await tick();
 
       assert.equal(form.getAttribute('aria-busy'), 'false', 'busy cleared once the live submit settles');

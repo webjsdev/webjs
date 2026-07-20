@@ -50,11 +50,13 @@ suite('Client router: <webjs-frame> frame-missing contract (#251)', () => {
     // The frame, with a link inside it (so activeFrameId resolves "main")
     // and identifiable content.
     container.innerHTML =
+      '<!--wj:children:/:/-->' +
       '<webjs-frame id="main">' +
         '<span id="frame-content">ORIGINAL</span>' +
         '<a id="frame-link" href="/no-frame-here">go</a>' +
       '</webjs-frame>' +
-      '<a id="plain-link" href="/plain-target">plain</a>';
+      '<a id="plain-link" href="/plain-target">plain</a>' +
+      '<!--/wj:children:/-->';
     document.body.appendChild(container);
 
     origFetch = window.fetch;
@@ -177,7 +179,7 @@ suite('Client router: <webjs-frame> frame-missing contract (#251)', () => {
       // return is scoped to frameId and never over-triggers.)
       window.fetch = () => htmlResponse(
         '<!doctype html><html><head></head><body>' +
-        '<h1 id="plain-swapped">Plain target</h1>' +
+        '<!--wj:children:/:/--><h1 id="plain-swapped">Plain target</h1><!--/wj:children:/-->' +
         '</body></html>'
       );
 

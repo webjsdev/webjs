@@ -30,12 +30,12 @@ async function waitForSearch(want, ms = 1000) {
   return location.search;
 }
 
-/** A minimal swap body: the `<!--wj:children:/-->` markers the router diffs into.
+/** A minimal swap body: the `<!--wj:children:/:/-->` markers the router diffs into.
  *  Same for every URL (these tests assert the URL + history, not content). */
 function swapBody() {
   return new Response(
     '<!doctype html><html><head></head><body>' +
-    '<!--wj:children:/-->after<!--/wj:children--></body></html>',
+    '<!--wj:children:/:/-->after<!--/wj:children:/--></body></html>',
     { headers: { 'content-type': 'text/html', 'x-webjs-build': '' } },
   );
 }
@@ -46,7 +46,7 @@ suite('Client router: query-string preservation (#639)', () => {
   function setup(responder) {
     enableClientRouter(); // idempotent
     _resetPrefetch();
-    document.body.innerHTML = '<!--wj:children:/-->before<!--/wj:children-->';
+    document.body.innerHTML = '<!--wj:children:/:/-->before<!--/wj:children:/-->';
     container = document.createElement('div');
     document.body.appendChild(container);
     calls = [];

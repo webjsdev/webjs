@@ -350,7 +350,11 @@ test('registration via customElements.define is not mistaken for a client global
   assert.equal(analyzeComponentSource(src).interactive, false);
 });
 
-test('a rendered <slot> forces interactive (light-DOM projection runtime)', () => {
+test('a display-only rendered <slot> is ELIDABLE under children-as-values (#1015)', () => {
+  // Pre-#1015 any rendered <slot> shipped (it needed the observer-driven
+  // projection runtime). With children as values the SSR output already
+  // carries the placed children and there are no observers, so a slotted
+  // wrapper with no dynamic slot usage is byte-identical without its JS.
   const src = `
     import { WebComponent, html } from '@webjsdev/core';
     class Card extends WebComponent {
@@ -358,9 +362,34 @@ test('a rendered <slot> forces interactive (light-DOM projection runtime)', () =
     }
     Card.register('slot-card');
   `;
-  const r = analyzeComponentSource(src);
-  assert.equal(r.interactive, true);
-  assert.match(r.reason, /slot/);
+  assert.equal(analyzeComponentSource(src).interactive, false);
+});
+
+test('the dynamic slot API forces interactive (#1015 narrow signals)', () => {
+  const cases = [
+    // slotchange listener wiring (string appears in the module source).
+    `this.querySelector('slot').addEventListener('slotchange', () => {})`,
+    // assigned* reads.
+    `const n = this.querySelector('slot').assignedNodes()`,
+    `const e = this.querySelector('slot').assignedElements()`,
+    // The slot record read (conditional-on-slot rendering).
+    `const has = this.slots.header`,
+    // The dynamic write + the record query.
+    `this.setSlotContent('header', [])`,
+    `if (this.hasSlot('header')) {}`,
+  ];
+  for (const line of cases) {
+    const src = `
+      import { WebComponent, html } from '@webjsdev/core';
+      class Card extends WebComponent {
+        probe() { ${line}; }
+        render() { return html\`<div><slot></slot></div>\`; }
+      }
+      Card.register('slot-card');
+    `;
+    const r = analyzeComponentSource(src);
+    assert.equal(r.interactive, true, `expected interactive for: ${line}`);
+  }
 });
 
 test('a custom tag named <slot-machine> is NOT mistaken for a slot', () => {

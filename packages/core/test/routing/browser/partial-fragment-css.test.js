@@ -3,7 +3,7 @@
  * the head stylesheets and the outer layout, not wipe them.
  *
  * The server's X-Webjs-Have partial response for a same-layout nav is an INNER
- * fragment that BEGINS with the `<!--wj:children:/-->` marker and carries no
+ * fragment that BEGINS with the `<!--wj:children:/:/-->` marker and carries no
  * `<!doctype>`/`<html>` (see packages/server/src/ssr.js `wrapWithChildrenMarker`
  * + the `have.has(segmentPath)` short-circuit). Parsing that fragment as a
  * DOCUMENT hoists the leading comment OUT of `<body>` (the HTML "before html"
@@ -23,7 +23,7 @@ import {
   enableClientRouter,
   navigate,
   _parseHTML,
-  _collectChildrenSlots,
+  _collectBoundaries,
 } from '../../../src/router-client.js';
 
 import { assert } from '../../../../../test/browser-assert.js';
@@ -32,19 +32,19 @@ const tick = () => new Promise((r) => setTimeout(r, 25));
 
 /** The inner fragment a same-layout partial nav returns: marker-first, no
  *  <!doctype>/<html>/<head>, no outer layout. Exactly what the server sends. */
-const FRAGMENT = '<!--wj:children:/--><main id="inner">AFTER</main><!--/wj:children-->';
+const FRAGMENT = '<!--wj:children:/:/--><main id="inner">AFTER</main><!--/wj:children:/-->';
 
 suite('Client router: same-layout nav keeps head CSS + outer layout (#936)', () => {
   test('parseHTML keeps the leading wj:children marker inside <body> for a bare fragment', () => {
     const doc = _parseHTML(FRAGMENT);
-    const slots = _collectChildrenSlots(doc.body);
+    const slots = _collectBoundaries(doc.body);
     // The open marker must be IN body (a document-context parse hoists it out,
     // leaving slots empty), so the slot map has the '/' path.
     assert.ok(slots.has('/'), 'the "/" children slot is found in the parsed fragment body');
     assert.ok(doc.querySelector('#inner'), 'the inner content parsed into the body');
     // A full document still parses as before (regression guard).
-    const full = _parseHTML('<!doctype html><html><head><link rel="stylesheet" href="/x.css"></head><body><!--wj:children:/-->x<!--/wj:children--></body></html>');
-    assert.ok(_collectChildrenSlots(full.body).has('/'), 'a full document body still yields the slot');
+    const full = _parseHTML('<!doctype html><html><head><link rel="stylesheet" href="/x.css"></head><body><!--wj:children:/:/-->x<!--/wj:children:/--></body></html>');
+    assert.ok(_collectBoundaries(full.body).has('/'), 'a full document body still yields the slot');
     assert.ok(full.querySelector('link[rel="stylesheet"]'), 'a full document keeps its head stylesheet');
   });
 
@@ -62,7 +62,7 @@ suite('Client router: same-layout nav keeps head CSS + outer layout (#936)', () 
     // the children slot the nav should swap. Mirrors the SSR layout structure.
     document.body.innerHTML =
       '<header class="site-top" id="navbar">NAV</header>' +
-      '<!--wj:children:/--><main id="inner">BEFORE</main><!--/wj:children-->';
+      '<!--wj:children:/:/--><main id="inner">BEFORE</main><!--/wj:children:/-->';
 
     const before = location.href;
     const origFetch = window.fetch;
@@ -87,7 +87,7 @@ suite('Client router: same-layout nav keeps head CSS + outer layout (#936)', () 
       const inner = document.getElementById('inner');
       assert.ok(inner && inner.textContent === 'AFTER', 'the children slot swapped to the new content');
       // And the layout markers are still in the body (a scoped swap keeps them).
-      assert.ok(_collectChildrenSlots(document.body).has('/'), 'the layout markers are intact after the swap');
+      assert.ok(_collectBoundaries(document.body).has('/'), 'the layout markers are intact after the swap');
     } finally {
       window.fetch = origFetch;
       try { history.replaceState(null, '', before); } catch { /* ignore */ }

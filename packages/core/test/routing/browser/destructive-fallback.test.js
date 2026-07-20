@@ -27,7 +27,7 @@ import {
 import { assert } from '../../../../../test/browser-assert.js';
 
 suite('Client router: soft nav keeps CSS + empty-have prefetch gate (#936)', () => {
-  test('a full-body-swap fallback whose incoming head lacks the stylesheet keeps the live CSS', () => {
+  test('a cross-page REPLACE whose incoming head lacks the stylesheet keeps the live CSS', () => {
     enableClientRouter();
 
     const link = document.createElement('link');
@@ -39,21 +39,32 @@ suite('Client router: soft nav keeps CSS + empty-have prefetch gate (#936)', () 
     style.textContent = ':root{--df:1}';
     document.head.appendChild(style);
 
-    // Live DOM has a layout; incoming document has a DIFFERENT layout marker
-    // (so no shared path -> the full-body-swap fallback runs) AND an empty head
-    // that lacks the stylesheet, exactly the shape that used to strip the CSS.
-    document.body.innerHTML = '<!--wj:children:/docs-->old<!--/wj:children-->';
+    // Cross-page nav under the shared root boundary: '/docs' -> '/admin' with
+    // '/' shared (#1015: REPLACE at '/', no full-body path anymore). The
+    // incoming head is EMPTY (lacks the stylesheet), exactly the shape that
+    // used to strip the CSS before #936. The add-only head merge on this path
+    // must leave the live CSS untouched.
+    document.body.innerHTML =
+      '<!--wj:children:/:/-->' +
+        '<!--wj:children:/docs:/docs-->old<!--/wj:children:/docs-->' +
+      '<!--/wj:children:/-->';
 
     try {
-      const doc = _parseHTML('<!doctype html><html><head></head><body><!--wj:children:/admin--><main>new</main><!--/wj:children--></body></html>');
+      const doc = _parseHTML(
+        '<!doctype html><html><head></head><body>' +
+        '<!--wj:children:/:/-->' +
+          '<!--wj:children:/admin:/admin--><main>new</main><!--/wj:children:/admin-->' +
+        '<!--/wj:children:/-->' +
+        '</body></html>');
       _applySwap(doc, null, false, location.origin + '/admin/y');
 
-      // The swap ran (cross-layout), but the head merge preserved the CSS.
+      // The swap ran (REPLACE at the shared root), and the CSS survived.
       assert.ok(document.head.querySelector('link[href="/destructive-fallback-test.css"]'),
         'the live stylesheet link was NOT stripped by the head merge');
       assert.ok(document.getElementById('df-inline-style'),
         'the live <style> was NOT stripped by the head merge');
       assert.ok(document.body.textContent.includes('new'), 'the body swap did apply');
+      assert.ok(!document.body.textContent.includes('old'), 'the old page content is gone');
     } finally {
       link.remove();
       const s = document.getElementById('df-inline-style');

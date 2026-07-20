@@ -879,11 +879,12 @@ test('ssrPage: page metadata.cacheControl is honoured', async () => {
   assert.equal(resp.headers.get('cache-control'), 'public, max-age=60');
 });
 
-test('ssrPage: emits wj:children comment marker around the page slot for each layout', async () => {
-  // Each layout's ${children} interpolation is wrapped in a
-  // <!--wj:children:<segment-path>--> ... <!--/wj:children--> comment pair
-  // by renderChain. The client router walks both old + new DOM for these
-  // markers and swaps only the deepest shared layout's children slot.
+test('ssrPage: emits the KEYED boundary pair around the page slot for each layout (#1015)', async () => {
+  // Each layout's ${children} interpolation is wrapped in a keyed comment
+  // boundary pair: open <!--wj:children:<segment>:<route-key>-->, close
+  // <!--/wj:children:<segment>-->. The keyed close makes client pairing
+  // deterministic id-matching (no LIFO), and the route-key drives the
+  // two-tier REPLACE/MORPH decision. A static segment's key equals it.
   const { route, appDir } = await makeRoute({
     pageSrc:
       `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
@@ -897,20 +898,53 @@ test('ssrPage: emits wj:children comment marker around the page slot for each la
   const url = new URL('http://localhost/');
   const resp = await ssrPage(route, {}, url, { dev: false, appDir });
   const body = await resp.text();
-  // Marker for the root layout, segment path '/'.
-  assert.ok(body.includes('<!--wj:children:/-->'),
-    `expected open marker for root layout, got: ${body.slice(0, 600)}`);
-  assert.ok(body.includes('<!--/wj:children-->'),
-    `expected close marker, got: ${body.slice(0, 600)}`);
-  // The shell wraps the marker, not the other way around: the layout
-  // markup is OUTSIDE its own children-slot marker.
+  // Boundary for the root layout: segment '/', route-key '/'.
+  assert.ok(body.includes('<!--wj:children:/:/-->'),
+    `expected keyed open boundary for root layout, got: ${body.slice(0, 600)}`);
+  assert.ok(body.includes('<!--/wj:children:/-->'),
+    `expected keyed close boundary, got: ${body.slice(0, 600)}`);
+  // The shell wraps the boundary, not the other way around: the layout
+  // markup is OUTSIDE its own children-slot boundary.
   const idxShell = body.indexOf('class="shell"');
-  const idxOpen = body.indexOf('<!--wj:children:/-->');
+  const idxOpen = body.indexOf('<!--wj:children:/:/-->');
   const idxPage = body.indexOf('page content');
-  const idxClose = body.indexOf('<!--/wj:children-->');
-  assert.ok(idxShell < idxOpen, 'layout markup precedes marker');
-  assert.ok(idxOpen < idxPage, 'open marker precedes page content');
-  assert.ok(idxPage < idxClose, 'close marker follows page content');
+  const idxClose = body.indexOf('<!--/wj:children:/-->');
+  assert.ok(idxShell < idxOpen, 'layout markup precedes the boundary');
+  assert.ok(idxOpen < idxPage, 'open boundary precedes page content');
+  assert.ok(idxPage < idxClose, 'close boundary follows page content');
+});
+
+test('ssrPage: a dynamic page gets its own boundary with the RESOLVED route-key (#1015)', async () => {
+  // A page whose segment differs from the innermost layout (here: page
+  // '/blog/[slug]' under root layout '/') gets its OWN keyed boundary whose
+  // route-key is the resolved path, so a param change (/blog/a -> /blog/b)
+  // REPLACES (remounts) the page while the root layout boundary (key '/')
+  // is preserved. The dynamic [slug] is substituted from resolved params.
+  const sub = mkdtempSync(join(tmpDir, 'boundary-dyn-'));
+  const appDir = join(sub, 'app');
+  const pageDir = join(appDir, 'blog', '[slug]');
+  mkdirSync(pageDir, { recursive: true });
+  const layoutFile = join(appDir, 'layout.js');
+  const pageFile = join(pageDir, 'page.js');
+  writeFileSync(layoutFile,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+    `export default function Layout({ children }) { return html\`<div class="shell">\${children}</div>\`; }\n`);
+  writeFileSync(pageFile,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+    `export default function Page() { return html\`<article>post</article>\`; }\n`);
+  const route = { file: pageFile, layouts: [layoutFile], errors: [], metadataFiles: [] };
+  const url = new URL('http://localhost/blog/a');
+  const resp = await ssrPage(route, { slug: 'a' }, url, { dev: false, appDir });
+  const body = await resp.text();
+  assert.ok(body.includes('<!--wj:children:/:/-->'), 'root layout boundary present');
+  assert.ok(body.includes('<!--wj:children:/blog/[slug]:/blog/a-->'),
+    `expected page boundary with resolved route-key, got: ${body.slice(0, 900)}`);
+  assert.ok(body.includes('<!--/wj:children:/blog/[slug]-->'), 'page boundary closed with its segment');
+  // The page boundary nests INSIDE the root layout boundary.
+  assert.ok(
+    body.indexOf('<!--wj:children:/:/-->') < body.indexOf('<!--wj:children:/blog/[slug]:'),
+    'page boundary nests inside the layout boundary',
+  );
 });
 
 test('ssrPage: X-Webjs-Have skips rendering layouts above the deepest match', async () => {
@@ -931,7 +965,7 @@ test('ssrPage: X-Webjs-Have skips rendering layouts above the deepest match', as
 
   const url = new URL('http://localhost/');
   const req = new Request(url.toString(), {
-    headers: { 'x-webjs-have': '/' },
+    headers: { 'x-webjs-have': '/:/' },
   });
   const resp = await ssrPage(route, {}, url, { dev: false, appDir, req });
   const body = await resp.text();
@@ -939,9 +973,103 @@ test('ssrPage: X-Webjs-Have skips rendering layouts above the deepest match', as
   // The outer layout's distinctive markup must NOT appear: it was skipped.
   assert.ok(!body.includes('HEAVY-OUTER-LAYOUT'),
     `outer layout should be skipped, but body contains it. got: ${body.slice(0, 500)}`);
-  // The page content is still present, wrapped in the matched marker.
-  assert.ok(body.includes('<!--wj:children:/-->'), 'matched marker present');
+  // The page content is still present, wrapped in the matched keyed boundary.
+  assert.ok(body.includes('<!--wj:children:/:/-->'), 'matched keyed boundary present');
   assert.ok(body.includes('page body'), 'page content present');
+});
+
+test('ssrPage: a REDUCED have-response carries Vary: X-Webjs-Have; a full one does not (#1009)', async () => {
+  // A reduced response (outer chrome omitted) under a URL-only cache key is
+  // latent cache poisoning: a shared cache could serve the fragment to a
+  // fresh full-page navigation. Vary scopes the key. A normal full response
+  // must NOT grow the header (its cache key stays URL-only).
+  const { route, appDir } = await makeRoute({
+    pageSrc:
+      `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+      `export default function Page() { return html\`<p>page body</p>\`; }\n`,
+    layoutSrc:
+      `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+      `export default function Layout({ children }) { return html\`<div class="OUTER">\${children}</div>\`; }\n`,
+  });
+  const url = new URL('http://localhost/');
+
+  // Reduced: the client already has '/'.
+  const haveReq = new Request(url.toString(), { headers: { 'x-webjs-have': '/:/' } });
+  const reducedResp = await ssrPage(route, {}, url, { dev: false, appDir, req: haveReq });
+  assert.ok((reducedResp.headers.get('vary') || '').includes('X-Webjs-Have'),
+    `a reduced response varies on X-Webjs-Have, got: ${reducedResp.headers.get('vary')}`);
+  const reducedBody = await reducedResp.text();
+  assert.ok(!reducedBody.includes('OUTER'), 'sanity: the response really was reduced');
+
+  // A have header that matches NOTHING renders the full page: no Vary.
+  const missReq = new Request(url.toString(), { headers: { 'x-webjs-have': '/nomatch:/nomatch' } });
+  const missResp = await ssrPage(route, {}, url, { dev: false, appDir, req: missReq });
+  assert.ok(!(missResp.headers.get('vary') || '').includes('X-Webjs-Have'),
+    'a non-matching have renders full and must NOT vary');
+
+  // No have header at all: full page, no Vary.
+  const fullResp = await ssrPage(route, {}, url, { dev: false, appDir });
+  assert.ok(!(fullResp.headers.get('vary') || '').includes('X-Webjs-Have'),
+    'a plain full-page response must NOT vary on X-Webjs-Have');
+  const fullBody = await fullResp.text();
+  assert.ok(fullBody.includes('OUTER'), 'sanity: the full response has the chrome');
+});
+
+test('ssrPage: a DYNAMIC layout the client has for OTHER params is re-rendered, not short-circuited (#1015)', async () => {
+  // The have entry carries the route-key: '/[org]:/a' means "I hold the [org]
+  // layout rendered for org-a". Navigating to org-b, the server must NOT
+  // short-circuit at [org] (the client's copy shows the wrong org chrome);
+  // it re-renders the layout so the client's parent-anchored REPLACE has the
+  // fresh markup. The static root ('/:/') still short-circuits.
+  const sub = mkdtempSync(join(tmpDir, 'have-dynkey-'));
+  const appDir = join(sub, 'app');
+  mkdirSync(join(appDir, '[org]', 'settings'), { recursive: true });
+  const rootLayout = join(appDir, 'layout.js');
+  const orgLayout = join(appDir, '[org]', 'layout.js');
+  const pageFile = join(appDir, '[org]', 'settings', 'page.js');
+  writeFileSync(rootLayout,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+    `export default function Root({ children }) { return html\`<div class="ROOT-CHROME">\${children}</div>\`; }\n`);
+  writeFileSync(orgLayout,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+    `export default function Org({ children, params }) { return html\`<h1 class="ORG-CHROME">\${params.org}</h1>\${children}\`; }\n`);
+  writeFileSync(pageFile,
+    `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+    `export default function Page() { return html\`<p>settings</p>\`; }\n`);
+  const route = { file: pageFile, layouts: [rootLayout, orgLayout], errors: [], metadataFiles: [] };
+  const url = new URL('http://localhost/b/settings');
+  const req = new Request(url.toString(), {
+    // The client holds the root (static, key matches) and the [org] layout
+    // rendered for org-a (key MISMATCH for this org-b navigation).
+    headers: { 'x-webjs-have': '/:/,/[org]:/a' },
+  });
+  const resp = await ssrPage(route, { org: 'b' }, url, { dev: false, appDir, req });
+  const body = await resp.text();
+  assert.ok(!body.includes('ROOT-CHROME'),
+    `the static root layout still short-circuits, got: ${body.slice(0, 500)}`);
+  assert.ok(body.includes('ORG-CHROME'),
+    `the [org] layout was RE-RENDERED for org-b (key mismatch), got: ${body.slice(0, 500)}`);
+  assert.ok(body.includes('>b</h1>'), 'the re-rendered layout carries the NEW param');
+  assert.ok(body.includes('<!--wj:children:/[org]:/b-->'),
+    'the re-rendered layout children boundary carries the new route-key');
+});
+
+test('ssrPage: a frame-subtree response varies on X-Webjs-Frame (shared-cache safety)', async () => {
+  // The subtree is sliced by the x-webjs-frame REQUEST header, so a shared
+  // cache must key on it or a full-page navigation could be served the lone
+  // frame subtree (the #1009 poisoning shape).
+  const { route, appDir } = await makeRoute({
+    pageSrc:
+      `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
+      `export default function Page() { return html\`<webjs-frame id="panel"><p>frame body</p></webjs-frame>\`; }\n`,
+  });
+  const url = new URL('http://localhost/');
+  const req = new Request(url.toString(), { headers: { 'x-webjs-frame': 'panel' } });
+  const resp = await ssrPage(route, {}, url, { dev: false, appDir, req });
+  assert.ok((resp.headers.get('vary') || '').includes('X-Webjs-Frame'),
+    `a frame subtree varies on X-Webjs-Frame, got: ${resp.headers.get('vary')}`);
+  const body = await resp.text();
+  assert.ok(body.includes('frame body'), 'sanity: the frame subtree was returned');
 });
 
 test('ssrPage: X-Webjs-Have picks deepest match (not just any match)', async () => {
@@ -973,7 +1101,7 @@ test('ssrPage: X-Webjs-Have picks deepest match (not just any match)', async () 
 
   const url = new URL('http://localhost/docs');
   const req = new Request(url.toString(), {
-    headers: { 'x-webjs-have': '/,/docs' },
+    headers: { 'x-webjs-have': '/:/,/docs:/docs' },
   });
   const resp = await ssrPage(route, {}, url, { dev: false, appDir, req });
   const body = await resp.text();
@@ -981,9 +1109,9 @@ test('ssrPage: X-Webjs-Have picks deepest match (not just any match)', async () 
   // Both outer layouts must be skipped: body has neither's distinctive markup.
   assert.ok(!body.includes('ROOT'), `root layout skipped; got: ${body.slice(0, 600)}`);
   assert.ok(!body.includes('DOCS'), `docs layout skipped; got: ${body.slice(0, 600)}`);
-  // Marker for /docs is present (deepest match).
-  assert.ok(body.includes('<!--wj:children:/docs-->'),
-    `deepest matched marker /docs present, got: ${body.slice(0, 600)}`);
+  // Keyed boundary for /docs is present (deepest match).
+  assert.ok(body.includes('<!--wj:children:/docs:/docs-->'),
+    `deepest matched boundary /docs present, got: ${body.slice(0, 600)}`);
   // Page content is there.
   assert.ok(body.includes('sub page'), 'page content present');
 });
@@ -1038,7 +1166,11 @@ test('ssrPage: emits <template id="wj-loading:<path>"> for each loading.ts in th
   assert.ok(body.includes('DOCS-SKELETON'), 'docs loading content present');
 });
 
-test('ssrPage: no children-slot markers when route has no layouts', async () => {
+test('ssrPage: a layoutless route still gets the PAGE boundary (#1015)', async () => {
+  // Pre-#1015 a layoutless route emitted no markers at all, leaving the
+  // client with only the destructive full-body path. The page-level keyed
+  // boundary now always exists, so even a layoutless app gets the two-tier
+  // swap (and the integrity gate) on soft navs.
   const { route, appDir } = await makeRoute({
     pageSrc:
       `import { html } from ${JSON.stringify(HTML_MODULE_URL)};\n` +
@@ -1047,8 +1179,8 @@ test('ssrPage: no children-slot markers when route has no layouts', async () => 
   const url = new URL('http://localhost/');
   const resp = await ssrPage(route, {}, url, { dev: false, appDir });
   const body = await resp.text();
-  assert.ok(!body.includes('wj:children:'),
-    `no layouts → no markers, got: ${body.slice(0, 400)}`);
+  assert.ok(body.includes('<!--wj:children:/:/-->') && body.includes('<!--/wj:children:/-->'),
+    `layoutless route carries the page boundary, got: ${body.slice(0, 400)}`);
 });
 
 test('ssrPage: modulepreload never points at server-only files', async () => {
