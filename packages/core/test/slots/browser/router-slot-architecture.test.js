@@ -113,6 +113,36 @@ suite('Router + slot architectural regressions', () => {
     }
   });
 
+  test('a template-forwarded slot on a client-side first mount is captured, not adopted', async () => {
+    // The lit-style forwarding shape: the OUTER template passes a <slot> as an
+    // authored child of the inner component. discoverSlots stamps
+    // data-webjs-light on it at compile time, so the framework-rendered
+    // detector must NOT fire on it (it has no data-projection until placed),
+    // or the inner host would adopt-and-discard the forwarded slot.
+    if (!customElements.get('fw-fixed-inner')) {
+      class FixedInner extends WebComponent {
+        render() { return html`<div class="inner-shell"><slot></slot></div>`; }
+      }
+      FixedInner.register('fw-fixed-inner');
+    }
+    const outerTag = tagName('fw-outer');
+    class Outer extends WebComponent {
+      render() { return html`<fw-fixed-inner><slot>forwarded fallback</slot></fw-fixed-inner>`; }
+    }
+    Outer.register(outerTag);
+    const o = document.createElement(outerTag);
+    document.body.appendChild(o); // client-side mount, no SSR
+    await tick();
+    await tick();
+    const inner = o.querySelector('fw-fixed-inner');
+    assert.ok(inner, 'inner mounted');
+    // The forwarded slot must survive as inner's authored child, projected
+    // into inner's own slot, showing its fallback content.
+    assert.ok(inner.textContent.includes('forwarded fallback'),
+      'the forwarded slot fallback rendered (not adopted-and-discarded)');
+    o.remove();
+  });
+
   test('cross-host move sticks: the first host does not steal the child back', async () => {
     const tagA = tagName('host-a');
     const tagB = tagName('host-b');

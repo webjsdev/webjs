@@ -1185,7 +1185,15 @@ function pruneAuthored(host, state) {
  */
 export function hasFrameworkRenderedSubtree(host) {
   if (!inBrowser) return false;
-  for (const el of host.querySelectorAll(`slot[${LIGHT_SLOT_ATTR}]`)) {
+  // BOTH attributes are required. data-webjs-light alone is stamped at
+  // TEMPLATE COMPILE time on every <slot> in every html template, including a
+  // slot FORWARDED as an authored child of a nested component tag
+  // (html`<inner-shell><slot>fallback</slot></inner-shell>`), so matching it
+  // alone would misfire on the forwarding shape at a client-side first mount
+  // and adopt (discard) the forwarded slot. data-projection is stamped only
+  // when the framework has PLACED the slot (SSR substitution or the apply
+  // step), so light + projection together mean genuinely rendered output.
+  for (const el of host.querySelectorAll(`slot[${LIGHT_SLOT_ATTR}][${PROJECTION_ATTR}]`)) {
     if (isOwnSlot(host, el)) return true;
   }
   return false;
