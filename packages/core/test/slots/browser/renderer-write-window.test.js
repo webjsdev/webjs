@@ -93,6 +93,24 @@ suite('Renderer-write window (async commits are not authored)', () => {
     host.remove();
   });
 
+  test('a component whose render() returns a plain string shows its text (not blank)', async () => {
+    // Non-template render path: host[INSTANCE] is null and the text nodes are
+    // direct host children. The window-close drain must NOT fold them into the
+    // slot record (which would park them and render the component blank).
+    const tag = tagName('string-render');
+    class C extends WebComponent({ n: Number }) {
+      constructor() { super(); this.n = 5; }
+      render() { return `Count: ${this.n}`; }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    document.body.appendChild(host);
+    await tick(0);
+    assert.equal(host.textContent, 'Count: 5', 'the string render is visible');
+    assert.ok(!host.querySelector('wj-slot-park'), 'no park spawned for renderer text');
+    host.remove();
+  });
+
   test('a reactive re-render does not fold rendered output into the slot record', async () => {
     const tag = tagName('rerender-host');
     class C extends WebComponent({ count: Number }) {

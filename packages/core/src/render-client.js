@@ -152,9 +152,10 @@ export function render(value, container) {
     container.appendChild(document.createTextNode(String(value)));
   } finally {
     host[RENDERING] = prevRendering;
-    // Outermost window closing: discard the childList records this commit made
-    // on the host, so the slot backstop only ever sees genuine author writes
-    // (mirrors withRendererWrites, which the async commit paths use).
+    // Outermost window closing: drain this commit's childList records off the
+    // slot backstop (drainRendererBackstop processes them with a renderer-output
+    // skip when an instance exists, else discards), so the backstop never folds
+    // renderer output. Mirrors withRendererWrites, used by the async paths.
     if (!prevRendering) drainRendererBackstop(host);
   }
 }

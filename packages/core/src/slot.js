@@ -672,10 +672,18 @@ function processBackstop(host, state, records) {
  * @param {Element} host
  */
 export function drainRendererBackstop(host) {
-  const state = /** @type {SlotState | undefined} */ (
-    /** @type {any} */ (host)[SLOT_STATE]
-  );
-  if (state && state.backstop) processBackstop(host, state, state.backstop.takeRecords());
+  const h = /** @type {any} */ (host);
+  const state = /** @type {SlotState | undefined} */ (h[SLOT_STATE]);
+  if (!(state && state.backstop)) return;
+  const records = state.backstop.takeRecords();
+  // Only PROCESS when there is a rendered instance: processBackstop skips
+  // renderer output via instanceOwns, which needs the instance bookends. On the
+  // non-template render path (render() returns a string / array / number) the
+  // instance is null and the renderer's own text nodes are direct host
+  // children, so processing would fold them into the record and park them (the
+  // component would render blank). With no instance to discriminate, discard,
+  // matching the pre-processing behavior.
+  if (h[Symbol.for('webjs.instance')]) processBackstop(host, state, records);
 }
 
 /**
