@@ -75,6 +75,27 @@ suite('Slot sensors', () => {
     host.remove();
   });
 
+  test('a bypass write coinciding with a render is not lost by the window drain', async () => {
+    const tag = tagName('bypass-coincide');
+    class C extends WebComponent({ n: Number }) {
+      constructor() { super(); this.n = 0; }
+      render() { return html`<div data-n=${this.n}><slot></slot></div>`; }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    document.body.appendChild(host);
+    await tick();
+    const slot = host.querySelector('slot[data-webjs-light]');
+    const p = document.createElement('p');
+    // Schedule a render AND do a raw bypass append in the SAME task. The render
+    // window's drain must PROCESS (not discard) the bypass record, or p is lost.
+    host.n = 1;
+    Node.prototype.appendChild.call(host, p);
+    await tick();
+    assert.equal(p.parentElement, slot, 'the coinciding bypass write was projected, not dropped');
+    host.remove();
+  });
+
   test('sensors survive a disconnect/reconnect and stay live', async () => {
     const tag = tagName('reconnect');
     const host = await mount(tag, () => html`<div><slot></slot></div>`);

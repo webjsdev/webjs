@@ -37,6 +37,16 @@
  * rendered template, not the authored children), `assignedChild.parentNode` is
  * the `<slot>`, and `::slotted()` CSS (use normal selectors / Tailwind).
  *
+ * Live writes need the component's JS on the page. Interception + sensors
+ * install in connectedCallback, so a component the framework ELIDES (a
+ * display-only slotted wrapper with no client signal) ships no JS and its
+ * post-mount native writes are inert, like anything on an elided component.
+ * A component that is actually interacted with ships (a client module
+ * references its tag); for an imperative consumer reaching it through a
+ * string selector the analyser cannot see, force the ship with
+ * `static interactive = true`. Shadow components always ship (the DSD
+ * carve-out), so this is the one place elision, not slots, sets the boundary.
+ *
  * Polyfill safety. Every prototype patch checks for the `data-webjs-light`
  * attribute and falls through to native otherwise, so real shadow-DOM slots
  * keep native behaviour exactly.
@@ -425,7 +435,12 @@ export function adoptSSRAssignments(host) {
       const children = Array.from(s.childNodes);
       // The SSR'd projected children retain their own `slot=` attribute, so
       // pushing them into `authored` and re-deriving reproduces the same
-      // per-name grouping without moving any DOM (no flash).
+      // per-name grouping without moving any DOM (no flash). Note: `authored`
+      // is rebuilt in slot-document order, not the original interleaved
+      // host-child order, which SSR did not preserve. Per-name grouping (all
+      // that placement uses) is exact; the only observable difference from a
+      // fresh mount is the cross-name ordering a post-hydration `insertBefore`
+      // with a ref in a DIFFERENT named slot would resolve against.
       for (const child of children) state.authored.push(child);
       state.lastSnapshot.set(s, children.slice());
     }
@@ -576,16 +591,14 @@ export function withRendererWrites(host, fn) {
     return fn();
   } finally {
     host[RENDERING] = prev;
-    // When the OUTERMOST window closes, discard the childList records this
-    // renderer commit produced on the host, synchronously, before the backstop
-    // observer's async callback can see them. The backstop then only ever
-    // observes genuine author / external writes. (The flip sensor is NOT
-    // drained: a renderer `name=` write on a slot is exactly what must
-    // re-project a dynamic `name=${...}`.)
-    if (!prev) {
-      const state = host[SLOT_STATE];
-      if (state && state.backstop) state.backstop.takeRecords();
-    }
+    // When the OUTERMOST window closes, drain the backstop synchronously before
+    // its async callback fires. The drain PROCESSES the records (renderer output
+    // is skipped structurally, a genuine bypass write is folded), so this
+    // commit's own childList churn is absorbed without losing a real author
+    // write that coincided in the same task. (The flip sensor is NOT drained: a
+    // renderer `name=` write on a slot is exactly what re-projects a dynamic
+    // `name=${...}`.)
+    if (!prev) drainRendererBackstop(host);
   }
 }
 
@@ -617,17 +630,24 @@ export function installSlotSensors(host) {
   });
 }
 
-/** Backstop callback body: fold raw direct-child adds / un-author raw removes. */
+/**
+ * Backstop callback body: fold a raw direct-child add / un-author a raw remove.
+ * A renderer-committed node (the render root and everything between the instance
+ * bookend markers) is SKIPPED structurally, so this is safe to run on the
+ * records drained at a renderer-write window close, not only on genuine
+ * author-bypass records. That is what keeps a real bypass write that happened
+ * to coincide with a commit in the same task from being silently dropped.
+ */
 function processBackstop(host, state, records) {
-  const park = /** @type {any} */ (host)[PARK];
+  const h = /** @type {any} */ (host);
+  const park = h[PARK];
+  const inst = h[Symbol.for('webjs.instance')];
   let dirty = false;
   for (const r of records) {
     for (const node of r.addedNodes) {
       if (node === park) continue;
+      if (inst && instanceOwns(inst, node)) continue; // renderer output, not authored
       if (state.authored.indexOf(node) !== -1) continue;
-      // A raw direct-child insert that bypassed the patched methods. Records
-      // reaching this callback are never renderer commits (those are drained at
-      // the window close), so fold it in as authored content.
       FRAMEWORK_DETACHED.add(node);
       state.authored.push(node);
       dirty = true;
@@ -641,6 +661,21 @@ function processBackstop(host, state, records) {
     }
   }
   if (dirty) applySlotAssignments(host);
+}
+
+/**
+ * Drain the host's backstop at a renderer-write window close, PROCESSING the
+ * records (renderer output is skipped structurally by processBackstop) so a
+ * genuine bypass write coinciding with the commit is not lost. Exported so
+ * render-client's render() window can share the exact same drain.
+ *
+ * @param {Element} host
+ */
+export function drainRendererBackstop(host) {
+  const state = /** @type {SlotState | undefined} */ (
+    /** @type {any} */ (host)[SLOT_STATE]
+  );
+  if (state && state.backstop) processBackstop(host, state, state.backstop.takeRecords());
 }
 
 /**
@@ -776,9 +811,13 @@ function expandArg(host, arg, allowString) {
   }
   if (arg && arg.nodeType === 11) {
     const kids = Array.from(arg.childNodes);
+    // Guard BEFORE draining: a cycle error must leave the fragment intact
+    // (native throws with the fragment untouched).
+    guardInsertable(host, kids);
     for (const k of kids) N_removeChild.call(arg, k);
     return kids;
   }
+  guardInsertable(host, [/** @type {Node} */ (arg)]);
   return [/** @type {Node} */ (arg)];
 }
 
@@ -846,7 +885,6 @@ export function installSlotInterception(host) {
   h.appendChild = function (node) {
     if (h[RENDERING]) return N_appendChild.call(this, node);
     const nodes = expandArg(host, node, false);
-    guardInsertable(host, nodes);
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
     authoredSplice(state, nodes, null);
     commitAuthored(host, state);
@@ -867,7 +905,6 @@ export function installSlotInterception(host) {
     // insertBefore(n, n) with n an existing child is a native no-op.
     if (node === ref) return node;
     const nodes = expandArg(host, node, false);
-    guardInsertable(host, nodes);
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
     authoredSplice(state, nodes, ref || null);
     commitAuthored(host, state);
@@ -888,8 +925,7 @@ export function installSlotInterception(host) {
     const i = state.authored.indexOf(oldNode);
     if (i === -1) return N_replaceChild.call(this, newNode, oldNode);
     if (newNode === oldNode) return oldNode; // native no-op
-    const nodes = expandArg(host, newNode, false);
-    guardInsertable(host, nodes);
+    const nodes = expandArg(host, newNode, false); // guards cycle before draining
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
     // remove any incoming already authored, then swap old for new at its slot.
     for (const n of nodes) {
@@ -906,7 +942,6 @@ export function installSlotInterception(host) {
     if (h[RENDERING]) return N_append.apply(this, args);
     const nodes = [];
     for (const a of args) nodes.push(...expandArg(host, a, true));
-    guardInsertable(host, nodes);
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
     authoredSplice(state, nodes, null);
     commitAuthored(host, state);
@@ -916,7 +951,6 @@ export function installSlotInterception(host) {
     if (h[RENDERING]) return N_prepend.apply(this, args);
     const nodes = [];
     for (const a of args) nodes.push(...expandArg(host, a, true));
-    guardInsertable(host, nodes);
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
     authoredSplice(state, nodes, state.authored[0] || null);
     commitAuthored(host, state);
@@ -926,7 +960,6 @@ export function installSlotInterception(host) {
     if (h[RENDERING]) return N_replaceChildren.apply(this, args);
     const nodes = [];
     for (const a of args) nodes.push(...expandArg(host, a, true));
-    guardInsertable(host, nodes);
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
     state.authored = nodes.slice();
     commitAuthored(host, state);

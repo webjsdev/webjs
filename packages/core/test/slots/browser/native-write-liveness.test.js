@@ -166,6 +166,21 @@ suite('Native-write liveness (light-DOM slot parity)', () => {
     wrap.remove();
   });
 
+  test('a rejected fragment insert (cycle) leaves the fragment intact (native parity)', async () => {
+    const tag = tagName('frag-cycle');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    // Build a fragment whose child is an ancestor of the host.
+    const wrap = document.createElement('div');
+    wrap.appendChild(host); // wrap is now an ancestor of host
+    const frag = document.createDocumentFragment();
+    frag.appendChild(wrap); // frag holds the ancestor
+    let threw = null;
+    try { host.appendChild(frag); } catch (e) { threw = e; }
+    assert.equal(threw && threw.name, 'HierarchyRequestError', 'cycle insert throws');
+    assert.equal(frag.childNodes.length, 1, 'the fragment was NOT drained on the error path');
+    host.remove();
+  });
+
   test('insertBefore(n, n) and replaceChild(x, x) are no-ops (native parity)', async () => {
     const tag = tagName('self-ref');
     const host = await mount(tag, () => html`<div><slot></slot></div>`);
