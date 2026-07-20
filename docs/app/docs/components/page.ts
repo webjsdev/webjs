@@ -479,7 +479,7 @@ card.querySelector('slot').assignedNodes();
 node.assignedSlot;
 card.querySelector('slot').addEventListener('slotchange', ...);</pre>
 
-    <p><strong>Migrating from a shadow-DOM component</strong>: flip <code>static shadow</code> and nothing else changes. You write the same template and the same imperative code.</p>
+    <p><strong>Migrating from a shadow-DOM component</strong>: flip <code>static shadow</code> and nothing else changes (with the forwarded-slot content limitation below as the one exception). You write the same template and the same imperative code.</p>
 
     <p><strong>The three light-DOM gaps</strong>, all a consequence of light DOM having no shadow boundary, not missing features:</p>
     <ul>

@@ -118,7 +118,7 @@ class MyCard extends WebComponent {
 
 Named slots, the default slot (unnamed children, text, comments), fallback content (a slot's inner markup when nothing matches), and first-wins resolution all behave per spec. The DOM API mirrors shadow slots: `assignedNodes` / `assignedElements` (with `{ flatten: true }`), `element.assignedSlot`, and the `slotchange` event. Both modes are SSR'd (light DOM places children into `<slot data-webjs-light data-projection="actual">`, shadow DOM via Declarative Shadow DOM), so slotted content renders with no JS.
 
-**Light-DOM slots ARE the native DOM slot API (#1021, full shadow parity).** There is no WebJs-specific slot API. Post-mount writes are live exactly as in shadow DOM, and moving a component between `static shadow = false` and `true` never needs a rewrite:
+**Light-DOM slots ARE the native DOM slot API (#1021, full shadow parity).** There is no WebJs-specific slot API. Post-mount writes are live exactly as in shadow DOM, and moving a component between `static shadow = false` and `true` never needs a rewrite (except the forwarded-slot content limitation, item 7 below):
 
 ```ts
 const card = document.querySelector('my-card');
