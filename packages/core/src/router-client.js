@@ -18,7 +18,7 @@ import { scanSeeds } from './action-seed-client.js';
 // reused hydrated light-DOM component across a soft nav (#908).
 import {
   SLOT_STATE, LIGHT_SLOT_ATTR, PROJECTION_ATTR, PROJECTION_ACTUAL,
-  projectAuthored,
+  projectAuthored, keyOfName,
 } from './slot.js';
 
 /** The content type a content-negotiated stream-action response carries (#248). */
@@ -3172,7 +3172,7 @@ function ownActualLightSlots(host) {
   for (const slot of host.querySelectorAll(sel)) {
     const s = /** @type {HTMLSlotElement} */ (slot);
     if (!isOwnLightSlot(s, host)) continue;
-    const name = s.getAttribute('name') || null;
+    const name = keyOfName(s.getAttribute('name'));
     if (!byName.has(name)) byName.set(name, s);
   }
   return byName;

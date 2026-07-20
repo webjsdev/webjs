@@ -9,7 +9,7 @@
  */
 import { WebComponent } from '../../../src/component.js';
 import { html } from '../../../src/html.js';
-import { asyncAppend } from '../../../src/directives.js';
+import { asyncAppend, until } from '../../../src/directives.js';
 
 import { assert } from '../../../../../test/browser-assert.js';
 
@@ -57,6 +57,39 @@ suite('Renderer-write window (async commits are not authored)', () => {
     // The stream chunks rendered as the host's own output (siblings of the slot).
     assert.equal(host.querySelectorAll('.chunk').length, 2, 'both chunks rendered as renderer output');
 
+    host.remove();
+  });
+
+  test('an until resolution into a slotted host does not pollute the slot', async () => {
+    const tag = tagName('until-host');
+    let resolve;
+    const slow = new Promise((r) => { resolve = r; });
+
+    class C extends WebComponent {
+      render() {
+        // A top-level <slot> AND a top-level until hole. until commits the
+        // resolved value from a promise callback, OUTSIDE render(), so only the
+        // renderer-write window (via applyChildInner -> commitInto) keeps it
+        // off the authored record.
+        return html`<slot></slot>${until(slow, html`<em class="pending">loading</em>`)}`;
+      }
+    }
+    C.register(tag);
+
+    const host = document.createElement(tag);
+    const authored = document.createElement('p');
+    authored.className = 'authored';
+    host.appendChild(authored);
+    document.body.appendChild(host);
+    await tick(5);
+
+    resolve(html`<em class="resolved">done</em>`);
+    await tick(15);
+
+    const slot = host.querySelector('slot[data-webjs-light]');
+    assert.equal(slot.querySelectorAll('.resolved').length, 0, 'resolved chunk did not enter the slot');
+    assert.equal(slot.querySelectorAll('.authored').length, 1, 'authored child stayed projected');
+    assert.equal(host.querySelectorAll('.resolved').length, 1, 'until resolved as renderer output');
     host.remove();
   });
 

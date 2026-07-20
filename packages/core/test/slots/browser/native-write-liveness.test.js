@@ -5,6 +5,7 @@
  */
 import { WebComponent } from '../../../src/component.js';
 import { html } from '../../../src/html.js';
+import { projectAuthored } from '../../../src/slot.js';
 
 import { assert } from '../../../../../test/browser-assert.js';
 
@@ -140,6 +141,63 @@ suite('Native-write liveness (light-DOM slot parity)', () => {
     host.removeChild(orphan); // remove from the record
     await tick();
     assert.equal(orphan.isConnected, false, 'the removed parked child is detached, like native removeChild');
+    host.remove();
+  });
+
+  test('appendChild of the host or an ancestor throws HierarchyRequestError', async () => {
+    const tag = tagName('cycle');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    const wrap = document.createElement('div');
+    wrap.appendChild(host); // wrap is now an ancestor of host
+    document.body.appendChild(wrap);
+    let threwSelf = null;
+    try { host.appendChild(host); } catch (e) { threwSelf = e; }
+    assert.equal(threwSelf && threwSelf.name, 'HierarchyRequestError', 'appending the host itself throws');
+    let threwAncestor = null;
+    try { host.appendChild(wrap); } catch (e) { threwAncestor = e; }
+    assert.equal(threwAncestor && threwAncestor.name, 'HierarchyRequestError', 'appending an ancestor throws');
+    wrap.remove();
+  });
+
+  test('insertBefore(n, n) and replaceChild(x, x) are no-ops (native parity)', async () => {
+    const tag = tagName('self-ref');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    const slot = host.querySelector('slot[data-webjs-light]');
+    const a = document.createElement('a-el');
+    const b = document.createElement('b-el');
+    host.appendChild(a);
+    host.appendChild(b);
+    host.insertBefore(a, a); // no-op: order unchanged
+    assert.deepEqual(
+      Array.from(slot.children).map((e) => e.tagName.toLowerCase()),
+      ['a-el', 'b-el'],
+      'insertBefore(n, n) did not reorder',
+    );
+    host.replaceChild(a, a); // no-op
+    assert.deepEqual(
+      Array.from(slot.children).map((e) => e.tagName.toLowerCase()),
+      ['a-el', 'b-el'],
+      'replaceChild(x, x) did not corrupt order',
+    );
+    host.remove();
+  });
+
+  test('a reprojected node (router morph path) still prunes on el.remove (no post-nav zombie)', async () => {
+    const tag = tagName('reproject-zombie');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    const slot = host.querySelector('slot[data-webjs-light]');
+    const p = document.createElement('p');
+    host.appendChild(p);
+    // Simulate the router's same-route morph reconcile: it re-pushes the live
+    // slot's children through projectAuthored (which re-marks them), and the
+    // subsequent apply takes the in-place fast path. The fast path must still
+    // clear the prune exemption, or a later remove would resurrect.
+    projectAuthored(host, null, [...slot.childNodes]);
+    await tick();
+    p.remove();
+    host.appendChild(document.createElement('span')); // force a re-apply
+    await tick();
+    assert.ok(!slot.contains(p), 'the reprojected-then-removed node did not resurrect');
     host.remove();
   });
 

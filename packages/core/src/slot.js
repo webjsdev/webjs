@@ -444,7 +444,7 @@ export function adoptSSRAssignments(host) {
  * @param {string | null | undefined} name
  * @returns {string | null}
  */
-function keyOfName(name) {
+export function keyOfName(name) {
   return name == null || name === '' || name === 'default' ? null : name;
 }
 
@@ -643,12 +643,35 @@ function processBackstop(host, state, records) {
   if (dirty) applySlotAssignments(host);
 }
 
-/** Flip-sensor callback body: a slot=/name= flip re-derives + re-places. */
+/**
+ * Flip-sensor callback body: a RELEVANT slot=/name= flip re-derives + re-places.
+ * Relevant = a `name=` change on one of the host's own light slots, or a `slot=`
+ * change on an authored (projected) child. An unrelated `name=` deep in the tree
+ * (e.g. an `<input name>`) is ignored, so common markup does not trigger a
+ * spurious full re-apply.
+ */
 function processFlip(host, records) {
+  const state = /** @type {SlotState | undefined} */ (
+    /** @type {any} */ (host)[SLOT_STATE]
+  );
+  if (!state) return;
   for (const r of records) {
-    if (r.type === 'attributes') {
-      applySlotAssignments(host);
-      return;
+    if (r.type !== 'attributes') continue;
+    const target = /** @type {Element} */ (r.target);
+    if (r.attributeName === 'name') {
+      if (
+        target.tagName === 'SLOT' &&
+        target.hasAttribute(LIGHT_SLOT_ATTR) &&
+        isOwnSlot(host, target)
+      ) {
+        applySlotAssignments(host);
+        return;
+      }
+    } else if (r.attributeName === 'slot') {
+      if (state.authored.indexOf(target) !== -1) {
+        applySlotAssignments(host);
+        return;
+      }
     }
   }
 }
@@ -760,6 +783,25 @@ function expandArg(host, arg, allowString) {
 }
 
 /**
+ * Throw `HierarchyRequestError` (native parity) if any node would create a
+ * cycle: the host itself, or an ancestor of the host. Checked BEFORE the record
+ * is mutated, so a bad insert leaves `authored` untouched, like native.
+ *
+ * @param {Element} host
+ * @param {Node[]} nodes
+ */
+function guardInsertable(host, nodes) {
+  for (const n of nodes) {
+    if (n === host || (n.nodeType === 1 && /** @type {Element} */ (n).contains(host))) {
+      throw new DOMException(
+        'Failed to execute insertion on the host: the new child contains the parent.',
+        'HierarchyRequestError',
+      );
+    }
+  }
+}
+
+/**
  * Splice `nodes` into `authored` before `ref` (a node already in authored) or
  * at the end when `ref` is null. Nodes already present are removed from their
  * current position first (native move semantics for a re-inserted child).
@@ -804,6 +846,7 @@ export function installSlotInterception(host) {
   h.appendChild = function (node) {
     if (h[RENDERING]) return N_appendChild.call(this, node);
     const nodes = expandArg(host, node, false);
+    guardInsertable(host, nodes);
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
     authoredSplice(state, nodes, null);
     commitAuthored(host, state);
@@ -812,6 +855,8 @@ export function installSlotInterception(host) {
 
   h.insertBefore = function (node, ref) {
     if (h[RENDERING]) return N_insertBefore.call(this, node, ref);
+    // insertBefore(n, n) is a native no-op (the node is already before itself).
+    if (node === ref) return node;
     if (ref != null && state.authored.indexOf(ref) === -1) {
       throw new DOMException(
         'insertBefore: reference node is not an assigned child of this host',
@@ -819,6 +864,7 @@ export function installSlotInterception(host) {
       );
     }
     const nodes = expandArg(host, node, false);
+    guardInsertable(host, nodes);
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
     authoredSplice(state, nodes, ref || null);
     commitAuthored(host, state);
@@ -838,7 +884,9 @@ export function installSlotInterception(host) {
     if (h[RENDERING]) return N_replaceChild.call(this, newNode, oldNode);
     const i = state.authored.indexOf(oldNode);
     if (i === -1) return N_replaceChild.call(this, newNode, oldNode);
+    if (newNode === oldNode) return oldNode; // native no-op
     const nodes = expandArg(host, newNode, false);
+    guardInsertable(host, nodes);
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
     // remove any incoming already authored, then swap old for new at its slot.
     for (const n of nodes) {
@@ -855,6 +903,7 @@ export function installSlotInterception(host) {
     if (h[RENDERING]) return N_append.apply(this, args);
     const nodes = [];
     for (const a of args) nodes.push(...expandArg(host, a, true));
+    guardInsertable(host, nodes);
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
     authoredSplice(state, nodes, null);
     commitAuthored(host, state);
@@ -864,6 +913,7 @@ export function installSlotInterception(host) {
     if (h[RENDERING]) return N_prepend.apply(this, args);
     const nodes = [];
     for (const a of args) nodes.push(...expandArg(host, a, true));
+    guardInsertable(host, nodes);
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
     authoredSplice(state, nodes, state.authored[0] || null);
     commitAuthored(host, state);
@@ -873,6 +923,7 @@ export function installSlotInterception(host) {
     if (h[RENDERING]) return N_replaceChildren.apply(this, args);
     const nodes = [];
     for (const a of args) nodes.push(...expandArg(host, a, true));
+    guardInsertable(host, nodes);
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
     state.authored = nodes.slice();
     commitAuthored(host, state);
@@ -1087,6 +1138,12 @@ function isOwnSlot(host, slot) {
  *   its last snapshot (so slotchange should fire).
  */
 export function applyActualAssignment(state, slot, assigned) {
+  // These nodes are being placed into an own actual slot, so they are
+  // author-live now: clear the prune exemption on EVERY path (including the
+  // unchanged and in-place fast paths below, which the router's morph hits).
+  // Missing this leaves a reprojected node permanently exempt, so a later
+  // el.remove() / cross-host move on it would not be pruned (zombie / theft).
+  for (const n of assigned) FRAMEWORK_DETACHED.delete(n);
   const wasFallback = slot.getAttribute(PROJECTION_ATTR) !== PROJECTION_ACTUAL;
   const prev = state.lastSnapshot.get(slot) || [];
   const equal = !wasFallback && arraysEqual(prev, assigned);
@@ -1117,12 +1174,7 @@ export function applyActualAssignment(state, slot, assigned) {
   } else {
     while (slot.firstChild) slot.removeChild(slot.firstChild);
   }
-  for (const node of assigned) {
-    // The node is now placed and author-live: it is no longer framework
-    // detached, so a later author `el.remove()` on it is prunable.
-    FRAMEWORK_DETACHED.delete(node);
-    slot.appendChild(node);
-  }
+  for (const node of assigned) slot.appendChild(node);
   slot.setAttribute(PROJECTION_ATTR, PROJECTION_ACTUAL);
   state.lastSnapshot.set(slot, assigned.slice());
   return true;
