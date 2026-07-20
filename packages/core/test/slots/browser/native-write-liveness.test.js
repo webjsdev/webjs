@@ -151,6 +151,57 @@ suite('Native-write liveness (light-DOM slot parity)', () => {
     host.remove();
   });
 
+  test('append / prepend order children like native, including reuse of the first child', async () => {
+    const tag = tagName('append-prepend');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    const slot = host.querySelector('slot[data-webjs-light]');
+    const order = () => Array.from(slot.children).map((e) => e.tagName.toLowerCase());
+    const a = document.createElement('a-el');
+    const b = document.createElement('b-el');
+    host.append(a, b); // now [a, b]
+    assert.deepEqual(order(), ['a-el', 'b-el'], 'append ordered a, b');
+    const c = document.createElement('c-el');
+    host.prepend(c); // now [c, a, b]
+    assert.deepEqual(order(), ['c-el', 'a-el', 'b-el'], 'prepend put c at the front');
+    // Degenerate case the round-8 review found, prepending the CURRENT first child.
+    host.prepend(c); // c stays first, still [c, a, b]
+    assert.deepEqual(order(), ['c-el', 'a-el', 'b-el'], 'prepend of the current first child keeps it first');
+    // Prepend the existing-first plus a new node, native inserts both at the front.
+    const x = document.createElement('x-el');
+    host.prepend(c, x); // now [c, x, a, b]
+    assert.deepEqual(order(), ['c-el', 'x-el', 'a-el', 'b-el'], 'prepend(first, new) orders both at the front');
+    host.remove();
+  });
+
+  test('textContent setter replaces authored content with text', async () => {
+    const tag = tagName('text-content');
+    const host = await mount(tag, () => html`<div class="shell"><slot></slot></div>`);
+    const slot = host.querySelector('slot[data-webjs-light]');
+    host.appendChild(document.createElement('p'));
+    host.textContent = 'plain';
+    assert.ok(host.querySelector('.shell'), 'render root survived');
+    assert.equal(slot.textContent, 'plain', 'textContent replaced the slotted content');
+    host.remove();
+  });
+
+  test('replaceChild swaps a projected child for a new one in place', async () => {
+    const tag = tagName('replace-child');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    const slot = host.querySelector('slot[data-webjs-light]');
+    const a = document.createElement('a-el');
+    const b = document.createElement('b-el');
+    host.append(a, b);
+    const c = document.createElement('c-el');
+    host.replaceChild(c, a); // swap a for c at the same position
+    assert.deepEqual(
+      Array.from(slot.children).map((e) => e.tagName.toLowerCase()),
+      ['c-el', 'b-el'],
+      'replaceChild swapped a for c in place',
+    );
+    assert.equal(a.isConnected, false, 'the replaced node is detached');
+    host.remove();
+  });
+
   test('appendChild of the host or an ancestor throws HierarchyRequestError', async () => {
     const tag = tagName('cycle');
     const host = await mount(tag, () => html`<div><slot></slot></div>`);

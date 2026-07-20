@@ -960,7 +960,15 @@ export function installSlotInterception(host) {
     const nodes = [];
     for (const a of args) nodes.push(...expandArg(host, a, true));
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
-    authoredSplice(state, nodes, state.authored[0] || null);
+    // Remove any incoming node from its current position, then insert at the
+    // FRONT via unshift. Passing `authored[0]` as an authoredSplice ref would be
+    // wrong, because that ref is captured before the incoming-removal, so
+    // prepending the current first child loses the ref and appends at the end.
+    for (const n of nodes) {
+      const j = state.authored.indexOf(n);
+      if (j !== -1) state.authored.splice(j, 1);
+    }
+    state.authored.unshift(...nodes);
     commitAuthored(host, state);
   };
 
