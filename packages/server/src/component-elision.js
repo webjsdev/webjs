@@ -219,7 +219,7 @@ const EVENT_PROP_RE = /\.on[a-z]+\s*=\s*\$\{/;
  * wrapper is byte-identical with or without its JS and is elidable. What
  * genuinely needs the client slot runtime is the DYNAMIC surface: a
  * `slotchange` listener, the assignedNodes/assignedElements/assignedSlot
- * reads, a `this.slots` record read, or the setSlotContent/hasSlot calls
+ * reads (assignedNodes / assignedElements / assignedSlot / slotchange)
  * (those two are also covered as CLIENT_METHOD_CALLS inside class bodies;
  * this regex catches external callers too).
  */
@@ -542,8 +542,7 @@ export function analyzeComponentSource(src) {
   // ships: the SSR output carries the placed children, and with no
   // observers in the runtime a display-only slotted wrapper is
   // byte-identical with or without its JS. Only the dynamic slot surface
-  // (slotchange, the assigned* reads, the slots record, setSlotContent /
-  // hasSlot) needs the client runtime.
+  // (slotchange, the assigned* reads) needs the client runtime.
   if (SLOT_DYNAMIC_RE.test(src)) {
     return { interactive: true, reason: 'uses the dynamic slot API (slotchange / assignedNodes / slots record)' };
   }

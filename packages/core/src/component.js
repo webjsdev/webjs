@@ -846,7 +846,7 @@ class WebComponentBase extends Base {
       //
       // There are NO mutation observers: an external appendChild or a
       // slot=""-attribute flip after mount is inert by design, and the
-      // dynamic path is setSlotContent() (children as values).
+      // dynamic path is the native DOM API (interception + sensors).
       if (hasSlotState(this)) {
         // (a) Reconnection. Record already populated. Sweep any direct child
         //     added by a raw bypass write while the host was disconnected (no

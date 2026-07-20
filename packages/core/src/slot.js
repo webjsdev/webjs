@@ -1,46 +1,49 @@
 /**
- * Light-DOM <slot> runtime for @webjsdev/core: CHILDREN AS VALUES (#1015).
+ * Light-DOM <slot> runtime for @webjsdev/core: FULL NATIVE PARITY (#1021).
  *
- * Provides functional parity with shadow-DOM <slot> projection inside
- * light-DOM WebComponents (those with static shadow = false), on the React
- * children model: authored children are captured ONCE per host lifetime into
- * a per-host slot record (name -> Node[]), and the component's own renderer
- * places that content into its `<slot data-webjs-light>` containers as an
- * ordinary render-owned value. ONE renderer owns all nodes.
+ * `<slot>` works identically in light DOM and shadow DOM, through the SAME
+ * native DOM API. You write the same template, and moving a component between
+ * `static shadow = false` and `true` never needs a rewrite. Native `<slot>` is
+ * a shadow-DOM primitive, so in light DOM WebJs implements slotting itself, to
+ * spec: named + default slots, fallback content, first-wins resolution, dynamic
+ * `name=${...}`, and live post-mount writes (appendChild, insertBefore,
+ * removeChild, innerHTML, `el.slot=` flips, HTMLSlotElement.assign) plus the
+ * full read surface (assignedNodes / assignedElements / {flatten} /
+ * assignedSlot / slotchange, with native async-coalesced slotchange timing).
  *
- * What this deliberately is NOT (the pre-#1015 model, deleted): an
- * observer-driven projection runtime. There are no MutationObservers, no
- * microtask projection scheduler, no framework-marker record sniffing, and no
- * pending-children shuffling. Those made light-DOM slots a third DOM-mutating
- * actor beside the renderer and the client router, which is exactly the
- * ownership overlap behind the #906/#908/#912/#914 cascade and the #1006
- * non-idempotent projection class. Capture-once closes #1006 by construction:
- * there is no second capture that could misclassify rendered nodes as
- * authored children.
+ * ONE WRITER. The design's core invariant: the component's own renderer is the
+ * only actor that moves authored nodes into slots (`applySlotAssignments`).
+ * `authored: Node[]` is the ordered source of truth; `assignedByName` is a pure
+ * derivation (`repartition`). Liveness comes from re-running that one writer,
+ * never from a second node-mover. This is what the pre-#1016 architecture got
+ * wrong: it live-re-projected via a MutationObserver that PHYSICALLY MOVED
+ * nodes, a third DOM writer beside the renderer and the client router, and the
+ * ownership overlap was the #906/#908/#912/#914, #1006, and #994 bug cascade.
  *
- * SEMANTICS CHANGE (deliberate, breaking): an external `appendChild` on a
- * mounted host, or a `slot=""`/`name=""` attribute flip, no longer live
- * re-projects. The dynamic path is the public API:
+ * How liveness reaches the one writer:
+ *   - Interception: the mutating methods are patched per-instance on a light
+ *     host; an author write updates `authored` + repartitions + applies.
+ *   - Renderer-write window (RENDERING): the renderer opens it around every
+ *     host-receiver commit (including the async paths), so a renderer commit is
+ *     never mistaken for authored content. The one discriminator, structural.
+ *   - Sensors (read-only, never move nodes): a childList backstop for raw
+ *     bypass writes, and a slot/name flip sensor for attribute flips.
+ *   - Prune rule: a node the author detaches (el.remove()) or re-parents is
+ *     dropped from `authored` by its real parent, killing zombie resurrection
+ *     and cross-host theft.
  *
- *   host.slots            read view of the record ({ default, [name] })
- *   host.hasSlot(name)    does the record carry content for `name`
- *   host.setSlotContent(name, value)   replace a slot's content (Node,
- *                         Node[], string, or null/[] to reset to fallback)
- *
- * The READS survive as derived shims: `assignedNodes()`,
- * `assignedElements()`, `assignedSlot`, and `slotchange` all keep working
- * against light-DOM slots exactly as before.
+ * Documented gaps (all from light DOM having no shadow boundary): structural
+ * host reads (`host.children` / `childNodes` / the innerHTML GETTER show the
+ * rendered template, not the authored children), `assignedChild.parentNode` is
+ * the `<slot>`, and `::slotted()` CSS (use normal selectors / Tailwind).
  *
  * Polyfill safety. Every prototype patch checks for the `data-webjs-light`
- * attribute on the slot element and falls through to the saved native
- * implementation otherwise. Real shadow-DOM slots elsewhere on the page
- * keep their native behaviour exactly.
+ * attribute and falls through to native otherwise, so real shadow-DOM slots
+ * keep native behaviour exactly.
  *
- * SSR. This module is import-safe in Node. The polyfill setup is guarded
- * on `typeof HTMLSlotElement !== 'undefined'`, so the server pipeline
- * loads slot.js without blowing up. Server-side slot substitution lives
- * in render-server.js (injectDSD); slot.js drives the client runtime
- * only.
+ * SSR. This module is import-safe in Node (DOM access is guarded on
+ * `typeof HTMLSlotElement !== 'undefined'`). Server-side slot substitution
+ * lives in render-server.js (injectDSD); slot.js drives the client runtime.
  */
 
 // ---------------------------------------------------------------------------
@@ -916,8 +919,8 @@ export function installSlotInterception(host) {
 
 /**
  * Place the slot record into the host's OWN light-DOM slots (#1015). The
- * renderer's slot parts call this after the template commits, and
- * `setSlotContent` calls it after a record update. Idempotent and cheap on
+ * renderer's slot parts call this after the template commits, and the
+ * interception + sensors call it after an authored mutation. Idempotent and cheap on
  * no-change passes.
  *
  *   1. Collect the host's OWN slots (no other custom element between the
@@ -1114,7 +1117,7 @@ export function applyActualAssignment(state, slot, assigned) {
 /**
  * Set a slot to fallback mode: clear any actual-assignment children and
  * restore the part-owned fallback fragment. The record keeps the nodes
- * (they are values now), so a later `setSlotContent` or slot re-creation
+ * (they are values now), so a later authored write or slot re-creation
  * re-places them.
  *
  * @param {SlotState} state

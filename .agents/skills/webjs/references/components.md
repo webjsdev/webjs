@@ -118,23 +118,19 @@ class MyCard extends WebComponent {
 
 Named slots, the default slot (unnamed children, text, comments), fallback content (a slot's inner markup when nothing matches), and first-wins resolution all behave per spec. The DOM API mirrors shadow slots: `assignedNodes` / `assignedElements` (with `{ flatten: true }`), `element.assignedSlot`, and the `slotchange` event. Both modes are SSR'd (light DOM places children into `<slot data-webjs-light data-projection="actual">`, shadow DOM via Declarative Shadow DOM), so slotted content renders with no JS.
 
-**Light-DOM slotted children are VALUES (#1015, the React children model).** Authored children are captured ONCE at mount into a per-host record; the component's own renderer places them, and there is no observer runtime. The record is a public API:
+**Light-DOM slots ARE the native DOM slot API (#1021, full shadow parity).** There is no WebJs-specific slot API. Post-mount writes are live exactly as in shadow DOM, and moving a component between `static shadow = false` and `true` never needs a rewrite:
 
 ```ts
-class MyCard extends WebComponent {
-  render() {
-    // Conditional-on-slot rendering: hasSlot()/this.slots are SSR-parity
-    // (the server seeds the record from the authored children BEFORE render).
-    return html`
-      ${this.hasSlot('header') ? html`<header><slot name="header"></slot></header>` : ''}
-      <main><slot></slot></main>`;
-  }
-}
-// The ONE dynamic path (fires slotchange when the assignment changes):
-card.setSlotContent('header', nodesOrStringOrNull);
+const card = document.querySelector('my-card');
+card.appendChild(node);                         // live, projected
+card.querySelector('[slot=old]').slot = 'new';  // flip re-projects
+card.innerHTML = '<p>replaced</p>';             // replaces slotted content
+card.querySelector('slot').assignedNodes();     // read, mirrors shadow
+node.assignedSlot;
+card.querySelector('slot').addEventListener('slotchange', ...); // async + coalesced
 ```
 
-Two consequences to internalize. (1) An external `appendChild` on a MOUNTED host, or flipping a child's `slot=""` / a slot's `name=""` attribute after mount, is INERT by design (the pre-#1015 live re-projection observers are gone); use `setSlotContent`. (2) At SSR, `this.slots` values are the authored raw-HTML strings, ONE chunk per name (there is no DOM server-side); PRESENCE and KEYS match the client record, which is the conditional-on-slot contract, while per-name node COUNTS are a client-side notion. The record API is LIGHT-DOM-only (shadow slots are native browser projection; `hasSlot` on a shadow component is false on both sides). The name `default` is a reserved alias for the default slot on both sides; do not name a slot `default`. And note elision interacts with external `setSlotContent` callers: a display-only slotted component is elidable, so a host driven ONLY by an external `setSlotContent` call never upgrades; force it with `static interactive = true`.
+Things to internalize. (1) Every native mutation is live: `appendChild` / `insertBefore` / `removeChild` / `el.remove()` / `innerHTML` / `el.slot=` flip / `HTMLSlotElement.assign()`. Reorder-by-append moves a child to the end (native semantics), a fragment expands and drains, and `insertBefore` against a renderer/non-child ref throws `NotFoundError`. (2) Three gaps, all from light DOM having no shadow boundary, NOT missing features: structural host reads (`host.children` / `host.childNodes` / `querySelector(':scope > ...')` / the `innerHTML` GETTER read the rendered template, not the authored children, so read slotted content with `assignedNodes()`); `assignedChild.parentNode` is the `<slot>`; and `::slotted()` CSS is shadow-only (style slotted content with normal selectors / Tailwind). (3) Conditional-on-slot at render time does not exist in EITHER mode (a shadow template can't branch on light-child presence at render time either); use CSS `:has()` / `slot:empty` or a `slotchange` listener. (4) The name `default` is a reserved alias for the default slot; do not name a slot `default`. (5) A display-only slotted wrapper still elides; a component whose slots are mutated at runtime is already shipped because a consumer references its tag (force a ship with `static interactive = true` only for a dynamically-resolved reference the analyser cannot see). (6) A generic DOM library should operate on the assigned nodes, never on the host element itself.
 
 A compound child reads its parent at the first server paint via `closest('ui-tabs')` (only tag-name selectors resolve at SSR, and the compound parent must be light DOM). Genuine live-DOM reads (`querySelector`, `classList`, geometry) still throw at SSR, so keep them in `connectedCallback` / `firstUpdated`.
 
@@ -169,9 +165,9 @@ A component that does no client-side work renders the same SSR'd HTML with or wi
 - an `@event` binding or native handler property (`.onclick`)
 - a factory-declared reactive property that is not `{ state: true }`
 - an overridden lifecycle hook (including `renderFallback` / `renderError`)
-- an imported `signal` / `computed` / `watch` / `Task` / `ref` / streaming directive, or `addController` / `requestUpdate` / `setSlotContent` / `hasSlot`
+- an imported `signal` / `computed` / `watch` / `Task` / `ref` / streaming directive, or `addController` / `requestUpdate`
 - code that runs at module load (a top-level call, non-data `new`, dynamic `import(...)`, top-level `await`); only declarations and `X.register(...)` are allowed
-- the dynamic slot API (`slotchange`, `assignedNodes` / `assignedElements` / `assignedSlot`, a `this.slots` read); merely RENDERING a `<slot>` no longer ships (#1015: the SSR output carries the placed children and there are no observers, so a display-only slotted wrapper is byte-identical without its JS)
+- the dynamic slot READ surface (`slotchange`, `assignedNodes` / `assignedElements` / `assignedSlot`); merely RENDERING a `<slot>` does not ship (the SSR output carries the placed children, so a display-only slotted wrapper is byte-identical without its JS; native-write liveness is consumer-driven and the consumer's tag reference forces the ship)
 - being rendered by a component that itself ships
 
 A bare `async render()` (no other signal, light DOM) is elided too: the SSR'd data is the complete first paint. Force shipping with `static interactive = true` when interactivity is invisible to static analysis (a dynamically-built tag string, a `:defined` rule in an external stylesheet). `static shadow = true` always ships (Declarative Shadow DOM re-attaches only during parsing). Turn elision off app-wide with `{ "webjs": { "elide": false } }` or `WEBJS_ELIDE=0`.
@@ -181,6 +177,6 @@ A bare `async render()` (no other signal, light DOM) is elided too: the SSR'd da
 A `WebComponent` inherits `HTMLElement` (browser) or an `ElementShim` (SSR) plus the framework reactivity base. A reactive prop or method whose NAME collides either fails to compile (`TS2415` for a type-incompatible property, `TS2416` for a method signature) or silently hijacks the native member at runtime. The fix is always to rename.
 
 - HTMLElement / Element: `title`, `id`, `slot`, `role`, `hidden`, `dir`, `lang`, `translate`, `draggable`, `tabIndex`, `className`, `dataset`, `remove`, `closest`, `matches`, `focus`, `blur`, `click`, `append` / `prepend`, `before` / `after`. Rename (`postTitle`, `removeItem`, `handleClick`).
-- WebComponent base: `render`, `update`, `requestUpdate`, `updated` / `firstUpdated`, `willUpdate` / `shouldUpdate`, `connectedCallback`, `renderError` / `renderFallback`, `addController` / `removeController`, `updateComplete`, and the slot API `slots` / `hasSlot` / `setSlotContent` (#1015). Only override one deliberately, with its exact signature; never repurpose the name for app logic.
+- WebComponent base: `render`, `update`, `requestUpdate`, `updated` / `firstUpdated`, `willUpdate` / `shouldUpdate`, `connectedCallback`, `renderError` / `renderFallback`, `addController` / `removeController`, `updateComplete` (#1021: there is no WebJs slot API to override; slots are native). Only override one deliberately, with its exact signature; never repurpose the name for app logic.
 
 Framework-private fields are underscore-prefixed (`_renderRoot`, `_connected`, `_changedProperties`, `_updatePromise`, `_isUpdating`); never declare a prop or field that matches one. Safe, non-inherited names: `label`, `open`, `count`, `value`, `name`, `items`, `todos`, `active`, `variant`, `size`, `checked`, `selected`, `heading`, `message`, `status`. When in doubt, grep the base surface in `node_modules/@webjsdev/core/src/component.js`.
