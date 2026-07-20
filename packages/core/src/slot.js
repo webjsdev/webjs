@@ -319,6 +319,9 @@ export function captureAuthoredChildren(host) {
   while (host.firstChild) {
     const node = host.firstChild;
     state.authored.push(node);
+    // Detached by the framework, awaiting placement at slot-apply time: the
+    // prune rule must not treat this parentless window as an author removal.
+    FRAMEWORK_DETACHED.add(node);
     host.removeChild(node);
   }
   repartition(state);
@@ -487,6 +490,7 @@ export function setSlotContent(host, name, value) {
       if (key == null) /** @type {Element} */ (n).removeAttribute('slot');
       else /** @type {Element} */ (n).setAttribute('slot', key);
     }
+    FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
     state.authored.push(n);
   }
   repartition(state);
@@ -506,6 +510,278 @@ function normalizeSlotValue(host, value) {
   }
   if (Array.isArray(value)) return value.filter(Boolean);
   return [value];
+}
+
+// ---------------------------------------------------------------------------
+// Native-write window + host interception (native slot-API liveness)
+// ---------------------------------------------------------------------------
+
+/**
+ * Set on a host WHILE the renderer is committing into it. The patched host
+ * methods check it and delegate to the saved native, so a renderer commit is
+ * never mistaken for authored content. This is the one discriminator between
+ * renderer writes and author writes: a synchronous framework-write window, set
+ * structurally (an own symbol), never inferred from comment markers.
+ */
+export const RENDERING = Symbol('webjs.slot.rendering');
+
+/** Marks a host whose mutating methods have been patched (install once). */
+const INTERCEPTED = Symbol('webjs.slot.intercepted');
+
+/** The per-host hidden holding element for authored nodes whose slot name
+ *  matches no rendered slot (native keeps them connected but unrendered). */
+const PARK = Symbol('webjs.slot.park');
+
+/**
+ * Authored nodes the framework detached ON PURPOSE (capture, teardown rescue),
+ * so the prune rule does not treat them as author-removed while they sit
+ * parentless waiting to be (re)placed. Cleared once a node is placed.
+ */
+const FRAMEWORK_DETACHED = new WeakSet();
+
+// Saved native references, captured once in the browser (Node has no `Node`).
+let N_appendChild = null;
+let N_insertBefore = null;
+let N_removeChild = null;
+let N_replaceChild = null;
+let N_append = null;
+let N_prepend = null;
+let N_replaceChildren = null;
+let INNER_HTML_DESC = null;
+let TEXT_CONTENT_DESC = null;
+
+function captureNatives() {
+  if (N_appendChild || !inBrowser) return;
+  N_appendChild = Node.prototype.appendChild;
+  N_insertBefore = Node.prototype.insertBefore;
+  N_removeChild = Node.prototype.removeChild;
+  N_replaceChild = Node.prototype.replaceChild;
+  N_append = Element.prototype.append;
+  N_prepend = Element.prototype.prepend;
+  N_replaceChildren = Element.prototype.replaceChildren;
+  INNER_HTML_DESC = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+  TEXT_CONTENT_DESC = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
+}
+
+/**
+ * Run `fn` with the renderer-write window open on `host`, restoring the prior
+ * flag afterward (re-entrancy safe: nested renderer commits nest cleanly). The
+ * renderer wraps every host-receiver commit in this; a write to a light host
+ * inside the window bypasses the interception and hits the native DOM.
+ *
+ * @template T
+ * @param {any} host
+ * @param {() => T} fn
+ * @returns {T}
+ */
+export function withRendererWrites(host, fn) {
+  const prev = host[RENDERING];
+  host[RENDERING] = true;
+  try {
+    return fn();
+  } finally {
+    host[RENDERING] = prev;
+  }
+}
+
+/** The host's hidden park element, created + attached lazily. */
+function parkFor(host) {
+  const h = /** @type {any} */ (host);
+  let park = h[PARK];
+  if (!park || !park.isConnected) {
+    if (!park) {
+      park = host.ownerDocument.createElement('wj-slot-park');
+      park.setAttribute('hidden', '');
+      park.style.display = 'none';
+      h[PARK] = park;
+    }
+    // Attach inside the host, after the rendered output, via the native path
+    // (never through the patched appendChild).
+    withRendererWrites(host, () => N_appendChild.call(host, park));
+  }
+  return park;
+}
+
+/**
+ * Expand one argument of a DOM insertion call into a flat node list. A
+ * DocumentFragment is DRAINED (native contract: the fragment ends empty) and
+ * its children returned; a string becomes a Text node when `allowString`
+ * (append / prepend / replaceChildren accept strings, appendChild does not).
+ *
+ * @param {Element} host
+ * @param {any} arg
+ * @param {boolean} allowString
+ * @returns {Node[]}
+ */
+function expandArg(host, arg, allowString) {
+  if (allowString && typeof arg === 'string') {
+    return [host.ownerDocument.createTextNode(arg)];
+  }
+  if (arg && arg.nodeType === 11) {
+    const kids = Array.from(arg.childNodes);
+    for (const k of kids) N_removeChild.call(arg, k);
+    return kids;
+  }
+  return [/** @type {Node} */ (arg)];
+}
+
+/**
+ * Splice `nodes` into `authored` before `ref` (a node already in authored) or
+ * at the end when `ref` is null. Nodes already present are removed from their
+ * current position first (native move semantics for a re-inserted child).
+ *
+ * @param {SlotState} state
+ * @param {Node[]} nodes
+ * @param {Node | null} ref
+ */
+function authoredSplice(state, nodes, ref) {
+  const a = state.authored;
+  for (const n of nodes) {
+    const i = a.indexOf(n);
+    if (i !== -1) a.splice(i, 1);
+  }
+  let at = ref == null ? a.length : a.indexOf(ref);
+  if (at === -1) at = a.length;
+  a.splice(at, 0, ...nodes);
+}
+
+/** Commit an authored mutation: record it, re-derive, re-place. */
+function commitAuthored(host, state) {
+  repartition(state);
+  applySlotAssignments(host);
+}
+
+/**
+ * Install the per-instance interception on a LIGHT-DOM host so native DOM
+ * writes drive the slot record. Own data properties / accessors shadow the
+ * prototype methods; installed once, never removed (so a mutation while the
+ * host is disconnected still updates the record). No-op in shadow DOM.
+ *
+ * @param {Element} host
+ */
+export function installSlotInterception(host) {
+  if (!inBrowser) return;
+  const h = /** @type {any} */ (host);
+  if (h[INTERCEPTED]) return;
+  captureNatives();
+  h[INTERCEPTED] = true;
+  const state = ensureSlotState(host);
+
+  h.appendChild = function (node) {
+    if (h[RENDERING]) return N_appendChild.call(this, node);
+    const nodes = expandArg(host, node, false);
+    for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
+    authoredSplice(state, nodes, null);
+    commitAuthored(host, state);
+    return node;
+  };
+
+  h.insertBefore = function (node, ref) {
+    if (h[RENDERING]) return N_insertBefore.call(this, node, ref);
+    if (ref != null && state.authored.indexOf(ref) === -1) {
+      throw new DOMException(
+        'insertBefore: reference node is not an assigned child of this host',
+        'NotFoundError',
+      );
+    }
+    const nodes = expandArg(host, node, false);
+    for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
+    authoredSplice(state, nodes, ref || null);
+    commitAuthored(host, state);
+    return node;
+  };
+
+  h.removeChild = function (node) {
+    if (h[RENDERING]) return N_removeChild.call(this, node);
+    const i = state.authored.indexOf(node);
+    if (i === -1) return N_removeChild.call(this, node);
+    state.authored.splice(i, 1);
+    commitAuthored(host, state);
+    return node;
+  };
+
+  h.replaceChild = function (newNode, oldNode) {
+    if (h[RENDERING]) return N_replaceChild.call(this, newNode, oldNode);
+    const i = state.authored.indexOf(oldNode);
+    if (i === -1) return N_replaceChild.call(this, newNode, oldNode);
+    const nodes = expandArg(host, newNode, false);
+    for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
+    // remove any incoming already authored, then swap old for new at its slot.
+    for (const n of nodes) {
+      const j = state.authored.indexOf(n);
+      if (j !== -1) state.authored.splice(j, 1);
+    }
+    const at = state.authored.indexOf(oldNode);
+    state.authored.splice(at, 1, ...nodes);
+    commitAuthored(host, state);
+    return oldNode;
+  };
+
+  h.append = function (...args) {
+    if (h[RENDERING]) return N_append.apply(this, args);
+    const nodes = [];
+    for (const a of args) nodes.push(...expandArg(host, a, true));
+    for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
+    authoredSplice(state, nodes, null);
+    commitAuthored(host, state);
+  };
+
+  h.prepend = function (...args) {
+    if (h[RENDERING]) return N_prepend.apply(this, args);
+    const nodes = [];
+    for (const a of args) nodes.push(...expandArg(host, a, true));
+    for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
+    authoredSplice(state, nodes, state.authored[0] || null);
+    commitAuthored(host, state);
+  };
+
+  h.replaceChildren = function (...args) {
+    if (h[RENDERING]) return N_replaceChildren.apply(this, args);
+    const nodes = [];
+    for (const a of args) nodes.push(...expandArg(host, a, true));
+    for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
+    state.authored = nodes.slice();
+    commitAuthored(host, state);
+  };
+
+  Object.defineProperty(h, 'innerHTML', {
+    configurable: true,
+    get() {
+      return INNER_HTML_DESC.get.call(this);
+    },
+    set(str) {
+      if (h[RENDERING]) {
+        INNER_HTML_DESC.set.call(this, str);
+        return;
+      }
+      const tmpl = host.ownerDocument.createElement('template');
+      INNER_HTML_DESC.set.call(tmpl, String(str));
+      const nodes = Array.from(tmpl.content.childNodes);
+      for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
+      state.authored = nodes;
+      commitAuthored(host, state);
+    },
+  });
+
+  Object.defineProperty(h, 'textContent', {
+    configurable: true,
+    get() {
+      return TEXT_CONTENT_DESC.get.call(this);
+    },
+    set(str) {
+      if (h[RENDERING]) {
+        TEXT_CONTENT_DESC.set.call(this, str);
+        return;
+      }
+      const nodes =
+        str == null || str === ''
+          ? []
+          : [host.ownerDocument.createTextNode(String(str))];
+      for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
+      state.authored = nodes;
+      commitAuthored(host, state);
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -535,8 +811,12 @@ export function applySlotAssignments(host) {
   );
   if (!state) return;
 
-  // 0. Re-derive the record from `authored` so a `slot=` change on an authored
-  //    node (or any other authored mutation) is reflected before placement.
+  // 0. Prune the record of nodes the author detached out from under us (an
+  //    `el.remove()` on a projected child, or a re-parent elsewhere): their
+  //    parent is no longer one of our own slots / the park, and we did not
+  //    detach them ourselves. Then re-derive from the surviving `authored` so a
+  //    `slot=` change (or any authored mutation) is reflected before placement.
+  pruneAuthored(host, state);
   repartition(state);
 
   // 1. The host's own slots, document order.
@@ -583,6 +863,57 @@ export function applySlotAssignments(host) {
   //    inside a slotchange handler recurse into this writer mid-loop, and
   //    would fire N events for an N-node loop; coalescing matches the spec.
   for (const slot of slotsChanged) queueSlotChange(state, slot);
+
+  // 5. Park authored nodes whose name matches no rendered own-slot. Native
+  //    shadow keeps an unassigned child connected but unrendered (a nested
+  //    custom element still upgrades and runs connectedCallback); a hidden
+  //    holding element inside the host reproduces that. Parked nodes have
+  //    parentNode === park, so the prune rule keeps them.
+  const matched = new Set(groups.keys());
+  const toPark = [];
+  for (const n of state.authored) {
+    if (!matched.has(slotNameOf(n))) toPark.push(n);
+  }
+  if (toPark.length) {
+    const park = parkFor(host);
+    for (const n of toPark) {
+      if (n.parentNode !== park) {
+        FRAMEWORK_DETACHED.delete(n);
+        withRendererWrites(host, () => N_appendChild.call(park, n));
+      }
+    }
+  }
+}
+
+/**
+ * Prune `authored` of nodes the author detached out from under the record: a
+ * node whose parent is neither one of the host's own actual slots nor the park,
+ * and which the framework did not itself detach (capture / teardown rescue mark
+ * such nodes so they survive the parentless window before (re)placement). This
+ * closes the zombie-child resurrection (`el.remove()` on a projected node) and
+ * cross-host theft: the ownership question is answered structurally by the
+ * node's real parent, never by stale bookkeeping.
+ *
+ * @param {Element} host
+ * @param {SlotState} state
+ */
+function pruneAuthored(host, state) {
+  const park = /** @type {any} */ (host)[PARK];
+  state.authored = state.authored.filter((n) => {
+    if (FRAMEWORK_DETACHED.has(n)) return true;
+    const p = n.parentNode;
+    if (p == null) return false;
+    if (p === park) return true;
+    if (
+      p.nodeType === 1 &&
+      /** @type {Element} */ (p).tagName === 'SLOT' &&
+      /** @type {Element} */ (p).hasAttribute(LIGHT_SLOT_ATTR) &&
+      isOwnSlot(host, /** @type {Element} */ (p))
+    ) {
+      return true;
+    }
+    return false;
+  });
 }
 
 /**
@@ -643,7 +974,12 @@ export function applyActualAssignment(state, slot, assigned) {
   } else {
     while (slot.firstChild) slot.removeChild(slot.firstChild);
   }
-  for (const node of assigned) slot.appendChild(node);
+  for (const node of assigned) {
+    // The node is now placed and author-live: it is no longer framework
+    // detached, so a later author `el.remove()` on it is prunable.
+    FRAMEWORK_DETACHED.delete(node);
+    slot.appendChild(node);
+  }
   slot.setAttribute(PROJECTION_ATTR, PROJECTION_ACTUAL);
   state.lastSnapshot.set(slot, assigned.slice());
   return true;
@@ -713,7 +1049,13 @@ export function rescueAssignedNodes(host, slot) {
   const assigned = state.assignedByName.get(name);
   if (assigned) {
     for (const node of assigned) {
-      if (node.parentNode === slot) slot.removeChild(node);
+      if (node.parentNode === slot) {
+        // Framework-detached on teardown: the record keeps the ref (children
+        // are values), so the prune rule must not drop it while it is parked
+        // out of the tree waiting for a re-created slot to re-place it.
+        FRAMEWORK_DETACHED.add(node);
+        slot.removeChild(node);
+      }
     }
   }
   state.lastSnapshot.delete(slot);

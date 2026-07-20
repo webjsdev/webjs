@@ -10,10 +10,26 @@ import {
   PROJECTION_FALLBACK,
   SLOT_FALLBACK_FRAG,
   SLOT_STATE,
+  RENDERING,
   applySlotAssignments,
   rescueAssignedNodes,
   ensureSlotState,
+  withRendererWrites,
 } from './slot.js';
+
+/**
+ * Open the renderer-write window on a light-DOM host while `fn` commits into
+ * it, so the host's patched slot-interception methods delegate to native and
+ * a renderer commit is never mistaken for authored content. A no-op (just runs
+ * `fn`) when `node` is not a slot host, so nested and non-host commits pay
+ * nothing. Covers the ASYNC commit paths (async directives, streaming) that
+ * run outside a synchronous render() call.
+ */
+function commitInto(node, fn) {
+  const host = node && /** @type {any} */ (node)[SLOT_STATE] ? node : null;
+  if (!host) return fn();
+  return withRendererWrites(host, fn);
+}
 
 /**
  * Client-side renderer with **fine-grained** updates.
@@ -88,43 +104,54 @@ const INSTANCE = Symbol.for('webjs.instance');
  */
 export function render(value, container) {
   const host = /** @type any */ (container);
-  const prev = host[INSTANCE];
+  // Open the renderer-write window for the whole commit: every host-receiver
+  // write below (and in createInstance / updateInstance / clearInstance / all
+  // part commits they reach synchronously) then bypasses the slot interception
+  // that is patched onto a light host. This is the single discriminator
+  // between a renderer commit and an author write.
+  const prevRendering = host[RENDERING];
+  host[RENDERING] = true;
+  try {
+    const prev = host[INSTANCE];
 
-  if (isTemplate(value)) {
-    const tr = /** @type {import('./html.js').TemplateResult} */ (value);
-    if (prev && prev.strings === tr.strings) {
-      updateInstance(prev, tr.values);
+    if (isTemplate(value)) {
+      const tr = /** @type {import('./html.js').TemplateResult} */ (value);
+      if (prev && prev.strings === tr.strings) {
+        updateInstance(prev, tr.values);
+        return;
+      }
+      if (prev) clearInstance(prev, container);
+
+      // Light DOM hydration: if container has SSR content (marked by
+      // <!--webjs-hydrate-->), remove the marker and proceed with normal
+      // rendering. The content will be replaced with identical output -
+      // no visible flash because SSR and client render produce the same HTML.
+      const firstChild = container.firstChild;
+      if (firstChild && firstChild.nodeType === 8 && /** @type {Comment} */ (firstChild).data === 'webjs-hydrate') {
+        firstChild.remove();
+      }
+
+      const inst = createInstance(tr, container);
+      host[INSTANCE] = inst;
       return;
     }
+
+    // Non-template value: treat as a single text child.
     if (prev) clearInstance(prev, container);
-
-    // Light DOM hydration: if container has SSR content (marked by
-    // <!--webjs-hydrate-->), remove the marker and proceed with normal
-    // rendering. The content will be replaced with identical output -
-    // no visible flash because SSR and client render produce the same HTML.
-    const firstChild = container.firstChild;
-    if (firstChild && firstChild.nodeType === 8 && /** @type {Comment} */ (firstChild).data === 'webjs-hydrate') {
-      firstChild.remove();
+    host[INSTANCE] = null;
+    container.replaceChildren();
+    if (value == null || value === false || value === true) return;
+    if (Array.isArray(value)) {
+      for (const v of value) {
+        const text = document.createTextNode(String(v ?? ''));
+        container.appendChild(text);
+      }
+      return;
     }
-
-    const inst = createInstance(tr, container);
-    host[INSTANCE] = inst;
-    return;
+    container.appendChild(document.createTextNode(String(value)));
+  } finally {
+    host[RENDERING] = prevRendering;
   }
-
-  // Non-template value: treat as a single text child.
-  if (prev) clearInstance(prev, container);
-  host[INSTANCE] = null;
-  container.replaceChildren();
-  if (value == null || value === false || value === true) return;
-  if (Array.isArray(value)) {
-    for (const v of value) {
-      const text = document.createTextNode(String(v ?? ''));
-      container.appendChild(text);
-    }
-    return;
-  }
-  container.appendChild(document.createTextNode(String(value)));
 }
 
 /* ================================================================
@@ -819,6 +846,22 @@ function applyChild(part, value) {
  * @param {unknown} value
  */
 function applyChildInner(part, value) {
+  // Open the renderer-write window around this commit. Most calls are
+  // synchronous inside render() (the window is already open, this nests
+  // harmlessly), but the async directive paths (until, watch, asyncAppend /
+  // asyncReplace, streaming) re-enter here from a promise / microtask OUTSIDE
+  // any render() window, so this is where those commits into a light host are
+  // marked as renderer writes rather than authored content.
+  return commitInto(part.marker && part.marker.parentNode, () =>
+    applyChildInnerRaw(part, value),
+  );
+}
+
+/**
+ * @param {Extract<BoundPart, {kind:'child'}>} part
+ * @param {unknown} value
+ */
+function applyChildInnerRaw(part, value) {
   const marker = part.marker;
 
   // unsafeHTML directive: inject raw HTML string as DOM nodes.
@@ -1829,17 +1872,23 @@ async function consumeAsyncStream(state, part, dir) {
       const mapped = dir.mapper ? dir.mapper(result.value, i) : result.value;
       const newNodes = renderToNodes(mapped);
 
-      if (state.mode === 'replace') {
-        for (const n of state.nodes) {
-          if (n.parentNode) n.parentNode.removeChild(n);
+      // This chunk commit runs in an async loop OUTSIDE any render() window,
+      // so open the renderer-write window explicitly: without it, committing a
+      // stream chunk into a light slot host would hit the patched insertBefore /
+      // removeChild and fold the renderer's own output into `authored`.
+      commitInto(marker.parentNode, () => {
+        if (state.mode === 'replace') {
+          for (const n of state.nodes) {
+            if (n.parentNode) n.parentNode.removeChild(n);
+          }
+          state.nodes = [];
         }
-        state.nodes = [];
-      }
 
-      const frag = document.createDocumentFragment();
-      for (const n of newNodes) frag.appendChild(n);
-      marker.parentNode?.insertBefore(frag, marker);
-      state.nodes.push(...newNodes);
+        const frag = document.createDocumentFragment();
+        for (const n of newNodes) frag.appendChild(n);
+        marker.parentNode?.insertBefore(frag, marker);
+        state.nodes.push(...newNodes);
+      });
 
       i++;
     }

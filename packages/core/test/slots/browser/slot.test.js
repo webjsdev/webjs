@@ -209,12 +209,11 @@ suite('Light-DOM slot projection (browser)', () => {
     host.remove();
   });
 
-  test('an external appendChild on a mounted host is INERT by design (#1015)', async () => {
-    // The pre-#1015 observers live-re-projected any appendChild. Children
-    // are values now: the record was captured once at mount, so a later
-    // external append neither moves into the slot nor fires slotchange.
-    // The dynamic path is setSlotContent (previous test).
-    const tag = tagName('append-inert');
+  test('an external appendChild on a mounted host is LIVE (native slot parity)', async () => {
+    // Full shadow-DOM parity: a post-mount appendChild is projected into the
+    // slot synchronously (assignment is synchronous, like native), and the
+    // slotchange event fires async + coalesced.
+    const tag = tagName('append-live');
     class C extends WebComponent {
       render() { return html`<div><slot></slot></div>`; }
     }
@@ -225,11 +224,13 @@ suite('Light-DOM slot projection (browser)', () => {
     const slot = host.querySelector('slot[data-webjs-light]');
     let fireCount = 0;
     slot.addEventListener('slotchange', () => { fireCount++; });
-    host.appendChild(document.createElement('p'));
+    const p = document.createElement('p');
+    host.appendChild(p);
+    assert.equal(p.parentElement, slot, 'appended child is projected synchronously');
+    assert.equal(slot.children.length, 1, 'the appended child was projected');
+    assert.equal(fireCount, 0, 'slotchange is async: not yet fired');
     await tick();
-    await tick();
-    assert.equal(fireCount, 0, 'no slotchange: external appends are not observed');
-    assert.equal(slot.children.length, 0, 'the appended child was not projected');
+    assert.equal(fireCount, 1, 'slotchange fired once (async, coalesced)');
     host.remove();
   });
 

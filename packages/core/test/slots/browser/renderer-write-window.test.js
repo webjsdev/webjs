@@ -1,0 +1,89 @@
+/**
+ * Phase 3 robustness hinge: the renderer-write window. A renderer commit into
+ * a light slot host (including the ASYNC paths that run outside a render()
+ * call) must NOT be folded into the slot record as authored content. If it
+ * were, streamed/async renderer output would teleport into the slot, which is
+ * the #906-class corruption the whole design prevents.
+ *
+ * Runs in a REAL browser via WTR + Playwright.
+ */
+import { WebComponent } from '../../../src/component.js';
+import { html } from '../../../src/html.js';
+import { asyncAppend } from '../../../src/directives.js';
+
+import { assert } from '../../../../../test/browser-assert.js';
+
+function tick(ms = 0) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+let n = 0;
+const tagName = (p) => `${p}-${n++}`;
+
+suite('Renderer-write window (async commits are not authored)', () => {
+  test('asyncAppend streaming into a slotted light host does not pollute the slot', async () => {
+    const tag = tagName('stream-host');
+
+    async function* gen() {
+      yield html`<em class="chunk">a</em>`;
+      await tick(5);
+      yield html`<em class="chunk">b</em>`;
+    }
+
+    class C extends WebComponent {
+      render() {
+        // A top-level <slot> AND a top-level asyncAppend hole: both commit
+        // with the HOST as receiver. The stream chunks run in an async loop
+        // outside render(), so only the renderer-write window keeps them off
+        // the authored record.
+        return html`<slot></slot>${asyncAppend(gen())}`;
+      }
+    }
+    C.register(tag);
+
+    const host = document.createElement(tag);
+    const authored = document.createElement('p');
+    authored.className = 'authored';
+    host.appendChild(authored);
+    document.body.appendChild(host);
+
+    // Let the first render + both stream chunks land.
+    await tick(30);
+
+    const slot = host.querySelector('slot[data-webjs-light]');
+    // The slot holds ONLY the authored <p>, never the streamed <em> chunks.
+    assert.equal(slot.querySelectorAll('.chunk').length, 0, 'stream chunks did not enter the slot');
+    assert.equal(slot.querySelectorAll('.authored').length, 1, 'authored child stayed projected');
+    // The stream chunks rendered as the host's own output (siblings of the slot).
+    assert.equal(host.querySelectorAll('.chunk').length, 2, 'both chunks rendered as renderer output');
+
+    host.remove();
+  });
+
+  test('a reactive re-render does not fold rendered output into the slot record', async () => {
+    const tag = tagName('rerender-host');
+    class C extends WebComponent({ count: Number }) {
+      constructor() { super(); this.count = 0; }
+      render() {
+        return html`<div class="body">count:${this.count}</div><slot></slot>`;
+      }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    const authored = document.createElement('span');
+    authored.className = 'authored';
+    host.appendChild(authored);
+    document.body.appendChild(host);
+    await tick(0);
+    const slot = host.querySelector('slot[data-webjs-light]');
+    // Drive several re-renders.
+    host.count = 1;
+    await tick(0);
+    host.count = 2;
+    await tick(0);
+    assert.equal(slot.querySelectorAll('.authored').length, 1, 'authored child still projected');
+    assert.equal(slot.querySelectorAll('.body').length, 0, 'rendered .body never entered the slot');
+    assert.ok(host.querySelector('.body').textContent.includes('count:2'), 're-render committed normally');
+    host.remove();
+  });
+});

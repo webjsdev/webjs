@@ -12,6 +12,7 @@ import {
   slotsView,
   hasSlotContent,
   setSlotContent,
+  installSlotInterception,
 } from './slot.js';
 
 const isBrowser = typeof window !== 'undefined' && typeof HTMLElement !== 'undefined';
@@ -854,6 +855,12 @@ class WebComponentBase extends Base {
       } else {
         captureAuthoredChildren(this);
       }
+      // Install native-write interception AFTER capture (capture uses the
+      // host's still-native methods). The patched methods make appendChild /
+      // insertBefore / removeChild / innerHTML / slot= flips on a mounted light
+      // host drive the slot record, restoring full shadow-DOM parity through
+      // the standard DOM API. Installed once, never removed.
+      installSlotInterception(this);
     }
 
     // Notify all controllers that the host is connected.
