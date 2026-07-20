@@ -329,6 +329,15 @@ export function adoptSSRAssignments(host) {
   for (const slot of slots) {
     /** @type {HTMLSlotElement} */
     const s = /** @type {any} */ (slot);
+    // Only the host's OWN slots. A nested component's slot (another custom
+    // element sits between it and the host) belongs to THAT component and is
+    // adopted from its own record. Without this filter, a nested actual slot
+    // that precedes the outer host's same-named slot in document order wins
+    // the first-wins `has(name)` check below, so the outer record adopts the
+    // inner component's children and the outer's first apply physically steals
+    // them. `applySlotAssignments` and the router both filter; this path must
+    // too.
+    if (!isOwnSlot(host, s)) continue;
     if (s.getAttribute(PROJECTION_ATTR) !== PROJECTION_ACTUAL) continue;
     const name = keyOfName(s.getAttribute('name'));
     if (!state.assignedByName.has(name)) {
