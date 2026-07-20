@@ -272,6 +272,10 @@ function findLightAssignedSlot(el) {
  *   assignment changed since the last microtask flush (coalesced slotchange).
  * @property {boolean} [slotChangeScheduled] True while a coalesced
  *   slotchange flush is queued for this host.
+ * @property {MutationObserver} [backstop] Sensor for raw direct-child writes
+ *   that bypass the patched methods (never moves nodes; folds into `authored`).
+ * @property {MutationObserver} [flipSensor] Sensor for `slot=` / `name=`
+ *   attribute flips (never moves nodes; re-derives + re-places).
  */
 
 /**
@@ -581,7 +585,141 @@ export function withRendererWrites(host, fn) {
     return fn();
   } finally {
     host[RENDERING] = prev;
+    // When the OUTERMOST window closes, discard the childList records this
+    // renderer commit produced on the host, synchronously, before the backstop
+    // observer's async callback can see them. The backstop then only ever
+    // observes genuine author / external writes. (The flip sensor is NOT
+    // drained: a renderer `name=` write on a slot is exactly what must
+    // re-project a dynamic `name=${...}`.)
+    if (!prev) {
+      const state = host[SLOT_STATE];
+      if (state && state.backstop) state.backstop.takeRecords();
+    }
   }
+}
+
+/**
+ * Install the two read-only sensors on a light host. Neither moves a node; each
+ * only folds a mutation into `authored` and calls the single renderer-owned
+ * writer. Installed on connect, torn down on disconnect.
+ *   - Bypass backstop (childList, subtree:false): catches raw writes that skip
+ *     the patched methods (`Node.prototype.appendChild.call`, Range ops).
+ *   - Flip sensor (attributes slot/name, subtree:true): catches an `el.slot=`
+ *     flip on a projected child and a slot `name=` change.
+ *
+ * @param {Element} host
+ */
+export function installSlotSensors(host) {
+  if (!inBrowser) return;
+  const h = /** @type {any} */ (host);
+  const state = ensureSlotState(host);
+  if (state.backstop) return;
+
+  state.backstop = new MutationObserver((records) => {
+    let dirty = false;
+    for (const r of records) {
+      for (const node of r.addedNodes) {
+        if (node === h[PARK]) continue;
+        if (state.authored.indexOf(node) !== -1) continue;
+        // A raw direct-child insert that bypassed the patched methods. Records
+        // reaching this async callback are never renderer commits (those are
+        // drained at the window close), so fold it in as authored content.
+        FRAMEWORK_DETACHED.add(node);
+        state.authored.push(node);
+        dirty = true;
+      }
+      for (const node of r.removedNodes) {
+        const i = state.authored.indexOf(node);
+        if (i !== -1 && !host.contains(node)) {
+          state.authored.splice(i, 1);
+          dirty = true;
+        }
+      }
+    }
+    if (dirty) applySlotAssignments(host);
+  });
+  state.backstop.observe(host, { childList: true, subtree: false });
+
+  state.flipSensor = new MutationObserver((records) => {
+    for (const r of records) {
+      if (r.type === 'attributes') {
+        // A slot=/name= flip somewhere in the tree. Re-derive + re-place; the
+        // writer is idempotent, so an unrelated flip settles to a no-op.
+        applySlotAssignments(host);
+        return;
+      }
+    }
+  });
+  state.flipSensor.observe(host, {
+    attributes: true,
+    attributeFilter: ['slot', 'name'],
+    subtree: true,
+  });
+}
+
+/**
+ * Tear down the sensors, processing any queued records FIRST (a bare
+ * `disconnect()` drops them, which would lose an inner flip queued mid-apply
+ * when a nested element bounces through disconnect/connect).
+ *
+ * @param {Element} host
+ */
+export function teardownSlotSensors(host) {
+  const state = /** @type {SlotState | undefined} */ (
+    /** @type {any} */ (host)[SLOT_STATE]
+  );
+  if (!state) return;
+  if (state.backstop) {
+    state.backstop.takeRecords();
+    state.backstop.disconnect();
+    state.backstop = undefined;
+  }
+  if (state.flipSensor) {
+    state.flipSensor.takeRecords();
+    state.flipSensor.disconnect();
+    state.flipSensor = undefined;
+  }
+}
+
+/**
+ * Reconnect sweep: after a host is re-inserted, fold any direct host child that
+ * is not already authored, not the park, and not the render root into
+ * `authored` (covers a raw bypass write made while the host was disconnected,
+ * which no sensor was live to see). Then re-apply.
+ *
+ * @param {Element} host
+ */
+export function reconnectSweep(host) {
+  if (!inBrowser) return;
+  const h = /** @type {any} */ (host);
+  const state = /** @type {SlotState | undefined} */ (h[SLOT_STATE]);
+  if (!state) return;
+  const inst = h[Symbol.for('webjs.instance')];
+  let changed = false;
+  for (const node of Array.from(host.childNodes)) {
+    if (node === h[PARK]) continue;
+    if (state.authored.indexOf(node) !== -1) continue;
+    // Skip the renderer's own top-level nodes (tracked on the instance).
+    if (inst && instanceOwns(inst, node)) continue;
+    FRAMEWORK_DETACHED.add(node);
+    state.authored.push(node);
+    changed = true;
+  }
+  if (changed) applySlotAssignments(host);
+}
+
+/**
+ * True when `node` is renderer-owned: it is one of the instance's bookend
+ * markers (`wjm-s` / `wjm-e`) or sits between them. Object-identity check
+ * against the marker refs the instance holds, never comment-text sniffing.
+ */
+function instanceOwns(inst, node) {
+  if (!inst || !inst.startNode || !inst.endNode) return false;
+  if (node === inst.startNode || node === inst.endNode) return true;
+  for (let n = inst.startNode.nextSibling; n && n !== inst.endNode; n = n.nextSibling) {
+    if (n === node) return true;
+  }
+  return false;
 }
 
 /** The host's hidden park element, created + attached lazily. */

@@ -13,6 +13,9 @@ import {
   hasSlotContent,
   setSlotContent,
   installSlotInterception,
+  installSlotSensors,
+  teardownSlotSensors,
+  reconnectSweep,
 } from './slot.js';
 
 const isBrowser = typeof window !== 'undefined' && typeof HTMLElement !== 'undefined';
@@ -848,7 +851,10 @@ class WebComponentBase extends Base {
       // slot=""-attribute flip after mount is inert by design, and the
       // dynamic path is setSlotContent() (children as values).
       if (hasSlotState(this)) {
-        // (a) Reconnection. Record already populated; nothing to do here.
+        // (a) Reconnection. Record already populated. Sweep any direct child
+        //     added by a raw bypass write while the host was disconnected (no
+        //     sensor was live to catch it), then re-arm the sensors below.
+        reconnectSweep(this);
       } else if (this.__isHydrating()) {
         ensureSlotState(this);
         adoptSSRAssignments(this);
@@ -856,11 +862,13 @@ class WebComponentBase extends Base {
         captureAuthoredChildren(this);
       }
       // Install native-write interception AFTER capture (capture uses the
-      // host's still-native methods). The patched methods make appendChild /
-      // insertBefore / removeChild / innerHTML / slot= flips on a mounted light
-      // host drive the slot record, restoring full shadow-DOM parity through
-      // the standard DOM API. Installed once, never removed.
+      // host's still-native methods), then arm the sensors. Together they make
+      // appendChild / insertBefore / removeChild / innerHTML / slot= flips on a
+      // mounted light host drive the slot record, restoring full shadow-DOM
+      // parity through the standard DOM API. Interception installs once;
+      // sensors are armed on every connect and torn down on disconnect.
       installSlotInterception(this);
+      installSlotSensors(this);
     }
 
     // Notify all controllers that the host is connected.
@@ -976,8 +984,11 @@ class WebComponentBase extends Base {
       this.__hydrationObserver.disconnect();
       this.__hydrationObserver = null;
     }
-    // No slot observers to detach (#1015). The per-host slot record is
-    // preserved so a subsequent reconnection picks up where it left off.
+    // Tear down the slot sensors, processing any queued records first (a bare
+    // disconnect() drops them). The per-host slot record + interception are
+    // preserved so a reconnection picks up where it left off (sensors re-arm in
+    // connectedCallback).
+    teardownSlotSensors(this);
     // Dispose the signal watcher so dependency edges drop. Without
     // this the element holds references to module-scope signals
     // (and vice versa) forever.

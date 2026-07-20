@@ -151,6 +151,13 @@ export function render(value, container) {
     container.appendChild(document.createTextNode(String(value)));
   } finally {
     host[RENDERING] = prevRendering;
+    // Outermost window closing: discard the childList records this commit made
+    // on the host, so the slot backstop only ever sees genuine author writes
+    // (mirrors withRendererWrites, which the async commit paths use).
+    if (!prevRendering) {
+      const st = host[SLOT_STATE];
+      if (st && st.backstop) st.backstop.takeRecords();
+    }
   }
 }
 
