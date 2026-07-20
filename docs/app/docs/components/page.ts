@@ -494,6 +494,8 @@ card.querySelector('slot').addEventListener('slotchange', ...);</pre>
 
     <p><strong>Live writes need the component's JS on the page.</strong> A display-only slotted wrapper (a component that only renders a <code>&lt;slot&gt;</code>, with no interactivity) is elided, so it ships no JavaScript and its post-mount native writes are inert, the same as any elided component. A component that is actually interacted with ships automatically (a client module references its tag); if a consumer reaches an otherwise-display-only wrapper through a string selector the analyzer cannot see, force it to ship with <code>static interactive = true</code>. Shadow-DOM components always ship, so this is the one boundary set by elision rather than by slots.</p>
 
+    <p><strong>Known limitation: forwarded-slot content projection is SSR-only.</strong> A template can forward a slot into a nested component (<code>html\`&lt;inner-shell&gt;&lt;slot&gt;fallback&lt;/slot&gt;&lt;/inner-shell&gt;\`</code>), and the forwarded slot's <em>fallback</em> works everywhere, as do the reads (<code>assignedNodes({ flatten: true })</code> follows the chain). But <em>content</em> passed to the outer component currently projects through the forwarded slot only in the server-rendered first paint; on the client the forwarded slot shows its fallback. Prefer passing content straight to the inner component until this write-path lands.</p>
+
     <h3>Default Slot</h3>
     <p>The <code>&lt;slot&gt;&lt;/slot&gt;</code> element in a component's <code>render()</code> is where the parent's child content appears:</p>
 
