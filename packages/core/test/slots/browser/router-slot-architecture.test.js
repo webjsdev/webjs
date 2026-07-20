@@ -143,6 +143,61 @@ suite('Router + slot architectural regressions', () => {
     o.remove();
   });
 
+  test('a serialized-stamped host with a conditionally CLOSED slot adopts (no stale-tree projection)', async () => {
+    // The serialized shape carries NO projected slot (the conditional is
+    // closed at snapshot time), so the structural detector has nothing to see.
+    // The router's data-wj-serialized stamp is what routes this restore to
+    // adopt; without it, capture hoovers the old rendered tree and a later
+    // conditional open projects that stale tree into the slot as authored
+    // content (the #1006 shape, one conditional away).
+    const tag = tagName('cond-restore');
+    class C extends WebComponent({ open: Boolean }) {
+      constructor() { super(); this.open = false; }
+      render() {
+        return this.open
+          ? html`<div class="opened"><slot></slot></div>`
+          : html`<div class="closed">closed</div>`;
+      }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    document.body.appendChild(host);
+    await tick();
+    const serialized = host.outerHTML; // post-render, closed: NO slot inside
+    host.remove();
+    await tick();
+    // Restore the serialized HTML with the router's stamp applied, as
+    // applySwap does for every host in a parsed doc.
+    const holder = document.createElement('div');
+    document.body.appendChild(holder);
+    holder.innerHTML = serialized.replace('data-wj-host', 'data-wj-host data-wj-serialized');
+    await tick();
+    const restored = holder.querySelector(tag);
+    assert.ok(restored, 'restored host upgraded');
+    assert.ok(!restored.hasAttribute('data-wj-serialized'), 'the stamp was consumed on upgrade');
+    // Open the conditional. The slot must show its (empty) assignment, never
+    // the STALE old rendered "closed" tree.
+    restored.open = true;
+    await tick();
+    await tick();
+    const slot = restored.querySelector('slot[data-webjs-light]');
+    assert.ok(slot, 'the conditional slot rendered');
+    assert.ok(!slot.querySelector('.closed'), 'the stale rendered tree was NOT projected as authored content');
+    holder.remove();
+  });
+
+  test('applySwap stamps every host in a parsed doc as serialized', async () => {
+    enableClientRouter();
+    const doc = _parseHTML(
+      '<div><some-widget data-wj-host><p>rendered</p></some-widget></div>'
+    );
+    // A background revalidation with no boundary plan DISCARDS the response
+    // (no navigation, no swap), but the stamp runs before that early return.
+    _applySwap(doc, null, true, location.origin + '/anywhere');
+    const host = doc.querySelector('some-widget');
+    assert.ok(host.hasAttribute('data-wj-serialized'), 'the parsed-doc host was stamped');
+  });
+
   test('cross-host move sticks: the first host does not steal the child back', async () => {
     const tagA = tagName('host-a');
     const tagB = tagName('host-b');

@@ -854,15 +854,22 @@ class WebComponentBase extends Base {
         //     added by a raw bypass write while the host was disconnected (no
         //     sensor was live to catch it), then re-arm the sensors below.
         reconnectSweep(this);
-      } else if (this.__isHydrating() || hasFrameworkRenderedSubtree(this)) {
-        // (b) Framework-rendered markup: boot-time SSR hydration (the
-        //     webjs-hydrate marker) OR any other framework-rendered subtree,
-        //     detected structurally (own data-webjs-light slots, an attribute
-        //     only the renderer / SSR stamps). The structural check is what makes a
-        //     back/forward SNAPSHOT RESTORE adopt instead of capture: restored
-        //     HTML is post-hydration (no marker), and capturing it would
-        //     hoover the rendered tree into the record and duplicate content
-        //     on the next render (the #1006 shape, on the restore path).
+      } else if (
+        this.__isHydrating() ||
+        this.hasAttribute('data-wj-serialized') ||
+        hasFrameworkRenderedSubtree(this)
+      ) {
+        // (b) Framework-rendered markup, from any of three signals: boot-time
+        //     SSR hydration (the webjs-hydrate marker), the router's
+        //     data-wj-serialized stamp (applySwap marks every host in a parsed
+        //     doc, covering a snapshot restore whose serialized shape has no
+        //     projected slot to detect), or the structural detector (own
+        //     data-webjs-light[data-projection] slots, attributes only the
+        //     renderer / SSR stamps). Adopt-not-capture: capturing restored
+        //     post-hydration HTML would hoover the rendered tree into the
+        //     record and duplicate content on the next render (the #1006
+        //     shape, on the restore path).
+        this.removeAttribute('data-wj-serialized');
         ensureSlotState(this);
         adoptSSRAssignments(this);
       } else {

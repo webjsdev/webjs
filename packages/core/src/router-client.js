@@ -2605,6 +2605,20 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
   // carriers, so the inert payload never lands in the live document.
   try { scanSeeds(doc); } catch { /* seeding is best-effort */ }
 
+  // Every host in this parsed doc is FRAMEWORK-SERIALIZED markup (an SSR
+  // fragment or a back/forward snapshot of post-hydration HTML), never
+  // author-written children. Stamp them so connectedCallback's slot chooser
+  // ADOPTS instead of capture-hoovering the rendered tree, which matters for
+  // a restored host whose serialized shape carries no projected slot (a
+  // conditionally closed slot at snapshot time) where the structural
+  // slot-marker detector has nothing to see. The chooser consumes and removes
+  // the attribute on upgrade.
+  try {
+    for (const el of doc.querySelectorAll('[data-wj-host]')) {
+      el.setAttribute('data-wj-serialized', '');
+    }
+  } catch { /* stamping is best-effort */ }
+
   // Any clean swap (no importmap mismatch, including cache restores
   // and frame swaps where we don't even run the mismatch check) is a
   // signal that the user successfully navigated, so clear the reload
