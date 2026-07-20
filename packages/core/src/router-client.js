@@ -2806,6 +2806,15 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
       // REPLACE anchors at a parent already compared equal; the other tiers
       // require no change at all), and the fresh deeper keys arrive via the
       // physically replaced boundary comments inside the range.
+      //
+      // When the swapped range lives INSIDE a light-DOM slot (a layout whose
+      // ${children} render inside a slotted shell component), the raw swap
+      // just rewrote nodes the slot runtime believes it owns, so its record is
+      // now stale. Resync the owning host's record from the slot's real
+      // children through the one public seam, or the host's next
+      // applySlotAssignments would wipe the freshly swapped content and
+      // restore the stale list.
+      resyncEnclosingSlotRecord(live.start);
       blurOutgoingFocus();
     }, () => upgradeCustomElementsInRange(live));
     forwardSuspenseResolvers(doc.body);
@@ -3211,6 +3220,34 @@ function ownActualLightSlots(host) {
  * @param {Element} dst  Live hydrated component host.
  * @param {Element} src  Incoming SSR copy of the same component.
  */
+/**
+ * After a boundary swap, if the swapped range's parent is a light-DOM slot,
+ * resync the owning host's slot record from the slot's REAL children through
+ * the one public seam (`projectAuthored`). The router's raw range write is the
+ * one sanctioned write into a region the slot runtime also places (a layout's
+ * `${children}` rendered inside a slotted shell puts the `wj:children` markers
+ * INSIDE that shell's slot), so without this sync the record goes stale and
+ * the host's next apply would wipe the swapped-in page content and restore the
+ * pruned old list. Walking up from the slot, the owner is the nearest
+ * `SLOT_STATE` host with no other custom element in between; anything else
+ * (a nested stateless component, a shadow slot) bails.
+ *
+ * @param {Comment} startMarker
+ */
+function resyncEnclosingSlotRecord(startMarker) {
+  const p = startMarker.parentNode;
+  if (!p || p.nodeType !== 1) return;
+  const slotEl = /** @type {Element} */ (p);
+  if (slotEl.tagName !== 'SLOT' || !slotEl.hasAttribute(LIGHT_SLOT_ATTR)) return;
+  let host = null;
+  for (let a = slotEl.parentElement; a; a = a.parentElement) {
+    if (/** @type {any} */ (a)[SLOT_STATE]) { host = a; break; }
+    if (a.tagName.includes('-')) return; // belongs to a stateless nested element
+  }
+  if (!host) return;
+  projectAuthored(host, keyOfName(slotEl.getAttribute('name')), [...slotEl.childNodes]);
+}
+
 function reprojectSlottedContent(dst, src) {
   // Only a light-DOM component that tracks slot assignments has placed
   // page-authored content to update. No slot state (no <slot>, or a shadow-DOM
