@@ -935,8 +935,12 @@ export function installSlotInterception(host) {
     if (newNode === oldNode) return oldNode; // native no-op
     const nodes = expandArg(host, newNode, false); // guards cycle before draining
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
-    // remove any incoming already authored, then swap old for new at its slot.
+    // Remove any incoming node already authored (so it MOVES to the new slot),
+    // but never oldNode itself: it is the replacement target, so skipping it
+    // keeps `at` valid even for the pathological replaceChild(fragmentWithOld,
+    // old) input, avoiding a splice(-1) that would corrupt an unrelated sibling.
     for (const n of nodes) {
+      if (n === oldNode) continue;
       const j = state.authored.indexOf(n);
       if (j !== -1) state.authored.splice(j, 1);
     }

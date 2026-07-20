@@ -202,6 +202,25 @@ suite('Native-write liveness (light-DOM slot parity)', () => {
     host.remove();
   });
 
+  test('replaceChild(fragment containing old, old) does not corrupt a sibling', async () => {
+    const tag = tagName('replace-pathological');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    const slot = host.querySelector('slot[data-webjs-light]');
+    const a = document.createElement('a-el');
+    const b = document.createElement('b-el');
+    host.append(a, b); // [a, b]
+    // Pathological input native itself rejects: a fragment that contains oldNode.
+    const frag = document.createDocumentFragment();
+    frag.appendChild(a); // moves a into the fragment
+    let threw = null;
+    try { host.replaceChild(frag, a); } catch (e) { threw = e; }
+    // Whether it throws or degrades, the key guarantee is that b (an unrelated
+    // sibling) is NOT dropped or reordered by a splice(-1).
+    assert.ok(slot.contains(b) || Array.from(slot.children).some((e) => e.tagName.toLowerCase() === 'b-el'),
+      'the unrelated sibling b survived');
+    host.remove();
+  });
+
   test('appendChild of the host or an ancestor throws HierarchyRequestError', async () => {
     const tag = tagName('cycle');
     const host = await mount(tag, () => html`<div><slot></slot></div>`);
