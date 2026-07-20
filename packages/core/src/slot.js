@@ -3,7 +3,9 @@
  *
  * `<slot>` works identically in light DOM and shadow DOM, through the SAME
  * native DOM API. You write the same template, and moving a component between
- * `static shadow = false` and `true` never needs a rewrite. Native `<slot>` is
+ * `static shadow = false` and `true` never needs a rewrite (one KNOWN
+ * LIMITATION: forwarded-slot CONTENT projection is SSR-only; the fallback and
+ * the flatten read chain work everywhere). Native `<slot>` is
  * a shadow-DOM primitive, so in light DOM WebJs implements slotting itself, to
  * spec: named + default slots, fallback content, first-wins resolution, dynamic
  * `name=${...}`, and live post-mount writes (appendChild, insertBefore,
@@ -32,7 +34,7 @@
  *     dropped from `authored` by its real parent, killing zombie resurrection
  *     and cross-host theft.
  *
- * Documented gaps (all from light DOM having no shadow boundary): structural
+ * Documented inherent gaps (all from light DOM having no shadow boundary): structural
  * host reads (`host.children` / `childNodes` / the innerHTML GETTER show the
  * rendered template, not the authored children), `assignedChild.parentNode` is
  * the `<slot>`, and `::slotted()` CSS (use normal selectors / Tailwind).

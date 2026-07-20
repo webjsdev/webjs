@@ -187,7 +187,9 @@ them per app.
    `innerHTML` / `el.slot=` flips / `HTMLSlotElement.assign()`), and the
    reads (`assignedNodes` / `assignedElements` / `{flatten}` /
    `assignedSlot` / `slotchange`, with native async-coalesced slotchange).
-   Flip `static shadow` and nothing else changes. The core invariant that
+   Flip `static shadow` and nothing else changes (one KNOWN LIMITATION:
+   forwarded-slot CONTENT projection is SSR-only, so pass content straight
+   to the inner component on the client). The core invariant that
    keeps this robust (unlike the pre-#1016 third-writer observer that
    caused the #906 / #1006 / #994 cascade): the component's renderer is the
    ONLY actor that moves authored nodes into slots (`applySlotAssignments`);
@@ -198,7 +200,7 @@ them per app.
    `data-webjs-light` attribute, so real shadow-DOM slots are untouched.
    SSR (`injectDSD`) projects light-DOM children into the rendered template
    before the response, so PE and JS-disabled clients see the content.
-   Three gaps, all from light DOM having no shadow boundary: structural
+   Three inherent gaps, all from light DOM having no shadow boundary: structural
    host reads (`host.children` / the `innerHTML` getter show the rendered
    template), `assignedChild.parentNode` is the `<slot>`, and `::slotted()`
    CSS (use normal selectors). When you add a slot behaviour, run the
