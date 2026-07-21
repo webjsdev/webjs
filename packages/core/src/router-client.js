@@ -18,7 +18,7 @@ import { scanSeeds } from './action-seed-client.js';
 // reused hydrated light-DOM component across a soft nav (#908).
 import {
   SLOT_STATE, LIGHT_SLOT_ATTR, PROJECTION_ATTR, PROJECTION_ACTUAL,
-  projectAuthored, keyOfName,
+  projectAuthored, keyOfName, isAuthoredContentSlot,
 } from './slot.js';
 
 /** The content type a content-negotiated stream-action response carries (#248). */
@@ -3206,6 +3206,11 @@ function ownActualLightSlots(host) {
   for (const slot of host.querySelectorAll(sel)) {
     const s = /** @type {HTMLSlotElement} */ (slot);
     if (!isOwnLightSlot(s, host)) continue;
+    // The runtime's invariant applies here too: a slot inside AUTHORED
+    // content (an author-relocated rendered chunk, a spoofed stamp) is
+    // inert content, never a reprojection target; collecting it would
+    // project into (or evict from) a slot the apply refuses to place.
+    if (isAuthoredContentSlot(host, s)) continue;
     const name = keyOfName(s.getAttribute('name'));
     if (!byName.has(name)) byName.set(name, s);
   }

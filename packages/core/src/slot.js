@@ -869,15 +869,15 @@ function processBackstop(host, state, records) {
     }
     for (const node of r.removedNodes) {
       const i = state.authored.indexOf(node);
-      // A removal record for a node the framework re-homed (park, holding
-      // fragment, old slot: parent is non-null) keeps its record entry; a
-      // marked node whose parent is NULL at processing time was RAW-REMOVED
-      // by the author (framework detach paths always re-home, and the
-      // pre-sensor capture generates no records), so it leaves like any
-      // author removal instead of being resurrected by the next apply.
-      const frameworkHeld =
-        FRAMEWORK_DETACHED.has(node) && node.parentNode != null;
-      if (i !== -1 && !host.contains(node) && !frameworkHeld) {
+      // Any authored node in a HOST-childList removal record that is no
+      // longer under the host was removed by the AUTHOR: no framework
+      // detach path can produce this shape (capture precedes sensor arming;
+      // rescue removes from the SLOT, not the host; park and placement
+      // moves keep the node under the host, so contains stays true; the
+      // render wipe's batch is discarded by the null-instance drain). A
+      // marked-node retention guard here defended an impossible case while
+      // resurrecting same-batch add-then-remove and add-then-move writes.
+      if (i !== -1 && !host.contains(node)) {
         state.authored.splice(i, 1);
         dirty = true;
       }
@@ -1195,11 +1195,22 @@ function authoredSplice(state, nodes, ref) {
  * element is CONTENT (a chunk the author wrote or moved in), never one of
  * the host's own rendered slots, no matter what attributes it carries.
  *
- * @param {SlotState} state
+ * Exported for the router's own-slot collection, which must apply the SAME
+ * invariant when picking reprojection targets.
+ *
  * @param {Element} host
  * @param {Element} el
  * @returns {boolean}
  */
+export function isAuthoredContentSlot(host, el) {
+  const state = /** @type {SlotState | undefined} */ (
+    /** @type {any} */ (host)[SLOT_STATE]
+  );
+  if (!state) return false;
+  return isInsideAuthored(state, host, el);
+}
+
+/** @param {SlotState} state @param {Element} host @param {Element} el */
 function isInsideAuthored(state, host, el) {
   for (let p = /** @type {Node | null} */ (el); p && p !== host; p = p.parentNode) {
     if (state.authored.indexOf(p) !== -1) return true;

@@ -1524,6 +1524,28 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
     }
   });
 
+  test('a same-batch raw add-then-move into a fragment is not stolen back', async () => {
+    const tag = tagName('batch-add-move');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      host.appendChild(document.createElement('em'));
+      await tick();
+      const n = document.createElement('p');
+      n.id = 'frag-bound';
+      const frag = document.createDocumentFragment();
+      // One observer batch: raw add to the host, then a move into the
+      // author's own fragment.
+      Node.prototype.appendChild.call(host, n);
+      frag.appendChild(n);
+      await tick();
+      await tick();
+      assert.equal(n.parentNode, frag, 'the node stayed in the author fragment (no theft-back)');
+      assert.equal(host.querySelector('#frag-bound'), null, 'not resurrected into the host');
+    } finally {
+      host.remove();
+    }
+  });
+
   test('router projectAuthored on the default slice leaves a manual assignment intact', async () => {
     const tag = tagName('proj-manual');
     const host = await mount(tag, () => html`<div><slot></slot><slot name="x"></slot></div>`);
