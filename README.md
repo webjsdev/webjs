@@ -163,8 +163,8 @@ are overridable via `DOCS_URL` / `EXAMPLE_BLOG_URL` / `UI_URL` / `WEBSITE_URL`
 ```ts
 // app/page.ts: server-rendered, async data fetching
 import { html, repeat } from '@webjsdev/core';
-import '../components/counter.ts';
-import { listPosts } from '../modules/posts/queries/list-posts.server.ts';
+import '#components/counter.ts';
+import { listPosts } from '#modules/posts/queries/list-posts.server.ts';
 
 export const metadata = { title: 'home' };
 
@@ -211,7 +211,7 @@ projection, same API).
 ```ts
 // modules/posts/queries/list-posts.server.ts: one function per file
 'use server';
-import { db } from '../../../db/connection.server.ts';
+import { db } from '#db/connection.server.ts';
 
 export async function listPosts() {
   return db.query.posts.findMany({ orderBy: { createdAt: 'desc' } });
