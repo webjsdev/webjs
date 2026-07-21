@@ -54,7 +54,7 @@ describe('SSR projection', () => {
     C.register('slot-ssr-3');
     const out = await renderToString(html`<slot-ssr-3></slot-ssr-3>`);
     assert.match(out, /data-projection="fallback"[^>]*name="header">Fallback head<\/slot>/);
-    assert.match(out, /data-projection="fallback">Fallback body<\/slot>/);
+    assert.match(out, /data-projection="fallback"[^>]*>Fallback body<\/slot>/);
   });
 
   test('partial fallback: only some named slots populated', async () => {
@@ -125,8 +125,8 @@ describe('SSR projection', () => {
     }
     C.register('slot-ssr-9');
     const out = await renderToString(html`<slot-ssr-9><p>real</p></slot-ssr-9>`);
-    assert.match(out, /data-projection="actual"><p>real<\/p><\/slot>/);
-    assert.match(out, /data-projection="fallback">FB<\/slot>/);
+    assert.match(out, /data-projection="actual"[^>]*><p>real<\/p><\/slot>/);
+    assert.match(out, /data-projection="fallback"[^>]*>FB<\/slot>/);
   });
 
   test('text node assignment routes to default slot', async () => {
@@ -135,7 +135,7 @@ describe('SSR projection', () => {
     }
     C.register('slot-ssr-10');
     const out = await renderToString(html`<slot-ssr-10>just some text</slot-ssr-10>`);
-    assert.match(out, /data-projection="actual">just some text<\/slot>/);
+    assert.match(out, /data-projection="actual"[^>]*>just some text<\/slot>/);
   });
 
   test('comment node in authored children is preserved', async () => {
@@ -208,7 +208,7 @@ describe('SSR projection', () => {
     }
     C.register('slot-ssr-16');
     const out = await renderToString(html`<slot-ssr-16></slot-ssr-16>`);
-    assert.match(out, /data-projection="fallback">FA<\/slot>/);
+    assert.match(out, /data-projection="fallback"[^>]*>FA<\/slot>/);
     assert.match(out, /data-projection="fallback"[^>]*name="x">FB<\/slot>/);
   });
 });
@@ -227,7 +227,7 @@ describe('SSR edge cases', () => {
     }
     C.register('slot-edge-cond-true');
     const out = await renderToString(html`<slot-edge-cond-true expanded><b>visible</b></slot-edge-cond-true>`);
-    assert.match(out, /data-projection="actual"><b>visible<\/b><\/slot>/);
+    assert.match(out, /data-projection="actual"[^>]*><b>visible<\/b><\/slot>/);
   });
 
   test('slot inside conditional ternary (false branch absent)', async () => {
@@ -252,7 +252,7 @@ describe('SSR edge cases', () => {
     const out = await renderToString(html`<slot-edge-box><slot-edge-box><p>inner</p></slot-edge-box></slot-edge-box>`);
     // Outer Box should project the inner Box (and its <p>) into its default slot.
     // Inner Box should project the <p> into its default slot.
-    assert.match(out, /<div class="box"><slot[^>]*data-projection="actual"><slot-edge-box data-wj-host><!--webjs-hydrate--><div class="box"><slot[^>]*data-projection="actual"><p>inner<\/p>/);
+    assert.match(out, /<div class="box"><slot[^>]*data-projection="actual"[^>]*><slot-edge-box data-wj-host><!--webjs-hydrate--><div class="box"><slot[^>]*data-projection="actual"[^>]*><p>inner<\/p>/);
   });
 
   test('case-sensitive slot name matching', async () => {
@@ -273,7 +273,7 @@ describe('SSR edge cases', () => {
     C.register('slot-edge-empty');
     // Per spec, slot="" (empty string) is the default-slot indicator.
     const out = await renderToString(html`<slot-edge-empty><p slot="">empty</p></slot-edge-empty>`);
-    assert.match(out, /<slot data-webjs-light data-projection="actual"><p slot="">empty<\/p>/);
+    assert.match(out, /<slot data-webjs-light data-projection="actual"[^>]*><p slot="">empty<\/p>/);
     assert.match(out, /name="x">F<\/slot>/);
   });
 
@@ -283,7 +283,7 @@ describe('SSR edge cases', () => {
     }
     C.register('slot-edge-mixed');
     const out = await renderToString(html`<slot-edge-mixed>before<!-- mid --><b>middle</b>after</slot-edge-mixed>`);
-    assert.match(out, /data-projection="actual">before<!-- mid --><b>middle<\/b>after<\/slot>/);
+    assert.match(out, /data-projection="actual"[^>]*>before<!-- mid --><b>middle<\/b>after<\/slot>/);
   });
 
   test('self-closing void element inside slot content (br, img)', async () => {
@@ -312,7 +312,7 @@ describe('SSR edge cases', () => {
     }
     C.register('slot-edge-entities-fallback');
     const out = await renderToString(html`<slot-edge-entities-fallback></slot-edge-entities-fallback>`);
-    assert.match(out, /data-projection="fallback">&copy; 2026<\/slot>/);
+    assert.match(out, /data-projection="fallback"[^>]*>&copy; 2026<\/slot>/);
   });
 
   test('deeply nested authored children all reach default slot', async () => {
@@ -333,7 +333,7 @@ describe('SSR edge cases', () => {
     C.register('slot-edge-interleave');
     const out = await renderToString(html`<slot-edge-interleave><b slot="a">x</b><p>y</p></slot-edge-interleave>`);
     assert.match(out, /data-projection="actual"[^>]*name="a"><b slot="a">x<\/b><\/slot>/);
-    assert.match(out, /data-projection="actual"><p>y<\/p><\/slot>/);
+    assert.match(out, /data-projection="actual"[^>]*><p>y<\/p><\/slot>/);
     // Second "a" slot shows fallback per first-wins.
     assert.match(out, /data-projection="fallback"[^>]*name="a">FA2<\/slot>/);
   });
@@ -370,7 +370,7 @@ describe('SSR edge cases', () => {
     Shadow.register('slot-edge-shadow-inner');
     const out = await renderToString(html`<slot-edge-light-outer><slot-edge-shadow-inner><p>both</p></slot-edge-shadow-inner></slot-edge-light-outer>`);
     // Light outer projects the shadow inner; shadow inner uses native slot.
-    assert.match(out, /data-projection="actual"><slot-edge-shadow-inner><template shadowrootmode="open"><div><slot><\/slot><\/div><\/template>/);
+    assert.match(out, /data-projection="actual"[^>]*><slot-edge-shadow-inner><template shadowrootmode="open"><div><slot><\/slot><\/div><\/template>/);
     assert.match(out, /<p>both<\/p><\/slot-edge-shadow-inner>/);
   });
 
@@ -387,7 +387,7 @@ describe('SSR edge cases', () => {
     const out = await renderToString(html`<slot-edge-shadow-outer><slot-edge-light-inner><b>inner content</b></slot-edge-light-inner></slot-edge-shadow-outer>`);
     // Light inner uses framework slot; sits in the outer's light children
     // for browser's native projection.
-    assert.match(out, /<slot-edge-light-inner data-wj-host><!--webjs-hydrate--><section><slot[^>]*data-projection="actual"><b>inner content<\/b>/);
+    assert.match(out, /<slot-edge-light-inner data-wj-host><!--webjs-hydrate--><section><slot[^>]*data-projection="actual"[^>]*><b>inner content<\/b>/);
   });
 
   test('multiple authored children to same named slot concatenate in order', async () => {
@@ -422,7 +422,7 @@ describe('SSR edge cases', () => {
     Inner.register('slot-edge-inner-with-slot');
     const out = await renderToString(html`<slot-edge-outer-with-inner><slot-edge-inner-with-slot><b>deep</b></slot-edge-inner-with-slot></slot-edge-outer-with-inner>`);
     // Outer projects the inner; inner projects its child <b>.
-    assert.match(out, /<slot-edge-inner-with-slot data-wj-host><!--webjs-hydrate--><span><slot[^>]*data-projection="actual"><b>deep<\/b>/);
+    assert.match(out, /<slot-edge-inner-with-slot data-wj-host><!--webjs-hydrate--><span><slot[^>]*data-projection="actual"[^>]*><b>deep<\/b>/);
   });
 
   test('attribute values with special characters survive partition', async () => {
@@ -479,7 +479,7 @@ describe('SSR edge cases', () => {
     // Without a suspense ctx, the fallback is the rendered output.
     const out = await renderToString(html`<slot-edge-suspense-1>${Suspense({ fallback: html`<i>wait</i>`, children: asyncContent })}</slot-edge-suspense-1>`);
     // The fallback markup lands inside the slot via the partitioning step.
-    assert.match(out, /data-projection="actual"><i>wait<\/i><\/slot>/);
+    assert.match(out, /data-projection="actual"[^>]*><i>wait<\/i><\/slot>/);
   });
 
   test('Suspense streaming places <webjs-boundary> inside the slot', async () => {
@@ -499,7 +499,7 @@ describe('SSR edge cases', () => {
     // in later (via the data-webjs-resolve script's replaceWith), the
     // swap updates the slot's children in place. DOM identity for the
     // wrapping <article> and surrounding slot stays stable.
-    assert.match(out, /data-projection="actual"><webjs-boundary id="s0"><i>wait<\/i><\/webjs-boundary><\/slot>/);
+    assert.match(out, /data-projection="actual"[^>]*><webjs-boundary id="s0"><i>wait<\/i><\/webjs-boundary><\/slot>/);
     assert.equal(ctx.pending.length, 1, 'one pending suspense promise');
   });
 
@@ -530,7 +530,7 @@ describe('SSR edge cases', () => {
     // Multiple <slot> elements in render output. First wins per spec; the
     // single authored <span> projects into the first slot; the second
     // shows its fallback (empty in this case).
-    assert.match(out, /data-projection="actual"><span>shared<\/span>/);
+    assert.match(out, /data-projection="actual"[^>]*><span>shared<\/span>/);
     assert.match(out, /data-projection="fallback"/);
   });
 });

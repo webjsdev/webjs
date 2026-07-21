@@ -3,11 +3,12 @@
  *
  * `<slot>` works identically in light DOM and shadow DOM, through the SAME
  * native DOM API. You write the same template, and moving a component between
- * `static shadow = false` and `true` never needs a rewrite (two KNOWN
- * LIMITATIONS: forwarded-slot CONTENT projection is SSR-only, #1023, with the
- * fallback and the flatten read chain working everywhere; and a layout's
- * children partitioned across MULTIPLE named slots only soft-nav-swap the
- * default slice, #1024, pre-existing). Native `<slot>` is
+ * `static shadow = false` and `true` never needs a rewrite. A FORWARDED slot
+ * (a template forwarding `<slot>` into a nested component) projects its
+ * content on the client and through hydration too (#1023): the renderer
+ * stamps each slot with its template owner (SLOT_OWNER), carried across SSR
+ * as `data-wj-slot-owner`, so a forwarded slot routes to the OUTER host that
+ * rendered it, not the child it nests in. Native `<slot>` is
  * a shadow-DOM primitive, so in light DOM WebJs implements slotting itself, to
  * spec: named + default slots, fallback content, first-wins resolution, dynamic
  * `name=${...}`, and live post-mount writes (appendChild, insertBefore,
@@ -109,6 +110,21 @@ export const PROJECTION_FALLBACK = 'fallback';
  * "actual" and "fallback".
  */
 export const SLOT_FALLBACK_FRAG = Symbol('webjs.slot.fallbackFrag');
+
+/**
+ * The host whose TEMPLATE produced this `<slot>` (the render container the
+ * renderer cloned the template into). Authoritative over the structural
+ * `isOwnSlot` walk: a slot a template FORWARDS into a nested component
+ * (`html\`<inner><slot></slot></inner>\``) sits physically inside that child
+ * but is owned by the OUTER host, which the structural walk (a custom element
+ * sits between them) gets wrong. Stamped by the renderer at bind time
+ * (render-client) and resolved from the SSR `data-wj-slot-owner` attribute on
+ * hydration so client-only mount and hydration share one mechanism.
+ */
+export const SLOT_OWNER = Symbol('webjs.slot.templateOwner');
+
+/** The SSR carrier for SLOT_OWNER (a symbol cannot cross the HTML boundary). */
+export const SLOT_OWNER_ATTR = 'data-wj-slot-owner';
 
 /** Maximum recursion depth for assignedNodes({flatten: true}); guards cycles. */
 const FLATTEN_MAX_DEPTH = 64;
@@ -1290,13 +1306,15 @@ function isVirtualChild(host, node) {
   const state = /** @type {SlotState | undefined} */ (
     /** @type {any} */ (host)[SLOT_STATE]
   );
+  // lastSnapshot membership proves ownership on its own (a detached forwarded
+  // slot's structural isOwnSlot would wrongly veto it); a contained slot still
+  // needs isOwnSlot so a foreign torn-down slot is not claimed.
   return (
     p.nodeType === 1 &&
     /** @type {Element} */ (p).tagName === 'SLOT' &&
     /** @type {Element} */ (p).hasAttribute(LIGHT_SLOT_ATTR) &&
-    (host.contains(p) ||
-      Boolean(state && state.lastSnapshot.has(/** @type {HTMLSlotElement} */ (p)))) &&
-    isOwnSlot(host, /** @type {Element} */ (p))
+    ((state && state.lastSnapshot.has(/** @type {HTMLSlotElement} */ (p))) ||
+      (host.contains(p) && isOwnSlot(host, /** @type {Element} */ (p))))
   );
 }
 
@@ -1944,20 +1962,21 @@ function pruneAuthored(host, state) {
     // physically-verifying placement step re-places it this same pass.
     if (p === host) return true;
     if (p === park) return true;
-    // The slot-parent keep requires the slot to be recognizably OURS: in
-    // this host's tree, or a slot THIS state once applied (lastSnapshot has
-    // it), which covers our own detached slots (a cache()-stashed branch, a
-    // torn-down conditional) without trusting the bare isOwnSlot walk,
-    // whose vacuous-true on ANY fully detached chain would let the apply
-    // steal a node back from an unrelated component's torn-down slot the
-    // author moved it into.
+    // The slot-parent keep requires the slot to be recognizably OURS.
+    // lastSnapshot membership is DIRECT proof this host applied that slot,
+    // so it stands alone (covering our own detached slots: a cache()-stashed
+    // branch, a torn-down conditional, or a FORWARDED slot the re-render
+    // detached, whose structural isOwnSlot walk would wrongly hit the child
+    // component between it and this host). A merely-CONTAINED slot still
+    // needs isOwnSlot, so the apply never steals a node back from an
+    // unrelated component's torn-down slot the author moved it into (the
+    // bare isOwnSlot walk is vacuously true on any fully detached chain).
     if (
       p.nodeType === 1 &&
       /** @type {Element} */ (p).tagName === 'SLOT' &&
       /** @type {Element} */ (p).hasAttribute(LIGHT_SLOT_ATTR) &&
-      (host.contains(p) ||
-        state.lastSnapshot.has(/** @type {HTMLSlotElement} */ (p))) &&
-      isOwnSlot(host, /** @type {Element} */ (p))
+      (state.lastSnapshot.has(/** @type {HTMLSlotElement} */ (p)) ||
+        (host.contains(p) && isOwnSlot(host, /** @type {Element} */ (p))))
     ) {
       return true;
     }
@@ -2020,10 +2039,52 @@ export function hasFrameworkRenderedSubtree(host) {
  * @returns {boolean}
  */
 function isOwnSlot(host, slot) {
+  // Template-ownership is authoritative when known: a forwarded slot sits
+  // physically inside a child component but belongs to the host whose
+  // template rendered it. Two carriers of the SAME fact, consulted in order:
+  //   1. the SLOT_OWNER symbol, stamped by the client renderer at render
+  //      time (createInstance) and thus present once this host has rendered;
+  //   2. the data-wj-slot-owner attribute, the SSR carrier, which is the
+  //      ACTIVE resolver on the adopt/hydration path (adoptSSRAssignments
+  //      runs in connectedCallback, before the deferred first render stamps
+  //      the symbol), resolved by nearest-matching-tag ancestor.
+  const owner = /** @type {any} */ (slot)[SLOT_OWNER];
+  if (owner) return owner === host;
+  const ownerTag =
+    typeof slot.getAttribute === 'function' ? slot.getAttribute(SLOT_OWNER_ATTR) : null;
+  if (ownerTag) {
+    const resolved = ownerHostFor(slot, ownerTag);
+    if (resolved) return resolved === host;
+    // Unresolvable (a detached chain the owner is no longer an ancestor of):
+    // fall through to the structural walk rather than falsely denying.
+  }
+  // Structural fallback: no OTHER custom element sits between slot and host.
   for (let p = slot.parentElement; p && p !== host; p = p.parentElement) {
     if (p.tagName.includes('-')) return false;
   }
   return true;
+}
+
+/**
+ * The host a `data-wj-slot-owner="<tag>"` attribute resolves to: the nearest
+ * ANCESTOR whose tag matches, by tag alone (NOT gated on SLOT_STATE). The
+ * gate would be wrong during the connect-time chooser, where an inner host
+ * has not upgraded yet, so a forwarded slot would fail to resolve to its
+ * outer owner and the outer would wrongly capture-hoover the SSR subtree.
+ * One-level forwarding resolves cleanly; same-tag-nested forwarding picks
+ * the nearest (the accepted edge, no worse than the structural walk it
+ * replaces).
+ *
+ * @param {Element} slot
+ * @param {string} ownerTag
+ * @returns {Element | null}
+ */
+function ownerHostFor(slot, ownerTag) {
+  const want = ownerTag.toLowerCase();
+  for (let p = slot.parentElement; p; p = p.parentElement) {
+    if (p.tagName.toLowerCase() === want) return p;
+  }
+  return null;
 }
 
 /**

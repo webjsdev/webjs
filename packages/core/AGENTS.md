@@ -187,9 +187,12 @@ them per app.
    `innerHTML` / `el.slot=` flips / `HTMLSlotElement.assign()`), and the
    reads (`assignedNodes` / `assignedElements` / `{flatten}` /
    `assignedSlot` / `slotchange`, with native async-coalesced slotchange).
-   Flip `static shadow` and nothing else changes (first KNOWN LIMITATION,
-   #1023: forwarded-slot CONTENT projection is SSR-only, so pass content
-   straight to the inner component on the client). The core invariant that
+   Flip `static shadow` and nothing else changes. A FORWARDED slot (a
+   template forwarding `<slot>` into a nested component) projects its
+   content on the client and through hydration (#1023): the renderer
+   stamps each slot with its template owner (`SLOT_OWNER`), carried across
+   SSR as `data-wj-slot-owner`, so a forwarded slot routes to the OUTER
+   host that rendered it. The core invariant that
    keeps this robust (unlike the pre-#1016 third-writer observer that
    caused the #906 / #1006 / #994 cascade): the component's renderer is the
    ONLY actor that moves authored nodes into slots (`applySlotAssignments`);
@@ -213,9 +216,11 @@ them per app.
    (`firstUpdated` sees the `<slot>` element with EMPTY `assignedNodes()`;
    the projection lands one microtask later, so read assigned content from
    `slotchange` or after a microtask; shadow DOM projects natively before
-   `firstUpdated`). A second KNOWN LIMITATION (#1024, pre-existing): a
-   layout's `${children}` partitioned across MULTIPLE named slots only
-   soft-nav-swaps the default slice. When you add a slot behaviour, extend
+   `firstUpdated`). A layout's `${children}` rendered inside a slotted
+   shell keeps its NAMED slots in sync across a soft-nav swap too (#1024):
+   the boundary swap resyncs every own slot of the enclosing host from the
+   incoming parsed doc, not just the default slice. When you add a slot
+   behaviour, extend
    the light-vs-shadow CONTRAST tests in
    `packages/core/test/slots/browser/slot.test.js` (the same component
    asserted in both modes) so the parity claim stays proven.
