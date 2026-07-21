@@ -76,6 +76,40 @@ const KNOWN_PHANTOMS = new Map(Object.entries({
     'internal base class exported as a value by the overlay but absent at runtime; fix tracked in #1032',
 }));
 
+// Dual-surface entries (#1035). The Node phantom check above maps `.` to the
+// Node sibling `index.js`, but the bare `@webjsdev/core` specifier resolves in
+// the BROWSER (via the server importmap) to `index-browser.js`, which drops the
+// server-only exports. The overlay is shared across both surfaces, so an export
+// the overlay declares that the browser bundle omits is a BROWSER phantom (a
+// browser `import { x }` type-checks and crashes at load). `intentionalAbsent`
+// lists the exports the browser is MEANT to drop (they are imported from
+// `@webjsdev/core/server`); any OTHER export missing from the browser bundle is
+// a real browser phantom. The positive control below asserts each
+// `intentionalAbsent` export is still actually stripped, so if the browser
+// bundle starts shipping one the allowlist entry is forced to be removed.
+const BROWSER_SURFACES = [
+  {
+    name: '@webjsdev/core',
+    dir: 'packages/core',
+    overlay: 'index.d.ts',
+    intentionalAbsent: ['renderToString', 'renderToStream', 'setCspNonceProvider'],
+  },
+];
+
+/**
+ * The bare-specifier BROWSER entry (relative to the package dir), read from the
+ * server importmap rather than hard-coded, so a rename that updates the mapping
+ * follows and a mapping pointing at a missing file fails loudly. Core's bare
+ * specifier maps to a `/__webjs/core/<file>` URL, whose prefix is the package dir.
+ */
+function browserEntryRel(name) {
+  const src = readFileSync(join(ROOT, 'packages/server/src/importmap.js'), 'utf8');
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const m = src.match(new RegExp(`['"]${esc}['"]\\s*:\\s*['"](/__webjs/core/[^'"]+)['"]`));
+  if (!m) throw new Error(`could not find the browser importmap entry for ${name} in importmap.js (#1035)`);
+  return m[1].replace(/^\/__webjs\/core\//, '');
+}
+
 /** Recursively copy only `.js` files (skip `.d.ts`, dist, node_modules, test). */
 function copyJsTree(srcDir, destDir) {
   for (const entry of readdirSync(srcDir, { withFileTypes: true })) {
@@ -213,6 +247,56 @@ for (const { name, dir, minEntries } of PACKAGES) {
   });
 }
 
+// --- Browser bundle surface (#1035): a shared `.` overlay checked against the
+// slim browser entry, so a value the overlay declares that the browser bundle
+// strips (beyond the intentional server-only set) is caught.
+for (const { name, dir, overlay, intentionalAbsent } of BROWSER_SURFACES) {
+  test(`${name}: the browser bundle declares no un-stripped phantom (#1035)`, () => {
+    const work = mkdtempSync(join(tmpdir(), 'webjs-dts-phantom-browser-'));
+    try {
+      const implSrc = join(work, 'impl');
+      mkdirSync(implSrc, { recursive: true });
+      copyJsTree(join(ROOT, dir), implSrc);
+
+      const browserRel = browserEntryRel(name);
+      const browserJs = join(implSrc, browserRel);
+      assert.ok(
+        statSafe(browserJs),
+        `${name}: browser entry '${browserRel}' (from the importmap) does not exist; the mapping is stale`,
+      );
+
+      const raw = phantomExports(browserJs, join(ROOT, dir, overlay), work, 'browser');
+
+      // Positive control: every intentionally-stripped export MUST show up as a
+      // browser phantom here. If one stops showing up, the browser bundle now
+      // ships it, so the allowlist entry is stale and must be deleted.
+      const noLongerStripped = intentionalAbsent.filter((e) => !raw.includes(e));
+      assert.deepEqual(
+        noLongerStripped,
+        [],
+        `${name}: these are allowlisted as browser-stripped but the browser bundle now provides them; ` +
+          `remove them from intentionalAbsent: ${noLongerStripped.join(', ')}`,
+      );
+
+      // Fail on any browser phantom that is neither an intentional strip nor a
+      // tracked Node-surface known phantom (WebComponentBase is absent on both).
+      const allow = new Set(intentionalAbsent);
+      const unexpected = raw
+        .filter((e) => !allow.has(e) && !KNOWN_PHANTOMS.has(`${name}#${e}`))
+        .sort();
+      assert.deepEqual(
+        unexpected,
+        [],
+        `${name} overlay declares value exports the BROWSER bundle drops (a browser ` +
+          `\`import { x }\` of these type-checks and crashes at load; import them from ` +
+          `${name}/server, or add to intentionalAbsent if newly server-only):\n  ` + unexpected.join('\n  '),
+      );
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
+  });
+}
+
 // --- Counterfactual: the guard must FIRE on a phantom value export and stay
 // SILENT on an honest overlay (real values + a type-only export). Without it, a
 // broken fixture (imports degrading to `any`, so `keyof` is empty) would make
@@ -246,6 +330,34 @@ test('counterfactual: an honest overlay (real values + a type-only export) is cl
     );
     const phantom = phantomExports(join(work, 'impl.js'), join(work, 'overlay.d.ts'), work, 'cf2');
     assert.deepEqual(phantom, [], `expected no phantom, got: ${phantom.join(', ')}`);
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+});
+
+// Browser-surface counterfactual (#1035): the intentional-absent allowlist must
+// suppress ONLY the exports it names, and a NON-allowlisted browser-stripped
+// export must still fail. A slim impl provides only `keep`; the overlay declares
+// `keep`, an intentionally-stripped `stripped`, and an accidental `drop`.
+test('counterfactual: the browser allowlist suppresses only named strips (#1035)', () => {
+  const work = mkdtempSync(join(tmpdir(), 'webjs-dts-phantom-browser-cf-'));
+  try {
+    writeFileSync(join(work, 'slim.js'), 'export function keep() {}\n');
+    writeFileSync(
+      join(work, 'overlay.d.ts'),
+      'export declare function keep(): void;\n' +
+      'export declare function stripped(): void;\n' +
+      'export declare function drop(): void;\n',
+    );
+    const raw = phantomExports(join(work, 'slim.js'), join(work, 'overlay.d.ts'), work, 'browser-cf');
+    assert.deepEqual(raw.sort(), ['drop', 'stripped'], `expected both missing, got: ${raw.join(', ')}`);
+
+    // The positive control sees the intentional strip...
+    const intentionalAbsent = ['stripped'];
+    assert.deepEqual(intentionalAbsent.filter((e) => !raw.includes(e)), [], 'positive control should detect the strip');
+    // ...and the allowlist filter leaves the accidental drop as the failure.
+    const allow = new Set(intentionalAbsent);
+    assert.deepEqual(raw.filter((e) => !allow.has(e)).sort(), ['drop'], 'only the non-allowlisted strip should fail');
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
