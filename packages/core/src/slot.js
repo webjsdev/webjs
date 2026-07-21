@@ -394,7 +394,7 @@ function flattenAssignedNodes(nodes, visited, depth) {
 }
 
 /**
- * Walk an element's ancestor chain to find a data-webjs-light slot it is
+ * Consult a node's DIRECT parent to find a data-webjs-light slot it is
  * currently projected into. Returns null if the element is in a fallback
  * slot or no light slot at all.
  *
@@ -600,12 +600,13 @@ export function adoptSSRAssignments(host) {
       // in.
       for (const child of children) {
         state.authored.push(child);
-        // Prune-exempt until the first placement settles them: when
-        // createInstance detaches the old SSR subtree, these children sit in
-        // a DETACHED old slot, and the prune rule must not depend on the
-        // vacuous-true isOwnSlot walk of that foreign-looking chain (the
-        // walk is containment-gated now).
-        FRAMEWORK_DETACHED.add(child);
+        // No prune-exemption mark here: when createInstance detaches the old
+        // SSR subtree, these children still sit in the OLD slot, which this
+        // adopt just recorded in lastSnapshot, so the prune gate keeps them
+        // through the detach window. Skipping the mark also means an author
+        // removing an adopted child BEFORE the first apply (child.remove()
+        // in another component's boot hook) is honoured instead of the node
+        // being resurrected by the resync.
         if (slotNameOf(child) !== name) {
           if (!state.adoptedKey) state.adoptedKey = new WeakMap();
           state.adoptedKey.set(child, name);
@@ -980,13 +981,17 @@ export function reconnectSweep(host) {
       continue;
     }
     // Skip the renderer's own top-level nodes. With an instance, ownership
-    // is checked via the bookends; with NO instance (the non-template render
-    // path: render() returned a string / number / array), the renderer's
-    // text output IS the direct host children, so folding is skipped
-    // entirely, exactly like drainRendererBackstop's no-instance guard
-    // (folding would park the component's own output and grow the record on
-    // every reconnect).
-    if (!inst || instanceOwns(inst, node)) continue;
+    // is checked via the bookends. With an EXPLICIT null instance (the
+    // non-template render path sets host[INSTANCE] = null: render() returned
+    // a string / number / array) the renderer's text output IS the direct
+    // host children, so folding is skipped entirely, like
+    // drainRendererBackstop's no-instance guard. A host that has NEVER
+    // rendered (the symbol is absent: moved before its deferred first
+    // render) has no renderer output at all, so a disconnected-window
+    // bypass write IS folded and survives the first render as a record
+    // value.
+    const rendered = Symbol.for('webjs.instance') in h;
+    if (rendered && (!inst || instanceOwns(inst, node))) continue;
     FRAMEWORK_DETACHED.add(node);
     state.authored.push(node);
     changed = true;
@@ -1027,6 +1032,30 @@ function parkFor(host) {
 }
 
 /**
+ * True for a REAL platform Node from any realm: a same-realm Node passes
+ * instanceof; a cross-realm Node passes via its own realm's constructor.
+ * KNOWN EDGE: a node from a DISCARDED iframe realm (ownerDocument.defaultView
+ * is null) fails both arms and is rejected where native would adopt it; that
+ * narrow throw is strictly safer than admitting an unverifiable object into
+ * the record.
+ *
+ * @param {any} n
+ * @returns {boolean}
+ */
+function isRealmNode(n) {
+  return (
+    n instanceof Node ||
+    Boolean(
+      n &&
+        typeof n === 'object' &&
+        /** @type {any} */ (n).ownerDocument &&
+        /** @type {any} */ (n).ownerDocument.defaultView &&
+        n instanceof /** @type {any} */ (n).ownerDocument.defaultView.Node,
+    )
+  );
+}
+
+/**
  * Expand one argument of a DOM insertion call into a flat node list. A
  * DocumentFragment is DRAINED (native contract: the fragment ends empty) and
  * its children returned; a string becomes a Text node when `allowString`
@@ -1039,9 +1068,11 @@ function parkFor(host) {
  */
 function expandArg(host, arg, allowString) {
   // WebIDL (Node or DOMString) coercion: append/prepend/replaceChildren
-  // stringify ANY non-Node argument (a number, null, an object), not only
-  // actual strings; native host.append(42) appends the text "42".
-  if (allowString && !(arg && typeof arg === 'object' && typeof arg.nodeType === 'number')) {
+  // stringify ANY argument that is not a real platform Node (a number, null,
+  // an object, even a duck-typed fake with a numeric nodeType); native
+  // host.append(42) appends the text "42" and host.append({}) appends
+  // "[object Object]".
+  if (allowString && !isRealmNode(arg)) {
     return [host.ownerDocument.createTextNode(String(arg))];
   }
   if (arg && arg.nodeType === 11) {
@@ -1069,19 +1100,10 @@ function guardInsertable(host, nodes) {
     // Validity BEFORE any record mutation (native throws with zero state
     // change): a non-Node is a TypeError, a Node that is not an insertable
     // child type (an Attr, a Document, a doctype) is a HierarchyRequestError.
-    // The brand check is realm-safe (a same-realm Node passes instanceof; a
-    // cross-realm Node passes via its own realm's constructor); a duck-typed
-    // fake with a numeric nodeType would otherwise pass the guards, mutate
-    // the record, and then throw INSIDE the apply pass on every later
-    // operation, permanently wedging the host's slot pipeline.
-    const realmNode =
-      n instanceof Node ||
-      (n &&
-        typeof n === 'object' &&
-        /** @type {any} */ (n).ownerDocument &&
-        /** @type {any} */ (n).ownerDocument.defaultView &&
-        n instanceof /** @type {any} */ (n).ownerDocument.defaultView.Node);
-    if (!realmNode) {
+    // A duck-typed fake with a numeric nodeType would otherwise pass the
+    // guards, mutate the record, and then throw INSIDE the apply pass on
+    // every later operation, permanently wedging the host's slot pipeline.
+    if (!isRealmNode(n)) {
       throw new TypeError('Failed to execute insertion on the host: parameter is not of type Node.');
     }
     const t = n.nodeType;
@@ -1316,9 +1338,12 @@ export function installSlotInterception(host) {
         INNER_HTML_DESC.set.call(this, str);
         return;
       }
-      const tmpl = host.ownerDocument.createElement('template');
-      INNER_HTML_DESC.set.call(tmpl, String(str));
-      const nodes = Array.from(tmpl.content.childNodes);
+      // Parse in a DIV (the "in body" fragment context a custom-element host
+      // gets natively): a <template> retains table-section tokens (<td>,
+      // <tr>) that the real host context drops to text.
+      const tmp = host.ownerDocument.createElement('div');
+      INNER_HTML_DESC.set.call(tmp, String(str));
+      const nodes = Array.from(tmp.childNodes);
       for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
       const displaced = state.authored;
       state.authored = nodes;
@@ -1336,8 +1361,10 @@ export function installSlotInterception(host) {
         TEXT_CONTENT_DESC.set.call(this, str);
         return;
       }
+      // [LegacyNullToEmptyString]: only null maps to empty; undefined
+      // stringifies to the text "undefined", like native.
       const nodes =
-        str == null || str === ''
+        str === null || str === ''
           ? []
           : [host.ownerDocument.createTextNode(String(str))];
       for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed

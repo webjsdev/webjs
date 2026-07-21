@@ -1139,6 +1139,144 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
     }
   });
 
+  test('append of a fake node object coerces to text like native WebIDL', async () => {
+    const tag = tagName('fake-coerce');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      host.append(/** @type {any} */ ({ nodeType: 3 }));
+      await tick();
+      const slot = host.querySelector('slot[data-webjs-light]');
+      assert.equal(slot.textContent, '[object Object]', 'stringified, not thrown, not admitted as a node');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('a bypass write while disconnected BEFORE the first render survives it', async () => {
+    const tag = tagName('preinstance-bypass');
+    class C extends WebComponent {
+      render() { return html`<div><slot></slot></div>`; }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    document.body.appendChild(host); // connect; first render is DEFERRED
+    host.remove(); // disconnect before the render ran
+    const el = document.createElement('p');
+    el.id = 'early-bypass';
+    Node.prototype.appendChild.call(host, el); // raw bypass, sensors down
+    document.body.appendChild(host); // reconnect in the same task
+    await tick();
+    await tick();
+    try {
+      const slot = host.querySelector('slot[data-webjs-light]');
+      assert.ok(slot, 'rendered');
+      assert.ok(slot.querySelector('#early-bypass'), 'the pre-render bypass write was folded and projected');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('removing an adopted child before the first apply is honoured (no resurrection)', async () => {
+    const tag = tagName('adopt-remove');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    const holder = document.createElement('div');
+    try {
+      const child = document.createElement('p');
+      child.id = 'adopt-removed';
+      host.appendChild(child);
+      await tick();
+      const serialized = host.outerHTML;
+      host.remove();
+      await tick();
+      document.body.appendChild(holder);
+      holder.innerHTML = serialized.replace('data-wj-host', 'data-wj-host data-wj-serialized');
+      // Synchronously after upgrade+adopt, BEFORE any apply: author removes
+      // the projected child out-of-band.
+      const restored = holder.querySelector(tag);
+      const rechild = restored.querySelector('#adopt-removed');
+      rechild.remove();
+      await tick();
+      await tick();
+      assert.ok(!rechild.isConnected, 'stayed removed');
+      assert.ok(!restored.querySelector('#adopt-removed'), 'not resurrected by the first apply');
+    } finally {
+      host.remove();
+      holder.remove();
+    }
+  });
+
+  test('innerHTML with table-section markup matches the native in-body context', async () => {
+    const tag = tagName('td-context');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      host.innerHTML = '<td>x</td>';
+      await tick();
+      const slot = host.querySelector('slot[data-webjs-light]');
+      assert.equal(slot.querySelector('td'), null, 'the td token was dropped like native');
+      assert.equal(slot.textContent, 'x', 'only the text remains');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('textContent = undefined stringifies (LegacyNullToEmptyString is null-only)', async () => {
+    const tag = tagName('tc-undefined');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      host.textContent = /** @type {any} */ (undefined);
+      await tick();
+      const slot = host.querySelector('slot[data-webjs-light]');
+      assert.equal(slot.textContent, 'undefined', 'undefined stringifies like native');
+      host.textContent = null;
+      await tick();
+      assert.equal(slot.textContent, '', 'null maps to empty like native');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('cache() re-apply reaches a slot inside an asyncAppend chunk in the cached branch', async () => {
+    const tag = tagName('cache-stream-slot');
+    async function* gen() {
+      yield html`<section><slot name="x"></slot></section>`;
+    }
+    class C extends WebComponent({ showA: Boolean }) {
+      constructor() { super(); this.showA = true; this.gen = gen(); }
+      render() {
+        return html`<div>${cache(
+          this.showA ? html`<b>${asyncAppend(this.gen)}</b>` : html`<em>alt</em>`,
+        )}</div>`;
+      }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    const child = document.createElement('strong');
+    child.setAttribute('slot', 'x');
+    child.textContent = 'stream-cached';
+    host.appendChild(child);
+    document.body.appendChild(host);
+    await waitFor(
+      () => host.querySelector('slot[name="x"]')?.getAttribute('data-projection') === 'actual',
+    );
+    await tick();
+    try {
+      assert.ok(host.querySelector('slot[name="x"]').contains(child), 'projected initially');
+      host.showA = false;
+      await host.updateComplete;
+      host.appendChild(document.createElement('span')); // apply while stashed
+      await tick();
+      host.showA = true;
+      await host.updateComplete;
+      await tick();
+      await tick();
+      const slot = host.querySelector('slot[name="x"]');
+      assert.ok(slot, 'chunk slot re-attached');
+      assert.ok(slot.contains(child), 'the DOM-range sweep reached the streamed-chunk slot');
+    } finally {
+      host.remove();
+    }
+  });
+
   test('router projectAuthored on the default slice leaves a manual assignment intact', async () => {
     const tag = tagName('proj-manual');
     const host = await mount(tag, () => html`<div><slot></slot><slot name="x"></slot></div>`);
