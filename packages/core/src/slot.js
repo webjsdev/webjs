@@ -869,10 +869,15 @@ function processBackstop(host, state, records) {
     }
     for (const node of r.removedNodes) {
       const i = state.authored.indexOf(node);
-      // Never splice a record VALUE: a FRAMEWORK_DETACHED node (captured,
-      // rescued, or folded-then-detached in this same batch) is held by the
-      // record on purpose; only a genuinely author-departed node leaves.
-      if (i !== -1 && !host.contains(node) && !FRAMEWORK_DETACHED.has(node)) {
+      // A removal record for a node the framework re-homed (park, holding
+      // fragment, old slot: parent is non-null) keeps its record entry; a
+      // marked node whose parent is NULL at processing time was RAW-REMOVED
+      // by the author (framework detach paths always re-home, and the
+      // pre-sensor capture generates no records), so it leaves like any
+      // author removal instead of being resurrected by the next apply.
+      const frameworkHeld =
+        FRAMEWORK_DETACHED.has(node) && node.parentNode != null;
+      if (i !== -1 && !host.contains(node) && !frameworkHeld) {
         state.authored.splice(i, 1);
         dirty = true;
       }
@@ -1286,14 +1291,22 @@ export function installSlotInterception(host) {
 
   h.insertBefore = function (node, ref) {
     if (h[RENDERING]) return N_insertBefore.call(this, node, ref);
-    // A non-null ref MUST be an assigned child (native throws NotFoundError
-    // otherwise), checked before the self-ref no-op so insertBefore(x, x) on a
-    // NON-child still throws like native.
+    // WebIDL converts arguments LEFT TO RIGHT and DOM pre-insert validity
+    // runs the cycle (HierarchyRequestError) step before the ref
+    // (NotFoundError) step: validate parameter 1's type and insertability
+    // FIRST, without draining a fragment (the drain happens in expandArg
+    // only after every validity check passed, so an error leaves the
+    // fragment intact like native).
+    if (!isRealmNode(node)) {
+      throw new TypeError('Failed to execute insertBefore on the host: parameter 1 is not of type Node.');
+    }
+    guardInsertable(host, node.nodeType === 11 ? Array.from(node.childNodes) : [node]);
     if (ref != null && !isRealmNode(ref)) {
-      // Native converts the ref through the Node parameter first: a
-      // non-Node ref is a TypeError, not NotFoundError.
       throw new TypeError('Failed to execute insertBefore on the host: parameter 2 is not of type Node.');
     }
+    // A non-null ref MUST be an assigned child (native throws NotFoundError
+    // otherwise), checked before the self-ref no-op so insertBefore(x, x) on
+    // a NON-child still throws like native.
     if (
       ref != null &&
       (state.authored.indexOf(ref) === -1 || !isVirtualChild(host, ref))
@@ -1333,6 +1346,12 @@ export function installSlotInterception(host) {
     if (h[RENDERING]) return N_replaceChild.call(this, newNode, oldNode);
     const i = state.authored.indexOf(oldNode);
     if (i === -1) return N_replaceChild.call(this, newNode, oldNode);
+    // WebIDL converts parameters left to right and the cycle check precedes
+    // the NotFound check: validate parameter 1 first, without draining.
+    if (!isRealmNode(newNode)) {
+      throw new TypeError('Failed to execute replaceChild on the host: parameter 1 is not of type Node.');
+    }
+    guardInsertable(host, newNode.nodeType === 11 ? Array.from(newNode.childNodes) : [newNode]);
     if (!isVirtualChild(host, oldNode)) {
       throw new DOMException(
         'replaceChild: the node to be replaced is not an assigned child of this host',

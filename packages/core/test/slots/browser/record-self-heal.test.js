@@ -1398,6 +1398,9 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
       host.textContent = /** @type {any} */ ({ valueOf: () => 1, toString: () => 'tc' });
       await tick();
       assert.equal(slot.textContent, 'tc', 'textContent coercion is toString-first too');
+      host.innerHTML = /** @type {any} */ ({ valueOf: () => 2, toString: () => '<i>ih</i>' });
+      await tick();
+      assert.equal(slot.textContent, 'ih', 'innerHTML coercion is toString-first too');
     } finally {
       host.remove();
     }
@@ -1474,6 +1477,50 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
     } finally {
       host.remove();
       holder.remove();
+    }
+  });
+
+  test('a same-batch raw add-then-remove stays removed (no resurrection)', async () => {
+    const tag = tagName('batch-add-remove');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      host.appendChild(document.createElement('em'));
+      await tick();
+      const n = document.createElement('p');
+      n.id = 'ghost';
+      // Both raw: one observer batch carries the add AND the remove.
+      Node.prototype.appendChild.call(host, n);
+      Node.prototype.removeChild.call(host, n);
+      await tick();
+      await tick();
+      assert.ok(!n.isConnected, 'the removed node stayed removed');
+      assert.equal(host.querySelector('#ghost'), null, 'not resurrected by the apply');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('insertBefore and replaceChild validate parameter 1 first (WebIDL order)', async () => {
+    const tag = tagName('param-order');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      const child = document.createElement('em');
+      host.appendChild(child);
+      await tick();
+      let e1 = null;
+      try { host.insertBefore(/** @type {any} */ (42), /** @type {any} */ ({})); } catch (e) { e1 = e; }
+      assert.ok(e1 instanceof TypeError, 'insertBefore(nonNode, nonNode) is a parameter-1 TypeError');
+      let e2 = null;
+      try { host.insertBefore(/** @type {any} */ ({}), document.createElement('u')); } catch (e) { e2 = e; }
+      assert.ok(e2 instanceof TypeError, 'insertBefore(nonNode, realNonChild) is TypeError, not NotFoundError');
+      let e3 = null;
+      try { host.insertBefore(host, document.createElement('u')); } catch (e) { e3 = e; }
+      assert.equal(e3 && e3.name, 'HierarchyRequestError', 'the cycle check precedes the ref check');
+      let e4 = null;
+      try { host.replaceChild(/** @type {any} */ (42), child); } catch (e) { e4 = e; }
+      assert.ok(e4 instanceof TypeError, 'replaceChild(nonNode, authoredChild) is a parameter-1 TypeError');
+    } finally {
+      host.remove();
     }
   });
 

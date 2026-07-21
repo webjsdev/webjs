@@ -131,13 +131,14 @@ export function render(value, container) {
         firstChild.remove();
       }
 
-      // Pre-set the symbol to an explicit null BEFORE the commit: if
-      // createInstance throws after its replaceChildren (e.g. inside the
-      // slot-part apply loop), the finally-drain must see "rendered, no
-      // instance" (discard the commit's records) and never "never rendered"
-      // (which would fold the just-committed template roots into the
-      // authored record and permanently corrupt it).
-      if (!(INSTANCE in host)) host[INSTANCE] = null;
+      // Pre-set the symbol to an explicit null BEFORE the commit,
+      // UNCONDITIONALLY: if createInstance throws after its replaceChildren
+      // (e.g. inside the slot-part apply loop), the finally-drain must see
+      // "rendered, no instance" (discard the commit's records), never
+      // "never rendered" (fold and corrupt) and never a STALE cleared prev
+      // instance on the template-swap path (whose bookends would misclassify
+      // the half-committed new roots as unowned and fold them).
+      host[INSTANCE] = null;
       const inst = createInstance(tr, container);
       host[INSTANCE] = inst;
       return;
