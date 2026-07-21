@@ -13,7 +13,6 @@ import {
   RENDERING,
   applySlotAssignments,
   rescueAssignedNodes,
-  ensureSlotState,
   withRendererWrites,
   drainRendererBackstop,
 } from './slot.js';

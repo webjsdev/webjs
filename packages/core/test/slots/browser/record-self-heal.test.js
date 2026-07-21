@@ -9,6 +9,7 @@
  */
 import { WebComponent } from '../../../src/component.js';
 import { html } from '../../../src/html.js';
+import { repeat } from '../../../src/directives.js';
 import { projectAuthored } from '../../../src/slot.js';
 
 import { assert } from '../../../../../test/browser-assert.js';
@@ -292,6 +293,146 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
       let threw = null;
       try { host.removeChild(child); } catch (e) { threw = e; }
       assert.equal(threw && threw.name, 'NotFoundError', 'native fidelity for a stale record entry');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('a write during the unfinalized-slot window does not corrupt the record (nested-template slot)', async () => {
+    // A slot inside a NESTED TemplateResult hole gets its slot-part finalize
+    // deferred one microtask on the first client render. A write landing in
+    // that window (firstUpdated is the canonical author spot) used to treat
+    // the unfinalized slot as fallback-mode: it destroyed the compiled
+    // fallback, then the deferred finalize hijacked the placed nodes as
+    // "fallback", leaving visible-but-record-dead content.
+    const tag = tagName('unfinalized-write');
+    class C extends WebComponent {
+      firstUpdated() {
+        const el = document.createElement('mark');
+        el.textContent = 'window-write';
+        this.appendChild(el);
+      }
+      render() {
+        return html`<div>${html`<slot>compiled fallback</slot>`}</div>`;
+      }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    document.body.appendChild(host);
+    await tick();
+    await tick();
+    try {
+      const slot = host.querySelector('slot[data-webjs-light]');
+      assert.equal(slot.getAttribute('data-projection'), 'actual', 'slot settled as ACTUAL');
+      const assigned = slot.assignedNodes();
+      assert.ok(
+        assigned.some((n) => n.textContent === 'window-write'),
+        'the window write is record-live (assignedNodes sees it)',
+      );
+      assert.ok(!slot.textContent.includes('compiled fallback'), 'fallback not shown with content present');
+      // The fallback must have SURVIVED (not been destroyed): remove the
+      // content and the compiled fallback must come back.
+      const el = assigned.find((n) => n.textContent === 'window-write');
+      host.removeChild(el);
+      await tick();
+      assert.ok(slot.textContent.includes('compiled fallback'), 'compiled fallback restored after removal');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('an author write does not revert a pending renderer reorder of OTHER nodes', async () => {
+    // Node-scoped order authority: the parent reorders a keyed list inside
+    // the shell's slot (no apply fires), then the author appends a banner.
+    // The append must land at the end WITHOUT fighting the reorder back.
+    ensureFixedShell();
+    const parentTag = tagName('reorder-keep');
+    class P extends WebComponent({ items: Array }) {
+      constructor() { super(); this.items = ['a', 'b']; }
+      render() {
+        return html`<heal-shell-fixed>${repeat(
+          this.items,
+          (i) => i,
+          (i) => html`<p class="item">${i}</p>`,
+        )}</heal-shell-fixed>`;
+      }
+    }
+    P.register(parentTag);
+    const parent = document.createElement(parentTag);
+    document.body.appendChild(parent);
+    await tick();
+    try {
+      const shell = parent.querySelector('heal-shell-fixed');
+      const slot = shell.querySelector('slot[data-webjs-light]');
+      parent.items = ['b', 'a']; // keyed reorder INSIDE the slot
+      await parent.updateComplete;
+      await tick();
+      assert.deepEqual(
+        Array.from(slot.querySelectorAll('.item')).map((e) => e.textContent),
+        ['b', 'a'],
+        'renderer reordered in place',
+      );
+      const banner = document.createElement('aside');
+      banner.id = 'kept-banner';
+      shell.appendChild(banner); // the record op that used to revert the order
+      await tick();
+      assert.deepEqual(
+        Array.from(slot.querySelectorAll('.item')).map((e) => e.textContent),
+        ['b', 'a'],
+        'the reorder SURVIVED the author write',
+      );
+      assert.ok(slot.querySelector('#kept-banner'), 'the banner landed');
+      assert.equal(slot.lastElementChild.id, 'kept-banner', 'appended at the end');
+    } finally {
+      parent.remove();
+    }
+  });
+
+  test('appendChild of a non-Node throws TypeError with zero record change', async () => {
+    const tag = tagName('arg-validity');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      host.appendChild(document.createElement('em'));
+      await tick();
+      const slot = host.querySelector('slot[data-webjs-light]');
+      let threw = null;
+      try { host.appendChild(/** @type {any} */ ({})); } catch (e) { threw = e; }
+      assert.ok(threw instanceof TypeError, 'TypeError like native');
+      assert.equal(slot.children.length, 1, 'record and placement untouched');
+      host.appendChild(document.createElement('strong')); // still functional
+      assert.equal(slot.children.length, 2, 'later writes unaffected');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('assign() on the SECOND duplicate slot targets that element', async () => {
+    const tag = tagName('dup-assign');
+    const host = await mount(tag, () => html`<div><slot name="x"></slot><slot name="x"></slot></div>`);
+    try {
+      const dupes = host.querySelectorAll('slot[name="x"]');
+      const child = document.createElement('span');
+      host.appendChild(child);
+      dupes[1].assign(child);
+      await tick();
+      assert.equal(child.parentElement, dupes[1], 'manual assignment bound to the RECEIVING element');
+      assert.ok(!dupes[0].contains(child), 'not routed to the first-wins duplicate');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('assign() before the node is a child is honoured on the later append', async () => {
+    const tag = tagName('assign-first');
+    const host = await mount(tag, () => html`<div><slot></slot><slot name="x"></slot></div>`);
+    try {
+      const slots = host.querySelectorAll('slot[data-webjs-light]');
+      const xSlot = slots[1];
+      const node = document.createElement('span'); // detached, no slot attr
+      xSlot.assign(node); // native-legal ordering: assign first
+      host.appendChild(node); // append later
+      await tick();
+      assert.equal(node.parentElement, xSlot, 'the earlier manual assignment routed the append');
     } finally {
       host.remove();
     }

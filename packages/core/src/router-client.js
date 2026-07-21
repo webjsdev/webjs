@@ -3106,7 +3106,11 @@ function diffElementInPlace(dst, src) {
     if (LIVE_ATTRS.has(attr.name)) continue;
     // The serialized-restore stamp is a message to a NOT-YET-UPGRADED
     // element's connectedCallback; copying it onto a live reused host would
-    // leave a consume-once marker lingering in the live DOM forever.
+    // leave a consume-once marker lingering in the live DOM forever. Note
+    // the REMOVAL loop below never strips an existing stamp either (the
+    // stamp is in srcAttrs, added before this skip) and that retention is
+    // load-bearing: a not-yet-upgraded `static lazy` host must KEEP its
+    // stamp across an intervening morph so its late upgrade still adopts.
     if (attr.name === 'data-wj-serialized') continue;
     if (dst.getAttribute(attr.name) !== attr.value) {
       dst.setAttribute(attr.name, attr.value);

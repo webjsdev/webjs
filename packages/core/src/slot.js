@@ -170,24 +170,39 @@ export function installSlotPolyfills() {
   NATIVE_assign = HTMLSlotElement.prototype.assign;
   HTMLSlotElement.prototype.assign = function patchedAssign(...nodes) {
     if (this.hasAttribute(LIGHT_SLOT_ATTR) && !isInShadowRoot(this)) {
-      // Manual slot assignment (imperative, overrides attribute mode). Record
-      // the manual list for this slot's name in a per-host overlay that
-      // repartition honors, then re-derive + re-place through the one writer.
+      // Manual slot assignment (imperative, overrides attribute mode). Bound
+      // to THIS slot element (native binds slottables to the receiving
+      // element, not its name), held via WeakRef (native holds manually
+      // assigned slottables weakly), honored by repartition through
+      // effectiveKeyOf and by the placement step's per-element routing.
+      // NOTE this is a deliberate EXTENSION of native: real manual mode
+      // requires slotAssignment 'manual' on the whole shadow root and turns
+      // name matching off; here assign() overlays per-node while name
+      // matching keeps working for everything else.
       const host = hostOfSlot(this);
       if (host) {
         const state = ensureSlotState(host);
-        if (!state.manualByName) state.manualByName = new Map();
-        const key = keyOfName(this.getAttribute('name'));
+        if (!state.manualAssign) state.manualAssign = new Map();
         const list = nodes.filter(Boolean);
-        // Native manual assignment is LAST-assign-wins: a node handed to this
-        // slot leaves any other slot's manual list.
-        for (const [mname, mnodes] of state.manualByName) {
-          if (mname === key) continue;
-          const kept = mnodes.filter((n) => list.indexOf(n) === -1);
-          if (kept.length !== mnodes.length) state.manualByName.set(mname, kept);
+        // LAST-assign-wins: a node handed to this slot leaves any other
+        // slot's manual list.
+        for (const [slotEl, refs] of state.manualAssign) {
+          if (slotEl === this) continue;
+          const kept = refs.filter((r) => {
+            const n = r.deref();
+            return n !== undefined && list.indexOf(n) === -1;
+          });
+          if (kept.length !== refs.length) {
+            if (kept.length) state.manualAssign.set(slotEl, kept);
+            else state.manualAssign.delete(slotEl);
+          }
         }
-        state.manualByName.set(key, list);
-        state.pendingRecordOp = true;
+        if (list.length) {
+          state.manualAssign.set(this, list.map((n) => new WeakRef(n)));
+        } else {
+          state.manualAssign.delete(this);
+        }
+        state.pendingRecordNodes = new Set(list);
         repartition(state);
         applySlotAssignments(host);
       }
@@ -196,6 +211,34 @@ export function installSlotPolyfills() {
     return NATIVE_assign ? NATIVE_assign.apply(this, nodes) : undefined;
   };
   polyfillsInstalled = true;
+}
+
+/**
+ * The slot ELEMENT a node is manually assigned to via `assign()`, or null.
+ * Dead WeakRefs are compacted on the way through.
+ *
+ * @param {SlotState} state
+ * @param {Node} node
+ * @returns {HTMLSlotElement | null}
+ */
+function manualSlotFor(state, node) {
+  const manual = state.manualAssign;
+  if (!manual || !manual.size) return null;
+  for (const [slotEl, refs] of manual) {
+    let found = false;
+    const live = refs.filter((r) => {
+      const n = r.deref();
+      if (n === undefined) return false;
+      if (n === node) found = true;
+      return true;
+    });
+    if (live.length !== refs.length) {
+      if (live.length) manual.set(slotEl, live);
+      else manual.delete(slotEl);
+    }
+    if (found) return slotEl;
+  }
+  return null;
 }
 
 /**
@@ -350,12 +393,17 @@ function findLightAssignedSlot(el) {
  *   that bypass the patched methods (never moves nodes; folds into `authored`).
  * @property {MutationObserver} [flipSensor] Sensor for `slot=` / `name=`
  *   attribute flips (never moves nodes; re-derives + re-places).
- * @property {boolean} [pendingRecordOp] Set by a record op (interceptor /
- *   assign() / router seam) and consumed by the next apply pass: tells the
- *   resync step that record order is authoritative for that pass.
- * @property {Map<string|null, Node[]>} [manualByName] Overlay for
- *   `HTMLSlotElement.assign()` manual assignment: a node here goes to the named
- *   slot regardless of its `slot=` attribute.
+ * @property {Set<Node> | undefined} [pendingRecordNodes] The nodes the
+ *   current record op touched (inserted, moved, or removed by an interceptor
+ *   / assign() / router splice), consumed by the next apply pass: the resync
+ *   step honours record positions for exactly these nodes and adopts
+ *   physical order for everything else (node-scoped order authority).
+ * @property {Map<HTMLSlotElement, WeakRef<Node>[]>} [manualAssign] Overlay for
+ *   `HTMLSlotElement.assign()` manual assignment, keyed by the RECEIVING slot
+ *   element (native binds slottables to the element, so a rename follows the
+ *   element and duplicates route correctly); nodes held via WeakRef (native
+ *   holds manually assigned slottables weakly). A node here goes to its
+ *   assigned slot regardless of its `slot=` attribute.
  */
 
 /**
@@ -440,12 +488,8 @@ export function repartition(state) {
  * @returns {string | null}
  */
 function effectiveKeyOf(state, node) {
-  const manual = state.manualByName;
-  if (manual && manual.size) {
-    for (const [mname, mnodes] of manual) {
-      if (mnodes.indexOf(node) !== -1) return mname;
-    }
-  }
+  const m = manualSlotFor(state, node);
+  if (m) return keyOfName(m.getAttribute('name'));
   return slotNameOf(node);
 }
 
@@ -500,7 +544,10 @@ export function adoptSSRAssignments(host) {
   for (const oldPark of host.querySelectorAll('wj-slot-park')) {
     if (!isOwnSlot(host, oldPark)) continue;
     for (const child of Array.from(oldPark.childNodes)) {
-      FRAMEWORK_DETACHED.add(child); // parentless after the park removal
+      // The children keep the DETACHED oldPark as parent until placement;
+      // the FRAMEWORK_DETACHED mark is what shields them from the prune
+      // rule across that window.
+      FRAMEWORK_DETACHED.add(child);
       state.authored.push(child);
     }
     oldPark.remove();
@@ -571,6 +618,7 @@ export function projectAuthored(host, name, nodes) {
   // attribute would evict a manually-assigned attribute-less node from the
   // default slice and silently drop another slot's content.
   let at = state.authored.findIndex((n) => effectiveKeyOf(state, n) === key);
+  const evicted = state.authored.filter((n) => effectiveKeyOf(state, n) === key);
   state.authored = state.authored.filter((n) => effectiveKeyOf(state, n) !== key);
   if (at === -1 || at > state.authored.length) at = state.authored.length;
   for (const n of list) {
@@ -581,7 +629,7 @@ export function projectAuthored(host, name, nodes) {
     FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
   }
   state.authored.splice(at, 0, ...list);
-  state.pendingRecordOp = true;
+  state.pendingRecordNodes = new Set([...evicted, ...list]);
   repartition(state);
   applySlotAssignments(host);
 }
@@ -919,7 +967,20 @@ function expandArg(host, arg, allowString) {
  */
 function guardInsertable(host, nodes) {
   for (const n of nodes) {
-    if (n === host || (n.nodeType === 1 && /** @type {Element} */ (n).contains(host))) {
+    // Validity BEFORE any record mutation (native throws with zero state
+    // change): a non-Node is a TypeError, a Node that is not an insertable
+    // child type (an Attr, a Document, a doctype) is a HierarchyRequestError.
+    if (!(n && typeof n === 'object' && typeof (/** @type {any} */ (n).nodeType) === 'number')) {
+      throw new TypeError('Failed to execute insertion on the host: parameter is not of type Node.');
+    }
+    const t = n.nodeType;
+    if (t !== 1 && t !== 3 && t !== 4 && t !== 7 && t !== 8 && t !== 11) {
+      throw new DOMException(
+        'Failed to execute insertion on the host: the node type may not be inserted here.',
+        'HierarchyRequestError',
+      );
+    }
+    if (n === host || (t === 1 && /** @type {Element} */ (n).contains(host))) {
       throw new DOMException(
         'Failed to execute insertion on the host: the new child contains the parent.',
         'HierarchyRequestError',
@@ -975,12 +1036,21 @@ function isVirtualChild(host, node) {
   );
 }
 
-/** Commit an authored mutation: record it, re-derive, re-place. */
-function commitAuthored(host, state) {
-  // Tell the apply pass this was a RECORD op, so the resync step treats
-  // record order as authoritative (the op may have just expressed a move)
-  // instead of adopting the slot's physical order.
-  state.pendingRecordOp = true;
+/** The empty set handed to resync when no record op is pending. */
+const EMPTY_NODE_SET = new Set();
+
+/**
+ * Commit an authored mutation: record it, re-derive, re-place. `touched`
+ * lists the nodes this op inserted, moved, or removed, so the resync step
+ * honours the record's position for exactly those nodes (an expressed move)
+ * while adopting physical order for everything else.
+ *
+ * @param {Element} host
+ * @param {SlotState} state
+ * @param {Node[]} [touched]
+ */
+function commitAuthored(host, state, touched) {
+  state.pendingRecordNodes = new Set(touched || []);
   repartition(state);
   applySlotAssignments(host);
 }
@@ -1006,7 +1076,7 @@ export function installSlotInterception(host) {
     const nodes = expandArg(host, node, false);
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
     authoredSplice(state, nodes, null);
-    commitAuthored(host, state);
+    commitAuthored(host, state, nodes);
     return node;
   };
 
@@ -1029,7 +1099,7 @@ export function installSlotInterception(host) {
     const nodes = expandArg(host, node, false);
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
     authoredSplice(state, nodes, ref || null);
-    commitAuthored(host, state);
+    commitAuthored(host, state, nodes);
     return node;
   };
 
@@ -1046,7 +1116,7 @@ export function installSlotInterception(host) {
       );
     }
     state.authored.splice(i, 1);
-    commitAuthored(host, state);
+    commitAuthored(host, state, [node]);
     return node;
   };
 
@@ -1074,7 +1144,7 @@ export function installSlotInterception(host) {
     }
     const at = state.authored.indexOf(oldNode);
     state.authored.splice(at, 1, ...nodes);
-    commitAuthored(host, state);
+    commitAuthored(host, state, [...nodes, oldNode]);
     return oldNode;
   };
 
@@ -1084,7 +1154,7 @@ export function installSlotInterception(host) {
     for (const a of args) nodes.push(...expandArg(host, a, true));
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
     authoredSplice(state, nodes, null);
-    commitAuthored(host, state);
+    commitAuthored(host, state, nodes);
   };
 
   h.prepend = function (...args) {
@@ -1101,7 +1171,7 @@ export function installSlotInterception(host) {
       if (j !== -1) state.authored.splice(j, 1);
     }
     state.authored.unshift(...nodes);
-    commitAuthored(host, state);
+    commitAuthored(host, state, nodes);
   };
 
   h.replaceChildren = function (...args) {
@@ -1109,8 +1179,9 @@ export function installSlotInterception(host) {
     const nodes = [];
     for (const a of args) nodes.push(...expandArg(host, a, true));
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
+    const displaced = state.authored;
     state.authored = nodes.slice();
-    commitAuthored(host, state);
+    commitAuthored(host, state, [...displaced, ...nodes]);
   };
 
   Object.defineProperty(h, 'innerHTML', {
@@ -1127,8 +1198,9 @@ export function installSlotInterception(host) {
       INNER_HTML_DESC.set.call(tmpl, String(str));
       const nodes = Array.from(tmpl.content.childNodes);
       for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
+      const displaced = state.authored;
       state.authored = nodes;
-      commitAuthored(host, state);
+      commitAuthored(host, state, [...displaced, ...nodes]);
     },
   });
 
@@ -1147,8 +1219,9 @@ export function installSlotInterception(host) {
           ? []
           : [host.ownerDocument.createTextNode(String(str))];
       for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
+      const displaced = state.authored;
       state.authored = nodes;
-      commitAuthored(host, state);
+      commitAuthored(host, state, [...displaced, ...nodes]);
     },
   });
 }
@@ -1192,17 +1265,34 @@ export function applySlotAssignments(host) {
   //    own slots / the park, and we did not detach them ourselves. Then
   //    re-derive from the surviving `authored` so a `slot=` change (or any
   //    authored mutation) is reflected before placement.
-  const recordOp = state.pendingRecordOp === true;
-  state.pendingRecordOp = false;
-  resyncActualSlots(host, state, recordOp);
+  const pendingNodes = state.pendingRecordNodes || EMPTY_NODE_SET;
+  state.pendingRecordNodes = undefined;
+  resyncActualSlots(host, state, pendingNodes);
   pruneAuthored(host, state);
   repartition(state);
 
-  // 1. The host's own slots, document order.
+  // 1. The host's own slots, document order. A slot that is BOUND but not yet
+  //    FINALIZED (its slot-part deferred finalize to a microtask: it carries
+  //    data-webjs-light from compile time but has neither a data-projection
+  //    stamp nor a harvested fallback frag) is EXCLUDED from placement this
+  //    pass: treating it as fallback-mode would destroy its un-harvested
+  //    fallback clone, and the finalize's own queued apply covers it one
+  //    microtask later. Its NAME still counts as rendered (pendingNames) so
+  //    the park step does not spuriously park (and bounce) its content.
   /** @type {HTMLSlotElement[]} */
   const slots = [];
+  /** @type {Set<string|null>} */
+  const pendingNames = new Set();
   for (const el of host.querySelectorAll(`slot[${LIGHT_SLOT_ATTR}]`)) {
-    if (isOwnSlot(host, el)) slots.push(/** @type {HTMLSlotElement} */ (el));
+    if (!isOwnSlot(host, el)) continue;
+    if (
+      !el.hasAttribute(PROJECTION_ATTR) &&
+      !(SLOT_FALLBACK_FRAG in /** @type {any} */ (el))
+    ) {
+      pendingNames.add(keyOfName(el.getAttribute('name')));
+      continue;
+    }
+    slots.push(/** @type {HTMLSlotElement} */ (el));
   }
 
   // 2. Group by current `name` attribute in document order.
@@ -1218,15 +1308,21 @@ export function applySlotAssignments(host) {
     arr.push(slot);
   }
 
-  // 3. Assign per the first-wins rule.
+  // 3. Assign per the first-wins rule; a node manually bound via `assign()`
+  //    routes to ITS slot element (native binds slottables to the receiving
+  //    element), everything else to the first slot of its name.
   /** @type {HTMLSlotElement[]} */
   const slotsChanged = [];
   for (const [name, group] of groups) {
     const assigned = state.assignedByName.get(name) || [];
     for (let i = 0; i < group.length; i++) {
       const slot = group[i];
-      if (i === 0 && assigned.length > 0) {
-        if (applyActualAssignment(state, slot, assigned)) {
+      const own = assigned.filter((n) => {
+        const m = manualSlotFor(state, n);
+        return m ? m === slot : i === 0;
+      });
+      if (own.length > 0) {
+        if (applyActualAssignment(state, slot, own)) {
           slotsChanged.push(slot);
         }
       } else {
@@ -1252,6 +1348,7 @@ export function applySlotAssignments(host) {
   //    record (or now matches a slot) is detached from the park, so a removed
   //    parked child ends up isConnected === false like native removeChild.
   const matched = new Set(groups.keys());
+  for (const name of pendingNames) matched.add(name);
   const shouldPark = new Set();
   for (const n of state.authored) {
     if (!matched.has(effectiveKeyOf(state, n))) shouldPark.add(n);
@@ -1286,26 +1383,28 @@ export function applySlotAssignments(host) {
  * this pass (the pre-fix behaviour) is the one-writer violation in reverse
  * and detaches DOM a live renderer part still points at.
  *
- * Reconciliation rule, per diverged slot:
- * - TRUE ADDITIONS (physical nodes the record has never seen) fold into
- *   `authored` at their physical position relative to already-known
- *   neighbours, in both modes.
- * - ORDER: when this apply was triggered by a record op (`recordOp`, an
- *   interceptor / sensor / router splice), record order is authoritative (the
- *   author may have just expressed a move, e.g. appendChild-of-existing); the
- *   physical order of known nodes is left to the placement step. Otherwise
- *   the physical order of the slice is ADOPTED, so a renderer part reordering
- *   a keyed list inside the slot is not fought back.
- * - REMOVALS are NOT adopted here: a snapshot node missing from the slot may
- *   have been bypass-moved onto the host (re-place it) or genuinely detached
- *   (prune it); `pruneAuthored`, which runs right after, already answers that
- *   structurally by the node's current parent.
+ * Reconciliation rule, per diverged slot. Order authority is NODE-scoped,
+ * never pass-scoped (a pass-scoped rule made the outcome depend on which
+ * trigger happened to run the apply):
+ * - The PHYSICAL order of the slice is the base: a renderer part reordering
+ *   a keyed list inside the slot is never fought back, regardless of what
+ *   triggered this apply.
+ * - Nodes the current record op TOUCHED (`pendingNodes`: inserted, moved, or
+ *   removed by the interceptor / assign() / router splice that triggered
+ *   this apply) are taken OUT of the base and re-anchored at their
+ *   record-implied position, so an author's expressed move (appendChild of
+ *   an existing child = move to end) is honoured; an op-REMOVED node is in
+ *   `pendingNodes` but no longer in the record, so it simply drops.
+ * - Record nodes missing from the slot (a bypass move onto the host, a
+ *   genuine author detach) are also re-anchored; `pruneAuthored`, which runs
+ *   right after, decides their fate structurally by their current parent
+ *   (re-place vs drop), so no zombie is resurrected.
  *
  * @param {Element} host
  * @param {SlotState} state
- * @param {boolean} recordOp
+ * @param {Set<Node>} pendingNodes
  */
-function resyncActualSlots(host, state, recordOp) {
+function resyncActualSlots(host, state, pendingNodes) {
   // lastSnapshot is a WeakMap (not iterable): walk the host's own APPLIED
   // actual slots instead, which are exactly the elements a snapshot exists
   // for.
@@ -1319,53 +1418,46 @@ function resyncActualSlots(host, state, recordOp) {
     const physical = Array.from(slot.childNodes);
     if (arraysEqual(physical, snapshot)) continue;
     const a = state.authored;
-    if (recordOp) {
-      // Fold additions only; record order stands.
-      let insertAt = -1; // authored index of the last physical node seen there
-      for (const node of physical) {
-        const idx = a.indexOf(node);
-        if (idx !== -1) {
-          insertAt = idx;
-          continue;
-        }
-        if (insertAt === -1) {
-          // Addition precedes every known member: insert before the first
-          // authored member of this physical list (append when none).
-          let firstIdx = a.length;
-          for (const p of physical) {
-            const j = a.indexOf(p);
-            if (j !== -1) {
-              firstIdx = j;
-              break;
-            }
-          }
-          a.splice(firstIdx, 0, node);
-          insertAt = firstIdx;
-        } else {
-          insertAt += 1;
-          a.splice(insertAt, 0, node);
-        }
+    const key = keyOfName(slot.getAttribute('name'));
+
+    // Base: the slice in PHYSICAL order, minus op-touched nodes (re-anchored
+    // below or op-removed). A physical node unknown to the record is a true
+    // addition (renderer hole / library write) and folds in at its physical
+    // position.
+    const merged = physical.filter((n) => !pendingNodes.has(n));
+
+    // Re-anchor every record node of this slice that is not already in the
+    // base, in record order, each after the LAST base member that precedes
+    // it in the record (start when none). Covers op-inserted/moved nodes and
+    // record nodes missing from the slot (prune settles those right after).
+    for (const n of a) {
+      if (merged.indexOf(n) !== -1) continue;
+      if (effectiveKeyOf(state, n) !== key) continue;
+      const nIdx = a.indexOf(n);
+      let at = 0;
+      for (let i = 0; i < merged.length; i++) {
+        const mIdx = a.indexOf(merged[i]);
+        if (mIdx !== -1 && mIdx < nIdx) at = i + 1;
       }
-    } else {
-      // Adopt the slice wholesale in physical order at the old slice's
-      // position; snapshot members not physically present stay where they
-      // are (prune decides their fate).
-      const physSet = new Set(physical);
-      let at = -1;
-      let seen = 0;
-      for (const n of a) {
-        if (physSet.has(n)) {
-          if (at === -1) at = seen;
-          continue; // re-inserted below
-        }
-        if (at === -1 && snapshot.indexOf(n) !== -1) at = seen;
-        seen += 1;
-      }
-      const rest = a.filter((n) => !physSet.has(n));
-      if (at === -1 || at > rest.length) at = rest.length;
-      rest.splice(at, 0, ...physical);
-      state.authored = rest;
+      merged.splice(at, 0, n);
     }
+
+    // Replace the old slice with the merged one at the old slice's position.
+    const involved = new Set(merged);
+    for (const n of snapshot) involved.add(n);
+    let at = -1;
+    let seen = 0;
+    for (const n of a) {
+      if (involved.has(n)) {
+        if (at === -1) at = seen;
+        continue;
+      }
+      seen += 1;
+    }
+    const rest = a.filter((n) => !involved.has(n));
+    if (at === -1 || at > rest.length) at = rest.length;
+    rest.splice(at, 0, ...merged);
+    state.authored = rest;
     // The snapshot itself is settled by the placement step this pass.
   }
 }
@@ -1403,21 +1495,11 @@ function pruneAuthored(host, state) {
     }
     return false;
   });
-  // Keep the manual-assignment overlay in step with the surviving record: a
-  // node the author removed (replaceChildren, innerHTML, el.remove()) must
-  // not stay strongly referenced in `manualByName` for the host's lifetime
-  // (a detached-subtree leak; engines hold manually-assigned slottables
-  // weakly).
-  const manual = state.manualByName;
-  if (manual && manual.size) {
-    for (const [mname, mnodes] of manual) {
-      const kept = mnodes.filter((n) => state.authored.indexOf(n) !== -1);
-      if (kept.length !== mnodes.length) {
-        if (kept.length) manual.set(mname, kept);
-        else manual.delete(mname);
-      }
-    }
-  }
+  // The manual-assignment overlay needs no pruning here: it holds nodes via
+  // WeakRef (native holds manually assigned slottables weakly), so a removed
+  // node is not leaked, and an entry for a node assigned BEFORE it becomes a
+  // host child stays honoured when the node is later appended (the native
+  // assign-first, append-later ordering).
 }
 
 /**
@@ -1457,6 +1539,13 @@ export function hasFrameworkRenderedSubtree(host) {
  * True when `slot` belongs to `host` directly: no OTHER custom element
  * sits between them. A slot nested inside a child custom element belongs
  * to THAT component and is applied from its own record.
+ *
+ * LOAD-BEARING SUBTLETY: for a slot in a fully DETACHED chain the walk ends
+ * at null without reaching `host` and returns vacuously true. The prune rule
+ * depends on this: adopted SSR nodes whose old subtree `createInstance` just
+ * detached survive pruning only because their detached parent slot still
+ * passes this check. Tightening the walk to require reaching `host` would
+ * wipe adopted content on every hydration.
  *
  * @param {Element} host
  * @param {Element} slot
