@@ -1342,13 +1342,14 @@ function convertVariadicArgs(host, args) {
   // nets [a, ...fragRest] exactly like native; a repeated Node argument is
   // physically moved, netting keep-LAST order; and the record can never
   // receive a duplicate entry (scratch children are unique by construction).
-  // NOTE on reaction TIMING: detaching a connected argument here fires its
-  // [CEReactions] callbacks MID-call, where native defers them to the end
-  // of the outer variadic operation (a userland polyfill has no reactions
-  // queue). The net DOM converges through the latch + record ops; the one
-  // observable divergence is a same-host-mutating disconnect callback
-  // racing replaceChildren's wholesale displacement, accepted as part of
-  // the documented reaction-bounce family.
+  // ACCEPTED DIVERGENCE, documented here as its canonical spot: detaching a
+  // connected argument fires its [CEReactions] callbacks MID-call, where
+  // native defers them to the end of the outer variadic operation (a
+  // userland polyfill has no reactions queue). The net DOM converges
+  // through the latch + record ops; the one observable divergence is a
+  // same-host-mutating disconnect callback racing replaceChildren's
+  // wholesale displacement. This is the same family as the native-matching
+  // disconnect bounce for connected variadic arguments.
   const scratch = host.ownerDocument.createDocumentFragment();
   for (const c of converted) {
     if (c.text !== undefined) {
@@ -1358,16 +1359,22 @@ function convertVariadicArgs(host, args) {
       guardInsertable(host, kids);
       for (const k of kids) N_appendChild.call(scratch, k);
     } else if (c.node) {
-      // TOCTOU re-guard, mirroring the fragment branch: a reaction fired by
-      // an earlier argument's detach can reparent the HOST into this one.
+      // DEFENSE-IN-DEPTH early throw (the LOAD-BEARING check is the final
+      // assembled guard below): a reaction fired by an earlier argument's
+      // detach can reparent the HOST into this one; catching it here just
+      // surfaces the error before this arg enters the scratch.
       guardCycle(host, [c.node]);
       N_appendChild.call(scratch, c.node);
     }
   }
   const nodes = Array.from(scratch.childNodes);
-  // Final assembled-validity check (DOM pre-insert runs validity AFTER the
-  // conversion step), so the record can never receive a host-containing
-  // node regardless of what mid-conversion reactions did.
+  // The LOAD-BEARING assembled-validity check (DOM pre-insert runs validity
+  // AFTER the conversion step): whatever mid-conversion reactions did,
+  // including a LATER argument's reaction poisoning an EARLIER scratch
+  // child, the returned list never contains a host-containing node, so the
+  // CONVERSION window cannot feed one into the record. (The record-to-
+  // placement window is separately shielded by the placement-time skip in
+  // applyActualAssignment.)
   guardCycle(host, nodes);
   for (const n of nodes) N_removeChild.call(scratch, n);
   return nodes;
@@ -2020,6 +2027,21 @@ export function applyActualAssignment(state, slot, assigned) {
   // unchanged and in-place fast paths below, which the router's morph hits).
   // Missing this leaves a reprojected node permanently exempt, so a later
   // el.remove() / cross-host move on it would not be pruned (zombie / theft).
+  // Placement-time cycle shield (skip, never throw): a reaction fired by an
+  // earlier slice's departure removal can reparent the HOST into a node this
+  // slice is about to place; inserting it would throw a native
+  // HierarchyRequestError out of the whole apply pass. Skipping leaves the
+  // poisoned node for the next pass's prune (its parent chain no longer
+  // qualifies) and keeps the pass atomic.
+  const hostEl = state.host;
+  if (
+    hostEl &&
+    assigned.some((n) => n === hostEl || (n.nodeType === 1 && /** @type {Element} */ (n).contains(hostEl)))
+  ) {
+    assigned = assigned.filter(
+      (n) => !(n === hostEl || (n.nodeType === 1 && /** @type {Element} */ (n).contains(hostEl))),
+    );
+  }
   for (const n of assigned) FRAMEWORK_DETACHED.delete(n);
   const wasFallback = slot.getAttribute(PROJECTION_ATTR) !== PROJECTION_ACTUAL;
   const prev = state.lastSnapshot.get(slot) || [];

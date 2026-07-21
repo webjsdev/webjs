@@ -1881,12 +1881,114 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
       try { host.append(boomer, wrapper); } catch (e) { threw = e; }
       assert.equal(threw && threw.name, 'HierarchyRequestError', 'atomic throw');
       assert.ok(!slot.contains(wrapper), 'the host-containing node never entered the slot');
+      // The DISCRIMINATING assert: without the guards, placement partially
+      // ran before the deep throw, leaving boomer placed in the slot; at
+      // head, boomer is lost to the conversion fragment (native parity).
+      assert.ok(!slot.contains(boomer), 'no partial placement (atomicity held)');
       host.appendChild(document.createElement('strong')); // still functional
       await tick();
       assert.ok(slot.querySelector('strong'), 'pipeline intact after the throw');
     } finally {
       host.remove();
       holder.remove();
+    }
+  });
+
+  test('a LATER arg reaction poisoning an EARLIER scratch child throws atomically', async () => {
+    // Mirror ordering of the toctou test: append(wrapper, boomer). Boomer's
+    // detach reaction reparents the host into wrapper, which ALREADY sits in
+    // the scratch: only the final assembled guardCycle catches this shape.
+    if (!customElements.get('boomer-probe-2')) {
+      class Probe extends HTMLElement {
+        disconnectedCallback() {
+          const c = /** @type {any} */ (this).__cycle;
+          if (c && !c.done) {
+            c.done = true;
+            c.wrapper.appendChild(c.host);
+          }
+        }
+      }
+      customElements.define('boomer-probe-2', Probe);
+    }
+    const tag = tagName('toctou-mirror');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    const holder = document.createElement('div');
+    document.body.appendChild(holder);
+    holder.appendChild(host);
+    try {
+      host.appendChild(document.createElement('em'));
+      await tick();
+      const slot = host.querySelector('slot[data-webjs-light]');
+      const boomer = document.createElement('boomer-probe-2');
+      host.appendChild(boomer);
+      await tick();
+      const wrapper = document.createElement('div');
+      /** @type {any} */ (boomer).__cycle = { host, wrapper, done: false };
+      let threw = null;
+      try { host.append(wrapper, boomer); } catch (e) { threw = e; }
+      assert.equal(threw && threw.name, 'HierarchyRequestError', 'atomic throw');
+      assert.ok(!slot.contains(wrapper), 'poisoned node never entered the slot');
+      assert.ok(!slot.contains(boomer), 'no partial placement');
+      host.appendChild(document.createElement('strong'));
+      await tick();
+      assert.ok(slot.querySelector('strong'), 'pipeline intact');
+    } finally {
+      host.remove();
+      holder.remove();
+    }
+  });
+
+  test('a latched projection does not end a co-pending manual adoption', async () => {
+    // The scoped adoption-clear: a probe's disconnect fires (op1) a manual
+    // assign of an ADOPTED node and (op2) a reentrant router projection of
+    // the default slice. The projection must clear adoptions only for ITS
+    // nodes; with the old union-wide clear, releasing the manual assignment
+    // later routed the node by its (absent) attribute instead of its
+    // adopted container key.
+    if (!customElements.get('proj-probe')) {
+      class Probe extends HTMLElement {
+        disconnectedCallback() {
+          const c = /** @type {any} */ (this).__ctx;
+          if (c && !c.done) {
+            c.done = true;
+            c.sideSlot.assign(c.n); // op1: manual (outranks adoption)
+            projectAuthored(c.host, null, [document.createElement('p')]); // op2
+          }
+        }
+      }
+      customElements.define('proj-probe', Probe);
+    }
+    const tag = tagName('scoped-clear');
+    const host = await mount(
+      tag,
+      () => html`<div><slot></slot><slot name="side"></slot></div>`,
+    );
+    try {
+      const seed = document.createElement('span');
+      seed.setAttribute('slot', 'side');
+      host.appendChild(seed);
+      await tick();
+      const sideSlot = host.querySelector('slot[name="side"]');
+      const n = document.createElement('u');
+      n.id = 'adopted-n';
+      sideSlot.appendChild(n); // library write
+      const probe = document.createElement('proj-probe');
+      host.appendChild(probe); // fold: n adopted to side
+      await tick();
+      assert.equal(n.parentElement, sideSlot, 'adopted into side');
+      /** @type {any} */ (probe).__ctx = { host, sideSlot, n, done: false };
+      host.removeChild(probe); // fires op1 + op2 mid-pass
+      await tick();
+      await tick();
+      assert.equal(n.parentElement, sideSlot, 'manually held in side');
+      sideSlot.assign(); // release the manual assignment
+      await tick();
+      await tick();
+      // With the scoped clear, n's ADOPTION survives the co-pending
+      // projection and still routes it to side after release.
+      assert.equal(n.parentElement, sideSlot, 'adoption survived the latched projection');
+    } finally {
+      host.remove();
     }
   });
 
