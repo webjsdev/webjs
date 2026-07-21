@@ -1677,11 +1677,11 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
   });
 
   test('a bypass move + intercepted write + same-task collapse loses nothing', async () => {
-    // The round-27 interleaving: the bypass MOVE onto the host and the
-    // repair placement's removal record land in one batch, and the rescue
-    // detaches the node before the batch is processed. The source-drain in
-    // the apply consumes the placement record with fresh containment, so
-    // the node can never be mis-attributed to an author removal.
+    // BEHAVIORAL coverage (not a counterfactual): this interleaving is
+    // handled by the window-close drains + retention conjuncts even without
+    // the end-of-apply source drain (verified empirically in round 28); the
+    // drain remains as documented defense-in-depth for the twice-traced
+    // stale-placement race no suite sequence has reproduced.
     const tag = tagName('interleave-loss');
     class C extends WebComponent({ cond: Boolean }) {
       constructor() { super(); this.cond = true; }

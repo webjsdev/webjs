@@ -1748,6 +1748,13 @@ export function applySlotAssignments(host) {
       // from racing this pass's park bookkeeping; recursion terminates because
       // a pure-placement batch marks nothing dirty and an inner apply leaves an
       // empty queue behind.
+      // DEFENSE-IN-DEPTH, empirically not required by any suite-constructible
+      // interleaving at this head (deleting it stays green): the window-close
+      // drains and the retention conjuncts cover every reproduced sequence.
+      // It stays because the stale-placement-record race was independently
+      // traced by two reviews, is O(pending records) cheap, provably
+      // terminates under the latch, and processing placement records with
+      // fresh containment can only ever retain correctly.
       if (state.backstop) {
         const placementRecords = state.backstop.takeRecords();
         if (placementRecords.length) processBackstop(host, state, placementRecords);

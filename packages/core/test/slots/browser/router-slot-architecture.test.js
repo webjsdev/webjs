@@ -283,7 +283,11 @@ suite('Router + slot architectural regressions', () => {
       await tick();
       await tick();
       // The own x slot reprojects from the incoming OWN x slot (inc-x), and
-      // the forwarded nested slot's content must never be the source.
+      // the forwarded nested slot's content must never be the source. The
+      // POSITIVE assert is the discriminating one: on revert, the exclusion's
+      // absence flips the live own slot to fallback, destroys its content,
+      // and never projects inc-x.
+      assert.ok(ownX.textContent.includes('inc-x'), 'the own slot reprojected from the incoming OWN slot');
       assert.ok(!ownX.textContent.includes('FWD'), 'forwarded content was NOT projected into the own slot');
     } finally {
       host.remove();
