@@ -37,7 +37,7 @@ export default function MetadataRoutes() {
     <p>The <code>sitemap()</code> helper from <code>@webjsdev/server</code> turns an array of entries into spec-valid <code>&lt;urlset&gt;</code> XML for you (escaping each URL, formatting <code>lastModified</code> as a W3C datetime, validating <code>priority</code> and <code>changeFrequency</code>). Return its output from the default export.</p>
     <pre>// app/sitemap.ts
 import { sitemap } from '@webjsdev/server';
-import { listPostSlugs } from '../modules/blog/queries/list-post-slugs.server.ts';
+import { listPostSlugs } from '#modules/blog/queries/list-post-slugs.server.ts';
 
 export default async function () {
   const posts = await listPostSlugs();
@@ -55,7 +55,7 @@ export default async function () {
     <p>A single sitemap maxes out at 50,000 URLs. To shard past that, serve each chunk from a <code>route.ts</code> handler and point a root <code>sitemapIndex()</code> at them. Both helpers share the same escaping + date rules.</p>
     <pre>// app/sitemaps/[shard]/route.ts
 import { sitemap } from '@webjsdev/server';
-import { listShardUrls } from '../../../modules/blog/queries/list-shard-urls.server.ts';
+import { listShardUrls } from '#modules/blog/queries/list-shard-urls.server.ts';
 
 export async function GET(req: Request, { params }: { params: { shard: string } }) {
   const entries = await listShardUrls(params.shard);

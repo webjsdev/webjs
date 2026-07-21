@@ -92,7 +92,7 @@ render() {
 
     <pre>// app/posts/[slug]/page.ts
 import { html } from '@webjsdev/core';
-import '../../components/post-card.ts';
+import '#components/post-card.ts';
 
 export default async function PostPage({ params }: { params: { slug: string } }) {
   const post = await db.post.findUnique({ where: { slug: params.slug } });
@@ -272,7 +272,7 @@ export default function RootLayout({ children }: { children: unknown }) {
 
 // app/page.ts
 import { html, Suspense } from '@webjsdev/core';
-import '../components/hero-banner.ts';
+import '#components/hero-banner.ts';
 
 export const metadata = {
   title: 'Home | My App',

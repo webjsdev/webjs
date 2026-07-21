@@ -51,7 +51,7 @@ export default function BackendOnly() {
     <p>A <code>route.ts</code> file anywhere under <code>app/</code> becomes an API endpoint. Export functions named after HTTP methods:</p>
     <pre>// app/api/users/route.ts
 import { db } from '#db/connection.server.ts';
-import { users } from '../../../db/schema.server.ts';
+import { users } from '#db/schema.server.ts';
 
 export async function GET(req: Request, { params }: { params: Record&lt;string, string&gt; }) {
   const rows = await db.query.users.findMany({
@@ -67,8 +67,8 @@ export async function POST(req: Request) {
 }</pre>
     <pre>// app/api/users/[id]/route.ts
 import { eq } from 'drizzle-orm';
-import { db } from '../../../../db/connection.server.ts';
-import { users } from '../../../../db/schema.server.ts';
+import { db } from '#db/connection.server.ts';
+import { users } from '#db/schema.server.ts';
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const user = await db.query.users.findFirst({ where: { id: Number(params.id) } });
@@ -129,8 +129,8 @@ export default rateLimit({ window: '10s', max: 5 });</pre>
     <p>Define your API logic as plain server-action functions, then expose them over HTTP through a <code>route.ts</code> handler. The <code>route()</code> adapter from <code>@webjsdev/server</code> writes the common handler (merge query + params + JSON body, run an optional validator, JSON-respond) in one line:</p>
     <pre>// actions/users.server.ts
 'use server';
-import { db } from '../db/connection.server.ts';
-import { users } from '../db/schema.server.ts';
+import { db } from '#db/connection.server.ts';
+import { users } from '#db/schema.server.ts';
 
 export async function listUsers() {
   return db.query.users.findMany({
@@ -150,7 +150,7 @@ export async function createUser({ name, email }: { name: string; email: string 
 }</pre>
     <pre>// app/api/v2/users/route.ts
 import { route } from '@webjsdev/server';
-import { listUsers, createUser } from '../../../actions/users.server.ts';
+import { listUsers, createUser } from '#actions/users.server.ts';
 
 const validateUser = (input: any) =&gt; {
   if (!input.name || typeof input.name !== 'string') throw new Error('name is required');
@@ -163,12 +163,12 @@ export const POST = route(createUser, { validate: validateUser });
 
 // app/api/v2/users/[id]/route.ts: ctx.params.id merges into the input
 import { route } from '@webjsdev/server';
-import { getUser } from '../../../../actions/users.server.ts';
+import { getUser } from '#actions/users.server.ts';
 export const GET = route(getUser);</pre>
     <p>The action is reachable two ways:</p>
     <ul>
       <li><strong>As an HTTP endpoint:</strong> <code>GET /api/v2/users/:id</code> from curl, Postman, or any HTTP client, served by the <code>route.ts</code> handler.</li>
-      <li><strong>As a typed function import:</strong> another WebJs app (or the same app's components) can <code>import { getUser } from '../actions/users.server.ts'</code> and call it as a function with full type safety.</li>
+      <li><strong>As a typed function import:</strong> another WebJs app (or the same app's components) can <code>import { getUser } from '#actions/users.server.ts'</code> and call it as a function with full type safety.</li>
     </ul>
     <p>The <code>route()</code> adapter merges URL params, query string, and JSON body into a single object argument. The optional <code>validate</code> function runs before the handler and can transform or reject input (works with zod, valibot, or any schema library that throws on error). For CORS, wrap the handler in the <code>cors()</code> middleware, or apply it in <code>middleware.ts</code> for the path.</p>
 
@@ -197,7 +197,7 @@ export function WS(ws: WebSocket, req: Request, { params }: { params: Record&lt;
     <p>Use the <code>json()</code> helper from <code>@webjsdev/server</code> and the <code>richFetch()</code> client helper from <code>webjs</code> for rich-encoded responses that preserve <code>Date</code>, <code>Map</code>, <code>Set</code>, <code>BigInt</code>, <code>TypedArray</code>, <code>Blob</code>, <code>File</code>, <code>FormData</code>, and reference cycles:</p>
     <pre>// app/api/events/route.ts
 import { json } from '@webjsdev/server';
-import { db } from '../../../db/connection.server.ts';
+import { db } from '#db/connection.server.ts';
 
 export async function GET() {
   const events = await db.query.events.findMany();
@@ -316,8 +316,8 @@ fastify.listen({ port: 8080 });</pre>
 
     <h3>app/api/posts/route.ts</h3>
     <pre>import { json } from '@webjsdev/server';
-import { db } from '../../../db/connection.server.ts';
-import { posts } from '../../../db/schema.server.ts';
+import { db } from '#db/connection.server.ts';
+import { posts } from '#db/schema.server.ts';
 
 export async function GET() {
   const rows = await db.query.posts.findMany({

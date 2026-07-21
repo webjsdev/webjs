@@ -69,7 +69,7 @@ export function Counter({ start }: { start: number }) {
     <p>The WebJs equivalent. The page is an async server function that reads data through a <code>.server</code> query, and the interactive part is a web component that hydrates:</p>
     <pre>// modules/stats/queries/get-stats.server.ts  (webjs: the server boundary)
 'use server';
-import { db } from '../../../db/connection.server.ts';
+import { db } from '#db/connection.server.ts';
 export async function getStats() {
   return db.query.stats.findFirst();
 }
@@ -77,8 +77,8 @@ export async function getStats() {
 // app/dashboard/page.ts  (webjs: an async page function, no hydration)
 import { html } from '@webjsdev/core';
 import type { PageProps } from '@webjsdev/core';
-import { getStats } from '../../modules/stats/queries/get-stats.server.ts';
-import '../../components/counter.ts';     // register the element
+import { getStats } from '#modules/stats/queries/get-stats.server.ts';
+import '#components/counter.ts';     // register the element
 
 export default async function Dashboard(_props: PageProps) {
   const stats = await getStats();          // runs on the server

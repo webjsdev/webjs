@@ -41,7 +41,7 @@ export type Theme = 'light' | 'dark' | 'system';</pre>
 
     <pre>import { WebComponent, html, css } from '@webjsdev/core';
 import { ContextProvider } from '@webjsdev/core/context';
-import { themeContext } from '../contexts/theme.ts';
+import { themeContext } from '#contexts/theme.ts';
 
 class AppShell extends WebComponent {
 
@@ -79,7 +79,7 @@ AppShell.register('app-shell');</pre>
 
     <pre>import { WebComponent, html, css } from '@webjsdev/core';
 import { ContextConsumer } from '@webjsdev/core/context';
-import { themeContext } from '../contexts/theme.ts';
+import { themeContext } from '#contexts/theme.ts';
 
 class ThemedCard extends WebComponent {
 
@@ -202,7 +202,7 @@ export const authContext = createContext('auth');
 // components/auth-provider.ts
 import { WebComponent, html } from '@webjsdev/core';
 import { ContextProvider } from '@webjsdev/core/context';
-import { authContext } from '../contexts/auth.ts';
+import { authContext } from '#contexts/auth.ts';
 
 class AuthProvider extends WebComponent {
 
@@ -231,7 +231,7 @@ AuthProvider.register('auth-provider');
 // components/user-menu.ts
 import { WebComponent, html } from '@webjsdev/core';
 import { ContextConsumer } from '@webjsdev/core/context';
-import { authContext } from '../contexts/auth.ts';
+import { authContext } from '#contexts/auth.ts';
 
 class UserMenu extends WebComponent {
 

@@ -10,7 +10,7 @@ export default function Auth() {
     <h2>Setup</h2>
     <pre>// lib/auth.server.ts: create once
 import { createAuth, Credentials, Google, GitHub } from '@webjsdev/server';
-import { db } from '../db/connection.server.ts';
+import { db } from '#db/connection.server.ts';
 
 export const { auth, signIn, signOut, handlers } = createAuth({
   providers: [
@@ -33,13 +33,13 @@ export const { auth, signIn, signOut, handlers } = createAuth({
 
     <h2>Mount the auth API route</h2>
     <pre>// app/api/auth/[...path]/route.ts
-import { handlers } from '../../../../lib/auth.server.ts';
+import { handlers } from '#lib/auth.server.ts';
 export const GET = handlers.GET;
 export const POST = handlers.POST;</pre>
 
     <h2>Read the session</h2>
     <pre>// In any page or server action:
-import { auth } from '../lib/auth.server.ts';
+import { auth } from '#lib/auth.server.ts';
 
 export default async function Dashboard() {
   const session = await auth();
@@ -50,7 +50,7 @@ export default async function Dashboard() {
 
     <h2>Sign in and sign out</h2>
     <pre>// Server actions
-import { signIn, signOut } from '../lib/auth.server.ts';
+import { signIn, signOut } from '#lib/auth.server.ts';
 
 export async function login(credentials) {
   return signIn('credentials', credentials);

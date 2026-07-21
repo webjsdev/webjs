@@ -66,7 +66,7 @@ if (!check.valid) return new Response('Forbidden', { status: 403 });</pre>
 
     <pre>// app/avatar/page.ts
 import { html } from '@webjsdev/core';
-import { saveAvatar } from '../../modules/avatar/actions/save-avatar.server.ts';
+import { saveAvatar } from '#modules/avatar/actions/save-avatar.server.ts';
 
 export async function action({ formData }: { formData: FormData }) {
   const file = formData.get('avatar');               // a web File
@@ -97,8 +97,8 @@ export default function Avatar({ actionData }: {
 'use server';
 import { getFileStore, generateKey } from '@webjsdev/server';
 import { eq } from 'drizzle-orm';
-import { db } from '../../../db/connection.server.ts';
-import { users } from '../../../db/schema.server.ts';
+import { db } from '#db/connection.server.ts';
+import { users } from '#db/schema.server.ts';
 
 export async function saveAvatar(file: File) {
   const key = generateKey(file.name);                // &lt;uuid&gt;.&lt;ext&gt;, safe

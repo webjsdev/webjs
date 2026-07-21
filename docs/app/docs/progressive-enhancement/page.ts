@@ -133,7 +133,7 @@ Counter.register('my-counter');</pre>
 
     <pre>// app/posts/page.ts
 import { html } from '@webjsdev/core';
-import { createPost } from '../../modules/posts/actions/create-post.server.ts';
+import { createPost } from '#modules/posts/actions/create-post.server.ts';
 
 // runs only on the server, receives the already-parsed formData
 export async function action({ formData }: { formData: FormData }) {
@@ -186,7 +186,7 @@ class PostList extends WebComponent {
 
     <pre>// ✅ first paint has the data
 // app/posts/page.ts
-import { listPosts } from '../modules/posts/queries/list-posts.server.ts';
+import { listPosts } from '#modules/posts/queries/list-posts.server.ts';
 export default async function Posts() {
   const posts = await listPosts();
   return html\`&lt;post-list .posts=\${posts}&gt;&lt;/post-list&gt;\`;

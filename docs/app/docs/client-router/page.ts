@@ -60,7 +60,7 @@ form.addEventListener('webjs:submit-end', (e) =&gt; {
     <p>WebJs ships two signatures for optimistic UI: a <strong>declarative</strong> React 19-style state wrapper (recommended for collections) and a <strong>legacy imperative</strong> signal-based helper (ideal for single-value toggles).</p>
     <p><strong>Declarative:</strong> <code>optimistic(host, { source, update })</code> manages a queue of pending updates, computes the combined value through a reducer, and auto-releases when a passed promise settles.</p>
     <pre>import { WebComponent, prop, optimistic, html } from '@webjsdev/core';
-import { createTodo } from '../actions/create-todo.server.js';
+import { createTodo } from '#actions/create-todo.server.js';
 
 class TodoList extends WebComponent({ todos: prop(Array) }) {
   constructor() {
@@ -85,7 +85,7 @@ class TodoList extends WebComponent({ todos: prop(Array) }) {
 }</pre>
     <p><strong>Imperative:</strong> <code>optimistic(signal, value, action)</code> sets the signal to <code>value</code> immediately, runs <code>action()</code>, and rolls back on a thrown error or <code>{ success: false }</code> envelope.</p>
     <pre>import { signal, optimistic } from '@webjsdev/core';
-import { likePost } from '../actions/like-post.server.js';
+import { likePost } from '#actions/like-post.server.js';
 
 const liked = signal(false);
 const result = await optimistic(liked, true, () => likePost(postId));

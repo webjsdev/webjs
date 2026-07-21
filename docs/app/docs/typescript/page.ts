@@ -53,18 +53,19 @@ export default function TypeScript() {
       <li><strong>isolatedModules: true</strong>: ensures every file can be transpiled independently, matching the per-file transform model of Node's stripper.</li>
     </ul>
 
-    <h2>Import Convention: Explicit .ts Extensions</h2>
-    <p>In WebJs projects, always use the real file extension in your imports:</p>
+    <h2>Import Convention: the # root alias and explicit .ts extensions</h2>
+    <p>WebJs apps address top-level folders through the <code>#</code> root alias (<code>#db/...</code>, <code>#lib/...</code>, <code>#modules/...</code>, <code>#components/...</code>) rather than deep <code>../../</code> relative paths. It is Node's native <code>package.json</code> <code>"imports"</code> map (the scaffold ships a single <code>"#*": "./*"</code> entry, so every top-level folder is aliased), resolved with no build step and no tsconfig <code>paths</code> on Node 24+ and Bun. The sigil is <code>#</code> with no slash after it (<code>#lib/...</code>, never <code>#/lib/...</code>). A same-directory import stays relative (<code>./sibling.ts</code>).</p>
+    <p>Always use the real file extension in your imports:</p>
     <pre>// Good: explicit .ts extension
-import { db } from '../db/connection.server.ts';
-import { createPost } from '../../modules/posts/actions/create-post.server.ts';
-import type { PostFormatted } from '../types.ts';
+import { db } from '#db/connection.server.ts';
+import { createPost } from '#modules/posts/actions/create-post.server.ts';
+import type { PostFormatted } from '#modules/posts/types.ts';
 
 // Also fine: .js files
-import { slugify } from '../utils/slugify.js';
+import { slugify } from '#lib/utils/slugify.js';
 
 // Avoid: extensionless imports don't work with Node's ESM or in browsers
-import { db } from '../db/connection.server';       // ERROR</pre>
+import { db } from '#db/connection.server';       // ERROR</pre>
     <p>This convention works because:</p>
     <ul>
       <li>The runtime strips types from <code>.ts</code> imports server-side natively (Node 24+, or Bun). No loader hook required.</li>
@@ -90,7 +91,7 @@ export async function createPost(
   // ...
 }</pre>
     <pre>// components/new-post-form.ts: client component
-import { createPost } from '../modules/posts/actions/create-post.server.ts';
+import { createPost } from '#modules/posts/actions/create-post.server.ts';
 
 // TypeScript knows createPost accepts (input: unknown)
 // and returns Promise&lt;ActionResult&lt;PostFormatted&gt;&gt;
@@ -263,13 +264,13 @@ lib/
 middleware.ts              # TypeScript
 tsconfig.json</pre>
     <pre>// app/page.js can import from .ts files
-import '../components/counter.ts';
+import '#components/counter.ts';
 
 // lib/utils.js can import from .ts files
-import { db } from '../db/connection.server.ts';
+import { db } from '#db/connection.server.ts';
 
 // app/blog/page.ts can import from .js files
-import '../components/footer.js';</pre>
+import '#components/footer.js';</pre>
     <p>The router, action scanner, dev server, and production bundler all accept <code>.ts</code>, <code>.mts</code>, <code>.js</code>, and <code>.mjs</code> interchangeably. Type-check the whole project with a single <code>tsc --noEmit</code>.</p>
 
     <h2>Running Type Checks</h2>

@@ -227,7 +227,7 @@ export function broadcast(msg: unknown, except?: WebSocket): void {
 
 // app/api/chat/route.ts
 import type { WebSocket } from 'ws';
-import { clients, broadcast } from '../../../modules/chat/clients.ts';
+import { clients, broadcast } from '#modules/chat/clients.ts';
 
 export function GET() {
   return new Response(
@@ -324,7 +324,7 @@ LiveChat.register('live-chat');</pre>
     <p>Use it in a page:</p>
     <pre>// app/chat/page.ts
 import { html } from '@webjsdev/core';
-import '../../components/live-chat.ts';
+import '#components/live-chat.ts';
 
 export const metadata = { title: 'Live Chat' };
 
@@ -373,7 +373,7 @@ export function publish(topic: string, msg: unknown): void {
     <h3>WebSocket Route</h3>
     <pre>// app/api/comments/[postId]/ws/route.ts
 import type { WebSocket } from 'ws';
-import { subscribe, publish } from '../../../../../modules/pubsub.ts';
+import { subscribe, publish } from '#modules/pubsub.ts';
 
 export function WS(ws: WebSocket, req: Request, { params }: { params: { postId: string } }) {
   const topic = 'comments:' + params.postId;
@@ -454,7 +454,7 @@ LiveComments.register('live-comments');</pre>
     <p>Usage in a page:</p>
     <pre>// app/posts/[slug]/page.ts
 import { html } from '@webjsdev/core';
-import '../../../components/live-comments.ts';
+import '#components/live-comments.ts';
 
 export default async function PostPage({ params }: { params: { slug: string } }) {
   const post = await db.post.findUnique({ where: { slug: params.slug } });

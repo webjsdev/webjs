@@ -11,7 +11,7 @@ export default function Cache() {
     <p>Wrap any async function with <code>cache()</code> to cache its return value on the server. Same function + same arguments = cached result until TTL expires or you call <code>invalidate()</code>.</p>
 
     <pre>import { cache } from '@webjsdev/server';
-import { db } from '../../db/connection.server.ts';
+import { db } from '#db/connection.server.ts';
 
 export const listPosts = cache(
   async () => {
@@ -35,9 +35,9 @@ const posts = await listPosts();</pre>
     <h3>Invalidation</h3>
     <p>The cached function has an <code>invalidate()</code> method. Call it after mutations to clear the cache:</p>
 
-    <pre>import { listPosts } from '../queries/list-posts.server.ts';
-import { db } from '../../../db/connection.server.ts';
-import { posts } from '../../../db/schema.server.ts';
+    <pre>import { listPosts } from '#modules/posts/queries/list-posts.server.ts';
+import { db } from '#db/connection.server.ts';
+import { posts } from '#db/schema.server.ts';
 
 export async function createPost(input) {
   await db.insert(posts).values(input);
@@ -64,8 +64,8 @@ export const listPosts = cache(
     <pre>// modules/comments/actions/create-comment.server.ts
 'use server';
 import { revalidateTag, revalidatePath } from '@webjsdev/server';
-import { db } from '../../../db/connection.server.ts';
-import { comments } from '../../../db/schema.server.ts';
+import { db } from '#db/connection.server.ts';
+import { comments } from '#db/schema.server.ts';
 
 export async function createComment(input) {
   await db.insert(comments).values(input);

@@ -55,8 +55,8 @@ export async function verifyPassword(
 
     <h2>Session Cookies</h2>
     <pre>// lib/session.server.ts
-import { db } from '../db/connection.server.ts';
-import { sessions } from '../db/schema.server.ts';
+import { db } from '#db/connection.server.ts';
+import { sessions } from '#db/schema.server.ts';
 
 export const SESSION_COOKIE = 'my_session';
 
@@ -75,7 +75,7 @@ export function sessionCookieHeader(token: string, opts = {}) {
     <pre>// modules/auth/queries/current-user.server.ts
 'use server';
 import { cookies } from '@webjsdev/server';
-import { getUserByToken, SESSION_COOKIE } from '../../../lib/session.server.ts';
+import { getUserByToken, SESSION_COOKIE } from '#lib/session.server.ts';
 
 export async function currentUser() {
   const token = cookies().get(SESSION_COOKIE);
@@ -86,7 +86,7 @@ export async function currentUser() {
     <h2>Route Protection via Middleware</h2>
     <pre>// app/dashboard/middleware.ts
 import { cookies } from '@webjsdev/server';
-import { getUserByToken, SESSION_COOKIE } from '../../lib/session.server.ts';
+import { getUserByToken, SESSION_COOKIE } from '#lib/session.server.ts';
 
 export default async function requireAuth(
   req: Request,

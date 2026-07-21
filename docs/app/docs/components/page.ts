@@ -37,7 +37,7 @@ MyCounter.register('my-counter');</pre>
 
     <p>That is a complete, working component. Import it from a page or layout and use it like any HTML element:</p>
 
-    <pre>import '../components/my-counter.ts';
+    <pre>import '#components/my-counter.ts';
 
 export default function Home() {
   return html\`&lt;my-counter&gt;&lt;/my-counter&gt;\`;
