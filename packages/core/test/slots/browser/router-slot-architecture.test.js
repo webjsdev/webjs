@@ -118,6 +118,100 @@ suite('Router + slot architectural regressions', () => {
     }
   });
 
+  test('named-slot slices of a layout\'s children update on a soft-nav swap (#1024)', async () => {
+    enableClientRouter();
+    const tag = tagName('shell1024');
+    class Shell extends WebComponent {
+      render() {
+        return html`<div class="frame"><slot></slot><aside><slot name="side"></slot></aside></div>`;
+      }
+    }
+    Shell.register(tag);
+    const host = document.createElement(tag);
+    // The layout-in-slotted-shell shape: boundary markers + default page
+    // content project into the default slot; a page-emitted slot="side"
+    // child projects into the named slot.
+    const open = document.createComment('wj:children:/:/');
+    const pageA = document.createElement('main');
+    pageA.id = 'page-a';
+    pageA.textContent = 'A';
+    const close = document.createComment('/wj:children:/');
+    const sideA = document.createElement('nav');
+    sideA.setAttribute('slot', 'side');
+    sideA.id = 'side-a';
+    sideA.textContent = 'A-side';
+    host.append(open, pageA, close, sideA);
+    document.body.appendChild(host);
+    await tick();
+    const defSlot = host.querySelector('slot[data-webjs-light]:not([name])');
+    const sideSlot = host.querySelector('slot[name="side"]');
+    assert.ok(defSlot.contains(pageA), 'default slice projected');
+    assert.ok(sideSlot.textContent.includes('A-side'), 'named slice projected');
+    try {
+      // Incoming parsed doc: the shell's projected DOM for page B, default
+      // slice holding the boundary markers + page B, named slice holding
+      // B-side.
+      const doc = _parseHTML(
+        `<${tag} data-wj-host><div class="frame">` +
+          `<slot data-webjs-light data-projection="actual">` +
+          `<!--wj:children:/:/--><main id="page-b">B</main><!--/wj:children:/-->` +
+          `</slot><aside><slot data-webjs-light data-projection="actual" name="side">` +
+          `<nav slot="side" id="side-b">B-side</nav></slot></aside>` +
+          `</div></${tag}>`,
+      );
+      _applySwap(doc, null, false, location.origin + '/');
+      assert.ok(defSlot.querySelector('#page-b'), 'default slice swapped to B');
+      assert.ok(sideSlot.textContent.includes('B-side'), 'named slice updated to B-side');
+      assert.ok(!sideSlot.textContent.includes('A-side'), 'the old named content is gone');
+      // A later authored write must not resurrect the stale named record.
+      host.appendChild(document.createElement('span'));
+      await tick();
+      assert.ok(sideSlot.textContent.includes('B-side'), 'named slice survives a re-apply');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('a dropped named slice reverts to fallback on a soft-nav swap (#1024)', async () => {
+    enableClientRouter();
+    const tag = tagName('shell1024b');
+    class Shell extends WebComponent {
+      render() {
+        return html`<div><slot></slot><aside><slot name="side">side-fb</slot></aside></div>`;
+      }
+    }
+    Shell.register(tag);
+    const host = document.createElement(tag);
+    const open = document.createComment('wj:children:/:/');
+    const pageA = document.createElement('main');
+    pageA.textContent = 'A';
+    const close = document.createComment('/wj:children:/');
+    const sideA = document.createElement('nav');
+    sideA.setAttribute('slot', 'side');
+    sideA.textContent = 'A-side';
+    host.append(open, pageA, close, sideA);
+    document.body.appendChild(host);
+    await tick();
+    const sideSlot = host.querySelector('slot[name="side"]');
+    assert.ok(sideSlot.textContent.includes('A-side'), 'named projected');
+    try {
+      // Page B emits NO side content: the named slot must revert to fallback.
+      const doc = _parseHTML(
+        `<${tag} data-wj-host><div>` +
+          `<slot data-webjs-light data-projection="actual">` +
+          `<!--wj:children:/:/--><main>B</main><!--/wj:children:/-->` +
+          `</slot><aside><slot data-webjs-light data-projection="fallback" name="side">side-fb</slot></aside>` +
+          `</div></${tag}>`,
+      );
+      _applySwap(doc, null, false, location.origin + '/');
+      await tick();
+      assert.ok(!sideSlot.textContent.includes('A-side'), 'stale named content dropped');
+      assert.ok(sideSlot.textContent.includes('side-fb'), 'named slot reverted to fallback');
+    } finally {
+      host.remove();
+    }
+  });
+
   test('a template-forwarded slot on a client-side first mount is captured, not adopted', async () => {
     // The lit-style forwarding shape: the OUTER template passes a <slot> as an
     // authored child of the inner component. discoverSlots stamps
