@@ -3256,15 +3256,13 @@ function ownActualLightSlots(host) {
  *     on the page-authored slot children, exactly as #908 shipped.
  *   - actual->fallback (content REMOVED) and fallback->actual (content ADDED):
  *     a slot's fallback is RENDER-OWNED (the compiled fallback template held by
- *     the slot-part), so these are NOT a raw reconcile. Drive them through the
- *     slot runtime's own primitives (`applyFallback` / `applyActualAssignment`)
- *     on the ONE resolved own slot, which restore or swap the render-owned
- *     fallback without reconciling any lit-html part (#912). This is applied
- *     surgically to the target slot, NOT via a whole-host application
- *     pass: a whole-host pass selects EVERY `data-webjs-light` slot in the
- *     subtree (including a nested child component's), so running it here would
- *     let this component's assignment reach into a nested child's same-named
- *     slot and clobber its render-owned nodes (the #906 hazard, one level down).
+ *     the slot-part), so these are NOT a raw reconcile. All three cases route
+ *     through `projectAuthored`, the record seam, whose apply pass restores or
+ *     swaps the render-owned fallback without reconciling any lit-html part
+ *     (#912). The #906 one-level-down hazard (this component's assignment
+ *     reaching a nested child's same-named slot) is answered by the apply
+ *     pass's own-slot filtering (`isOwnSlot` + the authored-content
+ *     exclusion), not by surgical single-slot application.
  *
  * @param {Element} dst  Live hydrated component host.
  * @param {Element} src  Incoming SSR copy of the same component.

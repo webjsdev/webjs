@@ -1348,8 +1348,8 @@ function convertVariadicArgs(host, args) {
   // userland polyfill has no reactions queue). The net DOM converges
   // through the latch + record ops; the one observable divergence is a
   // same-host-mutating disconnect callback racing replaceChildren's
-  // wholesale displacement. This is the same family as the native-matching
-  // disconnect bounce for connected variadic arguments.
+  // wholesale displacement. (Connected variadic arguments also fire their
+  // disconnect reactions on detach, matching native's own per-node moves.)
   const scratch = host.ownerDocument.createDocumentFragment();
   for (const c of converted) {
     if (c.text !== undefined) {
@@ -1723,10 +1723,26 @@ export function applySlotAssignments(host) {
         const assigned = state.assignedByName.get(name) || [];
         for (let i = 0; i < group.length; i++) {
           const slot = group[i];
-          const own = assigned.filter((n) => {
+          let own = assigned.filter((n) => {
             const m = manualSlotFor(state, n);
             return m ? m === slot : i === 0;
           });
+          // Placement-time cycle shield (skip, never throw): a reaction
+          // fired by an EARLIER slice's departure removal can reparent the
+          // HOST into a node this slice is about to place; inserting it
+          // would throw a native HierarchyRequestError out of the whole
+          // apply pass. The filter runs BEFORE the actual/fallback
+          // decision, so a fully poisoned slice correctly degrades to
+          // FALLBACK instead of an actual-stamped empty slot, and the
+          // poisoned nodes' prune exemptions are CLEARED so the next pass's
+          // prune reaps them by their (outside-the-host) parent chain.
+          const poisoned = own.filter(
+            (n) => n === host || (n.nodeType === 1 && /** @type {Element} */ (n).contains(host)),
+          );
+          if (poisoned.length) {
+            for (const n of poisoned) FRAMEWORK_DETACHED.delete(n);
+            own = own.filter((n) => poisoned.indexOf(n) === -1);
+          }
           if (own.length > 0) {
             if (applyActualAssignment(state, slot, own)) {
               slotsChanged.push(slot);
@@ -2027,21 +2043,6 @@ export function applyActualAssignment(state, slot, assigned) {
   // unchanged and in-place fast paths below, which the router's morph hits).
   // Missing this leaves a reprojected node permanently exempt, so a later
   // el.remove() / cross-host move on it would not be pruned (zombie / theft).
-  // Placement-time cycle shield (skip, never throw): a reaction fired by an
-  // earlier slice's departure removal can reparent the HOST into a node this
-  // slice is about to place; inserting it would throw a native
-  // HierarchyRequestError out of the whole apply pass. Skipping leaves the
-  // poisoned node for the next pass's prune (its parent chain no longer
-  // qualifies) and keeps the pass atomic.
-  const hostEl = state.host;
-  if (
-    hostEl &&
-    assigned.some((n) => n === hostEl || (n.nodeType === 1 && /** @type {Element} */ (n).contains(hostEl)))
-  ) {
-    assigned = assigned.filter(
-      (n) => !(n === hostEl || (n.nodeType === 1 && /** @type {Element} */ (n).contains(hostEl))),
-    );
-  }
   for (const n of assigned) FRAMEWORK_DETACHED.delete(n);
   const wasFallback = slot.getAttribute(PROJECTION_ATTR) !== PROJECTION_ACTUAL;
   const prev = state.lastSnapshot.get(slot) || [];

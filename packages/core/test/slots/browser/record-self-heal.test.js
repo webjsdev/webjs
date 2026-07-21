@@ -1992,6 +1992,60 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
     }
   });
 
+  test('a fully poisoned slice degrades to FALLBACK and the node is reaped', async () => {
+    // The placement-time cycle shield, correctly located: a departing
+    // reaction poisons the incoming named-slice node (reparents the host
+    // into it). The named slot must show its FALLBACK (not an
+    // actual-stamped blank), and the poisoned node must be REAPED by the
+    // next pass's prune (its exemption is cleared at filter time), never
+    // living immortally in the record.
+    if (!customElements.get('poison-probe')) {
+      class Probe extends HTMLElement {
+        disconnectedCallback() {
+          const c = /** @type {any} */ (this).__ctx;
+          if (c && !c.done) {
+            c.done = true;
+            c.n.appendChild(c.host); // poison the incoming node
+          }
+        }
+      }
+      customElements.define('poison-probe', Probe);
+    }
+    const tag = tagName('poison-slice');
+    const host = await mount(
+      tag,
+      () => html`<div><slot></slot><slot name="a">fb-a</slot></div>`,
+    );
+    const holder = document.createElement('div');
+    document.body.appendChild(holder);
+    holder.appendChild(host);
+    try {
+      const probe = document.createElement('poison-probe');
+      host.appendChild(probe); // default slice
+      await tick();
+      const aSlot = host.querySelector('slot[name="a"]');
+      assert.ok(aSlot.textContent.includes('fb-a'), 'fallback showing initially');
+      const n = document.createElement('div');
+      n.setAttribute('slot', 'a');
+      /** @type {any} */ (probe).__ctx = { host, n, done: false };
+      // One call: displaces the probe (firing the poisoning reaction during
+      // the default slice's departure) and brings in the poisoned n.
+      host.replaceChildren(n);
+      await tick();
+      await tick();
+      assert.ok(aSlot.textContent.includes('fb-a'), 'slot a shows FALLBACK, not a blank actual');
+      assert.notEqual(aSlot.getAttribute('data-projection'), 'actual', 'not stamped actual-empty');
+      // Reap check: a later unrelated apply must not resurrect n.
+      host.appendChild(document.createElement('em'));
+      await tick();
+      assert.ok(!aSlot.contains(n), 'the poisoned node was never placed');
+      assert.ok(aSlot.textContent.includes('fb-a'), 'fallback persists');
+    } finally {
+      host.remove();
+      holder.remove();
+    }
+  });
+
   test('router projectAuthored on the default slice leaves a manual assignment intact', async () => {
     const tag = tagName('proj-manual');
     const host = await mount(tag, () => html`<div><slot></slot><slot name="x"></slot></div>`);
