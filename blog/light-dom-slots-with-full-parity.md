@@ -50,7 +50,7 @@ The framework owns the lifecycle of a slot host. When a WebJs component connects
 3. The renderer walks the output. For each slot, it looks up matching children from the snapshot. Default slot matches unnamed children. Named slot matches children whose `slot=""` attribute equals the slot's name.
 4. Matched children get moved into the slot's position. Unmatched children stay connected but unrendered inside a hidden holding element (matching shadow-DOM semantics for unassigned slottables).
 5. Fallback content inside the slot tag stays put if no child matched. `data-projection="fallback"` flags this state.
-6. Runtime liveness rides the component's own writer, never a node-moving observer: the host's mutating DOM methods are intercepted to update the record, two read-only sensors catch raw bypass writes and `slot=` attribute flips, and a self-heal step folds in what a parent template or a library legitimately wrote inside a slot. When an assignment actually changes, `slotchange` fires with native async-coalesced timing.
+6. Runtime liveness rides the component's own writer, never a node-moving observer: the host's mutating DOM methods are intercepted to update the record, two read-only sensors catch raw bypass writes and `slot=` attribute flips, and a self-heal step folds in what a parent template or a library legitimately wrote inside an actively assigned slot (fallback content stays renderer-owned). When an assignment actually changes, `slotchange` fires with native async-coalesced timing.
 
 
 # The SSR piece
@@ -105,7 +105,7 @@ The slot runtime is not all in one file. Two pieces of behavior live partly in `
 
 1. Fallback content restoration. When a slot transitions to `data-projection="fallback"`, `slot.js` clears the actual-assigned children. The slot-part's apply step in `render-client.js` restores the compiled fallback template into the slot.
 
-2. Slot-part teardown when a slot is removed from the DOM (because it was inside a conditional that collapsed). `render-client.js` calls `movePendingFromTorndownSlot()` before removing the slot, so its assigned children survive to be re-projected on the next render.
+2. Slot-part teardown when a slot is removed from the DOM (because it was inside a conditional that collapsed). `render-client.js` calls `rescueAssignedNodes()` before removing the slot, so its assigned children survive as record-held values, re-projected when a matching slot next renders.
 
 These were the bugs that took the longest to find. The slot lifecycle and the template-part lifecycle had to coordinate without either owning the other. The current shape is the result of several rounds of fixing things that broke at the boundary.
 

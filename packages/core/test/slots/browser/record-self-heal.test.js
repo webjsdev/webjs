@@ -18,6 +18,14 @@ function tick() {
   return new Promise((r) => queueMicrotask(() => queueMicrotask(r)));
 }
 
+/** Bounded poll so async-path tests never race a loaded CI runner. */
+async function waitFor(cond, budgetMs = 2000) {
+  const start = Date.now();
+  while (!cond() && Date.now() - start < budgetMs) {
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
+
 let n = 0;
 const tagName = (p) => `${p}-${n++}`;
 
@@ -788,7 +796,10 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
     host.appendChild(child);
     document.body.appendChild(host);
     // Let the chunk land + the deferred finalize + its queued apply run.
-    await new Promise((r) => setTimeout(r, 50));
+    await waitFor(
+      () => host.querySelector('slot[name="x"]')?.getAttribute('data-projection') === 'actual',
+    );
+    await tick();
     try {
       const slot = host.querySelector('slot[name="x"]');
       assert.ok(slot, 'the chunk slot rendered');
@@ -844,24 +855,24 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
       tag,
       () => html`<div><slot></slot><slot name="side"></slot></div>`,
     );
-    const seed = document.createElement('span');
-    seed.setAttribute('slot', 'side');
-    host.appendChild(seed);
-    await tick();
-    const sideSlot = host.querySelector('slot[name="side"]');
-    const lib = document.createElement('u');
-    lib.id = 'restored-adopted';
-    sideSlot.appendChild(lib); // library write
-    host.appendChild(document.createElement('em')); // fold: adopted to side
-    await tick();
-    assert.equal(lib.parentElement, sideSlot, 'adopted before snapshot');
-
-    const serialized = host.outerHTML; // lib sits in the side slot, NO attribute
-    host.remove();
-    await tick();
     const holder = document.createElement('div');
-    document.body.appendChild(holder);
     try {
+      const seed = document.createElement('span');
+      seed.setAttribute('slot', 'side');
+      host.appendChild(seed);
+      await tick();
+      const sideSlot = host.querySelector('slot[name="side"]');
+      const lib = document.createElement('u');
+      lib.id = 'restored-adopted';
+      sideSlot.appendChild(lib); // library write
+      host.appendChild(document.createElement('em')); // fold: adopted to side
+      await tick();
+      assert.equal(lib.parentElement, sideSlot, 'adopted before snapshot');
+
+      const serialized = host.outerHTML; // lib sits in the side slot, NO attribute
+      host.remove();
+      await tick();
+      document.body.appendChild(holder);
       holder.innerHTML = serialized.replace('data-wj-host', 'data-wj-host data-wj-serialized');
       await tick();
       await tick();
@@ -871,7 +882,112 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
       const reSide = restored.querySelector('slot[name="side"]');
       assert.ok(reSide.contains(relib), 'STAYED in the slot the restored markup showed it in');
     } finally {
+      host.remove();
       holder.remove();
+    }
+  });
+
+  test('projectAuthored on an ADOPTED node ends its adoption (router takes over)', async () => {
+    const tag = tagName('proj-clears-adopt');
+    const host = await mount(
+      tag,
+      () => html`<div><slot></slot><slot name="side"></slot></div>`,
+    );
+    try {
+      const seed = document.createElement('span');
+      seed.setAttribute('slot', 'side');
+      host.appendChild(seed);
+      await tick();
+      const sideSlot = host.querySelector('slot[name="side"]');
+      const node = document.createElement('u');
+      sideSlot.appendChild(node); // library write
+      host.appendChild(document.createElement('em')); // fold: adopted to side
+      await tick();
+      assert.equal(node.parentElement, sideSlot, 'adopted into side');
+      // The router seam projects the node into the DEFAULT slice (a morph
+      // list can contain it). The projection is a record op: the adoption
+      // must end, and the node (attribute-less after the stamp) must route
+      // to the default slot and STAY there on later applies.
+      projectAuthored(host, null, [node]);
+      await tick();
+      const defSlot = host.querySelector('slot[data-webjs-light]:not([name])');
+      assert.ok(defSlot.contains(node), 'projected into the default slice');
+      host.appendChild(document.createElement('i')); // a later unrelated apply
+      await tick();
+      assert.ok(defSlot.contains(node), 'no stale adoption pulled it back to side');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('a slot= flip on a node detached in the SAME task still clears its adoption', async () => {
+    const tag = tagName('detached-flip-clear');
+    const host = await mount(
+      tag,
+      () => html`<div><slot></slot><slot name="side"></slot></div>`,
+    );
+    try {
+      const seed = document.createElement('span');
+      seed.setAttribute('slot', 'side');
+      host.appendChild(seed);
+      await tick();
+      const sideSlot = host.querySelector('slot[name="side"]');
+      const node = document.createElement('u');
+      sideSlot.appendChild(node); // library write
+      host.appendChild(document.createElement('em')); // fold: adopted to side
+      await tick();
+      assert.equal(node.parentElement, sideSlot, 'adopted into side');
+      // Same task: explicit attribute change, then detach. The sensor batch
+      // arrives with the node no longer authored; the adoption delete must
+      // run anyway, or a later re-append routes by the stale adopted key.
+      node.setAttribute('slot', '');
+      host.removeChild(node);
+      await tick();
+      host.appendChild(node);
+      await tick();
+      const defSlot = host.querySelector('slot[data-webjs-light]:not([name])');
+      assert.ok(defSlot.contains(node), 're-append routed by the attribute, not the stale adoption');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('cache() re-apply reaches slots in NESTED templates inside the cached branch', async () => {
+    const tag = tagName('cache-nested-slot');
+    class C extends WebComponent({ showA: Boolean }) {
+      constructor() { super(); this.showA = true; }
+      render() {
+        return html`<div>${cache(
+          this.showA
+            ? html`<section>${html`<slot name="x"></slot>`}</section>`
+            : html`<em>alt</em>`,
+        )}</div>`;
+      }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    const child = document.createElement('strong');
+    child.setAttribute('slot', 'x');
+    child.textContent = 'nested-cached';
+    host.appendChild(child);
+    document.body.appendChild(host);
+    await tick();
+    await tick();
+    try {
+      assert.equal(child.parentElement.getAttribute('name'), 'x', 'projected initially');
+      host.showA = false;
+      await host.updateComplete;
+      host.appendChild(document.createElement('span')); // apply while stashed
+      await tick();
+      host.showA = true;
+      await host.updateComplete;
+      await tick();
+      await tick();
+      const slot = host.querySelector('slot[name="x"]');
+      assert.ok(slot, 'nested slot re-attached');
+      assert.ok(slot.contains(child), 'the DEEP re-apply pulled the child back (shallow scan missed it)');
+    } finally {
+      host.remove();
     }
   });
 

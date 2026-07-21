@@ -1578,14 +1578,29 @@ function applyCache(part, inner) {
       // finalize will never fire again, while the host's record moved on
       // during the stash (content for these slots was parked when an apply
       // ran with the slot unreachable). Re-run the apply for each owning
-      // host so parked content is pulled back out.
+      // host so parked content is pulled back out. The walk RECURSES into
+      // nested template instances (and repeat / array item instances): slot
+      // parts belong to the template that contains the <slot>, so a
+      // shallow scan misses every slot one template level down.
       const hosts = new Set();
-      for (const p of cached.inst.bound) {
-        if (p.kind === 'slot' && p.slotEl) {
-          const h = findSlotHost(p.slotEl);
-          if (h) hosts.add(h);
+      const collectSlotHosts = (inst) => {
+        for (const p of inst.bound) {
+          if (p.kind === 'slot' && p.slotEl) {
+            const h = findSlotHost(p.slotEl);
+            if (h) hosts.add(h);
+            continue;
+          }
+          const c = p.child;
+          if (!c) continue;
+          if (c.bound) collectSlotHosts(c);
+          else if (c.kind === 'repeat' && c.map) {
+            for (const i of c.map.values()) collectSlotHosts(i);
+          } else if (c.kind === 'array' && c.items) {
+            for (const it of c.items) if (it.inst) collectSlotHosts(it.inst);
+          }
         }
-      }
+      };
+      collectSlotHosts(cached.inst);
       for (const h of hosts) applySlotAssignments(h);
       return;
     }
