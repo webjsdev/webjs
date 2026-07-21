@@ -10,6 +10,7 @@ import {
   PROJECTION_FALLBACK,
   SLOT_FALLBACK_FRAG,
   SLOT_STATE,
+  SLOT_OWNER,
   RENDERING,
   applySlotAssignments,
   rescueAssignedNodes,
@@ -523,9 +524,21 @@ function createInstance(tr, container) {
   // Slot parts have no value-hole to drive applyPart from the loop above.
   // Apply them once now that the fragment is inserted into the live
   // container, so each slot can locate its host by walking parents and
-  // schedule the first projection through slot.js.
+  // schedule the first projection through slot.js. Stamp each slot with the
+  // host whose TEMPLATE produced it (this container), so a FORWARDED slot
+  // (rendered here but nested inside a child component) routes to this host
+  // rather than to the child the structural walk would pick. Only an element
+  // container is a host; a fragment/shadow container leaves the structural
+  // path in place.
+  const ownerHost =
+    /** @type {any} */ (container).nodeType === 1 && /** @type {any} */ (container)[SLOT_STATE]
+      ? container
+      : null;
   for (const part of bound) {
-    if (part.kind === 'slot') applyPart(part, undefined, undefined, []);
+    if (part.kind === 'slot') {
+      if (ownerHost && part.slotEl) /** @type {any} */ (part.slotEl)[SLOT_OWNER] = ownerHost;
+      applyPart(part, undefined, undefined, []);
+    }
   }
 
   return { strings: tr.strings, bound, lastValues, startNode, endNode };
@@ -705,9 +718,24 @@ function applyPart(part, value, _prev, allValues) {
       if (part.applied) break;
       const slotEl = part.slotEl;
       const finalize = () => {
-        part.applied = true;
         const host = findSlotHost(slotEl);
-        if (!host) return; // truly orphan slot
+        if (!host) {
+          part.applied = true;
+          return; // truly orphan slot (no owner, no structural host)
+        }
+        // A FORWARDED slot's owner is known immediately (the SLOT_OWNER
+        // stamp) but the child component has not yet PLACED the slot into
+        // the owner's subtree, so the owner's apply cannot find it yet.
+        // Re-defer until the child places it (host.contains becomes true);
+        // the child WILL place it, or the owner disconnects and the retries
+        // stop. A normal own slot is already inside its host, so this passes
+        // on the first call with no extra deferral.
+        if (!host.contains(slotEl)) {
+          if (host.isConnected) queueMicrotask(finalize);
+          else part.applied = true;
+          return;
+        }
+        part.applied = true;
         // Shadow DOM: native projection. Leave fallback in place.
         if (isInShadowRootEl(slotEl)) return;
         // Light DOM: harvest the cloned fallback into a holding
@@ -721,7 +749,7 @@ function applyPart(part, value, _prev, allValues) {
         queueMicrotask(() => applySlotAssignments(host));
       };
       const directHost = findSlotHost(slotEl);
-      if (directHost) {
+      if (directHost && directHost.contains(slotEl)) {
         finalize();
       } else {
         queueMicrotask(finalize);
@@ -743,6 +771,10 @@ function applyPart(part, value, _prev, allValues) {
  * @returns {Element | null}
  */
 function findSlotHost(slotEl) {
+  // Template-owner stamp wins (a forwarded slot's true host), else the
+  // nearest SLOT_STATE ancestor structurally.
+  const owner = /** @type any */ (slotEl)[SLOT_OWNER];
+  if (owner && owner.isConnected) return owner;
   let p = slotEl.parentElement;
   while (p) {
     if (/** @type any */ (p)[SLOT_STATE]) return p;

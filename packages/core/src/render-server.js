@@ -596,7 +596,7 @@ async function injectDSD(html, ctx, ancestors = [], dev) {
         // 2. Recursively run injectDSD on the substituted output so
         //    nested custom elements (inside projected children) get
         //    their own DSD pass.
-        const innerWithSlots = substituteSlotsInRender(rawInner, partitioned);
+        const innerWithSlots = substituteSlotsInRender(rawInner, partitioned, tag);
         const innerProcessed = await injectDSD(innerWithSlots, ctx, [...ancestors, instance], dev);
         edits.push({
           start: m.index,
@@ -950,11 +950,19 @@ function appendStringToMap(map, key, value) {
  * slots with the same name follow the first-wins rule per spec; later
  * same-named slots fall back regardless of available projection.
  *
+ * The `ownerTag` (the tag of the component whose template rendered these
+ * slots) is emitted as `data-wj-slot-owner` so the client resolves template
+ * ownership on hydration the same way the client renderer stamps SLOT_OWNER,
+ * which is what makes a FORWARDED slot (rendered by this component but nested
+ * inside a child) route to this component and not the child (#1023).
+ *
  * @param {string} rendered
  * @param {Map<string|null, string>} partitioned
+ * @param {string} ownerTag
  * @returns {string}
  */
-function substituteSlotsInRender(rendered, partitioned) {
+function substituteSlotsInRender(rendered, partitioned, ownerTag) {
+  const ownerAttr = ownerTag ? ` data-wj-slot-owner="${escapeAttr(ownerTag)}"` : '';
   /** @type {Set<string|null>} */
   const consumedNames = new Set();
   let result = '';
@@ -999,9 +1007,9 @@ function substituteSlotsInRender(rendered, partitioned) {
     const extraAttrs = otherAttrs ? ` ${otherAttrs}` : '';
     if (projected !== undefined && !consumedNames.has(slotKey)) {
       consumedNames.add(slotKey);
-      result += `<slot data-webjs-light data-projection="actual"${nameAttr}${extraAttrs}>${projected}</slot>`;
+      result += `<slot data-webjs-light data-projection="actual"${ownerAttr}${nameAttr}${extraAttrs}>${projected}</slot>`;
     } else {
-      result += `<slot data-webjs-light data-projection="fallback"${nameAttr}${extraAttrs}>${fallback}</slot>`;
+      result += `<slot data-webjs-light data-projection="fallback"${ownerAttr}${nameAttr}${extraAttrs}>${fallback}</slot>`;
     }
     cursor = totalEnd;
     slotRe.lastIndex = totalEnd;

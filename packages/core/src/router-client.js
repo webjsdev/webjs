@@ -2831,7 +2831,7 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
       // children through the one public seam, or the host's next
       // applySlotAssignments would wipe the freshly swapped content and
       // restore the stale list.
-      resyncEnclosingSlotRecord(live.start);
+      resyncEnclosingHostSlots(live.start, incoming.start);
       blurOutgoingFocus();
     }, () => upgradeCustomElementsInRange(live));
     forwardSuspenseResolvers(doc.body);
@@ -3293,6 +3293,65 @@ function resyncEnclosingSlotRecord(startMarker) {
   }
   if (!host) return;
   projectAuthored(host, keyOfName(slotEl.getAttribute('name')), [...slotEl.childNodes]);
+}
+
+/**
+ * Resync the ENCLOSING HOST's slots after a boundary swap whose markers live
+ * inside a light-DOM slot (a layout whose `${children}` render inside a
+ * slotted shell). The boundary swap only rewrites the DEFAULT slice (the
+ * `wj:children` markers always partition to the default slot), so a page that
+ * emits top-level `slot=`-attributed children left the shell's NAMED slots
+ * showing the previous page's content (#1024). This resyncs the enclosing
+ * (default) slot from its just-swapped LIVE children, then reprojects the
+ * sibling NAMED slots from the INCOMING parsed host.
+ *
+ * @param {Comment} liveStart
+ * @param {Comment} incStart
+ */
+function resyncEnclosingHostSlots(liveStart, incStart) {
+  const lp = liveStart.parentNode;
+  if (!lp || lp.nodeType !== 1) return;
+  const liveSlot = /** @type {Element} */ (lp);
+  if (liveSlot.tagName !== 'SLOT' || !liveSlot.hasAttribute(LIGHT_SLOT_ATTR)) return;
+  let liveHost = null;
+  for (let a = liveSlot.parentElement; a; a = a.parentElement) {
+    if (/** @type {any} */ (a)[SLOT_STATE]) { liveHost = a; break; }
+    if (a.tagName.includes('-')) return; // enclosing slot belongs to a stateless nested element
+  }
+  if (!liveHost) return;
+  const enclosingName = keyOfName(liveSlot.getAttribute('name'));
+  // 1. The enclosing (boundary) slot, from its own just-swapped live children.
+  projectAuthored(liveHost, enclosingName, [...liveSlot.childNodes]);
+
+  // 2. The sibling NAMED slots, from the incoming parsed host. Find the
+  //    incoming host structurally (the parsed copy is not upgraded, so no
+  //    SLOT_STATE): the nearest custom-element ancestor of the incoming
+  //    boundary marker's enclosing slot.
+  const ip = incStart.parentNode;
+  if (!ip || ip.nodeType !== 1) return;
+  const incSlot = /** @type {Element} */ (ip);
+  if (incSlot.tagName !== 'SLOT') return;
+  let incHost = null;
+  for (let a = incSlot.parentElement; a; a = a.parentElement) {
+    if (a.tagName.includes('-')) { incHost = a; break; }
+  }
+  if (!incHost || incHost.tagName !== liveHost.tagName) return;
+
+  const liveSlots = ownActualLightSlots(liveHost);
+  const incSlots = ownActualLightSlots(incHost);
+  for (const name of new Set([...liveSlots.keys(), ...incSlots.keys()])) {
+    if (name === enclosingName) continue; // handled in (1); never re-reconcile the swapped range
+    const inc = incSlots.get(name);
+    if (inc) {
+      projectAuthored(
+        liveHost,
+        name,
+        [...inc.childNodes].map((n) => document.importNode(n, true)),
+      );
+    } else if (liveSlots.get(name)) {
+      projectAuthored(liveHost, name, null); // dropped by the incoming page: revert to fallback
+    }
+  }
 }
 
 function reprojectSlottedContent(dst, src) {
