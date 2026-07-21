@@ -31,18 +31,23 @@ async function mount(tag, render) {
   return host;
 }
 
+/** Shared slotted shell, defined once so every test can run in isolation. */
+const fixedShell = 'heal-shell-fixed';
+function ensureFixedShell() {
+  if (!customElements.get(fixedShell)) {
+    class FixedShell extends WebComponent {
+      render() { return html`<div class="shell"><slot></slot></div>`; }
+    }
+    FixedShell.register(fixedShell);
+  }
+}
+
 suite('Record self-heal + overlay coherence (review round 16)', () => {
   test('a parent hole committed inside the slot SURVIVES a later record-driven apply', async () => {
     // The one-writer seam: the parent's child-part marker projects into the
     // child's slot, so array growth commits divB directly there with no
     // record fold. The author's appendChild must not destroy it.
-    const fixedShell = 'heal-shell-fixed';
-    if (!customElements.get(fixedShell)) {
-      class FixedShell extends WebComponent {
-        render() { return html`<div class="shell"><slot></slot></div>`; }
-      }
-      FixedShell.register(fixedShell);
-    }
+    ensureFixedShell();
     const parentTag2 = tagName('heal-parent2');
     class Parent2 extends WebComponent({ items: Array }) {
       constructor() { super(); this.items = ['a']; }
@@ -87,7 +92,7 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
   });
 
   test('a renderer REMOVAL inside the slot is adopted (no resurrection)', async () => {
-    const fixedShell = 'heal-shell-fixed';
+    ensureFixedShell();
     const parentTag = tagName('heal-shrink');
     class P extends WebComponent({ items: Array }) {
       constructor() { super(); this.items = ['a', 'b']; }

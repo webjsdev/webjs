@@ -187,9 +187,9 @@ them per app.
    `innerHTML` / `el.slot=` flips / `HTMLSlotElement.assign()`), and the
    reads (`assignedNodes` / `assignedElements` / `{flatten}` /
    `assignedSlot` / `slotchange`, with native async-coalesced slotchange).
-   Flip `static shadow` and nothing else changes (one KNOWN LIMITATION:
-   forwarded-slot CONTENT projection is SSR-only, so pass content straight
-   to the inner component on the client). The core invariant that
+   Flip `static shadow` and nothing else changes (first KNOWN LIMITATION,
+   #1023: forwarded-slot CONTENT projection is SSR-only, so pass content
+   straight to the inner component on the client). The core invariant that
    keeps this robust (unlike the pre-#1016 third-writer observer that
    caused the #906 / #1006 / #994 cascade): the component's renderer is the
    ONLY actor that moves authored nodes into slots (`applySlotAssignments`);

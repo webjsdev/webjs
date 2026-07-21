@@ -3,7 +3,7 @@
 ## What This Covers
 
 - The Next.js patterns that LOOK right in WebJs but break, because WebJs borrows Next's file-based routing shape but not its execution model (no RSC, no `'use client'` split): `redirect()` in a route handler, `fetch()` in a page, `<Link>`, `NEXT_PUBLIC_`, `await params`.
-- The Lit patterns that break WebJs SSR or reactivity, because WebJs is HTML-first (real HTML first paint, JS opt-in per behaviour) not JS-first: `static properties` / the `@property()` decorator, class-field initializers, browser globals in `render()`, fetching in `connectedCallback`, interpolation into `<style>`.
+- The Lit patterns that break WebJs SSR or reactivity, because WebJs is HTML-first (real HTML first paint, JS opt-in per behaviour) not JS-first: `static properties` / the `@property()` decorator, class-field initializers, browser globals in `render()`, fetching in `connectedCallback`, interpolation into `<style>`, reading `assignedNodes()` in `firstUpdated` of a light-DOM component.
 - The WebJs-shaped fix for each, with short code.
 
 Read this when a pattern feels familiar from Next.js or Lit but you are not sure it transfers. For the component runtime see `components.md`; for the routing surface see `routing-and-pages.md`. The one difference underneath everything: pages and layouts render server-only and never hydrate, and the one client boundary is a `WebComponent` custom element.

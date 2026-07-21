@@ -173,7 +173,7 @@ jobs:
       # `#*` catch-all key (a `#/`-prefixed key does NOT resolve on Bun, which is
       # why the scaffold ships the slash-free `#*` form). The same script proves the Node path
       # under `npm test`.
-      - name: webjs # path alias on Bun
+      - name: "webjs # path alias on Bun"
         run: bun test/bun/path-alias.mjs
       # Server timeout wiring on Bun (#663): the node:http requestTimeout /
       # headersTimeout / keepAliveTimeout map onto Bun.serve's single idleTimeout
