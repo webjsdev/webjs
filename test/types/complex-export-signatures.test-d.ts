@@ -45,8 +45,8 @@ const task = new Task<number>(host, {
   args: () => [],
   autoRun: false,
 });
-const _tv: number | undefined = task.value; // value is T | undefined
-void _tv;
+// Exact-type pin (stronger than an assignability check): value is EXACTLY T | undefined.
+type _TaskValue = Assert<Equal<typeof task.value, number | undefined>>;
 const _run: Promise<void> = task.run();
 void _run;
 // @ts-expect-error Task needs a host + options, not a bare callback
@@ -75,7 +75,8 @@ provider.setValue('light');
 provider.setValue(123);
 
 const consumer = new ContextConsumer<string>(host, { context: themeCtx, subscribe: true });
-const _cv: string | undefined = consumer.value; // consumer value is T | undefined
-void _cv;
+// Exact-type pin: a consumer's value is EXACTLY T | undefined (provider's is T).
+type _ConsumerValue = Assert<Equal<typeof consumer.value, string | undefined>>;
+type _ProviderValue = Assert<Equal<typeof provider.value, string>>;
 // @ts-expect-error a consumer needs a host + options, not a bare context
 new ContextConsumer<string>(themeCtx);

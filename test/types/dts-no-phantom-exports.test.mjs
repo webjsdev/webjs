@@ -46,9 +46,13 @@ const tscBin = join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
 // Published packages whose `.d.ts` are HAND-WRITTEN overlays over `.js` JSDoc.
 // The entry map is read from each package's own `exports`, so a new subpath
 // entry is covered with no edit here.
+// `minEntries` is a sanity floor: if `entryPairs` ever returns fewer overlay
+// entries than this (a renamed `exports` shape, a mapping regression), the test
+// FAILS loudly instead of silently checking nothing. The counts match today's
+// `exports` maps; raising an export count only makes the floor stricter.
 const PACKAGES = [
-  { name: '@webjsdev/core', dir: 'packages/core' },
-  { name: '@webjsdev/server', dir: 'packages/server' },
+  { name: '@webjsdev/core', dir: 'packages/core', minEntries: 12 },
+  { name: '@webjsdev/server', dir: 'packages/server', minEntries: 3 },
 ];
 
 // KNOWN, REAL, TRACKED phantoms, keyed `<package>#<export>`. These are NOT false
@@ -77,15 +81,21 @@ function copyJsTree(srcDir, destDir) {
   }
 }
 
-/** The `.js` source + `.d.ts` overlay pairs declared in a package's exports. */
+/**
+ * The `.d.ts` overlay + its runtime `.js` for every package export that declares
+ * a `types`. The impl `.js` is DERIVED from the overlay path (a sibling
+ * `foo.d.ts` overlays `foo.js`), NOT read from a `source` field: only some
+ * entries carry `source` (the rest map `types` + `default`-to-dist), so keying
+ * on `source` silently skipped every server entry and five core subpaths. The
+ * derived sibling is the universal, convention-guaranteed mapping.
+ */
 function entryPairs(pkgDir) {
   const pkg = JSON.parse(readFileSync(join(ROOT, pkgDir, 'package.json'), 'utf8'));
   const pairs = [];
   for (const [key, val] of Object.entries(pkg.exports || {})) {
-    if (!val || typeof val !== 'object') continue;
-    const { source, types } = val;
-    if (!source || !types || !source.endsWith('.js') || !types.endsWith('.d.ts')) continue;
-    pairs.push({ key, source: source.replace(/^\.\//, ''), types: types.replace(/^\.\//, '') });
+    if (!val || typeof val !== 'object' || !val.types || !val.types.endsWith('.d.ts')) continue;
+    const types = val.types.replace(/^\.\//, '');
+    pairs.push({ key, types, source: types.replace(/\.d\.ts$/, '.js') });
   }
   return pairs;
 }
@@ -127,10 +137,17 @@ function phantomExports(implJs, overlayDts, workDir, tag) {
     { cwd: ROOT, encoding: 'utf8' },
   );
   const out = `${res.stdout || ''}${res.stderr || ''}`;
+  // Anti-vacuum: if EITHER import failed to resolve, `Impl`/`Decl` degrade to
+  // `any`, `keyof` collapses, and a real phantom would be silently missed. A
+  // resolution error (TS2307 / "Cannot find module") means the harness itself is
+  // broken, so throw instead of returning a falsely-empty set.
+  if (/error TS2307|Cannot find module/.test(out)) {
+    throw new Error(`phantom fixture failed to resolve a module (harness broken):\n${out}`);
+  }
   return [...new Set([...out.matchAll(/DTS_PHANTOM_([A-Za-z0-9_$]+)/g)].map((m) => m[1]))];
 }
 
-for (const { name, dir } of PACKAGES) {
+for (const { name, dir, minEntries } of PACKAGES) {
   test(`${name}: no .d.ts overlay declares a value the runtime lacks (#1031)`, () => {
     const work = mkdtempSync(join(tmpdir(), 'webjs-dts-phantom-'));
     try {
@@ -138,23 +155,47 @@ for (const { name, dir } of PACKAGES) {
       mkdirSync(implSrc, { recursive: true });
       copyJsTree(join(ROOT, dir), implSrc);
 
-      const phantom = [];
-      for (const { source, types } of entryPairs(dir)) {
+      const entries = entryPairs(dir);
+      // Sanity floor: an empty / shrunken entry list means the exports mapping
+      // regressed and the guard would check (almost) nothing.
+      assert.ok(
+        entries.length >= minEntries,
+        `${name}: expected >= ${minEntries} overlay entries, got ${entries.length} ` +
+          `(exports mapping regressed? the guard would check nothing)`,
+      );
+
+      // Collect the RAW phantom set (before known-issue suppression) per entry.
+      const raw = [];
+      for (const { source, types } of entries) {
         const implJs = join(implSrc, source);
         const overlay = join(ROOT, dir, types);
         assert.ok(statSafe(implJs), `runtime source missing for ${name} entry: ${source}`);
         const tag = source.replace(/[^A-Za-z0-9]/g, '_');
         for (const exp of phantomExports(implJs, overlay, work, tag)) {
-          if (KNOWN_PHANTOMS.has(`${name}#${exp}`)) continue;
-          phantom.push(`${types}: ${exp}`);
+          raw.push({ key: `${name}#${exp}`, label: `${types}: ${exp}` });
         }
       }
+
+      // Live positive control: on the real package, the guard MUST still detect a
+      // KNOWN phantom (core's WebComponentBase). If it does not, the mechanism has
+      // gone vacuous on the real invocation (resolve-to-any, empty keyof) and the
+      // synthetic counterfactuals below would not catch it.
+      for (const [pk] of KNOWN_PHANTOMS) {
+        if (!pk.startsWith(`${name}#`)) continue;
+        assert.ok(
+          raw.some((r) => r.key === pk),
+          `${name}: expected to still detect the known phantom ${pk} on the real ` +
+            `package; not detecting it means the guard went vacuous (check module resolution)`,
+        );
+      }
+
+      // Fail on any phantom that is NOT a documented, tracked known issue.
+      const unexpected = [...new Set(raw.filter((r) => !KNOWN_PHANTOMS.has(r.key)).map((r) => r.label))].sort();
       assert.deepEqual(
-        [...new Set(phantom)].sort(),
+        unexpected,
         [],
         `${name} overlays declare value exports the runtime .js does not provide ` +
-          `(a type-checking import of these would crash at load):\n  ` +
-          [...new Set(phantom)].sort().join('\n  '),
+          `(a type-checking import of these would crash at load):\n  ` + unexpected.join('\n  '),
       );
     } finally {
       rmSync(work, { recursive: true, force: true });
