@@ -704,6 +704,74 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
     }
   });
 
+  test('a BATCH of slot= flips clears every adoption (no first-record early exit)', async () => {
+    const tag = tagName('batch-flip');
+    const host = await mount(
+      tag,
+      () => html`<div><slot></slot><slot name="a"></slot><slot name="b"></slot></div>`,
+    );
+    try {
+      const aSlot = host.querySelector('slot[name="a"]');
+      const bSlot = host.querySelector('slot[name="b"]');
+      // Attribute-routed content puts both named slots in ACTUAL mode (the
+      // self-heal only folds applied actual slots).
+      const seedA = document.createElement('span');
+      seedA.setAttribute('slot', 'a');
+      const seedB = document.createElement('span');
+      seedB.setAttribute('slot', 'b');
+      host.append(seedA, seedB);
+      await tick();
+      // Two library writes create two adoptions.
+      const n1 = document.createElement('u');
+      const n2 = document.createElement('i');
+      aSlot.appendChild(n1);
+      bSlot.appendChild(n2);
+      host.appendChild(document.createElement('em')); // fold both adoptions
+      await tick();
+      assert.equal(n1.parentElement, aSlot, 'n1 adopted into a');
+      assert.equal(n2.parentElement, bSlot, 'n2 adopted into b');
+      // BOTH flips in one task = one MutationObserver batch.
+      n1.setAttribute('slot', '');
+      n2.setAttribute('slot', '');
+      await tick();
+      await tick();
+      const defSlot = host.querySelector('slot[data-webjs-light]:not([name])');
+      assert.ok(defSlot.contains(n1), 'first flip honoured');
+      assert.ok(defSlot.contains(n2), 'SECOND flip honoured too (no early exit)');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('an author record op on an adopted node restores attribute routing', async () => {
+    const tag = tagName('op-clears-adopt');
+    const host = await mount(
+      tag,
+      () => html`<div><slot></slot><slot name="side"></slot></div>`,
+    );
+    try {
+      const seed = document.createElement('span');
+      seed.setAttribute('slot', 'side'); // puts the side slot in ACTUAL mode
+      host.appendChild(seed);
+      await tick();
+      const sideSlot = host.querySelector('slot[name="side"]');
+      const node = document.createElement('u');
+      sideSlot.appendChild(node); // library write
+      host.appendChild(document.createElement('em')); // fold: node adopted to side
+      await tick();
+      assert.equal(node.parentElement, sideSlot, 'adopted into side');
+      // Author takes over: detach + re-append via the record API in ways the
+      // flip sensor never sees. Attribute intent (no attr = default) wins.
+      host.removeChild(node);
+      host.appendChild(node);
+      await tick();
+      const defSlot = host.querySelector('slot[data-webjs-light]:not([name])');
+      assert.ok(defSlot.contains(node), 'record op ended the adoption; attribute routing resumed');
+    } finally {
+      host.remove();
+    }
+  });
+
   test('router projectAuthored on the default slice leaves a manual assignment intact', async () => {
     const tag = tagName('proj-manual');
     const host = await mount(tag, () => html`<div><slot></slot><slot name="x"></slot></div>`);

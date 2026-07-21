@@ -17,6 +17,19 @@ function tick(ms = 0) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/**
+ * Poll until `cond` is true or the budget runs out (loaded CI runners can
+ * stretch a 5ms generator delay well past a fixed wait). Assertions after
+ * this stay meaningful either way: on timeout, they fail with the real
+ * mismatch.
+ */
+async function waitFor(cond, budgetMs = 2000) {
+  const start = Date.now();
+  while (!cond() && Date.now() - start < budgetMs) {
+    await tick(10);
+  }
+}
+
 let n = 0;
 const tagName = (p) => `${p}-${n++}`;
 
@@ -47,8 +60,10 @@ suite('Renderer-write window (async commits are not authored)', () => {
     host.appendChild(authored);
     document.body.appendChild(host);
 
-    // Let the first render + both stream chunks land.
-    await tick(30);
+    // Let the first render + both stream chunks land (bounded poll, not a
+    // fixed budget: CI load once stretched the 5ms chunk delay past 30ms).
+    await waitFor(() => host.querySelectorAll('.chunk').length >= 2);
+    await tick();
 
     const slot = host.querySelector('slot[data-webjs-light]');
     // The slot holds ONLY the authored <p>, never the streamed <em> chunks.
@@ -84,7 +99,8 @@ suite('Renderer-write window (async commits are not authored)', () => {
     await tick(5);
 
     resolve(html`<em class="resolved">done</em>`);
-    await tick(15);
+    await waitFor(() => host.querySelectorAll('.resolved').length >= 1);
+    await tick();
 
     const slot = host.querySelector('slot[data-webjs-light]');
     assert.equal(slot.querySelectorAll('.resolved').length, 0, 'resolved chunk did not enter the slot');

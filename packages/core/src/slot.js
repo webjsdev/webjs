@@ -675,6 +675,9 @@ export function projectAuthored(host, name, nodes) {
   }
   state.authored.splice(at, 0, ...list);
   state.pendingRecordNodes = new Set([...evicted, ...list]);
+  if (state.adoptedKey) {
+    for (const n of state.pendingRecordNodes) state.adoptedKey.delete(n);
+  }
   repartition(state);
   applySlotAssignments(host);
 }
@@ -862,6 +865,14 @@ function processFlip(host, records) {
     /** @type {any} */ (host)[SLOT_STATE]
   );
   if (!state) return;
+  // ONE pass over ALL records first: every explicit slot= change clears that
+  // node's self-heal adoption (the author's attribute is now the routing
+  // intent), unconditionally. Deleting for a node no longer authored is
+  // always safe, and gating on authored membership let a stale adoption
+  // outlive a same-task detach and mis-route a later re-append. Only then is
+  // relevance decided and the single apply run, so a batch with several
+  // relevant flips never leaves a later record's adoption uncleared.
+  let relevant = false;
   for (const r of records) {
     if (r.type !== 'attributes') continue;
     const target = /** @type {Element} */ (r.target);
@@ -871,19 +882,14 @@ function processFlip(host, records) {
         target.hasAttribute(LIGHT_SLOT_ATTR) &&
         isOwnSlot(host, target)
       ) {
-        applySlotAssignments(host);
-        return;
+        relevant = true;
       }
     } else if (r.attributeName === 'slot') {
-      if (state.authored.indexOf(target) !== -1) {
-        // An explicit slot= change WINS over a self-heal adoption: the
-        // author's attribute is now the routing intent.
-        if (state.adoptedKey) state.adoptedKey.delete(target);
-        applySlotAssignments(host);
-        return;
-      }
+      if (state.adoptedKey) state.adoptedKey.delete(target);
+      if (state.authored.indexOf(target) !== -1) relevant = true;
     }
   }
+  if (relevant) applySlotAssignments(host);
 }
 
 /**
@@ -1099,6 +1105,12 @@ const EMPTY_NODE_SET = new Set();
  */
 function commitAuthored(host, state, touched) {
   state.pendingRecordNodes = new Set(touched || []);
+  // An author record op on a node ends its self-heal adoption: once the
+  // author takes over, the node routes by its own attribute again (also
+  // covers an attribute change made while the sensors were down).
+  if (state.adoptedKey && touched) {
+    for (const n of touched) state.adoptedKey.delete(n);
+  }
   repartition(state);
   applySlotAssignments(host);
 }
