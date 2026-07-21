@@ -234,7 +234,11 @@ export function installSlotPolyfills() {
         } else {
           state.manualAssign.delete(this);
         }
-        state.pendingRecordNodes = new Set(list);
+        if (state.applying && state.pendingRecordNodes) {
+          for (const n of list) state.pendingRecordNodes.add(n);
+        } else {
+          state.pendingRecordNodes = new Set(list);
+        }
         repartition(state);
         applySlotAssignments(host);
       }
@@ -735,7 +739,12 @@ export function projectAuthored(host, name, nodes) {
     FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
   }
   state.authored.splice(at, 0, ...list);
-  state.pendingRecordNodes = new Set([...evicted, ...list]);
+  if (state.applying && state.pendingRecordNodes) {
+    for (const n of evicted) state.pendingRecordNodes.add(n);
+    for (const n of list) state.pendingRecordNodes.add(n);
+  } else {
+    state.pendingRecordNodes = new Set([...evicted, ...list]);
+  }
   if (state.adoptedKey) {
     for (const n of state.pendingRecordNodes) state.adoptedKey.delete(n);
   }
@@ -1317,37 +1326,33 @@ function convertVariadicArgs(host, args) {
       converted.push({ node: arg });
     }
   }
-  // Phase 2: DOM validity for every converted argument, THEN the drain.
+  // Phase 2: DOM validity for every converted argument, THEN the build.
   for (const c of converted) {
     if (c.frag) guardCycle(host, Array.from(c.frag.childNodes));
     else if (c.node) guardInsertable(host, [c.node]);
   }
-  /** @type {Node[]} */
-  const nodes = [];
+  // The build mirrors native's "converting nodes into a node": append each
+  // converted item to a SCRATCH fragment in argument order. Appending a
+  // plain-node argument detaches it from wherever it currently sits,
+  // INCLUDING a later fragment argument, so append(a, fragContaining(a))
+  // nets [a, ...fragRest] exactly like native; a repeated Node argument is
+  // physically moved, netting keep-LAST order; and the record can never
+  // receive a duplicate entry (scratch children are unique by construction).
+  const scratch = host.ownerDocument.createDocumentFragment();
   for (const c of converted) {
     if (c.text !== undefined) {
-      nodes.push(host.ownerDocument.createTextNode(c.text));
+      N_appendChild.call(scratch, host.ownerDocument.createTextNode(c.text));
     } else if (c.frag) {
       const kids = Array.from(c.frag.childNodes);
       guardInsertable(host, kids);
-      for (const k of kids) N_removeChild.call(c.frag, k);
-      nodes.push(...kids);
+      for (const k of kids) N_appendChild.call(scratch, k);
     } else if (c.node) {
-      nodes.push(c.node);
+      N_appendChild.call(scratch, c.node);
     }
   }
-  // Keep-LAST dedup: native moves a repeated Node argument, so append(a, b,
-  // a) nets [b, a]; a duplicate record entry would desync the snapshot from
-  // the DOM and fire a spurious slotchange on the healing pass.
-  const seen = new Set();
-  const deduped = [];
-  for (let i = nodes.length - 1; i >= 0; i--) {
-    const n = nodes[i];
-    if (seen.has(n)) continue;
-    seen.add(n);
-    deduped.unshift(n);
-  }
-  return deduped;
+  const nodes = Array.from(scratch.childNodes);
+  for (const n of nodes) N_removeChild.call(scratch, n);
+  return nodes;
 }
 
 /**
@@ -1361,7 +1366,14 @@ function convertVariadicArgs(host, args) {
  * @param {Node[]} [touched]
  */
 function commitAuthored(host, state, touched) {
-  state.pendingRecordNodes = new Set(touched || []);
+  // UNION under the latch: a nested record op cannot run its own pass, so
+  // its touched set must survive until the outer loop's next iteration; a
+  // second nested op must not clobber the first one's order authority.
+  if (state.applying && state.pendingRecordNodes) {
+    for (const n of touched || []) state.pendingRecordNodes.add(n);
+  } else {
+    state.pendingRecordNodes = new Set(touched || []);
+  }
   // An author record op on a node ends its self-heal adoption: once the
   // author takes over, the node routes by its own attribute again (also
   // covers an attribute change made while the sensors were down).

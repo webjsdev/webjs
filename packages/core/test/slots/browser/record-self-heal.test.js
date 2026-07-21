@@ -1788,11 +1788,58 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
         ['b', 'a'],
         'keep-last dedup matches native move semantics',
       );
+      // The DISCRIMINATING probe (red without dedup/unique-build): a
+      // duplicate record entry desyncs the snapshot, so a NO-OP trigger
+      // (append of the current last child) would heal the record and fire a
+      // spurious slotchange; a clean record fires none.
       let fires = 0;
       slot.addEventListener('slotchange', () => { fires += 1; });
-      host.appendChild(document.createElement('i')); // healing-pass probe
+      host.appendChild(a); // a IS the current last child: a true no-op
       await tick();
-      assert.equal(fires, 1, 'exactly one slotchange (no spurious heal event)');
+      assert.equal(fires, 0, 'no spurious heal slotchange (record was never desynced)');
+      host.appendChild(document.createElement('i')); // real change still fires
+      await tick();
+      assert.equal(fires, 1, 'a real change fires exactly once');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('two reentrant record ops in one pass both keep their authority', async () => {
+    // The union-under-latch: op2 must not clobber op1's touched set, or the
+    // reapply iteration's resync folds op1's removed node straight back in.
+    if (!customElements.get('double-op-probe')) {
+      class Probe extends HTMLElement {
+        disconnectedCallback() {
+          const o = /** @type {any} */ (this).__ctx;
+          if (o && !o.done) {
+            o.done = true;
+            o.host.removeChild(o.x); // op1: expressed removal
+            const y = document.createElement('ins');
+            y.id = 'op2-y';
+            o.host.appendChild(y); // op2: would clobber op1's set
+            o.slot.appendChild(document.createElement('wbr')); // divergence
+          }
+        }
+      }
+      customElements.define('double-op-probe', Probe);
+    }
+    const tag = tagName('double-op');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      const x = document.createElement('em');
+      x.id = 'op1-x';
+      const probe = document.createElement('double-op-probe');
+      host.append(x, probe);
+      await tick();
+      const slot = host.querySelector('slot[data-webjs-light]');
+      /** @type {any} */ (probe).__ctx = { host, x, slot, done: false };
+      host.removeChild(probe); // its slot-removal fires both ops MID-PASS
+      await tick();
+      await tick();
+      assert.ok(!x.isConnected, 'op1 removal HELD (not resurrected by the resync fold)');
+      assert.equal(host.querySelector('#op1-x'), null, 'x is gone');
+      assert.ok(slot.querySelector('#op2-y'), 'op2 write placed');
     } finally {
       host.remove();
     }
