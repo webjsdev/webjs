@@ -23,6 +23,24 @@ import { assert } from '../../../../../test/browser-assert.js';
 const tick = () => new Promise((r) => setTimeout(r, 20));
 
 suite('Client router: page-action form submissions (#244)', () => {
+  // LAST-RESORT navigation backstop for a loaded runner: if the router under
+  // pressure fails a boundary scan and degrades to a full page load, the
+  // native form submission would navigate the WTR page away and kill the
+  // whole file ("Tests were interrupted..."). A BUBBLE-phase listener at the
+  // window level fires after the router's document-level handling had its
+  // chance (a capture listener here would fire FIRST and break every
+  // router-handled submission): when the event is still not
+  // default-prevented by the time it bubbles out to the window, cancel it so
+  // the ASSERTIONS fail visibly instead of the page dying. Never interferes
+  // with router-handled submissions (those are already default-prevented).
+  window.addEventListener(
+    'submit',
+    (e) => {
+      if (!e.defaultPrevented) e.preventDefault();
+    },
+    false,
+  );
+
   let container, origFetch, calls;
   // When a test redefines window.location.href (to detect a full-page reload),
   // it records the restore fn here so teardown reverts it even if the body

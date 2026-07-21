@@ -702,39 +702,7 @@ describe('DOM API polyfills', () => {
   });
 });
 
-describe('SSR slot record parity (#1015)', () => {
-  test('hasSlot()/this.slots are readable during a LIGHT component SSR render', async () => {
-    class C extends WebComponent {
-      render() {
-        return html`${this.hasSlot('header') ? html`<p class="has-header">yes</p>` : html`<p class="no-header">no</p>`}<slot name="header"></slot><slot></slot>`;
-      }
-    }
-    C.register('slot-ssr-record-1');
-    const withHeader = await renderToString(
-      html`<slot-ssr-record-1><b slot="header">H</b><i>body</i></slot-ssr-record-1>`);
-    assert.ok(withHeader.includes('has-header'), 'hasSlot(header) is true at SSR when authored');
-    const withoutHeader = await renderToString(
-      html`<slot-ssr-record-1><i>body</i></slot-ssr-record-1>`);
-    assert.ok(withoutHeader.includes('no-header'), 'hasSlot(header) is false at SSR when absent');
-  });
-
-  test('a SHADOW component is NOT seeded (hasSlot stays false both sides)', async () => {
-    // The client only creates slot state on the light-DOM path (shadow slots
-    // are native projection), so seeding shadow at SSR would flip
-    // conditional-on-slot markup on the first client render. Counterfactual:
-    // seed shadow and this fails.
-    class C extends WebComponent {
-      static shadow = true;
-      render() {
-        return html`${this.hasSlot('header') ? html`<p class="sh-yes">yes</p>` : html`<p class="sh-no">no</p>`}<slot name="header"></slot>`;
-      }
-    }
-    C.register('slot-ssr-record-2');
-    const out = await renderToString(
-      html`<slot-ssr-record-2><b slot="header">H</b></slot-ssr-record-2>`);
-    assert.ok(out.includes('sh-no'), 'a shadow component sees hasSlot false at SSR (matching the client)');
-  });
-
+describe('SSR slot substitution', () => {
   test('the reserved `default` alias routes to the default slot at SSR', async () => {
     // slot="default" children and a <slot name="default"> both address the
     // DEFAULT slot on both sides (#1015): the client record normalizes the

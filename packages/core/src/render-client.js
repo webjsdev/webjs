@@ -10,10 +10,26 @@ import {
   PROJECTION_FALLBACK,
   SLOT_FALLBACK_FRAG,
   SLOT_STATE,
+  RENDERING,
   applySlotAssignments,
   rescueAssignedNodes,
-  ensureSlotState,
+  withRendererWrites,
+  drainRendererBackstop,
 } from './slot.js';
+
+/**
+ * Open the renderer-write window on a light-DOM host while `fn` commits into
+ * it, so the host's patched slot-interception methods delegate to native and
+ * a renderer commit is never mistaken for authored content. A no-op (just runs
+ * `fn`) when `node` is not a slot host, so nested and non-host commits pay
+ * nothing. Covers the ASYNC commit paths (async directives, streaming) that
+ * run outside a synchronous render() call.
+ */
+function commitInto(node, fn) {
+  const host = node && /** @type {any} */ (node)[SLOT_STATE] ? node : null;
+  if (!host) return fn();
+  return withRendererWrites(host, fn);
+}
 
 /**
  * Client-side renderer with **fine-grained** updates.
@@ -88,43 +104,67 @@ const INSTANCE = Symbol.for('webjs.instance');
  */
 export function render(value, container) {
   const host = /** @type any */ (container);
-  const prev = host[INSTANCE];
+  // Open the renderer-write window for the whole commit: every host-receiver
+  // write below (and in createInstance / updateInstance / clearInstance / all
+  // part commits they reach synchronously) then bypasses the slot interception
+  // that is patched onto a light host. This is the single discriminator
+  // between a renderer commit and an author write.
+  const prevRendering = host[RENDERING];
+  host[RENDERING] = true;
+  try {
+    const prev = host[INSTANCE];
 
-  if (isTemplate(value)) {
-    const tr = /** @type {import('./html.js').TemplateResult} */ (value);
-    if (prev && prev.strings === tr.strings) {
-      updateInstance(prev, tr.values);
+    if (isTemplate(value)) {
+      const tr = /** @type {import('./html.js').TemplateResult} */ (value);
+      if (prev && prev.strings === tr.strings) {
+        updateInstance(prev, tr.values);
+        return;
+      }
+      if (prev) clearInstance(prev, container);
+
+      // Light DOM hydration: if container has SSR content (marked by
+      // <!--webjs-hydrate-->), remove the marker and proceed with normal
+      // rendering. The content will be replaced with identical output -
+      // no visible flash because SSR and client render produce the same HTML.
+      const firstChild = container.firstChild;
+      if (firstChild && firstChild.nodeType === 8 && /** @type {Comment} */ (firstChild).data === 'webjs-hydrate') {
+        firstChild.remove();
+      }
+
+      // Pre-set the symbol to an explicit null BEFORE the commit,
+      // UNCONDITIONALLY: if createInstance throws after its replaceChildren
+      // (e.g. inside the slot-part apply loop), the finally-drain must see
+      // "rendered, no instance" (discard the commit's records), never
+      // "never rendered" (fold and corrupt) and never a STALE cleared prev
+      // instance on the template-swap path (whose bookends would misclassify
+      // the half-committed new roots as unowned and fold them).
+      host[INSTANCE] = null;
+      const inst = createInstance(tr, container);
+      host[INSTANCE] = inst;
       return;
     }
+
+    // Non-template value: treat as a single text child.
     if (prev) clearInstance(prev, container);
-
-    // Light DOM hydration: if container has SSR content (marked by
-    // <!--webjs-hydrate-->), remove the marker and proceed with normal
-    // rendering. The content will be replaced with identical output -
-    // no visible flash because SSR and client render produce the same HTML.
-    const firstChild = container.firstChild;
-    if (firstChild && firstChild.nodeType === 8 && /** @type {Comment} */ (firstChild).data === 'webjs-hydrate') {
-      firstChild.remove();
+    host[INSTANCE] = null;
+    container.replaceChildren();
+    if (value == null || value === false || value === true) return;
+    if (Array.isArray(value)) {
+      for (const v of value) {
+        const text = document.createTextNode(String(v ?? ''));
+        container.appendChild(text);
+      }
+      return;
     }
-
-    const inst = createInstance(tr, container);
-    host[INSTANCE] = inst;
-    return;
+    container.appendChild(document.createTextNode(String(value)));
+  } finally {
+    host[RENDERING] = prevRendering;
+    // Outermost window closing: drain this commit's childList records off the
+    // slot backstop (drainRendererBackstop processes them with a renderer-output
+    // skip when an instance exists, else discards), so the backstop never folds
+    // renderer output. Mirrors withRendererWrites, used by the async paths.
+    if (!prevRendering) drainRendererBackstop(host);
   }
-
-  // Non-template value: treat as a single text child.
-  if (prev) clearInstance(prev, container);
-  host[INSTANCE] = null;
-  container.replaceChildren();
-  if (value == null || value === false || value === true) return;
-  if (Array.isArray(value)) {
-    for (const v of value) {
-      const text = document.createTextNode(String(v ?? ''));
-      container.appendChild(text);
-    }
-    return;
-  }
-  container.appendChild(document.createTextNode(String(value)));
 }
 
 /* ================================================================
@@ -819,6 +859,22 @@ function applyChild(part, value) {
  * @param {unknown} value
  */
 function applyChildInner(part, value) {
+  // Open the renderer-write window around this commit. Most calls are
+  // synchronous inside render() (the window is already open, this nests
+  // harmlessly), but the async directive paths (until, watch, asyncAppend /
+  // asyncReplace, streaming) re-enter here from a promise / microtask OUTSIDE
+  // any render() window, so this is where those commits into a light host are
+  // marked as renderer writes rather than authored content.
+  return commitInto(part.marker && part.marker.parentNode, () =>
+    applyChildInnerRaw(part, value),
+  );
+}
+
+/**
+ * @param {Extract<BoundPart, {kind:'child'}>} part
+ * @param {unknown} value
+ */
+function applyChildInnerRaw(part, value) {
   const marker = part.marker;
 
   // unsafeHTML directive: inject raw HTML string as DOM nodes.
@@ -1071,6 +1127,16 @@ function buildDetached(tr) {
   for (let i = 0; i < tr.values.length; i++) {
     applyPart(bound[i], tr.values[i], undefined, tr.values);
     lastValues.push(tr.values[i]);
+  }
+  // Slot parts need their one-shot apply exactly like createInstance and the
+  // nested-template path. The fragment is still detached here, so the
+  // slot-part's own deferred finalize (a one-microtask retry when the parent
+  // walk cannot reach a host yet) carries it: every caller inserts the
+  // returned fragment synchronously in the same task, so the retry lands in
+  // the live tree. Without this loop a <slot> inside a repeat() / array item
+  // never finalizes and its content is never placeable.
+  for (const p of bound) {
+    if (p.kind === 'slot') applyPart(p, undefined, undefined, []);
   }
   const outFrag = document.createDocumentFragment();
   outFrag.appendChild(startNode);
@@ -1516,6 +1582,35 @@ function applyCache(part, inner) {
       // Reconcile values so any state changes since detachment apply.
       updateInstance(cached.inst, tr.values);
       part.child = cached.inst;
+      // A re-attached instance may carry ALREADY-APPLIED slot parts, whose
+      // finalize will never fire again, while the host's record moved on
+      // during the stash (content for these slots was parked when an apply
+      // ran with the slot unreachable). Re-run the apply for each owning
+      // host so parked content is pulled back out. The collection walks the
+      // re-attached DOM RANGE (not the instance tree): slot parts live on
+      // whatever template level contains the <slot> (nested holes, repeat /
+      // array items, streamed chunks), so a structural DOM walk is the only
+      // shape that covers every composition uniformly. moveRange already
+      // ran, so the range is live and each slot's parent walk reaches its
+      // host.
+      const hosts = new Set();
+      for (
+        let n = cached.inst.startNode.nextSibling;
+        n && n !== cached.inst.endNode;
+        n = n.nextSibling
+      ) {
+        if (n.nodeType !== 1) continue;
+        const el = /** @type {Element} */ (n);
+        if (el.matches('slot[data-webjs-light]')) {
+          const h = findSlotHost(el);
+          if (h) hosts.add(h);
+        }
+        for (const s of el.querySelectorAll('slot[data-webjs-light]')) {
+          const h = findSlotHost(s);
+          if (h) hosts.add(h);
+        }
+      }
+      for (const h of hosts) applySlotAssignments(h);
       return;
     }
   }
@@ -1829,17 +1924,23 @@ async function consumeAsyncStream(state, part, dir) {
       const mapped = dir.mapper ? dir.mapper(result.value, i) : result.value;
       const newNodes = renderToNodes(mapped);
 
-      if (state.mode === 'replace') {
-        for (const n of state.nodes) {
-          if (n.parentNode) n.parentNode.removeChild(n);
+      // This chunk commit runs in an async loop OUTSIDE any render() window,
+      // so open the renderer-write window explicitly: without it, committing a
+      // stream chunk into a light slot host would hit the patched insertBefore /
+      // removeChild and fold the renderer's own output into `authored`.
+      commitInto(marker.parentNode, () => {
+        if (state.mode === 'replace') {
+          for (const n of state.nodes) {
+            if (n.parentNode) n.parentNode.removeChild(n);
+          }
+          state.nodes = [];
         }
-        state.nodes = [];
-      }
 
-      const frag = document.createDocumentFragment();
-      for (const n of newNodes) frag.appendChild(n);
-      marker.parentNode?.insertBefore(frag, marker);
-      state.nodes.push(...newNodes);
+        const frag = document.createDocumentFragment();
+        for (const n of newNodes) frag.appendChild(n);
+        marker.parentNode?.insertBefore(frag, marker);
+        state.nodes.push(...newNodes);
+      });
 
       i++;
     }
@@ -1866,6 +1967,15 @@ function renderToNodes(value) {
     const bound = parts.map((p) => bindPart(p, frag));
     for (let i = 0; i < tr.values.length; i++) {
       applyPart(bound[i], tr.values[i], undefined, tr.values);
+    }
+    // Slot parts need their one-shot apply here too (same contract as
+    // createInstance / nested templates / buildDetached): the caller
+    // (consumeAsyncStream) inserts these nodes synchronously in the same
+    // task, so the slot-part's one-microtask finalize retry lands in the
+    // live tree. Without this, a <slot> inside streamed chunk content never
+    // finalizes and its name suppresses parking forever.
+    for (const p of bound) {
+      if (p.kind === 'slot') applyPart(p, undefined, undefined, []);
     }
     return [...frag.childNodes];
   }

@@ -9,9 +9,11 @@ import {
   adoptSSRAssignments,
   ensureSlotState,
   hasSlotState,
-  slotsView,
-  hasSlotContent,
-  setSlotContent,
+  hasFrameworkRenderedSubtree,
+  installSlotInterception,
+  installSlotSensors,
+  teardownSlotSensors,
+  reconnectSweep,
 } from './slot.js';
 
 const isBrowser = typeof window !== 'undefined' && typeof HTMLElement !== 'undefined';
@@ -843,17 +845,45 @@ class WebComponentBase extends Base {
       // c. First mount, no SSR. Partition authored children into the
       //    record before _performRender wipes the host.
       //
-      // There are NO mutation observers: an external appendChild or a
-      // slot=""-attribute flip after mount is inert by design, and the
-      // dynamic path is setSlotContent() (children as values).
+      // After capture, installSlotInterception + installSlotSensors below make
+      // native DOM writes on a mounted host live (appendChild, slot= flips,
+      // innerHTML, HTMLSlotElement.assign), so light-DOM slots match shadow DOM
+      // through the standard API.
       if (hasSlotState(this)) {
-        // (a) Reconnection. Record already populated; nothing to do here.
-      } else if (this.__isHydrating()) {
+        // (a) Reconnection. Record already populated. Sweep any direct child
+        //     added by a raw bypass write while the host was disconnected (no
+        //     sensor was live to catch it), then re-arm the sensors below.
+        reconnectSweep(this);
+      } else if (
+        this.__isHydrating() ||
+        this.hasAttribute('data-wj-serialized') ||
+        hasFrameworkRenderedSubtree(this)
+      ) {
+        // (b) Framework-rendered markup, from any of three signals: boot-time
+        //     SSR hydration (the webjs-hydrate marker), the router's
+        //     data-wj-serialized stamp (applySwap marks every host in a parsed
+        //     doc, covering a snapshot restore whose serialized shape has no
+        //     projected slot to detect), or the structural detector (own
+        //     data-webjs-light[data-projection] slots, attributes only the
+        //     renderer / SSR stamps). Adopt-not-capture: capturing restored
+        //     post-hydration HTML would hoover the rendered tree into the
+        //     record and duplicate content on the next render (the #1006
+        //     shape, on the restore path).
+        this.removeAttribute('data-wj-serialized');
         ensureSlotState(this);
         adoptSSRAssignments(this);
       } else {
+        // (c) First mount with author-written children. Capture them.
         captureAuthoredChildren(this);
       }
+      // Install native-write interception AFTER capture (capture uses the
+      // host's still-native methods), then arm the sensors. Together they make
+      // appendChild / insertBefore / removeChild / innerHTML / slot= flips on a
+      // mounted light host drive the slot record, restoring full shadow-DOM
+      // parity through the standard DOM API. Interception installs once;
+      // sensors are armed on every connect and torn down on disconnect.
+      installSlotInterception(this);
+      installSlotSensors(this);
     }
 
     // Notify all controllers that the host is connected.
@@ -888,48 +918,11 @@ class WebComponentBase extends Base {
       } catch (err) {
         console.error(`[webjs] lifecycle hook threw during initial render:`, err);
       }
-      // No slot observers to attach (#1015): the renderer's slot parts
-      // place the record content as part of the commit, and the only
-      // dynamic path is setSlotContent().
+      // The renderer's slot parts place the record content as part of the
+      // commit; native DOM writes on the host (appendChild, slot= flips,
+      // innerHTML) drive the record live through the interception + sensors
+      // installed on connect. There is no WebJs-specific slot API.
     });
-  }
-
-  /**
-   * Read view of this host's slot record (#1015): captured (or
-   * programmatically set) children per slot name, e.g.
-   * `this.slots.default` / `this.slots.header`. Fresh arrays each read.
-   * Enables conditional-on-slot rendering:
-   * `this.slots.header ? html\`...\` : ''`.
-   *
-   * @returns {Record<string, Node[]>}
-   */
-  get slots() {
-    return slotsView(this);
-  }
-
-  /**
-   * Does this host's slot record carry content for `name` (#1015)?
-   * `hasSlot()` / `hasSlot('default')` query the default slot.
-   *
-   * @param {string | null} [name]
-   * @returns {boolean}
-   */
-  hasSlot(name) {
-    return hasSlotContent(this, name);
-  }
-
-  /**
-   * Replace a slot's content (#1015): the ONE dynamic path for slotted
-   * children (external appendChild / slot="" flips after mount are inert
-   * by design). Accepts a Node, Node[], a string, or null to reset the
-   * slot to its fallback content. Fires `slotchange` when the assignment
-   * changes.
-   *
-   * @param {string | null} name
-   * @param {Node | Node[] | string | null} value
-   */
-  setSlotContent(name, value) {
-    setSlotContent(this, name, value);
   }
 
   /**
@@ -969,8 +962,11 @@ class WebComponentBase extends Base {
       this.__hydrationObserver.disconnect();
       this.__hydrationObserver = null;
     }
-    // No slot observers to detach (#1015). The per-host slot record is
-    // preserved so a subsequent reconnection picks up where it left off.
+    // Tear down the slot sensors, processing any queued records first (a bare
+    // disconnect() drops them). The per-host slot record + interception are
+    // preserved so a reconnection picks up where it left off (sensors re-arm in
+    // connectedCallback).
+    teardownSlotSensors(this);
     // Dispose the signal watcher so dependency edges drop. Without
     // this the element holds references to module-scope signals
     // (and vice versa) forever.

@@ -8,7 +8,6 @@ import { isSuspense } from './suspense.js';
 import { unsafeHTML, isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace, isWatch } from './directives.js';
 import { stringify, parse } from './serialize.js';
 import { cspNonce } from './csp-nonce.js';
-import { ensureSlotState } from './slot.js';
 
 /**
  * Render a TemplateResult (or any renderable value) to an HTML string.
@@ -487,14 +486,12 @@ async function injectDSD(html, ctx, ancestors = [], dev) {
       seedServerAttrs(instance, attrMap);
       applyAttrsToInstance(instance, attrMap, Cls);
       for (const [k, v] of Object.entries(propValues)) instance[k] = v;
-      // Extract the authored inner HTML BEFORE the render (#1015, the
-      // injectDSD reorder): the source scan needs no render output, and
-      // hoisting it lets the slot record be seeded so `this.hasSlot()` /
-      // `this.slots` inside render() see the authored children at SSR
-      // exactly as they will on the client (conditional-on-slot parity).
-      // The light-DOM branch below reuses these for the slot pipeline;
-      // the shadow branch is a read-only peek (its authored children stay
-      // in place for native projection, and its edit keeps the old end).
+      // Extract the authored inner HTML BEFORE the render (the injectDSD
+      // reorder): the source scan needs no render output, and hoisting it lets
+      // the light-DOM branch below project the authored children into the
+      // rendered slots. The shadow branch is a read-only peek (its authored
+      // children stay in place for native projection, and its edit keeps the
+      // old end).
       let authoredInner = '';
       let closeEnd = m.index + match.length;
       if (!selfClose) {
@@ -515,20 +512,6 @@ async function injectDSD(html, ctx, ancestors = [], dev) {
         }
       }
       const partitioned = partitionAuthoredBySlot(authoredInner);
-      // Seed the slot record for SSR-side reads: LIGHT DOM only, matching the
-      // client (which only creates slot state on the light-DOM path, since
-      // shadow slots are native browser projection). Seeding shadow here
-      // would make hasSlot() true at SSR and false after hydration, flipping
-      // conditional-on-slot markup on the first client render. At SSR the
-      // record value is the authored RAW HTML (one string per name; there is
-      // no DOM to hold Nodes), so PRESENCE and KEYS match the client record,
-      // which is the conditional-on-slot contract. Node access is client-side.
-      if (!isShadow) {
-        const slotState = ensureSlotState(instance);
-        for (const [name, htmlChunk] of partitioned) {
-          if (htmlChunk && htmlChunk.length) slotState.assignedByName.set(name, [htmlChunk]);
-        }
-      }
       // Run the pre-render lifecycle (willUpdate, controllers' hostUpdate,
       // then reflect reflect:true props) so derived state computed there is
       // correct in the SSR'd HTML, matching how lit runs the update cycle at

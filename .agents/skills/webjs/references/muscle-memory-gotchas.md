@@ -3,7 +3,7 @@
 ## What This Covers
 
 - The Next.js patterns that LOOK right in WebJs but break, because WebJs borrows Next's file-based routing shape but not its execution model (no RSC, no `'use client'` split): `redirect()` in a route handler, `fetch()` in a page, `<Link>`, `NEXT_PUBLIC_`, `await params`.
-- The Lit patterns that break WebJs SSR or reactivity, because WebJs is HTML-first (real HTML first paint, JS opt-in per behaviour) not JS-first: `static properties` / the `@property()` decorator, class-field initializers, browser globals in `render()`, fetching in `connectedCallback`, interpolation into `<style>`.
+- The Lit patterns that break WebJs SSR or reactivity, because WebJs is HTML-first (real HTML first paint, JS opt-in per behaviour) not JS-first: `static properties` / the `@property()` decorator, class-field initializers, browser globals in `render()`, fetching in `connectedCallback`, interpolation into `<style>`, reading `assignedNodes()` in `firstUpdated` of a light-DOM component.
 - The WebJs-shaped fix for each, with short code.
 
 Read this when a pattern feels familiar from Next.js or Lit but you are not sure it transfers. For the component runtime see `components.md`; for the routing surface see `routing-and-pages.md`. The one difference underneath everything: pages and layouts render server-only and never hydrate, and the one client boundary is a `WebComponent` custom element.
@@ -148,6 +148,10 @@ The `@property()` decorator is banned by the erasable-TS invariant (decorators a
 ### Expecting shadow DOM and reaching for scoped CSS
 
 Lit defaults to shadow DOM, so `static styles = css` scopes automatically. WebJs defaults to light DOM. A `static styles` block without `static shadow = true` does nothing useful and any inline `<style>` with bare class names leaks globally. The webjs-shaped fix is Tailwind utilities, which apply directly in light DOM. Reach for `static shadow = true` plus `static styles` only when scoped CSS genuinely belongs in a shadow root, or prefix every selector with the tag name if authoring vanilla light-DOM CSS.
+
+### Reading `assignedNodes()` in `firstUpdated` of a light-DOM component
+
+In shadow DOM the browser projects slotted content natively before `firstUpdated`, so Lit muscle memory says `this.shadowRoot.querySelector('slot').assignedNodes()` is populated there. In light DOM the first projection lands one microtask AFTER the first render, so `firstUpdated` sees the `<slot>` element with an EMPTY `assignedNodes()`. The webjs-shaped fix: read assigned content from a `slotchange` listener (fires once projection lands, and on every later change), or wait a microtask. Every later read and every mutation-driven update behaves identically in both modes; only the first-render read differs.
 
 ### `:host { display: block }` on a light-DOM component
 

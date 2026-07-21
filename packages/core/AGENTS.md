@@ -31,7 +31,7 @@ the same output in all three.
 | `component.js` | `WebComponent` base class: lifecycle, properties, reactive accessors, light-vs-shadow DOM, scheduling, slot host wiring. On the server the base is a DOM shim (attribute methods backed by a Map, no-op events, inert `attachInternals`, `closest()` over the SSR ancestor chain, and the host IDL reflections `dataset` / `className` / `hidden` / `id` / `title` / `slot` / `role` / `tabIndex` / `aria*`); `performServerUpdate` runs the pre-render lifecycle (`willUpdate` + controllers' `hostUpdate` + reflection) for SSR. **Async render (#469):** `render()` may be async; when it returns a promise, `update()` routes to `_commitAsync` (stale-while-revalidate, a monotonic `__renderToken` race guard, rejection to the `renderError()` boundary) and `_performRender` defers the post-commit half (`hostUpdated`, `firstUpdated` / `updated`, `updateComplete`) until the commit lands via `_postCommit`. `renderFallback()` is the optional client re-fetch loading UI (re-fetch only, never first paint); `renderError()` is the per-component error boundary |
 | `render-server.js` | `renderToString`, `renderToStream` (async, with Suspense streaming), SSR slot substitution in `injectDSD`. The walker seeds the server attribute shim from the source attributes, threads the enclosing-instance ancestor chain into each instance (so the shim's `closest()` resolves a parent), calls `performServerUpdate` before `render()`, and appends reflected/added attributes (including host attributes set inside `render()`) to the opening tag |
 | `render-client.js` | Client-side patcher + hydration; the only file that touches `document`. Also discovers and binds light-DOM slot parts |
-| `slot.js` | Light-DOM `<slot>` runtime: `HTMLSlotElement` polyfills (`assignedNodes`, `assignedElements`, `slotchange`), projection scheduling, MutationObserver, first-wins resolution, fallback swap, pending-fragment recovery |
+| `slot.js` | Light-DOM `<slot>` runtime, full native parity (#1021): `HTMLSlotElement` polyfills (`assignedNodes` / `assignedElements` / `assignedSlot` / `assign`), the ordered `authored` record + derived `assignedByName` (`repartition`), the single writer `applySlotAssignments`, per-instance method interception + the `RENDERING` window (`withRendererWrites`) + two read-only sensors for liveness, the parent-keyed prune rule, the unmatched-name park, first-wins resolution, fallback swap, and the `projectAuthored` router seam |
 | `directives.js` | the lit-html-parity directive set (`unsafeHTML`, `live`, `keyed`, `guard`, `templateContent`, `ref` / `createRef`, `cache`, `until`, `asyncAppend` / `asyncReplace`, `watch`, plus each `is*` guard). `repeat` lives in `repeat.js`. All are re-exported from `index.js` / `index-browser.js` so the bare specifier and the `/directives` subpath (which collapses onto the dist browser bundle) expose the full set |
 | `repeat.js` | `repeat(items, keyFn, templateFn)` for keyed list reconciliation |
 | `suspense.js` | `Suspense()` page/region-level boundary primitive |
@@ -179,15 +179,46 @@ them per app.
    statically). `renderFallback` stays a ship signal via
    `CLIENT_LIFECYCLE_HOOKS`.
 
-7. **`<slot>` works identically in light and shadow DOM.** Light-DOM
-   slots get the same `assignedNodes` / `assignedElements` /
-   `assignedSlot` / `slotchange` surface, named slots, fallback content,
-   and first-wins resolution as shadow-DOM slots. The light-DOM runtime
-   in `slot.js` gates every polyfill on a `data-webjs-light` attribute,
-   so real shadow-DOM slots elsewhere on the page are never touched.
-   SSR (`injectDSD`) projects light-DOM children into the rendered
-   template before the response goes out, so progressive enhancement
-   and JS-disabled clients both see the projected content.
+7. **`<slot>` works identically in light and shadow DOM, through the
+   NATIVE DOM API. No WebJs-specific slot methods.** Light-DOM slots get
+   the full shadow surface: named + default slots, fallback content,
+   first-wins resolution, dynamic `name=${...}`, LIVE post-mount writes
+   (`appendChild` / `insertBefore` / `removeChild` / `el.remove()` /
+   `innerHTML` / `el.slot=` flips / `HTMLSlotElement.assign()`), and the
+   reads (`assignedNodes` / `assignedElements` / `{flatten}` /
+   `assignedSlot` / `slotchange`, with native async-coalesced slotchange).
+   Flip `static shadow` and nothing else changes (first KNOWN LIMITATION,
+   #1023: forwarded-slot CONTENT projection is SSR-only, so pass content
+   straight to the inner component on the client). The core invariant that
+   keeps this robust (unlike the pre-#1016 third-writer observer that
+   caused the #906 / #1006 / #994 cascade): the component's renderer is the
+   ONLY actor that moves authored nodes into slots (`applySlotAssignments`);
+   `authored` is the ordered source of truth, `assignedByName` is derived
+   (`repartition`), and liveness re-runs that one writer via per-instance
+   method interception + a renderer-write window + two read-only sensors +
+   a parent-keyed prune rule + a self-heal resync (a parent hole or a
+   library writing inside an assigned container is folded back into the
+   record with node-scoped order authority, never destroyed). One caveat
+   rides `assign()` specifically. The light-DOM `assign()` is an extension
+   (element-bound overlay; native shadow `assign()` needs slotAssignment
+   `manual`, which WebJs does not set), so avoid `assign()` in a component
+   meant to flip modes. The runtime gates every polyfill on the
+   `data-webjs-light` attribute, so real shadow-DOM slots are untouched.
+   SSR (`injectDSD`) projects light-DOM children into the rendered template
+   before the response, so PE and JS-disabled clients see the content.
+   Four inherent gaps, all from light DOM having no shadow boundary: structural
+   host reads (`host.children` / the `innerHTML` getter show the rendered
+   template), `assignedChild.parentNode` is the `<slot>`, `::slotted()`
+   CSS (use normal selectors), and initial-projection lifecycle timing
+   (`firstUpdated` sees the `<slot>` element with EMPTY `assignedNodes()`;
+   the projection lands one microtask later, so read assigned content from
+   `slotchange` or after a microtask; shadow DOM projects natively before
+   `firstUpdated`). A second KNOWN LIMITATION (#1024, pre-existing): a
+   layout's `${children}` partitioned across MULTIPLE named slots only
+   soft-nav-swaps the default slice. When you add a slot behaviour, extend
+   the light-vs-shadow CONTRAST tests in
+   `packages/core/test/slots/browser/slot.test.js` (the same component
+   asserted in both modes) so the parity claim stays proven.
 
 ## Tests
 

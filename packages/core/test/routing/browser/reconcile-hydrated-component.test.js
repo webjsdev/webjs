@@ -21,6 +21,7 @@
 import { html } from '../../../src/html.js';
 import { WebComponent } from '../../../src/component.js';
 import { _diffElementInPlace, _reconcileChildren } from '../../../src/router-client.js';
+import { ensureSlotState } from '../../../src/slot.js';
 
 import { assert } from '../../../../../test/browser-assert.js';
 
@@ -581,5 +582,23 @@ suite('Client router: reconcile does not corrupt a hydrated component (#906)', (
     await Promise.resolve();
     assert.ok(cCount() >= 1, 'slotchange fires on the actual->fallback transition');
     c.remove();
+  });
+
+  test('a host with slot state but no rendered instance (pre-first-render) is opaque', async () => {
+    // The opacity guard widened to INSTANCE || SLOT_STATE (#1021): between a
+    // light host's upgrade (slot state installed) and its deferred first render
+    // (no instance yet), a same-task morph must still treat it as opaque, or it
+    // would reconcile INTO the host through the slot interception. Counterfactual:
+    // with only the INSTANCE check, #keep is replaced by #different.
+    const dst = document.createElement('div');
+    ensureSlotState(dst); // SLOT_STATE present, no webjs.instance
+    dst.innerHTML = '<span id="keep">live</span>';
+    document.body.appendChild(dst);
+    const src = document.createElement('div');
+    src.innerHTML = '<span id="different">incoming</span>';
+    _diffElementInPlace(dst, src);
+    assert.ok(dst.querySelector('#keep'), 'router did not recurse into the pre-render slot host');
+    assert.ok(!dst.querySelector('#different'), 'incoming child was not reconciled in');
+    dst.remove();
   });
 });

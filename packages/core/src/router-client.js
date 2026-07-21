@@ -18,7 +18,7 @@ import { scanSeeds } from './action-seed-client.js';
 // reused hydrated light-DOM component across a soft nav (#908).
 import {
   SLOT_STATE, LIGHT_SLOT_ATTR, PROJECTION_ATTR, PROJECTION_ACTUAL,
-  setSlotContent,
+  projectAuthored, keyOfName, isAuthoredContentSlot,
 } from './slot.js';
 
 /** The content type a content-negotiated stream-action response carries (#248). */
@@ -2605,6 +2605,23 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
   // carriers, so the inert payload never lands in the live document.
   try { scanSeeds(doc); } catch { /* seeding is best-effort */ }
 
+  // Every host in this parsed doc is FRAMEWORK-SERIALIZED markup (an SSR
+  // fragment or a back/forward snapshot of post-hydration HTML), never
+  // author-written children. Stamp them so connectedCallback's slot chooser
+  // ADOPTS instead of capture-hoovering the rendered tree, which matters for
+  // a restored host whose serialized shape carries no projected slot (a
+  // conditionally closed slot at snapshot time) where the structural
+  // slot-marker detector has nothing to see. The chooser consumes and removes
+  // the attribute on upgrade.
+  // (An ELIDED display-only host never upgrades, so its stamp is retained as
+  // an inert attribute; diffElementInPlace never copies it onto a live host,
+  // and the upgrade path consumes it, so it cannot mis-route anything.)
+  try {
+    for (const el of doc.querySelectorAll('[data-wj-host]')) {
+      el.setAttribute('data-wj-serialized', '');
+    }
+  } catch { /* stamping is best-effort */ }
+
   // Any clean swap (no importmap mismatch, including cache restores
   // and frame swaps where we don't even run the mismatch check) is a
   // signal that the user successfully navigated, so clear the reload
@@ -2806,6 +2823,15 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
       // REPLACE anchors at a parent already compared equal; the other tiers
       // require no change at all), and the fresh deeper keys arrive via the
       // physically replaced boundary comments inside the range.
+      //
+      // When the swapped range lives INSIDE a light-DOM slot (a layout whose
+      // ${children} render inside a slotted shell component), the raw swap
+      // just rewrote nodes the slot runtime believes it owns, so its record is
+      // now stale. Resync the owning host's record from the slot's real
+      // children through the one public seam, or the host's next
+      // applySlotAssignments would wipe the freshly swapped content and
+      // restore the stale list.
+      resyncEnclosingSlotRecord(live.start);
       blurOutgoingFocus();
     }, () => upgradeCustomElementsInRange(live));
     forwardSuspenseResolvers(doc.body);
@@ -3078,6 +3104,14 @@ function diffElementInPlace(dst, src) {
   for (const attr of src.attributes) {
     srcAttrs.add(attr.name);
     if (LIVE_ATTRS.has(attr.name)) continue;
+    // The serialized-restore stamp is a message to a NOT-YET-UPGRADED
+    // element's connectedCallback; copying it onto a live reused host would
+    // leave a consume-once marker lingering in the live DOM forever. Note
+    // the REMOVAL loop below never strips an existing stamp either (the
+    // stamp is in srcAttrs, added before this skip) and that retention is
+    // load-bearing: a not-yet-upgraded `static lazy` host must KEEP its
+    // stamp across an intervening morph so its late upgrade still adopts.
+    if (attr.name === 'data-wj-serialized') continue;
     if (dst.getAttribute(attr.name) !== attr.value) {
       dst.setAttribute(attr.name, attr.value);
     }
@@ -3133,7 +3167,12 @@ function diffElementInPlace(dst, src) {
  * @returns {boolean}
  */
 function isHydratedComponent(el) {
-  return /** @type {any} */ (el)[Symbol.for('webjs.instance')] != null;
+  // Opaque to the router when it has rendered (INSTANCE) OR merely has slot
+  // state installed but has not yet run its deferred first render (SLOT_STATE):
+  // in that window a same-task morph would otherwise reconcile INTO the host
+  // through the slot interception.
+  const a = /** @type {any} */ (el);
+  return a[Symbol.for('webjs.instance')] != null || a[SLOT_STATE] != null;
 }
 
 /**
@@ -3167,7 +3206,31 @@ function ownActualLightSlots(host) {
   for (const slot of host.querySelectorAll(sel)) {
     const s = /** @type {HTMLSlotElement} */ (slot);
     if (!isOwnLightSlot(s, host)) continue;
-    const name = s.getAttribute('name') || null;
+    // The runtime's invariant applies here too: a slot inside AUTHORED
+    // content (an author-relocated rendered chunk, a spoofed stamp) is
+    // inert content, never a reprojection target; collecting it would
+    // project into (or evict from) a slot the apply refuses to place.
+    if (isAuthoredContentSlot(host, s)) continue;
+    // Src-side (parsed doc) hosts have no record, so the authored test is
+    // inert there; the SERIALIZED shape of content is structural instead: a
+    // slot nested inside an ACTUAL-mode light slot of the same host is
+    // content (an SSR'd forwarded slot rides inside the inner host's own
+    // actual slot), never a reprojection target. A slot inside a
+    // FALLBACK-mode container stays collectable: fallback content is
+    // template markup, and a slot there is legitimate.
+    let nestedInActual = false;
+    for (let a = s.parentElement; a && a !== host; a = a.parentElement) {
+      if (
+        a.tagName === 'SLOT' &&
+        a.hasAttribute(LIGHT_SLOT_ATTR) &&
+        a.getAttribute(PROJECTION_ATTR) === PROJECTION_ACTUAL
+      ) {
+        nestedInActual = true;
+        break;
+      }
+    }
+    if (nestedInActual) continue;
+    const name = keyOfName(s.getAttribute('name'));
     if (!byName.has(name)) byName.set(name, s);
   }
   return byName;
@@ -3193,19 +3256,45 @@ function ownActualLightSlots(host) {
  *     on the page-authored slot children, exactly as #908 shipped.
  *   - actual->fallback (content REMOVED) and fallback->actual (content ADDED):
  *     a slot's fallback is RENDER-OWNED (the compiled fallback template held by
- *     the slot-part), so these are NOT a raw reconcile. Drive them through the
- *     slot runtime's own primitives (`applyFallback` / `applyActualAssignment`)
- *     on the ONE resolved own slot, which restore or swap the render-owned
- *     fallback without reconciling any lit-html part (#912). This is applied
- *     surgically to the target slot, NOT via a whole-host application
- *     pass: a whole-host pass selects EVERY `data-webjs-light` slot in the
- *     subtree (including a nested child component's), so running it here would
- *     let this component's assignment reach into a nested child's same-named
- *     slot and clobber its render-owned nodes (the #906 hazard, one level down).
+ *     the slot-part), so these are NOT a raw reconcile. All three cases route
+ *     through `projectAuthored`, the record seam, whose apply pass restores or
+ *     swaps the render-owned fallback without reconciling any lit-html part
+ *     (#912). The #906 one-level-down hazard (this component's assignment
+ *     reaching a nested child's same-named slot) is answered by the apply
+ *     pass's own-slot filtering (`isOwnSlot` + the authored-content
+ *     exclusion), not by surgical single-slot application.
  *
  * @param {Element} dst  Live hydrated component host.
  * @param {Element} src  Incoming SSR copy of the same component.
  */
+/**
+ * After a boundary swap, if the swapped range's parent is a light-DOM slot,
+ * resync the owning host's slot record from the slot's REAL children through
+ * the one public seam (`projectAuthored`). The router's raw range write is the
+ * one sanctioned write into a region the slot runtime also places (a layout's
+ * `${children}` rendered inside a slotted shell puts the `wj:children` markers
+ * INSIDE that shell's slot), so without this sync the record goes stale and
+ * the host's next apply would wipe the swapped-in page content and restore the
+ * pruned old list. Walking up from the slot, the owner is the nearest
+ * `SLOT_STATE` host with no other custom element in between; anything else
+ * (a nested stateless component, a shadow slot) bails.
+ *
+ * @param {Comment} startMarker
+ */
+function resyncEnclosingSlotRecord(startMarker) {
+  const p = startMarker.parentNode;
+  if (!p || p.nodeType !== 1) return;
+  const slotEl = /** @type {Element} */ (p);
+  if (slotEl.tagName !== 'SLOT' || !slotEl.hasAttribute(LIGHT_SLOT_ATTR)) return;
+  let host = null;
+  for (let a = slotEl.parentElement; a; a = a.parentElement) {
+    if (/** @type {any} */ (a)[SLOT_STATE]) { host = a; break; }
+    if (a.tagName.includes('-')) return; // belongs to a stateless nested element
+  }
+  if (!host) return;
+  projectAuthored(host, keyOfName(slotEl.getAttribute('name')), [...slotEl.childNodes]);
+}
+
 function reprojectSlottedContent(dst, src) {
   // Only a light-DOM component that tracks slot assignments has placed
   // page-authored content to update. No slot state (no <slot>, or a shadow-DOM
@@ -3218,7 +3307,7 @@ function reprojectSlottedContent(dst, src) {
   if (liveSlots.size === 0 && incSlots.size === 0) return;
 
   // #1015: slotted children are VALUES pushed through the ONE public seam,
-  // setSlotContent (no cross-module state surgery; the slot runtime owns the
+  // projectAuthored (no cross-module state surgery; the slot runtime owns the
   // record, fires slotchange on a genuine set change, and re-applies). The
   // union walk covers boundary transitions (a name present on only one side).
   const names = new Set([...liveSlots.keys(), ...incSlots.keys()]);
@@ -3233,13 +3322,13 @@ function reprojectSlottedContent(dst, src) {
       // set-equality check makes slotchange fire exactly on an
       // add/remove/replace and stay silent on a pure text edit (#912).
       reconcileChildren(liveSlot, incSlot);
-      setSlotContent(dst, name, [...liveSlot.childNodes]);
+      projectAuthored(dst, name, [...liveSlot.childNodes]);
     } else if (incSlot) {
       // fallback->actual: incoming ADDED content. Import and push.
-      setSlotContent(dst, name, [...incSlot.childNodes].map((n) => document.importNode(n, true)));
+      projectAuthored(dst, name, [...incSlot.childNodes].map((n) => document.importNode(n, true)));
     } else {
       // actual->fallback: incoming DROPPED the content. Reset to fallback.
-      setSlotContent(dst, name, null);
+      projectAuthored(dst, name, null);
     }
   }
 }

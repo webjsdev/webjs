@@ -173,7 +173,7 @@ jobs:
       # `#*` catch-all key (a `#/`-prefixed key does NOT resolve on Bun, which is
       # why the scaffold ships the slash-free `#*` form). The same script proves the Node path
       # under `npm test`.
-      - name: webjs # path alias on Bun
+      - name: "webjs # path alias on Bun"
         run: bun test/bun/path-alias.mjs
       # Server timeout wiring on Bun (#663): the node:http requestTimeout /
       # headersTimeout / keepAliveTimeout map onto Bun.serve's single idleTimeout
@@ -187,6 +187,14 @@ jobs:
       # on the Bun SSR path (buffered and streamed) as on Node.
       - name: webjs binding-prefix dispatch on Bun
         run: bun test/bun/binding-prefixes.mjs
+      # Light-DOM slot SSR projection on Bun (#1021): slot substitution
+      # (injectDSD / substituteSlotsInRender) is on the SSR hot path, so the
+      # projection must be byte-consistent across runtimes: authored children
+      # land in their named + default slots, an unmatched slot falls back, and
+      # the data-webjs-light + data-projection markers are emitted. The same
+      # script proves the Node path under `npm test`.
+      - name: Light-DOM slot SSR projection on Bun
+        run: bun test/bun/slot-ssr-parity.mjs
       # SQLite busy_timeout on Bun (#673): bun:sqlite (like node:sqlite) defaults
       # busy_timeout to 0, so a contended write throws `database is locked`; the
       # connection tune sets busy_timeout=5000 + WAL. This asserts the bug

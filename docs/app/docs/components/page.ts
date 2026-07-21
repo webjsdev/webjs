@@ -464,30 +464,40 @@ UserProfile.register('user-profile');</pre>
     <h2>Slots: Content Projection</h2>
     <p>Slots are how a parent passes content into a component. If you are coming from React, think of the default slot as <code>children</code>. <strong>WebJs supports the full shadow-DOM <code>&lt;slot&gt;</code> surface in light DOM as well as shadow DOM</strong>, so every example below works identically whether the component sets <code>static shadow = true</code> or leaves it at the default (light DOM). The light-DOM runtime mirrors <code>HTMLSlotElement.assignedNodes()</code>, <code>assignedElements()</code>, <code>assignedSlot</code>, and the <code>slotchange</code> event, plus named slots, fallback content, and first-wins resolution. To our knowledge no other web-components framework offers this complete parity in light DOM. Lit's slot APIs only work inside shadow roots, and Stencil's light-DOM slot polyfill has known gaps around fallback content and mixed shadow / non-shadow trees.</p>
 
-    <h3>Children as Values</h3>
-    <p>In light DOM, slotted children follow the React children model: the component captures its authored children <strong>once at mount</strong> into a per-instance record, and its own renderer places them into the <code>&lt;slot&gt;</code> containers. The record is a public API:</p>
+    <h3>The native slot API, in light DOM</h3>
+    <p>There is no WebJs-specific slot API. Light-DOM slots ARE the native DOM slot API, so post-mount writes are live exactly as in shadow DOM: <code>appendChild</code>, <code>insertBefore</code>, <code>removeChild</code>, <code>el.remove()</code>, <code>innerHTML</code>, flipping a child's <code>slot=""</code> attribute, and <code>HTMLSlotElement.assign()</code> all re-project immediately. The reads (<code>assignedNodes()</code>, <code>assignedElements()</code>, <code>assignedSlot</code>) and the <code>slotchange</code> event behave identically to shadow DOM, including native async-coalesced <code>slotchange</code> timing. One caveat rides <code>assign()</code>, which in light DOM is an <em>extension</em> (an element-bound overlay that works alongside name matching) while native shadow <code>assign()</code> only works under <code>slotAssignment: 'manual'</code>, a mode WebJs's shadow side does not set. So <code>assign()</code> is the one write that does not survive flipping to <code>static shadow = true</code>; prefer <code>slot=""</code> attributes in a component meant to move between modes.</p>
 
-    <pre>class MyCard extends WebComponent {
-  render() {
-    // Conditional-on-slot rendering. hasSlot() and this.slots work at SSR
-    // too (the server seeds the record from the authored children before
-    // the component renders), so the first paint is already correct.
-    return html\`
-      \${this.hasSlot('header') ? html\`&lt;header&gt;&lt;slot name="header"&gt;&lt;/slot&gt;&lt;/header&gt;\` : ''}
-      &lt;main&gt;&lt;slot&gt;&lt;/slot&gt;&lt;/main&gt;
-    \`;
-  }
-}
+    <pre>const card = document.querySelector('my-card');
 
-// Reading the record:
-card.slots.default   // Node[] of the default-slot content
-card.hasSlot('header')
+// Every one of these is live, and identical to shadow DOM:
+card.appendChild(node);
+card.querySelector('[slot=old]').slot = 'new'; // re-projects
+card.innerHTML = '&lt;p&gt;replaced&lt;/p&gt;';
 
-// The ONE dynamic path (fires slotchange when the assignment changes):
-card.setSlotContent('header', someNodeOrArrayOrString);
-card.setSlotContent('header', null); // reset to the slot's fallback content</pre>
+// Reads mirror shadow DOM:
+card.querySelector('slot').assignedNodes();
+node.assignedSlot;
+card.querySelector('slot').addEventListener('slotchange', ...);</pre>
 
-    <p><strong>What no longer works (by design)</strong>: calling <code>appendChild</code> on a mounted host, or flipping a child's <code>slot=""</code> attribute after mount, does not live re-project. Content set after mount goes through <code>setSlotContent()</code>. The reads (<code>assignedNodes</code>, <code>assignedElements</code>, <code>assignedSlot</code>, <code>slotchange</code>) are unaffected.</p>
+    <p><strong>Migrating from a shadow-DOM component</strong>: flip <code>static shadow</code> and nothing else changes, with the documented gaps and limitations on this page as the exceptions (most notably the <code>assign()</code> caveat above, forwarded-slot content, and first-render read timing). You write the same template and the same imperative code.</p>
+
+    <p><strong>The four light-DOM gaps</strong>, all a consequence of light DOM having no shadow boundary, not missing features:</p>
+    <ul>
+      <li><strong>Structural host reads.</strong> <code>host.children</code> / <code>host.childNodes</code> / <code>host.querySelector(':scope > ...')</code> and the <code>innerHTML</code> <em>getter</em> read the rendered template, not the authored children (in shadow DOM the authored children stay in the host's light tree). Read slotted content with <code>assignedNodes()</code> instead.</li>
+      <li><strong><code>assignedChild.parentNode</code></strong> is the <code>&lt;slot&gt;</code> element, not the host.</li>
+      <li><strong><code>::slotted()</code> CSS</strong> is shadow-only (it needs the boundary to select across). In light DOM, style slotted content with normal selectors or Tailwind on the children directly, which is strictly more powerful.</li>
+      <li><strong>Initial-projection timing.</strong> The first light-DOM projection lands one microtask after the first render, so <code>firstUpdated()</code> sees the <code>&lt;slot&gt;</code> element with an <em>empty</em> <code>assignedNodes()</code> (shadow DOM projects natively before it). Read assigned content from a <code>slotchange</code> listener, or after a microtask. Every later read and every mutation-driven update is identical in both modes.</li>
+    </ul>
+
+    <p><strong>Conditional-on-slot</strong> at render time (branching a template on whether a slot has content) is not a thing in either mode, because a shadow template can't branch on light-child presence at render time either. Use CSS <code>:has()</code> / <code>slot:empty</code>, or a <code>slotchange</code> listener.</p>
+
+    <p>A generic DOM library that reaches into a component should operate on the assigned nodes, never on the host element itself.</p>
+
+    <p><strong>Live writes need the component's JS on the page.</strong> A display-only slotted wrapper (a component that only renders a <code>&lt;slot&gt;</code>, with no interactivity) is elided, so it ships no JavaScript and its post-mount native writes are inert, the same as any elided component. A component that is actually interacted with ships automatically (a client module references its tag); if a consumer reaches an otherwise-display-only wrapper through a string selector the analyzer cannot see, force it to ship with <code>static interactive = true</code>. Shadow-DOM components always ship, so this is the one boundary set by elision rather than by slots.</p>
+
+    <p><strong>Known limitation: forwarded-slot content projection is SSR-only.</strong> A template can forward a slot into a nested component (<code>html\`&lt;inner-shell&gt;&lt;slot&gt;fallback&lt;/slot&gt;&lt;/inner-shell&gt;\`</code>), and the forwarded slot's <em>fallback</em> works everywhere, as do the reads (<code>assignedNodes({ flatten: true })</code> follows the chain). But <em>content</em> passed to the outer component currently projects through the forwarded slot only in the server-rendered first paint; on the client the forwarded slot shows its fallback. Prefer passing content straight to the inner component until this write-path lands.</p>
+
+    <p><strong>Known limitation: named-slot slices of a layout's children across soft navigation.</strong> When a <em>layout</em> renders its <code>\${children}</code> inside a slotted shell and a page emits top-level <code>slot=""</code>-attributed children, the named-slot slices update on a full page load but not on a soft-nav boundary swap (the default slot's slice updates either way). Until the router-side resync lands, keep a layout's page-emitted content in the default slot.</p>
 
     <h3>Default Slot</h3>
     <p>The <code>&lt;slot&gt;&lt;/slot&gt;</code> element in a component's <code>render()</code> is where the parent's child content appears:</p>
