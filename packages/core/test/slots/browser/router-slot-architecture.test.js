@@ -148,6 +148,77 @@ suite('Router + slot architectural regressions', () => {
     o.remove();
   });
 
+  test('a template-forwarded slot projects the OUTER content on a client-only mount (#1023)', async () => {
+    // The headline #1023 fix: template ownership routes the forwarded slot to
+    // the OUTER host that rendered it, so the outer's authored content lands
+    // there instead of the fallback.
+    if (!customElements.get('fw1023-inner')) {
+      class Inner extends WebComponent {
+        render() { return html`<div class="card"><slot></slot></div>`; }
+      }
+      Inner.register('fw1023-inner');
+    }
+    const outerTag = tagName('fw1023-outer');
+    class Outer extends WebComponent {
+      render() { return html`<fw1023-inner><slot>forwarded fallback</slot></fw1023-inner>`; }
+    }
+    Outer.register(outerTag);
+    const o = document.createElement(outerTag);
+    o.appendChild(document.createTextNode('Hello'));
+    document.body.appendChild(o); // client-only mount, never SSR'd
+    await tick();
+    await tick();
+    try {
+      const inner = o.querySelector('fw1023-inner');
+      const fwd = o.querySelector('fw1023-inner > .card slot[data-webjs-light]');
+      assert.ok(fwd, 'the forwarded slot rendered');
+      assert.ok(inner.textContent.includes('Hello'), 'the OUTER content projected into the forwarded slot');
+      assert.ok(!inner.textContent.includes('forwarded fallback'), 'fallback replaced by content');
+      // The forwarded slot's assignedNodes reflect the outer content.
+      const assigned = fwd.assignedNodes();
+      assert.ok(assigned.some((n) => n.textContent === 'Hello'), 'assignedNodes carries the outer content');
+      // Live update re-projects into the forwarded slot.
+      o.appendChild(document.createTextNode(' World'));
+      await tick();
+      assert.ok(inner.textContent.includes('Hello World'), 'a post-mount write re-projects');
+    } finally {
+      o.remove();
+    }
+  });
+
+  test('a nested child component keeps its OWN slot (forwarding does not steal, #1023)', async () => {
+    // Ownership must exclude a genuine child's own slot: outer forwards its
+    // default slot into the inner's default slot, but the inner ALSO has a
+    // named slot with inner-authored content that outer must never claim.
+    if (!customElements.get('fw1023-inner2')) {
+      class Inner extends WebComponent {
+        render() {
+          return html`<div><slot></slot><em class="tag"><slot name="tag">inner-tag</slot></em></div>`;
+        }
+      }
+      Inner.register('fw1023-inner2');
+    }
+    const outerTag = tagName('fw1023-outer2');
+    class Outer extends WebComponent {
+      render() { return html`<fw1023-inner2><slot></slot></fw1023-inner2>`; }
+    }
+    Outer.register(outerTag);
+    const o = document.createElement(outerTag);
+    o.appendChild(document.createTextNode('OUTER'));
+    document.body.appendChild(o);
+    await tick();
+    await tick();
+    try {
+      const inner = o.querySelector('fw1023-inner2');
+      const defSlot = inner.querySelector(':scope > div > slot[data-webjs-light]:not([name])');
+      const tagSlot = inner.querySelector('slot[name="tag"]');
+      assert.ok(defSlot.textContent.includes('OUTER') || inner.textContent.includes('OUTER'), 'outer content in the forwarded default slot');
+      assert.ok(tagSlot.textContent.includes('inner-tag'), 'the inner OWN named slot kept its fallback (not stolen)');
+    } finally {
+      o.remove();
+    }
+  });
+
   test('a serialized-stamped host with a conditionally CLOSED slot adopts (no stale-tree projection)', async () => {
     // The serialized shape carries NO projected slot (the conditional is
     // closed at snapshot time), so the structural detector has nothing to see.

@@ -110,6 +110,21 @@ export const PROJECTION_FALLBACK = 'fallback';
  */
 export const SLOT_FALLBACK_FRAG = Symbol('webjs.slot.fallbackFrag');
 
+/**
+ * The host whose TEMPLATE produced this `<slot>` (the render container the
+ * renderer cloned the template into). Authoritative over the structural
+ * `isOwnSlot` walk: a slot a template FORWARDS into a nested component
+ * (`html\`<inner><slot></slot></inner>\``) sits physically inside that child
+ * but is owned by the OUTER host, which the structural walk (a custom element
+ * sits between them) gets wrong. Stamped by the renderer at bind time
+ * (render-client) and resolved from the SSR `data-wj-slot-owner` attribute on
+ * hydration so client-only mount and hydration share one mechanism.
+ */
+export const SLOT_OWNER = Symbol('webjs.slot.templateOwner');
+
+/** The SSR carrier for SLOT_OWNER (a symbol cannot cross the HTML boundary). */
+export const SLOT_OWNER_ATTR = 'data-wj-slot-owner';
+
 /** Maximum recursion depth for assignedNodes({flatten: true}); guards cycles. */
 const FLATTEN_MAX_DEPTH = 64;
 
@@ -2020,10 +2035,39 @@ export function hasFrameworkRenderedSubtree(host) {
  * @returns {boolean}
  */
 function isOwnSlot(host, slot) {
+  // Template-ownership is authoritative when known: a forwarded slot sits
+  // physically inside a child component but belongs to the host whose
+  // template rendered it. The symbol (client render) and the SSR attribute
+  // (hydration) are the same fact; the attribute is resolved to the symbol
+  // by resolveSlotOwner on connect, so it is only a fallback here.
+  const owner = /** @type {any} */ (slot)[SLOT_OWNER];
+  if (owner) return owner === host;
+  const ownerTag =
+    typeof slot.getAttribute === 'function' ? slot.getAttribute(SLOT_OWNER_ATTR) : null;
+  if (ownerTag) return ownerHostFor(slot, ownerTag) === host;
+  // Structural fallback: no OTHER custom element sits between slot and host.
   for (let p = slot.parentElement; p && p !== host; p = p.parentElement) {
     if (p.tagName.includes('-')) return false;
   }
   return true;
+}
+
+/**
+ * The host a `data-wj-slot-owner="<tag>"` attribute resolves to: the nearest
+ * SLOT_STATE ancestor whose tag matches. One-level forwarding resolves
+ * cleanly; same-tag-nested forwarding picks the nearest (the accepted edge,
+ * no worse than the structural walk it replaces).
+ *
+ * @param {Element} slot
+ * @param {string} ownerTag
+ * @returns {Element | null}
+ */
+function ownerHostFor(slot, ownerTag) {
+  const want = ownerTag.toLowerCase();
+  for (let p = slot.parentElement; p; p = p.parentElement) {
+    if (/** @type {any} */ (p)[SLOT_STATE] && p.tagName.toLowerCase() === want) return p;
+  }
+  return null;
 }
 
 /**
