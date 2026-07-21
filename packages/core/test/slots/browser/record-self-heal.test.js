@@ -1845,6 +1845,51 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
     }
   });
 
+  test('a reaction reparenting the host into a sibling arg throws atomically', async () => {
+    // TOCTOU: boomer's detach-into-scratch fires a reaction that puts the
+    // HOST inside wrapper (a later plain-node argument). The re-guard must
+    // throw HierarchyRequestError BEFORE the record receives the
+    // host-containing node (native throws the same class after conversion,
+    // with boomer likewise lost to the conversion fragment).
+    if (!customElements.get('boomer-probe')) {
+      class Probe extends HTMLElement {
+        disconnectedCallback() {
+          const c = /** @type {any} */ (this).__cycle;
+          if (c && !c.done) {
+            c.done = true;
+            c.wrapper.appendChild(c.host);
+          }
+        }
+      }
+      customElements.define('boomer-probe', Probe);
+    }
+    const tag = tagName('toctou-cycle');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    const holder = document.createElement('div');
+    document.body.appendChild(holder);
+    holder.appendChild(host); // give the host a re-parentable position
+    try {
+      host.appendChild(document.createElement('em'));
+      await tick();
+      const slot = host.querySelector('slot[data-webjs-light]');
+      const boomer = document.createElement('boomer-probe');
+      host.appendChild(boomer);
+      await tick();
+      const wrapper = document.createElement('div');
+      /** @type {any} */ (boomer).__cycle = { host, wrapper, done: false };
+      let threw = null;
+      try { host.append(boomer, wrapper); } catch (e) { threw = e; }
+      assert.equal(threw && threw.name, 'HierarchyRequestError', 'atomic throw');
+      assert.ok(!slot.contains(wrapper), 'the host-containing node never entered the slot');
+      host.appendChild(document.createElement('strong')); // still functional
+      await tick();
+      assert.ok(slot.querySelector('strong'), 'pipeline intact after the throw');
+    } finally {
+      host.remove();
+      holder.remove();
+    }
+  });
+
   test('router projectAuthored on the default slice leaves a manual assignment intact', async () => {
     const tag = tagName('proj-manual');
     const host = await mount(tag, () => html`<div><slot></slot><slot name="x"></slot></div>`);

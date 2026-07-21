@@ -745,8 +745,12 @@ export function projectAuthored(host, name, nodes) {
   } else {
     state.pendingRecordNodes = new Set([...evicted, ...list]);
   }
+  // Scope the adoption-clear to THIS call's nodes: under the latch the
+  // pending set may carry a co-pending nested op's nodes, whose adoptions
+  // are not this projection's to end.
   if (state.adoptedKey) {
-    for (const n of state.pendingRecordNodes) state.adoptedKey.delete(n);
+    for (const n of evicted) state.adoptedKey.delete(n);
+    for (const n of list) state.adoptedKey.delete(n);
   }
   repartition(state);
   applySlotAssignments(host);
@@ -1338,6 +1342,13 @@ function convertVariadicArgs(host, args) {
   // nets [a, ...fragRest] exactly like native; a repeated Node argument is
   // physically moved, netting keep-LAST order; and the record can never
   // receive a duplicate entry (scratch children are unique by construction).
+  // NOTE on reaction TIMING: detaching a connected argument here fires its
+  // [CEReactions] callbacks MID-call, where native defers them to the end
+  // of the outer variadic operation (a userland polyfill has no reactions
+  // queue). The net DOM converges through the latch + record ops; the one
+  // observable divergence is a same-host-mutating disconnect callback
+  // racing replaceChildren's wholesale displacement, accepted as part of
+  // the documented reaction-bounce family.
   const scratch = host.ownerDocument.createDocumentFragment();
   for (const c of converted) {
     if (c.text !== undefined) {
@@ -1347,10 +1358,17 @@ function convertVariadicArgs(host, args) {
       guardInsertable(host, kids);
       for (const k of kids) N_appendChild.call(scratch, k);
     } else if (c.node) {
+      // TOCTOU re-guard, mirroring the fragment branch: a reaction fired by
+      // an earlier argument's detach can reparent the HOST into this one.
+      guardCycle(host, [c.node]);
       N_appendChild.call(scratch, c.node);
     }
   }
   const nodes = Array.from(scratch.childNodes);
+  // Final assembled-validity check (DOM pre-insert runs validity AFTER the
+  // conversion step), so the record can never receive a host-containing
+  // node regardless of what mid-conversion reactions did.
+  guardCycle(host, nodes);
   for (const n of nodes) N_removeChild.call(scratch, n);
   return nodes;
 }
