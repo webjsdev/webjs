@@ -33,12 +33,14 @@
  *
  * Scope: each overlay is checked against its NODE runtime sibling (the `.js`
  * beside the `.d.ts`, which is also the `source`/Node condition). The one
- * dual-surface entry is `@webjsdev/core`'s `.`: the bare specifier resolves in
- * the BROWSER to a slim bundle that intentionally drops the server-only exports
- * (`renderToString` / `renderToStream` / `setCspNonceProvider`, which Node
- * consumers import from `@webjsdev/core/server`). Those stay declared on `.` for
- * the Node bare-specifier path, so they are NOT phantoms here; the browser strip
- * is a separate, documented split this guard does not model (tracked in #1035).
+ * dual-surface entry, `@webjsdev/core`'s `.`, is ALSO checked against the BROWSER
+ * entry the bare specifier resolves to (`index-browser.js`, via the server
+ * importmap): see BROWSER_SURFACES below. The browser bundle intentionally drops
+ * the server-only exports (`renderToString` / `renderToStream` /
+ * `setCspNonceProvider`, which Node consumers import from `@webjsdev/core/server`);
+ * those are allowlisted for the browser pass (with a positive control that they
+ * stay stripped), so only a NEW value the overlay declares that the browser
+ * bundle drops is flagged as a browser phantom (#1035).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
