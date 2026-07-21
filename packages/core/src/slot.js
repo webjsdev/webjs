@@ -14,6 +14,12 @@
  * removeChild, innerHTML, `el.slot=` flips, HTMLSlotElement.assign) plus the
  * full read surface (assignedNodes / assignedElements / {flatten} /
  * assignedSlot / slotchange, with native async-coalesced slotchange timing).
+ * One caveat rides assign() specifically. The light-DOM assign() is an
+ * EXTENSION of native (an element-bound per-node overlay while name matching
+ * keeps working); native shadow assign() requires slotAssignment 'manual' on
+ * the shadow root, which WebJs does not set, so in `static shadow = true`
+ * mode assign() is a native no-op. Avoid assign() in a component meant to
+ * flip modes.
  *
  * ONE WRITER. The design's core invariant: the component's own renderer is the
  * only actor that moves authored nodes into slots (`applySlotAssignments`).
@@ -35,6 +41,12 @@
  *   - Prune rule: a node the author detaches (el.remove()) or re-parents is
  *     dropped from `authored` by its real parent, killing zombie resurrection
  *     and cross-host theft.
+ *   - Self-heal, in resyncActualSlots. The record is NOT the only legitimate
+ *     writer INSIDE a slot; a parent component's hole committed there and a
+ *     library operating on the assigned container are folded back into
+ *     `authored` before every apply, with NODE-scoped order authority
+ *     (physical order adopted except for the exact nodes a record op
+ *     touched), so the one writer never destroys another writer's work.
  *
  * Documented inherent gaps (all from light DOM having no shadow boundary): structural
  * host reads (`host.children` / `childNodes` / the innerHTML GETTER show the
@@ -236,7 +248,19 @@ function manualSlotFor(state, node) {
       if (live.length) manual.set(slotEl, live);
       else manual.delete(slotEl);
     }
-    if (found) return slotEl;
+    if (found) {
+      // A manual entry is honoured only while its RECEIVING element is still
+      // part of this host's tree. A torn-down (conditionally re-rendered)
+      // slot element leaves the entry DORMANT: the node falls back to its
+      // slot= attribute (routed by name or parked, native's
+      // unassigned-but-connected behaviour) instead of being excluded from
+      // every slot and lost. The entry is kept, not deleted, so a re-attached
+      // element (the cache directive) resumes its assignment, matching
+      // native's element-bound persistence.
+      const hostEl = state.host;
+      if (hostEl && (slotEl === hostEl || hostEl.contains(slotEl))) return slotEl;
+      return null;
+    }
   }
   return null;
 }
@@ -376,6 +400,8 @@ function findLightAssignedSlot(el) {
 
 /**
  * @typedef {Object} SlotState
+ * @property {Element} host The owning host element (back-reference so
+ *   state-only helpers can test containment).
  * @property {Node[]} authored The ordered source of truth: every authored
  *   child of the host, in host-child order. `assignedByName` is DERIVED from
  *   this by `repartition` (grouping each node by its current `slot=`
@@ -418,6 +444,7 @@ export function ensureSlotState(host) {
   let state = h[SLOT_STATE];
   if (!state) {
     state = {
+      host,
       authored: [],
       assignedByName: new Map(),
       lastSnapshot: new WeakMap(),

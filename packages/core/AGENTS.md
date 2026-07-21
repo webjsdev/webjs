@@ -196,7 +196,13 @@ them per app.
    `authored` is the ordered source of truth, `assignedByName` is derived
    (`repartition`), and liveness re-runs that one writer via per-instance
    method interception + a renderer-write window + two read-only sensors +
-   a parent-keyed prune rule. The runtime gates every polyfill on the
+   a parent-keyed prune rule + a self-heal resync (a parent hole or a
+   library writing inside an assigned container is folded back into the
+   record with node-scoped order authority, never destroyed). One caveat
+   rides `assign()` specifically. The light-DOM `assign()` is an extension
+   (element-bound overlay; native shadow `assign()` needs slotAssignment
+   `manual`, which WebJs does not set), so avoid `assign()` in a component
+   meant to flip modes. The runtime gates every polyfill on the
    `data-webjs-light` attribute, so real shadow-DOM slots are untouched.
    SSR (`injectDSD`) projects light-DOM children into the rendered template
    before the response, so PE and JS-disabled clients see the content.

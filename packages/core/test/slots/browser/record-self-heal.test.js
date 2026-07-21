@@ -438,6 +438,170 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
     }
   });
 
+  test('a manual assignment to a TORN-DOWN slot element goes dormant, not lost', async () => {
+    // Element-keyed assign() + a conditional re-render that disposes and
+    // recreates the slot: the dead element must not keep excluding the node
+    // from every slot (permanent limbo). The node falls back to attribute
+    // routing (here: parked, connected) while the entry stays dormant.
+    const tag = tagName('dead-target');
+    class C extends WebComponent({ open: Boolean }) {
+      constructor() { super(); this.open = true; }
+      render() {
+        return this.open
+          ? html`<div><slot name="x"></slot></div>`
+          : html`<div>closed</div>`;
+      }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    document.body.appendChild(host);
+    await tick();
+    try {
+      const oldSlot = host.querySelector('slot[name="x"]');
+      const node = document.createElement('span');
+      node.id = 'dormant-node';
+      host.appendChild(node); // no slot attr
+      oldSlot.assign(node);
+      await tick();
+      assert.equal(node.parentElement, oldSlot, 'manually assigned');
+      host.open = false; // tears the slot down
+      await host.updateComplete;
+      await tick();
+      host.open = true; // recreates a NEW slot element with the same name
+      await host.updateComplete;
+      await tick();
+      await tick();
+      assert.ok(node.isConnected, 'node still connected (not lost in limbo)');
+      // The dead-element entry is dormant: the attribute-less node parks
+      // (native unassigned-but-connected) rather than vanishing.
+      assert.equal(
+        node.parentElement.tagName.toLowerCase(),
+        'wj-slot-park',
+        'fell back to attribute routing (parked)',
+      );
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('content written in the unfinalized window is placed with NO park bounce', async () => {
+    if (!customElements.get('reparent-probe')) {
+      class Probe extends HTMLElement {
+        constructor() { super(); this.connects = 0; }
+        connectedCallback() { this.connects += 1; }
+      }
+      customElements.define('reparent-probe', Probe);
+    }
+    const tag = tagName('window-probe');
+    class C extends WebComponent {
+      firstUpdated() {
+        const probe = document.createElement('reparent-probe');
+        this.appendChild(probe);
+      }
+      render() {
+        return html`<div>${html`<slot></slot>`}</div>`;
+      }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    document.body.appendChild(host);
+    await tick();
+    await tick();
+    try {
+      const probe = host.querySelector('reparent-probe');
+      assert.ok(probe, 'probe placed');
+      assert.equal(probe.parentElement.tagName.toLowerCase(), 'slot', 'in the slot');
+      assert.equal(
+        /** @type {any} */ (probe).connects,
+        1,
+        'connected exactly once: never bounced through the park while the slot was pending',
+      );
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('replaceChildren fully replaces even when a third writer diverged the slot', async () => {
+    const tag = tagName('wholesale-diverge');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      const a = document.createElement('a-el');
+      host.appendChild(a);
+      await tick();
+      const slot = host.querySelector('slot[data-webjs-light]');
+      // Third-writer divergence: a library node directly in the container.
+      const lib = document.createElement('u');
+      lib.id = 'lib';
+      slot.appendChild(lib);
+      // Wholesale replacement: the displaced children must NOT resurrect.
+      const fresh = document.createElement('strong');
+      host.replaceChildren(fresh);
+      await tick();
+      assert.ok(!slot.contains(a), 'displaced child did not resurrect');
+      assert.ok(slot.contains(fresh), 'new content placed');
+      assert.ok(slot.contains(lib), 'the third writer node was folded, not destroyed');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('removeChild drops the node even when a renderer write diverged the slot', async () => {
+    const tag = tagName('remove-diverge');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      const a = document.createElement('a-el');
+      const b = document.createElement('b-el');
+      host.append(a, b);
+      await tick();
+      const slot = host.querySelector('slot[data-webjs-light]');
+      slot.appendChild(document.createElement('u')); // divergence
+      host.removeChild(a);
+      await tick();
+      assert.ok(!slot.contains(a), 'removed node is gone (not resurrected by the resync)');
+      assert.ok(!a.isConnected, 'detached like native');
+      assert.ok(slot.contains(b), 'sibling intact');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('a rename of the receiving slot carries its manual assignment along', async () => {
+    const tag = tagName('rename-manual');
+    const host = await mount(tag, () => html`<div><slot name="x"></slot><slot name="y"></slot></div>`);
+    try {
+      const xSlot = host.querySelector('slot[name="x"]');
+      const node = document.createElement('span');
+      node.setAttribute('slot', 'y'); // attribute says y
+      host.appendChild(node);
+      await tick();
+      xSlot.assign(node); // manual overrides to x
+      await tick();
+      assert.equal(node.parentElement, xSlot, 'manually in x');
+      xSlot.setAttribute('name', 'z'); // rename the RECEIVING element
+      await tick();
+      await tick();
+      assert.equal(node.parentElement, xSlot, 'assignment followed the ELEMENT through the rename');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('appendChild of a non-insertable Node throws HierarchyRequestError untouched', async () => {
+    const tag = tagName('bad-nodetype');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      host.appendChild(document.createElement('em'));
+      await tick();
+      const slot = host.querySelector('slot[data-webjs-light]');
+      let threw = null;
+      try { host.appendChild(/** @type {any} */ (document.createAttribute('data-x'))); } catch (e) { threw = e; }
+      assert.equal(threw && threw.name, 'HierarchyRequestError', 'Attr rejected like native');
+      assert.equal(slot.children.length, 1, 'zero state change');
+    } finally {
+      host.remove();
+    }
+  });
+
   test('router projectAuthored on the default slice leaves a manual assignment intact', async () => {
     const tag = tagName('proj-manual');
     const host = await mount(tag, () => html`<div><slot></slot><slot name="x"></slot></div>`);
