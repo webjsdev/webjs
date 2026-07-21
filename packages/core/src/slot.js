@@ -446,6 +446,10 @@ function findLightAssignedSlot(el) {
  *   / assign() / router splice), consumed by the next apply pass: the resync
  *   step honours record positions for exactly these nodes and adopts
  *   physical order for everything else (node-scoped order authority).
+ * @property {boolean} [applying] Re-entrancy latch: true while an apply
+ *   pass runs; a nested call flags `reapply` and returns.
+ * @property {boolean} [reapply] Set by a nested apply attempt; the outer
+ *   pass loops until a full pass completes without it.
  * @property {boolean} [adopted] True when this state was populated by the
  *   ADOPT connect branch (SSR hydration / serialized restore): the host's
  *   pre-first-render children are rendered markup, so the reconnect fold
@@ -1332,7 +1336,18 @@ function convertVariadicArgs(host, args) {
       nodes.push(c.node);
     }
   }
-  return nodes;
+  // Keep-LAST dedup: native moves a repeated Node argument, so append(a, b,
+  // a) nets [b, a]; a duplicate record entry would desync the snapshot from
+  // the DOM and fire a spurious slotchange on the healing pass.
+  const seen = new Set();
+  const deduped = [];
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i];
+    if (seen.has(n)) continue;
+    seen.add(n);
+    deduped.unshift(n);
+  }
+  return deduped;
 }
 
 /**
@@ -1583,141 +1598,163 @@ export function applySlotAssignments(host) {
   );
   if (!state) return;
 
-  // 0. Self-heal, prune, re-derive, in that order. First fold in what a
-  //    NON-record writer wrote inside our own actual slots (a parent
-  //    component's hole committed within projected content, or a library
-  //    operating on the assigned container): the apply step is the only
-  //    record writer, so physical-vs-snapshot divergence means someone else
-  //    wrote there, and destroying their nodes on this pass would be the
-  //    one-writer violation in reverse. Then prune the record of nodes the
-  //    author detached out from under us (an `el.remove()` on a projected
-  //    child, or a re-parent elsewhere): their parent is no longer one of our
-  //    own slots / the park, and we did not detach them ourselves. Then
-  //    re-derive from the surviving `authored` so a `slot=` change (or any
-  //    authored mutation) is reflected before placement.
-  const pendingNodes = state.pendingRecordNodes || EMPTY_NODE_SET;
-  state.pendingRecordNodes = undefined;
-  resyncActualSlots(host, state, pendingNodes);
-  pruneAuthored(host, state);
-  repartition(state);
-
-  // 1. The host's own slots, document order. A slot that is BOUND but not yet
-  //    FINALIZED (its slot-part deferred finalize to a microtask: it carries
-  //    data-webjs-light from compile time but has neither a data-projection
-  //    stamp nor a harvested fallback frag) is EXCLUDED from placement this
-  //    pass: treating it as fallback-mode would destroy its un-harvested
-  //    fallback clone, and the finalize's own queued apply covers it one
-  //    microtask later. Its NAME still counts as rendered (pendingNames) so
-  //    the park step does not spuriously park (and bounce) its content.
-  /** @type {HTMLSlotElement[]} */
-  const slots = [];
-  /** @type {Set<string|null>} */
-  const pendingNames = new Set();
-  for (const el of host.querySelectorAll(`slot[${LIGHT_SLOT_ATTR}]`)) {
-    if (!isOwnSlot(host, el)) continue;
-    // An own slot can NEVER live inside AUTHORED content: a slot element the
-    // author moved or wrote into the host (another component's chunk, a
-    // spoofed stamp) is inert content, exactly like a <slot> outside a
-    // shadow tree natively. Collecting it would hand it assignments whose
-    // nodes can CONTAIN it (HierarchyRequestError at placement).
-    if (isInsideAuthored(state, host, el)) continue;
-    if (
-      !el.hasAttribute(PROJECTION_ATTR) &&
-      !(SLOT_FALLBACK_FRAG in /** @type {any} */ (el))
-    ) {
-      pendingNames.add(keyOfName(el.getAttribute('name')));
-      continue;
-    }
-    slots.push(/** @type {HTMLSlotElement} */ (el));
+  // Re-entrancy latch: a custom-element reaction fired by a placement or
+  // fallback removal (a disconnectedCallback doing host.appendChild) can
+  // author-write while THIS pass is mid-flight; running a nested pass
+  // would let the outer loop destroy the inner placements and desync
+  // data-projection from the snapshot. The nested call returns after
+  // flagging a re-run (its record splice already happened in the
+  // interceptor), and the outer pass repeats until a full pass runs with
+  // no re-entrant write. The end-of-pass source drain also rides this
+  // loop instead of recursing.
+  if (state.applying) {
+    state.reapply = true;
+    return;
   }
+  state.applying = true;
+  try {
+    do {
+      state.reapply = false;
 
-  // 2. Group by current `name` attribute in document order.
-  /** @type {Map<string|null, HTMLSlotElement[]>} */
-  const groups = new Map();
-  for (const slot of slots) {
-    const name = keyOfName(slot.getAttribute('name'));
-    let arr = groups.get(name);
-    if (!arr) {
-      arr = [];
-      groups.set(name, arr);
-    }
-    arr.push(slot);
-  }
+      // 0. Self-heal, prune, re-derive, in that order. First fold in what a
+      //    NON-record writer wrote inside our own actual slots (a parent
+      //    component's hole committed within projected content, or a library
+      //    operating on the assigned container): the apply step is the only
+      //    record writer, so physical-vs-snapshot divergence means someone else
+      //    wrote there, and destroying their nodes on this pass would be the
+      //    one-writer violation in reverse. Then prune the record of nodes the
+      //    author detached out from under us (an `el.remove()` on a projected
+      //    child, or a re-parent elsewhere): their parent is no longer one of our
+      //    own slots / the park, and we did not detach them ourselves. Then
+      //    re-derive from the surviving `authored` so a `slot=` change (or any
+      //    authored mutation) is reflected before placement.
+      const pendingNodes = state.pendingRecordNodes || EMPTY_NODE_SET;
+      state.pendingRecordNodes = undefined;
+      resyncActualSlots(host, state, pendingNodes);
+      pruneAuthored(host, state);
+      repartition(state);
 
-  // 3. Assign per the first-wins rule; a node manually bound via `assign()`
-  //    routes to ITS slot element (native binds slottables to the receiving
-  //    element), everything else to the first slot of its name.
-  /** @type {HTMLSlotElement[]} */
-  const slotsChanged = [];
-  for (const [name, group] of groups) {
-    const assigned = state.assignedByName.get(name) || [];
-    for (let i = 0; i < group.length; i++) {
-      const slot = group[i];
-      const own = assigned.filter((n) => {
-        const m = manualSlotFor(state, n);
-        return m ? m === slot : i === 0;
-      });
-      if (own.length > 0) {
-        if (applyActualAssignment(state, slot, own)) {
-          slotsChanged.push(slot);
+      // 1. The host's own slots, document order. A slot that is BOUND but not yet
+      //    FINALIZED (its slot-part deferred finalize to a microtask: it carries
+      //    data-webjs-light from compile time but has neither a data-projection
+      //    stamp nor a harvested fallback frag) is EXCLUDED from placement this
+      //    pass: treating it as fallback-mode would destroy its un-harvested
+      //    fallback clone, and the finalize's own queued apply covers it one
+      //    microtask later. Its NAME still counts as rendered (pendingNames) so
+      //    the park step does not spuriously park (and bounce) its content.
+      /** @type {HTMLSlotElement[]} */
+      const slots = [];
+      /** @type {Set<string|null>} */
+      const pendingNames = new Set();
+      for (const el of host.querySelectorAll(`slot[${LIGHT_SLOT_ATTR}]`)) {
+        if (!isOwnSlot(host, el)) continue;
+        // An own slot can NEVER live inside AUTHORED content: a slot element the
+        // author moved or wrote into the host (another component's chunk, a
+        // spoofed stamp) is inert content, exactly like a <slot> outside a
+        // shadow tree natively. Collecting it would hand it assignments whose
+        // nodes can CONTAIN it (HierarchyRequestError at placement).
+        if (isInsideAuthored(state, host, el)) continue;
+        if (
+          !el.hasAttribute(PROJECTION_ATTR) &&
+          !(SLOT_FALLBACK_FRAG in /** @type {any} */ (el))
+        ) {
+          pendingNames.add(keyOfName(el.getAttribute('name')));
+          continue;
         }
-      } else {
-        if (applyFallback(state, slot)) slotsChanged.push(slot);
+        slots.push(/** @type {HTMLSlotElement} */ (el));
       }
-    }
-  }
 
-  // 4. Queue slotchange on slots whose assignment actually changed. Native
-  //    timing: assignment recomputes synchronously (placement above already
-  //    ran) but the slotchange EVENT is async and coalesced (one per slot per
-  //    microtask). Synchronous dispatch here would let an author mutation
-  //    inside a slotchange handler recurse into this writer mid-loop, and
-  //    would fire N events for an N-node loop; coalescing matches the spec.
-  for (const slot of slotsChanged) queueSlotChange(state, slot);
-
-  // 5. Park authored nodes whose name matches no rendered own-slot. Native
-  //    shadow keeps an unassigned child connected but unrendered (a nested
-  //    custom element still upgrades and runs connectedCallback); a hidden
-  //    holding element inside the host reproduces that. Parked nodes have
-  //    parentNode === park, so the prune rule keeps them. The park is
-  //    RECONCILED to exactly the current unmatched set: a node that left the
-  //    record (or now matches a slot) is detached from the park, so a removed
-  //    parked child ends up isConnected === false like native removeChild.
-  const matched = new Set(groups.keys());
-  for (const name of pendingNames) matched.add(name);
-  const shouldPark = new Set();
-  for (const n of state.authored) {
-    if (!matched.has(effectiveKeyOf(state, n))) shouldPark.add(n);
-  }
-  const existingPark = /** @type {any} */ (host)[PARK];
-  if (existingPark) {
-    for (const n of Array.from(existingPark.childNodes)) {
-      if (!shouldPark.has(n)) N_removeChild.call(existingPark, n);
-    }
-  }
-  if (shouldPark.size) {
-    const park = parkFor(host);
-    for (const n of shouldPark) {
-      if (n.parentNode !== park) {
-        FRAMEWORK_DETACHED.delete(n);
-        withRendererWrites(host, () => N_appendChild.call(park, n));
+      // 2. Group by current `name` attribute in document order.
+      /** @type {Map<string|null, HTMLSlotElement[]>} */
+      const groups = new Map();
+      for (const slot of slots) {
+        const name = keyOfName(slot.getAttribute('name'));
+        let arr = groups.get(name);
+        if (!arr) {
+          arr = [];
+          groups.set(name, arr);
+        }
+        arr.push(slot);
       }
-    }
-  }
 
-  // LAST step: consume the records this apply's own placements generated,
-  // while their containment evidence is still fresh. A host-to-slot
-  // placement removal processed now sees contains === true and is retained
-  // trivially, so it can never age into a stale record that a later rescue
-  // makes indistinguishable from an author removal (the retention conjuncts
-  // in processBackstop stay as a second line for any record that still
-  // straddles). Running at the END keeps any recursive fold's inner apply
-  // from racing this pass's park bookkeeping; recursion terminates because
-  // a pure-placement batch marks nothing dirty and an inner apply leaves an
-  // empty queue behind.
-  if (state.backstop) {
-    const placementRecords = state.backstop.takeRecords();
-    if (placementRecords.length) processBackstop(host, state, placementRecords);
+      // 3. Assign per the first-wins rule; a node manually bound via `assign()`
+      //    routes to ITS slot element (native binds slottables to the receiving
+      //    element), everything else to the first slot of its name.
+      /** @type {HTMLSlotElement[]} */
+      const slotsChanged = [];
+      for (const [name, group] of groups) {
+        const assigned = state.assignedByName.get(name) || [];
+        for (let i = 0; i < group.length; i++) {
+          const slot = group[i];
+          const own = assigned.filter((n) => {
+            const m = manualSlotFor(state, n);
+            return m ? m === slot : i === 0;
+          });
+          if (own.length > 0) {
+            if (applyActualAssignment(state, slot, own)) {
+              slotsChanged.push(slot);
+            }
+          } else {
+            if (applyFallback(state, slot)) slotsChanged.push(slot);
+          }
+        }
+      }
+
+      // 4. Queue slotchange on slots whose assignment actually changed. Native
+      //    timing: assignment recomputes synchronously (placement above already
+      //    ran) but the slotchange EVENT is async and coalesced (one per slot per
+      //    microtask). Synchronous dispatch here would let an author mutation
+      //    inside a slotchange handler recurse into this writer mid-loop, and
+      //    would fire N events for an N-node loop; coalescing matches the spec.
+      for (const slot of slotsChanged) queueSlotChange(state, slot);
+
+      // 5. Park authored nodes whose name matches no rendered own-slot. Native
+      //    shadow keeps an unassigned child connected but unrendered (a nested
+      //    custom element still upgrades and runs connectedCallback); a hidden
+      //    holding element inside the host reproduces that. Parked nodes have
+      //    parentNode === park, so the prune rule keeps them. The park is
+      //    RECONCILED to exactly the current unmatched set: a node that left the
+      //    record (or now matches a slot) is detached from the park, so a removed
+      //    parked child ends up isConnected === false like native removeChild.
+      const matched = new Set(groups.keys());
+      for (const name of pendingNames) matched.add(name);
+      const shouldPark = new Set();
+      for (const n of state.authored) {
+        if (!matched.has(effectiveKeyOf(state, n))) shouldPark.add(n);
+      }
+      const existingPark = /** @type {any} */ (host)[PARK];
+      if (existingPark) {
+        for (const n of Array.from(existingPark.childNodes)) {
+          if (!shouldPark.has(n)) N_removeChild.call(existingPark, n);
+        }
+      }
+      if (shouldPark.size) {
+        const park = parkFor(host);
+        for (const n of shouldPark) {
+          if (n.parentNode !== park) {
+            FRAMEWORK_DETACHED.delete(n);
+            withRendererWrites(host, () => N_appendChild.call(park, n));
+          }
+        }
+      }
+
+      // LAST step: consume the records this apply's own placements generated,
+      // while their containment evidence is still fresh. A host-to-slot
+      // placement removal processed now sees contains === true and is retained
+      // trivially, so it can never age into a stale record that a later rescue
+      // makes indistinguishable from an author removal (the retention conjuncts
+      // in processBackstop stay as a second line for any record that still
+      // straddles). Running at the END keeps any recursive fold's inner apply
+      // from racing this pass's park bookkeeping; recursion terminates because
+      // a pure-placement batch marks nothing dirty and an inner apply leaves an
+      // empty queue behind.
+      if (state.backstop) {
+        const placementRecords = state.backstop.takeRecords();
+        if (placementRecords.length) processBackstop(host, state, placementRecords);
+      }
+    } while (state.reapply);
+  } finally {
+    state.applying = false;
   }
 }
 

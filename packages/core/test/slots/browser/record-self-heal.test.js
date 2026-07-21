@@ -1731,6 +1731,73 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
     }
   });
 
+  test('a reentrant author write from a disconnectedCallback survives the pass', async () => {
+    if (!customElements.get('reentrant-probe')) {
+      class Probe extends HTMLElement {
+        disconnectedCallback() {
+          const owner = /** @type {any} */ (this).__owner;
+          if (owner && !owner.__reentered) {
+            owner.__reentered = true;
+            const c = document.createElement('mark');
+            c.id = 'reentrant-c';
+            c.textContent = 'C';
+            owner.appendChild(c); // author write MID-PASS
+          }
+        }
+      }
+      customElements.define('reentrant-probe', Probe);
+    }
+    const tag = tagName('reentrant-host');
+    const host = await mount(tag, () => html`<div><slot>fb-content</slot></div>`);
+    try {
+      const a = document.createElement('reentrant-probe');
+      /** @type {any} */ (a).__owner = host;
+      host.appendChild(a);
+      await tick();
+      const slot = host.querySelector('slot[data-webjs-light]');
+      assert.ok(slot.contains(a), 'probe projected');
+      host.textContent = ''; // removal fires the reentrant write mid-pass
+      await tick();
+      await tick();
+      assert.ok(slot.querySelector('#reentrant-c'), 'the reentrant write was placed, not destroyed');
+      assert.equal(slot.getAttribute('data-projection'), 'actual', 'projection state consistent');
+      assert.ok(!slot.textContent.includes('fb-content'), 'fallback not shown alongside content');
+      const assigned = slot.assignedNodes();
+      assert.ok(
+        assigned.some((n) => /** @type {Element} */ (n).id === 'reentrant-c'),
+        'assignedNodes reflects the reentrant write',
+      );
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('a repeated Node argument nets one placement in the last position', async () => {
+    const tag = tagName('dup-arg');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      const a = document.createElement('em');
+      a.textContent = 'a';
+      const b = document.createElement('u');
+      b.textContent = 'b';
+      host.append(a, b, a); // native nets [b, a]
+      await tick();
+      const slot = host.querySelector('slot[data-webjs-light]');
+      assert.deepEqual(
+        Array.from(slot.children).map((e) => e.textContent),
+        ['b', 'a'],
+        'keep-last dedup matches native move semantics',
+      );
+      let fires = 0;
+      slot.addEventListener('slotchange', () => { fires += 1; });
+      host.appendChild(document.createElement('i')); // healing-pass probe
+      await tick();
+      assert.equal(fires, 1, 'exactly one slotchange (no spurious heal event)');
+    } finally {
+      host.remove();
+    }
+  });
+
   test('router projectAuthored on the default slice leaves a manual assignment intact', async () => {
     const tag = tagName('proj-manual');
     const host = await mount(tag, () => html`<div><slot></slot><slot name="x"></slot></div>`);
