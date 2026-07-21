@@ -354,8 +354,8 @@ the module once (typically in `app/layout.ts`) and use the tag.
 ```ts
 // Tier 1: class helpers on native elements (use this for forms,
 // dashboards, cards, layouts, anywhere the value is purely visual)
-import { buttonClass } from '../components/ui/button.ts';
-import { inputClass } from '../components/ui/input.ts';
+import { buttonClass } from '#components/ui/button.ts';
+import { inputClass } from '#components/ui/input.ts';
 return html`
   <button class=${buttonClass({ size: 'lg' })}>Save</button>
   <input class=${inputClass()} placeholder="Email">
@@ -518,7 +518,7 @@ Consume:
 
 ```ts
 // app/page.ts
-import { rubric } from '../lib/utils/ui.ts';
+import { rubric } from '#lib/utils/ui.ts';
 
 export default function Home() {
   return html`
@@ -668,7 +668,7 @@ export async function createPost({ title, body }) {
 ```ts
 // app/api/posts/route.ts
 import { route } from '@webjsdev/server';
-import { createPost } from '../../modules/posts/actions/create-post.server.ts';
+import { createPost } from '#modules/posts/actions/create-post.server.ts';
 // The route() adapter merges query + route params + JSON body into one input
 // object and JSON-responds the result. Pass { validate } to guard the input.
 export const POST = route(createPost);
@@ -767,9 +767,9 @@ Where the data lives, where to read it:
 ```ts
 // modules/posts/actions/create-post.server.ts
 'use server';
-import { db } from '../../../db/connection.server.ts';
-import { posts } from '../../../db/schema.server.ts';
-import type { ActionResult } from '../types.ts';
+import { db } from '#db/connection.server.ts';
+import { posts } from '#db/schema.server.ts';
+import type { ActionResult } from '#modules/posts/types.ts';
 
 export async function createPost(input: {
   title: string;
@@ -885,8 +885,8 @@ Routes are thin wrappers over typed server actions. Business logic lives in
 
 ```ts
 // app/api/users/route.ts: thin wrapper
-import { listUsers } from '../../../modules/users/queries/list-users.server.ts';
-import { createUser } from '../../../modules/users/actions/create-user.server.ts';
+import { listUsers } from '#modules/users/queries/list-users.server.ts';
+import { createUser } from '#modules/users/actions/create-user.server.ts';
 
 export async function GET() { return Response.json(await listUsers()); }
 export async function POST(req: Request) {

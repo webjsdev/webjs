@@ -97,8 +97,8 @@ s.regenerateId(true);  // new ID, old store entry deleted</pre>
     <h2>Example: Login Flow</h2>
     <pre>// app/api/login/route.ts
 import { getSession } from '@webjsdev/server';
-import { db } from '../../db/connection.server.ts';
-import { verifyPassword } from '../../lib/auth.server.ts';
+import { db } from '#db/connection.server.ts';
+import { verifyPassword } from '#lib/auth.server.ts';
 
 export async function POST(req: Request) {
   const { email, password } = await req.json();

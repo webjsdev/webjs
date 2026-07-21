@@ -101,7 +101,7 @@ export default async function apiAuth(
     <p>A common pattern: require authentication for an entire subtree by placing a middleware in the segment directory.</p>
     <pre>// app/dashboard/middleware.ts
 import { cookies } from '@webjsdev/server';
-import { getUserByToken, SESSION_COOKIE } from '../../lib/session.server.ts';
+import { getUserByToken, SESSION_COOKIE } from '#lib/session.server.ts';
 
 export default async function requireAuth(
   req: Request,

@@ -73,7 +73,7 @@ app.use(async (req, res) => {
 
     <pre>// app/api/posts/middleware.ts
 import { rateLimit } from '@webjsdev/server';
-import { auth } from '../../modules/auth/index.ts';
+import { auth } from '#modules/auth/index.ts';
 
 export default rateLimit({
   window: '1m',

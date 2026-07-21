@@ -17,7 +17,7 @@ node --test test/*.test.js</pre>
     <p>Test your server actions, queries, and utilities directly. They're just async functions:</p>
     <pre>import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { listPosts } from '../modules/posts/queries/list-posts.server.ts';
+import { listPosts } from '#modules/posts/queries/list-posts.server.ts';
 
 test('listPosts returns an array', async () =&gt; {
   const posts = await listPosts();

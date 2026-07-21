@@ -94,7 +94,7 @@ export default function Layout({ children }: { children: unknown }) {
 
     <h3>app/page.ts</h3>
     <pre>import { html } from '@webjsdev/core';
-import '../components/counter.ts';
+import '#components/counter.ts';
 
 export default function Home() {
   return html\`

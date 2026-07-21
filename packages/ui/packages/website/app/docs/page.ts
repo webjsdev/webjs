@@ -58,8 +58,8 @@ webjs ui add button card dialog</code></pre>
       </p>
       <h2>Usage</h2>
       <p>Tier 1, apply helpers to native elements:</p>
-      <pre><code class="block bg-muted p-4 rounded">import { cardClass, cardHeaderClass, cardTitleClass, cardDescriptionClass, cardContentClass, buttonClass }
-  from './components/ui';
+      <pre><code class="block bg-muted p-4 rounded">import { cardClass, cardHeaderClass, cardTitleClass, cardDescriptionClass, cardContentClass } from '#components/ui/card.ts';
+import { buttonClass } from '#components/ui/button.ts';
 
 &lt;div class={cardClass()}&gt;
   &lt;div class={cardHeaderClass()}&gt;

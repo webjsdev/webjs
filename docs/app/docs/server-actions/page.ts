@@ -28,8 +28,8 @@ export default function ServerActions() {
     <pre>// modules/posts/actions/create-post.server.ts
 'use server';
 import { eq } from 'drizzle-orm';
-import { db } from '../../../db/connection.server.ts';
-import { posts } from '../../../db/schema.server.ts';
+import { db } from '#db/connection.server.ts';
+import { posts } from '#db/schema.server.ts';
 
 export async function createPost(input: { title: string; body: string }) {
   const [post] = await db.insert(posts).values(input).returning();
@@ -103,7 +103,7 @@ export const deletePost = (...args) => __rpc('deletePost', args);</pre>
 
     <pre>// components/post-form.ts
 import { WebComponent, html, css } from '@webjsdev/core';
-import { createPost } from '../actions/posts.server.ts';
+import { createPost } from '#actions/posts.server.ts';
 //                        ^-- TS sees: (input: { title: string; body: string }) => Promise&lt;Post&gt;
 
 export class PostForm extends WebComponent {
@@ -218,8 +218,8 @@ for await (const chunk of await streamTokens(8)) {
 
     <pre>// modules/posts/actions/create-post.server.ts
 'use server';
-import { db } from '../../../db/connection.server.ts';
-import { posts } from '../../../db/schema.server.ts';
+import { db } from '#db/connection.server.ts';
+import { posts } from '#db/schema.server.ts';
 
 export async function createPost({ title, body }: { title: string; body: string }) {
   const [post] = await db.insert(posts).values({ title, body }).returning();
@@ -227,7 +227,7 @@ export async function createPost({ title, body }: { title: string; body: string 
 }</pre>
 
     <pre>// app/api/posts/route.ts
-import { createPost } from '../../../modules/posts/actions/create-post.server.ts';
+import { createPost } from '#modules/posts/actions/create-post.server.ts';
 
 export async function POST(req: Request) {
   const body = await req.json();
@@ -247,13 +247,13 @@ export async function POST(req: Request) {
 
     <pre>// app/api/posts/route.ts (bare-function form)
 import { route } from '@webjsdev/server';
-import { createPost } from '../../../modules/posts/actions/create-post.server.ts';
+import { createPost } from '#modules/posts/actions/create-post.server.ts';
 
 export const POST = route(createPost);
 
 // app/api/posts/[slug]/route.ts
 import { route } from '@webjsdev/server';
-import { getPost } from '../../../../modules/posts/queries/get-post.server.ts';
+import { getPost } from '#modules/posts/queries/get-post.server.ts';
 
 // ctx.params.slug merges into the action input
 export const GET = route(getPost);</pre>
@@ -264,8 +264,8 @@ export const GET = route(getPost);</pre>
     <pre>// modules/posts/actions/create-post.server.ts
 'use server';
 import { z } from 'zod';
-import { db } from '../../../db/connection.server.ts';
-import { posts } from '../../../db/schema.server.ts';
+import { db } from '#db/connection.server.ts';
+import { posts } from '#db/schema.server.ts';
 
 const CreatePostSchema = z.object({
   title: z.string().min(1).max(200),
@@ -282,7 +282,7 @@ export async function createPost(input: { title: string; body: string }) {
 
     <pre>// app/api/posts/route.ts: the REST boundary passes the same validator
 import { route } from '@webjsdev/server';
-import { createPost } from '../../../modules/posts/actions/create-post.server.ts';
+import { createPost } from '#modules/posts/actions/create-post.server.ts';
 import { z } from 'zod';
 
 const CreatePostSchema = z.object({
@@ -354,7 +354,7 @@ export async function listTodos() {
 // 1b. Expose them over REST with the route() adapter
 // app/api/todos/route.ts
 import { route } from '@webjsdev/server';
-import { addTodo, listTodos } from '../../../actions/todos.server.ts';
+import { addTodo, listTodos } from '#actions/todos.server.ts';
 
 export const GET = route(listTodos);
 export const POST = route(addTodo);
@@ -362,7 +362,7 @@ export const POST = route(addTodo);
 // 2. Call from a web component
 // components/todo-app.ts
 import { WebComponent, html, css } from '@webjsdev/core';
-import { addTodo, listTodos } from '../actions/todos.server.ts';
+import { addTodo, listTodos } from '#actions/todos.server.ts';
 
 export class TodoApp extends WebComponent {
   static styles = css\`
@@ -419,7 +419,7 @@ TodoApp.register('todo-app');
     <p>The action receives <code>{ request, params, searchParams, url, formData }</code> (<code>formData</code> is the already-parsed body, <code>request</code> is the raw Request) and returns an <code>ActionResult</code>. The framework interprets the result.</p>
     <pre>// app/posts/page.ts
 import { html } from '@webjsdev/core';
-import { createPost } from '../../modules/posts/actions/create-post.server.ts';
+import { createPost } from '#modules/posts/actions/create-post.server.ts';
 
 // Runs only on the server. Receives the already-parsed formData.
 export async function action({ formData }: { formData: FormData }) {

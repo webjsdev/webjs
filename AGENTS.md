@@ -528,8 +528,8 @@ export default async function User({ params }: { params: { id: string } }) {
 // modules/users/actions/update-profile.server.ts
 'use server';
 import { eq } from 'drizzle-orm';
-import { db } from '../../../db/connection.server.ts';
-import { users } from '../../../db/schema.server.ts';
+import { db } from '#db/connection.server.ts';
+import { users } from '#db/schema.server.ts';
 export async function updateProfile(input: { name: string }) {
   const name = String(input?.name || '').trim();
   if (!name) return { success: false, error: 'name required', status: 400 };

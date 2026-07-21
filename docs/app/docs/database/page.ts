@@ -86,7 +86,7 @@ export const db = (g.__webjs_db ??= await open()) as Awaited&lt;ReturnType&lt;ty
     <p>Reads use the relational query builder with object filters; writes use the builder with <code>.returning()</code> (both SQLite and Postgres support it).</p>
     <pre>// modules/posts/queries/list-posts.server.ts
 'use server';
-import { db } from '../../../db/connection.server.ts';
+import { db } from '#db/connection.server.ts';
 
 export async function listPosts() {
   return db.query.posts.findMany({
@@ -96,8 +96,8 @@ export async function listPosts() {
 }</pre>
     <pre>// modules/posts/actions/create-post.server.ts
 'use server';
-import { db } from '../../../db/connection.server.ts';
-import { posts } from '../../../db/schema.server.ts';
+import { db } from '#db/connection.server.ts';
+import { posts } from '#db/schema.server.ts';
 
 export async function createPost(input: { slug: string; title: string; body: string; authorId: number }) {
   const [row] = await db.insert(posts).values(input).returning();
@@ -105,7 +105,7 @@ export async function createPost(input: { slug: string; title: string; body: str
 }</pre>
     <p>Import the query or action from a page or component as a normal import; WebJs rewrites it into a typed RPC stub on the client.</p>
     <pre>// app/page.ts
-import { listPosts } from '../modules/posts/queries/list-posts.server.ts';
+import { listPosts } from '#modules/posts/queries/list-posts.server.ts';
 
 export default async function Home() {
   const posts = await listPosts();
