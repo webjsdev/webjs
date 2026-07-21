@@ -309,10 +309,12 @@ suite('Native-write liveness (light-DOM slot parity)', () => {
     host.remove();
   });
 
-  test('name= flip on a projected child is a documented gap without the sensor (phase 4)', async () => {
-    // The interception layer alone covers method writes; a raw `slot=` attribute
-    // flip is caught by the flip sensor (phase 4). This test asserts the method
-    // path; the attribute-flip liveness is verified in the sensors test.
+  test('a slot= change while detached re-slots on re-append (pure method path, no sensor)', async () => {
+    // The attribute-flip liveness on an ATTACHED child rides the flip sensor
+    // (verified in the sensors test). This is the sensor-free method path: the
+    // child leaves via removeChild, its slot= changes while unobserved, and
+    // the re-append repartitions it into the new slot through interception
+    // alone.
     const tag = tagName('two-slots');
     const host = await mount(tag, () => html`<div><slot name="a"></slot><slot name="b"></slot></div>`);
     const slotA = host.querySelector('slot[name="a"]');
@@ -321,7 +323,10 @@ suite('Native-write liveness (light-DOM slot parity)', () => {
     child.setAttribute('slot', 'a');
     host.appendChild(child);
     assert.equal(child.parentElement, slotA, 'placed in slot a by attribute');
-    assert.ok(slotB, 'slot b exists');
+    host.removeChild(child);
+    child.setAttribute('slot', 'b'); // detached: no sensor observes this
+    host.appendChild(child);
+    assert.equal(child.parentElement, slotB, 're-append repartitioned into slot b synchronously');
     host.remove();
   });
 });
