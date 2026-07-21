@@ -2041,9 +2041,13 @@ export function hasFrameworkRenderedSubtree(host) {
 function isOwnSlot(host, slot) {
   // Template-ownership is authoritative when known: a forwarded slot sits
   // physically inside a child component but belongs to the host whose
-  // template rendered it. The symbol (client render) and the SSR attribute
-  // (hydration) are the same fact; the attribute is resolved to the symbol
-  // by resolveSlotOwner on connect, so it is only a fallback here.
+  // template rendered it. Two carriers of the SAME fact, consulted in order:
+  //   1. the SLOT_OWNER symbol, stamped by the client renderer at render
+  //      time (createInstance) and thus present once this host has rendered;
+  //   2. the data-wj-slot-owner attribute, the SSR carrier, which is the
+  //      ACTIVE resolver on the adopt/hydration path (adoptSSRAssignments
+  //      runs in connectedCallback, before the deferred first render stamps
+  //      the symbol), resolved by nearest-matching-tag ancestor.
   const owner = /** @type {any} */ (slot)[SLOT_OWNER];
   if (owner) return owner === host;
   const ownerTag =
