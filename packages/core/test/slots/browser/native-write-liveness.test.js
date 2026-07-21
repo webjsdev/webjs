@@ -211,13 +211,12 @@ suite('Native-write liveness (light-DOM slot parity)', () => {
     host.append(a, b); // [a, b]
     // Pathological input native itself rejects: a fragment that contains oldNode.
     const frag = document.createDocumentFragment();
-    frag.appendChild(a); // moves a into the fragment
+    frag.appendChild(a); // moves a OUT of the host: no longer a (virtual) child
     let threw = null;
     try { host.replaceChild(frag, a); } catch (e) { threw = e; }
-    // Whether it throws or degrades, the key guarantee is that b (an unrelated
-    // sibling) is NOT dropped or reordered by a splice(-1).
-    assert.ok(slot.contains(b) || Array.from(slot.children).some((e) => e.tagName.toLowerCase() === 'b-el'),
-      'the unrelated sibling b survived');
+    assert.equal(threw && threw.name, 'NotFoundError', 'native fidelity: oldNode is not a child anymore');
+    // And the unrelated sibling b is untouched by the rejected call.
+    assert.ok(slot.contains(b), 'the unrelated sibling b survived');
     host.remove();
   });
 
