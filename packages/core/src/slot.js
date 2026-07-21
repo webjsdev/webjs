@@ -446,6 +446,10 @@ function findLightAssignedSlot(el) {
  *   / assign() / router splice), consumed by the next apply pass: the resync
  *   step honours record positions for exactly these nodes and adopts
  *   physical order for everything else (node-scoped order authority).
+ * @property {boolean} [adopted] True when this state was populated by the
+ *   ADOPT connect branch (SSR hydration / serialized restore): the host's
+ *   pre-first-render children are rendered markup, so the reconnect fold
+ *   must not hoover them.
  * @property {WeakMap<Node, string|null>} [adoptedKey] The slot key a
  *   self-heal fold ADOPTED for a node a non-record writer placed inside a
  *   named slot (its own attribute would key it elsewhere); cleared when the
@@ -565,6 +569,10 @@ function effectiveKeyOf(state, node) {
  */
 export function adoptSSRAssignments(host) {
   const state = ensureSlotState(host);
+  // Record the connect branch: reconnectSweep's pre-render fold gate keys on
+  // this flag (an adopted host's children ARE rendered markup; a captured
+  // host's are only bypass writes).
+  state.adopted = true;
   /** @type {Set<string|null>} first-wins per name across the host's own slots */
   const seen = new Set();
   const slots = host.querySelectorAll(`slot[${LIGHT_SLOT_ATTR}]`);
@@ -861,7 +869,10 @@ function processBackstop(host, state, records) {
     }
     for (const node of r.removedNodes) {
       const i = state.authored.indexOf(node);
-      if (i !== -1 && !host.contains(node)) {
+      // Never splice a record VALUE: a FRAMEWORK_DETACHED node (captured,
+      // rescued, or folded-then-detached in this same batch) is held by the
+      // record on purpose; only a genuinely author-departed node leaves.
+      if (i !== -1 && !host.contains(node) && !FRAMEWORK_DETACHED.has(node)) {
         state.authored.splice(i, 1);
         dirty = true;
       }
@@ -979,7 +990,14 @@ export function reconnectSweep(host) {
   if (!state) return;
   const inst = h[Symbol.for('webjs.instance')];
   const rendered = Symbol.for('webjs.instance') in h;
-  const adoptedMarkup = !rendered && hasFrameworkRenderedSubtree(host);
+  // Gate on the RECORDED connect branch (adoptSSRAssignments sets
+  // state.adopted), never on structural re-detection: a bypass write can
+  // itself carry a rendered-looking chunk (slot[data-webjs-light]
+  // [data-projection] under plain wrappers) and would spoof a structural
+  // check, suppressing the fold for unrelated writes in the same batch.
+  // The flag is also free per reconnect where the structural query walked
+  // the subtree.
+  const adoptedMarkup = !rendered && state.adopted === true;
   let changed = false;
   for (const node of Array.from(host.childNodes)) {
     if (node === h[PARK]) continue;
@@ -1088,9 +1106,11 @@ function expandArg(host, arg, allowString) {
   // host.append(42) appends the text "42" and host.append({}) appends
   // "[object Object]".
   if (allowString && !isRealmNode(arg)) {
-    // '' + x matches WebIDL DOMString conversion: a Symbol THROWS TypeError
-    // (String(sym) is the one JS path that does not).
-    return [host.ownerDocument.createTextNode('' + /** @type {any} */ (arg))];
+    // A template literal performs exactly ES ToString (ToPrimitive with hint
+    // "string": toString before valueOf, and a Symbol THROWS TypeError),
+    // matching WebIDL DOMString conversion; '' + x would use hint "default"
+    // (valueOf first) and diverge for objects overriding both.
+    return [host.ownerDocument.createTextNode(`${/** @type {any} */ (arg)}`)];
   }
   // Non-string path (appendChild / insertBefore / replaceChild): reject any
   // non-platform-node BEFORE the fragment branch, or a duck-typed
@@ -1163,6 +1183,23 @@ function authoredSplice(state, nodes, ref) {
   let at = ref == null ? a.length : a.indexOf(ref);
   if (at === -1) at = a.length;
   a.splice(at, 0, ...nodes);
+}
+
+/**
+ * True when `el` is, or sits inside, an AUTHORED node of this host: such an
+ * element is CONTENT (a chunk the author wrote or moved in), never one of
+ * the host's own rendered slots, no matter what attributes it carries.
+ *
+ * @param {SlotState} state
+ * @param {Element} host
+ * @param {Element} el
+ * @returns {boolean}
+ */
+function isInsideAuthored(state, host, el) {
+  for (let p = /** @type {Node | null} */ (el); p && p !== host; p = p.parentNode) {
+    if (state.authored.indexOf(p) !== -1) return true;
+  }
+  return false;
 }
 
 /**
@@ -1252,6 +1289,11 @@ export function installSlotInterception(host) {
     // A non-null ref MUST be an assigned child (native throws NotFoundError
     // otherwise), checked before the self-ref no-op so insertBefore(x, x) on a
     // NON-child still throws like native.
+    if (ref != null && !isRealmNode(ref)) {
+      // Native converts the ref through the Node parameter first: a
+      // non-Node ref is a TypeError, not NotFoundError.
+      throw new TypeError('Failed to execute insertBefore on the host: parameter 2 is not of type Node.');
+    }
     if (
       ref != null &&
       (state.authored.indexOf(ref) === -1 || !isVirtualChild(host, ref))
@@ -1368,7 +1410,7 @@ export function installSlotInterception(host) {
       // innerHTML IS [LegacyNullToEmptyString]: null maps to the empty
       // string (the common clear idiom must clear, not insert the text
       // "null"); undefined stringifies; a Symbol throws (ToString).
-      INNER_HTML_DESC.set.call(tmp, str === null ? '' : '' + str);
+      INNER_HTML_DESC.set.call(tmp, str === null ? '' : `${str}`);
       const nodes = Array.from(tmp.childNodes);
       for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
       const displaced = state.authored;
@@ -1394,7 +1436,7 @@ export function installSlotInterception(host) {
       const nodes =
         str == null || str === ''
           ? []
-          : [host.ownerDocument.createTextNode('' + str)];
+          : [host.ownerDocument.createTextNode(`${str}`)];
       for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
       const displaced = state.authored;
       state.authored = nodes;
@@ -1462,6 +1504,12 @@ export function applySlotAssignments(host) {
   const pendingNames = new Set();
   for (const el of host.querySelectorAll(`slot[${LIGHT_SLOT_ATTR}]`)) {
     if (!isOwnSlot(host, el)) continue;
+    // An own slot can NEVER live inside AUTHORED content: a slot element the
+    // author moved or wrote into the host (another component's chunk, a
+    // spoofed stamp) is inert content, exactly like a <slot> outside a
+    // shadow tree natively. Collecting it would hand it assignments whose
+    // nodes can CONTAIN it (HierarchyRequestError at placement).
+    if (isInsideAuthored(state, host, el)) continue;
     if (
       !el.hasAttribute(PROJECTION_ATTR) &&
       !(SLOT_FALLBACK_FRAG in /** @type {any} */ (el))
@@ -1589,6 +1637,7 @@ function resyncActualSlots(host, state, pendingNodes) {
     `slot[${LIGHT_SLOT_ATTR}][${PROJECTION_ATTR}="${PROJECTION_ACTUAL}"]`,
   )) {
     if (!isOwnSlot(host, el)) continue;
+    if (isInsideAuthored(state, host, el)) continue; // authored content, not a slot
     const slot = /** @type {HTMLSlotElement} */ (el);
     const snapshot = state.lastSnapshot.get(slot);
     if (!snapshot) continue;

@@ -1387,6 +1387,96 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
     }
   });
 
+  test('object coercion uses ToString order (toString wins over valueOf)', async () => {
+    const tag = tagName('tostring-order');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      host.append(/** @type {any} */ ({ valueOf: () => 42, toString: () => 'hi' }));
+      await tick();
+      const slot = host.querySelector('slot[data-webjs-light]');
+      assert.equal(slot.textContent, 'hi', 'WebIDL DOMString conversion is toString-first');
+      host.textContent = /** @type {any} */ ({ valueOf: () => 1, toString: () => 'tc' });
+      await tick();
+      assert.equal(slot.textContent, 'tc', 'textContent coercion is toString-first too');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('a spoofed rendered-looking bypass chunk does not suppress the reconnect fold', async () => {
+    const tag = tagName('spoof-chunk');
+    class C extends WebComponent {
+      render() { return html`<div><slot></slot></div>`; }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    document.body.appendChild(host); // capture branch; first render deferred
+    host.remove(); // disconnect before the render
+    // A bypass write that LOOKS like rendered markup (a light slot with a
+    // projection stamp under plain wrappers) plus an unrelated plain write.
+    const fake = document.createElement('div');
+    fake.innerHTML = '<slot data-webjs-light data-projection="actual"></slot>';
+    const plain = document.createElement('p');
+    plain.id = 'plain-bypass';
+    Node.prototype.appendChild.call(host, fake);
+    Node.prototype.appendChild.call(host, plain);
+    document.body.appendChild(host); // reconnect: the fold must still run
+    await tick();
+    await tick();
+    try {
+      const projected = host.querySelector('#plain-bypass');
+      assert.ok(projected, 'the plain bypass write survived the first render');
+      assert.equal(
+        projected.parentElement.tagName.toLowerCase(),
+        'slot',
+        'the plain write was folded and projected (the spoof did not gate the fold)',
+      );
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('a SLOTLESS restored host survives a pre-render reconnect (no park hoover)', async () => {
+    // The adopt flag must cover hosts whose template has NO own slot: the
+    // structural gate it replaced returned false for them, so a same-task
+    // reparent folded the rendered wrappers and parked the entire visible
+    // markup (blank host + permanent stale nodes).
+    const tag = tagName('slotless-restore');
+    const host = await mount(tag, () => html`<div class="chrome">static ui</div>`);
+    const holder = document.createElement('div');
+    try {
+      await tick();
+      const serialized = host.outerHTML;
+      host.remove();
+      await tick();
+      document.body.appendChild(holder);
+      holder.innerHTML = serialized.replace('data-wj-host', 'data-wj-host data-wj-serialized');
+      // SAME task as the upgrade: reparent before the deferred first render.
+      const restored = holder.querySelector(tag);
+      const wrapper = document.createElement('section');
+      holder.appendChild(wrapper);
+      wrapper.appendChild(restored);
+      await tick();
+      await tick();
+      assert.equal(restored.querySelectorAll('.chrome').length, 1, 'exactly one rendered chrome');
+      assert.equal(restored.querySelector('wj-slot-park'), null, 'nothing was parked');
+      assert.ok(restored.textContent.includes('static ui'), 'visible markup intact');
+      // The deeper harm was RETENTION: hoovered wrappers stayed in the
+      // record, and any later apply re-attached the park with the stale tree
+      // inside (hidden duplicate content). Trigger an apply and count.
+      restored.appendChild(document.createElement('span'));
+      await tick();
+      assert.equal(
+        (restored.textContent.match(/static ui/g) || []).length,
+        1,
+        'no stale hoovered copy resurfaced via the park',
+      );
+    } finally {
+      host.remove();
+      holder.remove();
+    }
+  });
+
   test('router projectAuthored on the default slice leaves a manual assignment intact', async () => {
     const tag = tagName('proj-manual');
     const host = await mount(tag, () => html`<div><slot></slot><slot name="x"></slot></div>`);
