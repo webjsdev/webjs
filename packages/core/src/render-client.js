@@ -1578,29 +1578,30 @@ function applyCache(part, inner) {
       // finalize will never fire again, while the host's record moved on
       // during the stash (content for these slots was parked when an apply
       // ran with the slot unreachable). Re-run the apply for each owning
-      // host so parked content is pulled back out. The walk RECURSES into
-      // nested template instances (and repeat / array item instances): slot
-      // parts belong to the template that contains the <slot>, so a
-      // shallow scan misses every slot one template level down.
+      // host so parked content is pulled back out. The collection walks the
+      // re-attached DOM RANGE (not the instance tree): slot parts live on
+      // whatever template level contains the <slot> (nested holes, repeat /
+      // array items, streamed chunks), so a structural DOM walk is the only
+      // shape that covers every composition uniformly. moveRange already
+      // ran, so the range is live and each slot's parent walk reaches its
+      // host.
       const hosts = new Set();
-      const collectSlotHosts = (inst) => {
-        for (const p of inst.bound) {
-          if (p.kind === 'slot' && p.slotEl) {
-            const h = findSlotHost(p.slotEl);
-            if (h) hosts.add(h);
-            continue;
-          }
-          const c = p.child;
-          if (!c) continue;
-          if (c.bound) collectSlotHosts(c);
-          else if (c.kind === 'repeat' && c.map) {
-            for (const i of c.map.values()) collectSlotHosts(i);
-          } else if (c.kind === 'array' && c.items) {
-            for (const it of c.items) if (it.inst) collectSlotHosts(it.inst);
-          }
+      for (
+        let n = cached.inst.startNode.nextSibling;
+        n && n !== cached.inst.endNode;
+        n = n.nextSibling
+      ) {
+        if (n.nodeType !== 1) continue;
+        const el = /** @type {Element} */ (n);
+        if (el.matches('slot[data-webjs-light]')) {
+          const h = findSlotHost(el);
+          if (h) hosts.add(h);
         }
-      };
-      collectSlotHosts(cached.inst);
+        for (const s of el.querySelectorAll('slot[data-webjs-light]')) {
+          const h = findSlotHost(s);
+          if (h) hosts.add(h);
+        }
+      }
       for (const h of hosts) applySlotAssignments(h);
       return;
     }

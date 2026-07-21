@@ -179,6 +179,26 @@ export function installSlotPolyfills() {
     },
   });
 
+  // Native `assignedSlot` lives on the Slottable mixin, which covers Text as
+  // well as Element: a projected text child reports its slot in shadow DOM,
+  // so the light parity read must answer for Text too.
+  const NATIVE_text_assignedSlot_desc = Object.getOwnPropertyDescriptor(
+    Text.prototype,
+    'assignedSlot',
+  );
+  Object.defineProperty(Text.prototype, 'assignedSlot', {
+    configurable: true,
+    enumerable: true,
+    get: function patchedTextAssignedSlot() {
+      const native =
+        NATIVE_text_assignedSlot_desc && NATIVE_text_assignedSlot_desc.get
+          ? NATIVE_text_assignedSlot_desc.get.call(this)
+          : null;
+      if (native) return native;
+      return findLightAssignedSlot(this);
+    },
+  });
+
   NATIVE_assign = HTMLSlotElement.prototype.assign;
   HTMLSlotElement.prototype.assign = function patchedAssign(...nodes) {
     if (this.hasAttribute(LIGHT_SLOT_ATTR) && !isInShadowRoot(this)) {
@@ -382,14 +402,16 @@ function flattenAssignedNodes(nodes, visited, depth) {
  * @returns {HTMLSlotElement | null}
  */
 function findLightAssignedSlot(el) {
-  let p = el.parentElement;
-  while (p) {
-    if (p.tagName === 'SLOT' && p.hasAttribute(LIGHT_SLOT_ATTR)) {
-      return p.getAttribute(PROJECTION_ATTR) === PROJECTION_ACTUAL
-        ? /** @type {HTMLSlotElement} */ (p)
-        : null;
-    }
-    p = p.parentElement;
+  // Native `assignedSlot` answers only for a SLOTTABLE itself. In the light
+  // parity model, assigned nodes are exactly the slot element's DIRECT
+  // children, so only the immediate parent is consulted: a DESCENDANT of
+  // assigned content correctly reads null, matching shadow DOM (where only
+  // the host's direct children are slottables).
+  const p = el.parentElement;
+  if (p && p.tagName === 'SLOT' && p.hasAttribute(LIGHT_SLOT_ATTR)) {
+    return p.getAttribute(PROJECTION_ATTR) === PROJECTION_ACTUAL
+      ? /** @type {HTMLSlotElement} */ (p)
+      : null;
   }
   return null;
 }
@@ -578,6 +600,12 @@ export function adoptSSRAssignments(host) {
       // in.
       for (const child of children) {
         state.authored.push(child);
+        // Prune-exempt until the first placement settles them: when
+        // createInstance detaches the old SSR subtree, these children sit in
+        // a DETACHED old slot, and the prune rule must not depend on the
+        // vacuous-true isOwnSlot walk of that foreign-looking chain (the
+        // walk is containment-gated now).
+        FRAMEWORK_DETACHED.add(child);
         if (slotNameOf(child) !== name) {
           if (!state.adoptedKey) state.adoptedKey = new WeakMap();
           state.adoptedKey.set(child, name);
@@ -951,8 +979,14 @@ export function reconnectSweep(host) {
       changed = true;
       continue;
     }
-    // Skip the renderer's own top-level nodes (tracked on the instance).
-    if (inst && instanceOwns(inst, node)) continue;
+    // Skip the renderer's own top-level nodes. With an instance, ownership
+    // is checked via the bookends; with NO instance (the non-template render
+    // path: render() returned a string / number / array), the renderer's
+    // text output IS the direct host children, so folding is skipped
+    // entirely, exactly like drainRendererBackstop's no-instance guard
+    // (folding would park the component's own output and grow the record on
+    // every reconnect).
+    if (!inst || instanceOwns(inst, node)) continue;
     FRAMEWORK_DETACHED.add(node);
     state.authored.push(node);
     changed = true;
@@ -1035,7 +1069,19 @@ function guardInsertable(host, nodes) {
     // Validity BEFORE any record mutation (native throws with zero state
     // change): a non-Node is a TypeError, a Node that is not an insertable
     // child type (an Attr, a Document, a doctype) is a HierarchyRequestError.
-    if (!(n && typeof n === 'object' && typeof (/** @type {any} */ (n).nodeType) === 'number')) {
+    // The brand check is realm-safe (a same-realm Node passes instanceof; a
+    // cross-realm Node passes via its own realm's constructor); a duck-typed
+    // fake with a numeric nodeType would otherwise pass the guards, mutate
+    // the record, and then throw INSIDE the apply pass on every later
+    // operation, permanently wedging the host's slot pipeline.
+    const realmNode =
+      n instanceof Node ||
+      (n &&
+        typeof n === 'object' &&
+        /** @type {any} */ (n).ownerDocument &&
+        /** @type {any} */ (n).ownerDocument.defaultView &&
+        n instanceof /** @type {any} */ (n).ownerDocument.defaultView.Node);
+    if (!realmNode) {
       throw new TypeError('Failed to execute insertion on the host: parameter is not of type Node.');
     }
     const t = n.nodeType;
@@ -1093,10 +1139,15 @@ function isVirtualChild(host, node) {
   if (p == null) return false;
   if (p === host) return true;
   if (p === /** @type {any} */ (host)[PARK]) return true;
+  const state = /** @type {SlotState | undefined} */ (
+    /** @type {any} */ (host)[SLOT_STATE]
+  );
   return (
     p.nodeType === 1 &&
     /** @type {Element} */ (p).tagName === 'SLOT' &&
     /** @type {Element} */ (p).hasAttribute(LIGHT_SLOT_ATTR) &&
+    (host.contains(p) ||
+      Boolean(state && state.lastSnapshot.has(/** @type {HTMLSlotElement} */ (p)))) &&
     isOwnSlot(host, /** @type {Element} */ (p))
   );
 }
@@ -1566,10 +1617,19 @@ function pruneAuthored(host, state) {
     // physically-verifying placement step re-places it this same pass.
     if (p === host) return true;
     if (p === park) return true;
+    // The slot-parent keep requires the slot to be recognizably OURS: in
+    // this host's tree, or a slot THIS state once applied (lastSnapshot has
+    // it), which covers our own detached slots (a cache()-stashed branch, a
+    // torn-down conditional) without trusting the bare isOwnSlot walk,
+    // whose vacuous-true on ANY fully detached chain would let the apply
+    // steal a node back from an unrelated component's torn-down slot the
+    // author moved it into.
     if (
       p.nodeType === 1 &&
       /** @type {Element} */ (p).tagName === 'SLOT' &&
       /** @type {Element} */ (p).hasAttribute(LIGHT_SLOT_ATTR) &&
+      (host.contains(p) ||
+        state.lastSnapshot.has(/** @type {HTMLSlotElement} */ (p))) &&
       isOwnSlot(host, /** @type {Element} */ (p))
     ) {
       return true;
@@ -1621,12 +1681,12 @@ export function hasFrameworkRenderedSubtree(host) {
  * sits between them. A slot nested inside a child custom element belongs
  * to THAT component and is applied from its own record.
  *
- * LOAD-BEARING SUBTLETY: for a slot in a fully DETACHED chain the walk ends
- * at null without reaching `host` and returns vacuously true. The prune rule
- * depends on this: adopted SSR nodes whose old subtree `createInstance` just
- * detached survive pruning only because their detached parent slot still
- * passes this check. Tightening the walk to require reaching `host` would
- * wipe adopted content on every hydration.
+ * SUBTLETY: for a slot in a fully DETACHED chain the walk ends at null
+ * without reaching `host` and returns vacuously true. Callers that must not
+ * treat a FOREIGN detached slot as owned (the prune rule, isVirtualChild)
+ * pair this with a `host.contains(p)` gate; adopted-SSR children in the
+ * detached old chain survive pruning via their FRAMEWORK_DETACHED mark, not
+ * via this walk.
  *
  * @param {Element} host
  * @param {Element} slot

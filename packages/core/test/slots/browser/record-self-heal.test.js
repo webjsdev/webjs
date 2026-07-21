@@ -937,11 +937,14 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
       host.appendChild(document.createElement('em')); // fold: adopted to side
       await tick();
       assert.equal(node.parentElement, sideSlot, 'adopted into side');
-      // Same task: explicit attribute change, then detach. The sensor batch
-      // arrives with the node no longer authored; the adoption delete must
-      // run anyway, or a later re-append routes by the stale adopted key.
+      // Same task: explicit attribute change, then a RAW-NATIVE detach that
+      // bypasses interception (so commitAuthored's own adoption-clear never
+      // runs). The sensor batch arrives with the node departed; the
+      // unconditional delete must run anyway, or the later re-append routes
+      // by the stale adopted key.
       node.setAttribute('slot', '');
-      host.removeChild(node);
+      Node.prototype.removeChild.call(node.parentNode, node);
+      await tick();
       await tick();
       host.appendChild(node);
       await tick();
@@ -986,6 +989,151 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
       const slot = host.querySelector('slot[name="x"]');
       assert.ok(slot, 'nested slot re-attached');
       assert.ok(slot.contains(child), 'the DEEP re-apply pulled the child back (shallow scan missed it)');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('assignedSlot answers only for direct slottables (descendants read null)', async () => {
+    const tag = tagName('slottable-depth');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      const child = document.createElement('div');
+      const grand = document.createElement('span');
+      child.appendChild(grand);
+      host.appendChild(child);
+      await tick();
+      const slot = host.querySelector('slot[data-webjs-light]');
+      assert.equal(child.assignedSlot, slot, 'the slottable itself reports its slot');
+      assert.equal(grand.assignedSlot, null, 'a DESCENDANT of assigned content reads null (native)');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('a projected TEXT node reports its assignedSlot (Slottable covers Text)', async () => {
+    const tag = tagName('text-slottable');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      const text = document.createTextNode('hello');
+      host.appendChild(text);
+      await tick();
+      const slot = host.querySelector('slot[data-webjs-light]');
+      assert.equal(text.assignedSlot, slot, 'Text.assignedSlot answers in light mode');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('a non-template render survives a DOM move with no park growth', async () => {
+    const tag = tagName('string-move');
+    class C extends WebComponent {
+      render() { return 'plain text output'; }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    document.body.appendChild(host);
+    await tick();
+    const other = document.createElement('div');
+    document.body.appendChild(other);
+    try {
+      assert.ok(host.textContent.includes('plain text output'), 'renders');
+      // Each move is a disconnect + reconnect: the sweep must NOT fold the
+      // renderer's bare text output into the record and park it.
+      other.appendChild(host);
+      await tick();
+      await tick();
+      document.body.appendChild(host);
+      await tick();
+      await tick();
+      assert.ok(host.textContent.includes('plain text output'), 'still renders after moves');
+      assert.equal(host.querySelector('wj-slot-park'), null, 'no park was ever created');
+    } finally {
+      host.remove();
+      other.remove();
+    }
+  });
+
+  test('appendChild of a FAKE node object throws before any record mutation', async () => {
+    const tag = tagName('fake-node');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      host.appendChild(document.createElement('em'));
+      await tick();
+      const slot = host.querySelector('slot[data-webjs-light]');
+      let threw = null;
+      try {
+        host.appendChild(/** @type {any} */ ({ nodeType: 1, contains: () => false }));
+      } catch (e) { threw = e; }
+      assert.ok(threw instanceof TypeError, 'duck-typed fake rejected with TypeError');
+      // The pipeline is NOT wedged: later operations still work.
+      host.appendChild(document.createElement('strong'));
+      await tick();
+      assert.equal(slot.children.length, 2, 'record intact, pipeline functional');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('the apply does not steal a node the author moved into a FOREIGN detached slot', async () => {
+    const tag = tagName('foreign-steal');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      const child = document.createElement('p');
+      host.appendChild(child);
+      await tick();
+      // A detached light slot from some other component's torn-down branch.
+      const foreign = document.createElement('slot');
+      foreign.setAttribute('data-webjs-light', '');
+      foreign.appendChild(child); // the author's deliberate move
+      host.appendChild(document.createElement('span')); // any later apply
+      await tick();
+      assert.equal(child.parentElement, foreign, 'the move STUCK (no steal-back)');
+      const slot = host.querySelector('slot[data-webjs-light]');
+      assert.ok(!slot.contains(child), 'not re-inserted into the host slot');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('cache() re-apply reaches a slot inside a repeat() item in the cached branch', async () => {
+    const tag = tagName('cache-repeat-slot');
+    class C extends WebComponent({ showA: Boolean }) {
+      constructor() { super(); this.showA = true; }
+      render() {
+        return html`<div>${cache(
+          this.showA
+            ? html`<ul>${repeat(
+                ['only'],
+                (k) => k,
+                () => html`<li><slot name="x"></slot></li>`,
+              )}</ul>`
+            : html`<em>alt</em>`,
+        )}</div>`;
+      }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    const child = document.createElement('strong');
+    child.setAttribute('slot', 'x');
+    child.textContent = 'repeat-cached';
+    host.appendChild(child);
+    document.body.appendChild(host);
+    await tick();
+    await tick();
+    try {
+      assert.equal(child.parentElement.getAttribute('name'), 'x', 'projected initially');
+      host.showA = false;
+      await host.updateComplete;
+      host.appendChild(document.createElement('span')); // apply while stashed
+      await tick();
+      host.showA = true;
+      await host.updateComplete;
+      await tick();
+      await tick();
+      const slot = host.querySelector('slot[name="x"]');
+      assert.ok(slot, 'repeat-item slot re-attached');
+      assert.ok(slot.contains(child), 'the DOM-walk sweep reached the repeat-item slot');
     } finally {
       host.remove();
     }
