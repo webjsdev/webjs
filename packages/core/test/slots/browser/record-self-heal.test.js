@@ -1219,17 +1219,127 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
     }
   });
 
-  test('textContent = undefined stringifies (LegacyNullToEmptyString is null-only)', async () => {
-    const tag = tagName('tc-undefined');
+  test('textContent nullable coercion and innerHTML LegacyNullToEmptyString match native', async () => {
+    // Verified against real engines: textContent is a NULLABLE DOMString?
+    // (undefined converts to null, so BOTH empty), while innerHTML carries
+    // [LegacyNullToEmptyString] (null empties, undefined stringifies).
+    const tag = tagName('coercion-fidelity');
     const host = await mount(tag, () => html`<div><slot></slot></div>`);
     try {
+      const slot = host.querySelector('slot[data-webjs-light]');
+      host.textContent = 'seed';
+      await tick();
       host.textContent = /** @type {any} */ (undefined);
       await tick();
-      const slot = host.querySelector('slot[data-webjs-light]');
-      assert.equal(slot.textContent, 'undefined', 'undefined stringifies like native');
+      assert.equal(slot.textContent, '', 'textContent = undefined EMPTIES (nullable DOMString)');
+      host.textContent = 'seed2';
+      await tick();
       host.textContent = null;
       await tick();
-      assert.equal(slot.textContent, '', 'null maps to empty like native');
+      assert.equal(slot.textContent, '', 'textContent = null empties');
+      host.innerHTML = '<em>seed3</em>';
+      await tick();
+      host.innerHTML = /** @type {any} */ (null);
+      await tick();
+      assert.equal(slot.textContent, '', 'innerHTML = null CLEARS (LegacyNullToEmptyString)');
+      host.innerHTML = /** @type {any} */ (undefined);
+      await tick();
+      assert.equal(slot.textContent, 'undefined', 'innerHTML = undefined stringifies');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('a pre-render reconnect of a serialized-restored host does not hoover its own markup', async () => {
+    // The adopt path's window: a hydrated/restored host reconnected in the
+    // SAME task as its upgrade (before the deferred first render) must not
+    // fold its own rendered wrappers into the record (that bricked
+    // placement with a HierarchyRequestError, or parked the whole subtree
+    // for named-slot hosts).
+    const tag = tagName('prerender-reconnect');
+    const host = await mount(tag, () => html`<div class="shell"><slot></slot></div>`);
+    const holder = document.createElement('div');
+    try {
+      const child = document.createElement('p');
+      child.id = 'reconnect-child';
+      host.appendChild(child);
+      await tick();
+      const serialized = host.outerHTML;
+      host.remove();
+      await tick();
+      document.body.appendChild(holder);
+      holder.innerHTML = serialized.replace('data-wj-host', 'data-wj-host data-wj-serialized');
+      // SAME task as the upgrade: reparent the restored host (disconnect +
+      // reconnect before the deferred first render).
+      const restored = holder.querySelector(tag);
+      const wrapper = document.createElement('section');
+      holder.appendChild(wrapper);
+      wrapper.appendChild(restored);
+      await tick();
+      await tick();
+      assert.equal(restored.querySelectorAll('.shell').length, 1, 'exactly one rendered shell (no hoover, no brick)');
+      const slot = restored.querySelector('slot[data-webjs-light]');
+      assert.ok(slot.querySelector('#reconnect-child'), 'the authored child is projected');
+    } finally {
+      host.remove();
+      holder.remove();
+    }
+  });
+
+  test('append(Symbol()) throws TypeError like WebIDL ToString', async () => {
+    const tag = tagName('symbol-arg');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      let threw = null;
+      try { host.append(/** @type {any} */ (Symbol('x'))); } catch (e) { threw = e; }
+      assert.ok(threw instanceof TypeError, 'Symbol rejected like native DOMString conversion');
+      const slot = host.querySelector('slot[data-webjs-light]');
+      assert.equal(slot.children.length, 0, 'no state change');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('appendChild of a fake fragment object throws before touching anything', async () => {
+    const tag = tagName('fake-frag');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      host.appendChild(document.createElement('em'));
+      await tick();
+      const slot = host.querySelector('slot[data-webjs-light]');
+      let threw = null;
+      try {
+        host.appendChild(/** @type {any} */ ({ nodeType: 11, childNodes: [] }));
+      } catch (e) { threw = e; }
+      assert.ok(threw instanceof TypeError, 'duck-typed fragment rejected');
+      assert.equal(slot.children.length, 1, 'zero state change');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('a pre-render backstop bypass write survives the first render', async () => {
+    // The drain must PROCESS records for a never-rendered host (symbol
+    // absent): a bypass write followed by a patched write in the same task
+    // used to have its record drained-and-discarded at the park window
+    // close, so the first render silently destroyed the node.
+    const tag = tagName('prerender-drain');
+    class C extends WebComponent {
+      render() { return html`<div><slot></slot></div>`; }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    document.body.appendChild(host); // connect; render deferred
+    const extra = document.createElement('p');
+    extra.id = 'drained-bypass';
+    Node.prototype.appendChild.call(host, extra); // bypass: backstop queues
+    host.appendChild(document.createElement('em')); // patched write, same task
+    await tick();
+    await tick();
+    try {
+      const slot = host.querySelector('slot[data-webjs-light]');
+      assert.ok(slot.querySelector('#drained-bypass'), 'the bypass write survived (record processed, not discarded)');
+      assert.ok(slot.querySelector('em'), 'the patched write landed too');
     } finally {
       host.remove();
     }

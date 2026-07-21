@@ -890,7 +890,15 @@ export function drainRendererBackstop(host) {
   // children, so processing would fold them into the record and park them (the
   // component would render blank). With no instance to discriminate, discard,
   // matching the pre-processing behavior.
-  if (h[Symbol.for('webjs.instance')]) processBackstop(host, state, records);
+  // Process when an instance exists OR the host has NEVER rendered (the
+  // symbol is absent: a pre-first-render bypass write must be folded so the
+  // first render's replaceChildren does not silently destroy it); discard
+  // only on the EXPLICIT null of the non-template render path, whose text
+  // output would otherwise be folded and parked.
+  const hasInstanceSym = Symbol.for('webjs.instance') in h;
+  if (!hasInstanceSym || h[Symbol.for('webjs.instance')]) {
+    processBackstop(host, state, records);
+  }
 }
 
 /**
@@ -970,6 +978,8 @@ export function reconnectSweep(host) {
   const state = /** @type {SlotState | undefined} */ (h[SLOT_STATE]);
   if (!state) return;
   const inst = h[Symbol.for('webjs.instance')];
+  const rendered = Symbol.for('webjs.instance') in h;
+  const adoptedMarkup = !rendered && hasFrameworkRenderedSubtree(host);
   let changed = false;
   for (const node of Array.from(host.childNodes)) {
     if (node === h[PARK]) continue;
@@ -987,11 +997,14 @@ export function reconnectSweep(host) {
     // host children, so folding is skipped entirely, like
     // drainRendererBackstop's no-instance guard. A host that has NEVER
     // rendered (the symbol is absent: moved before its deferred first
-    // render) has no renderer output at all, so a disconnected-window
-    // bypass write IS folded and survives the first render as a record
-    // value.
-    const rendered = Symbol.for('webjs.instance') in h;
+    // render) has no CLIENT-renderer output, so a disconnected-window
+    // bypass write IS folded UNLESS the host carries adopted
+    // framework-rendered markup (SSR/hydration before the deferred first
+    // render, or a first render that threw): folding THAT subtree would
+    // push template wrappers into the record and brick placement on a
+    // HierarchyRequestError.
     if (rendered && (!inst || instanceOwns(inst, node))) continue;
+    if (!rendered && adoptedMarkup) continue;
     FRAMEWORK_DETACHED.add(node);
     state.authored.push(node);
     changed = true;
@@ -1034,10 +1047,12 @@ function parkFor(host) {
 /**
  * True for a REAL platform Node from any realm: a same-realm Node passes
  * instanceof; a cross-realm Node passes via its own realm's constructor.
- * KNOWN EDGE: a node from a DISCARDED iframe realm (ownerDocument.defaultView
- * is null) fails both arms and is rejected where native would adopt it; that
- * narrow throw is strictly safer than admitting an unverifiable object into
- * the record.
+ * KNOWN EDGE: a node from a DISCARDED iframe realm (defaultView null) and
+ * any cross-realm DOCUMENT (ownerDocument is null on a Document by spec)
+ * fail both arms where native would adopt or HierarchyRequestError:
+ * appendChild-shaped calls throw TypeError, and the variadic
+ * string-accepting calls stringify to text. Both outcomes are strictly
+ * safer than admitting an unverifiable object into the record.
  *
  * @param {any} n
  * @returns {boolean}
@@ -1073,7 +1088,15 @@ function expandArg(host, arg, allowString) {
   // host.append(42) appends the text "42" and host.append({}) appends
   // "[object Object]".
   if (allowString && !isRealmNode(arg)) {
-    return [host.ownerDocument.createTextNode(String(arg))];
+    // '' + x matches WebIDL DOMString conversion: a Symbol THROWS TypeError
+    // (String(sym) is the one JS path that does not).
+    return [host.ownerDocument.createTextNode('' + /** @type {any} */ (arg))];
+  }
+  // Non-string path (appendChild / insertBefore / replaceChild): reject any
+  // non-platform-node BEFORE the fragment branch, or a duck-typed
+  // {nodeType: 11} fake would bypass guardInsertable entirely.
+  if (!isRealmNode(arg)) {
+    throw new TypeError('Failed to execute insertion on the host: parameter is not of type Node.');
   }
   if (arg && arg.nodeType === 11) {
     const kids = Array.from(arg.childNodes);
@@ -1342,7 +1365,10 @@ export function installSlotInterception(host) {
       // gets natively): a <template> retains table-section tokens (<td>,
       // <tr>) that the real host context drops to text.
       const tmp = host.ownerDocument.createElement('div');
-      INNER_HTML_DESC.set.call(tmp, String(str));
+      // innerHTML IS [LegacyNullToEmptyString]: null maps to the empty
+      // string (the common clear idiom must clear, not insert the text
+      // "null"); undefined stringifies; a Symbol throws (ToString).
+      INNER_HTML_DESC.set.call(tmp, str === null ? '' : '' + str);
       const nodes = Array.from(tmp.childNodes);
       for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
       const displaced = state.authored;
@@ -1361,12 +1387,14 @@ export function installSlotInterception(host) {
         TEXT_CONTENT_DESC.set.call(this, str);
         return;
       }
-      // [LegacyNullToEmptyString]: only null maps to empty; undefined
-      // stringifies to the text "undefined", like native.
+      // Node.textContent is a NULLABLE DOMString? (LegacyNullToEmptyString
+      // belongs to innerHTML, not here): WebIDL converts undefined to null
+      // for nullable types, so BOTH null and undefined EMPTY, verified
+      // against all three engines. A Symbol still throws (ToString).
       const nodes =
-        str === null || str === ''
+        str == null || str === ''
           ? []
-          : [host.ownerDocument.createTextNode(String(str))];
+          : [host.ownerDocument.createTextNode('' + str)];
       for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
       const displaced = state.authored;
       state.authored = nodes;
