@@ -350,11 +350,12 @@ test('registration via customElements.define is not mistaken for a client global
   assert.equal(analyzeComponentSource(src).interactive, false);
 });
 
-test('a display-only rendered <slot> is ELIDABLE under children-as-values (#1015)', () => {
+test('a display-only rendered <slot> is ELIDABLE (#1015, kept under #1021)', () => {
   // Pre-#1015 any rendered <slot> shipped (it needed the observer-driven
-  // projection runtime). With children as values the SSR output already
-  // carries the placed children and there are no observers, so a slotted
-  // wrapper with no dynamic slot usage is byte-identical without its JS.
+  // projection runtime). The SSR output already carries the placed children,
+  // so a slotted wrapper with no dynamic slot usage is byte-identical
+  // without its JS; #1021's record runtime only ships for the dynamic READ
+  // surface (slotchange / assignedNodes / assignedElements / assignedSlot).
   const src = `
     import { WebComponent, html } from '@webjsdev/core';
     class Card extends WebComponent {

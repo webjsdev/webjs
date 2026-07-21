@@ -37,7 +37,11 @@
  * Documented inherent gaps (all from light DOM having no shadow boundary): structural
  * host reads (`host.children` / `childNodes` / the innerHTML GETTER show the
  * rendered template, not the authored children), `assignedChild.parentNode` is
- * the `<slot>`, and `::slotted()` CSS (use normal selectors / Tailwind).
+ * the `<slot>`, `::slotted()` CSS (use normal selectors / Tailwind), and
+ * initial-projection lifecycle timing: the first light-DOM projection lands
+ * one microtask AFTER the first render, so `firstUpdated` sees the `<slot>`
+ * element with EMPTY `assignedNodes()` (shadow DOM projects natively before
+ * it); read assigned content from `slotchange` or after a microtask.
  *
  * Live writes need the component's JS on the page. Interception + sensors
  * install in connectedCallback, so a component the framework ELIDES (a

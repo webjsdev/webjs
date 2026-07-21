@@ -200,12 +200,19 @@ them per app.
    `data-webjs-light` attribute, so real shadow-DOM slots are untouched.
    SSR (`injectDSD`) projects light-DOM children into the rendered template
    before the response, so PE and JS-disabled clients see the content.
-   Three inherent gaps, all from light DOM having no shadow boundary: structural
+   Four inherent gaps, all from light DOM having no shadow boundary: structural
    host reads (`host.children` / the `innerHTML` getter show the rendered
-   template), `assignedChild.parentNode` is the `<slot>`, and `::slotted()`
-   CSS (use normal selectors). When you add a slot behaviour, run the
-   parity harness that asserts a component behaves identically with
-   `static shadow` true and false.
+   template), `assignedChild.parentNode` is the `<slot>`, `::slotted()`
+   CSS (use normal selectors), and initial-projection lifecycle timing
+   (`firstUpdated` sees the `<slot>` element with EMPTY `assignedNodes()`;
+   the projection lands one microtask later, so read assigned content from
+   `slotchange` or after a microtask; shadow DOM projects natively before
+   `firstUpdated`). A second KNOWN LIMITATION (#1024, pre-existing): a
+   layout's `${children}` partitioned across MULTIPLE named slots only
+   soft-nav-swaps the default slice. When you add a slot behaviour, extend
+   the light-vs-shadow CONTRAST tests in
+   `packages/core/test/slots/browser/slot.test.js` (the same component
+   asserted in both modes) so the parity claim stays proven.
 
 ## Tests
 

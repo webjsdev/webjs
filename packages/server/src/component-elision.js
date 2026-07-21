@@ -213,15 +213,19 @@ const EVENT_BINDING_RE = new RegExp(
 const EVENT_PROP_RE = /\.on[a-z]+\s*=\s*\$\{/;
 
 /**
- * Narrow dynamic-slot signals (#1015). The old blanket rule shipped ANY
- * component that merely RENDERS a `<slot>`, but under children-as-values the
- * SSR output already carries the placed children, so a display-only slotted
- * wrapper is byte-identical with or without its JS and is elidable. What
- * genuinely needs the client slot runtime is the DYNAMIC READ surface: a
- * `slotchange` listener or an `assignedNodes` / `assignedElements` /
- * `assignedSlot` read. Native WRITE liveness (appendChild, slot= flips) is
- * consumer-driven, and a consumer that mutates a component's slots references
- * its tag, which already forces the ship.
+ * Narrow dynamic-slot signals (#1015, retained under #1021's native-parity
+ * record model). The old blanket rule shipped ANY component that merely
+ * RENDERS a `<slot>`, but the SSR output already carries the placed children,
+ * so a display-only slotted wrapper is byte-identical with or without its JS
+ * and is elidable. What genuinely needs the client slot runtime is the
+ * DYNAMIC READ surface: a `slotchange` listener or an `assignedNodes` /
+ * `assignedElements` / `assignedSlot` read. Native WRITE liveness
+ * (appendChild, slot= flips) is consumer-driven and usually forces the ship
+ * through the consumer's own signals (a shipping component that renders the
+ * tag, or an observation form); the remaining carve-out, a shipped script
+ * reaching an elided host only via document.querySelector, is inert by
+ * design with the `static interactive = true` escape hatch (see the
+ * slot.js banner).
  */
 const SLOT_DYNAMIC_RE = /\bslotchange\b|\bassignedNodes\s*\(|\bassignedElements\s*\(|\bassignedSlot\b/;
 

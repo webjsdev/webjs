@@ -523,7 +523,7 @@ suite('Light-DOM slot projection (browser)', () => {
     host.remove();
   });
 
-  test('drops authored child with slot="x" if no matching slot', async () => {
+  test('an authored child with slot="x" and no matching slot is parked, not rendered', async () => {
     const tag = tagName('unmatched');
     class C extends WebComponent {
       render() { return html`<div><slot></slot></div>`; }
@@ -542,8 +542,10 @@ suite('Light-DOM slot projection (browser)', () => {
     const slot = host.querySelector('slot[data-webjs-light]');
     assert.equal(slot.children.length, 1);
     assert.equal(slot.children[0], real);
-    // Ghost stays in the host's slot-state pending map; not rendered anywhere.
+    // Ghost is PARKED (connected but unrendered inside <wj-slot-park>, the
+    // native-parity holding element); it renders nowhere.
     assert.ok(!slot.contains(ghost), 'unmatched child not in default slot');
+    assert.equal(ghost.parentElement.tagName.toLowerCase(), 'wj-slot-park', 'parked');
     host.remove();
   });
 
@@ -625,7 +627,9 @@ suite('Light-DOM slot projection (browser)', () => {
   // the next microtask, via `slotchange`, or in `updated()` after a subsequent
   // re-render.
   //
-  // Documented in the skill's references/muscle-memory-gotchas.md gotcha #8.
+  // Documented as the fourth light-DOM gap (initial-projection timing) on
+  // every slot doc surface, and as the "Reading assignedNodes() in
+  // firstUpdated" gotcha in the skill's references/muscle-memory-gotchas.md.
   // ===========================================================================
 
   test('firstUpdated sees the <slot> element but light-DOM projection has NOT yet populated it', async () => {

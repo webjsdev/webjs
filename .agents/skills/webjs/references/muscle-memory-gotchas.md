@@ -149,6 +149,10 @@ The `@property()` decorator is banned by the erasable-TS invariant (decorators a
 
 Lit defaults to shadow DOM, so `static styles = css` scopes automatically. WebJs defaults to light DOM. A `static styles` block without `static shadow = true` does nothing useful and any inline `<style>` with bare class names leaks globally. The webjs-shaped fix is Tailwind utilities, which apply directly in light DOM. Reach for `static shadow = true` plus `static styles` only when scoped CSS genuinely belongs in a shadow root, or prefix every selector with the tag name if authoring vanilla light-DOM CSS.
 
+### Reading `assignedNodes()` in `firstUpdated` of a light-DOM component
+
+In shadow DOM the browser projects slotted content natively before `firstUpdated`, so Lit muscle memory says `this.shadowRoot.querySelector('slot').assignedNodes()` is populated there. In light DOM the first projection lands one microtask AFTER the first render, so `firstUpdated` sees the `<slot>` element with an EMPTY `assignedNodes()`. The webjs-shaped fix: read assigned content from a `slotchange` listener (fires once projection lands, and on every later change), or wait a microtask. Every later read and every mutation-driven update behaves identically in both modes; only the first-render read differs.
+
 ### `:host { display: block }` on a light-DOM component
 
 A custom element is `display: inline` by default, so a block container collapses. In Lit you fix this with `:host { display: block }`, which works because Lit is shadow-DOM-first. A light-DOM WebJs component has no shadow root, so there is no `:host` to write. There is nothing to do: the framework already defaults every light-DOM host to `display: block` via a low-priority `@layer webjs-host` rule, overridable by any Tailwind utility (`class="flex"` wins). A shadow-DOM component (`static shadow = true`) still sets `:host { display: block }` in `static styles` itself, exactly like Lit.

@@ -479,13 +479,14 @@ card.querySelector('slot').assignedNodes();
 node.assignedSlot;
 card.querySelector('slot').addEventListener('slotchange', ...);</pre>
 
-    <p><strong>Migrating from a shadow-DOM component</strong>: flip <code>static shadow</code> and nothing else changes (with the forwarded-slot content limitation below as the one exception). You write the same template and the same imperative code.</p>
+    <p><strong>Migrating from a shadow-DOM component</strong>: flip <code>static shadow</code> and nothing else changes, with the documented gaps and limitations below as the exceptions (most notably forwarded-slot content and first-render read timing). You write the same template and the same imperative code.</p>
 
-    <p><strong>The three light-DOM gaps</strong>, all a consequence of light DOM having no shadow boundary, not missing features:</p>
+    <p><strong>The four light-DOM gaps</strong>, all a consequence of light DOM having no shadow boundary, not missing features:</p>
     <ul>
       <li><strong>Structural host reads.</strong> <code>host.children</code> / <code>host.childNodes</code> / <code>host.querySelector(':scope > ...')</code> and the <code>innerHTML</code> <em>getter</em> read the rendered template, not the authored children (in shadow DOM the authored children stay in the host's light tree). Read slotted content with <code>assignedNodes()</code> instead.</li>
       <li><strong><code>assignedChild.parentNode</code></strong> is the <code>&lt;slot&gt;</code> element, not the host.</li>
       <li><strong><code>::slotted()</code> CSS</strong> is shadow-only (it needs the boundary to select across). In light DOM, style slotted content with normal selectors or Tailwind on the children directly, which is strictly more powerful.</li>
+      <li><strong>Initial-projection timing.</strong> The first light-DOM projection lands one microtask after the first render, so <code>firstUpdated()</code> sees the <code>&lt;slot&gt;</code> element with an <em>empty</em> <code>assignedNodes()</code> (shadow DOM projects natively before it). Read assigned content from a <code>slotchange</code> listener, or after a microtask. Every later read and every mutation-driven update is identical in both modes.</li>
     </ul>
 
     <p><strong>Conditional-on-slot</strong> at render time (branching a template on whether a slot has content) is not a thing in either mode, because a shadow template can't branch on light-child presence at render time either. Use CSS <code>:has()</code> / <code>slot:empty</code>, or a <code>slotchange</code> listener.</p>
@@ -495,6 +496,8 @@ card.querySelector('slot').addEventListener('slotchange', ...);</pre>
     <p><strong>Live writes need the component's JS on the page.</strong> A display-only slotted wrapper (a component that only renders a <code>&lt;slot&gt;</code>, with no interactivity) is elided, so it ships no JavaScript and its post-mount native writes are inert, the same as any elided component. A component that is actually interacted with ships automatically (a client module references its tag); if a consumer reaches an otherwise-display-only wrapper through a string selector the analyzer cannot see, force it to ship with <code>static interactive = true</code>. Shadow-DOM components always ship, so this is the one boundary set by elision rather than by slots.</p>
 
     <p><strong>Known limitation: forwarded-slot content projection is SSR-only.</strong> A template can forward a slot into a nested component (<code>html\`&lt;inner-shell&gt;&lt;slot&gt;fallback&lt;/slot&gt;&lt;/inner-shell&gt;\`</code>), and the forwarded slot's <em>fallback</em> works everywhere, as do the reads (<code>assignedNodes({ flatten: true })</code> follows the chain). But <em>content</em> passed to the outer component currently projects through the forwarded slot only in the server-rendered first paint; on the client the forwarded slot shows its fallback. Prefer passing content straight to the inner component until this write-path lands.</p>
+
+    <p><strong>Known limitation: named-slot slices of a layout's children across soft navigation.</strong> When a <em>layout</em> renders its <code>\${children}</code> inside a slotted shell and a page emits top-level <code>slot=""</code>-attributed children, the named-slot slices update on a full page load but not on a soft-nav boundary swap (the default slot's slice updates either way). Until the router-side resync lands, keep a layout's page-emitted content in the default slot.</p>
 
     <h3>Default Slot</h3>
     <p>The <code>&lt;slot&gt;&lt;/slot&gt;</code> element in a component's <code>render()</code> is where the parent's child content appears:</p>
