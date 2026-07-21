@@ -36,7 +36,7 @@ const out = await renderToString(
 // Named slot got its authored child, projected as "actual".
 assert.match(out, /data-projection="actual" name="header">[\s\S]*?Title/, `[${runtime}] header slot projected`);
 // Default slot (no name) caught the unnamed child.
-assert.match(out, /data-projection="actual"><p>Body<\/p><\/slot>/, `[${runtime}] default slot projected`);
+assert.match(out, /data-projection="actual"[^>]*><p>Body<\/p><\/slot>/, `[${runtime}] default slot projected`);
 // The unmatched footer slot shows its fallback.
 assert.match(out, /data-projection="fallback" name="footer">no actions/, `[${runtime}] footer fallback shown`);
 // The framework light-slot marker is emitted.

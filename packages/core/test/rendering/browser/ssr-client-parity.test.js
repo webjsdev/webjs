@@ -49,6 +49,9 @@ function normalize(htmlStr) {
     .replace(/<!--webjs-hydrate-->/g, '')
     .replace(MARKER_COMMENT_RE, '')
     .replace(/\s+data-webjs-prop-[a-z0-9-]+="[^"]*"/g, '')
+    // data-wj-slot-owner is an SSR-only hydration carrier for template
+    // ownership (#1023); the client render uses a symbol, not the attribute.
+    .replace(/\s+data-wj-slot-owner="[^"]*"/g, '')
     .replace(/<style[^>]*>[\s\S]*?<\/style>/g, '')
     // Boolean/empty attributes serialise as bare `attr` in the SSR string but
     // `attr=""` in the live DOM. Same attribute, different serialisation.

@@ -1305,13 +1305,15 @@ function isVirtualChild(host, node) {
   const state = /** @type {SlotState | undefined} */ (
     /** @type {any} */ (host)[SLOT_STATE]
   );
+  // lastSnapshot membership proves ownership on its own (a detached forwarded
+  // slot's structural isOwnSlot would wrongly veto it); a contained slot still
+  // needs isOwnSlot so a foreign torn-down slot is not claimed.
   return (
     p.nodeType === 1 &&
     /** @type {Element} */ (p).tagName === 'SLOT' &&
     /** @type {Element} */ (p).hasAttribute(LIGHT_SLOT_ATTR) &&
-    (host.contains(p) ||
-      Boolean(state && state.lastSnapshot.has(/** @type {HTMLSlotElement} */ (p)))) &&
-    isOwnSlot(host, /** @type {Element} */ (p))
+    ((state && state.lastSnapshot.has(/** @type {HTMLSlotElement} */ (p))) ||
+      (host.contains(p) && isOwnSlot(host, /** @type {Element} */ (p))))
   );
 }
 
@@ -1959,20 +1961,21 @@ function pruneAuthored(host, state) {
     // physically-verifying placement step re-places it this same pass.
     if (p === host) return true;
     if (p === park) return true;
-    // The slot-parent keep requires the slot to be recognizably OURS: in
-    // this host's tree, or a slot THIS state once applied (lastSnapshot has
-    // it), which covers our own detached slots (a cache()-stashed branch, a
-    // torn-down conditional) without trusting the bare isOwnSlot walk,
-    // whose vacuous-true on ANY fully detached chain would let the apply
-    // steal a node back from an unrelated component's torn-down slot the
-    // author moved it into.
+    // The slot-parent keep requires the slot to be recognizably OURS.
+    // lastSnapshot membership is DIRECT proof this host applied that slot,
+    // so it stands alone (covering our own detached slots: a cache()-stashed
+    // branch, a torn-down conditional, or a FORWARDED slot the re-render
+    // detached, whose structural isOwnSlot walk would wrongly hit the child
+    // component between it and this host). A merely-CONTAINED slot still
+    // needs isOwnSlot, so the apply never steals a node back from an
+    // unrelated component's torn-down slot the author moved it into (the
+    // bare isOwnSlot walk is vacuously true on any fully detached chain).
     if (
       p.nodeType === 1 &&
       /** @type {Element} */ (p).tagName === 'SLOT' &&
       /** @type {Element} */ (p).hasAttribute(LIGHT_SLOT_ATTR) &&
-      (host.contains(p) ||
-        state.lastSnapshot.has(/** @type {HTMLSlotElement} */ (p))) &&
-      isOwnSlot(host, /** @type {Element} */ (p))
+      (state.lastSnapshot.has(/** @type {HTMLSlotElement} */ (p)) ||
+        (host.contains(p) && isOwnSlot(host, /** @type {Element} */ (p))))
     ) {
       return true;
     }
@@ -2044,7 +2047,12 @@ function isOwnSlot(host, slot) {
   if (owner) return owner === host;
   const ownerTag =
     typeof slot.getAttribute === 'function' ? slot.getAttribute(SLOT_OWNER_ATTR) : null;
-  if (ownerTag) return ownerHostFor(slot, ownerTag) === host;
+  if (ownerTag) {
+    const resolved = ownerHostFor(slot, ownerTag);
+    if (resolved) return resolved === host;
+    // Unresolvable (a detached chain the owner is no longer an ancestor of):
+    // fall through to the structural walk rather than falsely denying.
+  }
   // Structural fallback: no OTHER custom element sits between slot and host.
   for (let p = slot.parentElement; p && p !== host; p = p.parentElement) {
     if (p.tagName.includes('-')) return false;
@@ -2054,9 +2062,13 @@ function isOwnSlot(host, slot) {
 
 /**
  * The host a `data-wj-slot-owner="<tag>"` attribute resolves to: the nearest
- * SLOT_STATE ancestor whose tag matches. One-level forwarding resolves
- * cleanly; same-tag-nested forwarding picks the nearest (the accepted edge,
- * no worse than the structural walk it replaces).
+ * ANCESTOR whose tag matches, by tag alone (NOT gated on SLOT_STATE). The
+ * gate would be wrong during the connect-time chooser, where an inner host
+ * has not upgraded yet, so a forwarded slot would fail to resolve to its
+ * outer owner and the outer would wrongly capture-hoover the SSR subtree.
+ * One-level forwarding resolves cleanly; same-tag-nested forwarding picks
+ * the nearest (the accepted edge, no worse than the structural walk it
+ * replaces).
  *
  * @param {Element} slot
  * @param {string} ownerTag
@@ -2065,7 +2077,7 @@ function isOwnSlot(host, slot) {
 function ownerHostFor(slot, ownerTag) {
   const want = ownerTag.toLowerCase();
   for (let p = slot.parentElement; p; p = p.parentElement) {
-    if (/** @type {any} */ (p)[SLOT_STATE] && p.tagName.toLowerCase() === want) return p;
+    if (p.tagName.toLowerCase() === want) return p;
   }
   return null;
 }

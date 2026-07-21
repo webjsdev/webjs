@@ -186,6 +186,46 @@ suite('Router + slot architectural regressions', () => {
     }
   });
 
+  test('a forwarded slot keeps its SSR content through hydration (#1023)', async () => {
+    // Hand-built SSR shape for `<mp>Hello</mp>` where mp forwards its slot
+    // into fc: fc's own slot (owner=fc) wraps mp's forwarded slot
+    // (owner=mp) which carries "Hello". Hydration must adopt "Hello" into
+    // the forwarded slot via the data-wj-slot-owner carrier and NOT revert
+    // to fallback when the components render on the client.
+    const mp = 'hydr-mp';
+    const fc = 'hydr-fc';
+    if (!customElements.get(fc)) {
+      class FC extends WebComponent {
+        render() { return html`<div class="card"><slot></slot></div>`; }
+      }
+      FC.register(fc);
+    }
+    if (!customElements.get(mp)) {
+      class MP extends WebComponent {
+        render() { return html`<hydr-fc><slot>fb</slot></hydr-fc>`; }
+      }
+      MP.register(mp);
+    }
+    const holder = document.createElement('div');
+    document.body.appendChild(holder);
+    holder.innerHTML =
+      `<${mp} data-wj-host><!--webjs-hydrate-->` +
+      `<${fc} data-wj-host><!--webjs-hydrate--><div class="card">` +
+      `<slot data-webjs-light data-projection="actual" data-wj-slot-owner="${fc}">` +
+      `<slot data-webjs-light data-projection="actual" data-wj-slot-owner="${mp}">Hello</slot>` +
+      `</slot></div></${fc}></${mp}>`;
+    await tick();
+    await tick();
+    await tick();
+    try {
+      const host = holder.querySelector(mp);
+      assert.ok(host.textContent.includes('Hello'), 'the forwarded content survived hydration');
+      assert.ok(!host.textContent.includes('fb'), 'did not revert to fallback');
+    } finally {
+      holder.remove();
+    }
+  });
+
   test('a nested child component keeps its OWN slot (forwarding does not steal, #1023)', async () => {
     // Ownership must exclude a genuine child's own slot: outer forwards its
     // default slot into the inner's default slot, but the inner ALSO has a
