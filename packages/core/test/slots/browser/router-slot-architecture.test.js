@@ -248,6 +248,48 @@ suite('Router + slot architectural regressions', () => {
     }
   });
 
+  test('a src-side serialized forwarded slot is not a reprojection target', async () => {
+    // The parsed-doc side has no record, so the exclusion is structural: a
+    // slot nested inside an ACTUAL-mode container is serialized forwarded
+    // content, never a target. Without it, the morph collected the nested
+    // name and projected clones into (or evicted from) the live host's
+    // same-named own slot.
+    const tag = tagName('src-fwd');
+    const host = await mount(
+      tag,
+      () => html`<div><slot></slot><slot name="x"></slot></div>`,
+    );
+    try {
+      const keep = document.createElement('b');
+      keep.setAttribute('slot', 'x');
+      keep.id = 'keep-x';
+      host.appendChild(keep);
+      await tick();
+      const ownX = host.querySelector('slot[name="x"]');
+      assert.ok(ownX.contains(keep), 'live own x slot holds its content');
+
+      // Incoming parsed host: the forwarded serialized shape (an actual
+      // name=x slot INSIDE the default actual slot) with different content.
+      const doc = _parseHTML(
+        `<${tag} data-wj-host><div>` +
+          `<slot data-webjs-light data-projection="actual">` +
+          `<slot data-webjs-light data-projection="actual" name="x">FWD</slot>` +
+          `</slot>` +
+          `<slot data-webjs-light data-projection="actual" name="x"><i>inc-x</i></slot>` +
+          `</div></${tag}>`,
+      );
+      const src = doc.querySelector(tag);
+      _diffElementInPlace(host, src);
+      await tick();
+      await tick();
+      // The own x slot reprojects from the incoming OWN x slot (inc-x), and
+      // the forwarded nested slot's content must never be the source.
+      assert.ok(!ownX.textContent.includes('FWD'), 'forwarded content was NOT projected into the own slot');
+    } finally {
+      host.remove();
+    }
+  });
+
   test('applySwap stamps every host in a parsed doc as serialized', async () => {
     enableClientRouter();
     const doc = _parseHTML(

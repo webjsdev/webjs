@@ -1676,6 +1676,61 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
     }
   });
 
+  test('a bypass move + intercepted write + same-task collapse loses nothing', async () => {
+    // The round-27 interleaving: the bypass MOVE onto the host and the
+    // repair placement's removal record land in one batch, and the rescue
+    // detaches the node before the batch is processed. The source-drain in
+    // the apply consumes the placement record with fresh containment, so
+    // the node can never be mis-attributed to an author removal.
+    const tag = tagName('interleave-loss');
+    class C extends WebComponent({ cond: Boolean }) {
+      constructor() { super(); this.cond = true; }
+      render() {
+        return this.cond
+          ? html`<div><slot name="a"></slot></div>`
+          : html`<div>off</div>`;
+      }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    const n = document.createElement('em');
+    n.setAttribute('slot', 'a');
+    n.id = 'kept-n';
+    host.appendChild(n);
+    document.body.appendChild(host);
+    await tick();
+    try {
+      // One author task: collapse queued, bypass move, intercepted write.
+      host.cond = false;
+      Node.prototype.appendChild.call(host, n);
+      host.appendChild(document.createElement('span'));
+      await host.updateComplete;
+      await tick();
+      await tick();
+      host.cond = true;
+      await host.updateComplete;
+      await tick();
+      await tick();
+      const slot = host.querySelector('slot[name="a"]');
+      assert.ok(slot, 'slot re-rendered');
+      assert.ok(slot.querySelector('#kept-n'), 'the authored node SURVIVED the interleaving');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('append(host, Symbol) throws the conversion TypeError first', async () => {
+    const tag = tagName('conv-first');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      let threw = null;
+      try { host.append(host, /** @type {any} */ (Symbol('s'))); } catch (e) { threw = e; }
+      assert.ok(threw instanceof TypeError, 'all conversions precede any DOM validity step');
+    } finally {
+      host.remove();
+    }
+  });
+
   test('router projectAuthored on the default slice leaves a manual assignment intact', async () => {
     const tag = tagName('proj-manual');
     const host = await mount(tag, () => html`<div><slot></slot><slot name="x"></slot></div>`);

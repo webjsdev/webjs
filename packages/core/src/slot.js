@@ -1297,20 +1297,26 @@ const EMPTY_NODE_SET = new Set();
  * @returns {Node[]}
  */
 function convertVariadicArgs(host, args) {
+  // Phase 1 is PURE WebIDL conversion, left to right, with NO DOM validity
+  // interleaved: native converts every argument (running ToString side
+  // effects, throwing on a Symbol) before any operation-body step, so a
+  // later argument's conversion TypeError must preempt an earlier
+  // argument's HierarchyRequestError.
   /** @type {Array<{ text?: string, frag?: DocumentFragment, node?: Node }>} */
   const converted = [];
   for (const arg of args) {
     if (!isRealmNode(arg)) {
       converted.push({ text: `${arg}` }); // Symbol throws here, nothing drained
-      continue;
-    }
-    if (arg.nodeType === 11) {
-      guardCycle(host, Array.from(arg.childNodes));
+    } else if (arg.nodeType === 11) {
       converted.push({ frag: /** @type {DocumentFragment} */ (arg) });
-      continue;
+    } else {
+      converted.push({ node: arg });
     }
-    guardInsertable(host, [arg]);
-    converted.push({ node: arg });
+  }
+  // Phase 2: DOM validity for every converted argument, THEN the drain.
+  for (const c of converted) {
+    if (c.frag) guardCycle(host, Array.from(c.frag.childNodes));
+    else if (c.node) guardInsertable(host, [c.node]);
   }
   /** @type {Node[]} */
   const nodes = [];
@@ -1697,6 +1703,21 @@ export function applySlotAssignments(host) {
         withRendererWrites(host, () => N_appendChild.call(park, n));
       }
     }
+  }
+
+  // LAST step: consume the records this apply's own placements generated,
+  // while their containment evidence is still fresh. A host-to-slot
+  // placement removal processed now sees contains === true and is retained
+  // trivially, so it can never age into a stale record that a later rescue
+  // makes indistinguishable from an author removal (the retention conjuncts
+  // in processBackstop stay as a second line for any record that still
+  // straddles). Running at the END keeps any recursive fold's inner apply
+  // from racing this pass's park bookkeeping; recursion terminates because
+  // a pure-placement batch marks nothing dirty and an inner apply leaves an
+  // empty queue behind.
+  if (state.backstop) {
+    const placementRecords = state.backstop.takeRecords();
+    if (placementRecords.length) processBackstop(host, state, placementRecords);
   }
 }
 
