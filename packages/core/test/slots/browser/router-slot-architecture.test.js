@@ -12,7 +12,12 @@
  */
 import { WebComponent } from '../../../src/component.js';
 import { html } from '../../../src/html.js';
-import { enableClientRouter, _applySwap, _parseHTML } from '../../../src/router-client.js';
+import {
+  enableClientRouter,
+  _applySwap,
+  _parseHTML,
+  _diffElementInPlace,
+} from '../../../src/router-client.js';
 
 import { assert } from '../../../../../test/browser-assert.js';
 
@@ -184,6 +189,63 @@ suite('Router + slot architectural regressions', () => {
     assert.ok(slot, 'the conditional slot rendered');
     assert.ok(!slot.querySelector('.closed'), 'the stale rendered tree was NOT projected as authored content');
     holder.remove();
+  });
+
+  test('the serialized stamp is never copied onto a live reused host', async () => {
+    // The morph's attribute sync must skip data-wj-serialized: it is a
+    // message to a not-yet-upgraded element's connectedCallback, and copying
+    // it onto an already-live host leaves a consume-once marker lingering in
+    // the live DOM.
+    const dst = document.createElement('div');
+    dst.setAttribute('data-wj-host', '');
+    const src = document.createElement('div');
+    src.setAttribute('data-wj-host', '');
+    src.setAttribute('data-wj-serialized', '');
+    src.setAttribute('data-extra', 'yes');
+    _diffElementInPlace(dst, src);
+    assert.ok(!dst.hasAttribute('data-wj-serialized'), 'stamp NOT copied to the live element');
+    assert.equal(dst.getAttribute('data-extra'), 'yes', 'ordinary attributes still sync');
+  });
+
+  test('a PARKED child survives a serialized-stamped restore', async () => {
+    // The outerHTML snapshot carries <wj-slot-park> with the unmatched child
+    // inside; the restore adopt must sweep it back into the record (connected,
+    // native parity) instead of leaving it lost in a stale serialized park.
+    const tag = tagName('park-restore');
+    const host = await mount(tag, () => html`<div><slot name="only"></slot></div>`);
+    const child = document.createElement('span');
+    child.setAttribute('slot', 'unmatched');
+    child.id = 'parked-child';
+    host.appendChild(child);
+    await tick();
+    assert.equal(child.parentElement.tagName.toLowerCase(), 'wj-slot-park', 'parked before snapshot');
+
+    const serialized = host.outerHTML;
+    host.remove();
+    await tick();
+    const holder = document.createElement('div');
+    document.body.appendChild(holder);
+    try {
+      holder.innerHTML = serialized.replace('data-wj-host', 'data-wj-host data-wj-serialized');
+      await tick();
+      await tick();
+      const restored = holder.querySelector(tag);
+      const rechild = restored.querySelector('#parked-child');
+      assert.ok(rechild, 'the parked child exists in the restored host');
+      assert.ok(rechild.isConnected, 'still connected (native keeps unmatched children connected)');
+      assert.equal(
+        rechild.parentElement.tagName.toLowerCase(),
+        'wj-slot-park',
+        're-parked in the fresh park',
+      );
+      assert.equal(
+        restored.querySelectorAll('wj-slot-park').length,
+        1,
+        'exactly one park (the serialized one was dropped)',
+      );
+    } finally {
+      holder.remove();
+    }
   });
 
   test('applySwap stamps every host in a parsed doc as serialized', async () => {

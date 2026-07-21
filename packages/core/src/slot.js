@@ -485,6 +485,20 @@ export function adoptSSRAssignments(host) {
       state.lastSnapshot.set(s, children.slice());
     }
   }
+  // A serialized snapshot (back/forward restore) also carries the PARK: an
+  // authored child whose slot name matched no rendered slot at snapshot time
+  // sits inside <wj-slot-park>. Sweep its children into the record and drop
+  // the serialized park element itself (a fresh park is created on demand),
+  // so a parked node survives the restore and a later render that DOES emit
+  // its slot pulls it back out.
+  for (const oldPark of host.querySelectorAll('wj-slot-park')) {
+    if (!isOwnSlot(host, oldPark)) continue;
+    for (const child of Array.from(oldPark.childNodes)) {
+      FRAMEWORK_DETACHED.add(child); // parentless after the park removal
+      state.authored.push(child);
+    }
+    oldPark.remove();
+  }
   repartition(state);
 }
 

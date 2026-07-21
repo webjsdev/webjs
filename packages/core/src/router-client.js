@@ -2613,6 +2613,9 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
   // conditionally closed slot at snapshot time) where the structural
   // slot-marker detector has nothing to see. The chooser consumes and removes
   // the attribute on upgrade.
+  // (An ELIDED display-only host never upgrades, so its stamp is retained as
+  // an inert attribute; diffElementInPlace never copies it onto a live host,
+  // and the upgrade path consumes it, so it cannot mis-route anything.)
   try {
     for (const el of doc.querySelectorAll('[data-wj-host]')) {
       el.setAttribute('data-wj-serialized', '');
@@ -3101,6 +3104,10 @@ function diffElementInPlace(dst, src) {
   for (const attr of src.attributes) {
     srcAttrs.add(attr.name);
     if (LIVE_ATTRS.has(attr.name)) continue;
+    // The serialized-restore stamp is a message to a NOT-YET-UPGRADED
+    // element's connectedCallback; copying it onto a live reused host would
+    // leave a consume-once marker lingering in the live DOM forever.
+    if (attr.name === 'data-wj-serialized') continue;
     if (dst.getAttribute(attr.name) !== attr.value) {
       dst.setAttribute(attr.name, attr.value);
     }
