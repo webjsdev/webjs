@@ -1120,6 +1120,16 @@ function buildDetached(tr) {
     applyPart(bound[i], tr.values[i], undefined, tr.values);
     lastValues.push(tr.values[i]);
   }
+  // Slot parts need their one-shot apply exactly like createInstance and the
+  // nested-template path. The fragment is still detached here, so the
+  // slot-part's own deferred finalize (a one-microtask retry when the parent
+  // walk cannot reach a host yet) carries it: every caller inserts the
+  // returned fragment synchronously in the same task, so the retry lands in
+  // the live tree. Without this loop a <slot> inside a repeat() / array item
+  // never finalizes and its content is never placeable.
+  for (const p of bound) {
+    if (p.kind === 'slot') applyPart(p, undefined, undefined, []);
+  }
   const outFrag = document.createDocumentFragment();
   outFrag.appendChild(startNode);
   while (frag.firstChild) outFrag.appendChild(frag.firstChild);

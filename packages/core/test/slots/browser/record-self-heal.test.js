@@ -602,6 +602,108 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
     }
   });
 
+  test('slots inside a repeat() item finalize and project (client-only mount)', async () => {
+    // buildDetached items apply their slot parts like every other template
+    // path; the deferred finalize retry lands after the caller's synchronous
+    // insert. Without it, content for these slots was permanently
+    // unplaceable (excluded from placement AND exempted from the park).
+    const tag = tagName('repeat-slots');
+    class C extends WebComponent({ names: Array }) {
+      constructor() { super(); this.names = ['top', 'side']; }
+      render() {
+        return html`<div>${repeat(
+          this.names,
+          (n) => n,
+          (n) => html`<section><slot name=${n}></slot></section>`,
+        )}</div>`;
+      }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    const a = document.createElement('em');
+    a.setAttribute('slot', 'top');
+    a.textContent = 'TOP';
+    const b = document.createElement('strong');
+    b.setAttribute('slot', 'side');
+    b.textContent = 'SIDE';
+    host.append(a, b);
+    document.body.appendChild(host);
+    await tick();
+    await tick();
+    try {
+      const slots = host.querySelectorAll('slot[data-webjs-light]');
+      assert.equal(slots.length, 2, 'both repeat-item slots rendered');
+      assert.ok(slots[0].contains(a), 'first item slot received its content');
+      assert.ok(slots[1].contains(b), 'second item slot received its content');
+      assert.equal(slots[0].getAttribute('data-projection'), 'actual', 'finalized + applied');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('a library write into a NAMED slot stays in that slot (adopted key)', async () => {
+    const tag = tagName('named-fold');
+    const host = await mount(
+      tag,
+      () => html`<div><slot></slot><slot name="side"></slot></div>`,
+    );
+    try {
+      const child = document.createElement('em');
+      child.setAttribute('slot', 'side');
+      host.appendChild(child);
+      await tick();
+      const sideSlot = host.querySelector('slot[name="side"]');
+      // The sanctioned third-party write: into the assigned CONTAINER of a
+      // NAMED slot, with a node that has no slot attribute.
+      const badge = document.createElement('u');
+      badge.id = 'badge';
+      sideSlot.appendChild(badge);
+      // Any record-driven apply used to teleport it to the default slot.
+      host.appendChild(document.createElement('span'));
+      await tick();
+      assert.equal(badge.parentElement, sideSlot, 'the badge STAYED in the named slot');
+      // An explicit later slot= change still wins over the adoption.
+      badge.setAttribute('slot', '');
+      await tick();
+      await tick();
+      const defSlot = host.querySelector('slot[data-webjs-light]:not([name])');
+      assert.ok(defSlot.contains(badge), 'explicit attribute reclaimed routing');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('projectAuthored preserves the slot= attribute of a manually assigned node', async () => {
+    const tag = tagName('proj-attr-keep');
+    const host = await mount(
+      tag,
+      () => html`<div><slot></slot><slot name="side"></slot></div>`,
+    );
+    try {
+      const el = document.createElement('em');
+      el.setAttribute('slot', 'side');
+      host.appendChild(el);
+      await tick();
+      const slots = host.querySelectorAll('slot[data-webjs-light]');
+      const defSlot = slots[0];
+      defSlot.assign(el); // manual: element-bound to the DEFAULT slot
+      await tick();
+      assert.equal(el.parentElement, defSlot, 'manually in the default slot');
+      // The router's morph re-projects the default slice from its physical
+      // children; the manual node's latent attribute must survive.
+      projectAuthored(host, null, Array.from(defSlot.childNodes));
+      await tick();
+      assert.equal(el.getAttribute('slot'), 'side', 'latent slot= attribute intact');
+      assert.equal(el.parentElement, defSlot, 'still manually routed');
+      // Releasing the overlay restores attribute routing.
+      defSlot.assign();
+      await tick();
+      assert.equal(el.parentElement, slots[1], 'released back to the named slot');
+    } finally {
+      host.remove();
+    }
+  });
+
   test('router projectAuthored on the default slice leaves a manual assignment intact', async () => {
     const tag = tagName('proj-manual');
     const host = await mount(tag, () => html`<div><slot></slot><slot name="x"></slot></div>`);

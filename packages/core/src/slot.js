@@ -424,6 +424,10 @@ function findLightAssignedSlot(el) {
  *   / assign() / router splice), consumed by the next apply pass: the resync
  *   step honours record positions for exactly these nodes and adopts
  *   physical order for everything else (node-scoped order authority).
+ * @property {WeakMap<Node, string|null>} [adoptedKey] The slot key a
+ *   self-heal fold ADOPTED for a node a non-record writer placed inside a
+ *   named slot (its own attribute would key it elsewhere); cleared when the
+ *   author explicitly changes the node's slot= attribute.
  * @property {Map<HTMLSlotElement, WeakRef<Node>[]>} [manualAssign] Overlay for
  *   `HTMLSlotElement.assign()` manual assignment, keyed by the RECEIVING slot
  *   element (native binds slottables to the element, so a rename follows the
@@ -517,6 +521,15 @@ export function repartition(state) {
 function effectiveKeyOf(state, node) {
   const m = manualSlotFor(state, node);
   if (m) return keyOfName(m.getAttribute('name'));
+  // A node a NON-record writer placed inside a NAMED slot (folded by the
+  // self-heal resync) keeps the key of the container it was written into;
+  // deriving from its (absent or different) slot= attribute would teleport
+  // it to the default slot on the next apply. An explicit later slot=
+  // change clears the adoption (the flip sensor owns that).
+  if (state.adoptedKey) {
+    const adopted = state.adoptedKey.get(node);
+    if (adopted !== undefined) return adopted;
+  }
   return slotNameOf(node);
 }
 
@@ -649,7 +662,12 @@ export function projectAuthored(host, name, nodes) {
   state.authored = state.authored.filter((n) => effectiveKeyOf(state, n) !== key);
   if (at === -1 || at > state.authored.length) at = state.authored.length;
   for (const n of list) {
-    if (n.nodeType === 1) {
+    // Stamp the slice key onto element nodes so the derived partition
+    // matches the projection, EXCEPT nodes with a live manual assign()
+    // entry: their routing is element-bound (the overlay outranks the
+    // attribute), and the attribute is the author's latent intent that must
+    // survive the overlay's release.
+    if (n.nodeType === 1 && !manualSlotFor(state, n)) {
       if (key == null) /** @type {Element} */ (n).removeAttribute('slot');
       else /** @type {Element} */ (n).setAttribute('slot', key);
     }
@@ -858,6 +876,9 @@ function processFlip(host, records) {
       }
     } else if (r.attributeName === 'slot') {
       if (state.authored.indexOf(target) !== -1) {
+        // An explicit slot= change WINS over a self-heal adoption: the
+        // author's attribute is now the routing intent.
+        if (state.adoptedKey) state.adoptedKey.delete(target);
         applySlotAssignments(host);
         return;
       }
@@ -1450,8 +1471,18 @@ function resyncActualSlots(host, state, pendingNodes) {
     // Base: the slice in PHYSICAL order, minus op-touched nodes (re-anchored
     // below or op-removed). A physical node unknown to the record is a true
     // addition (renderer hole / library write) and folds in at its physical
-    // position.
+    // position; when the container is a NAMED slot and the node's own
+    // attribute would key it elsewhere, remember the container's key as the
+    // node's ADOPTED key so repartition does not teleport it out of the
+    // container it was written into.
     const merged = physical.filter((n) => !pendingNodes.has(n));
+    for (const n of merged) {
+      if (a.indexOf(n) !== -1) continue; // known to the record already
+      if (effectiveKeyOf(state, n) !== key) {
+        if (!state.adoptedKey) state.adoptedKey = new WeakMap();
+        state.adoptedKey.set(n, key);
+      }
+    }
 
     // Re-anchor every record node of this slice that is not already in the
     // base, in record order, each after the LAST base member that precedes
