@@ -3,11 +3,12 @@
  *
  * `<slot>` works identically in light DOM and shadow DOM, through the SAME
  * native DOM API. You write the same template, and moving a component between
- * `static shadow = false` and `true` never needs a rewrite (two KNOWN
- * LIMITATIONS: forwarded-slot CONTENT projection is SSR-only, #1023, with the
- * fallback and the flatten read chain working everywhere; and a layout's
- * children partitioned across MULTIPLE named slots only soft-nav-swap the
- * default slice, #1024, pre-existing). Native `<slot>` is
+ * `static shadow = false` and `true` never needs a rewrite. A FORWARDED slot
+ * (a template forwarding `<slot>` into a nested component) projects its
+ * content on the client and through hydration too (#1023): the renderer
+ * stamps each slot with its template owner (SLOT_OWNER), carried across SSR
+ * as `data-wj-slot-owner`, so a forwarded slot routes to the OUTER host that
+ * rendered it, not the child it nests in. Native `<slot>` is
  * a shadow-DOM primitive, so in light DOM WebJs implements slotting itself, to
  * spec: named + default slots, fallback content, first-wins resolution, dynamic
  * `name=${...}`, and live post-mount writes (appendChild, insertBefore,
