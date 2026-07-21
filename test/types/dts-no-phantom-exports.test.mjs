@@ -9,7 +9,7 @@
  * offers an import that blows up at runtime.
  *
  * Why NOT a full signature diff. An earlier attempt emitted declarations from
- * the JSDoc and compared shapes, but webjs's overlays are DELIBERATELY richer
+ * the JSDoc and compared shapes, but WebJs's overlays are DELIBERATELY richer
  * than the loose JSDoc (`WebComponent` is `@returns {any}`; `register` types its
  * arg as a hand-written `WebComponentConstructor` where the JSDoc infers
  * `typeof WebComponent`). Consumers' editors read the overlay, not the JSDoc, so
@@ -104,7 +104,8 @@ function entryPairs(pkgDir) {
   for (const [key, val] of Object.entries(pkg.exports || {})) {
     if (!val || typeof val !== 'object' || !val.types || !val.types.endsWith('.d.ts')) continue;
     const types = val.types.replace(/^\.\//, '');
-    pairs.push({ key, types, source: types.replace(/\.d\.ts$/, '.js') });
+    // `impl` is the DERIVED sibling `.js`, not the package.json `source` field.
+    pairs.push({ key, types, impl: types.replace(/\.d\.ts$/, '.js') });
   }
   return pairs;
 }
@@ -175,11 +176,11 @@ for (const { name, dir, minEntries } of PACKAGES) {
 
       // Collect the RAW phantom set (before known-issue suppression) per entry.
       const raw = [];
-      for (const { source, types } of entries) {
-        const implJs = join(implSrc, source);
+      for (const { impl, types } of entries) {
+        const implJs = join(implSrc, impl);
         const overlay = join(ROOT, dir, types);
-        assert.ok(statSafe(implJs), `runtime source missing for ${name} entry: ${source}`);
-        const tag = source.replace(/[^A-Za-z0-9]/g, '_');
+        assert.ok(statSafe(implJs), `runtime source missing for ${name} entry: ${impl}`);
+        const tag = impl.replace(/[^A-Za-z0-9]/g, '_');
         for (const exp of phantomExports(implJs, overlay, work, tag)) {
           raw.push({ key: `${name}#${exp}`, label: `${types}: ${exp}` });
         }

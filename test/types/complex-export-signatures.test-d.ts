@@ -7,8 +7,11 @@
  * false positives on exactly these exports (generic classes, directive
  * overloads, factory functions). Per-signature correctness for them is pinned
  * POSITIVELY here instead. Each complex export gets a realistic valid use (must
- * compile) and a wrong use (`// @ts-expect-error`, must error), so a regression
- * in the declared signature surfaces as a fixture failure.
+ * compile) and, where a wrong shape is statically checkable, a wrong use
+ * (`// @ts-expect-error`, must error), so a regression in the declared signature
+ * surfaces as a fixture failure. (`Task`, `ref`, and the context classes carry
+ * a wrong-use case; `repeat` is JSDoc-inferred and loosely typed, so it gets the
+ * valid use only.)
  *
  * Not executed by node:test; compiled by `type-fixtures.test.mjs` (which asserts
  * valid lines compile and every `@ts-expect-error` is a genuine error).
