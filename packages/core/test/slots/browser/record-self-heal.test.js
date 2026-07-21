@@ -9,7 +9,7 @@
  */
 import { WebComponent } from '../../../src/component.js';
 import { html } from '../../../src/html.js';
-import { repeat } from '../../../src/directives.js';
+import { repeat, cache, asyncAppend } from '../../../src/directives.js';
 import { projectAuthored } from '../../../src/slot.js';
 
 import { assert } from '../../../../../test/browser-assert.js';
@@ -769,6 +769,109 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
       assert.ok(defSlot.contains(node), 'record op ended the adoption; attribute routing resumed');
     } finally {
       host.remove();
+    }
+  });
+
+  test('a slot inside asyncAppend chunk content finalizes and projects', async () => {
+    const tag = tagName('stream-chunk-slot');
+    async function* gen() {
+      yield html`<section><slot name="x"></slot></section>`;
+    }
+    class C extends WebComponent {
+      render() { return html`<div>${asyncAppend(gen())}</div>`; }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    const child = document.createElement('em');
+    child.setAttribute('slot', 'x');
+    child.textContent = 'streamed-slot-content';
+    host.appendChild(child);
+    document.body.appendChild(host);
+    // Let the chunk land + the deferred finalize + its queued apply run.
+    await new Promise((r) => setTimeout(r, 50));
+    try {
+      const slot = host.querySelector('slot[name="x"]');
+      assert.ok(slot, 'the chunk slot rendered');
+      assert.equal(slot.getAttribute('data-projection'), 'actual', 'finalized and applied');
+      assert.ok(slot.contains(child), 'authored content projected into the streamed slot');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('cache() toggle-back re-applies: parked content returns to the slot', async () => {
+    const tag = tagName('cache-slot');
+    class C extends WebComponent({ showA: Boolean }) {
+      constructor() { super(); this.showA = true; }
+      render() {
+        return html`<div>${cache(
+          this.showA ? html`<slot name="x"></slot>` : html`<em>alt</em>`,
+        )}</div>`;
+      }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    const child = document.createElement('strong');
+    child.setAttribute('slot', 'x');
+    child.textContent = 'cached-away';
+    host.appendChild(child);
+    document.body.appendChild(host);
+    await tick();
+    try {
+      assert.equal(child.parentElement.getAttribute('name'), 'x', 'projected initially');
+      host.showA = false; // stash the branch (slot + child leave the doc)
+      await host.updateComplete;
+      // An authored write while stashed: the apply cannot reach the stashed
+      // slot, so the child parks (or is held by the record).
+      host.appendChild(document.createElement('span'));
+      await tick();
+      host.showA = true; // re-attach the cached branch
+      await host.updateComplete;
+      await tick();
+      await tick();
+      const slot = host.querySelector('slot[name="x"]');
+      assert.ok(slot, 'slot re-attached');
+      assert.ok(slot.contains(child), 'the child RETURNED to the slot on toggle-back (no strand)');
+      assert.ok(child.isConnected, 'connected');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('a snapshot restore keeps an adopted node in the slot the markup shows', async () => {
+    const tag = tagName('restore-adopt');
+    const host = await mount(
+      tag,
+      () => html`<div><slot></slot><slot name="side"></slot></div>`,
+    );
+    const seed = document.createElement('span');
+    seed.setAttribute('slot', 'side');
+    host.appendChild(seed);
+    await tick();
+    const sideSlot = host.querySelector('slot[name="side"]');
+    const lib = document.createElement('u');
+    lib.id = 'restored-adopted';
+    sideSlot.appendChild(lib); // library write
+    host.appendChild(document.createElement('em')); // fold: adopted to side
+    await tick();
+    assert.equal(lib.parentElement, sideSlot, 'adopted before snapshot');
+
+    const serialized = host.outerHTML; // lib sits in the side slot, NO attribute
+    host.remove();
+    await tick();
+    const holder = document.createElement('div');
+    document.body.appendChild(holder);
+    try {
+      holder.innerHTML = serialized.replace('data-wj-host', 'data-wj-host data-wj-serialized');
+      await tick();
+      await tick();
+      const restored = holder.querySelector(tag);
+      const relib = restored.querySelector('#restored-adopted');
+      assert.ok(relib, 'node restored');
+      const reSide = restored.querySelector('slot[name="side"]');
+      assert.ok(reSide.contains(relib), 'STAYED in the slot the restored markup showed it in');
+    } finally {
+      holder.remove();
     }
   });
 

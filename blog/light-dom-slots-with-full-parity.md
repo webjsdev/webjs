@@ -48,9 +48,9 @@ The framework owns the lifecycle of a slot host. When a WebJs component connects
 1. `captureAuthoredChildren(host)` snapshots the original children before render fires.
 2. `render()` produces a template that may contain `<slot>` elements (or `<slot name="x">`).
 3. The renderer walks the output. For each slot, it looks up matching children from the snapshot. Default slot matches unnamed children. Named slot matches children whose `slot=""` attribute equals the slot's name.
-4. Matched children get moved into the slot's position. Unmatched children disappear (matching shadow-DOM semantics).
+4. Matched children get moved into the slot's position. Unmatched children stay connected but unrendered inside a hidden holding element (matching shadow-DOM semantics for unassigned slottables).
 5. Fallback content inside the slot tag stays put if no child matched. `data-projection="fallback"` flags this state.
-6. A MutationObserver watches the host's `childList` for runtime additions and removals. When the projected tree changes, `slotchange` fires.
+6. Runtime liveness rides the component's own writer, never a node-moving observer: the host's mutating DOM methods are intercepted to update the record, two read-only sensors catch raw bypass writes and `slot=` attribute flips, and a self-heal step folds in what a parent template or a library legitimately wrote inside a slot. When an assignment actually changes, `slotchange` fires with native async-coalesced timing.
 
 
 # The SSR piece

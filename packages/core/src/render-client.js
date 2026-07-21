@@ -1574,6 +1574,19 @@ function applyCache(part, inner) {
       // Reconcile values so any state changes since detachment apply.
       updateInstance(cached.inst, tr.values);
       part.child = cached.inst;
+      // A re-attached instance may carry ALREADY-APPLIED slot parts, whose
+      // finalize will never fire again, while the host's record moved on
+      // during the stash (content for these slots was parked when an apply
+      // ran with the slot unreachable). Re-run the apply for each owning
+      // host so parked content is pulled back out.
+      const hosts = new Set();
+      for (const p of cached.inst.bound) {
+        if (p.kind === 'slot' && p.slotEl) {
+          const h = findSlotHost(p.slotEl);
+          if (h) hosts.add(h);
+        }
+      }
+      for (const h of hosts) applySlotAssignments(h);
       return;
     }
   }
@@ -1930,6 +1943,15 @@ function renderToNodes(value) {
     const bound = parts.map((p) => bindPart(p, frag));
     for (let i = 0; i < tr.values.length; i++) {
       applyPart(bound[i], tr.values[i], undefined, tr.values);
+    }
+    // Slot parts need their one-shot apply here too (same contract as
+    // createInstance / nested templates / buildDetached): the caller
+    // (consumeAsyncStream) inserts these nodes synchronously in the same
+    // task, so the slot-part's one-microtask finalize retry lands in the
+    // live tree. Without this, a <slot> inside streamed chunk content never
+    // finalizes and its name suppresses parking forever.
+    for (const p of bound) {
+      if (p.kind === 'slot') applyPart(p, undefined, undefined, []);
     }
     return [...frag.childNodes];
   }

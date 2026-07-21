@@ -571,7 +571,18 @@ export function adoptSSRAssignments(host) {
       // that placement uses) is exact; the only observable difference from a
       // fresh mount is the cross-name ordering a post-hydration `insertBefore`
       // with a ref in a DIFFERENT named slot would resolve against.
-      for (const child of children) state.authored.push(child);
+      // A child whose OWN attribute keys elsewhere (a snapshot-restored
+      // adoption or manual assignment, provenance the HTML cannot carry) is
+      // re-adopted under the container's key, so the first client render
+      // never relocates a node out of the slot the restored markup showed it
+      // in.
+      for (const child of children) {
+        state.authored.push(child);
+        if (slotNameOf(child) !== name) {
+          if (!state.adoptedKey) state.adoptedKey = new WeakMap();
+          state.adoptedKey.set(child, name);
+        }
+      }
       state.lastSnapshot.set(s, children.slice());
     }
   }
