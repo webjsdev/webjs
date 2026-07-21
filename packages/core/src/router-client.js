@@ -3211,6 +3211,25 @@ function ownActualLightSlots(host) {
     // inert content, never a reprojection target; collecting it would
     // project into (or evict from) a slot the apply refuses to place.
     if (isAuthoredContentSlot(host, s)) continue;
+    // Src-side (parsed doc) hosts have no record, so the authored test is
+    // inert there; the SERIALIZED shape of content is structural instead: a
+    // slot nested inside an ACTUAL-mode light slot of the same host is
+    // content (an SSR'd forwarded slot rides inside the inner host's own
+    // actual slot), never a reprojection target. A slot inside a
+    // FALLBACK-mode container stays collectable: fallback content is
+    // template markup, and a slot there is legitimate.
+    let nestedInActual = false;
+    for (let a = s.parentElement; a && a !== host; a = a.parentElement) {
+      if (
+        a.tagName === 'SLOT' &&
+        a.hasAttribute(LIGHT_SLOT_ATTR) &&
+        a.getAttribute(PROJECTION_ATTR) === PROJECTION_ACTUAL
+      ) {
+        nestedInActual = true;
+        break;
+      }
+    }
+    if (nestedInActual) continue;
     const name = keyOfName(s.getAttribute('name'));
     if (!byName.has(name)) byName.set(name, s);
   }

@@ -10,7 +10,7 @@
 import { WebComponent } from '../../../src/component.js';
 import { html } from '../../../src/html.js';
 import { repeat, cache, asyncAppend } from '../../../src/directives.js';
-import { projectAuthored } from '../../../src/slot.js';
+import { projectAuthored, isAuthoredContentSlot } from '../../../src/slot.js';
 
 import { assert } from '../../../../../test/browser-assert.js';
 
@@ -1541,6 +1541,136 @@ suite('Record self-heal + overlay coherence (review round 16)', () => {
       await tick();
       assert.equal(n.parentNode, frag, 'the node stayed in the author fragment (no theft-back)');
       assert.equal(host.querySelector('#frag-bound'), null, 'not resurrected into the host');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('a rescue-detached record value survives a stale placement record', async () => {
+    // The placement move (host to slot) queues a host-childList removal
+    // record with containment TRUE at creation; if a conditional collapse
+    // rescues the node before the record is processed, the node is a
+    // parentless marked record value and the processing must RETAIN it.
+    const tag = tagName('stale-rescue');
+    class C extends WebComponent({ open: Boolean }) {
+      constructor() { super(); this.open = true; }
+      render() {
+        return this.open
+          ? html`<div><slot name="a"></slot></div>`
+          : html`<div>closed</div>`;
+      }
+    }
+    C.register(tag);
+    const host = document.createElement(tag);
+    const x = document.createElement('em');
+    x.setAttribute('slot', 'a');
+    x.id = 'rescued-x';
+    host.appendChild(x);
+    document.body.appendChild(host);
+    await tick();
+    try {
+      // Bypass-move X onto the host: the repair placement (host back to
+      // slot) queues the stale record; collapse the conditional in the same
+      // task so the rescue lands before the record is processed.
+      Node.prototype.appendChild.call(host, x);
+      host.open = false;
+      await host.updateComplete;
+      await tick();
+      await tick();
+      host.open = true; // the slot returns: the record value must re-place
+      await host.updateComplete;
+      await tick();
+      await tick();
+      const slot = host.querySelector('slot[name="a"]');
+      assert.ok(slot, 'slot re-rendered');
+      assert.ok(slot.querySelector('#rescued-x'), 'the record value SURVIVED the stale record');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('an SSR-serialized forwarded slot does not collide with a same-named own slot at adopt', async () => {
+    // The serialized shape: a forwarded actual slot rides INSIDE the inner
+    // host's own default slot. Without the adopt-time authored-content
+    // exclusion, first-wins adopted the forwarded slot under name x and the
+    // later legitimate own x slot's children were destroyed at first apply.
+    const tag = tagName('fwd-adopt');
+    class C extends WebComponent {
+      render() { return html`<div><slot></slot><slot name="x"></slot></div>`; }
+    }
+    C.register(tag);
+    const holder = document.createElement('div');
+    document.body.appendChild(holder);
+    try {
+      holder.innerHTML =
+        `<${tag} data-wj-host data-wj-serialized><div>` +
+        `<slot data-webjs-light data-projection="actual">` +
+        `<slot data-webjs-light data-projection="actual" name="x">P-content</slot>` +
+        `</slot>` +
+        `<slot data-webjs-light data-projection="actual" name="x"><b id="own-d">D</b></slot>` +
+        `</div></${tag}>`;
+      await tick();
+      await tick();
+      const host = holder.querySelector(tag);
+      const d = host.querySelector('#own-d');
+      assert.ok(d, 'the own slot child exists');
+      assert.ok(d.isConnected, 'D was not destroyed');
+      const ownX = Array.from(host.querySelectorAll('slot[name="x"]')).find(
+        (sl) => sl.querySelector('#own-d'),
+      );
+      assert.ok(ownX, 'D is still inside an x slot (the own slot kept its children)');
+    } finally {
+      holder.remove();
+    }
+  });
+
+  test('both-invalid insertBefore throws the parameter-2 TypeError (conversions precede DOM steps)', async () => {
+    const tag = tagName('both-invalid');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      let e1 = null;
+      try { host.insertBefore(host, /** @type {any} */ ({})); } catch (e) { e1 = e; }
+      assert.ok(e1 instanceof TypeError, 'cycle-invalid param 1 + non-node param 2 is a TypeError');
+      // Type validity (step 4) comes AFTER the ref NotFound (step 3).
+      const doctype = document.implementation.createDocumentType('html', '', '');
+      let e2 = null;
+      try { host.insertBefore(doctype, document.createElement('u')); } catch (e) { e2 = e; }
+      assert.equal(e2 && e2.name, 'NotFoundError', 'the ref check precedes the node-type check');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('append(frag, Symbol) throws with the fragment INTACT', async () => {
+    const tag = tagName('frag-intact');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      const frag = document.createDocumentFragment();
+      frag.appendChild(document.createElement('em'));
+      frag.appendChild(document.createElement('u'));
+      let threw = null;
+      try { host.append(frag, /** @type {any} */ (Symbol('x'))); } catch (e) { threw = e; }
+      assert.ok(threw instanceof TypeError, 'the later argument conversion threw');
+      assert.equal(frag.childNodes.length, 2, 'the fragment was NOT drained (all conversions precede any move)');
+      const slot = host.querySelector('slot[data-webjs-light]');
+      assert.equal(slot.children.length, 0, 'zero state change');
+    } finally {
+      host.remove();
+    }
+  });
+
+  test('isAuthoredContentSlot discriminates authored chunks from template slots', async () => {
+    const tag = tagName('acs-export');
+    const host = await mount(tag, () => html`<div><slot></slot></div>`);
+    try {
+      const chunk = document.createElement('div');
+      chunk.innerHTML = '<slot data-webjs-light data-projection="actual" name="q"></slot>';
+      host.appendChild(chunk);
+      await tick();
+      const spoof = chunk.querySelector('slot');
+      const real = host.querySelector('slot[data-webjs-light]:not([name])');
+      assert.equal(isAuthoredContentSlot(host, spoof), true, 'a slot inside an authored chunk is content');
+      assert.equal(isAuthoredContentSlot(host, real), false, 'the template slot is not content');
     } finally {
       host.remove();
     }

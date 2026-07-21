@@ -589,6 +589,15 @@ export function adoptSSRAssignments(host) {
     // too.
     if (!isOwnSlot(host, s)) continue;
     if (s.getAttribute(PROJECTION_ATTR) !== PROJECTION_ACTUAL) continue;
+    // The authored-content invariant applies at adopt time too: a slot
+    // sitting inside ALREADY-ADOPTED children (an SSR'd forwarded slot
+    // serialized as content of an earlier own slot) is content, not an own
+    // slot; adopting it would first-wins-collide with a later legitimate
+    // same-named own slot and destroy that slot's children. Document order
+    // guarantees a container slot precedes its descendants, so the check
+    // sees the container's children in `authored` by the time a nested slot
+    // is tested.
+    if (isInsideAuthored(state, host, s)) continue;
     const name = keyOfName(s.getAttribute('name'));
     if (!seen.has(name)) {
       seen.add(name);
@@ -851,8 +860,13 @@ function processBackstop(host, state, records) {
   const park = h[PARK];
   const inst = h[Symbol.for('webjs.instance')];
   let dirty = false;
+  // Nodes the AUTHOR touched in THIS pass (any addedNodes appearance): for
+  // them, the latest same-pass author action wins, so a following removal
+  // record splices even a marked node.
+  const touchedThisPass = new Set();
   for (const r of records) {
     for (const node of r.addedNodes) {
+      touchedThisPass.add(node);
       if (node === park) continue;
       if (inst && instanceOwns(inst, node)) continue; // renderer output, not authored
       if (state.authored.indexOf(node) !== -1) {
@@ -869,15 +883,20 @@ function processBackstop(host, state, records) {
     }
     for (const node of r.removedNodes) {
       const i = state.authored.indexOf(node);
-      // Any authored node in a HOST-childList removal record that is no
-      // longer under the host was removed by the AUTHOR: no framework
-      // detach path can produce this shape (capture precedes sensor arming;
-      // rescue removes from the SLOT, not the host; park and placement
-      // moves keep the node under the host, so contains stays true; the
-      // render wipe's batch is discarded by the null-instance drain). A
-      // marked-node retention guard here defended an impossible case while
-      // resurrecting same-batch add-then-remove and add-then-move writes.
-      if (i !== -1 && !host.contains(node)) {
+      if (i === -1) continue;
+      if (host.contains(node)) continue; // placement/park move: still ours
+      // Containment is evaluated at PROCESSING time, so a stale placement
+      // record (host to slot move) can be processed after a rescue detached
+      // the node as a record value: retain exactly that shape (marked,
+      // parentless, untouched by the author this pass). Everything else in
+      // a host-childList removal record was author-removed or author-moved
+      // (their same-pass add marks touchedThisPass; a placed node is
+      // unmarked; a re-homed node has a parent) and leaves the record.
+      const rescueValue =
+        FRAMEWORK_DETACHED.has(node) &&
+        node.parentNode == null &&
+        !touchedThisPass.has(node);
+      if (!rescueValue) {
         state.authored.splice(i, 1);
         dirty = true;
       }
@@ -1144,13 +1163,15 @@ function expandArg(host, arg, allowString) {
  * @param {Node[]} nodes
  */
 function guardInsertable(host, nodes) {
+  guardCycle(host, nodes);
   for (const n of nodes) {
-    // Validity BEFORE any record mutation (native throws with zero state
-    // change): a non-Node is a TypeError, a Node that is not an insertable
-    // child type (an Attr, a Document, a doctype) is a HierarchyRequestError.
-    // A duck-typed fake with a numeric nodeType would otherwise pass the
-    // guards, mutate the record, and then throw INSIDE the apply pass on
-    // every later operation, permanently wedging the host's slot pipeline.
+    // Node-TYPE validity is DOM pre-insert step 4, AFTER the ref's
+    // NotFoundError (step 3): callers run this via expandArg once the ref
+    // checks passed. A non-insertable type (an Attr, a Document, a doctype)
+    // is a HierarchyRequestError. Realm validity (TypeError for a
+    // duck-typed fake, which would otherwise mutate the record and wedge
+    // every later apply) is checked by callers BEFORE any DOM step, per
+    // WebIDL argument conversion.
     if (!isRealmNode(n)) {
       throw new TypeError('Failed to execute insertion on the host: parameter is not of type Node.');
     }
@@ -1161,7 +1182,19 @@ function guardInsertable(host, nodes) {
         'HierarchyRequestError',
       );
     }
-    if (n === host || (t === 1 && /** @type {Element} */ (n).contains(host))) {
+  }
+}
+
+/**
+ * DOM pre-insert step 2, the cycle check: run after ALL WebIDL argument
+ * conversions and before the ref's NotFoundError (step 3).
+ *
+ * @param {Element} host
+ * @param {Node[]} nodes
+ */
+function guardCycle(host, nodes) {
+  for (const n of nodes) {
+    if (n === host || (n.nodeType === 1 && /** @type {Element} */ (n).contains(host))) {
       throw new DOMException(
         'Failed to execute insertion on the host: the new child contains the parent.',
         'HierarchyRequestError',
@@ -1254,6 +1287,49 @@ function isVirtualChild(host, node) {
 const EMPTY_NODE_SET = new Set();
 
 /**
+ * WebIDL for the variadic insertion methods converts EVERY argument before
+ * any node is moved: phase 1 validates each argument (a Symbol or fake
+ * throws with every fragment still intact), phase 2 drains fragments and
+ * builds the flat node list.
+ *
+ * @param {Element} host
+ * @param {any[]} args
+ * @returns {Node[]}
+ */
+function convertVariadicArgs(host, args) {
+  /** @type {Array<{ text?: string, frag?: DocumentFragment, node?: Node }>} */
+  const converted = [];
+  for (const arg of args) {
+    if (!isRealmNode(arg)) {
+      converted.push({ text: `${arg}` }); // Symbol throws here, nothing drained
+      continue;
+    }
+    if (arg.nodeType === 11) {
+      guardCycle(host, Array.from(arg.childNodes));
+      converted.push({ frag: /** @type {DocumentFragment} */ (arg) });
+      continue;
+    }
+    guardInsertable(host, [arg]);
+    converted.push({ node: arg });
+  }
+  /** @type {Node[]} */
+  const nodes = [];
+  for (const c of converted) {
+    if (c.text !== undefined) {
+      nodes.push(host.ownerDocument.createTextNode(c.text));
+    } else if (c.frag) {
+      const kids = Array.from(c.frag.childNodes);
+      guardInsertable(host, kids);
+      for (const k of kids) N_removeChild.call(c.frag, k);
+      nodes.push(...kids);
+    } else if (c.node) {
+      nodes.push(c.node);
+    }
+  }
+  return nodes;
+}
+
+/**
  * Commit an authored mutation: record it, re-derive, re-place. `touched`
  * lists the nodes this op inserted, moved, or removed, so the resync step
  * honours the record's position for exactly those nodes (an expressed move)
@@ -1311,10 +1387,12 @@ export function installSlotInterception(host) {
     if (!isRealmNode(node)) {
       throw new TypeError('Failed to execute insertBefore on the host: parameter 1 is not of type Node.');
     }
-    guardInsertable(host, node.nodeType === 11 ? Array.from(node.childNodes) : [node]);
     if (ref != null && !isRealmNode(ref)) {
       throw new TypeError('Failed to execute insertBefore on the host: parameter 2 is not of type Node.');
     }
+    // Both conversions done; now DOM validity in step order (cycle, then the
+    // ref's NotFoundError below, then node-type inside expandArg).
+    guardCycle(host, node.nodeType === 11 ? Array.from(node.childNodes) : [node]);
     // A non-null ref MUST be an assigned child (native throws NotFoundError
     // otherwise), checked before the self-ref no-op so insertBefore(x, x) on
     // a NON-child still throws like native.
@@ -1362,7 +1440,7 @@ export function installSlotInterception(host) {
     if (!isRealmNode(newNode)) {
       throw new TypeError('Failed to execute replaceChild on the host: parameter 1 is not of type Node.');
     }
-    guardInsertable(host, newNode.nodeType === 11 ? Array.from(newNode.childNodes) : [newNode]);
+    guardCycle(host, newNode.nodeType === 11 ? Array.from(newNode.childNodes) : [newNode]);
     if (!isVirtualChild(host, oldNode)) {
       throw new DOMException(
         'replaceChild: the node to be replaced is not an assigned child of this host',
@@ -1389,8 +1467,7 @@ export function installSlotInterception(host) {
 
   h.append = function (...args) {
     if (h[RENDERING]) return N_append.apply(this, args);
-    const nodes = [];
-    for (const a of args) nodes.push(...expandArg(host, a, true));
+    const nodes = convertVariadicArgs(host, args);
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
     authoredSplice(state, nodes, null);
     commitAuthored(host, state, nodes);
@@ -1398,8 +1475,7 @@ export function installSlotInterception(host) {
 
   h.prepend = function (...args) {
     if (h[RENDERING]) return N_prepend.apply(this, args);
-    const nodes = [];
-    for (const a of args) nodes.push(...expandArg(host, a, true));
+    const nodes = convertVariadicArgs(host, args);
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
     // Remove any incoming node from its current position, then insert at the
     // FRONT via unshift. Passing `authored[0]` as an authoredSplice ref would be
@@ -1415,8 +1491,7 @@ export function installSlotInterception(host) {
 
   h.replaceChildren = function (...args) {
     if (h[RENDERING]) return N_replaceChildren.apply(this, args);
-    const nodes = [];
-    for (const a of args) nodes.push(...expandArg(host, a, true));
+    const nodes = convertVariadicArgs(host, args);
     for (const n of nodes) FRAMEWORK_DETACHED.add(n); // prune-exempt until placed
     const displaced = state.authored;
     state.authored = nodes.slice();
