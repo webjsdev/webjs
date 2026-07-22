@@ -46,7 +46,7 @@ The metadata routes (`sitemap`, `robots`, `manifest`, `icon`, `apple-icon`, `ope
 
 ```ts
 import { html } from '@webjsdev/core';
-import { listPosts } from '../../modules/posts/queries/list-posts.server.ts';
+import { listPosts } from '#modules/posts/queries/list-posts.server.ts';
 
 export const metadata = { title: 'Posts · my-app' };
 
@@ -80,8 +80,8 @@ Both throw a sentinel that the framework catches and translates to a 404 / 302 r
 # What route.ts looks like
 
 ```ts
-import { listPosts } from '../../../modules/posts/queries/list-posts.server.ts';
-import { createPost } from '../../../modules/posts/actions/create-post.server.ts';
+import { listPosts } from '#modules/posts/queries/list-posts.server.ts';
+import { createPost } from '#modules/posts/actions/create-post.server.ts';
 
 export async function GET() {
   return Response.json(await listPosts());
