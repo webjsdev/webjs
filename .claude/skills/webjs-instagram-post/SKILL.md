@@ -136,7 +136,15 @@ CREATE=$(curl -s "https://graph.instagram.com/v25.0/me/media" \
 echo "$CREATE"
 CREATION_ID=$(printf '%s' "$CREATE" | grep -oE '"id":"[0-9]+"' | head -1 | grep -oE '[0-9]+')
 
-# 2) publish the container
+# 2) WAIT until the container is FINISHED. Publishing too fast fails with
+#    code 9007 "Media ID is not available" even for a static image.
+for i in $(seq 1 25); do
+  ST=$(curl -s "https://graph.instagram.com/v25.0/${CREATION_ID}?fields=status_code&access_token=${IG_TOKEN}")
+  printf '%s' "$ST" | grep -q '"status_code":"FINISHED"' && break
+  printf '%s' "$ST" | grep -q '"status_code":"ERROR"' && { echo "container ERROR: $ST"; break; }
+done
+
+# 3) publish the container
 curl -s "https://graph.instagram.com/v25.0/me/media_publish" \
   --data-urlencode "creation_id=${CREATION_ID}" \
   --data-urlencode "access_token=${IG_TOKEN}"

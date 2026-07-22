@@ -44,12 +44,12 @@ magick -background none \
 # Text is sized to sit inside the center-safe column. Instagram's profile
 # grid crops a 1:1 post to 3:4 portrait (keeps full height, trims ~12.5% off
 # each side), so nothing critical may run to the horizontal edges.
-magick -background none -size 780x \
-  pango:"<span font=\"Adwaita Sans Heavy 54\" foreground=\"#F4F4F4\">${HEADLINE}</span>" \
+magick -background none -size 660x \
+  pango:"<span font=\"Adwaita Sans Heavy 50\" foreground=\"#F4F4F4\">${HEADLINE}</span>" \
   "$W/headline.png"
 
-magick -background none -size 720x \
-  pango:"<span font=\"Adwaita Sans 29\" foreground=\"#9a9a9a\">${SUBTEXT}</span>" \
+magick -background none -size 640x \
+  pango:"<span font=\"Adwaita Sans 27\" foreground=\"#9a9a9a\">${SUBTEXT}</span>" \
   "$W/subtext.png"
 
 magick -background none \
@@ -61,9 +61,10 @@ magick -background none \
 
 magick -size 660x2 xc:'#282828' "$W/divider.png"
 
-# Left/right margins put every element inside the center-safe column
-# (x from ~140 to ~940) so the 3:4 grid crop never clips text.
-PAD=140
+# Left/right margins put every element well inside the center-safe column so
+# the 3:4 grid crop (which trims ~135px per side) still leaves comfortable
+# padding around the text in the thumbnail, not text touching the edge.
+PAD=200
 HY=336
 H_head=$(identify -format '%h' "$W/headline.png")
 SY=$(( HY + H_head + 36 ))
