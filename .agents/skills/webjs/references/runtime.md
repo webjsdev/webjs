@@ -46,7 +46,7 @@ The 103 Early Hints gap costs only a small first-load latency edge where an edge
 webjs create my-app --runtime bun
 ```
 
-`--runtime` is orthogonal to `--template`, so it re-flavors any of full-stack, saas, or api. A Bun scaffold emits a `bun.lock`, a pure `oven/bun:1` Dockerfile plus a bun-install CI, and bun-command agent docs. The test, db, and check tooling still runs on Node.
+`--runtime` is orthogonal to `--template`, so it re-flavors either full-stack or api. A Bun scaffold emits a `bun.lock`, a pure `oven/bun:1` Dockerfile plus a bun-install CI, and bun-command agent docs. The test, db, and check tooling still runs on Node.
 
 ## Running on Bun
 

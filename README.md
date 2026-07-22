@@ -32,18 +32,19 @@ TypeScript with zero build step, real SSR with Declarative Shadow DOM.
 
 ## Quickstart
 
-> **AI agents, read this before scaffolding.** Only three templates exist
-> (`full-stack` default, `--template api`, `--template saas`), and the CLI
-> rejects anything else. Always start from one of them. Never hand-roll
-> the directory structure. Default to **full-stack with Drizzle + SQLite**.
-> Never store app data in JSON files, in-memory arrays, or localStorage
-> as a substitute for the database. The scaffold is **reference only**.
+> **AI agents, read this before scaffolding.** Only two templates exist
+> (`full-stack` default, `--template api`), and the CLI rejects anything
+> else. Always start from one of them. Never hand-roll the directory
+> structure. Default to **full-stack with Drizzle + SQLite**. Never store
+> app data in JSON files, in-memory arrays, or localStorage as a
+> substitute for the database. The scaffold is **reference only**.
 > Replace the example layout, page, components, and `User` model with
 > the app the user actually asked for. Picker:
 >
-> - Any product UI (todo, blog, notes, dashboard, marketplace, social, e-commerce…) → **default** (`webjs create <name>`)
+> - Any product UI (todo, blog, notes, dashboard, marketplace, social, e-commerce, a SaaS with accounts…) → **default** (`webjs create <name>`)
 > - Backend-only HTTP/JSON API, no UI → **`--template api`**
-> - Auth, login/signup, protected dashboard, SaaS → **`--template saas`**
+>
+> Auth is one of the full-stack gallery cards (login, a signed session, and a real protected route), so a default app already carries a promotable auth baseline.
 >
 > **The scaffold is a starting point, grown in place.** It ships a gallery index home, a neutral-palette root layout, database wiring, and a densely-commented feature gallery (single-concept demos under `app/features/` plus the `app/examples/todo` app, with logic in `modules/`). The framework context ships as one cross-agent skill, `.agents/skills/webjs/SKILL.md` (a routing skill), alongside `AGENTS.md` and `.agents/rules/workflow.md`. Read the skill and browse the gallery, then build the app the user asked for on top of the scaffold, pruning the demos it does not use.
 >
@@ -56,11 +57,11 @@ npm create webjs@latest my-app   # full-stack (pages + API + components + Drizzl
 cd my-app && npm run dev
 # → http://localhost:8080
 
-# Backend-only API
+# Backend-only API (routes + modules + Drizzle, no UI)
 npm create webjs@latest my-api  -- --template api
 
-# SaaS starter (auth + dashboard + Drizzle)
-npm create webjs@latest my-saas -- --template saas
+# Auth (login/signup, session, a protected route) ships as a gallery card
+# in the default full-stack app. No separate template needed.
 
 # Prefer Bun? webjs runs on Node 24+ or Bun. Add --runtime bun to any
 # template (it is orthogonal to --template), or scaffold through Bun and
