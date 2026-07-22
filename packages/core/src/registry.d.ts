@@ -1,4 +1,4 @@
-import type { WebComponentConstructor, WebComponentInstanceConstructor } from './component.d.ts';
+import type { WebComponentConstructor, WebComponentInstanceConstructor } from './component.js';
 
 // Re-exported for `@webjsdev/core/registry` consumers; it is the type of the
 // `WebComponent` const itself (class + factory dual).
