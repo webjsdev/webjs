@@ -13,7 +13,7 @@ import { requireAuth, type AuthUser } from '../middleware/require-auth.server.ts
 // (the action never runs) or stashes the caller on the request context.
 export const middleware = [requireAuth];
 
-export async function greet(input: { name: string; signedOut?: boolean }): Promise<ActionResult<{ message: string }>> {
+export async function greet(input: { name: string }): Promise<ActionResult<{ message: string }>> {
   // actionContext() is populated ONLY on a boundary that runs the middleware
   // chain (the RPC stub here, or a route() adapter). requireAuth runs there and
   // guarantees a user, so `caller` is set on every real call. A DIRECT
@@ -33,7 +33,7 @@ export async function greet(input: { name: string; signedOut?: boolean }): Promi
   // envelope. A guard BEFORE any await can never fire, since nothing has been
   // awaited yet, which is why the re-check lives after the await.
   try {
-    const message = await lookupGreeting(name, caller.name, actionSignal());
+    const message = await lookupGreeting(name, caller.name || caller.email || 'a signed-in user', actionSignal());
     return { success: true, data: { message } };
   } catch (e) {
     if (actionSignal().aborted) return { success: false, error: 'Request cancelled.', status: 499 };

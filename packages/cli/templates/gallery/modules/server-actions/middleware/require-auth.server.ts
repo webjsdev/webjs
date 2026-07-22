@@ -7,10 +7,12 @@
 // .server.ts with NO 'use server'): the action imports it server-side; it never
 // ships to the browser.
 import type { ActionResult } from '@webjsdev/server';
+import { getCurrentUser } from '#modules/auth/auth.server.ts';
 
 export interface AuthUser {
   id: string;
-  name: string;
+  name?: string | null;
+  email?: string;
 }
 
 // The context object the framework passes each middleware. `context` is the
@@ -24,17 +26,16 @@ interface ActionMiddlewareCtx {
 }
 
 export async function requireAuth(ctx: ActionMiddlewareCtx, next: () => Promise<unknown>): Promise<unknown> {
-  // A REAL guard reads the signed session or JWT off ctx.request, because auth
-  // belongs to the request, not the payload. This gallery has no login backend on
-  // the action path, so to keep BOTH branches exercisable the demo treats the
-  // caller as signed in UNLESS the request asks to simulate a signed-out visitor
-  // (the checkbox in the component sends { signedOut: true } in the action input).
-  const [input] = ctx.args as [{ signedOut?: boolean } | undefined];
-  const user: AuthUser | null = input?.signedOut ? null : { id: 'u_1', name: 'Ada' };
+  // A REAL guard reads the signed session off the request, because auth belongs
+  // to the request, not the payload. The RPC POST is same-origin, so the auth
+  // cookie rides along and getCurrentUser(ctx.request) reads it (this uses the
+  // auth gallery card's createAuth config; sign in at /features/auth/login).
+  const user = (await getCurrentUser(ctx.request)) as AuthUser | null;
 
   // Short-circuit: return an ActionResult WITHOUT calling next(), so the action
   // never runs. On the RPC boundary the short-circuit rides as the result with its
-  // status inside the envelope, and a denied call is served no-store (never cached).
+  // status inside the envelope, and a denied call is served no-store (never
+  // cached). An anonymous caller is genuinely denied here.
   if (!user) return { success: false, error: 'Sign in to continue.', status: 401 } satisfies ActionResult<never>;
 
   ctx.context.user = user; // what actionContext().user reads inside the action
