@@ -3782,32 +3782,46 @@ function metaIdentity(m) {
  * they are preserved), so "absent from the incoming head" means "this page does
  * not declare it", not "optimized away".
  *
+ * A key may repeat (multiple `og:image`), so both sides are grouped into a LIST
+ * per key and reconciled as a set: an unchanged set is left alone, else the live
+ * copies are removed and the incoming set re-appended.
+ *
  * @param {HTMLHeadElement} newHead
  */
 function reconcileHeadMetas(newHead) {
-  const incoming = new Map();
-  for (const m of newHead.querySelectorAll('meta')) {
-    const key = metaIdentity(m);
-    if (key && key !== META_KEY_CSP_NONCE && !incoming.has(key)) incoming.set(key, m);
-  }
-  const live = new Map();
-  for (const m of document.head.querySelectorAll('meta')) {
-    const key = metaIdentity(m);
-    if (key && key !== META_KEY_CSP_NONCE && !live.has(key)) live.set(key, m);
-  }
-  // Add a new keyed meta, or sync one whose attributes changed (e.g. content).
-  for (const [key, inc] of incoming) {
-    const cur = live.get(key);
-    if (!cur) {
-      document.head.appendChild(cloneElementWithCorrectNonce(inc));
-    } else if (outerHTMLForDiff(inc) !== outerHTMLForDiff(cur)) {
-      for (const a of [...cur.attributes]) cur.removeAttribute(a.name);
-      for (const a of inc.attributes) cur.setAttribute(a.name, a.value);
+  // A HEADLESS fragment response (a `<webjs-frame>` subtree) has no `<head>`, so
+  // `parseHTML` leaves `newHead` empty. A real full head ALWAYS emits charset +
+  // viewport, so "no `<meta>` at all in the incoming head" means "this is a
+  // fragment, not a head to reconcile against". Skipping it here is what keeps a
+  // frame swap from stripping every live page-scoped meta (viewport, og:*, ...).
+  if (!newHead.querySelector('meta')) return;
+
+  /** @param {ParentNode} root @returns {Map<string, Element[]>} */
+  const group = (root) => {
+    const map = new Map();
+    for (const el of root.querySelectorAll('meta')) {
+      const key = metaIdentity(el);
+      if (!key || key === META_KEY_CSP_NONCE) continue;
+      const list = map.get(key);
+      if (list) list.push(el); else map.set(key, [el]);
     }
+    return map;
+  };
+  const incoming = group(newHead);
+  const live = group(document.head);
+
+  // Add or replace each incoming key whose SET differs from the live set.
+  for (const [key, incEls] of incoming) {
+    const liveEls = live.get(key) || [];
+    const incKey = incEls.map(outerHTMLForDiff).join('\n');
+    const liveKey = liveEls.map(outerHTMLForDiff).join('\n');
+    if (incKey === liveKey) continue;
+    for (const el of liveEls) el.remove();
+    for (const el of incEls) document.head.appendChild(cloneElementWithCorrectNonce(el));
   }
-  // Remove a stale page-scoped keyed meta the incoming page does not declare.
-  for (const [key, cur] of live) {
-    if (!incoming.has(key)) cur.remove();
+  // Remove a stale page-scoped key the incoming page does not declare at all.
+  for (const [key, liveEls] of live) {
+    if (!incoming.has(key)) for (const el of liveEls) el.remove();
   }
 }
 

@@ -743,14 +743,54 @@ test('addNewHeadElements: adds a keyed meta present only in the incoming head (#
 });
 
 test('addNewHeadElements: an og:* property meta is reconciled by property (#1046)', () => {
-  document.head.innerHTML = '<title>T</title><meta property="og:title" content="Old page">';
+  document.head.innerHTML = '<title>T</title><meta charset="utf-8"><meta property="og:title" content="Old page">';
   const newHead = document.createElement('head');
-  newHead.innerHTML = '<title>T</title>'; // incoming page declares no og:title
+  // A real full head (charset present) that declares no og:title.
+  newHead.innerHTML = '<title>T</title><meta charset="utf-8">';
   _addNewHead(newHead);
   assert.equal(
     document.head.querySelectorAll('meta[property="og:title"]').length, 0,
     'stale og:title removed when the incoming page does not declare it'
   );
+});
+
+test('addNewHeadElements: a bare fragment (empty incoming head) does NOT strip live metas (#1046 frame-nav guard)', () => {
+  // A <webjs-frame> nav response is a headless subtree, so the incoming head is
+  // empty. That must NOT delete every live page-scoped meta.
+  document.head.innerHTML =
+    '<title>T</title>' +
+    '<meta name="viewport" content="width=device-width">' +
+    '<meta name="description" content="hi">' +
+    '<meta property="og:title" content="Home">';
+  const emptyHead = document.createElement('head'); // no metas at all (fragment)
+  _addNewHead(emptyHead);
+  assert.ok(document.head.querySelector('meta[name="viewport"]'), 'viewport survives a headless-fragment merge');
+  assert.ok(document.head.querySelector('meta[name="description"]'), 'description survives');
+  assert.ok(document.head.querySelector('meta[property="og:title"]'), 'og:title survives');
+});
+
+test('addNewHeadElements: repeated-key metas (multiple og:image) are reconciled as a set (#1046)', () => {
+  // Live page has one og:image; the incoming page declares two.
+  document.head.innerHTML =
+    '<title>T</title>' +
+    '<meta charset="utf-8">' +
+    '<meta property="og:image" content="/a.png">';
+  const newHead = document.createElement('head');
+  newHead.innerHTML =
+    '<title>T</title>' +
+    '<meta charset="utf-8">' +
+    '<meta property="og:image" content="/a.png">' +
+    '<meta property="og:image" content="/b.png">';
+  _addNewHead(newHead);
+  const imgs = [...document.head.querySelectorAll('meta[property="og:image"]')].map((m) => m.getAttribute('content'));
+  assert.deepEqual(imgs, ['/a.png', '/b.png'], 'both og:image metas present after nav to a two-image page');
+
+  // Now navigate to a page with only ONE og:image: the extra stale one is removed.
+  const back = document.createElement('head');
+  back.innerHTML = '<title>T</title><meta charset="utf-8"><meta property="og:image" content="/a.png">';
+  _addNewHead(back);
+  const after = [...document.head.querySelectorAll('meta[property="og:image"]')].map((m) => m.getAttribute('content'));
+  assert.deepEqual(after, ['/a.png'], 'the extra stale og:image is removed');
 });
 
 test('addNewHeadElements: the csp-nonce meta is NEVER reconciled (keeps the original page-load nonce)', () => {

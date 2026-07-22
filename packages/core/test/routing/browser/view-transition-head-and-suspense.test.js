@@ -92,6 +92,37 @@ suite('Client router: page-scoped <meta> reconciliation on soft nav (#1046)', ()
     } finally { teardown(); }
   });
 
+  test('a frame nav (headless fragment) does NOT strip live page-scoped metas (#1046 regression)', async () => {
+    setup();
+    try {
+      // Live head carries app-wide metas.
+      const vp = document.createElement('meta');
+      vp.setAttribute('name', 'viewport'); vp.setAttribute('content', 'width=device-width');
+      document.head.appendChild(vp);
+
+      container.innerHTML =
+        '<webjs-frame id="hf">' +
+        '<span id="hf-content">OLD</span>' +
+        '<a id="hf-link" href="/hf-target"></a>' +
+        '</webjs-frame>';
+
+      // A frame nav response is a BARE subtree fragment: no <head>.
+      window.fetch = () => htmlResponse(
+        '<webjs-frame id="hf"><span id="hf-content">NEW</span></webjs-frame>'
+      );
+
+      document.getElementById('hf-link').click();
+      await settle();
+
+      assert.equal(document.getElementById('hf-content').textContent, 'NEW', 'the frame swapped');
+      assert.ok(document.querySelector('meta[name="viewport"]'),
+        'the viewport meta survives a headless frame swap (not stripped by the reconcile)');
+    } finally {
+      const m = document.querySelector('meta[name="viewport"]'); if (m) m.remove();
+      teardown();
+    }
+  });
+
   test('an app-wide meta present in the incoming head is preserved (not churned)', async () => {
     setup();
     try {
