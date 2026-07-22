@@ -1025,6 +1025,20 @@ test('mergeHead: keeps the ORIGINAL csp-nonce meta when the incoming nonce diffe
     'created scripts get the original page-load nonce');
 });
 
+test('mergeHead: keeps the csp-nonce meta when the incoming head omits it (#1050)', () => {
+  // A reduced / partial incoming head that carries no csp-nonce must not cause
+  // the removal loop to drop the live original (it is "absent from newSet").
+  document.head.innerHTML = '<title>T</title><meta name="csp-nonce" content="ORIGINAL">';
+  const before = document.head.querySelector('meta[name="csp-nonce"]');
+  const newHead = document.createElement('head');
+  newHead.innerHTML = '<title>T</title>'; // no csp-nonce declared
+  _merge(newHead);
+  const nonce = document.head.querySelectorAll('meta[name="csp-nonce"]');
+  assert.equal(nonce.length, 1, 'the original csp-nonce meta survives a head that omits it');
+  assert.strictEqual(nonce[0], before, 'same element, not re-created');
+  assert.equal(nonce[0].getAttribute('content'), 'ORIGINAL');
+});
+
 test('addNewHeadElements + mergeHead: nonce-only diff on <link> tags does not duplicate preloads', () => {
   // Browsers gate cross-origin modulepreload by script-src nonce, so
   // preload links also carry per-request nonces after the recent CSP

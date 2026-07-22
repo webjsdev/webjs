@@ -794,7 +794,7 @@ function warnDropped(id) {
   if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production') return;
   warnOnce(
     `stream-drop:${id}`,
-    `[webjs] dropped a streamed Suspense resolve for "${id}": no #${id} boundary in the DOM. Benign if this navigation was superseded or degraded; a stuck skeleton here means the shell swap did not place the boundary.`
+    `[webjs] dropped a streamed Suspense resolve for "${id}": no #${id} boundary in the DOM. Benign if this navigation was superseded or degraded. A stuck skeleton here means the shell swap did not place the boundary.`
   );
 }
 
@@ -3960,7 +3960,7 @@ function mergeHead(newHead) {
     // ORIGINAL page load declared (see `getCspNonce`), so the live one must stay
     // (#1050). `outerHTMLForDiff` strips the nonce ATTRIBUTE but not the `content`
     // it lives in on this meta, so without this it looks "changed" and is dropped.
-    if (metaIdentity(el) === META_KEY_CSP_NONCE) continue;
+    if (el.tagName === 'META' && metaIdentity(el) === META_KEY_CSP_NONCE) continue;
     if (!newSet.has(outerHTMLForDiff(el))) el.remove();
   }
 
@@ -3971,7 +3971,7 @@ function mergeHead(newHead) {
     // Do not append the incoming per-request csp-nonce meta (the live original is
     // kept above), or the head would carry two and `getCspNonce` could read the
     // wrong one (#1050).
-    if (metaIdentity(el) === META_KEY_CSP_NONCE) continue;
+    if (el.tagName === 'META' && metaIdentity(el) === META_KEY_CSP_NONCE) continue;
     if (!currentSet.has(outerHTMLForDiff(el))) {
       if (el.tagName === 'SCRIPT') {
         currentHead.appendChild(
