@@ -179,6 +179,21 @@ export interface WebComponentConstructor extends WebComponentStatics {
   };
 }
 
+/**
+ * A constructor for a registered component: the static surface plus a plain
+ * `new ()`, WITHOUT the factory call signature that `WebComponentConstructor`
+ * carries. That call signature is what the `WebComponent` const needs (it is
+ * both a class and a factory), but it means no ordinary component class is
+ * assignable to `WebComponentConstructor` (a plain class is not callable as a
+ * factory). So the standalone `register(tag, cls)` / `lookup` / `tagOf` surface
+ * types against THIS instead, and a user's `class X extends WebComponent({…})`
+ * satisfies it (#1033).
+ */
+export interface WebComponentInstanceConstructor extends WebComponentStatics {
+  new (): WebComponentBase;
+  prototype: WebComponentBase;
+}
+
 export declare const WebComponent: WebComponentConstructor;
 
 export declare function prop<C extends PropertyConstructor<any>>(
