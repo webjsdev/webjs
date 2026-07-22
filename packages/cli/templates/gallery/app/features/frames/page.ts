@@ -2,7 +2,13 @@
 // link targeting its id, shipping zero component JS. It is WebJs's take on Turbo
 // Frames. Unlike the client router (which swaps the whole page's children when
 // you navigate to a DIFFERENT url), a frame refreshes just ONE sub-region in
-// place. The filter links below live INSIDE the frame, so a click walks
+// place. It is also NOT a layout: a layout (layout.ts) is server-rendered chrome
+// that WRAPS a route subtree via ${children} and re-renders only as part of a
+// navigation, so it answers "what structure wraps these routes". A frame answers
+// "which region updates itself in place", with no navigation at all. Use a layout
+// for shared chrome across routes; use a frame when one region (a filtered list,
+// a paginated table, a tab panel) must refresh on its own without navigating.
+// The filter links below live INSIDE the frame, so a click walks
 // closest('webjs-frame'), refetches THIS same page with the new ?status, and the
 // server returns ONLY the <webjs-frame id="tasks"> subtree (open the network tab
 // to see it). The router swaps that subtree in; everything outside the frame,
@@ -40,7 +46,9 @@ export default function FramesExample({ searchParams }: { searchParams: Record<s
       Filter the list. With JS on, only the framed region swaps (the response is
       just the frame's subtree, not the whole page) and the heading above never
       re-renders. With JS off, the same links do full-page navigations. It is one
-      region refreshing independently of a navigation, which a page cannot express.
+      region refreshing independently of a navigation, which neither a page nor a
+      layout can express: a layout wraps routes with shared chrome and only
+      re-renders when you navigate, while a frame updates one region in place.
     </p>
     <webjs-frame id="tasks" class="block p-4 rounded-2xl bg-card border border-border">
       <div class="flex gap-2 mb-4">
