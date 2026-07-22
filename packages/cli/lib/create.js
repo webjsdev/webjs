@@ -1346,6 +1346,7 @@ const FEATURES = [
   { href: '/features/async-render', title: 'Async render', blurb: 'A component that awaits server data in async render(), so the resolved value is in the first paint.' },
   { href: '/features/streaming', title: 'Streaming actions', blurb: 'A use-server action that returns an async generator, streamed to the call site token by token with for await.' },
   { href: '/features/suspense', title: 'Suspense boundary', blurb: 'The <webjs-suspense> element: a first-paint fallback for a SLOW component, with the resolved content streamed in.' },
+  { href: '/features/view-transitions', title: 'View transitions', blurb: 'The opt-in view-transition meta cross-fades a soft navigation, with a data-webjs-permanent element persisted across the swap.' },
   { href: '/features/directives', title: 'Directives', blurb: 'The lit-html directive set: repeat for keyed lists, watch(signal) for a fine-grained node swap.' },
   { href: '/features/route-handler', title: 'Route handlers', blurb: 'A server-only route.ts HTTP endpoint returning JSON, the WebJs equivalent of a Next route handler.' },
   { href: '/features/forms', title: 'Forms', blurb: 'A no-JS progressive-enhancement form posting to the page action, with server-side validation errors.' },
