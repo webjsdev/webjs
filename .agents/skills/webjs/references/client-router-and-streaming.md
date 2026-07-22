@@ -115,6 +115,8 @@ The router can wrap a navigation's DOM mutation in the native View Transitions A
 
 The accepted value is `same-origin`. When enabled it wraps every swap path (the two-tier boundary swap, the `<webjs-frame>` swap, and the background-revalidation full-body path). When `startViewTransition` is unavailable the swap runs synchronously with no flash and no throw. To persist a live element (a playing `<audio>`, an open menu) across a swap by node identity, mark it `data-webjs-permanent` and give it an `id`.
 
+The opt-in is **per page**, so it is a page-scoped meta: put it on a page's metadata to animate that page, or on the root layout to animate the whole app. Navigating to a page that does NOT declare it turns transitions back off, because the soft-nav head merge reconciles page-scoped `<meta>` tags (a stale one the previous page declared is removed, not left to leak, #1046). View transitions **compose with Suspense streaming**: a streamed boundary (a `loading.{js,ts}` skeleton or a `<webjs-suspense>` region) navigated to under an active transition still resolves its content progressively, because the streamed resolve waits for the transition's DOM swap to commit before it applies (#1048).
+
 ## `<webjs-stream>` Surgical Updates
 
 `<webjs-stream>` is WebJs's take on Turbo Streams, and the action set mirrors `<turbo-stream>`. It is the only SINGLE-element update primitive (append one row, remove one item, bump a count, insert a toast), whereas a frame or layout swap redraws a whole region.

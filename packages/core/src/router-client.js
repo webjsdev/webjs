@@ -2161,14 +2161,18 @@ async function fetchAndApply(href, frameId, recordHistory, optimisticState, meth
   // now live, so stream the resolved boundaries in fast-before-slow. Detached
   // (fire-and-forget) so the URL advance + navigate event do not wait on the
   // slow boundary; each apply is guarded by the nav token so a newer navigation
-  // stops it.
+  // stops it. Gated on the swap COMMIT (`_swapCommit`): under an async view
+  // transition the shell swap is deferred a frame, so applying a resolve before
+  // the placeholder is in the DOM dropped the boundary and stuck the skeleton
+  // (#1048). On the synchronous path `_swapCommit` is already resolved, so this
+  // is a same-microtask no-op there.
   if (streamCtx && (streamCtx.reader || streamCtx.rest)) {
-    streamBoundariesProgressively(
+    _swapCommit.then(() => streamBoundariesProgressively(
       streamCtx.reader,
       streamCtx.dec,
       streamCtx.rest,
       () => myToken === currentNavigationToken,
-    );
+    ));
   }
 
   document.dispatchEvent(new CustomEvent('webjs:navigate', { detail: { url: finalUrl, frameId, from: 'navigate' } }));
@@ -2450,10 +2454,19 @@ function runWithTransition(thunk, afterFinished) {
     } else if (afterFinished) {
       afterFinished();
     }
-    return;
+    // Resolve when the DOM MUTATION (the thunk) has actually committed, NOT when
+    // the animation finishes. Under `startViewTransition` the thunk is deferred a
+    // frame, so anything that reads the swapped-in DOM (a progressively-streamed
+    // Suspense resolve, #1048) must await this, or it runs against the pre-swap
+    // DOM and drops. `updateCallbackDone` is that signal; fall back to a resolved
+    // promise if the browser does not expose it.
+    return (t && t.updateCallbackDone && typeof t.updateCallbackDone.then === 'function')
+      ? t.updateCallbackDone.catch(() => {})
+      : Promise.resolve();
   }
   thunk();
   if (afterFinished) afterFinished();
+  return Promise.resolve();
 }
 
 /**
@@ -2596,6 +2609,16 @@ function upgradeCustomElementsInRange(range) {
     if (n.nodeType === 1) upgradeCustomElements(/** @type {Element} */ (n));
   }
 }
+
+/**
+ * Resolves when the most recent `applySwap` DOM mutation has committed. Under an
+ * async view transition the swap is deferred a frame, so the progressive
+ * Suspense streamer must await this before applying resolves, or it targets the
+ * pre-swap DOM (no placeholder yet) and drops the boundary (#1048). A resolved
+ * promise on the synchronous (no-transition) path.
+ * @type {Promise<void>}
+ */
+let _swapCommit = Promise.resolve();
 
 function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc) {
   // SSR action seeding (#472): ingest any seed payload the incoming page
@@ -2771,13 +2794,17 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
       // by node identity (it imports the incoming children first, then
       // swaps the live permanent node into the imported tree), so the live
       // `<audio>`/widget keeps running across the frame swap.
-      runWithTransition(() => {
+      // Capture the swap commit like the other swap paths so a frame nav that
+      // ALSO progressively streams a Suspense boundary gates its resolves on the
+      // committed frame swap, not a stale prior _swapCommit (#1048).
+      _swapCommit = runWithTransition(() => {
         diffChildren(target, source);
         reactivateScripts(target);
         upgradeCustomElements(target);
+        // Inside the swap so the placeholder exists before we resolve (#1048).
+        forwardSuspenseResolvers(doc.body);
         blurOutgoingFocus();
       }, () => upgradeCustomElements(target));
-      forwardSuspenseResolvers(doc.body);
       return;
     }
     // The response did not carry the requested frame (source null), or the
@@ -2815,7 +2842,7 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
     // ADD-ONLY head merge: the outer layout stays mounted, so its head-bound
     // runtime state (Tailwind injection, etc.) must not be invalidated.
     addNewHeadElements(doc.head);
-    runWithTransition(() => {
+    _swapCommit = runWithTransition(() => {
       if (mode === 'replace') replaceBoundaryRange(live, incoming);
       else swapMarkerRange(live, incoming, doc);
       // No key sync is needed on the anchor's own comments: the plan's anchor
@@ -2832,9 +2859,12 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
       // applySlotAssignments would wipe the freshly swapped content and
       // restore the stale list.
       resyncEnclosingHostSlots(live.start, incoming.start);
+      // Resolve buffered Suspense boundaries INSIDE the swap so the placeholder
+      // exists first. Doing this after `runWithTransition` returned raced the
+      // async view-transition swap and stuck the skeleton (#1048).
+      forwardSuspenseResolvers(doc.body);
       blurOutgoingFocus();
     }, () => upgradeCustomElementsInRange(live));
-    forwardSuspenseResolvers(doc.body);
     return;
   }
 
@@ -2883,7 +2913,7 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
     upgradeCustomElements(document.body);
     blurOutgoingFocus();
   };
-  runWithTransition(doSwap, () => upgradeCustomElements(document.body));
+  _swapCommit = runWithTransition(doSwap, () => upgradeCustomElements(document.body));
 }
 
 /**
@@ -3708,6 +3738,109 @@ function outerHTMLForDiff(el) {
   return clone.outerHTML;
 }
 
+/**
+ * The one framework-owned keyed meta that must NEVER be reconciled: the CSP
+ * nonce. A soft-nav response carries a FRESH per-request nonce, but the browser
+ * enforces CSP against the nonce the ORIGINAL page load declared (see
+ * `getCspNonce`), so overwriting the live `csp-nonce` meta with the incoming
+ * one would make every later nonce-stamped script/preload violate the active
+ * policy. Excluded from add/update/remove so the original meta survives verbatim.
+ */
+const META_KEY_CSP_NONCE = 'name=csp-nonce';
+
+/**
+ * Stable identity key for a `<meta>` that represents a single logical tag, so a
+ * PAGE-SCOPED meta can be reconciled across a soft-nav head merge (#1046). A
+ * meta with no identifying attribute returns null and is left to the add-only
+ * path (added but never removed), since its identity is ambiguous.
+ *
+ * @param {Element} m
+ * @returns {string | null}
+ */
+function metaIdentity(m) {
+  const name = m.getAttribute('name');
+  if (name) return 'name=' + name;
+  const property = m.getAttribute('property');
+  if (property) return 'property=' + property;
+  const httpEquiv = m.getAttribute('http-equiv');
+  if (httpEquiv) return 'http-equiv=' + httpEquiv;
+  if (m.hasAttribute('charset')) return 'charset';
+  return null;
+}
+
+/**
+ * Reconcile keyed `<meta>` tags across a soft-nav head merge (#1046). The
+ * add-only merge (`addNewHeadElements`) never removes a stale head element, so a
+ * PAGE-SCOPED meta the previous page added (a `view-transition` opt-in, a
+ * per-page `robots` / `theme-color` / `description`, an `og:*` property) leaked
+ * onto every later page. This pass gives each keyed meta the full add / update /
+ * remove treatment: a meta present in the incoming head is added or synced, and
+ * a live keyed meta ABSENT from the incoming head is removed.
+ *
+ * Safe against the `X-Webjs-Have` reduced-head optimization (#936): that
+ * optimization only omits the shared app STYLESHEET (already on the client), and
+ * this pass touches ONLY `<meta>` tags, never a stylesheet / link / script. The
+ * incoming head always carries the target page's complete meta set (charset,
+ * viewport, and the app-wide metas from the root layout appear in both heads, so
+ * they are preserved), so "absent from the incoming head" means "this page does
+ * not declare it", not "optimized away".
+ *
+ * A key may repeat (multiple `og:image`), so both sides are grouped into a LIST
+ * per key and reconciled as a set: an unchanged set is left alone, else the live
+ * copies are removed and the incoming set re-appended.
+ *
+ * @param {HTMLHeadElement} newHead
+ */
+function reconcileHeadMetas(newHead) {
+  // A HEADLESS fragment response (a `<webjs-frame>` subtree) has no `<head>`, so
+  // `parseHTML` leaves `newHead` empty. A real full head ALWAYS emits charset +
+  // viewport, so "no `<meta>` at all in the incoming head" means "this is a
+  // fragment, not a head to reconcile against". Skipping it here is what keeps a
+  // frame swap from stripping every live page-scoped meta (viewport, og:*, ...).
+  if (!newHead.querySelector('meta')) return;
+
+  /** @param {ParentNode} root @returns {Map<string, Element[]>} */
+  const group = (root) => {
+    const map = new Map();
+    for (const el of root.querySelectorAll('meta')) {
+      const key = metaIdentity(el);
+      if (!key || key === META_KEY_CSP_NONCE) continue;
+      const list = map.get(key);
+      if (list) list.push(el); else map.set(key, [el]);
+    }
+    return map;
+  };
+  const incoming = group(newHead);
+  const live = group(document.head);
+
+  // Add or replace each incoming key whose SET differs from the live set.
+  for (const [key, incEls] of incoming) {
+    const liveEls = live.get(key) || [];
+    const incKey = incEls.map(outerHTMLForDiff).join('\n');
+    const liveKey = liveEls.map(outerHTMLForDiff).join('\n');
+    if (incKey === liveKey) continue;
+    if (incEls.length === 1 && liveEls.length === 1) {
+      // The common case (one description / theme-color / robots per page):
+      // sync attributes IN PLACE so the live element keeps its DOM identity.
+      // An app script holding a reference (a theme manager caching
+      // meta[name=theme-color]) still points at the live tag after the nav,
+      // and there is no remove/append churn for a content-only change.
+      const cur = liveEls[0];
+      for (const a of [...cur.attributes]) cur.removeAttribute(a.name);
+      for (const a of incEls[0].attributes) cur.setAttribute(a.name, a.value);
+      continue;
+    }
+    // Multi-element sets (repeated og:image): no unambiguous element-to-element
+    // mapping exists, so replace the set wholesale.
+    for (const el of liveEls) el.remove();
+    for (const el of incEls) document.head.appendChild(cloneElementWithCorrectNonce(el));
+  }
+  // Remove a stale page-scoped key the incoming page does not declare at all.
+  for (const [key, liveEls] of live) {
+    if (!incoming.has(key)) for (const el of liveEls) el.remove();
+  }
+}
+
 function addNewHeadElements(newHead) {
   const newTitle = newHead.querySelector('title');
   if (newTitle) document.title = newTitle.textContent || '';
@@ -3727,6 +3860,9 @@ function addNewHeadElements(newHead) {
     }
     if (el.tagName === 'BASE') continue;
     if (el.tagName === 'TITLE') continue;
+    // A keyed <meta> is add/update/remove reconciled below (#1046), so skip it
+    // here to avoid appending a duplicate when its content changed.
+    if (el.tagName === 'META' && metaIdentity(el)) continue;
     if (!currentSet.has(outerHTMLForDiff(el))) {
       if (el.tagName === 'SCRIPT') {
         document.head.appendChild(
@@ -3737,6 +3873,10 @@ function addNewHeadElements(newHead) {
       }
     }
   }
+
+  // Reconcile keyed <meta> tags so a stale page-scoped meta is removed, not
+  // leaked onto every later page (#1046).
+  reconcileHeadMetas(newHead);
 }
 
 /**
@@ -3848,7 +3988,21 @@ function upgradeTree(root) {
  */
 function forwardSuspenseResolvers(fetchedBody) {
   for (const tpl of fetchedBody.querySelectorAll('template[data-webjs-resolve]')) {
-    document.body.appendChild(tpl.cloneNode(true));
+    const clone = /** @type {HTMLTemplateElement} */ (tpl.cloneNode(true));
+    document.body.appendChild(clone);
+    // Resolve SYNCHRONOUSLY against the just-swapped DOM instead of relying on
+    // the inline MutationObserver. The observer fires on a microtask, which
+    // races an async `startViewTransition` swap: with view transitions on, the
+    // swap that places the `#<id>` placeholder is deferred a frame, so the
+    // observer ran first, found no placeholder, and the skeleton stuck (#1048).
+    // Called from INSIDE the swap thunk (below), the placeholder is already in
+    // the DOM here, so this replaces it within the same commit (and inside any
+    // wrapping view transition, so the transition captures the resolved
+    // content, not the fallback). Falls back to the observer if the page-level
+    // resolver global is somehow absent.
+    const id = clone.getAttribute('data-webjs-resolve');
+    const resolve = /** @type {any} */ (window).__webjsResolve;
+    if (id && typeof resolve === 'function') resolve(id);
   }
 }
 
@@ -3952,6 +4106,13 @@ function takeResolveUnit(buf) {
  */
 function applyStreamedResolve(id, content) {
   const boundary = document.getElementById(id);
+  // A missing boundary is dropped (non-destructive), exactly as before. The
+  // async-view-transition race that USED to drop a still-valid boundary (#1048)
+  // is handled upstream: `streamBoundariesProgressively` is gated on the swap
+  // COMMIT (`_swapCommit`), so the placeholder is already live by the time any
+  // resolve is applied. A retry here would run OUTSIDE the streamer's
+  // `isCurrent()` nav-token fence and could splice a superseded nav's content
+  // into a recycled boundary id, so it is deliberately not attempted.
   if (!boundary) return;
   const tpl = document.createElement('template');
   tpl.innerHTML = content;
