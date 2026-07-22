@@ -75,8 +75,9 @@ const PACKAGES = [
 // silence a fresh finding without first filing the issue and confirming the
 // phantom is real.
 const KNOWN_PHANTOMS = new Map(Object.entries({
-  '@webjsdev/core#WebComponentBase':
-    'internal base class exported as a value by the overlay but absent at runtime; fix tracked in #1032',
+  // (empty) Each entry is a genuine phantom deferred to a tracked issue; it is
+  // deleted the moment that issue lands so the guard proves the fix. #1032
+  // (WebComponentBase) is fixed, so its entry is gone.
 }));
 
 // Dual-surface entries (#1035). The Node phantom check above maps `.` to the
