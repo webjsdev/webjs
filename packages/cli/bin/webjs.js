@@ -43,7 +43,7 @@ if (cmd !== 'help' && cmd !== undefined && !wantsHelp && !wantsVersion) {
   }
 }
 
-// Exactly three scaffolds exist. Keep this list as the single source of
+// Exactly two scaffolds exist. Keep this list as the single source of
 // truth. AI-agent docs in README.md / AGENTS.md / .cursorrules /
 // .agents/rules/workflow.md / .github/copilot-instructions.md mirror it.
 const TEMPLATES = ['full-stack', 'api'];
@@ -61,7 +61,7 @@ const USAGE = `webjs commands:
   webjs types                                     Generate .webjs/routes.d.ts (typed Route union + per-route params)
   webjs typecheck [tsc args...]                   Type-check the app with the project's tsc --noEmit (non-zero on errors)
   webjs create <name> [--template full-stack|api] [--db sqlite|postgres] [--runtime node|bun] [--no-install]  Scaffold a new webjs app
-                                                  (only 3 templates exist. default: full-stack, Drizzle, --db sqlite, --runtime node)
+                                                  (only 2 templates exist. default: full-stack, Drizzle, --db sqlite, --runtime node)
                                                   --runtime bun emits a Bun-flavored app (bun.lock, bun Dockerfile/CI, bun docs);
                                                   also auto-detected when run via "bun create webjs".
                                                   Auto-runs the detected package manager's install in the new dir
