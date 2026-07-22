@@ -41,36 +41,42 @@ magick -background none \
   pango:"<span foreground=\"#E8843C\" font=\"Adwaita Sans Bold 19\" letter_spacing=\"3600\">${KICKER}</span>" \
   "$W/kicker.png"
 
-magick -background none -size 970x \
-  pango:"<span font=\"Adwaita Sans Heavy 62\" foreground=\"#F4F4F4\">${HEADLINE}</span>" \
+# Text is sized to sit inside the center-safe column. Instagram's profile
+# grid crops a 1:1 post to 3:4 portrait (keeps full height, trims ~12.5% off
+# each side), so nothing critical may run to the horizontal edges.
+magick -background none -size 780x \
+  pango:"<span font=\"Adwaita Sans Heavy 54\" foreground=\"#F4F4F4\">${HEADLINE}</span>" \
   "$W/headline.png"
 
-magick -background none -size 840x \
-  pango:"<span font=\"Adwaita Sans 31\" foreground=\"#9a9a9a\">${SUBTEXT}</span>" \
+magick -background none -size 720x \
+  pango:"<span font=\"Adwaita Sans 29\" foreground=\"#9a9a9a\">${SUBTEXT}</span>" \
   "$W/subtext.png"
 
 magick -background none \
-  pango:"<span foreground=\"#F0803A\" font=\"Adwaita Sans 22\">&#9679;</span><span foreground=\"#8f8f8f\" font=\"Adwaita Sans Bold 17\" letter_spacing=\"2000\">   ${META}</span>" \
+  pango:"<span foreground=\"#F0803A\" font=\"Adwaita Sans 20\">&#9679;</span><span foreground=\"#8f8f8f\" font=\"Adwaita Sans Bold 15\" letter_spacing=\"1500\">   ${META}</span>" \
   "$W/footer-left.png"
 magick -background none \
-  pango:'<span foreground="#9a9a9a" font="Adwaita Sans 23">webjs.dev</span>' \
+  pango:'<span foreground="#9a9a9a" font="Adwaita Sans 22">webjs.dev</span>' \
   "$W/footer-right.png"
 
-magick -size 900x2 xc:'#282828' "$W/divider.png"
+magick -size 660x2 xc:'#282828' "$W/divider.png"
 
+# Left/right margins put every element inside the center-safe column
+# (x from ~140 to ~940) so the 3:4 grid crop never clips text.
+PAD=140
 HY=336
 H_head=$(identify -format '%h' "$W/headline.png")
-SY=$(( HY + H_head + 40 ))
+SY=$(( HY + H_head + 36 ))
 
 magick "$W/bg.png" \
-  "$W/logo.png"         -gravity northwest -geometry +90+86    -composite \
-  "$W/wordmark.png"     -gravity northwest -geometry +182+104  -composite \
-  "$W/kicker.png"       -gravity northeast -geometry +90+112   -composite \
-  "$W/headline.png"     -gravity northwest -geometry +90+${HY} -composite \
-  "$W/subtext.png"      -gravity northwest -geometry +92+${SY} -composite \
-  "$W/divider.png"      -gravity northwest -geometry +90+902   -composite \
-  "$W/footer-left.png"  -gravity northwest -geometry +90+936   -composite \
-  "$W/footer-right.png" -gravity northeast -geometry +90+940   -composite \
+  "$W/logo.png"         -gravity northwest -geometry +${PAD}+86    -composite \
+  "$W/wordmark.png"     -gravity northwest -geometry +$((PAD+92))+104 -composite \
+  "$W/kicker.png"       -gravity northeast -geometry +${PAD}+112   -composite \
+  "$W/headline.png"     -gravity northwest -geometry +${PAD}+${HY} -composite \
+  "$W/subtext.png"      -gravity northwest -geometry +$((PAD+2))+${SY} -composite \
+  "$W/divider.png"      -gravity northwest -geometry +${PAD}+902   -composite \
+  "$W/footer-left.png"  -gravity northwest -geometry +${PAD}+936   -composite \
+  "$W/footer-right.png" -gravity northeast -geometry +${PAD}+940   -composite \
   -quality 92 "$OUT"
 
 identify -format 'built %f %wx%h %m %b\n' "$OUT"
