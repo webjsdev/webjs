@@ -86,10 +86,11 @@ lib/
                          lockfile + applies the
                          runtime-rewrite transforms to the copied deploy +
                          agent-config files when bun.
-  saas-template.js       Extra files written when --template saas:
-                         auth + login/signup + protected dashboard
-                         + Drizzle User model. `writeSaasFiles(appDir, {runtime})`
-                         bun-ifies the generated auth-test setup comments.
+  api-gallery.js         Backend-features showcase for --template api:
+                         JSON/HTTP endpoints under app/api/features/ (the
+                         api counterpart of the UI gallery). Auth is a
+                         full-stack GALLERY card now (templates/gallery/
+                         {app/features/auth,modules/auth}), not a template.
   runtime-rewrite.js     Pure transforms (#541) that DERIVE the bun-mode
                          variant of each canonical node template:
                          `bunifyProse` (npm->bun command forms in markdown),

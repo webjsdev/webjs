@@ -874,9 +874,8 @@ no per-project disabling. Run `webjs check` to validate, and
 Create new projects with `webjs create`:
 
 ```sh
-webjs create <name>                  # full-stack (default)
-webjs create <name> --template api   # backend-only API
-webjs create <name> --template saas  # auth + dashboard + Drizzle User model
+webjs create <name>                  # full-stack (default; auth ships as a gallery card)
+webjs create <name> --template api   # backend-only API (routes + modules + Drizzle)
 ```
 
 **Route-wrapping pattern (especially for `--template api` apps):**

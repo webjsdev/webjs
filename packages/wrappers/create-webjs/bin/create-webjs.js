@@ -6,7 +6,7 @@
  *   npm create webjs@latest my-app
  *   npx create-webjs@latest my-app
  *   npm create webjs@latest my-api  -- --template api
- *   npm create webjs@latest my-saas -- --template saas --no-install
+ *   npm create webjs@latest my-api  -- --template api --no-install
  *
  * This is a thin wrapper around `@webjsdev/cli`'s `scaffoldApp()`. Behaviour
  * matches `webjs create` exactly, including auto-install (npm / pnpm / yarn /
@@ -20,7 +20,7 @@
  */
 import { scaffoldApp } from '@webjsdev/cli/lib/create.js';
 
-const TEMPLATES = ['full-stack', 'api', 'saas'];
+const TEMPLATES = ['full-stack', 'api'];
 
 const args = process.argv.slice(2);
 
@@ -31,13 +31,13 @@ function flagValue(name) {
 }
 
 const usage = `Usage:
-  npm create webjs@latest <app-name> [-- --template full-stack|api|saas] [-- --no-install]
-  npx create-webjs@latest <app-name> [--template full-stack|api|saas] [--no-install]
+  npm create webjs@latest <app-name> [-- --template full-stack|api] [-- --no-install]
+  npx create-webjs@latest <app-name> [--template full-stack|api] [--no-install]
 
 Templates:
-  full-stack (default)  pages + components + API + Drizzle/SQLite
-  api                   route handlers + modules, no SSR/UI
-  saas                  auth + login/signup + protected dashboard + Drizzle User model
+  full-stack (default)  pages + components + API + Drizzle/SQLite + gallery
+                        (auth ships as a gallery card: login + session + a protected route)
+  api                   route handlers + modules + Drizzle, no SSR/UI
 
 Options:
   --db sqlite|postgres  database dialect (default sqlite)

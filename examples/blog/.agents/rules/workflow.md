@@ -19,13 +19,12 @@ cover what you need, the full hosted docs are at **https://docs.webjs.dev**.
   the example `User` model, the example users module, etc. with the app the
   user actually asked for. Do not ship "Hello from <app-name>" as the
   deliverable.
-- **Only three templates exist:** `webjs create <name>` (default full-stack),
-  `--template api`, `--template saas`. The CLI rejects any other `--template`
-  value. Pick:
-  - Any product UI (todo, blog, dashboard, marketplace, social) goes through
-    the default template.
+- **Only two templates exist:** `webjs create <name>` (default full-stack) and
+  `--template api`. The CLI rejects any other `--template` value. Pick:
+  - Any product UI (todo, blog, dashboard, marketplace, social, a SaaS with
+    accounts) goes through the default template. Auth is one of the full-stack
+    gallery cards (login, session, a protected route), not a separate template.
   - HTTP/JSON API only, no UI, uses `--template api`.
-  - Auth / login / signup / SaaS uses `--template saas`.
 
 ## Before starting ANY work
 

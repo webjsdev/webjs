@@ -75,10 +75,10 @@ it applies, then update or consciously skip each.
 1. **The generators** (the code that writes the app):
    - `packages/cli/lib/create.js` (the main generator: layout, home page, the
      theme block, db/schema, the full-stack gallery wiring, the per-template
-     gates like `isApi` / `isSaas` / `!isApi`).
-   - `packages/cli/lib/saas-template.js` (the saas-only files: auth, login/signup,
-     dashboard, the saas schema).
-   - `packages/cli/lib/api-gallery.js` (the api backend-features showcase).
+     gates like `isApi` / `isFullStack` / `!isApi`).
+   - `packages/cli/lib/api-gallery.js` (the api backend-features showcase). Auth
+     is a full-stack GALLERY card now (`templates/gallery/{app/features/auth,
+     modules/auth}`), pruned by `gallery:clear`, not a separate template.
    - Any future `*-template.js` / `*-gallery.js` split out for escaping sanity.
 2. **The verbatim template files** copied into every app:
    - `packages/cli/templates/gallery/**` (the UI feature gallery + example app,
@@ -144,7 +144,7 @@ it applies, then update or consciously skip each.
    affected template, generate an app and prove it:
    ```sh
    # generate (files only is enough for structure/typecheck; install to boot)
-   node -e "import('packages/cli/lib/create.js').then(m => m.scaffoldApp('probe', '/tmp/x', { template: 'saas', install: false }))"
+   node -e "import('packages/cli/lib/create.js').then(m => m.scaffoldApp('probe', '/tmp/x', { template: 'full-stack', install: false }))"
    # then in the generated app: webjs check (only no-scaffold-placeholder should
    # remain), webjs typecheck (clean), and boot it to hit the new route(s).
    ```
