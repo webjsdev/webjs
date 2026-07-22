@@ -18,6 +18,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -203,6 +204,45 @@ test('the api template ships the backend-features showcase, not the UI gallery',
     const rootRoute = await readFile(join(appDir, 'app', 'route.ts'), 'utf8');
     assert.match(rootRoute, /features:/, 'root index lists the features');
     assert.match(rootRoute, /api\/features\/validate/, 'root index links the validate endpoint');
+    // The api template ships its own gallery:clear (backed by clear-api-gallery.mjs).
+    const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
+    assert.match(pkg.scripts['gallery:clear'], /clear-api-gallery\.mjs/, 'api gallery:clear runs the api showcase reset');
+    assert.ok(await exists(join(appDir, 'scripts', 'clear-api-gallery.mjs')), 'the api clear script ships');
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test('the api gallery:clear sheds the showcase to a health + users base', async () => {
+  const cwd = await tempCwd();
+  try {
+    await scaffoldApp('demo', cwd, { template: 'api' });
+    const appDir = join(cwd, 'demo');
+    // Run the api showcase reset the same way `npm run gallery:clear` would.
+    execFileSync(process.execPath, ['scripts/clear-api-gallery.mjs'], { cwd: appDir, stdio: 'ignore' });
+
+    // The showcase is gone.
+    assert.equal(existsSync(join(appDir, 'app', 'api', 'features')), false, 'app/api/features removed');
+    assert.equal(existsSync(join(appDir, 'modules', 'widgets')), false, 'modules/widgets removed');
+    assert.equal(existsSync(join(appDir, 'env.ts')), false, 'env.ts example removed');
+    assert.equal(existsSync(join(appDir, 'test', 'unit', 'widgets.test.ts')), false, 'widgets test removed');
+    // The root index no longer points at the removed showcase, but keeps the base.
+    const rootRoute = await readFile(join(appDir, 'app', 'route.ts'), 'utf8');
+    assert.doesNotMatch(rootRoute, /features:/, 'the stale features block is stripped from the index');
+    assert.match(rootRoute, /api\/health/, 'health endpoint kept in the index');
+    assert.match(rootRoute, /api\/users/, 'users endpoint kept in the index');
+    // Counterfactual: without the app/route.ts reset the index would still list a
+    // `features:` block pointing at routes that no longer exist (the assert above
+    // fails if the reset is dropped).
+
+    // The baseline is intact.
+    assert.ok(await exists(join(appDir, 'middleware.ts')), 'CORS middleware kept');
+    assert.ok(await exists(join(appDir, 'app', 'api', 'health', 'route.ts')), 'health endpoint kept');
+    assert.ok(await exists(join(appDir, 'app', 'api', 'users', 'route.ts')), 'users endpoint kept');
+    assert.ok(await exists(join(appDir, 'modules', 'users')), 'modules/users kept');
+
+    // A rerun is a safe no-op (the showcase is already gone).
+    execFileSync(process.execPath, ['scripts/clear-api-gallery.mjs'], { cwd: appDir, stdio: 'ignore' });
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }

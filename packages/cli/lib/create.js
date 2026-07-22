@@ -365,8 +365,13 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // app runs the compiler under Bun (its image has no Node), a Node app runs
       // it directly.
       ...(isApi ? {} : { 'css:build': cssBuildCmd }),
-      // Shed the demo gallery to a clean, buildable base (scripts/clear-gallery.mjs).
-      ...(isApi ? {} : { 'gallery:clear': isBun ? 'bun scripts/clear-gallery.mjs' : 'node scripts/clear-gallery.mjs' }),
+      // Shed the demo gallery / backend-features showcase to a clean, buildable
+      // base. The UI template runs clear-gallery.mjs; the api template runs
+      // clear-api-gallery.mjs (its showcase is app/api/features, not app/features).
+      'gallery:clear': (() => {
+        const script = isApi ? 'clear-api-gallery.mjs' : 'clear-gallery.mjs';
+        return isBun ? `bun scripts/${script}` : `node scripts/${script}`;
+      })(),
       dev: isBun ? 'bun --bun webjs dev' : 'webjs dev',
       start: isBun ? 'bun --bun webjs start' : 'webjs start',
       test: 'webjs test',
@@ -988,6 +993,14 @@ export type ActionResult<T> =
     // counterpart of the UI gallery. Prune what you skip.
     const { writeApiGallery } = await import('./api-gallery.js');
     await writeApiGallery(appDir);
+
+    // The showcase-reset script (wired as `gallery:clear` for the api template).
+    // It sheds app/api/features + its modules back to the health + users base.
+    const apiClearSrc = join(TEMPLATES, 'scripts', 'clear-api-gallery.mjs');
+    if (existsSync(apiClearSrc)) {
+      await mkdir(join(appDir, 'scripts'), { recursive: true });
+      await cp(apiClearSrc, join(appDir, 'scripts', 'clear-api-gallery.mjs'));
+    }
   }
 
   if (!isApi) {
