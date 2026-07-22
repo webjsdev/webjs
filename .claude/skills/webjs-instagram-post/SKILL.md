@@ -50,30 +50,29 @@ set -a; . ~/.config/webjs/instagram.env; set +a
 ## Step 1: create the branded SEO image (required, JPEG)
 
 The Instagram publishing API accepts a **JPEG only**, pulled from a public URL.
-Build a 1080x1080 branded card in the WebJs orange with a short headline. Keep
-the headline inside the centre so a feed crop never clips it. Adjust
-`HEADLINE` per post.
+Match the webjs.dev OG theme, which is a NEAR-BLACK card with a soft warm glow
+in the top-right corner, the orange squircle mark plus the white `webjs`
+wordmark, a bold white headline with ONE orange-highlighted phrase, gray
+subtext, and a small-caps footer meta row with a `webjs.dev` URL. It is a dark
+card with orange accents, NOT an orange background.
+
+`assets/build-post.sh` produces exactly this, parameterised by env var. Wrap the
+key headline phrase in an orange span, and bold a few subtext words in white:
 
 ```sh
-SLUG="why-webjs"                 # kebab-case, becomes the filename
-HEADLINE="Build on the platform,\nnot against it"
-OUT="/tmp/${SLUG}.jpg"
-
-magick -size 1080x1080 -define gradient:angle=135 gradient:'#FF8C3A'-'#DE5F10' \
-  \( -size 1080x1080 radial-gradient:'#00000000'-'#00000033' \) -composite \
-  \( -background none -fill white -font Adwaita-Sans-ExtraBold -kerning -4 \
-     -size 900x520 -gravity center caption:"$HEADLINE" \) \
-  -gravity center -composite \
-  \( -background none -fill 'white' -font Adwaita-Sans-Bold \
-     -size 620x -gravity center label:'webjs.dev' \) \
-  -gravity south -geometry +0+70 -composite \
-  -quality 90 "$OUT"
-identify -format '%wx%h %m\n' "$OUT"
+OUT=/tmp/post.jpg \
+HEADLINE='The web framework for <span foreground="#F0803A">AI agents</span>' \
+SUBTEXT='No build step. Built on <span foreground="#DcDcDc" font_weight="bold">web components</span>, SSR, and progressive enhancement. <span foreground="#DcDcDc" font_weight="bold">Standards that outlast frameworks.</span>' \
+KICKER='BUILT FOR THE AI ERA' \
+META='NO BUILD   ·   WEB COMPONENTS   ·   SSR' \
+  bash "$(dirname "$0")/assets/build-post.sh"
 ```
 
-The brand orange is a `#FF8C3A` to `#DE5F10` diagonal gradient. The wordmark
-font `Adwaita-Sans-ExtraBold` matches the site treatment. Sanity-check the
-render by reading `$OUT` back before publishing.
+It needs ImageMagick with Pango. Always read `$OUT` back and eyeball it before
+publishing: check the headline does not collide with the subtext (the script
+stacks them dynamically, but a very long headline can still crowd), and that
+the footer meta does not overrun the `webjs.dev` URL. Keep the important content
+away from the extreme edges so a feed crop never clips it.
 
 ## Step 2: host the image at a public HTTPS URL
 
