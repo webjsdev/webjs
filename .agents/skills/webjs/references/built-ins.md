@@ -136,6 +136,8 @@ On by default (`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`,
 
 Off by default. `{ "webjs": { "csp": true } }` enables a strict-dynamic + per-request nonce posture. An object form merges `directives` and supports `reportOnly`. Read the nonce with `cspNonce()` from `@webjsdev/core` to stamp your own inline `<script>`.
 
+Enforcement is the HTTP `Content-Security-Policy` HEADER, never a `<meta http-equiv>` tag, so `frame-ancestors` / `report-uri` work. The emitted `<meta name="csp-nonce">` is only the client-side nonce CARRIER. Across a client-router soft navigation the ORIGINAL page-load nonce stays authoritative (the browser enforces the original document's CSP header, not the fetched response's fresh one), so the router preserves that meta and re-stamps every dynamically-inserted script / preload with the original nonce via `getCspNonce()`. The server still mints a fresh nonce per request, and CSP pages are excluded from the HTML cache so a nonce is never served stale. No client config is needed.
+
 ### Redirects, trailing-slash, basePath, allowed origins
 
 ```jsonc
