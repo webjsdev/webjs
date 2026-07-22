@@ -687,6 +687,118 @@ test('addNewHeadElements: script elements are recreated (not cloned) to execute'
   assert.equal(added.getAttribute('type'), 'module');
 });
 
+/* ====================================================================
+ * addNewHeadElements: page-scoped <meta> reconciliation (#1046)
+ * ==================================================================== */
+
+test('addNewHeadElements: removes a stale page-scoped meta absent from the incoming head (#1046)', () => {
+  // The previous page opted into view transitions; the incoming page does not.
+  document.head.innerHTML =
+    '<title>T</title>' +
+    '<meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width">' +
+    '<meta name="view-transition" content="same-origin">' +
+    '<style id="runtime-css">.a{color:red}</style>' +
+    '<link rel="stylesheet" href="/app.css">';
+  const newHead = document.createElement('head');
+  newHead.innerHTML =
+    '<title>T</title>' +
+    '<meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width">';
+  // NOTE: the incoming head omits both view-transition (page-scoped, dropped)
+  // AND the shared stylesheet (X-Webjs-Have reduction, must be KEPT, #936).
+
+  _addNewHead(newHead);
+
+  assert.equal(
+    document.head.querySelectorAll('meta[name="view-transition"]').length, 0,
+    'stale page-scoped view-transition meta must be removed'
+  );
+  // App-wide metas present in both heads survive.
+  assert.ok(document.head.querySelector('meta[charset="utf-8"]'), 'charset preserved');
+  assert.ok(document.head.querySelector('meta[name="viewport"]'), 'viewport preserved');
+  // #936 guard: a stylesheet absent from the reduced incoming head is NEVER removed.
+  assert.ok(document.head.querySelector('link[href="/app.css"]'), 'shared stylesheet must survive');
+  assert.ok(document.head.querySelector('#runtime-css'), 'runtime CSS must survive');
+});
+
+test('addNewHeadElements: updates a changed keyed meta in place, no duplicate (#1046)', () => {
+  document.head.innerHTML = '<title>T</title><meta name="robots" content="index,follow">';
+  const newHead = document.createElement('head');
+  newHead.innerHTML = '<title>T</title><meta name="robots" content="noindex">';
+  _addNewHead(newHead);
+  const robots = document.head.querySelectorAll('meta[name="robots"]');
+  assert.equal(robots.length, 1, 'exactly one robots meta (updated, not duplicated)');
+  assert.equal(robots[0].getAttribute('content'), 'noindex', 'content updated to the new page value');
+});
+
+test('addNewHeadElements: adds a keyed meta present only in the incoming head (#1046)', () => {
+  document.head.innerHTML = '<title>T</title>';
+  const newHead = document.createElement('head');
+  newHead.innerHTML = '<title>T</title><meta name="view-transition" content="same-origin">';
+  _addNewHead(newHead);
+  const vt = document.head.querySelectorAll('meta[name="view-transition"]');
+  assert.equal(vt.length, 1, 'incoming page-scoped meta added');
+  assert.equal(vt[0].getAttribute('content'), 'same-origin');
+});
+
+test('addNewHeadElements: an og:* property meta is reconciled by property (#1046)', () => {
+  document.head.innerHTML = '<title>T</title><meta property="og:title" content="Old page">';
+  const newHead = document.createElement('head');
+  newHead.innerHTML = '<title>T</title>'; // incoming page declares no og:title
+  _addNewHead(newHead);
+  assert.equal(
+    document.head.querySelectorAll('meta[property="og:title"]').length, 0,
+    'stale og:title removed when the incoming page does not declare it'
+  );
+});
+
+/* ====================================================================
+ * runWithTransition: swap-commit promise (#1048)
+ *
+ * The progressive Suspense streamer applies each resolved boundary against
+ * the swapped-in DOM. Under an async view transition the swap is deferred a
+ * frame, so the streamer must await the swap COMMIT or it runs against the
+ * pre-swap DOM (no placeholder) and the skeleton sticks. runWithTransition
+ * returns that commit signal.
+ * ==================================================================== */
+
+test('runWithTransition: sync path runs the thunk and returns a resolved promise', async () => {
+  document.head.innerHTML = ''; // no view-transition meta -> VT disabled
+  const order = [];
+  const p = _runWithTransition(() => order.push('thunk'), () => order.push('after'));
+  assert.deepEqual(order, ['thunk', 'after'], 'thunk then afterFinished run synchronously');
+  await p; // must be a thenable that resolves
+  assert.ok(true, 'returned a resolved promise on the sync path');
+});
+
+test('runWithTransition: with an async view transition, the commit promise resolves AFTER the thunk (#1048)', async () => {
+  // Enable view transitions and mock an async startViewTransition that defers
+  // the DOM-mutation callback to a microtask (like the real API).
+  document.head.innerHTML = '<meta name="view-transition" content="same-origin">';
+  assert.equal(_viewTransitionsEnabled(), true, 'VT is enabled by the meta');
+
+  const prev = document.startViewTransition;
+  let thunkRan = false;
+  let committedBeforeThunk = null;
+  document.startViewTransition = (cb) => {
+    // Defer the update callback, exactly the ordering that stuck the skeleton.
+    const updateCallbackDone = Promise.resolve().then(() => { cb(); thunkRan = true; });
+    return { updateCallbackDone, finished: updateCallbackDone, ready: updateCallbackDone };
+  };
+  try {
+    const commit = _runWithTransition(() => {}, () => {});
+    // At this synchronous point the deferred thunk has NOT run yet.
+    committedBeforeThunk = thunkRan;
+    await commit;
+    assert.equal(committedBeforeThunk, false, 'thunk is deferred (async), not run synchronously');
+    assert.equal(thunkRan, true, 'the commit promise only resolves after the thunk has committed');
+  } finally {
+    document.startViewTransition = prev;
+    document.head.innerHTML = '';
+  }
+});
+
 test('addNewHeadElements: dynamically-created scripts get the meta csp-nonce, not the source page\'s per-request nonce', () => {
   // Set up the meta tag the server emits for the original page load.
   document.head.innerHTML = '<meta name="csp-nonce" content="original-page-nonce">';
