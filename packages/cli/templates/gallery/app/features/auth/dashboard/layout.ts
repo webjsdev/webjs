@@ -9,6 +9,8 @@ import { html } from '@webjsdev/core';
 export default function DashboardLayout({ children }: { children: unknown }) {
   return html`
     <nav class="flex items-center gap-4 mb-6 pb-4 border-b border-border">
+      <a href="/" class="text-sm text-muted-foreground hover:text-foreground transition-colors no-underline">&larr; Gallery</a>
+      <span class="w-px h-4 bg-border" aria-hidden="true"></span>
       <a href="/features/auth/dashboard" class="text-sm font-medium text-foreground hover:underline">Dashboard</a>
       <a href="/features/auth/dashboard/settings" class="text-sm font-medium text-foreground hover:underline">Settings</a>
       <form method="POST" action="/api/auth/signout" class="ml-auto">
