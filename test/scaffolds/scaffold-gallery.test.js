@@ -53,6 +53,11 @@ test('full-stack scaffold ships feature demos and one example app', async () => 
     for (const name of FEATURES) {
       assert.ok(await exists(join(appDir, 'app', 'features', name, 'page.ts')), `app/features/${name}/page.ts`);
     }
+    // A shared features layout gives every demo a back-to-gallery link so no
+    // card is a dead end (it links the gallery home at /).
+    const featuresLayout = await readFile(join(appDir, 'app', 'features', 'layout.ts'), 'utf8');
+    assert.match(featuresLayout, /href="\/"/, 'features layout links back to the gallery home');
+    assert.match(featuresLayout, /Gallery/, 'features layout renders a Gallery link');
     for (const name of EXAMPLE_APPS) {
       assert.ok(await exists(join(appDir, 'app', 'examples', name, 'page.ts')), `app/examples/${name}/page.ts`);
     }
