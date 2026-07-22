@@ -41,7 +41,7 @@ const galleryPaths = [
 const galleryModules = [
   'async-render', 'broadcast', 'caching', 'client-router', 'components',
   'directives', 'file-storage', 'frames', 'optimistic-ui', 'rate-limit',
-  'route-handler', 'server-actions', 'sessions', 'streaming',
+  'route-handler', 'server-actions', 'sessions', 'streaming', 'suspense',
   'todo', 'websockets',
 ].map((m) => `modules/${m}`);
 
