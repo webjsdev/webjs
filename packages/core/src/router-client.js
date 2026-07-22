@@ -3819,6 +3819,19 @@ function reconcileHeadMetas(newHead) {
     const incKey = incEls.map(outerHTMLForDiff).join('\n');
     const liveKey = liveEls.map(outerHTMLForDiff).join('\n');
     if (incKey === liveKey) continue;
+    if (incEls.length === 1 && liveEls.length === 1) {
+      // The common case (one description / theme-color / robots per page):
+      // sync attributes IN PLACE so the live element keeps its DOM identity.
+      // An app script holding a reference (a theme manager caching
+      // meta[name=theme-color]) still points at the live tag after the nav,
+      // and there is no remove/append churn for a content-only change.
+      const cur = liveEls[0];
+      for (const a of [...cur.attributes]) cur.removeAttribute(a.name);
+      for (const a of incEls[0].attributes) cur.setAttribute(a.name, a.value);
+      continue;
+    }
+    // Multi-element sets (repeated og:image): no unambiguous element-to-element
+    // mapping exists, so replace the set wholesale.
     for (const el of liveEls) el.remove();
     for (const el of incEls) document.head.appendChild(cloneElementWithCorrectNonce(el));
   }

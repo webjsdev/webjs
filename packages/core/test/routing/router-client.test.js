@@ -724,12 +724,16 @@ test('addNewHeadElements: removes a stale page-scoped meta absent from the incom
 
 test('addNewHeadElements: updates a changed keyed meta in place, no duplicate (#1046)', () => {
   document.head.innerHTML = '<title>T</title><meta name="robots" content="index,follow">';
+  const before = document.head.querySelector('meta[name="robots"]');
   const newHead = document.createElement('head');
   newHead.innerHTML = '<title>T</title><meta name="robots" content="noindex">';
   _addNewHead(newHead);
   const robots = document.head.querySelectorAll('meta[name="robots"]');
   assert.equal(robots.length, 1, 'exactly one robots meta (updated, not duplicated)');
   assert.equal(robots[0].getAttribute('content'), 'noindex', 'content updated to the new page value');
+  // Identity guarantee: the 1:1 case syncs attributes IN PLACE, so an app
+  // script holding a reference to the meta still points at the live element.
+  assert.strictEqual(robots[0], before, 'the live meta element keeps its DOM identity');
 });
 
 test('addNewHeadElements: adds a keyed meta present only in the incoming head (#1046)', () => {
