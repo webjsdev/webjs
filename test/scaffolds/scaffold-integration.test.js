@@ -1,11 +1,11 @@
 /**
- * Integration tests for `scaffoldApp`: invokes the full-stack, api, and
- * saas scaffolds programmatically in a temp dir and asserts the expected
- * files / directory structure are produced. Runs entirely offline.
+ * Integration tests for `scaffoldApp`: invokes the full-stack and api scaffolds
+ * programmatically in a temp dir and asserts the expected files / directory
+ * structure are produced. Runs entirely offline.
  *
- * This is a coverage anchor for `packages/cli/lib/create.js` and
- * `packages/cli/lib/saas-template.js`: both files are otherwise only
- * exercised by manual `webjs create` runs.
+ * This is a coverage anchor for `packages/cli/lib/create.js` (including the auth
+ * gallery card it wires into the UI template), otherwise only exercised by manual
+ * `webjs create` runs.
  */
 
 import { test } from 'node:test';
@@ -84,8 +84,8 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     }
 
     // #271: the opt-in progressive-enhancement service worker + its offline
-    // fallback ship into the UI scaffolds (full-stack / saas; api has no UI),
-    // dormant until the app registers it. This test covers full-stack.
+    // fallback ship into the UI scaffold (full-stack; api has no UI),
+    // dormant until the app registers it.
     assert.ok(existsSync(join(appDir, 'public', 'sw.js')), 'public/sw.js should exist');
     assert.ok(existsSync(join(appDir, 'public', 'offline.html')), 'public/offline.html should exist');
 
@@ -428,120 +428,91 @@ test('scaffoldApp api: writes API-only template (no layout, no components)', asy
   }
 });
 
-test('scaffoldApp saas: writes auth + dashboard + Drizzle User model', async () => {
+test('scaffoldApp full-stack: the auth card wires createAuth + dashboard + User model', async () => {
   const cwd = await tempCwd();
   const restore = muteConsole();
   try {
-    await scaffoldApp('my-saas', cwd, { template: 'saas' });
-    const appDir = join(cwd, 'my-saas');
+    await scaffoldApp('my-app', cwd, { template: 'full-stack' });
+    const appDir = join(cwd, 'my-app');
 
-    // Core scaffold still in place
+    // Core scaffold in place
     assert.ok(existsSync(join(appDir, 'app', 'layout.ts')), 'layout.ts written');
     assert.ok(existsSync(join(appDir, 'app', 'page.ts')), 'page.ts written');
 
-    // saas shares the same minimal-shell root layout (bare full-height main, no
-    // header), and designs its own chrome (the dashboard sub-nav lives in
-    // app/dashboard/layout.ts).
-    const saasLayoutSrc = readFileSync(join(appDir, 'app', 'layout.ts'), 'utf8');
-    assert.match(saasLayoutSrc, /<main class="min-h-dvh[^"]*">/,
-      'saas root layout is the minimal full-height shell');
-    assert.ok(!existsSync(join(appDir, 'LAYOUT-REFERENCE.md')),
-      'saas ships no LAYOUT-REFERENCE.md (removed)');
+    // The UI template ships the opt-in service worker (#271).
+    assert.ok(existsSync(join(appDir, 'public', 'sw.js')), 'ships public/sw.js');
+    assert.ok(existsSync(join(appDir, 'public', 'offline.html')), 'ships public/offline.html');
 
-    // #271: saas is a UI scaffold, so it ships the opt-in service worker.
-    assert.ok(existsSync(join(appDir, 'public', 'sw.js')), 'saas ships public/sw.js');
-    assert.ok(existsSync(join(appDir, 'public', 'offline.html')), 'saas ships public/offline.html');
+    // Auth server modules (the auth gallery card). createAuth config + hashing
+    // live under modules/auth/ so copyGallery ships them and gallery:clear prunes
+    // them; the handler route stays at the app root (createAuth hardcodes /api/auth).
+    assert.ok(existsSync(join(appDir, 'modules', 'auth', 'password.server.ts')), 'modules/auth/password.server.ts present');
+    assert.ok(existsSync(join(appDir, 'modules', 'auth', 'auth.server.ts')), 'modules/auth/auth.server.ts present');
+    assert.ok(existsSync(join(appDir, 'app', 'api', 'auth', '[...path]', 'route.ts')), 'auth api handler at the app root');
 
-    // SaaS-specific lib files
-    assert.ok(existsSync(join(appDir, 'lib', 'password.server.ts')), 'lib/password.server.ts present');
-    assert.ok(existsSync(join(appDir, 'lib', 'auth.server.ts')), 'lib/auth.server.ts present');
-    assert.ok(!existsSync(join(appDir, 'lib', 'prisma.server.ts')), 'no lib/prisma.server.ts');
-
-    // The copied ui-* components import cn() via the #lib/utils/cn.ts alias, not
-    // a stale relative `../lib/utils.ts` that would ERR_MODULE_NOT_FOUND from
-    // components/ui/ (saas-template's readUiComponent rewrite, #556). The cn
-    // helper itself lives at lib/utils/cn.ts. Counterfactual: the no-op rewrite
-    // bug left `'../lib/utils.ts'` and this fails.
-    assert.ok(existsSync(join(appDir, 'lib', 'utils', 'cn.ts')), 'cn helper at lib/utils/cn.ts');
-    for (const c of readdirSync(join(appDir, 'components', 'ui'))) {
-      if (!c.endsWith('.ts')) continue;
-      const src = readFileSync(join(appDir, 'components', 'ui', c), 'utf8');
-      assert.doesNotMatch(src, /from ['"]\.\.\/lib\/utils\.ts['"]/, `${c} must not keep the stale ../lib/utils.ts cn import`);
-      // #877: the onBeforeCache import must be rewritten the same way. The saas
-      // generator previously rewrote only the cn() import, so dialog.ts kept the
-      // registry-relative `../lib/dom.ts` (a nonexistent components/lib/dom.ts)
-      // and failed `webjs typecheck` with TS2307. Counterfactual: the missing
-      // rewrite leaves `'../lib/dom.ts'` and this fails.
-      assert.doesNotMatch(src, /from ['"]\.\.\/lib\/dom\.ts['"]/, `${c} must not keep the stale ../lib/dom.ts import`);
-      if (/onBeforeCache/.test(src)) {
-        assert.match(src, /from ['"]#lib\/utils\/dom\.ts['"]/, `${c} imports onBeforeCache from #lib/utils/dom.ts`);
-      }
-    }
-
-    // #877: lib/auth.server.ts must not assign `process.env.AUTH_SECRET`
+    // #877/#556: auth.server.ts must not assign `process.env.AUTH_SECRET`
     // (string | undefined) straight to the required `string` secret (TS2322).
     // It resolves through a typed const with a dev fallback + prod guard.
-    const authSrc = readFileSync(join(appDir, 'lib', 'auth.server.ts'), 'utf8');
+    const authSrc = readFileSync(join(appDir, 'modules', 'auth', 'auth.server.ts'), 'utf8');
     assert.doesNotMatch(authSrc, /secret:\s*process\.env\.AUTH_SECRET\b/, 'secret must not be the raw string | undefined env read');
     assert.match(authSrc, /const authSecret =/, 'auth secret resolved through a typed const');
     assert.match(authSrc, /secret:\s*authSecret\b/, 'createAuth uses the typed authSecret');
     assert.match(authSrc, /NODE_ENV === 'production'[\s\S]*AUTH_SECRET must be set/, 'production fails fast when AUTH_SECRET is unset');
+    assert.match(authSrc, /createAuth, Credentials, GitHub, Google/, 'demonstrates the createAuth provider surface');
 
-    // #878: every top-level page needs EXACTLY one <h1> (axe page-has-heading-one
-    // wants one, and a second h1 is its own violation). The auth cards are the
-    // sole heading so their title is the h1; the dashboard/settings pages already
-    // carry a page <h1>, so their card title stays a subordinate <h2> (promoting
-    // it to h1 was the regression this pins). Counterfactual: an <h3>-only page,
-    // or a double-h1 dashboard, fails this.
+    // #878: each auth page carries EXACTLY one <h1> (axe page-has-heading-one
+    // wants one, and a second h1 is its own violation). Counterfactual: an
+    // <h3>-only page, or a double-h1 dashboard, fails this.
     const h1Count = (src) => (src.match(/<h1\b/g) || []).length;
     for (const p of [['login'], ['signup'], ['dashboard'], ['dashboard', 'settings']]) {
-      const pageSrc = readFileSync(join(appDir, 'app', ...p, 'page.ts'), 'utf8');
-      assert.equal(h1Count(pageSrc), 1, `${p.join('/')} page has exactly one <h1>`);
+      const pageSrc = readFileSync(join(appDir, 'app', 'features', 'auth', ...p, 'page.ts'), 'utf8');
+      assert.equal(h1Count(pageSrc), 1, `auth/${p.join('/')} page has exactly one <h1>`);
     }
 
-    // Drizzle User model (saas overwrites db/schema.server.ts to add passwordHash)
+    // The users table carries the auth passwordHash column (create.js adds it in
+    // the UI template; gallery:clear strips it back out).
     const schema = readFileSync(join(appDir, 'db', 'schema.server.ts'), 'utf8');
     assert.match(schema, /export const users = table\('users'/, 'users table present');
-    assert.match(schema, /passwordHash/, 'User has passwordHash field');
+    assert.match(schema, /passwordHash/, 'users table carries the auth passwordHash column');
 
     // Signup page is the canonical no-JS form write-path (#244): it exports a
     // page `action`, posts via `<form method="POST">`, and returns fieldErrors
     // + values on failure so the re-render keeps the user's input.
-    const signup = readFileSync(join(appDir, 'app', 'signup', 'page.ts'), 'utf8');
+    const signup = readFileSync(join(appDir, 'app', 'features', 'auth', 'signup', 'page.ts'), 'utf8');
     assert.match(signup, /export async function action/, 'signup page exports an action');
     assert.match(signup, /<form method="POST"/, 'signup form posts to the page action');
     assert.match(signup, /fieldErrors/, 'signup action returns field errors');
     assert.match(signup, /actionData/, 'signup page reads actionData for re-render');
-    assert.doesNotMatch(signup, /id="signup-form"/, 'old inert JS-only form id is gone');
 
     // #904: a signed-in user must be able to log out. The dashboard subtree ships
     // a nested layout carrying a plain POST <form> to the createAuth signout route,
-    // so logout works with JS off (progressive-enhancement default) and appears on
-    // every /dashboard page.
-    const dashLayout = readFileSync(join(appDir, 'app', 'dashboard', 'layout.ts'), 'utf8');
+    // so logout works with JS off (progressive-enhancement default).
+    const dashLayout = readFileSync(join(appDir, 'app', 'features', 'auth', 'dashboard', 'layout.ts'), 'utf8');
     assert.match(dashLayout, /<form method="POST" action="\/api\/auth\/signout"/, 'dashboard layout ships a POST signout form');
     assert.match(dashLayout, /Log out/, 'dashboard layout renders a Log out control');
     // signOut is server-only, so the logout control must reach it through the
-    // route, never by importing lib/auth.server.ts into a browser-shipping page.
+    // route, never by importing the server-only auth module into a shipping page.
     assert.doesNotMatch(dashLayout, /import[^\n]*auth\.server/, 'logout control does not import the server-only auth module');
 
+    // The protected route is gated by a per-segment middleware that bounces an
+    // anonymous visitor to login.
+    const gate = readFileSync(join(appDir, 'app', 'features', 'auth', 'dashboard', 'middleware.ts'), 'utf8');
+    assert.match(gate, /auth\(req\)/, 'the gate reads the session off the request');
+    assert.match(gate, /location: '\/features\/auth\/login'/, 'the gate redirects anonymous visitors to login');
+
     // #904: a failed login must surface a message, not silently bounce to the home
-    // page. createAuth is configured with pages.error: '/login' and the login page
-    // reads searchParams.error to render it.
-    const auth = readFileSync(join(appDir, 'lib', 'auth.server.ts'), 'utf8');
-    assert.match(auth, /pages:\s*\{\s*error:\s*'\/login'\s*\}/, 'createAuth points its error page at /login');
-    const login = readFileSync(join(appDir, 'app', 'login', 'page.ts'), 'utf8');
+    // page. createAuth is configured with pages.error at the login route and the
+    // login page reads searchParams.error to render it.
+    assert.match(authSrc, /pages:\s*\{\s*error:\s*'\/features\/auth\/login'\s*\}/, 'createAuth points its error page at the login route');
+    const login = readFileSync(join(appDir, 'app', 'features', 'auth', 'login', 'page.ts'), 'utf8');
     assert.match(login, /searchParams\.error/, 'login page reads the error query param');
     assert.match(login, /Invalid email or password/, 'login page shows a message for a failed sign-in');
 
-    // The auth test is a REAL handle()-driven flow at the convention-correct
-    // path test/auth/auth.test.ts (#267), not the old type-shape stub at
-    // test/unit/auth.test.ts.
+    // The auth test is a REAL handle()-driven flow shipped with the card.
     assert.ok(existsSync(join(appDir, 'test', 'auth', 'auth.test.ts')), 'test/auth/auth.test.ts present');
-    assert.ok(!existsSync(join(appDir, 'test', 'unit', 'auth.test.ts')), 'old test/unit/auth.test.ts stub is gone');
     const authTest = readFileSync(join(appDir, 'test', 'auth', 'auth.test.ts'), 'utf8');
     assert.match(authTest, /@webjsdev\/server\/testing/, 'auth test uses the handle() test harness');
-    assert.match(authTest, /redirects to \/login when unauthenticated/, 'auth test asserts the protected-route gate');
+    assert.match(authTest, /redirects to login when unauthenticated/, 'auth test asserts the protected-route gate');
     assert.match(authTest, /loginAndGetCookies/, 'auth test drives the real login flow');
   } finally {
     restore();
@@ -578,20 +549,20 @@ test('scaffoldApp: generated users module models HTTP-verb actions (#488)', asyn
   }
 });
 
-test('scaffoldApp saas: per-session current-user stays POST-default (#488)', async () => {
-  // The saas auth read is per-user, so it deliberately is NOT a cacheable GET
-  // server action: it ships as the documented counter-example. Counterfactual:
-  // add `export const method = 'GET'` to saas-template's current-user and this
-  // fails (which is exactly the data-leak the comment warns against).
+test('scaffoldApp full-stack: per-session current-user stays POST-default (#488)', async () => {
+  // The auth-card current-user read is per-user, so it deliberately is NOT a
+  // cacheable GET server action: it ships as the documented counter-example.
+  // Counterfactual: add `export const method = 'GET'` to the auth card's
+  // current-user and this fails (the exact data-leak the comment warns against).
   const cwd = await tempCwd();
   const restore = muteConsole();
   try {
-    await scaffoldApp('verb-saas', cwd, { template: 'saas' });
-    const appDir = join(cwd, 'verb-saas');
+    await scaffoldApp('verb-app', cwd, { template: 'full-stack' });
+    const appDir = join(cwd, 'verb-app');
     const currentUser = readFileSync(
       join(appDir, 'modules', 'auth', 'queries', 'current-user.server.ts'), 'utf8');
     assert.doesNotMatch(currentUser, /export const method =/, 'current-user is not a verb-configured GET');
-    assert.match(currentUser, /per-session read/, 'current-user explains why it stays POST-default');
+    assert.match(currentUser, /per-session/, 'current-user explains why it stays POST-default');
   } finally {
     restore();
     await rm(cwd, { recursive: true, force: true });

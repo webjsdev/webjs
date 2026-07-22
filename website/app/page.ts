@@ -352,39 +352,30 @@ export default function LandingPage() {
     <section id="templates" class="scroll-mt-24 py-16">
       <div class="max-w-[1080px] mx-auto px-6">
         <div class="max-w-[720px] mx-auto mb-12 text-center">
-          <div class=${KICKER}>One framework, three templates</div>
+          <div class=${KICKER}>One framework, two templates</div>
           <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">Start where you are</h2>
         </div>
-        <div class="grid gap-4 grid-cols-1 max-w-[560px] mx-auto min-[900px]:grid-cols-3 min-[900px]:max-w-none">
+        <div class="grid gap-4 grid-cols-1 max-w-[560px] mx-auto min-[900px]:grid-cols-2 min-[900px]:max-w-[760px]">
           <div class="flex flex-col gap-3 p-6 min-w-0 rounded-2xl border border-border bg-bg-elev">
             <span class="font-mono font-semibold text-[10px] leading-none tracking-[0.16em] uppercase text-fg-subtle">Full-stack</span>
             <h3 class="font-display font-bold text-[1.15rem] leading-[1.25] m-0">Pages + API + components</h3>
-            <p class="m-0 text-[13.5px] leading-[1.6] text-fg-muted">SSR pages, web components, server actions, Drizzle, auth, and streaming. The default.</p>
+            <p class="m-0 text-[13.5px] leading-[1.6] text-fg-muted">SSR pages, web components, server actions, Drizzle, streaming, and a browsable feature gallery. Auth (login, sessions, a protected route) ships as a gallery card. The default.</p>
             <pre class="scroll-thin m-0 px-[14px] py-3 overflow-x-auto rounded-[10px] border border-border bg-bg-sunken font-mono text-[12px] leading-[1.6] text-fg-muted" tabindex="0" aria-label="Example files">app/page.ts
 components/counter.ts
 actions/posts.server.ts</pre>
             <div class="cmd-foot pt-2 mt-auto font-mono text-[12.5px] leading-[1.6] text-fg-muted max-w-full min-w-0"><copy-cmd>npm create webjs@latest my-app</copy-cmd></div>
           </div>
           <div class="flex flex-col gap-3 p-6 min-w-0 rounded-2xl border border-border bg-bg-elev">
-            <span class="font-mono font-semibold text-[10px] leading-none tracking-[0.16em] uppercase text-fg-subtle">API only</span>
-            <h3 class="font-display font-bold text-[1.15rem] leading-[1.25] m-0">Just route handlers</h3>
-            <p class="m-0 text-[13.5px] leading-[1.6] text-fg-muted">Skip pages. File-based routing, middleware, rate limiting, and WebSockets. Zero frontend.</p>
+            <span class="font-mono font-semibold text-[10px] leading-none tracking-[0.16em] uppercase text-fg-subtle">Backend (API)</span>
+            <h3 class="font-display font-bold text-[1.15rem] leading-[1.25] m-0">Route handlers + Database</h3>
+            <p class="m-0 text-[13.5px] leading-[1.6] text-fg-muted">A backend-only app, no UI or SSR. File-based route handlers, modules, middleware, rate limiting, WebSockets, a database, and a backend-features gallery.</p>
             <pre class="scroll-thin m-0 px-[14px] py-3 overflow-x-auto rounded-[10px] border border-border bg-bg-sunken font-mono text-[12px] leading-[1.6] text-fg-muted" tabindex="0" aria-label="Example files">app/api/users/route.ts
 app/api/chat/route.ts
 middleware.ts</pre>
             <div class="cmd-foot pt-2 mt-auto font-mono text-[12.5px] leading-[1.6] text-fg-muted max-w-full min-w-0"><copy-cmd>npm create webjs@latest my-api -- --template api</copy-cmd></div>
           </div>
-          <div class="flex flex-col gap-3 p-6 min-w-0 rounded-2xl border border-border bg-bg-elev">
-            <span class="font-mono font-semibold text-[10px] leading-none tracking-[0.16em] uppercase text-fg-subtle">SaaS</span>
-            <h3 class="font-display font-bold text-[1.15rem] leading-[1.25] m-0">Auth + dashboard</h3>
-            <p class="m-0 text-[13.5px] leading-[1.6] text-fg-muted">Login, signup, sessions, a protected dashboard, and a User model wired up out of the box.</p>
-            <pre class="scroll-thin m-0 px-[14px] py-3 overflow-x-auto rounded-[10px] border border-border bg-bg-sunken font-mono text-[12px] leading-[1.6] text-fg-muted" tabindex="0" aria-label="Example files">app/(auth)/login/page.ts
-app/dashboard/page.ts
-lib/session.server.ts</pre>
-            <div class="cmd-foot pt-2 mt-auto font-mono text-[12.5px] leading-[1.6] text-fg-muted max-w-full min-w-0"><copy-cmd>npm create webjs@latest my-saas -- --template saas</copy-cmd></div>
-          </div>
         </div>
-        <p class="mt-8 mx-auto max-w-[680px] text-center text-fg-subtle text-[13px] leading-[1.55]">Prefer Bun? Add <code class="font-mono">--runtime bun</code> to any template, or run <code class="font-mono">bun create webjs my-app</code> to flavor the scaffold for Bun automatically.</p>
+        <p class="mt-8 mx-auto max-w-[680px] text-center text-fg-subtle text-[13px] leading-[1.55]">Prefer Bun? Add <code class="font-mono">--runtime bun</code> to either template, or run <code class="font-mono">bun create webjs my-app</code> to flavor the scaffold for Bun automatically.</p>
       </div>
     </section>
 

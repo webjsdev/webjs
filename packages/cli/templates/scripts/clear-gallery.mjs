@@ -10,11 +10,12 @@
 // once to shed the gallery, then grow the app in place.
 //
 // It removes the gallery routes + modules + demo metadata routes, resets
-// app/page.ts to a minimal home, and drops the demo `todos` table from the
-// schema. It KEEPS the agent skill (.agents/skills/webjs/), the layout, the
-// database wiring, the theme toggle, and (for the saas template) the auth
-// modules. It is a one-time reset: if the gallery is already gone (no
-// app/features/) it does nothing, so a rerun never clobbers an app you built.
+// app/page.ts to a minimal home, and drops the demo `todos` table plus the auth
+// card's `passwordHash` column from the schema. It KEEPS the agent skill
+// (.agents/skills/webjs/), the layout, the database wiring, the theme toggle, and
+// the example `users` table. It is a one-time reset: if the gallery is already
+// gone (no app/features/) it does nothing, so a rerun never clobbers an app you
+// built.
 import { rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -30,18 +31,23 @@ if (!existsSync(join(root, 'app/features'))) {
   process.exit(0);
 }
 
-// 1) Gallery route trees + example metadata routes.
+// 1) Gallery route trees + example metadata routes. `app/api/auth` is the auth
+// card's createAuth handler (it lives at the app root, not under app/features/,
+// because createAuth hardcodes /api/auth/*), and `test/auth` is the auth card's
+// request-pipeline test, so both are removed here alongside the card.
 const galleryPaths = [
-  'app/features', 'app/examples', 'app/sitemaps',
+  'app/features', 'app/examples', 'app/sitemaps', 'app/api/auth', 'test/auth',
   'app/icon.ts', 'app/apple-icon.ts', 'app/manifest.ts', 'app/opengraph-image.ts',
   'app/twitter-image.ts', 'app/robots.ts', 'app/sitemap.ts',
   'app/global-error.ts', 'app/global-not-found.ts',
 ];
-// 2) The gallery's feature modules (by name, so saas auth modules survive).
+// 2) The gallery's feature modules (by name). `auth` is the auth card's server
+// modules (createAuth config, password hashing, signup action, current-user
+// query), pruned with the rest of the card.
 const galleryModules = [
-  'async-render', 'broadcast', 'caching', 'client-router', 'components',
+  'async-render', 'auth', 'broadcast', 'caching', 'client-router', 'components',
   'directives', 'file-storage', 'frames', 'optimistic-ui', 'rate-limit',
-  'route-handler', 'server-actions', 'sessions', 'streaming', 'suspense',
+  'route-handler', 'server-actions', 'sessions', 'stream', 'streaming', 'suspense',
   'todo', 'websockets',
 ].map((m) => `modules/${m}`);
 
@@ -51,12 +57,17 @@ for (const p of [...galleryPaths, ...galleryModules]) if (rm(p)) removed++;
 // 3) Reset app/page.ts to a minimal home (no gallery grid, no dead links).
 writeFileSync(join(root, 'app/page.ts'), MINIMAL_PAGE());
 
-// 4) Drop the demo `todos` table from the schema (keep everything else).
+// 4) Drop the demo `todos` table and the auth card's `passwordHash` column from
+// the schema (keep the example `users` table and everything else), reverting the
+// schema to the minimal base.
 const schemaPath = join(root, 'db/schema.server.ts');
 if (existsSync(schemaPath)) {
   let s = readFileSync(schemaPath, 'utf8');
   s = s.replace(/\n(?:\/\/[^\n]*\n)*export const todos = table\('todos',[\s\S]*?\n\}\);\n/, '\n');
   s = s.replace(/defineRelations\(\{ users, todos \}/, 'defineRelations({ users }');
+  // Strip the auth `passwordHash` column (and its leading comment lines) from the
+  // users table; the rest of the table is the minimal example base.
+  s = s.replace(/\n(?:[ \t]*\/\/[^\n]*\n)*[ \t]*passwordHash: text\(\),\n/, '\n');
   writeFileSync(schemaPath, s);
 }
 

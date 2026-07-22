@@ -11,7 +11,7 @@ Read this when you want an offline experience or an asset cache in a WebJs app, 
 
 ## What ships and why it is safe
 
-WebJs's UI scaffolds (full-stack and saas, not the api template) ship a hand-authored service worker at `public/sw.js` and an offline fallback at `public/offline.html`. Both ship **dormant**: they do nothing until the app registers the worker, and the worker only ever registers from JavaScript. So with JS off no worker exists, and pages, links, and forms behave exactly as before. It is opt-in and adds an offline experience plus an asset cache without changing the no-JS baseline.
+WebJs's UI scaffold (full-stack, not the api template) ships a hand-authored service worker at `public/sw.js` and an offline fallback at `public/offline.html`. Both ship **dormant**: they do nothing until the app registers the worker, and the worker only ever registers from JavaScript. So with JS off no worker exists, and pages, links, and forms behave exactly as before. It is opt-in and adds an offline experience plus an asset cache without changing the no-JS baseline.
 
 This is a thin, hand-readable worker built directly on the native Service Worker and Cache Storage APIs. There is no Workbox, no precache framework, and no bundler step, matching WebJs's no-build, close-to-web-standards posture. The file is yours to edit, not a framework internal.
 

@@ -33,7 +33,7 @@ async function collectTsFiles(dir, out = []) {
   return out;
 }
 
-for (const template of ['full-stack', 'api', 'saas']) {
+for (const template of ['full-stack', 'api']) {
   test(`scaffolded ${template} app: every generated .ts/.mts strips cleanly (#807)`, async () => {
     const cwd = await mkdtemp(join(tmpdir(), `webjs-scaffold-strip-${template}-`));
     try {

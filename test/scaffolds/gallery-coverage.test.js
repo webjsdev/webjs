@@ -182,7 +182,7 @@ function scaffoldAnalysis() {
       }
     };
     try {
-      for (const t of ['full-stack', 'api', 'saas']) {
+      for (const t of ['full-stack', 'api']) {
         // scaffoldApp(name, parentDir) writes parentDir/name.
         await scaffoldApp(t, base, { template: t, install: false });
         walk(join(base, t));

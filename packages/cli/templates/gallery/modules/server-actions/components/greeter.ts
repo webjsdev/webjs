@@ -5,14 +5,14 @@ import { greet } from '../actions/greet.server.ts';
 
 export class Greeter extends WebComponent {
   private msg = signal('');
-  // Drives the requireAuth middleware on the action: when true the request is
-  // treated as signed-out, so the middleware 401s BEFORE greet() runs.
-  private signedOut = signal(false);
 
   async run(e: SubmitEvent) {
     e.preventDefault();
     const name = String(new FormData(e.target as HTMLFormElement).get('name') ?? '');
-    const r = await greet({ name, signedOut: this.signedOut.get() });
+    // The action's requireAuth middleware reads the real session off the request.
+    // Signed out, this comes back as a 401 failure envelope ("Sign in to
+    // continue."); sign in at /features/auth/login and the greeting succeeds.
+    const r = await greet({ name });
     // Narrow on r.success so TS knows `data` (success) vs `error` (failure). A
     // middleware short-circuit arrives here as a normal failure envelope.
     this.msg.set(r.success ? (r.data?.message ?? '') : (r.error ?? 'error'));
@@ -27,10 +27,7 @@ export class Greeter extends WebComponent {
           <button type="submit"
             class="shrink-0 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">Greet</button>
         </form>
-        <label class="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
-          <input type="checkbox" @change=${(e: Event) => this.signedOut.set((e.target as HTMLInputElement).checked)} />
-          Simulate a signed-out visitor (the middleware 401s before the action runs)
-        </label>
+        <p class="m-0 text-sm text-muted-foreground">The action is gated by requireAuth. <a class="text-primary" href="/features/auth/login">Sign in</a> to greet; signed out returns a real 401.</p>
         ${this.msg.get() ? html`<p class="m-0 font-semibold text-foreground">${this.msg.get()}</p>` : ''}
       </div>
     `;

@@ -18,7 +18,6 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { bunifyProse, bunifyDockerfile, bunifyCompose, bunifyCi } from './runtime-rewrite.js';
-import { leanComponentSource } from './lean-copy.js';
 
 /**
  * Detect which package manager invoked us. Reads `npm_config_user_agent`,
@@ -107,60 +106,6 @@ function resolveUiRegistryRoot() {
 const UI_REGISTRY_ROOT = resolveUiRegistryRoot();
 
 /**
- * Read a single @webjsdev/ui registry component, rewrite its relative import
- * of `../lib/utils.ts` to the scaffolded app's aliased path so it resolves
- * when written to `components/ui/<name>.ts`. The scaffold puts cn() at
- * `lib/utils/cn.ts` (folder-grouped with other browser-safe helpers), so the
- * alias form is `#lib/utils/cn.ts` (#555/#556).
- *
- * @param {string} name  component name without `.ts` (e.g. 'button')
- * @returns {Promise<string>} source with import rewritten
- */
-async function readUiComponent(name) {
-  const src = join(UI_REGISTRY_ROOT, 'components', `${name}.ts`);
-  const raw = await readFile(src, 'utf8');
-  // The registry component imports cn() via a relative `../lib/utils.ts`; rewrite
-  // it to the scaffolded app's aliased path (cn lives at lib/utils/cn.ts).
-  const rewritten = raw
-    .replaceAll("'../lib/utils.ts'", "'#lib/utils/cn.ts'")
-    .replaceAll('"../lib/utils.ts"', '"#lib/utils/cn.ts"')
-    // onBeforeCache lives in its own client-only module so cn() stays pure (#819).
-    .replaceAll("'../lib/dom.ts'", "'#lib/utils/dom.ts'")
-    .replaceAll('"../lib/dom.ts"', '"#lib/utils/dom.ts"');
-  // Strip the worked @example from a Tier-1 helper (same as `webjs ui add`), so
-  // the scaffolded component is lean and the example is served on demand. The
-  // shared helper is used by the saas-template copier too, so they cannot drift.
-  return leanComponentSource(rewritten, name);
-}
-
-/**
- * Copy a list of @webjsdev/ui registry components into the scaffolded app
- * under `components/ui/`. Throws if any name is missing from the registry,
- * since the scaffold's generated pages import these by name and a missing
- * file would produce ERR_MODULE_NOT_FOUND at first request. Caller must
- * have already invoked assertUiRegistryAvailable().
- *
- * @param {string} appDir  destination app root
- * @param {string[]} names list of component file basenames (without `.ts`)
- */
-async function copyUiComponents(appDir, names) {
-  const uiDir = join(appDir, 'components', 'ui');
-  await mkdir(uiDir, { recursive: true });
-  for (const n of names) {
-    const src = join(UI_REGISTRY_ROOT, 'components', `${n}.ts`);
-    if (!existsSync(src)) {
-      throw new Error(
-        `@webjsdev/ui registry is missing component '${n}.ts' at ${src}. ` +
-        `The scaffold's example pages import this component by name. ` +
-        `Either the registry was published incompletely or the scaffold's ` +
-        `component list is out of sync with the registry.`,
-      );
-    }
-    await writeFile(join(uiDir, `${n}.ts`), await readUiComponent(n));
-  }
-}
-
-/**
  * Copy the example gallery (idiomatic, densely-commented working examples) into
  * the scaffolded app. Merges `templates/gallery/{app,modules}` over the app so
  * single-feature demos land under `app/features/<name>/`, whole example apps
@@ -177,7 +122,9 @@ async function copyUiComponents(appDir, names) {
  */
 async function copyGallery(appDir) {
   const galleryDir = join(TEMPLATES, 'gallery');
-  for (const sub of ['app', 'modules']) {
+  // `test` carries the auth card's real request-pipeline test (test/auth); it
+  // ships with the gallery and is pruned by gallery:clear alongside the card.
+  for (const sub of ['app', 'modules', 'test']) {
     await cp(join(galleryDir, sub), join(appDir, sub), { recursive: true });
   }
 }
@@ -312,21 +259,19 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   const shouldInstall = opts.install === true;
   // Defence in depth. The CLI already validates this, but library
   // callers (tests, programmatic use) might pass anything.
-  const VALID_TEMPLATES = ['full-stack', 'api', 'saas'];
+  const VALID_TEMPLATES = ['full-stack', 'api'];
   if (!VALID_TEMPLATES.includes(template)) {
     throw new Error(
       `Unknown template '${template}'. Only ${VALID_TEMPLATES.join(' / ')} exist.`,
     );
   }
   const isApi = template === 'api';
-  const isSaas = template === 'saas';
-  // The example gallery ships in every UI scaffold (full-stack AND saas). The
-  // copyGallery gate below is !isApi, since only the api template has no UI. saas
-  // overwrites db/schema.server.ts with its own schema (which includes the
-  // gallery's todos table) and renders the gallery below its auth landing.
-  // isFullStack distinguishes the plain full-stack app from saas for the parts
-  // that differ (its own home page and the create.js-written schema).
-  const isFullStack = !isApi && !isSaas;
+  // The example gallery ships in the one UI template (not api, which has no UI),
+  // so the copyGallery gate below is !isApi. Auth is one of the gallery cards
+  // (app/features/auth + modules/auth), so a UI app ships a real, prunable auth
+  // baseline. `isFullStack` names the UI template for the parts that differ from
+  // api (the todos table + the passwordHash column the auth card needs).
+  const isFullStack = !isApi;
 
   // Database dialect (#563): sqlite (default) or postgres. Drizzle is the ORM;
   // the schema/queries/actions are identical across dialects, only db/columns
@@ -420,8 +365,13 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // app runs the compiler under Bun (its image has no Node), a Node app runs
       // it directly.
       ...(isApi ? {} : { 'css:build': cssBuildCmd }),
-      // Shed the demo gallery to a clean, buildable base (scripts/clear-gallery.mjs).
-      ...(isApi ? {} : { 'gallery:clear': isBun ? 'bun scripts/clear-gallery.mjs' : 'node scripts/clear-gallery.mjs' }),
+      // Shed the demo gallery / backend-features showcase to a clean, buildable
+      // base. The UI template runs clear-gallery.mjs; the api template runs
+      // clear-api-gallery.mjs (its showcase is app/api/features, not app/features).
+      'gallery:clear': (() => {
+        const script = isApi ? 'clear-api-gallery.mjs' : 'clear-gallery.mjs';
+        return isBun ? `bun scripts/${script}` : `node scripts/${script}`;
+      })(),
       dev: isBun ? 'bun --bun webjs dev' : 'webjs dev',
       start: isBun ? 'bun --bun webjs start' : 'webjs start',
       test: 'webjs test',
@@ -763,7 +713,10 @@ export const users = table('users', {
   name: text(),
   // JSON column: a structured value persisted as JSON, typed via json<T>().
   // Same helper works on SQLite and Postgres. Delete if you do not need it.
-  settings: json<{ theme?: string }>(),
+  settings: json<{ theme?: string }>(),${isFullStack ? `
+  // The auth gallery card (app/features/auth) signs credentials against this.
+  // gallery:clear removes this column with the rest of the auth surface.
+  passwordHash: text(),` : ''}
   createdAt: createdAt(),
 });
 ${isFullStack ? `
@@ -1040,10 +993,18 @@ export type ActionResult<T> =
     // counterpart of the UI gallery. Prune what you skip.
     const { writeApiGallery } = await import('./api-gallery.js');
     await writeApiGallery(appDir);
+
+    // The showcase-reset script (wired as `gallery:clear` for the api template).
+    // It sheds app/api/features + its modules back to the health + users base.
+    const apiClearSrc = join(TEMPLATES, 'scripts', 'clear-api-gallery.mjs');
+    if (existsSync(apiClearSrc)) {
+      await mkdir(join(appDir, 'scripts'), { recursive: true });
+      await cp(apiClearSrc, join(appDir, 'scripts', 'clear-api-gallery.mjs'));
+    }
   }
 
   if (!isApi) {
-    // Full-stack and SaaS templates: layout + page + theme toggle + Tailwind
+    // The UI template: layout + page + theme toggle + Tailwind
 
     // The Tailwind stylesheet is compiled from public/input.css (written below)
     // to a STATIC public/tailwind.css by css:build, and lib/utils/ui.ts helpers
@@ -1053,8 +1014,8 @@ export type ActionResult<T> =
     const publicDir = join(appDir, 'public');
     await mkdir(publicDir, { recursive: true });
     // Progressive-enhancement service worker (#271): ship the opt-in offline
-    // primitive (the worker + its offline fallback) into the UI scaffolds
-    // (full-stack / saas; this block is api-excluded since api has no UI).
+    // primitive (the worker + its offline fallback) into the UI scaffold
+    // (this block is api-excluded since api has no UI).
     // Dormant until the app registers it (see the skill's references/service-worker.md);
     // it never changes the JS-disabled baseline.
     for (const swFile of ['sw.js', 'offline.html']) {
@@ -1087,13 +1048,9 @@ export type ActionResult<T> =
     // styles/globals.css (the @webjsdev/ui theme).
     await writeUiBootstrap(appDir);
 
-    // The saas auth pages import a few ui-* primitives. A full-stack app adds
-    // any component on demand with `webjs ui add <name>`.
-    if (isSaas) {
-      await copyUiComponents(appDir, [
-        'button', 'card', 'alert', 'badge', 'separator', 'label', 'input',
-      ]);
-    }
+    // The gallery cards style with plain Tailwind (the app is pre-initialised for
+    // `webjs ui add <name>` via writeUiBootstrap above, but ships no components
+    // until you add them on demand).
 
     // The @webjsdev/ui theme (`--color-primary`, `--color-card`, the @theme maps,
     // @custom-variant, @keyframes) plus the app @theme mappings are compiled from
@@ -1136,10 +1093,10 @@ ${uiThemeRaw}
 
     // The gallery: idiomatic, densely-commented single-feature demos under
     // app/features/ plus one whole example app under app/examples/, with logic
-    // in modules/, all linked from the home page below. Shipped in every UI
-    // scaffold (full-stack AND saas) so an agent gains context by browsing real
-    // working code; prune per-feature (delete the route + its module) for what
-    // the app does not use.
+    // in modules/, all linked from the home page below. Shipped in the UI
+    // scaffold so an agent gains context by browsing real working code; prune
+    // per-feature (delete the route + its module) for what the app does not use,
+    // or shed the whole gallery at once with `gallery:clear`.
     await copyGallery(appDir);
 
   await writeFile(join(appDir, 'app', 'layout.ts'), `import { html, cspNonce } from '@webjsdev/core';
@@ -1322,11 +1279,7 @@ export default function RootLayout({ children }: { children: unknown }) {
   // demo and the example app, and a footer with the docs + source links. Treat it
   // as a starting point: prune the demos you do not use (delete the
   // app/features/<x> route AND its modules/<x>), then reshape this page into the
-  // app's real landing page. For the saas template a login/signup CTA row is
-  // spliced under the tagline.
-  const homeAuthLinks = isSaas
-    ? '\n          <div class="flex flex-wrap gap-3 items-center justify-center mt-2"><a href="/login" class="inline-flex items-center px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium no-underline hover:opacity-90">Log in</a><a href="/signup" class="inline-flex items-center px-4 py-2 rounded-lg border border-border text-foreground text-sm font-medium no-underline hover:bg-accent">Create an account</a></div>'
-    : '';
+  // app's real landing page.
   await writeFile(join(appDir, 'app', 'page.ts'), `import { html } from '@webjsdev/core';
 
 export const metadata = {
@@ -1340,11 +1293,13 @@ export const metadata = {
 const FEATURES = [
   { href: '/features/routing', title: 'Routing', blurb: 'A static route plus a dynamic [id] segment that reads params. The file-based router in miniature.' },
   { href: '/features/boundaries', title: 'Boundaries', blurb: 'The control-flow throws (forbidden / unauthorized / notFound) and the nearest boundary file that catches each.' },
+  { href: '/features/auth', title: 'Auth', blurb: 'Password login on createAuth, a signed session cookie, and a real protected route that redirects anonymous visitors to login.' },
   { href: '/features/components', title: 'Components', blurb: 'The WebComponent factory, reactive props, instance signals, and slot projection in light DOM.' },
   { href: '/features/server-actions', title: 'Server actions', blurb: 'A use-server RPC action next to a server-only .server.ts utility, and why the boundary matters.' },
   { href: '/features/optimistic-ui', title: 'Optimistic UI', blurb: 'The imperative optimistic(signal, value, action) flip: instant update, automatic rollback on failure.' },
   { href: '/features/async-render', title: 'Async render', blurb: 'A component that awaits server data in async render(), so the resolved value is in the first paint.' },
   { href: '/features/streaming', title: 'Streaming actions', blurb: 'A use-server action that returns an async generator, streamed to the call site token by token with for await.' },
+  { href: '/features/stream', title: 'Stream updates', blurb: 'The <webjs-stream> element: renderStream() applies surgical append / replace / remove DOM updates by target id, no region redraw.' },
   { href: '/features/suspense', title: 'Suspense boundary', blurb: 'The <webjs-suspense> element: a first-paint fallback for a SLOW component, with the resolved content streamed in.' },
   { href: '/features/view-transitions', title: 'View transitions', blurb: 'The opt-in view-transition meta cross-fades a soft navigation, with a data-webjs-permanent element persisted across the swap.' },
   { href: '/features/directives', title: 'Directives', blurb: 'The lit-html directive set: repeat for keyed lists, watch(signal) for a fine-grained node swap.' },
@@ -1379,7 +1334,7 @@ export default function Home() {
         </h1>
         <p class="text-base sm:text-lg text-muted-foreground max-w-lg leading-relaxed m-0">
           AI-first and web-components-first. Server-rendered, progressively enhanced, and buildless.
-        </p>${homeAuthLinks}
+        </p>
       </section>
 
       <!-- Gallery: every feature demo + the example app -->
@@ -1508,12 +1463,6 @@ ThemeToggle.register('theme-toggle');
 `);
   } // end if (!isApi)
 
-  // --- SaaS template extras: auth, dashboard, drizzle User model ---
-  if (isSaas) {
-    const { writeSaasFiles } = await import('./saas-template.js');
-    await writeSaasFiles(appDir, { runtime });
-  }
-
   // AGENTS.md is already in place via the shared `templateFiles` loop
   // earlier in this function, so no framework-root fallback needed.
 
@@ -1535,19 +1484,10 @@ ThemeToggle.register('theme-toggle');
     db/{schema,columns,connection}.server.ts   ← Drizzle (User model)
     ${guide}
 `);
-  } else if (isSaas) {
-    console.log(`  ${name}/
-    app/{layout,page}.ts, login/, signup/
-    app/dashboard/{page,settings,middleware}.ts  ← protected
-    app/api/auth/[...path]/route.ts              ← auth API
-    components/ui/*, components/theme-toggle.ts
-    modules/auth/*, lib/{auth,password}.server.ts
-    db/{schema,columns,connection}.server.ts     ← Drizzle (User model)
-    ${guide}
-`);
   } else {
     console.log(`  ${name}/
-    app/{layout,page}.ts          ← a minimal home to grow in place
+    app/{layout,page}.ts          ← gallery home; gallery:clear grows in place
+    app/features/*, modules/*     ← browsable demos (incl. auth: login + protected route)
     components/theme-toggle.ts
     public/input.css              ← Tailwind entry (compiles to public/tailwind.css)
     db/{schema,columns,connection}.server.ts  ← Drizzle
@@ -1596,9 +1536,9 @@ ThemeToggle.register('theme-toggle');
   // Next-steps banner prints LAST so the actionable command is the
   // final thing on screen, never buried above the AI-agent guidance.
   // Single copy-paste line so the user can move from "scaffold done"
-  // to "dev server up" in one command. The full-stack and saas
-  // templates ship with @webjsdev/ui already initialised; the api
-  // template has no UI but may add one later.
+  // to "dev server up" in one command. The full-stack template ships
+  // with @webjsdev/ui already initialised; the api template has no UI
+  // but may add one later.
   const installSegment = installed ? '' : `${pm} install && `;
   // The shipped schema is applied on the first `run dev` (webjs.*.before runs
   // `db migrate`), but only if a migration FILE exists. When we installed, we

@@ -7,8 +7,8 @@
  * placeholder-marker gate was retired: `npm run gallery:clear` sheds the gallery
  * in one step instead.
  *
- * Also guards the scoping decision: api has no UI, so the gallery ships in every
- * UI template (full-stack AND saas).
+ * Also guards the scoping decision: api has no UI, so the gallery ships in the
+ * one UI template (full-stack). Auth is one of the gallery cards.
  *
  * The todo query assertion is a regression guard for the rc.3 relational-query
  * orderBy bug (`[desc(col)]` compiles to `no such column: d0.0`); the query must
@@ -18,6 +18,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -25,8 +26,8 @@ import { scaffoldApp } from '../../packages/cli/lib/create.js';
 
 // Single-feature demos under app/features/<name>.
 const FEATURES = [
-  'routing', 'boundaries', 'components', 'server-actions', 'optimistic-ui',
-  'async-render', 'streaming', 'suspense', 'directives', 'route-handler', 'forms',
+  'routing', 'boundaries', 'auth', 'components', 'server-actions', 'optimistic-ui',
+  'async-render', 'streaming', 'stream', 'suspense', 'directives', 'route-handler', 'forms',
   'metadata', 'caching', 'env', 'client-router', 'view-transitions', 'frames',
   'service-worker', 'websockets', 'broadcast', 'rate-limit', 'file-storage', 'sessions',
 ];
@@ -35,7 +36,7 @@ const EXAMPLE_APPS = ['todo'];
 // Demos whose logic lives in a modules/<name> folder, spot-checked here. The
 // app-only demos (routing / metadata / env / boundaries / view-transitions,
 // which have no modules/ dir) are excluded.
-const MODULE_ROUTES = ['components', 'server-actions', 'optimistic-ui', 'async-render', 'streaming', 'suspense', 'directives', 'frames', 'todo', 'websockets', 'broadcast', 'rate-limit', 'file-storage', 'sessions'];
+const MODULE_ROUTES = ['auth', 'components', 'server-actions', 'optimistic-ui', 'async-render', 'streaming', 'stream', 'suspense', 'directives', 'frames', 'todo', 'websockets', 'broadcast', 'rate-limit', 'file-storage', 'sessions'];
 
 async function tempCwd() {
   return mkdtemp(join(tmpdir(), 'webjs-scaffold-gallery-'));
@@ -52,6 +53,13 @@ test('full-stack scaffold ships feature demos and one example app', async () => 
 
     for (const name of FEATURES) {
       assert.ok(await exists(join(appDir, 'app', 'features', name, 'page.ts')), `app/features/${name}/page.ts`);
+    }
+    // Shared layouts give every feature demo AND every example app a
+    // back-to-gallery link so no card is a dead end (each links the home at /).
+    for (const seg of ['features', 'examples']) {
+      const layout = await readFile(join(appDir, 'app', seg, 'layout.ts'), 'utf8');
+      assert.match(layout, /href="\/"/, `${seg} layout links back to the gallery home`);
+      assert.match(layout, /Gallery/, `${seg} layout renders a Gallery link`);
     }
     for (const name of EXAMPLE_APPS) {
       assert.ok(await exists(join(appDir, 'app', 'examples', name, 'page.ts')), `app/examples/${name}/page.ts`);
@@ -196,34 +204,71 @@ test('the api template ships the backend-features showcase, not the UI gallery',
     const rootRoute = await readFile(join(appDir, 'app', 'route.ts'), 'utf8');
     assert.match(rootRoute, /features:/, 'root index lists the features');
     assert.match(rootRoute, /api\/features\/validate/, 'root index links the validate endpoint');
+    // The api template ships its own gallery:clear (backed by clear-api-gallery.mjs).
+    const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
+    assert.match(pkg.scripts['gallery:clear'], /clear-api-gallery\.mjs/, 'api gallery:clear runs the api showcase reset');
+    assert.ok(await exists(join(appDir, 'scripts', 'clear-api-gallery.mjs')), 'the api clear script ships');
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }
 });
 
-test('the saas template ships the gallery AND keeps its auth example', async () => {
+test('the api gallery:clear sheds the showcase to a health + users base', async () => {
   const cwd = await tempCwd();
   try {
-    await scaffoldApp('demo', cwd, { template: 'saas' });
+    await scaffoldApp('demo', cwd, { template: 'api' });
     const appDir = join(cwd, 'demo');
-    // The full webjs feature gallery ships below the auth landing.
-    for (const name of FEATURES) {
-      assert.ok(await exists(join(appDir, 'app', 'features', name, 'page.ts')), `saas app/features/${name}/page.ts`);
-    }
-    assert.ok(await exists(join(appDir, 'app', 'examples', 'todo', 'page.ts')), 'saas todo example');
-    assert.ok(await exists(join(appDir, 'modules', 'todo')), 'saas todo module');
-    // The saas schema carries BOTH the auth users table and the gallery todos table.
+    // Run the api showcase reset the same way `npm run gallery:clear` would.
+    execFileSync(process.execPath, ['scripts/clear-api-gallery.mjs'], { cwd: appDir, stdio: 'ignore' });
+
+    // The showcase is gone.
+    assert.equal(existsSync(join(appDir, 'app', 'api', 'features')), false, 'app/api/features removed');
+    assert.equal(existsSync(join(appDir, 'modules', 'widgets')), false, 'modules/widgets removed');
+    assert.equal(existsSync(join(appDir, 'env.ts')), false, 'env.ts example removed');
+    assert.equal(existsSync(join(appDir, 'test', 'unit', 'widgets.test.ts')), false, 'widgets test removed');
+    // The root index no longer points at the removed showcase, but keeps the base.
+    const rootRoute = await readFile(join(appDir, 'app', 'route.ts'), 'utf8');
+    assert.doesNotMatch(rootRoute, /features:/, 'the stale features block is stripped from the index');
+    assert.match(rootRoute, /api\/health/, 'health endpoint kept in the index');
+    assert.match(rootRoute, /api\/users/, 'users endpoint kept in the index');
+    // Counterfactual: without the app/route.ts reset the index would still list a
+    // `features:` block pointing at routes that no longer exist (the assert above
+    // fails if the reset is dropped).
+
+    // The baseline is intact.
+    assert.ok(await exists(join(appDir, 'middleware.ts')), 'CORS middleware kept');
+    assert.ok(await exists(join(appDir, 'app', 'api', 'health', 'route.ts')), 'health endpoint kept');
+    assert.ok(await exists(join(appDir, 'app', 'api', 'users', 'route.ts')), 'users endpoint kept');
+    assert.ok(await exists(join(appDir, 'modules', 'users')), 'modules/users kept');
+
+    // A rerun is a safe no-op (the showcase is already gone).
+    execFileSync(process.execPath, ['scripts/clear-api-gallery.mjs'], { cwd: appDir, stdio: 'ignore' });
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test('the full-stack auth card wires a real, protected auth baseline', async () => {
+  const cwd = await tempCwd();
+  try {
+    await scaffoldApp('demo', cwd, { template: 'full-stack' });
+    const appDir = join(cwd, 'demo');
+    // The auth card ships login, signup, and a protected dashboard subtree.
+    assert.ok(await exists(join(appDir, 'app', 'features', 'auth', 'login', 'page.ts')), 'auth login page');
+    assert.ok(await exists(join(appDir, 'app', 'features', 'auth', 'signup', 'page.ts')), 'auth signup page');
+    assert.ok(await exists(join(appDir, 'app', 'features', 'auth', 'dashboard', 'page.ts')), 'protected dashboard page');
+    assert.ok(await exists(join(appDir, 'app', 'features', 'auth', 'dashboard', 'middleware.ts')), 'the dashboard gate');
+    // The createAuth handler stays at the app root (createAuth hardcodes /api/auth/*).
+    assert.ok(await exists(join(appDir, 'app', 'api', 'auth', '[...path]', 'route.ts')), 'auth api handler at root');
+    // The auth server modules: createAuth config, hashing, signup, current-user.
+    assert.ok(await exists(join(appDir, 'modules', 'auth', 'auth.server.ts')), 'createAuth config module');
+    assert.ok(await exists(join(appDir, 'modules', 'auth', 'password.server.ts')), 'password hashing module');
+    // The users table carries the auth passwordHash column.
     const schema = await readFile(join(appDir, 'db', 'schema.server.ts'), 'utf8');
-    assert.match(schema, /table\('users'/, 'saas keeps the auth users table');
-    assert.match(schema, /passwordHash/, 'saas users table keeps the auth column');
-    assert.match(schema, /table\('todos'/, 'saas adds the gallery todos table');
-    // The auth example is intact.
-    assert.ok(await exists(join(appDir, 'app', 'login', 'page.ts')), 'saas keeps login');
-    assert.ok(await exists(join(appDir, 'app', 'dashboard', 'page.ts')), 'saas keeps the dashboard');
-    // The saas home shows both the auth CTAs and the gallery.
-    const home = await readFile(join(appDir, 'app', 'page.ts'), 'utf8');
-    assert.match(home, /\/login/, 'saas home keeps the auth CTA');
-    assert.match(home, /\/features\/routing/, 'saas home links the gallery');
+    assert.match(schema, /table\('users'/, 'the users table');
+    assert.match(schema, /passwordHash/, 'users table carries the auth column');
+    // The real auth-flow test ships with the card.
+    assert.ok(await exists(join(appDir, 'test', 'auth', 'auth.test.ts')), 'the auth flow test ships');
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }

@@ -124,7 +124,7 @@ export async function createPost(
     <h3>12. Scaffold + Persistence Defaults</h3>
     <p>When a layman user says "create a todo app with webjs", the agent should produce a real full-stack app with a real database, not a JSON-file simulation. WebJs enforces this with three guardrails:</p>
     <ul>
-      <li><strong>Exactly three scaffolds.</strong> <code>webjs create &lt;name&gt;</code> (full-stack default), <code>--template api</code>, <code>--template saas</code>. The CLI rejects any other <code>--template</code> value, so an agent can't hallucinate <code>--template todo</code> or <code>--template blog</code>.</li>
+      <li><strong>Exactly two scaffolds.</strong> <code>webjs create &lt;name&gt;</code> (full-stack default) and <code>--template api</code>. The CLI rejects any other <code>--template</code> value, so an agent can't hallucinate <code>--template todo</code> or <code>--template blog</code>. Auth is one of the full-stack gallery cards, not a separate template.</li>
       <li><strong>Drizzle + SQLite wired up by default.</strong> Every scaffold ships <code>db/schema.server.ts</code>, <code>db/columns.server.ts</code>, <code>db/connection.server.ts</code> (exports <code>db</code>), the <code>webjs.dev.before</code> + <code>webjs.start.before</code> steps running <code>webjs db migrate</code> (idempotent, so a <code>db:generate</code>'d migration applies on the next boot), and <code>npm run db:generate</code> / <code>db:migrate</code> / <code>db:studio</code> / <code>db:seed</code>. The agent edits the schema, runs <code>db:generate</code>, and <code>npm run dev</code> applies it, and won't accidentally fall back to JSON files for persistence.</li>
       <li><strong>Persist with Drizzle, not JSON files.</strong> A <code>data/todos.json</code> or <code>db.json</code> used as a database resets on reload and cannot scale. This is a project convention in <code>AGENTS.md</code> and the shipped skill, so an agent reading it takes the database path.</li>
     </ul>
@@ -132,8 +132,8 @@ export async function createPost(
     <pre>User asks for…                                          Scaffold
 ─────────────────────────────────────────────────────────────────────
 Todo app, blog, notes, dashboard, marketplace, social   default
-HTTP/JSON API only, no UI                                --template api
-Auth / login / signup / SaaS                            --template saas</pre>
+App with auth / login / signup / accounts (SaaS)        default (auth card)
+HTTP/JSON API only, no UI                                --template api</pre>
     <p>The scaffold is REFERENCE, not the final product. The agent's job after scaffolding is to replace the example <code>app/page.ts</code> ("Hello from …"), the example <code>User</code> model in <code>db/schema.server.ts</code>, and the example components with the app the user actually requested. The infrastructure (Drizzle wiring, test config, agent rules, route conventions) stays.</p>
 
     <p><strong>When the scaffolded <code>AGENTS.md</code> doesn't cover what you need</strong> (an obscure directive, an auth-provider recipe, deployment specifics, edge cases), the full hosted documentation is at <a href="https://docs.webjs.dev">docs.webjs.dev</a>. Every API, every recipe, every example lives there. Reach for it before guessing or hand-rolling.</p>

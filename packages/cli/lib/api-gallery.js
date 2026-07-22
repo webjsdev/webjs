@@ -2,7 +2,7 @@
  * Backend-features showcase for `webjs create --template api`.
  * A set of JSON/HTTP endpoints under `app/api/features/` that demonstrate the
  * backend capabilities an API app uses (the api counterpart of the UI gallery).
- * Extracted here (like saas-template.js) to keep create.js readable and dodge
+ * Extracted here to keep create.js readable and dodge
  * nested-template-literal escaping: files are built from arrays of
  * double-quoted strings, so `${...}` and backticks are emitted literally.
  */

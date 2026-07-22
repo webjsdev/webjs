@@ -1,16 +1,9 @@
 /**
- * Verifies that the full-stack and saas scaffolds pre-initialise the Webjs UI
- * kit correctly: components.json + lib/utils/cn.ts + styles/globals.css are
- * written, the standard component sources land in components/ui/, generated
- * pages call the Tier-1 class helpers on raw native elements (not stale
- * `<ui-X>` tags for Tier-1 components), and the API template deliberately
- * ships none of that.
- *
- * The "no stale Tier-1 tags" assertion catches a real regression class -
- * before the Tier-1/Tier-2 split, scaffolded pages used `<ui-button>`,
- * `<ui-card>`, etc. as custom elements. After the split, those Tier-1
- * components are class helpers (`buttonClass()`, `cardClass()`); a tag
- * like `<ui-button>` would render as un-upgraded HTML.
+ * Verifies that the full-stack scaffold pre-initialises the Webjs UI kit
+ * correctly: components.json + lib/utils/cn.ts + styles/globals.css are written
+ * so the app is ready for `webjs ui add`, but no component kit is pre-copied
+ * (components are added on demand). The API template deliberately ships none of
+ * that.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -21,45 +14,12 @@ import { tmpdir } from 'node:os';
 
 import { scaffoldApp } from '../../packages/cli/lib/create.js';
 
-// Tier 1: class helpers. Pages MUST call e.g. `buttonClass()` and apply
-// to a native <button>, never use `<ui-button>` (which doesn't exist).
-const TIER1_TAGS = [
-  'ui-button', 'ui-card', 'ui-card-header', 'ui-card-title', 'ui-card-description',
-  'ui-card-content', 'ui-card-footer', 'ui-card-action',
-  'ui-input', 'ui-textarea', 'ui-label',
-  'ui-alert', 'ui-alert-title', 'ui-alert-description',
-  'ui-badge', 'ui-separator', 'ui-skeleton', 'ui-aspect-ratio', 'ui-kbd',
-  'ui-checkbox', 'ui-radio-group', 'ui-switch', 'ui-native-select',
-  'ui-avatar', 'ui-table', 'ui-toggle', 'ui-breadcrumb', 'ui-pagination',
-  // Migrated to Tier 1 (native <progress value max>) in feat/ui-progress-tier1.
-  'ui-progress',
-];
-
-const TIER1_HELPERS_BUTTON = ['buttonClass'];
-const TIER1_HELPERS_CARD = [
-  'cardClass', 'cardHeaderClass', 'cardTitleClass',
-  'cardDescriptionClass', 'cardContentClass',
-];
-const TIER1_HELPERS_INPUT = ['inputClass'];
-const TIER1_HELPERS_LABEL = ['labelClass'];
-
 async function tempCwd() {
   return mkdtemp(join(tmpdir(), 'webjs-scaffold-ui-'));
 }
 
 async function exists(p) {
   try { await stat(p); return true; } catch { return false; }
-}
-
-/** Assert a file uses class helpers and contains no stale Tier-1 ui-* tags. */
-function assertTier1HygieneOnFile(content, filePath) {
-  for (const tag of TIER1_TAGS) {
-    assert.doesNotMatch(
-      content,
-      new RegExp(`<${tag}\\b`),
-      `${filePath}: stale Tier-1 tag <${tag}>: Tier-1 components are class helpers, not custom elements`,
-    );
-  }
 }
 
 test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
@@ -69,8 +29,8 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     const appDir = join(cwd, 'demo');
 
     // Bootstrap for `webjs ui add`: the config + cn() helper + theme ship, but
-    // NOT the pre-copied component kit (a full-stack app adds components on
-    // demand with `webjs ui add <name>`; only saas pre-copies its auth kit).
+    // NOT a pre-copied component kit (a UI app adds components on demand with
+    // `webjs ui add <name>`; the gallery cards style with plain Tailwind).
     assert.ok(await exists(join(appDir, 'components.json')), 'components.json should exist');
     assert.ok(await exists(join(appDir, 'lib', 'utils', 'cn.ts')), 'lib/utils/cn.ts should exist');
     assert.ok(await exists(join(appDir, 'styles', 'globals.css')), 'styles/globals.css should exist');
@@ -102,85 +62,6 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     assert.match(inputCss, /@import "tailwindcss"/, 'input.css imports Tailwind');
     assert.match(inputCss, /color-primary/, 'input.css carries the @theme color maps');
     assert.match(layout, /--primary:\s*#[0-9a-f]{6}/i, 'the palette VALUES stay inline (JS-off safe)');
-  } finally {
-    await rm(cwd, { recursive: true, force: true });
-  }
-});
-
-test('saas scaffold uses Tier-1 helpers on native elements', async () => {
-  const cwd = await tempCwd();
-  try {
-    await scaffoldApp('demo', cwd, { template: 'saas' });
-    const appDir = join(cwd, 'demo');
-
-    // Standard kit (inherited from full-stack path)
-    for (const name of ['button', 'card', 'alert', 'badge', 'separator', 'label', 'input']) {
-      assert.ok(await exists(join(appDir, 'components', 'ui', `${name}.ts`)));
-    }
-
-    // #983: a scaffolded Tier-1 component is LEAN, same as `webjs ui add`: the
-    // worked @example is stripped and a pointer is left, so the copied file is
-    // not dead boilerplate (the example is served on demand by view / MCP).
-    const scaffoldButton = await readFile(join(appDir, 'components', 'ui', 'button.ts'), 'utf8');
-    assert.doesNotMatch(scaffoldButton, /@example/, 'scaffolded Tier-1 component has no worked example');
-    assert.match(scaffoldButton, /npx @webjsdev\/ui view button/, 'scaffolded Tier-1 component carries the pointer');
-    assert.match(scaffoldButton, /export function buttonClass/, 'the helper code is preserved');
-
-    // Saas extras: only Tier-2 (dialog) + form-control class helpers
-    // (switch, checkbox). form + field are v2-deferred (see ui AGENTS.md).
-    for (const name of ['dialog', 'switch', 'checkbox']) {
-      assert.ok(
-        await exists(join(appDir, 'components', 'ui', `${name}.ts`)),
-        `saas should include components/ui/${name}.ts`,
-      );
-    }
-    // A Tier-2 element keeps its file whole (the element IS the component).
-    const scaffoldDialog = await readFile(join(appDir, 'components', 'ui', 'dialog.ts'), 'utf8');
-    assert.match(scaffoldDialog, /@example/, 'scaffolded Tier-2 element keeps its example');
-
-    // #983: the saas-only Tier-1 extras (switch, checkbox) go through the SAME
-    // lean-copy, not just the base set, so a fresh saas scaffold diffs clean.
-    for (const name of ['switch', 'checkbox']) {
-      const src = await readFile(join(appDir, 'components', 'ui', `${name}.ts`), 'utf8');
-      assert.doesNotMatch(src, /@example/, `scaffolded ${name} (Tier-1) has no worked example`);
-      assert.match(src, new RegExp(`npx @webjsdev\\/ui view ${name}`), `scaffolded ${name} carries the pointer`);
-    }
-
-    // Login page: imports + uses Tier-1 helpers, no stale Tier-1 tags
-    const login = await readFile(join(appDir, 'app', 'login', 'page.ts'), 'utf8');
-    for (const fn of [...TIER1_HELPERS_CARD, ...TIER1_HELPERS_BUTTON, ...TIER1_HELPERS_INPUT, ...TIER1_HELPERS_LABEL]) {
-      assert.match(login, new RegExp(`\\b${fn}\\b`), `login.ts should call ${fn}()`);
-    }
-    assertTier1HygieneOnFile(login, 'app/login/page.ts');
-
-    // Signup page: same shape
-    const signup = await readFile(join(appDir, 'app', 'signup', 'page.ts'), 'utf8');
-    for (const fn of [...TIER1_HELPERS_CARD, ...TIER1_HELPERS_BUTTON, ...TIER1_HELPERS_INPUT, ...TIER1_HELPERS_LABEL]) {
-      assert.match(signup, new RegExp(`\\b${fn}\\b`), `signup.ts should call ${fn}()`);
-    }
-    assertTier1HygieneOnFile(signup, 'app/signup/page.ts');
-
-    // Dashboard page: header-only card + badge (no inputs). buttonClass moved to
-    // the dashboard layout with the logout control (#904), so it is asserted there.
-    const dash = await readFile(join(appDir, 'app', 'dashboard', 'page.ts'), 'utf8');
-    for (const fn of ['cardClass', 'cardHeaderClass', 'cardTitleClass', 'cardDescriptionClass', 'badgeClass']) {
-      assert.match(dash, new RegExp(`\\b${fn}\\b`), `dashboard.ts should call ${fn}()`);
-    }
-    assertTier1HygieneOnFile(dash, 'app/dashboard/page.ts');
-
-    // Dashboard layout: the logout control demonstrates buttonClass (#904).
-    const dashLayout = await readFile(join(appDir, 'app', 'dashboard', 'layout.ts'), 'utf8');
-    for (const fn of TIER1_HELPERS_BUTTON) {
-      assert.match(dashLayout, new RegExp(`\\b${fn}\\b`), `dashboard/layout.ts should call ${fn}()`);
-    }
-    assertTier1HygieneOnFile(dashLayout, 'app/dashboard/layout.ts');
-
-    // Settings: uses card subparts only
-    const settings = await readFile(join(appDir, 'app', 'dashboard', 'settings', 'page.ts'), 'utf8');
-    for (const fn of TIER1_HELPERS_CARD) {
-      assert.match(settings, new RegExp(`\\b${fn}\\b`), `settings.ts should call ${fn}()`);
-    }
-    assertTier1HygieneOnFile(settings, 'app/dashboard/settings/page.ts');
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }

@@ -26,25 +26,22 @@ cd my-app && npm run dev
     <h2>Create a New App</h2>
 
     <h3>Using the scaffold</h3>
-    <pre># full-stack app (pages + API + components + Drizzle/SQLite)
+    <pre># full-stack app (pages + API + components + Drizzle/SQLite + gallery)
 webjs create my-app
 
 # backend-only API (route handlers + modules, no pages/components/SSR)
-webjs create my-api --template api
+webjs create my-api --template api</pre>
 
-# SaaS starter (auth + dashboard + Drizzle User model + modules)
-webjs create my-app --template saas</pre>
-
-    <p><strong>For AI agents:</strong> only those three templates exist, and the CLI rejects any other <code>--template</code> value. Default to full-stack with Drizzle + SQLite for any product app (todo, blog, dashboard, marketplace, social, e-commerce…). Pick <code>--template api</code> only if the user explicitly asks for a backend-only API with no UI. Pick <code>--template saas</code> only if the user explicitly asks for auth / login / accounts. The scaffold is a starting point. Replace the example layout, page, and <code>User</code> model with the app the user actually asked for. Use Drizzle for any persisted data, never JSON files, in-memory arrays, or localStorage. When AGENTS.md doesn't cover what you need, the full hosted docs are at <a href="https://docs.webjs.dev">docs.webjs.dev</a>.</p>
+    <p><strong>For AI agents:</strong> only those two templates exist, and the CLI rejects any other <code>--template</code> value. Default to full-stack with Drizzle + SQLite for any product app (todo, blog, dashboard, marketplace, social, e-commerce, a SaaS with accounts…). Pick <code>--template api</code> only if the user explicitly asks for a backend-only API with no UI. The scaffold is a starting point. Replace the example layout, page, and <code>User</code> model with the app the user actually asked for. Use Drizzle for any persisted data, never JSON files, in-memory arrays, or localStorage. When AGENTS.md doesn't cover what you need, the full hosted docs are at <a href="https://docs.webjs.dev">docs.webjs.dev</a>.</p>
 
     <p>The <code>--template api</code> scaffold generates thin route handlers that wrap typed server actions. Business logic lives in <code>modules/</code>. Routes just import and call the action/query, giving you file-based routing for URL structure plus type-safe server actions for logic.</p>
 
-    <p>The <code>--template saas</code> scaffold includes login + signup pages, a dashboard with auth middleware guard, settings page, auth API route, <code>createAuth()</code> with Credentials provider, Drizzle User model with password hashing, and a modules architecture (<code>modules/auth/{actions,queries,types.ts}</code>, <code>db/connection.server.ts</code>, <code>lib/{auth,password}.ts</code>).</p>
+    <p><strong>Auth ships as a gallery card.</strong> The full-stack app includes an auth card (<code>app/features/auth/</code> + <code>modules/auth/</code>): login + signup pages, a signed session, an auth API route, <code>createAuth()</code> with a Credentials provider, a Drizzle User model with password hashing, and a genuinely protected route (a segment <code>middleware.ts</code> that redirects an anonymous visitor to login). So a fresh full-stack app already carries a real, promotable auth baseline; <code>gallery:clear</code> strips it (and the rest of the gallery) back to the minimal base.</p>
 
-    <p><strong>The scaffold is a starting point, grown in place.</strong> Every UI scaffold ships a gallery index home, a neutral-palette root layout, database wiring, and a densely-commented feature gallery: single-concept demos under <code>app/features/</code> plus the <code>app/examples/todo</code> app, with logic in <code>modules/</code> (the api template ships the backend-features showcase under <code>app/api/features/</code> instead). The framework context you need to build ships as one cross-agent skill, <code>.agents/skills/webjs/SKILL.md</code> (a routing skill), alongside <code>AGENTS.md</code> and the workflow rules in <code>.agents/rules/workflow.md</code>. Read the skill and browse the gallery, then build the app the user asked for on top of the scaffold, editing the home page, layout, and schema in place and pruning the demo routes it does not use.</p>
+    <p><strong>The scaffold is a starting point, grown in place.</strong> Every UI scaffold ships a gallery index home, a neutral-palette root layout, database wiring, and a densely-commented feature gallery: single-concept demos under <code>app/features/</code> plus the <code>app/examples/todo</code> app, with logic in <code>modules/</code> (the api template ships the backend-features showcase under <code>app/api/features/</code> instead). The framework context you need to build ships as one cross-agent skill, <code>.agents/skills/webjs/SKILL.md</code> (a routing skill), alongside <code>AGENTS.md</code> and the workflow rules in <code>.agents/rules/workflow.md</code>. Read the skill and browse the gallery, then build the app the user asked for on top of the scaffold, editing the home page, layout, and schema in place and pruning the demo routes it does not use. Both templates ship a one-command reset, <code>npm run gallery:clear</code>: on the full-stack app it sheds the whole feature gallery (and resets the home + schema to a minimal base), and on the api app it sheds the backend-features showcase under <code>app/api/features/</code> (keeping the health + users endpoints).</p>
 
     <h3>Scaffolding a Bun app</h3>
-    <p>WebJs runs on Node 24+ or Bun. To generate a Bun-flavored app, add <code>--runtime bun</code> (a separate axis from <code>--template</code>, so it works with all three). It is auto-detected when you scaffold through Bun, so both forms below produce the same Bun app:</p>
+    <p>WebJs runs on Node 24+ or Bun. To generate a Bun-flavored app, add <code>--runtime bun</code> (a separate axis from <code>--template</code>, so it works with both). It is auto-detected when you scaffold through Bun, so both forms below produce the same Bun app:</p>
     <pre># auto-detected: scaffolding through bun implies --runtime bun
 bun create webjs my-app
 # the explicit pin-latest form (bun create maps to bunx create-webjs)
