@@ -781,6 +781,24 @@ function devWarnFallback(cause, href) {
 }
 
 /**
+ * Dev-only, fire-once-per-id hint: a streamed Suspense resolution arrived but
+ * its boundary placeholder was not in the DOM, so it was dropped (#1051). This
+ * is benign when the navigation was superseded, degraded to a full load, or
+ * discarded, but a stuck skeleton that is NONE of those has no other signal (it
+ * is what made the #1048 view-transition race hard to diagnose). Never warns in
+ * production, never throws.
+ *
+ * @param {string} id the streamed boundary id that could not be applied
+ */
+function warnDropped(id) {
+  if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production') return;
+  warnOnce(
+    `stream-drop:${id}`,
+    `[webjs] dropped a streamed Suspense resolve for "${id}": no #${id} boundary in the DOM. Benign if this navigation was superseded or degraded; a stuck skeleton here means the shell swap did not place the boundary.`
+  );
+}
+
+/**
  * Dev-only, fire-once hint: the router forces an INSTANT scroll-to-top on a
  * forward navigation (matching a native page load), so an app-level
  * `scroll-behavior: smooth` on <html> does not affect route transitions (it
@@ -3937,6 +3955,12 @@ function mergeHead(newHead) {
     // headline #936 symptom. Keeping it is safe: a genuinely stale sheet is
     // dropped by the deploy-level hard reload (build-id mismatch), not here.
     if (isPersistentHeadStyle(el)) continue;
+    // Never remove the CSP nonce meta: the incoming full-body response carries a
+    // FRESH per-request nonce, but the browser enforces CSP against the nonce the
+    // ORIGINAL page load declared (see `getCspNonce`), so the live one must stay
+    // (#1050). `outerHTMLForDiff` strips the nonce ATTRIBUTE but not the `content`
+    // it lives in on this meta, so without this it looks "changed" and is dropped.
+    if (metaIdentity(el) === META_KEY_CSP_NONCE) continue;
     if (!newSet.has(outerHTMLForDiff(el))) el.remove();
   }
 
@@ -3944,6 +3968,10 @@ function mergeHead(newHead) {
     if (el.tagName === 'SCRIPT' && el.getAttribute('type') === 'importmap') continue;
     if (el.tagName === 'BASE') continue;
     if (el.tagName === 'TITLE') continue;
+    // Do not append the incoming per-request csp-nonce meta (the live original is
+    // kept above), or the head would carry two and `getCspNonce` could read the
+    // wrong one (#1050).
+    if (metaIdentity(el) === META_KEY_CSP_NONCE) continue;
     if (!currentSet.has(outerHTMLForDiff(el))) {
       if (el.tagName === 'SCRIPT') {
         currentHead.appendChild(
@@ -4113,7 +4141,15 @@ function applyStreamedResolve(id, content) {
   // resolve is applied. A retry here would run OUTSIDE the streamer's
   // `isCurrent()` nav-token fence and could splice a superseded nav's content
   // into a recycled boundary id, so it is deliberately not attempted.
-  if (!boundary) return;
+  if (!boundary) {
+    // Dev-only diagnostic (#1051): the drop is benign for the normal reasons (a
+    // superseded / degraded / discarded nav), but a stuck skeleton that ISN'T
+    // one of those is otherwise silent, which is exactly what made #1048 hard to
+    // find. Surface the dropped boundary so a future regression is one glance
+    // away. Never in production, never throws, once per id.
+    warnDropped(id);
+    return;
+  }
   const tpl = document.createElement('template');
   tpl.innerHTML = content;
   const inserted = [...tpl.content.childNodes];
