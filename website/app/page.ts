@@ -2,7 +2,8 @@ import { html } from '@webjsdev/core';
 import '#components/copy-cmd.ts';
 import '#components/like-button.ts';
 import { COMPONENT_SAMPLE, ACTION_SAMPLE, PAGE_SAMPLE } from '#lib/samples.ts';
-import { DOCS_URL, UI_URL, EXAMPLE_BLOG_URL, GH_URL, DISCORD_URL, NEW_TAB } from '#lib/links.ts';
+import { DOCS_URL, GH_URL, NEW_TAB } from '#lib/links.ts';
+import { siteFooter } from '#lib/site-footer.ts';
 // highlight() runs only at SSR (codeWindow renders its output into the served
 // HTML), but it does ship to the client as a small dead module: the page loads
 // in the browser to register copy-cmd, and that pulls in its
@@ -400,47 +401,6 @@ middleware.ts</pre>
 
     </main>
 
-    <footer class="mt-24 border-t border-border py-16 px-6 bg-bg-subtle/30">
-      <div class="max-w-[1080px] mx-auto">
-        <nav class="grid grid-cols-2 md:grid-cols-5 gap-8 mb-12" aria-label="Footer">
-          <div class="flex flex-col gap-3">
-            <h4 class="text-xs font-bold uppercase tracking-wider text-fg">Product</h4>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${DOCS_URL + '/docs/getting-started'} target="_blank" rel="noopener noreferrer">Docs${NEW_TAB}</a>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${UI_URL} target="_blank" rel="noopener noreferrer">UI components${NEW_TAB}</a>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="#templates">Templates</a>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${EXAMPLE_BLOG_URL} target="_blank" rel="noopener noreferrer">Showcase${NEW_TAB}</a>
-          </div>
-          <div class="flex flex-col gap-3">
-            <h4 class="text-xs font-bold uppercase tracking-wider text-fg">Resources</h4>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/blog">Blog</a>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/articles">Articles</a>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/changelog">Changelog</a>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${GH_URL + '/releases'} target="_blank" rel="noopener noreferrer">Releases${NEW_TAB}</a>
-          </div>
-          <div class="flex flex-col gap-3">
-            <h4 class="text-xs font-bold uppercase tracking-wider text-fg"><a class="no-underline text-fg hover:text-accent transition-colors" href="/compare">Compare</a></h4>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/compare/webjs-vs-nextjs">Next.js</a>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/compare/webjs-vs-lit">Lit</a>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/compare/webjs-vs-remix">Remix 3</a>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/compare/webjs-vs-astro">Astro</a>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/compare/webjs-vs-rails">Rails</a>
-          </div>
-          <div class="flex flex-col gap-3">
-            <h4 class="text-xs font-bold uppercase tracking-wider text-fg">Community</h4>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${GH_URL} target="_blank" rel="noopener noreferrer">GitHub${NEW_TAB}</a>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${GH_URL + '/discussions'} target="_blank" rel="noopener noreferrer">Discussions${NEW_TAB}</a>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${DISCORD_URL} target="_blank" rel="noopener noreferrer">Discord${NEW_TAB}</a>
-          </div>
-          <div class="flex flex-col gap-3">
-            <h4 class="text-xs font-bold uppercase tracking-wider text-fg">webjs</h4>
-            <p class="m-0 text-xs text-fg-muted leading-relaxed">The web framework for AI agents. Full-stack web components, SSR, zero build step.</p>
-          </div>
-        </nav>
-        <div class="pt-8 border-t border-border flex flex-col md:flex-row justify-between items-center gap-4 text-fg-subtle text-xs">
-          <div><a class="no-underline hover:text-accent transition-colors" href=${GH_URL + '/blob/main/LICENSE'} target="_blank" rel="noopener noreferrer">MIT License${NEW_TAB}</a></div>
-          <div class="flex items-center gap-1">Built with webjs <svg class="heart" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></div>
-        </div>
-      </div>
-    </footer>
+    ${siteFooter()}
   `;
 }

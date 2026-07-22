@@ -1,6 +1,7 @@
 import { html } from '@webjsdev/core';
 import '#components/copy-cmd.ts';
 import { DOCS_URL, GH_URL, EXAMPLE_BLOG_URL, NEW_TAB } from '#lib/links.ts';
+import { siteFooter } from '#lib/site-footer.ts';
 
 /**
  * /why
@@ -211,5 +212,7 @@ Counter.register('counter');
     </section>
 
     </main>
+
+    ${siteFooter()}
   `;
 }
