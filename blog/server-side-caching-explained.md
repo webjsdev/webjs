@@ -40,7 +40,7 @@ The HTTP header caches a whole response. Often you want to cache one expensive t
 // modules/posts/queries/list-posts.server.ts
 'use server';
 import { cache } from '@webjsdev/server';
-import { db } from '../../../db/connection.server.ts';
+import { db } from '#db/connection.server.ts';
 
 export const listPosts = cache(
   async () => db.query.posts.findMany({ orderBy: { createdAt: 'desc' } }),

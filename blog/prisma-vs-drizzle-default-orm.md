@@ -67,7 +67,7 @@ Then you query it from a server action or a query module, importing the same `db
 ```ts
 // modules/posts/queries/list-posts.server.ts
 'use server';
-import { db } from '../../../db/connection.server.ts';
+import { db } from '#db/connection.server.ts';
 
 export async function listPosts() {
   return db.query.posts.findMany({ orderBy: { createdAt: 'desc' } });

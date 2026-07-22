@@ -23,7 +23,7 @@ Here is an action that calls an LLM SDK and yields tokens as they come off the m
 // modules/chat/actions/stream-answer.server.ts
 'use server';
 import { actionSignal } from '@webjsdev/server';
-import { openai } from '../../../lib/llm.server.ts';
+import { openai } from '#lib/llm.server.ts';
 
 export async function* streamAnswer(prompt: string) {
   const signal = actionSignal();
