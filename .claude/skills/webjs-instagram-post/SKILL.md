@@ -50,6 +50,11 @@ set -a; . ~/.config/webjs/instagram.env; set +a
 ## Step 1: create the branded SEO image (required, JPEG)
 
 The Instagram publishing API accepts a **JPEG only**, pulled from a public URL.
+`build-post.sh` renders at 2x supersample and outputs a sharpened **1440x1440**
+JPEG (quality 95) by default. This matters: a flat 1080 render looks soft in
+Instagram's DESKTOP full-size view on a high-DPI screen after IG re-compresses
+it, and the supersampled 1440 stays crisp. Do not drop back to a 1x 1080 render.
+
 Match the webjs.dev OG theme, which is a NEAR-BLACK card with a soft warm glow
 in the top-right corner, the orange squircle mark plus the white `webjs`
 wordmark, a bold white headline with ONE orange-highlighted phrase, gray
@@ -83,7 +88,8 @@ safe margin for this reason, but ALWAYS confirm by simulating the crop and
 eyeballing it:
 
 ```sh
-magick "$OUT" -gravity center -crop 810x1080+0+0 +repage /tmp/grid-crop.jpg
+# 3:4 crop of the default 1440 output (keep full height, center 75% width)
+magick "$OUT" -gravity center -crop 1080x1440+0+0 +repage /tmp/grid-crop.jpg
 # open /tmp/grid-crop.jpg: no text may touch an edge, padding on both sides
 ```
 
