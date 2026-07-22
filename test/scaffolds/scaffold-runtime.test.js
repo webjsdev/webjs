@@ -143,8 +143,8 @@ test('bun scaffold: agent-config markdown shows bun commands, no npm commands', 
   }
 });
 
-test('bun scaffold works across all three templates', async () => {
-  for (const template of ['full-stack', 'api', 'saas']) {
+test('bun scaffold works across both templates', async () => {
+  for (const template of ['full-stack', 'api']) {
     const cwd = await tempCwd();
     const restore = mute();
     try {
@@ -155,11 +155,6 @@ test('bun scaffold works across all three templates', async () => {
       const df = read(appDir, 'Dockerfile');
       assert.match(df, /FROM oven\/bun:1/, `${template}: pure oven/bun base`);
       assert.match(df, /CMD \["bun", "--bun", "run", "start"\]/, `${template}: serves on bun`);
-      // saas generates an auth test whose setup comments are bun-ified.
-      if (template === 'saas') {
-        const authTest = read(appDir, 'test/auth/auth.test.ts');
-        assert.doesNotMatch(authTest, /\bnpm run /, 'saas auth test comments bun-ified');
-      }
     } finally {
       restore();
       await rm(cwd, { recursive: true, force: true });

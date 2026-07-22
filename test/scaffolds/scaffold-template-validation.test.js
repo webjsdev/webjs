@@ -39,7 +39,6 @@ test('scaffoldApp error message mentions the valid templates', async () => {
     } catch (err) {
       assert.match(err.message, /full-stack/);
       assert.match(err.message, /api/);
-      assert.match(err.message, /saas/);
     }
   } finally {
     await rm(cwd, { recursive: true, force: true });
