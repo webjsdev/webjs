@@ -163,6 +163,17 @@ if has '(write|draft|author|compose).{0,24}(a |an |the )?(seo )?blog' \
   add_match "webjs-blog-write: the request is to write or substantially edit a blog post. Invoke the webjs-blog-write skill BEFORE writing prose. It requires analyzing the author's voice by reading all blog/*.md first, and carries the hard rules (no em-dashes, no internal #NNN numbers in prose, no process tells), the SEO topic + front-matter conventions, the de-duplication check against every existing post, and the mandatory dogfood verification of every factual claim in a feature post."
 fi
 
+# --- webjs-instagram-post: publish an SEO post to Instagram -------------
+# Triggers: post to Instagram, publish an Instagram post, share/promote a
+# page or feature on Instagram. Every post is SEO-only and MUST ship a
+# freshly created branded image plus a keyword-rich caption. The skill
+# holds the account id, the credential location (never printed), the image
+# recipe, the public-hosting requirement, and the confirm-first publish.
+if printf '%s' "$lc" | grep -q 'instagram' \
+   && has '(post|publish|share|promote|upload|announce|put up|schedule)'; then
+  add_match "webjs-instagram-post: the request is to publish to the WebJs Instagram account. Invoke the webjs-instagram-post skill. Every post is SEO-only, so ALWAYS create a fresh branded image plus a keyword-rich caption, host the JPEG at a public HTTPS URL, and CONFIRM the image and caption with the user before the public publish. Never print or commit the access token."
+fi
+
 # --- code-review: review the diff before a PR is ready ------------------
 # Triggers: review the PR/diff/branch/changes, code review, look it over
 # for bugs. Reviewing every change before it is marked ready is a standing
