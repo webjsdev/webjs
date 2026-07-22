@@ -1,11 +1,9 @@
 import { html } from '@webjsdev/core';
 import { signup } from '#modules/auth/actions/signup.server.ts';
-import { cardClass, cardHeaderClass, cardTitleClass, cardDescriptionClass, cardContentClass, cardFooterClass } from '#components/ui/card.ts';
-import { buttonClass } from '#components/ui/button.ts';
-import { inputClass } from '#components/ui/input.ts';
-import { labelClass } from '#components/ui/label.ts';
 
 export const metadata = { title: 'Sign up' };
+
+const inputCls = 'w-full bg-background border border-border rounded-xl px-3 py-2 text-[15px] text-foreground outline-none transition-colors focus:border-primary placeholder:text-muted-foreground';
 
 // Page server action: handles the POST from the form below. With JS disabled this
 // is a plain <form> round-trip; with JS the client router swaps the 422 re-render
@@ -33,36 +31,28 @@ export default function SignupPage({ actionData }: { actionData?: { fieldErrors?
   const errors = actionData?.fieldErrors || {};
   const values = actionData?.values || {};
   return html`
-    <div class="max-w-sm mx-auto mt-12">
-      <div class=${cardClass()}>
-        <div class=${cardHeaderClass()}>
-          <h1 class=${cardTitleClass()}>Create an account</h1>
-          <p class=${cardDescriptionClass()}>Get started with your new workspace.</p>
+    <div class="max-w-[420px] mx-auto">
+      <h1 class="text-h2 font-bold mb-2">Create an account</h1>
+      <p class="text-muted-foreground mb-5">Get started with your new workspace.</p>
+      <form method="POST" class="grid gap-4 p-5 rounded-2xl bg-card border border-border">
+        <div class="grid gap-1.5">
+          <label for="name" class="text-[13px] font-medium text-muted-foreground">Name</label>
+          <input id="name" name="name" type="text" value=${values.name || ''} required class=${inputCls} placeholder="Ada Lovelace" />
+          ${errors.name ? html`<p class="m-0 text-[12.5px] text-destructive">${errors.name}</p>` : ''}
         </div>
-        <div class=${cardContentClass()}>
-          <form method="POST" class="flex flex-col gap-4">
-            <div class="flex flex-col gap-1.5">
-              <label class=${labelClass()} for="name">Name</label>
-              <input class=${inputClass()} id="name" name="name" type="text" value=${values.name || ''} required>
-              ${errors.name ? html`<p class="text-sm text-destructive">${errors.name}</p>` : ''}
-            </div>
-            <div class="flex flex-col gap-1.5">
-              <label class=${labelClass()} for="email">Email</label>
-              <input class=${inputClass()} id="email" name="email" type="email" value=${values.email || ''} required>
-              ${errors.email ? html`<p class="text-sm text-destructive">${errors.email}</p>` : ''}
-            </div>
-            <div class="flex flex-col gap-1.5">
-              <label class=${labelClass()} for="password">Password</label>
-              <input class=${inputClass()} id="password" name="password" type="password" minlength="8" required>
-              ${errors.password ? html`<p class="text-sm text-destructive">${errors.password}</p>` : ''}
-            </div>
-            <button class=${buttonClass()} type="submit">Create account</button>
-          </form>
+        <div class="grid gap-1.5">
+          <label for="email" class="text-[13px] font-medium text-muted-foreground">Email</label>
+          <input id="email" name="email" type="email" value=${values.email || ''} required class=${inputCls} placeholder="ada@example.com" />
+          ${errors.email ? html`<p class="m-0 text-[12.5px] text-destructive">${errors.email}</p>` : ''}
         </div>
-        <div class=${cardFooterClass()}>
-          <p class="text-sm text-muted-foreground">Already have an account? <a href="/features/auth/login" class="underline">Log in</a></p>
+        <div class="grid gap-1.5">
+          <label for="password" class="text-[13px] font-medium text-muted-foreground">Password</label>
+          <input id="password" name="password" type="password" minlength="8" required class=${inputCls} />
+          ${errors.password ? html`<p class="m-0 text-[12.5px] text-destructive">${errors.password}</p>` : ''}
         </div>
-      </div>
+        <button type="submit" class="justify-self-start px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">Create account</button>
+      </form>
+      <p class="text-sm text-muted-foreground mt-4">Already have an account? <a href="/features/auth/login" class="text-primary">Log in</a></p>
     </div>
   `;
 }

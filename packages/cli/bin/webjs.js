@@ -46,7 +46,7 @@ if (cmd !== 'help' && cmd !== undefined && !wantsHelp && !wantsVersion) {
 // Exactly three scaffolds exist. Keep this list as the single source of
 // truth. AI-agent docs in README.md / AGENTS.md / .cursorrules /
 // .agents/rules/workflow.md / .github/copilot-instructions.md mirror it.
-const TEMPLATES = ['full-stack', 'api', 'saas'];
+const TEMPLATES = ['full-stack', 'api'];
 
 const USAGE = `webjs commands:
   webjs dev   [--port 8080] [--no-hot]            Start dev server with live reload
@@ -60,7 +60,7 @@ const USAGE = `webjs commands:
                                                   --json emits the structured results (with stable codes). --strict also fails the exit on warnings
   webjs types                                     Generate .webjs/routes.d.ts (typed Route union + per-route params)
   webjs typecheck [tsc args...]                   Type-check the app with the project's tsc --noEmit (non-zero on errors)
-  webjs create <name> [--template full-stack|api|saas] [--db sqlite|postgres] [--runtime node|bun] [--no-install]  Scaffold a new webjs app
+  webjs create <name> [--template full-stack|api] [--db sqlite|postgres] [--runtime node|bun] [--no-install]  Scaffold a new webjs app
                                                   (only 3 templates exist. default: full-stack, Drizzle, --db sqlite, --runtime node)
                                                   --runtime bun emits a Bun-flavored app (bun.lock, bun Dockerfile/CI, bun docs);
                                                   also auto-detected when run via "bun create webjs".
@@ -160,10 +160,10 @@ const HELP = {
     examples: ['webjs typecheck', 'webjs typecheck --watch'],
   },
   create: {
-    usage: 'webjs create <name> [--template full-stack|api|saas] [--db sqlite|postgres] [--runtime node|bun] [--no-install]',
+    usage: 'webjs create <name> [--template full-stack|api] [--db sqlite|postgres] [--runtime node|bun] [--no-install]',
     summary: 'Scaffold a new app. Defaults: full-stack template, Drizzle + SQLite, Node runtime.',
     options: [
-      { flag: '--template <t>', description: 'full-stack (default), api, or saas.' },
+      { flag: '--template <t>', description: 'full-stack (default) or api (backend-only, no UI).' },
       { flag: '--db <d>', description: 'sqlite (default) or postgres.' },
       { flag: '--runtime <r>', description: 'node (default) or bun.' },
       { flag: '--no-install', description: 'Skip the package-manager install step.' },
@@ -171,7 +171,7 @@ const HELP = {
     examples: [
       'webjs create my-app',
       'webjs create my-api --template api',
-      'webjs create my-saas --template saas --db postgres',
+      'webjs create my-api --template api --db postgres',
       'webjs create my-app --runtime bun',
     ],
   },
@@ -846,7 +846,7 @@ async function main() {
     case 'create': {
       const name = rest[0];
       if (!name || name.startsWith('-')) {
-        console.error('Usage: webjs create <app-name> [--template full-stack|api|saas]');
+        console.error('Usage: webjs create <app-name> [--template full-stack|api]');
         process.exit(1);
       }
       const template = flag(rest, '--template', 'full-stack');
@@ -856,16 +856,16 @@ async function main() {
         // on which scaffold to pick for which kind of app.
         console.error(`Error: unknown template '${template}'.
 
-Only three scaffolds exist:
-  full-stack   (default): pages + components + API + Drizzle/SQLite.
-                Pick this for any app the user describes in product terms
-                (todo app, blog, dashboard, marketplace, social feed, …).
-  api          backend-only: route handlers + modules, no pages/SSR.
-                Pick this only if the user explicitly asks for an HTTP/JSON
-                API with no UI.
-  saas         auth + login/signup + protected dashboard + Drizzle User
-                model. Pick this only if the user explicitly asks for auth
-                or a SaaS-shaped product.
+Only two scaffolds exist:
+  full-stack   (default): pages + components + API + Drizzle/SQLite, plus a
+                browsable feature gallery. Auth is one of the gallery cards
+                (login + session + a protected route), so a full-stack app
+                already carries a real auth baseline. Pick this for any app
+                the user describes in product terms (todo, blog, dashboard,
+                marketplace, social feed, a SaaS with accounts, …).
+  api          backend-only: route handlers + modules + Drizzle/SQLite, no
+                pages/SSR. Pick this only if the user explicitly asks for an
+                HTTP/JSON API with no UI.
 
 The scaffold is a starting point. Replace the example layout/page/
 components/schema with the actual app the user requested. Use Drizzle +
