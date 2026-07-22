@@ -135,6 +135,23 @@ test('webjs-blog-write stays quiet on a docs-sync prompt', () => {
   assert.ok(!routed(ctx, 'webjs-blog-write'), 'doc-sync prompt must not route to blog-write');
 });
 
+test('webjs-instagram-post routes on instagram-posting phrases', () => {
+  for (const p of [
+    'post this to instagram',
+    'publish an instagram post about the new feature',
+    'share the why page on instagram for SEO',
+    'promote the streaming actions on instagram',
+  ]) {
+    const { ctx } = run(p);
+    assert.ok(routed(ctx, 'webjs-instagram-post'), `expected instagram route for: ${p}`);
+  }
+});
+
+test('webjs-instagram-post stays quiet without instagram intent', () => {
+  const { ctx } = run('publish the release notes to the changelog');
+  assert.ok(!routed(ctx, 'webjs-instagram-post'), 'non-instagram publish must not route to instagram');
+});
+
 test('code-review routes on review phrases', () => {
   for (const p of [
     'review the PR',
