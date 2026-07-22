@@ -3736,6 +3736,16 @@ function outerHTMLForDiff(el) {
 }
 
 /**
+ * The one framework-owned keyed meta that must NEVER be reconciled: the CSP
+ * nonce. A soft-nav response carries a FRESH per-request nonce, but the browser
+ * enforces CSP against the nonce the ORIGINAL page load declared (see
+ * `getCspNonce`), so overwriting the live `csp-nonce` meta with the incoming
+ * one would make every later nonce-stamped script/preload violate the active
+ * policy. Excluded from add/update/remove so the original meta survives verbatim.
+ */
+const META_KEY_CSP_NONCE = 'name=csp-nonce';
+
+/**
  * Stable identity key for a `<meta>` that represents a single logical tag, so a
  * PAGE-SCOPED meta can be reconciled across a soft-nav head merge (#1046). A
  * meta with no identifying attribute returns null and is left to the add-only
@@ -3778,12 +3788,12 @@ function reconcileHeadMetas(newHead) {
   const incoming = new Map();
   for (const m of newHead.querySelectorAll('meta')) {
     const key = metaIdentity(m);
-    if (key && !incoming.has(key)) incoming.set(key, m);
+    if (key && key !== META_KEY_CSP_NONCE && !incoming.has(key)) incoming.set(key, m);
   }
   const live = new Map();
   for (const m of document.head.querySelectorAll('meta')) {
     const key = metaIdentity(m);
-    if (key && !live.has(key)) live.set(key, m);
+    if (key && key !== META_KEY_CSP_NONCE && !live.has(key)) live.set(key, m);
   }
   // Add a new keyed meta, or sync one whose attributes changed (e.g. content).
   for (const [key, inc] of incoming) {
@@ -4064,17 +4074,16 @@ function takeResolveUnit(buf) {
  * @param {string} id
  * @param {string} content
  */
-function applyStreamedResolve(id, content, retry = true) {
+function applyStreamedResolve(id, content) {
   const boundary = document.getElementById(id);
-  if (!boundary) {
-    // The shell swap that places this placeholder can still be mid-commit inside
-    // an async `startViewTransition` (#1048): retry once on the next frame
-    // instead of silently dropping the boundary and leaving the skeleton stuck.
-    if (retry && typeof requestAnimationFrame === 'function') {
-      requestAnimationFrame(() => applyStreamedResolve(id, content, false));
-    }
-    return;
-  }
+  // A missing boundary is dropped (non-destructive), exactly as before. The
+  // async-view-transition race that USED to drop a still-valid boundary (#1048)
+  // is handled upstream: `streamBoundariesProgressively` is gated on the swap
+  // COMMIT (`_swapCommit`), so the placeholder is already live by the time any
+  // resolve is applied. A retry here would run OUTSIDE the streamer's
+  // `isCurrent()` nav-token fence and could splice a superseded nav's content
+  // into a recycled boundary id, so it is deliberately not attempted.
+  if (!boundary) return;
   const tpl = document.createElement('template');
   tpl.innerHTML = content;
   const inserted = [...tpl.content.childNodes];

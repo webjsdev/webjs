@@ -753,6 +753,20 @@ test('addNewHeadElements: an og:* property meta is reconciled by property (#1046
   );
 });
 
+test('addNewHeadElements: the csp-nonce meta is NEVER reconciled (keeps the original page-load nonce)', () => {
+  // The browser enforces CSP against the nonce the ORIGINAL page load declared,
+  // so a soft-nav response's fresh per-request nonce must not overwrite it, or
+  // every later nonce-stamped script/preload violates the active policy.
+  document.head.innerHTML = '<title>T</title><meta name="csp-nonce" content="ORIGINAL-nonce">';
+  const newHead = document.createElement('head');
+  newHead.innerHTML = '<title>T</title><meta name="csp-nonce" content="INCOMING-nonce">';
+  _addNewHead(newHead);
+  const nonce = document.head.querySelectorAll('meta[name="csp-nonce"]');
+  assert.equal(nonce.length, 1, 'exactly one csp-nonce meta (not duplicated)');
+  assert.equal(nonce[0].getAttribute('content'), 'ORIGINAL-nonce',
+    'the original page-load nonce is preserved, not overwritten by the incoming one');
+});
+
 /* ====================================================================
  * runWithTransition: swap-commit promise (#1048)
  *
