@@ -35,6 +35,7 @@ let _collect, _plan, _keyOf, _diffEl, _reconcile,
   _eligibleAnchorHref, _prefetchSuppressed, _prefetchMode, _prefetchHasHoverPointer, _prefetch, _prefetchTake,
   _prefetchSaysSaveData, _prefetchPeek, _prefetchInflightSize, _resetPrefetch,
   _viewTransitionsEnabled, _runWithTransition, _regraftPermanentElements,
+  _applyStreamedResolve,
   enableClientRouter, disableClientRouter, revalidate,
   WebComponent, html;
 
@@ -114,6 +115,7 @@ before(async () => {
     _viewTransitionsEnabled,
     _runWithTransition,
     _regraftPermanentElements,
+    _applyStreamedResolve,
     navigate,
     revalidate,
     enableClientRouter,
@@ -857,6 +859,49 @@ test('runWithTransition: with an async view transition, the commit promise resol
   }
 });
 
+/* ====================================================================
+ * applyStreamedResolve: dev-warn on a dropped boundary (#1051)
+ * ==================================================================== */
+
+test('applyStreamedResolve: warns once in dev when the boundary is absent, silent otherwise (#1051)', () => {
+  const origWarn = console.warn;
+  const warnings = [];
+  console.warn = (...a) => { warnings.push(a.join(' ')); };
+  const origNodeEnv = process.env.NODE_ENV;
+  const drops = () => warnings.filter((w) => /dropped a streamed Suspense resolve/.test(w)).length;
+  try {
+    document.body.innerHTML = ''; // no #s1 boundary present -> the resolve drops
+
+    // dev: a dropped resolve warns exactly once, naming the id.
+    process.env.NODE_ENV = 'development';
+    _resetWarnOnce(); warnings.length = 0;
+    _applyStreamedResolve('s1', '<div>x</div>');
+    assert.equal(drops(), 1, 'warns once on a dropped boundary in dev');
+    assert.ok(warnings.some((w) => w.includes('"s1"')), 'the warning names the dropped boundary id');
+    _applyStreamedResolve('s1', '<div>x</div>');
+    assert.equal(drops(), 1, 'fire-once per id: a second drop of the same id does not warn again');
+
+    // a SUCCESSFUL resolve never warns.
+    _resetWarnOnce(); warnings.length = 0;
+    document.body.innerHTML = '<div id="s2">SKELETON</div>';
+    _applyStreamedResolve('s2', '<div id="done">DONE</div>');
+    assert.equal(drops(), 0, 'a resolved boundary emits no drop warning');
+    assert.ok(document.getElementById('done'), 'and it applied the content');
+
+    // production: suppressed even on a drop.
+    _resetWarnOnce(); warnings.length = 0;
+    process.env.NODE_ENV = 'production';
+    document.body.innerHTML = '';
+    _applyStreamedResolve('s3', '<div>y</div>');
+    assert.equal(drops(), 0, 'no drop warning in production');
+  } finally {
+    console.warn = origWarn;
+    if (origNodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = origNodeEnv;
+    _resetWarnOnce();
+    document.body.innerHTML = '';
+  }
+});
+
 test('addNewHeadElements: dynamically-created scripts get the meta csp-nonce, not the source page\'s per-request nonce', () => {
   // Set up the meta tag the server emits for the original page load.
   document.head.innerHTML = '<meta name="csp-nonce" content="original-page-nonce">';
@@ -957,6 +1002,41 @@ test('mergeHead: applies meta csp-nonce to created scripts (replaces source nonc
   assert.ok(added, 'script added');
   assert.equal(added.getAttribute('nonce'), 'page-nonce',
     'mergeHead must apply the meta nonce, not the source-page nonce');
+});
+
+test('mergeHead: keeps the ORIGINAL csp-nonce meta when the incoming nonce differs (#1050)', () => {
+  // A real full-body response carries a DIFFERENT per-request nonce. The browser
+  // enforces CSP against the original page-load nonce, so mergeHead must NOT
+  // replace the live meta, or getCspNonce() would then hand out a nonce the
+  // active policy rejects and later nonce-stamped scripts/preloads get blocked.
+  document.head.innerHTML = '<title>T</title><meta name="csp-nonce" content="ORIGINAL">';
+  const before = document.head.querySelector('meta[name="csp-nonce"]');
+  const newHead = document.createElement('head');
+  newHead.innerHTML =
+    '<title>T</title><meta name="csp-nonce" content="INCOMING">' +
+    '<script src="/after.js" nonce="INCOMING"></script>';
+  _merge(newHead);
+  const nonce = document.head.querySelectorAll('meta[name="csp-nonce"]');
+  assert.equal(nonce.length, 1, 'exactly one csp-nonce meta (not duplicated)');
+  assert.strictEqual(nonce[0], before, 'the original meta element is kept, not replaced');
+  assert.equal(nonce[0].getAttribute('content'), 'ORIGINAL', 'the original nonce content is preserved');
+  // A script created by the merge is stamped with the ORIGINAL nonce, not the incoming one.
+  assert.equal(document.head.querySelector('script[src="/after.js"]').getAttribute('nonce'), 'ORIGINAL',
+    'created scripts get the original page-load nonce');
+});
+
+test('mergeHead: keeps the csp-nonce meta when the incoming head omits it (#1050)', () => {
+  // A reduced / partial incoming head that carries no csp-nonce must not cause
+  // the removal loop to drop the live original (it is "absent from newSet").
+  document.head.innerHTML = '<title>T</title><meta name="csp-nonce" content="ORIGINAL">';
+  const before = document.head.querySelector('meta[name="csp-nonce"]');
+  const newHead = document.createElement('head');
+  newHead.innerHTML = '<title>T</title>'; // no csp-nonce declared
+  _merge(newHead);
+  const nonce = document.head.querySelectorAll('meta[name="csp-nonce"]');
+  assert.equal(nonce.length, 1, 'the original csp-nonce meta survives a head that omits it');
+  assert.strictEqual(nonce[0], before, 'same element, not re-created');
+  assert.equal(nonce[0].getAttribute('content'), 'ORIGINAL');
 });
 
 test('addNewHeadElements + mergeHead: nonce-only diff on <link> tags does not duplicate preloads', () => {
