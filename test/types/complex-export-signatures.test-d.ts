@@ -18,6 +18,7 @@
  */
 import {
   WebComponent,
+  register,
   Task,
   createContext,
   ContextProvider,
@@ -27,10 +28,21 @@ import {
 } from '@webjsdev/core';
 import { ref, createRef } from '@webjsdev/core/directives';
 
-// NOTE: the standalone `register(tag, cls)` / `lookup` signatures are pinned by
-// #1033 (its param type rejects a user component class today); their positive
-// cases land with that fix. The static `Class.register('tag')` idiom is covered
-// by `component-types.test-d.ts`.
+/* ---- register(tag, cls): accepts a user component class (#1033) ---- */
+// The second param is a component constructor, NOT the class+factory dual
+// `WebComponentConstructor` (which no ordinary class satisfies, since a plain
+// class is not callable as a factory). A class produced by the factory is fine.
+class RegWidget extends WebComponent({ count: Number }) {
+  render() { return html``; }
+}
+register('reg-widget', RegWidget);
+// A subclass of a factory-produced class is a component constructor too.
+class RegWidget2 extends RegWidget {}
+register('reg-widget-2', RegWidget2);
+// @ts-expect-error a plain object is not a component constructor
+register('reg-widget', {});
+// @ts-expect-error the tag must be a string
+register(123, RegWidget);
 
 type Assert<T extends true> = T;
 type Equal<X, Y> =

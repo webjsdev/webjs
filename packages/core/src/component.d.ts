@@ -72,25 +72,15 @@ export interface ReactiveController {
  * See the Editor Setup doc for tooling that gives attribute/tag
  * intelligence inside `html\`…\`` templates.
  */
-abstract class WebComponentBase extends HTMLElement {
-  static shadow: boolean;
-  static hydrate: 'visible' | undefined;
-  /** @internal Populated by the `WebComponent({ … })` factory, not by hand. */
-  static properties: Record<string, PropertyDeclaration>;
-  static styles: CSSResult | CSSResult[] | null;
-  static lazy?: boolean;
-  /**
-   * Force this component to ship (hydrate) even when the elision analyser would
-   * drop it as display-only. The escape hatch for interactivity the analyser
-   * cannot see statically: a dynamically-computed tag string, or a `:defined`
-   * rule in an external stylesheet outside the module graph. Leave unset for
-   * the automatic verdict.
-   */
-  static interactive?: boolean;
-  /** Register this class as a custom element under `tag`. Tag must contain a hyphen. */
-  static register(tag: string): void;
-  static readonly observedAttributes: string[];
-
+// An INTERFACE, not an `abstract class`, on purpose. A class is a value as well
+// as a type, and a non-exported class referenced from exported positions
+// (`new (): WebComponentBase`, `export type WebComponent = WebComponentBase`)
+// still leaks into the module's VALUE namespace, so `import { WebComponentBase }
+// from '@webjsdev/core'` type-checks and then crashes at load because the runtime
+// never exports it (#1032). An interface has no value meaning, so it describes the
+// instance shape without becoming a phantom export. The static surface lives on
+// `WebComponentStatics` / `WebComponentConstructor` below.
+interface WebComponentBase extends HTMLElement {
   /**
    * Schedule a re-render. Optionally record a property change so lifecycle
    * hooks can branch on what changed via `changedProperties`.
@@ -167,6 +157,14 @@ interface WebComponentStatics {
   properties: Record<string, PropertyDeclaration>;
   styles: CSSResult | CSSResult[] | null;
   lazy?: boolean;
+  /**
+   * Force this component to ship (hydrate) even when the elision analyser would
+   * drop it as display-only. The escape hatch for interactivity the analyser
+   * cannot see statically: a dynamically-computed tag string, or a `:defined`
+   * rule in an external stylesheet outside the module graph. Leave unset for
+   * the automatic verdict.
+   */
+  interactive?: boolean;
   register(tag: string): void;
   readonly observedAttributes: string[];
 }
@@ -179,6 +177,21 @@ export interface WebComponentConstructor extends WebComponentStatics {
     new (): WebComponentBase & InferProps<S>;
     prototype: WebComponentBase & InferProps<S>;
   };
+}
+
+/**
+ * A constructor for a registered component: the static surface plus a plain
+ * `new ()`, WITHOUT the factory call signature that `WebComponentConstructor`
+ * carries. That call signature is what the `WebComponent` const needs (it is
+ * both a class and a factory), but it means no ordinary component class is
+ * assignable to `WebComponentConstructor` (a plain class is not callable as a
+ * factory). So the standalone `register(tag, cls)` / `lookup` / `tagOf` surface
+ * types against THIS instead, and a user's `class X extends WebComponent({…})`
+ * satisfies it (#1033).
+ */
+export interface WebComponentInstanceConstructor extends WebComponentStatics {
+  new (): WebComponentBase;
+  prototype: WebComponentBase;
 }
 
 export declare const WebComponent: WebComponentConstructor;
