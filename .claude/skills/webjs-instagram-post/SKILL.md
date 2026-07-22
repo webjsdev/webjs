@@ -71,8 +71,25 @@ META='NO BUILD   ·   WEB COMPONENTS   ·   SSR' \
 It needs ImageMagick with Pango. Always read `$OUT` back and eyeball it before
 publishing: check the headline does not collide with the subtext (the script
 stacks them dynamically, but a very long headline can still crowd), and that
-the footer meta does not overrun the `webjs.dev` URL. Keep the important content
-away from the extreme edges so a feed crop never clips it.
+the footer meta does not overrun the `webjs.dev` URL.
+
+### Verify the thumbnail crop (do NOT skip this)
+
+The Instagram **profile grid** crops a 1:1 post to a **3:4 portrait**, keeping
+full height but trimming roughly 135px off EACH side of a 1080-wide image. So
+text that looks fine on the square card gets clipped, or sticks to the edge, in
+the grid thumbnail. `build-post.sh` already keeps every element inside a 200px
+safe margin for this reason, but ALWAYS confirm by simulating the crop and
+eyeballing it:
+
+```sh
+magick "$OUT" -gravity center -crop 810x1080+0+0 +repage /tmp/grid-crop.jpg
+# open /tmp/grid-crop.jpg: no text may touch an edge, padding on both sides
+```
+
+If anything is tight, widen `PAD` in `build-post.sh` and shrink the headline /
+subtext `-size` widths, then rebuild and re-check. This took several iterations
+in practice, so treat the crop check as mandatory, not optional.
 
 ## Step 2: host the image at a public HTTPS URL
 
