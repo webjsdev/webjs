@@ -1286,6 +1286,7 @@ const FEATURES = [
   { href: '/features/optimistic-ui', title: 'Optimistic UI', blurb: 'The imperative optimistic(signal, value, action) flip: instant update, automatic rollback on failure.' },
   { href: '/features/async-render', title: 'Async render', blurb: 'A component that awaits server data in async render(), so the resolved value is in the first paint.' },
   { href: '/features/streaming', title: 'Streaming actions', blurb: 'A use-server action that returns an async generator, streamed to the call site token by token with for await.' },
+  { href: '/features/stream', title: 'Stream updates', blurb: 'The <webjs-stream> element: renderStream() applies surgical append / replace / remove DOM updates by target id, no region redraw.' },
   { href: '/features/suspense', title: 'Suspense boundary', blurb: 'The <webjs-suspense> element: a first-paint fallback for a SLOW component, with the resolved content streamed in.' },
   { href: '/features/view-transitions', title: 'View transitions', blurb: 'The opt-in view-transition meta cross-fades a soft navigation, with a data-webjs-permanent element persisted across the swap.' },
   { href: '/features/directives', title: 'Directives', blurb: 'The lit-html directive set: repeat for keyed lists, watch(signal) for a fine-grained node swap.' },

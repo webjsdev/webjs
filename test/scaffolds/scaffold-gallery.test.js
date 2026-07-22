@@ -26,7 +26,7 @@ import { scaffoldApp } from '../../packages/cli/lib/create.js';
 // Single-feature demos under app/features/<name>.
 const FEATURES = [
   'routing', 'boundaries', 'auth', 'components', 'server-actions', 'optimistic-ui',
-  'async-render', 'streaming', 'suspense', 'directives', 'route-handler', 'forms',
+  'async-render', 'streaming', 'stream', 'suspense', 'directives', 'route-handler', 'forms',
   'metadata', 'caching', 'env', 'client-router', 'view-transitions', 'frames',
   'service-worker', 'websockets', 'broadcast', 'rate-limit', 'file-storage', 'sessions',
 ];
@@ -35,7 +35,7 @@ const EXAMPLE_APPS = ['todo'];
 // Demos whose logic lives in a modules/<name> folder, spot-checked here. The
 // app-only demos (routing / metadata / env / boundaries / view-transitions,
 // which have no modules/ dir) are excluded.
-const MODULE_ROUTES = ['auth', 'components', 'server-actions', 'optimistic-ui', 'async-render', 'streaming', 'suspense', 'directives', 'frames', 'todo', 'websockets', 'broadcast', 'rate-limit', 'file-storage', 'sessions'];
+const MODULE_ROUTES = ['auth', 'components', 'server-actions', 'optimistic-ui', 'async-render', 'streaming', 'stream', 'suspense', 'directives', 'frames', 'todo', 'websockets', 'broadcast', 'rate-limit', 'file-storage', 'sessions'];
 
 async function tempCwd() {
   return mkdtemp(join(tmpdir(), 'webjs-scaffold-gallery-'));
