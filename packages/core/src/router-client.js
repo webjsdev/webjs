@@ -2794,7 +2794,10 @@ function applySwap(doc, frameId, revalidating, href, incomingBuild, incomingSrc)
       // by node identity (it imports the incoming children first, then
       // swaps the live permanent node into the imported tree), so the live
       // `<audio>`/widget keeps running across the frame swap.
-      runWithTransition(() => {
+      // Capture the swap commit like the other swap paths so a frame nav that
+      // ALSO progressively streams a Suspense boundary gates its resolves on the
+      // committed frame swap, not a stale prior _swapCommit (#1048).
+      _swapCommit = runWithTransition(() => {
         diffChildren(target, source);
         reactivateScripts(target);
         upgradeCustomElements(target);
