@@ -88,6 +88,18 @@ and deploy, which also lands a real asset on webjs.dev:
 For a quick one-off where a deploy is too heavy, any public HTTPS host works,
 as long as the final URL is reachable and serves real JPEG bytes.
 
+ALWAYS verify the hosted URL round-trips real bytes BEFORE publishing:
+
+```sh
+curl -s "$IMG" -o /tmp/verify.jpg && identify /tmp/verify.jpg
+```
+
+A host can return a URL yet store an EMPTY file (catbox did this in testing),
+and Instagram then fails the create-container call with a useless generic
+`{"error":{"code":1,"message":"An unknown error has occurred."}}`. If you see
+code 1, suspect the image URL first: confirm it downloads a valid JPEG of the
+right dimensions, and re-host on a different provider if not.
+
 ## Step 3: write the SEO caption
 
 - First line names the capability with the primary keyword, since the first
