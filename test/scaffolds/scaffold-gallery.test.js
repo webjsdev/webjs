@@ -26,15 +26,16 @@ import { scaffoldApp } from '../../packages/cli/lib/create.js';
 // Single-feature demos under app/features/<name>.
 const FEATURES = [
   'routing', 'boundaries', 'components', 'server-actions', 'optimistic-ui',
-  'async-render', 'directives', 'route-handler', 'forms',
-  'metadata', 'caching', 'env', 'client-router', 'service-worker',
-  'websockets', 'broadcast', 'rate-limit', 'file-storage', 'sessions',
+  'async-render', 'streaming', 'suspense', 'directives', 'route-handler', 'forms',
+  'metadata', 'caching', 'env', 'client-router', 'view-transitions', 'frames',
+  'service-worker', 'websockets', 'broadcast', 'rate-limit', 'file-storage', 'sessions',
 ];
 // Whole example apps under app/examples/<name>.
 const EXAMPLE_APPS = ['todo'];
-// Routes whose logic lives in a modules/<name> folder (routing and
-// route-handler are app-only: a pages-only route and a route.ts handler).
-const MODULE_ROUTES = ['components', 'server-actions', 'optimistic-ui', 'async-render', 'directives', 'todo', 'websockets', 'broadcast', 'rate-limit', 'file-storage', 'sessions'];
+// Demos whose logic lives in a modules/<name> folder, spot-checked here. The
+// app-only demos (routing / metadata / env / boundaries / view-transitions,
+// which have no modules/ dir) are excluded.
+const MODULE_ROUTES = ['components', 'server-actions', 'optimistic-ui', 'async-render', 'streaming', 'suspense', 'directives', 'frames', 'todo', 'websockets', 'broadcast', 'rate-limit', 'file-storage', 'sessions'];
 
 async function tempCwd() {
   return mkdtemp(join(tmpdir(), 'webjs-scaffold-gallery-'));
@@ -65,6 +66,8 @@ test('full-stack scaffold ships feature demos and one example app', async () => 
     assert.ok(await exists(join(appDir, 'app', 'features', 'route-handler', 'data', 'route.ts')));
     // Client-router soft-nav target subpage.
     assert.ok(await exists(join(appDir, 'app', 'features', 'client-router', 'second', 'page.ts')));
+    // View-transitions soft-nav target subpage (the cross-fade + permanent-element demo).
+    assert.ok(await exists(join(appDir, 'app', 'features', 'view-transitions', 'second', 'page.ts')));
     // Infra features ship their server endpoints alongside the page.
     assert.ok(await exists(join(appDir, 'app', 'features', 'websockets', 'echo', 'route.ts')));
     assert.ok(await exists(join(appDir, 'app', 'features', 'broadcast', 'feed', 'route.ts')));
