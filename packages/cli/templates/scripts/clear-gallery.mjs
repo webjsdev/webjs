@@ -12,10 +12,16 @@
 // It removes the gallery routes + modules + demo metadata routes, resets
 // app/page.ts to a minimal home, and drops the demo `todos` table plus the auth
 // card's `passwordHash` column from the schema. It KEEPS the agent skill
-// (.agents/skills/webjs/), the layout, the database wiring, the theme toggle, and
-// the example `users` table. It is a one-time reset: if the gallery is already
-// gone (no app/features/) it does nothing, so a rerun never clobbers an app you
-// built.
+// (.agents/skills/webjs/), the layout, the database wiring, the theme toggle,
+// the example `users` table, AND the design system in `components/ui/` (the
+// `buttonClass` / `cardClass` / `inputClass` helpers + `lib/utils/cn.ts`). The
+// design system is INFRASTRUCTURE, not a demo: a real app built after this reset
+// still imports those helpers, and their teaching comments plus the styling
+// reference are where the "own and theme your @webjsdev/ui primitives" pattern
+// lives durably (the demos are just the disposable runnable illustration). So
+// do NOT add `components/ui` to the removal list below. It is a one-time reset:
+// if the gallery is already gone (no app/features/) it does nothing, so a rerun
+// never clobbers an app you built.
 import { rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -76,7 +82,7 @@ if (existsSync(schemaPath)) {
 rm('db/migrations');
 for (const f of ['db/dev.db', 'db/dev.db-shm', 'db/dev.db-wal']) rm(f);
 
-console.log(`Gallery cleared (${removed} paths removed). The agent skill and your database wiring are kept.`);
+console.log(`Gallery cleared (${removed} paths removed). The agent skill, your database wiring, and the components/ui/ design system are kept.`);
 console.log('Next: regenerate the database (db:generate then db:migrate), then start the dev server and build your app in app/ and modules/.');
 
 function MINIMAL_PAGE() {
