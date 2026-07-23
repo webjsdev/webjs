@@ -1,6 +1,3 @@
-// routes, or prune it (delete this file), then delete this marker line. webjs
-// check fails while the marker remains.
-//
 // app/sitemap.ts serves /sitemap.xml. The default export is a (possibly async)
 // server function; `sitemap(entries)` from @webjsdev/server serializes a
 // spec-valid XML sitemap. In a real app, build the entries from your content

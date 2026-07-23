@@ -1,6 +1,3 @@
-// file), then delete this marker line. webjs check fails while the marker
-// remains.
-//
 // app/global-error.ts is the ROOT-ONLY, app-wide catch-all error boundary. It
 // fires only after every nested error.ts boundary is exhausted, which includes
 // a failure in the root layout itself. Because a root-layout failure is exactly
@@ -29,9 +26,9 @@ export default function GlobalError({ error }: { error: Error }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>Something went wrong</title>
         <style nonce="${cspNonce()}">
-          body { font: 16px/1.6 system-ui, sans-serif; margin: 0; display: grid; place-items: center; min-height: 100vh; background: #1c1613; color: #f5f0eb; }
+          body { font: 16px/1.6 system-ui, sans-serif; margin: 0; display: grid; place-items: center; min-height: 100vh; background: #1e2226; color: #dee2e6; }
           main { max-width: 32rem; padding: 2rem; text-align: center; }
-          a { color: #ff8a3d; }
+          a { color: #94989c; }
         </style>
       </head>
       <body>

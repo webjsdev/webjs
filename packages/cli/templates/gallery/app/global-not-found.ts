@@ -1,6 +1,3 @@
-// file), then delete this marker line. webjs check fails while the marker
-// remains.
-//
 // app/global-not-found.ts is the ROOT-ONLY 404 for a URL that matches nothing
 // anywhere, used when no nested not-found.ts applies. Unlike global-error.ts it
 // renders only a BODY fragment: the framework wraps it in the document shell

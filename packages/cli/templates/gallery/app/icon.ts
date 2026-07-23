@@ -1,6 +1,3 @@
-// (delete this file), then delete this marker line. webjs check fails while the
-// marker remains.
-//
 // app/icon.ts serves /icon (the dynamic favicon). The default export is a
 // (possibly async) server function; returning a Response lets you set the exact
 // content type, so an inline SVG needs no asset file. For a favicon that never
@@ -9,8 +6,8 @@
 // mark must be computed at request time.
 export default function Icon() {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-    <rect width="32" height="32" rx="7" fill="#1c1613"/>
-    <text x="16" y="22" font-family="system-ui, sans-serif" font-size="18" font-weight="700" fill="#ff8a3d" text-anchor="middle">w</text>
+    <rect width="32" height="32" rx="7" fill="#1e2226"/>
+    <text x="16" y="22" font-family="system-ui, sans-serif" font-size="18" font-weight="700" fill="#94989c" text-anchor="middle">w</text>
   </svg>`;
   return new Response(svg, {
     headers: { 'content-type': 'image/svg+xml', 'cache-control': 'public, max-age=3600' },
