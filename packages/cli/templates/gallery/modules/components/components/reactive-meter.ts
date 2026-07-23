@@ -13,6 +13,10 @@ export class ReactiveMeter extends WebComponent {
       padding: 6px 12px; border-radius: 10px; border: 1px solid var(--color-border);
       background: transparent; color: inherit; cursor: pointer; font: inherit;
     }
+    /* Tailwind's focus styles do NOT cross the shadow boundary, so a shadow-DOM
+       component styles its own focus, else the browser's default outline (thick,
+       shown on window-refocus) appears. Match the app's themed ring. */
+    button:focus-visible { outline: 2px solid var(--color-ring); outline-offset: 2px; }
     .val { font-variant-numeric: tabular-nums; font-weight: 600; }
     .muted { opacity: 0.6; font-size: 13px; }
   `;
