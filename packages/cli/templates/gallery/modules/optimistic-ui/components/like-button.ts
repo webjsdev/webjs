@@ -30,7 +30,13 @@ export class LikeButton extends WebComponent {
     // `default` (primary fill). So compose buttonClass() for the base + colors +
     // focus ring + cursor, then override only the genuinely bespoke bits with cn()
     // (which tailwind-merges): a pill radius over the helper's rounded-xl, and a
-    // primary outline when liked. Only the heart SVG stays fully custom.
+    // border on the liked state. The border is GEOMETRY, not decoration: the
+    // `secondary` variant carries a 1px border and `default` carries none, so under
+    // box-sizing border-box an auto-width inline-flex button would change its outer
+    // size by ~1px each toggle (a small label jitter). Re-adding `border
+    // border-primary` keeps a 1px border in both states so the pill stays put. On
+    // the primary fill that border color matches the fill, so it reads as invisible,
+    // doing only the no-jitter job. Only the heart SVG stays fully custom.
     return html`
       <button @click=${() => this.toggle()} aria-pressed=${liked ? 'true' : 'false'}
         class=${cn(
