@@ -66,6 +66,24 @@ test('cn: padding subgroups: px-4 + py-2 coexist; px-4 + px-6 collapses to px-6'
   assert.match(out, /py-2/);
 });
 
+test('cn: a shorthand overrides the axis/side it subsumes (the icon-button gap)', () => {
+  // The bug this fixes: buttonClass() ships px-4 py-2, and cn(..., 'p-0') used to
+  // keep all three (unreliable). A shorthand now wins over what it subsumes.
+  assert.equal(cn('px-4', 'py-2', 'p-0'), 'p-0');
+  // Directional, not symmetric: shorthand THEN axis refines (both survive);
+  // axis THEN shorthand collapses to the shorthand.
+  assert.equal(cn('p-4', 'px-2'), 'p-4 px-2');
+  assert.equal(cn('px-2', 'p-4'), 'p-4');
+  // Side vs axis: a later px removes an earlier pl/pr; a later side refines px.
+  assert.equal(cn('pl-1', 'px-2'), 'px-2');
+  assert.equal(cn('px-2', 'pl-1'), 'px-2 pl-1');
+  // Margin behaves the same; size subsumes w and h.
+  assert.equal(cn('mx-4', 'm-0'), 'm-0');
+  assert.equal(cn('w-8', 'size-4'), 'size-4');
+  // Conflicts stay within a variant (a hover: shorthand does not touch a base axis).
+  assert.equal(cn('px-4', 'hover:p-0'), 'px-4 hover:p-0');
+});
+
 test('cn: variant prefixes (hover:, dark:) dedupe within their own variant only', () => {
   const out = cn('bg-white', 'hover:bg-blue-500', 'hover:bg-red-500');
   assert.match(out, /bg-white/);
