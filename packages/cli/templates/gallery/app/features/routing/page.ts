@@ -16,7 +16,7 @@ export default function RoutingExample() {
       <li><a class="text-primary underline underline-offset-2" href="/features/routing/hello">/features/routing/hello</a></li>
       <li><a class="text-primary underline underline-offset-2" href="/features/routing/legacy">/features/routing/legacy</a> throws <code class="font-mono">redirect()</code> back here</li>
     </ul>
-    <p class="text-muted-foreground text-sm mb-5">
+    <p class="text-muted-foreground text-sm mb-8">
       Routes are type-safe: <code class="font-mono">webjs types</code> (run by
       <code class="font-mono">webjs dev</code>) generates a
       <code class="font-mono">Route</code> union, and the
@@ -24,7 +24,7 @@ export default function RoutingExample() {
       <code class="font-mono">PageProps&lt;'/features/routing/[id]'&gt;</code>
       so <code class="font-mono">params</code> is checked against the real routes.
     </p>
-    <p class="text-muted-foreground text-sm mb-5">
+    <p class="text-muted-foreground text-sm mb-8">
       Programmatic navigation is checked too:
       <code class="font-mono">navigate(url)</code> takes that
       <code class="font-mono">Route</code> union, so
@@ -44,7 +44,7 @@ export default function RoutingExample() {
       <code class="font-mono">redirect()</code> on the server, call
       <code class="font-mono">navigate()</code> on the client.
     </p>
-    <p class="text-muted-foreground text-sm mt-5">
+    <p class="text-muted-foreground text-sm mt-8">
       A page can also THROW to short-circuit rendering:
       <code class="font-mono">notFound()</code> (404),
       <code class="font-mono">forbidden()</code> (403), and

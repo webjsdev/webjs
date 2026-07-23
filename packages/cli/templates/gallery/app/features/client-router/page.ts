@@ -26,7 +26,7 @@ export default function ClientRouterExample() {
       <a href="/features/client-router/second" class="${buttonClass()} no-underline">Go to page two</a>
       <a href="/" class="text-muted-foreground no-underline font-medium text-sm hover:text-foreground transition-colors">Home</a>
     </div>
-    <p class="text-muted-foreground text-sm mt-6 mb-5">Or drive it from JS with <code class="font-mono">navigate()</code> / <code class="font-mono">revalidate()</code>:</p>
+    <p class="text-muted-foreground text-sm mt-6 mb-8">Or drive it from JS with <code class="font-mono">navigate()</code> / <code class="font-mono">revalidate()</code>:</p>
     <router-controls></router-controls>
     <p class="text-muted-foreground text-sm mt-6">
       Opt out app-wide with <code class="font-mono">{ "webjs": { "clientRouter": false } }</code>,
