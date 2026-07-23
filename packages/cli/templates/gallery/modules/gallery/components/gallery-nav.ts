@@ -34,12 +34,12 @@ export class GalleryNav extends WebComponent({ current: prop(String) }) {
     const active = activePath.get() || this.current;
     const link = (href: string, title: string) => {
       const on = active === href;
-      const cls = 'block px-3 py-1.5 -mx-2 rounded-lg no-underline transition-colors ' +
+      const cls = 'block px-3 py-1.5 rounded-lg no-underline transition-colors ' +
         (on ? 'bg-accent text-foreground font-medium' : 'text-muted-foreground hover:bg-accent hover:text-foreground');
       return html`<a href=${href} aria-current=${on ? 'page' : 'false'} class=${cls}>${title}</a>`;
     };
     return html`
-      <a href="/" class="block px-3 py-1.5 -mx-2 mb-4 rounded-lg no-underline text-sm text-muted-foreground hover:text-foreground transition-colors">&larr; All demos</a>
+      <a href="/" class="block px-3 py-1.5 mb-4 rounded-lg no-underline text-sm text-muted-foreground hover:text-foreground transition-colors">&larr; Gallery</a>
       ${FEATURE_GROUPS.map((g) => html`
         <div class="mb-5">
           <div class="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">${g.label}</div>

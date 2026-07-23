@@ -13,7 +13,7 @@ export default function FeaturesLayout({ children, url }: { children: unknown; u
   return html`
     <div class="lg:hidden mb-6">${backLink('/', html`&larr; Gallery`)}</div>
     <div class="grid lg:grid-cols-[190px_1fr] gap-8 lg:gap-12">
-      <aside class="hidden lg:block sticky top-6 self-start max-h-[calc(100dvh-4rem)] overflow-y-auto py-1 text-sm">
+      <aside class="hidden lg:block sticky top-6 self-start max-h-[calc(100dvh-4rem)] overflow-y-auto overflow-x-hidden py-1 text-sm">
         <gallery-nav current=${path}></gallery-nav>
       </aside>
       <div class="min-w-0">${children}</div>
