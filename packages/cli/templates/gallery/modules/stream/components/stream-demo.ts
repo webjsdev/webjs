@@ -31,11 +31,15 @@ export class StreamDemo extends WebComponent {
   // component and blow away the streamed-in rows.
   #n = 2;
 
-  append() {
+  // NOTE the method names: NOT append() / prepend(). Those are native
+  // ParentNode methods, and WebJs instruments them on every light-DOM host for
+  // the slot API (#1021), so a component method of the same name is shadowed and
+  // never runs. Name your handlers something else (see muscle-memory-gotchas).
+  appendRow() {
     this.#n++;
     renderStream(streamPayload('append', 'stream-list', row(`row-${this.#n}`, `Row ${this.#n} (appended)`)));
   }
-  prepend() {
+  prependRow() {
     this.#n++;
     renderStream(streamPayload('prepend', 'stream-list', row(`row-${this.#n}`, `Row ${this.#n} (prepended)`)));
   }
@@ -58,8 +62,8 @@ export class StreamDemo extends WebComponent {
     return html`
       <div class="grid gap-4 max-w-[460px]">
         <div class="flex flex-wrap gap-2">
-          <button class=${btn} @click=${() => this.append()}>Append</button>
-          <button class=${btn} @click=${() => this.prepend()}>Prepend</button>
+          <button class=${btn} @click=${() => this.appendRow()}>Append</button>
+          <button class=${btn} @click=${() => this.prependRow()}>Prepend</button>
           <button class=${btn} @click=${() => this.replaceFirst()}>Replace Row 1</button>
           <button class=${btn} @click=${() => this.removeSecond()}>Remove Row 2</button>
           <button class=${btn} @click=${() => this.reset()}>Reset</button>
