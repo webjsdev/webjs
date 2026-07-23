@@ -34,7 +34,7 @@ export class TokenStream extends WebComponent {
         <button
           @click=${() => this.run()}
           ?disabled=${busy}
-          class="inline-flex items-center px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm transition-all hover:bg-primary/90 active:scale-[0.97] disabled:opacity-60"
+          class="inline-flex items-center px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97] disabled:opacity-60"
         >
           ${busy ? 'streaming…' : 'Stream tokens'}
         </button>
