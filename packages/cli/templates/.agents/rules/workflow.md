@@ -16,7 +16,8 @@ Read `AGENTS.md` first. Full hosted docs are at https://docs.webjs.dev.
   the demos relevant to your task under `app/features/<x>` for the runnable idiom
   (the skill teaches the same and SURVIVES the clear, so you never lose it);
   (2) run `npm run gallery:clear` to shed the whole gallery in one step (it keeps
-  the agent skill, the layout, and the database wiring, and resets the home);
+  the agent skill and the database wiring, and resets the home AND the root
+  layout to a token-free blank slate, no gallery palette or navbar survives);
   (3) regenerate the database and grow the app in place under `app/`,
   `components/`, and `modules/<feature>/`. Keep the gallery only while exploring,
   never ship it.
@@ -27,8 +28,10 @@ Read `AGENTS.md` first. Full hosted docs are at https://docs.webjs.dev.
 - **`app/` is routing-only.** Only routing files live in `app/` (page, layout,
   route, middleware, metadata routes). Browser-safe helpers go in `lib/utils/`,
   feature logic in `modules/`, server-only code behind `.server.ts`.
-- **Give a UI app its own design.** Set the design-token values in `app/layout.ts`
-  to a palette that fits the app. Render the app and LOOK before calling UI work
+- **Give a UI app its own design.** Define design tokens in `app/layout.ts` with
+  a palette that fits the app (after `gallery:clear` the layout is a token-free
+  blank slate; `.agents/skills/webjs/references/styling.md` is the guide).
+  Render the app and LOOK before calling UI work
   done: `webjs check` and `webjs typecheck` pass even when a layout collapses, so
   open every route you changed in a real browser and play through its states.
 

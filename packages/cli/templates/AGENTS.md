@@ -30,14 +30,19 @@ The order matters:
    `.agents/skills/webjs/` teaches the same patterns and SURVIVES the clear, so
    clearing is not a knowledge-loss event, the gallery is just a runnable bonus.
 2. **Clear it.** Run `npm run gallery:clear` to shed the whole gallery in one
-   step (removes `app/features/`, `app/examples/`, the demo `modules/`, the demo
-   `todos` table, and resets `app/page.ts` to a minimal home), while KEEPING the
-   agent skill, the layout, and the database wiring.
+   step: it removes `app/features/`, `app/examples/`, the demo `modules/`, the
+   gallery's example design system (`components/ui/`, the theme-toggle), the
+   example tests, and the demo `todos` table, and resets `app/page.ts` to a
+   minimal home AND `app/layout.ts` to a token-free blank slate (OS system
+   colours, no navbar, no palette). It KEEPS the agent skill, the database
+   wiring, and `lib/utils/cn.ts` (the `webjs ui add` prerequisite).
 3. **Build.** Regenerate the database (`npm run db:generate` then `npm run
    db:migrate`), then grow the app in place: routes under `app/`, components
    under `components/`, features under `modules/<feature>/`, server-only code
-   behind `.server.ts`, and the app's own palette via the tokens in
-   `app/layout.ts`.
+   behind `.server.ts`. Build the app's OWN design system from the blank slate:
+   define design tokens in `app/layout.ts` and pull primitives with
+   `npx webjsdev ui add <name>`, following
+   `.agents/skills/webjs/references/styling.md`.
 
 If you are only exploring, keep the gallery and browse it.
 
