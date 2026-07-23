@@ -679,17 +679,53 @@ export async function checkConventions(appDir) {
     for (const { rel, scan } of files) {
       if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
       for (const { body } of extractWebComponentClassBodies(scan)) {
+        // The slot interception installs only on LIGHT-DOM hosts (the shadow
+        // branch keeps the true native methods), so a shadow component's method
+        // is never shadowed. Skip the whole class.
+        if (/static\s+shadow\s*=\s*true/.test(body)) continue;
+        // Brace-depth map over the (already string/comment-masked) class body,
+        // so only TOP-LEVEL class members flag: a same-named object-literal
+        // shorthand or function expression nested inside a method body is a
+        // different object's property and shadows nothing.
+        const depth = new Int32Array(body.length);
+        {
+          let d = 0;
+          for (let i = 0; i < body.length; i++) {
+            if (body[i] === '{') { depth[i] = d; d++; }
+            else if (body[i] === '}') { d--; depth[i] = d; }
+            else depth[i] = d;
+          }
+        }
         for (const name of NATIVE_MEMBERS) {
-          // Same method-definition shape methodBodyOf() matches (name followed by
-          // a param list then `{`), preceded by a class-body boundary.
-          const re = new RegExp(`(?:^|[\\s;}])(?:async\\s+)?${name}\\s*\\([^)]*\\)\\s*(?::[^{]*)?\\{`);
-          if (re.test(body)) {
-            violations.push({
-              rule: 'no-shadowed-native-member',
-              file: rel,
-              message: `Component method \`${name}()\` shadows the native DOM method WebJs instruments for the slot API, so it silently never runs (the native method wins) and TypeScript does not catch it.`,
-              fix: `Rename the method to a non-native name (e.g. \`${name}Row()\` / \`${name}Item()\`) and update its call sites.`,
-            });
+          // Two shadowed-definition shapes, both instance-level: the method /
+          // accessor form (`remove() {`, `get remove() {`), and the class-field
+          // FUNCTION form (`remove = () => {}` / `= function () {}`), which the
+          // connect-time interception install overwrites just the same. A
+          // `static` member lives on the constructor and shadows nothing.
+          const methodRe = new RegExp(
+            `(?:^|[\\s;}])((?:static\\s+)?)(?:async\\s+)?(?:get\\s+|set\\s+)?(${name})\\s*\\([^)]*\\)\\s*(?::[^{]*)?\\{`,
+            'g',
+          );
+          const fieldRe = new RegExp(
+            `(?:^|[\\s;}])((?:static\\s+)?)(${name})\\s*=\\s*(?:async\\s*)?(?:function\\b|\\([^)]*\\)\\s*(?::[^=]*)?=>|[\\w$]+\\s*=>)`,
+            'g',
+          );
+          let flagged = false;
+          for (const re of [methodRe, fieldRe]) {
+            let m;
+            while (!flagged && (m = re.exec(body)) !== null) {
+              if (m[1]) continue;                       // static: not shadowed
+              const nameIdx = m.index + m[0].indexOf(m[2]);
+              if (depth[nameIdx] !== 0) continue;       // nested: another object's property
+              flagged = true;
+              violations.push({
+                rule: 'no-shadowed-native-member',
+                file: rel,
+                message: `Component member \`${name}\` shadows the native DOM method WebJs instruments for the slot API, so it silently never runs (the native method wins) and TypeScript does not catch it.`,
+                fix: `Rename the member to a non-native name (e.g. \`${name}Row()\` / \`${name}Item()\`) and update its call sites.`,
+              });
+            }
+            if (flagged) break;
           }
         }
       }
