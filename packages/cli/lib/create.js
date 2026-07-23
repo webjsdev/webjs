@@ -1126,20 +1126,21 @@ export default function RootLayout({ children }: { children: unknown }) {
   const nonce = cspNonce();
   return html\`
     <script nonce="\${nonce}">
-      // Light/dark theme: read the saved or OS choice and set data-theme plus the
-      // .dark class the tokens key off. Delete this block (and the light blocks
-      // below) for a single-theme app.
+      // Light/dark theme: apply the saved choice before paint (no flash). The
+      // tokens follow color-scheme, which [data-theme] forces and otherwise
+      // follows the OS, so an unset choice needs NO inline work here. The .dark
+      // class is synced only for @webjsdev/ui components (they key off .dark).
+      // Delete this block and the [data-theme] rules below for a single-theme app.
       (function(){
         try {
-          var mq = window.matchMedia('(prefers-color-scheme: light)');
+          var mq = window.matchMedia('(prefers-color-scheme: dark)');
           function apply(){
             var t = null;
             try { t = localStorage.getItem('webjs_theme'); } catch (_) {}
             var el = document.documentElement;
             if (t === 'light' || t === 'dark') el.dataset.theme = t;
             else delete el.dataset.theme;
-            var dark = t === 'dark' || (t !== 'light' && !mq.matches);
-            el.classList.toggle('dark', dark);
+            el.classList.toggle('dark', t === 'dark' || (t !== 'light' && mq.matches));
           }
           apply();
           mq.addEventListener('change', apply);
@@ -1153,7 +1154,9 @@ export default function RootLayout({ children }: { children: unknown }) {
         function measure(){
           try {
             var hdr = document.querySelector('header');
-            if (!hdr) return;
+            // Only a FIXED header leaves normal flow and needs its height
+            // reserved; a normal in-flow header (the gallery's navbar) does not.
+            if (!hdr || getComputedStyle(hdr).position !== 'fixed') return;
             var apply = function(){
               document.documentElement.style.setProperty('--header-h', hdr.offsetHeight + 'px');
             };
@@ -1181,91 +1184,51 @@ export default function RootLayout({ children }: { children: unknown }) {
 
     <link rel="stylesheet" href="/public/tailwind.css">
     <style>
-      /* Design tokens. The token NAMES are infrastructure (public/input.css maps
-         them into Tailwind via @theme). The VALUES are a cool neutral-grey palette
-         with a monospaced type system: change them here to give the app its own
-         look. bg-background / text-foreground / bg-card / bg-primary / border-border
-         all resolve from these. */
+      /* Design tokens: ONE definition per colour via light-dark(LIGHT, DARK), so
+         a palette change lands in a single place (DRY). The token NAMES are
+         infrastructure (public/input.css maps them into Tailwind via @theme); the
+         VALUES are a cool neutral-grey palette with a monospaced type system.
+         color-scheme decides which side of each light-dark() applies: the default
+         'light dark' follows the OS, and the toggle FORCES one via [data-theme]
+         below. The light theme is a crisp WHITE page with near-black text, a
+         readable muted grey, and visible borders (a washed-out light theme comes
+         from a grey page + too-light muted text + faint borders). For a
+         single-theme app, delete the [data-theme] rules and give each token a
+         single colour instead of light-dark(). */
       :root {
         --font-sans:  'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
         --font-serif: ui-serif, 'Iowan Old Style', Palatino, Georgia, serif;
         --font-mono:  'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
         --font-display: 'Bricolage Grotesque', 'JetBrains Mono', ui-sans-serif, system-ui, sans-serif;
         --header-h: 0px;
+
+        color-scheme: light dark;                              /* default: follow the OS */
+        --background:         light-dark(#ffffff, #1e2226);
+        --foreground:         light-dark(#191c20, #dee2e6);
+        --card:               light-dark(#f7f8fa, #313539);
+        --card-foreground:    light-dark(#191c20, #dee2e6);
+        --popover:            light-dark(#ffffff, #313539);
+        --popover-foreground: light-dark(#191c20, #dee2e6);
+        --primary:            light-dark(#1e2226, #dee2e6);
+        --primary-foreground: light-dark(#ffffff, #1e2226);
+        --secondary:          light-dark(#eef0f2, #363a3e);
+        --secondary-foreground: light-dark(#191c20, #dee2e6);
+        --muted:              light-dark(#eef0f2, #313539);
+        --muted-foreground:   light-dark(#565c64, #94989c);
+        --accent:             light-dark(#e9ebef, #363a3e);
+        --accent-foreground:  light-dark(#191c20, #f7fbff);
+        --border:             light-dark(#e2e5e9, #34393e);
+        --border-strong:      light-dark(#ccd1d7, #454b51);
+        --input:              light-dark(#e2e5e9, #34393e);
+        --ring:               light-dark(#8b9198, #6b7075);
         /* A translucent tint of the primary, tracked automatically across
            light/dark. Used for focus rings (ring-primary-tint). */
         --primary-tint: color-mix(in srgb, var(--primary) 22%, transparent);
       }
-      /* dark (the default, and the explicit .dark the toggle sets) */
-      :root, .dark {
-        color-scheme: dark;
-        --background: #1e2226;
-        --foreground: #dee2e6;
-        --card: #313539;
-        --card-foreground: #dee2e6;
-        --popover: #313539;
-        --popover-foreground: #dee2e6;
-        --primary: #dee2e6;
-        --primary-foreground: #1e2226;
-        --secondary: #363a3e;
-        --secondary-foreground: #dee2e6;
-        --muted: #313539;
-        --muted-foreground: #94989c;
-        --accent: #363a3e;
-        --accent-foreground: #f7fbff;
-        --border: #34393e;
-        --border-strong: #454b51;
-        --input: #34393e;
-        --ring: #6b7075;
-      }
-      /* light (explicit via the toggle). A crisp white page with near-black
-         text, a readable muted grey, and visible borders (a washed-out light
-         theme comes from a grey page + too-light muted text + faint borders). */
-      :root[data-theme='light'] {
-        color-scheme: light;
-        --background: #ffffff;
-        --foreground: #191c20;
-        --card: #f7f8fa;
-        --card-foreground: #191c20;
-        --popover: #ffffff;
-        --popover-foreground: #191c20;
-        --primary: #1e2226;
-        --primary-foreground: #ffffff;
-        --secondary: #eef0f2;
-        --secondary-foreground: #191c20;
-        --muted: #eef0f2;
-        --muted-foreground: #565c64;
-        --accent: #e9ebef;
-        --accent-foreground: #191c20;
-        --border: #e2e5e9;
-        --border-strong: #ccd1d7;
-        --input: #e2e5e9;
-        --ring: #8b9198;
-      }
-      /* light (OS preference, when the user has made no explicit choice) */
-      @media (prefers-color-scheme: light) {
-        :root:not(.dark):not([data-theme='dark']) {
-          color-scheme: light;
-          --background: #ffffff;
-          --foreground: #191c20;
-          --card: #f7f8fa;
-          --card-foreground: #191c20;
-          --popover: #ffffff;
-          --popover-foreground: #191c20;
-          --primary: #1e2226;
-          --primary-foreground: #ffffff;
-          --secondary: #eef0f2;
-          --secondary-foreground: #191c20;
-          --muted: #eef0f2;
-          --muted-foreground: #565c64;
-          --accent: #e9ebef;
-          --accent-foreground: #191c20;
-          --border: #e2e5e9;
-          --border-strong: #ccd1d7;
-          --input: #e2e5e9;
-          --ring: #8b9198;
-        }
-      }
+      /* The toggle writes data-theme to FORCE a scheme; with neither attribute
+         the default 'color-scheme: light dark' above follows the OS. */
+      :root[data-theme='light'] { color-scheme: light; }
+      :root[data-theme='dark']  { color-scheme: dark; }
     </style>
     <style>
       /* Base styles utility classes can't reach. */
@@ -1279,8 +1242,24 @@ export default function RootLayout({ children }: { children: unknown }) {
         -moz-osx-font-smoothing: grayscale;
       }
     </style>
-    <div class="fixed top-4 right-4 z-10"><theme-toggle></theme-toggle></div>
-    <main class="min-h-dvh max-w-5xl mx-auto px-4 sm:px-6 py-8">
+    <!-- Top navbar, on every page: brand on the left, links + theme toggle on
+         the right. It floats (no separator) and is in normal flow, so it just
+         scrolls with the page; make it a fixed header only if you want it pinned
+         (position: fixed, never sticky, which flickers on iOS during a nav). -->
+    <header class="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+      <a href="/" class="inline-flex items-center gap-2 no-underline text-foreground font-bold tracking-tight" style="font-family: var(--font-display)">
+        <span class="w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-foreground to-muted-foreground" aria-hidden="true"></span>
+        WebJs Gallery
+      </a>
+      <nav class="flex items-center gap-4 text-sm" aria-label="Primary">
+        <a href="https://docs.webjs.dev" target="_blank" rel="noopener" class="hidden sm:inline text-muted-foreground hover:text-foreground no-underline transition-colors">Docs</a>
+        <a href="https://github.com/webjsdev/webjs" target="_blank" rel="noopener" class="hidden sm:inline text-muted-foreground hover:text-foreground no-underline transition-colors">GitHub</a>
+        <theme-toggle></theme-toggle>
+      </nav>
+    </header>
+    <!-- Fill the viewport minus the h-14 (3.5rem) navbar, so a short page has no
+         spurious scrollbar (min-h-dvh alone would overflow by the navbar height). -->
+    <main class="min-h-[calc(100dvh-3.5rem)] max-w-5xl mx-auto px-4 sm:px-6 py-8">
       \${children}
     </main>
   \`;
@@ -1306,26 +1285,18 @@ export const metadata = {
 export default function Home() {
   return html\`
     <div class="py-8 flex flex-col items-center gap-16">
-      <!-- Masthead -->
+      <!-- Hero -->
       <section class="flex flex-col items-center text-center gap-5">
-        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground m-0">Welcome to</p>
-        <h1 class="text-6xl sm:text-7xl font-bold uppercase tracking-tight leading-none m-0 break-words bg-gradient-to-b from-foreground to-muted-foreground bg-clip-text text-transparent" style="font-family: var(--font-display); word-spacing: 0.08em; letter-spacing: -0.02em;">
-          WebJs Gallery
+        <h1 class="text-5xl sm:text-6xl font-bold tracking-tight leading-none m-0 break-words bg-gradient-to-b from-foreground to-muted-foreground bg-clip-text text-transparent" style="font-family: var(--font-display); letter-spacing: -0.02em;">
+          Explore the gallery
         </h1>
         <p class="text-base sm:text-lg text-muted-foreground max-w-lg leading-relaxed m-0">
-          AI-first and web-components-first. Server-rendered, progressively enhanced, and buildless.
+          Each demo isolates a single WebJs capability in real, runnable code. Read the ones you need, then build your app on the same patterns.
         </p>
       </section>
 
       <!-- Gallery: every feature demo + the example app -->
       <section class="w-full flex flex-col gap-6">
-        <div class="flex flex-col items-center gap-2 text-center">
-          <h2 class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground m-0">Explore the gallery</h2>
-          <p class="text-sm text-muted-foreground max-w-lg leading-relaxed m-0">
-            One WebJs concept per demo under <code class="text-[0.9em] text-foreground">app/features/</code>, with logic
-            in <code class="text-[0.9em] text-foreground">modules/</code>.
-          </p>
-        </div>
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           \${FEATURES.map(f => html\`
             <a href="\${f.href}" class=\${cardClass('group flex flex-col gap-1.5 rounded-xl p-4 no-underline transition-colors hover:border-border-strong hover:bg-accent')}>
@@ -1352,8 +1323,8 @@ export default function Home() {
       <!-- Footer: docs + source -->
       <footer class="flex flex-col items-center gap-3">
         <nav class="flex items-center gap-6 text-sm text-muted-foreground" aria-label="WebJs links">
-          <a href="https://docs.webjs.dev" class="inline-flex items-center gap-2 hover:text-foreground transition-colors no-underline">\${iconBook()}<span>Docs</span></a>
-          <a href="https://github.com/webjsdev/webjs" class="inline-flex items-center gap-2 hover:text-foreground transition-colors no-underline">\${iconGithub()}<span>GitHub</span></a>
+          <a href="https://docs.webjs.dev" target="_blank" rel="noopener" class="inline-flex items-center gap-2 hover:text-foreground transition-colors no-underline">\${iconBook()}<span>Docs</span></a>
+          <a href="https://github.com/webjsdev/webjs" target="_blank" rel="noopener" class="inline-flex items-center gap-2 hover:text-foreground transition-colors no-underline">\${iconGithub()}<span>GitHub</span></a>
         </nav>
         <p class="text-[0.7rem] uppercase tracking-[0.15em] text-muted-foreground m-0 text-center">
           Built with WebJs &middot; MIT License
@@ -1414,9 +1385,10 @@ export class ThemeToggle extends WebComponent {
     const el = document.documentElement;
     if (next === 'system') delete el.dataset.theme;
     else el.dataset.theme = next;
-    // Keep the .dark class the @webjsdev/ui kit uses in sync so the ui-* components follow the theme.
+    // Our own tokens follow color-scheme via data-theme (set above). Keep the
+    // .dark class in sync only for @webjsdev/ui components, which key off it.
     const dark = next === 'dark'
-      || (next === 'system' && !window.matchMedia('(prefers-color-scheme: light)').matches);
+      || (next === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
     el.classList.toggle('dark', dark);
   }
 

@@ -28,7 +28,10 @@ export default function FeaturesLayout({ children, url }: { children: unknown; u
     <style>${SIDENAV_CSS}</style>
     <div class="lg:hidden mb-6">${backLink('/', html`&larr; Gallery`)}</div>
     <div class="grid lg:grid-cols-[190px_1fr] gap-8 lg:gap-12">
-      <aside class="hidden lg:flex lg:flex-col sticky top-6 self-start max-h-[calc(100dvh-3rem)] text-sm">
+      <!-- The sidebar caps at the viewport minus the root chrome (the h-14 navbar
+           = 3.5rem plus the root <main>'s py-8 = 4rem, so 7.5rem) and scrolls
+           internally, so a short demo never forces a page scrollbar. -->
+      <aside class="hidden lg:flex lg:flex-col sticky top-6 self-start max-h-[calc(100dvh-7.5rem)] text-sm">
         <!-- Pinned header: stays put while the demo list below scrolls. -->
         <a href="/" class="shrink-0 block px-3 py-1.5 mb-2 rounded-lg no-underline text-muted-foreground hover:text-foreground transition-colors">&larr; Gallery</a>
         <div class="gallery-sidenav min-h-0 overflow-y-auto overflow-x-hidden -mr-2 pr-2">
