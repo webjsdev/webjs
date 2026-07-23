@@ -96,6 +96,26 @@ test('a <meta> between head-bound tags does NOT strand the later tags (favicon +
   assert.ok(out.includes('<main>content</main>'));
 });
 
+test('a > inside a quoted attribute value does not truncate the tag', () => {
+  // A description meta with free text (content="Guides > API") must hoist as a
+  // WHOLE tag: a naive [^>]* matcher would cut it at the inner >, hoist the
+  // truncated half, leak ` API">` as visible body text, and terminate the run
+  // (stranding the stylesheet, the FOUC again).
+  const body =
+    '<meta name="description" content="Guides > API">' +
+    '<link rel="alternate" title=\'a > b\' href="/feed.xml">' +
+    '<link rel="stylesheet" href="/s.css">' +
+    '<main>content</main>';
+  const { head, body: out } = _hoistHeadTags(HEAD, body);
+
+  assert.ok(head.includes('content="Guides > API"'), 'meta hoisted whole, not truncated');
+  assert.ok(head.includes("title='a > b'"), 'single-quoted attr with > hoisted whole');
+  assert.ok(head.includes('rel="stylesheet"'), 'stylesheet hoisted past both');
+  assert.equal(out.includes('API">'), false, 'no truncated remainder leaks into the body');
+  assert.equal(out.includes('rel="stylesheet"'), false, 'stylesheet not stranded');
+  assert.ok(out.includes('<main>content</main>'));
+});
+
 test('a webjs client-router marker terminates the run (not swallowed)', () => {
   // A pathological layout that renders children right after its head tags:
   // the <!--wj:children:…--> marker must stay in the body so the client

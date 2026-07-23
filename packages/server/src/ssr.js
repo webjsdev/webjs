@@ -1138,8 +1138,13 @@ function collectHoistedHeadTags(bodyHtml) {
   // guard exempts client-router markers (<!--wj:children:…-->,
   // <!--/wj:children-->) so a layout that renders children directly after its
   // head tags still terminates the run there rather than swallowing the marker.
+  // The void-tag matchers are QUOTE-AWARE ((?:[^>"']|"[^"]*"|'[^']*')*): a `>`
+  // inside a quoted attribute value (a description meta like
+  // content="Guides > API") must not terminate the tag early, which would hoist
+  // a truncated tag, leak the remainder as visible body text, and strand the
+  // stylesheet (the #406 FOUC this hoist exists to prevent).
   const re =
-    /^\s*(<!--(?!\/?wj:)[\s\S]*?-->|<script[\s>][\s\S]*?<\/script>|<style[\s>][\s\S]*?<\/style>|<link\b[^>]*>|<meta\b[^>]*>)/i;
+    /^\s*(<!--(?!\/?wj:)[\s\S]*?-->|<script[\s>][\s\S]*?<\/script>|<style[\s>][\s\S]*?<\/style>|<link\b(?:[^>"']|"[^"]*"|'[^']*')*>|<meta\b(?:[^>"']|"[^"]*"|'[^']*')*>)/i;
   let remaining = bodyHtml;
   // `body` only advances to just-past the LAST hoisted head tag. Comments
   // are scanned through (so they don't terminate the run) but a comment that
