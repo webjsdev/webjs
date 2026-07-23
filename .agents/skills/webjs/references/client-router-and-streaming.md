@@ -35,9 +35,12 @@ Note for anyone testing this: **the Chromium web-test-runner currently resolves 
 ```
 
 ```js
-import { disableClientRouter } from '@webjsdev/core';
-disableClientRouter();
+import { disableClientRouter, enableClientRouter } from '@webjsdev/core';
+disableClientRouter();   // stop intercepting document <a> / <form> (plain links resume full loads)
+enableClientRouter();    // turn soft navigation back on
 ```
+
+`disableClientRouter()` / `enableClientRouter()` are a runtime pair that toggle only the document-level `<a>` / `<form>` interception. An explicit `navigate(url)` call still does a soft navigation either way (it is not gated by the toggle).
 
 Per link, opt out with `data-no-router` (auth flows like `/logout`, OAuth redirects, print views, an experimental route with a different runtime). Cross-origin hrefs, `download`, a non-`_self` target, pure same-page hash jumps, and non-HTML extensions are auto-skipped.
 
@@ -111,6 +114,13 @@ The router can wrap a navigation's DOM mutation in the native View Transitions A
 
 ```html
 <meta name="view-transition" content="same-origin">
+```
+
+A page (or layout) does not write raw `<head>` markup, so emit that meta through the `other` metadata field, which scopes it to the page that declares it:
+
+```ts
+// app/gallery/page.ts
+export const metadata = { other: { 'view-transition': 'same-origin' } };
 ```
 
 The accepted value is `same-origin`. When enabled it wraps every swap path (the two-tier boundary swap, the `<webjs-frame>` swap, and the background-revalidation full-body path). When `startViewTransition` is unavailable the swap runs synchronously with no flash and no throw. To persist a live element (a playing `<audio>`, an open menu) across a swap by node identity, mark it `data-webjs-permanent` and give it an `id`.
@@ -188,12 +198,24 @@ export function WS(ws, req, { params }) {
 }
 ```
 
-**Client.** `connectWS(url, handlers)` from `@webjsdev/core` auto-reconnects with exponential backoff, handles JSON parse/stringify, and queues sends while disconnected.
+**Client.** `connectWS(url, handlers)` from `@webjsdev/core` auto-reconnects with exponential backoff, handles JSON parse/stringify, and queues sends while disconnected. The handler set is `{ onOpen, onMessage, onClose }`, and it RETURNS a connection handle with `.send(data)` and `.close()`. Open it in `connectedCallback` and close it in `disconnectedCallback`, driving a connection-status signal from `onOpen` / `onClose`:
 
 ```js
 import { connectWS, renderStream } from '@webjsdev/core';
-connectWS('/feed', { onMessage: (m) => renderStream(m) });
+
+connectedCallback() {
+  super.connectedCallback();
+  this.conn = connectWS('/feed', {
+    onOpen:    () => (this.online = true),
+    onClose:   () => (this.online = false),
+    onMessage: (m) => renderStream(m),   // apply a server-pushed <webjs-stream> payload
+  });
+}
+disconnectedCallback() { super.disconnectedCallback(); this.conn?.close(); }
+send(text) { this.conn.send(text); }
 ```
+
+**Gotcha: a component re-render clobbers surgical `renderStream()` updates.** `renderStream()` (and `<webjs-stream>` in general) mutates the DOM out of band, appending rows the component's own `render()` does not know about. If the component then re-renders, `render()` re-runs and wipes those out-of-band rows. So render the target container ONCE and drive any mutation counter with a PLAIN instance field, never a signal or reactive prop that `render()` reads (a read would re-render and blow away the streamed-in DOM).
 
 **Broadcast.** `broadcast(path, data)` from `@webjsdev/server` fans a message to every connected client on that path (single-instance). For multi-instance, add Redis pub/sub yourself, there is no framework magic.
 
