@@ -20,6 +20,7 @@
 // requirement. The frame element itself upgrades because the root layout ships a
 // component (the theme toggle), so @webjsdev/core and the router load app-wide.
 import { html } from '@webjsdev/core';
+import { cardClass } from '#components/ui/card.ts';
 import type { Metadata } from '@webjsdev/core';
 import { filterTasks, normalizeStatus, type Status } from '#modules/frames/utils/tasks.ts';
 
@@ -50,7 +51,7 @@ export default function FramesExample({ searchParams }: { searchParams: Record<s
       layout can express: a layout wraps routes with shared chrome and only
       re-renders when you navigate, while a frame updates one region in place.
     </p>
-    <webjs-frame id="tasks" class="block p-4 rounded-2xl bg-card border border-border">
+    <webjs-frame id="tasks" class="${cardClass()} block p-4">
       <div class="flex gap-2 mb-4">
         ${filterTab(status, 'all', 'All')}
         ${filterTab(status, 'active', 'Active')}

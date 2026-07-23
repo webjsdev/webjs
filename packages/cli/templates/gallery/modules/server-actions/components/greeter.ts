@@ -1,6 +1,7 @@
 // Calls the 'use server' action via a normal import (the RPC stub). Never
 // hand-write fetch(); importing the action IS the API.
 import { WebComponent, signal, html } from '@webjsdev/core';
+import { cardClass } from '#components/ui/card.ts';
 import { buttonClass } from '#components/ui/button.ts';
 import { greet } from '../actions/greet.server.ts';
 
@@ -22,7 +23,7 @@ export class Greeter extends WebComponent {
     return html`
       <div class="grid gap-3 max-w-[420px]">
         <form @submit=${(e: SubmitEvent) => this.run(e)}
-          class="flex items-center gap-2 p-2 pl-4 rounded-2xl bg-card border border-border">
+          class="${cardClass()} flex items-center gap-2 p-2 pl-4">
           <input name="name" placeholder="your name" autocomplete="off"
             class="flex-1 min-w-0 bg-transparent border-0 outline-none text-foreground text-[15px] placeholder:text-muted-foreground py-1.5" />
           <button type="submit"

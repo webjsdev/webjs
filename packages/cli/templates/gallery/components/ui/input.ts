@@ -1,38 +1,37 @@
 /**
- * Input: styled native `<input>`. Tier-1 class helper. Works with every
- * input type (text, email, password, number, search, tel, url, date,
- * time, file, color, …). Form submission, autocomplete, browser
- * validation, and password managers all work because it IS the native
- * input.
+ * inputClass: the gallery's text-field design token, built on @webjsdev/ui.
  *
- * shadcn parity:
- *   Input  → inputClass()
+ * Like buttonClass, this is a `@webjsdev/ui` tier-1 CLASS HELPER: it returns a
+ * Tailwind class string you spread onto a NATIVE `<input>` or `<textarea>`, so
+ * the browser's built-in form behaviour, validation, and accessibility all work
+ * with nothing extra:
  *
- * Pair with `<label class=${labelClass()} for="...">` and a hint paragraph
- * (`<p class=${hintClass()} id="...-hint">`). Wrap all three in
- * `<div class=${fieldClass()}>` for the canonical field rhythm.
+ *   <input class=${inputClass()} name="email" type="email" />
+ *   <textarea class=${inputClass()} name="message" rows="3"></textarea>
  *
- * Design tokens used: --input, --background, --primary, --primary-foreground,
- * --muted-foreground, --foreground, --ring, --destructive.
+ * The same helper styles inputs AND textareas here, because this app wants them
+ * to look identical. That is the point of a design token: one place decides how
+ * every field looks, so they cannot drift apart. If you later want a distinct
+ * textarea look, add a `textareaClass` alongside this and theme it separately
+ * (that is exactly how `webjs ui add textarea` would give you one).
  *
- * @example
- * ```html
- * <input class=${inputClass()} type="email" name="email" id="email" required
- *        aria-describedby="email-hint">
- * ```
+ * OWN-AND-THEME: this is `@webjsdev/ui`'s input, THEMED to this scaffold's look
+ * (a filled `bg-background` field, `rounded-xl`, a primary focus border). You
+ * own this file: change the class values here and every field in the app
+ * updates at once. This is the intended workflow when building on `@webjsdev/ui`
+ * for a real app: pull the primitive, then make it yours.
  */
 import { cn } from '#lib/utils/cn.ts';
 
-const INPUT_BASE =
-  'h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none selection:bg-primary selection:text-primary-foreground file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30';
+// One surface for every text field. `focus:border-primary` is the whole focus
+// affordance (no ring), to match this app's quiet, token-driven chrome.
+const BASE =
+  'w-full bg-background border border-border rounded-xl px-3 py-2 text-[15px] text-foreground outline-none transition-colors focus:border-primary placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60';
 
-const INPUT_FOCUS =
-  'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50';
-
-const INPUT_INVALID =
-  'aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40';
-
-/** Compose Tailwind classes for a native `<input>`. */
-export function inputClass(): string {
-  return cn(INPUT_BASE, INPUT_FOCUS, INPUT_INVALID);
+/**
+ * Compose the Tailwind classes for a text input or textarea. Append your own
+ * layout classes as needed: `class="${inputClass()} max-w-sm"`.
+ */
+export function inputClass(extra?: string): string {
+  return cn(BASE, extra);
 }

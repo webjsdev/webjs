@@ -6,6 +6,7 @@
 // the button is inert and the empty output renders (streaming is inherently a
 // JS behaviour), so nothing here breaks the no-JS first paint.
 import { WebComponent, signal, html } from '@webjsdev/core';
+import { cardClass } from '#components/ui/card.ts';
 import { buttonClass } from '#components/ui/button.ts';
 import { streamTokens } from '../actions/stream-tokens.server.ts';
 
@@ -31,7 +32,7 @@ export class TokenStream extends WebComponent {
   render() {
     const busy = this.busy.get();
     return html`
-      <div class="rounded-2xl border border-border bg-card p-5">
+      <div class="${cardClass()} p-5">
         <button
           @click=${() => this.run()}
           ?disabled=${busy}

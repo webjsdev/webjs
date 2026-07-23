@@ -1,10 +1,12 @@
 import { html } from '@webjsdev/core';
+import { cardClass } from '#components/ui/card.ts';
+import { inputClass } from '#components/ui/input.ts';
 import { buttonClass } from '#components/ui/button.ts';
 import { signup } from '#modules/auth/actions/signup.server.ts';
 
 export const metadata = { title: 'Sign up' };
 
-const inputCls = 'w-full bg-background border border-border rounded-xl px-3 py-2 text-[15px] text-foreground outline-none transition-colors focus:border-primary placeholder:text-muted-foreground';
+const inputCls = inputClass();
 
 // Page server action: handles the POST from the form below. With JS disabled this
 // is a plain <form> round-trip; with JS the client router swaps the 422 re-render
@@ -35,7 +37,7 @@ export default function SignupPage({ actionData }: { actionData?: { fieldErrors?
     <div class="max-w-[420px] mx-auto">
       <h1 class="text-h2 font-bold mb-2">Create an account</h1>
       <p class="text-muted-foreground mb-5">Get started with your new workspace.</p>
-      <form method="POST" class="grid gap-4 p-5 rounded-2xl bg-card border border-border">
+      <form method="POST" class="${cardClass()} grid gap-4 p-5">
         <div class="grid gap-1.5">
           <label for="name" class="text-[13px] font-medium text-muted-foreground">Name</label>
           <input id="name" name="name" type="text" value=${values.name || ''} required class=${inputCls} placeholder="Ada Lovelace" />

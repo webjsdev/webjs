@@ -4,6 +4,7 @@
 // component authoring shape. Styling is crafted Tailwind on the app's design
 // tokens so it stays visually coherent with the rest of the app.
 import { WebComponent, prop, signal, html } from '@webjsdev/core';
+import { cardClass } from '#components/ui/card.ts';
 import { buttonClass } from '#components/ui/button.ts';
 
 export class CounterCard extends WebComponent({
@@ -21,7 +22,7 @@ export class CounterCard extends WebComponent({
 
   render() {
     return html`
-      <div class="grid gap-4 p-5 rounded-2xl bg-card border border-border max-w-[320px]">
+      <div class="${cardClass()} grid gap-4 p-5 max-w-[320px]">
         <slot></slot>
         <div class="flex items-baseline gap-2">
           <span class="text-[2.5rem] font-bold tabular-nums leading-none text-foreground">${this.count.get()}</span>
