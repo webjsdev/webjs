@@ -35,3 +35,16 @@ const BASE =
 export function inputClass(extra?: string): string {
   return cn(BASE, extra);
 }
+
+// A BORDERLESS field for composing INSIDE a card/pill: a `cardClass()` form with a
+// button (a search-bar). The card is the bordered container, so the field is
+// seamless (transparent, no border), and it flexes to fill the row. Distinct from
+// inputClass (a standalone bordered field); a bordered input inside a bordered
+// card would be a box-in-a-box.
+const BARE =
+  'flex-1 min-w-0 bg-transparent border-0 outline-none py-1.5 text-[15px] text-foreground placeholder:text-muted-foreground';
+
+/** Compose the classes for a borderless text field composed inside a card pill. */
+export function bareInputClass(extra?: string): string {
+  return cn(BARE, extra);
+}

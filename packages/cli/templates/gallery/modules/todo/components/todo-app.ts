@@ -12,6 +12,7 @@
 import { WebComponent, prop, optimistic, html } from '@webjsdev/core';
 import { cardClass } from '#components/ui/card.ts';
 import { buttonClass } from '#components/ui/button.ts';
+import { bareInputClass } from '#components/ui/input.ts';
 import { cn } from '#lib/utils/cn.ts';
 import { createTodo } from '../actions/create-todo.server.ts';
 import { toggleTodo } from '../actions/toggle-todo.server.ts';
@@ -100,7 +101,7 @@ export class TodoApp extends WebComponent({
           class="${cardClass()} flex items-center gap-2 p-2 pl-4 shadow-[0_1px_0_0_color-mix(in_oklch,var(--foreground)_5%,transparent)]">
           <input type="hidden" name="intent" value="create" />
           <input name="title" required maxlength="280" autocomplete="off" placeholder="What needs doing?"
-            class="flex-1 min-w-0 bg-transparent border-0 outline-none text-foreground text-[15px] placeholder:text-muted-foreground py-1.5" />
+            class=${bareInputClass()} />
           <button type="submit"
             class="${buttonClass()} shrink-0">Add</button>
         </form>
