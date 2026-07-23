@@ -42,7 +42,6 @@ export class GalleryNav extends WebComponent({ current: prop(String) }) {
       return html`<a href=${href} aria-current=${on ? 'page' : 'false'} class=${cls}>${title}</a>`;
     };
     return html`
-      <a href="/" class="block px-3 py-1.5 mb-4 rounded-lg no-underline text-sm text-muted-foreground hover:text-foreground transition-colors">&larr; Gallery</a>
       ${FEATURE_GROUPS.map((g) => html`
         <div class="mb-5">
           <div class="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">${g.label}</div>

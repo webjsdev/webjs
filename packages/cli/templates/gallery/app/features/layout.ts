@@ -13,8 +13,12 @@ export default function FeaturesLayout({ children, url }: { children: unknown; u
   return html`
     <div class="lg:hidden mb-6">${backLink('/', html`&larr; Gallery`)}</div>
     <div class="grid lg:grid-cols-[190px_1fr] gap-8 lg:gap-12">
-      <aside class="hidden lg:block sticky top-6 self-start max-h-[calc(100dvh-4rem)] overflow-y-auto overflow-x-hidden py-1 text-sm">
-        <gallery-nav current=${path}></gallery-nav>
+      <aside class="hidden lg:flex lg:flex-col sticky top-6 self-start max-h-[calc(100dvh-3rem)] text-sm">
+        <!-- Pinned header: stays put while the demo list below scrolls. -->
+        <a href="/" class="shrink-0 block px-3 py-1.5 mb-2 rounded-lg no-underline text-muted-foreground hover:text-foreground transition-colors">&larr; Gallery</a>
+        <div class="min-h-0 overflow-y-auto overflow-x-hidden">
+          <gallery-nav current=${path}></gallery-nav>
+        </div>
       </aside>
       <div class="min-w-0">${children}</div>
     </div>
