@@ -8,6 +8,7 @@
 - Design tokens: `:root` / `@theme` in the root layout
 - Light-DOM host `display: block` behaviour (and shadow hosts via `:host`)
 - When to use `static styles` (shadow DOM)
+- Accessible native controls (label association, `aria-pressed`, `aria-label`)
 - `position: fixed`, not `sticky`, for a pinned header (the iOS WebKit flicker)
 - Even-grid / no-reflow layout tips
 
@@ -91,6 +92,16 @@ html`<button class=${buttonClass({ variant: 'secondary', size: 'sm' })} @click=$
 Why a class helper (not a `<ui-button>` wrapper): it adds NO indirection, so the element stays native (`@click`, `?disabled`, form submission, focus, a11y all just work) and the markup stays readable, while every button shares one source of truth (so no button can forget `cursor-pointer` or drift). Put the affordance every variant needs (like `cursor-pointer`) on the shared BASE.
 
 **Own and theme your copy.** `webjs ui add <name>` copies the primitive INTO your `components/ui/`, so you own it. Theme it to YOUR app: change the class values so the helper produces YOUR look, rather than bending your app to the kit's defaults. Keep only the parts you use (the gallery's `cardClass` is surface-only, since its panels vary their own padding and layout). Reserve `lib/utils/ui.ts` `html`-fragment helpers for repeated markup chunks; reserve `components/ui/*` class helpers for themed primitives with variants.
+
+## Accessible native controls
+
+A cleared, growing app hand-authors its own controls, so accessibility is your job (the `@webjsdev/ui` primitives carry their own, but a raw `<button>` / `<input>` does not). Three habits keep hand-authored interactive markup accessible on BOTH the JS and no-JS paths:
+
+- **Associate a label with its control.** `<label for="email">` paired with `<input id="email">` (or wrap the control in the `<label>`), so a click on the label focuses the field and a screen reader announces it.
+- **State a toggle's pressed state.** A button that toggles carries `aria-pressed=${on}` so assistive tech announces on/off, not just "button".
+- **Name an icon-only button.** A button whose only content is an icon has no accessible name, so give it `aria-label="Delete task"`.
+
+Native `<button>` / `<a>` / `<input>` already have correct focus + keyboard behaviour, which is the main reason to prefer them (and the `buttonClass()` / `inputClass()` class helpers) over a custom `<div role>` element.
 
 ## Design tokens
 
