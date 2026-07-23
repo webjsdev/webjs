@@ -9,27 +9,35 @@
 // same patterns and SURVIVES this reset, so nothing is lost), then run this
 // once to shed the gallery, then grow the app in place.
 //
-// It removes the gallery routes + modules + demo metadata routes + the gallery's
-// example design system (components/ui/), resets app/page.ts to a minimal home,
-// and drops the demo `todos` table plus the auth card's `passwordHash` column
-// from the schema. It KEEPS the agent skill (.agents/skills/webjs/), the layout,
-// the database wiring, the theme toggle, the example `users` table, and
-// `lib/utils/cn.ts` (the `webjs ui add` prerequisite).
+// It strips the app down to a TRULY BAREBONES blank slate: it removes the
+// gallery routes + modules + demo metadata routes, the gallery's example design
+// system (components/ui/), the example theme-toggle component + its wiring, the
+// example test suite (test/hello/), and every empty leftover dir, then resets
+// app/page.ts to a minimal home and drops the demo `todos` table plus the auth
+// card's `passwordHash` column from the schema. It KEEPS only the buildable
+// base: the agent skill (.agents/skills/webjs/), the root layout (with its
+// design-token palette + OS-preference dark mode, minus the toggle widget), the
+// database wiring, the example `users` table, and `lib/utils/cn.ts` (the
+// `webjs ui add` prerequisite).
 //
-// Why remove components/ui: the gallery's design system is an EXAMPLE of the
-// pattern, not a base to inherit. Keeping it would nudge the agent to lean on
-// the gallery's buttons instead of building the app's OWN. The DURABLE knowledge
-// is the pattern itself, which lives in the skill
-// (.agents/skills/webjs/references/styling.md, re-read every session): learn it
-// from the gallery here, then after this reset run `webjs ui add <name>` (cn.ts
-// is kept for it) and theme your own components/ui/ to your app. It is a
-// one-time reset: if the gallery is already gone (no app/features/) it does
-// nothing, so a rerun never clobbers an app you built.
-import { rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+// Why strip so much: the demos, the design system, and the example component /
+// tests are all EXAMPLES to learn FROM, not a base to inherit. Leaving them
+// nudges the implementing agent to lean on the scaffold's choices instead of
+// building the app's own. The DURABLE knowledge is the pattern itself, which
+// lives in the skill (.agents/skills/webjs/, re-read every session): learn it
+// from the gallery here, then after this reset build your own (run
+// `webjs ui add <name>` for UI primitives, cn.ts is kept for it) themed to your
+// app. It is a one-time reset: if the gallery is already gone (no app/features/)
+// it does nothing, so a rerun never clobbers an app you built.
+import { rmSync, rmdirSync, existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = process.cwd();
 const rm = (p) => { if (existsSync(join(root, p))) { rmSync(join(root, p), { recursive: true, force: true }); return true; } return false; };
+// Remove a directory ONLY if it exists and is empty (used to clean the empty
+// parents a partial gallery removal leaves behind, e.g. app/api after its lone
+// auth handler is gone). Never touches a dir that still holds files.
+const pruneEmpty = (p) => { const abs = join(root, p); if (existsSync(abs) && readdirSync(abs).length === 0) { rmdirSync(abs); return true; } return false; };
 
 // Guard: the gallery is identified by app/features/. If it is absent, the gallery
 // was already cleared (or this is not a gallery scaffold), so exit before any
@@ -53,6 +61,11 @@ const galleryPaths = [
   // slate: the agent builds its own components/ui/ (run `webjs ui add`, cn.ts is
   // kept), learning the pattern from the skill, not inheriting the gallery's.
   'components/ui',
+  // Example scaffold artifacts (invariant 2): the theme-toggle component and the
+  // example test suite are things to learn from, not the agent's app. Removed
+  // for a true blank slate; the layout's theme import is stripped separately
+  // below. The agent writes its own tests + components for the real app.
+  'components/theme-toggle.ts', 'test/hello',
 ];
 // 2) The gallery's feature modules (by name). `auth` is the auth card's server
 // modules (createAuth config, password hashing, signup action, current-user
@@ -84,17 +97,35 @@ if (existsSync(schemaPath)) {
   writeFileSync(schemaPath, s);
 }
 
-// 5) Drop generated migrations + the dev database so the next db:generate is
+// 5) Strip the example theme-toggle from the root layout. The component file was
+// removed above; here the layout's registration import is removed so it does not
+// reference a missing module. The OS-preference dark-mode inline script + the
+// design tokens STAY (they need no component and work with JS off), so the app
+// still honours light/dark, just without the manual toggle button.
+const layoutPath = join(root, 'app/layout.ts');
+if (existsSync(layoutPath)) {
+  const l = readFileSync(layoutPath, 'utf8').replace(/^import '#components\/theme-toggle\.ts';\n/m, '');
+  writeFileSync(layoutPath, l);
+}
+
+// 6) Drop generated migrations + the dev database so the next db:generate is
 // clean against the reset schema (safe: the scaffold has no real data yet).
 rm('db/migrations');
 for (const f of ['db/dev.db', 'db/dev.db-shm', 'db/dev.db-wal']) rm(f);
+
+// 7) Prune the empty leftover dirs a partial removal left behind, so the reset
+// tree is a clean blank slate: app/api (held only the gallery auth handler),
+// test/unit + test/e2e (empty base placeholders), and test/ itself once its
+// example suites are gone. modules/ + components/ are kept as empty build
+// targets (the reset home + `webjs ui add` land there). Order matters: prune the
+// children before test/ so it reads as empty.
+for (const d of ['app/api', 'test/unit', 'test/e2e', 'test']) if (pruneEmpty(d)) removed++;
 
 console.log(`Gallery cleared (${removed} paths removed). The agent skill and your database wiring are kept. Build your own design system: run \`npx webjsdev ui add <name>\` and theme it (see .agents/skills/webjs/references/styling.md).`);
 console.log('Next: regenerate the database (db:generate then db:migrate), then start the dev server and build your app in app/ and modules/.');
 
 function MINIMAL_PAGE() {
   return `import { html } from '@webjsdev/core';
-import '#components/theme-toggle.ts';
 
 export const metadata = {
   title: 'Home',
@@ -102,7 +133,6 @@ export const metadata = {
 
 export default function Home() {
   return html\`
-    <div class="fixed top-4 right-4 z-10"><theme-toggle></theme-toggle></div>
     <div class="max-w-2xl mx-auto px-6 py-24 flex flex-col items-center text-center gap-6">
       <h1 class="text-4xl font-bold tracking-tight m-0">Your app</h1>
       <p class="text-base text-muted-foreground leading-relaxed m-0">
