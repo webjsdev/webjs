@@ -70,6 +70,32 @@ test('multiple comments interleaved still hoist every tag', () => {
   assert.equal(out.includes('rel="stylesheet"'), false);
 });
 
+test('a <meta> between head-bound tags does NOT strand the later tags (favicon + stylesheet)', () => {
+  // The scaffold layout writes the theme <script>, then <meta name="color-scheme">,
+  // then the favicon <link> + the Tailwind stylesheet + the token <style>. A
+  // <meta> is void like a <link>, so it must be hoisted (not terminate the run),
+  // or the favicon lands in <body> (browsers ignore it, so it never renders) and
+  // the stylesheet + styles strand (FOUC). Fails without <meta> in the hoist regex.
+  const body =
+    '<script>/*theme*/</script>' +
+    '<meta name="color-scheme" content="light dark">' +
+    '<link rel="icon" href="/public/favicon.svg" type="image/svg+xml">' +
+    '<link rel="stylesheet" href="/public/tailwind.css">' +
+    '<style>:root{--x:1}</style>' +
+    '<main>content</main>';
+  const { head, body: out } = _hoistHeadTags(HEAD, body);
+
+  assert.ok(head.includes('name="color-scheme"'), 'meta hoisted');
+  assert.ok(head.includes('rel="icon"'), 'favicon hoisted past the meta');
+  assert.ok(head.includes('rel="stylesheet"'), 'stylesheet hoisted past the meta');
+  assert.ok(head.includes('<style>:root{--x:1}</style>'), 'token style hoisted');
+
+  assert.equal(out.includes('rel="icon"'), false, 'favicon must not stay in body');
+  assert.equal(out.includes('rel="stylesheet"'), false, 'stylesheet must not strand (FOUC)');
+  assert.equal((out.match(/name="color-scheme"/g) || []).length, 0, 'meta not duplicated into the body');
+  assert.ok(out.includes('<main>content</main>'));
+});
+
 test('a webjs client-router marker terminates the run (not swallowed)', () => {
   // A pathological layout that renders children right after its head tags:
   // the <!--wj:children:…--> marker must stay in the body so the client

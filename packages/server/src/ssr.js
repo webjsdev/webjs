@@ -1124,18 +1124,22 @@ function wrapInDocument(body, opts) {
  */
 function collectHoistedHeadTags(bodyHtml) {
   const tags = [];
-  // <script>…</script> and <style>…</style> are paired; <link …> is void.
-  // A plain HTML comment (<!-- … -->) is consumed but NOT hoisted, so a
-  // comment interleaved with head-bound tags (e.g. "<!-- Self-hosted fonts -->"
+  // <script>…</script> and <style>…</style> are paired; <link …> and <meta …>
+  // are void. A plain HTML comment (<!-- … -->) is consumed but NOT hoisted, so
+  // a comment interleaved with head-bound tags (e.g. "<!-- Self-hosted fonts -->"
   // between a favicon <link> and the stylesheet <link>) does not terminate
   // the leading run and strand the stylesheet in <body>, which caused FOUC
   // because a <link rel="stylesheet"> in <body> is not reliably
-  // render-blocking (#406). The `(?!/?wj:)` guard exempts client-router
-  // markers (<!--wj:children:…-->, <!--/wj:children-->) so a layout that
-  // renders children directly after its head tags still terminates the run
-  // there rather than swallowing the nesting marker.
+  // render-blocking (#406). A <meta …> is treated the same way for the same
+  // reason: a <meta name="color-scheme"> between the theme <script> and the
+  // stylesheet <link> would otherwise terminate the run and strand the
+  // stylesheet AND a <link rel="icon"> in <body> (a favicon in <body> is
+  // ignored by browsers, so the icon silently never renders). The `(?!/?wj:)`
+  // guard exempts client-router markers (<!--wj:children:…-->,
+  // <!--/wj:children-->) so a layout that renders children directly after its
+  // head tags still terminates the run there rather than swallowing the marker.
   const re =
-    /^\s*(<!--(?!\/?wj:)[\s\S]*?-->|<script[\s>][\s\S]*?<\/script>|<style[\s>][\s\S]*?<\/style>|<link\b[^>]*>)/i;
+    /^\s*(<!--(?!\/?wj:)[\s\S]*?-->|<script[\s>][\s\S]*?<\/script>|<style[\s>][\s\S]*?<\/style>|<link\b[^>]*>|<meta\b[^>]*>)/i;
   let remaining = bodyHtml;
   // `body` only advances to just-past the LAST hoisted head tag. Comments
   // are scanned through (so they don't terminate the run) but a comment that
