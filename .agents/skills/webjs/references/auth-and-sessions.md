@@ -2,10 +2,10 @@
 
 ## What This Covers
 
-- Sessions: cookie by default, Redis-backed when configured, the `SESSION_SECRET` requirement
-- Authentication: `createAuth` (NextAuth-style), Credentials plus OAuth providers, `auth()` in a page or action
-- Login and logout flows (`signIn` / `signOut` / `handlers`)
-- Protecting a route: gate at the top of a page or action, redirect when unauthenticated
+- Sessions: the `session()` middleware + storage factories (`cookieSession` / `storeSession`), the `getSession(req)` method API (`.get` / `.set` / `.flash` / `.destroy`), the `SESSION_SECRET` requirement
+- Authentication: `createAuth` (NextAuth-style), Credentials plus OAuth providers, `auth()` in a page or action, scrypt password hashing
+- Login and logout flows: mounting `handlers` at `app/api/auth/[...path]`, the no-JS credentials form (`/api/auth/signin/credentials` + `redirectTo` + `?error`), `signIn` / `signOut`
+- Protecting a route: a page-top `auth()` gate OR a per-segment `middleware.ts` calling `auth(req)`
 - `forbidden()` (403) vs `unauthorized()` (401) and their nearest-wins boundary files
 - Returning an `ActionResult` for an auth failure inside a `'use server'` action (do NOT throw there)
 - The Origin / `Sec-Fetch-Site` CSRF model (not a token cookie)
@@ -21,23 +21,30 @@ scaling, the full caching surface).
 
 ## Sessions
 
-Enable sessions in middleware, read and write them in a page or action.
+Enable sessions with `session()` MIDDLEWARE, then read and write them with `getSession(req)` in any route or middleware the session wraps.
 
 ```ts
-// middleware.ts: enable on all routes
-import { session } from '@webjsdev/server';
-export default session();   // auto: REDIS_URL present -> server-side, else -> cookie
-
-// in a page or action
-import { getSession } from '@webjsdev/server';
-const s = getSession(req);
-s.userId = user.id;         // auto-saved after the response
+// middleware.ts: enable on all routes. Storage is pluggable.
+import { session, cookieSession, storeSession } from '@webjsdev/server';
+export default session({ secret: process.env.SESSION_SECRET, storage: cookieSession() });
+// cookieSession()  -> whole session in a signed cookie (stateless, the default)
+// storeSession()   -> session in the active store (memoryStore in dev, Redis in prod), id in the cookie
 ```
 
-Cookie sessions (the default) are signed and encrypted with no server
-state. Store sessions (with Redis) keep the session id in the cookie and
-the data in Redis. Both require `SESSION_SECRET`, read from the
-environment (never a literal in source) so boot fails if it is missing.
+`getSession(req)` returns a small key/value `Session` with a METHOD API, not property assignment. Mutating it makes the middleware re-sign and set the cookie on the way out:
+
+```ts
+import { getSession } from '@webjsdev/server';
+export async function GET(req: Request) {
+  const s = getSession(req);
+  s.set('userId', user.id);            // write
+  const id = s.get('userId');          // read
+  s.flash('notice', 'Saved');          // one-read-only value (cleared after the next read)
+  s.destroy();                         // clear the whole session (logout)
+}
+```
+
+Cookie sessions (the default) are signed with no server state; store sessions keep only the id in the cookie and the data in the store. `cookieSession` / `storeSession` are aliases for `cookieSessionStorage` / `storeSessionStorage`. Both strategies require `SESSION_SECRET`, read from the environment (never a literal in source) so boot fails if it is missing.
 
 ## Authentication (`createAuth`)
 
@@ -55,7 +62,7 @@ export const { auth, signIn, signOut, handlers } = createAuth({
     Credentials({
       async authorize(credentials) {
         const user = await db.query.users.findFirst({ where: { email: credentials.email } });
-        if (!user || !verifyPassword(credentials.password, user.passwordHash)) return null;
+        if (!user || !(await compare(credentials.password, user.passwordHash))) return null;
         return { id: user.id, name: user.name, email: user.email, role: user.role };
       },
     }),
@@ -63,8 +70,49 @@ export const { auth, signIn, signOut, handlers } = createAuth({
     GitHub(),   // reads AUTH_GITHUB_ID, AUTH_GITHUB_SECRET
   ],
   secret: process.env.AUTH_SECRET,   // required, 32+ random chars, from the env
+  pages: { error: '/login' },        // a failed sign-in 302s here with ?error=<code>
 });
 ```
+
+**Password hashing is the app's job** (WebJs ships no `verifyPassword`). Use `scrypt` from `node:crypto` (built into Node AND Bun, no dependency) in a server-only utility, and call it from `authorize`:
+
+```ts
+// modules/auth/password.server.ts (a server-only utility, never reaches the browser)
+import { scrypt, randomBytes, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
+const scryptAsync = promisify(scrypt);
+export async function hash(pw: string) {
+  const salt = randomBytes(16).toString('hex');
+  return salt + ':' + ((await scryptAsync(pw, salt, 64)) as Buffer).toString('hex');
+}
+export async function compare(pw: string, stored: string) {
+  const [salt, key] = stored.split(':');
+  return timingSafeEqual((await scryptAsync(pw, salt, 64)) as Buffer, Buffer.from(key, 'hex'));
+}
+```
+
+**Mount `handlers` at an `app/api/auth/[...path]/route.ts` catch-all** (at the app root, NOT under a feature folder): `createAuth` hardcodes `/api/auth/signin/*` and `/api/auth/callback/*` for its form posts and OAuth callback URIs.
+
+```ts
+// app/api/auth/[...path]/route.ts
+import { handlers } from '#modules/auth/auth.server.ts';
+export const GET = handlers.GET;
+export const POST = handlers.POST;
+```
+
+**The no-JS sign-in / sign-out flow is plain forms** (progressive-enhancement-safe). Sign in by POSTing to `/api/auth/signin/credentials` with a hidden `redirectTo`, and read `?error` (mapped from `pages.error`) for feedback; sign out by POSTing to `/api/auth/signout`:
+
+```html
+<form method="POST" action="/api/auth/signin/credentials">
+  <input type="hidden" name="redirectTo" value="/dashboard">
+  <input name="email" type="email" required><input name="password" type="password" required>
+  <button>Sign in</button>
+</form>
+<!-- log out -->
+<form method="POST" action="/api/auth/signout"><button>Log out</button></form>
+```
+
+For a programmatic sign-in (the auto-login-after-signup pattern), `signIn('credentials', creds, { redirectTo })` returns a `302` `Response` that a page `action` can return directly.
 
 Sessions are JWT by default (stateless, scales horizontally). OAuth
 providers handle the full redirect flow. Read the session anywhere on the
@@ -118,6 +166,20 @@ export default async function Dashboard() {
 Reading the session through `auth()` also auto-excludes the page from the
 server HTML response cache, so a per-user page is never cached and served
 to another visitor (see `built-ins.md`).
+
+To gate a WHOLE subtree in one place, use a per-segment `middleware.ts` that reads `auth(req)` (the explicit-request form) and returns a `302` BEFORE the page renders. It runs for every request under its segment and needs only a cookie read (no DB query), so the gate is real the moment the app boots:
+
+```ts
+// app/dashboard/middleware.ts  (protects /dashboard/*)
+import { auth } from '#modules/auth/auth.server.ts';
+export default async function requireAuth(req: Request, next: () => Promise<Response>) {
+  const session = await auth(req);
+  if (!session?.user) return new Response(null, { status: 302, headers: { location: '/login' } });
+  return next();
+}
+```
+
+`auth(req)` takes the in-flight request explicitly (for a middleware / route); the ambient `auth()` (no argument) reads from context inside a page or action.
 
 ## `forbidden()` (403) vs `unauthorized()` (401)
 

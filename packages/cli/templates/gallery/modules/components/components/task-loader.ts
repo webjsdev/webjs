@@ -6,6 +6,7 @@
 // `async render()` instead, which blocks SSR so the data is server-rendered;
 // a Task shows its PENDING state at SSR, so the value is not in the first paint.
 import { WebComponent, html } from '@webjsdev/core';
+import { buttonClass } from '#components/ui/button.ts';
 import { Task, TaskStatus } from '@webjsdev/core/task';
 
 export class TaskLoader extends WebComponent {
@@ -33,13 +34,13 @@ export class TaskLoader extends WebComponent {
     const t = this.task;
     const body =
       t.status === TaskStatus.PENDING ? html`<span class="text-muted-foreground">loading…</span>`
-      : t.status === TaskStatus.ERROR ? html`<span class="text-red-500">error: ${String((t.error as Error)?.message ?? t.error)}</span>`
+      : t.status === TaskStatus.ERROR ? html`<span class="text-destructive">error: ${String((t.error as Error)?.message ?? t.error)}</span>`
       : t.status === TaskStatus.COMPLETE ? html`<span class="text-foreground">${t.value}</span>`
       : html`<span class="text-muted-foreground">idle</span>`;
     return html`
       <div class="flex items-center gap-3 text-[15px]">
         <button @click=${() => this.reload()}
-          class="px-3.5 py-1.5 rounded-xl bg-card border border-border text-foreground text-sm cursor-pointer transition-colors hover:border-border-strong">reload</button>
+          class=${buttonClass({ variant: 'secondary', size: 'sm' })}>reload</button>
         ${body}
       </div>
     `;

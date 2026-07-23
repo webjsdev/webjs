@@ -7,6 +7,7 @@
 // use HTTP Cache-Control + ETag (conditional GET).
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
+import { pageHeading, lede } from '#lib/utils/ui.ts';
 import '#modules/caching/components/cache-buster.ts';
 
 export const metadata: Metadata = { title: 'Caching (revalidate) | features' };
@@ -19,11 +20,11 @@ export default function CachingExample() {
   // seconds, so this value is frozen until the window elapses.
   const renderedAt = new Date().toLocaleTimeString('en-US', { hour12: false });
   return html`
-    <h1 class="text-h2 font-bold mb-4">Caching</h1>
-    <p class="text-muted-foreground mb-4">
+    ${pageHeading('Caching')}
+    ${lede(html`
       This page sets <code>export const revalidate = 10</code>, so its
       server-rendered HTML is cached per URL for ten seconds.
-    </p>
+    `)}
     <p class="mb-4">
       Rendered at
       <code class="font-mono text-primary">${renderedAt}</code>.
@@ -35,7 +36,7 @@ export default function CachingExample() {
       <code>revalidateTag</code>, or a GET action's
       <code>export const cache</code>.
     </p>
-    <p class="text-muted-foreground text-sm mt-6 mb-2">
+    <p class="text-muted-foreground text-sm">
       A mutation evicts the cache on demand. Click below (it calls
       <code class="font-mono">revalidatePath('/features/caching')</code>), then refresh:
       the timestamp updates immediately, even inside the 10s window, because the

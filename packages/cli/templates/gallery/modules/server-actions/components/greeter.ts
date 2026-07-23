@@ -1,6 +1,9 @@
 // Calls the 'use server' action via a normal import (the RPC stub). Never
 // hand-write fetch(); importing the action IS the API.
 import { WebComponent, signal, html } from '@webjsdev/core';
+import { cardClass } from '#components/ui/card.ts';
+import { buttonClass } from '#components/ui/button.ts';
+import { bareInputClass } from '#components/ui/input.ts';
 import { greet } from '../actions/greet.server.ts';
 
 export class Greeter extends WebComponent {
@@ -21,13 +24,13 @@ export class Greeter extends WebComponent {
     return html`
       <div class="grid gap-3 max-w-[420px]">
         <form @submit=${(e: SubmitEvent) => this.run(e)}
-          class="flex items-center gap-2 p-2 pl-4 rounded-2xl bg-card border border-border">
+          class="${cardClass()} flex items-center gap-2 p-2 pl-4">
           <input name="name" placeholder="your name" autocomplete="off"
-            class="flex-1 min-w-0 bg-transparent border-0 outline-none text-foreground text-[15px] placeholder:text-muted-foreground py-1.5" />
+            class=${bareInputClass()} />
           <button type="submit"
-            class="shrink-0 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">Greet</button>
+            class="${buttonClass()} shrink-0">Greet</button>
         </form>
-        <p class="m-0 text-sm text-muted-foreground">The action is gated by requireAuth. <a class="text-primary" href="/features/auth/login">Sign in</a> to greet; signed out returns a real 401.</p>
+        <p class="m-0 text-sm text-muted-foreground">The action is gated by requireAuth. <a class="text-primary underline underline-offset-2" href="/features/auth/login">Sign in</a> to greet; signed out returns a real 401.</p>
         ${this.msg.get() ? html`<p class="m-0 font-semibold text-foreground">${this.msg.get()}</p>` : ''}
       </div>
     `;

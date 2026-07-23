@@ -3,6 +3,7 @@
 // button is inert (cache eviction there happens as a side effect of the write
 // action that changed the data).
 import { WebComponent, signal, html } from '@webjsdev/core';
+import { buttonClass } from '#components/ui/button.ts';
 import { bustCaches } from '#modules/caching/actions/bust-caches.server.ts';
 
 export class CacheBuster extends WebComponent {
@@ -21,7 +22,7 @@ export class CacheBuster extends WebComponent {
     return html`
       <div class="flex items-center gap-3 text-[15px]">
         <button @click=${() => this.bust()}
-          class="px-3.5 py-1.5 rounded-xl bg-card border border-border text-foreground text-sm cursor-pointer transition-colors hover:border-border-strong">revalidate this page</button>
+          class=${buttonClass({ variant: 'secondary', size: 'sm' })}>revalidate this page</button>
         <span class="text-muted-foreground">${this.status.get()}</span>
       </div>
     `;

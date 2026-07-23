@@ -4,6 +4,7 @@
 // lives in modules/todo/. This is the idiomatic app-thin + modules-logic split.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core'; // Metadata is a @webjsdev/core type
+import { pageHeading } from '#lib/utils/ui.ts';
 import { listTodos } from '#modules/todo/queries/list-todos.server.ts';
 import { createTodo } from '#modules/todo/actions/create-todo.server.ts';
 import { toggleTodo } from '#modules/todo/actions/toggle-todo.server.ts';
@@ -16,7 +17,7 @@ export default async function TodoExample() {
   // SSR-fetched and seeded, so <todo-app> paints the real list on first byte.
   const todos = await listTodos();
   return html`
-    <h1 class="text-h2 font-bold mb-4">Optimistic todo</h1>
+    ${pageHeading('Optimistic todo')}
     <todo-app .todos=${todos}></todo-app>
   `;
 }

@@ -124,7 +124,16 @@ async function copyGallery(appDir) {
   const galleryDir = join(TEMPLATES, 'gallery');
   // `test` carries the auth card's real request-pipeline test (test/auth); it
   // ships with the gallery and is pruned by gallery:clear alongside the card.
-  for (const sub of ['app', 'modules', 'test']) {
+  // `components` carries the gallery's EXAMPLE design system (components/ui/ class
+  // helpers) the demos import. It ships here so a fresh app's demos work, but it
+  // is an example to learn from, so gallery:clear REMOVES it (the agent then runs
+  // `webjs ui add` and themes its own components/ui/); only cn.ts is kept as the
+  // `webjs ui add` prerequisite. It merges into the app's components/ alongside
+  // the separately-written theme toggle (also removed by gallery:clear).
+  // `lib` merges the gallery's markup-chunk helpers (lib/utils/ui.ts) alongside
+  // the ui bootstrap's cn.ts/dom.ts (written earlier); gallery:clear removes just
+  // ui.ts. cp is recursive-merge, so the pre-written lib/utils/ files are kept.
+  for (const sub of ['app', 'modules', 'test', 'components', 'lib']) {
     await cp(join(galleryDir, sub), join(appDir, sub), { recursive: true });
   }
 }
@@ -1111,26 +1120,34 @@ import '#components/theme-toggle.ts';
  * mapped into Tailwind via @theme in public/input.css, so bg-background,
  * text-foreground, bg-card, bg-primary, and border-border all work.
  */
+
+// Declare the favicon via metadata.icons (NOT a hand-written <link> in the
+// template): the framework emits metadata links into <head>, whereas a <link>
+// written in the layout body stays in <body>, where browsers ignore it. The SVG
+// lives at public/favicon.svg and serves at /public/favicon.svg.
+export const metadata = { icons: '/public/favicon.svg' };
+
 export default function RootLayout({ children }: { children: unknown }) {
   // Read the in-flight request's CSP nonce so the theme-detection inline script
   // passes strict CSP. Returns '' when no CSP nonce is set.
   const nonce = cspNonce();
   return html\`
     <script nonce="\${nonce}">
-      // Light/dark theme: read the saved or OS choice and set data-theme plus the
-      // .dark class the tokens key off. Delete this block (and the light blocks
-      // below) for a single-theme app.
+      // Light/dark theme: apply the saved choice before paint (no flash). The
+      // tokens follow color-scheme, which [data-theme] forces and otherwise
+      // follows the OS, so an unset choice needs NO inline work here. The .dark
+      // class is synced only for @webjsdev/ui components (they key off .dark).
+      // Delete this block and the [data-theme] rules below for a single-theme app.
       (function(){
         try {
-          var mq = window.matchMedia('(prefers-color-scheme: light)');
+          var mq = window.matchMedia('(prefers-color-scheme: dark)');
           function apply(){
             var t = null;
             try { t = localStorage.getItem('webjs_theme'); } catch (_) {}
             var el = document.documentElement;
             if (t === 'light' || t === 'dark') el.dataset.theme = t;
             else delete el.dataset.theme;
-            var dark = t === 'dark' || (t !== 'light' && !mq.matches);
-            el.classList.toggle('dark', dark);
+            el.classList.toggle('dark', t === 'dark' || (t !== 'light' && mq.matches));
           }
           apply();
           mq.addEventListener('change', apply);
@@ -1144,7 +1161,9 @@ export default function RootLayout({ children }: { children: unknown }) {
         function measure(){
           try {
             var hdr = document.querySelector('header');
-            if (!hdr) return;
+            // Only a FIXED header leaves normal flow and needs its height
+            // reserved; a normal in-flow header (the gallery's navbar) does not.
+            if (!hdr || getComputedStyle(hdr).position !== 'fixed') return;
             var apply = function(){
               document.documentElement.style.setProperty('--header-h', hdr.offsetHeight + 'px');
             };
@@ -1157,7 +1176,6 @@ export default function RootLayout({ children }: { children: unknown }) {
       })();
     </script>
     <meta name="color-scheme" content="light dark">
-    <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
     <!-- JetBrains Mono for body/UI (its monospaced, developer-console feel) and
          Bricolage Grotesque for the display wordmark. Swap these for your own
          fonts (and update --font-sans / --font-display below). -->
@@ -1172,89 +1190,59 @@ export default function RootLayout({ children }: { children: unknown }) {
 
     <link rel="stylesheet" href="/public/tailwind.css">
     <style>
-      /* Design tokens. The token NAMES are infrastructure (public/input.css maps
-         them into Tailwind via @theme). The VALUES are a cool neutral-grey palette
-         with a monospaced type system: change them here to give the app its own
-         look. bg-background / text-foreground / bg-card / bg-primary / border-border
-         all resolve from these. */
+      /* Design tokens: ONE definition per colour via light-dark(LIGHT, DARK), so
+         a palette change lands in a single place (DRY). The token NAMES are
+         infrastructure (public/input.css maps them into Tailwind via @theme); the
+         VALUES are a cool neutral-grey palette with a monospaced type system.
+         color-scheme decides which side of each light-dark() applies: the default
+         'light dark' follows the OS, and the toggle FORCES one via [data-theme]
+         below. The light theme is a crisp WHITE page with near-black text, a
+         readable muted grey, and visible borders (a washed-out light theme comes
+         from a grey page + too-light muted text + faint borders). For a
+         single-theme app, delete the [data-theme] rules and give each token a
+         single colour instead of light-dark().
+         EDGE CASES: light-dark() is COLOUR-only. A colour needed in just one
+         theme sets the unused side to a no-op, e.g. light-dark(#fff, transparent).
+         A DERIVED token that references a light-dark() one (like --primary-tint
+         below) tracks both themes for free. A NON-colour token that must differ
+         per theme (a shadow's geometry, a gradient, a size, an image) cannot use
+         light-dark(); give it a :root[data-theme='dark'] override plus an
+         @media (prefers-color-scheme: dark) { :root:not([data-theme]) { ... } }
+         rule for the OS default. */
       :root {
         --font-sans:  'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
         --font-serif: ui-serif, 'Iowan Old Style', Palatino, Georgia, serif;
         --font-mono:  'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
         --font-display: 'Bricolage Grotesque', 'JetBrains Mono', ui-sans-serif, system-ui, sans-serif;
         --header-h: 0px;
+
+        color-scheme: light dark;                              /* default: follow the OS */
+        --background:         light-dark(#ffffff, #1e2226);
+        --foreground:         light-dark(#191c20, #dee2e6);
+        --card:               light-dark(#f7f8fa, #313539);
+        --card-foreground:    light-dark(#191c20, #dee2e6);
+        --popover:            light-dark(#ffffff, #313539);
+        --popover-foreground: light-dark(#191c20, #dee2e6);
+        --primary:            light-dark(#1e2226, #dee2e6);
+        --primary-foreground: light-dark(#ffffff, #1e2226);
+        --secondary:          light-dark(#eef0f2, #363a3e);
+        --secondary-foreground: light-dark(#191c20, #dee2e6);
+        --muted:              light-dark(#eef0f2, #313539);
+        --muted-foreground:   light-dark(#565c64, #94989c);
+        --accent:             light-dark(#e9ebef, #363a3e);
+        --accent-foreground:  light-dark(#191c20, #f7fbff);
+        --border:             light-dark(#e2e5e9, #3d434b);
+        --border-strong:      light-dark(#ccd1d7, #454b51);
+        --input:              light-dark(#e2e5e9, #34393e);
+        --ring:               light-dark(#8b9198, #6b7075);
         /* A translucent tint of the primary, tracked automatically across
            light/dark. Used for focus rings (ring-primary-tint). */
         --primary-tint: color-mix(in srgb, var(--primary) 22%, transparent);
       }
-      /* dark (the default, and the explicit .dark the toggle sets) */
-      :root, .dark {
-        color-scheme: dark;
-        --background: #1e2226;
-        --foreground: #dee2e6;
-        --card: #313539;
-        --card-foreground: #dee2e6;
-        --popover: #313539;
-        --popover-foreground: #dee2e6;
-        --primary: #dee2e6;
-        --primary-foreground: #1e2226;
-        --secondary: #363a3e;
-        --secondary-foreground: #dee2e6;
-        --muted: #313539;
-        --muted-foreground: #94989c;
-        --accent: #363a3e;
-        --accent-foreground: #f7fbff;
-        --border: #34393e;
-        --border-strong: #454b51;
-        --input: #34393e;
-        --ring: #6b7075;
-      }
-      /* light (explicit via the toggle) */
-      :root[data-theme='light'] {
-        color-scheme: light;
-        --background: #dee2e6;
-        --foreground: #313539;
-        --card: #f0f4f7;
-        --card-foreground: #313539;
-        --popover: #f0f4f7;
-        --popover-foreground: #313539;
-        --primary: #313539;
-        --primary-foreground: #f7fbff;
-        --secondary: #f7fbff;
-        --secondary-foreground: #313539;
-        --muted: #eaeef1;
-        --muted-foreground: #767b80;
-        --accent: #f7fbff;
-        --accent-foreground: #313539;
-        --border: #c9d0d6;
-        --border-strong: #b3bbc2;
-        --input: #c9d0d6;
-        --ring: #9aa0a5;
-      }
-      /* light (OS preference, when the user has made no explicit choice) */
-      @media (prefers-color-scheme: light) {
-        :root:not(.dark):not([data-theme='dark']) {
-          color-scheme: light;
-          --background: #dee2e6;
-          --foreground: #313539;
-          --card: #f0f4f7;
-          --card-foreground: #313539;
-          --popover: #f0f4f7;
-          --popover-foreground: #313539;
-          --primary: #313539;
-          --primary-foreground: #f7fbff;
-          --secondary: #f7fbff;
-          --secondary-foreground: #313539;
-          --muted: #eaeef1;
-          --muted-foreground: #767b80;
-          --accent: #f7fbff;
-          --accent-foreground: #313539;
-          --border: #c9d0d6;
-          --border-strong: #b3bbc2;
-          --input: #c9d0d6;
-          --ring: #9aa0a5;
-        }
-      }
+      /* The toggle writes data-theme to FORCE a scheme; with neither attribute
+         the default 'color-scheme: light dark' above follows the OS. */
+      :root[data-theme='light'] { color-scheme: light; }
+      :root[data-theme='dark']  { color-scheme: dark; }
     </style>
     <style>
       /* Base styles utility classes can't reach. */
@@ -1268,7 +1256,24 @@ export default function RootLayout({ children }: { children: unknown }) {
         -moz-osx-font-smoothing: grayscale;
       }
     </style>
-    <main class="min-h-dvh px-4 sm:px-6 py-8">
+    <!-- Top navbar, on every page: brand on the left, links + theme toggle on
+         the right. It floats (no separator) and is in normal flow, so it just
+         scrolls with the page; make it a fixed header only if you want it pinned
+         (position: fixed, never sticky, which flickers on iOS during a nav). -->
+    <header class="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+      <a href="/" class="inline-flex items-center gap-2 no-underline text-foreground font-bold tracking-tight" style="font-family: var(--font-display)">
+        <span class="w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-foreground to-muted-foreground" aria-hidden="true"></span>
+        WebJs Gallery
+      </a>
+      <nav class="flex items-center gap-4 text-sm" aria-label="Primary">
+        <a href="https://docs.webjs.dev" target="_blank" rel="noopener" class="hidden sm:inline text-muted-foreground hover:text-foreground no-underline transition-colors">Docs</a>
+        <a href="https://github.com/webjsdev/webjs" target="_blank" rel="noopener" class="hidden sm:inline text-muted-foreground hover:text-foreground no-underline transition-colors">GitHub</a>
+        <theme-toggle></theme-toggle>
+      </nav>
+    </header>
+    <!-- Fill the viewport minus the h-14 (3.5rem) navbar, so a short page has no
+         spurious scrollbar (min-h-dvh alone would overflow by the navbar height). -->
+    <main class="min-h-[calc(100dvh-3.5rem)] max-w-5xl mx-auto px-4 sm:px-6 py-8">
       \${children}
     </main>
   \`;
@@ -1281,74 +1286,34 @@ export default function RootLayout({ children }: { children: unknown }) {
   // app/features/<x> route AND its modules/<x>), then reshape this page into the
   // app's real landing page.
   await writeFile(join(appDir, 'app', 'page.ts'), `import { html } from '@webjsdev/core';
+import { cardClass } from '#components/ui/card.ts';
+import { badgeClass } from '#components/ui/badge.ts';
+// The demo index is defined once in modules/gallery/nav.ts (the same source the
+// left sidebar reads), so the home cards and the sidebar can never drift.
+import { FEATURES, EXAMPLES } from '#modules/gallery/nav.ts';
 
 export const metadata = {
   title: '${displayName}',
 };
 
-// The gallery this page links. FEATURES are single-concept demos (one WebJs
-// concept each, under app/features/, logic in modules/). EXAMPLES are whole apps
-// composing several features (under app/examples/). Prune what you do not use
-// (delete the route AND its modules/<name>), then reshape this page.
-const FEATURES = [
-  { href: '/features/routing', title: 'Routing', blurb: 'A static route plus a dynamic [id] segment that reads params. The file-based router in miniature.' },
-  { href: '/features/boundaries', title: 'Boundaries', blurb: 'The control-flow throws (forbidden / unauthorized / notFound) and the nearest boundary file that catches each.' },
-  { href: '/features/auth', title: 'Auth', blurb: 'Password login on createAuth, a signed session cookie, and a real protected route that redirects anonymous visitors to login.' },
-  { href: '/features/components', title: 'Components', blurb: 'The WebComponent factory, reactive props, instance signals, and slot projection in light DOM.' },
-  { href: '/features/server-actions', title: 'Server actions', blurb: 'A use-server RPC action next to a server-only .server.ts utility, and why the boundary matters.' },
-  { href: '/features/optimistic-ui', title: 'Optimistic UI', blurb: 'The imperative optimistic(signal, value, action) flip: instant update, automatic rollback on failure.' },
-  { href: '/features/async-render', title: 'Async render', blurb: 'A component that awaits server data in async render(), so the resolved value is in the first paint.' },
-  { href: '/features/streaming', title: 'Streaming actions', blurb: 'A use-server action that returns an async generator, streamed to the call site token by token with for await.' },
-  { href: '/features/stream', title: 'Stream updates', blurb: 'The <webjs-stream> element: renderStream() applies surgical append / replace / remove DOM updates by target id, no region redraw.' },
-  { href: '/features/suspense', title: 'Suspense boundary', blurb: 'The <webjs-suspense> element: a first-paint fallback for a SLOW component, with the resolved content streamed in.' },
-  { href: '/features/view-transitions', title: 'View transitions', blurb: 'The opt-in view-transition meta cross-fades a soft navigation, with a data-webjs-permanent element persisted across the swap.' },
-  { href: '/features/directives', title: 'Directives', blurb: 'The lit-html directive set: repeat for keyed lists, watch(signal) for a fine-grained node swap.' },
-  { href: '/features/route-handler', title: 'Route handlers', blurb: 'A server-only route.ts HTTP endpoint returning JSON, the WebJs equivalent of a Next route handler.' },
-  { href: '/features/forms', title: 'Forms', blurb: 'A no-JS progressive-enhancement form posting to the page action, with server-side validation errors.' },
-  { href: '/features/metadata', title: 'Metadata', blurb: 'Static metadata plus generateMetadata(ctx), which reads the request to compute the title and Open Graph tags.' },
-  { href: '/features/caching', title: 'Caching', blurb: 'export const revalidate caches the page HTML per URL, with the safety rule for when a shared cache is allowed.' },
-  { href: '/features/env', title: 'Env vars', blurb: 'The server-only vs WEBJS_PUBLIC_ boundary, read during SSR so secrets never reach the browser.' },
-  { href: '/features/client-router', title: 'Client router', blurb: 'Automatic soft navigation: fragment-only fetches, hover prefetch, scroll restore, and graceful no-JS fallback.' },
-  { href: '/features/frames', title: 'Frames', blurb: 'A webjs-frame region that swaps a filtered sub-list in place from a link, shipping zero component JS, with a no-JS full-nav fallback.' },
-  { href: '/features/service-worker', title: 'Service worker', blurb: 'The opt-in offline enhancement, registered from a browser-only lifecycle hook (never a page or layout).' },
-  { href: '/features/websockets', title: 'WebSockets', blurb: 'A WS(ws, req) route endpoint plus the connectWS() client, echoing messages over a live socket.' },
-  { href: '/features/broadcast', title: 'Broadcast', blurb: 'Fan a message out to every connected client on a WebSocket path, so all open tabs stay in sync.' },
-  { href: '/features/rate-limit', title: 'Rate limiting', blurb: 'The rateLimit() middleware scoped to one endpoint, returning a 429 with Retry-After past the window.' },
-  { href: '/features/file-storage', title: 'File storage', blurb: 'A no-JS multipart upload streamed into the FileStore, then served back through a streaming route.' },
-  { href: '/features/sessions', title: 'Sessions', blurb: 'A signed-cookie session applied by a segment middleware, read and written per visitor with getSession() in a route.' },
-];
-const EXAMPLES = [
-  { href: '/examples/todo', title: 'Optimistic todo', blurb: 'A whole app composing several features: the declarative optimistic() list API, progressive-enhancement forms, accessible labels, the modules split, and SQLite.' },
-];
-
 export default function Home() {
   return html\`
-    <div class="fixed top-4 right-4 z-10"><theme-toggle></theme-toggle></div>
-
-    <div class="max-w-5xl mx-auto px-6 py-16 flex flex-col items-center gap-16">
-      <!-- Masthead -->
+    <div class="py-8 flex flex-col items-center gap-16">
+      <!-- Hero -->
       <section class="flex flex-col items-center text-center gap-5">
-        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground m-0">Welcome to</p>
-        <h1 class="text-6xl sm:text-7xl font-bold uppercase tracking-tight leading-none m-0 break-words bg-gradient-to-b from-foreground to-muted-foreground bg-clip-text text-transparent" style="font-family: var(--font-display); word-spacing: 0.08em; letter-spacing: -0.02em;">
-          WebJs Gallery
+        <h1 class="text-5xl sm:text-6xl font-bold tracking-tight leading-none m-0 break-words bg-gradient-to-b from-foreground to-muted-foreground bg-clip-text text-transparent" style="font-family: var(--font-display); letter-spacing: -0.02em;">
+          Explore the gallery
         </h1>
         <p class="text-base sm:text-lg text-muted-foreground max-w-lg leading-relaxed m-0">
-          AI-first and web-components-first. Server-rendered, progressively enhanced, and buildless.
+          Each demo isolates a single WebJs capability in real, runnable code. Read the ones you need, then build your app on the same patterns.
         </p>
       </section>
 
       <!-- Gallery: every feature demo + the example app -->
       <section class="w-full flex flex-col gap-6">
-        <div class="flex flex-col items-center gap-2 text-center">
-          <h2 class="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground m-0">Explore the gallery</h2>
-          <p class="text-sm text-muted-foreground max-w-lg leading-relaxed m-0">
-            One WebJs concept per demo under <code class="text-[0.9em] text-foreground">app/features/</code>, with logic
-            in <code class="text-[0.9em] text-foreground">modules/</code>.
-          </p>
-        </div>
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           \${FEATURES.map(f => html\`
-            <a href="\${f.href}" class="group flex flex-col gap-1.5 rounded-xl border border-border bg-card p-4 no-underline transition-colors hover:border-border-strong hover:bg-accent">
+            <a href="\${f.href}" class=\${cardClass('group flex flex-col gap-1.5 rounded-xl p-4 no-underline transition-colors hover:border-border-strong hover:bg-accent')}>
               <span class="flex items-center justify-between gap-2">
                 <span class="text-sm font-medium text-foreground">\${f.title}</span>
                 <span class="text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true">&rarr;</span>
@@ -1358,9 +1323,9 @@ export default function Home() {
           \`)}
         </div>
         \${EXAMPLES.map(e => html\`
-          <a href="\${e.href}" class="group flex flex-col gap-2 rounded-xl border border-border bg-card p-5 no-underline transition-colors hover:border-border-strong hover:bg-accent">
+          <a href="\${e.href}" class=\${cardClass('group flex flex-col gap-2 rounded-xl p-5 no-underline transition-colors hover:border-border-strong hover:bg-accent')}>
             <span class="flex items-center gap-2.5">
-              <span class="text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground rounded border border-border px-1.5 py-0.5">Example app</span>
+              <span class=\${badgeClass({ variant: 'outline' })}>Example app</span>
               <span class="text-sm font-medium text-foreground">\${e.title}</span>
               <span class="ml-auto text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true">&rarr;</span>
             </span>
@@ -1372,8 +1337,8 @@ export default function Home() {
       <!-- Footer: docs + source -->
       <footer class="flex flex-col items-center gap-3">
         <nav class="flex items-center gap-6 text-sm text-muted-foreground" aria-label="WebJs links">
-          <a href="https://docs.webjs.dev" class="inline-flex items-center gap-2 hover:text-foreground transition-colors no-underline">\${iconBook()}<span>Docs</span></a>
-          <a href="https://github.com/webjsdev/webjs" class="inline-flex items-center gap-2 hover:text-foreground transition-colors no-underline">\${iconGithub()}<span>GitHub</span></a>
+          <a href="https://docs.webjs.dev" target="_blank" rel="noopener" class="inline-flex items-center gap-2 hover:text-foreground transition-colors no-underline">\${iconBook()}<span>Docs</span></a>
+          <a href="https://github.com/webjsdev/webjs" target="_blank" rel="noopener" class="inline-flex items-center gap-2 hover:text-foreground transition-colors no-underline">\${iconGithub()}<span>GitHub</span></a>
         </nav>
         <p class="text-[0.7rem] uppercase tracking-[0.15em] text-muted-foreground m-0 text-center">
           Built with WebJs &middot; MIT License
@@ -1397,6 +1362,8 @@ function iconGithub() {
   // --- Theme toggle component ---
 
   await writeFile(join(appDir, 'components', 'theme-toggle.ts'), `import { WebComponent, html, signal } from '@webjsdev/core';
+import { cn } from '#lib/utils/cn.ts';
+import { buttonClass } from '#components/ui/button.ts';
 
 type Theme = 'system' | 'light' | 'dark';
 
@@ -1432,9 +1399,10 @@ export class ThemeToggle extends WebComponent {
     const el = document.documentElement;
     if (next === 'system') delete el.dataset.theme;
     else el.dataset.theme = next;
-    // Keep the .dark class the @webjsdev/ui kit uses in sync so the ui-* components follow the theme.
+    // Our own tokens follow color-scheme via data-theme (set above). Keep the
+    // .dark class in sync only for @webjsdev/ui components, which key off it.
     const dark = next === 'dark'
-      || (next === 'system' && !window.matchMedia('(prefers-color-scheme: light)').matches);
+      || (next === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
     el.classList.toggle('dark', dark);
   }
 
@@ -1444,7 +1412,7 @@ export class ThemeToggle extends WebComponent {
     const icon = t === 'light' ? ICONS.sun : t === 'dark' ? ICONS.moon : ICONS.system;
     return html\`
       <button
-        class="inline-flex items-center justify-center w-9 h-9 p-0 border border-border rounded-full bg-card text-muted-foreground cursor-pointer transition-all duration-150 hover:text-foreground hover:border-border-strong active:scale-[0.94] focus-visible:outline-none focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary-tint"
+        class=\${cn(buttonClass({ variant: 'secondary', size: 'none' }), 'w-9 h-9 rounded-full text-muted-foreground duration-150 hover:text-foreground active:scale-[0.94]')}
         @click=\${() => this.cycle()}
         aria-label="Cycle theme (currently \${label})"
         title="Theme: \${label.toLowerCase()}"

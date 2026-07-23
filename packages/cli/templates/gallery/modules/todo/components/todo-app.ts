@@ -10,6 +10,10 @@
 // one coherent theme. Prefer these tokens (and opacity modifiers like
 // bg-primary/90) over ad-hoc colors.
 import { WebComponent, prop, optimistic, html } from '@webjsdev/core';
+import { cardClass } from '#components/ui/card.ts';
+import { buttonClass } from '#components/ui/button.ts';
+import { bareInputClass } from '#components/ui/input.ts';
+import { cn } from '#lib/utils/cn.ts';
 import { createTodo } from '../actions/create-todo.server.ts';
 import { toggleTodo } from '../actions/toggle-todo.server.ts';
 import { deleteTodo } from '../actions/delete-todo.server.ts';
@@ -94,12 +98,12 @@ export class TodoApp extends WebComponent({
         <!-- Add: a real <form> so it works with JS off (posts to the page action);
              with JS, @submit intercepts and runs the optimistic path. -->
         <form method="post" action="" @submit=${(e: SubmitEvent) => this.add(e)}
-          class="flex items-center gap-2 p-2 pl-4 rounded-2xl bg-card border border-border shadow-[0_1px_0_0_color-mix(in_oklch,var(--foreground)_5%,transparent)]">
+          class="${cardClass()} flex items-center gap-2 p-2 pl-4 shadow-[0_1px_0_0_color-mix(in_oklch,var(--foreground)_5%,transparent)]">
           <input type="hidden" name="intent" value="create" />
           <input name="title" required maxlength="280" autocomplete="off" placeholder="What needs doing?"
-            class="flex-1 min-w-0 bg-transparent border-0 outline-none text-foreground text-[15px] placeholder:text-muted-foreground py-1.5" />
+            class=${bareInputClass()} />
           <button type="submit"
-            class="shrink-0 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">Add</button>
+            class="${buttonClass()} shrink-0">Add</button>
         </form>
 
         <ul class="list-none m-0 p-0 grid gap-2">
@@ -124,7 +128,7 @@ export class TodoApp extends WebComponent({
                 <!-- Delete: a proper icon button, revealed on row hover / focus. -->
                 <button type="submit" name="intent" value="delete" aria-label="Delete task"
                   @click=${(e: Event) => this.removeTodo(e, todo)}
-                  class="shrink-0 grid place-items-center w-7 h-7 rounded-lg border-0 bg-transparent text-muted-foreground cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all hover:text-destructive hover:bg-[color-mix(in_oklch,var(--color-destructive)_12%,transparent)]">
+                  class=${cn(buttonClass({ variant: 'destructive', size: 'none' }), 'w-7 h-7 rounded-lg opacity-0 group-hover:opacity-100 focus:opacity-100')}>
                   <svg viewBox="0 0 24 24" class="w-4 h-4 stroke-current fill-none" style="stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M18 6 6 18M6 6l12 12"/></svg>
                 </button>
               </form>

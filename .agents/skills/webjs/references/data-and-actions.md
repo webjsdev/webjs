@@ -5,7 +5,7 @@
 - The `modules/<feature>/` architecture (thin `app/` adapters, `actions/` mutations, `queries/` reads, one function per file)
 - `'use server'` RPC actions, the serializer-safe wire, and how a client import becomes a typed stub
 - Input validation at the boundary via `export const validate`
-- HTTP-verb config exports (`method`, `cache`, `tags`, `invalidates`, `middleware`)
+- HTTP-verb config exports (`method`, `cache`, `tags`, `invalidates`, `middleware`), the middleware `ctx` shape, and `actionSignal()` cancellation
 - The `ActionResult<T>` envelope and its robust failure detection
 - The `route()` REST adapter that exposes an action over HTTP
 - Drizzle rc.3 reads (`db.query.*`) and mutations (`.returning()`)
@@ -141,7 +141,24 @@ export async function updateUser(id: number, patch: Partial<User>) { /* ... */ }
 
 - A **GET** rides args in the URL (POST fallback over a 4KB cap), is CSRF-exempt, and carries `Cache-Control` + a weak `ETag` (304 on `If-None-Match`) + `X-Webjs-Tags`. A **mutation** (POST/PUT/PATCH/DELETE) sends the rich body (DELETE rides the URL), is CSRF-protected, and on success evicts its `invalidates` tags and reports them via `X-Webjs-Invalidate`. A method mismatch is a `405` + `Allow`.
 - **SAFETY.** `cache` with `public: true` SHARES one response across ALL users, keyed only by URL + args. Use it ONLY for data identical for every visitor (the same rule as a page's `export const revalidate`), never for a session or per-user read.
-- Per-action `middleware` short-circuits by returning an `ActionResult` instead of calling `next()`, and accumulates context the action reads via `actionContext()` from `@webjsdev/server`.
+- Per-action `middleware` short-circuits by returning an `ActionResult` instead of calling `next()`, and accumulates context the action reads via `actionContext()` from `@webjsdev/server`. Each middleware is `async (ctx, next) => result` where `ctx` is `{ request, args, signal, context }`. It writes to the shared bag `ctx.context.<key>` (for example `ctx.context.user = user`), which is exactly what `actionContext().user` reads back in the action. A direct server-to-server call skips the RPC boundary (so its middleware does NOT run), so the action must guard rather than assume a middleware-set value is present.
+
+### Cancellation with `actionSignal()`
+
+Inside an action, `actionSignal()` from `@webjsdev/server` returns the request's `AbortSignal`. It fires when the client disconnects OR when a newer client render supersedes this one (the RPC stub aborts the previous in-flight fetch). Thread it into the work you start, and re-check it after an await to map an abort to a cancelled envelope:
+
+```ts
+'use server';
+import { actionSignal } from '@webjsdev/server';
+export async function search(q: string) {
+  const signal = actionSignal();
+  const res = await fetch(`https://api/x?q=${q}`, { signal });   // aborts the fetch on disconnect
+  if (signal.aborted) return { success: false, error: 'Request cancelled.', status: 499 };
+  return { success: true, data: await res.json() };
+}
+```
+
+A guard placed BEFORE any await can never fire (nothing has yielded yet). Outside an action the signal never aborts, so a server-to-server call stays safe.
 
 ## The `ActionResult<T>` envelope
 

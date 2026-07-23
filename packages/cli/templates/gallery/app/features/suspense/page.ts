@@ -8,19 +8,20 @@
 // for fast data); reach for <webjs-suspense> when the data is genuinely slow.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
+import { pageHeading, lede } from '#lib/utils/ui.ts';
 import '#modules/suspense/components/slow-fact.ts';
 
 export const metadata: Metadata = { title: 'Suspense boundary (<webjs-suspense>) | features' };
 
 export default function SuspenseExample() {
   return html`
-    <h1 class="text-h2 font-bold mb-4">Suspense boundary</h1>
-    <p class="text-muted-foreground mb-4">
+    ${pageHeading('Suspense boundary')}
+    ${lede(html`
       The slow component below is wrapped in
       <code class="font-mono">&lt;webjs-suspense&gt;</code>. Its fallback shows on
       the first byte and the resolved content streams in when the slow await
       settles. Reload to see the fallback, then the fact stream in.
-    </p>
+    `)}
     <p class="text-muted-foreground mb-6 text-sm">
       <code class="font-mono">.fallback</code> is a property hole (unquoted, per
       invariant 4). Contrast with the

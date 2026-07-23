@@ -16,47 +16,48 @@
 //   /features/boundaries/private throws unauthorized() -> private/unauthorized.ts
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
+import { pageHeading, lede } from '#lib/utils/ui.ts';
 
 export const metadata: Metadata = { title: 'Boundaries (throws + boundary files) | features' };
 
 export default function BoundariesExample() {
   return html`
-    <h1 class="text-h2 font-bold mb-4">Boundaries</h1>
-    <p class="text-muted-foreground mb-4">
+    ${pageHeading('Boundaries')}
+    ${lede(html`
       Throw a control-flow function from a page (or a page
       <code class="font-mono">action</code>) to short-circuit the render. The
       framework catches it and renders the nearest matching boundary file in the
       route's chain, innermost wins.
-    </p>
+    `)}
     <ul class="list-disc pl-5 mb-4">
       <li>
-        <a class="text-primary" href="/features/boundaries/gated">/features/boundaries/gated</a>
+        <a class="text-primary underline underline-offset-2" href="/features/boundaries/gated">/features/boundaries/gated</a>
         throws <code class="font-mono">forbidden()</code>, caught by
         <code class="font-mono">gated/forbidden.ts</code> (403).
       </li>
       <li>
-        <a class="text-primary" href="/features/boundaries/private">/features/boundaries/private</a>
+        <a class="text-primary underline underline-offset-2" href="/features/boundaries/private">/features/boundaries/private</a>
         throws <code class="font-mono">unauthorized()</code>, caught by
         <code class="font-mono">private/unauthorized.ts</code> (401).
       </li>
       <li>
-        <a class="text-primary" href="/features/boundaries/crash">/features/boundaries/crash</a>
+        <a class="text-primary underline underline-offset-2" href="/features/boundaries/crash">/features/boundaries/crash</a>
         throws a render error, caught by this segment's
         <code class="font-mono">error.ts</code> (500).
       </li>
       <li>
-        <a class="text-primary" href="/features/boundaries/does-not-exist">/features/boundaries/does-not-exist</a>
+        <a class="text-primary underline underline-offset-2" href="/features/boundaries/does-not-exist">/features/boundaries/does-not-exist</a>
         matches nothing, caught by the nearest
         <code class="font-mono">not-found.ts</code> (404).
       </li>
     </ul>
-    <p class="text-muted-foreground text-sm mb-2">
+    <p class="text-muted-foreground text-sm">
       <code class="font-mono">forbidden()</code> is for an authenticated user who
       lacks permission (403); <code class="font-mono">unauthorized()</code> is for
       a request that is not authenticated at all (401). Both import from
       <code class="font-mono">@webjsdev/core</code> and are thrown, never returned.
     </p>
-    <p class="text-muted-foreground text-sm mb-2">
+    <p class="text-muted-foreground text-sm">
       Same throw model as <code class="font-mono">notFound()</code> (renders the
       nearest <code class="font-mono">not-found.ts</code>) and
       <code class="font-mono">redirect(url)</code> (sends an HTTP 3xx). Inside a
@@ -71,6 +72,6 @@ export default function BoundariesExample() {
       and <code class="font-mono">app/global-not-found.ts</code> (a 404 for a URL
       that matches nothing anywhere).
     </p>
-    <p class="mt-3"><a class="text-primary" href="/">Back to the gallery</a></p>
+    <p class="mt-3"><a class="text-primary underline underline-offset-2" href="/">Back to the gallery</a></p>
   `;
 }

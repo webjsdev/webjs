@@ -7,6 +7,8 @@
 // controllers automate. All light DOM, so the provider's <slot> projects its
 // children normally.
 import { WebComponent, html, signal } from '@webjsdev/core';
+import { buttonClass } from '#components/ui/button.ts';
+import { cardClass } from '#components/ui/card.ts';
 import { createContext, ContextProvider, ContextConsumer, ContextRequestEvent } from '@webjsdev/core/context';
 
 type Theme = 'light' | 'dark';
@@ -26,9 +28,9 @@ export class ThemeProvider extends WebComponent {
 
   render() {
     return html`
-      <div class="grid gap-3 p-3 rounded-xl bg-card border border-border max-w-[420px]">
+      <div class=${cardClass('grid gap-3 p-3 max-w-[420px]')}>
         <button @click=${() => this.toggle()}
-          class="w-fit px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">
+          class="${buttonClass({ size: 'sm' })} w-fit">
           provider theme: ${this.provider.value} (toggle)
         </button>
         <slot></slot>
@@ -58,7 +60,7 @@ export class ThemeConsumer extends WebComponent {
       <div class="flex items-center gap-3 text-[15px] text-foreground">
         <span>child sees: <strong>${theme}</strong></span>
         <button @click=${() => this.readOnce()}
-          class="px-3 py-1 rounded-lg text-sm bg-card border border-border text-foreground cursor-pointer transition-colors hover:border-border-strong">read once</button>
+          class=${buttonClass({ variant: 'secondary', size: 'xs' })}>read once</button>
         <span class="text-muted-foreground text-sm">last one-shot: ${this.lastRead.get()}</span>
       </div>
     `;

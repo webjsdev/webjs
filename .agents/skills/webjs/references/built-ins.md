@@ -4,7 +4,7 @@ Env vars, caching, rate limiting, broadcast, file storage, and the `package.json
 
 ## What This Covers
 
-- **Environment variables** and the `WEBJS_PUBLIC_` browser-exposed prefix.
+- **Environment variables**, the `WEBJS_PUBLIC_` browser-exposed prefix, and `env.ts` boot validation.
 - **Caching primitives.** `cache()` with tag invalidation, HTTP `Cache-Control`, the server HTML response cache (`export const revalidate`), content-hash asset URLs, conditional GET (ETag).
 - **Rate limiting** (`rateLimit()` middleware) and **broadcast** (`broadcast()` over WebSockets).
 - **File storage.** `FileStore` / `diskStore`, safe keys, signed URLs.
@@ -24,6 +24,18 @@ Read this when wiring caching or rate limiting, storing uploads, hardening heade
 | `PORT` | Listen port. Precedence `--port` flag, then `PORT` (real env or `.env`), then `8080` |
 
 Defaults are single-instance memory stores. To scale horizontally, switch the store once at startup: `setStore(redisStore({ url: process.env.REDIS_URL }))`.
+
+**Validate required vars at boot with an app-root `env.ts`** (optional). It default-exports either a SCHEMA object (each var mapped to a type `string` / `number` / `boolean` / `url` / `enum`, or an options object with `optional` / `default` / `minLength` / `pattern` / `values`) OR a validator function `(env) => void` that throws. It runs at boot after `.env` loads, coerces values and writes defaults back to `process.env`, and fails fast naming EVERY bad var:
+
+```ts
+// env.ts
+export default {
+  DATABASE_URL: 'url',
+  SESSION_SECRET: { type: 'string', minLength: 16 },
+  PORT: { type: 'number', default: 8080 },
+  LOG_LEVEL: { type: 'enum', values: ['debug', 'info', 'warn'], default: 'info' },
+};
+```
 
 ## Caching
 
@@ -112,7 +124,7 @@ setFileStore(diskStore({ dir: '/var/data/uploads', baseUrl: '/files' }));
 
 **Never trust a user filename as a key.** `generateKey(file.name)` returns an opaque `<uuid>.<ext>` with a sanitized extension; a traversal attempt yields a bare safe key. Keys are containment-checked before any filesystem op.
 
-**Signed URLs** gate serving without a session lookup. `signedUrl(key, { secret, expiresIn })` mints an expiring HMAC signature; `verifySignedUrl(searchParams, secret)` returns `{ valid }`. An `expiresIn` of `0` or negative fails closed.
+**Signed URLs** gate serving without a session lookup. `signedUrl(key, { secret, expiresIn })` mints an expiring HMAC signature; `verifySignedUrl(searchParams, secret)` returns `{ valid }`. An `expiresIn` of `0` or negative fails closed. Pass `base` to point the signed link at your own serve route instead of the default upload URL: `signedUrl(key, { secret, base: '/files/' + key, expiresIn: 3600 })`.
 
 **Serving-XSS warning.** The recorded content-type is attacker-controlled (the browser sent it at upload). A serving route MUST send `X-Content-Type-Options: nosniff` and SHOULD send `Content-Disposition: attachment` for user uploads. Only serve inline after validating bytes against a strict inert allowlist, never `text/html` / `image/svg+xml`. Add the uploads directory to `.gitignore`.
 

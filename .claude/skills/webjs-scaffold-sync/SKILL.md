@@ -1,6 +1,6 @@
 ---
 name: webjs-scaffold-sync
-description: Use this skill whenever a change affects what `webjs create` GENERATES (a new or changed gallery/showcase demo, a new template, a changed generated file like the layout/home/theme/schema, a new convention that belongs in generated apps, a new scaffold-shipped config/hook) OR when the user asks to sync the scaffold, "update all three templates", check the scaffold is consistent, or teach agents how to use webjs through the scaffold. The scaffold is webjs's PRIMARY teaching surface for AI agents, so a change to it must propagate in lockstep across the generators, the per-agent rule files, the scaffold tests, the framework docs that describe the scaffold, and the preview/example apps. This skill is the authoritative map of every scaffold surface plus the change-type to surface mapping, and the mandatory "generate + boot + check" verification, so no surface is silently skipped. Complements webjs-doc-sync (which owns framework API/behaviour docs); this skill owns what the scaffold emits.
+description: Use this skill whenever a change affects what `webjs create` GENERATES (a new or changed gallery/showcase demo, a new template, a changed generated file like the layout/home/theme/schema, a new convention that belongs in generated apps, a new scaffold-shipped config/hook) OR what the agent skill `.agents/skills/webjs/` (SKILL.md + references/) TEACHES, OR when the user asks to sync the scaffold or the skill, "update all three templates", check the scaffold is consistent, keep the skill in sync with framework features, or teach agents how to use WebJs. The scaffold teaches AI agents through TWO surfaces that must stay in sync with the framework: the agent skill `.agents/skills/webjs/` (the DURABLE teacher, the only surface that survives `gallery:clear`) and the runnable gallery (DISPOSABLE, removed by `gallery:clear`). A feature change usually needs BOTH. A change to either must propagate in lockstep across the skill, the generators, the per-agent rule files, the scaffold tests, the framework docs that describe the scaffold, and the preview/example apps. This skill is the authoritative map of every surface plus the change-type to surface mapping, and the mandatory "generate + boot + check" verification, so no surface is silently skipped. Complements webjs-doc-sync (which owns framework API/behaviour docs); this skill owns what the scaffold and the skill teach.
 when_to_use: |
   Examples that should trigger this skill:
     "add a new demo to the feature gallery"
@@ -8,9 +8,13 @@ when_to_use: |
     "update all three scaffold templates with this"
     "add a backend-features showcase to the api template"
     "make sure the scaffold teaches agents how to do X"
+    "does the skill teach everything the gallery demonstrates?"
+    "keep .agents/skills/webjs/ in sync with this feature"
+    "the gallery demoes X but the skill does not mention it"
     "did we keep the scaffold rule files in sync?"
     "the saas home / theme / schema changed, sync everything"
-    finishing any change to what `webjs create` generates
+    finishing any change to what `webjs create` generates OR what the
+    agent skill `.agents/skills/webjs/` teaches
   Do NOT trigger for: a framework API/behaviour change with no scaffold
   impact (use webjs-doc-sync), or a pure-internal refactor of the CLI
   that does not change generated output.
@@ -18,11 +22,25 @@ when_to_use: |
 
 # Keep every scaffold surface in sync with what `webjs create` generates
 
-The scaffold is the **primary way AI agents learn webjs**: an agent reads the
-generated gallery/showcase and its comments to learn the idioms, then builds the
-real app by adapting them. So a change to what `webjs create` emits is a
-first-class change with MANY surfaces, and the recurring failure is updating one
-(usually a template file) while the per-agent rule files, the scaffold tests, the
+The scaffold is the **primary way AI agents learn WebJs**, through TWO teaching
+surfaces that must stay in sync with the framework:
+
+1. **The agent skill `.agents/skills/webjs/`** (SKILL.md + references/): the
+   DURABLE teacher. It is the ONE canonical source (bundled into every scaffold
+   at prepack via `scripts/sync-scaffold-skill.mjs`, and the repo's own agent
+   guide). Crucially, `gallery:clear` strips the whole gallery to a blank slate,
+   so the skill is the ONLY teaching surface that SURVIVES, and after a clear it
+   is the agent's sole reference. A feature the skill does not teach is lost the
+   moment an agent clears the gallery.
+2. **The gallery** (`packages/cli/templates/gallery/**`): runnable, densely
+   commented demos an agent learns the idioms from by reading and running, then
+   adapts. It is DISPOSABLE (removed by `gallery:clear` before real work begins).
+
+So a change to a WebJs FEATURE usually needs BOTH: the skill updated (the durable
+pattern) AND a gallery demo (the runnable illustration). A change to what
+`webjs create` emits is a first-class change with MANY surfaces, and the
+recurring failure is updating one (usually a template file, or the gallery but
+not the skill) while the skill, the per-agent rule files, the scaffold tests, the
 framework docs, and the preview apps drift behind. This skill closes that gap.
 
 It is the sibling of `webjs-doc-sync`. Division of labour:
@@ -41,11 +59,14 @@ commit-time floor plus an un-skippable CI gate):
 
 - **Tier 1, the commit floor.** `.claude/hooks/require-scaffold-with-src.sh`
   BLOCKS a commit that stages framework-feature source (`packages/(core|server|cli)/src`)
-  with no scaffold surface (`packages/cli/templates` or `packages/cli/lib`) in the
-  same commit (escape hatch `WEBJS_NO_SCAFFOLD_GATE=1`). Like the test commit
-  gate, it only proves you *touched* a scaffold file; it cannot tell a real demo
-  from a doc bullet, which is exactly how #848 slipped (forbidden()/unauthorized()
-  staged doc bullets, shipped no gallery demo).
+  with no teaching surface in the same commit (escape hatch
+  `WEBJS_NO_SCAFFOLD_GATE=1`). A teaching surface is EITHER the scaffold
+  (`packages/cli/templates` or `packages/cli/lib`) OR the agent skill
+  (`.agents/skills/webjs/`), since the skill is the durable half of the teaching
+  pair. Like the test commit gate, it only proves you *touched* a teaching file;
+  it cannot tell a real demo from a doc bullet, nor that you updated BOTH the
+  gallery and the skill where both were needed, which is exactly how #848 slipped
+  (forbidden()/unauthorized() staged doc bullets, shipped no gallery demo).
 
 - **Tier 2, the CI coverage gate.** `test/scaffolds/gallery-coverage.test.js`
   reconciles the LIVE framework surface against the hand-curated
@@ -72,20 +93,49 @@ verification that neither tier can automate.
 Treat this as the universe. For any scaffold change, decide per surface whether
 it applies, then update or consciously skip each.
 
-1. **The generators** (the code that writes the app):
+1. **The agent skill `.agents/skills/webjs/`** (the DURABLE teacher, canonical at
+   the repo root, bundled into every scaffold at prepack). It is the surface most
+   likely to be forgotten and the most important to keep current, because it is
+   the ONLY teaching surface that survives `gallery:clear`. A new feature, export,
+   idiom, or convention MUST be taught here so an agent building AFTER a clear
+   still learns it:
+   - `.agents/skills/webjs/SKILL.md` (the router: add the concept to the right
+     "what this covers" line and route to the reference).
+   - `.agents/skills/webjs/references/*.md` (the focused reference the feature
+     belongs to, e.g. `data-and-actions.md`, `client-router-and-streaming.md`,
+     `components.md`, `styling.md`, `built-ins.md`). Add the API + the idiom +
+     the gotcha, matching the depth of the sibling entries.
+   - Edit the repo-root copy; `scripts/sync-scaffold-skill.mjs` bundles it into
+     `templates/` at prepack (do NOT hand-edit a bundled copy).
+2. **The generators** (the code that writes the app):
    - `packages/cli/lib/create.js` (the main generator: layout, home page, the
      theme block, db/schema, the full-stack gallery wiring, the per-template
      gates like `isApi` / `isFullStack` / `!isApi`).
    - `packages/cli/lib/api-gallery.js` (the api backend-features showcase). Auth
      is a full-stack GALLERY card now (`templates/gallery/{app/features/auth,
      modules/auth}`), pruned by `gallery:clear`, not a separate template.
+   - **The `gallery:clear` reset scripts (BOTH templates, MANDATORY parity).**
+     `packages/cli/templates/scripts/clear-gallery.mjs` (full-stack) strips the
+     app to a barebones blank slate (the gallery routes + modules, the example
+     design system `components/ui/`, `lib/utils/ui.ts`, the example theme-toggle +
+     its layout wiring, the example tests, empty leftover dirs), keeping only the
+     buildable base + the skill. `packages/cli/templates/scripts/clear-api-gallery.mjs`
+     (the `api` template) does the same for the backend showcase (`app/api/features`,
+     the demo modules, `env.ts`, the widgets test), keeping the health + users base.
+     **RULE: any NEW gallery artifact (a route, a module, a shared component, a lib
+     helper, a schema table) MUST be added to the matching clear script's removal
+     list in the SAME change, or `gallery:clear` leaves it behind and the app is not
+     a blank slate.** This is enforced by `test/scaffolds/scaffold-gallery.test.js`
+     (full-stack: asserts `modules/` and `components/` are EMPTY after clear, so a
+     forgotten module/component fails) and the api clear test in the same file; run
+     them after any gallery change.
    - Any future `*-template.js` / `*-gallery.js` split out for escaping sanity.
-2. **The verbatim template files** copied into every app:
+3. **The verbatim template files** copied into every app:
    - `packages/cli/templates/gallery/**` (the UI feature gallery + example app,
      shipped in full-stack AND saas).
    - `packages/cli/templates/**` (everything else copied per app: `lib/utils/ui.ts`,
      `public/`, `tsconfig.json`, `gitignore`, `.hooks/`, the metadata/route stubs).
-3. **The per-agent rule files** (LOCKSTEP: all carry the SAME rules in each
+4. **The per-agent rule files** (LOCKSTEP: all carry the SAME rules in each
    agent's format, the #134/#136 divergence lesson). A convention/workflow change
    for generated apps must land in ALL of them together:
    - `packages/cli/templates/AGENTS.md`
@@ -96,17 +146,17 @@ it applies, then update or consciously skip each.
    - `packages/cli/templates/.agents/rules/workflow.md`
    - `packages/cli/templates/.gemini/**`, `.opencode/**`, `.claude/**` (whatever
      per-agent rule files the scaffold currently ships; enumerate, do not assume)
-4. **The scaffold tests**: `test/scaffolds/*.test.js` (e.g. `scaffold-gallery`,
+5. **The scaffold tests**: `test/scaffolds/*.test.js` (e.g. `scaffold-gallery`,
    `scaffold-ui-integration`). A new demo/template/generated-file assertion goes
    here, including the counterfactual (a per-template exclusion test).
-5. **The framework docs that DESCRIBE the scaffold** (shared with doc-sync):
+6. **The framework docs that DESCRIBE the scaffold** (shared with doc-sync):
    - Root `AGENTS.md` "Scaffolding" section.
    - The docs site: `docs/app/docs/getting-started/page.ts` (+ `backend-only`,
      `ai-first`, `conventions` where they describe generated structure).
    - `README.md` (the template matrix + the "scaffold is the tutorial" note).
-6. **The CLI surface**: `packages/cli/` `--template` validation + `--help`/usage
+7. **The CLI surface**: `packages/cli/` `--template` validation + `--help`/usage
    text when a template or flag is added or renamed.
-7. **The preview / example / dogfood apps**: `examples/blog/` and any in-repo
+8. **The preview / example / dogfood apps**: `examples/blog/` and any in-repo
    apps, plus the local preview apps the user tests, when a convention they
    demonstrate changes.
 
@@ -114,7 +164,9 @@ it applies, then update or consciously skip each.
 
 | Change | Surfaces that MUST be checked |
 |---|---|
-| New / changed **gallery or showcase demo** | the template file(s) or generator strings for the demo + the home-page `features`/index array + the scaffold AGENTS.md gallery list + `test/scaffolds/*` FEATURES/assertions + **generate + boot the affected template** |
+| New / changed **WebJs feature, export, idiom, or convention** an agent must know | **the agent skill** `.agents/skills/webjs/` FIRST (SKILL.md routing line + the right `references/*.md`), the DURABLE teacher that survives `gallery:clear`, THEN a gallery demo (surface 2/3). Skill-without-demo means no runnable example; demo-without-skill means the pattern is LOST the moment an agent clears the gallery. A feature needs BOTH. |
+| New / changed **gallery or showcase demo** | the template file(s) or generator strings for the demo + the home-page `features`/index array + the scaffold AGENTS.md gallery list + **the matching `gallery:clear` removal list** (`clear-gallery.mjs` for full-stack, `clear-api-gallery.mjs` for api, so the new demo/module/component/lib artifact is stripped to a blank slate) + `test/scaffolds/*` FEATURES/assertions + **generate + boot the affected template + run `gallery:clear` and confirm a blank slate** |
+| **Removed / renamed gallery artifact** (a demo route, a module, a shared component, a lib helper, a schema table the gallery added) | the matching `gallery:clear` script's removal list (add the new path; remove a stale one) + the blank-slate clear test (`test/scaffolds/scaffold-gallery.test.js`) + **generate + run the clear + assert nothing gallery remains** |
 | New / removed **template** | the `create.js` template branch (+ a `*-template.js` if large) + the "only N templates exist" list in EVERY per-agent rule file + the framework `AGENTS.md`/getting-started/README template matrix + the CLI `--template` validation + `--help` + `test/scaffolds/*` |
 | New **control-flow throw or routing boundary file** (`notFound` / `redirect` / `forbidden` / `unauthorized` and their `not-found` / `forbidden` / `unauthorized` / `error` / `loading` / `global-error` / `global-not-found` boundary files) | a runnable **gallery demo** that exercises it (a route that throws it plus the nearest boundary file), NOT just an app-tree bullet in the rule files + the home-page `features` array + `test/scaffolds/*` FEATURES/boundary-file asserts + **generate + boot + hit the route**. A doc bullet in `AGENTS.md` / `CONVENTIONS.md` is necessary but NOT sufficient: the gallery is the primary teaching surface, so an undemoed thrower is invisible to a scaffolding agent (the #848 gap). Carve-out: a **root-only** boundary (`global-error` / `global-not-found`) cannot mount under `app/features/` without clashing with the generated app root, so teach those in the demo's PROSE rather than as a live route. |
 | New / renamed **public `@webjsdev/core` or `@webjsdev/server` export, or a new routing convention file** the router parses | `test/scaffolds/gallery-coverage.json` MUST classify it (a `{ demo }` / `{ demoed: true }`, or `{ exempt }` with an `internal:` / `deferred:` reason) or the tier-2 CI gate (`gallery-coverage.test.js`) FAILS. Prefer a real demo; `deferred:` is a conscious, reviewer-visible exemption tracked for later. This is the coverage-gate teeth described above. |
@@ -168,6 +220,13 @@ it applies, then update or consciously skip each.
    describes stale behaviour there (a classic gap: a demo added to the full-stack
    home but missing from the saas home, or a scoping phrase updated in one rule
    file but not the other five).
+   - **Skill-vs-gallery coverage sweep** (the highest-value audit now that
+     `gallery:clear` strips the gallery): for EACH gallery demo
+     (`app/features/<x>` + its `modules/<x>`), confirm the concept it teaches is
+     also taught in `.agents/skills/webjs/references/*.md`. A concept the gallery
+     demonstrates but the skill omits is a GAP, because it vanishes at
+     `gallery:clear` and the agent building the real app never sees it. Fill it in
+     the matching reference at the depth of its siblings.
 4. For a bulk audit, file a grounded follow-up via **webjs-file-issue** per gap
    (title `scaffold: <surface> missing <thing>`); for a single in-flight change,
    just fix all surfaces on the same PR.

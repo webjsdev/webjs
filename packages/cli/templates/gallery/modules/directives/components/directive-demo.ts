@@ -12,6 +12,9 @@
 // HTML), and `asyncAppend` / `asyncReplace` (stream values from an async
 // iterable, appending each or replacing with the latest).
 import { WebComponent, signal, html } from '@webjsdev/core';
+import { buttonClass } from '#components/ui/button.ts';
+import { cn } from '#lib/utils/cn.ts';
+import { inputClass } from '#components/ui/input.ts';
 import { repeat, watch, live, until, keyed, unsafeHTML, ref, createRef, guard, cache, templateContent, asyncAppend, asyncReplace } from '@webjsdev/core/directives';
 
 interface Item { id: number; label: string }
@@ -107,9 +110,9 @@ export class DirectiveDemo extends WebComponent {
         <div class="grid gap-4">
           <div class="flex gap-2">
             <button @click=${() => this.reverse()}
-              class="px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">Reverse</button>
+              class=${buttonClass({ size: 'sm' })}>Reverse</button>
             <button @click=${() => this.add()}
-              class="px-3.5 py-1.5 rounded-xl bg-card border border-border text-foreground font-medium text-sm cursor-pointer transition-colors hover:border-border-strong">Add</button>
+              class=${buttonClass({ variant: 'secondary', size: 'sm' })}>Add</button>
           </div>
           <!-- repeat keyed by item.id: reversing reuses the existing <li> nodes. -->
           <ul class="grid gap-2 list-none m-0 p-0">
@@ -121,7 +124,7 @@ export class DirectiveDemo extends WebComponent {
           </ul>
           <!-- watch(signal) swaps only this node when ticks changes. -->
           <button @click=${() => this.ticks.set(this.ticks.get() + 1)}
-            class="w-fit text-sm text-muted-foreground cursor-pointer transition-colors hover:text-foreground underline decoration-dotted underline-offset-4">ticks: ${watch(this.ticks)}</button>
+            class="${buttonClass({ variant: 'link', size: 'none' })} w-fit">ticks: ${watch(this.ticks)}</button>
         </div>
 
         <div class="grid gap-3 border-t border-border pt-4">
@@ -132,18 +135,18 @@ export class DirectiveDemo extends WebComponent {
             <input
               ${ref(this.inputRef)}
               aria-label="Editable text for the ref focus demo"
-              class="flex-1 px-3 py-1.5 rounded-xl bg-card border border-border text-[15px] text-foreground"
+              class=${inputClass('flex-1 min-w-0')}
               .value=${live(this.text.get())}
               @input=${(e: Event) => this.text.set((e.target as HTMLInputElement).value)}>
             <button @click=${() => this.focusInput()}
-              class="px-3.5 py-1.5 rounded-xl bg-card border border-border text-foreground text-sm cursor-pointer transition-colors hover:border-border-strong">Focus</button>
+              class=${buttonClass({ variant: 'secondary', size: 'sm' })}>Focus</button>
           </div>
           <!-- until shows the fallback until the promise resolves. -->
           <p class="text-sm text-muted-foreground">async: ${until(this.asyncValue, 'loading...')}</p>
           <!-- keyed discards and rebuilds this subtree when the key changes;
                unsafeHTML injects trusted, author-written HTML (NEVER user input). -->
           <button @click=${() => this.variant.set(variant + 1)}
-            class="w-fit text-sm text-muted-foreground cursor-pointer transition-colors hover:text-foreground underline decoration-dotted underline-offset-4">rekey</button>
+            class="${buttonClass({ variant: 'link', size: 'none' })} w-fit">rekey</button>
           ${keyed(variant, html`<div class="text-[15px] text-foreground">${unsafeHTML('<em>fresh subtree</em>')} #${variant}</div>`)}
         </div>
 
@@ -152,16 +155,20 @@ export class DirectiveDemo extends WebComponent {
                guard counter re-renders it; the OTHER counter (ticks above) does
                not, so the guarded value stays put. -->
           <button @click=${() => this.guardBumps.set(this.guardBumps.get() + 1)}
-            class="w-fit text-sm text-muted-foreground cursor-pointer transition-colors hover:text-foreground underline decoration-dotted underline-offset-4">bump guard dep</button>
+            class="${buttonClass({ variant: 'link', size: 'none' })} w-fit">bump guard dep</button>
           <p class="text-sm text-foreground">guarded: ${guard([this.guardBumps.get()], () => html`computed at bump #${this.guardBumps.get()}`)}</p>
 
           <!-- cache(value) keeps the inactive tab's DOM alive while you toggle,
                so switching back is instant and preserves any element state. -->
+          <!-- A tab toggle must keep a CONSTANT size between states, or the row
+               reflows and the content below dances. So both tabs use ONE variant
+               (same weight, border, padding) and cn() overrides only the active
+               COLORS, never the box. -->
           <div class="flex gap-2">
             <button @click=${() => this.tab.set('a')}
-              class="px-3 py-1 rounded-lg text-sm border cursor-pointer transition-colors ${this.tab.get() === 'a' ? 'bg-primary text-primary-foreground border-transparent' : 'bg-card border-border text-foreground hover:border-border-strong'}">Tab A</button>
+              class=${cn(buttonClass({ variant: 'secondary', size: 'xs' }), this.tab.get() === 'a' && 'bg-primary text-primary-foreground border-primary hover:border-primary')}>Tab A</button>
             <button @click=${() => this.tab.set('b')}
-              class="px-3 py-1 rounded-lg text-sm border cursor-pointer transition-colors ${this.tab.get() === 'b' ? 'bg-primary text-primary-foreground border-transparent' : 'bg-card border-border text-foreground hover:border-border-strong'}">Tab B</button>
+              class=${cn(buttonClass({ variant: 'secondary', size: 'xs' }), this.tab.get() === 'b' && 'bg-primary text-primary-foreground border-primary hover:border-primary')}>Tab B</button>
           </div>
           <div class="text-[15px] text-foreground">${cache(
             this.tab.get() === 'a'
@@ -181,7 +188,7 @@ export class DirectiveDemo extends WebComponent {
                you can watch them replay. The run counter forces the re-render. -->
           <div class="flex items-center gap-3">
             <button @click=${() => this.restartStreams()}
-              class="w-fit px-3.5 py-1.5 rounded-xl bg-card border border-border text-foreground text-sm cursor-pointer transition-colors hover:border-border-strong">restart streams</button>
+              class="${buttonClass({ variant: 'secondary', size: 'sm' })} w-fit">restart streams</button>
             <span class="text-sm text-muted-foreground">run #${this.streamRun.get()}</span>
           </div>
           <div class="text-sm text-muted-foreground">log (asyncAppend, one row per value):</div>

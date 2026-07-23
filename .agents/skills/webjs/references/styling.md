@@ -8,6 +8,7 @@
 - Design tokens: `:root` / `@theme` in the root layout
 - Light-DOM host `display: block` behaviour (and shadow hosts via `:host`)
 - When to use `static styles` (shadow DOM)
+- Accessible native controls (label association, `aria-pressed`, `aria-label`)
 - `position: fixed`, not `sticky`, for a pinned header (the iOS WebKit flicker)
 - Even-grid / no-reflow layout tips
 
@@ -67,9 +68,77 @@ export default function Post({ params }) {
 
 Avoid `@apply`: it hides which utilities a class uses and creates a second source of truth. A JS helper keeps the bundle visible at the definition site, composes with conditional classes and active states, and runs at SSR time.
 
-## Design tokens
+### A design system for repeated PRIMITIVES: class helpers built on `@webjsdev/ui`
 
-The default stack is a static compiled Tailwind stylesheet (`css:build` compiles `public/input.css` to the linked `public/tailwind.css`, so it works with JS off) plus `@theme` design tokens (palette, fonts, fluid type, motion durations) declared once in the root layout. Consume them as utility classes (`text-foreground`, `bg-card`, `font-serif`, `duration-fast`). If you wire your own theme switch, drive BOTH signals on `<html>` (the `data-theme` attribute for the app palette blocks AND the `.dark` class for the `@webjsdev/ui` kit), or half the UI renders stale tokens. Verify dark mode in a real browser, light mode passing proves nothing about dark.
+An `html`-fragment helper is right for a repeated CHUNK of markup (the rubric above). For a repeated UI PRIMITIVE (button, input, card, badge) that needs variants and sizes, use a class helper instead: a function that returns a Tailwind class STRING you spread onto a native element. That is exactly what `@webjsdev/ui` ships (`buttonClass({ variant, size })`, `cardClass()`, `inputClass()`, `badgeClass({ variant })`), and it is what the scaffold gallery uses in `components/ui/`. To style a ONE-OFF that a variant does not cover (a circular icon button, a pill), compose the helper and override the bespoke bits with `cn()`: `cn(buttonClass({ variant: 'secondary', size: 'none' }), 'w-9 h-9 rounded-full')`. `cn` resolves Tailwind conflicts so a later class wins, including a shorthand over the axis it subsumes (`p-0` beats an earlier `px-4 py-2`), so an override just works. For an icon button prefer `size: 'none'` (it states "I supply my own box" by dropping the helper's padding + radius) over layering a `p-0` on top of the default size.
+
+```ts
+// components/ui/button.ts  (webjs ui add button, themed to your app)
+import { cn } from '#lib/utils/cn.ts';
+const BASE = 'inline-flex cursor-pointer items-center justify-center ...';
+const VARIANTS = { default: 'bg-primary text-primary-foreground ...', secondary: '...' } as const;
+const SIZES = { default: 'px-4 py-2 rounded-xl', sm: '...' } as const;
+export function buttonClass(o: { variant?: keyof typeof VARIANTS; size?: keyof typeof SIZES } = {}) {
+  return cn(BASE, VARIANTS[o.variant ?? 'default'], SIZES[o.size ?? 'default']);
+}
+```
+
+```ts
+// a page or component
+import { buttonClass } from '#components/ui/button.ts';
+html`<button class=${buttonClass({ variant: 'secondary', size: 'sm' })} @click=${...}>Reset</button>`;
+```
+
+Why a class helper (not a `<ui-button>` wrapper): it adds NO indirection, so the element stays native (`@click`, `?disabled`, form submission, focus, a11y all just work) and the markup stays readable, while every button shares one source of truth (so no button can forget `cursor-pointer` or drift). Put the affordance every variant needs (like `cursor-pointer`) on the shared BASE.
+
+**Own and theme your copy.** `webjs ui add <name>` copies the primitive INTO your `components/ui/`, so you own it. Theme it to YOUR app: change the class values so the helper produces YOUR look, rather than bending your app to the kit's defaults. Keep only the parts you use (the gallery's `cardClass` is surface-only, since its panels vary their own padding and layout). Reserve `lib/utils/ui.ts` `html`-fragment helpers for repeated markup chunks; reserve `components/ui/*` class helpers for themed primitives with variants.
+
+## Accessible native controls
+
+A cleared, growing app hand-authors its own controls, so accessibility is your job (the `@webjsdev/ui` primitives carry their own, but a raw `<button>` / `<input>` does not). Three habits keep hand-authored interactive markup accessible on BOTH the JS and no-JS paths:
+
+- **Associate a label with its control.** `<label for="email">` paired with `<input id="email">` (or wrap the control in the `<label>`), so a click on the label focuses the field and a screen reader announces it.
+- **State a toggle's pressed state.** A button that toggles carries `aria-pressed=${on}` so assistive tech announces on/off, not just "button".
+- **Name an icon-only button.** A button whose only content is an icon has no accessible name, so give it `aria-label="Delete task"`.
+
+Native `<button>` / `<a>` / `<input>` already have correct focus + keyboard behaviour, which is the main reason to prefer them (and the `buttonClass()` / `inputClass()` class helpers) over a custom `<div role>` element.
+
+## Design tokens and theming
+
+The default stack is a static compiled Tailwind stylesheet (`css:build` compiles `public/input.css` to the linked `public/tailwind.css`, so it works with JS off) plus `@theme` design tokens declared once in the root layout. You consume them as utility classes (`bg-background`, `text-foreground`, `bg-card`, `border-border`, `font-serif`).
+
+**Two halves.** (1) `public/input.css` MAPS token names into Tailwind with `@theme inline` (`--color-background: var(--background)`), so `bg-background` resolves to `var(--background)`. That is infrastructure; leave it. (2) The root layout (`app/layout.ts`) DEFINES the values as plain CSS custom properties in a `<style>` block. That is your palette; make it your own. A freshly cleared app (after `npm run gallery:clear`) ships only the OS system-colour base (`Canvas` / `CanvasText`) with NO tokens, so building this palette is your first styling step.
+
+**Light and dark, defined once (DRY).** Write each colour token ONE time with the native CSS `light-dark(LIGHT, DARK)` function and let `color-scheme` pick the side. The default `color-scheme: light dark` follows the OS; a `[data-theme]` attribute forces one. No duplicated light/dark blocks:
+
+```html
+<style>
+  :root {
+    --font-sans: ui-sans-serif, system-ui, sans-serif;
+    color-scheme: light dark;                        /* follow the OS by default */
+    --background:       light-dark(#ffffff, #1e2226);
+    --foreground:       light-dark(#191c20, #dee2e6);
+    --card:             light-dark(#f7f8fa, #313539);
+    --muted-foreground: light-dark(#565c64, #94989c);
+    --border:           light-dark(#e2e5e9, #3d434b);
+    --primary:          light-dark(#1e2226, #dee2e6);
+    /* a derived token tracks BOTH themes for free via var(--primary) */
+    --primary-tint: color-mix(in srgb, var(--primary) 22%, transparent);
+  }
+  :root[data-theme='light'] { color-scheme: light; }  /* the toggle forces a scheme */
+  :root[data-theme='dark']  { color-scheme: dark; }
+</style>
+```
+
+`light-dark()` is a native CSS function (CSS Color 5, Baseline 2024), not a library, so nothing to import. A single-theme app drops the `[data-theme]` rules and gives each token one colour.
+
+**A manual theme toggle** writes `data-theme` on `<html>` (`light` / `dark`, or removes it for "follow the OS"). If you use `@webjsdev/ui` components, ALSO keep the `.dark` class in sync (the ui kit keys its own tokens off `.dark`), and apply the saved choice in a tiny inline `<script>` in the layout head so there is no first-paint flash. Verify dark mode in a real browser. Light mode passing proves nothing about dark.
+
+**Edge cases.** `light-dark()` is COLOUR-only. A colour needed in just one theme sets the unused side to a no-op (`light-dark(#fff, transparent)`). A derived token that references a `light-dark()` one (like `--primary-tint` above) tracks both themes automatically. A NON-colour token that must differ per theme (a shadow's geometry, a gradient, a size, an image) cannot use `light-dark()`; give it a `:root[data-theme='dark']` override plus an `@media (prefers-color-scheme: dark) { :root:not([data-theme]) { ... } }` rule for the OS default.
+
+**The ui class helpers build on these tokens.** `buttonClass()` / `cardClass()` / `inputClass()` / `badgeClass()` emit Tailwind utilities that reference the same tokens (`bg-primary`, `border-border`), so theming the tokens re-skins every helper at once.
+
+**Focus rings.** The design system applies ONE themed, keyboard-only focus ring globally in the theme CSS: `@layer base { * { @apply border-border outline-ring/50 } }` themes the outline COLOUR to `--ring/50`, and a `:focus-visible { outline: 2px solid color-mix(in oklab, var(--color-ring) 50%, transparent); outline-offset: 2px }` forces a SOLID outline. That second rule matters: `outline-ring/50` alone leaves `outline-style: auto`, so the browser draws its OWN focus ring (which can look thick and white and ignore the colour). So every focusable element (button, link, input) shares one `--ring`-coloured ring with no per-element styling (a native `<button>` renders it a touch wider than a link, a Chromium form-control quirk, but the colour is the same). Do NOT re-add a focus style on a light-DOM element (`buttonClass` deliberately carries none), and NEVER remove it (`outline: none` with no replacement fails WCAG 2.4.7). `:focus-visible` already limits the ring to keyboard / programmatic focus, not a mouse click. A SHADOW-DOM component is the ONE exception: a document rule cannot cross the shadow boundary, so it styles its own focus in `static styles`, matching the global ring EXACTLY (`--ring` at 50%, the same as `outline-ring/50`): `button:focus-visible { outline: 2px solid color-mix(in oklab, var(--color-ring) 50%, transparent); outline-offset: 2px }`. Without it, its controls fall back to the raw browser outline (thick, light on a dark theme, and shown on window-refocus).
 
 ## Light-DOM host display, and shadow hosts
 
@@ -82,6 +151,17 @@ static styles = css`:host { display: block }`;   // a shadow host with no :host 
 ```
 
 **Size the HOST, not just an inner wrapper.** The host custom element is the box the parent lays out. A host that is a flex/grid item in a centering parent (`flex justify-center`, `grid place-items-center`) is sized to its content unless it carries width itself. Put the sizing classes on the host (`w-full max-w-[400px]`), not only on an inner `<div>`. Symptom: a board or card renders tiny even though its inner grid says `w-full max-w-[400px]`. Fix: move the sizing onto the host.
+
+## Section rhythm: one gap, defined once
+
+Per-element margins can never give consistent vertical spacing: each element controls only one side, so a block's gap-above (the previous element's margin) drifts from its gap-below (its own). For a content column (a docs page, a demo page, an article), make the COLUMN own the spacing with a flex stack, and zero the children's own margins so only the one gap applies:
+
+```css
+.stack { --section-gap: 1.5rem; display: flex; flex-direction: column; gap: var(--section-gap); }
+.stack > * { margin: 0; }
+```
+
+Every top-level child (heading, paragraph, component, list) is then equally spaced from ONE variable, and a spacing change is a one-line edit. Flex `gap` beats forcing `display: block` + margins on children: a `grid`/`flex` child keeps its own layout (a blanket `display: block` clobbers it), an inline shadow-DOM host is blockified as a flex item so it honours the gap, a `display: contents` element (a streaming `<webjs-suspense>`) is replaced by its children which become the flex items, and a `display: none` node (a streaming `<script>`/`<template>`) is not an item at all, so it gets no phantom gap. A group that must stay tight (a caption directly above its code block) wraps in one child `<div>` and keeps its own inner spacing. The gallery's `/features` layout (`demo-stack`) is the worked example.
 
 ## Even grids, no reflow
 

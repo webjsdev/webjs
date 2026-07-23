@@ -8,6 +8,9 @@
 // across the swap: type into it, navigate, and your text survives the transition.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
+import { buttonClass } from '#components/ui/button.ts';
+import { inputClass } from '#components/ui/input.ts';
+import { pageHeading } from '#lib/utils/ui.ts';
 
 export const metadata: Metadata = {
   title: 'View transitions (soft-nav cross-fade) | features',
@@ -16,7 +19,7 @@ export const metadata: Metadata = {
 
 export default function ViewTransitionsExample() {
   return html`
-    <h1 class="text-h2 font-bold mb-4">View transitions</h1>
+    ${pageHeading('View transitions')}
     <div class="rounded-2xl bg-primary/10 border border-primary/30 p-6 mb-6">
       <p class="text-foreground m-0">Page one. Navigate to page two: with the
         <code class="font-mono">&lt;meta name="view-transition"&gt;</code> opt-in,
@@ -26,10 +29,10 @@ export default function ViewTransitionsExample() {
       <span class="text-muted-foreground text-sm">Type here, then navigate. This input is
         <code class="font-mono">data-webjs-permanent</code>, so its value survives the swap:</span>
       <input id="vt-note" data-webjs-permanent type="text" placeholder="type something…"
-        class="mt-2 block w-full max-w-sm rounded-xl border border-border bg-card px-4 py-2 text-foreground" />
+        class=${inputClass('mt-2 block max-w-sm')} />
     </label>
     <div class="flex gap-3 items-center">
-      <a href="/features/view-transitions/second" class="inline-flex items-center px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm no-underline transition-all hover:bg-primary/90 active:scale-[0.97]">Go to page two</a>
+      <a href="/features/view-transitions/second" class="${buttonClass()} no-underline">Go to page two</a>
       <a href="/" class="text-muted-foreground no-underline font-medium text-sm hover:text-foreground transition-colors">Home</a>
     </div>
     <p class="text-muted-foreground text-sm mt-6">

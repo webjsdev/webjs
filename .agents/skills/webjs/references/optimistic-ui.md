@@ -67,6 +67,24 @@ TodoList.register('todo-list');
 - Multiple `.add()` calls stack independently. Each carries its own release by ID, so overlapping in-flight mutations do not clobber one another.
 - When `update` is omitted, the payload REPLACES the state directly (`Action = State`), matching the simple `useOptimistic(setState)` pattern.
 
+### Author the optimistic mutation as a degrade-first form
+
+Wrap the mutation in a REAL `<form method="post" action="">` posting to the page's own URL, then intercept it for the optimistic path. One form then serves both: with JS off the browser submits to the page `action` (the no-JS write path, see `routing-and-pages.md`), and with JS on `@submit` calls `e.preventDefault()` and runs the optimistic path. That is the progressive-enhancement contract, not a fetch-only handler.
+
+```ts
+render() {
+  return html`
+    <form method="post" action="" @submit=${this.handleSubmit}>
+      <input type="hidden" name="intent" value="create">   <!-- one page action dispatches on intent -->
+      <input name="title" required>
+      <button>Add</button>
+    </form>
+    <ul>${this.optimisticTodos.value.map(t => html`<li class=${t.pending ? 'opacity-50' : ''}>${t.title}</li>`)}</ul>`;
+}
+```
+
+When a page owns SEVERAL mutations (create, toggle, delete), give each form a hidden `intent` field and let the single page `action` dispatch on it. Each interactive control (a toggle button, a delete button) is also its own tiny form so it still works with JS off.
+
 ## Seed the list from the server for SSR plus optimistic
 
 For a page that server-renders a list AND lets the user add to it optimistically, let ONE component own both the list and the form, and seed it from the page through a `.prop` hole (a DOM property that round-trips through SSR on custom elements). The list is then fully server-rendered on first paint (readable with JS off) and re-renders optimistically on each add. A separate static list in the page would not update on an optimistic add.

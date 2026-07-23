@@ -3,11 +3,13 @@
 ## What This Covers
 
 - Declaring reactive properties through the `WebComponent({ ... })` factory and `prop()`, with options (`reflect`, `state`, `attribute`, `default`, `converter`, `hasChanged`)
-- Signals as the default state primitive for component-local and shared state
+- Signals as the default state primitive for component-local and shared state, plus `effect` / `batch`
 - The Lit-aligned lifecycle and exactly which hooks SSR runs versus skips
 - Light DOM (default) versus shadow DOM, and the light-host `display: block` rule
 - Slots with full shadow-DOM parity in both DOM modes
 - `async render()`: SSR-blocking first paint, client stale-while-revalidate, `renderFallback()` / `renderError()`
+- `Task` for client-only async data, and context (`createContext` / `ContextProvider` / `ContextConsumer`) to avoid attribute drilling
+- The lit-html directive set (`repeat`, `watch`, `live`, `keyed`, `guard`, `cache`, `until`, `unsafeHTML`, `ref`, `asyncAppend` / `asyncReplace`, `templateContent`)
 - Display-only elision (when a component is stripped from the browser)
 - Inherited members app code must NOT shadow (`title`, `remove`, `render`, ...)
 
@@ -69,6 +71,19 @@ const count = computed(() => cart.get().length); // derived
 ```
 
 Read with `signal.get()` inside `render()`; the built-in `SignalWatcher` tracks the read and re-renders on change. An instance signal created in the constructor is component-local. For a fine-grained DOM swap use `${watch(signal)}` from `@webjsdev/core/directives`.
+
+Two more signal primitives from `@webjsdev/core` cover client-side reactions and batched writes:
+
+- `effect(fn)` runs `fn` now and re-runs it whenever a signal it read changes. It is a BROWSER-ONLY side-effect primitive (a subscription, a `document.title` sync, an analytics ping), not a render path. It returns a disposer, so create it in `connectedCallback` and call the disposer in `disconnectedCallback` to avoid a leak.
+- `batch(fn)` coalesces several `.set()` writes inside `fn` into ONE re-render instead of one per write. Reach for it when a handler updates multiple signals at once.
+
+```ts
+import { signal, effect, batch } from '@webjsdev/core';
+const open = signal(false), count = signal(0);
+connectedCallback() { super.connectedCallback(); this.dispose = effect(() => { document.title = `(${count.get()})`; }); }
+disconnectedCallback() { super.disconnectedCallback(); this.dispose?.(); }
+reset() { batch(() => { open.set(false); count.set(0); }); }   // one re-render, not two
+```
 
 ## Lifecycle (Lit-aligned) and what SSR runs
 
@@ -158,6 +173,71 @@ Errors are isolated per component by default (no user code): a thrown `await` re
 
 Decision rules. Use `async render()` for request-time server data that should be in the first paint (the default). Add `renderFallback()` when a client re-fetch's stale content would mislead. Use `Task` / signals for genuinely client-only data (a click, viewport, live updates). For SLOW data where blocking the first byte hurts, wrap the region in `<webjs-suspense .fallback=${html\`Loading...\`}>` to stream it (the only way to show a first-paint fallback; see `client-router-and-streaming.md`). Do NOT fetch in `connectedCallback` for data knowable server-side, and do NOT prop-drill what a leaf can fetch itself.
 
+## Task: client-only async data
+
+For async data that is genuinely CLIENT-only (it depends on a click, viewport, or a live source, so `async render()` cannot bake it in at SSR), use the `Task` reactive controller. It shows its pending state at SSR (staying `INITIAL`), then runs in the browser.
+
+```ts
+import { Task, TaskStatus } from '@webjsdev/core/task';
+
+class SearchResults extends WebComponent({ q: String }) {
+  #search = new Task(this, {
+    task: async ([q], { signal }) => (await fetch(`/api/s?q=${q}`, { signal })).json(),
+    args: () => [this.q],   // the args array spreads into the task's first parameter
+  });
+  render() {
+    switch (this.#search.status) {
+      case TaskStatus.PENDING: return html`<p>Searching...</p>`;
+      case TaskStatus.ERROR:   return html`<p>${this.#search.error.message}</p>`;
+      case TaskStatus.COMPLETE: return html`<ul>${this.#search.value.map((r) => html`<li>${r.title}</li>`)}</ul>`;
+      default: return html`<p>Type to search.</p>`;   // INITIAL (also the SSR state)
+    }
+  }
+}
+```
+
+`args()` re-runs the task whenever its return changes; call `this.#task.run()` to trigger it manually. `TaskStatus` is `INITIAL` / `PENDING` / `COMPLETE` / `ERROR`. Prefer `async render()` for server data that should be in the first paint; reach for `Task` only when the data cannot exist until the browser runs.
+
+## Context: share state without attribute drilling
+
+When a value must reach a deep descendant without threading it through every intermediate component's attributes, use context (from `@webjsdev/core/context`). This is a CLIENT-TIME concern: a provider publishes on connect, so context is empty at SSR. For server-known data, pass it through the page function or a `.prop` instead (see `muscle-memory-gotchas.md`).
+
+```ts
+import { createContext, ContextProvider, ContextConsumer } from '@webjsdev/core/context';
+
+export const themeContext = createContext<'light' | 'dark'>('theme');
+
+class ThemeRoot extends WebComponent({}) {
+  #provider = new ContextProvider(this, { context: themeContext, initialValue: 'dark' });
+  toggle() { this.#provider.setValue(this.#provider.value === 'dark' ? 'light' : 'dark'); }
+}
+
+class ThemedCard extends WebComponent({}) {
+  #theme = new ContextConsumer(this, { context: themeContext, subscribe: true }); // re-renders on change
+  render() { return html`<div class=${this.#theme.value === 'dark' ? 'bg-black' : 'bg-white'}>...</div>`; }
+}
+```
+
+`subscribe: true` re-renders the consumer on every provider change; omit it for a one-shot read. A component can also fire a `ContextRequestEvent` to pull a value imperatively.
+
+## Directives (lit-html parity)
+
+Import from `@webjsdev/core/directives`. Everything a `class`/`style`/conditional needs is plain JS (`classMap` is `class=${cond ? 'a' : 'b'}`, `when` is a ternary, `map` is `.map`); reach for a directive only for the jobs below.
+
+| Directive | Use it for |
+|---|---|
+| `repeat(items, keyFn, tpl)` | A keyed list where items reorder / insert / remove (preserves DOM + state per key). A static list is a plain `.map`. |
+| `watch(signal)` | A fine-grained DOM swap of one signal's value without re-rendering the whole component. |
+| `live(value)` | An `input` / `textarea` `.value` bound to state, so a user edit that equals the last committed value still resets. |
+| `keyed(key, tpl)` | Force a fresh subtree (discard old DOM + state) when `key` changes. |
+| `guard(deps, () => tpl)` | Skip re-rendering an expensive subtree unless `deps` change. |
+| `cache(tpl)` | Keep the DOM of an inactive branch around when toggling between templates. |
+| `until(promise, fallback)` | Render `fallback` until `promise` resolves (prefer `Task` in a component, `Suspense` for a page). |
+| `unsafeHTML(str)` | Render a TRUSTED raw HTML string. NEVER pass user input (XSS). |
+| `ref(cb)` / `createRef()` | Get a handle to the rendered DOM node. |
+| `asyncAppend(iter)` / `asyncReplace(iter)` | Stream from an async iterable, appending each value or replacing with the latest. |
+| `templateContent(el)` | Render the content of a `<template>` element. |
+
 ## Display-only elision
 
 A component that does no client-side work renders the same SSR'd HTML with or without its JS, so WebJs strips its import from the served source (and any vendor reachable only through it). This is automatic and conservative. A component stays elidable while it has NONE of:
@@ -174,7 +254,7 @@ A bare `async render()` (no other signal, light DOM) is elided too: the SSR'd da
 
 ## Members app code must not shadow
 
-A `WebComponent` inherits `HTMLElement` (browser) or an `ElementShim` (SSR) plus the framework reactivity base. A reactive prop or method whose NAME collides either fails to compile (`TS2415` for a type-incompatible property, `TS2416` for a method signature) or silently hijacks the native member at runtime. The fix is always to rename.
+A `WebComponent` inherits `HTMLElement` (browser) or an `ElementShim` (SSR) plus the framework reactivity base. A reactive prop or method whose NAME collides either fails to compile (`TS2415` for a type-incompatible property, `TS2416` for a method signature) or silently hijacks the native member at runtime. The fix is always to rename. The DOM MUTATION methods WebJs instruments for the light-DOM slot API (`append`, `prepend`, `before`, `after`, `replaceWith`, `replaceChildren`, `remove`, `appendChild`, `insertBefore`, `removeChild`, `replaceChild`) are the dangerous case TypeScript does NOT catch (a shorter override is assignable to the native signature), so a handler named `append()` compiles yet silently never runs. `webjs check`'s `no-shadowed-native-member` rule catches exactly these.
 
 - HTMLElement / Element: `title`, `id`, `slot`, `role`, `hidden`, `dir`, `lang`, `translate`, `draggable`, `tabIndex`, `className`, `dataset`, `remove`, `closest`, `matches`, `focus`, `blur`, `click`, `append` / `prepend`, `before` / `after`. Rename (`postTitle`, `removeItem`, `handleClick`).
 - WebComponent base: `render`, `update`, `requestUpdate`, `updated` / `firstUpdated`, `willUpdate` / `shouldUpdate`, `connectedCallback`, `renderError` / `renderFallback`, `addController` / `removeController`, `updateComplete` (#1021: there is no WebJs slot API to override; slots are native). Only override one deliberately, with its exact signature; never repurpose the name for app logic.

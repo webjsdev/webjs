@@ -7,11 +7,12 @@
 // navigation too). Same component either way; the boundary is what changes the
 // SSR behaviour from block to stream.
 import { WebComponent, html } from '@webjsdev/core';
+import { cardClass } from '#components/ui/card.ts';
 
 export class SlowFact extends WebComponent {
   async render() {
     await new Promise((r) => setTimeout(r, 900));
-    return html`<p class="rounded-2xl border border-border bg-card p-5 text-foreground">
+    return html`<p class="${cardClass()} p-5 text-foreground">
       The answer, after a slow lookup, is <strong>42</strong>.
     </p>`;
   }

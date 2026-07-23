@@ -6,6 +6,8 @@
 // the button is inert and the empty output renders (streaming is inherently a
 // JS behaviour), so nothing here breaks the no-JS first paint.
 import { WebComponent, signal, html } from '@webjsdev/core';
+import { cardClass } from '#components/ui/card.ts';
+import { buttonClass } from '#components/ui/button.ts';
 import { streamTokens } from '../actions/stream-tokens.server.ts';
 
 export class TokenStream extends WebComponent {
@@ -29,16 +31,21 @@ export class TokenStream extends WebComponent {
 
   render() {
     const busy = this.busy.get();
+    const output = this.output.get();
+    // Only reserve the output area once streaming starts (or has produced text),
+    // so an idle demo has no empty box below the button.
     return html`
-      <div class="rounded-2xl border border-border bg-card p-5">
+      <div class="${cardClass()} p-5">
         <button
           @click=${() => this.run()}
           ?disabled=${busy}
-          class="inline-flex items-center px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97] disabled:opacity-60"
+          class=${buttonClass()}
         >
           ${busy ? 'streaming…' : 'Stream tokens'}
         </button>
-        <pre class="mt-4 whitespace-pre-wrap font-mono text-sm text-foreground min-h-[3rem]">${this.output.get()}</pre>
+        ${busy || output
+          ? html`<pre class="mt-4 whitespace-pre-wrap font-mono text-sm text-foreground">${output}</pre>`
+          : ''}
       </div>
     `;
   }

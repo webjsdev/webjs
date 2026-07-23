@@ -73,22 +73,48 @@ const GROUPS: Array<[RegExp, string]> = [
   [/^grid(-|$)/, 'grid'],
 ];
 
+// Directional shorthand conflicts (the tailwind-merge model). A shorthand
+// utility invalidates the axis / side utilities it SUBSUMES, because Tailwind's
+// cascade makes the shorthand win: `p-0` after `px-4 py-2` drops both, but
+// `px-4` after `p-2` refines only the x-axis so BOTH survive (the conflict is
+// directional, not symmetric). Keyed by the group a NEWLY-seen token belongs to;
+// the value lists the EARLIER groups whose survivors it removes (its own group
+// is always removed too, handled below).
+const CONFLICTS: Record<string, string[]> = {
+  p: ['px', 'py', 'pt', 'pr', 'pb', 'pl'],
+  px: ['pl', 'pr'],
+  py: ['pt', 'pb'],
+  m: ['mx', 'my', 'mt', 'mr', 'mb', 'ml'],
+  mx: ['ml', 'mr'],
+  my: ['mt', 'mb'],
+  size: ['w', 'h'],
+};
+
 function dedupeUtilities(input: string): string {
   const tokens = input.split(/\s+/).filter(Boolean);
-  const seen = new Map<string, number>();
+  // `${prefix}::${group}` -> index of the last SURVIVING token in that group.
+  const lastByKey = new Map<string, number>();
   const result: Array<string | null> = [];
 
   for (const token of tokens) {
-    let key: string | null = null;
-    // Strip variant prefix (`hover:`, `dark:md:`, …) before testing each
-    // dedupe regex so `hover:bg-red-500` still matches the `bg-color` group.
+    // Strip variant prefix (`hover:`, `dark:md:`, …) before testing each dedupe
+    // regex so `hover:bg-red-500` still matches the `bg-color` group. Conflicts
+    // only apply WITHIN the same variant (`px-4 hover:p-0` keeps both).
     const prefix = variantPrefix(token);
     const bare = prefix ? token.slice(prefix.length) : token;
-    for (const [re, gk] of GROUPS) {
-      if (re.test(bare)) { key = `${prefix}::${gk}`; break; }
+    let gk: string | null = null;
+    for (const [re, g] of GROUPS) {
+      if (re.test(bare)) { gk = g; break; }
     }
-    if (key && seen.has(key)) result[seen.get(key)!] = null;
-    if (key) seen.set(key, result.length);
+    if (gk) {
+      // Remove earlier survivors in this group AND in every group it subsumes.
+      for (const g of [gk, ...(CONFLICTS[gk] ?? [])]) {
+        const k = `${prefix}::${g}`;
+        const idx = lastByKey.get(k);
+        if (idx !== undefined) { result[idx] = null; lastByKey.delete(k); }
+      }
+      lastByKey.set(`${prefix}::${gk}`, result.length);
+    }
     result.push(token);
   }
   return result.filter(Boolean).join(' ');

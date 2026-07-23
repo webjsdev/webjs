@@ -16,8 +16,8 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readFile, stat } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { mkdtemp, rm, readFile, stat, writeFile } from 'node:fs/promises';
+import { existsSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -55,10 +55,10 @@ test('full-stack scaffold ships feature demos and one example app', async () => 
       assert.ok(await exists(join(appDir, 'app', 'features', name, 'page.ts')), `app/features/${name}/page.ts`);
     }
     // Shared layouts give every feature demo AND every example app a
-    // back-to-gallery link so no card is a dead end (each links the home at /).
+    // back-to-gallery link so no card is a dead end (via the backLink('/') helper).
     for (const seg of ['features', 'examples']) {
       const layout = await readFile(join(appDir, 'app', seg, 'layout.ts'), 'utf8');
-      assert.match(layout, /href="\/"/, `${seg} layout links back to the gallery home`);
+      assert.match(layout, /backLink\('\/'/, `${seg} layout links back to the gallery home`);
       assert.match(layout, /Gallery/, `${seg} layout renders a Gallery link`);
     }
     for (const name of EXAMPLE_APPS) {
@@ -98,18 +98,23 @@ test('full-stack scaffold ships feature demos and one example app', async () => 
   }
 });
 
-test('full-stack home page links every feature and the example app', async () => {
+test('the shared gallery nav lists every feature and the example app', async () => {
+  // The feature index moved to modules/gallery/nav.ts (one source for the home
+  // cards AND the sidebar). Assert every demo is listed there, and that the home
+  // reads it rather than hard-coding its own list.
   const cwd = await tempCwd();
   try {
     await scaffoldApp('demo', cwd, { template: 'full-stack' });
+    const nav = await readFile(join(cwd, 'demo', 'modules', 'gallery', 'nav.ts'), 'utf8');
     const home = await readFile(join(cwd, 'demo', 'app', 'page.ts'), 'utf8');
 
     assert.doesNotMatch(home, /webjs-scaffold-placeholder/, 'the placeholder gate was retired');
+    assert.match(home, /from '#modules\/gallery\/nav\.ts'/, 'home reads the shared nav index');
     for (const name of FEATURES) {
-      assert.match(home, new RegExp(`/features/${name}`), `home links /features/${name}`);
+      assert.match(nav, new RegExp(`/features/${name}`), `nav lists /features/${name}`);
     }
     for (const name of EXAMPLE_APPS) {
-      assert.match(home, new RegExp(`/examples/${name}`), `home links /examples/${name}`);
+      assert.match(nav, new RegExp(`/examples/${name}`), `nav lists /examples/${name}`);
     }
   } finally {
     await rm(cwd, { recursive: true, force: true });
@@ -154,6 +159,111 @@ test('todo query uses rc.3 object-form orderBy (regression guard)', async () => 
     assert.match(q, /orderBy:\s*\{\s*createdAt:\s*'desc'\s*\}/, 'uses object-form orderBy');
     // Match only real code (an `orderBy: [`), not the cautionary comment.
     assert.doesNotMatch(q, /orderBy:\s*\[/, 'must not use array-form orderBy which mis-compiles in rc.3');
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test('full-stack gallery:clear strips the app to a barebones blank slate', async () => {
+  // gallery:clear must leave a minimal buildable base, not "the scaffold minus
+  // the gallery". It removes the gallery, the example design system, the example
+  // theme-toggle (+ its layout/home wiring), the example tests, and every empty
+  // leftover dir; it keeps the durable skill, the layout, db wiring, and cn.ts.
+  // The pre-clear existence asserts are the counterfactual (they prove each thing
+  // was really there to remove).
+  const cwd = await tempCwd();
+  try {
+    await scaffoldApp('demo', cwd, { template: 'full-stack', install: false });
+    const appDir = join(cwd, 'demo');
+    const has = (...p) => existsSync(join(appDir, ...p));
+
+    // Counterfactual: everything gallery:clear should strip is present first.
+    assert.ok(has('app', 'features'), 'pre: app/features exists');
+    assert.ok(has('app', 'examples'), 'pre: app/examples exists');
+    assert.ok(has('modules', 'todo'), 'pre: modules/todo exists');
+    assert.ok(has('components', 'ui', 'button.ts'), 'pre: components/ui design system exists');
+    assert.ok(has('components', 'theme-toggle.ts'), 'pre: example theme-toggle exists');
+    assert.ok(has('test', 'hello'), 'pre: example test suite exists');
+    assert.ok(has('lib', 'utils', 'ui.ts'), 'pre: gallery ui.ts fragment helpers exist');
+    assert.ok(has('app', 'api', 'auth'), 'pre: gallery auth handler under app/api exists');
+    assert.match(await readFile(join(appDir, 'app', 'layout.ts'), 'utf8'), /theme-toggle/, 'pre: layout imports theme-toggle');
+
+    execFileSync(process.execPath, ['scripts/clear-gallery.mjs'], { cwd: appDir, stdio: 'ignore' });
+
+    // Removed: the gallery + example design system + example artifacts.
+    assert.equal(has('app', 'features'), false, 'app/features removed');
+    assert.equal(has('app', 'examples'), false, 'app/examples removed');
+    assert.equal(has('modules', 'todo'), false, 'demo module removed');
+    assert.equal(has('modules', 'auth'), false, 'auth demo module removed');
+    assert.equal(has('components', 'ui'), false, 'components/ui design system removed');
+    assert.equal(has('components', 'theme-toggle.ts'), false, 'example theme-toggle removed');
+    assert.equal(has('test', 'hello'), false, 'example test suite removed');
+    // Empty leftover dirs pruned to a true blank slate.
+    assert.equal(has('app', 'api'), false, 'empty app/api pruned');
+    assert.equal(has('test', 'unit'), false, 'empty test/unit pruned');
+    assert.equal(has('test', 'e2e'), false, 'empty test/e2e pruned');
+    assert.equal(has('test'), false, 'empty test/ pruned');
+
+    // Kept: the buildable base.
+    assert.ok(has('.agents', 'skills', 'webjs', 'SKILL.md'), 'the durable agent skill is kept');
+    assert.equal(has('lib', 'utils', 'ui.ts'), false, 'gallery ui.ts fragment helpers removed');
+    assert.ok(has('lib', 'utils', 'cn.ts'), 'cn.ts kept (webjs ui add prerequisite)');
+    assert.ok(has('db', 'connection.server.ts'), 'db wiring kept');
+    assert.ok(has('components'), 'components/ kept as an (empty) build target');
+    assert.ok(has('modules'), 'modules/ kept as an (empty) build target');
+    // ENFORCEMENT (so a new gallery demo can't be added without updating
+    // gallery:clear): after clear, modules/ and components/ MUST be a blank
+    // slate. A gallery module or ui helper left behind fails here. If you added
+    // gallery content, add its removal to templates/scripts/clear-gallery.mjs.
+    const modulesLeft = readdirSync(join(appDir, 'modules'));
+    assert.deepEqual(modulesLeft, [], `modules/ must be empty after clear, found: ${modulesLeft.join(', ')}`);
+    const componentsLeft = readdirSync(join(appDir, 'components'));
+    assert.deepEqual(componentsLeft, [], `components/ must be empty after clear, found: ${componentsLeft.join(', ')}`);
+    assert.ok(has('app', 'layout.ts'), 'root layout kept');
+
+    // The layout is reset to a blank-slate base: no theme-toggle, no design-token
+    // palette, just the OS light/dark system colours (Canvas / CanvasText). The
+    // design system is taught in the skill, not baked into the blank slate.
+    const layout = await readFile(join(appDir, 'app', 'layout.ts'), 'utf8');
+    assert.doesNotMatch(layout, /theme-toggle/, 'layout theme-toggle import stripped');
+    assert.doesNotMatch(layout, /--(?:background|foreground|primary):/, 'reset layout ships no design-token palette');
+    assert.match(layout, /background:\s*Canvas/, 'reset layout uses OS system colours');
+
+    // The reset home is minimal: no <theme-toggle>, no gallery links.
+    const home = await readFile(join(appDir, 'app', 'page.ts'), 'utf8');
+    assert.doesNotMatch(home, /theme-toggle/, 'reset home drops theme-toggle');
+    assert.doesNotMatch(home, /\/features\//, 'reset home has no gallery links');
+
+    // The schema is reverted to the minimal base (no demo todos, no auth column).
+    const schema = await readFile(join(appDir, 'db', 'schema.server.ts'), 'utf8');
+    assert.doesNotMatch(schema, /export const todos = table/, 'todos table dropped');
+    assert.doesNotMatch(schema, /passwordHash/, 'auth passwordHash column dropped');
+    assert.match(schema, /defineRelations\(\{ users \}/, 'relations reverted to users only');
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test('gallery:clear keeps a hand-customised root layout (brand guard)', async () => {
+  // The layout overwrite is guarded on the gallery's own navbar brand: a layout
+  // the user already themed (brand gone) is the user's work, so clear KEEPS it
+  // and strips only the dangling theme-toggle wiring (the component file is
+  // removed either way).
+  const cwd = await tempCwd();
+  try {
+    await scaffoldApp('demo', cwd, { template: 'full-stack', install: false });
+    const appDir = join(cwd, 'demo');
+    const layoutPath = join(appDir, 'app', 'layout.ts');
+    const customised = (await readFile(layoutPath, 'utf8')).replace('WebJs Gallery', 'Acme Notes');
+    await writeFile(layoutPath, customised);
+
+    execFileSync(process.execPath, ['scripts/clear-gallery.mjs'], { cwd: appDir, stdio: 'ignore' });
+
+    const kept = await readFile(layoutPath, 'utf8');
+    assert.match(kept, /Acme Notes/, 'the customised layout survives the clear');
+    assert.match(kept, /light-dark\(/, "the user's palette survives too");
+    assert.doesNotMatch(kept, /theme-toggle/, 'the dangling theme-toggle wiring is stripped');
+    assert.doesNotMatch(kept, /background:\s*Canvas/, 'the blank-slate layout was NOT applied');
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }
@@ -240,6 +350,11 @@ test('the api gallery:clear sheds the showcase to a health + users base', async 
     assert.ok(await exists(join(appDir, 'app', 'api', 'health', 'route.ts')), 'health endpoint kept');
     assert.ok(await exists(join(appDir, 'app', 'api', 'users', 'route.ts')), 'users endpoint kept');
     assert.ok(await exists(join(appDir, 'modules', 'users')), 'modules/users kept');
+    // ENFORCEMENT (parity with the full-stack clear test): after clear, modules/
+    // holds ONLY the users base. A new api demo module left behind fails here, so
+    // clear-api-gallery.mjs must be updated whenever the api showcase gains one.
+    assert.deepEqual(readdirSync(join(appDir, 'modules')).sort(), ['users'],
+      'modules/ must hold only the users base after the api clear');
 
     // A rerun is a safe no-op (the showcase is already gone).
     execFileSync(process.execPath, ['scripts/clear-api-gallery.mjs'], { cwd: appDir, stdio: 'ignore' });

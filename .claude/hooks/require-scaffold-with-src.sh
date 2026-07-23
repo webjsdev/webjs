@@ -35,9 +35,16 @@
 # CLI packages' src, packages/(core|server|cli)/src/**. Editor plugins, the
 # MCP, and intellisense do not shape the scaffold, so they are excluded.
 #
-# Satisfying surface: the scaffold itself, packages/cli/templates/** (the
-# template files + per-agent rule files) OR packages/cli/lib/** (the
-# create.js / saas-template.js / api-gallery.js generators).
+# Satisfying surface: either of the scaffold's TWO primary teaching surfaces.
+# (1) the scaffold itself, packages/cli/templates/** (the template files +
+# per-agent rule files) OR packages/cli/lib/** (the generators); and (2) the
+# agent skill at the repo-root .agents/skills/webjs/** (SKILL.md + references/),
+# which is bundled into every scaffold at prepack and is the DURABLE teacher:
+# `gallery:clear` removes the gallery, so the skill is the only teaching surface
+# that survives, and a feature it does not teach is lost the moment an agent
+# clears the gallery. So a feature-source commit must move the gallery OR the
+# skill (per-surface judgment on whether BOTH are needed is the skill's manual
+# walk + the CI coverage gate).
 #
 # Allowed (exit 0): commits touching no feature src; commits that stage a
 # scaffold surface alongside the source; and a change that genuinely needs
@@ -71,9 +78,11 @@ if [ -z "$staged" ]; then exit 0; fi
 src_touched=$(printf '%s\n' "$staged" | grep -E '^packages/(core|server|cli)/src/' || true)
 if [ -z "$src_touched" ]; then exit 0; fi
 
-# Any scaffold surface staged in the same commit? The scaffold is the
-# templates (files + per-agent rule files) and the generators (cli/lib).
-scaffold_staged=$(printf '%s\n' "$staged" | grep -E '^packages/cli/(templates|lib)/' || true)
+# Any scaffold teaching surface staged in the same commit? Either the scaffold
+# templates/generators (the gallery, runnable but disposable via gallery:clear)
+# OR the agent skill at .agents/skills/webjs/ (the durable teacher bundled into
+# every scaffold, the only surface that survives gallery:clear).
+scaffold_staged=$(printf '%s\n' "$staged" | grep -E '^packages/cli/(templates|lib)/|^\.agents/skills/webjs/' || true)
 if [ -n "$scaffold_staged" ]; then exit 0; fi
 
 cat >&2 <<'EOF'
@@ -85,18 +94,21 @@ for AI agents (they learn the framework by reading the generated
 gallery/showcase, then build the real app by adapting it), so a task is NOT
 done until the scaffold that teaches the changed feature is in sync too.
 
-If this added or changed a webjs FEATURE an agent should learn from the
+If this added or changed a WebJs FEATURE an agent should learn from the
 scaffold (a new export/API, an html hole, a lifecycle hook, a server-action
-capability, a config key, a CLI behaviour), invoke the webjs-scaffold-sync
-skill, then `git add` the scaffold surface(s) and commit again:
-  packages/cli/templates/gallery/         a UI feature-gallery demo (full-stack + saas)
+capability, a config key, a CLI behaviour), invoke the `webjs-scaffold-sync`
+skill, then `git add` the teaching surface(s) and commit again:
+  `.agents/skills/webjs/`                  the DURABLE teacher (SKILL.md + references/),
+                                          survives `gallery:clear` so it MUST teach the feature
+  packages/cli/templates/gallery/         a UI feature-gallery demo (runnable, disposable)
   packages/cli/lib/api-gallery.js         an api backend-showcase endpoint
   packages/cli/lib/{create,saas-template}.js  the generators (home, theme, schema, wiring)
   packages/cli/templates/ (AGENTS/CONVENTIONS/.cursorrules/...)  scaffold rules in lockstep
   test/scaffolds/**                       the scaffold assertions for the above
-The skill walks every surface AND runs the mandatory generate + boot +
-`webjs check` verification (the generators emit strings, so escaping bugs
-only show in a freshly generated app).
+A feature usually needs BOTH: a gallery demo (learn by running) AND skill
+coverage (the pattern that survives the clear). The skill walks every surface
+AND runs the mandatory generate + boot + `webjs check` verification (the
+generators emit strings, so escaping bugs only show in a freshly generated app).
 
 Change that genuinely needs no scaffold update (a bug fix, an internal
 refactor, a tweak to an already-demoed feature)? Re-run with

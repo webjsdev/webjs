@@ -5,6 +5,8 @@
 // component renders its disconnected state, so with JS off the page still reads
 // (a live socket has no no-JS equivalent, which is the honest fallback here).
 import { WebComponent, signal, html, connectWS, renderStream } from '@webjsdev/core';
+import { buttonClass } from '#components/ui/button.ts';
+import { inputClass } from '#components/ui/input.ts';
 
 export class WsEcho extends WebComponent {
   private connected = signal(false);
@@ -59,9 +61,9 @@ export class WsEcho extends WebComponent {
         </div>
         <form @submit=${(e: SubmitEvent) => this.send(e)} class="flex gap-2">
           <input name="msg" autocomplete="off" placeholder="Say something"
-            class="flex-1 px-3 py-2 rounded-xl bg-card border border-border text-foreground text-sm outline-none focus:border-border-strong" />
+            class=${inputClass('flex-1 min-w-0')} />
           <button type="submit"
-            class="px-3.5 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">Send</button>
+            class=${buttonClass({ size: 'sm' })}>Send</button>
         </form>
         <ul class="grid gap-1.5 list-none m-0 p-0">
           ${this.lines.get().map((line) => html`
@@ -70,7 +72,7 @@ export class WsEcho extends WebComponent {
         </ul>
         <div class="grid gap-2 border-t border-border pt-4">
           <button @click=${() => this.applyStreamUpdate()}
-            class="w-fit px-3.5 py-1.5 rounded-xl bg-card border border-border text-foreground text-sm cursor-pointer transition-colors hover:border-border-strong">renderStream() an element-level update</button>
+            class="${buttonClass({ variant: 'secondary', size: 'sm' })} w-fit">renderStream() an element-level update</button>
           <ul id="ws-stream-log" class="grid gap-1.5 list-none m-0 p-0"></ul>
         </div>
       </div>

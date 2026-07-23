@@ -1,4 +1,6 @@
 import { html } from '@webjsdev/core';
+import { cardClass } from '#components/ui/card.ts';
+import { badgeClass } from '#components/ui/badge.ts';
 import { currentUser } from '#modules/auth/queries/current-user.server.ts';
 
 export const metadata = { title: 'Dashboard' };
@@ -8,9 +10,9 @@ export default async function Dashboard() {
   return html`
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-semibold">Dashboard</h1>
-      <span class="text-xs font-medium rounded-full bg-primary/15 text-primary px-2.5 py-1">Signed in</span>
+      <span class=${badgeClass()}>Signed in</span>
     </div>
-    <div class="p-6 rounded-2xl bg-card border border-border">
+    <div class="${cardClass()} p-6">
       <h2 class="text-lg font-semibold text-foreground m-0 mb-1">Welcome, ${user?.name || user?.email}!</h2>
       <p class="text-sm text-muted-foreground m-0">This route is gated by middleware.ts. Promote it into your product, or drop the whole auth card with gallery:clear.</p>
     </div>
