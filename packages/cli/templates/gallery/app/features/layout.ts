@@ -18,23 +18,22 @@ const SIDENAV_CSS = `
 
 // Section rhythm: ONE uniform gap between every top-level block of a demo
 // (heading, lede, paragraph, component, list, anything), so spacing stays
-// consistent with NO per-element margins. It zeroes each direct child's own
-// block margins, then puts an equal gap before every child after the first. This
-// is the single place that controls demo spacing. A group that must stay tight (a
-// caption directly above its code) is wrapped in ONE child <div>, which keeps its
-// own inner spacing (the reset only reaches DIRECT children of .demo-stack).
+// consistent with NO per-element margins. This is the single place that controls
+// demo spacing. A flex column with `gap` does it WITHOUT touching each child's
+// own display: a `grid`/`flex` child (like the forms card) keeps its layout, a
+// shadow-DOM host (inline by default) is blockified as a flex item so it honours
+// the gap, a display:contents <webjs-suspense> is replaced by its children (which
+// become the flex items and get the gap), and a display:none streaming
+// <script>/<template> is not an item at all (no phantom gap).
 const STACK_CSS = `
-  .demo-stack { --section-gap: 1.5rem; }
-  /* Space only RENDERED sections; skip streaming <script>/<style>/<template>
-     nodes (a forced-visible script would otherwise gain a phantom gap). block so
-     a shadow-DOM host (inline by default) honours the gap; ~ (not +) so an
-     interleaved streaming script cannot break the adjacency. */
-  .demo-stack > :not(script):not(style):not(template) { display: block; margin-block: 0; }
-  .demo-stack > :not(script):not(style):not(template) ~ :not(script):not(style):not(template) { margin-block-start: var(--section-gap); }
-  /* <webjs-suspense> is display:contents while streaming (no box, so it would
-     drop its section gap). Force a block box so the gap applies; streaming only
-     moves its children, so a CSS-level display change does not affect it. */
-  .demo-stack > webjs-suspense { display: block !important; }
+  .demo-stack {
+    --section-gap: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: var(--section-gap);
+  }
+  /* Zero any inline margins so ONLY the flex gap spaces sections. */
+  .demo-stack > * { margin: 0; }
 `;
 
 // Shared layout for every gallery feature demo under /features/*. A docs-style
