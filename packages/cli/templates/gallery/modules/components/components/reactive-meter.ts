@@ -15,8 +15,12 @@ export class ReactiveMeter extends WebComponent {
     }
     /* Tailwind's focus styles do NOT cross the shadow boundary, so a shadow-DOM
        component styles its own focus, else the browser's default outline (thick,
-       shown on window-refocus) appears. Match the app's themed ring. */
-    button:focus-visible { outline: 2px solid var(--color-ring); outline-offset: 2px; }
+       shown on window-refocus) appears. Match the design system's global ring
+       EXACTLY: the --ring colour at 50% (the same as outline-ring/50). */
+    button:focus-visible {
+      outline: 2px solid color-mix(in oklab, var(--color-ring) 50%, transparent);
+      outline-offset: 2px;
+    }
     .val { font-variant-numeric: tabular-nums; font-weight: 600; }
     .muted { opacity: 0.6; font-size: 13px; }
   `;
