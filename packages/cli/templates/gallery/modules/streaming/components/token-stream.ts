@@ -31,6 +31,9 @@ export class TokenStream extends WebComponent {
 
   render() {
     const busy = this.busy.get();
+    const output = this.output.get();
+    // Only reserve the output area once streaming starts (or has produced text),
+    // so an idle demo has no empty box below the button.
     return html`
       <div class="${cardClass()} p-5">
         <button
@@ -40,7 +43,9 @@ export class TokenStream extends WebComponent {
         >
           ${busy ? 'streaming…' : 'Stream tokens'}
         </button>
-        <pre class="mt-4 whitespace-pre-wrap font-mono text-sm text-foreground min-h-[3rem]">${this.output.get()}</pre>
+        ${busy || output
+          ? html`<pre class="mt-4 whitespace-pre-wrap font-mono text-sm text-foreground min-h-[3rem]">${output}</pre>`
+          : ''}
       </div>
     `;
   }
