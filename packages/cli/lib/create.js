@@ -124,7 +124,11 @@ async function copyGallery(appDir) {
   const galleryDir = join(TEMPLATES, 'gallery');
   // `test` carries the auth card's real request-pipeline test (test/auth); it
   // ships with the gallery and is pruned by gallery:clear alongside the card.
-  for (const sub of ['app', 'modules', 'test']) {
+  // `components` carries the design system (components/ui/ class helpers) the
+  // demos import; it is INFRASTRUCTURE that gallery:clear KEEPS (a real app goes
+  // on importing buttonClass/cardClass/inputClass), so it merges into the app's
+  // components/ alongside the separately-written theme toggle.
+  for (const sub of ['app', 'modules', 'test', 'components']) {
     await cp(join(galleryDir, sub), join(appDir, sub), { recursive: true });
   }
 }
