@@ -54,7 +54,7 @@ export default function FeaturesLayout({ children, url }: { children: unknown; u
            internally, so a short demo never forces a page scrollbar. -->
       <aside class="hidden lg:flex lg:flex-col sticky top-6 self-start max-h-[calc(100dvh-7.5rem)] text-sm">
         <!-- Pinned header: stays put while the demo list below scrolls. -->
-        <a href="/" class="shrink-0 block px-3 py-1.5 mb-2 rounded-lg no-underline text-muted-foreground hover:text-foreground transition-colors">&larr; Gallery</a>
+        <a href="/" class="shrink-0 block px-3 py-1.5 mb-4 rounded-lg no-underline text-muted-foreground hover:text-foreground transition-colors">&larr; Gallery</a>
         <div class="gallery-sidenav min-h-0 overflow-y-auto overflow-x-hidden -mr-2 pr-2">
           <gallery-nav current=${path}></gallery-nav>
         </div>
