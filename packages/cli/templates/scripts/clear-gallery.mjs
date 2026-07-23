@@ -110,10 +110,26 @@ if (existsSync(schemaPath)) {
 // carries no design system: the Tailwind stylesheet + OS light/dark system
 // colours (Canvas / CanvasText) + a bare <main>. The agent then builds the
 // palette (CSS tokens + @theme + a light-dark() theme) as its own, guided by
-// .agents/skills/webjs/references/styling.md. (Safe under the app/features/ guard
-// above: the gallery is still present, so the layout is not hand-customised yet.)
+// .agents/skills/webjs/references/styling.md.
+// GUARD: overwrite only while the layout still carries the gallery's own navbar
+// brand. A hand-customised layout (the brand removed / replaced) is the user's
+// work, so it is KEPT and only the dangling references to the removed
+// theme-toggle file are stripped surgically.
 const layoutPath = join(root, 'app/layout.ts');
-if (existsSync(layoutPath)) writeFileSync(layoutPath, MINIMAL_LAYOUT());
+if (existsSync(layoutPath)) {
+  const current = readFileSync(layoutPath, 'utf8');
+  if (current.includes('WebJs Gallery')) {
+    writeFileSync(layoutPath, MINIMAL_LAYOUT());
+  } else {
+    console.log('app/layout.ts looks customised; keeping it (only the theme-toggle wiring is stripped).');
+    writeFileSync(
+      layoutPath,
+      current
+        .replace(/^import '#components\/theme-toggle\.ts';\n/m, '')
+        .replace(/^\s*<theme-toggle><\/theme-toggle>\n?/m, ''),
+    );
+  }
+}
 
 // 6) Drop generated migrations + the dev database so the next db:generate is
 // clean against the reset schema (safe: the scaffold has no real data yet).
@@ -167,7 +183,7 @@ function MINIMAL_LAYOUT() {
  * the app's look. The recommended setup, CSS custom-property tokens mapped into
  * Tailwind via @theme (so bg-background / text-foreground work), a DRY
  * light-dark() palette, a header/nav, and the ui class helpers, is taught in
- * .agents/skills/webjs/references/styling.md. Run \\\`npx webjsdev ui add <name>\\\`
+ * .agents/skills/webjs/references/styling.md. Run \`npx webjsdev ui add <name>\`
  * to pull primitives, then theme them here.
  */
 

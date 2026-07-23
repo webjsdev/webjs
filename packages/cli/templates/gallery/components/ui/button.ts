@@ -34,8 +34,9 @@ import { cn } from '#lib/utils/cn.ts';
 
 // BASE: shared by every variant + size, so a fix here (e.g. the focus ring, or
 // cursor-pointer) applies to the whole button system at once.
-// Focus is handled ONCE by the app's global :focus-visible ring (in the root
-// layout), so buttons need no per-element focus style here.
+// Focus is handled ONCE by the design system's global :focus-visible ring (the
+// ui theme's @layer base in public/input.css), so buttons need no per-element
+// focus style here.
 const BASE =
   'inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap text-sm transition-all disabled:pointer-events-none disabled:opacity-60';
 
