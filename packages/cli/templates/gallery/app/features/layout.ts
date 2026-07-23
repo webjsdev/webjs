@@ -24,7 +24,7 @@ const SIDENAV_CSS = `
 // caption directly above its code) is wrapped in ONE child <div>, which keeps its
 // own inner spacing (the reset only reaches DIRECT children of .demo-stack).
 const STACK_CSS = `
-  .demo-stack { --section-gap: 2rem; }
+  .demo-stack { --section-gap: 1.5rem; }
   /* block so vertical gaps apply even to a shadow-DOM host (inline by default,
      and inline elements ignore block margins). */
   .demo-stack > * { display: block; margin-block: 0; }
