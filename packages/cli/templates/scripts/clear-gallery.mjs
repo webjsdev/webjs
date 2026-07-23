@@ -108,7 +108,9 @@ if (existsSync(schemaPath)) {
 // still honours light/dark, just without the manual toggle button.
 const layoutPath = join(root, 'app/layout.ts');
 if (existsSync(layoutPath)) {
-  const l = readFileSync(layoutPath, 'utf8').replace(/^import '#components\/theme-toggle\.ts';\n/m, '');
+  const l = readFileSync(layoutPath, 'utf8')
+    .replace(/^import '#components\/theme-toggle\.ts';\n/m, '')
+    .replace(/^\s*<div class="fixed top-4 right-4 z-10"><theme-toggle><\/theme-toggle><\/div>\n/m, '');
   writeFileSync(layoutPath, l);
 }
 

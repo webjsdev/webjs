@@ -1218,50 +1218,52 @@ export default function RootLayout({ children }: { children: unknown }) {
         --input: #34393e;
         --ring: #6b7075;
       }
-      /* light (explicit via the toggle) */
+      /* light (explicit via the toggle). A crisp white page with near-black
+         text, a readable muted grey, and visible borders (a washed-out light
+         theme comes from a grey page + too-light muted text + faint borders). */
       :root[data-theme='light'] {
         color-scheme: light;
-        --background: #dee2e6;
-        --foreground: #313539;
-        --card: #f0f4f7;
-        --card-foreground: #313539;
-        --popover: #f0f4f7;
-        --popover-foreground: #313539;
-        --primary: #313539;
-        --primary-foreground: #f7fbff;
-        --secondary: #f7fbff;
-        --secondary-foreground: #313539;
-        --muted: #eaeef1;
-        --muted-foreground: #767b80;
-        --accent: #f7fbff;
-        --accent-foreground: #313539;
-        --border: #c9d0d6;
-        --border-strong: #b3bbc2;
-        --input: #c9d0d6;
-        --ring: #9aa0a5;
+        --background: #ffffff;
+        --foreground: #191c20;
+        --card: #f7f8fa;
+        --card-foreground: #191c20;
+        --popover: #ffffff;
+        --popover-foreground: #191c20;
+        --primary: #1e2226;
+        --primary-foreground: #ffffff;
+        --secondary: #eef0f2;
+        --secondary-foreground: #191c20;
+        --muted: #eef0f2;
+        --muted-foreground: #565c64;
+        --accent: #e9ebef;
+        --accent-foreground: #191c20;
+        --border: #e2e5e9;
+        --border-strong: #ccd1d7;
+        --input: #e2e5e9;
+        --ring: #8b9198;
       }
       /* light (OS preference, when the user has made no explicit choice) */
       @media (prefers-color-scheme: light) {
         :root:not(.dark):not([data-theme='dark']) {
           color-scheme: light;
-          --background: #dee2e6;
-          --foreground: #313539;
-          --card: #f0f4f7;
-          --card-foreground: #313539;
-          --popover: #f0f4f7;
-          --popover-foreground: #313539;
-          --primary: #313539;
-          --primary-foreground: #f7fbff;
-          --secondary: #f7fbff;
-          --secondary-foreground: #313539;
-          --muted: #eaeef1;
-          --muted-foreground: #767b80;
-          --accent: #f7fbff;
-          --accent-foreground: #313539;
-          --border: #c9d0d6;
-          --border-strong: #b3bbc2;
-          --input: #c9d0d6;
-          --ring: #9aa0a5;
+          --background: #ffffff;
+          --foreground: #191c20;
+          --card: #f7f8fa;
+          --card-foreground: #191c20;
+          --popover: #ffffff;
+          --popover-foreground: #191c20;
+          --primary: #1e2226;
+          --primary-foreground: #ffffff;
+          --secondary: #eef0f2;
+          --secondary-foreground: #191c20;
+          --muted: #eef0f2;
+          --muted-foreground: #565c64;
+          --accent: #e9ebef;
+          --accent-foreground: #191c20;
+          --border: #e2e5e9;
+          --border-strong: #ccd1d7;
+          --input: #e2e5e9;
+          --ring: #8b9198;
         }
       }
     </style>
@@ -1277,6 +1279,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         -moz-osx-font-smoothing: grayscale;
       }
     </style>
+    <div class="fixed top-4 right-4 z-10"><theme-toggle></theme-toggle></div>
     <main class="min-h-dvh max-w-5xl mx-auto px-4 sm:px-6 py-8">
       \${children}
     </main>
@@ -1302,8 +1305,6 @@ export const metadata = {
 
 export default function Home() {
   return html\`
-    <div class="fixed top-4 right-4 z-10"><theme-toggle></theme-toggle></div>
-
     <div class="py-8 flex flex-col items-center gap-16">
       <!-- Masthead -->
       <section class="flex flex-col items-center text-center gap-5">
