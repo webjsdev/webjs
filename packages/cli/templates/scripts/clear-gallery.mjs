@@ -11,14 +11,17 @@
 //
 // It strips the app down to a TRULY BAREBONES blank slate: it removes the
 // gallery routes + modules + demo metadata routes, the gallery's example design
-// system (components/ui/), the example theme-toggle component + its wiring, the
-// example test suite (test/hello/), and every empty leftover dir, then resets
-// app/page.ts to a minimal home and drops the demo `todos` table plus the auth
-// card's `passwordHash` column from the schema. It KEEPS only the buildable
-// base: the agent skill (.agents/skills/webjs/), the root layout (with its
-// design-token palette + OS-preference dark mode, minus the toggle widget), the
-// database wiring, the example `users` table, and `lib/utils/cn.ts` (the
-// `webjs ui add` prerequisite).
+// system (components/ui/), the example theme-toggle component, the example test
+// suite (test/hello/), and every empty leftover dir, then resets app/page.ts to
+// a minimal home AND app/layout.ts to a blank-slate base (the gallery's navbar,
+// theme toggle, Google Fonts, AND design-token palette dropped: the reset layout
+// carries NO design system, just the OS light/dark system colours, so the agent
+// builds the palette as its own, guided by the skill), and drops the demo `todos`
+// table plus the auth card's `passwordHash` column from the schema. It KEEPS only
+// the buildable base: the agent skill (.agents/skills/webjs/), the reset root
+// layout (the Tailwind wiring + a system-colour base, no tokens), the database
+// wiring, the example `users` table, and `lib/utils/cn.ts` (the `webjs ui add`
+// prerequisite).
 //
 // Why strip so much: the demos, the design system, and the example component /
 // tests are all EXAMPLES to learn FROM, not a base to inherit. Leaving them
@@ -63,8 +66,8 @@ const galleryPaths = [
   'components/ui',
   // Example scaffold artifacts (invariant 2): the theme-toggle component and the
   // example test suite are things to learn from, not the agent's app. Removed
-  // for a true blank slate; the layout's theme import is stripped separately
-  // below. The agent writes its own tests + components for the real app.
+  // for a true blank slate; the root layout is reset to a minimal base below
+  // (which drops its toggle wiring). The agent writes its own tests + components.
   'components/theme-toggle.ts', 'test/hello',
   // The gallery's markup-chunk helpers. Their only users (the feature pages +
   // the features/examples layouts) are removed above, so drop the example file
@@ -101,18 +104,16 @@ if (existsSync(schemaPath)) {
   writeFileSync(schemaPath, s);
 }
 
-// 5) Strip the example theme-toggle from the root layout. The component file was
-// removed above; here the layout's registration import is removed so it does not
-// reference a missing module. The OS-preference dark-mode inline script + the
-// design tokens STAY (they need no component and work with JS off), so the app
-// still honours light/dark, just without the manual toggle button.
+// 5) Reset the root layout to a blank-slate base. The gallery layout ships a
+// navbar, a theme toggle, Google Fonts, and a full design-token palette; a blank
+// slate should inherit NONE of that, so OVERWRITE it with a minimal layout that
+// carries no design system: the Tailwind stylesheet + OS light/dark system
+// colours (Canvas / CanvasText) + a bare <main>. The agent then builds the
+// palette (CSS tokens + @theme + a light-dark() theme) as its own, guided by
+// .agents/skills/webjs/references/styling.md. (Safe under the app/features/ guard
+// above: the gallery is still present, so the layout is not hand-customised yet.)
 const layoutPath = join(root, 'app/layout.ts');
-if (existsSync(layoutPath)) {
-  const l = readFileSync(layoutPath, 'utf8')
-    .replace(/^import '#components\/theme-toggle\.ts';\n/m, '')
-    .replace(/^\s*<div class="fixed top-4 right-4 z-10"><theme-toggle><\/theme-toggle><\/div>\n/m, '');
-  writeFileSync(layoutPath, l);
-}
+if (existsSync(layoutPath)) writeFileSync(layoutPath, MINIMAL_LAYOUT());
 
 // 6) Drop generated migrations + the dev database so the next db:generate is
 // clean against the reset schema (safe: the scaffold has no real data yet).
@@ -141,15 +142,52 @@ export default function Home() {
   return html\`
     <div class="max-w-2xl mx-auto px-6 py-24 flex flex-col items-center text-center gap-6">
       <h1 class="text-4xl font-bold tracking-tight m-0">Your app</h1>
-      <p class="text-base text-muted-foreground leading-relaxed m-0">
-        The gallery is cleared. This is <code class="text-[0.9em] text-foreground">app/page.ts</code>. Build your
-        app from here. The guide is <code class="text-[0.9em] text-foreground">.agents/skills/webjs/SKILL.md</code>.
+      <p class="text-base leading-relaxed m-0 opacity-70">
+        The gallery is cleared. This is <code class="text-[0.9em]">app/page.ts</code>. Build your
+        app from here. The guide is <code class="text-[0.9em]">.agents/skills/webjs/SKILL.md</code>.
       </p>
-      <nav class="flex items-center gap-5 text-sm text-muted-foreground">
-        <a href="https://docs.webjs.dev" class="hover:text-foreground transition-colors no-underline">Docs</a>
-        <a href="https://github.com/webjsdev/webjs" class="hover:text-foreground transition-colors no-underline">GitHub</a>
+      <nav class="flex items-center gap-5 text-sm opacity-70">
+        <a href="https://docs.webjs.dev" target="_blank" rel="noopener" class="hover:opacity-100 transition-opacity no-underline">Docs</a>
+        <a href="https://github.com/webjsdev/webjs" target="_blank" rel="noopener" class="hover:opacity-100 transition-opacity no-underline">GitHub</a>
       </nav>
     </div>
+  \`;
+}
+`;
+}
+
+function MINIMAL_LAYOUT() {
+  return `import { html } from '@webjsdev/core';
+
+/**
+ * Root layout: the ONLY file that writes the document shell. It links the
+ * Tailwind stylesheet and renders \${children} in a bare container. This is a
+ * BLANK SLATE with no design system: it uses the OS light/dark system colours
+ * (Canvas / CanvasText) so it reads fine immediately, and it is where YOU build
+ * the app's look. The recommended setup, CSS custom-property tokens mapped into
+ * Tailwind via @theme (so bg-background / text-foreground work), a DRY
+ * light-dark() palette, a header/nav, and the ui class helpers, is taught in
+ * .agents/skills/webjs/references/styling.md. Run \\\`npx webjsdev ui add <name>\\\`
+ * to pull primitives, then theme them here.
+ */
+export default function RootLayout({ children }: { children: unknown }) {
+  return html\`
+    <meta name="color-scheme" content="light dark">
+    <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/public/tailwind.css">
+    <style>
+      html, body { margin: 0; }
+      body {
+        background: Canvas;
+        color: CanvasText;
+        font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+    </style>
+    <main class="min-h-dvh max-w-3xl mx-auto px-6 py-10">
+      \${children}
+    </main>
   \`;
 }
 `;

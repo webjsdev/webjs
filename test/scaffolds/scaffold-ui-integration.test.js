@@ -50,7 +50,7 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     // The gallery home builds its feature/example cards on the design system.
     const layout = await readFile(join(appDir, 'app', 'layout.ts'), 'utf8');
     const page = await readFile(join(appDir, 'app', 'page.ts'), 'utf8');
-    assert.match(page, /Welcome to/, 'home is the gallery welcome page');
+    assert.match(page, /Explore the gallery/, 'home is the gallery index page');
     assert.match(page, /cardClass|badgeClass/, 'the home cards use the design-system helpers');
 
     // CSS delivery (#947): the layout links a STATIC compiled stylesheet (works
@@ -63,7 +63,7 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     const inputCss = await readFile(join(appDir, 'public', 'input.css'), 'utf8');
     assert.match(inputCss, /@import "tailwindcss"/, 'input.css imports Tailwind');
     assert.match(inputCss, /color-primary/, 'input.css carries the @theme color maps');
-    assert.match(layout, /--primary:\s*#[0-9a-f]{6}/i, 'the palette VALUES stay inline (JS-off safe)');
+    assert.match(layout, /--primary:\s*light-dark\(#[0-9a-f]{6}, #[0-9a-f]{6}\)/i, 'the palette VALUES stay inline via light-dark() (JS-off safe)');
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }

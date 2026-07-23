@@ -1194,7 +1194,15 @@ export default function RootLayout({ children }: { children: unknown }) {
          readable muted grey, and visible borders (a washed-out light theme comes
          from a grey page + too-light muted text + faint borders). For a
          single-theme app, delete the [data-theme] rules and give each token a
-         single colour instead of light-dark(). */
+         single colour instead of light-dark().
+         EDGE CASES: light-dark() is COLOUR-only. A colour needed in just one
+         theme sets the unused side to a no-op, e.g. light-dark(#fff, transparent).
+         A DERIVED token that references a light-dark() one (like --primary-tint
+         below) tracks both themes for free. A NON-colour token that must differ
+         per theme (a shadow's geometry, a gradient, a size, an image) cannot use
+         light-dark(); give it a :root[data-theme='dark'] override plus an
+         @media (prefers-color-scheme: dark) { :root:not([data-theme]) { ... } }
+         rule for the OS default. */
       :root {
         --font-sans:  'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
         --font-serif: ui-serif, 'Iowan Old Style', Palatino, Georgia, serif;

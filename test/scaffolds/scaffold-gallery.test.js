@@ -221,11 +221,13 @@ test('full-stack gallery:clear strips the app to a barebones blank slate', async
     assert.deepEqual(componentsLeft, [], `components/ must be empty after clear, found: ${componentsLeft.join(', ')}`);
     assert.ok(has('app', 'layout.ts'), 'root layout kept');
 
-    // The layout no longer references the removed theme-toggle, but keeps its
-    // OS-preference dark-mode script (works with no component, JS off).
+    // The layout is reset to a blank-slate base: no theme-toggle, no design-token
+    // palette, just the OS light/dark system colours (Canvas / CanvasText). The
+    // design system is taught in the skill, not baked into the blank slate.
     const layout = await readFile(join(appDir, 'app', 'layout.ts'), 'utf8');
     assert.doesNotMatch(layout, /theme-toggle/, 'layout theme-toggle import stripped');
-    assert.match(layout, /prefers-color-scheme/, 'layout keeps OS-preference dark mode');
+    assert.doesNotMatch(layout, /--(?:background|foreground|primary):/, 'reset layout ships no design-token palette');
+    assert.match(layout, /background:\s*Canvas/, 'reset layout uses OS system colours');
 
     // The reset home is minimal: no <theme-toggle>, no gallery links.
     const home = await readFile(join(appDir, 'app', 'page.ts'), 'utf8');

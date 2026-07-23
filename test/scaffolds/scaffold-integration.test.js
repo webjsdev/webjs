@@ -120,20 +120,22 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
       'theme-toggle must toggle the .dark class (shadcn dark-mode signal)');
 
     // Re-skinned shell: a JetBrains Mono type system on a cool neutral-grey
-    // surface palette (not the old orange brand), a full-height main, no chrome.
-    assert.match(layoutSrc, /<main class="min-h-dvh[^"]*">/,
-      'layout renders a full-height main');
-    assert.doesNotMatch(layoutSrc, /<header\b/, 'the shell ships no built-in header');
+    // surface palette (not the old orange brand), a floating top navbar, and a
+    // main that fills the viewport minus the navbar.
+    assert.match(layoutSrc, /<main class="min-h-\[calc\(100dvh-3\.5rem\)\][^"]*">/,
+      'layout main fills the viewport minus the navbar');
+    assert.match(layoutSrc, /<header\b/, 'the shell ships a floating top navbar');
     assert.match(layoutSrc, /JetBrains\+Mono/, 'layout loads the JetBrains Mono font');
-    assert.match(layoutSrc, /--primary:\s*#dee2e6/, 'layout ships the neutral surface palette');
+    assert.match(layoutSrc, /--primary:\s*light-dark\(#1e2226, #dee2e6\)/,
+      'layout ships the DRY light-dark() surface palette');
     assert.doesNotMatch(layoutSrc, /oklch\(0\.7 0\.16 52\)/,
       'no orange brand color survives in the neutral scaffold');
 
-    // The home page is a gallery index: a masthead, a grid linking every feature
-    // demo + the example app, and a footer with the docs + source links.
+    // The home page is a gallery index: an 'Explore the gallery' hero, a grid
+    // linking every feature demo + the example app, and a footer with the docs +
+    // source links.
     const pageSrc = readFileSync(join(appDir, 'app', 'page.ts'), 'utf8');
-    assert.match(pageSrc, /Welcome to/, 'home is a welcome page');
-    assert.match(pageSrc, /Explore the gallery/, 'home indexes the gallery');
+    assert.match(pageSrc, /Explore the gallery/, 'home hero indexes the gallery');
     assert.match(pageSrc, /from '#modules\/gallery\/nav\.ts'/, 'home reads the shared gallery nav (the feature + example index)');
     assert.match(pageSrc, /docs\.webjs\.dev/, 'footer links the docs');
     assert.match(pageSrc, /github\.com\/webjsdev\/webjs/, 'footer links the source');
