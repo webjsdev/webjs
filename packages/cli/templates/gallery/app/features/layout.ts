@@ -25,10 +25,16 @@ const SIDENAV_CSS = `
 // own inner spacing (the reset only reaches DIRECT children of .demo-stack).
 const STACK_CSS = `
   .demo-stack { --section-gap: 1.5rem; }
-  /* block so vertical gaps apply even to a shadow-DOM host (inline by default,
-     and inline elements ignore block margins). */
-  .demo-stack > * { display: block; margin-block: 0; }
-  .demo-stack > * + * { margin-block-start: var(--section-gap); }
+  /* Space only RENDERED sections; skip streaming <script>/<style>/<template>
+     nodes (a forced-visible script would otherwise gain a phantom gap). block so
+     a shadow-DOM host (inline by default) honours the gap; ~ (not +) so an
+     interleaved streaming script cannot break the adjacency. */
+  .demo-stack > :not(script):not(style):not(template) { display: block; margin-block: 0; }
+  .demo-stack > :not(script):not(style):not(template) ~ :not(script):not(style):not(template) { margin-block-start: var(--section-gap); }
+  /* <webjs-suspense> is display:contents while streaming (no box, so it would
+     drop its section gap). Force a block box so the gap applies; streaming only
+     moves its children, so a CSS-level display change does not affect it. */
+  .demo-stack > webjs-suspense { display: block !important; }
 `;
 
 // Shared layout for every gallery feature demo under /features/*. A docs-style
