@@ -1,5 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="WebJs">
-  <rect width="32" height="32" rx="7" fill="#e9edf0"/>
-  <path d="M8 11.5l4.5 4.5L8 20.5" fill="none" stroke="#1e2226" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
-  <line x1="15.5" y1="21.5" x2="23" y2="21.5" stroke="#1e2226" stroke-width="2.6" stroke-linecap="round"/>
+  <!-- Matches the gallery navbar brand mark: a rounded square with a neutral
+       foreground -> muted-foreground gradient (bg-gradient-to-br). -->
+  <defs>
+    <linearGradient id="wj" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#191c20"/>
+      <stop offset="1" stop-color="#565c64"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="10" fill="url(#wj)"/>
 </svg>

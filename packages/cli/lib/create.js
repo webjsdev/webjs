@@ -1120,6 +1120,13 @@ import '#components/theme-toggle.ts';
  * mapped into Tailwind via @theme in public/input.css, so bg-background,
  * text-foreground, bg-card, bg-primary, and border-border all work.
  */
+
+// Declare the favicon via metadata.icons (NOT a hand-written <link> in the
+// template): the framework emits metadata links into <head>, whereas a <link>
+// written in the layout body stays in <body>, where browsers ignore it. The SVG
+// lives at public/favicon.svg and serves at /public/favicon.svg.
+export const metadata = { icons: '/public/favicon.svg' };
+
 export default function RootLayout({ children }: { children: unknown }) {
   // Read the in-flight request's CSP nonce so the theme-detection inline script
   // passes strict CSP. Returns '' when no CSP nonce is set.
@@ -1169,7 +1176,6 @@ export default function RootLayout({ children }: { children: unknown }) {
       })();
     </script>
     <meta name="color-scheme" content="light dark">
-    <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
     <!-- JetBrains Mono for body/UI (its monospaced, developer-console feel) and
          Bricolage Grotesque for the display wordmark. Swap these for your own
          fonts (and update --font-sans / --font-display below). -->

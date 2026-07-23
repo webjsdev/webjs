@@ -170,10 +170,14 @@ function MINIMAL_LAYOUT() {
  * .agents/skills/webjs/references/styling.md. Run \\\`npx webjsdev ui add <name>\\\`
  * to pull primitives, then theme them here.
  */
+
+// Favicon via metadata.icons so the framework emits the <link> into <head> (a
+// hand-written <link> in the template body is ignored by browsers).
+export const metadata = { icons: '/public/favicon.svg' };
+
 export default function RootLayout({ children }: { children: unknown }) {
   return html\`
     <meta name="color-scheme" content="light dark">
-    <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/public/tailwind.css">
     <style>
       html, body { margin: 0; }

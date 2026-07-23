@@ -131,6 +131,15 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.doesNotMatch(layoutSrc, /oklch\(0\.7 0\.16 52\)/,
       'no orange brand color survives in the neutral scaffold');
 
+    // Favicon: declared via metadata.icons (the framework emits it into <head>).
+    // A hand-written <link rel="icon"> in the layout body lands in <body>, where
+    // browsers ignore it, the recurring "favicon never shows" bug this guards.
+    assert.match(layoutSrc, /export const metadata = \{ icons: '\/public\/favicon\.svg' \}/,
+      'layout declares the favicon via metadata.icons');
+    assert.doesNotMatch(layoutSrc, /<link rel="icon"/,
+      'layout must NOT hand-write a <link rel=icon> (it lands in <body>, ignored)');
+    assert.ok(existsSync(join(appDir, 'public', 'favicon.svg')), 'ships public/favicon.svg');
+
     // The home page is a gallery index: an 'Explore the gallery' hero, a grid
     // linking every feature demo + the example app, and a footer with the docs +
     // source links.
