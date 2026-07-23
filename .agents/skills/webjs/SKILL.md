@@ -112,17 +112,19 @@ Find the right export fast. Load the linked reference for full examples.
 ### `@webjsdev/core` (browser + isomorphic)
 
 - `html` / `css` tagged templates. `WebComponent({ ... })` base-class factory; `prop(type?, opts?)` declares one reactive property. `register(tag, C)` / `Class.register('tag')`.
-- `signal` / `computed` reactive state; `render(v, el)` client render.
+- `signal` / `computed` reactive state, `effect(fn)` client-only reaction (returns a disposer), `batch(fn)` coalesced writes; `render(v, el)` client render.
 - `notFound()` / `redirect(url[, status])` control-flow throws (page/layout/action only, NOT `route.ts`). `forbidden()` / `unauthorized()` render the nearest boundary.
 - `Suspense({fallback, children})` page-level streaming; `<webjs-suspense>` component-level streaming.
 - `optimistic()` optimistic UI; `navigate(url)` / `revalidate(url?)` client-router control; `connectWS` / `richFetch`.
 - Types: `Metadata`, `PageProps<R>`, `LayoutProps<R>`, `RouteHandlerContext<R>`, `WebjsConfig`.
 - `@webjsdev/core/server`: `renderToString` / `renderToStream` (Node side).
-- `@webjsdev/core/directives`: `repeat`, `unsafeHTML` (trusted only), `live`, `keyed`, `guard`, `cache`, `until`, `watch(signal)`, `ref` / `createRef`. `Task` lives at `@webjsdev/core/task`, context at `/context`.
+- `@webjsdev/core/directives`: `repeat`, `unsafeHTML` (trusted only), `live`, `keyed`, `guard`, `cache`, `until`, `watch(signal)`, `ref` / `createRef`, `asyncAppend` / `asyncReplace`, `templateContent`. `Task` / `TaskStatus` live at `@webjsdev/core/task`, context (`createContext` / `ContextProvider` / `ContextConsumer`) at `/context`. See `references/components.md` for the directive table + Task + context.
 
 ### `@webjsdev/server` (server side)
 
 - `createRequestHandler`, `cors()`, `route(action, opts?)` REST adapter, `sitemap()` / `sitemapIndex()`, `actionContext()`, `actionSignal()`, `requestId()`, `cache()` / `revalidateTag`.
+- Route-handler toolkit: `json(v)` rich responder, `readBody(req)`, `clientIp(req)`, no-arg `headers()` / `cookies()` / `cspNonce()` (client counterpart `richFetch` is in `@webjsdev/core`). See `references/routing-and-pages.md`.
+- Auth + sessions: `createAuth` (+ `Credentials` / `Google` / `GitHub`), `auth()` / `auth(req)`, `session()` + `cookieSession` / `storeSession`, `getSession(req)` (`.get` / `.set` / `.flash` / `.destroy`). File storage: `getFileStore` / `diskStore` / `signedUrl`. See `references/auth-and-sessions.md` + `references/built-ins.md`.
 - Data layer is Drizzle in `db/*.server.ts`. Auth, sessions, caching, rate limit, file storage are built in and pluggable (`references/built-ins.md`).
 
 ### File conventions
