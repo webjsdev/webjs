@@ -67,6 +67,31 @@ export default function Post({ params }) {
 
 Avoid `@apply`: it hides which utilities a class uses and creates a second source of truth. A JS helper keeps the bundle visible at the definition site, composes with conditional classes and active states, and runs at SSR time.
 
+### A design system for repeated PRIMITIVES: class helpers built on `@webjsdev/ui`
+
+An `html`-fragment helper is right for a repeated CHUNK of markup (the rubric above). For a repeated UI PRIMITIVE (button, input, card, badge) that needs variants and sizes, use a class helper instead: a function that returns a Tailwind class STRING you spread onto a native element. That is exactly what `@webjsdev/ui` ships (`buttonClass({ variant, size })`, `cardClass()`, `inputClass()`), and it is what the scaffold gallery uses in `components/ui/`.
+
+```ts
+// components/ui/button.ts  (webjs ui add button, themed to your app)
+import { cn } from '#lib/utils/cn.ts';
+const BASE = 'inline-flex cursor-pointer items-center justify-center ...';
+const VARIANTS = { default: 'bg-primary text-primary-foreground ...', secondary: '...' } as const;
+const SIZES = { default: 'px-4 py-2 rounded-xl', sm: '...' } as const;
+export function buttonClass(o: { variant?: keyof typeof VARIANTS; size?: keyof typeof SIZES } = {}) {
+  return cn(BASE, VARIANTS[o.variant ?? 'default'], SIZES[o.size ?? 'default']);
+}
+```
+
+```ts
+// a page or component
+import { buttonClass } from '#components/ui/button.ts';
+html`<button class=${buttonClass({ variant: 'secondary', size: 'sm' })} @click=${...}>Reset</button>`;
+```
+
+Why a class helper (not a `<ui-button>` wrapper): it adds NO indirection, so the element stays native (`@click`, `?disabled`, form submission, focus, a11y all just work) and the markup stays readable, while every button shares one source of truth (so no button can forget `cursor-pointer` or drift). Put the affordance every variant needs (like `cursor-pointer`) on the shared BASE.
+
+**Own and theme your copy.** `webjs ui add <name>` copies the primitive INTO your `components/ui/`, so you own it. Theme it to YOUR app: change the class values so the helper produces YOUR look, rather than bending your app to the kit's defaults. Keep only the parts you use (the gallery's `cardClass` is surface-only, since its panels vary their own padding and layout). Reserve `lib/utils/ui.ts` `html`-fragment helpers for repeated markup chunks; reserve `components/ui/*` class helpers for themed primitives with variants.
+
 ## Design tokens
 
 The default stack is a static compiled Tailwind stylesheet (`css:build` compiles `public/input.css` to the linked `public/tailwind.css`, so it works with JS off) plus `@theme` design tokens (palette, fonts, fluid type, motion durations) declared once in the root layout. Consume them as utility classes (`text-foreground`, `bg-card`, `font-serif`, `duration-fast`). If you wire your own theme switch, drive BOTH signals on `<html>` (the `data-theme` attribute for the app palette blocks AND the `.dark` class for the `@webjsdev/ui` kit), or half the UI renders stale tokens. Verify dark mode in a real browser, light mode passing proves nothing about dark.
