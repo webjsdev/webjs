@@ -13,6 +13,7 @@
 // iterable, appending each or replacing with the latest).
 import { WebComponent, signal, html } from '@webjsdev/core';
 import { buttonClass } from '#components/ui/button.ts';
+import { cn } from '#lib/utils/cn.ts';
 import { inputClass } from '#components/ui/input.ts';
 import { repeat, watch, live, until, keyed, unsafeHTML, ref, createRef, guard, cache, templateContent, asyncAppend, asyncReplace } from '@webjsdev/core/directives';
 
@@ -159,11 +160,15 @@ export class DirectiveDemo extends WebComponent {
 
           <!-- cache(value) keeps the inactive tab's DOM alive while you toggle,
                so switching back is instant and preserves any element state. -->
+          <!-- A tab toggle must keep a CONSTANT size between states, or the row
+               reflows and the content below dances. So both tabs use ONE variant
+               (same weight, border, padding) and cn() overrides only the active
+               COLORS, never the box. -->
           <div class="flex gap-2">
             <button @click=${() => this.tab.set('a')}
-              class=${buttonClass({ variant: this.tab.get() === 'a' ? 'default' : 'secondary', size: 'xs' })}>Tab A</button>
+              class=${cn(buttonClass({ variant: 'secondary', size: 'xs' }), this.tab.get() === 'a' && 'bg-primary text-primary-foreground border-primary hover:border-primary')}>Tab A</button>
             <button @click=${() => this.tab.set('b')}
-              class=${buttonClass({ variant: this.tab.get() === 'b' ? 'default' : 'secondary', size: 'xs' })}>Tab B</button>
+              class=${cn(buttonClass({ variant: 'secondary', size: 'xs' }), this.tab.get() === 'b' && 'bg-primary text-primary-foreground border-primary hover:border-primary')}>Tab B</button>
           </div>
           <div class="text-[15px] text-foreground">${cache(
             this.tab.get() === 'a'

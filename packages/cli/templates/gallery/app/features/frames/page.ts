@@ -21,6 +21,8 @@
 // component (the theme toggle), so @webjsdev/core and the router load app-wide.
 import { html } from '@webjsdev/core';
 import { cardClass } from '#components/ui/card.ts';
+import { buttonClass } from '#components/ui/button.ts';
+import { cn } from '#lib/utils/cn.ts';
 import { pageHeading, lede } from '#lib/utils/ui.ts';
 import type { Metadata } from '@webjsdev/core';
 import { filterTasks, normalizeStatus, type Status } from '#modules/frames/utils/tasks.ts';
@@ -32,10 +34,14 @@ export const metadata: Metadata = { title: 'Frames (webjs-frame partial swap) | 
 // link OUTSIDE the frame would drive it from anywhere via data-webjs-frame="tasks".
 function filterTab(current: Status, status: Status, label: string) {
   const active = current === status;
-  const base = 'px-3 py-1.5 rounded-lg font-semibold text-sm no-underline transition-colors';
-  const cls = active
-    ? base + ' bg-primary text-primary-foreground'
-    : base + ' bg-card border border-border text-foreground font-medium hover:border-border-strong';
+  // A segmented control: keep ONE variant (constant weight, border, padding) so
+  // toggling the active tab never reflows the row, overriding only the active
+  // colors with cn().
+  const cls = cn(
+    buttonClass({ variant: 'secondary', size: 'sm' }),
+    'no-underline',
+    active && 'bg-primary text-primary-foreground border-primary hover:border-primary',
+  );
   return html`<a href="/features/frames?status=${status}" class=${cls}>${label}</a>`;
 }
 

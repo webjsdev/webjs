@@ -33,7 +33,10 @@ export class GalleryNav extends WebComponent({ current: prop(String) }) {
     // activePath is '' at SSR (and before hydrate), so fall back to the prop.
     const active = activePath.get() || this.current;
     const link = (href: string, title: string) => {
-      const on = active === href;
+      // Highlight the demo whose route we are on, INCLUDING its subroutes
+      // (/features/auth/dashboard highlights Auth). The trailing slash keeps
+      // /features/stream from matching /features/streaming.
+      const on = active === href || active.startsWith(href + '/');
       const cls = 'block px-3 py-1.5 rounded-lg no-underline transition-colors ' +
         (on ? 'bg-accent text-foreground font-medium' : 'text-muted-foreground hover:bg-accent hover:text-foreground');
       return html`<a href=${href} aria-current=${on ? 'page' : 'false'} class=${cls}>${title}</a>`;
