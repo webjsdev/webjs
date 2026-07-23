@@ -136,10 +136,17 @@
 
 @layer base {
   /* Focus: a themed, keyboard-only (:focus-visible), never-removed outline, in
-     the --ring colour, applied globally (shadcn convention). A shadow-DOM
-     component sets its own focus (a document rule cannot cross the shadow
-     boundary). */
+     the --ring colour, applied globally. `outline-ring/50` themes only the
+     COLOUR and leaves outline-style: auto, which the browser draws as its OWN
+     ring (it can look thick/white and ignore the colour). So force a SOLID
+     outline on focus, at a consistent width + offset, so the themed --ring/50
+     colour actually renders the same on every element. A shadow-DOM component
+     sets its own focus (a document rule cannot cross the shadow boundary). */
   * {
     @apply border-border outline-ring/50;
+  }
+  :focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--color-ring) 50%, transparent);
+    outline-offset: 2px;
   }
 }
