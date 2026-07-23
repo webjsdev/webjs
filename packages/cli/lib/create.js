@@ -1226,7 +1226,7 @@ export default function RootLayout({ children }: { children: unknown }) {
         --accent:             light-dark(#e9ebef, #363a3e);
         --accent-foreground:  light-dark(#191c20, #f7fbff);
         --border:             light-dark(#e2e5e9, #3d434b);
-        --border-strong:      light-dark(#ccd1d7, #545c66);
+        --border-strong:      light-dark(#ccd1d7, #454b51);
         --input:              light-dark(#e2e5e9, #34393e);
         --ring:               light-dark(#8b9198, #6b7075);
         /* A translucent tint of the primary, tracked automatically across
