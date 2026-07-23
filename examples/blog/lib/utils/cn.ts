@@ -73,22 +73,43 @@ const GROUPS: Array<[RegExp, string]> = [
   [/^grid(-|$)/, 'grid'],
 ];
 
+// Directional shorthand conflicts (the tailwind-merge model): a shorthand
+// utility invalidates the axis/side utilities it SUBSUMES (`p-0` beats an earlier
+// `px-4 py-2`), but a later axis only refines a shorthand (both survive). Keyed
+// by the group of a newly-seen token; the value lists the EARLIER groups it removes.
+const CONFLICTS: Record<string, string[]> = {
+  p: ['px', 'py', 'pt', 'pr', 'pb', 'pl'],
+  px: ['pl', 'pr'],
+  py: ['pt', 'pb'],
+  m: ['mx', 'my', 'mt', 'mr', 'mb', 'ml'],
+  mx: ['ml', 'mr'],
+  my: ['mt', 'mb'],
+  size: ['w', 'h'],
+};
+
 function dedupeUtilities(input: string): string {
   const tokens = input.split(/\s+/).filter(Boolean);
-  const seen = new Map<string, number>();
+  const lastByKey = new Map<string, number>();
   const result: Array<string | null> = [];
 
   for (const token of tokens) {
-    let key: string | null = null;
-    // Strip variant prefix (`hover:`, `dark:md:`, …) before testing each
-    // dedupe regex so `hover:bg-red-500` still matches the `bg-color` group.
+    // Strip variant prefix (`hover:`, `dark:md:`, …) before testing each dedupe
+    // regex so `hover:bg-red-500` still matches the `bg-color` group. Conflicts
+    // only apply WITHIN the same variant.
     const prefix = variantPrefix(token);
     const bare = prefix ? token.slice(prefix.length) : token;
-    for (const [re, gk] of GROUPS) {
-      if (re.test(bare)) { key = `${prefix}::${gk}`; break; }
+    let gk: string | null = null;
+    for (const [re, g] of GROUPS) {
+      if (re.test(bare)) { gk = g; break; }
     }
-    if (key && seen.has(key)) result[seen.get(key)!] = null;
-    if (key) seen.set(key, result.length);
+    if (gk) {
+      for (const g of [gk, ...(CONFLICTS[gk] ?? [])]) {
+        const k = `${prefix}::${g}`;
+        const idx = lastByKey.get(k);
+        if (idx !== undefined) { result[idx] = null; lastByKey.delete(k); }
+      }
+      lastByKey.set(`${prefix}::${gk}`, result.length);
+    }
     result.push(token);
   }
   return result.filter(Boolean).join(' ');
