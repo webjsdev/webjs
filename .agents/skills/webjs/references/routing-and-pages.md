@@ -4,8 +4,8 @@
 
 - Pages, layouts, and where the HTML shell comes from
 - Dynamic (`[param]`), catch-all (`[...rest]`), and optional catch-all (`[[...rest]]`) segments, route groups, private folders
-- `route.ts` HTTP handlers and `middleware.ts`
-- `metadata` and `generateMetadata` (folded in here)
+- `route.ts` HTTP handlers and `middleware.ts`, the route-handler toolkit (`json` / `readBody` / `clientIp` / the no-arg accessors), and calling one from the client with `richFetch`
+- `metadata` and `generateMetadata` (folded in here), including image metadata routes that return a `Response`
 - Control-flow throws: `notFound()`, `redirect()`, `forbidden()`, `unauthorized()`
 - The no-JS page `action` write path
 - Boundaries: `error.ts`, `loading.ts`, `not-found.ts`, `forbidden.ts`, `unauthorized.ts`, and the two root-only ones
@@ -77,6 +77,18 @@ export async function GET() {
 ```
 
 **NEVER throw `redirect()` / `notFound()` / `forbidden()` inside a `route.ts` handler** (an uncaught throw is a generic 500). Return a real response instead: `return Response.redirect(url, 303)` for a redirect, `return new Response('Not Found', { status: 404 })` for a 404. A `route.ts` is also NOT covered by the action CSRF check, so authenticate every mutating endpoint, validate, and rate-limit. Export `WS(ws, req, { params })` from the same file for a WebSocket endpoint.
+
+**The route-handler toolkit** (from `@webjsdev/server`). Two accessors take the request explicitly: `readBody(req)` decodes a rich request body (the inverse of `json()`, round-tripping `Date` / `Map` / `Set` / `BigInt` / `Blob`), and `clientIp(req)` reads the caller IP. To respond with rich types, `json(value)` serializes with the same wire (so a `Date` survives), versus a plain object return that auto-JSONs. The context accessors take NO argument because they read the in-flight request from context: `headers()`, `cookies()`, `requestId()`, `cspNonce()`.
+
+```ts
+import { json, readBody, clientIp } from '@webjsdev/server';
+export async function POST(req: Request) {
+  const body = await readBody(req);            // rich types decoded
+  return json({ at: new Date(), ip: clientIp(req) });  // Date survives the wire
+}
+```
+
+**Calling your own `route.ts` from the client:** use `richFetch<T>(url, opts?)` from `@webjsdev/core`, a drop-in `fetch` that sends `Accept: application/vnd.webjs+json`, encodes a plain-object `body` with the rich wire, and decodes the `json()` response (so `data.at` is a real `Date`). This is the ONE legitimate hand-fetch (importing a `'use server'` action is the way to call the server otherwise, never a hand-written `fetch` to an action).
 
 ## Middleware (`middleware.ts`)
 
@@ -156,3 +168,14 @@ How the result is read (server side): a success PRG-redirects with `303` (to a s
 - Root-only (in `app/` exactly): `global-error.ts` is the app-wide catch-all after nested `error` boundaries are exhausted and renders its OWN `<!doctype><html><body>` (returned verbatim, so keep it static HTML with no components or hydration). `global-not-found.ts` renders for an unmatched-anywhere URL when no `not-found` matches.
 
 Metadata routes (`sitemap.ts`, `robots.ts`, `manifest.ts`, `icon.ts`, `apple-icon.ts`, `opengraph-image.ts`, `twitter-image.ts`) live at app root or static segments and default-export a possibly-async function; `sitemap()` / `sitemapIndex()` from `@webjsdev/server` serialize spec-valid XML.
+
+The IMAGE metadata routes (`icon`, `apple-icon`, `opengraph-image`, `twitter-image`) default-export a function returning a `Response` with an explicit `content-type`, so an inline SVG needs no asset file (buildless). Then point `metadata` at the route via `openGraph.images` / `twitter.images` / `icons` (or drop a static file in `public/` instead).
+
+```ts
+// app/opengraph-image.ts  (OG is 1200x630; apple-icon 180x180)
+export default function OgImage() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630">...</svg>`;
+  return new Response(svg, { headers: { 'content-type': 'image/svg+xml' } });
+}
+// app/page.ts  ->  export const metadata = { openGraph: { images: ['/opengraph-image'] } };
+```
