@@ -29,7 +29,7 @@ export class Greeter extends WebComponent {
           <button type="submit"
             class="${buttonClass()} shrink-0">Greet</button>
         </form>
-        <p class="m-0 text-sm text-muted-foreground">The action is gated by requireAuth. <a class="text-primary" href="/features/auth/login">Sign in</a> to greet; signed out returns a real 401.</p>
+        <p class="m-0 text-sm text-muted-foreground">The action is gated by requireAuth. <a class="text-primary underline underline-offset-2" href="/features/auth/login">Sign in</a> to greet; signed out returns a real 401.</p>
         ${this.msg.get() ? html`<p class="m-0 font-semibold text-foreground">${this.msg.get()}</p>` : ''}
       </div>
     `;

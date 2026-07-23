@@ -12,6 +12,6 @@ export default function BoundariesError({ error }: { error: Error }) {
       This segment's <code class="font-mono">error.ts</code> boundary caught a
       render error: <code class="font-mono">${error?.message ?? 'unknown'}</code>.
     `)}
-    <p><a class="text-primary" href="/features/boundaries">Back to boundaries</a></p>
+    <p><a class="text-primary underline underline-offset-2" href="/features/boundaries">Back to boundaries</a></p>
   `;
 }

@@ -34,13 +34,13 @@ export default async function RoutingParam({ params }: PageProps<'/features/rout
       <code class="font-mono">const { id } = await params</code> works, same value.
     </p>
     <p class="text-muted-foreground text-sm mt-3">
-      Throwing wins over rendering: <a class="text-primary" href="/features/routing/missing">/features/routing/missing</a>
+      Throwing wins over rendering: <a class="text-primary underline underline-offset-2" href="/features/routing/missing">/features/routing/missing</a>
       throws <code class="font-mono">notFound()</code> and renders the nearest
       not-found boundary at 404. See the
-      <a class="text-primary" href="/features/boundaries">Boundaries</a> demo for
+      <a class="text-primary underline underline-offset-2" href="/features/boundaries">Boundaries</a> demo for
       <code class="font-mono">forbidden()</code> and
       <code class="font-mono">unauthorized()</code>.
     </p>
-    <p class="mt-3"><a class="text-primary" href="/features/routing">Back</a></p>
+    <p class="mt-3"><a class="text-primary underline underline-offset-2" href="/features/routing">Back</a></p>
   `;
 }

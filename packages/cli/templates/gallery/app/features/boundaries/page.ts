@@ -31,22 +31,22 @@ export default function BoundariesExample() {
     `)}
     <ul class="list-disc pl-5 mb-4">
       <li>
-        <a class="text-primary" href="/features/boundaries/gated">/features/boundaries/gated</a>
+        <a class="text-primary underline underline-offset-2" href="/features/boundaries/gated">/features/boundaries/gated</a>
         throws <code class="font-mono">forbidden()</code>, caught by
         <code class="font-mono">gated/forbidden.ts</code> (403).
       </li>
       <li>
-        <a class="text-primary" href="/features/boundaries/private">/features/boundaries/private</a>
+        <a class="text-primary underline underline-offset-2" href="/features/boundaries/private">/features/boundaries/private</a>
         throws <code class="font-mono">unauthorized()</code>, caught by
         <code class="font-mono">private/unauthorized.ts</code> (401).
       </li>
       <li>
-        <a class="text-primary" href="/features/boundaries/crash">/features/boundaries/crash</a>
+        <a class="text-primary underline underline-offset-2" href="/features/boundaries/crash">/features/boundaries/crash</a>
         throws a render error, caught by this segment's
         <code class="font-mono">error.ts</code> (500).
       </li>
       <li>
-        <a class="text-primary" href="/features/boundaries/does-not-exist">/features/boundaries/does-not-exist</a>
+        <a class="text-primary underline underline-offset-2" href="/features/boundaries/does-not-exist">/features/boundaries/does-not-exist</a>
         matches nothing, caught by the nearest
         <code class="font-mono">not-found.ts</code> (404).
       </li>
@@ -72,6 +72,6 @@ export default function BoundariesExample() {
       and <code class="font-mono">app/global-not-found.ts</code> (a 404 for a URL
       that matches nothing anywhere).
     </p>
-    <p class="mt-3"><a class="text-primary" href="/">Back to the gallery</a></p>
+    <p class="mt-3"><a class="text-primary underline underline-offset-2" href="/">Back to the gallery</a></p>
   `;
 }

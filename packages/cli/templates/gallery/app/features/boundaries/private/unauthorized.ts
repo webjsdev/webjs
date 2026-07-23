@@ -13,6 +13,6 @@ export default function Unauthorized() {
       <code class="font-mono">unauthorized.ts</code> boundary, rendered because the
       page threw <code class="font-mono">unauthorized()</code>.
     `)}
-    <p><a class="text-primary" href="/features/boundaries">Back to boundaries</a></p>
+    <p><a class="text-primary underline underline-offset-2" href="/features/boundaries">Back to boundaries</a></p>
   `;
 }

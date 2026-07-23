@@ -37,7 +37,7 @@ export default function LoginPage({ searchParams }: { searchParams: { error?: st
         </div>
         <button type="submit" class="${buttonClass()} justify-self-start">Sign in</button>
       </form>
-      <p class="text-sm text-muted-foreground mt-4">Don't have an account? <a href="/features/auth/signup" class="text-primary">Sign up</a></p>
+      <p class="text-sm text-muted-foreground mt-4">Don't have an account? <a href="/features/auth/signup" class="text-primary underline underline-offset-2">Sign up</a></p>
     </div>
   `;
 }

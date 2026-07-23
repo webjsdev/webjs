@@ -55,7 +55,7 @@ export default function SignupPage({ actionData }: { actionData?: { fieldErrors?
         </div>
         <button type="submit" class="${buttonClass()} justify-self-start">Create account</button>
       </form>
-      <p class="text-sm text-muted-foreground mt-4">Already have an account? <a href="/features/auth/login" class="text-primary">Log in</a></p>
+      <p class="text-sm text-muted-foreground mt-4">Already have an account? <a href="/features/auth/login" class="text-primary underline underline-offset-2">Log in</a></p>
     </div>
   `;
 }

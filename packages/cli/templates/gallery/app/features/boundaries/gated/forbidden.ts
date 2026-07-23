@@ -14,6 +14,6 @@ export default function Forbidden() {
       nearest <code class="font-mono">forbidden.ts</code> boundary, rendered
       because the page threw <code class="font-mono">forbidden()</code>.
     `)}
-    <p><a class="text-primary" href="/features/boundaries">Back to boundaries</a></p>
+    <p><a class="text-primary underline underline-offset-2" href="/features/boundaries">Back to boundaries</a></p>
   `;
 }

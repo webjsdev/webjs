@@ -40,7 +40,7 @@ export default function FormsFeature({ searchParams, actionData }: { searchParam
           <svg viewBox="0 0 24 24" class="w-6 h-6 stroke-current fill-none" style="stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round"><path d="m5 13 4 4L19 7"/></svg>
         </span>
         <p class="m-0 text-lg font-semibold text-foreground">Message sent</p>
-        <p class="m-0 text-sm text-muted-foreground">Thanks, we got it. <a class="text-primary" href="/features/forms">Send another</a>.</p>
+        <p class="m-0 text-sm text-muted-foreground">Thanks, we got it. <a class="text-primary underline underline-offset-2" href="/features/forms">Send another</a>.</p>
       </div>
     `;
   }

@@ -13,6 +13,6 @@ export default function BoundariesNotFound() {
       because a page threw <code class="font-mono">notFound()</code> or the URL
       matched nothing under this segment.
     `)}
-    <p><a class="text-primary" href="/features/boundaries">Back to boundaries</a></p>
+    <p><a class="text-primary underline underline-offset-2" href="/features/boundaries">Back to boundaries</a></p>
   `;
 }
