@@ -8,6 +8,7 @@
 // across the swap: type into it, navigate, and your text survives the transition.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
+import { buttonClass } from '#components/ui/button.ts';
 
 export const metadata: Metadata = {
   title: 'View transitions (soft-nav cross-fade) | features',
@@ -29,7 +30,7 @@ export default function ViewTransitionsExample() {
         class="mt-2 block w-full max-w-sm rounded-xl border border-border bg-card px-4 py-2 text-foreground" />
     </label>
     <div class="flex gap-3 items-center">
-      <a href="/features/view-transitions/second" class="inline-flex items-center px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm no-underline transition-all hover:bg-primary/90 active:scale-[0.97]">Go to page two</a>
+      <a href="/features/view-transitions/second" class="${buttonClass()} no-underline">Go to page two</a>
       <a href="/" class="text-muted-foreground no-underline font-medium text-sm hover:text-foreground transition-colors">Home</a>
     </div>
     <p class="text-muted-foreground text-sm mt-6">

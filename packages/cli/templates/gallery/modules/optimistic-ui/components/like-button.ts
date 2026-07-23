@@ -9,6 +9,8 @@
 // see the declarative optimistic(host, { source, update }) + .add() form in the
 // /examples/todo app.
 import { WebComponent, signal, optimistic, html } from '@webjsdev/core';
+import { cn } from '#lib/utils/cn.ts';
+import { buttonClass } from '#components/ui/button.ts';
 import { likePost } from '../actions/like-post.server.ts';
 
 export class LikeButton extends WebComponent {
@@ -23,9 +25,19 @@ export class LikeButton extends WebComponent {
 
   render() {
     const liked = this.liked.get();
+    // Build ON the design system, do not re-implement it. The like toggle IS the
+    // button variants: unliked reads as `secondary` (card surface), liked as
+    // `default` (primary fill). So compose buttonClass() for the base + colors +
+    // focus ring + cursor, then override only the genuinely bespoke bits with cn()
+    // (which tailwind-merges): a pill radius over the helper's rounded-xl, and a
+    // primary outline when liked. Only the heart SVG stays fully custom.
     return html`
       <button @click=${() => this.toggle()} aria-pressed=${liked ? 'true' : 'false'}
-        class="inline-flex items-center gap-2 px-4 py-2 rounded-full font-semibold text-sm border cursor-pointer transition-all active:scale-[0.97] ${liked ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-foreground border-border hover:border-border-strong'}">
+        class=${cn(
+          buttonClass({ variant: liked ? 'default' : 'secondary' }),
+          'rounded-full',
+          liked && 'border border-primary',
+        )}>
         <svg viewBox="0 0 24 24" class="w-4 h-4 ${liked ? 'fill-current stroke-none' : 'fill-none stroke-current'}" style="stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21l7.7-7.6 1.1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>
         ${liked ? 'Liked' : 'Like'}
       </button>
