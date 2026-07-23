@@ -16,6 +16,21 @@ const SIDENAV_CSS = `
   .gallery-sidenav::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklch, var(--foreground) 40%, transparent); }
 `;
 
+// Section rhythm: ONE uniform gap between every top-level block of a demo
+// (heading, lede, paragraph, component, list, anything), so spacing stays
+// consistent with NO per-element margins. It zeroes each direct child's own
+// block margins, then puts an equal gap before every child after the first. This
+// is the single place that controls demo spacing. A group that must stay tight (a
+// caption directly above its code) is wrapped in ONE child <div>, which keeps its
+// own inner spacing (the reset only reaches DIRECT children of .demo-stack).
+const STACK_CSS = `
+  .demo-stack { --section-gap: 2rem; }
+  /* block so vertical gaps apply even to a shadow-DOM host (inline by default,
+     and inline elements ignore block margins). */
+  .demo-stack > * { display: block; margin-block: 0; }
+  .demo-stack > * + * { margin-block-start: var(--section-gap); }
+`;
+
 // Shared layout for every gallery feature demo under /features/*. A docs-style
 // two-column shell: a grouped sidebar (the <gallery-nav> component, which tracks
 // the active demo across soft navigation) plus the demo content. On mobile the
@@ -25,7 +40,7 @@ const SIDENAV_CSS = `
 export default function FeaturesLayout({ children, url }: { children: unknown; url: URL | string }) {
   const path = typeof url === 'string' ? new URL(url, 'http://x').pathname : url.pathname;
   return html`
-    <style>${SIDENAV_CSS}</style>
+    <style>${SIDENAV_CSS}${STACK_CSS}</style>
     <div class="lg:hidden mb-6">${backLink('/', html`&larr; Gallery`)}</div>
     <div class="grid lg:grid-cols-[190px_1fr] gap-8 lg:gap-12">
       <!-- The sidebar caps at the viewport minus the root chrome (the h-14 navbar
@@ -38,7 +53,7 @@ export default function FeaturesLayout({ children, url }: { children: unknown; u
           <gallery-nav current=${path}></gallery-nav>
         </div>
       </aside>
-      <div class="min-w-0">${children}</div>
+      <div class="min-w-0 demo-stack">${children}</div>
     </div>
   `;
 }
