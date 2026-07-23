@@ -44,7 +44,7 @@ export class TokenStream extends WebComponent {
           ${busy ? 'streaming…' : 'Stream tokens'}
         </button>
         ${busy || output
-          ? html`<pre class="mt-4 whitespace-pre-wrap font-mono text-sm text-foreground min-h-[3rem]">${output}</pre>`
+          ? html`<pre class="mt-4 whitespace-pre-wrap font-mono text-sm text-foreground">${output}</pre>`
           : ''}
       </div>
     `;
