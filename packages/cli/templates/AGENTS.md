@@ -43,7 +43,8 @@ The order matters:
    under `components/`, features under `modules/<feature>/`, server-only code
    behind `.server.ts`. Build the app's OWN design system from the blank slate:
    define design tokens in `app/layout.ts` and pull primitives with
-   `npx webjsdev ui add <name>`, following
+   `npx webjsdev ui add <name>` then theme the copied source (you own it, so
+   modify it rather than hand-writing a primitive from scratch), following
    `.agents/skills/webjs/references/styling.md`.
 
 If you are only exploring, keep the gallery and browse it.
