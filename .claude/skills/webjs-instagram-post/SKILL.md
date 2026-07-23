@@ -216,18 +216,16 @@ curl -s "https://graph.instagram.com/v25.0/refresh_access_token?grant_type=ig_re
 Then write the returned token back into `~/.config/webjs/instagram.env` without
 printing it.
 
-## The profile avatar asset
+## The profile avatar
 
-`assets/webjs-instagram-avatar.png` is the 1080x1080 profile picture for the
-account. It is full-bleed brand orange with the white `webjs` wordmark, so
-Instagram's circular crop yields a clean filled circle rather than the clipped
-squircle the old favicon produced. It is set manually in the Instagram app (the
-publishing API cannot change a profile picture). Regenerate it with:
+The `@webjs_dev` profile picture is already set in the Instagram app (the
+publishing API cannot change a profile picture, so it is a manual step). The
+avatar is NOT committed to the repo. If you ever need to regenerate one, build
+it locally and set it by hand, never commit the PNG:
 
 ```sh
 magick -size 1080x1080 -define gradient:angle=135 gradient:'#FF8C3A'-'#DE5F10' base.png
 magick -background none -fill white -font Adwaita-Sans-ExtraBold -kerning -8 \
   -size 800x -gravity center label:'webjs' wordmark.png
-magick base.png wordmark.png -gravity center -composite \
-  assets/webjs-instagram-avatar.png
+magick base.png wordmark.png -gravity center -composite /tmp/webjs-instagram-avatar.png
 ```
