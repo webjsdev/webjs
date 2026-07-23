@@ -100,16 +100,42 @@ in practice, so treat the crop check as mandatory, not optional.
 ## Step 2: host the image at a public HTTPS URL
 
 Meta fetches the image server-side, so it MUST sit at a public HTTPS URL before
-you publish. The on-brand, SEO-positive route is to commit it into the website
-and deploy, which also lands a real asset on webjs.dev:
+you publish. The default, lowest-overhead route is a **throwaway branch in a
+worktree whose raw GitHub URL Instagram fetches** (the `webjsdev/webjs` repo is
+PUBLIC). Do NOT open a PR, do NOT merge, and do NOT commit these cards to main:
+the card is not linked from anywhere on webjs.dev, so committing it carries no
+SEO value, and the user has explicitly rejected the PR/deploy overhead. IG
+fetches and stores its OWN copy at create-container time (Step 4), so the branch
+only has to exist for that one call, then it is deleted.
 
-1. Copy the JPEG to `website/public/social/<slug>.jpg` in a worktree.
-2. Commit, push, open a PR, and after merge Railway serves it at
-   `https://webjs.dev/public/social/<slug>.jpg`.
-3. Confirm the URL returns `200` with `content-type: image/jpeg` before Step 4.
+```sh
+SLUG=works-without-javascript                 # match the post topic
+BR=chore/ig-social-$SLUG
+git worktree add -b "$BR" ../webjs-ig-social origin/main
+mkdir -p ../webjs-ig-social/website/public/social
+cp "$OUT" ../webjs-ig-social/website/public/social/$SLUG.jpg
+( cd ../webjs-ig-social
+  git add website/public/social/$SLUG.jpg
+  git commit -q -m "chore: add $SLUG Instagram social card asset"
+  git push -q -u origin "$BR" )
 
-For a quick one-off where a deploy is too heavy, any public HTTPS host works,
-as long as the final URL is reachable and serves real JPEG bytes.
+# the raw URL Instagram fetches (public repo, serves content-type: image/jpeg)
+IMG="https://raw.githubusercontent.com/webjsdev/webjs/$BR/website/public/social/$SLUG.jpg"
+```
+
+After the post is published in Step 4, tear the branch down so nothing lingers:
+
+```sh
+git worktree remove ../webjs-ig-social --force
+git branch -D "$BR"
+git push origin --delete "$BR"
+```
+
+Any other public HTTPS host works too, as long as the final URL is reachable
+and serves real JPEG bytes. (Committing to `website/public/social/` + a PR +
+Railway deploy also works and lands a real `webjs.dev/public/social/<slug>.jpg`
+asset, but that is heavier and not the default. Only take it if the user
+specifically wants the asset on the site.)
 
 ALWAYS verify the hosted URL round-trips real bytes BEFORE publishing:
 
@@ -190,18 +216,16 @@ curl -s "https://graph.instagram.com/v25.0/refresh_access_token?grant_type=ig_re
 Then write the returned token back into `~/.config/webjs/instagram.env` without
 printing it.
 
-## The profile avatar asset
+## The profile avatar
 
-`assets/webjs-instagram-avatar.png` is the 1080x1080 profile picture for the
-account. It is full-bleed brand orange with the white `webjs` wordmark, so
-Instagram's circular crop yields a clean filled circle rather than the clipped
-squircle the old favicon produced. It is set manually in the Instagram app (the
-publishing API cannot change a profile picture). Regenerate it with:
+The `@webjs_dev` profile picture is already set in the Instagram app (the
+publishing API cannot change a profile picture, so it is a manual step). The
+avatar is NOT committed to the repo. If you ever need to regenerate one, build
+it locally and set it by hand, never commit the PNG:
 
 ```sh
 magick -size 1080x1080 -define gradient:angle=135 gradient:'#FF8C3A'-'#DE5F10' base.png
 magick -background none -fill white -font Adwaita-Sans-ExtraBold -kerning -8 \
   -size 800x -gravity center label:'webjs' wordmark.png
-magick base.png wordmark.png -gravity center -composite \
-  assets/webjs-instagram-avatar.png
+magick base.png wordmark.png -gravity center -composite /tmp/webjs-instagram-avatar.png
 ```
