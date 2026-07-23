@@ -12,6 +12,7 @@
 // That is the whole point: out-of-band updates that a signal re-render or a frame
 // region-swap would clobber.
 import { WebComponent, html, renderStream } from '@webjsdev/core';
+import { buttonClass } from '#components/ui/button.ts';
 
 // Build a <webjs-stream> payload string. It is a plain string (NOT an html``
 // template), so interpolating the row markup here is fine. `remove` needs no
@@ -53,7 +54,7 @@ export class StreamDemo extends WebComponent {
   }
 
   render() {
-    const btn = 'px-3 py-1.5 rounded-lg bg-card border border-border text-sm font-medium text-foreground cursor-pointer transition-colors hover:border-border-strong';
+    const btn = buttonClass({ variant: 'secondary', size: 'xs' });
     return html`
       <div class="grid gap-4 max-w-[460px]">
         <div class="flex flex-wrap gap-2">

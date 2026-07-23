@@ -12,6 +12,7 @@
 // home; a page/layout never hydrates. With JS off the plain link still works
 // (progressive enhancement), while the buttons are inert.
 import { WebComponent, html, signal, navigate, revalidate, disableClientRouter, enableClientRouter } from '@webjsdev/core';
+import { buttonClass } from '#components/ui/button.ts';
 
 export class RouterControls extends WebComponent {
   // Instance signal mirroring whether soft navigation is currently on.
@@ -30,13 +31,13 @@ export class RouterControls extends WebComponent {
         <div class="flex flex-wrap gap-3 items-center">
           <button
             @click=${() => navigate('/features/client-router/second')}
-            class="inline-flex items-center px-4 py-2 rounded-xl bg-card border border-border text-foreground font-medium text-sm cursor-pointer transition-colors hover:border-border-strong">navigate() to page two</button>
+            class=${buttonClass({ variant: 'secondary' })}>navigate() to page two</button>
           <button
             @click=${() => revalidate()}
-            class="text-muted-foreground font-medium text-sm cursor-pointer transition-colors hover:text-foreground underline decoration-dotted underline-offset-4">revalidate() the snapshot cache</button>
+            class=${buttonClass({ variant: 'link', size: 'none' })}>revalidate() the snapshot cache</button>
           <button
             @click=${() => this.toggleRouter()}
-            class="text-muted-foreground font-medium text-sm cursor-pointer transition-colors hover:text-foreground underline decoration-dotted underline-offset-4">${soft ? 'disableClientRouter()' : 'enableClientRouter()'} (soft nav: ${soft ? 'on' : 'off'})</button>
+            class=${buttonClass({ variant: 'link', size: 'none' })}>${soft ? 'disableClientRouter()' : 'enableClientRouter()'} (soft nav: ${soft ? 'on' : 'off'})</button>
         </div>
         <p class="text-sm text-muted-foreground">
           Plain link:

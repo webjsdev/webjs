@@ -6,6 +6,7 @@
 // On failure the framework re-renders at 422 with the result; on success it
 // does a 303 Post-Redirect-Get, so we redirect to ?sent=1 to show a confirmation.
 import { html } from '@webjsdev/core';
+import { buttonClass } from '#components/ui/button.ts';
 import type { Metadata } from '@webjsdev/core';
 
 export const metadata: Metadata = { title: 'Forms (no-JS PE) | features' };
@@ -49,7 +50,7 @@ export default function FormsFeature({ searchParams, actionData }: { searchParam
       ${field('Name', 'name', html`<input id="name" name="name" value=${v.name ?? ''} class=${inputCls} placeholder="Ada Lovelace" />`, errs.name)}
       ${field('Email', 'email', html`<input id="email" name="email" type="email" value=${v.email ?? ''} class=${inputCls} placeholder="ada@example.com" />`, errs.email)}
       ${field('Message', 'message', html`<textarea id="message" name="message" rows="3" class=${inputCls} placeholder="Say hello...">${v.message ?? ''}</textarea>`, errs.message)}
-      <button type="submit" class="justify-self-start px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">Send message</button>
+      <button type="submit" class="${buttonClass()} justify-self-start">Send message</button>
     </form>
   `;
 }

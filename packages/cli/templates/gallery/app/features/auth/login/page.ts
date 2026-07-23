@@ -1,4 +1,5 @@
 import { html } from '@webjsdev/core';
+import { buttonClass } from '#components/ui/button.ts';
 
 export const metadata = { title: 'Log in' };
 
@@ -32,7 +33,7 @@ export default function LoginPage({ searchParams }: { searchParams: { error?: st
           <label for="password" class="text-[13px] font-medium text-muted-foreground">Password</label>
           <input id="password" name="password" type="password" required class=${inputCls} />
         </div>
-        <button type="submit" class="justify-self-start px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">Sign in</button>
+        <button type="submit" class="${buttonClass()} justify-self-start">Sign in</button>
       </form>
       <p class="text-sm text-muted-foreground mt-4">Don't have an account? <a href="/features/auth/signup" class="text-primary">Sign up</a></p>
     </div>

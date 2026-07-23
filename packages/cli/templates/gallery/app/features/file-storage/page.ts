@@ -5,6 +5,7 @@
 // streams the file back through file/[key]/route.ts. Works with JS off; the
 // client router applies the same flow in place with JS on.
 import { html } from '@webjsdev/core';
+import { buttonClass } from '#components/ui/button.ts';
 import type { Metadata } from '@webjsdev/core';
 import { storeUpload } from '#modules/file-storage/actions/store-upload.server.ts';
 
@@ -44,7 +45,7 @@ export default function FileStorageExample({
       <input type="file" name="file" required aria-label="Choose a file to upload"
         class="text-sm text-muted-foreground file:mr-3 file:px-3.5 file:py-2 file:rounded-xl file:border-0 file:bg-card file:border file:border-border file:text-foreground file:text-sm file:cursor-pointer" />
       <button type="submit"
-        class="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">Upload</button>
+        class=${buttonClass()}>Upload</button>
     </form>
     ${actionData?.error
       ? html`<p class="text-destructive text-sm mb-4">${actionData.error}</p>`

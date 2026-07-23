@@ -1,4 +1,5 @@
 import { html } from '@webjsdev/core';
+import { buttonClass } from '#components/ui/button.ts';
 
 // Nested layout for the protected dashboard subtree. Logout is a plain
 // <form method="POST"> posting to the createAuth signout route: it clears the
@@ -12,7 +13,7 @@ export default function DashboardLayout({ children }: { children: unknown }) {
       <a href="/features/auth/dashboard" class="text-sm font-medium text-foreground hover:underline">Dashboard</a>
       <a href="/features/auth/dashboard/settings" class="text-sm font-medium text-foreground hover:underline">Settings</a>
       <form method="POST" action="/api/auth/signout" class="ml-auto">
-        <button type="submit" class="px-3 py-1.5 rounded-lg border border-border text-sm text-foreground bg-transparent cursor-pointer transition-colors hover:bg-accent">Log out</button>
+        <button type="submit" class=${buttonClass({ variant: 'secondary', size: 'sm' })}>Log out</button>
       </form>
     </nav>
     ${children}

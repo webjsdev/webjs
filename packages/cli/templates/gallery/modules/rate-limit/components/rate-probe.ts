@@ -5,6 +5,7 @@
 // import and call instead). The button is the interactivity signal, so this
 // component ships and hydrates.
 import { WebComponent, signal, html } from '@webjsdev/core';
+import { buttonClass } from '#components/ui/button.ts';
 
 interface Probe { n: number; status: number; remaining: string }
 
@@ -32,7 +33,7 @@ export class RateProbe extends WebComponent {
     return html`
       <div class="grid gap-4 max-w-[420px]">
         <button @click=${() => this.ping()}
-          class="w-fit px-3.5 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">Ping the endpoint</button>
+          class="${buttonClass({ size: 'sm' })} w-fit">Ping the endpoint</button>
         <ul class="grid gap-1.5 list-none m-0 p-0">
           ${this.log.get().map((p) => html`
             <li class="flex items-center justify-between px-3 py-2 rounded-xl bg-card border border-border text-sm">

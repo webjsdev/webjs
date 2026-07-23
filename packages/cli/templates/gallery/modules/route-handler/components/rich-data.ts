@@ -6,6 +6,7 @@
 // (it runs in the browser), so it lives in a component; with JS off this button
 // is inert and the page still reads.
 import { WebComponent, signal, html, richFetch } from '@webjsdev/core';
+import { buttonClass } from '#components/ui/button.ts';
 
 interface RichPayload { at: Date; ip: string; requestId: string; cookieCount: number }
 
@@ -22,7 +23,7 @@ export class RichData extends WebComponent {
     return html`
       <div class="flex items-center gap-3 text-[15px]">
         <button @click=${() => this.load()}
-          class="px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">richFetch() the route</button>
+          class=${buttonClass({ size: 'sm' })}>richFetch() the route</button>
         <span class="text-muted-foreground">${this.line.get()}</span>
       </div>
     `;

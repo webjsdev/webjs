@@ -1,4 +1,5 @@
 import { html } from '@webjsdev/core';
+import { buttonClass } from '#components/ui/button.ts';
 import { signup } from '#modules/auth/actions/signup.server.ts';
 
 export const metadata = { title: 'Sign up' };
@@ -50,7 +51,7 @@ export default function SignupPage({ actionData }: { actionData?: { fieldErrors?
           <input id="password" name="password" type="password" minlength="8" required class=${inputCls} />
           ${errors.password ? html`<p class="m-0 text-[12.5px] text-destructive">${errors.password}</p>` : ''}
         </div>
-        <button type="submit" class="justify-self-start px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-sm border-0 cursor-pointer transition-all hover:bg-primary/90 active:scale-[0.97]">Create account</button>
+        <button type="submit" class="${buttonClass()} justify-self-start">Create account</button>
       </form>
       <p class="text-sm text-muted-foreground mt-4">Already have an account? <a href="/features/auth/login" class="text-primary">Log in</a></p>
     </div>
