@@ -103,9 +103,40 @@ A cleared, growing app hand-authors its own controls, so accessibility is your j
 
 Native `<button>` / `<a>` / `<input>` already have correct focus + keyboard behaviour, which is the main reason to prefer them (and the `buttonClass()` / `inputClass()` class helpers) over a custom `<div role>` element.
 
-## Design tokens
+## Design tokens and theming
 
-The default stack is a static compiled Tailwind stylesheet (`css:build` compiles `public/input.css` to the linked `public/tailwind.css`, so it works with JS off) plus `@theme` design tokens (palette, fonts, fluid type, motion durations) declared once in the root layout. Consume them as utility classes (`text-foreground`, `bg-card`, `font-serif`, `duration-fast`). If you wire your own theme switch, drive BOTH signals on `<html>` (the `data-theme` attribute for the app palette blocks AND the `.dark` class for the `@webjsdev/ui` kit), or half the UI renders stale tokens. Verify dark mode in a real browser, light mode passing proves nothing about dark.
+The default stack is a static compiled Tailwind stylesheet (`css:build` compiles `public/input.css` to the linked `public/tailwind.css`, so it works with JS off) plus `@theme` design tokens declared once in the root layout. You consume them as utility classes (`bg-background`, `text-foreground`, `bg-card`, `border-border`, `font-serif`).
+
+**Two halves.** (1) `public/input.css` MAPS token names into Tailwind with `@theme inline` (`--color-background: var(--background)`), so `bg-background` resolves to `var(--background)`. That is infrastructure; leave it. (2) The root layout (`app/layout.ts`) DEFINES the values as plain CSS custom properties in a `<style>` block. That is your palette; make it your own. A freshly cleared app (after `npm run gallery:clear`) ships only the OS system-colour base (`Canvas` / `CanvasText`) with NO tokens, so building this palette is your first styling step.
+
+**Light and dark, defined once (DRY).** Write each colour token ONE time with the native CSS `light-dark(LIGHT, DARK)` function and let `color-scheme` pick the side. The default `color-scheme: light dark` follows the OS; a `[data-theme]` attribute forces one. No duplicated light/dark blocks:
+
+```html
+<style>
+  :root {
+    --font-sans: ui-sans-serif, system-ui, sans-serif;
+    color-scheme: light dark;                        /* follow the OS by default */
+    --background:       light-dark(#ffffff, #1e2226);
+    --foreground:       light-dark(#191c20, #dee2e6);
+    --card:             light-dark(#f7f8fa, #313539);
+    --muted-foreground: light-dark(#565c64, #94989c);
+    --border:           light-dark(#e2e5e9, #34393e);
+    --primary:          light-dark(#1e2226, #dee2e6);
+    /* a derived token tracks BOTH themes for free via var(--primary) */
+    --primary-tint: color-mix(in srgb, var(--primary) 22%, transparent);
+  }
+  :root[data-theme='light'] { color-scheme: light; }  /* the toggle forces a scheme */
+  :root[data-theme='dark']  { color-scheme: dark; }
+</style>
+```
+
+`light-dark()` is a native CSS function (CSS Color 5, Baseline 2024), not a library, so nothing to import. A single-theme app drops the `[data-theme]` rules and gives each token one colour.
+
+**A manual theme toggle** writes `data-theme` on `<html>` (`light` / `dark`, or removes it for "follow the OS"). If you use `@webjsdev/ui` components, ALSO keep the `.dark` class in sync (the ui kit keys its own tokens off `.dark`), and apply the saved choice in a tiny inline `<script>` in the layout head so there is no first-paint flash. Verify dark mode in a real browser. Light mode passing proves nothing about dark.
+
+**Edge cases.** `light-dark()` is COLOUR-only. A colour needed in just one theme sets the unused side to a no-op (`light-dark(#fff, transparent)`). A derived token that references a `light-dark()` one (like `--primary-tint` above) tracks both themes automatically. A NON-colour token that must differ per theme (a shadow's geometry, a gradient, a size, an image) cannot use `light-dark()`; give it a `:root[data-theme='dark']` override plus an `@media (prefers-color-scheme: dark) { :root:not([data-theme]) { ... } }` rule for the OS default.
+
+**The ui class helpers build on these tokens.** `buttonClass()` / `cardClass()` / `inputClass()` / `badgeClass()` emit Tailwind utilities that reference the same tokens (`bg-primary`, `border-border`), so theming the tokens re-skins every helper at once.
 
 ## Light-DOM host display, and shadow hosts
 
