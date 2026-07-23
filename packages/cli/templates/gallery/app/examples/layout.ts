@@ -5,8 +5,12 @@ import { backLink } from '#lib/utils/ui.ts';
 // slim "back to the gallery" link the feature demos get, so an example is never a
 // dead end. A non-root layout, so it never writes the document shell.
 export default function ExamplesLayout({ children }: { children: unknown }) {
+  // An example app has no sidebar, so center it in a focused reading column
+  // (the root centers the whole page; this narrows the example within it).
   return html`
-    ${backLink('/', html`&larr; Gallery`)}
-    ${children}
+    <div class="max-w-xl mx-auto">
+      <div class="mb-6">${backLink('/', html`&larr; Gallery`)}</div>
+      ${children}
+    </div>
   `;
 }

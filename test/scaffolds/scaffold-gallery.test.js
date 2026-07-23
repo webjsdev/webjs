@@ -17,7 +17,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile, stat } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -98,18 +98,23 @@ test('full-stack scaffold ships feature demos and one example app', async () => 
   }
 });
 
-test('full-stack home page links every feature and the example app', async () => {
+test('the shared gallery nav lists every feature and the example app', async () => {
+  // The feature index moved to modules/gallery/nav.ts (one source for the home
+  // cards AND the sidebar). Assert every demo is listed there, and that the home
+  // reads it rather than hard-coding its own list.
   const cwd = await tempCwd();
   try {
     await scaffoldApp('demo', cwd, { template: 'full-stack' });
+    const nav = await readFile(join(cwd, 'demo', 'modules', 'gallery', 'nav.ts'), 'utf8');
     const home = await readFile(join(cwd, 'demo', 'app', 'page.ts'), 'utf8');
 
     assert.doesNotMatch(home, /webjs-scaffold-placeholder/, 'the placeholder gate was retired');
+    assert.match(home, /from '#modules\/gallery\/nav\.ts'/, 'home reads the shared nav index');
     for (const name of FEATURES) {
-      assert.match(home, new RegExp(`/features/${name}`), `home links /features/${name}`);
+      assert.match(nav, new RegExp(`/features/${name}`), `nav lists /features/${name}`);
     }
     for (const name of EXAMPLE_APPS) {
-      assert.match(home, new RegExp(`/examples/${name}`), `home links /examples/${name}`);
+      assert.match(nav, new RegExp(`/examples/${name}`), `nav lists /examples/${name}`);
     }
   } finally {
     await rm(cwd, { recursive: true, force: true });
@@ -206,6 +211,14 @@ test('full-stack gallery:clear strips the app to a barebones blank slate', async
     assert.ok(has('db', 'connection.server.ts'), 'db wiring kept');
     assert.ok(has('components'), 'components/ kept as an (empty) build target');
     assert.ok(has('modules'), 'modules/ kept as an (empty) build target');
+    // ENFORCEMENT (so a new gallery demo can't be added without updating
+    // gallery:clear): after clear, modules/ and components/ MUST be a blank
+    // slate. A gallery module or ui helper left behind fails here. If you added
+    // gallery content, add its removal to templates/scripts/clear-gallery.mjs.
+    const modulesLeft = readdirSync(join(appDir, 'modules'));
+    assert.deepEqual(modulesLeft, [], `modules/ must be empty after clear, found: ${modulesLeft.join(', ')}`);
+    const componentsLeft = readdirSync(join(appDir, 'components'));
+    assert.deepEqual(componentsLeft, [], `components/ must be empty after clear, found: ${componentsLeft.join(', ')}`);
     assert.ok(has('app', 'layout.ts'), 'root layout kept');
 
     // The layout no longer references the removed theme-toggle, but keeps its
@@ -310,6 +323,11 @@ test('the api gallery:clear sheds the showcase to a health + users base', async 
     assert.ok(await exists(join(appDir, 'app', 'api', 'health', 'route.ts')), 'health endpoint kept');
     assert.ok(await exists(join(appDir, 'app', 'api', 'users', 'route.ts')), 'users endpoint kept');
     assert.ok(await exists(join(appDir, 'modules', 'users')), 'modules/users kept');
+    // ENFORCEMENT (parity with the full-stack clear test): after clear, modules/
+    // holds ONLY the users base. A new api demo module left behind fails here, so
+    // clear-api-gallery.mjs must be updated whenever the api showcase gains one.
+    assert.deepEqual(readdirSync(join(appDir, 'modules')).sort(), ['users'],
+      'modules/ must hold only the users base after the api clear');
 
     // A rerun is a safe no-op (the showcase is already gone).
     execFileSync(process.execPath, ['scripts/clear-api-gallery.mjs'], { cwd: appDir, stdio: 'ignore' });

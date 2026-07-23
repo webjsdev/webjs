@@ -114,12 +114,21 @@ it applies, then update or consciously skip each.
    - `packages/cli/lib/api-gallery.js` (the api backend-features showcase). Auth
      is a full-stack GALLERY card now (`templates/gallery/{app/features/auth,
      modules/auth}`), pruned by `gallery:clear`, not a separate template.
-   - `packages/cli/templates/scripts/clear-gallery.mjs` (the `gallery:clear`
-     reset). It strips the app to a barebones blank slate (the gallery, the
-     example design system `components/ui/`, the example theme-toggle + its
-     layout wiring, the example tests, empty leftover dirs), keeping only the
-     buildable base + the skill. A NEW gallery route/module/example-artifact must
-     be added to its removal list, or `gallery:clear` will leave it behind.
+   - **The `gallery:clear` reset scripts (BOTH templates, MANDATORY parity).**
+     `packages/cli/templates/scripts/clear-gallery.mjs` (full-stack) strips the
+     app to a barebones blank slate (the gallery routes + modules, the example
+     design system `components/ui/`, `lib/utils/ui.ts`, the example theme-toggle +
+     its layout wiring, the example tests, empty leftover dirs), keeping only the
+     buildable base + the skill. `packages/cli/templates/scripts/clear-api-gallery.mjs`
+     (the `api` template) does the same for the backend showcase (`app/api/features`,
+     the demo modules, `env.ts`, the widgets test), keeping the health + users base.
+     **RULE: any NEW gallery artifact (a route, a module, a shared component, a lib
+     helper, a schema table) MUST be added to the matching clear script's removal
+     list in the SAME change, or `gallery:clear` leaves it behind and the app is not
+     a blank slate.** This is enforced by `test/scaffolds/scaffold-gallery.test.js`
+     (full-stack: asserts `modules/` and `components/` are EMPTY after clear, so a
+     forgotten module/component fails) and the api clear test in the same file; run
+     them after any gallery change.
    - Any future `*-template.js` / `*-gallery.js` split out for escaping sanity.
 3. **The verbatim template files** copied into every app:
    - `packages/cli/templates/gallery/**` (the UI feature gallery + example app,
@@ -156,7 +165,8 @@ it applies, then update or consciously skip each.
 | Change | Surfaces that MUST be checked |
 |---|---|
 | New / changed **WebJs feature, export, idiom, or convention** an agent must know | **the agent skill** `.agents/skills/webjs/` FIRST (SKILL.md routing line + the right `references/*.md`), the DURABLE teacher that survives `gallery:clear`, THEN a gallery demo (surface 2/3). Skill-without-demo means no runnable example; demo-without-skill means the pattern is LOST the moment an agent clears the gallery. A feature needs BOTH. |
-| New / changed **gallery or showcase demo** | the template file(s) or generator strings for the demo + the home-page `features`/index array + the scaffold AGENTS.md gallery list + the `gallery:clear` removal list (`templates/scripts/clear-gallery.mjs`, so the new demo/module is stripped to a blank slate) + `test/scaffolds/*` FEATURES/assertions + **generate + boot the affected template** |
+| New / changed **gallery or showcase demo** | the template file(s) or generator strings for the demo + the home-page `features`/index array + the scaffold AGENTS.md gallery list + **the matching `gallery:clear` removal list** (`clear-gallery.mjs` for full-stack, `clear-api-gallery.mjs` for api, so the new demo/module/component/lib artifact is stripped to a blank slate) + `test/scaffolds/*` FEATURES/assertions + **generate + boot the affected template + run `gallery:clear` and confirm a blank slate** |
+| **Removed / renamed gallery artifact** (a demo route, a module, a shared component, a lib helper, a schema table the gallery added) | the matching `gallery:clear` script's removal list (add the new path; remove a stale one) + the blank-slate clear test (`test/scaffolds/scaffold-gallery.test.js`) + **generate + run the clear + assert nothing gallery remains** |
 | New / removed **template** | the `create.js` template branch (+ a `*-template.js` if large) + the "only N templates exist" list in EVERY per-agent rule file + the framework `AGENTS.md`/getting-started/README template matrix + the CLI `--template` validation + `--help` + `test/scaffolds/*` |
 | New **control-flow throw or routing boundary file** (`notFound` / `redirect` / `forbidden` / `unauthorized` and their `not-found` / `forbidden` / `unauthorized` / `error` / `loading` / `global-error` / `global-not-found` boundary files) | a runnable **gallery demo** that exercises it (a route that throws it plus the nearest boundary file), NOT just an app-tree bullet in the rule files + the home-page `features` array + `test/scaffolds/*` FEATURES/boundary-file asserts + **generate + boot + hit the route**. A doc bullet in `AGENTS.md` / `CONVENTIONS.md` is necessary but NOT sufficient: the gallery is the primary teaching surface, so an undemoed thrower is invisible to a scaffolding agent (the #848 gap). Carve-out: a **root-only** boundary (`global-error` / `global-not-found`) cannot mount under `app/features/` without clashing with the generated app root, so teach those in the demo's PROSE rather than as a live route. |
 | New / renamed **public `@webjsdev/core` or `@webjsdev/server` export, or a new routing convention file** the router parses | `test/scaffolds/gallery-coverage.json` MUST classify it (a `{ demo }` / `{ demoed: true }`, or `{ exempt }` with an `internal:` / `deferred:` reason) or the tier-2 CI gate (`gallery-coverage.test.js`) FAILS. Prefer a real demo; `deferred:` is a conscious, reviewer-visible exemption tracked for later. This is the coverage-gate teeth described above. |
