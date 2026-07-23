@@ -2,9 +2,9 @@
 
 Load this when the app uses `@webjsdev/ui` (a `components.json` is present), OR
 when you are about to add a UI primitive (button, card, input, badge) to a fresh
-app that has not initialised the kit yet: running `webjs ui init` then `webjs ui
-add <name>` is HOW the kit comes to exist, and it is the default for a repeated
-primitive over hand-writing one from scratch. `@webjsdev/ui` is the shadcn-style
+app that has not initialised the kit yet: running `webjs ui init` then
+`webjs ui add <name>` is HOW the kit comes to exist, and it is the default for a
+repeated primitive over hand-writing one from scratch. `@webjsdev/ui` is the shadcn-style
 kit for WebJs. The source is copied into your repo (`components/ui/`), so you own
 and edit it exactly as freely as code you wrote yourself (the copied file is
 yours to trim and theme). Two tiers:
