@@ -1290,6 +1290,8 @@ export default function RootLayout({ children }: { children: unknown }) {
   // app/features/<x> route AND its modules/<x>), then reshape this page into the
   // app's real landing page.
   await writeFile(join(appDir, 'app', 'page.ts'), `import { html } from '@webjsdev/core';
+import { cardClass } from '#components/ui/card.ts';
+import { badgeClass } from '#components/ui/badge.ts';
 
 export const metadata = {
   title: '${displayName}',
@@ -1357,7 +1359,7 @@ export default function Home() {
         </div>
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           \${FEATURES.map(f => html\`
-            <a href="\${f.href}" class="group flex flex-col gap-1.5 rounded-xl border border-border bg-card p-4 no-underline transition-colors hover:border-border-strong hover:bg-accent">
+            <a href="\${f.href}" class=\${cardClass('group flex flex-col gap-1.5 rounded-xl p-4 no-underline transition-colors hover:border-border-strong hover:bg-accent')}>
               <span class="flex items-center justify-between gap-2">
                 <span class="text-sm font-medium text-foreground">\${f.title}</span>
                 <span class="text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true">&rarr;</span>
@@ -1367,9 +1369,9 @@ export default function Home() {
           \`)}
         </div>
         \${EXAMPLES.map(e => html\`
-          <a href="\${e.href}" class="group flex flex-col gap-2 rounded-xl border border-border bg-card p-5 no-underline transition-colors hover:border-border-strong hover:bg-accent">
+          <a href="\${e.href}" class=\${cardClass('group flex flex-col gap-2 rounded-xl p-5 no-underline transition-colors hover:border-border-strong hover:bg-accent')}>
             <span class="flex items-center gap-2.5">
-              <span class="text-[0.6rem] font-semibold uppercase tracking-wider text-muted-foreground rounded border border-border px-1.5 py-0.5">Example app</span>
+              <span class=\${badgeClass({ variant: 'outline' })}>Example app</span>
               <span class="text-sm font-medium text-foreground">\${e.title}</span>
               <span class="ml-auto text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true">&rarr;</span>
             </span>
@@ -1406,6 +1408,8 @@ function iconGithub() {
   // --- Theme toggle component ---
 
   await writeFile(join(appDir, 'components', 'theme-toggle.ts'), `import { WebComponent, html, signal } from '@webjsdev/core';
+import { cn } from '#lib/utils/cn.ts';
+import { buttonClass } from '#components/ui/button.ts';
 
 type Theme = 'system' | 'light' | 'dark';
 
@@ -1453,7 +1457,7 @@ export class ThemeToggle extends WebComponent {
     const icon = t === 'light' ? ICONS.sun : t === 'dark' ? ICONS.moon : ICONS.system;
     return html\`
       <button
-        class="inline-flex items-center justify-center w-9 h-9 p-0 border border-border rounded-full bg-card text-muted-foreground cursor-pointer transition-all duration-150 hover:text-foreground hover:border-border-strong active:scale-[0.94] focus-visible:outline-none focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary-tint"
+        class=\${cn(buttonClass({ variant: 'secondary', size: 'none' }), 'w-9 h-9 rounded-full text-muted-foreground duration-150 hover:text-foreground active:scale-[0.94]')}
         @click=\${() => this.cycle()}
         aria-label="Cycle theme (currently \${label})"
         title="Theme: \${label.toLowerCase()}"
