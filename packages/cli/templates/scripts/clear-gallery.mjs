@@ -9,19 +9,22 @@
 // same patterns and SURVIVES this reset, so nothing is lost), then run this
 // once to shed the gallery, then grow the app in place.
 //
-// It removes the gallery routes + modules + demo metadata routes, resets
-// app/page.ts to a minimal home, and drops the demo `todos` table plus the auth
-// card's `passwordHash` column from the schema. It KEEPS the agent skill
-// (.agents/skills/webjs/), the layout, the database wiring, the theme toggle,
-// the example `users` table, AND the design system in `components/ui/` (the
-// `buttonClass` / `cardClass` / `inputClass` helpers + `lib/utils/cn.ts`). The
-// design system is INFRASTRUCTURE, not a demo: a real app built after this reset
-// still imports those helpers, and their teaching comments plus the styling
-// reference are where the "own and theme your @webjsdev/ui primitives" pattern
-// lives durably (the demos are just the disposable runnable illustration). So
-// do NOT add `components/ui` to the removal list below. It is a one-time reset:
-// if the gallery is already gone (no app/features/) it does nothing, so a rerun
-// never clobbers an app you built.
+// It removes the gallery routes + modules + demo metadata routes + the gallery's
+// example design system (components/ui/), resets app/page.ts to a minimal home,
+// and drops the demo `todos` table plus the auth card's `passwordHash` column
+// from the schema. It KEEPS the agent skill (.agents/skills/webjs/), the layout,
+// the database wiring, the theme toggle, the example `users` table, and
+// `lib/utils/cn.ts` (the `webjs ui add` prerequisite).
+//
+// Why remove components/ui: the gallery's design system is an EXAMPLE of the
+// pattern, not a base to inherit. Keeping it would nudge the agent to lean on
+// the gallery's buttons instead of building the app's OWN. The DURABLE knowledge
+// is the pattern itself, which lives in the skill
+// (.agents/skills/webjs/references/styling.md, re-read every session): learn it
+// from the gallery here, then after this reset run `webjs ui add <name>` (cn.ts
+// is kept for it) and theme your own components/ui/ to your app. It is a
+// one-time reset: if the gallery is already gone (no app/features/) it does
+// nothing, so a rerun never clobbers an app you built.
 import { rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -46,6 +49,10 @@ const galleryPaths = [
   'app/icon.ts', 'app/apple-icon.ts', 'app/manifest.ts', 'app/opengraph-image.ts',
   'app/twitter-image.ts', 'app/robots.ts', 'app/sitemap.ts',
   'app/global-error.ts', 'app/global-not-found.ts',
+  // The gallery's EXAMPLE design system. Removed so the reset app is a blank
+  // slate: the agent builds its own components/ui/ (run `webjs ui add`, cn.ts is
+  // kept), learning the pattern from the skill, not inheriting the gallery's.
+  'components/ui',
 ];
 // 2) The gallery's feature modules (by name). `auth` is the auth card's server
 // modules (createAuth config, password hashing, signup action, current-user
@@ -82,7 +89,7 @@ if (existsSync(schemaPath)) {
 rm('db/migrations');
 for (const f of ['db/dev.db', 'db/dev.db-shm', 'db/dev.db-wal']) rm(f);
 
-console.log(`Gallery cleared (${removed} paths removed). The agent skill, your database wiring, and the components/ui/ design system are kept.`);
+console.log(`Gallery cleared (${removed} paths removed). The agent skill and your database wiring are kept. Build your own design system: run \`npx webjsdev ui add <name>\` and theme it (see .agents/skills/webjs/references/styling.md).`);
 console.log('Next: regenerate the database (db:generate then db:migrate), then start the dev server and build your app in app/ and modules/.');
 
 function MINIMAL_PAGE() {
