@@ -48,6 +48,10 @@ const VARIANTS = {
   ghost: 'bg-transparent text-foreground font-medium hover:bg-accent',
   // A button that reads as an inline text link (navigate, toggle, reveal).
   link: 'text-muted-foreground font-medium underline decoration-dotted underline-offset-4 hover:text-foreground',
+  // A subtle destructive action (a delete icon / a remove control): transparent
+  // and muted at rest, turning red on hover. NOT a loud solid-red button; theme
+  // it to a filled `bg-destructive` variant if you want a prominent confirm.
+  destructive: 'bg-transparent text-muted-foreground font-medium hover:text-destructive hover:bg-destructive/10',
 } as const;
 
 // SIZES carry SHAPE (padding + radius). `none` is for the link variant, which

@@ -124,11 +124,16 @@ async function copyGallery(appDir) {
   const galleryDir = join(TEMPLATES, 'gallery');
   // `test` carries the auth card's real request-pipeline test (test/auth); it
   // ships with the gallery and is pruned by gallery:clear alongside the card.
-  // `components` carries the design system (components/ui/ class helpers) the
-  // demos import; it is INFRASTRUCTURE that gallery:clear KEEPS (a real app goes
-  // on importing buttonClass/cardClass/inputClass), so it merges into the app's
-  // components/ alongside the separately-written theme toggle.
-  for (const sub of ['app', 'modules', 'test', 'components']) {
+  // `components` carries the gallery's EXAMPLE design system (components/ui/ class
+  // helpers) the demos import. It ships here so a fresh app's demos work, but it
+  // is an example to learn from, so gallery:clear REMOVES it (the agent then runs
+  // `webjs ui add` and themes its own components/ui/); only cn.ts is kept as the
+  // `webjs ui add` prerequisite. It merges into the app's components/ alongside
+  // the separately-written theme toggle (also removed by gallery:clear).
+  // `lib` merges the gallery's markup-chunk helpers (lib/utils/ui.ts) alongside
+  // the ui bootstrap's cn.ts/dom.ts (written earlier); gallery:clear removes just
+  // ui.ts. cp is recursive-merge, so the pre-written lib/utils/ files are kept.
+  for (const sub of ['app', 'modules', 'test', 'components', 'lib']) {
     await cp(join(galleryDir, sub), join(appDir, sub), { recursive: true });
   }
 }
