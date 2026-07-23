@@ -17,7 +17,8 @@ Read `AGENTS.md` first. Full hosted docs are at https://docs.webjs.dev.
   (the skill teaches the same and SURVIVES the clear, so you never lose it);
   (2) run `npm run gallery:clear` to shed the whole gallery in one step (it keeps
   the agent skill and the database wiring, and resets the home AND the root
-  layout to a token-free blank slate, no gallery palette or navbar survives);
+  layout to a token-free blank slate, no gallery palette or navbar survives; a
+  layout you already customised is kept, only its theme-toggle wiring stripped);
   (3) regenerate the database and grow the app in place under `app/`,
   `components/`, and `modules/<feature>/`. Keep the gallery only while exploring,
   never ship it.

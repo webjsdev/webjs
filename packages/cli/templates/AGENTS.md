@@ -34,8 +34,10 @@ The order matters:
    gallery's example design system (`components/ui/`, the theme-toggle), the
    example tests, and the demo `todos` table, and resets `app/page.ts` to a
    minimal home AND `app/layout.ts` to a token-free blank slate (OS system
-   colours, no navbar, no palette). It KEEPS the agent skill, the database
-   wiring, and `lib/utils/cn.ts` (the `webjs ui add` prerequisite).
+   colours, no navbar, no palette). A layout you already customised (the gallery
+   brand removed) is KEPT, with only the theme-toggle wiring stripped. It KEEPS
+   the agent skill, the database wiring, and `lib/utils/cn.ts` (the
+   `webjs ui add` prerequisite).
 3. **Build.** Regenerate the database (`npm run db:generate` then `npm run
    db:migrate`), then grow the app in place: routes under `app/`, components
    under `components/`, features under `modules/<feature>/`, server-only code

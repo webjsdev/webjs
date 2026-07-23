@@ -16,7 +16,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readFile, stat } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, stat, writeFile } from 'node:fs/promises';
 import { existsSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
@@ -239,6 +239,31 @@ test('full-stack gallery:clear strips the app to a barebones blank slate', async
     assert.doesNotMatch(schema, /export const todos = table/, 'todos table dropped');
     assert.doesNotMatch(schema, /passwordHash/, 'auth passwordHash column dropped');
     assert.match(schema, /defineRelations\(\{ users \}/, 'relations reverted to users only');
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test('gallery:clear keeps a hand-customised root layout (brand guard)', async () => {
+  // The layout overwrite is guarded on the gallery's own navbar brand: a layout
+  // the user already themed (brand gone) is the user's work, so clear KEEPS it
+  // and strips only the dangling theme-toggle wiring (the component file is
+  // removed either way).
+  const cwd = await tempCwd();
+  try {
+    await scaffoldApp('demo', cwd, { template: 'full-stack', install: false });
+    const appDir = join(cwd, 'demo');
+    const layoutPath = join(appDir, 'app', 'layout.ts');
+    const customised = (await readFile(layoutPath, 'utf8')).replace('WebJs Gallery', 'Acme Notes');
+    await writeFile(layoutPath, customised);
+
+    execFileSync(process.execPath, ['scripts/clear-gallery.mjs'], { cwd: appDir, stdio: 'ignore' });
+
+    const kept = await readFile(layoutPath, 'utf8');
+    assert.match(kept, /Acme Notes/, 'the customised layout survives the clear');
+    assert.match(kept, /light-dark\(/, "the user's palette survives too");
+    assert.doesNotMatch(kept, /theme-toggle/, 'the dangling theme-toggle wiring is stripped');
+    assert.doesNotMatch(kept, /background:\s*Canvas/, 'the blank-slate layout was NOT applied');
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }
