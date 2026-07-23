@@ -497,28 +497,31 @@ async function main() {
       break;
     }
     case 'ui': {
-      // Delegate to @webjsdev/ui. Bundled as a hard dependency of
-      // @webjsdev/cli, so `npm install -g webjsdev` pulls it in
-      // automatically, and `webjs ui add button` works out of the box
-      // without an extra install in user projects.
-      const { createRequire } = await import('node:module');
-      const req = createRequire(import.meta.url);
+      // Delegate to @webjsdev/ui's bin. It is a hard dependency of
+      // @webjsdev/cli, so `npm install -g webjsdev` pulls it in automatically
+      // and `webjs ui add button` works without an extra install.
+      //
+      // Resolve via resolveBin, NOT req.resolve('@webjsdev/ui/bin/webjsui.js'):
+      // the ui package's `exports` map does not list the bin subpath, so a
+      // direct subpath resolve throws ERR_PACKAGE_PATH_NOT_EXPORTED even though
+      // the file exists, which surfaced as a misleading "could not be resolved"
+      // (#1073). resolveBin resolves the `.` export, walks to the package root,
+      // and reads the `bin` map, exactly as `db` / `test --browser` do.
       let entry;
       try {
-        entry = req.resolve('@webjsdev/ui/bin/webjsui.js');
+        // Hard-dep path: @webjsdev/ui in the CLI's own node_modules.
+        entry = resolveBin(join(__dirname, '..'), '@webjsdev/ui', 'webjsui');
       } catch {
-        // Fallback: try resolving from the user's cwd in case of weird
-        // workspace setups.
+        // Fallback: the user installed @webjsdev/ui directly in their project.
         try {
-          const userReq = createRequire(join(process.cwd(), 'package.json'));
-          entry = userReq.resolve('@webjsdev/ui/bin/webjsui.js');
+          entry = resolveBin(process.cwd(), '@webjsdev/ui', 'webjsui');
         } catch {
           console.error('@webjsdev/ui could not be resolved.');
           console.error('Reinstall the CLI:  npm install -g webjsdev');
           process.exit(1);
         }
       }
-      const child = spawn('node', [entry, ...rest], { stdio: 'inherit', cwd: process.cwd() });
+      const child = spawn(process.execPath, [entry, ...rest], { stdio: 'inherit', cwd: process.cwd() });
       child.on('exit', (code) => process.exit(code ?? 0));
       break;
     }
