@@ -20,7 +20,7 @@ export default function RateLimitExample() {
       <code class="font-mono">Retry-After</code> header.
     `)}
     <rate-probe></rate-probe>
-    <p class="text-muted-foreground text-sm mt-4">
+    <p class="text-muted-foreground text-sm mt-5">
       With JavaScript off, hit
       <a class="text-primary underline underline-offset-2" href="/features/rate-limit/ping" data-no-router>/features/rate-limit/ping</a>
       directly (refresh past five times in ten seconds).

@@ -51,13 +51,13 @@ export default function BoundariesExample() {
         <code class="font-mono">not-found.ts</code> (404).
       </li>
     </ul>
-    <p class="text-muted-foreground text-sm mb-2">
+    <p class="text-muted-foreground text-sm mb-5">
       <code class="font-mono">forbidden()</code> is for an authenticated user who
       lacks permission (403); <code class="font-mono">unauthorized()</code> is for
       a request that is not authenticated at all (401). Both import from
       <code class="font-mono">@webjsdev/core</code> and are thrown, never returned.
     </p>
-    <p class="text-muted-foreground text-sm mb-2">
+    <p class="text-muted-foreground text-sm mb-5">
       Same throw model as <code class="font-mono">notFound()</code> (renders the
       nearest <code class="font-mono">not-found.ts</code>) and
       <code class="font-mono">redirect(url)</code> (sends an HTTP 3xx). Inside a
