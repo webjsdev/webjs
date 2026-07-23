@@ -4,6 +4,8 @@
 // across the swap: the text you typed on page one is still here.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
+import { inputClass } from '#components/ui/input.ts';
+import { pageHeading } from '#lib/utils/ui.ts';
 
 export const metadata: Metadata = {
   title: 'View transitions: page two | features',
@@ -12,7 +14,7 @@ export const metadata: Metadata = {
 
 export default function ViewTransitionsSecond() {
   return html`
-    <h1 class="text-h2 font-bold mb-4">Page two</h1>
+    ${pageHeading('Page two')}
     <div class="rounded-2xl bg-foreground/5 border border-border p-6 mb-6">
       <p class="text-foreground m-0">You arrived with a cross-fade, no full
         reload. The input below is the same node from page one, regrafted across
@@ -21,7 +23,7 @@ export default function ViewTransitionsSecond() {
     <label class="block mb-6">
       <span class="text-muted-foreground text-sm">Its value persisted across the transition:</span>
       <input id="vt-note" data-webjs-permanent type="text" placeholder="type something…"
-        class="mt-2 block w-full max-w-sm rounded-xl border border-border bg-card px-4 py-2 text-foreground" />
+        class=${inputClass('mt-2 block max-w-sm')} />
     </label>
     <a href="/features/view-transitions" class="text-primary no-underline font-medium">&larr; Back to page one</a>
   `;

@@ -8,19 +8,20 @@
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
 import { buttonClass } from '#components/ui/button.ts';
+import { pageHeading, lede } from '#lib/utils/ui.ts';
 import '#modules/client-router/components/router-controls.ts';
 
 export const metadata: Metadata = { title: 'Client router (soft nav) | features' };
 
 export default function ClientRouterExample() {
   return html`
-    <h1 class="text-h2 font-bold mb-4">Client router</h1>
-    <p class="text-muted-foreground mb-4">
+    ${pageHeading('Client router')}
+    ${lede(html`
       Navigate to the second page and back. With JS on it is a soft swap (no full
       reload, scroll restored); open the network tab to see only a fragment
       fetched, prefetched on hover. With JS off the same links do full-page
       navigations. Nothing was imported to get this.
-    </p>
+    `)}
     <div class="flex gap-3 items-center">
       <a href="/features/client-router/second" class="${buttonClass()} no-underline">Go to page two</a>
       <a href="/" class="text-muted-foreground no-underline font-medium text-sm hover:text-foreground transition-colors">Home</a>

@@ -6,17 +6,18 @@
 // agent-docs/service-worker.md for the full recipe.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
+import { pageHeading, lede } from '#lib/utils/ui.ts';
 
 export const metadata: Metadata = { title: 'Service worker (opt-in) | features' };
 
 export default function ServiceWorkerExample() {
   return html`
-    <h1 class="text-h2 font-bold mb-4">Service worker</h1>
-    <p class="text-muted-foreground mb-4">
+    ${pageHeading('Service worker')}
+    ${lede(html`
       Opt-in offline/caching enhancement. Nothing is registered until you add
       <code class="font-mono">public/sw.js</code> and register it from a
       browser-only lifecycle hook.
-    </p>
+    `)}
     <p class="mb-2 text-sm font-medium">Register inside a component (never in a page or layout):</p>
     <pre class="bg-card border border-border rounded-xl p-4 overflow-x-auto text-sm font-mono mb-4"><code>connectedCallback() {
   super.connectedCallback();

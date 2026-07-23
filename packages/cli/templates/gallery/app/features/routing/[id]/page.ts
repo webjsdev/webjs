@@ -14,6 +14,7 @@
 // route literal that does not exist and it is a compile error.
 import { html, notFound } from '@webjsdev/core';
 import type { PageProps } from '@webjsdev/core';
+import { pageHeading } from '#lib/utils/ui.ts';
 
 export default async function RoutingParam({ params }: PageProps<'/features/routing/[id]'>) {
   // The Next-style await also works; `params.id` sync would be identical.
@@ -23,7 +24,7 @@ export default async function RoutingParam({ params }: PageProps<'/features/rout
   // you throw this after a DB lookup returns nothing. Try /features/routing/missing.
   if (id === 'missing') notFound();
   return html`
-    <h1 class="text-h2 font-bold mb-4">Route param</h1>
+    ${pageHeading('Route param')}
     <p>The <code>[id]</code> segment is: <strong>${id}</strong></p>
     <p class="text-muted-foreground text-sm mt-3">
       Typed with <code class="font-mono">PageProps&lt;'/features/routing/[id]'&gt;</code>,

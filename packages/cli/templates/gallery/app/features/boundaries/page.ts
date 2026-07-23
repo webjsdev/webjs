@@ -16,18 +16,19 @@
 //   /features/boundaries/private throws unauthorized() -> private/unauthorized.ts
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
+import { pageHeading, lede } from '#lib/utils/ui.ts';
 
 export const metadata: Metadata = { title: 'Boundaries (throws + boundary files) | features' };
 
 export default function BoundariesExample() {
   return html`
-    <h1 class="text-h2 font-bold mb-4">Boundaries</h1>
-    <p class="text-muted-foreground mb-4">
+    ${pageHeading('Boundaries')}
+    ${lede(html`
       Throw a control-flow function from a page (or a page
       <code class="font-mono">action</code>) to short-circuit the render. The
       framework catches it and renders the nearest matching boundary file in the
       route's chain, innermost wins.
-    </p>
+    `)}
     <ul class="list-disc pl-5 mb-4">
       <li>
         <a class="text-primary" href="/features/boundaries/gated">/features/boundaries/gated</a>

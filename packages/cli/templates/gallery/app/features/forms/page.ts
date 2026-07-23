@@ -9,6 +9,7 @@ import { html } from '@webjsdev/core';
 import { cardClass } from '#components/ui/card.ts';
 import { inputClass } from '#components/ui/input.ts';
 import { buttonClass } from '#components/ui/button.ts';
+import { pageHeading } from '#lib/utils/ui.ts';
 import type { Metadata } from '@webjsdev/core';
 
 export const metadata: Metadata = { title: 'Forms (no-JS PE) | features' };
@@ -33,7 +34,7 @@ const inputCls = inputClass();
 export default function FormsFeature({ searchParams, actionData }: { searchParams: Record<string, string | undefined>; actionData?: Result }) {
   if (searchParams.sent) {
     return html`
-      <h1 class="text-h2 font-bold mb-4">Forms</h1>
+      ${pageHeading('Forms')}
       <div class="${cardClass()} max-w-[460px] grid gap-3 p-6 text-center">
         <span class="mx-auto grid place-items-center w-12 h-12 rounded-2xl bg-primary/15 text-primary">
           <svg viewBox="0 0 24 24" class="w-6 h-6 stroke-current fill-none" style="stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round"><path d="m5 13 4 4L19 7"/></svg>

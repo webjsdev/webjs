@@ -3,13 +3,14 @@
 // `params`. See app/features/routing/[id]/page.ts.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
+import { pageHeading, lede } from '#lib/utils/ui.ts';
 
 export const metadata: Metadata = { title: 'Routing (dynamic params) | features' };
 
 export default function RoutingExample() {
   return html`
-    <h1 class="text-h2 font-bold mb-4">Routing</h1>
-    <p class="text-muted-foreground mb-4">A folder is a URL segment; a <code>[id]</code> folder is a dynamic param.</p>
+    ${pageHeading('Routing')}
+    ${lede(html`A folder is a URL segment; a <code>[id]</code> folder is a dynamic param.`)}
     <ul class="list-disc pl-5 mb-4">
       <li><a class="text-primary" href="/features/routing/42">/features/routing/42</a></li>
       <li><a class="text-primary" href="/features/routing/hello">/features/routing/hello</a></li>

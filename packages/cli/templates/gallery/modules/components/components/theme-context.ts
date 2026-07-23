@@ -8,6 +8,7 @@
 // children normally.
 import { WebComponent, html, signal } from '@webjsdev/core';
 import { buttonClass } from '#components/ui/button.ts';
+import { cardClass } from '#components/ui/card.ts';
 import { createContext, ContextProvider, ContextConsumer, ContextRequestEvent } from '@webjsdev/core/context';
 
 type Theme = 'light' | 'dark';
@@ -27,7 +28,7 @@ export class ThemeProvider extends WebComponent {
 
   render() {
     return html`
-      <div class="grid gap-3 p-3 rounded-xl bg-card border border-border max-w-[420px]">
+      <div class=${cardClass('grid gap-3 p-3 max-w-[420px]')}>
         <button @click=${() => this.toggle()}
           class="${buttonClass({ size: 'sm' })} w-fit">
           provider theme: ${this.provider.value} (toggle)

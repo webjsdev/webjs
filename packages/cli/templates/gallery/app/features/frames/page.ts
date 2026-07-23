@@ -21,6 +21,7 @@
 // component (the theme toggle), so @webjsdev/core and the router load app-wide.
 import { html } from '@webjsdev/core';
 import { cardClass } from '#components/ui/card.ts';
+import { pageHeading, lede } from '#lib/utils/ui.ts';
 import type { Metadata } from '@webjsdev/core';
 import { filterTasks, normalizeStatus, type Status } from '#modules/frames/utils/tasks.ts';
 
@@ -42,15 +43,15 @@ export default function FramesExample({ searchParams }: { searchParams: Record<s
   const status = normalizeStatus(searchParams?.status);
   const tasks = filterTasks(status);
   return html`
-    <h1 class="text-h2 font-bold mb-4">Frames</h1>
-    <p class="text-muted-foreground mb-4">
+    ${pageHeading('Frames')}
+    ${lede(html`
       Filter the list. With JS on, only the framed region swaps (the response is
       just the frame's subtree, not the whole page) and the heading above never
       re-renders. With JS off, the same links do full-page navigations. It is one
       region refreshing independently of a navigation, which neither a page nor a
       layout can express: a layout wraps routes with shared chrome and only
       re-renders when you navigate, while a frame updates one region in place.
-    </p>
+    `)}
     <webjs-frame id="tasks" class="${cardClass()} block p-4">
       <div class="flex gap-2 mb-4">
         ${filterTab(status, 'all', 'All')}

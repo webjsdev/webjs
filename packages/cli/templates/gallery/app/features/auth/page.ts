@@ -10,6 +10,7 @@
 // line is the real query during SSR and a safe RPC stub on the client.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
+import { pageHeading, lede } from '#lib/utils/ui.ts';
 import { currentUser } from '#modules/auth/queries/current-user.server.ts';
 
 export const metadata: Metadata = { title: 'Auth (login + protected route) | features' };
@@ -17,8 +18,8 @@ export const metadata: Metadata = { title: 'Auth (login + protected route) | fea
 export default async function AuthExample() {
   const user = await currentUser();
   return html`
-    <h1 class="text-h2 font-bold mb-4">Auth</h1>
-    <p class="text-muted-foreground mb-4">Password login on <code>createAuth</code>, a signed session cookie, and a protected <code>/features/auth/dashboard</code> that redirects anonymous visitors to login.</p>
+    ${pageHeading('Auth')}
+    ${lede(html`Password login on <code>createAuth</code>, a signed session cookie, and a protected <code>/features/auth/dashboard</code> that redirects anonymous visitors to login.`)}
 
     ${user
       ? html`

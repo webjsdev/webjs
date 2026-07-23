@@ -6,6 +6,7 @@
 // (sitemap.ts, robots.ts, opengraph-image.ts, ...) live at the app root.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
+import { pageHeading, lede } from '#lib/utils/ui.ts';
 
 // generateMetadata wins over a static `metadata` export when both exist. Here
 // it derives the title from a ?topic= query param to show the dynamic form;
@@ -31,12 +32,12 @@ export default function MetadataExample({
 }) {
   const topic = (searchParams.topic || '').trim();
   return html`
-    <h1 class="text-h2 font-bold mb-4">Metadata</h1>
-    <p class="text-muted-foreground mb-4">
+    ${pageHeading('Metadata')}
+    ${lede(html`
       <code>generateMetadata(ctx)</code> runs on the server and can read the
       request, so the <code>&lt;title&gt;</code> is computed per URL. View source
       to see the tag this page produced.
-    </p>
+    `)}
     <p class="mb-4">
       Current title source:
       <code class="font-mono text-sm">${topic ? '?topic=' + topic : '(default, no ?topic=)'}</code>

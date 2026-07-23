@@ -6,6 +6,7 @@
 // (a live socket has no no-JS equivalent, which is the honest fallback here).
 import { WebComponent, signal, html, connectWS, renderStream } from '@webjsdev/core';
 import { buttonClass } from '#components/ui/button.ts';
+import { inputClass } from '#components/ui/input.ts';
 
 export class WsEcho extends WebComponent {
   private connected = signal(false);
@@ -60,7 +61,7 @@ export class WsEcho extends WebComponent {
         </div>
         <form @submit=${(e: SubmitEvent) => this.send(e)} class="flex gap-2">
           <input name="msg" autocomplete="off" placeholder="Say something"
-            class="flex-1 px-3 py-2 rounded-xl bg-card border border-border text-foreground text-sm outline-none focus:border-border-strong" />
+            class=${inputClass('flex-1 min-w-0')} />
           <button type="submit"
             class=${buttonClass({ size: 'sm' })}>Send</button>
         </form>

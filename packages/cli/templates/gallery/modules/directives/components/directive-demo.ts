@@ -13,6 +13,7 @@
 // iterable, appending each or replacing with the latest).
 import { WebComponent, signal, html } from '@webjsdev/core';
 import { buttonClass } from '#components/ui/button.ts';
+import { inputClass } from '#components/ui/input.ts';
 import { repeat, watch, live, until, keyed, unsafeHTML, ref, createRef, guard, cache, templateContent, asyncAppend, asyncReplace } from '@webjsdev/core/directives';
 
 interface Item { id: number; label: string }
@@ -133,7 +134,7 @@ export class DirectiveDemo extends WebComponent {
             <input
               ${ref(this.inputRef)}
               aria-label="Editable text for the ref focus demo"
-              class="flex-1 px-3 py-1.5 rounded-xl bg-card border border-border text-[15px] text-foreground"
+              class=${inputClass('flex-1 min-w-0')}
               .value=${live(this.text.get())}
               @input=${(e: Event) => this.text.set((e.target as HTMLInputElement).value)}>
             <button @click=${() => this.focusInput()}

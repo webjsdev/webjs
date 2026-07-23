@@ -3,17 +3,18 @@
 // its scroll position from the client-router snapshot cache.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
+import { pageHeading, lede } from '#lib/utils/ui.ts';
 
 export const metadata: Metadata = { title: 'Client router: page two | features' };
 
 export default function ClientRouterSecond() {
   return html`
-    <h1 class="text-h2 font-bold mb-4">Page two</h1>
-    <p class="text-muted-foreground mb-4">
+    ${pageHeading('Page two')}
+    ${lede(html`
       You arrived here without a full reload. Press the browser Back button (or
       the link below): the previous page and its scroll position are restored
       from the snapshot cache.
-    </p>
+    `)}
     <a href="/features/client-router" class="text-primary no-underline font-medium">&larr; Back to page one</a>
   `;
 }

@@ -5,6 +5,7 @@
 // the page still reads with JS off (a live feed has no no-JS equivalent).
 import { WebComponent, signal, html, connectWS } from '@webjsdev/core';
 import { buttonClass } from '#components/ui/button.ts';
+import { inputClass } from '#components/ui/input.ts';
 
 export class BroadcastFeed extends WebComponent {
   private connected = signal(false);
@@ -46,7 +47,7 @@ export class BroadcastFeed extends WebComponent {
         </div>
         <form @submit=${(e: SubmitEvent) => this.send(e)} class="flex gap-2">
           <input name="msg" autocomplete="off" placeholder="Message everyone"
-            class="flex-1 px-3 py-2 rounded-xl bg-card border border-border text-foreground text-sm outline-none focus:border-border-strong" />
+            class=${inputClass('flex-1 min-w-0')} />
           <button type="submit"
             class=${buttonClass({ size: 'sm' })}>Send</button>
         </form>

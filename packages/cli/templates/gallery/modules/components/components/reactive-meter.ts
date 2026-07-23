@@ -10,7 +10,7 @@ export class ReactiveMeter extends WebComponent {
   static styles = css`
     .row { display: flex; align-items: center; gap: 8px; }
     button {
-      padding: 6px 12px; border-radius: 10px; border: 1px solid #8883;
+      padding: 6px 12px; border-radius: 10px; border: 1px solid var(--color-border);
       background: transparent; color: inherit; cursor: pointer; font: inherit;
     }
     .val { font-variant-numeric: tabular-nums; font-weight: 600; }

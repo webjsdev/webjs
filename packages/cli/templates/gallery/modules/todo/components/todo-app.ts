@@ -12,6 +12,7 @@
 import { WebComponent, prop, optimistic, html } from '@webjsdev/core';
 import { cardClass } from '#components/ui/card.ts';
 import { buttonClass } from '#components/ui/button.ts';
+import { cn } from '#lib/utils/cn.ts';
 import { createTodo } from '../actions/create-todo.server.ts';
 import { toggleTodo } from '../actions/toggle-todo.server.ts';
 import { deleteTodo } from '../actions/delete-todo.server.ts';
@@ -126,7 +127,7 @@ export class TodoApp extends WebComponent({
                 <!-- Delete: a proper icon button, revealed on row hover / focus. -->
                 <button type="submit" name="intent" value="delete" aria-label="Delete task"
                   @click=${(e: Event) => this.removeTodo(e, todo)}
-                  class="shrink-0 grid place-items-center w-7 h-7 rounded-lg border-0 bg-transparent text-muted-foreground cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all hover:text-destructive hover:bg-[color-mix(in_oklch,var(--color-destructive)_12%,transparent)]">
+                  class=${cn(buttonClass({ variant: 'destructive', size: 'none' }), 'w-7 h-7 rounded-lg opacity-0 group-hover:opacity-100 focus:opacity-100')}>
                   <svg viewBox="0 0 24 24" class="w-4 h-4 stroke-current fill-none" style="stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M18 6 6 18M6 6l12 12"/></svg>
                 </button>
               </form>

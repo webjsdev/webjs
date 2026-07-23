@@ -18,20 +18,21 @@
 // message applied with renderStream() from a WS handler, see the WebSockets card).
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
+import { pageHeading, lede } from '#lib/utils/ui.ts';
 import '#modules/stream/components/stream-demo.ts';
 
 export const metadata: Metadata = { title: 'Stream updates (webjs-stream) | features' };
 
 export default function StreamExample() {
   return html`
-    <h1 class="text-h2 font-bold mb-4">Stream updates</h1>
-    <p class="text-muted-foreground mb-4">
+    ${pageHeading('Stream updates')}
+    ${lede(html`
       <code class="font-mono">renderStream()</code> applies a
       <code class="font-mono">&lt;webjs-stream action="..." target="..."&gt;</code>
       payload: a surgical, element-level DOM update by id. Each button below mutates
       the live list in place, and the component never re-renders (contrast a frame,
       which swaps a whole region, and the client router, which swaps a whole page).
-    </p>
+    `)}
     <stream-demo></stream-demo>
     <p class="text-muted-foreground text-sm mt-6">
       The same grammar arrives over HTTP (a content-negotiated
