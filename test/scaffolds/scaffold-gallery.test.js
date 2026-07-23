@@ -55,10 +55,10 @@ test('full-stack scaffold ships feature demos and one example app', async () => 
       assert.ok(await exists(join(appDir, 'app', 'features', name, 'page.ts')), `app/features/${name}/page.ts`);
     }
     // Shared layouts give every feature demo AND every example app a
-    // back-to-gallery link so no card is a dead end (each links the home at /).
+    // back-to-gallery link so no card is a dead end (via the backLink('/') helper).
     for (const seg of ['features', 'examples']) {
       const layout = await readFile(join(appDir, 'app', seg, 'layout.ts'), 'utf8');
-      assert.match(layout, /href="\/"/, `${seg} layout links back to the gallery home`);
+      assert.match(layout, /backLink\('\/'/, `${seg} layout links back to the gallery home`);
       assert.match(layout, /Gallery/, `${seg} layout renders a Gallery link`);
     }
     for (const name of EXAMPLE_APPS) {
@@ -179,6 +179,7 @@ test('full-stack gallery:clear strips the app to a barebones blank slate', async
     assert.ok(has('components', 'ui', 'button.ts'), 'pre: components/ui design system exists');
     assert.ok(has('components', 'theme-toggle.ts'), 'pre: example theme-toggle exists');
     assert.ok(has('test', 'hello'), 'pre: example test suite exists');
+    assert.ok(has('lib', 'utils', 'ui.ts'), 'pre: gallery ui.ts fragment helpers exist');
     assert.ok(has('app', 'api', 'auth'), 'pre: gallery auth handler under app/api exists');
     assert.match(await readFile(join(appDir, 'app', 'layout.ts'), 'utf8'), /theme-toggle/, 'pre: layout imports theme-toggle');
 
@@ -200,6 +201,7 @@ test('full-stack gallery:clear strips the app to a barebones blank slate', async
 
     // Kept: the buildable base.
     assert.ok(has('.agents', 'skills', 'webjs', 'SKILL.md'), 'the durable agent skill is kept');
+    assert.equal(has('lib', 'utils', 'ui.ts'), false, 'gallery ui.ts fragment helpers removed');
     assert.ok(has('lib', 'utils', 'cn.ts'), 'cn.ts kept (webjs ui add prerequisite)');
     assert.ok(has('db', 'connection.server.ts'), 'db wiring kept');
     assert.ok(has('components'), 'components/ kept as an (empty) build target');

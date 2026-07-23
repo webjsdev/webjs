@@ -66,6 +66,10 @@ const galleryPaths = [
   // for a true blank slate; the layout's theme import is stripped separately
   // below. The agent writes its own tests + components for the real app.
   'components/theme-toggle.ts', 'test/hello',
+  // The gallery's markup-chunk helpers. Their only users (the feature pages +
+  // the features/examples layouts) are removed above, so drop the example file
+  // too; cn.ts + dom.ts (real infrastructure) stay under lib/utils/.
+  'lib/utils/ui.ts',
 ];
 // 2) The gallery's feature modules (by name). `auth` is the auth card's server
 // modules (createAuth config, password hashing, signup action, current-user
