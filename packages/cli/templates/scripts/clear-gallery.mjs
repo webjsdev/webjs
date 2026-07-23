@@ -76,7 +76,7 @@ const galleryPaths = [
 // query), pruned with the rest of the card.
 const galleryModules = [
   'async-render', 'auth', 'broadcast', 'caching', 'client-router', 'components',
-  'directives', 'file-storage', 'frames', 'optimistic-ui', 'rate-limit',
+  'directives', 'file-storage', 'frames', 'gallery', 'optimistic-ui', 'rate-limit',
   'route-handler', 'server-actions', 'sessions', 'stream', 'streaming', 'suspense',
   'todo', 'websockets',
 ].map((m) => `modules/${m}`);
