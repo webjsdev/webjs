@@ -120,7 +120,7 @@ The default stack is a static compiled Tailwind stylesheet (`css:build` compiles
     --foreground:       light-dark(#191c20, #dee2e6);
     --card:             light-dark(#f7f8fa, #313539);
     --muted-foreground: light-dark(#565c64, #94989c);
-    --border:           light-dark(#e2e5e9, #34393e);
+    --border:           light-dark(#e2e5e9, #3d434b);
     --primary:          light-dark(#1e2226, #dee2e6);
     /* a derived token tracks BOTH themes for free via var(--primary) */
     --primary-tint: color-mix(in srgb, var(--primary) 22%, transparent);
@@ -151,6 +151,17 @@ static styles = css`:host { display: block }`;   // a shadow host with no :host 
 ```
 
 **Size the HOST, not just an inner wrapper.** The host custom element is the box the parent lays out. A host that is a flex/grid item in a centering parent (`flex justify-center`, `grid place-items-center`) is sized to its content unless it carries width itself. Put the sizing classes on the host (`w-full max-w-[400px]`), not only on an inner `<div>`. Symptom: a board or card renders tiny even though its inner grid says `w-full max-w-[400px]`. Fix: move the sizing onto the host.
+
+## Section rhythm: one gap, defined once
+
+Per-element margins can never give consistent vertical spacing: each element controls only one side, so a block's gap-above (the previous element's margin) drifts from its gap-below (its own). For a content column (a docs page, a demo page, an article), make the COLUMN own the spacing with a flex stack, and zero the children's own margins so only the one gap applies:
+
+```css
+.stack { --section-gap: 1.5rem; display: flex; flex-direction: column; gap: var(--section-gap); }
+.stack > * { margin: 0; }
+```
+
+Every top-level child (heading, paragraph, component, list) is then equally spaced from ONE variable, and a spacing change is a one-line edit. Flex `gap` beats forcing `display: block` + margins on children: a `grid`/`flex` child keeps its own layout (a blanket `display: block` clobbers it), an inline shadow-DOM host is blockified as a flex item so it honours the gap, a `display: contents` element (a streaming `<webjs-suspense>`) is replaced by its children which become the flex items, and a `display: none` node (a streaming `<script>`/`<template>`) is not an item at all, so it gets no phantom gap. A group that must stay tight (a caption directly above its code block) wraps in one child `<div>` and keeps its own inner spacing. The gallery's `/features` layout (`demo-stack`) is the worked example.
 
 ## Even grids, no reflow
 
