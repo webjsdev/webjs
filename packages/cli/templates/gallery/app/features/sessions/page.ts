@@ -14,6 +14,6 @@ export default function SessionsExample() {
     ${pageHeading('Sessions')}
     ${lede(html`A per-segment <code>middleware.ts</code> applies <code>session()</code>; a <code>route.ts</code> reads it with <code>getSession(req)</code>.`)}
     <p>GET <a class="text-primary underline underline-offset-2" href="/features/sessions/count" data-no-router>/features/sessions/count</a> increments a per-visitor counter kept in the signed session cookie. Reload it and the count climbs; open it in a private window and it starts over. (<code class="font-mono">data-no-router</code> opts the link out of the client router, since a <code>route.ts</code> returns JSON, not a page.)</p>
-    <p class="text-muted-foreground text-sm mt-8">Swap the storage from <code class="font-mono">cookieSession()</code> to <code class="font-mono">storeSession()</code> to hold larger sessions in the active store (Redis in production).</p>
+    <p class="text-muted-foreground text-sm">Swap the storage from <code class="font-mono">cookieSession()</code> to <code class="font-mono">storeSession()</code> to hold larger sessions in the active store (Redis in production).</p>
   `;
 }

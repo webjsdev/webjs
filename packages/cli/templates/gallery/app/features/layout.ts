@@ -32,8 +32,11 @@ const STACK_CSS = `
     flex-direction: column;
     gap: var(--section-gap);
   }
-  /* Zero any inline margins so ONLY the flex gap spaces sections. */
-  .demo-stack > * { margin: 0; }
+  /* Zero any BLOCK-axis margins so ONLY the flex gap spaces sections. Block
+     axis only: this style is unlayered so it beats Tailwind's layered
+     utilities, and a full margin: 0 would also kill mx-auto (an auth card's
+     horizontal centering). */
+  .demo-stack > * { margin-block: 0; }
 `;
 
 // Shared layout for every gallery feature demo under /features/*. A docs-style
