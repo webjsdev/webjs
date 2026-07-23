@@ -120,6 +120,11 @@ export const RULES = [
       'Flags genuinely browser-only APIs used in a WebComponent constructor, willUpdate, or render() method. The SSR pipeline instantiates the component, runs willUpdate plus controllers\' hostUpdate, reflects properties, and calls render() to produce HTML, on a server element shim that backs the attribute methods but has no real DOM. So a browser global (document, window, localStorage, sessionStorage, navigator, location, matchMedia, screen, history) or an unshimmed HTMLElement member on `this` (attachShadow, shadowRoot, classList, querySelector, querySelectorAll, getBoundingClientRect, focus, blur, scrollIntoView) touched there throws at SSR time (the isomorphic footgun). The attribute methods (getAttribute/setAttribute/hasAttribute/removeAttribute/toggleAttribute), the event methods (addEventListener/removeEventListener/dispatchEvent), and attachInternals are shim-backed and run server-side, so they are NOT flagged. The flagged APIs belong in connectedCallback() or a lifecycle hook (firstUpdated/updated), which SSR never calls; seed first-paint defaults in the constructor (or derive them in willUpdate) only from server-known inputs (attributes, props). Conservative: only the constructor, willUpdate, and render bodies are scanned, and only direct references, so helper indirection is not flagged (the runtime SSR error covers that case).',
   },
   {
+    name: 'no-shadowed-native-member',
+    description:
+      'Flags a WebComponent class method whose name collides with a native DOM mutation method that WebJs relies on and INSTRUMENTS on every light-DOM host for the slot API (#1021): append, prepend, before, after, replaceWith, replaceChildren, remove, appendChild, insertBefore, removeChild, replaceChild. A method of the same name is SHADOWED at runtime (the instrumented native method wins), so the component method silently never runs, while TypeScript stays green because a zero/one-arg override is assignable to the native signature. Found dogfooding the stream demo (#248): a component named its button handler `append()`, so clicking Append called the slot-append no-op instead of the handler. Rename the handler to a non-native name (appendRow / prependRow / removeItem). The `render` / lifecycle hooks are MEANT to be overridden and are not flagged; only the native DOM mutation members are.',
+  },
+  {
     name: 'no-server-import-in-browser-module',
     description:
       'A page / layout / component module that SHIPS to the browser (the build does NOT elide it) must not transitively import a server-only `.server.{ts,js}` module. The server module is replaced by a stub in the browser, so the import is fine while the module never loads client-side: a display-only page is elided, and a page whose only client relevance is importing shipping components is import-only (#605/#963), dropped from the boot in favour of its components. But the moment the page does its OWN client work (the client router, a reactive primitive, a module-scope browser-global access, a client-effecting non-component util) it ships whole, dragging the server import with it. The stub then throws (or a server-only export like `auth` is missing) the instant the module loads, a runtime browser crash that `webjs typecheck` and the rest of `webjs check` miss. The rule reuses the build\'s own elision verdict, so it ONLY fires on modules that genuinely ship; an elided, inert, or import-only page is never flagged. The fix is to keep the server call off the browser-shipped module: gate the route in `middleware.ts`, call the server through a `\'use server\'` action, or move the module\'s own client work into a component so the page is dropped again. Server-to-server imports (`.server.ts` importing `.server.ts`) and `middleware.ts` / `route.ts` (never shipped) are never flagged.',
@@ -652,6 +657,38 @@ export async function checkConventions(appDir) {
               file: rel,
               message: `\`${member}\` (${kind}) is used in ${method}(), which runs during SSR where it is not available, so it throws and the component fails to server-render.`,
               fix: `Move browser-only work to connectedCallback() or a lifecycle hook (firstUpdated/updated), which SSR never calls. Seed first-paint defaults in the constructor only from server-known inputs (attributes / props), then refine in connectedCallback by writing to a signal.`,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // --- Rule: no-shadowed-native-member ---
+  // A WebComponent method named after a native DOM mutation method WebJs
+  // instruments on every light-DOM host for the slot API (#1021) is SHADOWED at
+  // runtime (the native/instrumented method wins), so the component method never
+  // runs, while TypeScript stays green (a shorter override is assignable). Rename
+  // the handler. The lifecycle hooks are meant to be overridden, so only the DOM
+  // mutation members are reserved.
+  {
+    const NATIVE_MEMBERS = [
+      'append', 'prepend', 'before', 'after', 'replaceWith', 'replaceChildren', 'remove',
+      'appendChild', 'insertBefore', 'removeChild', 'replaceChild',
+    ];
+    for (const { rel, scan } of files) {
+      if (!/class\s+\w+\s+extends\s+WebComponent/.test(scan)) continue;
+      for (const { body } of extractWebComponentClassBodies(scan)) {
+        for (const name of NATIVE_MEMBERS) {
+          // Same method-definition shape methodBodyOf() matches (name followed by
+          // a param list then `{`), preceded by a class-body boundary.
+          const re = new RegExp(`(?:^|[\\s;}])(?:async\\s+)?${name}\\s*\\([^)]*\\)\\s*(?::[^{]*)?\\{`);
+          if (re.test(body)) {
+            violations.push({
+              rule: 'no-shadowed-native-member',
+              file: rel,
+              message: `Component method \`${name}()\` shadows the native DOM method WebJs instruments for the slot API, so it silently never runs (the native method wins) and TypeScript does not catch it.`,
+              fix: `Rename the method to a non-native name (e.g. \`${name}Row()\` / \`${name}Item()\`) and update its call sites.`,
             });
           }
         }
