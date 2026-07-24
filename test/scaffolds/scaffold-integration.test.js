@@ -647,3 +647,56 @@ test('scaffoldApp --db postgres: json<T>() helper maps to jsonb, one schema both
     await rm(cwd, { recursive: true, force: true });
   }
 });
+
+// AGENTS.md carries a template-SPECIFIC build playbook (#1076): the full-stack
+// scaffold teaches the UI playbook (design tokens, the UI kit, an MPA), the api
+// scaffold teaches the backend playbook (route handlers, endpoint security), and
+// neither ships guidance that does not match what it generated. Both front-load
+// the same required meta-rules and drop the opt-out phrasing that let smaller
+// models under-gather context.
+test('scaffoldApp: AGENTS.md build playbook is template-specific (#1076)', async () => {
+  const cwd = await tempCwd();
+  const restore = muteConsole();
+  try {
+    await scaffoldApp('fs-app', cwd, { template: 'full-stack' });
+    await scaffoldApp('api-app', cwd, { template: 'api' });
+    const fs = readFileSync(join(cwd, 'fs-app', 'AGENTS.md'), 'utf8');
+    const api = readFileSync(join(cwd, 'api-app', 'AGENTS.md'), 'utf8');
+
+    // The placeholder is always substituted (a leftover would ship a broken app).
+    for (const [label, md] of [['full-stack', fs], ['api', api]]) {
+      assert.doesNotMatch(md, /\{\{PLAYBOOK\}\}|\{\{APP_NAME\}\}/, `${label}: no leftover placeholder`);
+    }
+
+    // Shared, required meta-rules on BOTH templates.
+    for (const [label, md] of [['full-stack', fs], ['api', api]]) {
+      assert.match(md, /Gather context BEFORE you build \(required\)/, `${label}: required context-gathering`);
+      assert.match(md, /Read the framework source for exact contracts/, `${label}: source-reading step`);
+      assert.match(md, /Never reach for `any`/, `${label}: no-any strict typing`);
+      assert.match(md, /npx webjsdev check/, `${label}: verification includes webjs check`);
+      // No opt-out / permission-to-skip phrasing (the #1076 regression to prevent).
+      assert.doesNotMatch(md, /do not have to read|only exploring|only if a task needs/i,
+        `${label}: no opt-out phrasing`);
+    }
+
+    // Full-stack teaches the UI playbook; the api template must NOT.
+    assert.match(fs, /light-dark\(LIGHT, DARK\)/, 'full-stack: design-token mandate');
+    assert.match(fs, /Tier 2, custom elements/, 'full-stack: UI kit tier-2 discovery');
+    assert.match(fs, /multi-page app \(MPA\)/, 'full-stack: MPA structure');
+    assert.match(fs, /position: fixed/, 'full-stack: fixed navbar');
+    assert.match(fs, /npm run css:build/, 'full-stack: css:build in the pipeline');
+    for (const uiOnly of [/light-dark/, /Tier 2/, /ui add/, /css:build/, /position: fixed/]) {
+      assert.doesNotMatch(api, uiOnly, `api: no UI-only guidance (${uiOnly})`);
+    }
+
+    // The api template teaches the backend playbook the full-stack one does not.
+    assert.match(api, /Build a backend API \(api template\)/, 'api: backend playbook heading');
+    assert.match(api, /app\/api\/features\//, 'api: backend-features showcase path');
+    assert.match(api, /`route\(\)` adapter/, 'api: route() adapter');
+    assert.match(api, /Secure every endpoint/, 'api: endpoint security section');
+    assert.doesNotMatch(fs, /Build a backend API/, 'full-stack: no backend-API heading');
+  } finally {
+    restore();
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
