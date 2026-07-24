@@ -621,6 +621,16 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       await mkdir(dirname(join(appDir, dest)), { recursive: true });
       let content = await readFile(src, 'utf8');
       content = content.replace(/\{\{APP_NAME\}\}/g, name);
+      // AGENTS.md carries a template-specific build playbook: the full-stack
+      // (UI) playbook or the api (backend) one. The shared meta-rules (required
+      // context-gathering, strict typing, data) live in AGENTS.md itself; only
+      // the `{{PLAYBOOK}}` section swaps, so the two stay single-sourced. The
+      // partials live under templates/partials/ and are NOT copied as app files.
+      if (f === 'AGENTS.md') {
+        const playbookFile = isApi ? 'agents-playbook-api.md' : 'agents-playbook-fullstack.md';
+        const playbook = await readFile(join(TEMPLATES, 'partials', playbookFile), 'utf8');
+        content = content.replace('{{PLAYBOOK}}', () => playbook.trimEnd());
+      }
       if (isBun) {
         if (PROSE_REWRITE.has(f)) content = bunifyProse(content);
         else if (FILE_REWRITE[f]) content = FILE_REWRITE[f](content);
