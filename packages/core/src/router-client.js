@@ -24,6 +24,7 @@ import {
   SLOT_STATE, LIGHT_SLOT_ATTR, PROJECTION_ATTR, PROJECTION_ACTUAL,
   projectAuthored, keyOfName, isAuthoredContentSlot,
 } from './slot.js';
+import { FORM_ACTION_FIELD } from './form-action.js';
 
 /** The content type a content-negotiated stream-action response carries (#248). */
 const STREAM_MIME = 'text/vnd.webjs-stream.html';
@@ -592,6 +593,11 @@ function onSubmit(e) {
 
   const body = buildSubmitFormData(form, submitter);
 
+  // After the body is built (that is where the identity becomes answerable) and
+  // before `preventDefault`, so it observes the submission the browser was
+  // about to make and changes nothing about it.
+  warnIfActionSubmissionCannotDeliver(form, submitter, method, body);
+
   e.preventDefault();
   // Resolve the target frame for the submit, same precedence as a link:
   // an explicit `data-webjs-frame` on (or above) the form or its submitter
@@ -768,11 +774,18 @@ function resolveTargetFrameId(trigger) {
  * @type {Set<string>}
  */
 const warnedKeys = new Set();
-/** @param {string} key @param {string} message */
-function warnOnce(key, message) {
+/**
+ * @param {string} key
+ * @param {string} message
+ * @param {'warn' | 'error'} [level] `'error'` for a BROKEN path, which is a
+ *   different severity from a correct-but-suboptimal degradation. The dev
+ *   overlay hooks neither, so raising the level pops nothing.
+ */
+function warnOnce(key, message, level = 'warn') {
   if (warnedKeys.has(key)) return;
   warnedKeys.add(key);
-  if (typeof console !== 'undefined' && console.warn) console.warn(message);
+  const sink = typeof console !== 'undefined' ? console[level] : null;
+  if (sink) sink(message);
 }
 
 /**
@@ -964,6 +977,65 @@ function reportFallback(cause, href, willReload = true) {
       ? `[webjs] client router fell back to a full page load (${cause}) navigating to ${href}. This is correct (no DOM corruption), just not a soft nav.`
       : `[webjs] client router degraded a soft navigation (${cause}) for ${href}, without a full page load.`
   );
+}
+
+/**
+ * Dev-only, fire-once hint: this submission carries a bound action's identity
+ * but cannot deliver it on at least one path, and nothing else will say so
+ * (#1307).
+ *
+ * The two branches differ in reach, so the messages do too. A non-POST method
+ * loses the identity to the query string on BOTH paths. An `enctype="text/plain"`
+ * breaks only the no-JS path, because with JS the router posts `FormData` and
+ * ignores the attribute entirely.
+ *
+ * Reachable through the cannot-tell fallback: a submitter bound inside a
+ * component whose host form is unbound. The client cannot answer that at
+ * reconcile time (the question is skipped while the fragment is detached), but
+ * by submit time both the form and the body are in hand, so the answer is
+ * always available here.
+ *
+ * Logs, never throws. This runs in a delegated document-level listener, so a
+ * throw would escape uncaught AND abort before `preventDefault` and
+ * `performSubmission`, making dev behave differently from production.
+ *
+ * @param {HTMLFormElement} form
+ * @param {HTMLElement | null} submitter
+ * @param {string} method the resolved lowercase submission method
+ * @param {FormData} body the body the submission will actually carry
+ */
+function warnIfActionSubmissionCannotDeliver(form, submitter, method, body) {
+  if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production') return;
+  // No identity in the body: an ordinary form with nothing to deliver.
+  if (!body.has(FORM_ACTION_FIELD)) return;
+  let path = '';
+  try { path = new URL(form.getAttribute('action') || location.href, location.href).pathname; }
+  catch { path = location.pathname; }
+  if (method !== 'post') {
+    warnOnce(
+      `submit-nowhere:${path}:${method}`,
+      `[webjs] this form carries a bound server action but submits as ${method.toUpperCase()}, which sends no body, so the identity rides the query string and the action never runs. Bind the enclosing <form> (<form action=\${formAction}>), which is what supplies method="post" at form start.`,
+      'error',
+    );
+    return;
+  }
+  const enctype = (submitter && submitter.getAttribute('formenctype'))
+    || form.getAttribute('enctype')
+    || 'application/x-www-form-urlencoded';
+  // `text/plain` ONLY, not the renderer's allowlist. `enctype` is an enumerated
+  // attribute whose missing AND invalid value defaults are both
+  // `application/x-www-form-urlencoded`, so `enctype="nonsense"` submits a
+  // parseable body and the action runs. Testing against the allowlist reported
+  // that working form as broken, which is the inversion `js-scan.js` documents
+  // and the check rule deliberately avoids; the two halves of one feature must
+  // not disagree on the same input.
+  if (enctype.toLowerCase() === 'text/plain') {
+    warnOnce(
+      `submit-nowhere:${path}:${enctype}`,
+      `[webjs] this form carries a bound server action but declares enctype="${enctype}", which the server cannot parse. With JavaScript on the router posts FormData and the action still runs, so this breaks only the no-JS path, where the submission is a 405. Drop the enctype and let the binding supply it.`,
+      'error',
+    );
+  }
 }
 
 /**
