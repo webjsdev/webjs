@@ -38,16 +38,9 @@ import { join } from 'node:path';
  * @returns {{ dev: { before: string[], parallel: string[] }, start: { before: string[] } }}
  */
 export function readAppTasks(appDir, readFile) {
-  const read = readFile || ((p) => readFileSync(p, 'utf8'));
-  let pkg = {};
-  try {
-    pkg = JSON.parse(read(join(appDir, 'package.json')));
-  } catch {
-    // No package.json, or unparseable: a plain run with no orchestration.
-    return emptyTasks();
-  }
-  const webjs = pkg && typeof pkg === 'object' ? pkg.webjs : null;
-  if (!webjs || typeof webjs !== 'object') return emptyTasks();
+  const webjs = readWebjsBlock(appDir, readFile);
+  // No package.json, unparseable, or no block: a plain run with no orchestration.
+  if (!webjs) return emptyTasks();
 
   /** Keep only non-empty string entries; drop anything else defensively. */
   const cmds = (v) =>
@@ -60,6 +53,27 @@ export function readAppTasks(appDir, readFile) {
     },
     start: { before: cmds(webjs.start && webjs.start.before) },
   };
+}
+
+/**
+ * The app's `package.json` `"webjs"` block, or `null` when there is no
+ * package.json, it does not parse, or the block is absent / not an object.
+ * Shared by every CLI-side reader here so the file is read one way.
+ *
+ * @param {string} appDir
+ * @param {(p: string) => string} [readFile] injectable reader for tests
+ * @returns {Record<string, unknown> | null}
+ */
+function readWebjsBlock(appDir, readFile) {
+  const read = readFile || ((p) => readFileSync(p, 'utf8'));
+  let pkg;
+  try {
+    pkg = JSON.parse(read(join(appDir, 'package.json')));
+  } catch {
+    return null;
+  }
+  const webjs = pkg && typeof pkg === 'object' ? pkg.webjs : null;
+  return webjs && typeof webjs === 'object' ? webjs : null;
 }
 
 /** @returns {{ dev: { before: string[], parallel: string[] }, start: { before: string[] } }} */
@@ -102,15 +116,8 @@ function emptyTasks() {
  * @returns {Record<string, string>} verb -> shell command (empty when unset)
  */
 export function readDbCommands(appDir, readFile) {
-  const read = readFile || ((p) => readFileSync(p, 'utf8'));
-  let pkg = {};
-  try {
-    pkg = JSON.parse(read(join(appDir, 'package.json')));
-  } catch {
-    return {};
-  }
-  const webjs = pkg && typeof pkg === 'object' ? pkg.webjs : null;
-  const db = webjs && typeof webjs === 'object' ? webjs.db : null;
+  const webjs = readWebjsBlock(appDir, readFile);
+  const db = webjs ? webjs.db : null;
   if (!db || typeof db !== 'object' || Array.isArray(db)) return {};
   /** @type {Record<string, string>} */
   const out = {};
