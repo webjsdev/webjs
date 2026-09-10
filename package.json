@@ -262,45 +262,50 @@
               ]
             },
             {
-              "title": "Browser (web-test-runner / Playwright)",
-              "run": "npm run test:browser"
+              "title": "Browser suites (one web-test-runner at a time)",
+              "steps": [
+                {
+                  "title": "Browser (web-test-runner / Playwright)",
+                  "run": "npm run test:browser"
+                },
+                {
+                  "title": "In-repo app tests",
+                  "steps": [
+                    {
+                      "title": "website typecheck",
+                      "run": "npm run typecheck --workspace=@webjsdev/website"
+                    },
+                    {
+                      "title": "blog typecheck",
+                      "run": "npm run typecheck --workspace=@webjsdev/example-blog"
+                    },
+                    {
+                      "title": "gallery typecheck",
+                      "run": "npm run typecheck --workspace=@webjsdev/gallery"
+                    },
+                    {
+                      "title": "website tests (node + browser)",
+                      "run": "npm test --workspace=@webjsdev/website"
+                    },
+                    {
+                      "title": "blog tests (node)",
+                      "run": "npm test --workspace=@webjsdev/example-blog"
+                    },
+                    {
+                      "title": "gallery tests (node + browser)",
+                      "run": "npm test --workspace=@webjsdev/gallery"
+                    },
+                    {
+                      "title": "App boot-check on Node (website incl. /docs + /ui)",
+                      "run": "node test/bun/app-boot.mjs"
+                    }
+                  ]
+                }
+              ]
             },
             {
               "title": "Unit + integration (node --test)",
               "run": "npm test"
-            },
-            {
-              "title": "In-repo app tests",
-              "steps": [
-                {
-                  "title": "website typecheck",
-                  "run": "npm run typecheck --workspace=@webjsdev/website"
-                },
-                {
-                  "title": "blog typecheck",
-                  "run": "npm run typecheck --workspace=@webjsdev/example-blog"
-                },
-                {
-                  "title": "gallery typecheck",
-                  "run": "npm run typecheck --workspace=@webjsdev/gallery"
-                },
-                {
-                  "title": "website tests (node + browser)",
-                  "run": "npm test --workspace=@webjsdev/website"
-                },
-                {
-                  "title": "blog tests (node)",
-                  "run": "npm test --workspace=@webjsdev/example-blog"
-                },
-                {
-                  "title": "gallery tests (node + browser)",
-                  "run": "npm test --workspace=@webjsdev/gallery"
-                },
-                {
-                  "title": "App boot-check on Node (website incl. /docs + /ui)",
-                  "run": "node test/bun/app-boot.mjs"
-                }
-              ]
             },
             {
               "title": "Conventions",

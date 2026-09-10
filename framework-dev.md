@@ -183,9 +183,12 @@ one `Gate` group that runs THREE slots at once, longest first (six overloaded a
 blog in a real browser, the browser-test harness, the dev overlay, seed
 observability, morph, the form-submission run against a live website dev
 server via `scripts/ci-e2e-website.sh`, the two ui e2e), the Bun group (all 31
-proof scripts, then the matrix), the blog e2e served on Bun, the browser suite,
-the root `npm test`, the in-repo app typechecks and suites plus the website
-boot-check, the Conventions group (`webjs check` and `webjs doctor` per in-repo
+proof scripts, then the matrix), the blog e2e served on Bun, one slot holding the
+browser suite and then the in-repo app typechecks and suites plus the website
+boot-check (every suite that starts a web-test-runner binds its fixed port
+8000, so two in flight at once make the later one fetch its test modules from
+the wrong server; sequential in one slot costs no wall-clock), the root `npm
+test`, the Conventions group (`webjs check` and `webjs doctor` per in-repo
 app, the buildless-packages invariant, the em-dash scan), and the Postgres
 round-trip against a throwaway `postgres:16` container (`scripts/ci-postgres.sh`,
 which also installs the `pg` driver `--no-save` into the repo's own
