@@ -188,20 +188,25 @@ test('the monorepo root itself refuses instead of reporting cross-app findings',
   assert.doesNotMatch(r.stdout, /violation\(s\) found/);
 });
 
-test('the derived app list matches the app list ci.yml loops over', async () => {
-  const workflow = await readFile(join(REPO, '.github', 'workflows', 'ci.yml'), 'utf8');
-  // The `webjs check` step's loop, isolated from the sibling `webjs doctor`
-  // loop over the same apps, by anchoring on the step name above it.
-  const step = workflow.split('webjs check (')[1];
-  assert.ok(step, 'ci.yml has a `webjs check` step');
-  const loop = step.match(/for app in ([^;]+); do/);
-  assert.ok(loop, 'that step loops over an app list');
-  const fromCi = loop[1].trim().split(/\s+/).sort();
+test('the derived app list matches the apps the root local CI list checks (#1474)', async () => {
+  // The gate is the root `webjs.ci` list (#1474), not the GitHub workflow: one
+  // `webjs check (<app>)` step per in-repo app, each a `cd <dir> && node
+  // .../webjs.js check`. The refusal's derived list and that step set must be
+  // the same apps, which is what replaces a `--workspaces` flag.
+  const pkg = JSON.parse(await readFile(join(REPO, 'package.json'), 'utf8'));
+  const walk = (nodes) => nodes.flatMap((n) => (n.steps ? walk(n.steps) : [n]));
+  const checkSteps = walk(pkg.webjs.ci.steps).filter((s) => /^webjs check \(/.test(s.title || ''));
+  assert.ok(checkSteps.length > 0, 'the root webjs.ci list has webjs check steps');
+  const fromCi = checkSteps
+    .map((s) => /^cd (\S+) &&/.exec(s.run)?.[1])
+    .filter(Boolean)
+    .sort();
+  assert.equal(fromCi.length, checkSteps.length, 'every check step cds into its app');
 
   const { workspaceApps } = await findCheckTarget(REPO);
   assert.deepEqual(
     workspaceApps,
     fromCi,
-    'the apps the refusal names must be the apps CI checks',
+    'the apps the refusal names must be the apps local CI checks',
   );
 });
