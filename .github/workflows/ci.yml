@@ -1,12 +1,13 @@
 name: CI
 
-# The cloud SECOND OPINION on every PR into main and every push to main.
-# The merge gate is local CI (#1474): the root package.json `webjs.ci` list
-# runs every check below on the developer's machine through `npm run ci`, and
-# `npm run ci -- --signoff` posts the green `signoff` status main requires
-# (scripts/protect-main.sh declares the gate). During the transition the six
-# job names listed in that script stay required too; `--local-only` drops
-# them, after which this workflow is informational and may be deleted.
+# The required merge gate on every PR into main and every push to main. The
+# same checks run locally (#1474): the root package.json `webjs.ci` list runs
+# every job below on the developer's machine through `npm run ci`, and
+# `npm run ci -- --signoff` posts a green `signoff` status on the pushed head.
+# That status is not required yet. scripts/protect-main.sh is the switch:
+# run plain, it requires `signoff` alongside the six job names listed in it;
+# with `--local-only` it drops those names, after which this workflow is
+# informational and may be deleted. Neither has been run.
 #
 # The jobs run as separate runners so a failure names the layer that broke;
 # the local list gets the same property from the runner's per-step result

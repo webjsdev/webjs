@@ -172,10 +172,11 @@ So prevention lives one layer up, and the rest is repair:
 
 Regression tests: `test/hooks/block-install-in-linked-worktree.test.mjs`, `test/repo-health/warn-worktree-install.test.mjs`, `test/repo-health/link-worktree-deps.test.mjs`, `test/hooks/cleanup-merged-worktree.test.mjs`, `test/cli/doctor.test.mjs`.
 
-### Local CI is the merge gate: `npm run ci` at the root and inside each app (#1471, #1474)
+### Local CI: `npm run ci` at the root and inside each app (#1471, #1474)
 
-The monorepo runs its own local CI the way a scaffolded app does, and local CI
-is the merge gate (the Rails 8.1 posture). The root `package.json` declares a
+The monorepo runs its own local CI the way a scaffolded app does, and the list
+is complete enough to BE the merge gate (the Rails 8.1 posture), though the
+Actions checks remain the required gate until the switch below is run. The root `package.json` declares a
 `webjs.ci` step list that runs EVERYTHING `.github/workflows/ci.yml` runs, step
 for step: a Setup group (the blog and gallery databases, the core dist), then
 one `Gate` group that runs THREE slots at once, longest first (six overloaded a
@@ -207,15 +208,20 @@ every root step invokes the in-repo CLI the same way for the same reason.
 `test/cli/check-target.test.mjs` cross-checks the `webjs check` steps against
 the workspace app list.
 
-**The gate.** `npm run ci -- --signoff` runs the list and, only when every step
-passes, runs `gh signoff` (basecamp/gh-signoff), which posts a green `signoff`
-commit status on the PUSHED head. `scripts/protect-main.sh` declares the whole
-gate: the CODEOWNER review, the `signoff` status through `gh signoff install`,
-and, during the transition, the six Actions job names. Push first, then sign
-off; a later push has no signoff until the list is run on it again, so a stale
-green can never carry forward. `bash scripts/protect-main.sh --local-only` is
-the final state, with no Actions context required, which is what lets the
-workflow be demoted to a non-required second opinion or deleted. Sign off from
+**The gate today, and the switch.** `main` requires one approving CODEOWNER
+review plus the six Actions job names in `.github/workflows/ci.yml`; nothing
+requires a local run. `npm run ci -- --signoff` runs the list and, only when
+every step passes, runs `gh signoff` (basecamp/gh-signoff), which posts a green
+`signoff` commit status on the PUSHED head, visible on the PR beside the
+Actions checks and required by nothing yet. `scripts/protect-main.sh` is the
+switch, and it has not been run: plain, it declares the review, the `signoff`
+status through `gh signoff install` (a repository ruleset), and the six Actions
+job names, so both gates apply during a transition; `--local-only` drops the
+Actions names, the final state, after which the workflow is a non-required
+second opinion or deleted. Reverse it with `gh signoff uninstall` and the
+version of the script on `main` before #1474. Push first, then sign off; a
+later push has no signoff until the list is run on it again, so a stale green
+can never carry forward. Sign off from
 a REAL install (the primary checkout, or a worktree whose `node_modules` links
 were replaced by an install): in a linked worktree every bare `@webjsdev/*`
 specifier resolves into the primary checkout, so the listener proofs and the
