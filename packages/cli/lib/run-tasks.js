@@ -44,12 +44,32 @@ export async function runBeforeSteps(steps, cwd, opts = {}) {
     if (opts.onStep) opts.onStep(step);
     const code = await new Promise((res) => {
       const c = spawn(step, { shell: true, stdio: 'inherit', cwd, env });
-      c.on('exit', (code) => res(code ?? 0));
+      // A child killed by a signal exits with `code` null and `signal` set.
+      // That is a failure (an OOM-killed `db migrate` must not boot the
+      // server over a half-applied schema), so it maps to 1, never 0.
+      c.on('exit', (code, signal) => res(code ?? (signal ? 1 : 0)));
       c.on('error', () => res(1));
     });
     if (code !== 0) return { ok: false, step, code };
   }
   return { ok: true };
+}
+
+/**
+ * Quote one argv entry for a POSIX shell so it survives `shell: true` as ONE
+ * word with no expansion. A plain word passes through untouched; anything
+ * else is single-quoted, with an embedded single quote spliced as `'\''`.
+ * Used by `webjs db <verb> [args]` (#1468) to append the CLI's args to a
+ * mapped command string, so `--name "add users"` reaches the ORM as one arg
+ * and a `$` / `;` / glob is never expanded, matching what the drizzle-kit
+ * default (a real argv, no shell) already guarantees.
+ *
+ * @param {string} arg
+ * @returns {string}
+ */
+export function shellQuote(arg) {
+  if (/^[A-Za-z0-9_\-.\/=:@,+%]+$/.test(arg)) return arg;
+  return `'${arg.replace(/'/g, `'\\''`)}'`;
 }
 
 /**

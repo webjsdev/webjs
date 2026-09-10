@@ -533,11 +533,20 @@ async function main() {
       // `webjs db migrate` stays the one spelling the scaffolded start.before,
       // the Dockerfile, and the deploy docs use, whatever ORM is behind it.
       // Checked FIRST so a mapped `seed` overrides the seed-file runner too.
+      if (!sub) {
+        console.error('webjs db: missing subcommand.\n' + USAGE);
+        process.exit(1);
+      }
       const { readDbCommands } = await import('../lib/app-tasks.js');
-      const mapped = sub ? readDbCommands(process.cwd())[sub] : undefined;
+      const dbCommands = readDbCommands(process.cwd());
+      // Own-property lookup: the map is a plain object, so a bare index would
+      // answer `webjs db constructor` with an inherited function.
+      const mapped = Object.hasOwn(dbCommands, sub) ? dbCommands[sub] : undefined;
       if (mapped) {
-        const { runBeforeSteps } = await import('../lib/run-tasks.js');
-        const full = [mapped, ...args].join(' ');
+        const { runBeforeSteps, shellQuote } = await import('../lib/run-tasks.js');
+        // Each arg is quoted so it reaches the ORM as one word, unexpanded,
+        // the way the drizzle-kit default's real argv already does.
+        const full = [mapped, ...args.map(shellQuote)].join(' ');
         console.log(`webjs db ${sub}: running \`${full}\` (from package.json webjs.db)`);
         const r = await runBeforeSteps([full], process.cwd());
         process.exit(r.ok ? 0 : r.code);
@@ -561,7 +570,7 @@ async function main() {
       // schema sync), studio. All wrap drizzle-kit; the verbose name stays
       // hidden behind `webjs db`.
       const map = { generate: ['generate'], migrate: ['migrate'], push: ['push'], studio: ['studio'] };
-      const kitArgs = map[sub];
+      const kitArgs = Object.hasOwn(map, sub) ? map[sub] : undefined;
       if (!kitArgs) {
         console.error(
           `Unknown db subcommand "${sub}". Map it in package.json to add it: ` +

@@ -107,3 +107,35 @@ test('an unmapped unknown verb still exits 1 and says how to add it', () => {
     assert.ok(!existsSync(join(dir, 'marker.txt')), 'nothing ran');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('extra args reach the mapped command as whole, unexpanded words', () => {
+  const dir = app({ db: { generate: MARK } });
+  try {
+    const r = db(dir, 'generate', '--name', 'add users', '$HOME;echo', 'a*b');
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(readFileSync(join(dir, 'marker.txt'), 'utf8'), '--name add users $HOME;echo a*b');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('an inherited property name is not a mapped verb', () => {
+  // `webjs db constructor` must not run Object's constructor source through sh.
+  const dir = app({ db: { migrate: MARK } });
+  try {
+    for (const verb of ['constructor', 'toString', '__proto__']) {
+      const r = db(dir, verb);
+      assert.equal(r.status, 1, `${verb}: ${r.stdout}`);
+      assert.match(r.stderr, /Unknown db subcommand/, verb);
+    }
+    assert.ok(!existsSync(join(dir, 'marker.txt')), 'nothing ran');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a bare `webjs db` reports the missing subcommand, not "undefined"', () => {
+  const dir = app({ db: { migrate: MARK } });
+  try {
+    const r = db(dir);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /missing subcommand/);
+    assert.doesNotMatch(r.stderr, /undefined/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
