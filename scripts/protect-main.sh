@@ -81,7 +81,9 @@ JSON
 if ! gh extension list 2>/dev/null | grep -q 'basecamp/gh-signoff'; then
   gh extension install basecamp/gh-signoff
 fi
-gh signoff install --repo "$REPO"
+# The extension takes no --repo (only --branch); it resolves the repository
+# through `gh api repos/:owner/:repo`, which GH_REPO overrides.
+GH_REPO="$REPO" gh signoff install
 
 if [ "$MODE" = "local-only" ]; then
   echo "main is now protected: 1 approving CODEOWNER review + a signed-off local CI run (npm run ci -- --signoff) before merge. No Actions check is required."
