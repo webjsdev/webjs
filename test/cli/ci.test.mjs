@@ -157,11 +157,29 @@ test('Ctrl-C: the first signal winds the run down as interrupted (exit 130), a s
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const exited = (child) => new Promise((r) => child.on('exit', (code, signal) => r({ code, signal })));
 
-  const dir = await fixture(t, { ci: { steps: [{ title: 'G', parallel: 2, steps: [{ title: 'sleeper', run: 'sleep 20' }] }] } });
+  // The signal must land while the CHILD is running, not before the bin has
+  // spawned it (under a loaded machine 700ms was not enough and the run ended
+  // with nothing to interrupt). Each fixture uses a sleep length unique to
+  // this PROCESS so pgrep can wait for exactly its child: this file runs twice
+  // in one local CI run (npm test in one slot, the Bun matrix in another), and
+  // a fixed length would match the other run's child and fire the signal
+  // before this run had spawned anything.
+  const { execFileSync } = await import('node:child_process');
+  const longSleep = `20.${process.pid}`;
+  const shortSleep = `4.${process.pid}`;
+  const childUp = async (pattern) => {
+    for (let i = 0; i < 100; i++) {
+      try { execFileSync('pgrep', ['-f', pattern], { stdio: 'ignore' }); return; } catch {}
+      await wait(100);
+    }
+    throw new Error(`child matching ${pattern} never started`);
+  };
+
+  const dir = await fixture(t, { ci: { steps: [{ title: 'G', parallel: 2, steps: [{ title: 'sleeper', run: `sleep ${longSleep}` }] }] } });
   const one = spawn(process.execPath, [CLI, 'ci'], { cwd: dir, env: { ...process.env, NO_COLOR: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
   let out1 = '';
   one.stdout.on('data', (d) => { out1 += d; });
-  await wait(700);
+  await childUp(`sleep ${longSleep}`);
   one.kill('SIGINT');
   const r1 = await Promise.race([exited(one), wait(6000).then(() => null)]);
   assert.ok(r1, 'a single interrupt winds the run down within the bound (the detached sleep is reaped)');
@@ -170,9 +188,9 @@ test('Ctrl-C: the first signal winds the run down as interrupted (exit 130), a s
 
   // A captured child that ignores SIGTERM cannot be wound down; the second
   // Ctrl-C is the door out.
-  const stubborn = await fixture(t, { ci: { steps: [{ title: 'G', parallel: 2, steps: [{ title: 'stubborn', run: "trap '' TERM INT; sleep 4" }] }] } });
+  const stubborn = await fixture(t, { ci: { steps: [{ title: 'G', parallel: 2, steps: [{ title: 'stubborn', run: `trap '' TERM INT; sleep ${shortSleep}` }] }] } });
   const two = spawn(process.execPath, [CLI, 'ci'], { cwd: stubborn, env: { ...process.env, NO_COLOR: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
-  await wait(700);
+  await childUp(`sleep ${shortSleep}`);
   two.kill('SIGINT');
   await wait(400);
   const stillRunning = two.exitCode === null;

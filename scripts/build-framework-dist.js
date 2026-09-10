@@ -18,10 +18,10 @@
  * Run from the repo root: `node scripts/build-framework-dist.js`.
  */
 
-import { mkdir, rm, stat } from 'node:fs/promises';
+import { mkdir, readdir, rename, rm, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { build } from 'esbuild';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -63,32 +63,62 @@ async function main() {
   // so a test can build into a throwaway temp dir without clobbering the shared
   // `packages/core/dist` that other tests may read.
   const dist = process.argv[2] ? resolve(process.argv[2]) : join(CORE, 'dist');
-  await rm(dist, { recursive: true, force: true });
+  // Build into a STAGING sibling and move each bundle into place with a
+  // rename, so `dist/` never disappears and a concurrent reader sees the old
+  // bundle or the new one, never a missing file. The previous shape (rm the
+  // directory, then write) opened a window that the monorepo's local CI hit
+  // (#1474): the packaging test in the unit suite and two Bun proofs rebuild
+  // this directory while other slots of the same run import
+  // `@webjsdev/core/dist/webjs-core.js`, and four unrelated tests red with
+  // ERR_MODULE_NOT_FOUND. CI never saw it because each job has its own tree.
+  const staging = `${dist}.building-${process.pid}`;
+  await rm(staging, { recursive: true, force: true });
+  await mkdir(staging, { recursive: true });
   await mkdir(dist, { recursive: true });
 
-  // Splitting OFF: each entry is a single self-contained file with no
-  // shared `chunk-*.js`. The browser surface is one request
-  // (`webjs-core-browser.js`); the handful of other entries (the Node
-  // full bundle, the on-demand lazy loader, the test helpers) duplicate
-  // the small amount of code they share, which is a cheap tarball cost
-  // (never shipped to a browser) in exchange for a clean, waterfall-free
-  // network graph. The few entries mean little duplication in practice.
-  const result = await build({
-    entryPoints: ENTRIES.map((e) => ({ in: join(CORE, e.in), out: e.out })),
-    outdir: dist,
-    bundle: true,
-    splitting: false,
-    format: 'esm',
-    target: 'es2022',
-    platform: 'browser',
-    sourcemap: 'linked',
-    sourcesContent: false,
-    minify: true,
-    treeShaking: true,
-    metafile: true,
-    logLevel: 'info',
-    legalComments: 'none',
-  });
+  const produced = new Set();
+  try {
+    // Splitting OFF: each entry is a single self-contained file with no
+    // shared `chunk-*.js`. The browser surface is one request
+    // (`webjs-core-browser.js`); the handful of other entries (the Node
+    // full bundle, the on-demand lazy loader, the test helpers) duplicate
+    // the small amount of code they share, which is a cheap tarball cost
+    // (never shipped to a browser) in exchange for a clean, waterfall-free
+    // network graph. The few entries mean little duplication in practice.
+    const result = await build({
+      entryPoints: ENTRIES.map((e) => ({ in: join(CORE, e.in), out: e.out })),
+      outdir: staging,
+      bundle: true,
+      splitting: false,
+      format: 'esm',
+      target: 'es2022',
+      platform: 'browser',
+      sourcemap: 'linked',
+      sourcesContent: false,
+      minify: true,
+      treeShaking: true,
+      metafile: true,
+      logLevel: 'info',
+      legalComments: 'none',
+    });
+
+    // Move every bundle into place (a rename over an existing file is atomic
+    // on the same filesystem), then drop whatever the previous build left that
+    // this one did not produce.
+    for (const outFile of Object.keys(result.metafile.outputs)) {
+      const name = basename(outFile);
+      await rename(outFile, join(dist, name));
+      produced.add(name);
+    }
+    for (const stale of await readdir(dist)) {
+      if (!produced.has(stale)) await rm(join(dist, stale), { recursive: true, force: true });
+    }
+  } finally {
+    // On every path, including an esbuild failure: the staging sibling is not
+    // matched by the `.gitignore` `dist` pattern, so one left behind by a
+    // build that threw would show up untracked and ride a `git add -A`.
+    await rm(staging, { recursive: true, force: true });
+  }
 
   // Sanity-check: every entry produced an output file with the
   // expected name. If esbuild ever changes its naming, fail loud
@@ -102,11 +132,11 @@ async function main() {
 
   // Report total dist size for the npm-pack budget the issue calls out.
   let total = 0;
-  for (const outFile of Object.keys(result.metafile.outputs)) {
-    total += (await stat(outFile)).size;
+  for (const name of produced) {
+    total += (await stat(join(dist, name))).size;
   }
   const kb = (total / 1024).toFixed(1);
-  console.log(`[build-framework-dist] wrote ${dist} (${kb} KB total across ${Object.keys(result.metafile.outputs).length} files)`);
+  console.log(`[build-framework-dist] wrote ${dist} (${kb} KB total across ${produced.size} files)`);
 }
 
 main().catch((err) => {

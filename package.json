@@ -62,52 +62,250 @@
           "steps": [
             {
               "title": "E2E (Puppeteer against the blog example)",
-              "run": "npm run test:e2e"
+              "steps": [
+                {
+                  "title": "e2e: blog in a real browser",
+                  "run": "CHROMIUM_PATH=\"$(node -p \"require('playwright-core').chromium.executablePath()\")\" node --test test/e2e/e2e.test.mjs",
+                  "env": {
+                    "WEBJS_E2E": "1"
+                  }
+                },
+                {
+                  "title": "e2e: browser-test harness (#806)",
+                  "run": "CHROMIUM_PATH=\"$(node -p \"require('playwright-core').chromium.executablePath()\")\" node --test test/e2e/browser-harness.test.mjs",
+                  "env": {
+                    "WEBJS_E2E": "1"
+                  }
+                },
+                {
+                  "title": "e2e: dev overlay nav (#1047)",
+                  "run": "CHROMIUM_PATH=\"$(node -p \"require('playwright-core').chromium.executablePath()\")\" node --test test/e2e/dev-overlay-nav.test.mjs",
+                  "env": {
+                    "WEBJS_E2E": "1"
+                  }
+                },
+                {
+                  "title": "e2e: dev seed observability (#1309)",
+                  "run": "CHROMIUM_PATH=\"$(node -p \"require('playwright-core').chromium.executablePath()\")\" node --test test/e2e/dev-seed-observability.test.mjs",
+                  "env": {
+                    "WEBJS_E2E": "1"
+                  }
+                },
+                {
+                  "title": "e2e: dev morph (#1398)",
+                  "run": "CHROMIUM_PATH=\"$(node -p \"require('playwright-core').chromium.executablePath()\")\" node --test test/e2e/dev-morph.test.mjs",
+                  "env": {
+                    "WEBJS_E2E": "1"
+                  }
+                },
+                {
+                  "title": "e2e: form submission + scroll restoration (#1310)",
+                  "run": "CHROMIUM_PATH=\"$(node -p \"require('playwright-core').chromium.executablePath()\")\" bash scripts/ci-e2e-website.sh",
+                  "env": {
+                    "WEBJS_E2E": "1"
+                  }
+                },
+                {
+                  "title": "e2e: ui touch",
+                  "run": "npm run test:e2e:touch --workspace=@webjsdev/ui"
+                },
+                {
+                  "title": "e2e: ui a11y tree",
+                  "run": "npm run test:e2e:a11y-tree --workspace=@webjsdev/ui"
+                }
+              ]
             },
             {
               "title": "Bun runtime smoke + test matrix",
-              "run": "node scripts/run-bun-tests.js"
+              "steps": [
+                {
+                  "title": "bun proof: proof-exit-code",
+                  "run": "bun test/bun/proof-exit-code.mjs"
+                },
+                {
+                  "title": "bun proof: smoke",
+                  "run": "bun test/bun/smoke.mjs"
+                },
+                {
+                  "title": "bun proof: listener",
+                  "run": "bun test/bun/listener.mjs"
+                },
+                {
+                  "title": "bun proof: form-action-guard",
+                  "run": "bun test/bun/form-action-guard.mjs"
+                },
+                {
+                  "title": "bun proof: live-attribute-hole",
+                  "run": "bun test/bun/live-attribute-hole.mjs"
+                },
+                {
+                  "title": "bun proof: form-action-dispatch",
+                  "run": "bun test/bun/form-action-dispatch.mjs"
+                },
+                {
+                  "title": "bun proof: listener-overhead",
+                  "run": "bun test/bun/listener-overhead.mjs"
+                },
+                {
+                  "title": "bun proof: file-storage",
+                  "run": "bun test/bun/file-storage.mjs"
+                },
+                {
+                  "title": "bun proof: compression",
+                  "run": "bun test/bun/compression.mjs"
+                },
+                {
+                  "title": "bun proof: comment-not-an-element",
+                  "run": "bun test/bun/comment-not-an-element.mjs"
+                },
+                {
+                  "title": "bun proof: asset-url",
+                  "run": "bun test/bun/asset-url.mjs"
+                },
+                {
+                  "title": "bun proof: dev-hot-reload",
+                  "run": "bun test/bun/dev-hot-reload.mjs"
+                },
+                {
+                  "title": "bun proof: dev-extra-watch",
+                  "run": "bun test/bun/dev-extra-watch.mjs"
+                },
+                {
+                  "title": "bun proof: dev-reload-retry",
+                  "run": "bun test/bun/dev-reload-retry.mjs"
+                },
+                {
+                  "title": "bun proof: dev-overlay-scope",
+                  "run": "bun test/bun/dev-overlay-scope.mjs"
+                },
+                {
+                  "title": "bun proof: dev-public-before-warm",
+                  "run": "bun test/bun/dev-public-before-warm.mjs"
+                },
+                {
+                  "title": "bun proof: dev-morph-verdict",
+                  "run": "bun test/bun/dev-morph-verdict.mjs"
+                },
+                {
+                  "title": "bun proof: app-source-signal",
+                  "run": "bun test/bun/app-source-signal.mjs"
+                },
+                {
+                  "title": "bun proof: app-boot",
+                  "run": "bun test/bun/app-boot.mjs"
+                },
+                {
+                  "title": "bun proof: seed",
+                  "run": "bun test/bun/seed.mjs"
+                },
+                {
+                  "title": "bun proof: blog-db",
+                  "run": "bun test/bun/blog-db.mjs"
+                },
+                {
+                  "title": "bun proof: path-alias",
+                  "run": "bun test/bun/path-alias.mjs"
+                },
+                {
+                  "title": "bun proof: timeouts",
+                  "run": "bun test/bun/timeouts.mjs"
+                },
+                {
+                  "title": "bun proof: binding-prefixes",
+                  "run": "bun test/bun/binding-prefixes.mjs"
+                },
+                {
+                  "title": "bun proof: forwarded-proto",
+                  "run": "bun test/bun/forwarded-proto.mjs"
+                },
+                {
+                  "title": "bun proof: forwarded-trust",
+                  "run": "bun test/bun/forwarded-trust.mjs"
+                },
+                {
+                  "title": "bun proof: root-middleware",
+                  "run": "bun test/bun/root-middleware.mjs"
+                },
+                {
+                  "title": "bun proof: webjs-config-validate",
+                  "run": "bun test/bun/webjs-config-validate.mjs"
+                },
+                {
+                  "title": "bun proof: slot-ssr-parity",
+                  "run": "bun test/bun/slot-ssr-parity.mjs"
+                },
+                {
+                  "title": "bun proof: sqlite-busy-timeout",
+                  "run": "bun test/bun/sqlite-busy-timeout.mjs"
+                },
+                {
+                  "title": "bun proof: vendor-scan",
+                  "run": "bun test/bun/vendor-scan.mjs"
+                },
+                {
+                  "title": "bun test matrix",
+                  "run": "node scripts/run-bun-tests.js"
+                }
+              ]
             },
             {
-              "title": "Browser (web-test-runner / Playwright)",
-              "run": "npm run test:browser"
+              "title": "E2E (blog served on Bun)",
+              "steps": [
+                {
+                  "title": "e2e: blog served on Bun",
+                  "run": "CHROMIUM_PATH=\"$(node -p \"require('playwright-core').chromium.executablePath()\")\" node --test test/e2e/e2e.test.mjs",
+                  "env": {
+                    "WEBJS_E2E": "1",
+                    "WEBJS_E2E_RUNTIME": "bun"
+                  }
+                }
+              ]
+            },
+            {
+              "title": "Browser suites (one web-test-runner at a time)",
+              "steps": [
+                {
+                  "title": "Browser (web-test-runner / Playwright)",
+                  "run": "npm run test:browser"
+                },
+                {
+                  "title": "In-repo app tests",
+                  "steps": [
+                    {
+                      "title": "website typecheck",
+                      "run": "npm run typecheck --workspace=@webjsdev/website"
+                    },
+                    {
+                      "title": "blog typecheck",
+                      "run": "npm run typecheck --workspace=@webjsdev/example-blog"
+                    },
+                    {
+                      "title": "gallery typecheck",
+                      "run": "npm run typecheck --workspace=@webjsdev/gallery"
+                    },
+                    {
+                      "title": "website tests (node + browser)",
+                      "run": "npm test --workspace=@webjsdev/website"
+                    },
+                    {
+                      "title": "blog tests (node)",
+                      "run": "npm test --workspace=@webjsdev/example-blog"
+                    },
+                    {
+                      "title": "gallery tests (node + browser)",
+                      "run": "npm test --workspace=@webjsdev/gallery"
+                    },
+                    {
+                      "title": "App boot-check on Node (website incl. /docs + /ui)",
+                      "run": "node test/bun/app-boot.mjs"
+                    }
+                  ]
+                }
+              ]
             },
             {
               "title": "Unit + integration (node --test)",
               "run": "npm test"
-            },
-            {
-              "title": "In-repo app tests",
-              "steps": [
-                {
-                  "title": "website typecheck",
-                  "run": "npm run typecheck --workspace=@webjsdev/website"
-                },
-                {
-                  "title": "blog typecheck",
-                  "run": "npm run typecheck --workspace=@webjsdev/example-blog"
-                },
-                {
-                  "title": "gallery typecheck",
-                  "run": "npm run typecheck --workspace=@webjsdev/gallery"
-                },
-                {
-                  "title": "website tests (node + browser)",
-                  "run": "npm test --workspace=@webjsdev/website"
-                },
-                {
-                  "title": "blog tests (node)",
-                  "run": "npm test --workspace=@webjsdev/example-blog"
-                },
-                {
-                  "title": "gallery tests (node + browser)",
-                  "run": "npm test --workspace=@webjsdev/gallery"
-                },
-                {
-                  "title": "App boot-check on Node (website incl. /docs + /ui)",
-                  "run": "node test/bun/app-boot.mjs"
-                }
-              ]
             },
             {
               "title": "Conventions",
@@ -145,8 +343,16 @@
                   "run": "hits=$(git grep -lP '\\x{2014}' -- '*.js' '*.ts' '*.md' ':!changelog/' ':!**/node_modules/**' ':!.claude/skills/**' ':!.agents/skills/**' || true); [ -z \"$hits\" ] || { echo \"$hits\"; exit 1; }"
                 }
               ]
+            },
+            {
+              "title": "Postgres prod-engine round-trip (#563)",
+              "run": "bash scripts/ci-postgres.sh"
             }
           ]
+        },
+        {
+          "title": "Docker image build (the deploy artifact)",
+          "run": "${WEBJS_DOCKER:-docker} build --quiet -t webjs-monorepo:ci . >/dev/null"
         }
       ]
     }

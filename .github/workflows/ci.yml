@@ -1,13 +1,21 @@
 name: CI
 
-# Runs the full test pyramid on every PR into main and on every push to
-# main. The three layers run as separate jobs so a failure names the
-# layer that broke. Mark all three as required status checks in the
-# branch-protection rule for main so a PR can only merge when unit,
-# browser, AND e2e are green (not just unit). See the repo's branch
-# protection settings, or run scripts/protect-main.sh.
+# The required merge gate on every PR into main and every push to main. The
+# same checks run locally (#1474): the root package.json `webjs.ci` list runs
+# every job below on the developer's machine through `npm run ci`, and
+# `npm run ci -- --signoff` posts a green `signoff` status on the pushed head.
+# That status is not required yet. scripts/protect-main.sh is the switch:
+# run plain, it requires `signoff` alongside the six job names listed in it;
+# with `--local-only` it drops those names, after which this workflow is
+# informational and may be deleted. Neither has been run.
 #
-# Free on public repos (ubuntu-latest has unlimited Actions minutes).
+# The jobs run as separate runners so a failure names the layer that broke;
+# the local list gets the same property from the runner's per-step result
+# lines and its `--only <group>` flag. Keep the job `name:` values in sync
+# with scripts/protect-main.sh: GitHub keys a required check on that exact
+# string, and a rename once left one required check unreportable (#1371,
+# corrected in #1472). Free on public repos (ubuntu-latest has unlimited
+# Actions minutes).
 
 on:
   pull_request:
