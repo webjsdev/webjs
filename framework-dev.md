@@ -172,6 +172,37 @@ So prevention lives one layer up, and the rest is repair:
 
 Regression tests: `test/hooks/block-install-in-linked-worktree.test.mjs`, `test/repo-health/warn-worktree-install.test.mjs`, `test/repo-health/link-worktree-deps.test.mjs`, `test/hooks/cleanup-merged-worktree.test.mjs`, `test/cli/doctor.test.mjs`.
 
+### Local CI: `npm run ci` at the root and inside each app (#1471)
+
+The monorepo runs its own local CI the way a scaffolded app does. The root
+`package.json` declares a `webjs.ci` step list mirroring the GitHub jobs
+(`.github/workflows/ci.yml` stays the required merge gate and is not converted):
+a Setup group (the blog and gallery databases, the core dist), a Conventions
+group running three at a time (`webjs check` and `webjs doctor` per in-repo
+app, the buildless-packages invariant, the em-dash scan), the root `npm test`,
+the in-repo app typechecks and suites plus the website boot-check, the browser
+suite, the blog e2e, and the Bun matrix. `npm run ci` runs the lot; `npm run ci
+-- --only Conventions` runs one group, and `--json` gives an agent the verdict
+as data. The root script runs `node packages/cli/bin/webjs.js ci` rather than a
+hoisted `webjs` bin because in a linked worktree `node_modules/.bin/webjs`
+resolves into the PRIMARY checkout, which may not carry the branch's CLI, and
+every root step invokes the in-repo CLI the same way for the same reason.
+`test/repo-health/in-repo-ci-blocks.test.mjs` pins that.
+
+`gallery`, `examples/blog`, and `website` each declare their own shorter list
+(setup, then `webjs check` / `webjs doctor` / typecheck / tests two at a time)
+and a `ci` script, so `npm run ci` inside an app is the app's gate. Their steps
+go through the app's npm scripts on purpose: the website's `pretest` hook runs
+`scripts/copy-registry.mjs`, which a bare `webjs test` would skip. Inside a
+linked worktree run an app's list as `node ../packages/cli/bin/webjs.js ci`
+(`../../` from the blog) until the branch's CLI is on `main`.
+
+Two things the root list cannot do for you. The e2e step needs a Chromium
+(`CHROMIUM_PATH`, see the e2e job), and a linked worktree reds the handful of
+tests that always fail there (the listener and elision assertions in
+`reference` notes), so a red root run in a worktree is read against that
+baseline, not taken at face value.
+
 ### `webjs check` runs per app, and the repo root refuses (#1301)
 
 `webjs check` is an APP-level tool: every rule assumes one application, meaning one module graph, one custom-element registry, one runtime. This repo's root is none of those, it is a workspace holding two apps plus every package's test suite plus editor fixtures plus the scaffold templates, so a root-level run used to walk all of it and report 67 collisions that no single runtime ever sees. `my-counter`, for instance, was reported as duplicated across a blog component, an editor-plugin fixture, two unit tests, and a type fixture, five files that never load together.

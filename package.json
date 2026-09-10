@@ -33,7 +33,52 @@
     "test:browser:example-blog": "node scripts/run-example-blog-browser-e2e.js",
     "test:browser:gallery": "npm run test:browser --workspace=@webjsdev/gallery",
     "test:e2e": "WEBJS_E2E=1 node --test test/e2e/e2e.test.mjs test/e2e/dev-seed-observability.test.mjs",
-    "test:all": "npm test && npm run test:browser"
+    "test:all": "npm test && npm run test:browser",
+    "ci": "node packages/cli/bin/webjs.js ci"
+  },
+  "webjs": {
+    "ci": {
+      "steps": [
+        {
+          "title": "Setup",
+          "steps": [
+            { "title": "Setup: blog database", "run": "[ -f examples/blog/.env ] || cp examples/blog/.env.example examples/blog/.env; npm run db:migrate --workspace=@webjsdev/example-blog && npm run db:seed --workspace=@webjsdev/example-blog" },
+            { "title": "Setup: gallery database", "run": "[ -f gallery/.env ] || cp gallery/.env.example gallery/.env; npm run db:migrate --workspace=@webjsdev/gallery" },
+            { "title": "Setup: core dist", "run": "npm run build:dist --workspace=@webjsdev/core" }
+          ]
+        },
+        {
+          "title": "Conventions",
+          "parallel": 3,
+          "steps": [
+            { "title": "webjs check (blog)", "run": "cd examples/blog && node ../../packages/cli/bin/webjs.js check" },
+            { "title": "webjs check (gallery)", "run": "cd gallery && node ../packages/cli/bin/webjs.js check" },
+            { "title": "webjs check (website)", "run": "cd website && node ../packages/cli/bin/webjs.js check" },
+            { "title": "webjs doctor (blog)", "run": "cd examples/blog && node ../../packages/cli/bin/webjs.js doctor" },
+            { "title": "webjs doctor (gallery)", "run": "cd gallery && node ../packages/cli/bin/webjs.js doctor" },
+            { "title": "webjs doctor (website)", "run": "cd website && node ../packages/cli/bin/webjs.js doctor" },
+            { "title": "Buildless framework packages (no .ts source)", "run": "hits=$(git ls-files 'packages/core/**/*.ts' 'packages/server/**/*.ts' 'packages/cli/**/*.ts' 'packages/editors/**/*.ts' | grep -vE '\\.d\\.ts$|/templates/' || true); [ -z \"$hits\" ] || { echo \"$hits\"; exit 1; }" },
+            { "title": "No em-dash in source (invariant 11)", "run": "hits=$(git grep -lP '\\x{2014}' -- '*.js' '*.ts' '*.md' ':!changelog/' ':!**/node_modules/**' ':!.claude/skills/**' ':!.agents/skills/**' || true); [ -z \"$hits\" ] || { echo \"$hits\"; exit 1; }" }
+          ]
+        },
+        { "title": "Unit + integration (node --test)", "run": "npm test" },
+        {
+          "title": "In-repo app tests",
+          "steps": [
+            { "title": "website typecheck", "run": "npm run typecheck --workspace=@webjsdev/website" },
+            { "title": "blog typecheck", "run": "npm run typecheck --workspace=@webjsdev/example-blog" },
+            { "title": "gallery typecheck", "run": "npm run typecheck --workspace=@webjsdev/gallery" },
+            { "title": "website tests (node + browser)", "run": "npm test --workspace=@webjsdev/website" },
+            { "title": "blog tests (node)", "run": "npm test --workspace=@webjsdev/example-blog" },
+            { "title": "gallery tests (node + browser)", "run": "npm test --workspace=@webjsdev/gallery" },
+            { "title": "App boot-check on Node (website incl. /docs + /ui)", "run": "node test/bun/app-boot.mjs" }
+          ]
+        },
+        { "title": "Browser (web-test-runner / Playwright)", "run": "npm run test:browser" },
+        { "title": "E2E (Puppeteer against the blog example)", "run": "npm run test:e2e" },
+        { "title": "Bun runtime smoke + test matrix", "run": "node scripts/run-bun-tests.js" }
+      ]
+    }
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.2.2",

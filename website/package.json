@@ -14,7 +14,8 @@
     "test": "webjs test",
     "pretest:browser": "node scripts/copy-registry.mjs",
     "test:browser": "webjs test --browser",
-    "css:build": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify"
+    "css:build": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify",
+    "ci": "webjs ci"
   },
   "webjs": {
     "seed": false,
@@ -64,6 +65,20 @@
       "gate": {
         "UNMARKED_ASSET_LINKS": "error"
       }
+    },
+    "ci": {
+      "steps": [
+        {
+          "title": "Checks",
+          "parallel": 2,
+          "steps": [
+            { "title": "Conventions", "run": "webjs check" },
+            { "title": "Health", "run": "webjs doctor" },
+            { "title": "Types", "run": "npm run typecheck" },
+            { "title": "Tests: node + browser", "run": "npm test" }
+          ]
+        }
+      ]
     }
   },
   "dependencies": {

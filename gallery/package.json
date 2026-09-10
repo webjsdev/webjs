@@ -15,7 +15,8 @@
     "db:seed": "webjs db seed",
     "typecheck": "webjs typecheck",
     "test": "webjs test",
-    "test:browser": "webjs test --browser"
+    "test:browser": "webjs test --browser",
+    "ci": "webjs ci"
   },
   "webjs": {
     "dev": {
@@ -41,6 +42,21 @@
       "before": [
         "webjs db migrate",
         "npm run css:build"
+      ]
+    },
+    "ci": {
+      "steps": [
+        { "title": "Setup", "run": "webjs db migrate" },
+        {
+          "title": "Checks",
+          "parallel": 2,
+          "steps": [
+            { "title": "Conventions", "run": "webjs check" },
+            { "title": "Health", "run": "webjs doctor" },
+            { "title": "Types", "run": "npm run typecheck" },
+            { "title": "Tests: node + browser", "run": "npm test" }
+          ]
+        }
       ]
     }
   },

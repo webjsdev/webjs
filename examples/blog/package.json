@@ -14,7 +14,8 @@
     "db:migrate": "webjs db migrate",
     "db:seed": "webjs db seed",
     "typecheck": "webjs typecheck",
-    "test": "webjs test --server"
+    "test": "webjs test --server",
+    "ci": "webjs ci"
   },
   "webjs": {
     "dev": {
@@ -40,6 +41,21 @@
       "gate": {
         "UNMARKED_ASSET_LINKS": "error"
       }
+    },
+    "ci": {
+      "steps": [
+        { "title": "Setup", "run": "webjs db migrate && webjs db seed" },
+        {
+          "title": "Checks",
+          "parallel": 2,
+          "steps": [
+            { "title": "Conventions", "run": "webjs check" },
+            { "title": "Health", "run": "webjs doctor" },
+            { "title": "Types", "run": "npm run typecheck" },
+            { "title": "Tests: node", "run": "npm test" }
+          ]
+        }
+      ]
     }
   },
   "dependencies": {
