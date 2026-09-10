@@ -172,24 +172,57 @@ So prevention lives one layer up, and the rest is repair:
 
 Regression tests: `test/hooks/block-install-in-linked-worktree.test.mjs`, `test/repo-health/warn-worktree-install.test.mjs`, `test/repo-health/link-worktree-deps.test.mjs`, `test/hooks/cleanup-merged-worktree.test.mjs`, `test/cli/doctor.test.mjs`.
 
-### Local CI: `npm run ci` at the root and inside each app (#1471)
+### Local CI is the merge gate: `npm run ci` at the root and inside each app (#1471, #1474)
 
-The monorepo runs its own local CI the way a scaffolded app does. The root
-`package.json` declares a `webjs.ci` step list mirroring the GitHub jobs
-(`.github/workflows/ci.yml` stays the required merge gate and is not converted):
-a Setup group (the blog and gallery databases, the core dist), then one `Gate`
-group that runs THREE slots at once, longest first (six overloaded a 24-core box: Firefox timed out launching a test page): the blog e2e, the Bun matrix,
-the browser suite, the root `npm test`, the in-repo app typechecks and suites
-plus the website boot-check, and the Conventions group (`webjs check` and
-`webjs doctor` per in-repo app, the buildless-packages invariant, the em-dash
-scan). Each slot's output is replayed whole when it finishes, so the six never
-interleave, and the wall-clock is the longest step rather than the sum. `npm
-run ci` runs the lot; `npm run ci -- --only Conventions` runs one group, and
-`--json` gives an agent the verdict as data. The root script runs `node packages/cli/bin/webjs.js ci` rather than a
+The monorepo runs its own local CI the way a scaffolded app does, and local CI
+is the merge gate (the Rails 8.1 posture). The root `package.json` declares a
+`webjs.ci` step list that runs EVERYTHING `.github/workflows/ci.yml` runs, step
+for step: a Setup group (the blog and gallery databases, the core dist), then
+one `Gate` group that runs THREE slots at once, longest first (six overloaded a
+24-core box: Firefox timed out launching a test page): the Node e2e group (the
+blog in a real browser, the browser-test harness, the dev overlay, seed
+observability, morph, the form-submission run against a live website dev
+server via `scripts/ci-e2e-website.sh`, the two ui e2e), the Bun group (all 31
+proof scripts, then the matrix), the blog e2e served on Bun, the browser suite,
+the root `npm test`, the in-repo app typechecks and suites plus the website
+boot-check, the Conventions group (`webjs check` and `webjs doctor` per in-repo
+app, the buildless-packages invariant, the em-dash scan), and the Postgres
+round-trip against a throwaway `postgres:16` container (`scripts/ci-postgres.sh`,
+which also installs the `pg` driver into a scratch prefix and links it under
+`test/pg/node_modules`, so the shared lock stays without it, the same posture
+the CI job takes). The Docker image build is its own top-level step after the
+Gate, so `--only Gate` skips it on a routine run and a signoff run includes it.
+Each slot's output is replayed whole when it finishes, and the wall-clock is the
+longest slot rather than the sum. `npm run ci` runs the lot; `npm run ci --
+--only Conventions` runs one group, and `--json` gives an agent the verdict as
+data. The root script runs `node packages/cli/bin/webjs.js ci` rather than a
 hoisted `webjs` bin because in a linked worktree `node_modules/.bin/webjs`
 resolves into the PRIMARY checkout, which may not carry the branch's CLI, and
 every root step invokes the in-repo CLI the same way for the same reason.
-`test/repo-health/in-repo-ci-blocks.test.mjs` pins that.
+`test/repo-health/in-repo-ci-blocks.test.mjs` pins that, and
+`test/cli/check-target.test.mjs` cross-checks the `webjs check` steps against
+the workspace app list.
+
+**The gate.** `npm run ci -- --signoff` runs the list and, only when every step
+passes, runs `gh signoff` (basecamp/gh-signoff), which posts a green `signoff`
+commit status on the PUSHED head. `scripts/protect-main.sh` declares the whole
+gate: the CODEOWNER review, the `signoff` status through `gh signoff install`,
+and, during the transition, the six Actions job names. Push first, then sign
+off; a later push has no signoff until the list is run on it again, so a stale
+green can never carry forward. `bash scripts/protect-main.sh --local-only` is
+the final state, with no Actions context required, which is what lets the
+workflow be demoted to a non-required second opinion or deleted. Sign off from
+a REAL install (the primary checkout, or a worktree whose `node_modules` links
+were replaced by an install): in a linked worktree every bare `@webjsdev/*`
+specifier resolves into the primary checkout, so the listener proofs and the
+config type fixture red there and the rest is partly vacuous.
+
+**Local prerequisites** for the whole list: Node 24+, Bun, Docker (the Postgres
+container and the image build), the Playwright browsers (`npx playwright
+install chromium firefox webkit`), `puppeteer-core` (a root devDependency),
+`gh` with the signoff extension (the script installs it), and a shell that does
+NOT export `FORCE_COLOR` (it flips tsc to pretty output and reds two type
+guards that parse the plain format).
 
 `gallery`, `examples/blog`, and `website` each declare their own shorter list
 (setup, then `webjs check` / `webjs doctor` / typecheck / tests two at a time)
@@ -198,12 +231,6 @@ go through the app's npm scripts on purpose: the website's `pretest` hook runs
 `scripts/copy-registry.mjs`, which a bare `webjs test` would skip. Inside a
 linked worktree run an app's list as `node ../packages/cli/bin/webjs.js ci`
 (`../../` from the blog) until the branch's CLI is on `main`.
-
-Two things the root list cannot do for you. The e2e step needs a Chromium
-(`CHROMIUM_PATH`, see the e2e job), and a linked worktree reds the handful of
-tests that always fail there (the listener and elision assertions in
-`reference` notes), so a red root run in a worktree is read against that
-baseline, not taken at face value.
 
 ### `webjs check` runs per app, and the repo root refuses (#1301)
 
