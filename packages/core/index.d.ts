@@ -54,6 +54,12 @@ export type {
   WebjsCspConfig,
   WebjsDoctorConfig,
   WebjsDoctorSeverity,
+  WebjsCiConfig,
+  WebjsCiStep,
+  WebjsCiNestedStep,
+  WebjsCiCommand,
+  WebjsCiGroup,
+  WebjsCiNestedGroup,
 } from './src/webjs-config.d.ts';
 
 // Compile-time serializability typing for server actions (#488): the opt-in

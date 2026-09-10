@@ -18,6 +18,7 @@ import type {
   WebjsTrailingSlash,
   WebjsDoctorConfig,
   WebjsDoctorSeverity,
+  WebjsCiConfig,
 } from '@webjsdev/core';
 
 /* ------------- A fully-populated, valid config ------------- */
@@ -43,8 +44,49 @@ const full: WebjsConfig = {
   headersTimeoutMs: 20000,
   keepAliveTimeoutMs: 5000,
   doctor: { gate: { UNMARKED_ASSET_LINKS: 'error', ELISION_CARRIERS: 'off', ENV_DRIFT: 'warn' } },
+  ci: {
+    steps: [
+      'webjs check',
+      { title: 'Types', run: 'webjs typecheck' },
+      {
+        title: 'Checks',
+        parallel: 2,
+        steps: [
+          'webjs doctor',
+          { title: 'Tests', steps: [{ title: 'e2e', run: 'webjs test --server', env: { WEBJS_E2E: '1' } }] },
+        ],
+      },
+    ],
+  },
 };
 void full;
+
+/* ------------- Local CI (#1471) ------------- */
+
+const ciConfig: WebjsCiConfig = { steps: ['webjs check'] };
+void ciConfig;
+
+// An empty ci block is valid: `steps` is optional.
+const emptyCi: WebjsConfig = { ci: {} };
+void emptyCi;
+
+const badCiRun: WebjsConfig = {
+  // @ts-expect-error a command step's `run` is a string, not a number
+  ci: { steps: [{ title: 'x', run: 1 }] },
+};
+void badCiRun;
+
+const badCiNestedParallel: WebjsConfig = {
+  // @ts-expect-error a group nested inside a group cannot declare `parallel` (it takes one slot)
+  ci: { steps: [{ title: 'g', steps: [{ title: 'h', parallel: 2, steps: ['x'] }] }] },
+};
+void badCiNestedParallel;
+
+const badCiKey: WebjsConfig = {
+  // @ts-expect-error `step` is not a key of the ci block (it is `steps`)
+  ci: { step: ['webjs check'] },
+};
+void badCiKey;
 
 /* ------------- The doctor gate (#1257) ------------- */
 
