@@ -189,6 +189,17 @@ WEBJS_ELIDE=0 npm run test:e2e
 
 A test that passes under one and fails under the other is a wrong verdict, and `webjs elision` tells you which module and on what evidence. If the component's interactivity is genuinely invisible to static analysis, the fix is `static interactive = true` on it; see `components.md` for what that override does and does not rescue.
 
+## One command for every layer (`webjs ci`)
+
+```sh
+npm run ci                     # the webjs.ci list: check, doctor, typecheck, audit, then every test layer
+npm run ci -- --only Tests     # one step or group by title
+npm run ci -- --fail-fast      # stop at the first failure
+npm run ci -- --json           # one JSON document for an agent loop
+```
+
+The scaffold declares its gate once, in `package.json` under `webjs.ci`, and `npm run ci` runs it with a timed result line per step (the Rails `bin/ci` model). The generated GitHub workflow runs the same list, so a green local run predicts CI. Run it before every push; the pre-commit hook deliberately runs none of it so a commit stays fast. Browser and e2e steps need a Chromium on the machine (`npx playwright install chromium`, plus `puppeteer-core` for the e2e layer), which the workflow installs for itself. The list, the flags, the `--signoff` merge gate, and the JSON shape are in `references/built-ins.md` under "Local CI".
+
 ## Type-checking your tests (`webjs typecheck`)
 
 Your tests are inside the tsconfig `include`, so `npm run typecheck` reads them (#1299). Treat a type error in a test as a failed gate, not a review catch: the checker sees a wrong argument shape or an unannotated parameter in a test the same way it sees one in `app/`.

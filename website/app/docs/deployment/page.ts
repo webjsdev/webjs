@@ -418,6 +418,7 @@ pm2 start "webjs start" --name my-app</code-block>
       <li>Configure health checks against <code>/__webjs/health</code>.</li>
       <li><strong>HTTP/2 at the edge is recommended.</strong> PaaS deploys (Railway, Fly, Render, Vercel, Cloudflare Pages, Heroku) give you HTTP/2 to the browser automatically. For bare-VM deploys, front <code>npm run start</code> with nginx, Caddy, or Traefik.</li>
       <li>Set up log aggregation (WebJs outputs structured JSON in production).</li>
+      <li>Point your CI provider at <code>npm run ci</code>. It runs the <code>webjs.ci</code> step list from <code>package.json</code>, the same list you run locally, so the pipeline and the developer machine cannot drift; the scaffold's GitHub workflow is exactly that one job.</li>
     </ul>
   `;
 }

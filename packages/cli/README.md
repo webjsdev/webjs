@@ -48,6 +48,10 @@ webjs start                    # production server (no build step, serves source
 webjs check                    # validate source-code conventions (CI gate)
 webjs doctor                   # verify the project/toolchain setup (per-check severity via webjs.doctor.gate, so CI can gate a subset)
 webjs test                     # run server + browser tests
+webjs ci                       # local CI: run the webjs.ci step list in package.json (check, doctor,
+                               # typecheck, audit, every test layer), one result line per step;
+                               # --only <title>, --fail-fast, --json, --signoff (gh signoff after a green run)
+webjs create <name> --skip-ci  # omit the GitHub workflow (the local ci list always ships)
 webjs vendor pin [--download]  # pin client deps to a committable importmap (offline/reproducible)
 webjs db <generate|migrate|push|studio|seed>   # drizzle-kit passthrough (+ seed) by default; a package.json webjs.db block maps any verb to your own ORM's command
 
@@ -70,6 +74,7 @@ The scaffold seeds opinionated defaults so AI agents produce consistent code:
 
 - `AGENTS.md` + `CONVENTIONS.md` + `.agents/skills/webjs/` (single cross-agent source of truth)
 - `.agents/rules/workflow.md` & `.claude/` protective hooks
+- A `webjs.ci` step list in `package.json` (`npm run ci`, local CI) and a one-job GitHub workflow that runs the same list
 - `test/<feature>/` (with optional `browser/` / `e2e/` subfolders per kind) with example tests
 - Tailwind CSS via CLI (no browser runtime at build time)
 - TypeScript, `.editorconfig`, `.gitignore`

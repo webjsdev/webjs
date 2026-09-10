@@ -264,6 +264,7 @@ Success is a 303 (PRG); failure re-renders the page at 422 with the result on `a
 
 ## Testing Defaults
 
+- `npm run ci` before every push: it runs the `webjs.ci` step list in `package.json` (correctness, project health, types, a dependency audit, then the server, browser, and e2e test layers) with a result line per step, and CI runs the same list, so a green local run predicts the pipeline. `npm run ci -- --only Tests` runs one layer while iterating. See `references/testing.md` and `references/built-ins.md`.
 - Prefer server/handler tests first: drive the app with `handle()` from `@webjsdev/server/testing` and assert on the `Response`.
 - Add a browser test (`npm run test:browser`) for anything touching hydration, the client router, slots, or custom-element upgrade. A unit test is necessary but NOT sufficient for a browser-facing change.
 - Render the app and LOOK for any UI change: `npm run check` and `npm run typecheck` pass even when a layout collapses. Static tools give no signal for a visual defect.
