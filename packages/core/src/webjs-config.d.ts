@@ -228,6 +228,17 @@ export interface WebjsConfig {
   start?: WebjsStartTasks;
 
   /**
+   * The `webjs db` verb map (#1468), bring-your-own-ORM. Each key is a verb
+   * and its value the shell command `webjs db <verb>` runs instead of the
+   * drizzle-kit default (node_modules/.bin on PATH, extra args appended), so
+   * `webjs db migrate` keeps one spelling across ORMs:
+   * `{ migrate: 'prisma migrate deploy' }`. Any key is a verb; an unmapped one
+   * keeps its default, so an app with no block is unchanged. Read by the CLI
+   * (`packages/cli/lib/app-tasks.js`), NOT the server.
+   */
+  db?: Record<string, string>;
+
+  /**
    * `webjs doctor` policy (#1257): which project-health checks the project
    * treats as fatal. Read by the CLI (`packages/cli/lib/doctor.js`), NOT the
    * server readers.

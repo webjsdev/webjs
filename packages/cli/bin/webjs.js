@@ -112,6 +112,9 @@ const USAGE = `webjs commands:
   webjs db push                                   Push the schema straight to the dev DB (drizzle-kit push)
   webjs db studio                                 Open the database browser (drizzle-kit studio)
   webjs db seed                                   Run the app's db/seed.server.ts
+  webjs db <verb>                                 Any verb "webjs": { "db": { "<verb>": "<command>" } } maps in
+                                                  package.json runs that command instead (bring your own ORM);
+                                                  an unmapped verb keeps the drizzle-kit default above
   webjs ui <subcmd>                               AI-first component library CLI
                                                   (init / add / list / view / diff / info)
                                                   Requires @webjsdev/ui installed in the project
@@ -250,8 +253,15 @@ const HELP = {
     ],
   },
   db: {
-    usage: 'webjs db <generate|migrate|push|studio|seed>',
-    summary: 'Database tasks (wraps drizzle-kit); seed runs db/seed.server.ts.',
+    usage: 'webjs db <generate|migrate|push|studio|seed|verb> [args...]',
+    summary: 'Database tasks (wraps drizzle-kit by default); seed runs db/seed.server.ts.',
+    notes: [
+      'A "webjs": { "db": { "<verb>": "<command>" } } block in package.json maps a verb to',
+      'a shell command (run with node_modules/.bin on PATH, extra args appended), so',
+      'another ORM keeps the same spelling: { "migrate": "prisma migrate deploy" }.',
+      'Any key is a verb ("reset" adds `webjs db reset`); an unmapped one keeps its',
+      'drizzle-kit / seed default, so an app with no block is unchanged.',
+    ],
     examples: ['webjs db generate', 'webjs db migrate', 'webjs db studio', 'webjs db seed'],
   },
   ui: {
@@ -516,6 +526,22 @@ async function main() {
     case 'db': {
       const sub = rest[0];
       const args = rest.slice(1);
+      // A verb the app's `webjs.db` block maps (#1468) runs that command
+      // through the shell, the way a `before` step does (node_modules/.bin on
+      // PATH, so a bare `prisma migrate deploy` resolves), with the extra args
+      // appended. This is what makes Drizzle a default rather than lock-in:
+      // `webjs db migrate` stays the one spelling the scaffolded start.before,
+      // the Dockerfile, and the deploy docs use, whatever ORM is behind it.
+      // Checked FIRST so a mapped `seed` overrides the seed-file runner too.
+      const { readDbCommands } = await import('../lib/app-tasks.js');
+      const mapped = sub ? readDbCommands(process.cwd())[sub] : undefined;
+      if (mapped) {
+        const { runBeforeSteps } = await import('../lib/run-tasks.js');
+        const full = [mapped, ...args].join(' ');
+        console.log(`webjs db ${sub}: running \`${full}\` (from package.json webjs.db)`);
+        const r = await runBeforeSteps([full], process.cwd());
+        process.exit(r.ok ? 0 : r.code);
+      }
       // `webjs db seed` runs the app's own seed script directly (not a
       // drizzle-kit command); Drizzle has no codegen, so there is no
       // `generate`-the-client step, only schema-to-SQL `generate`.
@@ -536,7 +562,13 @@ async function main() {
       // hidden behind `webjs db`.
       const map = { generate: ['generate'], migrate: ['migrate'], push: ['push'], studio: ['studio'] };
       const kitArgs = map[sub];
-      if (!kitArgs) { console.error('Unknown db subcommand.\n' + USAGE); process.exit(1); }
+      if (!kitArgs) {
+        console.error(
+          `Unknown db subcommand "${sub}". Map it in package.json to add it: ` +
+          `"webjs": { "db": { "${sub}": "<command>" } }\n` + USAGE,
+        );
+        process.exit(1);
+      }
       // Resolve the app's own drizzle-kit bin and spawn it with the CURRENT
       // runtime (process.execPath). This drops the hard `npx` dependency (#570):
       // `npx` is absent in a pure oven/bun image, which broke `webjs db migrate`
@@ -548,7 +580,9 @@ async function main() {
       } catch {
         console.error(
           'webjs db: drizzle-kit is not installed in this project.\n' +
-          'Install it with `npm install -D drizzle-kit`, then re-run `webjs db ' + sub + '`.',
+          'Install it with `npm install -D drizzle-kit`, then re-run `webjs db ' + sub + '`.\n' +
+          'Using another ORM? Map the verb in package.json and the same command runs it:\n' +
+          '  "webjs": { "db": { "' + sub + '": "<your ORM\'s ' + sub + ' command>" } }',
         );
         process.exit(1);
       }

@@ -67,6 +67,7 @@ const KNOWN_KEYS = [
   // dev.watch is readDevWatchPathsFromApp (dev.js, #894).
   'dev',
   'start', // readAppTasks (cli/lib/app-tasks.js), CLI-read (#550)
+  'db', // readDbCommands (cli/lib/app-tasks.js), CLI-read (#1468)
   'doctor', // readDoctorPolicy (cli/lib/doctor.js), CLI-read (#1257)
 ];
 
@@ -158,6 +159,11 @@ test('key shapes match the reader contracts', () => {
 
   // csp is boolean | object (readCspConfig accepts true / object).
   assert.ok(Array.isArray(p.csp.oneOf), 'csp is a oneOf(boolean, object)');
+
+  // db is a free-form verb -> shell-command map (readDbCommands, #1468): any
+  // key is a verb, so it must NOT be sealed, and every value is a string.
+  assert.equal(p.db.type, 'object');
+  assert.deepEqual(p.db.additionalProperties, { type: 'string' }, 'db values are shell commands');
 });
 
 // The schema and the exported WebjsConfig type are two artifacts that must

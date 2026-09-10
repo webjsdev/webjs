@@ -551,6 +551,12 @@ export async function scaffoldApp(name, cwd, opts = {}) {
         }),
       },
       start: { before: isApi ? ['webjs db migrate'] : ['webjs db migrate', cssBuildCmd] },
+      // No `db` block on purpose (#1468). `webjs db` defaults to drizzle-kit,
+      // and Drizzle is the scaffold default by OMISSION: an app that swaps the
+      // ORM adds `"db": { "migrate": "prisma migrate deploy", ... }` here and
+      // the `webjs db migrate` spelling in `before` (and the Dockerfile, and
+      // CI) keeps working. Emitting the Drizzle mapping would only duplicate
+      // the default into every app.
       // Which doctor findings are FATAL is the app's own call (#1257), declared
       // here rather than in the CI workflow so `npm run doctor` locally and the
       // workflow step agree about what fails. UNMARKED_ASSET_LINKS starts at

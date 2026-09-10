@@ -217,6 +217,11 @@
         }
       }
     },
+    "db": {
+      "description": "The `webjs db` verb map (#1468), bring-your-own-ORM. Read by the CLI (readDbCommands in packages/cli/lib/app-tasks.js), NOT the server. Each key is a verb and its value the shell command `webjs db <verb>` runs instead of the drizzle-kit default (run with node_modules/.bin on PATH, extra CLI args appended), so `webjs db migrate` keeps one spelling across ORMs: { \"migrate\": \"prisma migrate deploy\" }. Any key is a verb (a new one adds a subcommand); an unmapped verb keeps its default (drizzle-kit for generate / migrate / push / studio, db/seed.server.ts for seed), so an app with no block is unchanged.",
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
     "doctor": {
       "description": "`webjs doctor` policy (#1257). Read by the CLI (readDoctorPolicy in packages/cli/lib/doctor.js), NOT the server.",
       "type": "object",

@@ -177,3 +177,14 @@ test('every HELP entry has a usage line and at least one example', async () => {
     assert.match(after, /\n {2}\S/, `${cmd} lists at least one example`);
   }
 });
+
+test('`webjs help db` documents the webjs.db verb map (#1468)', () => {
+  // Bring-your-own-ORM: the help must tell an agent that a verb can be mapped
+  // to another ORM's command in package.json, since the default wording only
+  // names drizzle-kit.
+  const r = help('db');
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /"webjs": \{ "db": \{ "<verb>": "<command>" \} \}/, 'names the config block');
+  assert.match(r.stdout, /prisma migrate deploy/, 'shows a non-Drizzle mapping');
+  assert.match(r.stdout, /unmapped one keeps its/, 'says the default is unchanged');
+});

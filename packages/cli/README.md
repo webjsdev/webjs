@@ -49,7 +49,7 @@ webjs check                    # validate source-code conventions (CI gate)
 webjs doctor                   # verify the project/toolchain setup (per-check severity via webjs.doctor.gate, so CI can gate a subset)
 webjs test                     # run server + browser tests
 webjs vendor pin [--download]  # pin client deps to a committable importmap (offline/reproducible)
-webjs db <generate|migrate|push|studio|seed>   # drizzle-kit passthrough (+ seed)
+webjs db <generate|migrate|push|studio|seed>   # drizzle-kit passthrough (+ seed) by default; a package.json webjs.db block maps any verb to your own ORM's command
 
 webjs ui init                  # initialise @webjsdev/ui in this project
 webjs ui add <names...>        # copy components from the registry (https://webjs.dev/ui/registry/<name>.json)

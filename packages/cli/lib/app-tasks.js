@@ -66,3 +66,56 @@ export function readAppTasks(appDir, readFile) {
 function emptyTasks() {
   return { dev: { before: [], parallel: [] }, start: { before: [] } };
 }
+
+/**
+ * Read the `webjs db` verb map from an app's `package.json` `"webjs"` block
+ * (#1468). Drizzle is the scaffold DEFAULT, never lock-in: the runtime never
+ * imports it and `db/connection.server.ts` is the app's own file. But without
+ * this map the `webjs db` verbs contradicted that, since `generate` / `migrate`
+ * / `push` / `studio` resolved the app's drizzle-kit binary and exited 1 with
+ * any other ORM installed, while `webjs db migrate` is the spelling baked into
+ * the scaffolded `dev.before` / `start.before` tasks, the Dockerfile, and the
+ * deployment docs. Mapping a verb here keeps that spelling stable across ORMs,
+ * so an ORM swap is one config block plus the app's own `db/` files.
+ *
+ * Shape:
+ *   "webjs": {
+ *     "db": {
+ *       "migrate": "prisma migrate deploy",
+ *       "studio":  "prisma studio",
+ *       "reset":   "prisma migrate reset --force"
+ *     }
+ *   }
+ *
+ * Any key is a verb: a mapped verb runs its command through the shell (the
+ * same way a `before` step does, so a local-only binary resolves), with the
+ * extra CLI args appended. A verb the map does not name keeps its default (the
+ * drizzle-kit passthrough for the four kit verbs, `db/seed.server.ts` for
+ * `seed`), so an app with no block is unchanged. Non-string / blank values are
+ * dropped defensively, the same posture as `readAppTasks`.
+ *
+ * Pure (reads one file, never spawns / prints / exits) so it is unit-testable
+ * without a process.
+ *
+ * @param {string} appDir
+ * @param {(p: string) => string} [readFile] injectable reader for tests
+ * @returns {Record<string, string>} verb -> shell command (empty when unset)
+ */
+export function readDbCommands(appDir, readFile) {
+  const read = readFile || ((p) => readFileSync(p, 'utf8'));
+  let pkg = {};
+  try {
+    pkg = JSON.parse(read(join(appDir, 'package.json')));
+  } catch {
+    return {};
+  }
+  const webjs = pkg && typeof pkg === 'object' ? pkg.webjs : null;
+  const db = webjs && typeof webjs === 'object' ? webjs.db : null;
+  if (!db || typeof db !== 'object' || Array.isArray(db)) return {};
+  /** @type {Record<string, string>} */
+  const out = {};
+  for (const [verb, cmd] of Object.entries(db)) {
+    if (typeof cmd === 'string' && cmd.trim().length > 0 && verb.trim().length > 0) out[verb] = cmd;
+  }
+  return out;
+}
