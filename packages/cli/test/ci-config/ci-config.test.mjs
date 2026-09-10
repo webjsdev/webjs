@@ -7,7 +7,18 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readCiConfig, normalizeSteps, selectSteps, flattenSteps } from '../../lib/ci-config.js';
+import { readCiConfig, normalizeSteps, selectSteps, flattenSteps, noCiConfigMessage } from '../../lib/ci-config.js';
+
+test('the missing-config refusal names the directory, the block shape, and any workspace member that declares one', () => {
+  const alone = noCiConfigMessage('/app', []);
+  assert.match(alone, /declares no "webjs": \{ "ci" \} block/);
+  assert.match(alone, /\n  \/app\n/);
+  assert.match(alone, /"webjs": \{ "ci": \{ "steps": \[/);
+  assert.doesNotMatch(alone, /workspace members/);
+  const root = noCiConfigMessage('/repo', ['apps/a', 'apps/b']);
+  assert.match(root, /These workspace members declare one/);
+  assert.match(root, /\( cd apps\/a && npx webjs ci \)\n  \( cd apps\/b && npx webjs ci \)/);
+});
 
 function reader(pkgJson) {
   return (_p) => (pkgJson === null ? (() => { throw new Error('ENOENT'); })() : pkgJson);

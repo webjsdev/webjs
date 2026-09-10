@@ -206,6 +206,39 @@ export function flattenSteps(steps) {
   return out;
 }
 
+/**
+ * The refusal `webjs ci` prints when the directory declares no `webjs.ci`
+ * block: what is missing, where it goes, and (at a workspace root) which
+ * member apps already declare one. Mirrors `notAnAppMessage` in
+ * check-target.js. A run with nothing declared exits 1 rather than 0, because
+ * "ran zero steps" would read as green.
+ *
+ * @param {string} cwd
+ * @param {string[]} apps workspace members that DO declare a `webjs.ci` block
+ */
+export function noCiConfigMessage(cwd, apps) {
+  const lines = [
+    'webjs ci: nothing to run, this package.json declares no "webjs": { "ci" } block.',
+    '',
+    `  ${cwd}`,
+    '',
+    'Declare the steps once and every tool reads the same list:',
+    '',
+    '  "webjs": { "ci": { "steps": [',
+    '    "webjs check",',
+    '    { "title": "Tests", "run": "webjs test" }',
+    '  ] } }',
+    '',
+  ];
+  if (apps.length > 0) {
+    lines.push('These workspace members declare one. Run it inside each:', '');
+    for (const app of apps) lines.push(`  ( cd ${app} && npx webjs ci )`);
+    lines.push('');
+  }
+  lines.push('`webjs help ci` shows the flags.');
+  return lines.join('\n');
+}
+
 /** @param {unknown} v */
 function isPlainObject(v) {
   return !!v && typeof v === 'object' && !Array.isArray(v);

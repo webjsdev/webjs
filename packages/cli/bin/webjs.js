@@ -90,6 +90,11 @@ const USAGE = `webjs commands:
   webjs start [--port 8080]                       Start production server (serves source directly, no build step)
   webjs test  [--server|--browser]                 Run server + browser tests
   webjs check [--json]                            Run correctness checks (--json emits structured violations)
+  webjs ci [-f|--fail-fast] [--only <title>] [--json] [--signoff]
+                                                  Run the local CI steps declared under "webjs": { "ci": { "steps": [...] } }
+                                                  in package.json (timed, one result line per step, parallel groups replayed whole,
+                                                  exit 1 on any failure). The same list a cloud pipeline runs via "npm run ci".
+                                                  --only runs one step or group by title; --signoff runs "gh signoff" after a green run
   webjs routes [--json|--table] [--no-headers]    Print the route table (path / owner file / methods). Default tree; --json matches the MCP list_routes shape; --no-headers drops the --table header
   webjs elision [--json] [--verify]               Report which component modules are elided and why each shipped one ships;
                                                   --verify diffs SSR output with elision on vs off (exits non-zero on a divergence)
@@ -173,6 +178,25 @@ const HELP = {
       { flag: '--rules', description: 'List the correctness rules instead of running them.' },
     ],
     examples: ['webjs check', 'webjs check --json', 'webjs check --rules'],
+  },
+  ci: {
+    usage: 'webjs ci [-f|--fail-fast] [--only <title>]... [--json] [--signoff]',
+    summary:
+      'Run the local CI steps declared in package.json under "webjs": { "ci": { "steps": [...] } }: ' +
+      'each step is timed and reported, a parallel group replays each step\'s output whole, and the exit is 1 on any failure. ' +
+      'A cloud pipeline runs the same list through `npm run ci`, so the two cannot drift.',
+    options: [
+      { flag: '-f, --fail-fast', description: 'Stop after the first failing step instead of running every step and listing every failure.' },
+      { flag: '--only <title>', description: 'Run only the step or group with this title (repeatable, case-insensitive; a matched group runs whole).' },
+      { flag: '--json', description: 'Emit one JSON document on stdout ({ ok, seconds, steps[] }, failed steps carry their output); the human output goes to stderr.' },
+      { flag: '--signoff', description: 'After a green run, run `gh signoff` (basecamp/gh-signoff) to post a green commit status; a red run prints the do-not-merge heading instead.' },
+    ],
+    notesTitle: 'Environment:',
+    notes: [
+      'Every step runs with CI=true and node_modules/.bin on PATH, plus the step\'s own `env`.',
+      'Under GitHub Actions each step is a log group and a failure is annotated; a $GITHUB_STEP_SUMMARY table is appended.',
+    ],
+    examples: ['webjs ci', 'webjs ci --fail-fast', 'webjs ci --only Tests', 'webjs ci --json', 'webjs ci --signoff'],
   },
   routes: {
     usage: 'webjs routes [--json | --table] [--no-headers]',
@@ -748,6 +772,123 @@ async function main() {
       }
 
       console.log('\nwebjs test: done ✓');
+      break;
+    }
+    case 'ci': {
+      // Local CI (#1471): run the step list `webjs.ci` declares, the Rails
+      // `bin/ci` posture. The predicate is the CONFIG, not an `app/` dir (unlike
+      // `webjs check`), because a workspace root is a legitimate target: this
+      // monorepo declares its own list. Nothing declared is exit 1, not 0, since
+      // "ran zero steps" would read as green.
+      const cwd = process.cwd();
+      const json = rest.includes('--json');
+      const failFast = rest.includes('--fail-fast') || rest.includes('-f');
+      const signoff = rest.includes('--signoff');
+      const only = [];
+      for (let i = 0; i < rest.length; i++) {
+        if (rest[i] === '--only' && rest[i + 1] !== undefined) only.push(rest[++i]);
+      }
+      const { readCiConfig, selectSteps, noCiConfigMessage } = await import('../lib/ci-config.js');
+      const { runCi, formatSummary, stepSummaryMarkdown, colorize } = await import('../lib/ci-runner.js');
+      // Under --json stdout carries exactly one document, so the human output
+      // moves to stderr; every step is captured so its output can ride the
+      // document (failed steps only) instead of the terminal.
+      const out = json ? (s) => { process.stderr.write(s); } : (s) => { process.stdout.write(s); };
+      const isTTY = !json && !!process.stdout.isTTY;
+      const refuse = (message, code, extra) => {
+        if (json) console.log(JSON.stringify({ error: { code, message, cwd, ...extra } }));
+        else console.error(message);
+        process.exitCode = 1;
+      };
+
+      const cfg = readCiConfig(cwd);
+      if (!cfg.declared) {
+        const { workspaceApps } = await import('../lib/check-target.js');
+        const members = (await workspaceApps(cwd)).filter((app) => readCiConfig(join(cwd, app)).declared);
+        refuse(noCiConfigMessage(cwd, members), 'NO_CI_CONFIG', { apps: members });
+        break;
+      }
+      if (cfg.problems.length > 0) {
+        refuse(
+          `webjs ci: package.json has ${cfg.problems.length} problem(s) in the "webjs": { "ci" } block, so nothing ran:\n` +
+            cfg.problems.map((p) => `  - ${p}`).join('\n'),
+          'INVALID_CI_CONFIG',
+          { problems: cfg.problems },
+        );
+        break;
+      }
+      const selected = selectSteps(cfg.steps, only);
+      if (selected.problems.length > 0) {
+        refuse(`webjs ci: ${selected.problems.join('; ')}`, 'UNKNOWN_ONLY', { problems: selected.problems });
+        break;
+      }
+
+      // `.env` first, like dev / start (#447), so a local `webjs db migrate`
+      // step reads DATABASE_URL from it. A real env var still wins (loadEnvFile
+      // never overrides), so a CI runner's explicit env is untouched.
+      loadAppEnv(cwd);
+      const title = 'Continuous Integration';
+      out(`${colorize(title, 'banner', isTTY)}\n${colorize('Running the steps declared in package.json under webjs.ci', 'subtitle', isTTY)}\n`);
+      const run = runCi(selected.steps, cwd, {
+        write: out,
+        isTTY,
+        failFast,
+        captureAll: json,
+        actions: !!process.env.GITHUB_ACTIONS,
+      });
+      const onSignal = () => run.interrupt();
+      process.on('SIGINT', onSignal);
+      process.on('SIGTERM', onSignal);
+      const result = await run.done;
+      process.off('SIGINT', onSignal);
+      process.off('SIGTERM', onSignal);
+      out(formatSummary(result, title, isTTY));
+
+      if (process.env.GITHUB_STEP_SUMMARY) {
+        const { appendFileSync } = await import('node:fs');
+        try { appendFileSync(process.env.GITHUB_STEP_SUMMARY, stepSummaryMarkdown(result)); } catch {}
+      }
+
+      // The Rails signoff step, opt-in. A green run posts a green commit status
+      // (`gh signoff`, which branch protection can require); a red run says so
+      // and posts nothing. It goes through the same runner so it reads as one
+      // more step, and a missing `gh` is a failed step, never a silent skip.
+      let signoffOk = true;
+      if (signoff) {
+        if (result.ok) {
+          const so = runCi(
+            [{ kind: 'step', title: 'Signoff: All systems go. Ready for merge and deploy.', run: 'gh signoff', env: {} }],
+            cwd,
+            { write: out, isTTY, captureAll: json },
+          );
+          signoffOk = (await so.done).ok;
+        } else {
+          out(`\n\n${colorize('Signoff: CI failed. Do not merge or deploy.', 'error', isTTY)}\n${colorize('Fix the issues and try again.', 'subtitle', isTTY)}\n`);
+        }
+      }
+
+      if (json) {
+        console.log(JSON.stringify({
+          ok: result.ok && signoffOk,
+          seconds: result.seconds,
+          interrupted: result.interrupted,
+          steps: result.steps.map((s) => ({
+            title: s.title,
+            run: s.run,
+            group: s.group,
+            ok: s.ok,
+            code: s.code,
+            signal: s.signal,
+            interrupted: s.interrupted,
+            seconds: s.seconds,
+            ...(s.ok ? {} : { output: s.output ?? '' }),
+          })),
+        }));
+      }
+      // exitCode rather than a process.exit() call, because a run writes far
+      // more than `check` does and exit() truncates pending pipe writes when
+      // stdout is not a TTY.
+      process.exitCode = result.interrupted ? 130 : result.ok && signoffOk ? 0 : 1;
       break;
     }
     case 'check': {

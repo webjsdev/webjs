@@ -69,7 +69,7 @@ export async function findCheckTarget(cwd) {
  * @param {string} cwd
  * @returns {Promise<string[]>}
  */
-async function workspaceApps(cwd) {
+export async function workspaceApps(cwd) {
   let patterns;
   try {
     const pkg = JSON.parse(await readFile(join(cwd, 'package.json'), 'utf8'));
