@@ -194,8 +194,9 @@ the CI job takes). The Docker image build is its own top-level step after the
 Gate, so `--only Gate` skips it on a routine run and a signoff run includes it.
 Each slot's output is replayed whole when it finishes, and the wall-clock is the
 longest slot rather than the sum. `npm run ci` runs the lot; `npm run ci --
---only Conventions` runs one group, and `--json` gives an agent the verdict as
-data. The root script runs `node packages/cli/bin/webjs.js ci` rather than a
+--only Conventions` runs one group, and `npm run -s ci -- --json` gives an
+agent the verdict as one JSON document (npm's `-s` keeps its own run banner
+off stdout). The root script runs `node packages/cli/bin/webjs.js ci` rather than a
 hoisted `webjs` bin because in a linked worktree `node_modules/.bin/webjs`
 resolves into the PRIMARY checkout, which may not carry the branch's CLI, and
 every root step invokes the in-repo CLI the same way for the same reason.
@@ -218,7 +219,9 @@ specifier resolves into the primary checkout, so the listener proofs and the
 config type fixture red there and the rest is partly vacuous.
 
 **Local prerequisites** for the whole list: Node 24+, Bun, Docker (the Postgres
-container and the image build), the Playwright browsers (`npx playwright
+container and the image build; the user must be in the `docker` group, or set
+`WEBJS_DOCKER` to the command that reaches a daemon, such as `sudo -n docker`
+or `podman`), the Playwright browsers (`npx playwright
 install chromium firefox webkit`), `puppeteer-core` (a root devDependency),
 `gh` with the signoff extension (the script installs it), and a shell that does
 NOT export `FORCE_COLOR` (it flips tsc to pretty output and reds two type

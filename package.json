@@ -347,7 +347,7 @@
         },
         {
           "title": "Docker image build (the deploy artifact)",
-          "run": "docker build --quiet -t webjs-monorepo:ci . >/dev/null"
+          "run": "${WEBJS_DOCKER:-docker} build --quiet -t webjs-monorepo:ci . >/dev/null"
         }
       ]
     }
