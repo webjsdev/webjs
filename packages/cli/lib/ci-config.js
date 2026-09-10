@@ -73,17 +73,19 @@ export function readCiConfig(appDir, readFile) {
 /**
  * Normalize a raw step array into `CiNode`s, collecting every shape problem
  * with its JSON path. A string is shorthand for a command titled by itself; an
- * object with `steps` is a group; an object with `run` is a command. A group
- * inside a PARALLEL group runs its steps sequentially in one slot, so a
- * `parallel` on it is a contradiction and is reported rather than honoured
- * (the Rails rule: sub-groups cannot be parallelized).
+ * object with `steps` is a group; an object with `run` is a command. Only a
+ * TOP-LEVEL group may declare `parallel`: a nested group takes one slot of
+ * its parent and runs its steps in order, so `parallel` on it is reported
+ * rather than honoured (the Rails rule: sub-groups cannot be parallelized),
+ * which is exactly what the JSON Schema's `ciNestedStep` and the
+ * `WebjsCiNestedGroup` type say.
  *
  * @param {unknown} raw
  * @param {string} path JSON path used in problem messages
- * @param {boolean} inParallel whether an ancestor group runs in parallel
+ * @param {boolean} nested whether these steps sit inside a group
  * @returns {{ steps: CiNode[], problems: string[] }}
  */
-export function normalizeSteps(raw, path = 'webjs.ci.steps', inParallel = false) {
+export function normalizeSteps(raw, path = 'webjs.ci.steps', nested = false) {
   /** @type {CiNode[]} */
   const steps = [];
   /** @type {string[]} */
@@ -113,17 +115,20 @@ export function normalizeSteps(raw, path = 'webjs.ci.steps', inParallel = false)
       if (!title) problems.push(`${at} (a group) needs a non-empty title`);
       let parallel = 1;
       if (item.parallel !== undefined) {
-        if (!Number.isInteger(item.parallel) || item.parallel < 1) {
-          problems.push(`${at}.parallel must be an integer of at least 1`);
-        } else if (inParallel && item.parallel > 1) {
+        if (nested) {
+          // One rule on every surface (the schema's ciNestedStep, the
+          // WebjsCiNestedGroup type, the docs): a nested group never declares
+          // parallel, whatever its parent is. It takes one slot and runs in order.
           problems.push(
-            `${at}.parallel is not allowed on a group nested inside a parallel group (it takes one slot and runs its steps in order)`,
+            `${at}.parallel is not allowed on a nested group (it takes one slot of its parent and runs its steps in order)`,
           );
+        } else if (!Number.isInteger(item.parallel) || item.parallel < 1) {
+          problems.push(`${at}.parallel must be an integer of at least 1`);
         } else {
           parallel = item.parallel;
         }
       }
-      const inner = normalizeSteps(item.steps, `${at}.steps`, inParallel || parallel > 1);
+      const inner = normalizeSteps(item.steps, `${at}.steps`, true);
       problems.push(...inner.problems);
       if (Array.isArray(item.steps) && item.steps.length === 0) problems.push(`${at}.steps is empty`);
       steps.push({ kind: 'group', title: title || `group ${i}`, parallel, steps: inner.steps });

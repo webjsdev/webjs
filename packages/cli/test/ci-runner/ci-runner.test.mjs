@@ -22,6 +22,8 @@ function fakeChild() {
   const c = new EventEmitter();
   c.stdout = new EventEmitter();
   c.stderr = new EventEmitter();
+  c.stdout.destroy = () => { c.stdout.destroyed = true; };
+  c.stderr.destroy = () => { c.stderr.destroyed = true; };
   c.killed = null;
   c.kill = (sig) => { c.killed = sig || 'SIGTERM'; };
   return c;
@@ -232,6 +234,45 @@ test('captured: a close that never comes is bounded by the grace timer and marke
   assert.equal(result.steps[0].ok, true, 'exit 0 still counts as a pass');
   assert.equal(result.steps[0].truncated, true);
   assert.equal(result.steps[0].output, 'partial\n');
+  // The bound also REAPS the group and drops the pipe handles: otherwise the
+  // open pipes keep the event loop alive and the bin sits after its summary.
+  assert.equal(c.child.killed, 'SIGTERM', 'the leaked group is killed when the grace fires');
+  assert.equal(c.child.stdout.destroyed, true, 'stdout pipe destroyed');
+  assert.equal(c.child.stderr.destroyed, true, 'stderr pipe destroyed');
+});
+
+test('a nested group inside a pool shares the progress bookkeeping (its steps show in the line, replays clear it)', async () => {
+  const r = recorder();
+  const out = sink();
+  const t = timers();
+  const { steps } = normalizeSteps([{ title: 'Checks', parallel: 2, steps: ['a', { title: 'Tests', steps: ['b', 'c'] }] }]);
+  const run = runCi(steps, '/app', base({ spawn: r.spawn, write: out.write, isTTY: true, timers: t.api }));
+  await settle();
+  assert.deepEqual(r.calls.map((x) => x.cmd), ['a', 'b']);
+  t.intervals[0]();
+  assert.match(out.text(), /Checks \(\d+s\) - a \| b\.\.\./, 'the nested step b is in the progress line');
+  finish(r.byCmd('b'), { out: 'B\n' });
+  await settle();
+  const text = out.text();
+  const bAt = text.indexOf('B\n');
+  assert.ok(text.lastIndexOf('\r\x1b[K', bAt) > text.lastIndexOf('a | b', bAt), 'the line is cleared before the nested replay');
+  t.intervals[0]();
+  assert.match(out.text().slice(bAt), /Checks \(\d+s\) - a \| c\.\.\./, 'c took over b\'s slot and shows in the line');
+  finish(r.byCmd('a'));
+  finish(r.byCmd('c'));
+  const result = await run.done;
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.steps.map((s) => [s.title, s.group]), [['b', 'Tests'], ['a', 'Checks'], ['c', 'Tests']]);
+});
+
+test('color:false on a TTY keeps FORCE_COLOR away from captured children (NO_COLOR honoured)', async () => {
+  const r = recorder();
+  const { steps } = normalizeSteps([{ title: 'G', parallel: 2, steps: ['x'] }]);
+  const run = runCi(steps, '/app', base({ spawn: r.spawn, write: () => {}, isTTY: true, color: false }));
+  await settle();
+  assert.equal(r.calls[0].opts.env.FORCE_COLOR, undefined);
+  finish(r.calls[0]);
+  await run.done;
 });
 
 test('interrupt() kills every running child, stops the dequeue, and reports the run interrupted', async () => {
@@ -252,6 +293,7 @@ test('interrupt() kills every running child, stops the dequeue, and reports the 
   assert.equal(result.ok, false);
   assert.deepEqual(result.steps.map((s) => [s.title, s.interrupted, s.ok]), [['a', true, false], ['b', true, false]]);
   assert.match(out.text(), /❌ a interrupted/);
+  assert.match(formatSummary(result, 'Continuous Integration', false), /❌ Continuous Integration interrupted\n$/, 'the total line says interrupted, not failed');
 });
 
 test('on a TTY the progress line renders only while the pool runs, is cleared before a replay, and colours captured children', async () => {

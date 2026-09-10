@@ -69,4 +69,29 @@ const quiet = { write: () => {}, isTTY: false };
   assert.ok(r.steps.every((s) => s.interrupted && !s.ok), `[${runtime}] each running step reads as interrupted, not failed`);
 }
 
+// 5. A captured child that EXITS while a grandchild keeps the pipe open (the
+//    leaked-dev-server shape): the grace bound resolves the step as truncated,
+//    REAPS the group so the grandchild does not outlive the run, and drops the
+//    pipe handles so the process can exit. Without the reap, `pgrep` still
+//    finds the sleep and this script's exit waits on its handles.
+{
+  const marker = `sleep 31.7${runtime === 'bun' ? '1' : '3'}`;
+  const { steps } = normalizeSteps([{ title: 'G', parallel: 2, steps: [{ title: 'leaky', run: `${marker} & echo hi; exit 0` }] }]);
+  const t0 = Date.now();
+  const r = await Promise.race([
+    runCi(steps, process.cwd(), { ...quiet, closeGraceMs: 300 }).done,
+    new Promise((res) => setTimeout(() => res(null), 5000)),
+  ]);
+  assert.ok(r, `[${runtime}] the run settled within the bound despite the leaked grandchild`);
+  assert.ok(Date.now() - t0 < 4000, `[${runtime}] settled through the grace, not by waiting on the sleep`);
+  const leaky = r.steps[0];
+  assert.equal(leaky.ok, true, `[${runtime}] exit 0 still passes`);
+  assert.equal(leaky.truncated, true, `[${runtime}] marked truncated`);
+  assert.match(leaky.output, /hi\n/, `[${runtime}] the output before the leak was kept`);
+  await new Promise((res) => setTimeout(res, 200));
+  const { spawnSync } = await import('node:child_process');
+  const left = spawnSync('pgrep', ['-f', marker], { encoding: 'utf8' });
+  assert.equal(left.status, 1, `[${runtime}] the leaked grandchild was reaped with its group (pgrep found: ${left.stdout.trim()})`);
+}
+
 console.log(`[${runtime}] ci-runner cross-runtime asserts passed`);

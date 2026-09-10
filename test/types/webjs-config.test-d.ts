@@ -66,9 +66,17 @@ void full;
 const ciConfig: WebjsCiConfig = { steps: ['webjs check'] };
 void ciConfig;
 
-// An empty ci block is valid: `steps` is optional.
-const emptyCi: WebjsConfig = { ci: {} };
+const emptyCi: WebjsConfig = {
+  // @ts-expect-error `steps` is required: a block with no steps is refused, not a green run
+  ci: {},
+};
 void emptyCi;
+
+const nestedUnderSequential: WebjsConfig = {
+  // @ts-expect-error a nested group cannot declare `parallel` even under a sequential parent
+  ci: { steps: [{ title: 'g', steps: [{ title: 'h', parallel: 2, steps: ['x'] }] }] },
+};
+void nestedUnderSequential;
 
 const badCiRun: WebjsConfig = {
   // @ts-expect-error a command step's `run` is a string, not a number

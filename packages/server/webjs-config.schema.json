@@ -242,9 +242,10 @@
       "description": "Local CI (#1471): the step list `webjs ci` runs on a developer machine, and the same list a cloud pipeline runs by calling `npm run ci`, so the two cannot drift. Read by the CLI (readCiConfig in packages/cli/lib/ci-config.js), NOT the server. A step is a string (shorthand for a command whose title is the command), a { title, run, env? } command, or a { title, steps, parallel? } group. `parallel` is a slot count (default 1, sequential); a group nested inside a parallel group takes ONE slot and runs its steps in order, so it cannot declare `parallel` itself.",
       "type": "object",
       "additionalProperties": false,
+      "required": ["steps"],
       "properties": {
         "steps": {
-          "description": "The steps, run in order. Every child gets CI=true and node_modules/.bin on PATH. A failing step fails the run (exit 1); --fail-fast stops at the first failure.",
+          "description": "The steps, run in order. Required: a block with no steps is refused, since a run of zero steps would read as green. Every child gets CI=true and node_modules/.bin on PATH. A failing step fails the run (exit 1); --fail-fast stops at the first failure.",
           "type": "array",
           "items": { "$ref": "#/definitions/ciStep" }
         }

@@ -786,8 +786,14 @@ async function main() {
       const failFast = rest.includes('--fail-fast') || rest.includes('-f');
       const signoff = rest.includes('--signoff');
       const only = [];
+      let onlyMissing = false;
       for (let i = 0; i < rest.length; i++) {
-        if (rest[i] === '--only' && rest[i + 1] !== undefined) only.push(rest[++i]);
+        if (rest[i] !== '--only') continue;
+        const value = rest[i + 1];
+        // A bare `--only` (or one followed by another flag) must NOT fall
+        // through to the whole list: that inverts the flag. Refuse it below.
+        if (value === undefined || value.startsWith('--')) onlyMissing = true;
+        else only.push(rest[++i]);
       }
       const { readCiConfig, selectSteps, noCiConfigMessage } = await import('../lib/ci-config.js');
       const { runCi, formatSummary, stepSummaryMarkdown, colorize } = await import('../lib/ci-runner.js');
@@ -796,11 +802,18 @@ async function main() {
       // document (failed steps only) instead of the terminal.
       const out = json ? (s) => { process.stderr.write(s); } : (s) => { process.stdout.write(s); };
       const isTTY = !json && !!process.stdout.isTTY;
+      // Colour on a TTY unless NO_COLOR is set; the runner passes the same
+      // decision down as FORCE_COLOR for captured children.
+      const color = isTTY && !process.env.NO_COLOR;
       const refuse = (message, code, extra) => {
         if (json) console.log(JSON.stringify({ error: { code, message, cwd, ...extra } }));
         else console.error(message);
         process.exitCode = 1;
       };
+      if (onlyMissing) {
+        refuse('webjs ci: --only needs a step or group title (webjs ci --only "Tests")', 'INVALID_ONLY', {});
+        break;
+      }
 
       const cfg = readCiConfig(cwd);
       if (!cfg.declared) {
@@ -829,21 +842,31 @@ async function main() {
       // never overrides), so a CI runner's explicit env is untouched.
       loadAppEnv(cwd);
       const title = 'Continuous Integration';
-      out(`${colorize(title, 'banner', isTTY)}\n${colorize('Running the steps declared in package.json under webjs.ci', 'subtitle', isTTY)}\n`);
+      out(`${colorize(title, 'banner', color)}\n${colorize('Running the steps declared in package.json under webjs.ci', 'subtitle', color)}\n`);
       const run = runCi(selected.steps, cwd, {
         write: out,
         isTTY,
+        color,
         failFast,
         captureAll: json,
         actions: !!process.env.GITHUB_ACTIONS,
       });
-      const onSignal = () => run.interrupt();
+      // The first signal winds the run down (children killed, results kept).
+      // A SECOND one exits outright, the way Rails' bin/ci lets a repeated
+      // interrupt through: a captured child that ignores SIGTERM (a hung
+      // browser under web-test-runner) would otherwise leave no way out.
+      let interrupting = false;
+      const onSignal = () => {
+        if (interrupting) process.exit(130);
+        interrupting = true;
+        run.interrupt();
+      };
       process.on('SIGINT', onSignal);
       process.on('SIGTERM', onSignal);
       const result = await run.done;
       process.off('SIGINT', onSignal);
       process.off('SIGTERM', onSignal);
-      out(formatSummary(result, title, isTTY));
+      out(formatSummary(result, title, color));
 
       if (process.env.GITHUB_STEP_SUMMARY) {
         const { appendFileSync } = await import('node:fs');
@@ -860,11 +883,11 @@ async function main() {
           const so = runCi(
             [{ kind: 'step', title: 'Signoff: All systems go. Ready for merge and deploy.', run: 'gh signoff', env: {} }],
             cwd,
-            { write: out, isTTY, captureAll: json },
+            { write: out, isTTY, color, captureAll: json },
           );
           signoffOk = (await so.done).ok;
         } else {
-          out(`\n\n${colorize('Signoff: CI failed. Do not merge or deploy.', 'error', isTTY)}\n${colorize('Fix the issues and try again.', 'subtitle', isTTY)}\n`);
+          out(`\n\n${colorize('Signoff: CI failed. Do not merge or deploy.', 'error', color)}\n${colorize('Fix the issues and try again.', 'subtitle', color)}\n`);
         }
       }
 

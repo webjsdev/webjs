@@ -99,18 +99,27 @@ test('a malformed block is declared AND reports each problem with its JSON path'
   }
 });
 
-test('a group nested inside a PARALLEL group may not itself be parallel (it takes one slot)', () => {
+test('a NESTED group may never declare parallel, whatever its parent (one rule with the schema and the type)', () => {
   const r = normalizeSteps([
     { title: 'outer', parallel: 2, steps: [{ title: 'inner', parallel: 3, steps: ['a', 'b'] }] },
   ]);
   assert.equal(r.problems.length, 1);
-  assert.match(r.problems[0], /steps\[0\]\.steps\[0\]\.parallel is not allowed on a group nested inside a parallel group/);
+  assert.match(r.problems[0], /steps\[0\]\.steps\[0\]\.parallel is not allowed on a nested group/);
   // The offending value is NOT honoured: the nested group is normalized to one slot.
   assert.equal(r.steps[0].steps[0].parallel, 1);
-  // Counterfactual: the same nesting under a SEQUENTIAL parent is fine.
-  const ok = normalizeSteps([{ title: 'outer', steps: [{ title: 'inner', parallel: 3, steps: ['a', 'b'] }] }]);
-  assert.deepEqual(ok.problems, []);
-  assert.equal(ok.steps[0].steps[0].parallel, 3);
+  // The same rule under a SEQUENTIAL parent: the schema's ciNestedStep and the
+  // WebjsCiNestedGroup type have no `parallel` at all, so the reader agrees.
+  const seq = normalizeSteps([{ title: 'outer', steps: [{ title: 'inner', parallel: 3, steps: ['a', 'b'] }] }]);
+  assert.equal(seq.problems.length, 1);
+  assert.match(seq.problems[0], /not allowed on a nested group/);
+  assert.equal(seq.steps[0].steps[0].parallel, 1);
+  // Even `parallel: 1` is refused on a nested group: the key is simply not part of that shape.
+  const one = normalizeSteps([{ title: 'outer', steps: [{ title: 'inner', parallel: 1, steps: ['a'] }] }]);
+  assert.equal(one.problems.length, 1);
+  // Counterfactual: a TOP-LEVEL group declares it freely.
+  const top = normalizeSteps([{ title: 'outer', parallel: 3, steps: ['a', 'b'] }]);
+  assert.deepEqual(top.problems, []);
+  assert.equal(top.steps[0].parallel, 3);
 });
 
 test('a problem never drops a sibling step silently: valid neighbours survive', () => {

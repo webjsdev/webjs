@@ -180,8 +180,8 @@ export type WebjsCiNestedStep = string | WebjsCiCommand | WebjsCiNestedGroup;
  * (`packages/cli/lib/ci-config.js`), not the server.
  */
 export interface WebjsCiConfig {
-  /** The steps, run in order. A failing step fails the run. */
-  steps?: WebjsCiStep[];
+  /** The steps, run in order. A failing step fails the run. Required: a block with no steps is refused, since a run of zero steps would read as green. */
+  steps: WebjsCiStep[];
 }
 
 /**

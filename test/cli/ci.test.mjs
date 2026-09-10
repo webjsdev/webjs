@@ -142,6 +142,45 @@ test('--only runs the named step or group (case-insensitive) and refuses an unkn
   const miss = ci(dir, ['--only', 'nope']);
   assert.equal(miss.status, 1);
   assert.match(miss.stderr, /--only "nope" matches no step or group title/);
+  // A bare --only (or one followed by a flag) must not fall through to the whole list.
+  const bare = ci(dir, ['--only']);
+  assert.equal(bare.status, 1);
+  assert.match(bare.stderr, /--only needs a step or group title/);
+  assert.doesNotMatch(bare.stdout, /echo one/, 'counterfactual: nothing ran');
+  const flagged = ci(dir, ['--only', '--json']);
+  assert.equal(flagged.status, 1);
+  assert.equal(JSON.parse(flagged.stdout).error.code, 'INVALID_ONLY');
+});
+
+test('Ctrl-C: the first signal winds the run down as interrupted (exit 130), a second one exits outright', async (t) => {
+  const { spawn } = await import('node:child_process');
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const exited = (child) => new Promise((r) => child.on('exit', (code, signal) => r({ code, signal })));
+
+  const dir = await fixture(t, { ci: { steps: [{ title: 'G', parallel: 2, steps: [{ title: 'sleeper', run: 'sleep 20' }] }] } });
+  const one = spawn(process.execPath, [CLI, 'ci'], { cwd: dir, env: { ...process.env, NO_COLOR: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  let out1 = '';
+  one.stdout.on('data', (d) => { out1 += d; });
+  await wait(700);
+  one.kill('SIGINT');
+  const r1 = await Promise.race([exited(one), wait(6000).then(() => null)]);
+  assert.ok(r1, 'a single interrupt winds the run down within the bound (the detached sleep is reaped)');
+  assert.equal(r1.code, 130);
+  assert.match(out1, /❌ sleeper interrupted[\s\S]*❌ Continuous Integration interrupted/);
+
+  // A captured child that ignores SIGTERM cannot be wound down; the second
+  // Ctrl-C is the door out.
+  const stubborn = await fixture(t, { ci: { steps: [{ title: 'G', parallel: 2, steps: [{ title: 'stubborn', run: "trap '' TERM INT; sleep 4" }] }] } });
+  const two = spawn(process.execPath, [CLI, 'ci'], { cwd: stubborn, env: { ...process.env, NO_COLOR: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  await wait(700);
+  two.kill('SIGINT');
+  await wait(400);
+  const stillRunning = two.exitCode === null;
+  two.kill('SIGINT');
+  const r2 = await Promise.race([exited(two), wait(3000).then(() => null)]);
+  assert.ok(stillRunning, 'after one interrupt the stubborn child kept the run alive');
+  assert.ok(r2, 'the second interrupt exits within the bound');
+  assert.equal(r2.code, 130);
 });
 
 test('under GitHub Actions each step is a log group, a failure is annotated, and the step summary is appended', async (t) => {

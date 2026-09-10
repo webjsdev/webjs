@@ -30,8 +30,10 @@ import { envWithLocalBin, killChildTree } from './run-tasks.js';
  * Every child gets `CI=true` (so an app can branch on it, as under any CI
  * provider) and every ancestor `node_modules/.bin` on PATH (`envWithLocalBin`,
  * the npm-run behaviour), then the step's own `env`. A captured child gets
- * `FORCE_COLOR=1` only when the PARENT's stdout is a TTY, so a terminal keeps
- * the tools' colours through the pipe and a log file never gets escape codes.
+ * `FORCE_COLOR=1` only when the runner itself colours (the PARENT's stdout is
+ * a TTY and NO_COLOR is unset), so a terminal keeps the tools' colours through
+ * the pipe, a log file never gets escape codes, and a user's NO_COLOR reaches
+ * the tools instead of being overridden.
  * Node has no PTY without a native dependency, which a buildless framework
  * will not take on, so this is the whole colour story.
  *
@@ -143,7 +145,7 @@ export function formatSummary(result, title, color) {
       out += `${colorize(`   ↳ ${s.title} ${s.interrupted ? 'interrupted' : 'failed'}`, 'error', color)}\n`;
     }
   }
-  out += formatResult({ title, ok: result.ok, seconds: result.seconds, interrupted: result.interrupted && result.ok }, color);
+  out += formatResult({ title, ok: result.ok, seconds: result.seconds, interrupted: result.interrupted }, color);
   return out;
 }
 
@@ -275,19 +277,29 @@ async function runPool(group, ctx) {
   const startedAt = ctx.now();
   const progress = ctx.isTTY ? startProgress(group.title, startedAt, inFlight, ctx) : null;
 
+  // One slot's work: a step, or a nested group's steps in order (a nested
+  // group is always sequential, the reader refuses `parallel` on it). Every
+  // step goes through the SAME bookkeeping, so a nested step shows in the
+  // progress line and its replay clears the line first; the scaffold's
+  // default list nests its three longest steps this way.
+  const runInSlot = async (nodes, groupTitle) => {
+    for (const node of nodes) {
+      if (halted(ctx)) return;
+      if (node.kind === 'group') {
+        await runInSlot(node.steps, node.title);
+        continue;
+      }
+      inFlight.add(node.title);
+      const r = await runOne(node, groupTitle, ctx, true);
+      inFlight.delete(node.title);
+      progress?.clear();
+      report(r, ctx);
+      progress?.redraw();
+    }
+  };
   const worker = async () => {
     while (queue.length > 0 && !halted(ctx)) {
-      const node = queue.shift();
-      if (node.kind === 'group') {
-        await runSequence(node.steps, node.title, ctx, true);
-      } else {
-        inFlight.add(node.title);
-        const r = await runOne(node, group.title, ctx, true);
-        inFlight.delete(node.title);
-        progress?.clear();
-        report(r, ctx);
-        progress?.redraw();
-      }
+      await runInSlot([queue.shift()], group.title);
     }
   };
   const slots = Math.min(group.parallel, queue.length);
@@ -358,7 +370,10 @@ async function runOne(step, group, ctx, capture) {
   const env = {
     ...ctx.baseEnv,
     CI: 'true',
-    ...(capture && ctx.isTTY ? { FORCE_COLOR: '1' } : {}),
+    // Colour for a captured child follows the runner's own colour decision
+    // (a TTY with no NO_COLOR), so a user's NO_COLOR is honoured inside the
+    // tools too rather than overridden by FORCE_COLOR.
+    ...(capture && ctx.color ? { FORCE_COLOR: '1' } : {}),
     ...step.env,
   };
   if (!capture) {
@@ -458,8 +473,17 @@ function spawnCaptured(step, env, ctx) {
     child.on('exit', (code, signal) => {
       exited = { code: code ?? (signal ? null : 0), signal: signal || null };
       // `close` normally follows within a tick. A leaked grandchild holding the
-      // pipe would keep it from ever firing, so bound the wait.
-      grace = ctx.timers.setTimeout(() => finish(true), ctx.closeGraceMs);
+      // pipe would keep it from ever firing, so bound the wait, and when the
+      // bound fires REAP the group (it is still addressable, the child is
+      // detached) and drop the pipe handles. Without both, the open pipes keep
+      // the parent's event loop alive and the bin, which exits through
+      // exitCode, sits after its summary until the grandchild dies on its own.
+      grace = ctx.timers.setTimeout(() => {
+        killChildTree(child);
+        try { child.stdout?.destroy(); } catch {}
+        try { child.stderr?.destroy(); } catch {}
+        finish(true);
+      }, ctx.closeGraceMs);
       if (grace && typeof grace.unref === 'function') grace.unref();
     });
     child.on('close', (code, signal) => {
