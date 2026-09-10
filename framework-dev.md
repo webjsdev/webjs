@@ -188,9 +188,9 @@ the root `npm test`, the in-repo app typechecks and suites plus the website
 boot-check, the Conventions group (`webjs check` and `webjs doctor` per in-repo
 app, the buildless-packages invariant, the em-dash scan), and the Postgres
 round-trip against a throwaway `postgres:16` container (`scripts/ci-postgres.sh`,
-which also installs the `pg` driver into a scratch prefix and links it under
-`test/pg/node_modules`, so the shared lock stays without it, the same posture
-the CI job takes). The Docker image build is its own top-level step after the
+which also installs the `pg` driver `--no-save` into the repo's own
+`node_modules` and refuses to do so through a symlinked one, so the shared lock
+stays without it, the same posture the CI job takes). The Docker image build is its own top-level step after the
 Gate, so `--only Gate` skips it on a routine run and a signoff run includes it.
 Each slot's output is replayed whole when it finishes, and the wall-clock is the
 longest slot rather than the sum. `npm run ci` runs the lot; `npm run ci --
@@ -223,9 +223,12 @@ container and the image build; the user must be in the `docker` group, or set
 `WEBJS_DOCKER` to the command that reaches a daemon, such as `sudo -n docker`
 or `podman`), the Playwright browsers (`npx playwright
 install chromium firefox webkit`), `puppeteer-core` (a root devDependency),
-`gh` with the signoff extension (the script installs it), and a shell that does
-NOT export `FORCE_COLOR` (it flips tsc to pretty output and reds two type
-guards that parse the plain format).
+`gh` with the signoff extension (the script installs it), `setsid` and `pgrep`
+(util-linux and procps, present on Linux and absent from a stock macOS: the
+website e2e step and the runner's interrupt test use them), and a shell that
+does NOT export `FORCE_COLOR` (it flips tsc to pretty output and reds two type
+guards that parse the plain format) or `PORT` (the website e2e step pins 5001
+itself, but nothing else in the list should be steered by it either).
 
 `gallery`, `examples/blog`, and `website` each declare their own shorter list
 (setup, then `webjs check` / `webjs doctor` / typecheck / tests two at a time)

@@ -52,12 +52,15 @@ $DOCKER run -d --rm --name "$NAME" \
   -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=webjs_test \
   -p "127.0.0.1:${PORT}:5432" postgres:16 >/dev/null
 
-# Same readiness probe the CI service container declares, up to ~50s.
+# The CI service container's readiness probe, up to ~50s, but over TCP: the
+# image's entrypoint first runs a temporary init-phase server on the unix
+# socket only, and a socket probe (no -h) reads ready there, before the real
+# server listens on the port the test connects to.
 for _ in $(seq 1 50); do
-  if $DOCKER exec "$NAME" pg_isready -U postgres >/dev/null 2>&1; then break; fi
+  if $DOCKER exec "$NAME" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; then break; fi
   sleep 1
 done
-if ! $DOCKER exec "$NAME" pg_isready -U postgres >/dev/null 2>&1; then
+if ! $DOCKER exec "$NAME" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; then
   echo "ci-postgres: postgres:16 did not become ready in time" >&2
   $DOCKER logs "$NAME" >&2 || true
   exit 1

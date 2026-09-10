@@ -19,6 +19,13 @@
 # - On a failure the server log is printed, so a boot failure, a build failure,
 #   or a 500 on /ui/button does not fail the step with its cause in a file
 #   nobody reads.
+# - Two things a fresh CI runner never had to guard against. A server ALREADY
+#   on :5001 (a machine that was just editing the website) would answer the
+#   probe first try while ours died with EADDRINUSE, and the step would report
+#   on that server rather than this tree, so it is refused. And the website's
+#   dev script is `webjs dev --port ${PORT:-5001}`, so a shell exporting PORT
+#   would put the server elsewhere and the probe would wait out its two
+#   minutes; the port is pinned.
 
 set -euo pipefail
 
@@ -26,7 +33,12 @@ ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 LOG="${TMPDIR:-/tmp}/webjs-ci-website-dev-$$.log"
 cd "$ROOT"
 
-setsid npm run dev --workspace=@webjsdev/website > "$LOG" 2>&1 < /dev/null &
+if curl -sf -o /dev/null http://localhost:5001/ui/button; then
+  echo "something already answers on :5001; stop it first, or this step tests that server instead of this tree" >&2
+  exit 1
+fi
+
+PORT=5001 setsid npm run dev --workspace=@webjsdev/website > "$LOG" 2>&1 < /dev/null &
 server_pid=$!
 trap 'rc=$?; if [ "$rc" -ne 0 ]; then echo "--- website dev server log ---"; tail -n 200 "$LOG" || true; fi; kill -- -"$server_pid" 2>/dev/null || true; rm -f "$LOG"; exit "$rc"' EXIT
 
