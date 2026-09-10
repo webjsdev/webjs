@@ -76,43 +76,49 @@ async function main() {
   await mkdir(staging, { recursive: true });
   await mkdir(dist, { recursive: true });
 
-  // Splitting OFF: each entry is a single self-contained file with no
-  // shared `chunk-*.js`. The browser surface is one request
-  // (`webjs-core-browser.js`); the handful of other entries (the Node
-  // full bundle, the on-demand lazy loader, the test helpers) duplicate
-  // the small amount of code they share, which is a cheap tarball cost
-  // (never shipped to a browser) in exchange for a clean, waterfall-free
-  // network graph. The few entries mean little duplication in practice.
-  const result = await build({
-    entryPoints: ENTRIES.map((e) => ({ in: join(CORE, e.in), out: e.out })),
-    outdir: staging,
-    bundle: true,
-    splitting: false,
-    format: 'esm',
-    target: 'es2022',
-    platform: 'browser',
-    sourcemap: 'linked',
-    sourcesContent: false,
-    minify: true,
-    treeShaking: true,
-    metafile: true,
-    logLevel: 'info',
-    legalComments: 'none',
-  });
-
-  // Move every bundle into place (a rename over an existing file is atomic on
-  // the same filesystem), then drop whatever the previous build left that this
-  // one did not produce, then the empty staging dir.
   const produced = new Set();
-  for (const outFile of Object.keys(result.metafile.outputs)) {
-    const name = basename(outFile);
-    await rename(outFile, join(dist, name));
-    produced.add(name);
+  try {
+    // Splitting OFF: each entry is a single self-contained file with no
+    // shared `chunk-*.js`. The browser surface is one request
+    // (`webjs-core-browser.js`); the handful of other entries (the Node
+    // full bundle, the on-demand lazy loader, the test helpers) duplicate
+    // the small amount of code they share, which is a cheap tarball cost
+    // (never shipped to a browser) in exchange for a clean, waterfall-free
+    // network graph. The few entries mean little duplication in practice.
+    const result = await build({
+      entryPoints: ENTRIES.map((e) => ({ in: join(CORE, e.in), out: e.out })),
+      outdir: staging,
+      bundle: true,
+      splitting: false,
+      format: 'esm',
+      target: 'es2022',
+      platform: 'browser',
+      sourcemap: 'linked',
+      sourcesContent: false,
+      minify: true,
+      treeShaking: true,
+      metafile: true,
+      logLevel: 'info',
+      legalComments: 'none',
+    });
+
+    // Move every bundle into place (a rename over an existing file is atomic
+    // on the same filesystem), then drop whatever the previous build left that
+    // this one did not produce.
+    for (const outFile of Object.keys(result.metafile.outputs)) {
+      const name = basename(outFile);
+      await rename(outFile, join(dist, name));
+      produced.add(name);
+    }
+    for (const stale of await readdir(dist)) {
+      if (!produced.has(stale)) await rm(join(dist, stale), { recursive: true, force: true });
+    }
+  } finally {
+    // On every path, including an esbuild failure: the staging sibling is not
+    // matched by the `.gitignore` `dist` pattern, so one left behind by a
+    // build that threw would show up untracked and ride a `git add -A`.
+    await rm(staging, { recursive: true, force: true });
   }
-  for (const stale of await readdir(dist)) {
-    if (!produced.has(stale)) await rm(join(dist, stale), { recursive: true, force: true });
-  }
-  await rm(staging, { recursive: true, force: true });
 
   // Sanity-check: every entry produced an output file with the
   // expected name. If esbuild ever changes its naming, fail loud
