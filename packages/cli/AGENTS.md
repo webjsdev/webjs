@@ -114,6 +114,18 @@ lib/
                          scaffold-template-validation.test.js` +
                          `test/scaffolds/scaffold-integration.test.js` (the
                          emitted `.env.example` line).
+  ci-config.js           PURE reader for the `webjs.ci` step list (#1471): normalizes
+                         the string shorthand, validates every shape with its JSON path
+                         (the boot validator never follows the schema's $ref), and
+                         resolves `--only` titles. Nested-in-parallel `parallel` is a
+                         problem, not honoured.
+  ci-runner.js           The `webjs ci` runner (#1471): sequential steps inherit stdio,
+                         parallel-group steps are captured (detached, stdin ignored,
+                         resolved on `close` with a bounded grace) and replayed whole,
+                         a TTY-only progress line, Rails-shaped result lines, GitHub
+                         Actions log groups + annotations, the step-summary table. Pure
+                         of process.exit / console / the clock (spawn, write, now,
+                         timers injectable).
   check-target.js        PURE invocation-target guard for `webjs check` (#1301).
                          `findCheckTarget(cwd)` returns `{ isApp, workspaceApps }`,
                          `notAnAppMessage()` renders the stderr refusal and

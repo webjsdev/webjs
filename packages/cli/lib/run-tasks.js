@@ -12,7 +12,7 @@ import { delimiter, dirname, join } from 'node:path';
  * @param {string} cwd
  * @param {NodeJS.ProcessEnv} [env]
  */
-function envWithLocalBin(cwd, env = process.env) {
+export function envWithLocalBin(cwd, env = process.env) {
   const bins = [];
   let dir = cwd;
   // Walk up to the filesystem root, collecting each node_modules/.bin.
@@ -110,7 +110,7 @@ export function startParallelTasks(commands, cwd, opts = {}) {
  *
  * @param {import('node:child_process').ChildProcess} child
  */
-function killChildTree(child) {
+export function killChildTree(child) {
   try {
     if (typeof child.pid === 'number') process.kill(-child.pid, 'SIGTERM');
     else child.kill();
