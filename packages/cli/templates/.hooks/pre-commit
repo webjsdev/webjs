@@ -7,10 +7,11 @@
 #
 # To bypass in emergencies: git commit --no-verify
 #
-# Tests and convention checks run in CI (.github/workflows/ci.yml), not
-# here, so a commit stays fast and the test gate cannot be skipped by a
-# local --no-verify. The CI workflow runs `webjs check` + `webjs test`
-# on every push and pull request.
+# Tests and convention checks do not run here, so a commit stays fast. The
+# step list lives in package.json under "webjs": { "ci" }. Run it locally
+# with `npm run ci` before pushing (the local gate), and the CI workflow
+# (.github/workflows/ci.yml) runs the same list on every push and pull
+# request, where a local --no-verify cannot skip it.
 #
 # Running more than one AI agent on this repo at once? Give each task its own
 # git worktree, not a shared checkout. Two agents in one working directory

@@ -292,6 +292,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   // points (`webjs create` and `npx create-webjs-app`) explicitly set
   // `install: true` unless the user passes `--no-install`.
   const shouldInstall = opts.install === true;
+  // `--skip-ci` (#1471, `rails new --skip-ci` parity): omit the GitHub
+  // workflow. The local `webjs ci` list in package.json is always emitted, so
+  // the app still has its gate; only the cloud half is optional.
+  const skipCi = opts.skipCi === true;
   // Defence in depth. The CLI already validates this, but library
   // callers (tests, programmatic use) might pass anything.
   const VALID_TEMPLATES = ['full-stack', 'api'];
@@ -421,6 +425,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // the environment-shaped checks (env drift, pin freshness over the
       // network, the git hook) stay warns and cannot make CI flaky.
       doctor: 'webjs doctor',
+      // Local CI (#1471): every check above plus the test layers, one command,
+      // from the step list in the `webjs.ci` block below. Runtime-neutral like
+      // the other tooling scripts (it spawns `webjs ...` children).
+      ci: 'webjs ci',
       'db:generate': 'webjs db generate',
       'db:migrate': 'webjs db migrate',
       'db:push': 'webjs db push',
@@ -568,6 +576,39 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // everything else keeps its default warn. Add a code with "off" to
       // silence it, or "error" to make it fatal too.
       doctor: { gate: { UNMARKED_ASSET_LINKS: 'error' } },
+      // Local CI (#1471), the Rails `bin/ci` posture. `npm run ci` runs this
+      // list on a developer machine and the generated GitHub workflow runs the
+      // SAME list through the same command, so the two cannot drift. Bare
+      // `webjs ...` commands, like the before-steps above (a Bun app's image
+      // has no npm). The `Checks` group runs two steps at a time with each
+      // step's output replayed whole; `Tests` inside it stays SEQUENTIAL, one
+      // slot, because the server and e2e layers share one SQLite file.
+      ci: {
+        steps: [
+          { title: 'Setup', run: 'webjs db migrate' },
+          {
+            title: 'Checks',
+            parallel: 2,
+            steps: [
+              { title: 'Conventions', run: 'webjs check' },
+              { title: 'Health', run: 'webjs doctor' },
+              { title: 'Types', run: 'webjs typecheck' },
+              {
+                title: 'Security: dependency audit',
+                run: isBun ? 'bun audit --audit-level=high' : 'npm audit --audit-level=high',
+              },
+              {
+                title: 'Tests',
+                steps: [
+                  { title: 'Tests: server', run: 'webjs test --server' },
+                  { title: 'Tests: browser', run: 'webjs test --browser' },
+                  { title: 'Tests: e2e', run: 'webjs test --server', env: { WEBJS_E2E: '1' } },
+                ],
+              },
+            ],
+          },
+        ],
+      },
     },
   }, null, 2) + '\n');
 
@@ -663,7 +704,8 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     // Shipped without a dot (npm strips a published .gitignore) and renamed on copy.
     'gitignore',
     '.github/pull_request_template.md',
-    // CI runs webjs check + the test layers on every PR and push to main.
+    // The cloud half of CI: one job that runs `npm run ci`, the same step list
+    // the app declares under `webjs.ci` (#1471). Omitted by `--skip-ci`.
     '.github/workflows/ci.yml',
     '.editorconfig',
     '.vscode/settings.json',
@@ -692,6 +734,8 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     '.github/workflows/ci.yml': bunifyCi,
   };
   for (const f of templateFiles) {
+    // `--skip-ci` drops only the workflow; the PR template still ships.
+    if (skipCi && f === '.github/workflows/ci.yml') continue;
     const src = join(TEMPLATES, f);
     if (existsSync(src)) {
       // `gitignore` ships without a dot (npm strips a published `.gitignore`)

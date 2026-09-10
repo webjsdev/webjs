@@ -44,15 +44,20 @@ cross-origin access use the `cors()` middleware from `@webjsdev/server`; with
 
 ### 5. Verify before you call it done
 
-Run each of these and fix what it reports, in order:
+Run `npm run ci` and fix what it reports. It is one command for every gate,
+the step list declared in `package.json` under `webjs.ci`, with a result line
+per step:
 
-- `npm run check` (correctness: no browser-import or boundary violation).
-- `npm run doctor` (project health; CI runs it too). It fails on whatever
-  `package.json` `webjs.doctor.gate` marks `error`, plus the two hard toolchain
-  checks that are fatal with no gate entry, `NODE_VERSION` and
-  `TSCONFIG_ERASABLE`.
-- `npm run typecheck` (zero type errors).
-- `npm test` (unit tests for the endpoints and modules you built).
+- `webjs check` (correctness: no browser-import or boundary violation).
+- `webjs doctor` (project health). It fails on whatever `package.json`
+  `webjs.doctor.gate` marks `error`, plus the two hard toolchain checks that
+  are fatal with no gate entry, `NODE_VERSION` and `TSCONFIG_ERASABLE`.
+- `webjs typecheck` (zero type errors).
+- A dependency audit.
+- The test layers for the endpoints and modules you built.
+
+The GitHub workflow runs the same list, so a green local run predicts CI.
+While iterating, `npm run ci -- --only Tests` runs one layer.
 
 Then boot `npm run dev` and probe each endpoint for the expected status and JSON
 shape.
@@ -66,6 +71,7 @@ npm run dev             # dev server at http://localhost:8080
 npm run start           # production server
 npm test                # unit + browser tests
 npm run typecheck
+npm run ci              # every gate, one command (the webjs.ci steps in package.json)
 npm run check           # correctness checks
 npm run doctor          # project health (severity per check: webjs.doctor.gate)
 npm run db:generate && npm run db:migrate

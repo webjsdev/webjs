@@ -105,7 +105,7 @@ const USAGE = `webjs commands:
                                                   in package.json, so CI gates on a chosen subset without every warning becoming fatal
   webjs types                                     Generate .webjs/routes.d.ts (typed Route union + per-route params)
   webjs typecheck [tsc args...]                   Type-check the app with the project's tsc --noEmit (non-zero on errors)
-  webjs create <name> [--template full-stack|api] [--db sqlite|postgres] [--runtime node|bun] [--no-install]  Scaffold a new webjs app
+  webjs create <name> [--template full-stack|api] [--db sqlite|postgres] [--runtime node|bun] [--no-install] [--skip-ci]  Scaffold a new webjs app
                                                   <name> must be a valid package name (letters, digits, - . _, starts with a letter or digit)
                                                   (only 2 templates exist. default: full-stack, Drizzle, --db sqlite, --runtime node)
                                                   --runtime bun emits a Bun-flavored app (bun.lock, bun Dockerfile/CI, bun docs);
@@ -255,7 +255,7 @@ const HELP = {
     examples: ['webjs typecheck', 'webjs typecheck --watch'],
   },
   create: {
-    usage: 'webjs create <name> [--template full-stack|api] [--db sqlite|postgres] [--runtime node|bun] [--no-install]',
+    usage: 'webjs create <name> [--template full-stack|api] [--db sqlite|postgres] [--runtime node|bun] [--no-install] [--skip-ci]',
     summary: 'Scaffold a new app. Defaults: full-stack template, Drizzle + SQLite, Node runtime.',
     options: [
       // Kept to one terminal line like every other row: printHelp does not
@@ -268,6 +268,7 @@ const HELP = {
       { flag: '--db <d>', description: 'sqlite (default) or postgres.' },
       { flag: '--runtime <r>', description: 'node (default) or bun.' },
       { flag: '--no-install', description: 'Skip the package-manager install step.' },
+      { flag: '--skip-ci', description: 'Omit the GitHub workflow (.github/workflows/ci.yml); the local `npm run ci` list is always emitted.' },
     ],
     examples: [
       'webjs create my-app',
@@ -1485,6 +1486,8 @@ Full docs: https://webjs.dev/docs`);
         process.exit(1);
       }
       const noInstall = rest.includes('--no-install');
+      // --skip-ci omits the GitHub workflow (#1471); the local ci list stays.
+      const skipCi = rest.includes('--skip-ci');
       // --db picks the database dialect: sqlite (default) or postgres.
       const db = flag(rest, '--db', 'sqlite');
       // --runtime picks the target runtime: node (default) or bun. Orthogonal
@@ -1496,7 +1499,7 @@ Full docs: https://webjs.dev/docs`);
         process.exit(1);
       }
       const { scaffoldApp } = await import('../lib/create.js');
-      await scaffoldApp(name, process.cwd(), { template, db, runtime, install: !noInstall });
+      await scaffoldApp(name, process.cwd(), { template, db, runtime, install: !noInstall, skipCi });
       break;
     }
     case 'vendor': {

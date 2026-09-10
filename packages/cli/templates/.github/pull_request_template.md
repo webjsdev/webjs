@@ -4,10 +4,9 @@
 
 ## Test plan
 
-- [ ] Unit tests added/updated (`webjs test` passes)
-- [ ] E2E tests added/updated for user-facing changes (`webjs test --e2e` passes)
-- [ ] `webjs check` passes (no convention violations)
-- [ ] `webjs doctor` passes (project health; it fails on whatever `webjs.doctor.gate` marks `error`, plus the hard `NODE_VERSION` / `TSCONFIG_ERASABLE` checks)
+- [ ] `webjs ci` passes locally (the `webjs.ci` step list in package.json: `webjs check`, `webjs doctor`, `webjs typecheck`, the dependency audit, and the server / browser / e2e test layers; CI runs the same list)
+- [ ] Unit tests added/updated
+- [ ] E2E tests added/updated for user-facing changes (`WEBJS_E2E=1 webjs test`)
 
 ## Definition of done
 

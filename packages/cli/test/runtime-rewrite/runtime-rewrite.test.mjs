@@ -133,8 +133,13 @@ test('bunifyCi: keeps setup-node, adds setup-bun, bun install, plain bun run', (
     '      - run: npm run db:generate && npm run db:migrate',
     '      - run: npm install --no-save puppeteer-core',
     '      - run: npx playwright install --with-deps chromium',
+    '      - run: npm run ci',
   ].join('\n');
   const out = bunifyCi(node);
+  // `npm run ci` (the local CI list, #1471) is rewritten by the generic
+  // `npm run ` rule and must NOT be caught by the `npm ci` install rewrite.
+  assert.match(out, /- run: bun run ci$/m);
+  assert.doesNotMatch(out, /bun install ci|bun run install/);
   // Node is kept (webjs test/db tooling runs on it); Bun is added for install.
   assert.match(out, /uses: actions\/setup-node@v6/);
   assert.match(out, /uses: oven-sh\/setup-bun@v2/);
