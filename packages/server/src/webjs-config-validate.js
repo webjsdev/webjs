@@ -41,9 +41,9 @@ import { fileURLToPath } from 'node:url';
  * `integer` leaf types.
  *
  * So a value is type-checked only when its schema declares `type: "boolean"` or
- * `type: "integer"`, or an `enum`. Today that is 9 of the 18 top-level keys; the
- * other 9 (`headers`, `redirects`, `allowedOrigins`, `basePath`, `csp`, `dev`,
- * `start`, `db`, `doctor`) pass whatever they hold, `csp` because its schema is a
+ * `type: "integer"`, or an `enum`. Today that is 9 of the 19 top-level keys; the
+ * other 10 (`headers`, `redirects`, `allowedOrigins`, `basePath`, `csp`, `dev`,
+ * `start`, `db`, `doctor`, `ci`) pass whatever they hold, `csp` because its schema is a
  * `oneOf` with no `type` at all and the rest because theirs is `array`,
  * `string`, or `object`. That is enough for the case this exists to close, a
  * typo'd top-level key silently dropped, plus the leaf kinds a schema can decide

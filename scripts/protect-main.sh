@@ -39,7 +39,7 @@ gh api -X PUT "repos/${REPO}/branches/main/protection" \
       "Browser (web-test-runner / Playwright)",
       "E2E (Puppeteer against the blog example)",
       "Build (@webjsdev/core dist)",
-      "In-repo app tests (website + blog)"
+      "In-repo app tests (website + blog + gallery)"
     ]
   },
   "enforce_admins": false,

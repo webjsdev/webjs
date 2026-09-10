@@ -237,6 +237,71 @@
           }
         }
       }
+    },
+    "ci": {
+      "description": "Local CI (#1471): the step list `webjs ci` runs on a developer machine, and the same list a cloud pipeline runs by calling `npm run ci`, so the two cannot drift. Read by the CLI (readCiConfig in packages/cli/lib/ci-config.js), NOT the server. A step is a string (shorthand for a command whose title is the command), a { title, run, env? } command, or a { title, steps, parallel? } group. `parallel` is a slot count (default 1, sequential); a group nested inside a parallel group takes ONE slot and runs its steps in order, so it cannot declare `parallel` itself.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["steps"],
+      "properties": {
+        "steps": {
+          "description": "The steps, run in order. Required: a block with no steps is refused, since a run of zero steps would read as green. Every child gets CI=true and node_modules/.bin on PATH. A failing step fails the run (exit 1); --fail-fast stops at the first failure.",
+          "type": "array",
+          "items": { "$ref": "#/definitions/ciStep" }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "ciCommand": {
+      "description": "One command step of `webjs ci`.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "run"],
+      "properties": {
+        "title": { "description": "Shown in the step heading and its result line.", "type": "string", "minLength": 1 },
+        "run": { "description": "The shell command, run with node_modules/.bin on PATH and CI=true in the environment.", "type": "string", "minLength": 1 },
+        "env": {
+          "description": "Extra environment for this step only, e.g. { \"WEBJS_E2E\": \"1\" }.",
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "ciStep": {
+      "description": "A top-level `webjs ci` step: a string (a command whose title is the command), a command object, or a group that may run its steps in parallel.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "$ref": "#/definitions/ciCommand" },
+        {
+          "description": "A group of steps. `parallel` is a slot count; each nested group takes one slot and runs sequentially.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["title", "steps"],
+          "properties": {
+            "title": { "description": "The group name, shown in the progress line.", "type": "string", "minLength": 1 },
+            "parallel": { "description": "How many steps run at once (default 1, sequential).", "type": "integer", "minimum": 1 },
+            "steps": { "description": "The group's steps.", "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/ciNestedStep" } }
+          }
+        }
+      ]
+    },
+    "ciNestedStep": {
+      "description": "A step inside a group: the same shapes as a top-level step, except a nested group cannot declare `parallel` (it occupies one slot of its parent and runs sequentially).",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "$ref": "#/definitions/ciCommand" },
+        {
+          "description": "A nested group: one slot of the parent, steps run in order.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["title", "steps"],
+          "properties": {
+            "title": { "description": "The group name.", "type": "string", "minLength": 1 },
+            "steps": { "description": "The group's steps.", "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/ciNestedStep" } }
+          }
+        }
+      ]
     }
   }
 }

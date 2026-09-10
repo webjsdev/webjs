@@ -50,15 +50,21 @@ Read `AGENTS.md` first. Full hosted docs are at https://webjs.dev/docs.
 2. Browser tests in `test/<feature>/browser/*.test.js` for hydration, DOM, slots,
    and the client router.
 3. Documentation stays in sync on the SAME PR as the code, never a follow-up.
-4. `npm run check` must pass (correctness), and so must `npm run doctor`
-   (project health). CI runs both. Doctor fails on whatever your `package.json`
-   `webjs.doctor.gate` marks `error`, which starts as the un-versioned
-   stylesheet link check, plus the two hard toolchain checks that default to
-   `error` with no gate entry at all: `NODE_VERSION` (the Node floor) and
-   `TSCONFIG_ERASABLE` (`erasableSyntaxOnly` missing from an existing
-   tsconfig), either of which would 500 the app at runtime. Everything else it
-   reports is a warning that cannot fail the build. Widen or narrow the gate in
-   `package.json` rather than in the workflow.
+4. `npm run ci` must pass before you push. It runs the step list declared in
+   `package.json` under `webjs.ci`, one result line per step: `webjs check`
+   (correctness), `webjs doctor` (project health), `webjs typecheck`, a
+   dependency audit, then the server, browser, and e2e test layers. The GitHub
+   workflow runs the same list on every PR and push, so the two cannot drift;
+   `npm run ci -- --only Tests` runs one layer while you iterate, and
+   `npm run ci -- --signoff` posts a green commit status (basecamp/gh-signoff)
+   a branch-protection rule can require. Doctor fails on whatever your
+   `package.json` `webjs.doctor.gate` marks `error`, which starts as the
+   un-versioned stylesheet link check, plus the two hard toolchain checks that
+   default to `error` with no gate entry at all: `NODE_VERSION` (the Node
+   floor) and `TSCONFIG_ERASABLE` (`erasableSyntaxOnly` missing from an
+   existing tsconfig), either of which would 500 the app at runtime. Everything
+   else it reports is a warning that cannot fail the build. Widen or narrow the
+   gate, and the step list, in `package.json` rather than in the workflow.
 
 How a PR gets REVIEWED is deliberately not specified here. Use whatever your
 team already does. WebJs has opinions about the code (the conventions above,

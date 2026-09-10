@@ -138,13 +138,47 @@ for (const template of ['full-stack', 'api']) {
       assert.equal(pkg.webjs.doctor.gate.UNMARKED_ASSET_LINKS, 'error');
       assert.equal(pkg.scripts.doctor, 'webjs doctor');
       const ci = await readFile(join(cwd, 'my-app', '.github', 'workflows', 'ci.yml'), 'utf8');
-      assert.match(ci, /^\s+- run: npm run doctor$/m, 'the conventions job runs doctor');
+      assert.match(ci, /^\s+- run: npm run ci$/m, 'the workflow runs the declared step list');
+      const flat = JSON.stringify(pkg.webjs.ci.steps);
+      assert.match(flat, /"webjs doctor"/, 'the ci list runs doctor, which reads the gate');
     } finally {
       console.log = restoreLog;
       await rm(cwd, { recursive: true, force: true });
     }
   });
 }
+
+// `--skip-ci` (#1471, `rails new --skip-ci` parity) drops ONLY the cloud half:
+// the workflow file. The local `webjs.ci` list and the `ci` script are always
+// emitted (the app keeps its gate), and the PR template is not CI, so it stays.
+test('--skip-ci omits the GitHub workflow and nothing else (library option + CLI flag)', async () => {
+  const cwd = await tempCwd();
+  const restoreLog = console.log;
+  console.log = () => {};
+  try {
+    await scaffoldApp('lib-app', cwd, { template: 'full-stack', install: false, skipCi: true });
+    const app = join(cwd, 'lib-app');
+    await assert.rejects(readFile(join(app, '.github', 'workflows', 'ci.yml')), 'no workflow with skipCi');
+    await readFile(join(app, '.github', 'pull_request_template.md'), 'utf8');
+    const pkg = JSON.parse(await readFile(join(app, 'package.json'), 'utf8'));
+    assert.equal(pkg.scripts.ci, 'webjs ci', 'the local gate is still scripted');
+    assert.ok(Array.isArray(pkg.webjs.ci.steps) && pkg.webjs.ci.steps.length > 0, 'the local list is still declared');
+
+    // Counterfactual: the default keeps generating the workflow.
+    await scaffoldApp('default-app', cwd, { template: 'full-stack', install: false });
+    await readFile(join(cwd, 'default-app', '.github', 'workflows', 'ci.yml'), 'utf8');
+
+    // The CLI flag reaches the same option.
+    const bin = fileURLToPath(new URL('../../packages/cli/bin/webjs.js', import.meta.url));
+    const r = spawnSync(process.execPath, [bin, 'create', 'cli-app', '--no-install', '--skip-ci'], { cwd, encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stderr);
+    await assert.rejects(readFile(join(cwd, 'cli-app', '.github', 'workflows', 'ci.yml')), 'the CLI flag omits the workflow');
+    await readFile(join(cwd, 'cli-app', '.github', 'pull_request_template.md'), 'utf8');
+  } finally {
+    console.log = restoreLog;
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
 
 test('an uppercase name scaffolds a working app end to end', async () => {
   // The rule deliberately allows uppercase, and the claim that goes with it is
@@ -183,6 +217,22 @@ test('the CLI rejects a bad app name non-zero, before writing anything', async (
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }
+});
+
+// The wrapper resolves `@webjsdev/cli` by bare specifier, which in a linked
+// worktree lands in the primary checkout, so this pins the forwarding in the
+// wrapper's SOURCE rather than by running it: the flag must reach scaffoldApp
+// as `skipCi`, and the usage must name it, so `npm create webjs -- --skip-ci`
+// cannot silently scaffold the workflow the way `--db` once silently scaffolded
+// sqlite.
+test('the create-webjs wrapper forwards --skip-ci to scaffoldApp (#1471)', async () => {
+  const src = await readFile(
+    new URL('../../packages/wrappers/create-webjs/bin/create-webjs.js', import.meta.url),
+    'utf8',
+  );
+  assert.match(src, /const skipCi = args\.includes\('--skip-ci'\)/, 'the flag is read');
+  assert.match(src, /scaffoldApp\(name, process\.cwd\(\), \{[^}]*skipCi[^}]*\}\)/, 'and forwarded to scaffoldApp');
+  assert.match(src, /--skip-ci\s+omit the GitHub workflow/, 'and documented in the usage');
 });
 
 test('the create-webjs wrapper rejects a bad name too (npm / bun create webjs)', async () => {

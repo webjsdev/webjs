@@ -95,16 +95,21 @@ accessor). Use the shorthand for primitives
 
 ### 7. Verify before you call it done
 
-Run each of these and fix what it reports, in order:
+Run `npm run ci` and fix what it reports. It is one command for every gate,
+the step list declared in `package.json` under `webjs.ci`, with a result line
+per step:
 
-- `npm run check` (correctness: no browser-import or boundary violation).
-- `npm run doctor` (project health; CI runs it too). It fails on whatever
-  `package.json` `webjs.doctor.gate` marks `error`, plus the two hard toolchain
-  checks that are fatal with no gate entry, `NODE_VERSION` and
-  `TSCONFIG_ERASABLE`.
-- `npm run typecheck` (zero type errors).
-- `npm test` (unit and browser tests for the features you built).
-- `npm run css:build` (compile Tailwind).
+- `webjs check` (correctness: no browser-import or boundary violation).
+- `webjs doctor` (project health). It fails on whatever `package.json`
+  `webjs.doctor.gate` marks `error`, plus the two hard toolchain checks that
+  are fatal with no gate entry, `NODE_VERSION` and `TSCONFIG_ERASABLE`.
+- `webjs typecheck` (zero type errors).
+- A dependency audit.
+- The server, browser, and e2e test layers for the features you built.
+
+The GitHub workflow runs the same list, so a green local run predicts CI.
+While iterating, `npm run ci -- --only Tests` runs one layer. Then
+`npm run css:build` (compile Tailwind).
 
 Then boot `npm run dev`, confirm every page route returns HTTP 200, and open
 every route you changed in a real browser and play through its states: `check`
@@ -121,6 +126,7 @@ npm run start                # production server
 npm test                     # unit + browser tests
 npm run typecheck
 npm run css:build            # compile Tailwind
+npm run ci                   # every gate, one command (the webjs.ci steps in package.json)
 npm run check                # correctness checks
 npm run doctor               # project health (severity per check: webjs.doctor.gate)
 npx webjsdev ui add <name>   # copy a ui primitive into components/ui/

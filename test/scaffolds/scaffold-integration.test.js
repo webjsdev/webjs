@@ -277,18 +277,32 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.doesNotMatch(preCommit, /no test is staged/,
       'pre-commit no longer carries the require-tests floor (moved to CI)');
 
-    // CI carries the test gate: webjs check + the unit / browser / e2e
-    // layers on every PR and push to main.
+    // The test gate is the `webjs.ci` step list in package.json (#1471):
+    // `npm run ci` runs it locally, and the ONE-job workflow runs the same
+    // list on every PR and push to main, so the two cannot drift.
     const ciWorkflow = readFileSync(
       join(appDir, '.github/workflows/ci.yml'), 'utf8');
-    assert.match(ciWorkflow, /npm run check/,
-      'CI runs webjs check');
-    assert.match(ciWorkflow, /npm run test:server/,
-      'CI runs the unit + integration suite (server layer)');
-    assert.match(ciWorkflow, /npm run test:browser/,
-      'CI runs the browser suite');
-    assert.match(ciWorkflow, /WEBJS_E2E/,
-      'CI runs the e2e layer');
+    assert.match(ciWorkflow, /^\s+- run: npm run ci$/m,
+      'the workflow runs the declared step list through npm run ci');
+    assert.doesNotMatch(ciWorkflow, /npm run check|npm run test:server/,
+      'counterfactual: the workflow no longer restates the steps by hand');
+    assert.match(ciWorkflow, /^permissions:\n  contents: read$/m,
+      'the workflow token is read-only');
+    assert.match(ciWorkflow, /timeout-minutes: \d+/, 'the job is bounded');
+    const ciPkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
+    assert.equal(ciPkg.scripts.ci, 'webjs ci', 'the ci script is the runtime-neutral webjs command');
+    const flatten = (steps) => steps.flatMap((s) =>
+      typeof s === 'string' ? [{ run: s }] : s.steps ? flatten(s.steps) : [s]);
+    const ciSteps = flatten(ciPkg.webjs.ci.steps);
+    const runs = ciSteps.map((s) => s.run);
+    for (const expected of ['webjs check', 'webjs doctor', 'webjs typecheck', 'webjs test --server', 'webjs test --browser']) {
+      assert.ok(runs.includes(expected), `the ci list runs ${expected}`);
+    }
+    assert.ok(ciSteps.some((s) => s.env?.WEBJS_E2E === '1'), 'the ci list runs the e2e layer via its env');
+    const checks = ciPkg.webjs.ci.steps.find((s) => s.title === 'Checks');
+    assert.equal(checks.parallel, 2, 'the Checks group runs two steps at a time');
+    const tests = checks.steps.find((s) => s.title === 'Tests');
+    assert.equal(tests.parallel, undefined, 'the Tests sub-group is sequential (one SQLite file)');
 
     // Production / deploy scaffolding ships with every app.
     assert.ok(existsSync(join(appDir, 'Dockerfile')), 'Dockerfile scaffolded');

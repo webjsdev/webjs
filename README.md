@@ -125,7 +125,7 @@ packages/
   # Framework (the things webjs ships at runtime)
   core/             # @webjsdev/core: html, css, WebComponent, renderers, client router
   server/           # @webjsdev/server: dev/prod server, router, SSR, actions, WS
-  cli/              # @webjsdev/cli: webjs dev/start/create/db/test/check/ui
+  cli/              # @webjsdev/cli: webjs dev/start/create/db/test/check/ci/ui
   intellisense/       # @webjsdev/intellisense: standalone editor intelligence (own template parser, no Lit dep)
   ui/               # @webjsdev/ui: AI-first component library + CLI
 
@@ -313,7 +313,9 @@ Pre-1.0, released continuously. Current versions of every package
 (`@webjsdev/core`, `@webjsdev/server`, `@webjsdev/cli`, `@webjsdev/ui`) are on
 the [changelog](https://webjs.dev/changelog). Behaviour is covered by unit,
 browser (web-test-runner), and puppeteer e2e suites, plus example-app smoke
-tests. Key features:
+tests. `npm run ci` runs the whole pyramid locally, in this repo and in every
+scaffolded app, from a step list declared in `package.json` (the Rails `bin/ci`
+model); the generated GitHub workflow runs the same list. Key features:
 
 - **Core:** Signals (`signal`, `computed`, `effect`, `batch`, TC39 Stage 1 shape) as the default state primitive, with WebComponent's built-in SignalWatcher auto-tracking `.get()` reads inside `render()`. Reactive properties via the declare-free base-class factory `extends WebComponent({ count: Number })` (the `prop()` helper carries options like `reflect` / `state` / `attribute` / `default`), reserved for HTML attribute round-trip (a direct `static properties` block throws at runtime, flagged by the `no-static-properties` rule, and a class-field initializer on a factory prop is caught by `reactive-props-no-class-field`). Full lit-API parity: ReactiveController hooks (`hostConnected`, `hostDisconnected`, `hostUpdate`, `hostUpdated`) and lifecycle (`shouldUpdate`, `willUpdate`, `update`, `updated`, `firstUpdated`, `updateComplete`), 12 directives (`repeat`, `unsafeHTML`, `live`, `keyed`, `guard`, `templateContent`, `ref` + `createRef`, `cache`, `until`, `asyncAppend`, `asyncReplace`, `watch`). SSR with DSD (opt-in) + light-DOM hydration (default), light-DOM `<slot>` projection (framework-driven, same API as shadow DOM), fine-grained client renderer, `Suspense()`, client router with `composedPath()` for shadow DOM, mixed-attribute interpolation, MutationObserver upgrade safety net.
 - **Data:** Server actions with webjs's built-in serializer (`Date`, `Map`, `Set`, `BigInt`, `TypedArray`, `Blob`, `File`, `FormData`, reference cycles all survive the wire). Two-marker server-file convention: `.server.{js,ts}` for path-level source-protection (browser imports get a throw-at-load stub), `'use server'` for RPC registration (file is also browser-callable). REST over HTTP via a `route.ts` (or the `route()` adapter) with an optional `validate` config export. `json()` + `richFetch()` for content-negotiated APIs. `cache()` for server-side query caching with TTL + `invalidate()`. `WEBJS_PUBLIC_*` env vars injected into `window.process.env` at SSR (no build step, no transform).

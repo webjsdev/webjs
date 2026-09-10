@@ -144,6 +144,46 @@ export interface WebjsStartTasks {
   before?: string[];
 }
 
+/** One command step of `webjs ci` (#1471). */
+export interface WebjsCiCommand {
+  /** Shown in the step heading and its result line. */
+  title: string;
+  /** The shell command, run with `node_modules/.bin` on PATH and `CI=true` in the environment. */
+  run: string;
+  /** Extra environment for this step only, e.g. `{ WEBJS_E2E: '1' }`. */
+  env?: Record<string, string>;
+}
+
+/** A step inside a group: a nested group takes ONE slot of its parent and runs sequentially, so it cannot declare `parallel`. */
+export interface WebjsCiNestedGroup {
+  /** The group name. */
+  title: string;
+  /** The group's steps, run in order. */
+  steps: WebjsCiNestedStep[];
+}
+
+/** A top-level group of `webjs ci` steps. */
+export interface WebjsCiGroup extends WebjsCiNestedGroup {
+  /** How many steps run at once (default 1, sequential). Captured output is replayed whole per step, never interleaved. */
+  parallel?: number;
+}
+
+/** A top-level `webjs ci` step: a string is shorthand for a command whose title is the command. */
+export type WebjsCiStep = string | WebjsCiCommand | WebjsCiGroup;
+
+/** A step inside a group: the same shapes, minus `parallel` on a nested group. */
+export type WebjsCiNestedStep = string | WebjsCiCommand | WebjsCiNestedGroup;
+
+/**
+ * Local CI in `webjs.ci` (#1471): the step list `webjs ci` runs, and the same
+ * list a cloud pipeline runs through `npm run ci`. Read by the CLI
+ * (`packages/cli/lib/ci-config.js`), not the server.
+ */
+export interface WebjsCiConfig {
+  /** The steps, run in order. A failing step fails the run. Required: a block with no steps is refused, since a run of zero steps would read as green. */
+  steps: WebjsCiStep[];
+}
+
 /**
  * A severity a `webjs.doctor.gate` entry may declare, mirroring ESLint's
  * three-level scale. `error` fails the `webjs doctor` exit, `warn` reports
@@ -237,6 +277,13 @@ export interface WebjsConfig {
    * (`packages/cli/lib/app-tasks.js`), NOT the server.
    */
   db?: Record<string, string>;
+
+  /**
+   * Local CI (#1471): the step list `webjs ci` runs locally and a cloud
+   * pipeline runs through `npm run ci`, so the two cannot drift. Read by the
+   * CLI (`packages/cli/lib/ci-config.js`), NOT the server.
+   */
+  ci?: WebjsCiConfig;
 
   /**
    * `webjs doctor` policy (#1257): which project-health checks the project

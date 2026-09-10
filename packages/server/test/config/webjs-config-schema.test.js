@@ -69,6 +69,7 @@ const KNOWN_KEYS = [
   'start', // readAppTasks (cli/lib/app-tasks.js), CLI-read (#550)
   'db', // readDbCommands (cli/lib/app-tasks.js), CLI-read (#1468)
   'doctor', // readDoctorPolicy (cli/lib/doctor.js), CLI-read (#1257)
+  'ci', // readCiConfig (cli/lib/ci-config.js), CLI-read (#1471)
 ];
 
 test('schema file is valid JSON and parses', () => {
@@ -215,6 +216,37 @@ test('webjs.dev.regenerate is declared in both the schema and the WebjsConfig ty
   const src = readFileSync(dtsPath, 'utf8');
   assert.match(src, /interface WebjsRegenerateRule/, 'the type declares WebjsRegenerateRule');
   assert.match(src, /regenerate\?:\s*WebjsRegenerateRule\[\]/, 'WebjsDevTasks carries regenerate');
+});
+
+// The `webjs.ci` step list (#1471) is recursive (a group holds steps that may
+// be groups), which the top-level checks above cannot see: the boot validator
+// never follows a `$ref`, so the CLI reader validates the shapes itself. Guard
+// the schema's shape here (the ref, the three step forms, and the rule that a
+// NESTED group cannot declare `parallel`) alongside the type, so an editor's
+// schema, the type, and the reader agree about what a step is.
+test('webjs.ci.steps is a recursive step list in both the schema and the WebjsConfig type (#1471)', () => {
+  const schema = JSON.parse(readFileSync(schemaPath, 'utf8'));
+  const steps = schema.properties?.ci?.properties?.steps;
+  assert.ok(steps, 'schema declares webjs.ci.steps');
+  assert.equal(steps.type, 'array', 'steps is an array');
+  assert.equal(steps.items?.$ref, '#/definitions/ciStep', 'each step refs the ciStep definition');
+  const defs = schema.definitions || {};
+  assert.equal(defs.ciStep?.oneOf?.length, 3, 'a step is a string, a command, or a group');
+  assert.equal(defs.ciNestedStep?.oneOf?.length, 3, 'a nested step has the same three forms');
+  const group = defs.ciStep.oneOf[2];
+  const nested = defs.ciNestedStep.oneOf[2];
+  assert.ok(group.properties?.parallel, 'a top-level group may declare parallel');
+  assert.equal(nested.properties?.parallel, undefined, 'a nested group cannot declare parallel');
+  assert.equal(nested.additionalProperties, false, 'so a nested parallel is flagged, not ignored');
+  assert.deepEqual((defs.ciCommand?.required || []).sort(), ['run', 'title'], 'a command needs title + run');
+
+  const dtsPath = fileURLToPath(
+    new URL('../../../core/src/webjs-config.d.ts', import.meta.url),
+  );
+  const src = readFileSync(dtsPath, 'utf8');
+  assert.match(src, /interface WebjsCiConfig/, 'the type declares WebjsCiConfig');
+  assert.match(src, /ci\?:\s*WebjsCiConfig/, 'WebjsConfig carries ci');
+  assert.match(src, /type WebjsCiNestedStep = string \| WebjsCiCommand \| WebjsCiNestedGroup/, 'a nested step excludes the parallel group');
 });
 
 test('representative valid configs pass the structural validator', () => {

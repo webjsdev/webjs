@@ -27,6 +27,7 @@ Only three templates exist; the CLI rejects anything else.
 |---|---|---|
 | `--template <full-stack \| api \| saas>` | `full-stack` | Pick the scaffold variant. |
 | `--no-install` | install runs | Skip the post-scaffold `<pm> install`. |
+| `--skip-ci` | the workflow ships | Omit `.github/workflows/ci.yml`; the local `npm run ci` step list in `package.json` is always emitted. |
 | `-h`, `--help` | | Show help. |
 
 The package manager is detected from `npm_config_user_agent`: pnpm / yarn / bun users get their own.

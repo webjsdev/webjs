@@ -58,8 +58,15 @@ test('bun scaffold: package.json scripts, trustedDependencies, lockfile flavor',
       inputs: ['app', 'components', 'modules', 'lib', 'public/input.css'],
     }]);
     const regenCmds = p.webjs.dev.regenerate.map((r) => r.command);
-    for (const step of [...p.webjs.dev.before, ...p.webjs.start.before, ...regenCmds]) {
-      assert.doesNotMatch(step, /npm run/, 'no npm in a Bun app before/regenerate step (the image has no npm)');
+    // The local CI list (#1471) is held to the same bar, and its audit step is
+    // the Bun one (the app has bun.lock, not package-lock.json).
+    const flatten = (steps) => steps.flatMap((s) =>
+      typeof s === 'string' ? [s] : s.steps ? flatten(s.steps) : [s.run]);
+    const ciCmds = flatten(p.webjs.ci.steps);
+    assert.ok(ciCmds.includes('bun audit --audit-level=high'), 'a Bun app audits with bun audit');
+    assert.ok(!ciCmds.some((c) => /^npm /.test(c)), 'no npm command in a Bun app ci step');
+    for (const step of [...p.webjs.dev.before, ...p.webjs.start.before, ...regenCmds, ...ciCmds]) {
+      assert.doesNotMatch(step, /npm run/, 'no npm in a Bun app before/regenerate/ci step (the image has no npm)');
     }
   } finally {
     restore();
@@ -109,7 +116,7 @@ test('bun scaffold: Dockerfile / compose / CI run on Bun', async () => {
     assert.match(ci, /oven-sh\/setup-bun@v2/);
     assert.match(ci, /actions\/setup-node/); // kept: webjs tooling runs on node
     assert.match(ci, /- run: bun install/);
-    assert.match(ci, /- run: bun run check/);
+    assert.match(ci, /- run: bun run ci$/m, 'the one-job workflow runs the declared list under bun');
     assert.doesNotMatch(ci, /bun --bun run/); // tooling stays on node
     assert.doesNotMatch(ci, /npm ci/);
   } finally {

@@ -198,6 +198,22 @@ webjs test --browser</code-block>
       <li><code>test/&lt;feature&gt;/e2e/&lt;name&gt;.test.{ts,mjs}</code>: e2e (opt in with <code>WEBJS_E2E=1</code>)</li>
     </ul>
 
+    <h2>webjs ci command</h2>
+    <p>One command for every layer. A scaffolded app declares its gate once, in <code>package.json</code> under <code>webjs.ci</code>, and <code>npm run ci</code> runs it with a timed result line per step, the Rails <code>bin/ci</code> model:</p>
+    <code-block># Every step: check, doctor, typecheck, a dependency audit, then the server,
+# browser, and e2e test layers
+npm run ci
+
+# One step or group by title, while iterating
+npm run ci -- --only Tests
+
+# Stop at the first failure
+npm run ci -- --fail-fast
+
+# One JSON document, for an agent loop
+npm run ci -- --json</code-block>
+    <p>The generated GitHub workflow runs the same list through the same command, so a green local run predicts CI. The pre-commit hook deliberately runs none of it (a commit stays fast); run it before every push. The browser and e2e steps need a Chromium on the machine (<code>npx playwright install chromium</code>, plus <code>puppeteer-core</code> for the e2e layer), which the workflow installs for itself. The step shapes, the flags, and the <code>--signoff</code> merge gate are on the <a href="/docs/configuration">configuration</a> page.</p>
+
     <h2>Browser Tests (WTR + Playwright)</h2>
     <p>Browser tests launch real Chromium to exercise hydration, the DOM, slots, the client router, and custom-element upgrade. <code>ssrFixture()</code> server-renders a template then hydrates it in the real browser:</p>
     <code-block>import { html } from '@webjsdev/core';

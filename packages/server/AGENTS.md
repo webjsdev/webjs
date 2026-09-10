@@ -165,10 +165,12 @@ in THREE co-located places that MUST stay in lockstep:
    `readBodyLimits` / `computeServerTimeouts` (`body-limit.js`, the byte
    caps + timeouts), `readAllowedOrigins` (`csrf.js`, `allowedOrigins`),
    `readRegenerateRules` (`dev-regenerate.js`, `dev.regenerate`, #967), and
-   `readDevWatchPathsFromApp` (`dev.js`, `dev.watch`, #894). Four readers
+   `readDevWatchPathsFromApp` (`dev.js`, `dev.watch`, #894). Six readers
    live in the CLI rather than here: `readAppTasks`
    (`packages/cli/lib/app-tasks.js`, `dev.before` / `dev.parallel` /
-   `start.before`, #550), `readDoctorPolicy`
+   `start.before`, #550), `readDbCommands` (`packages/cli/lib/app-tasks.js`,
+   `db`, #1468), `readCiConfig` (`packages/cli/lib/ci-config.js`, `ci.steps`,
+   #1471, the local-CI step list `webjs ci` runs), `readDoctorPolicy`
    (`packages/cli/lib/doctor.js`, `doctor.gate`, #1257), and two more inside
    `lib/doctor.js` that read keys the server also reads, so a change to
    either key's semantics needs BOTH implementations updated:

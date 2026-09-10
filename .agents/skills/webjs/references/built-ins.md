@@ -216,6 +216,30 @@ An over-limit body responds `413` without buffering the whole payload.
 
 `before` runs to completion first (a non-zero exit aborts the boot). `parallel` (dev only) runs long-lived watchers alongside the server and tears them down on exit. `watch` (dev only) adds extra live-reload directories outside the app tree.
 
+### Local CI (`webjs.ci`)
+
+`webjs ci` runs the step list the block declares, the Rails 8.1 `bin/ci` posture: your machine is the first CI runner, and a cloud pipeline runs the SAME list by calling `npm run ci`, so the two cannot drift. Each step prints a heading, then `✅ <title> passed in 2.11s` or `❌ <title> failed in 0.01s`; the run ends with every failure listed and one total line, and exits 1 on any failure.
+
+```jsonc
+{ "webjs": { "ci": { "steps": [
+  { "title": "Setup", "run": "webjs db migrate" },
+  { "title": "Checks", "parallel": 2, "steps": [        // two at a time
+    "webjs check",                                       // a string is a command titled by itself
+    { "title": "Types", "run": "webjs typecheck" },
+    { "title": "Tests", "steps": [                       // a nested group takes ONE slot, runs in order
+      { "title": "Tests: server", "run": "webjs test --server" },
+      { "title": "Tests: e2e", "run": "webjs test --server", "env": { "WEBJS_E2E": "1" } }
+    ] }
+  ] }
+] } } }
+```
+
+A step is a string, a `{ title, run, env? }` command, or a `{ title, steps, parallel? }` group. `parallel` is a slot count (default 1); a parallel group captures each step's output and replays it whole when the step finishes, so two steps never interleave, and a group nested inside it takes one slot and runs sequentially (it cannot declare `parallel`, which the reader reports rather than honours). `env` is per-step, so the e2e opt-in does not depend on a shell prefix. Every child runs with `CI=true`, `node_modules/.bin` on PATH, and `.env` loaded first (a real env var wins), so a `webjs db migrate` step sees `DATABASE_URL`.
+
+Flags: `-f` / `--fail-fast` stops after the first failure (the default runs everything and lists every failure), `--only <title>` runs one step or group by title (repeatable, an unknown title is an error rather than an empty green run), `--json` emits one document on stdout (`{ ok, seconds, steps: [{ title, run, group, ok, code, seconds, output? }] }`, failed steps carrying their captured output, the human report on stderr) for an agent loop, and `--signoff` runs `gh signoff` after a green run. To hold a merge until a LOCAL run is green, install `basecamp/gh-signoff`, run `gh signoff install` once (a branch-protection rule requiring the `signoff` status), and run `npm run ci -- --signoff`; a red run posts nothing.
+
+Under GitHub Actions each step is a `::group::` in the log, a failed step is an `::error::` annotation, and a step table is appended to the job summary, so a single job running the whole list still names the layer that broke. The scaffold's workflow is exactly that one job; `webjs create --skip-ci` omits it and the local list always ships. A malformed block (a group with no title, a nested `parallel`, an unknown key) refuses to run and names every problem by JSON path, because a silently dropped step is a check that never ran. Nothing declared is exit 1 too, naming any workspace member that declares one, since "ran zero steps" would read as green.
+
 ### Bring your own ORM (`webjs.db`)
 
 Drizzle is the scaffold DEFAULT, not lock-in. The runtime never imports it, `db/connection.server.ts` is the app's own file, and `webjs db` is adapter-driven: a `db` block maps each verb to the shell command `webjs db <verb>` runs instead of the drizzle-kit default (node_modules/.bin on PATH like a `before` step, extra CLI args appended).
