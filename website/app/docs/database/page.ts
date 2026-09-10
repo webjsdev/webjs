@@ -127,6 +127,20 @@ export default async function Home() {
 webjs db migrate     # apply pending migrations (drizzle-kit migrate)
 webjs db push        # push the schema straight to the dev DB (drizzle-kit push)
 webjs db studio      # visual DB browser (drizzle-kit studio)
-webjs db seed        # run db/seed.server.ts</code-block>
+webjs db seed        # run db/seed.server.ts
+webjs db &lt;verb&gt;      # any verb webjs.db maps in package.json (see below)</code-block>
+
+    <h2 id="bring-your-own-orm">Bring your own ORM</h2>
+    <p>Drizzle is the <em>default</em>, not lock-in. The runtime never imports it, <code>db/connection.server.ts</code> is your own file, and the <code>webjs db</code> verbs are adapter-driven. A <code>db</code> block in the <code>package.json</code> <code>webjs</code> config maps each verb to the shell command <code>webjs db &lt;verb&gt;</code> runs instead of the drizzle-kit default, with <code>node_modules/.bin</code> on the PATH and any extra arguments appended, so a Prisma app looks like this.</p>
+    <code-block>"webjs": &#123;
+  "db": &#123;
+    "generate": "prisma migrate dev --create-only",
+    "migrate":  "prisma migrate deploy",
+    "push":     "prisma db push",
+    "studio":   "prisma studio",
+    "reset":    "prisma migrate reset --force"
+  &#125;
+&#125;</code-block>
+    <p>Any key is a verb, so <code>reset</code> above adds a <code>webjs db reset</code> command. A verb the block does not name keeps its default (drizzle-kit for the four kit verbs, <code>db/seed.server.ts</code> for <code>seed</code>), so an app with no block behaves exactly as before and the scaffold emits none. The point is that <code>webjs db migrate</code> stays one spelling whatever sits behind it, so the scaffolded <code>dev.before</code> and <code>start.before</code> steps, the Dockerfile, CI, and the deployment guide all keep working after a swap. Write the bare binary (<code>prisma migrate deploy</code>) rather than <code>npx prisma ...</code>, since a pure Bun image ships no <code>npx</code>. The rest of the swap is your own files: replace <code>db/connection.server.ts</code> with the new client, delete <code>drizzle.config.ts</code> and <code>db/columns.server.ts</code>, and keep the server-only imports behind <code>.server.ts</code> exactly as with Drizzle.</p>
   `;
 }

@@ -216,6 +216,24 @@ An over-limit body responds `413` without buffering the whole payload.
 
 `before` runs to completion first (a non-zero exit aborts the boot). `parallel` (dev only) runs long-lived watchers alongside the server and tears them down on exit. `watch` (dev only) adds extra live-reload directories outside the app tree.
 
+### Bring your own ORM (`webjs.db`)
+
+Drizzle is the scaffold DEFAULT, not lock-in. The runtime never imports it, `db/connection.server.ts` is the app's own file, and `webjs db` is adapter-driven: a `db` block maps each verb to the shell command `webjs db <verb>` runs instead of the drizzle-kit default (node_modules/.bin on PATH like a `before` step, extra CLI args appended).
+
+```jsonc
+{ "webjs": {
+  "db": {
+    "generate": "prisma migrate dev --create-only",
+    "migrate":  "prisma migrate deploy",
+    "push":     "prisma db push",
+    "studio":   "prisma studio",
+    "reset":    "prisma migrate reset --force"
+  }
+} }
+```
+
+Any key is a verb (`reset` above adds `webjs db reset`). A verb the block does not name keeps its default (drizzle-kit for `generate` / `migrate` / `push` / `studio`, `db/seed.server.ts` for `seed`), so an app with no block is unchanged and the scaffold emits none. The payoff is that `webjs db migrate` stays one spelling across ORMs, so the scaffolded `dev.before` / `start.before`, the Dockerfile, CI, and the deploy docs all keep working after a swap. Write the bare binary (`prisma migrate deploy`), not `npx prisma ...`, since a pure Bun image has no `npx`. The swap itself is the app's own files: replace `db/connection.server.ts` with the new client, drop `drizzle.config.ts` / `db/columns.server.ts`, and keep server-only imports behind `.server.ts` as before.
+
 ### Doctor severity gate
 
 `webjs doctor` reports project health, and by default only a broken toolchain fails the exit. `--strict` makes EVERY warning fatal, which is unusable in CI, because four checks are environment-shaped: `GIT_HOOK` wants a local pre-commit hook a runner has no reason to have, `ENV_DRIFT` compares against a `.env` CI does not carry, `VENDOR_PIN` fetches the network, and `FRAMEWORK_RESOLVE` plus `FRAMEWORK_LINKS` depend on the environment. So per-check severity is CONFIG, keyed by the stable code every result carries.

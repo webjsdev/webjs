@@ -4,7 +4,7 @@ import { EventEmitter } from 'node:events';
 import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runBeforeSteps, startParallelTasks } from '../../lib/run-tasks.js';
+import { shellQuote, runBeforeSteps, startParallelTasks } from '../../lib/run-tasks.js';
 
 /**
  * A fake `spawn` that records the commands it was asked to run and emits a
@@ -105,4 +105,25 @@ test('startParallelTasks actually terminates a real long-running child process',
   // The child should exit shortly after the kill; if it does not, the test
   // times out (proving the killer failed). No assertion needed beyond not hanging.
   await new Promise((r) => setTimeout(r, 200));
+});
+
+test('runBeforeSteps treats a signal-killed child as a failure, never exit 0', async () => {
+  // `exit` fires with code null + a signal for a killed child. A `db migrate`
+  // OOM-killed mid-way must abort the boot, not serve a half-applied schema.
+  const spawn = () => {
+    const c = new EventEmitter();
+    setImmediate(() => c.emit('exit', null, 'SIGKILL'));
+    return c;
+  };
+  const r = await runBeforeSteps(['x'], '/app', { spawn });
+  assert.deepEqual(r, { ok: false, step: 'x', code: 1 });
+});
+
+test('shellQuote passes a plain word through and single-quotes everything else', () => {
+  assert.equal(shellQuote('--name'), '--name');
+  assert.equal(shellQuote('db/migrations'), 'db/migrations');
+  assert.equal(shellQuote('add users'), "'add users'");
+  assert.equal(shellQuote('$HOME;rm'), "'$HOME;rm'");
+  assert.equal(shellQuote("it's"), "'it'\\''s'");
+  assert.equal(shellQuote(''), "''");
 });

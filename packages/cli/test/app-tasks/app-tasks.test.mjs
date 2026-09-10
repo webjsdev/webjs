@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readAppTasks } from '../../lib/app-tasks.js';
+import { readAppTasks, readDbCommands } from '../../lib/app-tasks.js';
 
 /** Build an injectable reader that returns the given package.json text. */
 function reader(pkgJson) {
@@ -47,4 +47,32 @@ test('counterfactual: a non-array before/parallel is ignored, not spread', () =>
   const tasks = readAppTasks('/app', reader(pkg));
   assert.deepEqual(tasks.dev.before, []);
   assert.deepEqual(tasks.dev.parallel, []);
+});
+
+// `webjs.db` (#1468): the bring-your-own-ORM verb map behind `webjs db`.
+
+test('readDbCommands reads the verb map, any key is a verb', () => {
+  const pkg = JSON.stringify({
+    webjs: { db: { migrate: 'prisma migrate deploy', reset: 'prisma migrate reset --force' } },
+  });
+  assert.deepEqual(readDbCommands('/app', reader(pkg)), {
+    migrate: 'prisma migrate deploy',
+    reset: 'prisma migrate reset --force',
+  });
+});
+
+test('readDbCommands yields an empty map with no block, no package.json, or bad JSON', () => {
+  assert.deepEqual(readDbCommands('/app', reader(JSON.stringify({ name: 'x' }))), {});
+  assert.deepEqual(readDbCommands('/app', reader(JSON.stringify({ webjs: { start: {} } }))), {});
+  assert.deepEqual(readDbCommands('/app', reader(null)), {});
+  assert.deepEqual(readDbCommands('/app', reader('not json')), {});
+});
+
+test('readDbCommands drops non-string / blank values and a non-object block', () => {
+  const pkg = JSON.stringify({
+    webjs: { db: { migrate: 'ok', push: '', studio: '   ', seed: 42, generate: null, reset: ['x'] } },
+  });
+  assert.deepEqual(readDbCommands('/app', reader(pkg)), { migrate: 'ok' });
+  assert.deepEqual(readDbCommands('/app', reader(JSON.stringify({ webjs: { db: 'prisma' } }))), {});
+  assert.deepEqual(readDbCommands('/app', reader(JSON.stringify({ webjs: { db: ['x'] } }))), {});
 });
