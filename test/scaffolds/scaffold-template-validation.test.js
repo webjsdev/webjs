@@ -219,6 +219,22 @@ test('the CLI rejects a bad app name non-zero, before writing anything', async (
   }
 });
 
+// The wrapper resolves `@webjsdev/cli` by bare specifier, which in a linked
+// worktree lands in the primary checkout, so this pins the forwarding in the
+// wrapper's SOURCE rather than by running it: the flag must reach scaffoldApp
+// as `skipCi`, and the usage must name it, so `npm create webjs -- --skip-ci`
+// cannot silently scaffold the workflow the way `--db` once silently scaffolded
+// sqlite.
+test('the create-webjs wrapper forwards --skip-ci to scaffoldApp (#1471)', async () => {
+  const src = await readFile(
+    new URL('../../packages/wrappers/create-webjs/bin/create-webjs.js', import.meta.url),
+    'utf8',
+  );
+  assert.match(src, /const skipCi = args\.includes\('--skip-ci'\)/, 'the flag is read');
+  assert.match(src, /scaffoldApp\(name, process\.cwd\(\), \{[^}]*skipCi[^}]*\}\)/, 'and forwarded to scaffoldApp');
+  assert.match(src, /--skip-ci\s+omit the GitHub workflow/, 'and documented in the usage');
+});
+
 test('the create-webjs wrapper rejects a bad name too (npm / bun create webjs)', async () => {
   // `npm create webjs` and `bun create webjs` route through this wrapper, not
   // through `webjs create`, so its guard is a third entry point and needs its

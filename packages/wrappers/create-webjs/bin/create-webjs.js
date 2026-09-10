@@ -51,6 +51,8 @@ Options:
                         (bun.lock, bun Dockerfile/CI, bun docs). Auto-detected as bun
                         when invoked via \`bun create webjs\`.
   --no-install          skip running the package manager's install in the new directory
+  --skip-ci             omit the GitHub workflow (.github/workflows/ci.yml); the local
+                        \`npm run ci\` step list in package.json is always emitted
   -h, --help            show this help`;
 
 if (args.length === 0 || args.includes('-h') || args.includes('--help')) {
@@ -109,4 +111,8 @@ const db = flagValue('--db');
 
 const noInstall = args.includes('--no-install');
 
-await scaffoldApp(name, process.cwd(), { template, db, runtime, install: !noInstall });
+// --skip-ci (#1471), forwarded so the wrapper matches `webjs create`: omits
+// the GitHub workflow only; the local ci list always ships.
+const skipCi = args.includes('--skip-ci');
+
+await scaffoldApp(name, process.cwd(), { template, db, runtime, install: !noInstall, skipCi });
