@@ -177,13 +177,15 @@ Regression tests: `test/hooks/block-install-in-linked-worktree.test.mjs`, `test/
 The monorepo runs its own local CI the way a scaffolded app does. The root
 `package.json` declares a `webjs.ci` step list mirroring the GitHub jobs
 (`.github/workflows/ci.yml` stays the required merge gate and is not converted):
-a Setup group (the blog and gallery databases, the core dist), a Conventions
-group running three at a time (`webjs check` and `webjs doctor` per in-repo
-app, the buildless-packages invariant, the em-dash scan), the root `npm test`,
-the in-repo app typechecks and suites plus the website boot-check, the browser
-suite, the blog e2e, and the Bun matrix. `npm run ci` runs the lot; `npm run ci
--- --only Conventions` runs one group, and `--json` gives an agent the verdict
-as data. The root script runs `node packages/cli/bin/webjs.js ci` rather than a
+a Setup group (the blog and gallery databases, the core dist), then one `Gate`
+group that runs THREE slots at once, longest first (six overloaded a 24-core box: Firefox timed out launching a test page): the blog e2e, the Bun matrix,
+the browser suite, the root `npm test`, the in-repo app typechecks and suites
+plus the website boot-check, and the Conventions group (`webjs check` and
+`webjs doctor` per in-repo app, the buildless-packages invariant, the em-dash
+scan). Each slot's output is replayed whole when it finishes, so the six never
+interleave, and the wall-clock is the longest step rather than the sum. `npm
+run ci` runs the lot; `npm run ci -- --only Conventions` runs one group, and
+`--json` gives an agent the verdict as data. The root script runs `node packages/cli/bin/webjs.js ci` rather than a
 hoisted `webjs` bin because in a linked worktree `node_modules/.bin/webjs`
 resolves into the PRIMARY checkout, which may not carry the branch's CLI, and
 every root step invokes the in-repo CLI the same way for the same reason.
