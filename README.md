@@ -1,6 +1,6 @@
 # WebJs
 
-**The web components framework built for the AI era.**
+**The AI-first web framework.**
 
 ## What is WebJs?
 
