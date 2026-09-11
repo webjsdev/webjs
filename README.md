@@ -1,11 +1,10 @@
 # WebJs
 
-**The web framework for AI agents.**
+**The web components framework built for the AI era.**
 
 ## What is WebJs?
 
-**WebJs is an AI-first full-stack JavaScript web framework built on web
-components.** It server-renders every page and component to real HTML,
+**WebJs is an AI-first full-stack JavaScript web components framework.** It server-renders every page and component to real HTML,
 needs no build step or bundler, and runs on Node 24+ or Bun.
 
 You get production-ready architecture from your very first prompt, and none of
