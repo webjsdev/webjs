@@ -95,6 +95,7 @@ packages/ui/
     lint/
       grammar.js                  `webjsui lint` token grammar: parseToken() (arbitrary VALUE vs VARIANT), groupOf(), GROUP_CATEGORY (shadcn-ui/lint's taxonomy, verbatim)
       scan.js                     the class-site scanner (html-template attributes, cn() args, class=${} holes), pure over source
+      rules/                      the three rules, each pure `(site, ctx) => violations`: no-raw-colors, no-arbitrary-values, no-restyle
       theme-tokens.js             READS the app's `--color-*` tokens from its @theme / @theme inline blocks (utils/theme.js WRITES them)
     registry/
       schema.js                   zod schemas (wire-compatible with shadcn's) + the opt-in `lint` block of components.json
