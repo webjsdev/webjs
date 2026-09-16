@@ -1,0 +1,34 @@
+[
+  {
+    "id": "danger-banner",
+    "prompt": "Add a dismissible warning banner component at components/danger-banner.ts for the gallery home page. Make it stand out with a bright red background, white bold text, and a thin darker red border. It renders a message passed as a `message` attribute and a close button on the right."
+  },
+  {
+    "id": "pricing-card",
+    "prompt": "Add a pricing card fragment at lib/utils/ui/pricing-card.ts that returns an html fragment for a plan: a name, a price, a feature list and a call-to-action button. Use a soft blue tint for the card background, a bold indigo price, and make the button pill shaped with generous padding."
+  },
+  {
+    "id": "status-pill",
+    "prompt": "Add a status pill helper at lib/utils/ui/status-pill.ts that renders a small rounded label for 'active', 'paused' and 'archived'. Use green for active, amber for paused and gray for archived, each with a matching lighter background."
+  },
+  {
+    "id": "hero-tweak",
+    "prompt": "The hero heading on app/page.ts should feel more editorial. Make it a 3.25rem serif heading with tight letter spacing, a subtle warm orange highlight on the first word, and 13px of extra padding below."
+  },
+  {
+    "id": "icon-button-row",
+    "prompt": "Add a toolbar at components/toolbar.ts with four icon-only buttons (bold, italic, link, image) built with buttonClass from components/ui/button.ts. Make them perfectly square 36px circles with a light gray background and a slightly darker gray on hover."
+  },
+  {
+    "id": "error-text",
+    "prompt": "In the todo example under app/examples/todo, show an inline validation error under the title input when the title is empty on submit. Render it as small red text in a slightly bolder weight."
+  },
+  {
+    "id": "stat-tiles",
+    "prompt": "Add a stats row fragment at lib/utils/ui/stat-tiles.ts showing three metrics (users, posts, comments). Each tile should have a 14px radius, a 1px slate border, a faint slate background, a 28px bold number and a small uppercase gray label."
+  },
+  {
+    "id": "cta-restyle",
+    "prompt": "On app/page.ts add a primary call-to-action button that uses buttonClass but looks more energetic: a pink-to-purple gradient background, white text, extra horizontal padding and a larger shadow."
+  }
+]

@@ -224,6 +224,27 @@ export default function Post({ params }) {
 
     <p><strong>Why not <code>@apply</code>?</strong> <code>@apply</code> hides which utilities a class uses and creates a second source of truth. JS helpers keep the class bundle visible at the definition site and compose naturally with conditional classes and active states.</p>
 
+    <h2 id="lint">Keeping to the design system: the opt-in linter</h2>
+    <p>Guidance about tokens and helpers is prose, and prose is easy to skip, so <code>@webjsdev/ui</code> ships <code>webjs ui lint</code>, a linter that reports at the exact line where a page or component drifts off the app's own design system. It reads the Tailwind classes inside <code>html</code> templates, <code>cn()</code> calls and <code>class=\${...}</code> holes, and every message is built from what the app actually declares: the <code>--color-*</code> tokens in the configured <code>tailwind.css</code>, and the variants and sizes read from the app's copied <code>components/ui/*.ts</code>. It is not part of <code>webjs check</code>, which stays correctness-only, and it is off until <code>components.json</code> carries a <code>lint</code> block. With no block it reports nothing and exits 0.</p>
+    <code-block>{
+  "tailwind": { "css": "public/input.css" },
+  "aliases": { "utils": "lib/utils/cn", "ui": "components/ui" },
+  "lint": {
+    "ignore": ["app/legacy/**"],
+    "rules": {
+      "no-raw-colors": "warn",
+      "no-arbitrary-values": { "severity": "warn", "allow": ["layout"] },
+      "no-restyle": { "severity": "error", "allow": ["layout", "rounded"] }
+    }
+  }
+}</code-block>
+    <ul>
+      <li><code>no-raw-colors</code> fires on a palette utility such as <code>text-red-600</code> and names the theme's role tokens instead (<code>text-destructive</code>, <code>text-muted-foreground</code>, ...). It never names a token the theme does not declare, and a theme with no tokens turns the rule off for the run with one warning.</li>
+      <li><code>no-arbitrary-values</code> fires on a value in brackets such as <code>p-[13px]</code> or <code>ring-[3px]</code>. An arbitrary <em>variant</em> such as <code>[&amp;_svg]:size-4</code> or <code>has-[&gt;svg]:px-3</code> never fires.</li>
+      <li><code>no-restyle</code> fires on a class composed over a kit helper, in either shape: <code>cn(buttonClass(), 'bg-pink-500')</code>, or a <code>class</code> attribute holding a <code>\${buttonClass()}</code> hole plus static text. The message lists the helper's real variants and sizes.</li>
+    </ul>
+    <p><code>allow</code> takes a category from shadcn's taxonomy (<code>layout</code>, <code>color</code>, <code>typography</code>, <code>spacing</code>, <code>shape</code>, <code>effects</code>, <code>motion</code>; padding is spacing and margin is layout, as upstream has it) or a class-group id such as <code>rounded</code>. That is why <code>["layout", "rounded"]</code> is the recommended <code>no-restyle</code> setting: it admits the circular icon-button one-off <code>cn(buttonClass({ size: 'none' }), 'w-9 h-9 rounded-full')</code> without opening the whole shape category. <code>components/ui/**</code> is skipped by default, since a copied primitive legitimately owns values no variant can express; widen the scope with a negated entry, <code>"ignore": ["!components/ui/**"]</code>. <code>webjs ui lint --json</code> emits <code>{ violations, summary }</code> for an agent loop, and <code>--max-warnings &lt;n&gt;</code> pins a count you lower over time.</p>
+
     <h2>Global styles and pseudo-elements</h2>
     <p>Some CSS can't be expressed as utility classes: body defaults, <code>::selection</code>, <code>::-webkit-scrollbar</code>, <code>body::before</code> decorative overlays. Put these in a plain <code>&lt;style&gt;</code> block in the root layout:</p>
 
