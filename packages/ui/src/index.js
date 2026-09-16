@@ -9,6 +9,7 @@ import { view } from './commands/view.js';
 import { diff } from './commands/diff.js';
 import { info } from './commands/info.js';
 import { build } from './commands/build.js';
+import { lint } from './commands/lint.js';
 
 const pkg = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8'));
 
@@ -27,6 +28,7 @@ program
   .addCommand(view)
   .addCommand(diff)
   .addCommand(info)
-  .addCommand(build);
+  .addCommand(build)
+  .addCommand(lint);
 
 program.parse();

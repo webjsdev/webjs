@@ -1,7 +1,7 @@
 # AGENTS.md : @webjsdev/ui
 
 The webjs **AI-first component library + CLI**, `webjsui init` / `add` /
-`list` / `view` / `diff` / `info` / `build`. Ships 32 primitives across two
+`list` / `view` / `diff` / `info` / `build` / `lint`. Ships 32 primitives across two
 tiers: class-helper functions for visual components, custom elements only
 where state matters. Variant names, sizes, and data-attribute conventions
 mirror shadcn so existing shadcn knowledge transfers directly.
@@ -92,7 +92,9 @@ packages/ui/
       diff.js                     diff, compare local vs registry
       info.js                     info, project diagnostics
       build.js                    build, compile a custom registry (for registry authors)
+      lint.js                     lint, the opt-in design-system linter (runLint() is the pure core the test calls)
     lint/
+      index.js                    lintApp(): walks the D7 scope, runs the scanner, dispatches sites to the enabled rules (the one filesystem-touching module)
       grammar.js                  `webjsui lint` token grammar: parseToken() (arbitrary VALUE vs VARIANT), groupOf(), GROUP_CATEGORY (shadcn-ui/lint's taxonomy, verbatim)
       scan.js                     the class-site scanner (html-template attributes, cn() args, class=${} holes), pure over source
       rules/                      the three rules, each pure `(site, ctx) => violations`: no-raw-colors, no-arbitrary-values, no-restyle
@@ -296,6 +298,101 @@ later change cannot quietly make the test non-discriminating.
 | `webjsui diff [name]` | Show diffs between local and registry (against the LIVE upstream) |
 | `webjsui info` | Print cwd + config + registry URL |
 | `webjsui build [file]` | Compile a custom registry (for registry authors) |
+| `webjsui lint` | Opt-in design-system linter over the app's own source (see the section below). Reports nothing and exits 0 with no `lint` block in `components.json`. `--json` emits `{ violations, summary }`, `--max-warnings <n>` caps warnings, exit is 1 on an error-level violation, an exceeded cap, or a config it cannot run against. |
+
+### `webjsui lint`: the opt-in design-system linter (#1478)
+
+The kit's styling guidance is prose, and prose is what an agent skips. The
+linter fires at the exact line where an app drifts off its design system, with
+a message built from the app's OWN tokens and helper variants (the
+`@shadcn/lint` thesis: a diagnostic naming the real alternative converges an
+agent in one correction round where rules text takes more). It is NOT part of
+`webjs check`, which stays correctness-only (a sensible app can legitimately
+want `bg-pink-500`), and it is off until an app opts in.
+
+**Config.** A `lint` block at the top level of `components.json`, beside
+`tailwind` and `aliases`. A rule value is a bare severity (`"off"` / `"warn"` /
+`"error"`) or `{ severity, allow }`. A rule absent from `rules` is off. The
+schema is strict (`lintConfigSchema` in `registry/schema.js`), so a typo is a
+config error rather than a silent no-op.
+
+```json
+"lint": {
+  "ignore": ["app/legacy/**"],
+  "rules": {
+    "no-raw-colors": "warn",
+    "no-arbitrary-values": { "severity": "warn", "allow": ["layout"] },
+    "no-restyle": { "severity": "error", "allow": ["layout", "rounded"] }
+  }
+}
+```
+
+**The three rules**, each pure `(site, ctx) => violations` in `src/lint/rules/`:
+
+- `no-raw-colors`: a Tailwind palette utility (`text-red-600`) where the theme
+  declares a role token. The message lists only utilities the app's configured
+  `tailwind.css` declares (`--color-*` inside `@theme` OR `@theme inline`, both
+  live in this repo) and adds a role match only where unambiguous (`red` /
+  `rose` to `destructive`; the neutral families to `muted-foreground` under
+  `text-`, `muted` otherwise) and only when that token exists. A theme file
+  yielding no tokens turns the rule OFF for the run with one warning naming the
+  path, because the rule's whole value is naming the alternative.
+- `no-arbitrary-values`: a token whose UTILITY segment carries a `[`
+  (`p-[13px]`, `ring-[3px]`, `[padding:13px]`). An arbitrary VARIANT
+  (`[&_svg]:size-4`, `has-[>svg]:px-3`, `data-[state=open]:flex`) and the
+  `(--var)` shorthand never fire. That single rule, in `grammar.js`
+  `parseToken`, decides every case.
+- `no-restyle`: a class composed beside a kit helper, in either shape an app
+  writes (`cn(buttonClass(), 'rounded-full')`, or a `class` attribute holding a
+  `${buttonClass()}` hole plus static text). The message names the helper's
+  REAL variants and sizes through `extractHelperAxes` in `registry/extract.js`,
+  read from the APP's copied `components/ui/*.ts` (an app may add or remove a
+  variant), never from a second parser; a helper matching neither authored
+  shape gets no value list rather than an invented one. Drift guard:
+  `test/lint-message-drift.test.js`.
+
+**`allow` is shadcn's category taxonomy, verbatim.** `grammar.js`
+`GROUP_CATEGORY` transcribes `grammar/categories.ts` from `shadcn-ui/lint` in
+upstream order so it diffs cleanly. Six named categories (`color`,
+`typography`, `spacing`, `shape`, `effects`, `motion`) and everything else is
+`layout`. Two placements are counterintuitive and both are kept: padding is
+`spacing`, margin is `layout`. `allow` takes a category name OR a class-group
+id, so `["layout", "rounded"]` admits `w-9 h-9 rounded-full` (the skill's
+sanctioned icon-button one-off) without opening the whole `shape` category
+(`border-2` still fires). Do NOT redefine the taxonomy locally. #1116 was
+reverted for inventing vocabulary shadcn does not ship.
+
+**Where it reads classes** (`src/lint/scan.js`, the three CLASS SITES, the
+complete set): a `class=` attribute inside an OPEN TAG inside an `html` tagged
+template (nested templates in holes recursed); every string literal inside a
+recognized `cn(` call; every string literal inside a `class=${...}` hole. A
+helper is recognized only by its IMPORT resolving inside `aliases.ui`, and `cn`
+only when imported from `aliases.utils`, so a local `fooClass()` is never
+mistaken for a kit helper. The open-tag requirement is what keeps an
+entity-escaped docs code sample (`&lt;p class="text-red-600"&gt;`) inert
+without any docs-page heuristic. A token touching a hole with no whitespace
+between is dropped as a fragment (`class="text-${size} p-2"` yields `p-2`).
+
+**Scope.** `app/**`, `components/**`, `modules/**`, `lib/**` over
+`.ts .tsx .js .jsx .mts .mjs`, never `node_modules`, `.webjs`, `dist`,
+`public`. **`components/ui/**` (the resolved `aliases.ui`) is skipped by
+default**: a copied primitive legitimately owns structural values no variant
+can express (the kit button's `focus-visible:ring-[3px]` and
+`[&_svg:not([class*='size-'])]:size-4`), and it is what other files' variants
+are measured against. This is also why the sonner raw palette colors
+(`sonner.ts` success / info / warning icons) are LEFT ALONE. There is no token
+to move them to, and inventing a `--success` is what got #1116 reverted. Widen
+the scope with a negated entry (`"ignore": ["!components/ui/**"]`), narrow it
+with more globs. Entries match the path relative to the app root.
+
+**Phases.** Phase 1 (this) ships the command and the docs that DESCRIBE it.
+Nothing tells an agent to run it in its loop, and nothing adds it to the
+scaffold's generated `components.json` or a `webjs.ci` list, until the
+three-arm eval in `test/evals/` (before, after with diagnostics, and a
+rules-only control, run through the `claude` CLI on a scratch copy of
+`gallery`) shows diagnostics converge in fewer rounds than rules text on two of
+three models. That is the #1116 lesson: shipping the guidance before the gate
+ran is what let it land measuring nothing.
 
 ### Where the shared helpers land (#1129)
 

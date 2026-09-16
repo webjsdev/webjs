@@ -335,13 +335,17 @@ export function scanClassSites(src, opts = {}) {
  *
  * @param {string} src
  * @param {{ filePath: string, appRoot: string, uiDir: string, utilsPath: string }} paths
- * @returns {{ helpers: string[], cnNames: string[] }}
+ * @returns {{ helpers: string[], cnNames: string[], helperFiles: Record<string, string> }}
+ *   `helperFiles` maps each helper to the absolute path its import resolved to
+ *   (extension as written), so the orchestrator can read the APP's copy.
  */
 export function collectHelperImports(src, { filePath, appRoot, uiDir, utilsPath }) {
   /** @type {string[]} */
   const helpers = [];
   /** @type {string[]} */
   const cnNames = [];
+  /** @type {Record<string, string>} */
+  const helperFiles = {};
   const stripExt = (p) => p.replace(/\.(?:ts|tsx|js|jsx|mts|mjs)$/, '');
   const ui = resolve(uiDir);
   const utils = stripExt(resolve(utilsPath));
@@ -360,9 +364,9 @@ export function collectHelperImports(src, { filePath, appRoot, uiDir, utilsPath 
       const piece = part.trim().replace(/^type\s+/, '');
       if (!piece) continue;
       const [imported, local = imported] = piece.split(/\s+as\s+/).map((s) => s.trim());
-      if (inUi && /Class$/.test(local)) helpers.push(local);
+      if (inUi && /Class$/.test(local)) { helpers.push(local); helperFiles[local] = target; }
       if (isUtils && imported === 'cn') cnNames.push(local);
     }
   }
-  return { helpers, cnNames };
+  return { helpers, cnNames, helperFiles };
 }

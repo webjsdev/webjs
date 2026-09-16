@@ -127,6 +127,7 @@ always compares against the live upstream.
 | `webjsui diff [name]` | Show diff between your local copy and the live registry |
 | `webjsui info` | Print project diagnostics |
 | `webjsui build` | (For registry authors) Compile a custom registry |
+| `webjsui lint` | Opt-in design-system linter. Reports raw palette colors, arbitrary values and classes composed over a kit helper, at the line, with a message built from your own theme tokens and helper variants. Configured by a `lint` block in `components.json`; with no block it reports nothing and exits 0. `--json` for an agent loop, `--max-warnings <n>` to pin a count. |
 
 ## Tag convention
 
