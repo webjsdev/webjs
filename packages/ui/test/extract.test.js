@@ -99,3 +99,9 @@ test('extractHelperAxes: a helper matching neither shape yields no axes rather t
   const other = "const MAP = { a: 1, b: 2 };\nexport function fooClass() { const k = compute(); return String(MAP[k]); }\n";
   assert.deepEqual(extractHelperAxes(other), {});
 });
+
+test('extractHelperAxes: a comment inside the variant map cannot swallow the object', () => {
+  const src = readFileSync(new URL('../packages/registry/components/button.ts', import.meta.url), 'utf8')
+    .replace("'icon-lg': 'size-10',", "'icon-lg': 'size-10', // the app's largest icon button\n  none: '', /* don't */");
+  assert.deepEqual(extractHelperAxes(src).buttonClass.size, ['default', 'xs', 'sm', 'lg', 'icon', 'icon-xs', 'icon-sm', 'icon-lg', 'none']);
+});

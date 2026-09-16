@@ -19,17 +19,26 @@ export function runLint(opts = {}) {
   const maxWarnings = Number(opts.maxWarnings ?? -1);
   /** @type {string[]} */
   const lines = [];
+  // A run that cannot start still answers in the requested shape, so an agent
+  // loop parsing stdout under --json receives an error document, never text.
+  const refuse = (error) => {
+    if (opts.json) {
+      lines.push(JSON.stringify({ error, violations: [], summary: { count: 0, errors: 0, warnings: 0, byRule: {} }, warnings: [], configured: false }, null, 2));
+    } else {
+      lines.push(`webjsui lint: ${error}`);
+    }
+    return { lines, code: 1, report: null };
+  };
+  if (!Number.isInteger(maxWarnings) || maxWarnings < -1) {
+    return refuse(`--max-warnings expects an integer (-1 for no cap), got ${JSON.stringify(String(opts.maxWarnings))}`);
+  }
   let config;
   try {
     config = getConfig(cwd);
   } catch (e) {
-    lines.push(`webjsui lint: components.json is invalid: ${firstIssue(e)}`);
-    return { lines, code: 1, report: null };
+    return refuse(`components.json is invalid: ${firstIssue(e)}`);
   }
-  if (!config) {
-    lines.push('webjsui lint: components.json not found (run `npx @webjsdev/ui init`)');
-    return { lines, code: 1, report: null };
-  }
+  if (!config) return refuse('components.json not found (run `npx @webjsdev/ui init`)');
 
   const { violations, warnings, configured } = lintApp(cwd, config);
   const errors = violations.filter((v) => v.severity === 'error').length;

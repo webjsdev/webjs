@@ -96,9 +96,15 @@ function scratchCopy() {
   return dir;
 }
 
+// A run that yields no document THROWS rather than reading as zero findings:
+// this is the phase-3 gate, and a crashed or refused linter must fail the task
+// (the per-task try records it), never look like an agent that was already clean.
 function lint(cwd) {
   const r = spawnSync(process.execPath, [WEBJSUI, 'lint', '--json', '--cwd', cwd], { encoding: 'utf8' });
-  try { return JSON.parse(r.stdout); } catch { return { violations: [], summary: { count: 0 }, raw: r.stdout + r.stderr }; }
+  let doc;
+  try { doc = JSON.parse(r.stdout); } catch { throw new Error(`webjsui lint emitted no JSON (exit ${r.status}): ${(r.stdout + r.stderr).slice(0, 300)}`); }
+  if (doc.error) throw new Error(`webjsui lint refused to run: ${doc.error}`);
+  return doc;
 }
 
 function agent(cwd, prompt) {
@@ -128,19 +134,20 @@ function runTask(task) {
   // AFTER: fresh agent per round, diagnostics in the prompt.
   const after = mkdtempSync(join(tmpdir(), 'webjsui-eval-after-'));
   cpSync(before, after, { recursive: true });
-  let rounds = 0, cost = 0, findings = lint(after).summary.count;
-  while (findings > 0 && rounds < ROUNDS) {
-    const diag = lint(after).violations.map(fmt).join('\n');
+  let rounds = 0, cost = 0, last = lint(after);
+  while (last.summary.count > 0 && rounds < ROUNDS) {
+    const diag = last.violations.map(fmt).join('\n');
     const a = agent(after, `${task.prompt}\n\nThe file you produced was linted against the app's design system. Fix every finding below, keeping the feature intact.\n\n${RULES_TEXT}\n\nFindings from \`webjsui lint --json\`:\n${diag}`);
     cost += a.cost; rounds++;
-    findings = lint(after).summary.count;
+    last = lint(after);
   }
-  result.after = { rounds, findings, cost };
+  result.after = { rounds, findings: last.summary.count, cost };
 
   // RULES ONLY: same start, same rules text, no diagnostics; a hidden lint decides the next round.
   const rulesOnly = mkdtempSync(join(tmpdir(), 'webjsui-eval-rules-'));
   cpSync(before, rulesOnly, { recursive: true });
-  rounds = 0; cost = 0; findings = lint(rulesOnly).summary.count;
+  rounds = 0; cost = 0;
+  let findings = lint(rulesOnly).summary.count;
   while (findings > 0 && rounds < ROUNDS) {
     const a = agent(rulesOnly, `${task.prompt}\n\nReview the file you produced against the app's design-system rules below and fix anything that breaks them, keeping the feature intact.\n\n${RULES_TEXT}`);
     cost += a.cost; rounds++;

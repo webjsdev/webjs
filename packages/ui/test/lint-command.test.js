@@ -11,12 +11,39 @@ import { tmpdir } from 'node:os';
 import { runLint, lint } from '../src/commands/lint.js';
 
 const BLOG = new URL('../../../examples/blog/', import.meta.url);
-const BLOG_LINES = [
-  ['app/feedback/page.ts', 29],
-  ['app/feedback/triage/page.ts', 36],
-  ['app/feedback/triage-split/page.ts', 50],
-  ['modules/feedback/components/feedback-form.ts', 56],
+// The four blog files that carried `text-red-600` when #1478 was filed. Read
+// live, with the expected line computed from the content, so a reflow of the
+// blog (or applying the linter's own recommendation there) cannot red this
+// suite; the verbatim shape is pinned separately by FEEDBACK_PAGE below.
+const BLOG_FILES = [
+  'app/feedback/page.ts',
+  'app/feedback/triage/page.ts',
+  'app/feedback/triage-split/page.ts',
+  'modules/feedback/components/feedback-form.ts',
 ];
+const linesWith = (src, needle) => src.split('\n').map((l, i) => (l.includes(needle) ? i + 1 : 0)).filter(Boolean);
+// The exact template shape of examples/blog/app/feedback/page.ts:29 at bf201e7c
+// (a nested html template in a conditional hole), inline so it cannot drift.
+const FEEDBACK_PAGE = [
+  "import { html } from '@webjsdev/core';",
+  "import { submitFeedback } from '#modules/feedback/actions/submit-feedback.server.ts';",
+  '',
+  'export default function Feedback({ actionData }: { actionData?: { fieldErrors?: Record<string, string>; values?: Record<string, string> } }) {',
+  "  const err = actionData?.fieldErrors?.email;",
+  "  const val = actionData?.values?.email || '';",
+  '  return html`',
+  '    <h1>Feedback</h1>',
+  '      <form action=${submitFeedback}>',
+  '        <label for="email">Email',
+  '          <input id="email" name="email" type="email" value=${val} class="border rounded px-2 py-1">',
+  '        </label>',
+  "        ${err ? html`<p id=\"email-error\" class=\"text-sm text-red-600\">${err}</p>` : ''}",
+  '        <button type="submit" class="border rounded px-3 py-1">Submit</button>',
+  '      </form>',
+  '  `;',
+  '}',
+  '',
+].join('\n');
 
 const THEME = '@import "tailwindcss";\n@theme {\n  --color-primary: var(--primary);\n  --color-destructive: var(--destructive);\n  --color-muted-foreground: var(--muted-foreground);\n}\n';
 const CONFIG = (lint) => ({
@@ -64,32 +91,37 @@ test('lint: no lint block reports nothing and exits 0 (the opt-in guarantee)', (
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('lint: COUNTERFACTUAL, the blog feedback line is reported at its line and clears with text-destructive', () => {
-  const src = readFileSync(new URL('app/feedback/page.ts', BLOG), 'utf8');
-  const d = app({ 'app/feedback/page.ts': src }, { rules: { 'no-raw-colors': 'warn' } });
+test('lint: COUNTERFACTUAL, the blog feedback shape is reported at its line and clears with text-destructive', () => {
+  const d = app({ 'app/feedback/page.ts': FEEDBACK_PAGE }, { rules: { 'no-raw-colors': 'warn' } });
   try {
     const r = runLint({ cwd: d });
     assert.equal(r.report.summary.count, 1);
     const [v] = r.report.violations;
     assert.equal(v.rule, 'no-raw-colors');
     assert.equal(v.file, 'app/feedback/page.ts');
-    assert.equal(v.line, 29);
+    assert.equal(v.line, 13);
+    assert.equal(v.column, 57);
     assert.equal(v.class, 'text-red-600');
     assert.equal(v.fix, 'text-destructive');
     assert.match(v.message, /\(declared in public\/input\.css\)/);
-    writeFileSync(join(d, 'app/feedback/page.ts'), src.replace('text-red-600', 'text-destructive'));
+    writeFileSync(join(d, 'app/feedback/page.ts'), FEEDBACK_PAGE.replace('text-red-600', 'text-destructive'));
     assert.equal(runLint({ cwd: d }).report.summary.count, 0);
   } finally { rmSync(d, { recursive: true }); }
 });
 
-test('lint: all four blog text-red-600 lines are reported', () => {
+test('lint: every text-red-600 in the live blog feedback files is reported at its line', () => {
   const files = {};
-  for (const [rel] of BLOG_LINES) files[rel] = readFileSync(new URL(rel, BLOG), 'utf8');
+  const expected = [];
+  for (const rel of BLOG_FILES) {
+    const src = readFileSync(new URL(rel, BLOG), 'utf8');
+    files[rel] = src;
+    for (const line of linesWith(src, 'text-red-600')) expected.push([rel, line]);
+  }
   const d = app(files, { rules: { 'no-raw-colors': 'warn' } });
   try {
     const r = runLint({ cwd: d });
     const got = r.report.violations.map((v) => [v.file, v.line]);
-    assert.deepEqual(got.sort(), BLOG_LINES.map((x) => [...x]).sort());
+    assert.deepEqual(got.sort(), expected.sort());
     assert.equal(r.code, 0); // warnings only
   } finally { rmSync(d, { recursive: true }); }
 });
@@ -100,9 +132,13 @@ test('lint: components/ui/** is skipped by default, and the same file elsewhere 
   try {
     const r = runLint({ cwd: d });
     assert.deepEqual(r.report.violations.map((v) => v.file), ['components/toolbar.ts']);
-    // A negated ignore entry widens the scope back over the ui dir.
-    writeFileSync(join(d, 'components.json'), JSON.stringify(CONFIG({ ignore: ['!components/ui/**'], rules: { 'no-arbitrary-values': 'warn' } })));
-    assert.deepEqual(runLint({ cwd: d }).report.violations.map((v) => v.file), ['components/toolbar.ts', 'components/ui/button.ts']);
+    // A negated ignore entry widens the scope over whatever it MATCHES.
+    for (const neg of ['!components/ui/**', '!components/ui/*', '!components/ui/button.ts']) {
+      writeFileSync(join(d, 'components.json'), JSON.stringify(CONFIG({ ignore: [neg], rules: { 'no-arbitrary-values': 'warn' } })));
+      assert.deepEqual(runLint({ cwd: d }).report.violations.map((v) => v.file), ['components/toolbar.ts', 'components/ui/button.ts'], neg);
+    }
+    writeFileSync(join(d, 'components.json'), JSON.stringify(CONFIG({ ignore: ['!components/ui/other.ts'], rules: { 'no-arbitrary-values': 'warn' } })));
+    assert.deepEqual(runLint({ cwd: d }).report.violations.map((v) => v.file), ['components/toolbar.ts']);
     // A plain ignore entry narrows it.
     writeFileSync(join(d, 'components.json'), JSON.stringify(CONFIG({ ignore: ['components/tool*'], rules: { 'no-arbitrary-values': 'warn' } })));
     assert.deepEqual(runLint({ cwd: d }).report.violations, []);
@@ -150,6 +186,10 @@ test('lint: exit codes follow errors and --max-warnings', () => {
     assert.equal(runLint({ cwd: d }).code, 0);
     assert.equal(runLint({ cwd: d, maxWarnings: '0' }).code, 1);
     assert.equal(runLint({ cwd: d, maxWarnings: '5' }).code, 0);
+    // A cap that is not an integer is refused rather than silently lifted.
+    const bad = runLint({ cwd: d, maxWarnings: 'abc' });
+    assert.equal(bad.code, 1);
+    assert.match(bad.lines[0], /--max-warnings expects an integer/);
     writeFileSync(join(d, 'components.json'), JSON.stringify(CONFIG({ rules: { 'no-raw-colors': 'error' } })));
     assert.equal(runLint({ cwd: d }).code, 1);
     writeFileSync(join(d, 'components.json'), JSON.stringify(CONFIG({ rules: { 'no-raw-colors': 'off' } })));
@@ -186,4 +226,19 @@ test('lint: the Commander command prints the report and sets exitCode', async ()
     process.exitCode = 0;
     rmSync(d, { recursive: true });
   }
+});
+
+test('lint: --json answers the missing and invalid config exits with an error document', () => {
+  const missing = app({}, null);
+  const invalid = app({}, { rules: { 'no-such': 'warn' } });
+  try {
+    for (const [d, re] of [[missing, /components\.json not found/], [invalid, /components\.json is invalid/]]) {
+      const r = runLint({ cwd: d, json: true });
+      assert.equal(r.code, 1);
+      const doc = JSON.parse(r.lines.join('\n'));
+      assert.match(doc.error, re);
+      assert.deepEqual(doc.violations, []);
+      assert.equal(doc.summary.count, 0);
+    }
+  } finally { rmSync(missing, { recursive: true }); rmSync(invalid, { recursive: true }); }
 });

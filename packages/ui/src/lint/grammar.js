@@ -572,6 +572,12 @@ export function groupOf(utility) {
   if (Object.hasOwn(KEYWORDS, utility)) return KEYWORDS[utility];
 
   let s;
+  // text-shadow-* (before text-*, whose head would otherwise swallow it)
+  if ((s = splitHead(utility, ['text-shadow']))) {
+    const v = s[1];
+    if (v === '' || SHADOW_SIZES.test(v) || isArbitraryLength(v)) return 'text-shadow';
+    return 'text-shadow-color';
+  }
   // text-*
   if ((s = splitHead(utility, ['text']))) {
     const v = s[1];
@@ -581,11 +587,6 @@ export function groupOf(utility) {
     if (v === 'base' || T_SHIRT.test(v) || isArbitraryLength(v)) return 'font-size';
     if (/^(?:base|xs|sm|lg|\dxl|xl)\/[\w.]+$/.test(v)) return 'font-size';
     return 'text-color';
-  }
-  if ((s = splitHead(utility, ['text-shadow']))) {
-    const v = s[1];
-    if (v === '' || SHADOW_SIZES.test(v) || isArbitraryLength(v)) return 'text-shadow';
-    return 'text-shadow-color';
   }
   // font-*
   if ((s = splitHead(utility, ['font']))) {
@@ -597,6 +598,7 @@ export function groupOf(utility) {
   // bg-*
   if ((s = splitHead(utility, ['bg']))) {
     const v = s[1];
+    if (/^blend-/.test(v)) return 'bg-blend';
     if (/^(?:fixed|local|scroll)$/.test(v)) return 'bg-attachment';
     if (/^clip-/.test(v)) return 'bg-clip';
     if (/^origin-/.test(v)) return 'bg-origin';

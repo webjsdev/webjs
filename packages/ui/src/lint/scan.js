@@ -81,7 +81,9 @@ export function scanClassSites(src, opts = {}) {
     return { line: lo + 1, column: offset - lineStarts[lo] + 1 };
   };
   const newSite = (kind, offset) => ({ kind, offset, ...pos(offset), classes: [], helpers: [] });
-  const emit = (site) => { if (site.classes.length) sites.push(site); };
+  // A site is dropped while muted (inside a helper's own arguments, or inside
+  // a hole that sits in commented-out markup).
+  const emit = (site) => { if (site.classes.length && mute === 0) sites.push(site); };
 
   /** @type {ClassSite[]} the active collector stack (innermost last) */
   const collectors = [];
@@ -129,7 +131,22 @@ export function scanClassSites(src, opts = {}) {
     }
     markValue();
   };
+  // A literal that is a comparison operand (`kind === 'primary'`), or a
+  // `case 'x':` label, is a value the code compares, not a class, so it is not
+  // collected. Any other literal in a class hole or cn() call is read as a
+  // class; an unknown token falls to the layout category, so a stray one is
+  // admitted by the recommended config rather than reported.
+  const isComparisonOperand = (before, after) => {
+    if (lastWord === 'case') return true;
+    let j = before - 1;
+    while (j >= 0 && /\s/.test(src[j])) j--;
+    if (j >= 1 && src[j] === '=' && (src[j - 1] === '=' || src[j - 1] === '!')) return true;
+    let k = after;
+    while (k < n && /\s/.test(src[k])) k++;
+    return (src[k] === '=' && src[k + 1] === '=') || (src[k] === '!' && src[k + 1] === '=');
+  };
   const scanString = (q) => {
+    const quoteAt = i;
     const start = i + 1;
     i++;
     let body = '';
@@ -140,7 +157,7 @@ export function scanClassSites(src, opts = {}) {
       body += src[i]; i++;
     }
     const site = active();
-    if (site && mute === 0) pushTokens(site, body, start);
+    if (site && mute === 0 && !isComparisonOperand(quoteAt, i)) pushTokens(site, body, start);
     markValue();
   };
   const scanPlainTemplate = () => {
@@ -168,6 +185,7 @@ export function scanClassSites(src, opts = {}) {
     /** @type {{ site: ClassSite|null, quote: string|null, run: string, runStart: number, holeBefore: boolean }|null} */
     let attr = null;
     let pendingClassHole = false;
+    let inComment = false;
     const flushRun = (touchesHoleRight) => {
       if (!attr || !attr.site) return;
       let text = attr.run;
@@ -193,6 +211,17 @@ export function scanClassSites(src, opts = {}) {
         continue;
       }
       if (c === '`') { i++; break; }
+      // Commented-out markup (`<!-- <div class="..."> -->`) opens no tag. A hole
+      // inside the comment is still lexed as code so the template's real end is
+      // found, but it is muted: its output lands inside the comment, so nothing
+      // in it is collected.
+      if (inComment) {
+        if (src.startsWith('-->', i)) { inComment = false; i += 3; continue; }
+        if (c === '$' && src[i + 1] === '{') { i += 2; mute++; scanCode('hole'); mute--; if (i < n && src[i] === '}') i++; continue; }
+        i++;
+        continue;
+      }
+      if (!inTag && !attr && src.startsWith('<!--', i)) { inComment = true; i += 4; continue; }
       if (c === '$' && src[i + 1] === '{') {
         const at = i;
         i += 2;
@@ -360,7 +389,9 @@ export function collectHelperImports(src, { filePath, appRoot, uiDir, utilsPath 
     const inUi = target === ui || target.startsWith(ui + sep);
     const isUtils = stripExt(target) === utils;
     if (!inUi && !isUtils) continue;
-    for (const part of m[1].split(',')) {
+    // A comment inside a multi-line import list is not a binding.
+    const bindings = m[1].replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+    for (const part of bindings.split(',')) {
       const piece = part.trim().replace(/^type\s+/, '');
       if (!piece) continue;
       const [imported, local = imported] = piece.split(/\s+as\s+/).map((s) => s.trim());

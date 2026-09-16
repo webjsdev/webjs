@@ -370,8 +370,15 @@ helper is recognized only by its IMPORT resolving inside `aliases.ui`, and `cn`
 only when imported from `aliases.utils`, so a local `fooClass()` is never
 mistaken for a kit helper. The open-tag requirement is what keeps an
 entity-escaped docs code sample (`&lt;p class="text-red-600"&gt;`) inert
-without any docs-page heuristic. A token touching a hole with no whitespace
-between is dropped as a fragment (`class="text-${size} p-2"` yields `p-2`).
+without any docs-page heuristic, and commented-out markup (`<!-- ... -->`)
+inside a template opens no tag either. A token touching a hole with no
+whitespace between is dropped as a fragment (`class="text-${size} p-2"` yields
+`p-2`). A literal that is a comparison operand (`kind === 'primary'`) or a
+`case` label is not collected; any other literal in a class hole or `cn()` call
+is read as a class, and an unknown token falls to `layout`, so a stray one is
+admitted by the recommended config rather than reported. `no-restyle` names
+every helper a site composes and reads the axes from the LAST one, which is
+the argument `cn` lets win.
 
 **Scope.** `app/**`, `components/**`, `modules/**`, `lib/**` over
 `.ts .tsx .js .jsx .mts .mjs`, never `node_modules`, `.webjs`, `dist`,
@@ -382,8 +389,10 @@ can express (the kit button's `focus-visible:ring-[3px]` and
 are measured against. This is also why the sonner raw palette colors
 (`sonner.ts` success / info / warning icons) are LEFT ALONE. There is no token
 to move them to, and inventing a `--success` is what got #1116 reverted. Widen
-the scope with a negated entry (`"ignore": ["!components/ui/**"]`), narrow it
-with more globs. Entries match the path relative to the app root.
+the scope with a negated entry, which un-ignores whatever it MATCHES
+(`"ignore": ["!components/ui/**"]` for the whole dir,
+`"!components/ui/button.ts"` for one file), narrow it with more globs.
+Entries match the path relative to the app root.
 
 **Phases.** Phase 1 (this) ships the command and the docs that DESCRIBE it.
 Nothing tells an agent to run it in its loop, and nothing adds it to the

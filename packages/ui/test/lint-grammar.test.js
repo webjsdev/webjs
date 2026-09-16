@@ -105,3 +105,12 @@ test('GROUP_CATEGORY: keeps shadcn placements (padding is spacing, margin is lay
   assert.equal(categoryOf('arbitrary..transition-duration'), 'motion');
   assert.equal(categoryOf('arbitrary..grid-template-areas'), null);
 });
+
+test('parseToken: a longer head is matched before the prefix it starts with (review findings on PR #1479)', () => {
+  assert.equal(parseToken('text-shadow-lg').group, 'text-shadow');
+  assert.equal(parseToken('text-shadow-[0_1px_0_#000]').group, 'text-shadow');
+  assert.equal(parseToken('text-shadow-red-500').group, 'text-shadow-color');
+  assert.equal(isAllowed(parseToken('text-shadow-[0_1px_0_#000]'), ['effects']), true);
+  assert.equal(parseToken('bg-blend-multiply').group, 'bg-blend');
+  assert.equal(parseToken('bg-blend-multiply').category, 'effects');
+});

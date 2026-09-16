@@ -112,3 +112,23 @@ test('collectHelperImports: recognizes helpers by resolved import path, cn by th
   assert.deepEqual(r.helpers, ['buttonClass', 'badgeClass']);
   assert.deepEqual(r.cnNames, ['cx']);
 });
+
+test('scan: a comparison operand or a case label in a class hole is not a class', () => {
+  assert.deepEqual(names(scanClassSites("html`<p class=${cn(buttonClass(), item.kind === 'primary' ? 'w-9' : '')}>`", { helpers: ['buttonClass'] })), ['w-9']);
+  assert.deepEqual(names(scanClassSites("html`<p class=${'x' == kind ? 'p-2' : kind != 'y' ? 'p-3' : 'p-4'}>`")), ['p-2', 'p-3', 'p-4']);
+  assert.deepEqual(names(scanClassSites("switch (k) { case 'primary': return cn(buttonClass(), 'w-9'); }", { helpers: ['buttonClass'] })), ['w-9']);
+});
+
+test('scan: commented-out markup inside an html template opens no tag', () => {
+  const src = 'html`<!-- <div class="text-red-600"> --><p class="p-2">${x}</p><!-- ${y} -->`';
+  assert.deepEqual(names(scanClassSites(src)), ['p-2']);
+  // A hole inside the comment is still lexed, so a backtick in it cannot end the template early.
+  const tricky = 'html`<!-- ${html`<i class="mt-1">`} --><p class="p-3">`';
+  assert.deepEqual(names(scanClassSites(tricky)), ['p-3']);
+});
+
+test('collectHelperImports: a comment inside a multi-line import list is not a binding', () => {
+  const paths = { filePath: '/app/components/x.ts', appRoot: '/app', uiDir: '/app/components/ui', utilsPath: '/app/lib/utils/cn.ts' };
+  const src = "import {\n  buttonClass, // the primary\n  /* badges */ badgeClass,\n} from '#components/ui/button.ts';";
+  assert.deepEqual(collectHelperImports(src, paths).helpers, ['buttonClass', 'badgeClass']);
+});

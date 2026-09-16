@@ -91,3 +91,18 @@ test('rules table: the three rules are registered by their config names', () => 
   assert.deepEqual(RULE_NAMES, ['no-raw-colors', 'no-arbitrary-values', 'no-restyle']);
   assert.equal(RULES['no-restyle'], noRestyle);
 });
+
+test('no-raw-colors: the role sentence names the surface by prefix', () => {
+  const ctx = { tokens: TOKENS, themePath: 'x.css' };
+  assert.match(noRawColors(attr('border-red-500'), ctx)[0].message, /For error border colors, border-destructive is the role match\./);
+  assert.match(noRawColors(attr('bg-red-500'), ctx)[0].message, /For error surfaces, bg-destructive is the role match\./);
+  assert.match(noRawColors(attr('ring-gray-300'), ctx)[0].message, /For muted ring colors, ring-muted is the role match\./);
+});
+
+test('no-restyle: a site composed with two helpers names both and reads axes from the last', () => {
+  const s = site("html`<span class=${cn(buttonClass(), badgeClass(), 'bg-pink-500')}>`", { helpers: ['buttonClass', 'badgeClass'] });
+  const calls = [];
+  const [v] = noRestyle(s, { allow: ['layout'], axesFor: (h) => { calls.push(h); return { axes: { variant: ['default', 'outline'] }, file: `components/ui/${h.replace('Class', '')}.ts` }; } });
+  assert.match(v.message, /^bg-pink-500 overrides what buttonClass and badgeClass already set\. Use a badgeClass variant: default, outline \(declared in components\/ui\/badge\.ts\)\.$/);
+  assert.deepEqual(calls, ['badgeClass']);
+});

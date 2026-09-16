@@ -117,14 +117,19 @@ export function lintApp(cwd, config) {
   const warnings = [];
   if (Object.keys(rules).length === 0) return { violations: [], warnings, configured: false };
 
-  // Ignore set: the ui dir by default, plus the app's entries; a `!` entry un-ignores.
+  // Ignore set: the ui dir by default, plus the app's entries. A `!` entry
+  // un-ignores whatever it MATCHES, so `!components/ui/**` widens the scope
+  // over the whole ui dir and `!components/ui/button.ts` over one file.
   const uiRel = toPosix(relative(root, config.resolvedPaths.ui));
-  let ignore = [`${uiRel}/**`];
+  const ignore = [`${uiRel}/**`];
+  const unignore = [];
   for (const entry of config.lint?.ignore ?? []) {
-    if (entry.startsWith('!')) ignore = ignore.filter((g) => g !== entry.slice(1));
+    if (entry.startsWith('!')) unignore.push(entry.slice(1));
     else ignore.push(entry);
   }
   const ignoreRes = ignore.map(globToRegExp);
+  const unignoreRes = unignore.map(globToRegExp);
+  const isIgnored = (rel) => ignoreRes.some((re) => re.test(rel)) && !unignoreRes.some((re) => re.test(rel));
 
   // Theme tokens, read once; no tokens disables no-raw-colors for the run.
   let tokens = [];
@@ -157,7 +162,7 @@ export function lintApp(cwd, config) {
   /** @type {Violation[]} */
   const violations = [];
   for (const rel of collectFiles(root)) {
-    if (ignoreRes.some((re) => re.test(rel))) continue;
+    if (isIgnored(rel)) continue;
     const abs = join(root, rel);
     let src;
     try { src = readFileSync(abs, 'utf8'); } catch { continue; }
@@ -167,7 +172,10 @@ export function lintApp(cwd, config) {
       uiDir: config.resolvedPaths.ui,
       utilsPath: config.resolvedPaths.utils,
     });
-    const sites = scanClassSites(src, { helpers: imports.helpers, cnNames: imports.cnNames.length ? imports.cnNames : [] });
+    // `cnNames` is passed even when empty ON PURPOSE: the scanner's own default
+    // recognizes a bare `cn`, but here `cn` counts only when imported from the
+    // configured utils alias, so an unrecognized `cn` never opens a call site.
+    const sites = scanClassSites(src, { helpers: imports.helpers, cnNames: imports.cnNames });
     if (!sites.length) continue;
     const axesFor = (helper) => {
       const target = imports.helperFiles[helper];

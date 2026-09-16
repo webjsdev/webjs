@@ -70,6 +70,10 @@ export function extractHelperSignatures(src) {
  * @returns {Record<string, Record<string, string[]>>}
  */
 export function extractHelperAxes(src) {
+  // Comments are blanked first (string-aware), so an apostrophe or a brace in
+  // a comment inside the app's variant map cannot swallow the rest of the
+  // object; positions are not reported here, so blanking to spaces is enough.
+  src = blankComments(src);
   // 1. Every `const NAME(: T)? = { ... }` object literal and its top-level keys.
   /** @type {Map<string, string[]>} */
   const objects = new Map();
@@ -131,6 +135,34 @@ export function extractHelperAxes(src) {
     const forHelper = (out[h] ??= {});
     const values = (forHelper[axis] ??= []);
     for (const k of keys) if (!values.includes(k)) values.push(k);
+  }
+  return out;
+}
+
+/** `src` with every line and block comment blanked to spaces, strings and templates left intact. */
+function blankComments(src) {
+  let out = '';
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i];
+    if (c === "'" || c === '"' || c === '`') {
+      out += c; i++;
+      while (i < src.length && src[i] !== c) { if (src[i] === '\\') { out += src[i]; i++; } out += src[i]; i++; }
+      out += src[i] ?? '';
+      continue;
+    }
+    if (c === '/' && src[i + 1] === '/') {
+      while (i < src.length && src[i] !== '\n') { out += ' '; i++; }
+      out += '\n';
+      continue;
+    }
+    if (c === '/' && src[i + 1] === '*') {
+      const end = src.indexOf('*/', i + 2);
+      const stop = end === -1 ? src.length : end + 2;
+      out += src.slice(i, stop).replace(/[^\n]/g, ' ');
+      i = stop - 1;
+      continue;
+    }
+    out += c;
   }
   return out;
 }

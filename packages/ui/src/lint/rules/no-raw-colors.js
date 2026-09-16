@@ -57,7 +57,8 @@ export function noRawColors(site, ctx) {
     let message = `${parsed.base} is a raw palette color. Use a theme token: ${list.join(', ')} (declared in ${ctx.themePath}).`;
     if (roleDeclared) {
       const what = family === 'red' || family === 'rose' ? 'error' : 'muted';
-      message += ` For ${what} ${prefix === 'bg' ? 'surfaces' : 'text'}, ${prefix}-${role} is the role match`;
+      const noun = prefix === 'bg' ? 'surfaces' : prefix === 'text' ? 'text' : `${prefix} colors`;
+      message += ` For ${what} ${noun}, ${prefix}-${role} is the role match`;
       message += role === 'destructive' && prefix === 'text' ? ', or use errorClass() from the kit.' : '.';
     }
     out.push({

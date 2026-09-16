@@ -29,12 +29,15 @@ import { parseToken, isAllowed } from '../grammar.js';
 export function noRestyle(site, ctx) {
   if (!site.helpers.length) return [];
   const out = [];
-  const helper = site.helpers[0];
+  // Every composed helper is named; the axes come from the LAST one, since a
+  // later argument is what `cn` lets win.
+  const helper = site.helpers[site.helpers.length - 1];
+  const named = site.helpers.length === 1 ? helper : `${site.helpers.slice(0, -1).join(', ')} and ${helper}`;
   const { axes, file } = ctx.axesFor(helper);
   for (const token of site.classes) {
     const parsed = parseToken(token.name);
     if (isAllowed(parsed, ctx.allow)) continue;
-    let message = `${parsed.utility} overrides what ${helper} already sets.`;
+    let message = `${parsed.utility} overrides what ${named} already ${site.helpers.length === 1 ? 'sets' : 'set'}.`;
     const axisNames = Object.keys(axes);
     if (axisNames.length) {
       const axis = pickAxis(parsed, axisNames);
