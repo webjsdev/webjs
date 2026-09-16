@@ -59,7 +59,7 @@ const CARD = 'p-6 bg-bg-elev hover:bg-[color-mix(in_oklch,var(--bg-elev)_92%,var
 // matching the "Why webjs" cells on the home page.
 const REASONS = [
   {
-    title: 'What you write is what runs',
+    title: 'What you write is what runs, nothing is compiled away',
     body: 'No build, no bundler, no minifier. Source files are served as native ES modules, so the code your agent reads on disk is byte for byte the code running in the browser. It debugs against reality, never a compiled or source-mapped artifact.',
   },
   {
