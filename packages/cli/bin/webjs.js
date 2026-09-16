@@ -290,7 +290,7 @@ const HELP = {
     examples: ['webjs db generate', 'webjs db migrate', 'webjs db studio', 'webjs db seed'],
   },
   ui: {
-    usage: 'webjs ui <init|add|list|view|diff|info> [names...]',
+    usage: 'webjs ui <init|add|list|view|diff|info|lint> [names...]',
     summary: 'AI-first component library CLI. Requires @webjsdev/ui installed in the project.',
     examples: ['webjs ui init', 'webjs ui add button card', 'webjs ui list'],
   },
