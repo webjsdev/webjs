@@ -92,6 +92,10 @@ packages/ui/
       diff.js                     diff, compare local vs registry
       info.js                     info, project diagnostics
       build.js                    build, compile a custom registry (for registry authors)
+    lint/
+      grammar.js                  `webjsui lint` token grammar: parseToken() (arbitrary VALUE vs VARIANT), groupOf(), GROUP_CATEGORY (shadcn-ui/lint's taxonomy, verbatim)
+      scan.js                     the class-site scanner (html-template attributes, cn() args, class=${} holes), pure over source
+      theme-tokens.js             READS the app's `--color-*` tokens from its @theme / @theme inline blocks (utils/theme.js WRITES them)
     registry/
       schema.js                   zod schemas (wire-compatible with shadcn's) + the opt-in `lint` block of components.json
       local.js                    LOCAL-FIRST composer: read the packaged registry from disk (no network)
