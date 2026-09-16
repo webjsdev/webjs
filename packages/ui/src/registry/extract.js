@@ -49,6 +49,140 @@ export function extractHelperSignatures(src) {
 }
 
 /**
+ * The option AXES a Tier-1 class helper exposes, e.g.
+ * `{ buttonClass: { variant: ['default', ...], size: ['default', 'xs', ...] } }`.
+ *
+ * `extractHelperSignatures` returns signature TEXT, which is right for `view`
+ * and the MCP `ui` tool but cannot answer "which sizes exist", the question a
+ * `webjsui lint` no-restyle message has to answer. Same lexical, parser-free
+ * approach, same module, so the two cannot drift. Pure over SOURCE TEXT so the
+ * linter can feed it the APP's copied `components/ui/*.ts` (which may have
+ * added or removed a variant) rather than the packaged registry.
+ *
+ * Resolves the two shapes the registry actually writes:
+ *   const size = opts.size ?? 'default';  ...  SIZES[size]      (button.ts)
+ *   VARIANTS[opts.variant ?? 'default']                          (badge.ts)
+ * Two objects feeding one axis are unioned (switch.ts: TRACK_SIZES[size] and
+ * THUMB_SIZES[size]). A helper matching neither shape yields no axes, and the
+ * caller then omits the value list rather than inventing one.
+ *
+ * @param {string} src
+ * @returns {Record<string, Record<string, string[]>>}
+ */
+export function extractHelperAxes(src) {
+  // 1. Every `const NAME(: T)? = { ... }` object literal and its top-level keys.
+  /** @type {Map<string, string[]>} */
+  const objects = new Map();
+  const objRe = /\bconst\s+([A-Za-z_$][\w$]*)\s*(?::[^=]*?)?=\s*\{/g;
+  let m;
+  while ((m = objRe.exec(src)) !== null) {
+    const open = m.index + m[0].length - 1;
+    const close = matchBrace(src, open);
+    if (close === -1) continue;
+    objects.set(m[1], topLevelKeys(src.slice(open + 1, close)));
+    objRe.lastIndex = close;
+  }
+  if (objects.size === 0) return {};
+
+  // 2. Every exported helper, by start offset, so a read below is attributed to
+  //    the nearest preceding declaration (helpers are sequential in a module).
+  /** @type {{ name: string, at: number }[]} */
+  const helpers = [];
+  const fnRe =
+    /export\s+(?:const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\([^)]*\)\s*(?::[^=]+?)?=>|function\s+([A-Za-z_$][\w$]*)\s*\()/g;
+  while ((m = fnRe.exec(src)) !== null) helpers.push({ name: m[1] || m[2], at: m.index });
+  const helperAt = (/** @type {number} */ offset) => {
+    let h = null;
+    for (const c of helpers) if (c.at <= offset) h = c.name;
+    return h;
+  };
+
+  // 3. `const <local> = <param>.<axis> ?? ...` bindings, scoped to their helper.
+  /** @type {Map<string, Map<string, string>>} */
+  const bindings = new Map();
+  const bindRe = /\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*[A-Za-z_$][\w$]*\.([A-Za-z_$][\w$]*)\s*\?\?/g;
+  while ((m = bindRe.exec(src)) !== null) {
+    const h = helperAt(m.index);
+    if (!h) continue;
+    if (!bindings.has(h)) bindings.set(h, new Map());
+    bindings.get(h).set(m[1], m[2]);
+  }
+
+  // 4. Every `OBJ[<index>]` read: the axis is `<param>.<axis>` in the index, or
+  //    the axis the bare local was bound to. Union per helper + axis, first-seen
+  //    order, so the message lists `default` first as the source does.
+  /** @type {Record<string, Record<string, string[]>>} */
+  const out = {};
+  const readRe = /\b([A-Za-z_$][\w$]*)\[([^\]]+)\]/g;
+  while ((m = readRe.exec(src)) !== null) {
+    const keys = objects.get(m[1]);
+    if (!keys) continue;
+    const h = helperAt(m.index);
+    if (!h) continue;
+    const index = m[2];
+    let axis = null;
+    const member = /[A-Za-z_$][\w$]*\.([A-Za-z_$][\w$]*)/.exec(index);
+    if (member) axis = member[1];
+    else {
+      const local = index.trim();
+      axis = bindings.get(h)?.get(local) ?? null;
+    }
+    if (!axis) continue;
+    const forHelper = (out[h] ??= {});
+    const values = (forHelper[axis] ??= []);
+    for (const k of keys) if (!values.includes(k)) values.push(k);
+  }
+  return out;
+}
+
+/** Index of the `}` matching the `{` at `open`, string-aware. -1 when unbalanced. */
+function matchBrace(s, open) {
+  let depth = 0;
+  for (let i = open; i < s.length; i++) {
+    const c = s[i];
+    if (c === "'" || c === '"' || c === '`') {
+      i++;
+      while (i < s.length && s[i] !== c) { if (s[i] === '\\') i++; i++; }
+      continue;
+    }
+    if (c === '{') depth++;
+    else if (c === '}') { depth--; if (depth === 0) return i; }
+  }
+  return -1;
+}
+
+/** The top-level keys of an object-literal body (bare identifiers and quoted strings). */
+function topLevelKeys(body) {
+  /** @type {string[]} */
+  const keys = [];
+  let depth = 0;
+  let atKey = true;
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (c === "'" || c === '"' || c === '`') {
+      let j = i + 1;
+      let text = '';
+      while (j < body.length && body[j] !== c) { if (body[j] === '\\') j++; text += body[j]; j++; }
+      if (depth === 0 && atKey) { keys.push(text); atKey = false; }
+      i = j;
+      continue;
+    }
+    if (c === '{' || c === '[' || c === '(') { depth++; continue; }
+    if (c === '}' || c === ']' || c === ')') { depth--; continue; }
+    if (depth === 0 && c === ',') { atKey = true; continue; }
+    if (depth === 0 && atKey && /[A-Za-z_$]/.test(c)) {
+      let j = i;
+      let word = '';
+      while (j < body.length && /[\w$]/.test(body[j])) word += body[j++];
+      keys.push(word);
+      atKey = false;
+      i = j - 1;
+    }
+  }
+  return keys;
+}
+
+/**
  * The JSDoc header text (description + a11y obligations + token notes), with the
  * `@example` block and the `@module`/`@param`-style tags dropped. This is the
  * "lean header" the copied file keeps; serving it lets an agent read the

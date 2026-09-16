@@ -82,6 +82,43 @@ export const registryItemCommonSchema = z.object({
   categories: z.array(z.string()).optional(),
 });
 
+/** A rule's severity. Absent from `lint.rules` means `off`. */
+export const lintSeveritySchema = z.enum(['off', 'warn', 'error']);
+
+/**
+ * One rule's configuration: a bare severity, or an object adding `allow`
+ * (category names such as `layout` / `spacing`, or class-group names such
+ * as `rounded`). Kept `.strict()` so a typo is a config error, not a silent
+ * no-op.
+ */
+export const lintRuleSchema = z.union([
+  lintSeveritySchema,
+  z
+    .object({
+      severity: lintSeveritySchema.default('warn'),
+      allow: z.array(z.string()).optional(),
+    })
+    .strict(),
+]);
+
+/**
+ * The opt-in `lint` block of `components.json`, read by `webjsui lint`. No
+ * block means every rule is off and the command reports nothing.
+ */
+export const lintConfigSchema = z
+  .object({
+    ignore: z.array(z.string()).default([]),
+    rules: z
+      .object({
+        'no-raw-colors': lintRuleSchema.optional(),
+        'no-arbitrary-values': lintRuleSchema.optional(),
+        'no-restyle': lintRuleSchema.optional(),
+      })
+      .strict()
+      .default({}),
+  })
+  .strict();
+
 export const rawConfigSchema = z
   .object({
     $schema: z.string().optional(),
@@ -94,6 +131,7 @@ export const rawConfigSchema = z
       prefix: z.string().default('').optional(),
     }),
     iconLibrary: z.string().optional().default('lucide'),
+    lint: lintConfigSchema.optional(),
     aliases: z.object({
       components: z.string().default('components'),
       utils: z.string().default('lib/utils'),
