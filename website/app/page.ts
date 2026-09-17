@@ -640,7 +640,7 @@ export default function LandingPage() {
     <section class="py-16">
       <div class="max-w-6xl mx-auto px-6">
         <div class="max-w-3xl mx-auto mb-12 text-center">
-          <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">What you write is what runs</h2>
+          <h2 class="font-display font-bold text-h2 leading-[1.12] tracking-[-0.03em] my-3 text-balance">What you write is what runs, nothing is compiled away</h2>
           <!-- THE HEADING IS STRONGER THAN THE SECTION, deliberately, and the
                lede has to bring it back inside two carve-outs it does not state
                itself. "What you write is what runs" is true of the files that
