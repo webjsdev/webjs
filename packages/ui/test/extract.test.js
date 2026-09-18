@@ -7,10 +7,12 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   uiComponent,
   uiInventory,
   extractHelperSignatures,
+  extractHelperAxes,
   extractDocHeader,
   renderComponentText,
 } from '../src/registry/extract.js';
@@ -68,4 +70,38 @@ test('renderComponentText: includes tier, helpers, and deps for a Tier-1 compone
   assert.match(text, /Helpers:/);
   assert.match(text, /cardClass/);
   assert.match(text, /npm: @webjsdev\/core/);
+});
+
+test('extractHelperAxes: resolves the local-binding shape (button.ts) into variant + size values', () => {
+  const src = readFileSync(new URL('../packages/registry/components/button.ts', import.meta.url), 'utf8');
+  const axes = extractHelperAxes(src);
+  assert.deepEqual(axes.buttonClass.variant, ['default', 'destructive', 'outline', 'secondary', 'ghost', 'link']);
+  assert.deepEqual(axes.buttonClass.size, ['default', 'xs', 'sm', 'lg', 'icon', 'icon-xs', 'icon-sm', 'icon-lg']);
+});
+
+test('extractHelperAxes: resolves the inline shape (badge.ts) and unions two objects on one axis (switch.ts)', () => {
+  const badge = readFileSync(new URL('../packages/registry/components/badge.ts', import.meta.url), 'utf8');
+  assert.deepEqual(extractHelperAxes(badge).badgeClass.variant, ['default', 'secondary', 'destructive', 'outline', 'ghost', 'link']);
+  const sw = readFileSync(new URL('../packages/registry/components/switch.ts', import.meta.url), 'utf8');
+  // TRACK_SIZES[size] and THUMB_SIZES[size] carry the same keys, unioned + deduplicated.
+  assert.deepEqual(extractHelperAxes(sw).switchTrackClass.size, ['default', 'sm']);
+  const unioned = extractHelperAxes(
+    "const A = { default: 'x', big: 'y' } as const;\nconst B = { default: 'z', huge: 'w' } as const;\n" +
+    "export function fooClass(opts: { size?: string } = {}) { const size = opts.size ?? 'default'; return [A[size], B[size]].join(' '); }\n",
+  );
+  assert.deepEqual(unioned.fooClass.size, ['default', 'big', 'huge']);
+});
+
+test('extractHelperAxes: a helper matching neither shape yields no axes rather than a wrong list', () => {
+  const src = "const BASE = 'rounded-xl border';\nexport const cardClass = (): string => BASE;\n";
+  assert.deepEqual(extractHelperAxes(src), {});
+  // An object read through an unrelated index (not an option) is not an axis.
+  const other = "const MAP = { a: 1, b: 2 };\nexport function fooClass() { const k = compute(); return String(MAP[k]); }\n";
+  assert.deepEqual(extractHelperAxes(other), {});
+});
+
+test('extractHelperAxes: a comment inside the variant map cannot swallow the object', () => {
+  const src = readFileSync(new URL('../packages/registry/components/button.ts', import.meta.url), 'utf8')
+    .replace("'icon-lg': 'size-10',", "'icon-lg': 'size-10', // the app's largest icon button\n  none: '', /* don't */");
+  assert.deepEqual(extractHelperAxes(src).buttonClass.size, ['default', 'xs', 'sm', 'lg', 'icon', 'icon-xs', 'icon-sm', 'icon-lg', 'none']);
 });

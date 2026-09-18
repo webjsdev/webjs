@@ -52,6 +52,31 @@ So the loop is: `add` the component, then query `ui <name>` (MCP) or
   that ships inside the installed `@webjsdev/ui`, with no network. This pins you
   to the installed version; run `npx webjsdev ui diff` to see where your local copies
   drift from the upstream (that command alone compares against the live registry).
+- `npx webjsdev ui lint` is an OPT-IN design-system linter over the app's own
+  source. It reads the Tailwind classes in `html` templates, `cn()` calls and
+  `class=${...}` holes and reports, at the line, a raw palette colour where the
+  theme declares a role token (`no-raw-colors`, with a message naming only the
+  `--color-*` tokens the configured `tailwind.css` actually declares), an
+  arbitrary value such as `p-[13px]` (`no-arbitrary-values`; an arbitrary
+  VARIANT like `[&_svg]:size-4` never fires), and a class composed over a kit
+  helper (`no-restyle`, naming the helper's real variants and sizes read from
+  the app's copied `components/ui/*.ts`). It is off until `components.json`
+  carries a `lint` block, and with no block it reports nothing and exits 0.
+  `components/ui/**` is skipped by default (a copied primitive owns structural
+  values no variant expresses), and `allow` uses shadcn's category taxonomy
+  (`layout`, `color`, `typography`, `spacing`, `shape`, `effects`, `motion`) or
+  a class-group id such as `rounded`. `--json` emits `{ violations, summary }`
+  for an agent loop; `--max-warnings <n>` pins a count.
+
+  ```json
+  "lint": {
+    "rules": {
+      "no-raw-colors": "warn",
+      "no-arbitrary-values": { "severity": "warn", "allow": ["layout"] },
+      "no-restyle": { "severity": "error", "allow": ["layout", "rounded"] }
+    }
+  }
+  ```
 
 ## Inventory (run `npx webjsdev ui list` or the MCP `ui` tool for the authoritative, current set)
 

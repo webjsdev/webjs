@@ -113,6 +113,7 @@ webjs ui add button card dialog input label</code-block>
           <tr><td><code>view &lt;name&gt;</code></td><td>Prints a component's helpers, its paste-ready example, and its full source.</td></tr>
           <tr><td><code>diff [name]</code></td><td>Compares your local copy against the live registry.</td></tr>
           <tr><td><code>info</code></td><td>Project diagnostics: the resolved config and registry URL.</td></tr>
+          <tr><td><code>lint</code></td><td>Opt-in design-system linter. Reports a raw palette colour, an arbitrary value, or a class composed over a kit helper, at the line, with a message built from your own theme tokens and helper variants. Off until <code>components.json</code> carries a <code>lint</code> block; with none it reports nothing and exits 0. <code>--json</code> for an agent loop. See <a href="/docs/styling#lint">the styling docs</a>.</td></tr>
         </tbody>
       </table>
       <p>

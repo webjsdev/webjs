@@ -581,7 +581,7 @@ webjs help   [command]             # full usage banner, or per-command usage + O
 webjs typecheck [tsc args...]      # the project's own tsc --noEmit
 webjs create <name> [--template api] [--skip-ci]   # --skip-ci omits the GitHub workflow (rails new parity, #1471); the local webjs.ci list and `ci` script always ship
 webjs db <generate|migrate|push|studio|seed|verb> [args]   # wraps drizzle-kit by default (+ runs db/seed.server.ts). Bring your own ORM (#1468): a `"webjs": { "db": { "<verb>": "<command>" } }` block in package.json runs that shell command instead (node_modules/.bin on PATH, extra args appended), any key is a verb, an unmapped verb keeps its default, so `webjs db migrate` is one spelling across ORMs and the scaffolded start.before / Dockerfile / CI keep working after a swap
-webjs ui init | add <names...> | list | view <name>
+webjs ui init | add <names...> | list | view <name> | diff | info | lint   # lint is the opt-in design-system linter (#1478), configured by a `lint` block in components.json; no block reports nothing
 webjs vendor pin|unpin|list|audit|outdated|update [--from PROVIDER]   # importmap pinning, .webjs/vendor/importmap.json
 ```
 

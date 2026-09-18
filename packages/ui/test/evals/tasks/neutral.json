@@ -1,0 +1,34 @@
+[
+  {
+    "id": "empty-state",
+    "prompt": "Add an empty-state fragment at lib/utils/ui/empty-state.ts that renders a heading, a one-line description and an optional action link, for lists that have no rows yet. Use it in the todo example under app/examples/todo when there are no todos."
+  },
+  {
+    "id": "breadcrumbs",
+    "prompt": "Add a breadcrumb trail to the feature pages under app/features/ so each page shows Home / Features / <feature name>. Put the fragment in lib/utils/ui/breadcrumbs.ts."
+  },
+  {
+    "id": "confirm-dialog",
+    "prompt": "Add a confirm-delete dialog component at components/confirm-delete.ts that wraps a native <dialog> with a message, a cancel button and a confirm button, and use it before deleting a todo in app/examples/todo."
+  },
+  {
+    "id": "search-box",
+    "prompt": "Add a search box to the gallery home page at app/page.ts that filters the feature cards client-side as the user types. Put the interactive part in components/feature-search.ts."
+  },
+  {
+    "id": "footer",
+    "prompt": "Add a site footer to app/layout.ts with the project name, a link to the docs and a link to the GitHub repository."
+  },
+  {
+    "id": "todo-count",
+    "prompt": "Show a count of remaining todos next to the list heading in app/examples/todo, updated as items are completed."
+  },
+  {
+    "id": "notice-list",
+    "prompt": "Add a notices page at app/notices/page.ts that lists three static notices, each with a title, a date and a short body, and link it from the gallery home."
+  },
+  {
+    "id": "profile-card",
+    "prompt": "Add a profile card fragment at lib/utils/ui/profile-card.ts showing an avatar, a name, a role and a short bio, and render one example on the gallery home page."
+  }
+]

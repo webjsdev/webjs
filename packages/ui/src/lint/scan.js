@@ -1,0 +1,446 @@
+/**
+ * The class-site scanner behind `webjsui lint`: where in a module the linter
+ * reads Tailwind classes from. Pure over `(source, { helpers, cnNames })`, no
+ * filesystem, so every rule test is a string in and an array out.
+ *
+ * A CLASS SITE is one of three shapes, and they are the complete set:
+ *
+ *   1. Template attribute site. A `class=` attribute inside an OPEN TAG inside
+ *      an `html` tagged template. Nested `html` templates inside holes are
+ *      recursed into (the blog's positives all sit inside
+ *      `${cond ? html\`...\` : ''}`).
+ *   2. Helper argument site. Every string literal (a plain template literal
+ *      included, split at its holes) lexically inside a call to a recognized
+ *      `cn(` (the app's utils alias) anywhere in the module. A
+ *      recognized `*Class(` helper call contributes its NAME (the class beside
+ *      it is composed with that helper) and its own arguments are never read
+ *      as classes, since `buttonClass({ variant: 'secondary' })` carries option
+ *      values, not classes.
+ *   3. Hole site. Every string literal inside a `class=${...}` hole.
+ *
+ * Sites 2 and 3 overlap (`class=${cn(buttonClass(), 'w-9')}`) and a `cn` call
+ * inside a class hole feeds the hole's site rather than opening a second one,
+ * so one string is never reported twice.
+ *
+ * The TAG-REGION requirement is what makes an escaped code sample inert: a
+ * `class=` is a site only when a literal `<` followed by a tag-name character
+ * opened a tag that a `>` has not yet closed. In a docs page the markup is
+ * written `&lt;p class="..."&gt;`, so no tag is ever open and nothing is read.
+ * This is a structural rule, not a "does this look like a docs page" guess.
+ *
+ * A class string spanning a hole is split at the hole boundary. Each static
+ * run is tokenized on whitespace, and a token touching a hole with no
+ * intervening whitespace is DROPPED as a fragment (`class="text-${size} p-2"`
+ * yields only `p-2`). Nothing is reconstructed across a hole.
+ *
+ * The lexer is hand-rolled, borrowing the regex-versus-division and nested
+ * `${...}` handling of `@webjsdev/server`'s `js-scan.js`. It is NOT imported:
+ * this package must not depend on `@webjsdev/server`, and that module blanks
+ * template bodies while this one must read them.
+ *
+ * @module lint/scan
+ */
+
+import { dirname, resolve, sep } from 'node:path';
+
+/**
+ * @typedef {{ name: string, offset: number, line: number, column: number }} ClassToken
+ * @typedef {{
+ *   kind: 'attribute'|'hole'|'call',
+ *   offset: number, line: number, column: number,
+ *   classes: ClassToken[],
+ *   helpers: string[],
+ * }} ClassSite
+ */
+
+const REGEX_PRECEDING_KEYWORDS = new Set([
+  'return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void',
+  'do', 'else', 'case', 'yield', 'await', 'throw',
+]);
+
+/**
+ * Scan one module's source for class sites.
+ *
+ * @param {string} src
+ * @param {{ helpers?: Iterable<string>, cnNames?: Iterable<string> }} [opts]
+ * @returns {ClassSite[]}
+ */
+export function scanClassSites(src, opts = {}) {
+  const helpers = new Set(opts.helpers ?? []);
+  const cnNames = new Set(opts.cnNames ?? ['cn']);
+  const n = src.length;
+  /** @type {ClassSite[]} */
+  const sites = [];
+  const lineStarts = [0];
+  for (let k = 0; k < n; k++) if (src[k] === '\n') lineStarts.push(k + 1);
+  const pos = (offset) => {
+    let lo = 0, hi = lineStarts.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (lineStarts[mid] <= offset) lo = mid; else hi = mid - 1;
+    }
+    return { line: lo + 1, column: offset - lineStarts[lo] + 1 };
+  };
+  const newSite = (kind, offset) => ({ kind, offset, ...pos(offset), classes: [], helpers: [] });
+  // A site is dropped while muted (inside a helper's own arguments, or inside
+  // a hole that sits in commented-out markup).
+  const emit = (site) => { if (site.classes.length && mute === 0) sites.push(site); };
+
+  /** @type {ClassSite[]} the active collector stack (innermost last) */
+  const collectors = [];
+  let mute = 0;
+  const active = () => (collectors.length ? collectors[collectors.length - 1] : null);
+  const pushTokens = (site, text, base) => {
+    const re = /\S+/g;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      site.classes.push({ name: m[0], offset: base + m.index, ...pos(base + m.index) });
+    }
+  };
+
+  // One static run of a class string that holes may interrupt. A token touching
+  // a hole with no whitespace between is a fragment and is dropped, on either
+  // side, so nothing is ever reconstructed across a hole.
+  const pushRun = (site, text, base, holeBefore, holeAfter) => {
+    if (!text.length) return;
+    if (holeBefore && !/^\s/.test(text)) {
+      const m = /^\S+/.exec(text);
+      base += m[0].length; text = text.slice(m[0].length);
+    }
+    if (holeAfter && !/\s$/.test(text)) text = text.replace(/\S+$/, '');
+    pushTokens(site, text, base);
+  };
+
+  let i = 0;
+  let lastSig = '';
+  let lastWord = '';
+  let lastWordIsProp = false;
+  let lastWasIncDec = false;
+  const markValue = () => { lastSig = 'x'; lastWord = ''; lastWordIsProp = false; lastWasIncDec = false; };
+  const isRegex = () => {
+    if (lastSig === '') return true;
+    if (lastSig === ')' || lastSig === ']') return false;
+    if (lastSig === "'" || lastSig === '"' || lastSig === '`') return false;
+    if (lastWasIncDec) return false;
+    if (/[\w$]/.test(lastSig)) return !lastWordIsProp && REGEX_PRECEDING_KEYWORDS.has(lastWord);
+    return true;
+  };
+
+  const scanLineComment = () => { i += 2; while (i < n && src[i] !== '\n') i++; };
+  const scanBlockComment = () => {
+    i += 2;
+    while (i < n) { if (src[i] === '*' && src[i + 1] === '/') { i += 2; return; } i++; }
+  };
+  const scanRegex = () => {
+    i++;
+    let inClass = false;
+    while (i < n) {
+      const d = src[i];
+      if (d === '\\' && i + 1 < n) { i += 2; continue; }
+      if (d === '\n') break;
+      if (d === '[') inClass = true;
+      else if (d === ']') inClass = false;
+      else if (d === '/' && !inClass) { i++; break; }
+      i++;
+    }
+    markValue();
+  };
+  // A literal that is a comparison operand (`kind === 'primary'`), or a
+  // `case 'x':` label, is a value the code compares, not a class, so it is not
+  // collected. Any other literal in a class hole or cn() call is read as a
+  // class; an unknown token falls to the layout category, so a stray one is
+  // admitted by the recommended config rather than reported.
+  const isComparisonOperand = (before, after) => {
+    if (lastWord === 'case') return true;
+    let j = before - 1;
+    while (j >= 0 && /\s/.test(src[j])) j--;
+    if (j >= 1 && src[j] === '=' && (src[j - 1] === '=' || src[j - 1] === '!')) return true;
+    let k = after;
+    while (k < n && /\s/.test(src[k])) k++;
+    return (src[k] === '=' && src[k + 1] === '=') || (src[k] === '!' && src[k + 1] === '=');
+  };
+  const scanString = (q) => {
+    const quoteAt = i;
+    const start = i + 1;
+    i++;
+    let body = '';
+    while (i < n) {
+      if (src[i] === '\\' && i + 1 < n) { body += src[i] + src[i + 1]; i += 2; continue; }
+      if (src[i] === q) { i++; break; }
+      if (src[i] === '\n') { i++; break; }
+      body += src[i]; i++;
+    }
+    const site = active();
+    if (site && mute === 0 && !isComparisonOperand(quoteAt, i)) pushTokens(site, body, start);
+    markValue();
+  };
+  // A plain template literal is a string literal too, so inside a collecting
+  // site its static text is read like one (`cn(buttonClass(), \`bg-pink-500\`)`),
+  // split at its holes by the same fragment rule an attribute site uses.
+  const scanPlainTemplate = () => {
+    const quoteAt = i;
+    const site = mute === 0 ? active() : null;
+    /** @type {Array<{ text: string, base: number, holeBefore: boolean, holeAfter: boolean }>} */
+    const runs = [];
+    let run = '';
+    let runStart = -1;
+    let holeBefore = false;
+    const endRun = (holeAfter) => {
+      if (run.length) runs.push({ text: run, base: runStart, holeBefore, holeAfter });
+      run = ''; runStart = -1;
+    };
+    i++;
+    while (i < n) {
+      const c = src[i];
+      if (c === '\\' && i + 1 < n) {
+        if (runStart === -1) runStart = i;
+        run += c + src[i + 1];
+        i += 2;
+        continue;
+      }
+      if (c === '`') { i++; break; }
+      if (c === '$' && src[i + 1] === '{') {
+        endRun(true);
+        holeBefore = true;
+        i += 2;
+        scanCode('hole');
+        if (i < n && src[i] === '}') i++;
+        continue;
+      }
+      if (runStart === -1) runStart = i;
+      run += c;
+      i++;
+    }
+    endRun(false);
+    if (site && !isComparisonOperand(quoteAt, i)) {
+      for (const r of runs) pushRun(site, r.text, r.base, r.holeBefore, r.holeAfter);
+    }
+    markValue();
+  };
+
+  // An `html` tagged template: read the TEXT for open tags and `class=`
+  // attributes, recurse into holes as code.
+  const scanHtmlTemplate = () => {
+    i++;
+    let inTag = false;
+    /** @type {{ site: ClassSite|null, quote: string|null, run: string, runStart: number, holeBefore: boolean }|null} */
+    let attr = null;
+    let pendingClassHole = false;
+    let inComment = false;
+    const flushRun = (touchesHoleRight) => {
+      if (!attr || !attr.site) return;
+      pushRun(attr.site, attr.run, attr.runStart, attr.holeBefore, touchesHoleRight);
+      attr.run = ''; attr.runStart = -1; attr.holeBefore = false;
+    };
+    const closeAttr = () => { flushRun(false); if (attr.site) emit(attr.site); attr = null; };
+    while (i < n) {
+      const c = src[i];
+      if (c === '\\' && i + 1 < n) {
+        if (attr && attr.site) { if (attr.runStart === -1) attr.runStart = i; attr.run += src[i] + src[i + 1]; }
+        i += 2;
+        continue;
+      }
+      if (c === '`') { i++; break; }
+      // Commented-out markup (`<!-- <div class="..."> -->`) opens no tag. A hole
+      // inside the comment is still lexed as code so the template's real end is
+      // found, but it is muted: its output lands inside the comment, so nothing
+      // in it is collected.
+      if (inComment) {
+        if (src.startsWith('-->', i)) { inComment = false; i += 3; continue; }
+        if (c === '$' && src[i + 1] === '{') { i += 2; mute++; scanCode('hole'); mute--; if (i < n && src[i] === '}') i++; continue; }
+        i++;
+        continue;
+      }
+      if (!inTag && !attr && src.startsWith('<!--', i)) { inComment = true; i += 4; continue; }
+      if (c === '$' && src[i + 1] === '{') {
+        const at = i;
+        i += 2;
+        if (attr && attr.site) {
+          flushRun(true);
+          attr.holeBefore = true;
+          collectors.push(attr.site);
+          scanCode('hole');
+          collectors.pop();
+        } else if (pendingClassHole) {
+          pendingClassHole = false;
+          const site = newSite('hole', at);
+          collectors.push(site);
+          scanCode('hole');
+          collectors.pop();
+          emit(site);
+        } else {
+          scanCode('hole');
+        }
+        if (i < n && src[i] === '}') i++;
+        continue;
+      }
+      if (attr) {
+        if (attr.quote ? c === attr.quote : (/\s/.test(c) || c === '>')) {
+          const consume = attr.quote !== null;
+          closeAttr();
+          if (consume) i++;
+          continue;
+        }
+        if (attr.site) { if (attr.runStart === -1) attr.runStart = i; attr.run += c; }
+        i++;
+        continue;
+      }
+      if (!inTag) {
+        if (c === '<' && /[A-Za-z]/.test(src[i + 1] || '')) { inTag = true; i += 2; continue; }
+        i++;
+        continue;
+      }
+      if (c === '>') { inTag = false; pendingClassHole = false; i++; continue; }
+      if (c === '"' || c === "'") {
+        // Another attribute's quoted value: skip it, still scanning holes as code.
+        attr = { site: null, quote: c, run: '', runStart: -1, holeBefore: false };
+        i++;
+        continue;
+      }
+      if (src.startsWith('class=', i) && /[\s]/.test(src[i - 1] || '')) {
+        i += 6;
+        const q = src[i];
+        if (q === '"' || q === "'") {
+          attr = { site: newSite('attribute', i), quote: q, run: '', runStart: -1, holeBefore: false };
+          i++;
+        } else if (q === '$' && src[i + 1] === '{') {
+          pendingClassHole = true;
+        } else {
+          attr = { site: newSite('attribute', i), quote: null, run: '', runStart: -1, holeBefore: false };
+        }
+        continue;
+      }
+      i++;
+    }
+    if (attr) closeAttr();
+    markValue();
+  };
+
+  // A recognized call: `cn(` opens a call site unless one is already
+  // collecting; a `*Class(` helper contributes its name and mutes its args.
+  const scanCall = (word, wordAt) => {
+    // i sits at `(`
+    i++;
+    if (helpers.has(word)) {
+      const site = active();
+      if (site && mute === 0 && !site.helpers.includes(word)) site.helpers.push(word);
+      mute++;
+      scanCode('paren');
+      mute--;
+    } else if (active() || mute > 0) {
+      scanCode('paren');
+    } else {
+      const site = newSite('call', wordAt);
+      collectors.push(site);
+      scanCode('paren');
+      collectors.pop();
+      emit(site);
+    }
+    if (i < n && src[i] === ')') i++;
+    lastSig = ')'; lastWord = ''; lastWordIsProp = false; lastWasIncDec = false;
+  };
+
+  /** @param {'hole'|'paren'|null} stop */
+  function scanCode(stop) {
+    let brace = 0;
+    let paren = 0;
+    // A hole or a call's arguments start a fresh expression. Without this the
+    // lexer still remembers the `html` tag that opened the enclosing template,
+    // so a plain template (or a regex) leading a hole is misread.
+    if (stop !== null) { lastSig = stop === 'hole' ? '{' : '('; lastWord = ''; lastWordIsProp = false; lastWasIncDec = false; }
+    while (i < n) {
+      const c = src[i], next = src[i + 1];
+      if (stop === 'hole' && c === '}' && brace === 0) return;
+      if (stop === 'paren' && c === ')' && paren === 0) return;
+      if (c === '/' && next === '/') { scanLineComment(); continue; }
+      if (c === '/' && next === '*') { scanBlockComment(); continue; }
+      if (c === '/' && isRegex()) { scanRegex(); continue; }
+      if (c === "'" || c === '"') { scanString(c); continue; }
+      if (c === '`') {
+        if (lastWord === 'html' && /[\w$]/.test(lastSig) && !lastWordIsProp) scanHtmlTemplate();
+        else scanPlainTemplate();
+        continue;
+      }
+      if (c === '{') { brace++; lastSig = '{'; lastWord = ''; lastWasIncDec = false; i++; continue; }
+      if (c === '}') { brace--; lastSig = '}'; lastWord = ''; lastWasIncDec = false; i++; continue; }
+      if (c === '(') { paren++; lastSig = '('; lastWord = ''; lastWasIncDec = false; i++; continue; }
+      if (c === ')') { paren--; lastSig = ')'; lastWord = ''; lastWasIncDec = false; i++; continue; }
+      if (/[A-Za-z_$]/.test(c)) {
+        const prop = lastSig === '.';
+        const at = i;
+        let w = '';
+        while (i < n && /[\w$]/.test(src[i])) { w += src[i]; i++; }
+        lastWord = w; lastSig = w[w.length - 1]; lastWordIsProp = prop; lastWasIncDec = false;
+        if (!prop && (cnNames.has(w) || helpers.has(w))) {
+          let j = i;
+          while (j < n && /[ \t]/.test(src[j])) j++;
+          if (src[j] === '(') { i = j; scanCall(w, at); }
+        }
+        continue;
+      }
+      if (/\s/.test(c)) { i++; continue; }
+      lastWasIncDec = (c === '+' || c === '-') && c === lastSig;
+      lastSig = c; lastWord = ''; i++;
+    }
+  }
+
+  scanCode(null);
+  return sites;
+}
+
+/**
+ * The recognized helper and `cn` identifiers of one module, read from its
+ * imports. An identifier ending in `Class` is a kit helper only when imported
+ * from a path resolving inside `uiDir`; `cn` only when imported from
+ * `utilsPath` (the config's `aliases.utils`). A `#` specifier has its sigil
+ * stripped and resolves against `appRoot`; a relative one against the file.
+ * An unrelated local `fooClass()` is therefore never mistaken for a helper.
+ *
+ * @param {string} src
+ * @param {{ filePath: string, appRoot: string, uiDir: string, utilsPath: string }} paths
+ * @returns {{ helpers: string[], cnNames: string[], helperFiles: Record<string, string>, helperExports: Record<string, string> }}
+ *   `helperFiles` maps each helper to the absolute path its import resolved to
+ *   (extension as written), so the orchestrator can read the APP's copy.
+ *   `helperExports` maps each helper's LOCAL name to the name it is exported
+ *   under, which differs only for an aliased import.
+ */
+export function collectHelperImports(src, { filePath, appRoot, uiDir, utilsPath }) {
+  /** @type {string[]} */
+  const helpers = [];
+  /** @type {string[]} */
+  const cnNames = [];
+  /** @type {Record<string, string>} */
+  const helperFiles = {};
+  /** @type {Record<string, string>} */
+  const helperExports = {};
+  const stripExt = (p) => p.replace(/\.(?:ts|tsx|js|jsx|mts|mjs)$/, '');
+  const ui = resolve(uiDir);
+  const utils = stripExt(resolve(utilsPath));
+  // The optional group admits a default binding ahead of the named list
+  // (`import Def, { cn } from ...`), which is otherwise not matched at all.
+  const re = /\bimport\s*(?:type\s+)?(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g;
+  let m;
+  while ((m = re.exec(src)) !== null) {
+    const spec = m[2];
+    let target;
+    if (spec.startsWith('#')) target = resolve(appRoot, spec.slice(1));
+    else if (spec.startsWith('.')) target = resolve(dirname(filePath), spec);
+    else continue;
+    const inUi = target === ui || target.startsWith(ui + sep);
+    const isUtils = stripExt(target) === utils;
+    if (!inUi && !isUtils) continue;
+    // A comment inside a multi-line import list is not a binding.
+    const bindings = m[1].replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+    for (const part of bindings.split(',')) {
+      const piece = part.trim().replace(/^type\s+/, '');
+      if (!piece) continue;
+      const [imported, local = imported] = piece.split(/\s+as\s+/).map((s) => s.trim());
+      // Recognition keys on the EXPORTED name, so `buttonClass as bc` is still a
+      // kit helper. The scanner matches the local, and `helperExports` maps it
+      // back to the name `extractHelperAxes` keys its result on.
+      if (inUi && /Class$/.test(imported)) { helpers.push(local); helperFiles[local] = target; helperExports[local] = imported; }
+      if (isUtils && imported === 'cn') cnNames.push(local);
+    }
+  }
+  return { helpers, cnNames, helperFiles, helperExports };
+}
