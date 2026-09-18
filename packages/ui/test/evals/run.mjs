@@ -122,36 +122,58 @@ function agent(cwd, prompt) {
 
 const fmt = (v) => `${v.file}:${v.line}:${v.column} [${v.rule}] ${v.message}`;
 
+// `gallery` is not clean under LINT_BLOCK (its own pages compose classes over
+// kit helpers), so a whole-app count would start every arm far above zero and
+// the gate could never pass. Each arm therefore counts only what the agent
+// ADDED: the violations left once the pristine copy's own are taken out. The key
+// leaves the position out, because editing a file moves the lines below the edit.
+const key = (v) => `${v.file}|${v.rule}|${v.class}`;
+function baselineOf(doc) {
+  /** @type {Map<string, number>} */
+  const counts = new Map();
+  for (const v of doc.violations) counts.set(key(v), (counts.get(key(v)) ?? 0) + 1);
+  return counts;
+}
+function added(doc, baseline) {
+  const left = new Map(baseline);
+  return doc.violations.filter((v) => {
+    const k = key(v);
+    const c = left.get(k) ?? 0;
+    if (c > 0) { left.set(k, c - 1); return false; }
+    return true;
+  });
+}
+
 function runTask(task) {
   const result = { id: task.id, set: task.set, before: {}, after: {}, rulesOnly: {} };
 
   // BEFORE: the task alone.
   const before = scratchCopy();
+  const baseline = baselineOf(lint(before));
   const b = agent(before, task.prompt);
-  const beforeLint = lint(before);
-  result.before = { findings: beforeLint.summary.count, cost: b.cost };
+  result.before = { findings: added(lint(before), baseline).length, cost: b.cost };
 
   // AFTER: fresh agent per round, diagnostics in the prompt.
   const after = mkdtempSync(join(tmpdir(), 'webjsui-eval-after-'));
   cpSync(before, after, { recursive: true });
-  let rounds = 0, cost = 0, last = lint(after);
-  while (last.summary.count > 0 && rounds < ROUNDS) {
-    const diag = last.violations.map(fmt).join('\n');
+  let rounds = 0, cost = 0, last = added(lint(after), baseline);
+  while (last.length > 0 && rounds < ROUNDS) {
+    const diag = last.map(fmt).join('\n');
     const a = agent(after, `${task.prompt}\n\nThe file you produced was linted against the app's design system. Fix every finding below, keeping the feature intact.\n\n${RULES_TEXT}\n\nFindings from \`webjsui lint --json\`:\n${diag}`);
     cost += a.cost; rounds++;
-    last = lint(after);
+    last = added(lint(after), baseline);
   }
-  result.after = { rounds, findings: last.summary.count, cost };
+  result.after = { rounds, findings: last.length, cost };
 
   // RULES ONLY: same start, same rules text, no diagnostics; a hidden lint decides the next round.
   const rulesOnly = mkdtempSync(join(tmpdir(), 'webjsui-eval-rules-'));
   cpSync(before, rulesOnly, { recursive: true });
   rounds = 0; cost = 0;
-  let findings = lint(rulesOnly).summary.count;
+  let findings = added(lint(rulesOnly), baseline).length;
   while (findings > 0 && rounds < ROUNDS) {
     const a = agent(rulesOnly, `${task.prompt}\n\nReview the file you produced against the app's design-system rules below and fix anything that breaks them, keeping the feature intact.\n\n${RULES_TEXT}`);
     cost += a.cost; rounds++;
-    findings = lint(rulesOnly).summary.count;
+    findings = added(lint(rulesOnly), baseline).length;
   }
   result.rulesOnly = { rounds, findings, cost };
 
