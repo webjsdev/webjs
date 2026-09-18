@@ -334,7 +334,11 @@ config error rather than a silent no-op.
   `tailwind.css` declares (`--color-*` inside `@theme` OR `@theme inline`, both
   live in this repo) and adds a role match only where unambiguous (`red` /
   `rose` to `destructive`; the neutral families to `muted-foreground` under
-  `text-`, `muted` otherwise) and only when that token exists. A theme file
+  `text-`, `muted` otherwise) and only when that token exists. A role match
+  also sets `fix` in the `--json` output, as a drop-in for the reported `class`
+  (`hover:text-red-600/50` gets `hover:text-destructive/50`, keeping the
+  variants, the opacity modifier and a `!`). CSS comments are stripped before
+  the theme is read, so a commented-out token is never named. A theme file
   yielding no tokens turns the rule OFF for the run with one warning naming the
   path, because the rule's whole value is naming the alternative.
 - `no-arbitrary-values`: a token whose UTILITY segment carries a `[`
@@ -366,9 +370,12 @@ reverted for inventing vocabulary shadcn does not ship.
 complete set): a `class=` attribute inside an OPEN TAG inside an `html` tagged
 template (nested templates in holes recursed); every string literal inside a
 recognized `cn(` call; every string literal inside a `class=${...}` hole. A
+plain template literal counts as a string literal in both, read at its static
+text and split at its holes. A
 helper is recognized only by its IMPORT resolving inside `aliases.ui`, and `cn`
 only when imported from `aliases.utils`, so a local `fooClass()` is never
-mistaken for a kit helper. The open-tag requirement is what keeps an
+mistaken for a kit helper. Recognition keys on the EXPORTED name, so an aliased
+`buttonClass as bc` is still a helper and its axes are still found. The open-tag requirement is what keeps an
 entity-escaped docs code sample (`&lt;p class="text-red-600"&gt;`) inert
 without any docs-page heuristic, and commented-out markup (`<!-- ... -->`)
 inside a template opens no tag either. A token touching a hole with no
@@ -392,7 +399,9 @@ to move them to, and inventing a `--success` is what got #1116 reverted. Widen
 the scope with a negated entry, which un-ignores whatever it MATCHES
 (`"ignore": ["!components/ui/**"]` for the whole dir,
 `"!components/ui/button.ts"` for one file), narrow it with more globs.
-Entries match the path relative to the app root.
+Entries match the path relative to the app root, and an entry also covers its
+own subtree, so a bare directory (`app/legacy`, `app/legacy/`, `./app/legacy`)
+ignores everything under it.
 
 **Phases.** Phase 1 (this) ships the command and the docs that DESCRIBE it.
 Nothing tells an agent to run it in its loop, and nothing adds it to the

@@ -9,8 +9,9 @@
  *      an `html` tagged template. Nested `html` templates inside holes are
  *      recursed into (the blog's positives all sit inside
  *      `${cond ? html\`...\` : ''}`).
- *   2. Helper argument site. Every string literal lexically inside a call to a
- *      recognized `cn(` (the app's utils alias) anywhere in the module. A
+ *   2. Helper argument site. Every string literal (a plain template literal
+ *      included, split at its holes) lexically inside a call to a recognized
+ *      `cn(` (the app's utils alias) anywhere in the module. A
  *      recognized `*Class(` helper call contributes its NAME (the class beside
  *      it is composed with that helper) and its own arguments are never read
  *      as classes, since `buttonClass({ variant: 'secondary' })` carries option
@@ -97,6 +98,19 @@ export function scanClassSites(src, opts = {}) {
     }
   };
 
+  // One static run of a class string that holes may interrupt. A token touching
+  // a hole with no whitespace between is a fragment and is dropped, on either
+  // side, so nothing is ever reconstructed across a hole.
+  const pushRun = (site, text, base, holeBefore, holeAfter) => {
+    if (!text.length) return;
+    if (holeBefore && !/^\s/.test(text)) {
+      const m = /^\S+/.exec(text);
+      base += m[0].length; text = text.slice(m[0].length);
+    }
+    if (holeAfter && !/\s$/.test(text)) text = text.replace(/\S+$/, '');
+    pushTokens(site, text, base);
+  };
+
   let i = 0;
   let lastSig = '';
   let lastWord = '';
@@ -160,19 +174,46 @@ export function scanClassSites(src, opts = {}) {
     if (site && mute === 0 && !isComparisonOperand(quoteAt, i)) pushTokens(site, body, start);
     markValue();
   };
+  // A plain template literal is a string literal too, so inside a collecting
+  // site its static text is read like one (`cn(buttonClass(), \`bg-pink-500\`)`),
+  // split at its holes by the same fragment rule an attribute site uses.
   const scanPlainTemplate = () => {
+    const quoteAt = i;
+    const site = mute === 0 ? active() : null;
+    /** @type {Array<{ text: string, base: number, holeBefore: boolean, holeAfter: boolean }>} */
+    const runs = [];
+    let run = '';
+    let runStart = -1;
+    let holeBefore = false;
+    const endRun = (holeAfter) => {
+      if (run.length) runs.push({ text: run, base: runStart, holeBefore, holeAfter });
+      run = ''; runStart = -1;
+    };
     i++;
     while (i < n) {
       const c = src[i];
-      if (c === '\\' && i + 1 < n) { i += 2; continue; }
+      if (c === '\\' && i + 1 < n) {
+        if (runStart === -1) runStart = i;
+        run += c + src[i + 1];
+        i += 2;
+        continue;
+      }
       if (c === '`') { i++; break; }
       if (c === '$' && src[i + 1] === '{') {
+        endRun(true);
+        holeBefore = true;
         i += 2;
         scanCode('hole');
         if (i < n && src[i] === '}') i++;
         continue;
       }
+      if (runStart === -1) runStart = i;
+      run += c;
       i++;
+    }
+    endRun(false);
+    if (site && !isComparisonOperand(quoteAt, i)) {
+      for (const r of runs) pushRun(site, r.text, r.base, r.holeBefore, r.holeAfter);
     }
     markValue();
   };
@@ -188,18 +229,7 @@ export function scanClassSites(src, opts = {}) {
     let inComment = false;
     const flushRun = (touchesHoleRight) => {
       if (!attr || !attr.site) return;
-      let text = attr.run;
-      let base = attr.runStart;
-      if (text.length) {
-        if (attr.holeBefore && !/^\s/.test(text)) {
-          const m = /^\S+/.exec(text);
-          base += m[0].length; text = text.slice(m[0].length);
-        }
-        if (touchesHoleRight && !/\s$/.test(text)) {
-          text = text.replace(/\S+$/, '');
-        }
-        pushTokens(attr.site, text, base);
-      }
+      pushRun(attr.site, attr.run, attr.runStart, attr.holeBefore, touchesHoleRight);
       attr.run = ''; attr.runStart = -1; attr.holeBefore = false;
     };
     const closeAttr = () => { flushRun(false); if (attr.site) emit(attr.site); attr = null; };
@@ -314,6 +344,10 @@ export function scanClassSites(src, opts = {}) {
   function scanCode(stop) {
     let brace = 0;
     let paren = 0;
+    // A hole or a call's arguments start a fresh expression. Without this the
+    // lexer still remembers the `html` tag that opened the enclosing template,
+    // so a plain template (or a regex) leading a hole is misread.
+    if (stop !== null) { lastSig = stop === 'hole' ? '{' : '('; lastWord = ''; lastWordIsProp = false; lastWasIncDec = false; }
     while (i < n) {
       const c = src[i], next = src[i + 1];
       if (stop === 'hole' && c === '}' && brace === 0) return;
@@ -364,9 +398,11 @@ export function scanClassSites(src, opts = {}) {
  *
  * @param {string} src
  * @param {{ filePath: string, appRoot: string, uiDir: string, utilsPath: string }} paths
- * @returns {{ helpers: string[], cnNames: string[], helperFiles: Record<string, string> }}
+ * @returns {{ helpers: string[], cnNames: string[], helperFiles: Record<string, string>, helperExports: Record<string, string> }}
  *   `helperFiles` maps each helper to the absolute path its import resolved to
  *   (extension as written), so the orchestrator can read the APP's copy.
+ *   `helperExports` maps each helper's LOCAL name to the name it is exported
+ *   under, which differs only for an aliased import.
  */
 export function collectHelperImports(src, { filePath, appRoot, uiDir, utilsPath }) {
   /** @type {string[]} */
@@ -375,10 +411,14 @@ export function collectHelperImports(src, { filePath, appRoot, uiDir, utilsPath 
   const cnNames = [];
   /** @type {Record<string, string>} */
   const helperFiles = {};
+  /** @type {Record<string, string>} */
+  const helperExports = {};
   const stripExt = (p) => p.replace(/\.(?:ts|tsx|js|jsx|mts|mjs)$/, '');
   const ui = resolve(uiDir);
   const utils = stripExt(resolve(utilsPath));
-  const re = /\bimport\s*(?:type\s+)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g;
+  // The optional group admits a default binding ahead of the named list
+  // (`import Def, { cn } from ...`), which is otherwise not matched at all.
+  const re = /\bimport\s*(?:type\s+)?(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g;
   let m;
   while ((m = re.exec(src)) !== null) {
     const spec = m[2];
@@ -395,9 +435,12 @@ export function collectHelperImports(src, { filePath, appRoot, uiDir, utilsPath 
       const piece = part.trim().replace(/^type\s+/, '');
       if (!piece) continue;
       const [imported, local = imported] = piece.split(/\s+as\s+/).map((s) => s.trim());
-      if (inUi && /Class$/.test(local)) { helpers.push(local); helperFiles[local] = target; }
+      // Recognition keys on the EXPORTED name, so `buttonClass as bc` is still a
+      // kit helper. The scanner matches the local, and `helperExports` maps it
+      // back to the name `extractHelperAxes` keys its result on.
+      if (inUi && /Class$/.test(imported)) { helpers.push(local); helperFiles[local] = target; helperExports[local] = imported; }
       if (isUtils && imported === 'cn') cnNames.push(local);
     }
   }
-  return { helpers, cnNames, helperFiles };
+  return { helpers, cnNames, helperFiles, helperExports };
 }

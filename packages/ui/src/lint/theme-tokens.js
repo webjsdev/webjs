@@ -28,6 +28,10 @@ import { readFileSync } from 'node:fs';
 export function parseThemeTokens(css) {
   /** @type {string[]} */
   const tokens = [];
+  // Comments go first. A commented-out `--color-old` is not a token Tailwind
+  // generates, so naming it would break the rule's promise, and a `}` inside a
+  // comment would otherwise close the block early and lose what follows it.
+  css = css.replace(/\/\*[\s\S]*?\*\//g, ' ');
   const re = /@theme\b[^{;]*\{/g;
   let m;
   while ((m = re.exec(css)) !== null) {

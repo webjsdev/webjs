@@ -139,6 +139,13 @@ test('lint: components/ui/** is skipped by default, and the same file elsewhere 
     }
     writeFileSync(join(d, 'components.json'), JSON.stringify(CONFIG({ ignore: ['!components/ui/other.ts'], rules: { 'no-arbitrary-values': 'warn' } })));
     assert.deepEqual(runLint({ cwd: d }).report.violations.map((v) => v.file), ['components/toolbar.ts']);
+    // A directory spelling covers its subtree, negated or not.
+    writeFileSync(join(d, 'components.json'), JSON.stringify(CONFIG({ ignore: ['!./components/ui/'], rules: { 'no-arbitrary-values': 'warn' } })));
+    assert.deepEqual(runLint({ cwd: d }).report.violations.map((v) => v.file), ['components/toolbar.ts', 'components/ui/button.ts']);
+    for (const dir of ['components', 'components/', './components/**']) {
+      writeFileSync(join(d, 'components.json'), JSON.stringify(CONFIG({ ignore: [dir], rules: { 'no-arbitrary-values': 'warn' } })));
+      assert.deepEqual(runLint({ cwd: d }).report.violations, [], dir);
+    }
     // A plain ignore entry narrows it.
     writeFileSync(join(d, 'components.json'), JSON.stringify(CONFIG({ ignore: ['components/tool*'], rules: { 'no-arbitrary-values': 'warn' } })));
     assert.deepEqual(runLint({ cwd: d }).report.violations, []);
@@ -163,6 +170,9 @@ test('lint: no-restyle reads the APP copy of the helper through its import', () 
     // The value list comes from the app's copy (which added `none`), not the packaged registry.
     assert.match(v.message, /Use a buttonClass variant: default, destructive, outline, secondary, ghost, link \(declared in components\/ui\/button\.ts\)\./);
     assert.match(runLint({ cwd: d, json: false }).lines.join('\n'), /✗ \[no-restyle\] components\/toolbar\.ts:3:\d+/);
+    // An aliased import is the same helper: recognized by its exported name, axes read under it.
+    writeFileSync(join(d, 'components/toolbar.ts'), "import { cn } from '#lib/utils/cn.ts';\nimport { buttonClass as bc } from '#components/ui/button.ts';\nexport const t = html`<button class=${cn(bc(), 'bg-pink-500')}>`;");
+    assert.match(runLint({ cwd: d }).report.violations[0].message, /^bg-pink-500 overrides what bc already sets\. Use a bc variant: default, destructive,/);
   } finally { rmSync(d, { recursive: true }); }
 });
 

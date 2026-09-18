@@ -585,7 +585,9 @@ export function groupOf(utility) {
     if (/^(?:wrap|nowrap|balance|pretty)$/.test(v)) return 'text-wrap';
     if (/^(?:ellipsis|clip)$/.test(v)) return 'text-overflow';
     if (v === 'base' || T_SHIRT.test(v) || isArbitraryLength(v)) return 'font-size';
-    if (/^(?:base|xs|sm|lg|\dxl|xl)\/[\w.]+$/.test(v)) return 'font-size';
+    // A size with a line-height modifier, in every spelling of the modifier:
+    // `text-sm/6`, `text-sm/[17px]`, `text-sm/(--lh)`.
+    if (/^(?:base|xs|sm|lg|\dxl|xl)\/(?:[\w.]+|\[.+\]|\(.+\))$/.test(v)) return 'font-size';
     return 'text-color';
   }
   // font-*
@@ -608,6 +610,9 @@ export function groupOf(utility) {
     if (v === 'none' || /^(?:linear|radial|conic|gradient)-/.test(v)) return 'bg-image';
     const inner = arbitraryInner(v);
     if (inner !== null && /^(?:url\(|image:|linear-gradient|radial-gradient|conic-gradient)/.test(inner)) return 'bg-image';
+    // A typed arbitrary value names its own property, so it is not a colour.
+    if (inner !== null && /^(?:length|size|percentage):/.test(inner)) return 'bg-size';
+    if (inner !== null && /^position:/.test(inner)) return 'bg-position';
     return 'bg-color';
   }
   // gradient stops
@@ -631,7 +636,11 @@ export function groupOf(utility) {
     if (v === '') return 'border-w';
     if (BORDER_STYLES.has(v)) return 'border-style';
     if (v === 'collapse' || v === 'separate') return 'border-collapse';
-    if (v.startsWith('spacing')) return v === 'spacing' ? 'border-spacing' : `border-spacing-${v.slice(8)}`;
+    if (v.startsWith('spacing')) {
+      // The group is the AXIS (`border-spacing-x`), never the value after it.
+      const axis = /^spacing-([xy])(?:-|$)/.exec(v);
+      return axis ? `border-spacing-${axis[1]}` : 'border-spacing';
+    }
     const side = BORDER_SIDES.find((x) => v === x || v.startsWith(x + '-'));
     const rest = side ? v.slice(side.length + 1) : v;
     const suffix = side ? `-${side}` : '';
@@ -729,7 +738,11 @@ export function groupOf(utility) {
     return 'flex';
   }
   if (utility.startsWith('mask-')) return 'mask-image';
-  if (utility.startsWith('scrollbar-')) return utility.includes('thumb') ? 'scrollbar-thumb-color' : 'scrollbar-track-color';
+  // `scrollbar-gutter-*` and `scrollbar-w-*` are layout groups resolved by
+  // SIMPLE_GROUPS below; only the remaining `scrollbar-*` names are colours.
+  if (utility.startsWith('scrollbar-') && !/^scrollbar-(?:gutter|w)(?:-|$)/.test(utility)) {
+    return utility.includes('thumb') ? 'scrollbar-thumb-color' : 'scrollbar-track-color';
+  }
   if ((s = splitHead(utility, SIMPLE_GROUPS))) {
     if (s[0] === 'placeholder') return 'placeholder-color';
     if (s[0] === 'caret') return 'caret-color';

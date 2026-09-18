@@ -127,8 +127,15 @@ export function lintApp(cwd, config) {
     if (entry.startsWith('!')) unignore.push(entry.slice(1));
     else ignore.push(entry);
   }
-  const ignoreRes = ignore.map(globToRegExp);
-  const unignoreRes = unignore.map(globToRegExp);
+  // An entry also covers its own subtree, and a leading `./` or a trailing `/`
+  // is dropped, so the directory spellings (`app/legacy`, `app/legacy/`,
+  // `./app/legacy/**`) work instead of silently matching no file.
+  const toRes = (glob) => {
+    const g = glob.replace(/^\.\//, '').replace(/\/+$/, '');
+    return [globToRegExp(g), globToRegExp(`${g}/**`)];
+  };
+  const ignoreRes = ignore.flatMap(toRes);
+  const unignoreRes = unignore.flatMap(toRes);
   const isIgnored = (rel) => ignoreRes.some((re) => re.test(rel)) && !unignoreRes.some((re) => re.test(rel));
 
   // Theme tokens, read once; no tokens disables no-raw-colors for the run.
@@ -181,7 +188,7 @@ export function lintApp(cwd, config) {
       const target = imports.helperFiles[helper];
       if (!target) return { axes: {}, file: null };
       const r = axesForFile(target);
-      return { axes: r.axes[helper] ?? {}, file: r.file };
+      return { axes: r.axes[imports.helperExports[helper] ?? helper] ?? {}, file: r.file };
     };
     for (const site of sites) {
       for (const [name, conf] of Object.entries(rules)) {

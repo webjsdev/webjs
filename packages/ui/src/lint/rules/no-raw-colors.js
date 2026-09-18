@@ -66,8 +66,21 @@ export function noRawColors(site, ctx) {
       column: token.column,
       class: token.name,
       message,
-      ...(roleDeclared ? { fix: `${prefix}-${role}` } : {}),
+      ...(roleDeclared ? { fix: swapBase(token.name, parsed.base, `${prefix}-${role}`) } : {}),
     });
   }
   return out;
+}
+
+/**
+ * `raw` with its base utility swapped and everything else kept, so `fix` is a
+ * drop-in replacement for the reported `class`: the variants, the opacity
+ * modifier and a `!` all survive (`hover:text-red-600/50` to
+ * `hover:text-destructive/50`). The LAST occurrence is the utility, since an
+ * arbitrary variant ahead of it can spell the same text.
+ */
+function swapBase(raw, base, replacement) {
+  const at = raw.lastIndexOf(base);
+  if (at === -1) return replacement;
+  return raw.slice(0, at) + replacement + raw.slice(at + base.length);
 }

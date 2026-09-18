@@ -106,3 +106,28 @@ test('no-restyle: a site composed with two helpers names both and reads axes fro
   assert.match(v.message, /^bg-pink-500 overrides what buttonClass and badgeClass already set\. Use a badgeClass variant: default, outline \(declared in components\/ui\/badge\.ts\)\.$/);
   assert.deepEqual(calls, ['badgeClass']);
 });
+
+test('no-raw-colors: fix is a drop-in for the reported class (variants, opacity and ! survive)', () => {
+  const ctx = { tokens: TOKENS, themePath: 'x' };
+  for (const [cls, fix] of [
+    ['hover:text-red-600/50', 'hover:text-destructive/50'],
+    ['dark:md:bg-gray-100', 'dark:md:bg-muted'],
+    ['!text-red-600', '!text-destructive'],
+    ['[&.text-red-600]:text-red-600', '[&.text-red-600]:text-destructive'],
+  ]) {
+    const [v] = noRawColors(attr(cls), ctx);
+    assert.equal(v.class, cls);
+    assert.equal(v.fix, fix, cls);
+  }
+});
+
+test('no-restyle: a weight or underline override names the variant axis, a font size the size axis', () => {
+  const run = (cls) => noRestyle(
+    site(`html\`<a class="\${buttonClass()} ${cls}">\``, { helpers: ['buttonClass'] }),
+    { allow: ['layout'], axesFor: () => ({ axes: { variant: ['default', 'link'], size: ['default', 'sm'] }, file: null }) },
+  )[0].message;
+  assert.match(run('no-underline'), /Use a buttonClass variant: default, link/);
+  assert.match(run('font-bold'), /Use a buttonClass variant:/);
+  assert.match(run('text-lg'), /Use a buttonClass size: default, sm/);
+  assert.match(run('px-8'), /Use a buttonClass size:/);
+});

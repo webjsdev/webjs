@@ -132,3 +132,32 @@ test('collectHelperImports: a comment inside a multi-line import list is not a b
   const src = "import {\n  buttonClass, // the primary\n  /* badges */ badgeClass,\n} from '#components/ui/button.ts';";
   assert.deepEqual(collectHelperImports(src, paths).helpers, ['buttonClass', 'badgeClass']);
 });
+
+test('scan: a plain template literal in a cn() call or a class hole is read, split at its holes', () => {
+  assert.deepEqual(names(scanClassSites("const c = cn('a', `bg-pink-500 p-[3px]`);")), ['a', 'bg-pink-500', 'p-[3px]']);
+  const composed = scanClassSites('const t = html`<b class=${cn(buttonClass(), `w-9 text-${size} h-9`)}>`;', { helpers: ['buttonClass'] });
+  assert.deepEqual(names(composed), ['w-9', 'h-9']);
+  assert.deepEqual(composed[0].helpers, ['buttonClass']);
+  const hole = scanClassSites('const t = html`<b class=${`p-4 bg-red-500 ${extra}`}>`;');
+  assert.deepEqual(names(hole), ['p-4', 'bg-red-500']);
+  assert.equal(hole[0].classes[1].column, 'const t = html`<b class=${`p-4 '.length + 1);
+  // Outside a collecting site a template is still just a value.
+  assert.deepEqual(scanClassSites('const s = `bg-red-500`;'), []);
+});
+
+test('collectHelperImports: an aliased helper and a default-plus-named import are both recognized', () => {
+  const r = collectHelperImports(
+    "import { buttonClass as bc, badge } from '#components/ui/button.ts';\nimport Def, { cn } from '#lib/utils/cn.ts';",
+    { filePath: '/app/app/page.ts', appRoot: '/app', uiDir: '/app/components/ui', utilsPath: '/app/lib/utils/cn.ts' },
+  );
+  assert.deepEqual(r.helpers, ['bc']);
+  assert.deepEqual(r.helperExports, { bc: 'buttonClass' });
+  assert.deepEqual(r.cnNames, ['cn']);
+});
+
+test('scan: a hole starts a fresh expression, so a regex leading it is not lexed as a division', () => {
+  // Read as a division, the quote inside the regex opens a string that runs to
+  // the end of the line and swallows the template's closing backtick.
+  const src = 'const t = html`<p class="a">${/"/.test(s) ? 1 : 2}</p>`;\nconst u = html`<p class="b">`;';
+  assert.deepEqual(names(scanClassSites(src)), ['a', 'b']);
+});

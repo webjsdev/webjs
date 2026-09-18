@@ -114,3 +114,30 @@ test('parseToken: a longer head is matched before the prefix it starts with (rev
   assert.equal(parseToken('bg-blend-multiply').group, 'bg-blend');
   assert.equal(parseToken('bg-blend-multiply').category, 'effects');
 });
+
+test('groupOf: a value never leaks into the group id, and a typed value is not read as a colour', () => {
+  // Every group the resolver returns has to exist in the taxonomy table, or it
+  // silently falls to layout.
+  for (const [token, group, category] of [
+    ['border-spacing-2', 'border-spacing', 'spacing'],
+    ['border-spacing-x-2', 'border-spacing-x', 'spacing'],
+    ['border-spacing-y-[3px]', 'border-spacing-y', 'spacing'],
+    ['border-spacing-[3px]', 'border-spacing', 'spacing'],
+    // A line-height modifier in its arbitrary and variable spellings.
+    ['text-sm/6', 'font-size', 'typography'],
+    ['text-sm/[17px]', 'font-size', 'typography'],
+    ['text-lg/(--lh)', 'font-size', 'typography'],
+    // A typed arbitrary background names its own property.
+    ['bg-[length:200px]', 'bg-size', 'effects'],
+    ['bg-[position:0_0]', 'bg-position', 'effects'],
+    ['bg-[#fff]', 'bg-color', 'color'],
+    // The two layout scrollbar groups sit behind a colour catch-all.
+    ['scrollbar-gutter-stable', 'scrollbar-gutter', null],
+    ['scrollbar-thumb-red-500', 'scrollbar-thumb-color', 'color'],
+  ]) {
+    const p = parseToken(token);
+    assert.equal(p.group, group, token);
+    assert.equal(p.category, category, token);
+    assert.ok(Object.hasOwn(GROUP_CATEGORY, p.group), `${token} resolved to a group the table has`);
+  }
+});

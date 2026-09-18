@@ -39,3 +39,8 @@ test('readThemeTokens: missing, unparsable and token-less files yield an empty a
     assert.equal(r.path, join(d, 'empty.css'));
   } finally { rmSync(d, { recursive: true }); }
 });
+
+test('parseThemeTokens: a commented-out token is not a token, and a brace in a comment does not close the block', () => {
+  const css = '/* @theme { --color-fake: red; } */\n@theme inline {\n  --color-a: red;\n  /* --color-old: blue; } */\n  --color-b: blue;\n}';
+  assert.deepEqual(parseThemeTokens(css), ['a', 'b']);
+});

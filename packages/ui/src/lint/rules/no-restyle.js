@@ -51,10 +51,15 @@ export function noRestyle(site, ctx) {
   return out;
 }
 
-/** A colour or typography override reads as a variant; a size-ish one as a size, when the helper has one. */
+/**
+ * A colour or typography override reads as a variant, and a size-ish one as a
+ * size when the helper has one. Font size and line height are the two
+ * typography groups a kit SIZE carries (`text-xs` in the button's `xs`), so they
+ * read as a size, while a weight or an underline stays a variant.
+ */
 function pickAxis(parsed, axisNames) {
   const cat = parsed.category;
-  const sizeLike = cat === null || cat === 'spacing' || cat === 'shape' || cat === 'typography';
+  const sizeLike = cat === null || cat === 'spacing' || cat === 'shape' || parsed.group === 'font-size' || parsed.group === 'leading';
   if (sizeLike && axisNames.includes('size')) return 'size';
   if (axisNames.includes('variant')) return 'variant';
   return axisNames[0];
