@@ -27,9 +27,12 @@ import { brandLockup } from '#lib/design/brand.ts';
 // there is. The H1 stays the positioning claim: it is a minor ranking signal
 // and the only line that differentiates us, and the definition sentence sits
 // in bold directly beneath it either way. 56 characters, inside the SERP
-// truncation limit, brand first. The separator is a colon rather than the
-// spaced hyphen the old title used, per invariant 11.
-const TITLE = 'WebJs: Full-stack web components framework, no build step';
+// truncation limit, brand first. The separator is a spaced hyphen, by the
+// owner's call: a colon reads as a label in a browser tab that shows about
+// twenty characters. That is a deliberate exception to invariant 11 for page
+// titles only, so do not "fix" it back to a colon. The Articles and Compare
+// page titles follow the same rule.
+const TITLE = 'WebJs - Full-stack web components framework, no build step';
 // 155 characters, against 256 before. Google renders about 160, so a third of
 // the old one was never shown to anyone.
 //
