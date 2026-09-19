@@ -18,7 +18,7 @@ import { listArticles } from '#modules/articles/queries/list-articles.server.ts'
  */
 
 export const metadata = {
-  title: 'Articles: web components, no-build, and the web platform · WebJs',
+  title: 'Articles - web components, no-build, and the web platform · WebJs',
   description: 'Plain-English explainers on the ideas behind WebJs: what a web components framework is, building a full-stack app with no build step, server-rendering web components, and running TypeScript without a build.',
 };
 
