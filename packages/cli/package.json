@@ -1,6 +1,6 @@
 {
   "name": "@webjsdev/cli",
-  "version": "0.10.57",
+  "version": "0.10.58",
   "type": "module",
   "description": "The CLI for WebJs, a full-stack JavaScript framework built on web components with server-side rendering and no build step. Runs the dev and production servers, scaffolds apps, validates conventions, and drives the database. Node 24+ or Bun.",
   "bin": {
@@ -18,8 +18,8 @@
   ],
   "dependencies": {
     "@webjsdev/mcp": "^0.1.0",
-    "@webjsdev/server": "^0.8.0",
-    "@webjsdev/ui": "^0.3.1"
+    "@webjsdev/server": "^0.8.67",
+    "@webjsdev/ui": "^0.3.15"
   },
   "publishConfig": {
     "access": "public"
