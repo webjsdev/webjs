@@ -14,7 +14,7 @@ import { DOCS_START_PATH, GALLERY_URL, GH_URL, NEW_TAB, SAME_AS } from '#lib/lin
 // dependency, html, is already loaded by the components, so the real cost is a
 // single tiny module fetch.
 import { highlight } from '#lib/utils/highlight.ts';
-import { BTN_PRIMARY, BTN_GHOST, INSTALL} from '#lib/design/recipes.ts';
+import { BTN_PRIMARY, BTN_GHOST, INSTALL } from '#lib/design/recipes.ts';
 import { ctaPanel } from '#lib/ui/cta-panel.ts';
 
 // The home page intentionally sets NO title/description/og here. The root
@@ -1152,70 +1152,70 @@ middleware.ts</pre>
     </section>
 
     ${ctaPanel({
-      // "One command, then a prompt", not "Start building with AI". The old
-      // title was the seventh agent mention on the page and the only one
-      // carrying no information, and it landed right after the page's most
-      // concrete section. This one describes the two steps the lede then
-      // explains, so the install bar below reads as step one.
-      //
-      // It also avoids a dangling pronoun. "then tell it what to build" was
-      // the first draft, and the only noun near that "it" is "one command",
-      // so it briefly reads as instructing the command. The lede can use "it"
-      // safely because it names the agent in the same sentence.
-      // The two spaces inside "then a prompt" are NBSPs (U+00A0), which is the
-      // whole mobile line-break fix. The title is a plain string in a text
-      // hole, so there is no markup to hang a <br> or a responsive class off,
-      // and at 390px the greedy fill broke it "One command, then a" / "prompt".
-      // Gluing the second clause makes it one unwrappable unit, so the break
-      // lands at the comma where the sense already breaks. Width-adaptive by
-      // construction: nothing wraps at all above ~430px.
-      title: 'One command, then a prompt',
-      // The lede used to be the header in longhand: "Run the command below in
-      // your terminal, launch your AI coding agent from the app folder, and
-      // tell it what you would like to build" is command-then-prompt said
-      // twice, once in the H2 and once at three times the length.
-      //
-      // The one phrase carrying weight was "from the app folder", buried as an
-      // aside. It is what the two sections above just earned: the conventions
-      // live in a skill inside the app, and the framework source lives in its
-      // node_modules, so launching the agent THERE is what puts either in
-      // reach. That is now the second sentence rather than a detail about
-      // which directory you happen to be in.
-      //
-      // A hand-back to the page is allowed here and nowhere else. The
-      // stand-alone rule protects readers arriving mid-page from a search
-      // result, and nobody arrives at a closing CTA cold.
-      // Two lines in the CTA panel, which is a 52ch box (525px) shared with
-      // /why-webjs, so the text was cut rather than the box widened. It ran to
-      // three with "are already in there" alone on the last one.
-      //
-      // What went: "coding" from "coding agent" (the page says "your agent"
-      // everywhere else, so this is the house term rather than a loss) and the
-      // articles before demos and framework source. What stayed is "framework
-      // source": shortening it to "source" also fits, and makes it read as the
-      // app's own source, which is the opposite of the point.
-      //
-      // Measures 521 and 503, which is only 26px of total slack, the tightest
-      // two-line fit on the page. It is deliberate: "already" is load-bearing
-      // (nothing has to be fetched) and worth the margin. Two ways to buy room
-      // if this ever re-wraps, measured live in the element rather than a
-      // clone: dropping "The" before conventions gives 57px, dropping
-      // "already" as well gives 87px.
-      //
-      // On a two-line fill, one substituted glyph pushes a word down and the
-      // second line has to absorb it, which is how this paragraph reached three
-      // lines in the first place. So measure the ELEMENT, not a copy of it: an
-      // earlier pass measured a clone whose class list had been rewritten and
-      // read 57px here, 31px off.
-      lede: 'Run the command below, then start your agent in the new app folder. The conventions, demos, and framework source are already there.',
-      primary: { href: DOCS_START_PATH, label: 'Get started' },
-      // NOT a second docs link. This slot used to point at DOCS_PATH while the
-      // primary pointed at DOCS_START_PATH, and /docs is a 308 to
-      // /docs/getting-started, so both buttons resolved to the identical URL and
-      // the secondary was dead weight. The pair now offers two different
-      // actions, read it or watch it work, which is what a secondary is for.
-      secondary: { href: GALLERY_URL, label: 'See it running', ext: true },
-    })}
+    // "One command, then a prompt", not "Start building with AI". The old
+    // title was the seventh agent mention on the page and the only one
+    // carrying no information, and it landed right after the page's most
+    // concrete section. This one describes the two steps the lede then
+    // explains, so the install bar below reads as step one.
+    //
+    // It also avoids a dangling pronoun. "then tell it what to build" was
+    // the first draft, and the only noun near that "it" is "one command",
+    // so it briefly reads as instructing the command. The lede can use "it"
+    // safely because it names the agent in the same sentence.
+    // The two spaces inside "then a prompt" are NBSPs (U+00A0), which is the
+    // whole mobile line-break fix. The title is a plain string in a text
+    // hole, so there is no markup to hang a <br> or a responsive class off,
+    // and at 390px the greedy fill broke it "One command, then a" / "prompt".
+    // Gluing the second clause makes it one unwrappable unit, so the break
+    // lands at the comma where the sense already breaks. Width-adaptive by
+    // construction: nothing wraps at all above ~430px.
+    title: 'One command, then a prompt to an agent',
+    // The lede used to be the header in longhand: "Run the command below in
+    // your terminal, launch your AI coding agent from the app folder, and
+    // tell it what you would like to build" is command-then-prompt said
+    // twice, once in the H2 and once at three times the length.
+    //
+    // The one phrase carrying weight was "from the app folder", buried as an
+    // aside. It is what the two sections above just earned: the conventions
+    // live in a skill inside the app, and the framework source lives in its
+    // node_modules, so launching the agent THERE is what puts either in
+    // reach. That is now the second sentence rather than a detail about
+    // which directory you happen to be in.
+    //
+    // A hand-back to the page is allowed here and nowhere else. The
+    // stand-alone rule protects readers arriving mid-page from a search
+    // result, and nobody arrives at a closing CTA cold.
+    // Two lines in the CTA panel, which is a 52ch box (525px) shared with
+    // /why-webjs, so the text was cut rather than the box widened. It ran to
+    // three with "are already in there" alone on the last one.
+    //
+    // What went: "coding" from "coding agent" (the page says "your agent"
+    // everywhere else, so this is the house term rather than a loss) and the
+    // articles before demos and framework source. What stayed is "framework
+    // source": shortening it to "source" also fits, and makes it read as the
+    // app's own source, which is the opposite of the point.
+    //
+    // Measures 521 and 503, which is only 26px of total slack, the tightest
+    // two-line fit on the page. It is deliberate: "already" is load-bearing
+    // (nothing has to be fetched) and worth the margin. Two ways to buy room
+    // if this ever re-wraps, measured live in the element rather than a
+    // clone: dropping "The" before conventions gives 57px, dropping
+    // "already" as well gives 87px.
+    //
+    // On a two-line fill, one substituted glyph pushes a word down and the
+    // second line has to absorb it, which is how this paragraph reached three
+    // lines in the first place. So measure the ELEMENT, not a copy of it: an
+    // earlier pass measured a clone whose class list had been rewritten and
+    // read 57px here, 31px off.
+    lede: 'Run the command below, then start your agent in the new app folder. The conventions, demos, and framework source are already there.',
+    primary: { href: DOCS_START_PATH, label: 'Get started' },
+    // NOT a second docs link. This slot used to point at DOCS_PATH while the
+    // primary pointed at DOCS_START_PATH, and /docs is a 308 to
+    // /docs/getting-started, so both buttons resolved to the identical URL and
+    // the secondary was dead weight. The pair now offers two different
+    // actions, read it or watch it work, which is what a secondary is for.
+    secondary: { href: GALLERY_URL, label: 'See it running', ext: true },
+  })}
 
     </main>
   `;
