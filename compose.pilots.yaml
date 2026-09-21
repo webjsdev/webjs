@@ -1,0 +1,32 @@
+name: webjs
+
+services:
+  website:
+    build: .
+    working_dir: /app/website
+    command: ["bun", "/app/node_modules/@webjsdev/cli/bin/webjs.js", "start"]
+    ports:
+      - "8080"
+    environment:
+      PORT: "8080"
+
+  gallery:
+    build: .
+    working_dir: /app/gallery
+    command:
+      - sh
+      - -c
+      - bun /app/node_modules/@webjsdev/cli/bin/webjs.js db migrate && bun /app/node_modules/@webjsdev/cli/bin/webjs.js start
+    ports:
+      - "8080"
+    environment:
+      PORT: "8080"
+      DATABASE_URL: file:/data/dev.db
+      AUTH_SECRET: pilots-local-demo-secret-at-least-32-chars
+      SESSION_SECRET: pilots-local-demo-secret-at-least-32-chars
+      FILE_URL_SECRET: pilots-local-demo-secret-at-least-32-chars
+    volumes:
+      - gallery-data:/data
+
+volumes:
+  gallery-data:
