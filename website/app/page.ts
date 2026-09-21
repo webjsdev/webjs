@@ -1169,7 +1169,7 @@ middleware.ts</pre>
     // Gluing the second clause makes it one unwrappable unit, so the break
     // lands at the comma where the sense already breaks. Width-adaptive by
     // construction: nothing wraps at all above ~430px.
-    title: 'One command, then a prompt to an agent',
+    title: 'One command, then a prompt',
     // The lede used to be the header in longhand: "Run the command below in
     // your terminal, launch your AI coding agent from the app folder, and
     // tell it what you would like to build" is command-then-prompt said
