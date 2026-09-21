@@ -371,7 +371,7 @@ export default function LandingPage() {
              touching any of the three numbers; they are chosen against the wrap
              points, not picked. -->
         <h1 class="font-display font-extrabold text-hero-h1 leading-[0.98] tracking-[-0.038em] mx-auto mt-2 mb-6 max-w-[64rem] text-balance">
-          Conventions your agent follows.<br>Architecture you still own.
+          Conventions your agent follows. (PR preview)<br>Architecture you still own.
         </h1>
         <!-- Two sentences. The second one is the PAGE'S THESIS, and it took a
              long time to find because it is not any single section's claim.
