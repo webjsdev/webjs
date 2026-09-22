@@ -1,6 +1,6 @@
 ---
 name: pr-review
-description: Review a GitHub pull request the way a human reviewer would, entirely inline, and post the review through the GitHub review API as ONE review object, a summary plus line-anchored comments that highlight the code to fix and carry suggestion blocks where a concrete replacement is obvious. Trigger whenever the user asks to review a PR ("review the PR", "review #123", "look over this pull request", "review the branch/changes" when the branch has an open PR). The reviewer ONLY reviews. It never fixes findings, never waits on or reports CI, never resolves threads, and never delegates to a subagent or another agent.
+description: Review a GitHub pull request the way a human reviewer would, entirely inline, and post the review through the GitHub review API as ONE review object, a summary plus line-anchored comments that highlight the code to fix and carry suggestion blocks where a concrete replacement is obvious. Trigger whenever the user asks to review a PR ("review the PR", "review #123", "look over this pull request", "review the branch/changes" when the branch has an open PR). A plain review ask stops at the findings: it never waits on or reports CI, never resolves threads, and never delegates to a subagent or another agent. When the ask says to fix the findings (`/code-review --fix`, "review and fix"), the fixes are applied too.
 when_to_use: |
   Examples that should trigger this skill:
     "review the PR"
@@ -33,10 +33,14 @@ commands.
    itself, in the same session. Never spawn a reviewer subagent, a
    fleet, or a background task for it, and never run a multi-round
    review cycle. One read over the whole diff, one posted review, done.
-2. **Review only.** The reviewer never fixes what it finds: no commits,
-   no pushes, no code edits, no resolving of threads. Findings are the
-   deliverable. Fixing them is separate work for whoever owns the
-   branch, on a separate ask.
+2. **Findings are the deliverable, unless a fix was asked for.** A
+   plain review ask stops at the posted findings: no commits, no
+   pushes, no code edits, no resolving of threads. An ask that says to
+   fix them (`/code-review --fix`, `--fix --comment`, "review and
+   fix", "apply the findings") is a fix ask: apply the findings to the
+   working tree, and when comments were asked for too, do both rather
+   than commenting instead of fixing. Nothing in this skill overrides
+   a fix the user asked for.
 3. **No CI.** Never wait on, read, or report CI or check status. Checks
    are the merge gate's business, not the reviewer's, and a review that
    stalls on a pending check has failed its one job of being fast
@@ -168,6 +172,7 @@ gh api -X POST repos/<owner>/<repo>/pulls/<N>/reviews --input review.json
 
 A clean review still posts: a short summary saying it is clean, with no
 inline comments. Then tell the user the outcome in one or two
-sentences, with the review's URL and the finding count. Stop there. No
-fixing, no thread resolution, no follow-up issues, no re-review unless
-they ask again.
+sentences, with the review's URL and the finding count. Stop there: no
+thread resolution, no follow-up issues, no re-review unless they ask
+again. Stop before fixing too, unless the ask was to fix (see rule 2),
+in which case apply the findings now.

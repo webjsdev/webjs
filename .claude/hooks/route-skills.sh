@@ -198,14 +198,16 @@ fi
 # ask THIS agent for a review, the pr-review skill runs it like a human
 # reviewer working over the GitHub API instead of the dashboard: one
 # inline read, one posted review object (summary plus line-anchored
-# comments with suggestion blocks). Review only: no reviewer subagent,
-# no multi-round cycle, no fixing findings, no waiting on CI. The skill
-# is agent-agnostic (plain gh/REST) and committed at
+# comments with suggestion blocks). No reviewer subagent, no multi-round
+# cycle, no waiting on CI. A plain review ask stops at the findings; an
+# ask that says to FIX them (the built-in `/code-review --fix`, "review
+# and fix") applies the fixes too, and `--fix --comment` means both. The
+# skill is agent-agnostic (plain gh/REST) and committed at
 # .claude/skills/pr-review, exposed cross-agent via .agents/skills/.
 if has '(review|audit) (the |my |this )?(pr|diff|branch|change|changes|code|commit)' \
    || has 'code ?review' \
    || has '(review|look) .{0,20}(over )?for (bug|issue|correctness|regression)'; then
-  add_match "pr-review: the request is to review code. Invoke the pr-review skill and perform the review YOURSELF, inline in this session. NEVER spawn a reviewer subagent and NEVER run a multi-round review cycle. When the target is a pull request, post the review through the GitHub review API as ONE review object, a summary plus line-anchored comments that highlight the code to fix and carry suggestion blocks where a concrete replacement is obvious, exactly as the skill specifies. The reviewer ONLY reviews: it does not fix findings, does not resolve threads, and never waits on or reports CI. For a local diff with no PR, review inline and report the findings in the conversation instead. The owner decides what gets fixed, and fixing is separate work on a separate ask."
+  add_match "pr-review: the request is to review code. Invoke the pr-review skill and perform the review YOURSELF, inline in this session. NEVER spawn a reviewer subagent and NEVER run a multi-round review cycle. When the target is a pull request, post the review through the GitHub review API as ONE review object, a summary plus line-anchored comments that highlight the code to fix and carry suggestion blocks where a concrete replacement is obvious, exactly as the skill specifies. A plain review ask stops at the findings: it resolves no threads and never waits on or reports CI. But when the request asks for the findings to be FIXED (the built-in \`/code-review --fix\`, \`--fix --comment\`, \"review and fix\", \"apply the findings\"), APPLY the fixes; \`--fix --comment\` means do both, never comment instead of fixing. For a local diff with no PR, review inline and report the findings in the conversation instead."
 fi
 
 # --- verify: prove the change works by running the app ------------------
