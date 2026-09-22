@@ -213,9 +213,13 @@ test('the pr-review directive and skill both keep the review contract', () => {
   // One read, not a cycle. A round count coming back is the regression.
   assert.match(directive, /NEVER run a multi-round review cycle/);
   assert.match(skill, /never run a multi-round\s+review cycle/i);
-  // Review only: fixing the findings is the author's job, on a separate ask.
-  assert.match(directive, /does not fix findings/);
-  assert.match(skill, /\*\*Review only\.\*\* The reviewer never fixes what it finds/);
+  // A plain review stops at the findings, but a fix ask (/code-review --fix)
+  // is honoured: commenting INSTEAD of fixing is the regression this guards.
+  assert.match(directive, /A plain review ask stops at the findings/);
+  assert.match(directive, /APPLY the fixes/);
+  assert.match(directive, /never comment instead of fixing/);
+  assert.match(skill, /Findings are the deliverable, unless a fix was asked for/);
+  assert.match(skill, /Nothing in this skill overrides\s+a fix the user asked for/);
   // Never blocks on CI, which is the merge gate's business.
   assert.match(directive, /never waits on or reports CI/);
   assert.match(skill, /\*\*No CI\.\*\* Never wait on, read, or report CI/);
