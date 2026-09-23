@@ -12,7 +12,7 @@ Framework-wide rules live in the root [`../../AGENTS.md`](../../AGENTS.md).
 | Dir | Package | What it is | Ships to |
 |---|---|---|---|
 | `intellisense/` | `@webjsdev/intellisense` (npm) | The standalone tsserver plugin: in-template completions, diagnostics, go-to-definition, hover. **The SOURCE OF TRUTH for all editor intelligence.** | npm |
-| `vscode/` | `webjs` extension | VS Code / Cursor / Windsurf / Antigravity extension. Highlighting (TextMate grammars) + snippets + commands, and it **bundles** intellisense. | VS Marketplace + Open VSX |
+| `vscode/` | `WebJs` extension (`WebJs.WebJs`) | VS Code / Cursor / Windsurf / Antigravity extension. Highlighting (TextMate grammars) + snippets + commands, and it **bundles** intellisense. | VS Marketplace (live); Open VSX (not yet) |
 | `nvim/` | `webjs.nvim` | Neovim plugin. Treesitter highlighting + `:WebjsCheck` + an LSP helper, and it **vendors** intellisense. | a standalone GitHub repo (`webjsdev/webjs.nvim`) |
 
 Both editor plugins carry their OWN copy of the intellisense plugin (a Neovim
