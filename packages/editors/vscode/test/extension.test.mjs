@@ -31,9 +31,13 @@ const readJSON = (rel) => JSON.parse(readFileSync(join(ROOT, rel), 'utf8'));
 const manifest = readJSON('package.json');
 
 test('manifest identity is the published webjs extension', () => {
-  assert.equal(manifest.name, 'webjs');
-  assert.equal(manifest.displayName, 'webjs');
-  assert.equal(manifest.publisher, 'webjsdev');
+  assert.equal(manifest.name, 'WebJs');
+  // The Marketplace still reserves the plain name from the retired
+  // webjs-vscode listing, so the published display name carries a trailing
+  // U+00A0 (renders identically). Restore this to 'WebJs' once Microsoft
+  // releases the old name.
+  assert.equal(manifest.displayName, 'WebJs\u00a0');
+  assert.equal(manifest.publisher, 'WebJs');
   // private: true is a belt-and-braces guard so the changelog/publish-npm
   // pipeline can never accidentally `npm publish` the extension (it ships to
   // the VS Marketplace + Open VSX instead).
