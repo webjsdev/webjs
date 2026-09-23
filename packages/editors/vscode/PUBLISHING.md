@@ -42,7 +42,7 @@ dependencies.
    export OVSX_PAT=<OPEN_VSX_TOKEN>
    ```
 
-## The display name carries a trailing U+00A0 — do not "fix" it
+## The display name carries a trailing U+00A0: do not "fix" it
 
 `displayName` in `package.json` is `WebJs` followed by a NON-BREAKING SPACE
 (U+00A0). It renders as plain "WebJs" everywhere, and it is deliberate.
@@ -59,7 +59,7 @@ id and the plain display name `WebJs`. A publish using either is refused:
 
 A plain trailing space does not help: the uniqueness check trims ASCII
 whitespace before comparing. U+00A0 is not ASCII whitespace, so it survives
-the trim and the name reads as distinct. The id has no such escape hatch —
+the trim and the name reads as distinct. The id has no such escape hatch.
 `vsce` validates it locally against `/^[a-z0-9][a-z0-9\-]*$/i`, so only
 letters, digits and hyphens are allowed there.
 

@@ -3,7 +3,7 @@
 The all-in-one editor extension for webjs, published as **`WebJs.WebJs`**
 on the **VS Marketplace**, and destined for **Open VSX** (what Cursor,
 Antigravity, Windsurf, and VSCodium pull from) once it is uploaded there.
-`displayName` carries a deliberate trailing U+00A0 — see
+`displayName` carries a deliberate trailing U+00A0. See
 [`PUBLISHING.md`](./PUBLISHING.md) before touching it. It is phase 1 of the editor-plugin
 epic (#381).
 
