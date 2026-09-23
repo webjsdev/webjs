@@ -14,7 +14,7 @@ Works in VSCode and VSCode-based editors (Cursor, Antigravity, Windsurf, VSCodiu
 ## Install
 
 - **VSCode:** search "WebJs" in the Extensions view, or install [`WebJs.WebJs`](https://marketplace.visualstudio.com/items?itemName=WebJs.WebJs) from the Marketplace.
-- **Cursor / Antigravity / Windsurf / VSCodium:** these pull from Open VSX, where the extension is not published yet. Install the packaged `webjs.vsix` directly with `code --install-extension webjs.vsix` (substitute your editor's CLI).
+- **Cursor / Antigravity / Windsurf / VSCodium:** these pull from Open VSX, where the extension is not published yet. Until it is, use the **Download Extension** link on the [Marketplace listing](https://marketplace.visualstudio.com/items?itemName=WebJs.WebJs) to save the `.vsix`, then install that file with `code --install-extension path/to/the.vsix` (substitute your editor's CLI).
 
 ## About
 
