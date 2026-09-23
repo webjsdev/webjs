@@ -1,8 +1,10 @@
-# AGENTS.md for the `webjs` VSCode extension
+# AGENTS.md for the `WebJs` VSCode extension
 
-The all-in-one editor extension for webjs, shipping to the **VS
-Marketplace** and **Open VSX** (the latter is what Cursor, Antigravity,
-Windsurf, and VSCodium pull from). It is phase 1 of the editor-plugin
+The all-in-one editor extension for webjs, published as **`WebJs.WebJs`**
+on the **VS Marketplace**, and destined for **Open VSX** (what Cursor,
+Antigravity, Windsurf, and VSCodium pull from) once it is uploaded there.
+`displayName` carries a deliberate trailing U+00A0 — see
+[`PUBLISHING.md`](./PUBLISHING.md) before touching it. It is phase 1 of the editor-plugin
 epic (#381).
 
 Framework-wide rules (workflow, JSDoc-in-`packages/`, no-build, commit

@@ -2,7 +2,7 @@
 
 All-in-one editor support for [webjs](https://github.com/webjsdev/webjs), the AI-first, web-components-first framework. **No Lit extension required.**
 
-Works in VSCode and VSCode-based editors (Cursor, Antigravity, Windsurf, VSCodium) via the [Open VSX Registry](https://open-vsx.org).
+Works in VSCode and VSCode-based editors (Cursor, Antigravity, Windsurf, VSCodium). The Marketplace listing is live; the [Open VSX](https://open-vsx.org) one is not published yet, so those editors install the `.vsix` directly for now.
 
 ## Features
 
@@ -13,8 +13,8 @@ Works in VSCode and VSCode-based editors (Cursor, Antigravity, Windsurf, VSCodiu
 
 ## Install
 
-- **VSCode:** search "webjs" in the Extensions view (Marketplace).
-- **Cursor / Antigravity / Windsurf / VSCodium:** search "webjs" (these pull from Open VSX).
+- **VSCode:** search "WebJs" in the Extensions view, or install [`WebJs.WebJs`](https://marketplace.visualstudio.com/items?itemName=WebJs.WebJs) from the Marketplace.
+- **Cursor / Antigravity / Windsurf / VSCodium:** these pull from Open VSX, where the extension is not published yet. Install the packaged `webjs.vsix` directly with `code --install-extension webjs.vsix` (substitute your editor's CLI).
 
 ## About
 

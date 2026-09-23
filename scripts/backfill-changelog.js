@@ -57,7 +57,7 @@ const UNSCOPED = new Set();
 // (they ship via vsce/ovsx and the nvim git subtree instead). The display
 // name is what renders in the changelog frontmatter `package:` field, since
 // the `@webjsdev/<dir>` convention does not match their real identity (the
-// extension id is `webjsdev.webjs`; the plugin is `webjs.nvim`).
+// extension id is `WebJs.WebJs`; the plugin is `webjs.nvim`).
 const NON_NPM = new Set(['vscode', 'nvim']);
 const DISPLAY_NAME = {
   vscode: 'webjs (VS Code extension)',

@@ -15,7 +15,8 @@ dependencies.
 
 ### Visual Studio Marketplace
 
-1. The publisher id is `webjsdev` (set in `package.json`). Create the
+1. The publisher id is `WebJs` and the extension id is `WebJs` (both set
+   in `package.json`), so the listing is `WebJs.WebJs`. Create the
    publisher once at <https://marketplace.visualstudio.com/manage>,
    signing in with the Microsoft / Azure DevOps account that should own
    it.
@@ -24,22 +25,47 @@ dependencies.
    organizations, scope **Marketplace > Manage**. Copy the token.
 3. Authenticate locally:
    ```sh
-   npx --yes @vscode/vsce login webjsdev
+   npx --yes @vscode/vsce login WebJs
    # paste the PAT when prompted
    ```
 
 ### Open VSX
 
 1. Sign in at <https://open-vsx.org> with GitHub and create the
-   `webjsdev` namespace:
+   `WebJs` namespace (nothing is published there yet):
    ```sh
-   npx --yes ovsx create-namespace webjsdev -p <OPEN_VSX_TOKEN>
+   npx --yes ovsx create-namespace WebJs -p <OPEN_VSX_TOKEN>
    ```
 2. Generate an access token from your Open VSX user settings. Export it
    (or pass `-p`):
    ```sh
    export OVSX_PAT=<OPEN_VSX_TOKEN>
    ```
+
+## The display name carries a trailing U+00A0 — do not "fix" it
+
+`displayName` in `package.json` is `WebJs` followed by a NON-BREAKING SPACE
+(U+00A0). It renders as plain "WebJs" everywhere, and it is deliberate.
+
+The Marketplace reserves an extension's display name and id permanently once
+a listing has existed, even after it is deleted. An earlier listing under the
+id `webjs-vscode` was published and then unpublished, which retired BOTH that
+id and the plain display name `WebJs`. A publish using either is refused:
+
+| Attempt | Marketplace response |
+|---|---|
+| id `webjs-vscode` | `The extension 'webjs-vscode' already exists in the Marketplace` |
+| display name `WebJs` | `This extension display name is taken` |
+
+A plain trailing space does not help: the uniqueness check trims ASCII
+whitespace before comparing. U+00A0 is not ASCII whitespace, so it survives
+the trim and the name reads as distinct. The id has no such escape hatch —
+`vsce` validates it locally against `/^[a-z0-9][a-z0-9\-]*$/i`, so only
+letters, digits and hyphens are allowed there.
+
+Removing the U+00A0 will make the next publish fail. The real fix is to ask
+<VSMarketplace@microsoft.com> to release the retired name, then drop the
+character and update the assertion in `test/extension.test.mjs`.
 
 ## Releasing a version
 
@@ -64,8 +90,8 @@ dependencies.
    builds the self-contained tsserver plugin and packages from a
    standalone dir so the vsix stays small (see `AGENTS.md`).
 3. Verify the listings:
-   - <https://marketplace.visualstudio.com/items?itemName=webjsdev.webjs>
-   - <https://open-vsx.org/extension/webjsdev/webjs>
+   - <https://marketplace.visualstudio.com/items?itemName=WebJs.WebJs>
+   - <https://open-vsx.org/extension/WebJs/WebJs> (not published yet)
 
 ## Local install without a registry
 
