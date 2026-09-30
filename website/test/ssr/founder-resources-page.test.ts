@@ -1,5 +1,5 @@
 /**
- * /resources renders its link, and nothing on the site points at it.
+ * /founder-resources renders its link, and nothing on the site points at it.
  *
  * The page is unlisted by design: it is reached by someone who was handed the
  * URL. That is a property no other test would notice breaking, because every
@@ -18,7 +18,7 @@ import { resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { html } from '@webjsdev/core';
 import { renderToString } from '@webjsdev/core/server';
-import ResourcesPage, * as ResourcesModule from '#app/resources/page.ts';
+import ResourcesPage, * as ResourcesModule from '#app/founder-resources/page.ts';
 import RootLayout from '#app/layout.ts';
 import Sitemap from '#app/sitemap.ts';
 import { GET as llmsTxt } from '#app/llms.txt/route.ts';
@@ -34,7 +34,7 @@ function anchorTag(out: string, href: string): string {
   return tag[0];
 }
 
-test('/resources renders a followed link with its description', async () => {
+test('/founder-resources renders a followed link with its description', async () => {
   const out = await renderToString(ResourcesPage());
   const tag = anchorTag(out, LINK);
   assert.ok(!/\brel=/.test(tag), `the link must carry no rel at all, saw ${tag}`);
@@ -46,35 +46,35 @@ test('/resources renders a followed link with its description', async () => {
   );
 });
 
-test('/resources stays indexable', () => {
+test('/founder-resources stays indexable', () => {
   // A `robots` key is the only way a page opts out of indexing here, so its
   // absence from the page metadata is the whole assertion.
   assert.ok(!('robots' in ResourcesModule.metadata), 'no robots metadata on the page');
   assert.ok(!/noindex/i.test(JSON.stringify(ResourcesModule.metadata)));
 });
 
-test('the sitemap does not list /resources', async () => {
+test('the sitemap does not list /founder-resources', async () => {
   const out = await Sitemap();
   assert.ok(out.includes('<loc>https://webjs.dev/brand</loc>'), 'sanity: the sitemap rendered its static routes');
-  assert.ok(!out.includes('/resources'), '/resources is unlisted');
+  assert.ok(!out.includes('/founder-resources'), '/founder-resources is unlisted');
 });
 
-test('/llms.txt does not list /resources', async () => {
+test('/llms.txt does not list /founder-resources', async () => {
   const out = await (await llmsTxt()).text();
   assert.ok(out.includes('/what-is-webjs'), 'sanity: llms.txt rendered its overview');
-  assert.ok(!out.includes('/resources'), '/resources is unlisted');
+  assert.ok(!out.includes('/founder-resources'), '/founder-resources is unlisted');
 });
 
-test('neither the header nor the footer links /resources', async () => {
+test('neither the header nor the footer links /founder-resources', async () => {
   const out = await renderToString(RootLayout(layoutProps(html`<main>x</main>`)));
   assert.ok(out.includes('href="/blog"'), 'sanity: the chrome rendered');
-  assert.ok(!out.includes('/resources'), 'no chrome link to the page');
+  assert.ok(!out.includes('/founder-resources'), 'no chrome link to the page');
 });
 
-test('no other source file references /resources', () => {
+test('no other source file references /founder-resources', () => {
   // The rendered checks above cover the surfaces that exist today. This one
   // covers a link added tomorrow on any page, fragment or component.
-  const self = resolve(WEBSITE_ROOT, 'app', 'resources');
+  const self = resolve(WEBSITE_ROOT, 'app', 'founder-resources');
   const hits: string[] = [];
   for (const dir of ['app', 'lib', 'components', 'modules']) {
     for (const entry of readdirSync(resolve(WEBSITE_ROOT, dir), { recursive: true, withFileTypes: true })) {
@@ -83,8 +83,8 @@ test('no other source file references /resources', () => {
       if (file.startsWith(self)) continue;
       // The trailing class keeps a longer path with the same prefix, if one is
       // ever added, from reading as a reference to this page.
-      if (/\/resources(?![\w/-])/.test(readFileSync(file, 'utf8'))) hits.push(relative(WEBSITE_ROOT, file));
+      if (/\/founder-resources(?![\w/-])/.test(readFileSync(file, 'utf8'))) hits.push(relative(WEBSITE_ROOT, file));
     }
   }
-  assert.deepEqual(hits, [], 'only app/resources itself may name the path');
+  assert.deepEqual(hits, [], 'only app/founder-resources itself may name the path');
 });

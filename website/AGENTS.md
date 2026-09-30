@@ -64,12 +64,15 @@ website/
                        registry/** the JSON API that shipped CLI versions fetch
                        (see modules/ui/ below). No landing page: /ui opens on
                        the introduction, the way /docs opens on Getting Started.
-    resources/page.ts  /resources, outside services for founders. UNLISTED on
-                       purpose: it is reached by direct URL only, so it is
-                       absent from the header, the footer, the sitemap, and
-                       /llms.txt, and test/ssr/resources-page.test.ts fails if
-                       anything links it. It stays indexable and its links are
-                       followed (no rel=nofollow). Do not add it to the sitemap.
+    founder-resources/page.ts
+                       /founder-resources, outside services for founders.
+                       UNLISTED on purpose: it is reached by direct URL only,
+                       so it is absent from the header, the footer, the
+                       sitemap, and /llms.txt, and
+                       test/ssr/founder-resources-page.test.ts fails if
+                       anything links it. It stays indexable and its links
+                       are followed (no rel=nofollow). Do not add it to the
+                       sitemap.
     sitemap.ts         /sitemap.xml (enumerates docs + ui + articles + compare + blog)
     robots.ts          /robots.txt (allow-all, points at the sitemap)
     llms.txt/route.ts  /llms.txt (llmstxt.org overview for AI agents)

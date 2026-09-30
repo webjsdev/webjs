@@ -3,12 +3,12 @@ import { READING } from '#lib/design/recipes.ts';
 import { pageHeader } from '#lib/ui/page-header.ts';
 
 /**
- * /resources
+ * /founder-resources
  *
  * Outside services worth pointing a founder at. UNLISTED on purpose: the page
  * is reached by someone who was handed the URL, so nothing on the site links
  * here. It is absent from the header, the footer, app/sitemap.ts, and
- * /llms.txt, and test/ssr/resources-page.test.ts holds all four. Do not "fix"
+ * /llms.txt, and test/ssr/founder-resources-page.test.ts holds all four. Do not "fix"
  * the missing sitemap entry.
  *
  * Unlisted is not hidden. The page stays indexable (no robots metadata) and
@@ -20,7 +20,7 @@ import { pageHeader } from '#lib/ui/page-header.ts';
  */
 
 export const metadata = {
-  title: 'Resources · WebJs',
+  title: 'Founder resources · WebJs',
   description: 'Outside services for founders building a company around their software, starting with where to find investors.',
 };
 
@@ -36,7 +36,7 @@ const RESOURCES = [
 export default function Resources() {
   return html`
     <main id="main" tabindex="-1" class="${READING} py-12 focus:outline-none">
-      ${pageHeader('Resources', 'Outside services for founders building a company around their software.')}
+      ${pageHeader('Founder resources', 'Outside services for founders building a company around their software.')}
 
       ${RESOURCES.map((r) => html`
         <section class="mb-8">
