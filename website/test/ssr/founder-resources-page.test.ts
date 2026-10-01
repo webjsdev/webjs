@@ -18,14 +18,17 @@ import { resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { html } from '@webjsdev/core';
 import { renderToString } from '@webjsdev/core/server';
-import ResourcesPage, * as ResourcesModule from '#app/founder-resources/page.ts';
+import FounderResourcesPage, * as ResourcesModule from '#app/founder-resources/page.ts';
 import RootLayout from '#app/layout.ts';
 import Sitemap from '#app/sitemap.ts';
 import { GET as llmsTxt } from '#app/llms.txt/route.ts';
 import { layoutProps } from '#test/helpers/layout-props.ts';
 
 const WEBSITE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const LINK = 'https://www.investorlist.com';
+const LINKS = [
+  { href: 'https://www.investorlist.com', name: 'Investorlist.com' },
+  { href: 'https://kjoller.com', name: 'Kjøller' },
+];
 
 /** The opening tag of the anchor pointing at `href`, attributes included. */
 function anchorTag(out: string, href: string): string {
@@ -34,16 +37,21 @@ function anchorTag(out: string, href: string): string {
   return tag[0];
 }
 
-test('/founder-resources renders a followed link with its description', async () => {
-  const out = await renderToString(ResourcesPage());
-  const tag = anchorTag(out, LINK);
-  assert.ok(!/\brel=/.test(tag), `the link must carry no rel at all, saw ${tag}`);
+test('/founder-resources renders every link, followed, with its description', async () => {
+  const out = await renderToString(FounderResourcesPage());
+  for (const { href, name } of LINKS) {
+    const tag = anchorTag(out, href);
+    assert.ok(!/\brel=/.test(tag), `${href} must carry no rel at all, saw ${tag}`);
+    assert.ok(out.includes(`>${name}</a>`), `the anchor text names ${name}`);
+  }
   assert.ok(!/nofollow|sponsored|ugc/i.test(out), 'nothing on the page opts a link out of being followed');
-  assert.ok(out.includes('>Investorlist.com</a>'), 'the anchor text names the site');
   assert.ok(
     out.includes('Downloadable, curated lists of active startup investors, angels, VCs, and family offices.'),
     'the description sits beside the link',
   );
+  // Both sit under one heading: a second "Fundraising" would mean the data
+  // shape regressed to one section per entry.
+  assert.equal(out.split('>Fundraising<').length - 1, 1, 'one Fundraising heading');
 });
 
 test('/founder-resources stays indexable', () => {
