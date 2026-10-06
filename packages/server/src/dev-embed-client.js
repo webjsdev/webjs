@@ -225,10 +225,12 @@ export function installEmbedBridge(origins, opts) {
     var t = p && p.length ? p[0] : e.target;
     return t && t.nodeType === 1 ? t : null;
   }
-  // `closest('[data-webjs-src]')` that also climbs out of shadow roots.
+  // `closest('[data-webjs-src]')` that also climbs out of shadow roots, and
+  // only takes a `file:line` value: the importmap script carries an unrelated
+  // `data-webjs-src` (the app-source deploy id).
   function sourceOf(el) {
     for (var n = el; n; n = n.parentNode || n.host) {
-      if (n.nodeType === 1 && n.hasAttribute('data-webjs-src')) return n;
+      if (n.nodeType === 1 && /:\d+$/.test(n.getAttribute('data-webjs-src') || '')) return n;
     }
     return null;
   }
