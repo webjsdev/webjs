@@ -335,22 +335,28 @@ export function loadWsModule(file, dev) {
 
 /**
  * Runtime-neutral SSE registry + fanout for dev live-reload and the dev error
- * overlay (#264). Owns the connected-client Set and the keepalive timer; the
- * fanout writes plain SSE frames through each client's `send`. Each shell adds a
- * thin client wrapper over its own transport (node `res.write`, a Bun
+ * overlay (#264). Owns the connected-client Set; the fanout writes plain SSE
+ * frames through each client's `send`. Each shell adds a thin client wrapper
+ * over its own transport (node `res.write`, a Bun
  * `ReadableStreamDefaultController`), so this fanout logic is written once.
+ *
+ * The stream is SILENT between events (#1507). It used to write a `: ka`
+ * comment every 25 seconds per open tab, which kept the host busy forever: a
+ * sandbox or a laptop that sleeps on network quiet never slept while a tab
+ * showed the app. Each shell instead switches the server's idle timeout off
+ * for this one request, so a silent stream is never reaped, and the browser
+ * relay reconnects (with backoff) only when the stream actually drops.
+ *
+ * `seq` counts the reload frames this process has sent. It rides every reload
+ * frame and the `hello` frame, so a relay that closed its stream while every
+ * tab was hidden can tell, on reconnecting, that it missed an edit.
  */
 export class SseHub {
-  /** @param {{ keepaliveMs?: number }} [opts] */
-  constructor(opts = {}) {
+  constructor() {
     /** @type {Set<{ send: (s: string) => void, close: () => void }>} */
     this.clients = new Set();
-    // Keepalive: a comment frame every 25s defeats proxy idle timeouts (and, on
-    // Bun, keeps the connection under the server idleTimeout). Cheap and safe:
-    // SSE comments are ignored by the client. Unref'd so it never holds the
-    // process open.
-    this._timer = setInterval(() => this._raw(': ka\n\n'), opts.keepaliveMs ?? 25_000);
-    if (typeof this._timer.unref === 'function') this._timer.unref();
+    /** Reload frames sent by this process (#1507). */
+    this.seq = 0;
   }
 
   /** @param {{ send: (s: string) => void, close: () => void }} client */
@@ -366,30 +372,44 @@ export class SseHub {
   }
 
   /**
+   * The frame that opens every stream. `retry: 300` shrinks the browser's
+   * native reconnect wait (#893). The `hello` data names this process (its
+   * boot id, so a reconnect to a RESTARTED server reloads) and how many reload
+   * frames it has sent (`seq`, so a reconnect after a pause that missed one
+   * reloads too). JSON since #1507; a relay older than that compares the raw
+   * data, sees a change, and reloads once, which is the safe direction.
+   * @returns {string}
+   */
+  helloFrame() {
+    return `retry: 300\nevent: hello\ndata: ${JSON.stringify({ boot: DEV_BOOT_ID, seq: this.seq })}\n\n`;
+  }
+
+  /**
    * Push a live-reload event to every open tab.
    *
    * The frame carries the change's `{ v, by, why }` classification (#1398) as a
-   * single-line JSON payload, matching `devError` below. The browser relay
-   * resolves ANY payload it cannot read to `reload`, and an absent or malformed
-   * verdict is emitted as `reload` here too, so the fail-safe holds on both ends
-   * of the wire and a tab running against a restarted server can never be
-   * skewed into a lighter response than the change deserves.
+   * single-line JSON payload, matching `devError` below, plus the frame's `seq`
+   * (#1507). The browser relay resolves ANY payload it cannot read to `reload`,
+   * and an absent or malformed verdict is emitted as `reload` here too, so the
+   * fail-safe holds on both ends of the wire and a tab running against a
+   * restarted server can never be skewed into a lighter response than the
+   * change deserves.
    *
    * @param {{ v?: string, by?: string, why?: string } | null} [verdict]
    */
   reload(verdict) {
     const v = verdict && typeof verdict.v === 'string' ? verdict : { v: 'reload' };
-    this._raw(`event: reload\ndata: ${JSON.stringify(v)}\n\n`);
+    this.seq++;
+    this._raw(`event: reload\ndata: ${JSON.stringify({ ...v, seq: this.seq })}\n\n`);
   }
 
   /** Push a dev-error overlay frame (#264) to every open tab. @param {object} frame */
   devError(frame) { this._raw(`event: webjs-error\ndata: ${JSON.stringify(frame)}\n\n`); }
 
-  /** Close every client and stop the keepalive (graceful shutdown). */
+  /** Close every client (graceful shutdown). */
   closeAll() {
     for (const c of this.clients) { try { c.close(); } catch {} }
     this.clients.clear();
-    clearInterval(this._timer);
   }
 }
 

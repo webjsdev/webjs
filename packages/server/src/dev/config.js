@@ -319,13 +319,13 @@ export async function readDevWatchPathsFromApp(appDir) {
 
 /**
  * The dev tooling switches in `webjs.dev` (#1504): `embedOrigins` (the embed
- * bridge, #1498) and `sourceLocations` (#1499). Raw values; the env overrides
+ * bridge, #1498), `sourceLocations` (#1499) and `reloadIdle` (#1507). Raw values; the env overrides
  * and validation live with each feature (`resolveEmbedOrigins`,
  * `sourceLocationsRequested`). A missing or unreadable package.json is both
  * off.
  *
  * @param {string} appDir
- * @returns {Promise<{ embedOrigins: unknown, sourceLocations: unknown }>}
+ * @returns {Promise<{ embedOrigins: unknown, sourceLocations: unknown, reloadIdle: unknown }>}
  */
 export async function readDevToolingFromApp(appDir) {
   let dev;
@@ -335,8 +335,8 @@ export async function readDevToolingFromApp(appDir) {
   } catch {
     dev = undefined;
   }
-  if (!dev || typeof dev !== 'object') return { embedOrigins: undefined, sourceLocations: undefined };
-  return { embedOrigins: dev.embedOrigins, sourceLocations: dev.sourceLocations };
+  if (!dev || typeof dev !== 'object') return { embedOrigins: undefined, sourceLocations: undefined, reloadIdle: undefined };
+  return { embedOrigins: dev.embedOrigins, sourceLocations: dev.sourceLocations, reloadIdle: dev.reloadIdle };
 }
 
 /**

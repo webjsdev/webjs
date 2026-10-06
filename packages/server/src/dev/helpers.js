@@ -368,6 +368,32 @@ const DEV_STYLES_SRC = readFileSync(new URL('../dev-styles.js', import.meta.url)
  * @param {string} bp the normalized base path (`''` = no-op)
  * @returns {string}
  */
+/** Idle close for the reload stream, in ms (#1507); 0 = off. Set by the dev handler. */
+let _reloadIdleMs = 0;
+
+/**
+ * Record `webjs.dev.reloadIdle` / `WEBJS_DEV_RELOAD_IDLE` (#1507) for the served
+ * reload scripts. A module-level switch like `setEmbedOrigins`, set once per
+ * dev handler.
+ * @param {number} ms
+ */
+export function setReloadIdleMs(ms) {
+  _reloadIdleMs = Number.isFinite(ms) && ms > 0 ? Math.round(ms) : 0;
+}
+
+/**
+ * Resolve the reload idle close in ms: a set `WEBJS_DEV_RELOAD_IDLE` (seconds)
+ * wins over `webjs.dev.reloadIdle` (seconds); anything not a positive number
+ * is off.
+ * @param {string | undefined} envRaw
+ * @param {unknown} configured
+ * @returns {number}
+ */
+export function resolveReloadIdleMs(envRaw, configured) {
+  const raw = typeof envRaw === 'string' && envRaw.trim() !== '' ? Number(envRaw) : configured;
+  return typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? Math.round(raw * 1000) : 0;
+}
+
 export function reloadClientJs(bp) {
   // The overlay renderer uses textContent throughout (never innerHTML), so the
   // error message / code frame can never inject markup (#264). Served only in
@@ -471,8 +497,8 @@ function __webjsDirectEvents() {
   // the reload debounce (#1397). The shim scope has no setTimeout, so the relay
   // picks up the tab's own timers.
   const scope = {};
-  startReloadWorker(scope, EventSource, ${eventsUrl});
-  scope.onconnect({ ports: [{ start() {}, postMessage(m) {
+  startReloadWorker(scope, EventSource, ${eventsUrl}, { idleMs: ${_reloadIdleMs} });
+  const shim = { start() {}, postMessage(m) {
     // Nothing may throw out of here, and nothing may be silently dropped.
     //
     // The relay's fanout deletes a port whose postMessage throws, which is the
@@ -495,7 +521,37 @@ function __webjsDirectEvents() {
     } catch (_) {
       console.error('[webjs] dev reload handler threw', _);
     }
-  } }] });
+  } };
+  scope.onconnect({ ports: [shim] });
+  __webjsReportVisibility(function (msg) { if (shim.onmessage) shim.onmessage({ data: msg }); });
+}
+// Tell the relay whether this tab is on screen (#1507). The relay holds the
+// live-reload stream open only while some tab is visible, so a backgrounded
+// dev tab keeps no request in flight and sends nothing; it reopens on return
+// and its hello says whether an edit landed meanwhile. \`bye\` on pagehide
+// drops the tab outright, and a bfcache restore reports in again.
+function __webjsReportVisibility(send) {
+  function report() {
+    try { send({ type: 'visibility', visible: document.visibilityState !== 'hidden' }); } catch (_) { /* relay gone */ }
+  }
+  document.addEventListener('visibilitychange', report);
+  addEventListener('pagehide', function () { try { send({ type: 'bye' }); } catch (_) { /* relay gone */ } });
+  addEventListener('pageshow', function (e) { if (e.persisted) report(); });
+  report();
+  // Interaction keeps an idle-closing stream (webjs.dev.reloadIdle) open and
+  // reopens a closed one, at most once a second. The dev embed bridge calls
+  // __webjsDevActivity for each host command, so a framing tool can resume it.
+  var lastActivity = 0;
+  function activity() {
+    var now = Date.now();
+    if (now - lastActivity < 1000) return;
+    lastActivity = now;
+    try { send({ type: 'activity' }); } catch (_) { /* relay gone */ }
+  }
+  ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart', 'focus'].forEach(function (t) {
+    addEventListener(t, activity, { capture: true, passive: true });
+  });
+  globalThis.__webjsDevActivity = activity;
 }
 try {
   if (typeof SharedWorker !== 'undefined') {
@@ -506,6 +562,7 @@ try {
       else if (m.type === 'webjs-error') __webjsApplyError(m.data);
     };
     w.port.start();
+    __webjsReportVisibility(function (msg) { w.port.postMessage(msg); });
   } else {
     __webjsDirectEvents();
   }
@@ -527,7 +584,7 @@ try {
 export function reloadWorkerJs(bp) {
   return `// webjs dev reload worker (one shared connection for all tabs)
 ${RELOAD_WORKER_SRC}
-startReloadWorker(self, EventSource, ${JSON.stringify(withBasePath('/__webjs/events', bp))});
+startReloadWorker(self, EventSource, ${JSON.stringify(withBasePath('/__webjs/events', bp))}, { idleMs: ${_reloadIdleMs} });
 `;
 }
 

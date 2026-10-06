@@ -462,6 +462,12 @@ jobs:
         env:
           WEBJS_E2E: '1'
         run: node --test test/e2e/dev-embed.test.mjs
+      # Quiet dev live-reload stream (#1507): live reload while visible, no
+      # stream while hidden, and a catch-up reload on return are browser facts.
+      - name: Run dev-idle-stream e2e (#1507)
+        env:
+          WEBJS_E2E: '1'
+        run: node --test test/e2e/dev-idle-stream.test.mjs
       # Dev observability for SSR action seeding (#1309): spawns `webjs dev`
       # against a fixture app and drives a real browser, because the headline
       # criterion is a browser fact. Whether a hydrating component re-issued the

@@ -208,6 +208,11 @@
           "type": "array",
           "items": { "type": "string" }
         },
+        "reloadIdle": {
+          "description": "Live-reload idle close (#1507), DEV-ONLY and off by default. Seconds with no edit and no interaction in any tab after which the dev live-reload stream is closed, so a host that counts an open request as activity (a sandbox that suspends when idle) can sleep while a preview tab is open; the next interaction, a tab becoming visible, or an embed-bridge host command reopens it, and an edit made meanwhile reloads the page. WEBJS_DEV_RELOAD_IDLE (seconds) overrides it. Read by the server (readDevToolingFromApp). Ignored by webjs start.",
+          "type": "number",
+          "minimum": 0
+        },
         "sourceLocations": {
           "description": "Dev source locations (#1499, #1504), DEV-ONLY and off by default. When true, element opening tags in the app's html templates carry data-webjs-src=\"<app-relative-file>:<line>\" in SSR output and client renders. WEBJS_SOURCE_LOCATIONS=1 or 0 overrides it for one run. Read by the server (readDevToolingFromApp). Ignored by webjs start.",
           "type": "boolean"

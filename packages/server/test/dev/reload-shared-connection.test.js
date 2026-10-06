@@ -46,8 +46,12 @@ test('dev serves the reload SharedWorker, and the client uses it with a direct E
   // so the client inlines the relay module too and hands it `EventSource`.
   assert.match(clientSrc, /typeof SharedWorker/, 'client feature-detects SharedWorker');
   assert.match(clientSrc, /function startReloadWorker/, 'the client inlines the relay module for the fallback');
-  assert.match(clientSrc, /startReloadWorker\(scope, EventSource, "\/__webjs\/events"\)/, 'the fallback runs the relay against the real EventSource');
-  assert.match(clientSrc, /scope\.onconnect\(\{ ports: \[\{/, 'and drives it over a shim port');
+  assert.match(clientSrc, /startReloadWorker\(scope, EventSource, "\/__webjs\/events", \{ idleMs: 0 \}\)/, 'the fallback runs the relay against the real EventSource');
+  assert.match(clientSrc, /scope\.onconnect\(\{ ports: \[shim\] \}\)/, 'and drives it over a shim port');
+  // #1507: both paths tell the relay whether the tab is visible, so the
+  // stream is held open only while someone is looking.
+  assert.match(clientSrc, /function __webjsReportVisibility/, 'the client reports its visibility');
+  assert.equal(clientSrc.match(/__webjsReportVisibility\(function/g).length, 2, 'from the SharedWorker path and the fallback alike');
   // The shim's postMessage runs application code synchronously, and the relay's
   // fanout DELETES a port whose postMessage throws (correct for a real
   // MessagePort, where a throw means the tab is gone). Unguarded, an overlay
@@ -115,7 +119,7 @@ test('dev serves the reload SharedWorker, and the client uses it with a direct E
   // The worker inlines the shared relay module and bootstraps it with the real
   // globals (the relay behaviour itself is exercised in the browser test).
   assert.match(workerSrc, /function startReloadWorker/, 'the worker inlines the relay module');
-  assert.match(workerSrc, /startReloadWorker\(self, EventSource, "\/__webjs\/events"\)/, 'it wires the single events stream to the worker');
+  assert.match(workerSrc, /startReloadWorker\(self, EventSource, "\/__webjs\/events", \{ idleMs: 0 \}\)/, 'it wires the single events stream to the worker');
   assert.match(workerSrc, /scope\.onconnect/, 'the relay accepts a port per tab');
   assert.match(workerSrc, /lastError = null/, 'the relay clears the cached error on reload');
   assert.match(workerSrc, /if \(lastError != null\)/, 'a late-joining tab gets the current error');
@@ -136,7 +140,7 @@ test('the worker events URL carries the base path under a sub-path deploy (#256)
   const appDir = makeApp({ basePath: '/app' });
   const app = await createRequestHandler({ appDir, dev: true });
   const worker = await (await app.handle(new Request('http://x/app/__webjs/reload-worker.js'))).text();
-  assert.match(worker, /startReloadWorker\(self, EventSource, "\/app\/__webjs\/events"\)/, 'events URL is base-path prefixed in the worker');
+  assert.match(worker, /startReloadWorker\(self, EventSource, "\/app\/__webjs\/events", \{ idleMs: 0 \}\)/, 'events URL is base-path prefixed in the worker');
   const client = await (await app.handle(new Request('http://x/app/__webjs/reload.js'))).text();
   assert.match(client, /reload-worker\.js/, 'client references the worker');
   assert.match(client, /\/app\/__webjs\/reload-worker\.js/, 'worker URL is base-path prefixed in the client');
@@ -200,7 +204,7 @@ test('the reload client probes the server is up before reloading (no restart fla
   assert.match(clientSrc, /else if \(m\.type === 'webjs-error'\) __webjsApplyError\(m\.data\)/, 'and both route an error frame to the overlay');
   // The boot-id rule (#893) lives in the relay now, in ONE place, rather than
   // being re-implemented in the fallback where the two copies could drift.
-  assert.match(clientSrc, /if \(lastBoot !== null && e\.data !== lastBoot\) requestReload\('reload'\)/, 'only a changed boot id reloads, and it is unconditionally a FULL reload (#1398)');
+  assert.match(clientSrc, /if \(lastBoot !== null && \(h\.boot !== lastBoot \|\| \(h\.seq !== null && lastSeq !== null && h\.seq !== lastSeq\)\)\) \{\s*requestReload\('reload'\);/, 'only a changed boot id, or a reload missed while paused (#1507), reloads, and it is unconditionally a FULL reload (#1398)');
   assert.equal(clientSrc.match(/lastBoot !== null/g).length, 1, 'the boot-id rule exists exactly once');
 });
 
@@ -209,4 +213,25 @@ test('the direct-fallback probe carries the base path under a sub-path deploy (#
   const app = await createRequestHandler({ appDir, dev: true });
   const clientSrc = await (await app.handle(new Request('http://x/app/__webjs/reload.js'))).text();
   assert.match(clientSrc, /fetch\(\"\/app\/__webjs\/version\"/, 'the readiness probe is base-path prefixed');
+});
+
+// #1507: webjs.dev.reloadIdle (seconds) reaches both served scripts as idleMs,
+// and a set WEBJS_DEV_RELOAD_IDLE wins over it.
+test('webjs.dev.reloadIdle and WEBJS_DEV_RELOAD_IDLE set the relay idle close (#1507)', async () => {
+  const saved = process.env.WEBJS_DEV_RELOAD_IDLE;
+  try {
+    delete process.env.WEBJS_DEV_RELOAD_IDLE;
+    const appDir = makeApp({ dev: { reloadIdle: 20 } });
+    let app = await createRequestHandler({ appDir, dev: true });
+    const worker = await (await app.handle(new Request('http://x/__webjs/reload-worker.js'))).text();
+    assert.match(worker, /\{ idleMs: 20000 \}\)/, 'the config seconds become idleMs');
+    const client = await (await app.handle(new Request('http://x/__webjs/reload.js'))).text();
+    assert.match(client, /\{ idleMs: 20000 \}\)/, 'the fallback relay gets it too');
+    process.env.WEBJS_DEV_RELOAD_IDLE = '5';
+    app = await createRequestHandler({ appDir, dev: true });
+    assert.match(await (await app.handle(new Request('http://x/__webjs/reload-worker.js'))).text(), /\{ idleMs: 5000 \}\)/, 'the env var wins');
+  } finally {
+    if (saved === undefined) delete process.env.WEBJS_DEV_RELOAD_IDLE;
+    else process.env.WEBJS_DEV_RELOAD_IDLE = saved;
+  }
 });

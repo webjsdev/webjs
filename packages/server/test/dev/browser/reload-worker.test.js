@@ -10,14 +10,19 @@
  * runs in a real browser. The relay is driven with a fake EventSource + fake
  * MessagePorts so it needs no live SSE server.
  */
-import { startReloadWorker, RELOAD_QUIET_MS, RELOAD_MAX_HOLD_MS, parseVerdict } from '../../../src/dev-reload-worker.js';
+import { startReloadWorker, RELOAD_QUIET_MS, RELOAD_MAX_HOLD_MS, RECONNECT_BASE_MS, RECONNECT_MAX_MS, parseVerdict, parseHello } from '../../../src/dev-reload-worker.js';
 
 import { assert } from '../../../../../test/browser-assert.js';
 
 class FakeEventSource {
-  constructor(url) { this.url = url; this._l = {}; FakeEventSource.last = this; }
+  constructor(url) {
+    this.url = url; this._l = {}; this.closed = false;
+    FakeEventSource.last = this;
+    FakeEventSource.opened = (FakeEventSource.opened || 0) + 1;
+  }
   addEventListener(type, cb) { (this._l[type] || (this._l[type] = [])).push(cb); }
   fire(type, data) { (this._l[type] || []).forEach((cb) => cb({ data })); }
+  close() { this.closed = true; }
 }
 
 function fakePort() {
@@ -90,7 +95,10 @@ suite('dev reload SharedWorker relay (#887)', () => {
   test('caches the error and replays it to a tab that connects later', () => {
     const { scope } = fakeClock();
     startReloadWorker(scope, FakeEventSource, '/__webjs/events');
-    FakeEventSource.last.fire('webjs-error', 'FRAME_JSON'); // error before the tab opens
+    // The stream opens with the first tab (#1507), so the error arrives while
+    // one tab is open and a second tab joins after it.
+    scope.onconnect({ ports: [fakePort().port] });
+    FakeEventSource.last.fire('webjs-error', 'FRAME_JSON');
     const late = fakePort();
     scope.onconnect({ ports: [late.port] });
     assert.deepEqual(late.received, [{ type: 'webjs-error', data: 'FRAME_JSON' }], 'a late tab still shows the overlay');
@@ -109,8 +117,9 @@ suite('dev reload SharedWorker relay (#887)', () => {
 
   test('connects the single EventSource at the given events URL', () => {
     const { scope } = fakeClock();
-    const { es } = startReloadWorker(scope, FakeEventSource, '/base/__webjs/events');
-    assert.equal(es.url, '/base/__webjs/events', 'the one connection uses the base-path-aware URL');
+    const relay = startReloadWorker(scope, FakeEventSource, '/base/__webjs/events');
+    scope.onconnect({ ports: [fakePort().port] });
+    assert.equal(relay.es.url, '/base/__webjs/events', 'the one connection uses the base-path-aware URL');
   });
 
   // #893: a `node --watch` restart drops the connection; if the in-process
@@ -373,5 +382,178 @@ suite('dev reload verdicts (#1398)', () => {
     assert.equal(parseVerdict('"page"'), 'reload', 'a bare string is not an object');
     assert.equal(parseVerdict('{"v":"page"}'), 'page', 'and a good one still parses');
     assert.equal(parseVerdict('{"v":"shell"}'), 'shell');
+  });
+});
+
+// #1507: the stream is open only while some tab is visible, it is silent
+// between events, and it comes back with backoff only when it really drops,
+// so a host that sleeps on network quiet can sleep while a dev tab is open in
+// the background, and a server that is gone is probed less and less often.
+suite('dev reload stream pauses when hidden and reconnects with backoff (#1507)', () => {
+  /** Send a tab-to-relay message the way the served client does. */
+  function say(p, msg) { p.port.onmessage({ data: msg }); }
+
+  test('no connection until a tab connects', () => {
+    const { scope } = fakeClock();
+    const relay = startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    assert.equal(relay.es, null, 'nothing is opened for nobody');
+    scope.onconnect({ ports: [fakePort().port] });
+    assert.ok(relay.es, 'the first tab opens the stream');
+  });
+
+  test('the stream closes when the last visible tab hides and reopens when one shows', () => {
+    const { scope } = fakeClock();
+    const relay = startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    const a = fakePort(); const b = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    scope.onconnect({ ports: [b.port] });
+    const first = relay.es;
+    say(a, { type: 'visibility', visible: false });
+    assert.equal(relay.es, first, 'one visible tab keeps it open');
+    say(b, { type: 'visibility', visible: false });
+    assert.equal(relay.es, null, 'every tab hidden: no request in flight');
+    assert.equal(first.closed, true, 'the EventSource is closed, not just ignored');
+    say(b, { type: 'visibility', visible: true });
+    assert.ok(relay.es && relay.es !== first, 'a visible tab reopens a fresh stream');
+  });
+
+  test('a closed tab (bye) stops counting as visible', () => {
+    const { scope } = fakeClock();
+    const relay = startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    say(a, { type: 'bye' });
+    assert.equal(relay.es, null);
+    assert.equal(relay.ports.size, 0, 'the port is forgotten');
+  });
+
+  test('an edit made while paused reloads on return (the hello seq moved)', () => {
+    const { scope, tick } = fakeClock();
+    startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    FakeEventSource.last.fire('hello', JSON.stringify({ boot: 'B', seq: 3 }));
+    say(a, { type: 'visibility', visible: false });
+    say(a, { type: 'visibility', visible: true });
+    FakeEventSource.last.fire('hello', JSON.stringify({ boot: 'B', seq: 4 }));
+    tick(RELOAD_QUIET_MS);
+    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }]);
+  });
+
+  test('no edit while paused: returning does not reload, even after reloads it did see', () => {
+    const { scope, tick } = fakeClock();
+    startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    FakeEventSource.last.fire('hello', JSON.stringify({ boot: 'B', seq: 0 }));
+    FakeEventSource.last.fire('reload', JSON.stringify({ v: 'page', seq: 1 }));
+    tick(RELOAD_QUIET_MS);
+    assert.equal(a.received.length, 1, 'the live reload went through');
+    say(a, { type: 'visibility', visible: false });
+    say(a, { type: 'visibility', visible: true });
+    FakeEventSource.last.fire('hello', JSON.stringify({ boot: 'B', seq: 1 }));
+    tick(RELOAD_QUIET_MS);
+    assert.equal(a.received.length, 1, 'the seq it already saw is not a new edit');
+  });
+
+  test('a dropped stream reconnects with doubling backoff, reset by the next hello', () => {
+    const { scope, tick } = fakeClock();
+    const relay = startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    scope.onconnect({ ports: [fakePort().port] });
+    const opened = () => FakeEventSource.opened;
+    const start = opened();
+    relay.es.fire('error');
+    assert.equal(relay.es, null, 'the dropped stream is closed, so the browser never retries on its own');
+    tick(RECONNECT_BASE_MS - 1);
+    assert.equal(opened(), start, 'not before the backoff');
+    tick(1);
+    assert.equal(opened(), start + 1, 'first retry after the base wait');
+    relay.es.fire('error');
+    tick(RECONNECT_BASE_MS * 2 - 1);
+    assert.equal(opened(), start + 1);
+    tick(1);
+    assert.equal(opened(), start + 2, 'the wait doubles');
+    for (let i = 0; i < 12; i++) { relay.es.fire('error'); tick(RECONNECT_MAX_MS); }
+    const before = opened();
+    relay.es.fire('error');
+    tick(RECONNECT_MAX_MS);
+    assert.equal(opened(), before + 1, 'the wait is capped');
+    relay.es.fire('hello', JSON.stringify({ boot: 'X', seq: 0 }));
+    relay.es.fire('error');
+    tick(RECONNECT_BASE_MS);
+    assert.equal(opened(), before + 2, 'a hello resets the backoff');
+  });
+
+  test('a stream that drops while every tab is hidden is not retried until one shows', () => {
+    const { scope, tick } = fakeClock();
+    const relay = startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    relay.es.fire('error');
+    say(a, { type: 'visibility', visible: false });
+    const n = FakeEventSource.opened;
+    tick(RECONNECT_MAX_MS * 2);
+    assert.equal(FakeEventSource.opened, n, 'no retry for a hidden page');
+    say(a, { type: 'visibility', visible: true });
+    assert.equal(FakeEventSource.opened, n + 1, 'showing the tab reconnects at once');
+  });
+
+  // Idle close (webjs.dev.reloadIdle): a host that counts an OPEN request as
+  // activity (a pilots sandbox does, for the request's whole life) never
+  // sleeps while the stream is open, however quiet it is.
+  test('with idleMs, a stream with no events and no interaction closes, and interaction reopens it', () => {
+    const { scope, tick } = fakeClock();
+    const relay = startReloadWorker(scope, FakeEventSource, '/__webjs/events', { idleMs: 20000 });
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    relay.es.fire('hello', JSON.stringify({ boot: 'B', seq: 0 }));
+    tick(15000);
+    say(a, { type: 'activity' });
+    tick(15000);
+    assert.ok(relay.es, 'activity pushed the idle deadline out');
+    relay.es.fire('reload', JSON.stringify({ v: 'page', seq: 1 }));
+    tick(19999);
+    assert.ok(relay.es, 'an edit counts as activity too');
+    tick(RELOAD_MAX_HOLD_MS);
+    assert.equal(relay.es, null, 'quiet for idleMs: closed, nothing in flight');
+    say(a, { type: 'activity' });
+    assert.ok(relay.es, 'the next interaction reopens it');
+  });
+
+  test('an edit made while idle-closed reloads once the stream reopens', () => {
+    const { scope, tick } = fakeClock();
+    const relay = startReloadWorker(scope, FakeEventSource, '/__webjs/events', { idleMs: 20000 });
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    relay.es.fire('hello', JSON.stringify({ boot: 'B', seq: 2 }));
+    tick(20000);
+    assert.equal(relay.es, null);
+    say(a, { type: 'activity' });
+    relay.es.fire('hello', JSON.stringify({ boot: 'B', seq: 3 }));
+    tick(RELOAD_QUIET_MS);
+    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }]);
+  });
+
+  test('without idleMs the stream never closes on its own', () => {
+    const { scope, tick } = fakeClock();
+    const relay = startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    scope.onconnect({ ports: [fakePort().port] });
+    tick(10 * 60 * 1000);
+    assert.ok(relay.es, 'local dev keeps live reload with no interaction');
+  });
+
+  test('activity from a hidden tab does not reopen the stream', () => {
+    const { scope } = fakeClock();
+    const relay = startReloadWorker(scope, FakeEventSource, '/__webjs/events', { idleMs: 20000 });
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    say(a, { type: 'visibility', visible: false });
+    say(a, { type: 'activity' });
+    assert.equal(relay.es, null);
+  });
+
+  test('parseHello reads the JSON hello and the bare boot id an older server sends', () => {
+    assert.deepEqual(parseHello('{"boot":"b1","seq":4}'), { boot: 'b1', seq: 4 });
+    assert.deepEqual(parseHello('b1'), { boot: 'b1', seq: null });
   });
 });

@@ -28,8 +28,9 @@
  *     natively on Bun), the SAME negotiation + compressor factory the node shell
  *     uses (shared in `listener-core.js`), so the Bun path gets brotli too (#517).
  *   - **Timeouts** (#237): the node `requestTimeout` maps to Bun's single
- *     `idleTimeout` (seconds), clamped above the 25s SSE keepalive so a dev
- *     live-reload stream is never reaped.
+ *     `idleTimeout` (seconds); the dev live-reload stream opts out of it per
+ *     request with `server.timeout(req, 0)` (#1507), since it is silent
+ *     between events.
  *   - **Proxy IP**: `server.requestIP(req).address` stamps the framework-trusted
  *     `x-webjs-remote-ip` (the node socket-address equivalent), after stripping
  *     any spoofed inbound value.
@@ -59,7 +60,6 @@ import {
   MAX_SYNC_COMPRESS_BYTES,
   varyWithAcceptEncoding,
   readBufferedOrStream,
-  DEV_BOOT_ID,
 } from './listener-core.js';
 
 /* global Bun */
@@ -91,6 +91,9 @@ export function startBunListener(ctx) {
         // on node, but on Bun it is a perfectly ordinary streaming Response.
         if (isEventsPath(url.pathname, basePathStr)) {
           if (!dev) return new Response(null, { status: 404 });
+          // Silent between events (#1507): switch Bun's idleTimeout off for this
+          // one request, so a quiet live-reload stream is never reaped.
+          try { srv.timeout?.(req, 0); } catch { /* an older Bun: idleTimeout still applies */ }
           return bunSseResponse(req, hub, app);
         }
 
@@ -298,11 +301,9 @@ function bunSseResponse(req, hub, app) {
         send: (s) => { try { controller.enqueue(enc.encode(s)); } catch {} },
         close: () => { try { controller.close(); } catch {} },
       };
-      // `retry: 300` shrinks the EventSource reconnect backoff so a reconnect
-      // after a dev restart re-triggers a reload promptly (#893); the `hello`
-      // data is the per-process boot id so a reconnect reloads only on a real
-      // restart, matching the node:http shell.
-      controller.enqueue(enc.encode(`retry: 300\nevent: hello\ndata: ${DEV_BOOT_ID}\n\n`));
+      // The hello frame (`SseHub.helloFrame`, shared with the node:http shell)
+      // carries the retry hint, the boot id and the reload seq (#893, #1507).
+      controller.enqueue(enc.encode(hub.helloFrame()));
       hub.add(client);
       // Replay an unresolved dev error (#264) so a tab connecting AFTER the
       // breaking edit still shows the overlay.
@@ -488,8 +489,8 @@ async function maybeCompress(resp, req) {
 
 /**
  * Map the node `requestTimeout` (ms) to Bun's single `idleTimeout` (seconds). Bun
- * caps it at 255s; we clamp it above the 25s SSE keepalive so a dev live-reload
- * stream is never reaped as idle. `0` (the node "disable" sentinel) disables it
+ * caps it at 255s; the floor of 30s is kept for ordinary requests. The dev
+ * live-reload stream is exempt per request (`server.timeout(req, 0)`, #1507). `0` (the node "disable" sentinel) disables it
  * on Bun too.
  * @param {{ requestTimeout?: number } | undefined} timeouts
  */
