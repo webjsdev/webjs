@@ -23,6 +23,7 @@ import {
 } from 'node:zlib';
 import { stripBasePath } from './base-path.js';
 import { randomUUID } from 'node:crypto';
+import { isWatchError } from './dev/watch-tree.js';
 
 /** The dev live-reload SSE path (matched after base-path stripping). */
 export const EVENTS_PATH = '/__webjs/events';
@@ -416,10 +417,18 @@ export class SseHub {
 /**
  * Install once-only process error handlers. Idempotent across multiple
  * `startServer` calls in the same process. Runtime-neutral (plain `process.on`).
+ *
+ * In dev, an uncaught file-watcher error (`syscall: 'watch'`, #1521) is logged
+ * as a warning and NOT fatal: one unreadable or vanished file in a watched dir
+ * says nothing about the server's state, and shutting down over it is how a
+ * `sed -i` from another user took a whole dev preview down. Prod keeps the
+ * strict contract, every uncaught exception is fatal.
+ *
  * @param {import('./logger.js').Logger} logger
  * @param {() => void} onFatal Starts the FATAL shutdown, which exits non-zero.
+ * @param {{ dev?: boolean }} [opts]
  */
-export function installProcessHandlers(logger, onFatal) {
+export function installProcessHandlers(logger, onFatal, { dev = false } = {}) {
   if (/** @type any */ (globalThis).__webjsProcHandlers) return;
   /** @type any */ (globalThis).__webjsProcHandlers = true;
   process.on('unhandledRejection', (reason) => {
@@ -428,6 +437,10 @@ export function installProcessHandlers(logger, onFatal) {
     });
   });
   process.on('uncaughtException', (err) => {
+    if (dev && isWatchError(err)) {
+      logger.warn(`file watcher skipped ${/** @type any */ (err).path || 'a path'} (${/** @type any */ (err).code || err.message})`);
+      return;
+    }
     logger.error('uncaughtException', { err: err.stack || err.message });
     // Begin orderly shutdown; process state may be corrupt.
     try { onFatal(); } catch {}

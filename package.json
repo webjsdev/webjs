@@ -199,6 +199,10 @@
                   "run": "bun test/bun/dev-extra-watch.mjs"
                 },
                 {
+                  "title": "bun proof: dev-watch-error",
+                  "run": "bun test/bun/dev-watch-error.mjs"
+                },
+                {
                   "title": "bun proof: dev-reload-retry",
                   "run": "bun test/bun/dev-reload-retry.mjs"
                 },

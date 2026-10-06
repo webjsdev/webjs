@@ -226,9 +226,13 @@ jobs:
       # dev-embed rides here too: the embed bridge (#1498) is injected into the
       # SSR head and relaxes the framing headers in the shared response merge,
       # so the injection and the header rewrite have to hold on both shells.
-      - name: webjs dev extra-watch + reload-retry + overlay-scope + public-before-warm + morph-verdict + embed on Bun
+      # dev-watch-error rides here too (#1521): the dev supervisor and the
+      # server's watcher must survive an unreadable watched file and bring a
+      # crashed server back, on both runtimes.
+      - name: webjs dev extra-watch + reload-retry + overlay-scope + public-before-warm + morph-verdict + embed + watch-error on Bun
         run: |
           bun test/bun/dev-extra-watch.mjs
+          bun test/bun/dev-watch-error.mjs
           bun test/bun/dev-reload-retry.mjs
           bun test/bun/dev-overlay-scope.mjs
           bun test/bun/dev-public-before-warm.mjs
