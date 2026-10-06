@@ -10,7 +10,8 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { buildRouteTable, matchPage, compareSpecificity } from '../../src/router.js';
+import { buildRouteTable, matchPage, matchApi, compareSpecificity } from '../../src/router.js';
+import { createRequestHandler } from '../../src/dev.js';
 
 async function scaffold(rels) {
   const dir = await mkdtemp(join(tmpdir(), 'webjs-routespec-'));
@@ -125,4 +126,44 @@ test('counterfactual: the old 3-bucket score tied the two depth-2 dynamic routes
   const b = { routeDir: '[user]/settings', isCatchAll: false };
   assert.equal(oldDynScore(a), oldDynScore(b), 'the old score tied them (the bug)');
   assert.ok(compareSpecificity(a, b) > 0, 'the new comparator puts [user]/settings first');
+});
+
+// #1510: route handlers rank exactly like pages. They used to keep filesystem
+// walk order, so a catch-all auth handler answered for its more specific
+// siblings. Directory names are chosen so the catch-all sorts FIRST in a
+// plain listing (`[` sorts before lowercase letters), which is the order that
+// exposed it.
+test('API routes rank by the same specificity as pages (#1510)', async () => {
+  const dir = await scaffold([
+    'app/api/auth/[...path]/route.js',
+    'app/api/auth/callback/github/connect/route.js',
+    'app/api/auth/callback/[provider]/route.js',
+    'app/api/auth/session/route.js',
+    'app/api/[...rest]/route.js',
+  ]);
+  const table = await buildRouteTable(dir);
+  const at = (p) => matchApi(table, p).route.routeDir;
+  assert.equal(at('/api/auth/callback/github/connect'), 'api/auth/callback/github/connect', 'the longest static route wins over the catch-all');
+  assert.equal(at('/api/auth/callback/google'), 'api/auth/callback/[provider]', 'a dynamic segment beats a catch-all');
+  assert.equal(at('/api/auth/session'), 'api/auth/session', 'a static leaf beats the catch-all');
+  assert.equal(at('/api/auth/signin/github'), 'api/auth/[...path]', 'the scoped catch-all takes what is left under /api/auth');
+  assert.equal(at('/api/other/thing'), 'api/[...rest]', 'the outer catch-all takes the rest');
+});
+
+test('API specificity holds through the request handler, dev and production alike (#1510)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'webjs-apispec-'));
+  const files = {
+    'app/api/auth/[...path]/route.js': 'export const GET = () => new Response("catch-all");',
+    'app/api/auth/callback/github/connect/route.js': 'export const GET = () => new Response("connect");',
+  };
+  for (const [rel, body] of Object.entries(files)) {
+    await mkdir(join(dir, rel, '..'), { recursive: true });
+    await writeFile(join(dir, rel), body);
+  }
+  for (const dev of [true, false]) {
+    const app = await createRequestHandler({ appDir: dir, dev });
+    const hit = async (p) => (await app.handle(new Request('http://x' + p))).text();
+    assert.equal(await hit('/api/auth/callback/github/connect'), 'connect', `the specific handler answers (dev=${dev})`);
+    assert.equal(await hit('/api/auth/signin'), 'catch-all', `the catch-all still answers the rest (dev=${dev})`);
+  }
 });

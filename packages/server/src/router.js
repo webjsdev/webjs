@@ -187,6 +187,12 @@ export async function buildRouteTable(appDir) {
   }
 
   pages.sort(compareSpecificity);
+  // Route handlers rank by the SAME positional specificity as pages (#1510).
+  // They used to keep filesystem walk order, so a catch-all such as
+  // `api/auth/[...path]/route.ts` could answer for a more specific sibling
+  // like `api/auth/callback/github/route.ts`, and which one won depended on
+  // the order the directory happened to list in.
+  apis.sort(compareSpecificity);
   // `instrumentation-client.*` is an app-ROOT convention file, not a router
   // stem, but it is a browser-bound entry (the boot imports it first), so the
   // table is where every consumer already looks for one. Resolved HERE rather

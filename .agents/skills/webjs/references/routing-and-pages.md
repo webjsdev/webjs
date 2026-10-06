@@ -87,6 +87,7 @@ export default async function User({ params }: { params: { id: string } }) {
 
 - `[param]/page.ts` dynamic segment, read via `params.param`.
 - `[...rest]/page.ts` catch-all, `[[...rest]]/page.ts` optional catch-all.
+- Overlapping routes resolve by positional specificity, for pages and `route.ts` handlers alike: segment by segment, a static segment beats `[param]`, which beats a catch-all, so `api/auth/callback/github/route.ts` answers before `api/auth/[...path]/route.ts` whatever the directory order.
 - `(group)/...` route group: the folder is NOT in the URL but still scopes layout / error.
 - `_private/...` private folder: ignored by the router.
 
