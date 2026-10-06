@@ -28,6 +28,7 @@ import { stripTypeScript } from '../ts-strip.js';
 import { serveDownloadedBundle } from '../vendor.js';
 import { resolveImport } from '../module-graph.js';
 import { elideImportsFromSource } from '../component-elision.js';
+import { annotateSourceLocations, isSourceLocationCandidate, sourceLocationFile } from '../dev-source-locations.js';
 import { basePath } from '../importmap.js';
 import { withBasePath } from '../base-path.js';
 import { versionModuleImports } from '../asset-hash.js';
@@ -322,6 +323,9 @@ export async function handleCore(req, ctx) {
         moduleGraph: state.moduleGraph,
         elidableComponents: state.elidableComponents,
         appDir,
+        // Dev source locations (#1499): annotate the served module's `html`
+        // templates exactly as the SSR load hook annotates the server's copy.
+        sourceLocations: state.sourceLocations === true,
       };
       // A `?v=<hash>` app-module request is content-addressed -> immutable
       // (#243); an un-fingerprinted request keeps the 1h fallback.
@@ -691,7 +695,7 @@ export async function jsModuleResponse(abs, dev, elideOpts, immutable) {
   try { source = await readFile(abs, 'utf8'); }
   catch { return new Response('Not found', { status: 404 }); }
   let code = elideImportsFromSource(
-    source, abs, elideOpts.moduleGraph, elideOpts.elidableComponents, resolveImport, elideOpts.appDir,
+    annotateServedModule(source, abs, elideOpts), abs, elideOpts.moduleGraph, elideOpts.elidableComponents, resolveImport, elideOpts.appDir,
   );
   // Version same-origin relative import specifiers so the URL the browser
   // fetches matches the `?v=`-versioned modulepreload + boot specifier (#369).
@@ -705,6 +709,24 @@ export async function jsModuleResponse(abs, dev, elideOpts, immutable) {
     [BUFFERED_MARKER]: '1',
   };
   return new Response(code, { status: 200, headers });
+}
+
+/**
+ * Dev source locations (#1499): stamp `data-webjs-src` on the element opening
+ * tags of a served app module's `html` templates, the same transform the SSR
+ * load hook applies to the server's copy, so the two renders agree. A no-op
+ * unless the handler was built with `WEBJS_SOURCE_LOCATIONS=1` under dev, and
+ * for any module outside the app or under `node_modules`. Runs on the stripped
+ * code, which keeps every line where the source had it.
+ *
+ * @param {string} code
+ * @param {string} abs
+ * @param {{ appDir: string, sourceLocations?: boolean } | undefined} opts
+ * @returns {string}
+ */
+function annotateServedModule(code, abs, opts) {
+  if (!opts || !opts.sourceLocations || !isSourceLocationCandidate(abs, opts.appDir)) return code;
+  return annotateSourceLocations(code, sourceLocationFile(abs, opts.appDir));
 }
 
 /**
@@ -815,6 +837,7 @@ export async function tsResponse(abs, dev, elideOpts, cache, immutable, reportDe
     throw err;
   }
   if (elideOpts) {
+    code = annotateServedModule(code, abs, elideOpts);
     code = elideImportsFromSource(
       code, abs, elideOpts.moduleGraph, elideOpts.elidableComponents, resolveImport, elideOpts.appDir,
     );
