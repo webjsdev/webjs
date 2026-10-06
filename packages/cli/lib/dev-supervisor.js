@@ -1,28 +1,43 @@
 /**
- * Dev-server reload supervisor planning for `webjs dev` (issue #514).
+ * Dev-server reload supervisor planning for `webjs dev` (issues #514, #1521).
  *
- * `webjs dev` re-execs itself under the host runtime's hot-reload supervisor so
- * an edit to a transitively-imported module (an action, query, component, util)
- * takes effect without a manual restart. Both runtimes cache ES modules by
- * resolved URL with no public invalidation API, so the dev re-import in
- * `@webjsdev/server`'s `dev.js` relies on the runtime's own file-watching cache
- * invalidation:
+ * `webjs dev` runs its server in a CHILD process that a supervising parent
+ * restarts, so an edit to a transitively-imported module (an action, query,
+ * component, util) takes effect without a manual restart. Both runtimes cache
+ * ES modules by resolved URL with no public invalidation API, so the dev
+ * re-import in `@webjsdev/server`'s `dev.js` relies on a fresh process (Node)
+ * or the runtime's own cache invalidation (Bun):
  *
- * - **Node** has no in-place module-cache eviction, so it re-execs under
- *   `node --watch`, which RESTARTS the process on a file change (a fresh ESM
- *   cache each time). The dev re-import additionally appends a `?t=` cache-bust
- *   query that Node honours between restarts.
- * - **Bun** keys its module cache by path and IGNORES that `?t=` query, so the
- *   `node --watch` model does not transfer: without help a re-imported module
- *   stays STALE on Bun (the #514 bug). Bun's `--hot` invalidates loaded modules
- *   on a file change WITHOUT restarting the process, which is exactly what the
- *   dev re-import needs; `Bun.serve` is reused across hot reloads, so the
- *   listener is not duplicated. `--hot` auto-watches every loaded file, so the
- *   node `--watch-path` flags do not apply (and are not Bun flags).
+ * - **Node** has no in-place module-cache eviction, so the parent RESTARTS the
+ *   child on a change under the watched paths (a fresh ESM cache each time).
+ *   This used to be `node --watch`, which dies on the first watcher error it
+ *   cannot handle (an EACCES on a temp file another user created, a file that
+ *   vanished mid-scan, #1521) and takes the preview down for good. WebJs's own
+ *   supervisor (`lib/dev-reload.js`) watches the same paths with every watcher
+ *   error handled, and restarts the child faster.
+ * - **Bun** keys its module cache by path and IGNORES the `?t=` cache-bust, so
+ *   a restart-per-edit model is not needed: `bun --hot` invalidates loaded
+ *   modules on a file change WITHOUT restarting the process, and `Bun.serve` is
+ *   reused across hot reloads. The parent still supervises it, but only to
+ *   bring a CRASHED child back (`restartOnChange: false`).
+ *
+ * On both runtimes a child that exits on its own (a crash) is restarted on the
+ * next file change, and after a short backoff even with no change.
  *
  * This pure planner returns the spawn decision so the bin stays a thin shell and
  * the branch logic is unit-testable without spawning a process.
  */
+
+/** Project directories whose changes restart the dev server on Node. */
+export const WATCH_DIRS = ['app', 'components', 'modules', 'lib', 'actions'];
+
+/**
+ * Every extension the server's root-middleware lookup accepts, in the same
+ * order. If these two lists diverge, an app gets a middleware that loads but
+ * never restarts the dev server when edited, which is the quiet half of the
+ * bug where a `middleware.ts` was loaded by neither.
+ */
+export const WATCH_FILES = ['middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs'];
 
 /**
  * Plan how `webjs dev` runs its server.
@@ -31,35 +46,21 @@
  * @param {boolean} opts.isBun  Whether the host runtime is Bun (`process.versions.bun`).
  * @param {string[]} opts.argv  `process.argv.slice(1)` (the script path followed by its args), forwarded to the child verbatim.
  * @param {boolean} opts.noHot  Whether `--no-hot` was passed (opt out of the supervisor entirely).
- * @param {(path: string) => boolean} opts.exists  Existence check for the Node `--watch-path` targets (relative to cwd). Unused on Bun.
- * @returns {{ mode: 'inline' } | { mode: 'spawn', args: string[] }}
- *   `inline` runs the server in this process (no reload watcher); `spawn`
- *   re-execs `process.execPath` with `args` and `__WEBJS_DEV_CHILD=1`.
+ * @returns {{ mode: 'inline' } | { mode: 'supervise', args: string[], restartOnChange: boolean, watchDirs: string[], watchFiles: string[] }}
+ *   `inline` runs the server in this process (no reload watcher); `supervise`
+ *   spawns `process.execPath` with `args` and `__WEBJS_DEV_CHILD=1` under the
+ *   supervisor, which watches `watchDirs` (recursively) and `watchFiles` (at
+ *   the app root). The directories need not exist yet: one created later is
+ *   picked up.
  */
-export function planDevSupervisor({ isBun, argv, noHot, exists }) {
+export function planDevSupervisor({ isBun, argv, noHot }) {
   // `--no-hot` opts out of the reload supervisor on either runtime: run the dev
   // server in THIS process with no watcher. Degraded dev (a deep-import edit
   // needs a manual restart) but useful under an external process manager or a
   // debugger that wants a single, un-re-exec'd process.
   if (noHot) return { mode: 'inline' };
 
-  if (isBun) return { mode: 'spawn', args: ['--hot', ...argv] };
-
-  // Node: re-exec under `node --watch`, watching the project dirs/files that
-  // exist. `--watch-preserve-output` keeps prior logs across a restart.
-  const watchPaths = [];
-  for (const dir of ['app', 'components', 'modules', 'lib', 'actions']) {
-    if (exists(dir)) watchPaths.push('--watch-path', dir);
-  }
-  // Every extension the server's root-middleware lookup accepts, in the same
-  // order. If these two lists diverge, an app gets a middleware that loads but
-  // never restarts the dev server when edited, which is the quiet half of the
-  // bug where a `middleware.ts` was loaded by neither.
-  for (const f of ['middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs']) {
-    if (exists(f)) watchPaths.push('--watch-path', f);
-  }
-  return {
-    mode: 'spawn',
-    args: ['--watch', '--watch-preserve-output', ...watchPaths, ...argv],
-  };
+  const watch = { watchDirs: [...WATCH_DIRS], watchFiles: [...WATCH_FILES] };
+  if (isBun) return { mode: 'supervise', args: ['--hot', ...argv], restartOnChange: false, ...watch };
+  return { mode: 'supervise', args: [...argv], restartOnChange: true, ...watch };
 }

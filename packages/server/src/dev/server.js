@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { strongerVerdict } from '../dev-classify.js';
-import { watch as fsWatch } from 'node:fs/promises';
+import { watchTree } from './watch-tree.js';
 import { relative } from 'node:path';
 import { createServer as createHttp1Server } from 'node:http';
 import { createRequestHandler } from './handler.js';
@@ -190,7 +190,7 @@ function startNodeListener(ctx) {
   // Catch-all process handlers: log, but don't tear the process down on a
   // single mishandled promise. Uncaught exceptions are different: state may be
   // corrupted, so log + start an orderly shutdown rather than continuing.
-  installProcessHandlers(logger, () => shutdown('uncaughtException', { fatal: true }));
+  installProcessHandlers(logger, () => shutdown('uncaughtException', { fatal: true }), { dev });
 
   return {
     server,
@@ -252,11 +252,12 @@ export async function startServer(opts) {
   /** @type {AbortController | null} */
   let watcherAbort = null;
   if (dev) {
-    // Watch the app root recursively via Node's built-in
-    // `fs.promises.watch`. Stable on macOS, Windows, and Linux as of
-    // Node 24. No external dep needed.
+    // Watch the app tree with Node's built-in `fs.watch` (no external dep):
+    // `watchTree` (#1521) watches the root plus each non-ignored top-level dir,
+    // so `node_modules` is never walked, and handles a per-path watch error
+    // (EACCES, ENOENT) with a warning instead of an uncaughtException.
     //
-    // fs.watch returns relative paths in event.filename. `shouldIgnoreWatchPath`
+    // Paths are reported relative to the watched root. `shouldIgnoreWatchPath`
     // (module-level, exported for tests) skips node_modules, .git, .webjs/, and
     // the SQLite dev DB (db/dev.db) + db/migrations so a file the dev server itself writes never loops.
     // Live-reload classification (#1398). Several files can change inside one
@@ -273,26 +274,32 @@ export async function startServer(opts) {
       app.rebuild(v || undefined);
     }, 80);
     watcherAbort = new AbortController();
-    const watchRoot = async (root) => {
-      try {
-        const events = fsWatch(root, { recursive: true, signal: watcherAbort.signal });
-        for await (const event of events) {
-          const filename = event.filename || '';
-          if (shouldIgnoreWatchPath(filename)) continue;
+    // One warning per unwatchable path (#1521): an EACCES / ENOENT on a single
+    // file must never stop the dev server, and a burst of the same temp file
+    // must not flood the log either.
+    const warned = new Set();
+    const onWatchError = (err) => {
+      const key = `${err && err.code}:${err && err.path}`;
+      if (warned.has(key) || warned.size > 200) return;
+      warned.add(key);
+      logger.warn(`file watcher skipped ${err && err.path ? err.path : 'a path'} (${err && err.code ? err.code : String(err)})`);
+    };
+    const watchRoot = (root) => {
+      const close = watchTree(root, {
+        ignore: shouldIgnoreWatchPath,
+        onEvent: (filename) => {
           // A regenerate output (#967) is a build product the server itself
           // writes on request; ignoring it stops a spurious rebuild + reload
           // (and a reload -> refetch -> recompile -> reload cycle), same as the
           // db/dev.db carve-out above. `app` exposes the check because `state`
           // lives in createRequestHandler's scope, not here.
-          if (app.isRegenerateOutput(filename)) continue;
+          if (app.isRegenerateOutput(filename)) return;
           pendingVerdict = strongerVerdict(pendingVerdict, app.classifyWatchPath(filename, root));
           rebuild();
-        }
-      } catch (err) {
-        if (err && /** @type any */(err).name !== 'AbortError') {
-          logger.warn({ err }, `file watcher exited (${root})`);
-        }
-      }
+        },
+        onError: onWatchError,
+      });
+      watcherAbort.signal.addEventListener('abort', close, { once: true });
     };
     watchRoot(app.appDir);
     // Extra roots the app reads from OUTSIDE its appDir (#894): repo-root content

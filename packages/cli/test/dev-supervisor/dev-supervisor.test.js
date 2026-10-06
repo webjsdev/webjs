@@ -7,10 +7,10 @@
  * module stayed STALE on Bun. The fix re-execs under `bun --hot` on Bun, whose
  * file-watching cache invalidation makes the dev re-import pick up the edit.
  *
- * These tests prove the planner's branch logic: Bun yields `bun --hot`, Node
- * yields `node --watch` with the existing watch-path set, `--no-hot` opts out
- * on either runtime, and the counterfactual that the Bun branch never emits the
- * Node-only `--watch` flags.
+ * These tests prove the planner's branch logic: Bun yields `bun --hot` with
+ * crash-only supervision, Node yields a supervised child that restarts on a
+ * change (never `node --watch`, #1521), `--no-hot` opts out on either runtime,
+ * and the counterfactual that neither branch emits the `--watch` flags.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -22,70 +22,44 @@ import { fileURLToPath } from 'node:url';
 import { planDevSupervisor } from '../../lib/dev-supervisor.js';
 
 const ARGV = ['/path/to/webjs.js', 'dev', '--port', '8080'];
-const allExist = () => true;
-const noneExist = () => false;
+const WATCH = {
+  watchDirs: ['app', 'components', 'modules', 'lib', 'actions'],
+  watchFiles: ['middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs'],
+};
 
-test('Bun re-execs under `bun --hot`, forwarding argv verbatim', () => {
-  const plan = planDevSupervisor({ isBun: true, argv: ARGV, noHot: false, exists: allExist });
-  assert.deepEqual(plan, { mode: 'spawn', args: ['--hot', ...ARGV] });
+test('Bun runs the child under `bun --hot`, forwarding argv verbatim', () => {
+  const plan = planDevSupervisor({ isBun: true, argv: ARGV, noHot: false });
+  assert.deepEqual(plan, { mode: 'supervise', args: ['--hot', ...ARGV], restartOnChange: false, ...WATCH });
 });
 
 test('Bun branch NEVER emits the Node-only watch flags (the #514 mismatch)', () => {
   // The counterfactual: the old code passed `--watch` / `--watch-path` to Bun,
   // which Bun does not understand. The fix must use ONLY `--hot`.
-  const plan = planDevSupervisor({ isBun: true, argv: ARGV, noHot: false, exists: allExist });
-  assert.ok(plan.mode === 'spawn');
+  const plan = planDevSupervisor({ isBun: true, argv: ARGV, noHot: false });
+  assert.ok(plan.mode === 'supervise');
   for (const flag of ['--watch', '--watch-preserve-output', '--watch-path']) {
     assert.ok(!plan.args.includes(flag), `Bun args must not include ${flag}`);
   }
 });
 
-test('Node re-execs under `node --watch` with the project watch paths', () => {
-  const plan = planDevSupervisor({ isBun: false, argv: ARGV, noHot: false, exists: allExist });
-  assert.deepEqual(plan, {
-    mode: 'spawn',
-    args: [
-      '--watch',
-      '--watch-preserve-output',
-      '--watch-path', 'app',
-      '--watch-path', 'components',
-      '--watch-path', 'modules',
-      '--watch-path', 'lib',
-      '--watch-path', 'actions',
-      '--watch-path', 'middleware.ts',
-      '--watch-path', 'middleware.js',
-      '--watch-path', 'middleware.mts',
-      '--watch-path', 'middleware.mjs',
-      ...ARGV,
-    ],
-  });
-});
-
-test('Node watch paths include only the dirs/files that exist', () => {
-  // Only `app` exists in this project.
-  const exists = (p) => p === 'app';
-  const plan = planDevSupervisor({ isBun: false, argv: ARGV, noHot: false, exists });
-  assert.deepEqual(plan, {
-    mode: 'spawn',
-    args: ['--watch', '--watch-preserve-output', '--watch-path', 'app', ...ARGV],
-  });
-});
-
-test('Node with no project dirs still watches (no --watch-path entries)', () => {
-  const plan = planDevSupervisor({ isBun: false, argv: ARGV, noHot: false, exists: noneExist });
-  assert.deepEqual(plan, {
-    mode: 'spawn',
-    args: ['--watch', '--watch-preserve-output', ...ARGV],
-  });
+test('Node restarts the child on a change, and never runs it under `node --watch` (#1521)', () => {
+  // `node --watch` crashed on the first watcher error it could not handle (an
+  // EACCES on a temp file another user created) and never came back. The
+  // supervisor owns the watching now, so the child's argv is the plain script.
+  const plan = planDevSupervisor({ isBun: false, argv: ARGV, noHot: false });
+  assert.deepEqual(plan, { mode: 'supervise', args: [...ARGV], restartOnChange: true, ...WATCH });
+  for (const flag of ['--watch', '--watch-preserve-output', '--watch-path']) {
+    assert.ok(!plan.args.includes(flag), `Node args must not include ${flag}`);
+  }
 });
 
 test('`--no-hot` opts out of the supervisor on Bun (run in-process)', () => {
-  const plan = planDevSupervisor({ isBun: true, argv: ARGV, noHot: true, exists: allExist });
+  const plan = planDevSupervisor({ isBun: true, argv: ARGV, noHot: true });
   assert.deepEqual(plan, { mode: 'inline' });
 });
 
 test('`--no-hot` opts out of the supervisor on Node (run in-process)', () => {
-  const plan = planDevSupervisor({ isBun: false, argv: ARGV, noHot: true, exists: allExist });
+  const plan = planDevSupervisor({ isBun: false, argv: ARGV, noHot: true });
   assert.deepEqual(plan, { mode: 'inline' });
 });
 
@@ -112,8 +86,9 @@ test('the watched middleware extensions match the ones the server loads', () => 
   assert.ok(m, 'the server declares its root-middleware candidates in one place');
   const serverExts = m[1].match(/'([^']+)'/g).map((q) => q.slice(1, -1));
 
-  const plan = planDevSupervisor({ isBun: false, argv: ARGV, noHot: false, exists: allExist });
-  const watched = plan.args.filter((a) => a.startsWith('middleware.'));
+  const plan = planDevSupervisor({ isBun: false, argv: ARGV, noHot: false });
+  assert.ok(plan.mode === 'supervise');
+  const watched = plan.watchFiles.filter((a) => a.startsWith('middleware.'));
 
   assert.deepEqual(
     [...watched].sort(),

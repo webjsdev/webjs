@@ -500,6 +500,14 @@ async function main() {
         // too, but that runs too late to affect the port the CLI computes.
         loadAppEnv(process.cwd());
         const port = resolvePort(flag(rest, '--port'));
+        // Exit with the supervisor (#1521): when its IPC channel closes, the
+        // parent is gone (killed outright, or crashed), and a child left
+        // running would hold the port against the next `webjs dev`. Unref'd
+        // so the channel itself never keeps this process alive.
+        if (process.connected) {
+          process.channel?.unref?.();
+          process.on('disconnect', () => process.exit(0));
+        }
         await startServer({ appDir: process.cwd(), port, dev: true });
         break;
       }
@@ -520,22 +528,21 @@ async function main() {
       loadAppEnv(process.cwd());
       await runPhaseBeforeSteps('dev', devTasks.dev.before, process.cwd());
       const killTasks = await startDevParallelTasks(devTasks.dev.parallel, process.cwd());
-      process.on('SIGINT', () => { killTasks(); process.exit(0); });
-      process.on('SIGTERM', () => { killTasks(); process.exit(0); });
 
-      // Decide how to run: in-process (`--no-hot`), or re-exec'd under the host
-      // runtime's hot-reload supervisor (`node --watch` on Node, `bun --hot` on
-      // Bun, #514). The branch logic lives in the pure `planDevSupervisor` so it
-      // is unit-testable without spawning a process.
-      const { existsSync } = await import('node:fs');
+      // Decide how to run: in-process (`--no-hot`), or in a child under WebJs's
+      // reload supervisor (#1521), which restarts it on a change on Node and
+      // runs it under `bun --hot` on Bun (#514), and brings a crashed child
+      // back on either. The branch logic lives in the pure `planDevSupervisor`
+      // so it is unit-testable without spawning a process.
       const plan = planDevSupervisor({
         isBun: !!process.versions.bun,
         argv: process.argv.slice(1),
         noHot: rest.includes('--no-hot'),
-        exists: (p) => existsSync(p),
       });
 
       if (plan.mode === 'inline') {
+        process.on('SIGINT', () => { killTasks(); process.exit(0); });
+        process.on('SIGTERM', () => { killTasks(); process.exit(0); });
         const { startServer } = await import('@webjsdev/server');
         loadAppEnv(process.cwd());
         const port = resolvePort(flag(rest, '--port'));
@@ -544,12 +551,13 @@ async function main() {
         break;
       }
 
-      const child = spawn(process.execPath, plan.args, {
-        stdio: 'inherit',
+      const { superviseDevServer } = await import('../lib/dev-reload.js');
+      superviseDevServer({
         cwd: process.cwd(),
+        plan,
         env: { ...process.env, __WEBJS_DEV_CHILD: '1' },
+        onExit: (code) => { killTasks(); process.exit(code); },
       });
-      child.on('exit', (code) => { killTasks(); process.exit(code ?? 0); });
       break;
     }
     case 'start': {

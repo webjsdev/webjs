@@ -157,7 +157,7 @@ export function startBunListener(ctx) {
   const shutdown = makeShutdown({ closeServer, hub, logger });
   process.once('SIGINT', () => shutdown('SIGINT'));
   process.once('SIGTERM', () => shutdown('SIGTERM'));
-  installProcessHandlers(logger, () => shutdown('uncaughtException', { fatal: true }));
+  installProcessHandlers(logger, () => shutdown('uncaughtException', { fatal: true }), { dev });
 
   return {
     server,

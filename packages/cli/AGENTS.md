@@ -60,16 +60,31 @@ lib/
                          `resolvePort` so a `.env` PORT is in `process.env` at
                          resolution time; the server loads `.env` too but too late
                          to affect the port the CLI computes. Tests: `test/port/`.
-  dev-supervisor.js      `webjs dev` reload-supervisor planner (#514). PURE
-                         `planDevSupervisor({ isBun, argv, noHot, exists })`
-                         returns the spawn decision: `bun --hot` on Bun (Bun
-                         ignores the dev `?t=` cache-bust, so `node --watch`
-                         would leave a server-module edit stale), `node --watch`
-                         + the existing `--watch-path` set on Node, or `inline`
-                         (run in-process) when `--no-hot` is passed. Kept pure so
-                         the branch logic is unit-testable without spawning a
-                         process; the bin owns the actual spawn + the
-                         `__WEBJS_DEV_CHILD` re-entry. Tests: `test/dev-supervisor/`
+  dev-supervisor.js      `webjs dev` reload-supervisor planner (#514, #1521).
+                         PURE `planDevSupervisor({ isBun, argv, noHot })`
+                         returns the spawn decision: `supervise` with
+                         `restartOnChange: true` on Node (restart the child on a
+                         change under `WATCH_DIRS` / the root `WATCH_FILES`),
+                         `supervise` with `bun --hot` and `restartOnChange:
+                         false` on Bun (Bun ignores the dev `?t=` cache-bust and
+                         reloads in place; the parent only revives a crashed
+                         child), or `inline` (run in-process) for `--no-hot`.
+                         Node no longer runs under `node --watch`, which crashed
+                         on an unhandled watcher error and never came back.
+                         Tests: `test/dev-supervisor/`
+  dev-reload.js          The supervisor runtime (#1521). `watchRestartPaths`
+                         (every watcher error handled, a watched dir created or
+                         removed later followed, `webjs.dev.regenerate` outputs
+                         and build noise ignored), `createSupervisor` (the
+                         restart state machine: 50ms debounce, SIGTERM then
+                         SIGKILL after 2s, the replacement spawned on the old
+                         child's exit, crash restart on the next change or after
+                         a 0.5s to 10s backoff), and `superviseDevServer` (real
+                         spawn with an IPC channel so an orphaned child exits,
+                         signals, an uncaughtException guard that swallows only
+                         `syscall: 'watch'` errors). The bin owns the
+                         `__WEBJS_DEV_CHILD` re-entry. Tests:
+                         `test/dev-supervisor/dev-reload.test.js`
                          (unit) + `test/bun/dev-hot-reload.mjs` (cross-runtime).
   resolve-bin.js         Resolve a dependency's bin from the app's node_modules
                          (#570). `resolveBin(cwd, pkgName, binName)` so `webjs db`
@@ -186,7 +201,7 @@ README.md                npm-facing package readme.
 
 | Command | Implementation |
 |---|---|
-| `webjs dev` | Re-execs itself under the host runtime's hot-reload supervisor, then `startServer({ dev: true })` in the child. The supervisor is runtime-specific (#514, `lib/dev-supervisor.js`): `node --watch` on Node (restart-on-change, fresh ESM cache, plus the dev re-import's `?t=` query); `bun --hot` on Bun (in-place module invalidation, since Bun keys its cache by path and ignores `?t=`, so `node --watch` would leave a server-module edit stale). `--no-hot` opts out and runs the server in-process on either runtime. In the parent (pre-spawn) it runs the configured dev orchestration (#550, `lib/run-tasks.js`): the `webjs.dev.before` steps (one-shot) to completion, then the `webjs.dev.parallel` watchers (e.g. the Tailwind CLI) alongside the server, torn down on exit. So a bare `webjs dev` runs the same before-steps and watchers as `npm run dev`. The scaffold ships `webjs db migrate` as both a `dev.before` and a `start.before` step (#725), so a `db:generate`'d migration is applied on the next boot in dev and prod alike with no manual `db:migrate`; `.env` is loaded before the dev before-steps (same as start), so a Postgres dev migrate sees `DATABASE_URL`. Local binaries (`drizzle-kit`, `tailwindcss`) resolve because the spawn PATH is prepended with the ancestor `node_modules/.bin` dirs, npm-style. **Before dispatching either dev or start**, a directory-relative resolve probe (`checkFrameworkResolves` from `lib/doctor.js`) checks that `@webjsdev/core` resolves from `process.cwd()`; if not (the fresh-git-worktree-without-node_modules trap, #954), it prints the cause + remedy and exits 1 instead of letting a raw `ERR_MODULE_NOT_FOUND` bubble from deep in SSR. A no-op single resolve on the happy path. |
+| `webjs dev` | Runs `startServer({ dev: true })` in a child under WebJs's own reload supervisor (#514, #1521, `lib/dev-supervisor.js` plans, `lib/dev-reload.js` runs): on Node it restarts the child on a change (fresh ESM cache, plus the dev re-import's `?t=` query); on Bun the child runs under `bun --hot` (in-place module invalidation, since Bun keys its cache by path and ignores `?t=`). On both, a watcher error (EACCES / ENOENT on one path) is a warning, never a crash, and a crashed child is restarted on the next change or after a backoff. `--no-hot` opts out and runs the server in-process on either runtime. In the parent (pre-spawn) it runs the configured dev orchestration (#550, `lib/run-tasks.js`): the `webjs.dev.before` steps (one-shot) to completion, then the `webjs.dev.parallel` watchers (e.g. the Tailwind CLI) alongside the server, torn down on exit. So a bare `webjs dev` runs the same before-steps and watchers as `npm run dev`. The scaffold ships `webjs db migrate` as both a `dev.before` and a `start.before` step (#725), so a `db:generate`'d migration is applied on the next boot in dev and prod alike with no manual `db:migrate`; `.env` is loaded before the dev before-steps (same as start), so a Postgres dev migrate sees `DATABASE_URL`. Local binaries (`drizzle-kit`, `tailwindcss`) resolve because the spawn PATH is prepended with the ancestor `node_modules/.bin` dirs, npm-style. **Before dispatching either dev or start**, a directory-relative resolve probe (`checkFrameworkResolves` from `lib/doctor.js`) checks that `@webjsdev/core` resolves from `process.cwd()`; if not (the fresh-git-worktree-without-node_modules trap, #954), it prints the cause + remedy and exits 1 instead of letting a raw `ERR_MODULE_NOT_FOUND` bubble from deep in SSR. A no-op single resolve on the happy path. |
 | `webjs start` | `startServer({ dev: false })`, plain HTTP/1.1 (front a reverse proxy for TLS + HTTP/2). Shares the dev framework-resolve preflight above (#954). |
 | `webjs test [--server\|--browser]` | Runtime-native test runner (#570): server tests run under `node --test` on Node and `bun test` on Bun (`bun --test` is invalid), dispatched on `process.versions.bun`; browser tests run the app's resolved `@web/test-runner` (`wtr`) bin via `process.execPath` (no `npx`). |
 | `webjs ci [-f\|--fail-fast] [--only <title>]... [--json] [--signoff]` | Local CI (#1471), the Rails `bin/ci` posture: runs the step list `package.json` declares under `webjs.ci.steps` (`readCiConfig` in `lib/ci-config.js`, `runCi` in `lib/ci-runner.js`). Each step is timed with a `✅` / `❌` result line, the run ends with a failure list and one total line, and the exit is 1 on any failure (130 on interrupt). A group with `parallel: N` runs N steps at once with each step's output captured and replayed whole; a group nested in it takes one slot and runs sequentially. Every child gets `CI=true`, `node_modules/.bin` on PATH, and the step's `env`; `.env` is loaded first like dev / start. The predicate is the CONFIG, not an `app/` directory, so a workspace root (this monorepo) is a legitimate target; no block is exit 1 naming the workspace members that declare one (`--json`: `{ error: { code: 'NO_CI_CONFIG' } }`), a malformed block is `INVALID_CI_CONFIG` with every problem's JSON path, an unknown `--only` title is `UNKNOWN_ONLY`. `--json` puts one document on stdout (`{ ok, seconds, interrupted, steps[] }`, failed steps carrying their captured output) and the human report on stderr. Under `GITHUB_ACTIONS` each step is a `::group::` and a failure an `::error::` annotation, and a `$GITHUB_STEP_SUMMARY` table is appended, so one cloud job running the whole list still names the layer that broke. `--signoff` runs `gh signoff` after a green run (a red run prints the do-not-merge heading). Tests: `test/cli/ci.test.mjs`, `test/bun/ci-runner.mjs` (both runtimes), `test/ci-config/`, `test/ci-runner/` |

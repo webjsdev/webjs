@@ -566,7 +566,7 @@ Rules: **always scaffold via `webjs create`** (never hand-roll). **Default to a 
 ## CLI reference
 
 ```sh
-webjs dev    [--port N] [--no-hot] # dev server with live reload (node --watch on Node, bun --hot on Bun). --no-hot runs in-process. Runs webjs.dev.before + webjs.dev.parallel (#550). A page or layout edit REFRESHES IN PLACE where the server process survives it (#1398); a component edit always reloads
+webjs dev    [--port N] [--no-hot] # dev server with live reload (a restart-on-change supervisor on Node, bun --hot on Bun; a watcher error never stops it and a crashed server is restarted, #1521). --no-hot runs in-process. Runs webjs.dev.before + webjs.dev.parallel (#550). A page or layout edit REFRESHES IN PLACE where the server process survives it (#1398); a component edit always reloads
 webjs start  [--port N]            # prod server; source IS the runtime, plain HTTP/1.1 (reverse-proxy for TLS + HTTP/2). Runs webjs.start.before first (#550)
 webjs test   [--server] [--browser] [--watch]
 webjs check  [--rules] [--json]    # correctness validator (report-only, no autofix); --json for an agent loop
