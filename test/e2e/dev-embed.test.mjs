@@ -6,7 +6,8 @@
  * observable that way: the frame loading at all (the default X-Frame-Options
  * would refuse it), messages crossing a real cross-origin `postMessage`, the
  * client router taking a host `navigate` as a soft navigation, and the dev
- * overlay's server-error reaching the parent.
+ * overlay's server-error reaching the parent. Source locations (#1499) are on
+ * as well, so inspect mode's `select` carries the clicked element's file:line.
  *
  * Run: WEBJS_E2E=1 node --test test/e2e/dev-embed.test.mjs
  */
@@ -51,7 +52,9 @@ function startDev(dir, port, embedOrigins) {
   return new Promise((res, rej) => {
     const child = spawn(process.execPath, [cli, 'dev', '--port', String(port)], {
       cwd: dir,
-      env: { ...process.env, __WEBJS_DEV_CHILD: '1', NODE_ENV: 'development', WEBJS_EMBED_ORIGINS: embedOrigins },
+      // Source locations on too (#1499), so inspect mode's `select` can carry
+      // the file:line of the clicked element, the click-to-edit pairing.
+      env: { ...process.env, __WEBJS_DEV_CHILD: '1', NODE_ENV: 'development', WEBJS_EMBED_ORIGINS: embedOrigins, WEBJS_SOURCE_LOCATIONS: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let started = false;
@@ -189,7 +192,7 @@ describe('E2E: dev embed bridge (#1498)', {
     const sel = await message((m) => m.type === 'select', from);
     assert.equal(sel.tag, 'h1');
     assert.equal(sel.text, 'about');
-    assert.equal(sel.src, null, 'no source location unless WEBJS_SOURCE_LOCATIONS is on');
+    assert.equal(sel.src, 'app/about/page.ts:6', 'the clicked element maps back to its template line');
     await page.evaluate(() => window.send({ type: 'inspect', enabled: false }));
     await frame().waitForFunction(() => !document.querySelector('[data-webjs-embed-highlight]'), { timeout: 5000 });
   });

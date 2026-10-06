@@ -454,6 +454,14 @@ jobs:
         env:
           WEBJS_E2E: '1'
         run: node --test test/e2e/dev-source-locations.test.mjs
+      # Dev embed bridge (#1498): a host page on one origin frames a real
+      # `webjs dev` on another, because the frame loading at all, cross-origin
+      # postMessage, and a host navigate being a client-router soft navigation
+      # are browser facts.
+      - name: Run dev-embed e2e (#1498)
+        env:
+          WEBJS_E2E: '1'
+        run: node --test test/e2e/dev-embed.test.mjs
       # Dev observability for SSR action seeding (#1309): spawns `webjs dev`
       # against a fixture app and drives a real browser, because the headline
       # criterion is a browser fact. Whether a hydrating component re-issued the
