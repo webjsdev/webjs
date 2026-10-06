@@ -218,7 +218,7 @@ test('the dev reload client EventSource URL is base-path-prefixed (#256)', async
   const src = await res.text();
   assert.match(
     src,
-    /startReloadWorker\(scope, EventSource, "\/myapp\/__webjs\/events"\)/,
+    /startReloadWorker\(scope, EventSource, "\/myapp\/__webjs\/events", \{ idleMs: 0 \}\)/,
     'the EventSource URL must be prefixed with the base path',
   );
   assert.ok(
@@ -237,7 +237,7 @@ test('the dev reload client EventSource URL is bare with no basePath (no-op)', a
   const src = await res.text();
   assert.match(
     src,
-    /startReloadWorker\(scope, EventSource, "\/__webjs\/events"\)/,
+    /startReloadWorker\(scope, EventSource, "\/__webjs\/events", \{ idleMs: 0 \}\)/,
     'the EventSource URL is the bare path when no basePath is set (byte-identical)',
   );
 });
