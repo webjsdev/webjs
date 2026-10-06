@@ -18,7 +18,7 @@ build
 out
 .cache
 
-# Local env files. The container gets its env from compose / uncloud, not a
+# Local env files. The container gets its env from compose or the host, not a
 # committed file. Keep the example for reference.
 .env
 !.env.example

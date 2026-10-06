@@ -2,9 +2,9 @@
 #
 #   docker compose up --build   →   http://localhost:8080
 #
-# In production the webdeploy tool (ubicloud + uncloud) provisions a managed
-# Postgres and injects DATABASE_URL + AUTH_SECRET for you. Locally this uses
-# the scaffold's SQLite file on a named volume so data survives `compose down`.
+# In production your host provides DATABASE_URL + AUTH_SECRET. Locally this
+# uses the scaffold's SQLite file on a named volume so data survives
+# `compose down`.
 services:
   app:
     build: .

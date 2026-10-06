@@ -18,6 +18,7 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { bunifyProse, bunifyDockerfile, bunifyCompose, bunifyCi } from './runtime-rewrite.js';
+import { postgresCompose, postgresCi } from './db-rewrite.js';
 import { assertValidAppName, toDatabaseName } from './app-name.js';
 import { isGalleryAppShellFile } from './gallery-shell-files.js';
 import { detectPackageManager } from './package-manager.js';
@@ -726,6 +727,14 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     'compose.yaml': bunifyCompose,
     '.github/workflows/ci.yml': bunifyCi,
   };
+  // Database axis (#1490): the compose + CI templates are the SQLite shape, so
+  // a --db postgres app derives its variant (a Postgres service, DATABASE_URL
+  // pointed at it) by a pure transform, like the Bun rewrite above. Applied
+  // FIRST; the two touch disjoint lines, so they compose. SQLite copies as is.
+  const DB_REWRITE = dialect === 'postgres' ? {
+    'compose.yaml': (c) => postgresCompose(c, toDatabaseName(name)),
+    '.github/workflows/ci.yml': (c) => postgresCi(c, toDatabaseName(name)),
+  } : {};
   for (const f of templateFiles) {
     // `--skip-ci` drops only the workflow; the PR template still ships.
     if (skipCi && f === '.github/workflows/ci.yml') continue;
@@ -747,6 +756,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
         const playbook = await readFile(join(TEMPLATES, 'partials', playbookFile), 'utf8');
         content = content.replace('{{PLAYBOOK}}', () => playbook.trimEnd());
       }
+      if (DB_REWRITE[f]) content = DB_REWRITE[f](content);
       if (isBun) {
         if (PROSE_REWRITE.has(f)) content = bunifyProse(content);
         else if (FILE_REWRITE[f]) content = FILE_REWRITE[f](content);
