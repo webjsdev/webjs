@@ -498,6 +498,60 @@ suite('dev reload stream pauses when hidden and reconnects with backoff (#1507)'
     assert.equal(FakeEventSource.opened, n + 1, 'showing the tab reconnects at once');
   });
 
+  // Idle close (webjs.dev.reloadIdle): a host that counts an OPEN request as
+  // activity (a pilots sandbox does, for the request's whole life) never
+  // sleeps while the stream is open, however quiet it is.
+  test('with idleMs, a stream with no events and no interaction closes, and interaction reopens it', () => {
+    const { scope, tick } = fakeClock();
+    const relay = startReloadWorker(scope, FakeEventSource, '/__webjs/events', { idleMs: 20000 });
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    relay.es.fire('hello', JSON.stringify({ boot: 'B', seq: 0 }));
+    tick(15000);
+    say(a, { type: 'activity' });
+    tick(15000);
+    assert.ok(relay.es, 'activity pushed the idle deadline out');
+    relay.es.fire('reload', JSON.stringify({ v: 'page', seq: 1 }));
+    tick(19999);
+    assert.ok(relay.es, 'an edit counts as activity too');
+    tick(RELOAD_MAX_HOLD_MS);
+    assert.equal(relay.es, null, 'quiet for idleMs: closed, nothing in flight');
+    say(a, { type: 'activity' });
+    assert.ok(relay.es, 'the next interaction reopens it');
+  });
+
+  test('an edit made while idle-closed reloads once the stream reopens', () => {
+    const { scope, tick } = fakeClock();
+    const relay = startReloadWorker(scope, FakeEventSource, '/__webjs/events', { idleMs: 20000 });
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    relay.es.fire('hello', JSON.stringify({ boot: 'B', seq: 2 }));
+    tick(20000);
+    assert.equal(relay.es, null);
+    say(a, { type: 'activity' });
+    relay.es.fire('hello', JSON.stringify({ boot: 'B', seq: 3 }));
+    tick(RELOAD_QUIET_MS);
+    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }]);
+  });
+
+  test('without idleMs the stream never closes on its own', () => {
+    const { scope, tick } = fakeClock();
+    const relay = startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    scope.onconnect({ ports: [fakePort().port] });
+    tick(10 * 60 * 1000);
+    assert.ok(relay.es, 'local dev keeps live reload with no interaction');
+  });
+
+  test('activity from a hidden tab does not reopen the stream', () => {
+    const { scope } = fakeClock();
+    const relay = startReloadWorker(scope, FakeEventSource, '/__webjs/events', { idleMs: 20000 });
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    say(a, { type: 'visibility', visible: false });
+    say(a, { type: 'activity' });
+    assert.equal(relay.es, null);
+  });
+
   test('parseHello reads the JSON hello and the bare boot id an older server sends', () => {
     assert.deepEqual(parseHello('{"boot":"b1","seq":4}'), { boot: 'b1', seq: 4 });
     assert.deepEqual(parseHello('b1'), { boot: 'b1', seq: null });

@@ -67,6 +67,8 @@ import {
 import {
   exists, kebab, resolveRequestId, shouldAccessLog, loadAppEnv, collectRouteModules,
   appTopLevelDirs, locateCoreDir,
+  setReloadIdleMs,
+  resolveReloadIdleMs,
 } from './helpers.js';
 import {
   handleCore, loadMiddleware, tryServeFrameworkStatic, tryServePublicAsset,
@@ -223,9 +225,13 @@ export async function createRequestHandler(opts) {
   // neither injects the script nor relaxes a framing header.
   // `webjs.dev.embedOrigins` in package.json is the default (#1504); a set
   // env var replaces it for one run.
-  const devTooling = dev ? await readDevToolingFromApp(appDir) : { embedOrigins: undefined, sourceLocations: undefined };
+  const devTooling = dev ? await readDevToolingFromApp(appDir) : { embedOrigins: undefined, sourceLocations: undefined, reloadIdle: undefined };
   const embedOriginsValue = dev ? resolveEmbedOrigins(process.env.WEBJS_EMBED_ORIGINS, devTooling.embedOrigins) : [];
   setEmbedOrigins(embedOriginsValue);
+  // Live-reload idle close (#1507): `webjs.dev.reloadIdle` seconds, or a set
+  // `WEBJS_DEV_RELOAD_IDLE`. Off by default; for a host that counts an open
+  // request as activity, so it can sleep while a preview tab sits open.
+  setReloadIdleMs(dev ? resolveReloadIdleMs(process.env.WEBJS_DEV_RELOAD_IDLE, devTooling.reloadIdle) : 0);
 
   const coreDir = locateCoreDir(appDir);
   // Switch the importmap between dist/ bundles and src/ per-file

@@ -128,8 +128,13 @@ function reloadSeq(data) {
  *   drive the debounce on a fake clock.
  * @param {new (url: string) => any} EventSourceCtor  the `EventSource` constructor
  * @param {string} eventsUrl  the base-path-aware `/__webjs/events` URL
+ * @param {{ idleMs?: number }} [opts]  `idleMs` (#1507, from `webjs.dev.reloadIdle`
+ *   / `WEBJS_DEV_RELOAD_IDLE`): close the stream after this long with no edit
+ *   and no interaction in any tab, and reopen on the next interaction. `0` (the
+ *   default) keeps it open while a tab is visible.
  */
-export function startReloadWorker(scope, EventSourceCtor, eventsUrl) {
+export function startReloadWorker(scope, EventSourceCtor, eventsUrl, opts) {
+  const idleMs = opts && opts.idleMs > 0 ? opts.idleMs : 0;
   /** @type {Map<any, boolean>} each connected tab's port, and whether it is visible */
   const ports = new Map();
   /** @type {string | null} the last error frame, cached for late-joining tabs */
@@ -180,6 +185,20 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl) {
   /** @type {any} */ let retryTimer = null;
   let retryDelay = RECONNECT_BASE_MS;
 
+  /** @type {any} */ let idleTimer = null;
+
+  // Idle close (#1507). A host that counts an in-flight request as activity
+  // (a pilots sandbox does, for the request's whole life) never sleeps while
+  // the stream is open, however quiet it is. With `idleMs` set, a stream that
+  // has carried nothing and seen no interaction for that long is closed, and
+  // the next interaction, a tab showing, or a host command through the embed
+  // bridge reopens it; the hello seq then says whether an edit landed meanwhile.
+  function touch() {
+    if (!idleMs) return;
+    if (idleTimer !== null) timers.clearTimeout(idleTimer);
+    idleTimer = timers.setTimeout(() => { idleTimer = null; close(); }, idleMs);
+  }
+
   function anyVisible() {
     for (const v of ports.values()) if (v) return true;
     return false;
@@ -189,8 +208,10 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl) {
     if (es || retryTimer !== null) return;
     es = new EventSourceCtor(eventsUrl);
     const mine = es;
+    touch();
     es.addEventListener('hello', (e) => {
       retryDelay = RECONNECT_BASE_MS;
+      touch();
       const h = parseHello(e.data);
       if (lastBoot !== null && (h.boot !== lastBoot || (h.seq !== null && lastSeq !== null && h.seq !== lastSeq))) {
         requestReload('reload');
@@ -199,6 +220,7 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl) {
       lastSeq = h.seq;
     });
     es.addEventListener('reload', (e) => {
+      touch();
       lastError = null;
       const n = reloadSeq(e.data);
       if (n !== null) lastSeq = n;
@@ -219,6 +241,7 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl) {
   }
 
   function close() {
+    if (idleTimer !== null) { timers.clearTimeout(idleTimer); idleTimer = null; }
     if (retryTimer !== null) { timers.clearTimeout(retryTimer); retryTimer = null; }
     if (es) { try { es.close(); } catch (_) { /* already closed */ } es = null; }
     retryDelay = RECONNECT_BASE_MS;
@@ -237,6 +260,7 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl) {
       const d = (m && m.data) || {};
       if (d.type === 'visibility') ports.set(port, d.visible !== false);
       else if (d.type === 'bye') ports.delete(port);
+      else if (d.type === 'activity') { if (!ports.get(port)) return; touch(); }
       else return;
       sync();
     };

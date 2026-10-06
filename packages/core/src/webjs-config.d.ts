@@ -146,6 +146,14 @@ export interface WebjsDevTasks {
    * one run. Ignored by `webjs start`.
    */
   sourceLocations?: boolean;
+  /**
+   * Live-reload idle close (#1507), DEV-ONLY, off by default. Seconds with no
+   * edit and no interaction after which the dev live-reload stream closes, so a
+   * host that counts an open request as activity can sleep with a preview tab
+   * open; interaction, a tab showing, or an embed-bridge host command reopens
+   * it. `WEBJS_DEV_RELOAD_IDLE` (seconds) overrides it. Ignored by `webjs start`.
+   */
+  reloadIdle?: number;
 }
 
 /** Start task orchestration in `webjs.start` (#550). Read by the CLI, not the server. */

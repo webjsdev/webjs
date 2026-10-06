@@ -488,3 +488,14 @@ test('makeShutdown exits 1 when the drain itself fails', async () => {
   });
   assert.equal(await exitCodeOf(shutdown, ['SIGTERM']), 1);
 });
+
+test('resolveReloadIdleMs: env seconds win over config seconds, anything else is off (#1507)', async () => {
+  const { resolveReloadIdleMs } = await import('../../src/dev/helpers.js');
+  assert.equal(resolveReloadIdleMs(undefined, 20), 20000);
+  assert.equal(resolveReloadIdleMs('30', 20), 30000);
+  assert.equal(resolveReloadIdleMs('0', 20), 0, 'an explicit 0 turns a config value off');
+  assert.equal(resolveReloadIdleMs('', 20), 20000, 'a blank env var does not override');
+  assert.equal(resolveReloadIdleMs(undefined, undefined), 0);
+  assert.equal(resolveReloadIdleMs('soon', undefined), 0);
+  assert.equal(resolveReloadIdleMs(undefined, '20'), 0, 'config must be a number');
+});

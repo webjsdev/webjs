@@ -171,7 +171,7 @@ in THREE co-located places that MUST stay in lockstep:
    `readRegenerateRules` (`dev-regenerate.js`, `dev.regenerate`, #967), and
    `readDevWatchPathsFromApp` (`dev.js`, `dev.watch`, #894), and
    `readDevToolingFromApp` (`dev/config.js`, `dev.embedOrigins` /
-   `dev.sourceLocations`, #1504; the env vars override it). Six readers
+   `dev.sourceLocations` / `dev.reloadIdle`, #1504, #1507; the env vars override it). Six readers
    live in the CLI rather than here: `readAppTasks`
    (`packages/cli/lib/app-tasks.js`, `dev.before` / `dev.parallel` /
    `start.before`, #550), `readDbCommands` (`packages/cli/lib/app-tasks.js`,

@@ -297,6 +297,10 @@ export function installEmbedBridge(origins, opts) {
     var d = e.data;
     if (!d || typeof d !== 'object' || d.source !== 'webjs-embed-host') return;
     known = e.origin;
+    // A host command is activity: it reopens a live-reload stream the dev
+    // server closed for idleness (webjs.dev.reloadIdle, #1507), and an edit
+    // made meanwhile then reloads the page.
+    if (typeof win.__webjsDevActivity === 'function') { try { win.__webjsDevActivity(); } catch (_) { /* no reload client */ } }
     if (d.type === 'reload') {
       win.location.reload();
     } else if (d.type === 'navigate') {
@@ -319,6 +323,7 @@ export function installEmbedBridge(origins, opts) {
     } else if (d.type === 'inspect') {
       setInspect(d.enabled === true);
     }
+    // { type: 'resume' } needs nothing beyond the activity call above.
   });
 
   return {

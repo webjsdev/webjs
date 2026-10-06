@@ -245,6 +245,18 @@ suite('dev embed bridge, browser half (#1498)', () => {
     iframe.remove();
   });
 
+  test('every host command counts as activity, so resume reopens an idle-closed reload stream (#1507)', async () => {
+    const { iframe, win, handle } = await mount();
+    let pings = 0;
+    win.__webjsDevActivity = () => { pings++; };
+    host(win, { type: 'resume' });
+    host(win, { type: 'inspect', enabled: false });
+    for (let i = 0; i < 50 && pings < 2; i++) await new Promise((r) => setTimeout(r, 10));
+    assert.equal(pings, 2, 'resume and any other host command ping the reload relay');
+    handle.uninstall();
+    iframe.remove();
+  });
+
   test('a host message that is not from the parent window is ignored', async () => {
     const { iframe, win, handle } = await mount();
     // Posted by the frame to itself: right origin, wrong source. It must run
