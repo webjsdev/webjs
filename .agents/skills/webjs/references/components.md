@@ -390,6 +390,10 @@ every hole position (a child, a plain attribute, a `?bool`, a `.prop`). So
 was previously resolved only in a child hole, which served `open=""` and let
 hydration close the element a moment later (#1443).
 
+## Lazy components: load on first sight
+
+`static lazy = true` defers a component's module until an element with its tag is first visible: scrolled within 200px of the viewport, or shown when a `hidden` tab panel or a closed `<dialog>` around it opens. Reach for it for heavy panes and dialogs a first screen does not show (an editor behind a Code tab, a data browser, a settings dialog). It stays lazy when the component that renders it imports it (`import './code-pane.ts'`): the server keeps that import for SSR, and the browser copy of the importer gets an `observeLazy` registration in its place, with no preload for the lazy subtree (#1524). Only a SIDE-EFFECT import defers; a binding import (`import { CodePane } from ...`) stays eager. Until the module arrives the element is not upgraded, so a parent calling into it uses optional calls (`this.#pane.value?.save?.()`). The loader scans light DOM only, so do not render a lazy tag inside a shadow root. A component opened by a window event rather than by becoming visible (a panel that renders nothing until an `open` event) does not fit `static lazy`: dynamically `import()` its module in the code that dispatches the event, then dispatch.
+
 ## Display-only elision
 
 A component that does no client-side work renders the same SSR'd HTML with or without its JS, so WebJs strips its import from the served source (and any vendor reachable only through it). This is automatic and conservative. A component stays elidable while it has NONE of:
