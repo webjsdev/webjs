@@ -6,6 +6,7 @@ import { jsonForScriptTag } from '../script-tag-json.js';
 import { vendorIntegrityFor } from '../importmap.js';
 import { publicEnvShim } from './env-shim.js';
 import { clientRouterEnabled } from './client-router-flag.js';
+import { embedScriptTag } from '../dev-embed.js';
 
 // Which icon metadata ROUTES the app has (`app/icon.*`, `app/apple-icon.*`).
 // Set at boot and on each route rebuild from the route table, the same shape
@@ -845,7 +846,7 @@ export function wrapHead(opts) {
 ${opts.nonce ? `<meta name="csp-nonce" content="${escapeAttr(opts.nonce)}">` : ''}
 ${metaTags.join('\n')}
 <title>${escapeHtml(title)}</title>
-${publicEnvShim({ dev: opts.dev, nonce: opts.nonce })}${clientRouterEnabled() ? '' : `\n<script${n}>window.__WEBJS_CLIENT_ROUTER__=false;</script>`}
+${publicEnvShim({ dev: opts.dev, nonce: opts.nonce })}${embedScriptTag({ dev: opts.dev, nonce: opts.nonce })}${clientRouterEnabled() ? '' : `\n<script${n}>window.__WEBJS_CLIENT_ROUTER__=false;</script>`}
 ${importMapTag({ nonce: opts.nonce })}
 ${linkTags.join('\n')}
 ${scriptTags.length ? scriptTags.join('\n') + '\n' : ''}${boot}

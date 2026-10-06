@@ -1,0 +1,1 @@
+{ "name": "embed-fixture-app", "private": true, "type": "module", "imports": { "#*": "./*" } }
