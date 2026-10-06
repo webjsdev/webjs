@@ -70,6 +70,7 @@ const KNOWN_KEYS = [
   'db', // readDbCommands (cli/lib/app-tasks.js), CLI-read (#1468)
   'doctor', // readDoctorPolicy (cli/lib/doctor.js), CLI-read (#1257)
   'ci', // readCiConfig (cli/lib/ci-config.js), CLI-read (#1471)
+  'audit', // readAuditConfig (cli/lib/audit.js), CLI-read (#1492)
 ];
 
 test('schema file is valid JSON and parses', () => {

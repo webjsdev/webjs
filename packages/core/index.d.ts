@@ -53,6 +53,8 @@ export type {
   WebjsTrailingSlash,
   WebjsCspConfig,
   WebjsDoctorConfig,
+  WebjsAuditConfig,
+  WebjsAuditIgnore,
   WebjsDoctorSeverity,
   WebjsCiConfig,
   WebjsCiStep,

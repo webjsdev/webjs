@@ -103,6 +103,8 @@ const USAGE = `webjs commands:
                                                   --json emits the structured results (with stable codes). --strict additionally fails on every remaining warning.
                                                   Per-check severity is CONFIG: map a code to off/warn/error under "webjs": { "doctor": { "gate": {...} } }
                                                   in package.json, so CI gates on a chosen subset without every warning becoming fatal
+  webjs audit [--json]                            Run the npm / bun dependency audit, failing at "webjs": { "audit": { "level" } } (default high)
+                                                  and above, minus the advisories "webjs.audit.ignore" accepts, each with its reason
   webjs types                                     Generate .webjs/routes.d.ts (typed Route union + per-route params)
   webjs typecheck [tsc args...]                   Type-check the app with the project's tsc --noEmit (non-zero on errors)
   webjs create <name> [--template full-stack|api] [--db sqlite|postgres] [--runtime node|bun] [--no-install] [--skip-ci]  Scaffold a new webjs app
@@ -225,6 +227,22 @@ const HELP = {
       '(WEBJS_ELIDE=1 then WEBJS_ELIDE=0) to cover that half.',
     ],
     examples: ['webjs elision', 'webjs elision --json', 'webjs elision --verify', 'webjs elision --verify --routes /,/blog/hello'],
+  },
+  audit: {
+    usage: 'webjs audit [--json]',
+    summary:
+      'Run the package manager\'s dependency audit (npm or bun, found by the nearest lockfile) and fail on any advisory at or above ' +
+      'webjs.audit.level (default high), except the ones webjs.audit.ignore lists, each with the reason it is safe to accept.',
+    options: [
+      { flag: '--json', description: 'Emit { ok, manager, level, failing[], ignored[], stale[] } as JSON.' },
+    ],
+    notes: [
+      'Config lives in package.json, in one place:',
+      '"webjs": { "audit": { "level": "high", "ignore": [{ "id": "GHSA-...", "reason": "..." }] } }.',
+      'An entry with no reason, an unknown key, or a bad level exits 1 naming it. An ignored id',
+      'the audit no longer reports is printed as stale, so the list shrinks when a fix ships.',
+    ],
+    examples: ['webjs audit', 'webjs audit --json'],
   },
   doctor: {
     usage: 'webjs doctor [--json] [--strict]',
@@ -749,7 +767,32 @@ async function main() {
         const useBrowserDir = !hasConfig && !serverOnly && existsSync(join(cwd, 'test', 'browser'));
         // Only resolve + run when there is actually something to run, so a
         // `webjs test` with no browser tests stays a no-op (not a hard error).
+        // Zero browser test files is a pass, not a failure (#1491). WTR throws
+        // `Could not find any test files` on an empty match, so an app with no
+        // browser tests yet (what `gallery:clear` leaves) would fail its own CI
+        // on this layer. Check the globs first and skip with a note. `null`
+        // patterns mean the config's `files` is not a plain literal, so WTR
+        // runs unchanged and reports for itself.
+        let noBrowserTests = false;
         if (hasConfig || useBrowserDir) {
+          const { readFile } = await import('node:fs/promises');
+          const { readWtrFilePatterns, findBrowserTestFiles } = await import('../lib/browser-test-files.js');
+          let patterns = ['test/browser/**/*.test.js'];
+          if (hasConfig) {
+            const cfg = existsSync(join(cwd, 'web-test-runner.config.js'))
+              ? 'web-test-runner.config.js' : 'web-test-runner.config.mjs';
+            patterns = readWtrFilePatterns(await readFile(join(cwd, cfg), 'utf8'));
+          }
+          if (patterns && (await findBrowserTestFiles(cwd, patterns)).length === 0) {
+            noBrowserTests = true;
+            console.log(
+              '\nwebjs test: no browser tests yet (no file matches '
+              + (patterns.length ? patterns.join(', ') : 'the configured `files`')
+              + '), skipping the browser layer.',
+            );
+          }
+        }
+        if ((hasConfig || useBrowserDir) && !noBrowserTests) {
           // Resolve the app's @web/test-runner bin and spawn it with the current
           // runtime, dropping `npx` (#570; absent in a pure oven/bun image).
           let wtrPath;
@@ -975,6 +1018,60 @@ async function main() {
         }
         process.exit(1);
       }
+      break;
+    }
+    case 'audit': {
+      // Dependency audit with a reviewable allowlist (#1492). npm has no ignore
+      // flag, so both managers' JSON reports are parsed and filtered the same
+      // way here (see lib/audit.js for why each part fails closed).
+      const cwd = process.cwd();
+      const json = rest.includes('--json');
+      const { readAuditConfigFrom, detectAuditManager, parseAuditReport, applyAuditConfig } = await import('../lib/audit.js');
+      const { config, errors } = readAuditConfigFrom(cwd);
+      if (errors.length) {
+        for (const e of errors) console.error(`webjs audit: ${e}`);
+        process.exit(1);
+      }
+      const pm = detectAuditManager(cwd);
+      if (pm !== 'npm' && pm !== 'bun') {
+        console.error(`webjs audit: drives npm and bun audits; this project uses ${pm}. Run \`${pm} audit\` directly.`);
+        process.exit(1);
+      }
+      const { spawnSync } = await import('node:child_process');
+      const res = spawnSync(pm, ['audit', '--json'], {
+        cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, shell: process.platform === 'win32',
+      });
+      const advisories = res.error ? null : parseAuditReport(pm, res.stdout || '');
+      if (!advisories) {
+        console.error(`webjs audit: \`${pm} audit --json\` produced no report${res.error ? ` (${res.error.message})` : ''}.`);
+        if (res.stderr) console.error(res.stderr.trim());
+        process.exit(1);
+      }
+      const { failing, ignored, stale } = applyAuditConfig(advisories, config);
+      const reasonOf = (id) => config.ignore.find((i) => i.id.toUpperCase() === id.toUpperCase())?.reason || '';
+      if (json) {
+        console.log(JSON.stringify({
+          ok: failing.length === 0, manager: pm, level: config.level, failing,
+          ignored: ignored.map((a) => ({ ...a, reason: reasonOf(a.id) })), stale,
+        }, null, 2));
+        process.exit(failing.length ? 1 : 0);
+      }
+      console.log(`webjs audit: ${pm} audit, failing at ${config.level} and above`);
+      for (const a of ignored) {
+        console.log(`  ignored ${a.id} (${a.severity}, ${a.packages.join(', ')}): ${reasonOf(a.id)}`);
+      }
+      for (const i of stale) {
+        console.log(`  stale   ${i.id} is no longer reported; remove it from webjs.audit.ignore`);
+      }
+      if (failing.length) {
+        for (const a of failing) {
+          console.log(`  FAIL    ${a.id} (${a.severity}, ${a.packages.join(', ')}): ${a.title}${a.url ? ` ${a.url}` : ''}`);
+        }
+        console.log(`\nwebjs audit: ${failing.length} advisor${failing.length === 1 ? 'y' : 'ies'} at ${config.level} or above. ` +
+          'Upgrade the dependency, or, when no patched release exists and it cannot reach users, add it to webjs.audit.ignore with a reason.');
+        process.exit(1);
+      }
+      console.log(`webjs audit: no ${config.level}+ advisories outside the allowlist ✓`);
       break;
     }
     case 'doctor': {

@@ -1931,3 +1931,38 @@ test('framework-links is wired into the runner and carries its declared code', a
   assert.ok(r, 'the check runs');
   assert.equal(r.code, 'FRAMEWORK_LINKS');
 });
+
+// WORKSPACE_OVERRIDES (#1492): npm and bun honour `overrides` only at the
+// workspace root, so the scaffold's security floors are silently dropped when
+// the app is a workspace member. Doctor warns, naming the root.
+const { checkWorkspaceOverrides } = await import(resolve(CLI_LIB_DIR, 'doctor', 'probes', 'workspace-overrides.js'));
+
+test('workspace-overrides: warns for overrides in a workspace member', () => {
+  const root = mkdtempSync(join(tmpdir(), 'webjs-doctor-ws-'));
+  cleanup.push(root);
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ private: true, workspaces: ['apps/*'] }));
+  const app = join(root, 'apps', 'web');
+  mkdirSync(app, { recursive: true });
+  writeFileSync(join(app, 'package.json'), JSON.stringify({ name: 'web', overrides: { 'basic-ftp': '^6.2.2' } }));
+  const r = checkWorkspaceOverrides(app);
+  assert.equal(r.status, 'warn');
+  assert.match(r.message, /member of the workspace at \.\.\/\.\.\/package\.json/);
+  assert.match(r.fix, /Move the `overrides` block into \.\.\/\.\.\/package\.json/);
+});
+
+test('workspace-overrides: passes for a standalone app, a non-member, or no overrides', () => {
+  const root = mkdtempSync(join(tmpdir(), 'webjs-doctor-ws-'));
+  cleanup.push(root);
+  // A parent workspace whose globs do NOT include the app is not its root.
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ private: true, workspaces: ['packages/*'] }));
+  const app = join(root, 'apps', 'web');
+  mkdirSync(app, { recursive: true });
+  writeFileSync(join(app, 'package.json'), JSON.stringify({ name: 'web', overrides: { 'basic-ftp': '^6.2.2' } }));
+  assert.equal(checkWorkspaceOverrides(app).status, 'pass', 'not a member: its overrides apply');
+  // yarn's object form, now including the app, flips it to warn (counterfactual).
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ private: true, workspaces: { packages: ['apps/*'] } }));
+  assert.equal(checkWorkspaceOverrides(app).status, 'warn');
+  // No overrides at all: nothing to say.
+  writeFileSync(join(app, 'package.json'), JSON.stringify({ name: 'web' }));
+  assert.equal(checkWorkspaceOverrides(app).status, 'pass');
+});

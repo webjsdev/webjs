@@ -18,6 +18,7 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { bunifyProse, bunifyDockerfile, bunifyCompose, bunifyCi } from './runtime-rewrite.js';
+import { postgresCompose, postgresCi } from './db-rewrite.js';
 import { assertValidAppName, toDatabaseName } from './app-name.js';
 import { isGalleryAppShellFile } from './gallery-shell-files.js';
 import { detectPackageManager } from './package-manager.js';
@@ -463,7 +464,12 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // The Tailwind v4 CLI that css:build runs to compile public/input.css into
       // the static public/tailwind.css the layout links. UI templates only (the
       // api template has no CSS). Build tooling, never shipped to the runtime.
-      ...(isApi ? {} : { '@tailwindcss/cli': '^4.1.0' }),
+      // `tailwindcss` itself is declared too (#1493): public/input.css starts
+      // with `@import "tailwindcss"`, so the app imports that package directly.
+      // Leaving it transitive (via @tailwindcss/cli) breaks under bun's isolated
+      // linker and pnpm, which link only declared packages into the app's
+      // node_modules, so the compile fails with `Can't resolve 'tailwindcss'`.
+      ...(isApi ? {} : { '@tailwindcss/cli': '^4.1.0', tailwindcss: '^4.1.0' }),
       // tsserver plugin, wired into tsconfig below. Gives the language
       // INTELLIGENCE (go-to-def, completions, diagnostics, hover inside html``
       // templates) in any tsserver editor with NO editor plugin installed,
@@ -511,8 +517,18 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     // `npm audit fix --force` proposes: its @web/test-runner-chrome@1 still
     // declares puppeteer-core ^24, so the same vulnerable chain resolves and
     // the audit stays red after a breaking major.
+    //
+    // basic-ftp (#1492) is the same kind of floor for the same runner: it is
+    // reached through puppeteer-core's proxy-agent chain and 6.2.2 is its fixed
+    // release (GHSA-c475-qrg2-pj4r), so an install that still resolves an older
+    // chain cannot land below it.
+    //
+    // Overrides are honoured ONLY at a workspace root. When this app is a
+    // member of an npm or bun workspace, move this block into the root
+    // package.json (`webjs doctor` warns with WORKSPACE_OVERRIDES until then).
     overrides: {
       'puppeteer-core': '^25.7.0',
+      'basic-ftp': '^6.2.2',
     },
     // Dev + start task orchestration (#550). `webjs dev` / `webjs start` read
     // `before` and run it in-process, so `npm run dev` / `start` (thin aliases
@@ -564,6 +580,23 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // everything else keeps its default warn. Add a code with "off" to
       // silence it, or "error" to make it fatal too.
       doctor: { gate: { UNMARKED_ASSET_LINKS: 'error' } },
+      // The dependency audit's allowlist (#1492), the ONE place an accepted
+      // advisory is listed, each with the reason it is safe. `webjs audit`
+      // (the CI step below) fails on every other advisory at `level` or above,
+      // and prints an entry as stale once the audit stops reporting it, so
+      // remove it then. Only accept an advisory with NO patched release that
+      // the app's users cannot reach; anything with a fix gets upgraded.
+      audit: {
+        level: 'high',
+        ignore: [
+          {
+            id: 'GHSA-vfj7-8cjw-p6xm',
+            reason: 'braces <=3.0.3 (no patched release) is reached only through dev tooling: the Tailwind '
+              + 'CLI file watcher and the test runner globber, on glob patterns this repo writes. Nothing '
+              + 'in the served app expands a pattern from request input.',
+          },
+        ],
+      },
       // Local CI (#1471), the Rails `bin/ci` posture. `npm run ci` runs this
       // list on a developer machine and the generated GitHub workflow runs the
       // SAME list through the same command, so the two cannot drift. Bare
@@ -581,10 +614,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
               { title: 'Conventions', run: 'webjs check' },
               { title: 'Health', run: 'webjs doctor' },
               { title: 'Types', run: 'webjs typecheck' },
-              {
-                title: 'Security: dependency audit',
-                run: isBun ? 'bun audit --audit-level=high' : 'npm audit --audit-level=high',
-              },
+              // `webjs audit` (#1492) runs `npm audit` or `bun audit` (by the
+              // nearest lockfile) and fails at webjs.audit.level, minus the
+              // advisories webjs.audit.ignore accepts below.
+              { title: 'Security: dependency audit', run: 'webjs audit' },
               {
                 title: 'Tests',
                 steps: [
@@ -721,6 +754,14 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     'compose.yaml': bunifyCompose,
     '.github/workflows/ci.yml': bunifyCi,
   };
+  // Database axis (#1490): the compose + CI templates are the SQLite shape, so
+  // a --db postgres app derives its variant (a Postgres service, DATABASE_URL
+  // pointed at it) by a pure transform, like the Bun rewrite above. Applied
+  // FIRST; the two touch disjoint lines, so they compose. SQLite copies as is.
+  const DB_REWRITE = dialect === 'postgres' ? {
+    'compose.yaml': (c) => postgresCompose(c, toDatabaseName(name)),
+    '.github/workflows/ci.yml': (c) => postgresCi(c, toDatabaseName(name)),
+  } : {};
   for (const f of templateFiles) {
     // `--skip-ci` drops only the workflow; the PR template still ships.
     if (skipCi && f === '.github/workflows/ci.yml') continue;
@@ -742,6 +783,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
         const playbook = await readFile(join(TEMPLATES, 'partials', playbookFile), 'utf8');
         content = content.replace('{{PLAYBOOK}}', () => playbook.trimEnd());
       }
+      if (DB_REWRITE[f]) content = DB_REWRITE[f](content);
       if (isBun) {
         if (PROSE_REWRITE.has(f)) content = bunifyProse(content);
         else if (FILE_REWRITE[f]) content = FILE_REWRITE[f](content);

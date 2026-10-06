@@ -1,7 +1,7 @@
 # Production image for the {{APP_NAME}} webjs app.
 #
-# Works with a plain `docker build` / `docker compose up`, and is the same
-# artifact the webdeploy hosting tool (ubicloud + uncloud) builds and ships.
+# Works with a plain `docker build` / `docker compose up`, and with any host
+# that builds from a Dockerfile.
 #
 # webjs serves .ts directly by stripping types at the runtime layer, so there is
 # NO JavaScript build step (webjs is buildless end to end; there is no bundler or
@@ -41,7 +41,7 @@ COPY . .
 # step runs `webjs db migrate`). See the CMD note below.
 
 ENV NODE_ENV=production
-# webjs start reads $PORT (default 8080). compose / uncloud / Railway set it.
+# webjs start reads $PORT (default 8080). compose and most hosts set it.
 ENV PORT=8080
 EXPOSE 8080
 

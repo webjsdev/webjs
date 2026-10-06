@@ -355,6 +355,12 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     }], 'webjs.dev.regenerate recompiles the static CSS on request (#967)');
     assert.equal(pkg.scripts['css:build'], 'tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify');
     assert.ok(pkg.devDependencies['@tailwindcss/cli'], 'the Tailwind CLI is a devDependency');
+    // public/input.css does `@import "tailwindcss"`, so the package is a DIRECT
+    // dependency (#1493): bun's isolated linker and pnpm link only declared
+    // packages, so a transitive-only tailwindcss fails the compile there.
+    assert.ok(pkg.devDependencies.tailwindcss, 'tailwindcss is declared directly (input.css imports it)');
+    assert.equal(pkg.devDependencies.tailwindcss.split('.')[0], pkg.devDependencies['@tailwindcss/cli'].split('.')[0],
+      'tailwindcss is on the same major as @tailwindcss/cli');
     assert.ok(pkg.dependencies['@webjsdev/core']);
     assert.ok(pkg.dependencies['@webjsdev/server']);
     assert.ok(pkg.dependencies['drizzle-orm'], 'drizzle-orm dep present');
@@ -467,6 +473,10 @@ test('scaffoldApp api: writes API-only template (no layout, no components)', asy
     assert.ok(!existsSync(join(appDir, 'app', 'page.ts')), 'no page for api');
     assert.ok(!existsSync(join(appDir, 'components', 'theme-toggle.ts')),
       'no theme-toggle for api');
+    // No CSS, so no Tailwind packages at all (#1493 is UI-templates only).
+    const apiPkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
+    assert.ok(!apiPkg.devDependencies.tailwindcss && !apiPkg.devDependencies['@tailwindcss/cli'],
+      'the api template declares no Tailwind packages');
   } finally {
     restore();
     await rm(cwd, { recursive: true, force: true });

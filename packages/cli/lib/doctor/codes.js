@@ -49,6 +49,7 @@ export const DOCTOR_CODES = {
   'Component elision (what the browser drops)': 'ELISION_COMPONENTS',
   'Static build outputs (dev.regenerate freshness)': 'STATIC_ASSET_FRESHNESS',
   'Asset urls (unmarked stylesheet links)': 'UNMARKED_ASSET_LINKS',
+  'workspace-overrides': 'WORKSPACE_OVERRIDES',
 };
 
 /**
