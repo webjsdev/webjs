@@ -235,3 +235,44 @@ test('webjs.dev.reloadIdle and WEBJS_DEV_RELOAD_IDLE set the relay idle close (#
     else process.env.WEBJS_DEV_RELOAD_IDLE = saved;
   }
 });
+
+// #1516: a dev page carries the reload state it was rendered at, and the client
+// hands it to the relay, which re-checks it on every reconnect.
+test('a dev page renders the reload state meta when a reload stream exists, and the client sends it', async () => {
+  const { setDevReloadState } = await import('../../src/dev-reload-state.js');
+  const appDir = makeApp();
+  const app = await createRequestHandler({ appDir, dev: true });
+  try {
+    const noStream = await (await app.handle(new Request('http://x/'))).text();
+    assert.doesNotMatch(noStream, /webjs-dev-reload/, 'no reload stream (embedded handler): no meta');
+
+    let seq = 7;
+    setDevReloadState(() => ({ boot: 'boot-1', seq }));
+    const html = await (await app.handle(new Request('http://x/'))).text();
+    const m = html.match(/<meta name="webjs-dev-reload" content="([^"]*)">/);
+    assert.ok(m, 'the meta tag is rendered');
+    assert.deepEqual(JSON.parse(m[1].replace(/&quot;/g, '"')), { boot: 'boot-1', seq: 7 });
+    seq = 8;
+    const later = await (await app.handle(new Request('http://x/'))).text();
+    assert.match(later, /&quot;seq&quot;:8/, 'each render reads the current seq');
+
+    const clientSrc = await (await app.handle(new Request('http://x/__webjs/reload.js'))).text();
+    assert.match(clientSrc, /meta\[name="webjs-dev-reload"\]/, 'the client reads the meta');
+    assert.match(clientSrc, /type: 'page'/, 'and sends it to the relay');
+  } finally {
+    setDevReloadState(null);
+  }
+});
+
+test('a production page never renders the reload state meta', async () => {
+  const { setDevReloadState } = await import('../../src/dev-reload-state.js');
+  const appDir = makeApp();
+  setDevReloadState(() => ({ boot: 'boot-1', seq: 1 }));
+  try {
+    const app = await createRequestHandler({ appDir, dev: false });
+    const html = await (await app.handle(new Request('http://x/'))).text();
+    assert.doesNotMatch(html, /webjs-dev-reload/);
+  } finally {
+    setDevReloadState(null);
+  }
+});

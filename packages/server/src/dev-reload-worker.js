@@ -98,6 +98,23 @@ export function parseHello(data) {
   return { boot: String(data), seq: null };
 }
 
+/**
+ * Whether a tab's page is behind the server (#1516). `page` is the
+ * `{ boot, seq }` the page was rendered at (the `webjs-dev-reload` meta tag),
+ * `boot` / `seq` what the server reports now. A different boot id is a
+ * restarted process; a different seq from the same process is an edit the page
+ * has not picked up. A missing seq on either side cannot say, so it is not
+ * stale (the boot id alone still decides).
+ * @param {{ boot: string, seq: number | null } | undefined} page
+ * @param {string | null} boot
+ * @param {number | null} seq
+ */
+export function pageIsStale(page, boot, seq) {
+  if (!page || boot === null) return false;
+  if (page.boot !== boot) return true;
+  return page.seq !== null && seq !== null && page.seq !== seq;
+}
+
 /** A reload frame's `seq` (#1507), or null when it carries none. @param {string} data */
 function reloadSeq(data) {
   try {
@@ -118,6 +135,16 @@ function reloadSeq(data) {
  * server's boot id and reload `seq`, and a difference from what this relay last
  * saw is a reload.
  *
+ * Every reconnect also re-checks each tab against the state its PAGE was
+ * rendered at (#1516). A tab sends `{ type: 'page', boot, seq }` from the
+ * page's `webjs-dev-reload` meta tag when it connects. A frame emitted while no
+ * stream was there to carry it is gone: a host that holds the quiet stream
+ * across a suspend and closes it at the next wake swallows the reload the wake
+ * itself caused, a fresh relay has no previous hello to compare with, and a tab
+ * that connects after a reload was fanned out never got it. In each case the
+ * next hello (or the tab's own connect) shows the page is behind, and that tab
+ * reloads.
+ *
  * The browser's own EventSource retry is replaced by an explicit one with
  * backoff (300ms doubling to 30s, reset by the next `hello`), so a server that
  * is gone for a while is probed less and less often instead of every 300ms.
@@ -137,6 +164,8 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl, opts) {
   const idleMs = opts && opts.idleMs > 0 ? opts.idleMs : 0;
   /** @type {Map<any, boolean>} each connected tab's port, and whether it is visible */
   const ports = new Map();
+  /** @type {Map<any, { boot: string, seq: number | null }>} the state each tab's page reflects (#1516) */
+  const pages = new Map();
   /** @type {string | null} the last error frame, cached for late-joining tabs */
   let lastError = null;
   /** @type {string | null} the last-seen per-process boot id (#893) */
@@ -157,13 +186,26 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl, opts) {
 
   /** @type {string} the strongest verdict seen in the CURRENT batch (#1398) */
   let batchVerdict = 'page';
+  /** Whether the batch reloads every tab, or only the stale ones in `batchPorts` (#1516). */
+  let batchAll = false;
+  /** @type {Set<any>} tabs whose page fell behind, reloaded on their own */
+  const batchPorts = new Set();
 
   function emitReload() {
     if (quietTimer !== null) { timers.clearTimeout(quietTimer); quietTimer = null; }
     if (capTimer !== null) { timers.clearTimeout(capTimer); capTimer = null; }
     const v = batchVerdict;
     batchVerdict = 'page';   // a fresh batch starts at the weakest verdict
-    fanout({ type: 'reload', verdict: v });
+    const msg = { type: 'reload', verdict: v };
+    const targets = batchAll ? Array.from(ports.keys()) : Array.from(batchPorts).filter((p) => ports.has(p));
+    batchAll = false;
+    batchPorts.clear();
+    for (const p of targets) {
+      // The tab applies this reload, so from here its page reflects the state
+      // the relay knows now; a later hello compares against that.
+      if (pages.has(p) && typeof lastBoot === 'string') pages.set(p, { boot: lastBoot, seq: lastSeq });
+      try { p.postMessage(msg); } catch (_) { ports.delete(p); pages.delete(p); }
+    }
   }
 
   /** Strength rank; an unrecognised name ranks strongest, so it can only ever
@@ -173,8 +215,12 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl, opts) {
     return i === -1 ? 0 : i;
   }
 
-  /** @param {string} verdict */
-  function requestReload(verdict) {
+  /**
+   * @param {string} verdict
+   * @param {any} [port]  reload only this tab (its page fell behind); omitted, every tab
+   */
+  function requestReload(verdict, port) {
+    if (port === undefined) batchAll = true; else batchPorts.add(port);
     if (rank(verdict) < rank(batchVerdict)) batchVerdict = VERDICT_STRENGTH[rank(verdict)];
     if (quietTimer !== null) timers.clearTimeout(quietTimer);
     quietTimer = timers.setTimeout(emitReload, RELOAD_QUIET_MS);
@@ -199,6 +245,13 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl, opts) {
     idleTimer = timers.setTimeout(() => { idleTimer = null; close(); }, idleMs);
   }
 
+  // Reload every tab whose page is behind what the server reports now (#1516).
+  function checkPages() {
+    for (const [p, page] of pages) {
+      if (pageIsStale(page, lastBoot, lastSeq)) requestReload('reload', p);
+    }
+  }
+
   function anyVisible() {
     for (const v of ports.values()) if (v) return true;
     return false;
@@ -218,6 +271,7 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl, opts) {
       }
       lastBoot = h.boot;
       lastSeq = h.seq;
+      checkPages();
     });
     es.addEventListener('reload', (e) => {
       touch();
@@ -258,8 +312,18 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl, opts) {
     ports.set(port, true);
     port.onmessage = (m) => {
       const d = (m && m.data) || {};
+      if (d.type === 'page') {
+        // The state this tab's page was rendered at (#1516). Checked now
+        // against what the relay already knows, so a tab that missed a fanned
+        // out reload catches up, and again on every hello.
+        if (typeof d.boot === 'string') {
+          pages.set(port, { boot: d.boot, seq: typeof d.seq === 'number' ? d.seq : null });
+          if (pageIsStale(pages.get(port), lastBoot, lastSeq)) requestReload('reload', port);
+        }
+        return;
+      }
       if (d.type === 'visibility') ports.set(port, d.visible !== false);
-      else if (d.type === 'bye') ports.delete(port);
+      else if (d.type === 'bye') { ports.delete(port); pages.delete(port); }
       else if (d.type === 'activity') { if (!ports.get(port)) return; touch(); }
       else return;
       sync();

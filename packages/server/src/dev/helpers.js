@@ -531,12 +531,27 @@ function __webjsDirectEvents() {
 // and its hello says whether an edit landed meanwhile. \`bye\` on pagehide
 // drops the tab outright, and a bfcache restore reports in again.
 function __webjsReportVisibility(send) {
+  // The state this page was rendered at (#1516). The relay compares it with
+  // the server's on connect and on every reconnect, so an edit whose reload
+  // frame was lost (a stream replaced at a host's wake, a fresh relay, a tab
+  // that connected after the fanout) still reloads this page.
+  // Sent again on a bfcache restore, since \`bye\` dropped this tab's entry.
+  function sendPage() {
+    try {
+      var metas = document.querySelectorAll('meta[name="webjs-dev-reload"]');
+      var meta = metas.length ? metas[metas.length - 1] : null;
+      if (!meta) return;
+      var page = JSON.parse(meta.getAttribute('content') || 'null');
+      if (page && typeof page.boot === 'string') send({ type: 'page', boot: page.boot, seq: typeof page.seq === 'number' ? page.seq : null });
+    } catch (_) { /* no usable state: the relay's own hello check still runs */ }
+  }
+  sendPage();
   function report() {
     try { send({ type: 'visibility', visible: document.visibilityState !== 'hidden' }); } catch (_) { /* relay gone */ }
   }
   document.addEventListener('visibilitychange', report);
   addEventListener('pagehide', function () { try { send({ type: 'bye' }); } catch (_) { /* relay gone */ } });
-  addEventListener('pageshow', function (e) { if (e.persisted) report(); });
+  addEventListener('pageshow', function (e) { if (e.persisted) { sendPage(); report(); } });
   report();
   // Interaction keeps an idle-closing stream (webjs.dev.reloadIdle) open and
   // reopens a closed one, at most once a second. The dev embed bridge calls

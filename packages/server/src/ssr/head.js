@@ -7,6 +7,7 @@ import { vendorIntegrityFor } from '../importmap.js';
 import { publicEnvShim } from './env-shim.js';
 import { clientRouterEnabled } from './client-router-flag.js';
 import { embedScriptTag } from '../dev-embed.js';
+import { devReloadState } from '../dev-reload-state.js';
 
 // Which icon metadata ROUTES the app has (`app/icon.*`, `app/apple-icon.*`).
 // Set at boot and on each route rebuild from the route table, the same shape
@@ -315,8 +316,12 @@ export function wrapHead(opts) {
     : '';
 
   const boot = (imports || lazyBoot) ? `<script type="module"${n}>\n${imports}${lazyBoot}\n</script>` : '';
+  // The reload state this page is rendered at (#1516), so the reload client can
+  // tell on every reconnect whether the page fell behind the server.
+  const reloadState = opts.dev ? devReloadState() : null;
   const reload = opts.dev
-    ? `<script type="module"${n} src="${escapeAttr(withBasePath('/__webjs/reload.js', bp))}"></script>`
+    ? (reloadState ? `<meta name="webjs-dev-reload" content="${escapeAttr(JSON.stringify(reloadState))}">\n` : '') +
+      `<script type="module"${n} src="${escapeAttr(withBasePath('/__webjs/reload.js', bp))}"></script>`
     : '';
   const suspenseBoot = opts.streaming
     ? `<script${n}>(function(){` +
