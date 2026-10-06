@@ -238,6 +238,31 @@
         }
       }
     },
+    "audit": {
+      "description": "`webjs audit` (#1492): the dependency audit's failing level and its allowlist, in one place. `webjs audit` runs `npm audit` or `bun audit` (by the nearest lockfile) and fails on any advisory at or above `level` that `ignore` does not list. Read by the CLI (readAuditConfig in packages/cli/lib/audit.js), NOT the server. A malformed block (an unknown key, a bad level, an entry without an id or a reason) exits 1, so an allowlist cannot silently stop applying.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "description": "The lowest severity that fails the audit. Default high.",
+          "type": "string",
+          "enum": ["low", "moderate", "high", "critical"]
+        },
+        "ignore": {
+          "description": "Advisories the app accepts, each with the reason it is safe. Only for an advisory with no patched release that the app's users cannot reach; an id the audit no longer reports is printed as stale.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "reason"],
+            "properties": {
+              "id": { "description": "The advisory id, GHSA-xxxx-xxxx-xxxx or CVE-YYYY-NNNN.", "type": "string", "pattern": "^(GHSA(-[0-9a-zA-Z]{4}){3}|CVE-[0-9]{4}-[0-9]+)$" },
+              "reason": { "description": "Why accepting it is safe (which dependency chain reaches it, and why that chain cannot reach users).", "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
     "ci": {
       "description": "Local CI (#1471): the step list `webjs ci` runs on a developer machine, and the same list a cloud pipeline runs by calling `npm run ci`, so the two cannot drift. Read by the CLI (readCiConfig in packages/cli/lib/ci-config.js), NOT the server. A step is a string (shorthand for a command whose title is the command), a { title, run, env? } command, or a { title, steps, parallel? } group. `parallel` is a slot count (default 1, sequential); a group nested inside a parallel group takes ONE slot and runs its steps in order, so it cannot declare `parallel` itself.",
       "type": "object",

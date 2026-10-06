@@ -275,6 +275,25 @@ Three levels, the same scale ESLint uses: `error` fails the exit, `warn` reports
 
 Two guarantees worth knowing. A result that could not check (a network or toolchain outage) is capped at `warn` and can never be escalated, so a jspm or npm outage cannot red your CI. And a malformed gate exits 1 naming the offender rather than being ignored, so a typo cannot silently un-gate the build. That covers an unknown code, a bad severity, a wrong shape (a non-object `doctor` or `gate`), and a misspelled sibling of `gate` such as `gates`, since every one of those would otherwise leave the build un-gated while the `package.json` looks gated. Under `--json` the offenders come back as a `configErrors` array alongside an empty `results`, each entry a `{ kind }` of `malformed` / `unknown-key` / `unknown-code` / `bad-severity`. Wire it up with one workflow step, `npm run doctor`, and change what is fatal in `package.json` rather than in the workflow.
 
+### Dependency audit allowlist
+
+`webjs audit` runs `npm audit` or `bun audit` (by the nearest lockfile, so a workspace member uses the root's) and fails on any advisory at or above `webjs.audit.level` (default `high`) that `webjs.audit.ignore` does not list. The scaffold's `Security: dependency audit` CI step runs it.
+
+```jsonc
+{ "webjs": {
+  "audit": {
+    "level": "high",
+    "ignore": [
+      { "id": "GHSA-vfj7-8cjw-p6xm", "reason": "braces has no patched release; reached only through dev tooling" }
+    ]
+  }
+} }
+```
+
+The allowlist is the ONE place an accepted advisory lives, each with its reason. Accept only an advisory with no patched release that the app's users cannot reach; upgrade anything that has a fix. Never "fix" a red audit with `npm audit fix --force`, which proposes breaking majors that often keep the same vulnerable chain. A malformed block (unknown key, bad level, an entry without an id or a reason) exits 1, and an id the audit stops reporting prints as stale, so remove it then.
+
+Overrides apply only at a WORKSPACE ROOT. The scaffold's `overrides` block (the `puppeteer-core` and `basic-ftp` security floors) is ignored once the app is a member of an npm or bun workspace, so move it into the root `package.json`; `webjs doctor` warns with `WORKSPACE_OVERRIDES` until you do.
+
 ## Observability
 
 Wired at the single response funnel, covering pages, routes, actions, and assets uniformly.

@@ -112,3 +112,35 @@ test('no template mentions webdeploy, ubicloud or uncloud', () => {
   walk(TEMPLATES);
   assert.deepEqual(hits, []);
 });
+
+// #1492: the audit step and its one-place allowlist.
+for (const runtime of ['node', 'bun']) {
+  test(`${runtime}: the audit step is webjs audit, with a reasoned allowlist and the basic-ftp floor`, async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'webjs-scaffold-audit-'));
+    const restore = mute();
+    try {
+      await scaffoldApp('audit-app', cwd, { template: 'full-stack', install: false, runtime });
+    } finally {
+      restore();
+    }
+    try {
+      const pkg = JSON.parse(readFileSync(join(cwd, 'audit-app', 'package.json'), 'utf8'));
+      const flatten = (steps) => steps.flatMap((s) => (s.steps ? flatten(s.steps) : [s]));
+      const audit = flatten(pkg.webjs.ci.steps).find((s) => s.title === 'Security: dependency audit');
+      assert.equal(audit.run, 'webjs audit');
+      assert.equal(pkg.webjs.audit.level, 'high');
+      assert.ok(pkg.webjs.audit.ignore.length > 0);
+      for (const entry of pkg.webjs.audit.ignore) {
+        assert.match(entry.id, /^GHSA-/);
+        assert.ok(entry.reason.length > 40, `${entry.id} carries a real reason`);
+      }
+      assert.equal(pkg.overrides['basic-ftp'], '^6.2.2');
+      assert.equal(pkg.overrides['puppeteer-core'], '^25.7.0');
+      // The scaffold's own config passes the CLI's fail-closed reader.
+      const { readAuditConfig } = await import('../../packages/cli/lib/audit.js');
+      assert.deepEqual(readAuditConfig(pkg).errors, []);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+}

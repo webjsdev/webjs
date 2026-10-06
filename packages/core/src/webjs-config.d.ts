@@ -212,6 +212,27 @@ export interface WebjsDoctorConfig {
   gate?: Record<string, WebjsDoctorSeverity>;
 }
 
+/** One advisory `webjs audit` accepts (#1492): its id and why that is safe. */
+export interface WebjsAuditIgnore {
+  /** The advisory id, `GHSA-xxxx-xxxx-xxxx` or `CVE-YYYY-NNNN`. */
+  id: string;
+  /** Why accepting it is safe: which chain reaches it, and why that chain cannot reach users. Required. */
+  reason: string;
+}
+
+/**
+ * `webjs.audit` (#1492): the dependency audit's failing level and its
+ * allowlist, in one place. `webjs audit` runs `npm audit` or `bun audit` and
+ * fails on any advisory at or above `level` that `ignore` does not list. A
+ * malformed block exits 1, so an allowlist cannot silently stop applying.
+ */
+export interface WebjsAuditConfig {
+  /** The lowest severity that fails the audit. Default `'high'`. */
+  level?: 'low' | 'moderate' | 'high' | 'critical';
+  /** Advisories with no patched release that the app's users cannot reach. */
+  ignore?: WebjsAuditIgnore[];
+}
+
 /** The object form of `webjs.csp` (the non-boolean shape). */
 export interface WebjsCspConfig {
   /**
@@ -291,6 +312,13 @@ export interface WebjsConfig {
    * server readers.
    */
   doctor?: WebjsDoctorConfig;
+
+  /**
+   * `webjs audit` policy (#1492): the failing severity and the advisories the
+   * app accepts, each with a reason. Read by the CLI
+   * (`packages/cli/lib/audit.js`), NOT the server.
+   */
+  audit?: WebjsAuditConfig;
 
   /** Per-path response-header rules, shaped like Next's. */
   headers?: WebjsHeaderRule[];

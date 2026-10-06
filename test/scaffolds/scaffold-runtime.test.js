@@ -58,12 +58,13 @@ test('bun scaffold: package.json scripts, trustedDependencies, lockfile flavor',
       inputs: ['app', 'components', 'modules', 'lib', 'public/input.css'],
     }]);
     const regenCmds = p.webjs.dev.regenerate.map((r) => r.command);
-    // The local CI list (#1471) is held to the same bar, and its audit step is
-    // the Bun one (the app has bun.lock, not package-lock.json).
+    // The local CI list (#1471) is held to the same bar. Its audit step is
+    // `webjs audit` on both runtimes (#1492), which runs `bun audit` here by
+    // finding bun.lock, so the step itself carries no npm.
     const flatten = (steps) => steps.flatMap((s) =>
       typeof s === 'string' ? [s] : s.steps ? flatten(s.steps) : [s.run]);
     const ciCmds = flatten(p.webjs.ci.steps);
-    assert.ok(ciCmds.includes('bun audit --audit-level=high'), 'a Bun app audits with bun audit');
+    assert.ok(ciCmds.includes('webjs audit'), 'the audit step is webjs audit (it picks bun audit from bun.lock)');
     assert.ok(!ciCmds.some((c) => /^npm /.test(c)), 'no npm command in a Bun app ci step');
     for (const step of [...p.webjs.dev.before, ...p.webjs.start.before, ...regenCmds, ...ciCmds]) {
       assert.doesNotMatch(step, /npm run/, 'no npm in a Bun app before/regenerate/ci step (the image has no npm)');
