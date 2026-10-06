@@ -1,6 +1,6 @@
 import { render as clientRender } from '../render-client.js';
 import { readAttributeValue, resolveAttributeProperty } from '../attribute-reader.js';
-import { setActiveActionSignal } from '../action-abort-client.js';
+import { setActiveActionSignal, activeActionSignal } from '../action-abort-client.js';
 import { carriesFunction } from '../form-action.js';
 import { isCSS, adoptStyles } from '../css.js';
 import { register, tagOf } from '../registry.js';
@@ -872,23 +872,18 @@ class WebComponentBase extends Base {
         // by-sync case (#469); a shouldUpdate=false cycle never reaches here,
         // so it does not invalidate an in-flight async render.
         this.__renderToken = (this.__renderToken || 0) + 1;
-        // Abort the superseded render's in-flight action fetches (#492), start a
-        // fresh controller for this render, and bind it as the active signal so
-        // the RPC stub ties its fetches to this render. A superseded fetch's
-        // AbortError is dropped by the render-token guard in _commitAsync.
+        // Abort the superseded render's in-flight action fetches (#492) and
+        // start a fresh controller for this render. update() binds its signal
+        // around render() alone (see there), never the DOM commit. A
+        // superseded fetch's AbortError is dropped by the render-token guard
+        // in _commitAsync.
         if (this.__renderAbort) this.__renderAbort.abort();
         this.__renderAbort = typeof AbortController !== 'undefined' ? new AbortController() : null;
-        setActiveActionSignal(this.__renderAbort ? this.__renderAbort.signal : null);
         try {
           const r = this.update(changedProperties);
           if (r && typeof r.then === 'function') pendingCommit = r;
         } catch (error) {
           this._handleRenderError(/** @type {Error} */ (error));
-        } finally {
-          // The synchronous portion of render() has run; actions invoked there
-          // already captured the signal. Clear it so a later event handler is
-          // not bound to a stale render's controller.
-          setActiveActionSignal(null);
         }
 
         if (!pendingCommit) {
@@ -1126,7 +1121,21 @@ class WebComponentBase extends Base {
       });
     }
     let tpl;
-    this.__signalWatcher.observe(() => { tpl = this.render(); });
+    // Bind this render's abort signal (#492) around the synchronous part of
+    // render() ONLY, so the RPC stub ties an action called there to this
+    // render and the next render cancels it. The commit below runs unbound:
+    // it connects the child elements this template creates, and an action a
+    // child starts in its connectedCallback belongs to the child, not to this
+    // render, so the parent's next render must not cancel it (#1514). The
+    // previous binding is restored rather than cleared, so a render nested
+    // inside another's synchronous work leaves the outer one intact.
+    const outer = activeActionSignal();
+    setActiveActionSignal(this.__renderAbort ? this.__renderAbort.signal : null);
+    try {
+      this.__signalWatcher.observe(() => { tpl = this.render(); });
+    } finally {
+      setActiveActionSignal(outer || null);
+    }
     // Bare-await async render (#469): render() returned a promise. Use
     // stale-while-revalidate: keep the current DOM (the SSR first paint on
     // hydration, or the prior content on a re-fetch) visible until the new

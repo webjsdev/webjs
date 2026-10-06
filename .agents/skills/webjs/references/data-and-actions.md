@@ -206,7 +206,7 @@ export async function updateUser(id: number, patch: Partial<User>) { /* ... */ }
 
 ### Cancellation with `actionSignal()`
 
-Inside an action, `actionSignal()` from `@webjsdev/server` returns the request's `AbortSignal`. It fires when the client disconnects OR when a newer client render supersedes this one (the RPC stub aborts the previous in-flight fetch). Thread it into the work you start, and re-check it after an await to map an abort to a cancelled envelope:
+Inside an action, `actionSignal()` from `@webjsdev/server` returns the request's `AbortSignal`. It fires when the client disconnects OR when a newer client render supersedes this one (the RPC stub aborts the previous in-flight fetch). Only an action called in the synchronous part of a component's own `render()` is tied to that render. One called from `connectedCallback`, an event handler, `firstUpdated()` / `updated()`, or a `Task` is never cancelled by a re-render, including a child element's `connectedCallback` that runs while its parent's template is being committed, so a child can start its first fetch there without the parent's next render cancelling it. Thread it into the work you start, and re-check it after an await to map an abort to a cancelled envelope:
 
 ```ts
 'use server';
