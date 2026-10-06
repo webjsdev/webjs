@@ -23,8 +23,23 @@ Read this when wiring caching or rate limiting, storing uploads, hardening heade
 | `SESSION_SECRET` / `AUTH_SECRET` | Session and auth signing (see `auth-and-sessions.md`) |
 | `PORT` | Listen port. Precedence `--port` flag, then `PORT` (real env or `.env`), then `8080` |
 | `WEBJS_SOURCE_LOCATIONS` | `webjs dev` only. `1` stamps `data-webjs-src="<app-relative-file>:<line>"` on the elements of the app's `html` templates (see below). Ignored by `webjs start` |
+| `WEBJS_EMBED_ORIGINS` | `webjs dev` only. Comma-separated parent origins (`https://builder.dev,http://localhost:8080`) allowed to frame the dev server and receive the embed bridge's messages (see below). Ignored by `webjs start` |
 
 **Source locations for tooling (`WEBJS_SOURCE_LOCATIONS=1`, dev only).** A tool that hosts the app (an inspector, click-to-edit in an embedding builder) can map a clicked element back to the line that wrote it. With the variable set, `webjs dev` adds `data-webjs-src="components/todo-list.ts:12"` to every element opening tag written in an `html` template inside the app, both in the SSR markup and in client renders (one source transform applied to the served module and to the module the server imports, so the two agree and hydration is unaffected). Read it with `el.closest('[data-webjs-src]')`. Not annotated: `*.server.*` modules, `node_modules`, `css` / `svg` tagged templates, `html` / `head` / `body` / head-only and raw-text elements, and the descendants of `svg` / `math`. Lines are exact; nothing reaches production. The importmap `<script>` in `<head>` carries an unrelated `data-webjs-src` (the app-source deploy id), so match the `file:line` value shape when querying the whole document.
+
+**Embed bridge for iframe previews (`WEBJS_EMBED_ORIGINS`, dev only).** A tool that previews the app inside an iframe (an app builder, a docs playground) sets `WEBJS_EMBED_ORIGINS` to its own origin(s). `webjs dev` then (1) drops `X-Frame-Options` and adds those origins to a CSP `frame-ancestors`, so the frame loads without the app stripping headers in `webjs.headers`, and (2) inlines a small nonce-signed script into every document that, when framed by a listed origin, posts to `window.parent` (with that exact target origin, never `*`):
+
+```js
+{ source: 'webjs-embed', type: 'ready', path, title }            // document parsed
+{ source: 'webjs-embed', type: 'navigate', path, title }         // every client-router navigation + popstate
+{ source: 'webjs-embed', type: 'console', level: 'error' | 'warn', message, dropped? } // max 20/s
+{ source: 'webjs-embed', type: 'error', message, stack, file, line, column }          // window error + unhandledrejection
+{ source: 'webjs-embed', type: 'network', method, url, status, error? }               // fetch/XHR status >= 500, or status 0 on failure
+{ source: 'webjs-embed', type: 'server-error', kind, message, file, line, path }      // the dev error overlay went up
+{ source: 'webjs-embed', type: 'select', src, tag, text, rect: { x, y, width, height } } // a click in inspect mode
+```
+
+and accepts, only from `window.parent` on a listed origin: `{ source: 'webjs-embed-host', type: 'navigate', path }` (a local path; a soft navigation when the client router is on), `{ source: 'webjs-embed-host', type: 'reload' }`, and `{ source: 'webjs-embed-host', type: 'inspect', enabled: true | false }` (hover highlight plus click capture that posts `select`; `src` is the nearest `data-webjs-src`, so pair it with `WEBJS_SOURCE_LOCATIONS=1` for click-to-edit). Paths are app paths (`/api/x`, `/components/x.ts`). Unset adds zero bytes; `webjs start` never injects it nor relaxes a header.
 
 Defaults are single-instance memory stores. To scale horizontally, switch the store once at startup: `setStore(redisStore({ url: process.env.REDIS_URL }))`.
 
