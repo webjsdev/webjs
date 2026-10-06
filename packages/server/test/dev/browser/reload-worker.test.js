@@ -10,7 +10,7 @@
  * runs in a real browser. The relay is driven with a fake EventSource + fake
  * MessagePorts so it needs no live SSE server.
  */
-import { startReloadWorker, RELOAD_QUIET_MS, RELOAD_MAX_HOLD_MS, RECONNECT_BASE_MS, RECONNECT_MAX_MS, parseVerdict, parseHello } from '../../../src/dev-reload-worker.js';
+import { startReloadWorker, RELOAD_QUIET_MS, RELOAD_MAX_HOLD_MS, RECONNECT_BASE_MS, RECONNECT_MAX_MS, parseVerdict, parseHello, pageIsStale } from '../../../src/dev-reload-worker.js';
 
 import { assert } from '../../../../../test/browser-assert.js';
 
@@ -550,6 +550,122 @@ suite('dev reload stream pauses when hidden and reconnects with backoff (#1507)'
     say(a, { type: 'visibility', visible: false });
     say(a, { type: 'activity' });
     assert.equal(relay.es, null);
+  });
+
+  // #1516: every reconnect re-checks each tab against the state its PAGE was
+  // rendered at, so a reload frame that no stream carried is not lost.
+  test('a dropped stream with an edit in between, whose reload frame was lost, reloads on the reconnect', () => {
+    const { scope, tick } = fakeClock();
+    const relay = startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    say(a, { type: 'page', boot: 'B', seq: 3 });
+    relay.es.fire('hello', JSON.stringify({ boot: 'B', seq: 3 }));
+    // The host suspends, then wakes and closes the held stream. The edit that
+    // woke it emitted reload seq 4 into the old stream, which nobody read.
+    relay.es.fire('error');
+    tick(RECONNECT_BASE_MS);
+    assert.ok(relay.es, 'reconnected');
+    relay.es.fire('hello', JSON.stringify({ boot: 'B', seq: 4 }));
+    tick(RELOAD_QUIET_MS);
+    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }]);
+  });
+
+  test('a fresh relay reloads a page rendered before an edit (no previous hello to compare)', () => {
+    const { scope, tick } = fakeClock();
+    const relay = startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    say(a, { type: 'page', boot: 'B', seq: 3 });
+    relay.es.fire('hello', JSON.stringify({ boot: 'B', seq: 4 }));
+    tick(RELOAD_QUIET_MS);
+    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }]);
+  });
+
+  test('a fresh relay reloads a page rendered by a previous server process', () => {
+    const { scope, tick } = fakeClock();
+    const relay = startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    say(a, { type: 'page', boot: 'OLD', seq: 9 });
+    relay.es.fire('hello', JSON.stringify({ boot: 'NEW', seq: 0 }));
+    tick(RELOAD_QUIET_MS);
+    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }]);
+  });
+
+  test('a tab that connects after a reload was fanned out still reloads, and only that tab', () => {
+    const { scope, tick } = fakeClock();
+    const relay = startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    say(a, { type: 'page', boot: 'B', seq: 3 });
+    relay.es.fire('hello', JSON.stringify({ boot: 'B', seq: 3 }));
+    relay.es.fire('reload', JSON.stringify({ v: 'reload', seq: 4 }));
+    tick(RELOAD_QUIET_MS);
+    assert.equal(a.received.length, 1, 'tab A got the live reload');
+    // Tab B's page was rendered at seq 3, before the edit, and connects now.
+    const b = fakePort();
+    scope.onconnect({ ports: [b.port] });
+    say(b, { type: 'page', boot: 'B', seq: 3 });
+    tick(RELOAD_QUIET_MS);
+    assert.deepEqual(b.received, [{ type: 'reload', verdict: 'reload' }], 'tab B caught up');
+    assert.equal(a.received.length, 1, 'tab A, already current, is not reloaded again');
+  });
+
+  test('an up-to-date page never reloads on a reconnect', () => {
+    const { scope, tick } = fakeClock();
+    const relay = startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    say(a, { type: 'page', boot: 'B', seq: 4 });
+    relay.es.fire('hello', JSON.stringify({ boot: 'B', seq: 4 }));
+    relay.es.fire('error');
+    tick(RECONNECT_BASE_MS);
+    relay.es.fire('hello', JSON.stringify({ boot: 'B', seq: 4 }));
+    tick(RELOAD_QUIET_MS);
+    assert.equal(a.received.length, 0);
+  });
+
+  test('a page the relay already reloaded is current at the next reconnect', () => {
+    const { scope, tick } = fakeClock();
+    const relay = startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    say(a, { type: 'page', boot: 'B', seq: 1 });
+    relay.es.fire('hello', JSON.stringify({ boot: 'B', seq: 1 }));
+    // A light (page) reload is applied in place, so the tab keeps its port and
+    // never re-reports; the relay records it as current.
+    relay.es.fire('reload', JSON.stringify({ v: 'page', seq: 2 }));
+    tick(RELOAD_QUIET_MS);
+    relay.es.fire('error');
+    tick(RECONNECT_BASE_MS);
+    relay.es.fire('hello', JSON.stringify({ boot: 'B', seq: 2 }));
+    tick(RELOAD_QUIET_MS);
+    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'page' }], 'one reload, not a second one on the reconnect');
+  });
+
+  test('with idleMs, a page behind the server reloads once when the idle-closed stream reopens', () => {
+    const { scope, tick } = fakeClock();
+    const relay = startReloadWorker(scope, FakeEventSource, '/__webjs/events', { idleMs: 20000 });
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    say(a, { type: 'page', boot: 'B', seq: 2 });
+    relay.es.fire('hello', JSON.stringify({ boot: 'B', seq: 2 }));
+    tick(20000);
+    assert.equal(relay.es, null, 'idle-closed');
+    say(a, { type: 'activity' });
+    relay.es.fire('hello', JSON.stringify({ boot: 'B', seq: 3 }));
+    tick(RELOAD_QUIET_MS);
+    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'reload' }], 'exactly one reload');
+  });
+
+  test('pageIsStale compares boot, then seq, and never guesses without a seq', () => {
+    assert.equal(pageIsStale({ boot: 'B', seq: 3 }, 'B', 3), false);
+    assert.equal(pageIsStale({ boot: 'B', seq: 3 }, 'B', 4), true);
+    assert.equal(pageIsStale({ boot: 'A', seq: 3 }, 'B', 3), true);
+    assert.equal(pageIsStale({ boot: 'B', seq: null }, 'B', 4), false);
+    assert.equal(pageIsStale({ boot: 'B', seq: 3 }, null, null), false, 'nothing known yet');
+    assert.equal(pageIsStale(undefined, 'B', 3), false);
   });
 
   test('parseHello reads the JSON hello and the bare boot id an older server sends', () => {

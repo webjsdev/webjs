@@ -12,7 +12,9 @@
  *      the page (if the stream were still open, the in-place refresh would run
  *      in a hidden tab just the same);
  *   3. showing the tab again reconnects, and the hello's reload `seq` tells the
- *      relay an edit was missed, so the page catches up with a reload.
+ *      relay an edit was missed, so the page catches up with a reload;
+ *   4. a fresh relay whose stream missed an edit compares the hello with the
+ *      state the page was rendered at (#1516) and reloads.
  *
  * Visibility is driven by overriding `document.visibilityState` and firing
  * `visibilitychange`, the exact signal the served client listens to.
@@ -134,5 +136,36 @@ describe('E2E: the dev live-reload stream is quiet and pauses while hidden (#150
     await setVisible(true);
     await page.waitForFunction(() => document.querySelector('#about')?.textContent === 'edited while hidden', { timeout: RELOAD_SETTLE_MS + 3000 });
     assert.equal(await page.evaluate(() => window.__beforeShow), undefined, 'a missed edit is a full reload, the safe response');
+  });
+
+  // #1516: a host that holds the quiet stream across a suspend closes it at the
+  // next wake, and the reload frame the wake itself caused goes to the dead
+  // stream. Here the tab's stream is cut from the start (a fresh relay that has
+  // never seen a hello), an edit lands, and the stream comes back: the page's
+  // own render-time state says it is behind, so it reloads.
+  test('a fresh relay whose stream missed an edit reloads once the stream returns', async () => {
+    const p2 = await browser.newPage();
+    try {
+      // The per-tab relay, so its EventSource is a page request the test can cut.
+      await p2.evaluateOnNewDocument(() => { delete window.SharedWorker; });
+      await p2.setRequestInterception(true);
+      let cut = true;
+      p2.on('request', (r) => {
+        if (cut && r.url().includes('/__webjs/events')) r.abort();
+        else r.continue();
+      });
+      await p2.goto(base + '/about', { waitUntil: 'domcontentloaded' });
+      await p2.waitForFunction(() => !!document.querySelector('#about'), { timeout: 10000 });
+      const meta = await p2.evaluate(() => document.querySelector('meta[name="webjs-dev-reload"]')?.getAttribute('content'));
+      assert.ok(meta && JSON.parse(meta).boot, 'the page carries the state it was rendered at');
+      await p2.evaluate(() => { window.__beforeEdit = 1; });
+      writeFileSync(join(dir, 'app/about/page.ts'), aboutPage('edited while the stream was gone'));
+      await sleep(1000);
+      cut = false;
+      await p2.waitForFunction(() => document.querySelector('#about')?.textContent === 'edited while the stream was gone', { timeout: RELOAD_SETTLE_MS + 8000 });
+      assert.equal(await p2.evaluate(() => window.__beforeEdit), undefined, 'a full reload');
+    } finally {
+      await p2.close();
+    }
   });
 });

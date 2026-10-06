@@ -6,7 +6,8 @@ import { createServer as createHttp1Server } from 'node:http';
 import { createRequestHandler } from './handler.js';
 import { readServerTimeoutsFromApp, readDevWatchPathsFromApp } from './config.js';
 import { defaultLogger } from '../logger.js';
-import { SseHub, makeShutdown, installProcessHandlers, serverRuntime } from '../listener-core.js';
+import { SseHub, makeShutdown, installProcessHandlers, serverRuntime, DEV_BOOT_ID } from '../listener-core.js';
+import { setDevReloadState } from '../dev-reload-state.js';
 import { urlFromRequest } from '../forwarded.js';
 import { stripBasePath } from '../base-path.js';
 import { basePath } from '../importmap.js';
@@ -229,6 +230,9 @@ export async function startServer(opts) {
   // identically on both). Built before the handler so its onReload / onDevError
   // callbacks can fan out through it.
   const hub = new SseHub();
+  // Pages render the stream's state into a meta tag (#1516), so the relay can
+  // re-check a page against the server on every reconnect.
+  if (dev) setDevReloadState(() => ({ boot: DEV_BOOT_ID, seq: hub.seq }));
   let app;
   try {
     app = await createRequestHandler({
