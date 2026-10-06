@@ -15,6 +15,10 @@ const enc = new TextEncoder();
 const dec = new TextDecoder();
 const AUTH_COOKIE = 'webjs.auth';
 const STATE_COOKIE = 'webjs.auth.state';
+// Carries the post-sign-in target across the OAuth round trip (#1495). Signed
+// with the auth secret and short-lived (the same 10 minutes as the state
+// cookie), so the callback only ever lands on a path this app chose.
+const REDIRECT_COOKIE = 'webjs.auth.redirect';
 const DEFAULT_MAX_AGE = 30 * 24 * 60 * 60; // 30 days (seconds)
 
 // -- Web Crypto helpers -----------------------------------------------------
@@ -63,6 +67,27 @@ function randomId() {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
   return b64url(bytes.buffer);
+}
+
+/**
+ * Accept a post-sign-in target only when it is a same-origin local path: one
+ * leading `/`, the next character neither `/` nor `\` (both make a
+ * protocol-relative URL a browser follows off-site), and no control
+ * characters or whitespace a browser might strip before resolving. Anything
+ * else returns `null` and the caller falls back to its default. A bad value is
+ * DROPPED, never repaired, since a repaired open redirect is still one.
+ *
+ * @param {unknown} value
+ * @returns {string | null}
+ */
+function safeRedirectPath(value) {
+  if (typeof value !== 'string') return null;
+  if (value.length === 0 || value.length > 2048) return null;
+  if (value[0] !== '/') return null;
+  if (value[1] === '/' || value[1] === '\\') return null;
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f\s\\]/.test(value)) return null;
+  return value;
 }
 
 // -- Cookie helpers ---------------------------------------------------------
@@ -290,11 +315,16 @@ export function createAuth(config) {
         if (ok === false) return new Response(null, { status: 302, headers: { location: pages.error || '/?error=AccessDenied' } });
       }
       const cookie = await writeSession(user);
-      const redirectTo = opts.redirectTo || (data && data.redirectTo) || '/';
+      // `opts.redirectTo` is the app's own server-side choice and is trusted.
+      // `data.redirectTo` usually arrives from a submitted form, so it goes
+      // through the same local-path check the OAuth flow uses (#1495).
+      const redirectTo = opts.redirectTo || safeRedirectPath(data && data.redirectTo) || '/';
       return new Response(null, { status: 302, headers: { location: /** @type {string} */ (redirectTo), 'set-cookie': cookie } });
     }
 
-    if (provider.type === 'oauth') return oauthRedirect(provider, opts);
+    if (provider.type === 'oauth') {
+      return oauthRedirect(provider, { ...opts, redirectTo: opts.redirectTo || (data && data.redirectTo) });
+    }
     return new Response('Unsupported provider type', { status: 400 });
   }
 
@@ -332,7 +362,28 @@ export function createAuth(config) {
     const hdrs = new Headers();
     hdrs.set('location', url.toString());
     hdrs.append('set-cookie', setCookie(STATE_COOKIE, await sign(state, secret), 600_000, secure()));
+    // The post-sign-in target rides in its own signed cookie (#1495). With no
+    // valid target, any leftover cookie from an abandoned earlier attempt is
+    // cleared so it cannot steer this sign-in somewhere stale.
+    const target = safeRedirectPath(opts.redirectTo);
+    hdrs.append('set-cookie', target
+      ? setCookie(REDIRECT_COOKIE, await sign(target, secret), 600_000, secure())
+      : clearCookie(REDIRECT_COOKIE));
     return new Response(null, { status: 302, headers: hdrs });
+  }
+
+  /**
+   * Read the signed post-sign-in target the redirect leg stored, re-checking it
+   * as a local path (defence in depth: the signature proves this app wrote it,
+   * the check proves it is still a safe target). Null when absent or invalid.
+   *
+   * @param {Request} req
+   * @returns {Promise<string | null>}
+   */
+  async function readRedirectCookie(req) {
+    const raw = parseCookies(req.headers.get('cookie') || '')[REDIRECT_COOKIE];
+    if (!raw) return null;
+    return safeRedirectPath(await unsign(raw, secret));
   }
 
   async function oauthCallback(req, provider) {
@@ -376,13 +427,20 @@ export function createAuth(config) {
 
     if (cb.signIn) {
       const ok = await cb.signIn({ user, account: { provider: provider.id, accessToken } });
-      if (ok === false) return new Response(null, { status: 302, headers: { location: pages.error || '/?error=AccessDenied' } });
+      if (ok === false) {
+        const denied = new Headers();
+        denied.set('location', pages.error || '/?error=AccessDenied');
+        denied.append('set-cookie', clearCookie(STATE_COOKIE));
+        denied.append('set-cookie', clearCookie(REDIRECT_COOKIE));
+        return new Response(null, { status: 302, headers: denied });
+      }
     }
 
     const hdrs = new Headers();
-    hdrs.set('location', '/');
+    hdrs.set('location', (await readRedirectCookie(req)) || '/');
     hdrs.append('set-cookie', await writeSession(user));
     hdrs.append('set-cookie', clearCookie(STATE_COOKIE));
+    hdrs.append('set-cookie', clearCookie(REDIRECT_COOKIE));
     return new Response(null, { status: 302, headers: hdrs });
   }
 
@@ -401,7 +459,7 @@ export function createAuth(config) {
     if (seg[0] === 'signin' && seg[1]) {
       const p = providers.get(seg[1]);
       if (!p || p.type !== 'oauth') return new Response('Unknown OAuth provider', { status: 404 });
-      return oauthRedirect(p, { req });
+      return oauthRedirect(p, { req, redirectTo: new URL(req.url).searchParams.get('redirectTo') });
     }
     if (seg[0] === 'callback' && seg[1]) {
       const p = providers.get(seg[1]);
@@ -423,28 +481,31 @@ export function createAuth(config) {
     if (seg[0] === 'signin' && seg[1]) {
       const provider = providers.get(seg[1]);
       if (!provider) return new Response('Unknown provider', { status: 404 });
-      if (provider.type === 'credentials') {
-        // Bounded body read (issue #237): the credentials sign-in endpoint is
-        // public and unauthenticated, so cap its body to defend against
-        // memory exhaustion. Credentials are small fixed-shape JSON / form
-        // data, so the JSON / RPC limit applies. An over-limit body is a 413
-        // before any parse, and is never buffered whole (see body-limit.js).
-        const limits = getBodyLimits();
-        const limit = limits ? limits.json : DEFAULT_MAX_BODY_BYTES;
-        let body = {};
-        const ct = req.headers.get('content-type') || '';
-        if (ct.includes('json')) {
-          const { tooLarge, text } = await readTextBounded(req, limit);
-          if (tooLarge) return payloadTooLarge();
-          body = text ? JSON.parse(text) : {};
-        } else if (ct.includes('form')) {
-          const { tooLarge, formData } = await readFormDataBounded(req, limit);
-          if (tooLarge) return payloadTooLarge();
-          for (const [k, v] of formData.entries()) body[k] = v;
-        }
-        return signInFn('credentials', body, { req });
+      // Bounded body read (issue #237): the sign-in endpoint is public and
+      // unauthenticated, so cap its body to defend against memory exhaustion.
+      // Credentials (and an OAuth form's `redirectTo`, #1495) are small
+      // fixed-shape JSON / form data, so the JSON / RPC limit applies. An
+      // over-limit body is a 413 before any parse, and is never buffered
+      // whole (see body-limit.js).
+      const limits = getBodyLimits();
+      const limit = limits ? limits.json : DEFAULT_MAX_BODY_BYTES;
+      /** @type {Record<string, unknown>} */
+      let body = {};
+      const ct = req.headers.get('content-type') || '';
+      if (ct.includes('json')) {
+        const { tooLarge, text } = await readTextBounded(req, limit);
+        if (tooLarge) return payloadTooLarge();
+        body = text ? JSON.parse(text) : {};
+      } else if (ct.includes('form')) {
+        const { tooLarge, formData } = await readFormDataBounded(req, limit);
+        if (tooLarge) return payloadTooLarge();
+        for (const [k, v] of formData.entries()) body[k] = v;
       }
-      if (provider.type === 'oauth') return oauthRedirect(provider, { req });
+      if (provider.type === 'credentials') return signInFn('credentials', body, { req });
+      if (provider.type === 'oauth') {
+        const redirectTo = body.redirectTo ?? new URL(req.url).searchParams.get('redirectTo');
+        return oauthRedirect(provider, { req, redirectTo });
+      }
     }
     if (seg[0] === 'signout') return signOutFn({ req });
     return new Response('Not found', { status: 404 });
