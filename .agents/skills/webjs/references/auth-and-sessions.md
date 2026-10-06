@@ -113,6 +113,17 @@ export const POST = handlers.POST;
 <form method="POST" action="/api/auth/signout"><button>Log out</button></form>
 ```
 
+**OAuth sign-in returns the user where they started, with the same one form.** POST to `/api/auth/signin/github` (or `google`) with a hidden `redirectTo`, or link to `GET /api/auth/signin/github?redirectTo=/dashboard/x`; `signIn('github', undefined, { redirectTo })` does the same from an action. The target rides through the provider round trip in a short-lived signed cookie and the callback lands on it, so no wrapper around the auth route is needed:
+
+```html
+<form method="POST" action="/api/auth/signin/github">
+  <input type="hidden" name="redirectTo" value="/dashboard/x">
+  <button>Sign in with GitHub</button>
+</form>
+```
+
+A `redirectTo` that arrives from a request (a form field or a query param, for OAuth or credentials) must be a same-origin local path: one leading `/`, not followed by `/` or `\`. An absolute URL, a protocol-relative `//host`, or a backslash variant is dropped (not repaired) and the sign-in lands on `/`, so the field is never an open redirect. A denied sign-in still goes to `pages.error`.
+
 For a programmatic sign-in (the auto-login-after-signup pattern), `signIn('credentials', creds, { redirectTo })` returns a `302` `Response` that a form-bound action can return directly (the framework honors a returned `Response` verbatim).
 
 Sessions are JWT by default (stateless, scales horizontally). OAuth

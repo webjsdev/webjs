@@ -70,6 +70,14 @@ export async function logout() {
 }</code-block>
     <p><code>signOut</code> is also reachable as a route: the mounted <code>handlers</code> serve <code>POST /api/auth/signout</code>, so a plain <code>&lt;form method="POST" action="/api/auth/signout"&gt;</code> logs a user out with no JavaScript. That is how the scaffold's auth gallery card renders its logout button.</p>
 
+    <h2>Return to the page the user started from</h2>
+    <p>Pass <code>redirectTo</code> and the user lands there after signing in, for OAuth providers as well as credentials. A plain form is enough: the mounted handler reads the field, carries it through the provider round trip in a short-lived signed cookie, and the callback lands on it.</p>
+    <code-block>&lt;form method="POST" action="/api/auth/signin/github"&gt;
+  &lt;input type="hidden" name="redirectTo" value="/dashboard/x"&gt;
+  &lt;button&gt;Sign in with GitHub&lt;/button&gt;
+&lt;/form&gt;</code-block>
+    <p>A link works too (<code>/api/auth/signin/github?redirectTo=/dashboard/x</code>), and so does <code>signIn('github', undefined, { redirectTo })</code> from an action. A <code>redirectTo</code> that comes from a request must be a same-origin local path: one leading <code>/</code>, not followed by <code>/</code> or <code>\</code>. An absolute URL or a protocol-relative <code>//host</code> is dropped rather than repaired, and the sign-in lands on <code>/</code>, so the field can never be used as an open redirect. A denied sign-in still goes to <code>pages.error</code>.</p>
+
     <h2>Showing a failed sign-in</h2>
     <p>A failed credentials sign-in redirects to <code>&#36;{pages.error}?error=CredentialsSignin</code>, falling back to the home page when <code>pages.error</code> is unset (which silently swallows the failure). Point the error page at your login route, then read the code and render a message:</p>
     <code-block>createAuth({

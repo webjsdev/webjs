@@ -223,6 +223,10 @@
                   "run": "bun test/bun/forwarded-trust.mjs"
                 },
                 {
+                  "title": "bun proof: oauth-redirect-to",
+                  "run": "bun test/bun/oauth-redirect-to.mjs"
+                },
+                {
                   "title": "bun proof: root-middleware",
                   "run": "bun test/bun/root-middleware.mjs"
                 },
