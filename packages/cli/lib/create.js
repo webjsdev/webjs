@@ -20,22 +20,7 @@ import { spawnSync } from 'node:child_process';
 import { bunifyProse, bunifyDockerfile, bunifyCompose, bunifyCi } from './runtime-rewrite.js';
 import { assertValidAppName, toDatabaseName } from './app-name.js';
 import { isGalleryAppShellFile } from './gallery-shell-files.js';
-
-/**
- * Detect which package manager invoked us. Reads `npm_config_user_agent`,
- * which npm / pnpm / yarn / bun all set when running scripts or `npx`.
- * Falls back to `npm` when nothing is detected (matches what most users
- * actually have installed).
- *
- * @returns {'npm'|'pnpm'|'yarn'|'bun'}
- */
-function detectPackageManager() {
-  const ua = process.env.npm_config_user_agent || '';
-  if (ua.startsWith('pnpm/')) return 'pnpm';
-  if (ua.startsWith('yarn/')) return 'yarn';
-  if (ua.startsWith('bun/')) return 'bun';
-  return 'npm';
-}
+import { detectPackageManager } from './package-manager.js';
 
 /**
  * Run `<pm> install` inside the scaffolded app. Returns true on success.
@@ -327,7 +312,10 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   // with the explicit flag winning over detection. A bun-flavored app SERVES on
   // Bun (its dev/start scripts force `--bun`), commits `bun.lock`, sets
   // `trustedDependencies`, and ships a bun Dockerfile / CI / agent docs.
-  const runtime = opts.runtime || (detectPackageManager() === 'bun' ? 'bun' : 'node');
+  // Runtime detection reads ONLY the invoking tool (no lockfile walk): a
+  // global `webjs create` run inside someone else's Bun workspace should not
+  // silently flip the new app to serving on Bun.
+  const runtime = opts.runtime || (detectPackageManager({ cwd: null, prefer: 'agent' }) === 'bun' ? 'bun' : 'node');
   const VALID_RUNTIMES = ['node', 'bun'];
   if (!VALID_RUNTIMES.includes(runtime)) {
     throw new Error(`Unknown --runtime '${runtime}'. Only ${VALID_RUNTIMES.join(' / ')} are supported.`);
@@ -1663,8 +1651,11 @@ ThemeToggle.register('theme-toggle');
   // that exercise the scaffold without paying the install cost.
   // In bun mode, install with bun regardless of the invoking PM, so the app
   // commits `bun.lock` (text JSONC, git-diffable) instead of `package-lock.json`
-  // (#541). Otherwise honour the invoking PM (npm / pnpm / yarn / bun).
-  const pm = isBun ? 'bun' : detectPackageManager();
+  // (#541). Otherwise honour the invoking PM (npm / pnpm / yarn / bun), and when
+  // nothing invoked us through a package manager (a global `webjs` bin), the
+  // lockfile of the enclosing project or workspace (#1494), so an app created
+  // inside a bun workspace does not get a stray package-lock.json.
+  const pm = isBun ? 'bun' : detectPackageManager({ cwd: dirname(appDir), prefer: 'agent' });
   let installed = false;
   let generatedMigration = false;
   if (shouldInstall) {

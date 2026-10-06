@@ -111,6 +111,13 @@ it on demand with `npx @webjsdev/ui view <name>`, which is what the pointer it
 leaves behind says too). It also self-heals the theme tokens if
 they are missing.
 
+The install runs with your project's package manager. `add` looks for a
+lockfile in the current directory and then each parent, stopping at the
+workspace root, so an app inside a monorepo uses the root's lockfile:
+`pnpm-lock.yaml` means pnpm, `yarn.lock` yarn, `bun.lock` or `bun.lockb` bun,
+`package-lock.json` npm. With no lockfile it reads `npm_config_user_agent`
+(set by `bunx`, `pnpm dlx` and friends), and falls back to npm.
+
 Resolution is LOCAL-FIRST: `init` / `add` / `list` / `view` read the registry
 that ships inside the installed `@webjsdev/ui` package, so they work with no
 network. Point at a custom registry with `--registry <url>`; `webjsui diff`
