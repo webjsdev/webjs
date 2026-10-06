@@ -468,6 +468,12 @@ jobs:
         env:
           WEBJS_E2E: '1'
         run: node --test test/e2e/dev-idle-stream.test.mjs
+      # A pinned vendor package with transitive deps (#1518): whether the
+      # browser can resolve and run the whole chain is a browser fact.
+      - name: Run vendor-pin-transitives e2e (#1518)
+        env:
+          WEBJS_E2E: '1'
+        run: node --test test/e2e/vendor-pin-transitives.test.mjs
       # Dev observability for SSR action seeding (#1309): spawns `webjs dev`
       # against a fixture app and drives a real browser, because the headline
       # criterion is a browser fact. Whether a hydrating component re-issued the

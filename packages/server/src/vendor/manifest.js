@@ -91,6 +91,33 @@ export function getPackageManifest(pkgName, appDir) {
   }
 }
 
+/**
+ * The names a package depends on at runtime (`dependencies`,
+ * `peerDependencies`, `optionalDependencies`) and its installed directory,
+ * resolved from `fromDir` (#1518). Resolving a dependency from its DEPENDENT's
+ * directory finds a nested install as well as a hoisted one, so the pin prune
+ * can walk the real installed graph. Null when the package is not installed.
+ *
+ * @param {string} pkgName
+ * @param {string} fromDir  a directory holding a package.json (the app, or a dependent package)
+ * @returns {{ dir: string, names: string[] } | null}
+ */
+export function getPackageDeps(pkgName, fromDir) {
+  const real = resolvePackageDir(pkgName, fromDir);
+  if (!real) return null;
+  try {
+    const pkg = JSON.parse(readFileSync(join(real, 'package.json'), 'utf8'));
+    const names = new Set([
+      ...Object.keys(pkg.dependencies || {}),
+      ...Object.keys(pkg.peerDependencies || {}),
+      ...Object.keys(pkg.optionalDependencies || {}),
+    ]);
+    return { dir: real, names: [...names] };
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // JSPM Generator API client
 // ---------------------------------------------------------------------------
