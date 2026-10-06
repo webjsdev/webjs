@@ -10,6 +10,7 @@ import { DEFAULT_REGISTRY_URL } from '../registry/fetcher.js';
 import { isCustomElementSource } from '../registry/local.js';
 import { stripExample } from '../registry/example.js';
 import { ensureTheme } from '../utils/theme.js';
+import { detectPackageManager } from '../utils/package-manager.js';
 
 export const add = new Command()
   .name('add')
@@ -247,7 +248,7 @@ function ensureDir(d) {
 }
 
 async function installDeps(cwd, deps, dev) {
-  const manager = detectPackageManager(cwd);
+  const manager = detectAddCommand(cwd);
   const flag = dev ? '-D' : '';
   const cmd = `${manager.exec} ${manager.add} ${flag} ${deps.join(' ')}`.replace(/\s+/g, ' ').trim();
   logger.info(`${logger.dim('$')} ${cmd}`);
@@ -258,9 +259,21 @@ async function installDeps(cwd, deps, dev) {
   }
 }
 
-function detectPackageManager(cwd) {
-  if (existsSync(join(cwd, 'pnpm-lock.yaml'))) return { exec: 'pnpm', add: 'add' };
-  if (existsSync(join(cwd, 'yarn.lock'))) return { exec: 'yarn', add: 'add' };
-  if (existsSync(join(cwd, 'bun.lockb'))) return { exec: 'bun', add: 'add' };
-  return { exec: 'npm', add: 'install' };
+/** Install command per manager (`-D` marks a dev dependency for all four). */
+const ADD_COMMANDS = {
+  npm: { exec: 'npm', add: 'install' },
+  pnpm: { exec: 'pnpm', add: 'add' },
+  yarn: { exec: 'yarn', add: 'add' },
+  bun: { exec: 'bun', add: 'add' },
+};
+
+/**
+ * Resolve the install command for the project at `cwd` (#1494): the lockfile
+ * walk-up (so `bun.lock` and a workspace-root lockfile both count), then the
+ * invoking tool's user agent, then npm.
+ * @param {string} cwd
+ * @param {Record<string, string | undefined>} [env]
+ */
+export function detectAddCommand(cwd, env = process.env) {
+  return ADD_COMMANDS[detectPackageManager({ cwd, env })];
 }
