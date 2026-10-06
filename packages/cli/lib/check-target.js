@@ -24,7 +24,7 @@
 
 import { statSync } from 'node:fs';
 import { readFile, glob } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, dirname, relative } from 'node:path';
 
 /**
  * @typedef {{ isApp: boolean, workspaceApps: string[] }} CheckTarget
@@ -94,6 +94,71 @@ export async function workspaceApps(cwd) {
     }
   }
   return [...apps].sort();
+}
+
+/**
+ * The nearest STRICT ancestor of `cwd` that holds an `app/` directory, or
+ * `null`. Started from inside an app (its `app/` or `components/` dir), this is
+ * the app the user meant.
+ *
+ * @param {string} cwd
+ * @returns {string | null}
+ */
+export function findAncestorApp(cwd) {
+  let dir = dirname(cwd);
+  for (;;) {
+    if (hasAppDir(dir)) return dir;
+    const up = dirname(dir);
+    if (up === dir) return null;
+    dir = up;
+  }
+}
+
+/**
+ * Where a server command (`webjs dev` / `webjs start`) that was started outside
+ * an app should have been started (#1526): the workspace's member apps when
+ * `cwd` is a workspace root, else the nearest ancestor app, else nothing.
+ * `isApp` is the same `app/` predicate `webjs check` refuses on (#1301).
+ *
+ * @param {string} cwd
+ * @returns {Promise<{ isApp: boolean, workspaceApps: string[], ancestorApp: string | null }>}
+ */
+export async function findServeTarget(cwd) {
+  const target = await findCheckTarget(cwd);
+  if (target.isApp) return { ...target, ancestorApp: null };
+  return { ...target, ancestorApp: target.workspaceApps.length ? null : findAncestorApp(cwd) };
+}
+
+/**
+ * The refusal `webjs dev` / `webjs start` print when started where there is no
+ * app (#1526). Without it the server boots, says it is ready, and answers 404
+ * for every route, which is how a launch from a workspace root used to look.
+ *
+ * @param {'dev' | 'start'} command
+ * @param {string} cwd
+ * @param {{ workspaceApps: string[], ancestorApp: string | null }} target
+ * @returns {string}
+ */
+export function notAnAppServeMessage(command, cwd, { workspaceApps, ancestorApp }) {
+  const lines = [
+    `webjs ${command}: this directory is not a WebJs app, so there is nothing to serve.`,
+    '',
+    `  ${cwd}`,
+    '',
+    'There is no `app/` directory here. Started anyway, the server would answer',
+    '404 for every route.',
+    '',
+  ];
+  if (workspaceApps.length) {
+    lines.push('This is a workspace root. Start the server inside the app:', '');
+    for (const app of workspaceApps) lines.push(`  cd ${app} && webjs ${command}`);
+  } else if (ancestorApp) {
+    lines.push('This directory is inside an app. Start the server from the app root:', '');
+    lines.push(`  cd ${relative(cwd, ancestorApp) || '.'} && webjs ${command}`);
+  } else {
+    lines.push('Change into your app directory (the one holding `app/`) and re-run.');
+  }
+  return lines.join('\n');
 }
 
 /**
