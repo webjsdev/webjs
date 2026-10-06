@@ -230,6 +230,12 @@ jobs:
           bun test/bun/dev-overlay-scope.mjs
           bun test/bun/dev-public-before-warm.mjs
           bun test/bun/dev-morph-verdict.mjs
+      # Dev source locations (#1499): the SSR half is a module load hook, which
+      # is module.registerHooks on Node and a Bun.plugin onLoad on Bun, so the
+      # annotation (and the plugin leaving *.server.* to the seed plugin) has
+      # to be proven on both.
+      - name: webjs dev source locations on Bun
+        run: bun test/bun/dev-source-locations.mjs
       # The app-source deploy signal (#899) is derived from an fs source walk +
       # a node:crypto digest, so it must be byte-identical on the Bun.serve path.
       - name: App-source deploy signal on Bun

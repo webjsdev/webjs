@@ -179,6 +179,10 @@
                   "run": "bun test/bun/dev-overlay-scope.mjs"
                 },
                 {
+                  "title": "bun proof: dev-source-locations",
+                  "run": "bun test/bun/dev-source-locations.mjs"
+                },
+                {
                   "title": "bun proof: dev-public-before-warm",
                   "run": "bun test/bun/dev-public-before-warm.mjs"
                 },
