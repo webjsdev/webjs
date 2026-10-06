@@ -81,7 +81,7 @@ let batchDepth = 0;
  * @property {boolean} dirty
  * @property {ReactiveNode[]} producers
  * @property {number[]} producerLastReadVersions
- * @property {Set<ReactiveNode>=} liveConsumers
+ * @property {Map<ReactiveNode, number>=} liveConsumers live consumer -> how many of its producer slots read this node
  * @property {boolean} consumerAllowSignalWrites
  * @property {boolean} consumerIsAlwaysLive
  * @property {(this: ReactiveNode) => boolean} producerMustRecompute
@@ -105,11 +105,18 @@ const FALSE_FN = () => false;
  * This is how source `set()` calls reach watchers across computed
  * chains: the push side of the graph propagates upward only when
  * something downstream is actually live.
+ *
+ * The edge is REFERENCE COUNTED, one count per producer slot (#1508). A
+ * consumer that reads the same signal twice in one run holds it in two slots,
+ * and every slot is added and removed on its own as runs shrink, grow or
+ * reorder. With a plain set the first removal dropped the edge outright, so a
+ * render that went from reading a signal twice to once (or swapped the order
+ * of two reads) stopped hearing about that signal while still depending on it.
  */
 function producerAddLiveConsumer(node, consumer) {
-  if (!node.liveConsumers) node.liveConsumers = new Set();
+  if (!node.liveConsumers) node.liveConsumers = new Map();
   const wasEmpty = node.liveConsumers.size === 0;
-  node.liveConsumers.add(consumer);
+  node.liveConsumers.set(consumer, (node.liveConsumers.get(consumer) || 0) + 1);
   if (wasEmpty) {
     if (node.producers && node.producers.length > 0) {
       for (const p of node.producers) producerAddLiveConsumer(p, node);
@@ -120,9 +127,12 @@ function producerAddLiveConsumer(node, consumer) {
   }
 }
 
-/** Inverse of producerAddLiveConsumer. Cascades teardown upward. */
+/** Inverse of producerAddLiveConsumer: drops one slot's count, and the edge with the last one. Cascades teardown upward. */
 function producerRemoveLiveConsumer(node, consumer) {
   if (!node.liveConsumers) return;
+  const n = node.liveConsumers.get(consumer);
+  if (n === undefined) return;
+  if (n > 1) { node.liveConsumers.set(consumer, n - 1); return; }
   node.liveConsumers.delete(consumer);
   if (node.liveConsumers.size === 0) {
     if (node.producers && node.producers.length > 0) {
@@ -181,7 +191,7 @@ function producerNotifyConsumers(node) {
   const prev = inNotificationPhase;
   inNotificationPhase = true;
   try {
-    for (const consumer of node.liveConsumers) {
+    for (const consumer of node.liveConsumers.keys()) {
       if (!consumer.dirty) {
         consumerMarkDirty(consumer);
       }
@@ -316,7 +326,7 @@ function collectBatched(node) {
   inNotificationPhase = true;
   try {
     if (!node.liveConsumers) return;
-    for (const consumer of node.liveConsumers) {
+    for (const consumer of node.liveConsumers.keys()) {
       if (consumer.dirty) continue;
       consumer.dirty = true;
       if (consumer.__isWatcher) {
@@ -550,7 +560,7 @@ function introspectSources(sink) {
 
 /** @param {SignalState | SignalComputed} producer */
 function introspectSinks(producer) {
-  return producer.liveConsumers ? [...producer.liveConsumers] : [];
+  return producer.liveConsumers ? [...producer.liveConsumers.keys()] : [];
 }
 
 /** @param {SignalState | SignalComputed} producer */

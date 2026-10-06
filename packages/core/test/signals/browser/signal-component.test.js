@@ -174,4 +174,42 @@ suite('WebComponent + signal integration', () => {
     // No render after disconnect.
     assert.equal(renders, 1);
   });
+
+  // #1508: a render that reads a signal twice in one branch and once in the
+  // other kept depending on it after the branch flipped, but stopped
+  // re-rendering when it changed, because the second read's edge removal
+  // deleted the one shared subscription. Workaround in the wild: read each
+  // signal once per render. Not needed any more.
+  test('a render whose reads of a signal shrink from two to one still re-renders (#1508)', async () => {
+    const status = signal('idle');
+    const busy = signal(true);
+    const T = newTag('sc-shrink');
+    let renders = 0;
+    class C extends WebComponent {
+      render() {
+        renders++;
+        return busy.get()
+          ? html`<button disabled title=${status.get()}>${status.get()}</button>`
+          : html`<button>${status.get()}</button>`;
+      }
+    }
+    customElements.define(T, C);
+    const el = document.createElement(T);
+    document.body.appendChild(el);
+    await el.updateComplete;
+    busy.set(false);           // two reads of status become one
+    await el.updateComplete;
+    assert.equal(el.querySelector('button').textContent, 'idle');
+    const before = renders;
+    status.set('published');
+    await el.updateComplete;
+    assert.equal(renders, before + 1, 'the change re-renders');
+    assert.equal(el.querySelector('button').textContent, 'published');
+    busy.set(true);            // and back to two reads
+    await el.updateComplete;
+    status.set('again');
+    await el.updateComplete;
+    assert.equal(el.querySelector('button').textContent, 'again');
+    document.body.removeChild(el);
+  });
 });
