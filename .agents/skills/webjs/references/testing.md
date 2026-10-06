@@ -63,6 +63,8 @@ WEBJS_E2E=1 npm run test  # adds the e2e layer
 
 `npm run test` dispatches on the runtime (`node --test` on Node, `bun test` on Bun). The scaffold's `web-test-runner.config.js` globs `test/**/browser/**/*.test.js` and is already wired, so you do not set it up.
 
+An app with no browser tests yet (for example right after `npm run gallery:clear`) is not a failure: `webjs test --browser` sees that no file matches the config's `files` globs, prints `no browser tests yet`, and exits 0, the same way the server layer passes with zero files. So `npm run ci` stays green until you write the first browser test, and from then on the browser layer runs as normal.
+
 A scaffolded app has one root `test/` directory shaped the same way (feature first, kind second):
 
 ```

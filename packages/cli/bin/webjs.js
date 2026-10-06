@@ -749,7 +749,32 @@ async function main() {
         const useBrowserDir = !hasConfig && !serverOnly && existsSync(join(cwd, 'test', 'browser'));
         // Only resolve + run when there is actually something to run, so a
         // `webjs test` with no browser tests stays a no-op (not a hard error).
+        // Zero browser test files is a pass, not a failure (#1491). WTR throws
+        // `Could not find any test files` on an empty match, so an app with no
+        // browser tests yet (what `gallery:clear` leaves) would fail its own CI
+        // on this layer. Check the globs first and skip with a note. `null`
+        // patterns mean the config's `files` is not a plain literal, so WTR
+        // runs unchanged and reports for itself.
+        let noBrowserTests = false;
         if (hasConfig || useBrowserDir) {
+          const { readFile } = await import('node:fs/promises');
+          const { readWtrFilePatterns, findBrowserTestFiles } = await import('../lib/browser-test-files.js');
+          let patterns = ['test/browser/**/*.test.js'];
+          if (hasConfig) {
+            const cfg = existsSync(join(cwd, 'web-test-runner.config.js'))
+              ? 'web-test-runner.config.js' : 'web-test-runner.config.mjs';
+            patterns = readWtrFilePatterns(await readFile(join(cwd, cfg), 'utf8'));
+          }
+          if (patterns && (await findBrowserTestFiles(cwd, patterns)).length === 0) {
+            noBrowserTests = true;
+            console.log(
+              '\nwebjs test: no browser tests yet (no file matches '
+              + (patterns.length ? patterns.join(', ') : 'the configured `files`')
+              + '), skipping the browser layer.',
+            );
+          }
+        }
+        if ((hasConfig || useBrowserDir) && !noBrowserTests) {
           // Resolve the app's @web/test-runner bin and spawn it with the current
           // runtime, dropping `npx` (#570; absent in a pure oven/bun image).
           let wtrPath;

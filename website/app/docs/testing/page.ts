@@ -197,6 +197,7 @@ webjs test --browser</code-block>
       <li><code>test/&lt;feature&gt;/browser/&lt;name&gt;.test.js</code>: browser tests (with the <code>--browser</code> flag)</li>
       <li><code>test/&lt;feature&gt;/e2e/&lt;name&gt;.test.{ts,mjs}</code>: e2e (opt in with <code>WEBJS_E2E=1</code>)</li>
     </ul>
+    <p>With no browser test files yet (a fresh app after <code>npm run gallery:clear</code>), <code>webjs test --browser</code> prints <code>no browser tests yet</code> and exits 0 instead of failing, so a missing layer never turns <code>npm run ci</code> red. Once one file matches the <code>files</code> globs in <code>web-test-runner.config.js</code>, the browser layer runs as usual.</p>
 
     <h2>webjs ci command</h2>
     <p>One command for every layer. A scaffolded app declares its gate once, in <code>package.json</code> under <code>webjs.ci</code>, and <code>npm run ci</code> runs it with a timed result line per step, the Rails <code>bin/ci</code> model:</p>
