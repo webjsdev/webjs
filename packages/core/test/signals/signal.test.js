@@ -164,3 +164,72 @@ test('chain of computeds: invalidates downstream when leaf changes', () => {
   a.set(10);
   assert.equal(c.get(), 21);
 });
+
+// #1508: a consumer holds one producer slot per READ, so a signal read twice
+// sits in two slots. The live edge used to be a plain set entry, which the
+// first slot removal deleted outright: a run that went from two reads to one,
+// or swapped the order of two reads, kept depending on the signal and stopped
+// hearing about it. The edge is reference counted per slot now.
+test('watcher: reading a signal twice, then once, keeps the subscription (#1508)', () => {
+  const a = signal(0);
+  const flag = signal(true);
+  let fired = 0;
+  const w = new Signal.subtle.Watcher(() => { fired++; });
+  const run = () => w.observe(() => (flag.get() ? a.get() + a.get() : a.get()));
+  run();                 // slots: flag, a, a
+  flag.set(false);       // dirties the watcher
+  run();                 // slots: flag, a (the second `a` slot is pruned)
+  fired = 0;
+  a.set(1);
+  assert.equal(fired, 1, 'a change to a signal still read once must notify');
+  w.dispose();
+});
+
+test('watcher: swapping the order of two reads keeps both subscriptions (#1508)', () => {
+  const a = signal(0);
+  const b = signal(0);
+  const flip = signal(false);
+  let fired = 0;
+  const w = new Signal.subtle.Watcher(() => { fired++; });
+  const run = () => w.observe(() => (flip.get() ? [b.get(), a.get()] : [a.get(), b.get()]));
+  run();
+  flip.set(true);
+  run();                 // slot order a,b becomes b,a
+  for (const s of [a, b]) {
+    fired = 0;
+    s.set(s.get() + 1);
+    assert.equal(fired, 1, 'each signal still notifies after the reorder');
+    run();
+  }
+  w.dispose();
+});
+
+test('watcher: dispose drops every slot of a doubly-read signal (#1508)', () => {
+  const a = signal(0);
+  let fired = 0;
+  const w = new Signal.subtle.Watcher(() => { fired++; });
+  w.observe(() => a.get() + a.get());
+  assert.equal(Signal.subtle.hasSinks(a), true);
+  w.dispose();
+  assert.equal(Signal.subtle.hasSinks(a), false, 'no leaked edge after dispose');
+  a.set(1);
+  assert.equal(fired, 0);
+});
+
+test('computed: a double read that shrinks to one keeps the chain live (#1508)', () => {
+  const a = signal(1);
+  const twice = signal(true);
+  const c = computed(() => (twice.get() ? a.get() + a.get() : a.get()));
+  let fired = 0;
+  const w = new Signal.subtle.Watcher(() => { fired++; });
+  const run = () => w.observe(() => c.get());
+  run();
+  twice.set(false);
+  run();
+  fired = 0;
+  a.set(5);
+  assert.equal(fired, 1, 'the watcher hears the source through the computed');
+  run();
+  assert.equal(c.get(), 5);
+  w.dispose();
+});
