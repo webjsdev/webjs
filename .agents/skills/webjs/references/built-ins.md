@@ -22,6 +22,9 @@ Read this when wiring caching or rate limiting, storing uploads, hardening heade
 | `REDIS_URL` | When set, sessions, rate limit, and cache use Redis instead of memory |
 | `SESSION_SECRET` / `AUTH_SECRET` | Session and auth signing (see `auth-and-sessions.md`) |
 | `PORT` | Listen port. Precedence `--port` flag, then `PORT` (real env or `.env`), then `8080` |
+| `WEBJS_SOURCE_LOCATIONS` | `webjs dev` only. `1` stamps `data-webjs-src="<app-relative-file>:<line>"` on the elements of the app's `html` templates (see below). Ignored by `webjs start` |
+
+**Source locations for tooling (`WEBJS_SOURCE_LOCATIONS=1`, dev only).** A tool that hosts the app (an inspector, click-to-edit in an embedding builder) can map a clicked element back to the line that wrote it. With the variable set, `webjs dev` adds `data-webjs-src="components/todo-list.ts:12"` to every element opening tag written in an `html` template inside the app, both in the SSR markup and in client renders (one source transform applied to the served module and to the module the server imports, so the two agree and hydration is unaffected). Read it with `el.closest('[data-webjs-src]')`. Not annotated: `*.server.*` modules, `node_modules`, `css` / `svg` tagged templates, `html` / `head` / `body` / head-only and raw-text elements, and the descendants of `svg` / `math`. Lines are exact; nothing reaches production. The importmap `<script>` in `<head>` carries an unrelated `data-webjs-src` (the app-source deploy id), so match the `file:line` value shape when querying the whole document.
 
 Defaults are single-instance memory stores. To scale horizontally, switch the store once at startup: `setStore(redisStore({ url: process.env.REDIS_URL }))`.
 

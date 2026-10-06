@@ -17,6 +17,7 @@ export default function Configuration() {
       <li>TypeScript files transformed on the fly</li>
       <li>No cache-busting needed, since module loads are busted per request</li>
     </ul>
+    <p><strong>Source locations for tooling.</strong> Run <code>WEBJS_SOURCE_LOCATIONS=1 webjs dev</code> and every element opening tag written in one of the app's <code>html</code> templates carries <code>data-webjs-src="&lt;app-relative-file&gt;:&lt;line&gt;"</code>, for example <code>data-webjs-src="components/todo-list.ts:12"</code>, in the server-rendered markup and in client renders alike. A tool hosting the app (an inspector, click-to-edit in an app builder) reads it with <code>el.closest('[data-webjs-src]')</code>. It is a dev-only source transform of the app's own modules: <code>*.server.*</code> modules, <code>node_modules</code>, <code>css</code> and <code>svg</code> templates, document and head elements, raw-text elements and the inside of <code>svg</code> are left alone, line numbers stay exact, and <code>webjs start</code> ignores the variable.</p>
 
     <h3>webjs start</h3>
     <code-block>webjs start [--port 8080]</code-block>

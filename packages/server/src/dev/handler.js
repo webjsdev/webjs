@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -16,6 +16,8 @@ import {
   buildActionIndex,
 } from '../actions.js';
 import { registerActionHooks } from '../action-seed.js';
+import { sourceLocationsRequested } from '../dev-source-locations.js';
+import { registerSourceLocationHook } from '../dev-source-locations-hook.js';
 import { readRegenerateRules, isRegenerateOutputPath } from '../dev-regenerate.js';
 import { classifyChangedPath } from '../dev-classify.js';
 import { ensureStripper } from '../ts-strip.js';
@@ -278,6 +280,19 @@ export async function createRequestHandler(opts) {
   // on seeding would mean `webjs.seed: false` silently broke every no-JS form.
   await registerActionHooks({ seed: await readSeedEnabled(appDir), dev });
 
+  // Dev source locations (#1499): `WEBJS_SOURCE_LOCATIONS=1` under `webjs dev`
+  // stamps `data-webjs-src="<file>:<line>"` on the element opening tags of the
+  // app's `html` templates. Read once (the SSR load hook is process-global and
+  // cannot be uninstalled), never in prod. The browser half reads
+  // `state.sourceLocations` in serve.js; the SSR half is this load hook, which
+  // must be in place before any app module is imported.
+  const sourceLocations = dev && sourceLocationsRequested();
+  if (sourceLocations) {
+    registerSourceLocationHook(appDir);
+    // Module URLs are realpaths, so a symlinked app dir registers both forms.
+    try { const real = realpathSync(appDir); if (real !== appDir) registerSourceLocationHook(real); } catch { /* keep appDir only */ }
+  }
+
   // When an app commits a vendor pin (.webjs/vendor/importmap.json) it carries a
   // deterministic vendor map that is cheap to read (one file, no analysis, no
   // network). Resolve it AT BOOT and publish the build id immediately so the
@@ -430,6 +445,9 @@ export async function createRequestHandler(opts) {
     // settings (a multi-tenant embedder, or the differential elision test)
     // must not share it, or the second would serve the first's elided source.
     tsCache: new Map(),
+    // Dev source locations (#1499), fixed for the handler's lifetime, so the
+    // per-handler tsCache above never mixes annotated and plain bytes.
+    sourceLocations,
     // The most recent unresolved dev error frame (#264), or null. Pushed to the
     // SSE channel for the live overlay and replayed to a freshly-connected tab.
     // Dev-only (never populated when !dev); cleared on a successful rebuild.
