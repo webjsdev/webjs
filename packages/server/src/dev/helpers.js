@@ -472,7 +472,7 @@ function __webjsDirectEvents() {
   // picks up the tab's own timers.
   const scope = {};
   startReloadWorker(scope, EventSource, ${eventsUrl});
-  scope.onconnect({ ports: [{ start() {}, postMessage(m) {
+  const shim = { start() {}, postMessage(m) {
     // Nothing may throw out of here, and nothing may be silently dropped.
     //
     // The relay's fanout deletes a port whose postMessage throws, which is the
@@ -495,7 +495,23 @@ function __webjsDirectEvents() {
     } catch (_) {
       console.error('[webjs] dev reload handler threw', _);
     }
-  } }] });
+  } };
+  scope.onconnect({ ports: [shim] });
+  __webjsReportVisibility(function (msg) { if (shim.onmessage) shim.onmessage({ data: msg }); });
+}
+// Tell the relay whether this tab is on screen (#1507). The relay holds the
+// live-reload stream open only while some tab is visible, so a backgrounded
+// dev tab keeps no request in flight and sends nothing; it reopens on return
+// and its hello says whether an edit landed meanwhile. \`bye\` on pagehide
+// drops the tab outright, and a bfcache restore reports in again.
+function __webjsReportVisibility(send) {
+  function report() {
+    try { send({ type: 'visibility', visible: document.visibilityState !== 'hidden' }); } catch (_) { /* relay gone */ }
+  }
+  document.addEventListener('visibilitychange', report);
+  addEventListener('pagehide', function () { try { send({ type: 'bye' }); } catch (_) { /* relay gone */ } });
+  addEventListener('pageshow', function (e) { if (e.persisted) report(); });
+  report();
 }
 try {
   if (typeof SharedWorker !== 'undefined') {
@@ -506,6 +522,7 @@ try {
       else if (m.type === 'webjs-error') __webjsApplyError(m.data);
     };
     w.port.start();
+    __webjsReportVisibility(function (msg) { w.port.postMessage(msg); });
   } else {
     __webjsDirectEvents();
   }

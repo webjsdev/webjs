@@ -99,6 +99,13 @@
                   }
                 },
                 {
+                  "title": "e2e: dev idle stream (#1507)",
+                  "run": "CHROMIUM_PATH=\"$(node -p \"require('playwright-core').chromium.executablePath()\")\" node --test test/e2e/dev-idle-stream.test.mjs",
+                  "env": {
+                    "WEBJS_E2E": "1"
+                  }
+                },
+                {
                   "title": "e2e: dev seed observability (#1309)",
                   "run": "CHROMIUM_PATH=\"$(node -p \"require('playwright-core').chromium.executablePath()\")\" node --test test/e2e/dev-seed-observability.test.mjs",
                   "env": {

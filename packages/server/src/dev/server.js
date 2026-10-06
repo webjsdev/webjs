@@ -6,7 +6,7 @@ import { createServer as createHttp1Server } from 'node:http';
 import { createRequestHandler } from './handler.js';
 import { readServerTimeoutsFromApp, readDevWatchPathsFromApp } from './config.js';
 import { defaultLogger } from '../logger.js';
-import { SseHub, makeShutdown, installProcessHandlers, DEV_BOOT_ID, serverRuntime } from '../listener-core.js';
+import { SseHub, makeShutdown, installProcessHandlers, serverRuntime } from '../listener-core.js';
 import { urlFromRequest } from '../forwarded.js';
 import { stripBasePath } from '../base-path.js';
 import { basePath } from '../importmap.js';
@@ -102,9 +102,15 @@ function startNodeListener(ctx) {
         // promptly. The `hello` data is a per-process boot id (#893): the client
         // reloads on a reconnect ONLY when it changes (a real restart), so a
         // transient reconnect never triggers a spurious reload.
-        res.write(`retry: 300\nevent: hello\ndata: ${DEV_BOOT_ID}\n\n`);
-        // Register a node client wrapper in the shared hub: the fanout + keepalive
-        // live in SseHub; only the transport write (res.write / res.end) is local.
+        res.write(hub.helloFrame());
+        // The stream is silent between events (#1507), so no socket timeout may
+        // reap it. node:http sets none by default, but an inherited or future
+        // one would close a live reload stream that is simply quiet, so it is
+        // switched off for this request alone.
+        req.setTimeout?.(0);
+        res.setTimeout?.(0);
+        // Register a node client wrapper in the shared hub: the fanout lives in
+        // SseHub; only the transport write (res.write / res.end) is local.
         const client = {
           send: (s) => { try { res.write(s); } catch {} },
           close: () => { try { res.end(); } catch {} },
@@ -189,8 +195,7 @@ function startNodeListener(ctx) {
     server,
     close: () => new Promise((r) => {
       if (watcherAbort) watcherAbort.abort();
-      // Clear the shared SSE keepalive timer so repeated startServer/close cycles
-      // (e.g. across a test run) don't accumulate live intervals.
+      // Close every open live-reload stream.
       hub.closeAll();
       server.close(() => r());
     }),
@@ -236,8 +241,6 @@ export async function startServer(opts) {
       onDevError: (frame) => hub.devError(frame),
     });
   } catch (e) {
-    // The hub starts its keepalive interval in its constructor (before this
-    // await), so a boot failure must clear it rather than leak a live timer.
     hub.closeAll();
     throw e;
   }

@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  SseHub,
+  SseHub, DEV_BOOT_ID,
   serverRuntime,
   isEventsPath,
   isCompressible,
@@ -138,12 +138,12 @@ function fakeClient() {
 }
 
 test('SseHub.reload fans a reload frame to every registered client', () => {
-  const hub = new SseHub({ keepaliveMs: 1_000_000 });
+  const hub = new SseHub();
   const a = fakeClient(); const b = fakeClient();
   hub.add(a); hub.add(b);
   hub.reload();
-  assert.deepEqual(a.frames, ['event: reload\ndata: {"v":"reload"}\n\n']);
-  assert.deepEqual(b.frames, ['event: reload\ndata: {"v":"reload"}\n\n']);
+  assert.deepEqual(a.frames, ['event: reload\ndata: {"v":"reload","seq":1}\n\n']);
+  assert.deepEqual(b.frames, ['event: reload\ndata: {"v":"reload","seq":1}\n\n']);
   hub.closeAll();
 });
 
@@ -151,7 +151,7 @@ test('SseHub.reload fans a reload frame to every registered client', () => {
 // the lightest correct response. A single-line JSON `data:` payload, matching
 // the devError sibling.
 test('SseHub.reload carries the change verdict as a parseable JSON payload (#1398)', () => {
-  const hub = new SseHub({ keepaliveMs: 1_000_000 });
+  const hub = new SseHub();
   const a = fakeClient();
   hub.add(a);
   hub.reload({ v: 'page', by: 'app/page.ts', why: 'page-module' });
@@ -159,27 +159,27 @@ test('SseHub.reload carries the change verdict as a parseable JSON payload (#139
   assert.ok(a.frames[0].startsWith('event: reload\ndata: '));
   const json = a.frames[0].slice('event: reload\ndata: '.length).trimEnd();
   assert.equal(json.includes('\n'), false, 'the payload stays on ONE data line');
-  assert.deepEqual(JSON.parse(json), { v: 'page', by: 'app/page.ts', why: 'page-module' });
+  assert.deepEqual(JSON.parse(json), { v: 'page', by: 'app/page.ts', why: 'page-module', seq: 1 });
   hub.closeAll();
 });
 
 // Fail safe on the emitting end too, so a caller with nothing to say can only
 // ever produce the full reload this always was.
 test('SseHub.reload emits `reload` for an absent or malformed verdict (#1398)', () => {
-  const hub = new SseHub({ keepaliveMs: 1_000_000 });
+  const hub = new SseHub();
   const a = fakeClient();
   hub.add(a);
   hub.reload();
   hub.reload(null);
   hub.reload(/** @type any */ ({}));
   hub.reload(/** @type any */ ({ v: 7 }));
-  for (const f of a.frames) assert.equal(f, 'event: reload\ndata: {"v":"reload"}\n\n');
+  a.frames.forEach((f, i) => assert.equal(f, `event: reload\ndata: {"v":"reload","seq":${i + 1}}\n\n`));
   assert.equal(a.frames.length, 4);
   hub.closeAll();
 });
 
 test('SseHub.devError fans a JSON overlay frame (#264)', () => {
-  const hub = new SseHub({ keepaliveMs: 1_000_000 });
+  const hub = new SseHub();
   const a = fakeClient();
   hub.add(a);
   hub.devError({ message: 'boom', file: 'app/page.ts' });
@@ -191,7 +191,7 @@ test('SseHub.devError fans a JSON overlay frame (#264)', () => {
 });
 
 test('SseHub.remove stops delivering to a removed client', () => {
-  const hub = new SseHub({ keepaliveMs: 1_000_000 });
+  const hub = new SseHub();
   const a = fakeClient(); const b = fakeClient();
   hub.add(a); hub.add(b);
   hub.remove(a);
@@ -202,7 +202,7 @@ test('SseHub.remove stops delivering to a removed client', () => {
 });
 
 test('SseHub fanout isolates a throwing client from the rest', () => {
-  const hub = new SseHub({ keepaliveMs: 1_000_000 });
+  const hub = new SseHub();
   const dead = { send: () => { throw new Error('socket gone'); }, close: () => {} };
   const live = fakeClient();
   hub.add(dead); hub.add(live);
@@ -212,7 +212,7 @@ test('SseHub fanout isolates a throwing client from the rest', () => {
 });
 
 test('SseHub.closeAll closes every client and empties the registry', () => {
-  const hub = new SseHub({ keepaliveMs: 1_000_000 });
+  const hub = new SseHub();
   const a = fakeClient(); const b = fakeClient();
   hub.add(a); hub.add(b);
   hub.closeAll();
@@ -220,13 +220,31 @@ test('SseHub.closeAll closes every client and empties the registry', () => {
   assert.equal(hub.clients.size, 0, 'registry is emptied');
 });
 
-test('SseHub keepalive writes a comment frame on the timer', async () => {
-  const hub = new SseHub({ keepaliveMs: 5 });
+// #1507: the stream is silent between events. A periodic keepalive kept every
+// host that sleeps on network quiet (a pilots sandbox, a laptop) awake for as
+// long as a tab showed the app.
+test('SseHub writes nothing on its own: no keepalive frames, no timer (#1507)', async () => {
+  const hub = new SseHub();
   const a = fakeClient();
   hub.add(a);
-  await new Promise((r) => setTimeout(r, 20));
-  assert.ok(a.frames.some((f) => f === ': ka\n\n'), 'a keepalive comment frame is written');
+  await new Promise((r) => setTimeout(r, 50));
+  assert.deepEqual(a.frames, [], 'an idle stream stays silent');
+  assert.equal('_timer' in hub, false, 'the hub owns no interval');
   hub.closeAll();
+});
+
+// #1507: hello names the process AND how many reloads it has sent, so a relay
+// that paused while every tab was hidden can tell it missed one.
+test('SseHub.helloFrame carries the retry hint, the boot id and the reload seq (#1507)', () => {
+  const hub = new SseHub();
+  const first = hub.helloFrame();
+  assert.match(first, /^retry: 300\nevent: hello\ndata: /);
+  const data = JSON.parse(first.split('data: ')[1]);
+  assert.equal(data.boot, DEV_BOOT_ID);
+  assert.equal(data.seq, 0);
+  hub.reload({ v: 'page' });
+  hub.reload();
+  assert.equal(JSON.parse(hub.helloFrame().split('data: ')[1]).seq, 2, 'seq counts reload frames');
 });
 
 /* ---------------- isEventsPath (base-path aware) ---------------- */

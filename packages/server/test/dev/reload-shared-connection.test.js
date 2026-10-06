@@ -47,7 +47,11 @@ test('dev serves the reload SharedWorker, and the client uses it with a direct E
   assert.match(clientSrc, /typeof SharedWorker/, 'client feature-detects SharedWorker');
   assert.match(clientSrc, /function startReloadWorker/, 'the client inlines the relay module for the fallback');
   assert.match(clientSrc, /startReloadWorker\(scope, EventSource, "\/__webjs\/events"\)/, 'the fallback runs the relay against the real EventSource');
-  assert.match(clientSrc, /scope\.onconnect\(\{ ports: \[\{/, 'and drives it over a shim port');
+  assert.match(clientSrc, /scope\.onconnect\(\{ ports: \[shim\] \}\)/, 'and drives it over a shim port');
+  // #1507: both paths tell the relay whether the tab is visible, so the
+  // stream is held open only while someone is looking.
+  assert.match(clientSrc, /function __webjsReportVisibility/, 'the client reports its visibility');
+  assert.equal(clientSrc.match(/__webjsReportVisibility\(function/g).length, 2, 'from the SharedWorker path and the fallback alike');
   // The shim's postMessage runs application code synchronously, and the relay's
   // fanout DELETES a port whose postMessage throws (correct for a real
   // MessagePort, where a throw means the tab is gone). Unguarded, an overlay
@@ -200,7 +204,7 @@ test('the reload client probes the server is up before reloading (no restart fla
   assert.match(clientSrc, /else if \(m\.type === 'webjs-error'\) __webjsApplyError\(m\.data\)/, 'and both route an error frame to the overlay');
   // The boot-id rule (#893) lives in the relay now, in ONE place, rather than
   // being re-implemented in the fallback where the two copies could drift.
-  assert.match(clientSrc, /if \(lastBoot !== null && e\.data !== lastBoot\) requestReload\('reload'\)/, 'only a changed boot id reloads, and it is unconditionally a FULL reload (#1398)');
+  assert.match(clientSrc, /if \(lastBoot !== null && \(h\.boot !== lastBoot \|\| \(h\.seq !== null && lastSeq !== null && h\.seq !== lastSeq\)\)\) \{\s*requestReload\('reload'\);/, 'only a changed boot id, or a reload missed while paused (#1507), reloads, and it is unconditionally a FULL reload (#1398)');
   assert.equal(clientSrc.match(/lastBoot !== null/g).length, 1, 'the boot-id rule exists exactly once');
 });
 
