@@ -442,6 +442,14 @@ jobs:
         env:
           WEBJS_E2E: '1'
         run: node --test test/e2e/dev-overlay-nav.test.mjs
+      # Dev source locations (#1499): a real `webjs dev` with
+      # WEBJS_SOURCE_LOCATIONS=1 and a real browser, because the headline claim
+      # (client-rendered elements carry data-webjs-src, hydration stays clean)
+      # is a browser fact.
+      - name: Run dev-source-locations e2e (#1499)
+        env:
+          WEBJS_E2E: '1'
+        run: node --test test/e2e/dev-source-locations.test.mjs
       # Dev observability for SSR action seeding (#1309): spawns `webjs dev`
       # against a fixture app and drives a real browser, because the headline
       # criterion is a browser fact. Whether a hydrating component re-issued the
