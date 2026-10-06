@@ -463,7 +463,12 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // The Tailwind v4 CLI that css:build runs to compile public/input.css into
       // the static public/tailwind.css the layout links. UI templates only (the
       // api template has no CSS). Build tooling, never shipped to the runtime.
-      ...(isApi ? {} : { '@tailwindcss/cli': '^4.1.0' }),
+      // `tailwindcss` itself is declared too (#1493): public/input.css starts
+      // with `@import "tailwindcss"`, so the app imports that package directly.
+      // Leaving it transitive (via @tailwindcss/cli) breaks under bun's isolated
+      // linker and pnpm, which link only declared packages into the app's
+      // node_modules, so the compile fails with `Can't resolve 'tailwindcss'`.
+      ...(isApi ? {} : { '@tailwindcss/cli': '^4.1.0', tailwindcss: '^4.1.0' }),
       // tsserver plugin, wired into tsconfig below. Gives the language
       // INTELLIGENCE (go-to-def, completions, diagnostics, hover inside html``
       // templates) in any tsserver editor with NO editor plugin installed,
