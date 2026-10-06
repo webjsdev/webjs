@@ -310,13 +310,12 @@ test('a page importing a component AND a self-executing helper SHIPS, not import
 });
 
 test('a statically-imported lazy component is re-emitted, even when not rendered (#605)', async () => {
-  // A `static lazy` component is in the STATIC closure only when imported
-  // directly, and pre-elision that import eager-loaded it via the page module
-  // (lazy was already defeated for a static import). Re-emitting it keeps that
-  // exact behaviour, so a tag revealed by a later client interaction still
-  // upgrades. EXCLUDING it would under-ship: the class would never be defined,
-  // and observeLazy only covers RENDERED tags, so an imported-not-rendered lazy
-  // component would silently never register.
+  // The ANALYSIS still lists a statically-imported lazy component in the
+  // frontier: EXCLUDING it would under-ship, since the class would never be
+  // defined when its tag is revealed by a later client interaction. What the
+  // boot does with it is the render's call (#1524): it registers a lazy
+  // frontier component with the lazy loader instead of importing it, which
+  // covers a tag rendered later too (see lazy-static-import.test.js).
   const lazy = `
     import { WebComponent, html } from '@webjsdev/core';
     class Heavy extends WebComponent {

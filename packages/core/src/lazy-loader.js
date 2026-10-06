@@ -22,6 +22,17 @@
  *     // ...
  *   }
  *   MyWidget.register('my-lazy-widget');
+ *
+ * A component that another shipping module imports for registration
+ * (`import './my-lazy-widget.ts'`) stays lazy too (#1524): the server keeps
+ * that import for SSR, and the browser copy of the importer is served with
+ * the line rewritten to an `observeLazy({...})` call, so the module loads
+ * when an element with the tag is first visible: a hidden tab panel when it
+ * shows, a dialog's content when it opens, an element added later by a
+ * client render (the MutationObserver below catches it).
+ *
+ * The scan reads the light DOM (`document.querySelectorAll`), so a lazy tag
+ * rendered inside another component's shadow root is not found.
  */
 
 /** @type {Map<string, string>} tag → module URL */
@@ -29,6 +40,14 @@ const pending = new Map();
 
 /** @type {IntersectionObserver | null} */
 let observer = null;
+
+/**
+ * ONE MutationObserver for the whole page, however often `observeLazy` runs
+ * (#1524): the boot script calls it, and so does every served module whose
+ * side-effect import of a `static lazy` component was deferred to it.
+ * @type {MutationObserver | null}
+ */
+let mutations = null;
 
 /** @type {Map<string, Promise<unknown>>} in-flight module loads, keyed by URL */
 const inflight = new Map();
@@ -78,15 +97,18 @@ export function observeLazy(entries) {
   scan();
 
   // Also watch for dynamically added elements via MutationObserver.
-  if (typeof MutationObserver !== 'undefined') {
-    const mo = new MutationObserver(() => scan());
-    mo.observe(document.body, { childList: true, subtree: true });
+  if (!mutations && typeof MutationObserver !== 'undefined') {
+    mutations = new MutationObserver(() => scan());
+    mutations.observe(document.body, { childList: true, subtree: true });
   }
 }
 
 function scan() {
   if (!observer || !pending.size) return;
   for (const tag of pending.keys()) {
+    // Already defined some other way (an eager import elsewhere): nothing
+    // left to load for this tag.
+    if (customElements.get(tag)) { pending.delete(tag); continue; }
     for (const el of document.querySelectorAll(tag)) {
       observer.observe(el);
     }

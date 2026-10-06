@@ -33,7 +33,7 @@ import { reachedBareImports, resolveVendorImports, clearVendorCache, hasVendorPi
 import { browserEntryFiles } from '../browser-entries.js';
 import { buildModuleGraph, seenFilesFor, appImportsMap, reachableFromEntries } from '../module-graph.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from '../component-scanner.js';
-import { analyzeElision } from '../component-elision.js';
+import { analyzeElision, lazyComponentFiles } from '../component-elision.js';
 
 import { setVendorEntries, setCoreInstall, publishBuildId, setAppSourceId, setBasePath, basePath, setImportAliasEntries, importAliasBrowserEntries } from '../importmap.js';
 import { stripBasePath, withBasePath } from '../base-path.js';
@@ -442,6 +442,10 @@ export async function createRequestHandler(opts) {
     elidableComponents: new Set(),
     inertRouteModules: new Set(),
     importOnlyRouteModules: new Map(),
+    // `static lazy` component files -> their tags (#1524): a side-effect import
+    // of one is served as a lazy-loader registration, and the preload walks
+    // skip it. Independent of the elision switch.
+    lazyComponentFiles: new Map(),
     // The browser-bound ENTRY files (pages / layouts / boundaries / components),
     // kept alongside the expanded gate set because the vendor scan roots at the
     // entries rather than at the closure.
@@ -609,6 +613,7 @@ export async function createRequestHandler(opts) {
             state.elidableComponents = r.elidableComponents;
             state.inertRouteModules = r.inertRouteModules;
             state.importOnlyRouteModules = r.importOnlyRouteModules;
+            state.lazyComponentFiles = lazyComponentFiles(components, state.elidableComponents);
             // Dev live-reload classification (#1398): derive the three sets the
             // watch-event classifier reads. `browserBoundFiles` above is the
             // AUTHORIZATION gate (it walks from every entry, elided ones
@@ -647,7 +652,10 @@ export async function createRequestHandler(opts) {
                 // component imports), so a flip in / out of that class must bust
                 // the importer's `?v` too.
                 ...state.importOnlyRouteModules.keys(),
-              ].map(rel).sort();
+                // A file flipping to or from `static lazy` changes how every
+                // importer serves its import of it (#1524).
+                ...[...state.lazyComponentFiles.keys()].map((f) => `lazy:${f}`),
+              ].map((p) => (p.startsWith('lazy:') ? `lazy:${rel(p.slice(5))}` : rel(p))).sort();
               setElisionFingerprint(elidedPaths.length ? elidedPaths.join('\n') : '');
             }
             // App-source fingerprint for the HTML cache key (#318): a
