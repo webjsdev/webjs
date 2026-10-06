@@ -202,6 +202,15 @@
           "description": "Extra directories the dev live-reload watcher follows in addition to the appDir (#894), for content the app reads from outside its own tree (e.g. blog markdown in a repo-root blog/ dir). Each entry is resolved relative to the app root and may escape it (../blog). Read by the server (readDevWatchPathsFromApp).",
           "type": "array",
           "items": { "type": "string" }
+        },
+        "embedOrigins": {
+          "description": "Dev embed bridge (#1498, #1504), DEV-ONLY and off by default. Parent origins (e.g. https://builder.example) allowed to frame the dev server: X-Frame-Options is dropped and frame-ancestors widened for them, and every document carries a nonce-signed script that posts { source: 'webjs-embed', type } messages to such a parent and takes { source: 'webjs-embed-host', type } commands from it. A set WEBJS_EMBED_ORIGINS env var replaces this list. Read by the server (readDevToolingFromApp). Ignored by webjs start.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "sourceLocations": {
+          "description": "Dev source locations (#1499, #1504), DEV-ONLY and off by default. When true, element opening tags in the app's html templates carry data-webjs-src=\"<app-relative-file>:<line>\" in SSR output and client renders. WEBJS_SOURCE_LOCATIONS=1 or 0 overrides it for one run. Read by the server (readDevToolingFromApp). Ignored by webjs start.",
+          "type": "boolean"
         }
       }
     },

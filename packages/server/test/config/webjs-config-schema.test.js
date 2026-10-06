@@ -64,7 +64,8 @@ const KNOWN_KEYS = [
   'keepAliveTimeoutMs', // computeServerTimeouts (body-limit.js)
   // SPLIT: dev.before / dev.parallel are readAppTasks (cli/lib/app-tasks.js,
   // #550), dev.regenerate is readRegenerateRules (dev-regenerate.js, #967),
-  // dev.watch is readDevWatchPathsFromApp (dev.js, #894).
+  // dev.watch is readDevWatchPathsFromApp (dev.js, #894), dev.embedOrigins and
+  // dev.sourceLocations are readDevToolingFromApp (dev/config.js, #1504).
   'dev',
   'start', // readAppTasks (cli/lib/app-tasks.js), CLI-read (#550)
   'db', // readDbCommands (cli/lib/app-tasks.js), CLI-read (#1468)

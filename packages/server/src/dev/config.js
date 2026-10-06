@@ -318,6 +318,28 @@ export async function readDevWatchPathsFromApp(appDir) {
 }
 
 /**
+ * The dev tooling switches in `webjs.dev` (#1504): `embedOrigins` (the embed
+ * bridge, #1498) and `sourceLocations` (#1499). Raw values; the env overrides
+ * and validation live with each feature (`resolveEmbedOrigins`,
+ * `sourceLocationsRequested`). A missing or unreadable package.json is both
+ * off.
+ *
+ * @param {string} appDir
+ * @returns {Promise<{ embedOrigins: unknown, sourceLocations: unknown }>}
+ */
+export async function readDevToolingFromApp(appDir) {
+  let dev;
+  try {
+    const pkg = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
+    dev = pkg && pkg.webjs && pkg.webjs.dev;
+  } catch {
+    dev = undefined;
+  }
+  if (!dev || typeof dev !== 'object') return { embedOrigins: undefined, sourceLocations: undefined };
+  return { embedOrigins: dev.embedOrigins, sourceLocations: dev.sourceLocations };
+}
+
+/**
  * Resolve the node:http server timeouts (issue #237) from the app's
  * package.json `webjs.requestTimeoutMs` / `webjs.headersTimeoutMs` /
  * `webjs.keepAliveTimeoutMs` plus the env overrides. A missing or unreadable

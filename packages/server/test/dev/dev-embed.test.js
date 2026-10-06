@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { createRequestHandler } from '../../src/dev.js';
-import { parseEmbedOrigins, allowEmbedFraming, embedScriptTag, setEmbedOrigins } from '../../src/dev-embed.js';
+import { parseEmbedOrigins, resolveEmbedOrigins, allowEmbedFraming, embedScriptTag, setEmbedOrigins } from '../../src/dev-embed.js';
 
 let tmpRoot;
 const savedEnv = process.env.WEBJS_EMBED_ORIGINS;
@@ -136,4 +136,28 @@ test('the inlined bridge is comment-free, contains no script closer, and stays s
   const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   assert.ok(!/['"`][^'"`\n]*(\/\*|\/\/)[^'"`\n]*['"`]/.test(code), 'no comment opener inside a string literal');
   assert.doesNotThrow(() => new Function(body), 'the inlined body parses');
+});
+
+test('resolveEmbedOrigins: the env var replaces the config list, else the config applies (#1504)', () => {
+  const quiet = { warn() {} };
+  assert.deepEqual(resolveEmbedOrigins(undefined, ['https://a.dev/', 'nope'], quiet), ['https://a.dev']);
+  assert.deepEqual(resolveEmbedOrigins('https://b.dev', ['https://a.dev'], quiet), ['https://b.dev']);
+  assert.deepEqual(resolveEmbedOrigins('  ', ['https://a.dev'], quiet), ['https://a.dev'], 'a blank env var does not override');
+  assert.deepEqual(resolveEmbedOrigins(undefined, 'https://a.dev', quiet), [], 'a non-array config is ignored');
+  assert.deepEqual(resolveEmbedOrigins(undefined, undefined, quiet), []);
+});
+
+test('webjs.dev.embedOrigins in package.json enables the bridge with no env var (#1504)', async () => {
+  const appDir = makeApp({
+    ...PAGE,
+    'package.json': JSON.stringify({ name: 'cfg-embed', type: 'module', webjs: { dev: { embedOrigins: ['https://builder.example'] } } }),
+  });
+  const { res, html } = await get({ appDir, dev: true }, undefined);
+  assert.ok(html.includes('installEmbedBridge(["https://builder.example"])'), 'the config origins are inlined');
+  assert.equal(res.headers.get('x-frame-options'), null);
+  const env = await get({ appDir, dev: true }, 'https://other.example');
+  assert.ok(env.html.includes('installEmbedBridge(["https://other.example"])'), 'the env var replaces the config list');
+  const prod = await get({ appDir, dev: false }, undefined);
+  assert.ok(!prod.html.includes('data-webjs-embed'), 'production ignores the config');
+  assert.equal(prod.res.headers.get('x-frame-options'), 'SAMEORIGIN');
 });
