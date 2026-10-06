@@ -2,8 +2,9 @@
  * The dev embed bridge, SERVER half (#1498).
  *
  * `webjs dev` with `WEBJS_EMBED_ORIGINS` set (a comma-separated list of parent
- * origins, e.g. `https://crisp.app,http://localhost:8080`) makes an app ready
- * to be previewed inside an iframe on those origins:
+ * origins, e.g. `https://builder.example,http://localhost:8080`), or the app's
+ * `webjs.dev.embedOrigins` list (#1504), makes an app ready to be previewed
+ * inside an iframe on those origins:
  *
  *   1. every HTML document gets a small inline script (the browser half,
  *      `dev-embed-client.js`) that reports page state to the parent and takes
@@ -71,6 +72,23 @@ export function parseEmbedOrigins(raw, opts) {
     if (!out.includes(origin)) out.push(origin);
   }
   return out;
+}
+
+/**
+ * The effective embed origins (#1504): `WEBJS_EMBED_ORIGINS`, when set and
+ * non-empty, replaces the app's `webjs.dev.embedOrigins`; otherwise the config
+ * list applies. Both go through `parseEmbedOrigins`, so a bad entry is dropped
+ * with the same warning wherever it was written.
+ *
+ * @param {string | undefined} envRaw
+ * @param {unknown} configured the app's `webjs.dev.embedOrigins`
+ * @param {{ warn?: (msg: string) => void }} [opts]
+ * @returns {string[]}
+ */
+export function resolveEmbedOrigins(envRaw, configured, opts) {
+  if (typeof envRaw === 'string' && envRaw.trim()) return parseEmbedOrigins(envRaw, opts);
+  if (!Array.isArray(configured)) return [];
+  return parseEmbedOrigins(configured.filter((o) => typeof o === 'string').join(','), opts);
 }
 
 /**

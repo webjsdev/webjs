@@ -132,6 +132,20 @@ export interface WebjsDevTasks {
    * appDir) entries are skipped. Read by the server (`readDevWatchPathsFromApp`).
    */
   watch?: string[];
+  /**
+   * Dev embed bridge (#1498, #1504), DEV-ONLY, off by default. Parent origins
+   * (`https://builder.example`) allowed to frame the dev server and exchange
+   * `webjs-embed` messages with it. A set `WEBJS_EMBED_ORIGINS` replaces this
+   * list. Ignored by `webjs start`.
+   */
+  embedOrigins?: string[];
+  /**
+   * Dev source locations (#1499, #1504), DEV-ONLY, off by default. `true` stamps
+   * `data-webjs-src="<app-relative-file>:<line>"` on the element opening tags of
+   * the app's `html` templates. `WEBJS_SOURCE_LOCATIONS=1|0` overrides it for
+   * one run. Ignored by `webjs start`.
+   */
+  sourceLocations?: boolean;
 }
 
 /** Start task orchestration in `webjs.start` (#550). Read by the CLI, not the server. */

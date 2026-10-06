@@ -41,7 +41,7 @@ import { setAssetUrlProvider, setFormActionResolver } from '@webjsdev/core';
 import { resolveActionIdentity } from '../form-action-identity.js';
 import { setAssetRoots, clearAssetHashCache, setElisionFingerprint, withAssetHash, assetHashFor, resolveAssetUrl } from '../asset-hash.js';
 import { applySecurityHeaders, webRequestIsHttps } from '../headers.js';
-import { parseEmbedOrigins, setEmbedOrigins, allowEmbedFraming } from '../dev-embed.js';
+import { resolveEmbedOrigins, setEmbedOrigins, allowEmbedFraming } from '../dev-embed.js';
 import {
   applyRedirects,
   applyTrailingSlash,
@@ -62,6 +62,7 @@ import {
   readAllowedOriginsFromApp,
   readCspConfigFromApp,
   readBodyLimitsFromApp,
+  readDevToolingFromApp,
 } from './config.js';
 import {
   exists, kebab, resolveRequestId, shouldAccessLog, loadAppEnv, collectRouteModules,
@@ -216,11 +217,14 @@ export async function createRequestHandler(opts) {
   // analysis pass re-reads it each rebuild so a dev toggle takes effect live.
   setClientRouterEnabled(await readClientRouterEnabled(appDir));
 
-  // Dev embed bridge (#1498): `WEBJS_EMBED_ORIGINS` lets the listed parent
+  // Dev embed bridge (#1498): `WEBJS_EMBED_ORIGINS` (or `webjs.dev.embedOrigins`) lets the listed parent
   // origins frame this dev server and receive the bridge's messages. Read once
   // here, and only in dev, so a production handler records no origins and
   // neither injects the script nor relaxes a framing header.
-  const embedOriginsValue = dev ? parseEmbedOrigins(process.env.WEBJS_EMBED_ORIGINS) : [];
+  // `webjs.dev.embedOrigins` in package.json is the default (#1504); a set
+  // env var replaces it for one run.
+  const devTooling = dev ? await readDevToolingFromApp(appDir) : { embedOrigins: undefined, sourceLocations: undefined };
+  const embedOriginsValue = dev ? resolveEmbedOrigins(process.env.WEBJS_EMBED_ORIGINS, devTooling.embedOrigins) : [];
   setEmbedOrigins(embedOriginsValue);
 
   const coreDir = locateCoreDir(appDir);
@@ -288,13 +292,15 @@ export async function createRequestHandler(opts) {
   // on seeding would mean `webjs.seed: false` silently broke every no-JS form.
   await registerActionHooks({ seed: await readSeedEnabled(appDir), dev });
 
-  // Dev source locations (#1499): `WEBJS_SOURCE_LOCATIONS=1` under `webjs dev`
+  // Dev source locations (#1499): `WEBJS_SOURCE_LOCATIONS=1` (or
+  // `webjs.dev.sourceLocations: true`) under `webjs dev`
   // stamps `data-webjs-src="<file>:<line>"` on the element opening tags of the
   // app's `html` templates. Read once (the SSR load hook is process-global and
   // cannot be uninstalled), never in prod. The browser half reads
   // `state.sourceLocations` in serve.js; the SSR half is this load hook, which
   // must be in place before any app module is imported.
-  const sourceLocations = dev && sourceLocationsRequested();
+  // `webjs.dev.sourceLocations` is the default (#1504); the env var wins.
+  const sourceLocations = dev && sourceLocationsRequested(process.env, devTooling.sourceLocations);
   if (sourceLocations) {
     registerSourceLocationHook(appDir);
     // Module URLs are realpaths, so a symlinked app dir registers both forms.

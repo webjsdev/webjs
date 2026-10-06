@@ -64,15 +64,21 @@ const REGEX_AFTER_KEYWORDS = new Set([
 export const SOURCE_LOCATIONS_ENV = 'WEBJS_SOURCE_LOCATIONS';
 
 /**
- * Whether the env asks for source locations. Read by the dev handler once, at
- * construction; the caller also requires `dev`, so production never consults it.
+ * Whether source locations are on (#1499, #1504). The app's
+ * `webjs.dev.sourceLocations` sets the default; the env var, when set, wins
+ * either way (`1` / `true` on, `0` / `false` off), so one run can flip it
+ * without editing package.json. Read by the dev handler once, at construction;
+ * the caller also requires `dev`, so production never consults it.
  *
  * @param {Record<string, string | undefined>} [env]
+ * @param {unknown} [configured] the app's `webjs.dev.sourceLocations`
  * @returns {boolean}
  */
-export function sourceLocationsRequested(env = process.env) {
+export function sourceLocationsRequested(env = process.env, configured = false) {
   const v = String(env[SOURCE_LOCATIONS_ENV] || '').trim().toLowerCase();
-  return v === '1' || v === 'true';
+  if (v === '1' || v === 'true') return true;
+  if (v === '0' || v === 'false') return false;
+  return configured === true;
 }
 
 /**

@@ -166,3 +166,12 @@ test('sourceLocationsRequested reads WEBJS_SOURCE_LOCATIONS', () => {
   assert.equal(sourceLocationsRequested({ WEBJS_SOURCE_LOCATIONS: '0' }), false);
   assert.equal(sourceLocationsRequested({}), false);
 });
+
+test('sourceLocationsRequested: webjs.dev.sourceLocations is the default, the env var wins (#1504)', () => {
+  assert.equal(sourceLocationsRequested({}, true), true, 'config on, env unset');
+  assert.equal(sourceLocationsRequested({ WEBJS_SOURCE_LOCATIONS: '0' }, true), false, 'env off beats config on');
+  assert.equal(sourceLocationsRequested({ WEBJS_SOURCE_LOCATIONS: 'false' }, true), false);
+  assert.equal(sourceLocationsRequested({ WEBJS_SOURCE_LOCATIONS: '1' }, false), true, 'env on beats config off');
+  assert.equal(sourceLocationsRequested({ WEBJS_SOURCE_LOCATIONS: 'maybe' }, true), true, 'an unrecognised env value defers to the config');
+  assert.equal(sourceLocationsRequested({}, 'yes'), false, 'only a literal true in config turns it on');
+});

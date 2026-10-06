@@ -63,10 +63,11 @@ const FILES = {
 };
 
 const dirs = [];
-function makeApp() {
+function makeApp(webjs) {
   const appDir = mkdtempSync(join(HERE, '.tmp-app-'));
   dirs.push(appDir);
-  for (const [rel, body] of Object.entries(FILES)) {
+  const files = webjs ? { ...FILES, 'package.json': JSON.stringify({ name: 'srcloc', type: 'module', webjs }) } : FILES;
+  for (const [rel, body] of Object.entries(files)) {
     const abs = join(appDir, rel);
     mkdirSync(dirname(abs), { recursive: true });
     writeFileSync(abs, body);
@@ -135,6 +136,26 @@ test('production never annotates, even with the variable set', async () => {
     const prod = await render(appDir, { dev: false });
     assert.doesNotMatch(prod.page, LOC);
     assert.doesNotMatch(prod.mod, LOC);
+  } finally {
+    delete process.env.WEBJS_SOURCE_LOCATIONS;
+  }
+});
+
+test('webjs.dev.sourceLocations turns it on with no env var (#1504)', async () => {
+  const appDir = makeApp({ dev: { sourceLocations: true } });
+  delete process.env.WEBJS_SOURCE_LOCATIONS;
+  const viaConfig = await render(appDir, { dev: true });
+  assert.match(viaConfig.page, /<main data-webjs-src="app\/page\.ts:5">/, 'SSR annotated from the config');
+  assert.match(viaConfig.mod, /<p data-webjs-src="components\/hello-card\.ts:4"/, 'served module annotated from the config');
+});
+
+test('WEBJS_SOURCE_LOCATIONS=0 overrides a config that turns it on (#1504)', async () => {
+  const appDir = makeApp({ dev: { sourceLocations: true } });
+  process.env.WEBJS_SOURCE_LOCATIONS = '0';
+  try {
+    const off = await render(appDir, { dev: true });
+    assert.doesNotMatch(off.page, LOC);
+    assert.doesNotMatch(off.mod, LOC);
   } finally {
     delete process.env.WEBJS_SOURCE_LOCATIONS;
   }
