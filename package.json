@@ -198,6 +198,10 @@
                   "run": "bun test/bun/dev-morph-verdict.mjs"
                 },
                 {
+                  "title": "bun proof: dev-embed",
+                  "run": "bun test/bun/dev-embed.mjs"
+                },
+                {
                   "title": "bun proof: app-source-signal",
                   "run": "bun test/bun/app-source-signal.mjs"
                 },

@@ -41,6 +41,7 @@ import { setAssetUrlProvider, setFormActionResolver } from '@webjsdev/core';
 import { resolveActionIdentity } from '../form-action-identity.js';
 import { setAssetRoots, clearAssetHashCache, setElisionFingerprint, withAssetHash, assetHashFor, resolveAssetUrl } from '../asset-hash.js';
 import { applySecurityHeaders, webRequestIsHttps } from '../headers.js';
+import { parseEmbedOrigins, setEmbedOrigins, allowEmbedFraming } from '../dev-embed.js';
 import {
   applyRedirects,
   applyTrailingSlash,
@@ -214,6 +215,13 @@ export async function createRequestHandler(opts) {
   // before any render even if a request arrives before the first warm. The
   // analysis pass re-reads it each rebuild so a dev toggle takes effect live.
   setClientRouterEnabled(await readClientRouterEnabled(appDir));
+
+  // Dev embed bridge (#1498): `WEBJS_EMBED_ORIGINS` lets the listed parent
+  // origins frame this dev server and receive the bridge's messages. Read once
+  // here, and only in dev, so a production handler records no origins and
+  // neither injects the script nor relaxes a framing header.
+  const embedOriginsValue = dev ? parseEmbedOrigins(process.env.WEBJS_EMBED_ORIGINS) : [];
+  setEmbedOrigins(embedOriginsValue);
 
   const coreDir = locateCoreDir(appDir);
   // Switch the importmap between dist/ bundles and src/ per-file
@@ -1013,6 +1021,12 @@ export async function createRequestHandler(opts) {
           /* a malformed policy must not take the request down: serve without CSP */
         }
       }
+
+      // Dev embed bridge (#1498): let the allowed origins frame the page. Runs
+      // after every header source above (defaults, webjs.headers, middleware,
+      // the CSP), so it overrides them all, which is the point: the variable
+      // is the developer saying "this dev server is framed by these origins".
+      if (embedOriginsValue.length) allowEmbedFraming(merged.headers, embedOriginsValue);
 
       // Server HTML cache write (#241): if the SSR marked this response as a
       // cache candidate (an opted-in `revalidate` page), store the FINAL body

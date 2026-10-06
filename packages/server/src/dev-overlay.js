@@ -158,6 +158,14 @@ export function renderDevOverlay(f, currentPath) {
   (document.body || document.documentElement).appendChild(o);
   __wjOverlay = o;
   __wjFrame = f;
+  // Announce that an overlay is now on screen, for the dev embed bridge
+  // (#1498), which relays it to a host framing this page. Dispatched here,
+  // after the scope gate above, so a frame held for another url never counts.
+  try {
+    document.dispatchEvent(new CustomEvent('webjs:dev-overlay', {
+      detail: { kind: f.kind || 'render', message: f.message || '', file: f.file || null, line: f.line || null },
+    }));
+  } catch (_) { /* a listener throwing must not break the overlay */ }
 }
 
 /**

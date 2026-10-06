@@ -223,13 +223,17 @@ jobs:
       # listener shells drive `SseHub._raw` over different transports (node
       # `res.write` versus a Bun ReadableStream controller), so the frame has to
       # be proven byte-identical on both.
-      - name: webjs dev extra-watch + reload-retry + overlay-scope + public-before-warm + morph-verdict on Bun
+      # dev-embed rides here too: the embed bridge (#1498) is injected into the
+      # SSR head and relaxes the framing headers in the shared response merge,
+      # so the injection and the header rewrite have to hold on both shells.
+      - name: webjs dev extra-watch + reload-retry + overlay-scope + public-before-warm + morph-verdict + embed on Bun
         run: |
           bun test/bun/dev-extra-watch.mjs
           bun test/bun/dev-reload-retry.mjs
           bun test/bun/dev-overlay-scope.mjs
           bun test/bun/dev-public-before-warm.mjs
           bun test/bun/dev-morph-verdict.mjs
+          bun test/bun/dev-embed.mjs
       # Dev source locations (#1499): the SSR half is a module load hook, which
       # is module.registerHooks on Node and a Bun.plugin onLoad on Bun, so the
       # annotation (and the plugin leaving *.server.* to the seed plugin) has
