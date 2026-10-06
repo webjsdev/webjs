@@ -1,9 +1,9 @@
 import { readFile, writeFile, mkdir, unlink, stat, rename, readdir } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { BUILTIN, FRAMEWORK_SERVER_ONLY, extractPackageName, scanBareImports } from './scanner.js';
-import { getPackageVersion } from './manifest.js';
+import { getPackageVersion, getPackageDeps } from './manifest.js';
 import { SUPPORTED_PROVIDERS } from './providers.js';
 import { PIN_BUNDLE_TIMEOUT_MS, fetchIntegrity, sha384Integrity } from './integrity.js';
 import { jspmGenerate } from './jspm.js';
@@ -506,17 +506,54 @@ export function basePackage(spec) {
  * when code imports `dayjs/plugin/utc`, and vice versa). Integrity hashes for
  * dropped URLs are pruned too.
  *
+ * With `opts.appDir` it also keeps the TRANSITIVE dependencies of every kept
+ * package (#1518). App code never imports a transitive (`@codemirror/view`
+ * imports `style-mod`, `@codemirror/language` imports `@lezer/lr`), so the
+ * filter above alone dropped every one of them and the browser failed to
+ * resolve the bare specifier. The closure walks each kept package's installed
+ * `package.json`, resolving each dependency from its dependent's directory, and
+ * keeps every pin entry whose base package it reaches, which is the set the
+ * live resolve serves (jspm flattens the transitives of the reachable
+ * installs). When a kept package is not on disk the graph cannot be walked, so
+ * every pin entry the app does not itself declare is kept instead: an unused
+ * entry costs nothing, a missing one breaks the page.
+ *
  * @param {Record<string, string>} imports  pin entries (specifier -> URL)
  * @param {Record<string, string>} integrity  SRI hashes keyed by URL
  * @param {Set<string>} reachable  bare specifiers used by non-elided modules
+ * @param {{ appDir?: string }} [opts]
  * @returns {{ imports: Record<string, string>, integrity: Record<string, string> }}
  */
-export function prunePinToReachable(imports, integrity, reachable) {
-  const reachableBases = new Set([...reachable].map(basePackage));
+export function prunePinToReachable(imports, integrity, reachable, opts = {}) {
+  const keepBases = new Set([...reachable].map(basePackage));
+  if (opts.appDir) {
+    const pinnedBases = new Set(Object.keys(imports || {}).map(basePackage));
+    let complete = true;
+    /** @type {Array<[string, string]>} base package, directory to resolve it from */
+    const queue = [...keepBases].filter((b) => pinnedBases.has(b)).map((b) => [b, opts.appDir]);
+    const walked = new Set();
+    while (queue.length) {
+      const [base, from] = /** @type {[string, string]} */ (queue.shift());
+      const key = `${base}\0${from}`;
+      if (walked.has(key)) continue;
+      walked.add(key);
+      const deps = getPackageDeps(base, from);
+      if (!deps) { complete = false; continue; }
+      for (const name of deps.names) {
+        if (!pinnedBases.has(name)) continue;
+        keepBases.add(name);
+        queue.push([name, deps.dir]);
+      }
+    }
+    if (!complete) {
+      const declared = declaredDeps(opts.appDir);
+      for (const b of pinnedBases) if (!declared.has(b)) keepBases.add(b);
+    }
+  }
   /** @type {Record<string, string>} */
   const keptImports = {};
   for (const [spec, url] of Object.entries(imports || {})) {
-    if (reachable.has(spec) || reachableBases.has(basePackage(spec))) {
+    if (reachable.has(spec) || keepBases.has(basePackage(spec))) {
       keptImports[spec] = url;
     }
   }
@@ -527,6 +564,25 @@ export function prunePinToReachable(imports, integrity, reachable) {
     if (keptUrls.has(url)) keptIntegrity[url] = hash;
   }
   return { imports: keptImports, integrity: keptIntegrity };
+}
+
+/**
+ * Every package the app's own package.json declares, in any dependency field.
+ * @param {string} appDir
+ * @returns {Set<string>}
+ */
+function declaredDeps(appDir) {
+  try {
+    const pkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
+    return new Set([
+      ...Object.keys(pkg.dependencies || {}),
+      ...Object.keys(pkg.devDependencies || {}),
+      ...Object.keys(pkg.peerDependencies || {}),
+      ...Object.keys(pkg.optionalDependencies || {}),
+    ]);
+  } catch {
+    return new Set();
+  }
 }
 
 // ---------------------------------------------------------------------------

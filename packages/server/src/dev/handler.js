@@ -816,7 +816,7 @@ export async function createRequestHandler(opts) {
           // path skipped it. This runs on the first warm AND after every rebuild,
           // so the pruned map is the single source of truth.
           const reachable = await scan();
-          ({ imports, integrity } = prunePinToReachable(imports, integrity, reachable));
+          ({ imports, integrity } = prunePinToReachable(imports, integrity, reachable, { appDir }));
         }
         await setVendorEntries(imports, integrity);
         return v.ok;

@@ -502,7 +502,13 @@ conditional leaves a CSP-off document one newline shorter than a CSP-on one).
    `.webjs/vendor/importmap.json` is applied verbatim at boot (for a stable
    build id) and then, once elision is known, pruned to the specifiers still
    reachable from non-elided modules via `prunePinToReachable` in `ensureReady`
-   (issue #197). So a pinned app and an unpinned app serve the SAME map. The
+   (issue #197), KEEPING the transitive dependencies of every kept package
+   (#1518): the prune walks each kept package's installed `package.json`
+   (`getPackageDeps` in `vendor/manifest.js`, resolved from the dependent's own
+   directory) and keeps every pin entry it reaches, because app code never
+   imports a transitive like `style-mod` or `@lezer/lr` and pruning them broke
+   the page. When a kept package is not on disk it keeps every pin entry the app
+   does not itself declare. So a pinned app and an unpinned app serve the SAME map. The
    advertised build id stays the boot-published hash of the committed pin (a
    deploy fingerprint) and is not re-published, so only the served map shrinks
    and the warmup window cannot drift the id.
