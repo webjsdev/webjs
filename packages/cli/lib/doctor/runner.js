@@ -11,6 +11,7 @@ import { checkElisionCarriers, checkElisionComponents } from './probes/elision.j
 import { checkStaticAssetFreshness } from './probes/static-asset-freshness.js';
 import { checkUnmarkedAssetLinks } from './probes/unmarked-asset-links.js';
 import { checkFrameworkResolves, checkFrameworkLinks } from './probes/framework-resolves.js';
+import { checkWorkspaceOverrides } from './probes/workspace-overrides.js';
 
 /**
  * @typedef {import('./codes.js').DoctorResult} DoctorResult
@@ -64,6 +65,7 @@ export async function runDoctorChecks(appDir, opts = {}) {
     checkElisionComponents(elision),
     checkStaticAssetFreshness(appDir),
     checkUnmarkedAssetLinks(appDir),
+    Promise.resolve(checkWorkspaceOverrides(appDir)),
   ]);
   // Attach the stable machine code to every result (#975). Centralized here so
   // each check function stays free of the code-contract concern.
