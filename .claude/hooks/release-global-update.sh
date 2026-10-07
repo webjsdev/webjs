@@ -30,13 +30,15 @@ cmd=$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2>/dev/null 
 if [ -z "$cmd" ]; then exit 0; fi
 
 # Only after a `gh pr merge`.
-if ! printf '%s' "$cmd" | grep -Eq '(^|[^[:alnum:]-])gh pr merge([^[:alnum:]-]|$)'; then
+# scripts/ci-merge.sh counts too: it runs local CI and then `gh pr merge`
+# inside the script, where this hook cannot see the literal string (#1593).
+if ! printf '%s' "$cmd" | grep -Eq '(^|[^[:alnum:]-])(gh pr merge|ci-merge\.sh)([^[:alnum:]-]|$)'; then
   exit 0
 fi
 command -v gh >/dev/null 2>&1 || exit 0
 
-# The PR number is the first bare number after `gh pr merge`.
-num=$(printf '%s' "$cmd" | grep -oE 'gh pr merge[[:space:]]+#?[0-9]+' | grep -oE '[0-9]+' | head -1)
+# The PR number is the first bare number after `gh pr merge` or ci-merge.sh.
+num=$(printf '%s' "$cmd" | grep -oE '(gh pr merge|ci-merge\.sh)[[:space:]]+#?[0-9]+' | grep -oE '[0-9]+$' | head -1)
 if [ -z "$num" ]; then exit 0; fi
 
 # REST, not `gh pr view`. Every `gh pr *` porcelain command goes through the
