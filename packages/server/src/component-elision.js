@@ -1607,3 +1607,66 @@ export function lazyComponentFiles(components, elidable) {
   }
   return out;
 }
+
+/** `import <bindings> from 'x'` (the bindings part is captured). */
+const BINDING_IMPORT_RE = /\bimport\s+(type\s+)?([\w$*{}\s,]+?)\s+from\s+(['"])([^'"]+)\3/g;
+/** `export { a } from 'x'` / `export * from 'x'` (a re-export needs the module too). */
+const REEXPORT_RE = /\bexport\s+(type\s+)?(?:\*|\{[^}]*\}|\*\s+as\s+[\w$]+)\s+from\s+(['"])([^'"]+)\2/g;
+
+/**
+ * Is this import clause types only (`import type { A }`, or every named
+ * specifier marked `type`)? Those are erased before the browser sees them.
+ *
+ * @param {string | undefined} typeKw
+ * @param {string} clause
+ */
+function typeOnlyClause(typeKw, clause) {
+  if (typeKw) return true;
+  const m = clause.trim().match(/^\{([\s\S]*)\}$/);
+  if (!m) return false;
+  const names = m[1].split(',').map((s) => s.trim()).filter(Boolean);
+  return names.length > 0 && names.every((n) => /^type\s/.test(n));
+}
+
+/**
+ * The lazy component files some module imports WITH bindings (#1524). A
+ * binding import loads the module eagerly whatever the class says, because the
+ * importer needs the value when it runs. Such a file is not lazy in practice,
+ * so the caller drops it from the lazy set: otherwise the preload walks would
+ * skip a module the browser still fetches up front, which only makes it slower.
+ *
+ * Only importers whose graph edges reach a lazy file are read. A server file is
+ * never served, so its imports do not count.
+ *
+ * @param {Map<string, string[]>} lazyFiles
+ * @param {import('./module-graph.js').ModuleGraph | undefined} moduleGraph
+ * @param {(file: string) => Promise<string>} readFileFn
+ * @param {(spec: string, fromFile: string, appDir: string) => (string|null)} resolveImport
+ * @param {string} appDir
+ * @returns {Promise<Set<string>>}
+ */
+export async function bindingImportedLazyFiles(lazyFiles, moduleGraph, readFileFn, resolveImport, appDir) {
+  /** @type {Set<string>} */
+  const out = new Set();
+  if (!lazyFiles.size || !moduleGraph) return out;
+  for (const [importer, deps] of moduleGraph) {
+    if (SERVER_FILE_RE.test(importer)) continue;
+    let reaches = false;
+    for (const d of deps) if (lazyFiles.has(d) && !out.has(d)) { reaches = true; break; }
+    if (!reaches) continue;
+    let src;
+    try { src = await readFileFn(importer); } catch { continue; }
+    const code = redactStringsAndTemplates(maskComments(src));
+    for (const m of code.matchAll(BINDING_IMPORT_RE)) {
+      if (typeOnlyClause(m[1], m[2])) continue;
+      const abs = resolveImport(m[4], importer, appDir);
+      if (abs && lazyFiles.has(abs)) out.add(abs);
+    }
+    for (const m of code.matchAll(REEXPORT_RE)) {
+      if (m[1]) continue;
+      const abs = resolveImport(m[3], importer, appDir);
+      if (abs && lazyFiles.has(abs)) out.add(abs);
+    }
+  }
+  return out;
+}

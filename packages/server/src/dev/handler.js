@@ -31,9 +31,9 @@ import { mintNonce, buildCspHeader, cspHeaderName } from '../csp.js';
 import { propagateTrustedRemoteIp } from '../rate-limit.js';
 import { reachedBareImports, resolveVendorImports, clearVendorCache, hasVendorPin, readPinFile, prunePinToReachable } from '../vendor.js';
 import { browserEntryFiles } from '../browser-entries.js';
-import { buildModuleGraph, seenFilesFor, appImportsMap, reachableFromEntries } from '../module-graph.js';
+import { buildModuleGraph, seenFilesFor, appImportsMap, reachableFromEntries, resolveImport } from '../module-graph.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from '../component-scanner.js';
-import { analyzeElision, lazyComponentFiles } from '../component-elision.js';
+import { analyzeElision, lazyComponentFiles, bindingImportedLazyFiles } from '../component-elision.js';
 
 import { setVendorEntries, setCoreInstall, publishBuildId, setAppSourceId, setBasePath, basePath, setImportAliasEntries, importAliasBrowserEntries } from '../importmap.js';
 import { stripBasePath, withBasePath } from '../base-path.js';
@@ -614,6 +614,10 @@ export async function createRequestHandler(opts) {
             state.inertRouteModules = r.inertRouteModules;
             state.importOnlyRouteModules = r.importOnlyRouteModules;
             state.lazyComponentFiles = lazyComponentFiles(components, state.elidableComponents);
+            // A lazy component some module imports WITH bindings loads eagerly
+            // anyway, so it keeps its preload hint and its imports as written.
+            for (const f of await bindingImportedLazyFiles(state.lazyComponentFiles, state.moduleGraph,
+              (f) => readFile(f, 'utf8'), resolveImport, appDir)) state.lazyComponentFiles.delete(f);
             // Dev live-reload classification (#1398): derive the three sets the
             // watch-event classifier reads. `browserBoundFiles` above is the
             // AUTHORIZATION gate (it walks from every entry, elided ones

@@ -18,7 +18,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync } from 'node
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { createRequestHandler } from '../../src/dev.js';
-import { deferLazyImportsFromSource, lazyComponentFiles } from '../../src/component-elision.js';
+import { deferLazyImportsFromSource, lazyComponentFiles, bindingImportedLazyFiles } from '../../src/component-elision.js';
 import { declaresLazy } from '../../src/component-scanner.js';
 import { createBrowserTestHandler } from '../../src/testing.js';
 
@@ -87,6 +87,28 @@ test('lazyComponentFiles keeps lazy files only, and leaves an elided one to the 
   ];
   const out = lazyComponentFiles(comps, new Set([BADGE]));
   assert.deepEqual([...out.entries()], [[PANE, ['x-pane']]]);
+});
+
+test('bindingImportedLazyFiles finds lazy files a module imports with bindings', async () => {
+  const OTHER = '/app/components/other.js';
+  const lazyFiles = new Map([[PANE, ['x-pane']], [OTHER, ['x-other']], [BADGE, ['x-badge']]]);
+  const g = new Map([
+    ['/app/shell.js', new Set([PANE, OTHER, BADGE])],
+    ['/app/data.server.js', new Set([BADGE])],
+  ]);
+  const files = {
+    '/app/shell.js': [
+      `import './components/other.js';`,
+      `import { Pane } from './components/pane.js';`,
+      `import type { Badge } from './components/badge.js';`,
+      `import { type Other } from './components/other.js';`,
+      `// import { Badge } from './components/badge.js';`,
+    ].join('\n'),
+    // A server file's imports never reach the browser.
+    '/app/data.server.js': `import { Badge } from './components/badge.js';`,
+  };
+  const out = await bindingImportedLazyFiles(lazyFiles, g, async (f) => files[f], resolver, '/app');
+  assert.deepEqual([...out], [PANE], 'only the real binding import counts');
 });
 
 // ---- through the request handler -------------------------------------------
@@ -233,6 +255,26 @@ export default () => html\`<x-test-shell></x-test-shell>\`;`,
     const served = await (await t.handle(new Request('http://x/components/shell.ts'))).text();
     assert.match(served, /import '\.\/pane\.ts';/, 'the import is served as written');
     assert.doesNotMatch(served, /observeLazy/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a lazy component another module imports with bindings stays eager, preload included', async () => {
+  const dir = makeApp({
+    'app/layout.ts': LAYOUT,
+    'app/page.ts': `import { html } from '@webjsdev/core';
+import '../components/shell.ts';
+export default () => html\`<x-bound-shell></x-bound-shell>\`;`,
+    'components/shell.ts': SHELL_SRC('x-bound-shell', 'x-bound-pane').replace("import './pane.ts';", "import { Pane } from './pane.ts';\nconsole.log(Pane);"),
+    'components/pane.ts': PANE_SRC('x-bound-pane').replace('class Pane', 'export class Pane'),
+    'components/pane-helper.ts': HELPER,
+  });
+  try {
+    const app = await createRequestHandler({ appDir: dir, dev: true });
+    if (app.warmup) await app.warmup();
+    const html = await (await app.handle(new Request('http://x/'))).text();
+    assert.ok(preloads(html).some((h) => h.includes('/components/pane.ts')), 'the eagerly loaded pane keeps its preload');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
