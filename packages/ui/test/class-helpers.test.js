@@ -248,3 +248,91 @@ test('native-select: wrapper + select + option helpers', { skip }, async () => {
     assertHelper(mod, name);
   }
 });
+
+// ---------- empty ----------
+
+test('empty: 6 subpart helpers, icon media variant', { skip }, async () => {
+  const mod = await import(join(COMPONENTS_DIR, 'empty.ts'));
+  for (const name of [
+    'emptyClass',
+    'emptyHeaderClass',
+    'emptyMediaClass',
+    'emptyTitleClass',
+    'emptyDescriptionClass',
+    'emptyContentClass',
+  ]) assertHelper(mod, name);
+  assert.match(mod.emptyClass(), /border-dashed/);
+  assert.match(mod.emptyClass(), /md:p-12/);
+  assert.match(mod.emptyHeaderClass(), /max-w-sm/);
+  assert.match(mod.emptyMediaClass(), /bg-transparent/);
+  const icon = mod.emptyMediaClass({ variant: 'icon' });
+  assert.match(icon, /size-10/);
+  assert.match(icon, /rounded-lg/);
+  assert.match(icon, /bg-muted/);
+  assert.match(icon, /text-foreground/);
+  assert.doesNotMatch(icon, /bg-transparent/);
+  assert.match(mod.emptyDescriptionClass(), /text-muted-foreground/);
+});
+
+// ---------- spinner ----------
+
+test('spinner: spinnerClass + an inline SVG that SSRs as a named status', { skip }, async () => {
+  const mod = await import(join(COMPONENTS_DIR, 'spinner.ts'));
+  assert.equal(mod.spinnerClass(), 'size-4 animate-spin');
+  const { renderToString } = await import('@webjsdev/core/server');
+  const out = await renderToString(mod.spinner());
+  assert.match(out, /<svg[^>]*role="status"/);
+  assert.match(out, /aria-label="Loading"/);
+  assert.match(out, /stroke="currentColor"/);
+  assert.match(out, /class="size-4 animate-spin"/);
+  assert.match(out, /M21 12a9 9 0 1 1-6\.219-8\.56/);
+});
+
+test('spinner: a size class replaces the default, label renames it', { skip }, async () => {
+  const mod = await import(join(COMPONENTS_DIR, 'spinner.ts'));
+  const { renderToString } = await import('@webjsdev/core/server');
+  const out = await renderToString(mod.spinner({ class: 'size-6', label: 'Saving' }));
+  assert.match(out, /class="animate-spin size-6"|class="size-6 animate-spin"/);
+  assert.doesNotMatch(out, /size-4/);
+  assert.match(out, /aria-label="Saving"/);
+});
+
+test('spinner: decorative serves aria-hidden and NO empty role or name', { skip }, async () => {
+  const mod = await import(join(COMPONENTS_DIR, 'spinner.ts'));
+  const { renderToString } = await import('@webjsdev/core/server');
+  const out = await renderToString(mod.spinner({ decorative: true }));
+  assert.match(out, /aria-hidden="true"/);
+  assert.doesNotMatch(out, /role=/);
+  assert.doesNotMatch(out, /aria-label=/);
+});
+
+// ---------- field ----------
+
+test('field: 11 subpart helpers with orientation + legend variants', { skip }, async () => {
+  const mod = await import(join(COMPONENTS_DIR, 'field.ts'));
+  for (const name of [
+    'fieldSetClass',
+    'fieldLegendClass',
+    'fieldGroupClass',
+    'fieldClass',
+    'fieldContentClass',
+    'fieldLabelClass',
+    'fieldTitleClass',
+    'fieldDescriptionClass',
+    'fieldErrorClass',
+    'fieldSeparatorClass',
+    'fieldSeparatorContentClass',
+  ]) assertHelper(mod, name);
+  assert.match(mod.fieldClass(), /group\/field/);
+  assert.match(mod.fieldClass(), /data-\[invalid=true\]:text-destructive/);
+  assert.match(mod.fieldClass(), /flex-col/);
+  assert.match(mod.fieldClass({ orientation: 'horizontal' }), /flex-row items-center/);
+  assert.match(mod.fieldClass({ orientation: 'responsive' }), /@md\/field-group:flex-row/);
+  assert.match(mod.fieldLegendClass(), /text-base/);
+  assert.match(mod.fieldLegendClass({ variant: 'label' }), /text-sm/);
+  assert.match(mod.fieldGroupClass(), /@container\/field-group/);
+  assert.match(mod.fieldErrorClass(), /text-destructive/);
+  assert.match(mod.fieldErrorClass(), /text-sm/);
+  assert.match(mod.fieldLabelClass(), /group-data-\[disabled=true\]\/field:opacity-50/);
+  assert.match(mod.fieldDescriptionClass(), /text-muted-foreground/);
+});

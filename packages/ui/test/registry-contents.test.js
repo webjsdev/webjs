@@ -38,6 +38,7 @@ const V1_COMPONENTS = [
   'dialog', 'alert-dialog', 'popover', 'tooltip', 'hover-card',
   'tabs', 'accordion', 'collapsible',
   'dropdown-menu', 'sonner',
+  'empty', 'spinner', 'field',
 ];
 
 // Components that are Tier 2, must register a custom element.
@@ -59,10 +60,10 @@ function readManifest() {
   return JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'));
 }
 
-test('registry.json exists and enumerates ≥32 v1 components', { skip }, () => {
+test('registry.json exists and enumerates ≥35 components', { skip }, () => {
   const m = readManifest();
   const uiItems = m.items.filter((it) => it.type === 'registry:ui');
-  assert.ok(uiItems.length >= 32, `expected ≥32 registry:ui items, found ${uiItems.length}`);
+  assert.ok(uiItems.length >= 35, `expected ≥35 registry:ui items, found ${uiItems.length}`);
 });
 
 test('every v1 component source file exists and is non-trivial', { skip }, () => {
