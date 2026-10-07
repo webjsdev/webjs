@@ -223,14 +223,33 @@ test('a state:true prop still receives a .prop binding at SSR (#1341)', async ()
   assert.ok(out.includes('val={"viaProp":1}'), out);
 });
 
-test('a camelCase source attribute is ignored at SSR, as the browser ignores it (#1341)', async () => {
-  // The HTML parser lowercases `cfgData` to `cfgdata`, which matches nothing in
-  // `observedAttributes` (the entry there is `cfg-data`), so the browser leaves
-  // the constructor value. SSR lowercases the source name before resolving and
-  // reaches the same nothing.
-  const out = await renderToString(html([`<ssr-camel cfgData="oops"></ssr-camel>`]));
-  assert.ok(out.includes('val=CTOR'), out);
-  assert.ok(!out.includes('val=oops'), `the camelCase name still resolved: ${out}`);
+test('a camelCase source attribute resolves at SSR through its lowercased alias (#1540)', async () => {
+  // The HTML parser lowercases `cfgData` to `cfgdata`. `observedAttributes`
+  // lists that lowercased name (lit's default attribute name) beside the kebab
+  // `cfg-data`, so the browser delivers it, and SSR lowercases the source name
+  // before resolving and reaches the same prop. It used to resolve to nothing
+  // on both sides, so the prop silently stayed at its constructor value.
+  const out = await renderToString(html([`<ssr-camel cfgData="ok"></ssr-camel>`]));
+  assert.ok(out.includes('val=ok'), out);
+  const lower = await renderToString(html([`<ssr-camel cfgdata="ok2"></ssr-camel>`]));
+  assert.ok(lower.includes('val=ok2'), lower);
+});
+
+class SsrQuiz extends WebComponent({ quizId: Number }) {
+  render() { return html`<i>quiz=${String(this.quizId)}|${typeof this.quizId}</i>`; }
+}
+SsrQuiz.register('ssr-quiz-player');
+
+test('a camelCase attribute HOLE on a custom element reaches its prop at SSR (#1540)', async () => {
+  // The shape a real app wrote: `<quiz-player quizId=${quiz.id}>`.
+  const id = 42;
+  for (const out of [
+    await renderToString(html`<ssr-quiz-player quizId=${id}></ssr-quiz-player>`),
+    await renderToString(html`<ssr-quiz-player quizid=${id}></ssr-quiz-player>`),
+    await renderToString(html`<ssr-quiz-player quiz-id=${id}></ssr-quiz-player>`),
+  ]) {
+    assert.ok(out.includes('quiz=42|number'), out);
+  }
 });
 
 test('the kebab-cased attribute still resolves at SSR (#1341)', async () => {
