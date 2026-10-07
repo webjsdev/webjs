@@ -1,5 +1,6 @@
 import { watch, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { watchRecursive } from './watch-recursive.js';
 
 /**
  * The dev live-reload watcher over one root (#1521).
@@ -49,10 +50,13 @@ export function watchTree(root, { ignore, onEvent, onError }) {
   const watchDir = (name) => {
     if (closed || dirs.has(name) || ignore(name)) return;
     try {
-      const w = guard(watch(join(root, name), { recursive: true }, (_type, filename) => {
+      // `watchRecursive` (#1529): on Linux under Node a per-directory walker,
+      // since Node 24's recursive watcher goes deaf to a file once it is
+      // replaced (`sed -i`, an editor's atomic save).
+      const w = guard(watchRecursive(join(root, name), (_type, filename) => {
         const rel = filename ? join(name, String(filename)) : name;
         if (!ignore(rel)) onEvent(rel);
-      }));
+      }, { ignore: (rel) => ignore(join(name, rel)) }));
       dirs.set(name, w);
     } catch (err) {
       onError(/** @type {NodeJS.ErrnoException} */ (err));
