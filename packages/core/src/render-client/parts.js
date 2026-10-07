@@ -11,6 +11,7 @@ import {
   SLOT_FALLBACK_FRAG, SLOT_STATE, SLOT_OWNER, applySlotAssignments, withRendererWrites,
 } from '../slot.js';
 import { compile, templateCache } from './template-compiler.js';
+import { attrHoleValue } from '../binding-prefixes.js';
 
 /**
  * The container the in-progress `render()` is committing into, or null
@@ -203,7 +204,10 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
       applyChild(part, value, reconcileFormActionsCb);
       break;
     case 'attr': {
-      if (value == null || value === false) part.el.removeAttribute(part.name);
+      // #1573: the shared rule, so this agrees with SSR. `null` / `undefined`
+      // remove, `false` removes except on aria-*, where it writes "false".
+      const written = attrHoleValue(part.name, value);
+      if (written === null) part.el.removeAttribute(part.name);
       else if (isBoundFormAction(value, part.name, part.el.localName)) {
         // #1155: the ONE supported form-action binding, applied to the live
         // form exactly as SSR wrote it. A component that ships re-renders its
@@ -220,7 +224,7 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
         // (mirrors the SSR guard, so a client re-render cannot write a
         // server action's source into the live DOM).
         assertNotFunctionActionAttr(value, part.name, part.el.localName);
-        part.el.setAttribute(part.name, String(value));
+        part.el.setAttribute(part.name, written);
       }
       break;
     }

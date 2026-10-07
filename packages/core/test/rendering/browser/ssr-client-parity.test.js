@@ -386,6 +386,24 @@ async function bothWays(tpl) {
   return { ssr, ssrErr, client, clientErr };
 }
 
+suite('SSR/client parity: nullish and false plain attribute holes (#1573)', () => {
+  test('null / undefined omit, false omits off aria-*, aria-* false is "false"', async () => {
+    const tpl = () => html`<a href="/x" aria-current=${null} title=${undefined} data-on=${false} aria-expanded=${false} aria-pressed=${'true'}>x</a>`;
+    const attrsOf = (markup) => {
+      const t = document.createElement('template');
+      t.innerHTML = normalize(markup);
+      const a = t.content.querySelector('a');
+      return [...a.attributes].map((x) => `${x.name}="${x.value}"`).sort().join(' ');
+    };
+    const ssr = attrsOf(await renderToString(tpl(), { ssr: true }));
+    const host = document.createElement('div');
+    render(tpl(), host);
+    const client = attrsOf(host.innerHTML);
+    assert.equal(client, ssr, 'client and SSR serve the same attribute set');
+    assert.equal(ssr, 'aria-expanded="false" aria-pressed="true" href="/x"');
+  });
+});
+
 suite('SSR/client parity: form actions (#1155)', () => {
   setup(() => { setFormActionResolver((fn) => (fn[FORM_ACTION_ID_KEY] ? ACTION_ID : null)); });
   teardown(() => { setFormActionResolver(() => null); });
@@ -400,6 +418,11 @@ suite('SSR/client parity: form actions (#1155)', () => {
     'quoted hole-provided method': () => html`<form action=${boundAction()} method="${'post'}"></form>`,
     'mixed attribute with NON-EMPTY statics': () => html`<form action=${boundAction()} method="pos${'t'}"></form>`,
     'falsy boolean hole leaves it to the framework': () => html`<form action=${boundAction()} ?method=${false}></form>`,
+    // #1573: a nullish plain hole is omitted by BOTH renderers, so it leaves the
+    // method to the framework exactly as the falsy boolean hole above does.
+    'null method hole leaves it to the framework': () => html`<form action=${boundAction()} method=${null}></form>`,
+    'undefined enctype hole leaves it to the framework': () => html`<form action=${boundAction()} enctype=${undefined}></form>`,
+    'null name hole on a bound submitter': () => html`<form action=${boundAction()}><button name=${null} formaction=${boundAction()}>Save</button></form>`,
     'case-folded ACTION still binds': () => html`<form ACTION=${boundAction()}></form>`,
     'a plain url action is an ordinary form': () => html`<form action=${'/legacy'}></form>`,
     'an unbound form keeps its own method': () => html`<form action=${'/search'} method=${'get'}></form>`,
@@ -461,7 +484,6 @@ suite('SSR/client parity: form actions (#1155)', () => {
     'method=get': [() => html`<form method="get" action=${boundAction()}></form>`, /cannot work/],
     'hole-provided method=get after the hole': [() => html`<form action=${boundAction()} method=${'get'}></form>`, /cannot work/],
     'quoted hole-provided method=get': [() => html`<form action=${boundAction()} method="${'get'}"></form>`, /cannot work/],
-    'null method hole renders an empty value': [() => html`<form action=${boundAction()} method=${null}></form>`, /cannot work/],
     'truthy boolean hole renders an empty value': [() => html`<form action=${boundAction()} ?enctype=${true}></form>`, /cannot work/],
     'unparseable enctype': [() => html`<form action=${boundAction()} enctype="text/plain"></form>`, /cannot work/],
     'quoted action hole is a stringify': [() => html`<form action="${boundAction()}"></form>`, /interpolated into/],

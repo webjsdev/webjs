@@ -40,3 +40,31 @@ export const BINDING_PREFIXES = Object.freeze({
 export function isBindingPrefix(ch) {
   return Object.prototype.hasOwnProperty.call(BINDING_PREFIXES, ch);
 }
+
+/**
+ * What a PLAIN attribute hole (`name=${value}`, unquoted, the whole value)
+ * writes, or `null` when the attribute is omitted. The one rule both renderers
+ * follow, so the server never serves an attribute the client then removes
+ * (#1573):
+ *
+ *   - `null` / `undefined` omit the attribute. This is the "omit" value, so a
+ *     conditional attribute is `aria-current=${active ? 'page' : null}`.
+ *   - `false` omits it too, EXCEPT on an `aria-*` attribute, where it writes
+ *     `"false"`. For a tri-state ARIA attribute (`aria-expanded`,
+ *     `aria-pressed`, `aria-checked`) `"false"` and absent mean different
+ *     things, so the value an author passes is the value the user agent gets.
+ *   - anything else is `String(value)`.
+ *
+ * A quoted or mixed value (`title="${x}"`, `class="a ${x}"`) is not a plain
+ * hole: the author wrote the attribute statically, so it stays and a nullish
+ * piece reads as empty text.
+ *
+ * @param {string} name the attribute name as written
+ * @param {unknown} value the hole's value (`live()` already unwrapped)
+ * @returns {string | null}
+ */
+export function attrHoleValue(name, value) {
+  if (value == null) return null;
+  if (value === false) return /^aria-/i.test(name) ? 'false' : null;
+  return String(value);
+}

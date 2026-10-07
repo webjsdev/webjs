@@ -1,5 +1,5 @@
 import { html, isTemplate } from '../html.js';
-import { BINDING_PREFIXES } from '../binding-prefixes.js';
+import { BINDING_PREFIXES, attrHoleValue } from '../binding-prefixes.js';
 import { escapeText, escapeAttr } from '../escape.js';
 import {
   assertNotFunctionActionAttr, assertNotFunctionReflectedActionProp,
@@ -542,7 +542,12 @@ export async function renderTemplate(tr, ctx) {
           // #1154: never stringify a function into action=/formaction= (it
           // would serialize a server action's source into the served HTML).
           assertNotFunctionActionAttr(val, attrName, currentTag);
-          out += `"${escapeAttr(String(val ?? ''))}"`;
+          // #1573: the client's rule, not a stringify. `null` / `undefined`
+          // (and `false` off an aria-* name) omit the attribute, which is
+          // already in `out` from `attrStart`, so slice it back off.
+          const written = attrHoleValue(attrName, val);
+          if (written === null) out = out.slice(0, attrStart);
+          else out += `"${escapeAttr(written)}"`;
           state = 'in-tag';
           attrName = '';
         }
@@ -922,7 +927,10 @@ export async function streamTemplate(tr, ctx, controller) {
           // `renderToStream(v, { ssr: false })`, which no page render uses, so
           // this covers the public API surface rather than a page leak.
           assertNotFunctionActionAttr(val, attrName, currentTag);
-          buf += `"${escapeAttr(String(val ?? ''))}"`;
+          // #1573: the same omission rule as the buffered renderer above.
+          const written = attrHoleValue(attrName, val);
+          if (written === null) buf = buf.slice(0, attrStart);
+          else buf += `"${escapeAttr(written)}"`;
           state = 'in-tag';
           attrName = '';
         }

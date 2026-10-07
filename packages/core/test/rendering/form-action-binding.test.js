@@ -895,17 +895,35 @@ test('the submitter .prop refusal does not fire on ordinary controls', async () 
 });
 
 test('an empty author name after the hole is refused, not shipped as a duplicate', async () => {
-  // `name=${null}` emits `name=""`. The parse keeps the LAST duplicate, so
+  // `name=${''}` emits `name=""`. The parse keeps the LAST duplicate, so
   // reading the value back found `''` and waved through a tag carrying TWO
   // `name` attributes. A browser keeps the FIRST, so whichever came first would
   // silently win, and SSR would ship markup the client never produces.
   withResolver();
   for (const tpl of [
-    html`<form action=${submitFeedback}><button formaction=${submitFeedback} name=${null}>x</button></form>`,
-    html`<form action=${submitFeedback}><button name=${null} formaction=${submitFeedback}>x</button></form>`,
+    html`<form action=${submitFeedback}><button formaction=${submitFeedback} name=${''}>x</button></form>`,
+    html`<form action=${submitFeedback}><button name=${''} formaction=${submitFeedback}>x</button></form>`,
   ]) {
     await assert.rejects(() => renderToString(tpl, { ssr: true }), /already carries a "name" attribute/);
   }
+});
+
+test('a null name hole on a bound submitter is omitted, so the identity is the only name (#1573)', async () => {
+  withResolver();
+  for (const tpl of [
+    html`<form action=${submitFeedback}><button formaction=${submitFeedback} name=${null}>x</button></form>`,
+    html`<form action=${submitFeedback}><button name=${undefined} formaction=${submitFeedback}>x</button></form>`,
+  ]) {
+    const out = await renderToString(tpl, { ssr: true });
+    assert.equal((out.match(/<button[^>]*>/)[0].match(/\bname=/g) || []).length, 1, out);
+  }
+});
+
+test('a null method hole on a bound form gets the supplied method="post" (#1573)', async () => {
+  withResolver();
+  const out = await renderToString(html`<form action=${submitFeedback} method=${null}></form>`, { ssr: true });
+  assert.match(out, /<form[^>]*method="post"/);
+  assert.doesNotMatch(out, /method=""/);
 });
 
 test('a .prop on a submitter that binds NOTHING is an ordinary native property', async () => {
