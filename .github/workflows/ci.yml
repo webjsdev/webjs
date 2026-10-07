@@ -10,8 +10,9 @@ name: CI
 # This file stays as the readable record of what the local list must cover,
 # and it can still be run by hand (workflow_dispatch) as a second opinion on a
 # clean Ubuntu runner. Keep it and the `webjs.ci` list in step: a job added
-# here and not there is a job nobody runs. Auto-release, Purge CDN and the
-# nightly vendor contract stay on Actions; they publish and are free there.
+# here and not there is a job nobody runs. Actions is for publishing only:
+# release.yml publishes to npm on a tag scripts/release.sh pushes; the CDN
+# purge and the nightly vendor contract run locally too.
 
 on:
   workflow_dispatch:

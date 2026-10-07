@@ -22,6 +22,9 @@
 #      CODEOWNER review requirement (a solo maintainer cannot approve their
 #      own PR), it retries with --admin, which is the one bypass AGENTS.md
 #      allows: CI is proven green on this exact head a moment earlier.
+#   5. After the merge, start scripts/purge-cdn.sh for the merge commit in
+#      the background (it waits for the website's Railway deploy, then purges
+#      webjs.dev), when CLOUDFLARE_API_TOKEN is set. This was purge-cdn.yml.
 set -euo pipefail
 
 REPO="webjsdev/webjs"
@@ -101,4 +104,16 @@ if ! out="$(gh pr merge "$pr" --squash --delete-branch --match-head-commit "$sha
   fi
 else
   printf '%s\n' "$out"
+fi
+
+merged="$(gh api "repos/$REPO/pulls/$pr" --jq '.merge_commit_sha // empty' 2>/dev/null | tail -n1)"
+if [ -n "$merged" ] && [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -f "$root/scripts/purge-cdn.sh" ]; then
+  plog="${TMPDIR:-/tmp}/webjs-purge-${merged:0:12}.log"
+  setsid nohup bash "$root/scripts/purge-cdn.sh" "$merged" >"$plog" 2>&1 < /dev/null &
+  echo "ci-merge: CDN purge for ${merged:0:12} runs in the background once the deploy is live: $plog"
+elif [ -n "$merged" ]; then
+  echo "ci-merge: CLOUDFLARE_API_TOKEN is not set; purge the CDN later with scripts/purge-cdn.sh ${merged:0:12}"
+fi
+if [ ${#release[@]} -gt 0 ]; then
+  echo "ci-merge: release PR merged; publish it with scripts/release.sh from a checkout of origin/main"
 fi
