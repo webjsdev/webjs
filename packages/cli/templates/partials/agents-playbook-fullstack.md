@@ -90,23 +90,34 @@ export type PostStatus = (typeof POST_STATUSES)[number];
 ```
 
 ```ts
-// lib/utils/form.ts
+// lib/utils/form.ts (labelled controls: the label, the server error under it, the typed value kept)
 import { html } from '@webjsdev/core';
 import { labelClass } from '#components/ui/label.ts';
 import { inputClass } from '#components/ui/input.ts';
+import { textareaClass } from '#components/ui/textarea.ts';
+import { nativeSelectClass, nativeSelectWrapperClass, nativeSelectIconClass } from '#components/ui/native-select.ts';
 export interface FormState { error?: string; fieldErrors?: Record<string, string>; values?: Record<string, string> }
 export const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 export const str = (fd: FormData, k: string) => String(fd.get(k) ?? '').trim();
 export const toId = (v: unknown) => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : null; };
-export function field(o: { label: string; name: string; type?: string; value?: string; error?: string; required?: boolean }) {
-  return html`
-    <div class="grid gap-1.5">
-      <label for=${o.name} class=${labelClass()}>${o.label}</label>
-      <input id=${o.name} name=${o.name} type=${o.type ?? 'text'} value=${o.value ?? ''} ?required=${o.required}
-        aria-invalid=${o.error ? 'true' : 'false'} class=${inputClass()}>
-      ${o.error ? html`<p class="text-sm text-destructive">${o.error}</p>` : ''}
-    </div>`;
-}
+interface Field { label: string; name: string; value?: string; error?: string; required?: boolean; id?: string }
+const wrap = (o: Field, control: unknown) => html`
+  <div class="grid gap-1.5">
+    <label for=${o.id ?? o.name} class=${labelClass()}>${o.label}</label>${control}
+    ${o.error ? html`<p class="text-sm text-destructive">${o.error}</p>` : ''}
+  </div>`;
+export const field = (o: Field & { type?: string }) => wrap(o, html`<input id=${o.id ?? o.name} name=${o.name} type=${o.type ?? 'text'}
+  value=${o.value ?? ''} ?required=${o.required} aria-invalid=${o.error ? 'true' : 'false'} class=${inputClass()}>`);
+export const textareaField = (o: Field) => wrap(o, html`<textarea id=${o.id ?? o.name} name=${o.name} rows="3" class=${textareaClass()}>${o.value ?? ''}</textarea>`);
+/** A native select with the kit's chevron. Pass `name: ''` for a select no form submits. */
+export const selectControl = (o: { id: string; name?: string; value?: string; options: readonly string[]; attrs?: unknown }) => html`
+  <div class=${nativeSelectWrapperClass()}>
+    <select id=${o.id} name=${o.name ?? o.id} class=${nativeSelectClass()}>
+      ${o.options.map((v) => html`<option value=${v} ?selected=${v === o.value}>${v}</option>`)}
+    </select>
+    <svg class=${nativeSelectIconClass()} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+  </div>`;
+export const selectField = (o: Field & { options: readonly string[] }) => wrap(o, selectControl({ id: o.id ?? o.name, name: o.name, value: o.value, options: o.options }));
 ```
 
 Auth is the built-in `createAuth` (a signed session cookie). Hash passwords in
@@ -241,8 +252,7 @@ declared in the `WebComponent({...})` factory (`postId` arrives as the
 import { WebComponent, html, signal } from '@webjsdev/core';
 import { setPostStatus } from '../actions/set-post-status.server.ts';
 import { POST_STATUSES, type PostStatus } from '../types.ts';
-import { labelClass } from '#components/ui/label.ts';
-import { nativeSelectClass } from '#components/ui/native-select.ts';
+import { nativeSelectClass, nativeSelectWrapperClass, nativeSelectIconClass } from '#components/ui/native-select.ts';
 export class PostStatusSelect extends WebComponent({ postId: Number, status: String }) {
   note = signal('');
   async onChange(e: Event) {
@@ -257,10 +267,13 @@ export class PostStatusSelect extends WebComponent({ postId: Number, status: Str
     const id = `status-${this.postId}`;
     return html`
       <div class="flex items-center gap-2">
-        <label for=${id} class=${labelClass()}>Status</label>
-        <select id=${id} class=${nativeSelectClass()} @change=${(e: Event) => this.onChange(e)}>
-          ${POST_STATUSES.map((s) => html`<option value=${s} ?selected=${s === this.status}>${s}</option>`)}
-        </select>
+        <label for=${id} class="text-sm text-muted-foreground">Status</label>
+        <div class=${nativeSelectWrapperClass()}>
+          <select id=${id} class="${nativeSelectClass()} h-8 min-w-[8.5rem]" @change=${(e: Event) => this.onChange(e)}>
+            ${POST_STATUSES.map((s) => html`<option value=${s} ?selected=${s === this.status}>${s}</option>`)}
+          </select>
+          <svg class=${nativeSelectIconClass()} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
         <span class="text-xs text-muted-foreground" aria-live="polite">${this.note.get()}</span>
       </div>`;
   }
@@ -294,6 +307,7 @@ export default async function RootLayout({ children }: LayoutProps) {
       <nav class="mx-auto flex h-full max-w-4xl items-center gap-4 px-4">
         <a href="/" class="font-semibold text-foreground no-underline">Posts</a>
         ${user ? html`
+          <a href="/posts" class="text-sm text-muted-foreground hover:text-foreground">All posts</a>
           <span class="ml-auto hidden text-sm text-muted-foreground sm:inline">${user.email}</span>
           <form action=${signOutUser} class="ml-auto sm:ml-0"><button class=${buttonClass({ variant: 'outline', size: 'sm' })}>Sign out</button></form>`
         : html`<a href="/signin" class="ml-auto text-sm">Sign in</a>`}
@@ -306,74 +320,85 @@ export default async function RootLayout({ children }: LayoutProps) {
 `app/page.ts`: `export default async function Home() { redirect((await currentUser()) ? '/posts' : '/signin'); }`.
 `app/not-found.ts` default-exports a function returning the 404 `html`.
 
-A page with a form reads `actionData` typed as `FormState`. Sign-in and
-sign-up pages are this shape too, starting with
-`if (await currentUser()) redirect('/posts');` and showing `actionData.error`.
+Every page has the same anatomy: a header (h1, a one-line summary, the main
+actions on the right), then sections, each with an h2. A form is a card with a
+title and its fields in a grid; a list is ONE card of divided rows, each row the
+title, a muted meta line, and small actions on the right. Do not put
+`cardClass()` on list rows (it carries `gap-6 py-6` for card sections and makes
+rows sprawl). Pages with a form read `actionData` typed as `FormState`.
 
 ```ts
-// app/posts/page.ts
+// app/posts/page.ts (a list page with a create form and row actions; projects or tasks look the same)
 import { html } from '@webjsdev/core';
 import type { PageProps } from '@webjsdev/core';
 import { buttonClass } from '#components/ui/button.ts';
-import { cardClass } from '#components/ui/card.ts';
-import { field, type FormState } from '#lib/utils/form.ts';
+import { field, selectField, type FormState } from '#lib/utils/form.ts';
 import { requireUser } from '#modules/auth/queries/require-user.server.ts';
 import { listPosts } from '#modules/posts/queries/list-posts.server.ts';
 import { createPost } from '#modules/posts/actions/create-post.server.ts';
-export const metadata = { title: 'Your posts' };
+import { deletePost } from '#modules/posts/actions/delete-post.server.ts';
+import { POST_STATUSES } from '#modules/posts/types.ts';
+import '#modules/posts/components/post-status.ts'; // registers <post-status>
+export const metadata = { title: 'Posts' };
+const CARD = 'rounded-xl border border-border bg-card text-card-foreground shadow-sm';
 export default async function PostsPage({ actionData }: PageProps<'/posts'> & { actionData?: FormState }) {
   await requireUser();
   const items = await listPosts();
   const e = actionData?.fieldErrors ?? {};
   const v = actionData?.values ?? {};
   return html`
-    <h1 class="text-2xl font-semibold">Your posts</h1>
-    <form action=${createPost} class="${cardClass()} mt-6 grid gap-3 p-4 sm:grid-cols-[1fr_auto] sm:items-end">
-      ${field({ label: 'Title', name: 'title', value: v.title, error: e.title, required: true })}
-      <button class=${buttonClass()}>Create post</button>
-    </form>
-    <ul class="mt-6 grid gap-3 sm:grid-cols-2">
-      ${items.map((p) => html`<li class="${cardClass()} p-4"><a href="/posts/${p.id}" class="font-medium">${p.title}</a></li>`)}
-    </ul>
-    ${items.length ? '' : html`<p class="mt-6 text-muted-foreground">No posts yet.</p>`}`;
-}
-```
-
-```ts
-// app/posts/[id]/page.ts
-import { html, notFound } from '@webjsdev/core';
-import type { PageProps } from '@webjsdev/core';
-import { buttonClass } from '#components/ui/button.ts';
-import { requireUser } from '#modules/auth/queries/require-user.server.ts';
-import { getPost } from '#modules/posts/queries/get-post.server.ts';
-import { deletePost } from '#modules/posts/actions/delete-post.server.ts';
-import '#modules/posts/components/post-status.ts'; // registers <post-status>
-export default async function PostPage({ params }: PageProps<'/posts/[id]'>) {
-  await requireUser();
-  const post = await getPost(params.id);
-  if (!post) notFound();
-  return html`
-    <h1 class="text-2xl font-semibold">${post.title}</h1>
-    <div class="mt-6 flex flex-wrap items-center gap-3">
-      <post-status post-id=${post.id} status=${post.status}></post-status>
-      <a href="/posts/${post.id}/edit" class=${buttonClass({ variant: 'outline', size: 'sm' })}>Edit</a>
-      <form action=${deletePost} onsubmit="return confirm('Delete this post?')">
-        <input type="hidden" name="id" value=${post.id}>
-        <button class=${buttonClass({ variant: 'destructive', size: 'sm' })}>Delete</button>
+    <header class="flex flex-wrap items-end justify-between gap-3">
+      <div><h1 class="text-2xl font-semibold tracking-tight">Posts</h1>
+        <p class="text-sm text-muted-foreground">${items.length} posts</p></div>
+    </header>
+    <section class="${CARD} mt-6 p-5">
+      <h2 class="text-base font-semibold">New post</h2>
+      <form action=${createPost} class="mt-4 grid gap-4 sm:grid-cols-2">
+        ${field({ label: 'Title', name: 'title', value: v.title, error: e.title, required: true })}
+        ${selectField({ label: 'Status', name: 'status', value: v.status ?? 'draft', options: POST_STATUSES })}
+        <div class="sm:col-span-2"><button class=${buttonClass()}>Create post</button></div>
       </form>
-    </div>`;
+    </section>
+    <section class="mt-10">
+      <h2 class="text-lg font-semibold">All posts</h2>
+      ${items.length ? html`
+        <ul class="${CARD} mt-3 divide-y divide-border">
+          ${items.map((p) => html`
+            <li class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+              <div class="min-w-0 w-full sm:w-auto sm:flex-1">
+                <a href="/posts/${p.id}" class="font-medium text-foreground hover:underline">${p.title}</a>
+                <p class="truncate text-sm text-muted-foreground">${[p.body, p.publishOn && `Publish ${p.publishOn}`].filter(Boolean).join(' · ')}</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <post-status post-id=${p.id} status=${p.status}></post-status>
+                <a href="/posts/${p.id}/edit" class=${buttonClass({ variant: 'ghost', size: 'sm' })}>Edit</a>
+                <form action=${deletePost} onsubmit="return confirm('Delete this post?')">
+                  <input type="hidden" name="id" value=${p.id}>
+                  <button class="${buttonClass({ variant: 'ghost', size: 'sm' })} text-destructive">Delete</button>
+                </form>
+              </div>
+            </li>`)}
+        </ul>`
+      : html`<p class="${CARD} mt-3 p-6 text-center text-muted-foreground">No posts yet. Create the first one above.</p>`}
+    </section>`;
 }
 ```
 
-The edit page loads the row the same way, pre-fills from it
-(`const v = actionData?.values ?? { title: post.title, ... }`), and posts a
-hidden `id` to `updatePost`. A `<textarea class=${textareaClass()}>` holds its
-value as text content; a `<select class=${nativeSelectClass()}>` marks the
-current option with `?selected=${s === v.status}`; each has a `<label for>`.
+A detail or edit page loads its row with the owner check and stops on a miss:
+`const post = await getPost(params.id); if (!post) notFound();`
+(`PageProps<'/posts/[id]/edit'>`, `notFound` from `@webjsdev/core`). The edit
+form is the same card, pre-filled (`const v = actionData?.values ?? { title: post.title, ... }`),
+with a hidden `id` input, `textareaField` / `selectField` for long text and
+choices, and Save plus a ghost Cancel link. Sign-in and sign-up pages are one
+narrow form card (`mx-auto max-w-sm`), starting with
+`if (await currentUser()) redirect('/posts');` and showing `actionData.error`.
+Destructive buttons are `ghost` or `outline` with `text-destructive`; a solid
+red button is too loud for a row or a page header.
 
-Tests are `node:test` files: `import { test } from 'node:test'`,
-`import assert from 'node:assert/strict'`, build a `FormData` and assert on
-`validatePost(fd)`.
+Write one test file per feature, `test/<feature>/<feature>.test.ts` (node:test:
+`import { test } from 'node:test'`, `import assert from 'node:assert/strict'`),
+covering its validation (each error message, the trimmed valid result) and any
+pure helper.
 
 ### Look and the UI kit
 
