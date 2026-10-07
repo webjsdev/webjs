@@ -666,7 +666,7 @@ export default function Feedback({ actionData }: { actionData?: { fieldErrors?: 
 }
 ```
 
-Binding the action is the whole wiring: no `method`, no `enctype`, no adapter. Works with JS off; with JS the client router applies the 422 in place and follows the 303.
+Binding the action is the whole wiring: no `method`, no `enctype`, no adapter. Works with JS off; with JS the client router applies the 422 in place and follows the 303. On a failure `actionData.values` carries every submitted text field (the action's own `values` on top), and with JS the router also restores what was typed into any control the re-render did not explicitly set, so a forgotten refill no longer empties a field (#1581, opt out with `data-preserve-values="false"`).
 
 ### Add a server action
 

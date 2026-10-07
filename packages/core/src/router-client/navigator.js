@@ -13,6 +13,7 @@ import { parseHTML } from './dom-parse.js';
 import { onClick, onPopState, onSubmit } from './events.js';
 import { fetchAndApply } from './fetch-apply.js';
 import { clearFormBusy, markFormBusy } from './frames.js';
+import { captureFormState, restoreFormState } from './form-state.js';
 import { clearPrefetchHover, clearPrefetchRefused, clearPrefetchViewTimers, onPrefetchIntent, onPrefetchOut, prefetchCache, prefetchClearAll, prefetchEvict, refreshPrefetchObservers, teardownPrefetchViewObserver } from './prefetch.js';
 // `restoreGeneration` is imported READ-ONLY: the deferred restore captures it
 // and re-compares after the frame, so it must be the live binding. Writes go
@@ -869,6 +870,10 @@ export async function performSubmission(href, method, body, frameId, form, opts)
   // (markFormBusy/clearFormBusy) keeps a superseded submit's teardown from
   // clearing the busy state a newer submit set.
   const busyForm = form ? markFormBusy(form, myToken, url.href) : null;
+  // #1581: what the person typed, taken before the request leaves, so a failed
+  // submission's in-place re-render can hand it back (see form-state.js). A
+  // safe-method submission is a search, not a write, and is left alone.
+  const typed = !isSafe ? captureFormState(form) : null;
   let outcomeOk = false;
   try {
     const outcome = await fetchAndApply(
@@ -884,6 +889,13 @@ export async function performSubmission(href, method, body, frameId, form, opts)
       { preserveScroll: !!(opts && opts.preserveScroll) },
     );
     outcomeOk = !!(outcome && outcome.ok);
+    // A non-2xx response applied in place is the failed-validation re-render.
+    // Restore after the swap COMMITS: under an async view transition the DOM
+    // changes a frame later than `fetchAndApply` returns.
+    if (typed && outcome && outcome.applied && !outcome.ok && myToken === currentNavigationToken) {
+      await _swapCommit;
+      if (myToken === currentNavigationToken) restoreFormState(typed);
+    }
     // Mutating submissions invalidate cached versions of other URLs -
     // do this *after* the response applies so the new page itself is
     // snapshotted on the next nav, not pre-emptively wiped. Clear the

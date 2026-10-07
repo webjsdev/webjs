@@ -169,7 +169,7 @@ export default function NewPost({ actionData }: {
 }</code-block>
 
     <p>
-      With JS off the browser submits, follows the 303, or renders the 422. With JS on the client router posts the same body to the same URL, applies the 422 in place (no reload, typed input preserved) and follows the 303 via fetch, so the two paths are identical by construction rather than by two implementations agreeing. Both are Origin-verified, so a no-JS form needs no CSRF token field. Avoid the pattern of <code>fetch('/api/...')</code> + a click handler for write-paths. That's JS-required by construction.
+      With JS off the browser submits, follows the 303, or renders the 422. With JS on the client router posts the same body to the same URL, applies the 422 in place (no reload, and what was typed is put back into every control the re-render did not explicitly set) and follows the 303 via fetch, so the two paths are identical by construction rather than by two implementations agreeing. Both are Origin-verified, so a no-JS form needs no CSRF token field. Avoid the pattern of <code>fetch('/api/...')</code> + a click handler for write-paths. That's JS-required by construction.
     </p>
 
     <p>

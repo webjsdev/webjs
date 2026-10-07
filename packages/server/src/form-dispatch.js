@@ -386,6 +386,28 @@ function textValuesOf(formData) {
 }
 
 /**
+ * A failure result with `values` completed from the submission (#1581).
+ *
+ * Every submitted text field is there, so a page refills a field with
+ * `value=${actionData?.values?.x}` without the action having to echo it, which
+ * is the one step generated and hand-written actions both keep forgetting. The
+ * action's own `values` win, so an action that normalizes or deliberately
+ * blanks a field (a password) still decides. A repeated name (a checkbox group)
+ * keeps its last value, as `textValuesOf` does; read the FormData for the full
+ * list. Files are left out. The author's object is copied, never mutated.
+ *
+ * @param {unknown} result
+ * @param {FormData} formData
+ * @returns {unknown}
+ */
+function withSubmittedValues(result, formData) {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return result;
+  const own = /** @type any */ (result).values;
+  const ownValues = own && typeof own === 'object' && !Array.isArray(own) ? own : {};
+  return { ...result, values: { ...textValuesOf(formData), ...ownValues } };
+}
+
+/**
  * A page path exists but only renders: the method is the problem, not the url.
  * @returns {Response}
  */
@@ -523,8 +545,9 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
         return await formActionErrorResponse(v.thrown, ssrOpts.dev);
       }
       // A structured failure envelope is a NORMAL result the page renders, so
-      // it takes the 422 re-render path exactly as a failing action would.
-      return ssrPage(route, params, url, { ...ssrOpts, req, actionData: v.result, status: 422 });
+      // it takes the 422 re-render path exactly as a failing action would,
+      // submitted values included (#1581).
+      return ssrPage(route, params, url, { ...ssrOpts, req, actionData: withSubmittedValues(v.result, formData), status: 422 });
     }
     args = [v.value];
   }
@@ -634,10 +657,11 @@ export async function runFormAction(route, params, url, req, ssrOpts, deps) {
   }
 
   // FAILURE: re-render the SAME page with the action result available on
-  // ctx.actionData, status 422. Repopulation is the page author's job (native
-  // `value=${actionData.values?.field}`).
+  // ctx.actionData, status 422. `actionData.values` carries every submitted
+  // text field (#1581), so `value=${actionData?.values?.field}` refills a field
+  // whether or not the action echoed it.
   const status = typeof result.status === 'number' && result.status >= 400 ? result.status : 422;
-  const page = await ssrPage(route, params, url, { ...ssrOpts, req, actionData: result, status });
+  const page = await ssrPage(route, params, url, { ...ssrOpts, req, actionData: withSubmittedValues(result, formData), status });
   // A failure result can still have mutated (a partial write, then a rejected
   // second step), so the eviction above applies here too and this response, not
   // being a redirect, is one the router can actually read the header off.
