@@ -159,3 +159,52 @@ export function sitemapIndex(sitemaps) {
     '</sitemapindex>\n'
   );
 }
+
+/**
+ * One `User-agent` group for {@link robots}.
+ * @typedef {object} RobotsRule
+ * @property {string | string[]} [userAgent] Defaults to `*`.
+ * @property {string | string[]} [allow]
+ * @property {string | string[]} [disallow]
+ * @property {number} [crawlDelay]
+ */
+
+/**
+ * The Next.js `MetadataRoute.Robots` shape.
+ * @typedef {object} RobotsConfig
+ * @property {RobotsRule | RobotsRule[]} [rules] Defaults to allow everything.
+ * @property {string | string[]} [sitemap] Absolute sitemap URL(s).
+ * @property {string} [host]
+ */
+
+/** @param {unknown} v @returns {string[]} */
+const listOf = (v) => (Array.isArray(v) ? v : v == null ? [] : [v])
+  .map((x) => String(x).replace(/[\r\n]/g, ''))
+  .filter((x) => x !== '');
+
+/**
+ * Serialize a robots config into robots.txt text (#1564). An `app/robots.ts`
+ * may return this object directly; the server runs it through here. Newlines
+ * are stripped from every value so a data-derived path cannot inject a rule.
+ * @param {RobotsConfig} [config]
+ * @returns {string}
+ */
+export function robots(config = {}) {
+  const rules = config.rules == null ? [{ userAgent: '*', allow: '/' }]
+    : Array.isArray(config.rules) ? config.rules : [config.rules];
+  const blocks = [];
+  for (const rule of rules) {
+    if (!rule || typeof rule !== 'object') continue;
+    const agents = listOf(rule.userAgent);
+    const lines = (agents.length ? agents : ['*']).map((a) => `User-agent: ${a}`);
+    for (const a of listOf(rule.allow)) lines.push(`Allow: ${a}`);
+    for (const d of listOf(rule.disallow)) lines.push(`Disallow: ${d}`);
+    if (typeof rule.crawlDelay === 'number' && rule.crawlDelay >= 0) lines.push(`Crawl-delay: ${rule.crawlDelay}`);
+    blocks.push(lines.join('\n'));
+  }
+  const tail = [];
+  for (const h of listOf(config.host)) tail.push(`Host: ${h}`);
+  for (const s of listOf(config.sitemap)) tail.push(`Sitemap: ${s}`);
+  if (tail.length) blocks.push(tail.join('\n'));
+  return blocks.join('\n\n') + '\n';
+}

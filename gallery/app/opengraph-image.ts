@@ -1,9 +1,9 @@
 // app/opengraph-image.ts serves /opengraph-image (the preview card social
 // platforms show when the site is shared). The Open Graph spec wants 1200x630.
-// Returning a Response with an inline SVG keeps this buildless; for per-page
-// previews, read the request in a nested static segment's opengraph-image.ts
-// and compose the title in. Reference it from metadata via
-// `openGraph: { images: ['/opengraph-image'] }`.
+// Returning a Response with an inline SVG keeps this buildless. Every page that
+// declares no `openGraph.images` gets og:image pointing here automatically
+// (absolute against SITE_URL); a nested `app/<segment>/opengraph-image.ts`
+// covers the pages under that segment instead.
 export default function OpengraphImage() {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
     <rect width="1200" height="630" fill="#1e2226"/>

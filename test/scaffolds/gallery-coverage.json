@@ -662,6 +662,9 @@
     "sitemapIndex": {
       "demoed": true
     },
+    "robots": {
+      "demoed": true
+    },
     "ssrNotFound": {
       "exempt": "internal: framework/CLI plumbing"
     },

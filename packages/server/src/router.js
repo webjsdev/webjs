@@ -157,7 +157,10 @@ export async function buildRouteTable(appDir) {
     } else if (METADATA_STEMS.has(stem) && (dir === '.' || dir.split('/').every(s => !s.startsWith('[')))) {
       // Metadata route: sitemap.ts, robots.ts, icon.ts, etc.
       // Only at root or static segments (no dynamic params in metadata routes).
-      const urlPath = METADATA_URL_MAP[stem] || `/${stem}`;
+      // A nested route answers under its own segment (`app/blog/opengraph-image.ts`
+      // -> `/blog/opengraph-image`, #1564); route groups add no URL segment.
+      const prefix = dir === '.' ? '' : '/' + dir.split('/').filter(isUrlSegment).join('/');
+      const urlPath = (prefix === '/' ? '' : prefix) + (METADATA_URL_MAP[stem] || `/${stem}`);
       metadataRoutes.push({ stem, file, urlPath });
     } else if (stem === 'route') {
       // route.js / route.ts can live anywhere under app/ (matches NextJs).
@@ -227,7 +230,7 @@ function chainOf(routeDir) {
 }
 
 /** @param {string} seg */
-function isUrlSegment(seg) {
+export function isUrlSegment(seg) {
   if (seg.startsWith('(') && seg.endsWith(')')) return false; // route group
   if (seg.startsWith('_')) return false; // private
   return true;

@@ -138,6 +138,30 @@ export async function generateMetadata(ctx: MetadataContext): Promise<Metadata> 
 
 Common fields: `title` (string or `{ template, default, absolute }`), `description`, `keywords`, `metadataBase` (resolves relative URLs in `openGraph` / `twitter` / `alternates` / `icons`), `openGraph`, `twitter`, `robots`, `alternates.canonical`, `icons`, `manifest`, and `jsonLd` (schema.org structured data, single object or array, HTML-safe-escaped automatically). `viewport`, `themeColor`, and `colorScheme` may also be set via a split `export const viewport = { ... }`. `cacheControl` is emitted as a response HEADER (not a `<meta>`); pages default to `no-store`, and any other value enables conditional GET (a weak `ETag` + `304`), `private` included. See https://webjs.dev/docs for the full field list.
 
+### Search and share defaults (SEO)
+
+Set `SITE_URL` (the app's public origin, e.g. `https://shop.example.com`) in production. It is the default `metadataBase`, and with it every page gets, unless it sets its own:
+
+- `<link rel="canonical">` = site URL + the page's pathname (query dropped). Opt one page out with `alternates: { canonical: null }`. Without a site URL no canonical is emitted, because the request host can be set by a client.
+- `og:title` / `og:description` from `title` / `description`, `og:type` `website`, `og:url` = the canonical.
+- `og:image` from the nearest `opengraph-image` route above the page (and `twitter:image` from `twitter-image`), when the page declares no image.
+- `twitter:card`: `summary_large_image` when there is an image, else `summary`.
+
+`openGraph` and `twitter` take Next's shapes: `images` is a string, `URL`, `{ url, width, height, alt, type }` or an array of those (emits `og:image` + `og:image:width` / `height` / `alt`); camelCase keys become snake_case (`siteName` -> `og:site_name`); `publishedTime` / `modifiedTime` / `authors` / `section` / `tags` emit `article:*`. `metadataBase` may be a string or a `URL`.
+
+So a public page needs only a specific title and description:
+
+```ts
+export const metadata: Metadata = {
+  title: 'Opening hours',
+  description: 'When the bakery is open, including public holidays.',
+};
+```
+
+A signed-in or private page says `robots: { index: false }` (put it on the private section's layout and every page below inherits it); `pages()` then leaves it out of the sitemap too.
+
+Structured data goes in `jsonLd` (from `generateMetadata` when it depends on a record): one schema.org object or an array, escaped safely into `<script type="application/ld+json">`.
+
 ## Control-flow throws
 
 From `@webjsdev/core`: throw to short-circuit a page / layout render or a form-bound action.
@@ -225,7 +249,30 @@ The BOUNDARY FILE's own crash (it throws, or fails to import at all) is reported
 Two further consequences: a layout that fetches runs its fetch again on a boundary response, and a `<webjs-suspense>` inside a wrapped layout shows its fallback, because a boundary response is buffered so its status is final before the first byte. A 404 for a URL that matched NO route has no chain to wrap in and stays a bare document.
 - Root-only (in `app/` exactly): `global-error.ts` is the app-wide catch-all after nested `error` boundaries are exhausted and renders its OWN `<!doctype><html><body>` (returned verbatim, so keep it static HTML with no components or hydration). That verbatim document is exactly why it is the one boundary left UNWRAPPED: a second shell would nest inside the root layout's, wrapping it would re-run the code that just threw, and with no boot script it could not soft-swap anyway. `global-not-found.ts` renders for an unmatched-anywhere URL when no `not-found` matches.
 
-Metadata routes (`sitemap.ts`, `robots.ts`, `manifest.ts`, `icon.ts`, `apple-icon.ts`, `opengraph-image.ts`, `twitter-image.ts`) live at app root or static segments and default-export a possibly-async function; `sitemap()` / `sitemapIndex()` from `@webjsdev/server` serialize spec-valid XML.
+Metadata routes (`sitemap.ts`, `robots.ts`, `manifest.ts`, `icon.ts`, `apple-icon.ts`, `opengraph-image.ts`, `twitter-image.ts`) live at app root or static segments (a nested one answers under its segment: `app/blog/opengraph-image.ts` is `/blog/opengraph-image`) and default-export a possibly-async function that receives `{ request, url, siteUrl, pages }`. `siteUrl` is `SITE_URL`, else the request origin. `sitemap` may return an ARRAY of entries (urls may be paths, resolved against `siteUrl`) and `robots` an OBJECT (Next's `MetadataRoute.Robots` shape); the server serializes them. `sitemap()` / `sitemapIndex()` / `robots()` from `@webjsdev/server` are the same serializers, for a route that builds its own Response.
+
+`pages()` lists every public page as sitemap entries: each static page (route groups dropped), each dynamic page that exports `generateSitemapParams()`, and none whose static metadata chain says `robots: { index: false }`. So the sitemap follows the app as pages are added:
+
+```ts
+// app/sitemap.ts
+import type { MetadataRouteContext } from '@webjsdev/server';
+export default async function sitemap({ pages }: MetadataRouteContext) {
+  return pages();
+}
+
+// app/products/[id]/page.ts: list the products this route serves
+export async function generateSitemapParams() {
+  return (await listProducts()).map((p) => ({ params: { id: p.id }, lastModified: p.updatedAt }));
+}
+
+// app/robots.ts
+import type { MetadataRouteContext } from '@webjsdev/server';
+export default function robots({ siteUrl }: MetadataRouteContext) {
+  return { rules: { userAgent: '*', allow: '/', disallow: ['/account', '/api/'] }, sitemap: `${siteUrl}/sitemap.xml` };
+}
+```
+
+`generateSitemapParams()` returns params objects (`[{ id: '1' }]`) or entries carrying them (`[{ params: { id: '1' }, lastModified }]`).
 
 The IMAGE metadata routes (`icon`, `apple-icon`, `opengraph-image`, `twitter-image`) default-export a function returning a `Response` with an explicit `content-type`, so an inline SVG needs no asset file (buildless).
 
@@ -248,7 +295,7 @@ export const metadata = {
 
 Declare a favicon through `metadata.icons` (or a metadata route), never as a hand-written `<link rel="icon">`: only the root layout may write a shell at all (invariant 8), so a hand-written tag is unavailable to every other layout. A `public/favicon.ico` needs no declaration either way, since the framework serves it at the origin root for crawlers that read no markup.
 
-`opengraph-image` and `twitter-image` are NOT auto-linked (a preview image is a per-page editorial choice, not a site-wide default). Point `metadata` at those via `openGraph.images` / `twitter.images`.
+`opengraph-image` and `twitter-image` are LINKED too, Next's behaviour: a page that declares no `openGraph.images` gets `og:image` pointing at the nearest `opengraph-image` route above it (absolute against the site URL), and likewise `twitter:image`. A page that declares its own image keeps it.
 
 ```ts
 // app/opengraph-image.ts  (OG is 1200x630; apple-icon 180x180)
@@ -256,5 +303,5 @@ export default function OgImage() {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630">...</svg>`;
   return new Response(svg, { headers: { 'content-type': 'image/svg+xml' } });
 }
-// app/page.ts  ->  export const metadata = { openGraph: { images: ['/opengraph-image'] } };
+// every page without its own image now carries og:image = <site>/opengraph-image
 ```

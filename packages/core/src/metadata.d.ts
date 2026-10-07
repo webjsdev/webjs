@@ -19,6 +19,8 @@
 
 /** A URL or relative path. Relative values resolve against `metadataBase`. */
 type MetadataUrl = string;
+/** A URL that may also be given as a `URL` object (Open Graph / Twitter fields). */
+type MetadataUrlOrUrl = string | URL;
 
 /** `title` accepts a plain string or the template object Next.js uses. */
 export type TitleMetadata =
@@ -64,7 +66,11 @@ export interface RobotsMetadata {
 
 /** `alternates`: canonical + i18n / media / type alternates. */
 export interface AlternatesMetadata {
-  canonical?: MetadataUrl;
+  /**
+   * Defaults to the site URL + the page's pathname when a site URL is known
+   * (`metadataBase` or the `SITE_URL` env var). `null` opts the page out.
+   */
+  canonical?: MetadataUrl | null;
   /** hreflang -> URL, e.g. `{ 'es-ES': '/es' }`. */
   languages?: Record<string, MetadataUrl>;
   /** media query -> URL, e.g. `{ '(max-width: 600px)': '/mobile' }`. */
@@ -103,30 +109,55 @@ export type IconsMetadata =
         | Array<{ rel: string; url: MetadataUrl; sizes?: string; type?: string }>;
     };
 
+/** An Open Graph / Twitter image: a URL, or a URL with its details. */
+export type MetadataImage =
+  | MetadataUrlOrUrl
+  | { url: MetadataUrlOrUrl; secureUrl?: MetadataUrlOrUrl; width?: number | string; height?: number | string; alt?: string; type?: string };
+
 /**
- * `openGraph`. Each key is emitted as `<meta property="og:<key>">`, so the
- * indexer carries the documented keys plus an open-ended fallback for the
- * `og:image:width` / `image:height` / `image:alt` style entries.
+ * `openGraph`. Next's shape: `images` (one or many, string or object) emits
+ * `og:image` plus `og:image:width` / `height` / `alt` / `type`; camelCase keys
+ * become snake_case (`siteName` -> `og:site_name`); article fields emit
+ * `article:*`. Raw `og:<key>` names (`image`, `site_name`, `'image:width'`)
+ * still work. When unset, `title`, `description`, `url` (the canonical),
+ * `type` (`website`) and `images` (the nearest `opengraph-image` route) are
+ * filled in from the page.
  */
 export interface OpenGraphMetadata {
   type?: string;
   title?: string;
   description?: string;
-  url?: MetadataUrl;
-  image?: MetadataUrl;
+  url?: MetadataUrlOrUrl;
+  siteName?: string;
+  locale?: string;
+  images?: MetadataImage | MetadataImage[];
+  image?: MetadataImage;
   site_name?: string;
-  [key: string]: string | undefined;
+  publishedTime?: string | Date;
+  modifiedTime?: string | Date;
+  expirationTime?: string | Date;
+  authors?: string | string[];
+  section?: string;
+  tags?: string | string[];
+  [key: string]: unknown;
 }
 
-/** `twitter` card. Each key is emitted as `<meta name="twitter:<key>">`. */
+/**
+ * `twitter` card. `images` emits `twitter:image` (+ `twitter:image:alt`).
+ * `card` defaults to `summary_large_image` when the page has an image, else
+ * `summary`.
+ */
 export interface TwitterMetadata {
   card?: 'summary' | 'summary_large_image' | 'app' | 'player';
   title?: string;
   description?: string;
-  image?: MetadataUrl;
+  images?: MetadataImage | MetadataImage[];
+  image?: MetadataImage;
   site?: string;
+  siteId?: string;
   creator?: string;
-  [key: string]: string | undefined;
+  creatorId?: string;
+  [key: string]: unknown;
 }
 
 /** A startup-image entry for `appleWebApp.startupImage`. */
@@ -200,8 +231,11 @@ export interface Metadata {
   /** -> `<meta name="referrer">`. */
   referrer?: string;
 
-  /** Base for resolving every relative URL in this object. */
-  metadataBase?: string;
+  /**
+   * Base for resolving every relative URL in this object. Defaults to the
+   * `SITE_URL` env var (the app's public origin).
+   */
+  metadataBase?: string | URL;
 
   /** -> `<meta name="viewport">`. String form OR object form. */
   viewport?: string | ViewportMetadata;
