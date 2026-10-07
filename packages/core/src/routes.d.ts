@@ -124,6 +124,8 @@ export interface PageProps<R extends string = string> {
    * Present ONLY on the re-render after a failed page `action` submission
    * (#244). `undefined` on a normal GET render. Read `actionData.fieldErrors`
    * / `actionData.values` to surface validation errors and repopulate inputs.
+   * On a failure `values` carries every submitted text field, with the action's
+   * own `values` on top (#1581).
    */
   actionData?: unknown;
 }

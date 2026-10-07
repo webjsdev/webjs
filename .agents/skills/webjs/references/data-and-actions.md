@@ -139,6 +139,8 @@ The renderer omits the `action` attribute so the form posts to the page's own ur
 
 **A form-bound action always receives the `FormData`**, which is where it differs from the same function called over RPC (rich arguments) or server-to-server. `validate` is the typing seam: it takes the `FormData` and its transform-return becomes the action's typed input.
 
+A failing form action does not need to echo the submission back. On the 422 re-render `actionData.values` already carries every submitted text field (any `values` the action returns are layered on top), and with JavaScript on the client router restores what was typed into every control the re-render did not explicitly set (#1581). Return `values` only to normalize or blank a field; see `routing-and-pages.md` for the page side.
+
 Everything the action declares applies here too, or an action would be protected over RPC and open over a form:
 
 - `validate` runs on the submitted `FormData`.
