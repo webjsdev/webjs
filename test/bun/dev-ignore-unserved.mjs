@@ -91,13 +91,15 @@ try {
   writeFileSync(join(dir, 'uploads/a.bin'), 'x');
   assert.equal(await quiet, false, `a write to dev.log, coverage/ or a gitignored dir reloaded the page on ${runtime}\n--- server log ---\n${log}`);
 
-  // A real source edit still reloads, so the silence above is not a dead stream.
+  // A tracked root file still reloads, so the silence above is not a dead
+  // stream or a deaf root watcher. (Not an app/ edit: on Node that restarts the
+  // process and the reload arrives as a reconnect, not a frame.)
   const fired = reloadFired(10_000);
   await sleep(300);
-  writeFileSync(join(dir, 'app/page.ts'), "import { html } from '@webjsdev/core';\nexport default () => html`<h1>edited</h1>`;\n");
-  assert.ok(await fired, `a page edit did not reload on ${runtime}\n--- server log ---\n${log}`);
+  writeFileSync(join(dir, 'NOTES.md'), '# tracked\n');
+  assert.ok(await fired, `a tracked root file did not reload on ${runtime}\n--- server log ---\n${log}`);
 
-  console.log(`OK  webjs dev ignores dev.log, coverage/ and gitignored paths, and still reloads a page edit on ${runtime}`);
+  console.log(`OK  webjs dev ignores dev.log, coverage/ and gitignored paths, and still reloads a tracked file on ${runtime}`);
 } finally {
   if (child && child.pid) {
     try { process.kill(-child.pid, 'SIGTERM'); } catch { try { child.kill('SIGTERM'); } catch {} }
