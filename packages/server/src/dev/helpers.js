@@ -585,6 +585,12 @@ function __webjsReportVisibility(send) {
   });
   globalThis.__webjsDevActivity = activity;
 }
+let __webjsFellBack = false;
+function __webjsFallBack() {
+  if (__webjsFellBack) return;
+  __webjsFellBack = true;
+  __webjsDirectEvents();
+}
 try {
   if (typeof SharedWorker !== 'undefined') {
     const w = new SharedWorker(${workerUrl});
@@ -593,13 +599,25 @@ try {
       if (m.type === 'reload') __webjsApplyReload(m.verdict);
       else if (m.type === 'webjs-error') __webjsApplyError(m.data);
     };
+    // The worker's SCRIPT can fail to load where the page itself loaded: a
+    // host that admits the page on a partitioned cookie, which Chromium does
+    // not send with a shared worker's script request from a third-party frame
+    // (a private preview embedded in a builder). That is an error event, not a
+    // throw, so without this the tab would get no reloads and no error
+    // overlay at all. Fall back to this tab's own EventSource, which the page's
+    // cookies do reach.
+    w.onerror = function () {
+      w.port.onmessage = null;
+      try { w.port.close(); } catch (_) { /* already gone */ }
+      __webjsFallBack();
+    };
     w.port.start();
-    __webjsReportVisibility(function (msg) { w.port.postMessage(msg); });
+    __webjsReportVisibility(function (msg) { if (!__webjsFellBack) w.port.postMessage(msg); });
   } else {
-    __webjsDirectEvents();
+    __webjsFallBack();
   }
 } catch (_) {
-  __webjsDirectEvents();
+  __webjsFallBack();
 }
 `;
 }
