@@ -1,0 +1,64 @@
+name: npm deprecate
+
+# Mark one published version of a package deprecated on npm, by hand.
+#
+# npm registry actions run here, never from a laptop. Publishing uses
+# trusted publishing (OIDC, release.yml), but OIDC can only PUBLISH: npm
+# accepts no OIDC credential for `npm deprecate`. So this job uses the
+# repository's NPM_TOKEN secret, which must be a granular token with write
+# access to the @webjsdev packages. The token is checked with `npm whoami`
+# first, so an expired or revoked one fails with that cause and not with an
+# opaque 404 from the deprecate call.
+#
+# An empty message un-deprecates the version (npm's own convention).
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package name, e.g. @webjsdev/server'
+        required: true
+        type: string
+      versions:
+        description: 'Version or range to deprecate, e.g. 0.8.85 or ">=0.8.85 <0.8.87"'
+        required: true
+        type: string
+      message:
+        description: 'Deprecation message (empty to un-deprecate)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-deprecate
+  cancel-in-progress: false
+
+jobs:
+  deprecate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+      - name: the token is valid
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "::error::The NPM_TOKEN secret is not set on this repository."
+            exit 1
+          fi
+          npm whoami || { echo "::error::NPM_TOKEN is expired or revoked; create a granular npm token with write access to the @webjsdev packages and update the secret."; exit 1; }
+      - name: deprecate
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PKG: ${{ inputs.package }}
+          VERSIONS: ${{ inputs.versions }}
+          MESSAGE: ${{ inputs.message }}
+        run: |
+          set -euo pipefail
+          npm deprecate "${PKG}@${VERSIONS}" "${MESSAGE}"
+          npm view "${PKG}@${VERSIONS}" version deprecated
