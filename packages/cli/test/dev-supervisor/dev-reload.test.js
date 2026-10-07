@@ -25,6 +25,7 @@ import {
   CRASH_BACKOFF_MS,
 } from '../../lib/dev-reload.js';
 import { needsDirWalker } from '../../lib/watch-recursive.js';
+import { PORT_IN_USE_EXIT_CODE } from '../../lib/port.js';
 
 /** A controllable clock + timer queue. */
 function fakeTimers() {
@@ -66,14 +67,16 @@ function harness({ restartOnChange = true } = {}) {
   const timers = fakeTimers();
   const children = [];
   const logs = [];
+  const finals = [];
   const sup = createSupervisor({
     restartOnChange,
+    onFinal: (code) => finals.push(code),
     timers,
     now: timers.now,
     log: (l) => logs.push(l),
     spawnChild: () => { const c = fakeChild(); children.push(c); return c; },
   });
-  return { sup, timers, children, logs };
+  return { sup, timers, children, logs, finals };
 }
 
 test('a change restarts the child: SIGTERM, then a new child the moment the old one exits', () => {
@@ -128,6 +131,27 @@ test('a crashed child comes back on its own after the backoff (#1521)', () => {
   children[0].exit(1);
   assert.equal(children.length, 1, 'not restarted in a tight loop');
   assert.match(logs.at(-1), /exited \(code 1\); restarting in 500ms/);
+  timers.advance(CRASH_BACKOFF_MS[0]);
+  assert.equal(children.length, 2);
+});
+
+test('a child that could not bind its port is final: no restart, the supervisor reports its code (#1527)', () => {
+  const { sup, timers, children, logs, finals } = harness();
+  sup.start();
+  children[0].exit(PORT_IN_USE_EXIT_CODE);
+  assert.deepEqual(finals, [PORT_IN_USE_EXIT_CODE]);
+  assert.ok(!logs.some((l) => /restarting in/.test(l)), 'no restart is announced');
+  timers.advance(CRASH_BACKOFF_MS.at(-1) * 2);
+  sup.change('app/page.ts');
+  timers.advance(50);
+  assert.equal(children.length, 1, 'neither the backoff nor a file change starts another child');
+});
+
+test('the same exit code from a signal-killed child is still a crash, not final', () => {
+  const { sup, timers, children, finals } = harness();
+  sup.start();
+  children[0].exit(null, 'SIGKILL');
+  assert.deepEqual(finals, []);
   timers.advance(CRASH_BACKOFF_MS[0]);
   assert.equal(children.length, 2);
 });

@@ -22,6 +22,7 @@ import { spawn } from 'node:child_process';
 import { watch, statSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { watchRecursive } from './watch-recursive.js';
+import { PORT_IN_USE_EXIT_CODE } from './port.js';
 
 /**
  * Quiet window between a file event and the restart. `node --watch` used
@@ -202,6 +203,8 @@ export function watchRestartPaths(cwd, { dirs, files, ignore, onChange, onError,
  *   backoffMs?: number[],
  *   stableMs?: number,
  *   killTimeoutMs?: number,
+ *   finalExitCodes?: number[],
+ *   onFinal?: (code: number) => void,
  * }} opts
  */
 export function createSupervisor({
@@ -214,6 +217,10 @@ export function createSupervisor({
   backoffMs = CRASH_BACKOFF_MS,
   stableMs = STABLE_MS,
   killTimeoutMs = KILL_TIMEOUT_MS,
+  // Exit codes a restart cannot fix (a taken port, #1527): the supervisor
+  // stops and reports instead of retrying on its backoff forever.
+  finalExitCodes = [PORT_IN_USE_EXIT_CODE],
+  onFinal = () => {},
 }) {
   /** @type {ChildLike | null} */
   let child = null;
@@ -265,6 +272,12 @@ export function createSupervisor({
       return;
     }
     // Exited on its own: a crash, a fatal boot error, or an outside kill.
+    if (!signal && code !== null && finalExitCodes.includes(code)) {
+      stopping = true;
+      debounceTimer = clear(debounceTimer);
+      onFinal(code);
+      return;
+    }
     if (now() - startedAt >= stableMs) crashes = 0;
     const delay = backoffMs[Math.min(crashes, backoffMs.length - 1)];
     crashes++;
@@ -331,9 +344,22 @@ export function superviseDevServer({ cwd, plan, env, onExit }) {
   // watcher keeps running either way.
   const ignoreWatchError = () => {};
 
+  let exiting = false;
+  /** @type {() => void} */
+  let closeWatch = () => {};
+  const shutdown = (code) => {
+    if (exiting) return;
+    exiting = true;
+    closeWatch();
+    sup.stop().then(() => onExit(code));
+  };
+
   const sup = createSupervisor({
     restartOnChange: plan.restartOnChange,
     log,
+    // The child already printed why (the port and its holder); stop with its
+    // code rather than restarting a server that can never bind.
+    onFinal: (code) => shutdown(code),
     spawnChild: () => {
       const c = spawn(process.execPath, plan.args, {
         // The IPC channel lets the child notice this process is gone and exit,
@@ -353,7 +379,7 @@ export function superviseDevServer({ cwd, plan, env, onExit }) {
   });
 
   const outputs = readRegenerateOutputs(cwd);
-  const closeWatch = watchRestartPaths(cwd, {
+  closeWatch = watchRestartPaths(cwd, {
     dirs: plan.watchDirs,
     files: plan.watchFiles,
     ignore: (rel) => shouldIgnoreRestartPath(rel) || outputs.has(rel.replace(/\\/g, '/')),
@@ -361,13 +387,6 @@ export function superviseDevServer({ cwd, plan, env, onExit }) {
     onError: ignoreWatchError,
   });
 
-  let exiting = false;
-  const shutdown = (code) => {
-    if (exiting) return;
-    exiting = true;
-    closeWatch();
-    sup.stop().then(() => onExit(code));
-  };
   process.on('SIGINT', () => shutdown(0));
   process.on('SIGTERM', () => shutdown(0));
   process.on('SIGHUP', () => shutdown(0));

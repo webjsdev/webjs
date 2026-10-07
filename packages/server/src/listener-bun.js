@@ -48,6 +48,7 @@ import { matchApi } from './router.js';
 import { registerClient } from './broadcast.js';
 import { setTrustedRemoteIp, propagateTrustedRemoteIp } from './rate-limit.js';
 import { applyForwarded } from './forwarded.js';
+import { isAddrInUse, portInUseError, reusePortRequested } from './port-in-use.js';
 import {
   isCompressible,
   isEventsPath,
@@ -72,8 +73,16 @@ import {
 export function startBunListener(ctx) {
   const { app, dev, compress, logger, hub, port, basePathStr, timeouts, watcherAbort } = ctx;
 
-  const server = Bun.serve({
+  /** @type {any} */
+  let server;
+  try {
+    server = Bun.serve({
     port,
+    // Explicit, never Bun's default (#1527): with `development: false` Bun
+    // turns SO_REUSEPORT on, so a second server on a taken port bound silently
+    // and the kernel split the requests between the two. Off unless the
+    // operator asks for a shared port with WEBJS_REUSE_PORT=1.
+    reusePort: reusePortRequested(),
     idleTimeout: bunIdleTimeout(timeouts),
     // WebJs owns its dev error overlay (over SSE) and handles thrown errors in
     // `fetch`, so Bun's own development error page must never interfere; keep it
@@ -145,6 +154,12 @@ export function startBunListener(ctx) {
       },
     },
   });
+  } catch (e) {
+    // A taken port fails fast with the holder named (#1527); the CLI prints
+    // it and exits instead of retrying.
+    if (isAddrInUse(e)) throw portInUseError(port, e);
+    throw e;
+  }
 
   logger.info(
     `webjs ${dev ? 'dev' : 'prod'} server ready on http://localhost:${server.port} (Bun ${process.versions.bun})`,

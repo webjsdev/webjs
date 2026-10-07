@@ -166,6 +166,30 @@ test('bun scaffold: agent-config markdown shows bun commands, no npm commands', 
   }
 });
 
+test('bun scaffold: the ui-kit hint, gallery reset, hook and env hints use bun (#1527)', async () => {
+  const cwd = await tempCwd();
+  const lines = [];
+  const log = console.log, err = console.error;
+  console.log = (...a) => { lines.push(a.join(' ')); }; console.error = () => {};
+  try {
+    await scaffoldApp('bunapp', cwd, { template: 'full-stack', runtime: 'bun' });
+    const appDir = join(cwd, 'bunapp');
+    const banner = lines.join('\n');
+    assert.match(banner, /bunx webjsdev ui add <name>/, 'the closing banner names bunx');
+    assert.doesNotMatch(banner, /npx webjsdev/);
+    const clear = read(appDir, 'scripts/clear-gallery.mjs');
+    assert.match(clear, /bunx webjsdev ui add <name>/);
+    assert.doesNotMatch(clear, /npx webjsdev/, 'the reset script and the layout it writes say bunx');
+    assert.doesNotMatch(read(appDir, '.hooks/pre-commit'), /npm run /);
+    assert.doesNotMatch(read(appDir, '.gitignore'), /npm run /);
+    assert.match(read(appDir, '.env.example'), /# Generate: bun -e /);
+    assert.match(read(appDir, 'compose.yaml'), /# Generate: bun -e /);
+  } finally {
+    console.log = log; console.error = err;
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
 test('bun scaffold works across both templates', async () => {
   for (const template of ['full-stack', 'api']) {
     const cwd = await tempCwd();
@@ -219,6 +243,10 @@ test('node mode (default) is unchanged: no bun flavor leaks in', async () => {
     assert.match(read(appDir, 'compose.yaml'), /test: \["CMD", "node", "-e"/);
     assert.match(read(appDir, '.github/workflows/ci.yml'), /actions\/setup-node/);
     assert.match(read(appDir, 'AGENTS.md'), /npm run dev/);
+    // #1527 counterfactual: the node app keeps its npx / node spellings.
+    assert.match(read(appDir, 'scripts/clear-gallery.mjs'), /npx webjsdev ui add/);
+    assert.match(read(appDir, '.env.example'), /# Generate: node -e /);
+    assert.match(read(appDir, '.hooks/pre-commit'), /npm run ci/);
   } finally {
     if (prev === undefined) delete process.env.npm_config_user_agent;
     else process.env.npm_config_user_agent = prev;

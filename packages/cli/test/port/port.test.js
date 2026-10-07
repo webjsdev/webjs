@@ -144,3 +144,22 @@ test('COUNTERFACTUAL: the old ordering (resolve before loading .env) loses the .
   });
   rmSync(dir, { recursive: true, force: true });
 });
+
+// #1527: a taken port exits with a dedicated code and the server's message.
+import { failFastOnPortInUse, PORT_IN_USE_EXIT_CODE } from '../../lib/port.js';
+
+test('failFastOnPortInUse prints the message and exits 98 on EADDRINUSE (#1527)', async () => {
+  const lines = [];
+  const codes = [];
+  const err = Object.assign(new Error('port 8080 is already in use by PID 42 (bun webjs dev).'), { code: 'EADDRINUSE' });
+  await failFastOnPortInUse(Promise.reject(err), { error: (l) => lines.push(l), exit: (c) => { codes.push(c); return /** @type {never} */ (undefined); } });
+  assert.equal(PORT_IN_USE_EXIT_CODE, 98);
+  assert.deepEqual(codes, [98]);
+  assert.match(lines[0], /^\[webjs\] port 8080 is already in use by PID 42/);
+});
+
+test('failFastOnPortInUse passes a started server through and rethrows other errors', async () => {
+  const handle = { server: 1 };
+  assert.equal(await failFastOnPortInUse(Promise.resolve(handle)), handle);
+  await assert.rejects(failFastOnPortInUse(Promise.reject(new Error('boom'))), /boom/);
+});

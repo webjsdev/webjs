@@ -207,6 +207,10 @@
                   "run": "bun test/bun/dev-watch-replaced.mjs"
                 },
                 {
+                  "title": "bun proof: port-in-use",
+                  "run": "bun test/bun/port-in-use.mjs"
+                },
+                {
                   "title": "bun proof: dev-reload-retry",
                   "run": "bun test/bun/dev-reload-retry.mjs"
                 },

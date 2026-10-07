@@ -161,7 +161,22 @@ export function bunifyDockerfile(s) {
  * @returns {string}
  */
 export function bunifyCompose(s) {
-  return s.replace('test: ["CMD", "node", "-e", "fetch(', 'test: ["CMD", "bun", "-e", "fetch(');
+  return s
+    .replace('test: ["CMD", "node", "-e", "fetch(', 'test: ["CMD", "bun", "-e", "fetch(')
+    // The secret-generation hint (#1527): a Bun app may have no node at all.
+    .replaceAll('# Generate: node -e ', '# Generate: bun -e ');
+}
+
+/**
+ * Rewrite `.env.example` for Bun (#1527): its secret-generation hint runs
+ * `node -e`, which a Bun-only machine (the oven/bun image, a Bun-only dev box)
+ * does not have. `bun -e` runs the same one-liner.
+ *
+ * @param {string} s
+ * @returns {string}
+ */
+export function bunifyEnvExample(s) {
+  return s.replaceAll('# Generate: node -e ', '# Generate: bun -e ');
 }
 
 /**

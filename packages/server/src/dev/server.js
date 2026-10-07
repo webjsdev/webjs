@@ -13,6 +13,7 @@ import { stripBasePath } from '../base-path.js';
 import { basePath } from '../importmap.js';
 import { attachWebSocket } from '../websocket.js';
 import { toWebRequest, sendWebResponse } from './helpers.js';
+import { isAddrInUse, portInUseError, reusePortRequested } from '../port-in-use.js';
 
 function debounce(fn, ms) {
   let t;
@@ -80,7 +81,7 @@ function makeHttpServer(handler) {
  * @param {import('../listener-types.js').ListenerContext} ctx
  * @returns {{ server: import('node:http').Server, close: () => Promise<void> }}
  */
-function startNodeListener(ctx) {
+async function startNodeListener(ctx) {
   const { app, dev, compress, logger, hub, port, basePathStr, timeouts, watcherAbort } = ctx;
 
   const server = makeHttpServer(async (req, res) => {
@@ -171,14 +172,25 @@ function startNodeListener(ctx) {
   // WebSocket endpoint at its URL.
   attachWebSocket(server, () => app.getRouteTable(), { dev, logger });
 
-  server.listen(port, () => {
-    logger.info(`webjs ${dev ? 'dev' : 'prod'} server ready on http://localhost:${port}`);
-    // The server is now accepting connections; warm the first-request analysis
-    // in the background so a real first request finds it memoized. Fire-and-
-    // forget: listening (and thus readiness probes / load-balancer health) does
-    // not wait on it, and a failure here does not bring the process down.
-    app.warmup();
+  // Listening is awaited, so a bind failure rejects startServer instead of
+  // surfacing as an unhandled 'error' event. A taken port fails fast with the
+  // holder named (#1527); WEBJS_REUSE_PORT=1 shares the port on purpose
+  // (SO_REUSEPORT, honoured on Linux by Node 22.12+ / 23.1+).
+  await new Promise((resolve, reject) => {
+    const onError = (/** @type {NodeJS.ErrnoException} */ e) => reject(isAddrInUse(e) ? portInUseError(port, e) : e);
+    server.once('error', onError);
+    const options = reusePortRequested() ? { port, reusePort: true } : { port };
+    server.listen(options, () => {
+      server.off('error', onError);
+      resolve(undefined);
+    });
   });
+  logger.info(`webjs ${dev ? 'dev' : 'prod'} server ready on http://localhost:${port}`);
+  // The server is now accepting connections; warm the first-request analysis
+  // in the background so a real first request finds it memoized. Fire-and-
+  // forget: listening (and thus readiness probes / load-balancer health) does
+  // not wait on it, and a failure here does not bring the process down.
+  app.warmup();
 
   const closeServer = () => new Promise((resolve, reject) => {
     server.close((err) => (err ? reject(err) : resolve(undefined)));
@@ -328,9 +340,18 @@ export async function startServer(opts) {
   // skips the node:http bridge (toWebRequest/sendWebResponse) for ~1.9x more
   // req/s on the listening path (#511); the Bun shell is dynamically imported so
   // the `Bun.*` global is never referenced on Node.
-  if (serverRuntime() === 'bun') {
-    const { startBunListener } = await import('../listener-bun.js');
-    return startBunListener(ctx);
+  try {
+    if (serverRuntime() === 'bun') {
+      const { startBunListener } = await import('../listener-bun.js');
+      return startBunListener(ctx);
+    }
+    return await startNodeListener(ctx);
+  } catch (e) {
+    // The listener never came up (a taken port, #1527): stop what was started
+    // for it, so an embedding caller that catches this is not left with a
+    // live file watcher keeping the process alive.
+    if (watcherAbort) watcherAbort.abort();
+    hub.closeAll();
+    throw e;
   }
-  return startNodeListener(ctx);
 }

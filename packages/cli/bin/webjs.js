@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { resolveBin } from '../lib/resolve-bin.js';
 import { dbGenerateTtyHint } from '../lib/db-hints.js';
 import { checkNodeInline, nodeInlineMessage } from '../lib/node-preflight.js';
-import { loadAppEnv, resolvePort } from '../lib/port.js';
+import { loadAppEnv, resolvePort, failFastOnPortInUse } from '../lib/port.js';
 import { planDevSupervisor } from '../lib/dev-supervisor.js';
 import { checkAppName, appNameErrorMessage } from '../lib/app-name.js';
 import { findCheckTarget, notAnAppMessage, notAnAppJson, findServeTarget, notAnAppServeMessage } from '../lib/check-target.js';
@@ -530,7 +530,7 @@ async function main() {
           process.channel?.unref?.();
           process.on('disconnect', () => process.exit(0));
         }
-        await startServer({ appDir: process.cwd(), port, dev: true });
+        await failFastOnPortInUse(startServer({ appDir: process.cwd(), port, dev: true }));
         break;
       }
 
@@ -568,7 +568,9 @@ async function main() {
         const { startServer } = await import('@webjsdev/server');
         loadAppEnv(process.cwd());
         const port = resolvePort(flag(rest, '--port'));
-        await startServer({ appDir: process.cwd(), port, dev: true });
+        await failFastOnPortInUse(startServer({ appDir: process.cwd(), port, dev: true }), {
+          exit: (code) => { killTasks(); process.exit(code); },
+        });
         killTasks();
         break;
       }
@@ -593,7 +595,7 @@ async function main() {
       const { readAppTasks } = await import('../lib/app-tasks.js');
       await runPhaseBeforeSteps('start', readAppTasks(process.cwd()).start.before, process.cwd());
       const port = resolvePort(flag(rest, '--port'));
-      await startServer({ appDir: process.cwd(), port, dev: false });
+      await failFastOnPortInUse(startServer({ appDir: process.cwd(), port, dev: false }));
       break;
     }
     case 'db': {

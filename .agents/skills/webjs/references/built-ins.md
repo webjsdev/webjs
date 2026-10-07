@@ -21,7 +21,8 @@ Read this when wiring caching or rate limiting, storing uploads, hardening heade
 |---|---|
 | `REDIS_URL` | When set, sessions, rate limit, and cache use Redis instead of memory |
 | `SESSION_SECRET` / `AUTH_SECRET` | Session and auth signing (see `auth-and-sessions.md`) |
-| `PORT` | Listen port. Precedence `--port` flag, then `PORT` (real env or `.env`), then `8080` |
+| `PORT` | Listen port. Precedence `--port` flag, then `PORT` (real env or `.env`), then `8080`. A taken port fails fast: `webjs dev` / `webjs start` exit 98 with `port 8080 is already in use by PID <n> (<command>)`, on Node and Bun alike |
+| `WEBJS_REUSE_PORT` | `1` lets several `webjs dev` / `webjs start` processes share one port (`SO_REUSEPORT`, Linux; the kernel balances connections across them). Off by default, so a second server on a taken port fails instead of silently taking a share of the requests |
 | `WEBJS_SOURCE_LOCATIONS` | `webjs dev` only. `1` stamps `data-webjs-src="<app-relative-file>:<line>"` on the elements of the app's `html` templates (see below); `0` turns off a config default. Same as `webjs.dev.sourceLocations: true`. Ignored by `webjs start` |
 | `WEBJS_EMBED_ORIGINS` | `webjs dev` only. Comma-separated parent origins (`https://builder.dev,http://localhost:8080`) allowed to frame the dev server and receive the embed bridge's messages (see below). Replaces `webjs.dev.embedOrigins` when set. Ignored by `webjs start` |
 | `WEBJS_DEV_RELOAD_IDLE` | `webjs dev` only. Seconds of no edit and no interaction after which the live-reload stream closes so an idle host can sleep (`webjs.dev.reloadIdle`; this wins). Off by default; see `runtime.md` |
