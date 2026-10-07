@@ -78,6 +78,13 @@
                   }
                 },
                 {
+                  "title": "e2e: Suspense split template",
+                  "run": "CHROMIUM_PATH=\"$(node -p \"require('playwright-core').chromium.executablePath()\")\" node --test test/e2e/suspense-partial-template.test.mjs",
+                  "env": {
+                    "WEBJS_E2E": "1"
+                  }
+                },
+                {
                   "title": "e2e: dev overlay nav (#1047)",
                   "run": "CHROMIUM_PATH=\"$(node -p \"require('playwright-core').chromium.executablePath()\")\" node --test test/e2e/dev-overlay-nav.test.mjs",
                   "env": {
