@@ -650,6 +650,14 @@ export async function registerActionHooks(opts = {}) {
   _registered = true;
 
   if (serverRuntime() === 'bun') {
+    // Once per PROCESS, not per module instance (#1575): `bun --hot` re-runs
+    // the server with fresh module state, and a `Bun.plugin` cannot be
+    // unregistered, so a module-level guard alone stacked one more plugin per
+    // edit (the first one registered keeps answering anyway).
+    const g = /** @type {any} */ (globalThis);
+    const installed = Symbol.for('webjs.actionSeed.bunPlugin');
+    if (g[installed]) { _hookInstalled = true; return; }
+    g[installed] = true;
     // Bun has no module.registerHooks; install the same facade via Bun.plugin.
     const { installBunSeedPlugin } = await import('./action-seed-bun.js');
     installBunSeedPlugin({ isSeedCandidate, buildSeedFacade, serverFileRe: SERVER_FILE_RE });

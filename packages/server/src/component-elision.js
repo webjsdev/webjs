@@ -1158,6 +1158,84 @@ export async function computeElidableComponents(components, moduleGraph, readFil
 }
 
 /**
+ * Per-file scan results, keyed by path and validated on the exact source and
+ * the two facts about the file the scan depends on (#1575). The scan reads one
+ * file and nothing else, so an unchanged file never needs it again; on a large
+ * app it was most of the elision pass (about 350 ms of Crisp's 450 ms rebuild),
+ * repeated in full after every edit.
+ * @type {Map<string, { src: string, isRoute: boolean, isComponent: boolean, result: ReturnType<typeof scanFileUncached> }>}
+ */
+const SCAN_RESULT_CACHE = new Map();
+
+/**
+ * The per-file half of `analyzeElision`: every signal it reads off ONE file.
+ * @param {string} file
+ * @param {string} src  the raw source as read
+ * @param {{ isRoute: boolean, isComponent: boolean, appDir: string, scanStripper: any }} ctx
+ */
+function scanFileForElision(file, src, ctx) {
+  const hit = SCAN_RESULT_CACHE.get(file);
+  if (hit && hit.src === src && hit.isRoute === ctx.isRoute && hit.isComponent === ctx.isComponent) return hit.result;
+  const result = scanFileUncached(file, src, ctx);
+  SCAN_RESULT_CACHE.set(file, { src, isRoute: ctx.isRoute, isComponent: ctx.isComponent, result });
+  return result;
+}
+
+/**
+ * @param {string} file
+ * @param {string} src
+ * @param {{ isRoute: boolean, isComponent: boolean, appDir: string, scanStripper: any }} ctx
+ */
+function scanFileUncached(file, src, { isRoute, isComponent, appDir, scanStripper }) {
+  // Erase type syntax first, so every scan below reads the code that RUNS
+  // (#1423). This is the single point where the analyser reads a file, so
+  // doing it here covers the module-scope, template, import, and component
+  // scans at once.
+  src = eraseTypesForScan(scanStripper, file, src);
+  // Mask comments once for every signal scan below (#179): a `<tag>`, an
+  // `@event`, a browser global, an `import`, or a `whenDefined` written in a
+  // comment must not register as a real signal. String and template content
+  // is kept, so a real rendered tag, a real `@click=${}` in an html template,
+  // and a real `whenDefined('tag')` (the tag rides a string) still match.
+  // (`importsSideEffectNonCorePackage` / `hasModuleScopeSideEffect` /
+  // `analyzeComponentSource` also redact strings/templates internally; running
+  // them on the comment-masked source just additionally drops comment prose.)
+  const masked = maskComments(src);
+  const tags = extractRenderedTags(masked);
+  const { redacted, literals } = redactToPlaceholders(src);
+  // A page/layout NEVER hydrates (#605), so its `html` TEMPLATE content is
+  // SSR output, not module client work: an inline `<script>`'s browser
+  // globals run from the rendered HTML, and a page-template `@event` is
+  // dropped at SSR. For a route module, scan those two template-borne signals
+  // on the template-redacted source so they do not pin the module, while a
+  // genuine module-scope `document.x` OUTSIDE any template still flags (#623).
+  // The import-based checks stay on `redacted`: a real `import 'pkg'` side
+  // effect DOES run when a page/layout module loads in the browser, and
+  // `importsSideEffectNonCorePackage` itself skips local `#`-alias imports.
+  const templateScan = isRoute ? redacted : masked;
+  const clientGlobalOrBare = EVENT_BINDING_RE.test(templateScan) || EVENT_PROP_RE.test(templateScan) ||
+    importsSideEffectNonCorePackage(redacted, appDir, literals) || CLIENT_GLOBAL_RE.test(templateScan) ||
+    hasModuleScopeSideEffect(redacted, literals);
+  let interactive = false;
+  /** @type {string | null} */
+  let interactiveReason = null;
+  if (isComponent) {
+    const v = analyzeComponentSource(masked);
+    if (v.interactive) { interactive = true; interactiveReason = v.reason ?? null; }
+  }
+  return {
+    tags,
+    reactive: importsReactivePrimitive(redacted, literals),
+    clientRouter: importsClientRouter(redacted, literals),
+    clientGlobalOrBare,
+    interactive,
+    interactiveReason,
+    observedTags: [...[...masked.matchAll(WHEN_DEFINED_RE)].map((m) => m[1]), ...[...masked.matchAll(TAG_DEFINED_RE)].map((m) => m[1])],
+    observedClasses: [...masked.matchAll(INSTANCEOF_RE)].map((m) => m[1]),
+  };
+}
+
+/**
  * Full elision analysis: which display-only COMPONENT modules can be elided,
  * AND which page/layout ROUTE modules are inert (do no client work) and can
  * therefore be dropped from the client boot script entirely. The second is
@@ -1257,53 +1335,28 @@ export async function analyzeElision(components, routeModules, moduleGraph, read
     // (#1423). This is the single point where the analyser reads a file, so
     // doing it here covers the module-scope, template, import, and component
     // scans at once.
-    src = eraseTypesForScan(scanStripper, file, src);
-    // Mask comments once for every signal scan below (#179): a `<tag>`, an
-    // `@event`, a browser global, an `import`, or a `whenDefined` written in a
-    // comment must not register as a real signal. String and template content
-    // is kept, so a real rendered tag, a real `@click=${}` in an html template,
-    // and a real `whenDefined('tag')` (the tag rides a string) still match.
-    // (`importsSideEffectNonCorePackage` / `hasModuleScopeSideEffect` /
-    // `analyzeComponentSource` also redact strings/templates internally; running
-    // them on the comment-masked source just additionally drops comment prose.)
-    const masked = maskComments(src);
-    fileTags.set(file, extractRenderedTags(masked));
-    const { redacted, literals } = redactToPlaceholders(src);
-    if (importsReactivePrimitive(redacted, literals)) reactiveFiles.add(file);
-    if (importsClientRouter(redacted, literals)) clientRouterFiles.add(file);
-    // A page/layout NEVER hydrates (#605), so its `html` TEMPLATE content is
-    // SSR output, not module client work: an inline `<script>`'s browser
-    // globals run from the rendered HTML, and a page-template `@event` is
-    // dropped at SSR. For a route module, scan those two template-borne signals
-    // on the template-redacted source so they do not pin the module, while a
-    // genuine module-scope `document.x` OUTSIDE any template still flags (#623).
-    // The import-based checks stay on `redacted`: a real `import 'pkg'` side
-    // effect DOES run when a page/layout module loads in the browser, and
-    // `importsSideEffectNonCorePackage` itself skips local `#`-alias imports.
-    const templateScan = routeModuleSet.has(file) ? redacted : masked;
-    if (EVENT_BINDING_RE.test(templateScan) || EVENT_PROP_RE.test(templateScan) ||
-        importsSideEffectNonCorePackage(redacted, appDir, literals) || CLIENT_GLOBAL_RE.test(templateScan) ||
-        hasModuleScopeSideEffect(redacted, literals)) {
-      clientGlobalOrBareFiles.add(file);
-    }
-    if (componentFiles.has(file)) {
-      const v = analyzeComponentSource(masked);
-      if (v.interactive) { mustShip.add(file); noteShip(file, 'own', null, v.reason); }
-    }
+    const scan = scanFileForElision(file, src, {
+      isRoute: routeModuleSet.has(file),
+      isComponent: componentFiles.has(file),
+      appDir,
+      scanStripper,
+    });
+    fileTags.set(file, scan.tags);
+    if (scan.reactive) reactiveFiles.add(file);
+    if (scan.clientRouter) clientRouterFiles.add(file);
+    if (scan.clientGlobalOrBare) clientGlobalOrBareFiles.add(file);
+    if (scan.interactive) { mustShip.add(file); noteShip(file, 'own', null, scan.interactiveReason); }
     // Cross-module registration observation (#169): if THIS module observes
     // another component's tag, that component must register client-side, so
     // it cannot be elided. Map each observed tag/class back to its component
-    // file. Resolution against tagToFile / classToFile happens after the loop
-    // (all components are known up front, but we collect here while we hold
-    // each source). Verdict-safe: only ever forces MORE components to ship.
-    for (const m of masked.matchAll(WHEN_DEFINED_RE)) {
-      const f = tagToFile.get(m[1]); if (f) { observedComponentFiles.add(f); if (!observedBy.has(f)) observedBy.set(f, file); }
+    // file. Resolution against tagToFile / classToFile happens here, outside
+    // the per-file cache, because the component set is not a property of this
+    // file. Verdict-safe: only ever forces MORE components to ship.
+    for (const tag of scan.observedTags) {
+      const f = tagToFile.get(tag); if (f) { observedComponentFiles.add(f); if (!observedBy.has(f)) observedBy.set(f, file); }
     }
-    for (const m of masked.matchAll(TAG_DEFINED_RE)) {
-      const f = tagToFile.get(m[1]); if (f) { observedComponentFiles.add(f); if (!observedBy.has(f)) observedBy.set(f, file); }
-    }
-    for (const m of masked.matchAll(INSTANCEOF_RE)) {
-      const f = classToFile.get(m[1]); if (f) { observedComponentFiles.add(f); if (!observedBy.has(f)) observedBy.set(f, file); }
+    for (const cls of scan.observedClasses) {
+      const f = classToFile.get(cls); if (f) { observedComponentFiles.add(f); if (!observedBy.has(f)) observedBy.set(f, file); }
     }
   }
 

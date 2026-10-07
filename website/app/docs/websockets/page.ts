@@ -175,7 +175,7 @@ conn.send({ type: 'subscribe', channel: 'updates' });</code-block>
     </ul>
 
     <h2>The globalThis Pattern for Shared State</h2>
-    <p>In dev mode, WebJs cache-busts module imports on every request so that edits take effect immediately. This means module-level variables (like a <code>Set</code> of connected clients) are reset every time the module reloads. To preserve shared state across dev reloads, attach it to <code>globalThis</code>:</p>
+    <p>In dev mode, WebJs re-imports a module after each edit so the edit takes effect immediately. This means module-level variables (like a <code>Set</code> of connected clients) are reset every time the module reloads. To preserve shared state across dev reloads, attach it to <code>globalThis</code>:</p>
 
     <code-block>// modules/chat/clients.ts
 import type { WebSocket } from 'ws';

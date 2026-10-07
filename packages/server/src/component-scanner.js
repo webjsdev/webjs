@@ -166,6 +166,44 @@ export async function primeComponentRegistry(appDir, components) {
 }
 
 /**
+ * Per-file results of the orphan scan, validated on the exact source (#1575):
+ * the dev server runs `findOrphanComponents` after every rebuild, and on a
+ * large app re-scanning every unchanged file cost about 100 ms an edit.
+ * @type {Map<string, { src: string, declared: Set<string>, registered: string[] }>}
+ */
+const ORPHAN_SCAN_CACHE = new Map();
+
+/**
+ * The classes one file declares as WebComponents and the ones it registers.
+ * @param {string} file
+ * @param {string} src
+ * @returns {{ declared: Set<string>, registered: string[] }}
+ */
+function orphanScan(file, src) {
+  const hit = ORPHAN_SCAN_CACHE.get(file);
+  if (hit && hit.src === src) return hit;
+  const { redacted } = redactToPlaceholders(src);
+  // Find every class that extends WebComponent (exact name: we trust
+  // the framework convention).
+  const classRe = /\b(?:export\s+)?(?:default\s+)?class\s+([A-Z][A-Za-z0-9_$]*)\s+extends\s+WebComponent\b/g;
+  const declared = new Set();
+  let m;
+  while ((m = classRe.exec(redacted)) !== null) declared.add(m[1]);
+
+  // "Registered" is whatever `extractComponents` accepts, reused rather than
+  // re-expressed. The two scans MUST agree on what a literal tag is: when
+  // this used its own looser pattern, a redacted interpolated template
+  // (`Class.register(\`${p}__STR_1__\`)`) satisfied the orphan scan but not
+  // `extractComponents`, so a computed template-literal tag was neither a
+  // component NOR an orphan and vanished from every surface, which is the
+  // exact shape the orphan report exists to catch.
+  const registered = extractComponents(src).map((c) => c.className);
+  const entry = { src, declared, registered };
+  ORPHAN_SCAN_CACHE.set(file, entry);
+  return entry;
+}
+
+/**
  * Find ORPHAN components: a `class X extends WebComponent` that NOTHING in the
  * app registers with a LITERAL tag, via either `X.register('tag')` or
  * `customElements.define('tag', X)`. The declaration is per-file, the
@@ -242,22 +280,8 @@ export async function findOrphanComponents(appDir) {
     // blank-strings argument: the default form keeps plain-string bodies and
     // single-line untagged templates verbatim, so a sample written either way
     // would match again and the false orphan would be back.
-    const { redacted } = redactToPlaceholders(src);
-    // Find every class that extends WebComponent (exact name: we trust
-    // the framework convention).
-    const classRe = /\b(?:export\s+)?(?:default\s+)?class\s+([A-Z][A-Za-z0-9_$]*)\s+extends\s+WebComponent\b/g;
-    const declared = new Set();
-    let m;
-    while ((m = classRe.exec(redacted)) !== null) declared.add(m[1]);
-
-    // "Registered" is whatever `extractComponents` accepts, reused rather than
-    // re-expressed. The two scans MUST agree on what a literal tag is: when
-    // this used its own looser pattern, a redacted interpolated template
-    // (`Class.register(\`${p}__STR_1__\`)`) satisfied the orphan scan but not
-    // `extractComponents`, so a computed template-literal tag was neither a
-    // component NOR an orphan and vanished from every surface, which is the
-    // exact shape the orphan report exists to catch.
-    for (const c of extractComponents(src)) registeredAnywhere.add(c.className);
+    const { declared, registered } = orphanScan(file, src);
+    for (const cls of registered) registeredAnywhere.add(cls);
     if (declared.size) declaredPerFile.push({ file, declared });
   }
 

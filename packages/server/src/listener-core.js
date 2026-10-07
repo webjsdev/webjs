@@ -23,7 +23,7 @@ import {
 import { stripBasePath } from './base-path.js';
 import { randomUUID } from 'node:crypto';
 import { isWatchError } from './dev/watch-tree.js';
-import { devImportSpecifier } from './dev-import.js';
+import { devImport } from './dev-import.js';
 
 /** The dev live-reload SSE path (matched after base-path stripping). */
 export const EVENTS_PATH = '/__webjs/events';
@@ -329,7 +329,7 @@ export async function readBufferedOrStream(web, maxBytes) {
  * @param {boolean} dev
  */
 export function loadWsModule(file, dev) {
-  return import(devImportSpecifier(file, dev));
+  return devImport(file, dev);
 }
 
 /**

@@ -18,7 +18,7 @@
 import { join } from 'node:path';
 import { stat } from 'node:fs/promises';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { devImportSpecifier } from './dev-import.js';
+import { devImport } from './dev-import.js';
 
 /**
  * Per-boot handoff channel for a `register()`-registered error sink. An
@@ -86,7 +86,7 @@ export async function runInstrumentation(appDir, opts = {}) {
   const store = { onError: null };
   await _als.run(store, async () => {
     try {
-      const mod = await import(devImportSpecifier(file, dev));
+      const mod = await devImport(file, dev);
       const register = typeof mod.default === 'function'
         ? mod.default
         : (typeof mod.register === 'function' ? mod.register : null);

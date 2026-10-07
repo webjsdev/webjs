@@ -33,6 +33,13 @@ import { PORT_IN_USE_EXIT_CODE } from './port.js';
 export const RESTART_DEBOUNCE_MS = 50;
 
 /**
+ * The IPC message a dev server child sends when it reloads every module in
+ * place under `bun --hot`, plugin-served ones included (#1575). Mirrors
+ * `HOT_IN_PLACE_MESSAGE` in `@webjsdev/server`'s `dev/hot-host.js`.
+ */
+export const HOT_IN_PLACE_MESSAGE = 'hot-reload-in-place';
+
+/**
  * Delays before restarting a child that exited on its own (a crash), indexed
  * by consecutive crash count and capped at the last entry. A file change
  * restarts it at once regardless, so the backoff only matters when nothing is
@@ -339,11 +346,34 @@ export function createSupervisor({
 }
 
 /**
+ * Which changed paths restart the live child. A Bun child that reloads
+ * plugin-served modules in place announces it over IPC once it is up (#1575);
+ * from then on only `plan.inPlaceRestartFor` (the boot hooks) restarts it.
+ * Per child: `reset()` on every spawn, so a child that never announces (an
+ * older `@webjsdev/server`) keeps the restarts it needs.
+ *
+ * @param {{ restartFor?: (path: string) => boolean, inPlaceRestartFor?: (path: string) => boolean }} plan
+ */
+export function inPlaceRestarts(plan) {
+  let inPlace = false;
+  const base = plan.restartFor || (() => true);
+  return {
+    /** @param {string} p */
+    restartFor: (p) => (inPlace && plan.inPlaceRestartFor ? plan.inPlaceRestartFor(p) : base(p)),
+    /** @param {unknown} msg */
+    onMessage: (msg) => {
+      if (msg && typeof msg === 'object' && /** @type {any} */ (msg).webjs === HOT_IN_PLACE_MESSAGE) inPlace = true;
+    },
+    reset: () => { inPlace = false; },
+  };
+}
+
+/**
  * Run the dev server under the supervisor until a signal stops it.
  *
  * @param {{
  *   cwd: string,
- *   plan: { args: string[], restartOnChange: boolean, restartFor?: (path: string) => boolean, watchDirs: string[], watchFiles: string[] },
+ *   plan: { args: string[], restartOnChange: boolean, restartFor?: (path: string) => boolean, inPlaceRestartFor?: (path: string) => boolean, watchDirs: string[], watchFiles: string[] },
  *   env: NodeJS.ProcessEnv,
  *   onExit: (code: number) => void,
  * }} opts
@@ -366,14 +396,16 @@ export function superviseDevServer({ cwd, plan, env, onExit }) {
     sup.stop().then(() => onExit(code));
   };
 
+  const restarts = inPlaceRestarts(plan);
   const sup = createSupervisor({
     restartOnChange: plan.restartOnChange,
-    ...(plan.restartFor ? { restartFor: plan.restartFor } : {}),
+    ...(plan.restartFor ? { restartFor: restarts.restartFor } : {}),
     log,
     // The child already printed why (the port and its holder); stop with its
     // code rather than restarting a server that can never bind.
     onFinal: (code) => shutdown(code),
     spawnChild: () => {
+      restarts.reset();
       const c = spawn(process.execPath, plan.args, {
         // The IPC channel lets the child notice this process is gone and exit,
         // so a killed supervisor never leaves an orphan holding the port.
@@ -381,6 +413,7 @@ export function superviseDevServer({ cwd, plan, env, onExit }) {
         cwd,
         env,
       });
+      c.on('message', restarts.onMessage);
       // A failed spawn emits 'error' and may never emit 'exit'; report it as
       // an exit so the backoff retries it (a repeated exit is ignored).
       c.on('error', (err) => {

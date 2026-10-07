@@ -16,7 +16,7 @@
 
 import { actionIdentitiesOf, identityHookInstalled } from './action-seed.js';
 import { pathToFileURL } from 'node:url';
-import { devImportSpecifier } from './dev-import.js';
+import { devImport } from './dev-import.js';
 
 /**
  * Resolved identities for functions the hook never registered. Only ever
@@ -283,7 +283,7 @@ export async function lookupActionIdentity(idx, id) {
   if (!file) return { ok: false, reason: 'skew' };
   let module;
   try {
-    module = await import(devImportSpecifier(file, Boolean(idx.dev)));
+    module = await devImport(file, Boolean(idx.dev));
   } catch (error) {
     return { ok: false, reason: 'load-failed', error };
   }

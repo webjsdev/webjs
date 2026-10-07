@@ -508,7 +508,7 @@ async function walk(dir, appDir, graph, seen, dynamic, bare, bareDynamic) {
  * rebuilds incremental for large apps without restructuring the caller.
  * Keyed by mtime AND size: a same-tick edit that also changes the file length
  * is caught even on coarse-resolution filesystems where mtime alone could miss.
- * @type {Map<string, { mtimeMs: number, size: number, deps: Set<string> }>}
+ * @type {Map<string, { mtimeMs: number, size: number, specs: string[], dynSpecs: string[], bareDeps: Set<string>, bareDynDeps: Set<string> }>}
  */
 const PARSE_CACHE = new Map();
 
@@ -530,10 +530,7 @@ async function parseFile(file, appDir, graph, seen, dynamic, bare, bareDynamic) 
   seen?.add(file); // mark live (both cache-hit and miss paths) for cache eviction
   const cached = PARSE_CACHE.get(file);
   if (cached && cached.mtimeMs === mtimeMs && cached.size === size) {
-    if (cached.deps.size) graph.set(file, cached.deps);
-    if (cached.dynDeps && cached.dynDeps.size && dynamic) dynamic.set(file, cached.dynDeps);
-    if (cached.bareDeps && cached.bareDeps.size && bare) bare.set(file, cached.bareDeps);
-    if (cached.bareDynDeps && cached.bareDynDeps.size && bareDynamic) bareDynamic.set(file, cached.bareDynDeps);
+    addResolved(file, appDir, cached, graph, dynamic, bare, bareDynamic);
     return;
   }
 
@@ -574,7 +571,8 @@ async function parseFile(file, appDir, graph, seen, dynamic, bare, bareDynamic) 
   // string (blanked here), so it is read back from raw `src` via the match's
   // group indices (the `d` flag).
   const masked = redactStringsAndTemplates(src, true);
-  const deps = new Set();
+  /** @type {string[]} local (relative / aliased) static specifiers */
+  const specs = [];
   /** @type {Set<string>} bare npm vendor specifiers imported by this file (#754) */
   const bareDeps = new Set();
   for (const re of [IMPORT_RE, EXPORT_FROM_RE]) {
@@ -612,8 +610,7 @@ async function parseFile(file, appDir, graph, seen, dynamic, bare, bareDynamic) 
         if (isVendorSpecifier(spec)) bareDeps.add(spec);
         continue;
       }
-      const resolved = resolveImport(spec, file, appDir);
-      if (resolved) deps.add(resolved);
+      specs.push(spec);
     }
   }
   // Dynamic `import('…')` with a string-literal specifier (#751): a separate
@@ -636,7 +633,8 @@ async function parseFile(file, appDir, graph, seen, dynamic, bare, bareDynamic) 
   // computed `import(expr)` still falls out (its char after the quote is not
   // `,`/`)`), preserving the documented limitation.
   const { redacted: holeAware, literals } = redactToPlaceholders(src);
-  const dynDeps = new Set();
+  /** @type {string[]} local dynamic-import specifiers */
+  const dynSpecs = [];
   const bareDynDeps = new Set();
   for (const m of holeAware.matchAll(DYNAMIC_IMPORT_RE)) {
     const token = m[1];
@@ -651,14 +649,43 @@ async function parseFile(file, appDir, graph, seen, dynamic, bare, bareDynamic) 
       if (isVendorSpecifier(spec)) bareDynDeps.add(spec);
       continue;
     }
+    dynSpecs.push(spec);
+  }
+  const parsed = { mtimeMs, size, specs, dynSpecs, bareDeps, bareDynDeps };
+  PARSE_CACHE.set(file, parsed);
+  addResolved(file, appDir, parsed, graph, dynamic, bare, bareDynamic);
+}
+
+/**
+ * Resolve a parsed file's specifiers and add its edges to the graph maps.
+ *
+ * The cache holds SPECIFIERS, not resolved paths (#1575): resolution depends on
+ * which files exist, not on the importer's own bytes, so a cached resolution
+ * outlives the file system it was made against. An importer written before the
+ * module it imports (the order an agent often writes them in) resolved to
+ * nothing, was cached that way, and kept no edge after the target appeared,
+ * because the importer's mtime never changed again; the gate then 404'd the new
+ * module. Resolving on every build costs a few `existsSync` calls per edge.
+ *
+ * @param {string} file
+ * @param {string} appDir
+ * @param {{ specs: string[], dynSpecs: string[], bareDeps: Set<string>, bareDynDeps: Set<string> }} parsed
+ */
+function addResolved(file, appDir, parsed, graph, dynamic, bare, bareDynamic) {
+  const deps = new Set();
+  for (const spec of parsed.specs) {
+    const resolved = resolveImport(spec, file, appDir);
+    if (resolved) deps.add(resolved);
+  }
+  const dynDeps = new Set();
+  for (const spec of parsed.dynSpecs) {
     const resolved = resolveImport(spec, file, appDir);
     if (resolved && !deps.has(resolved)) dynDeps.add(resolved);
   }
-  PARSE_CACHE.set(file, { mtimeMs, size, deps, dynDeps, bareDeps, bareDynDeps });
   if (deps.size) graph.set(file, deps);
   if (dynDeps.size && dynamic) dynamic.set(file, dynDeps);
-  if (bareDeps.size && bare) bare.set(file, bareDeps);
-  if (bareDynDeps.size && bareDynamic) bareDynamic.set(file, bareDynDeps);
+  if (parsed.bareDeps.size && bare) bare.set(file, parsed.bareDeps);
+  if (parsed.bareDynDeps.size && bareDynamic) bareDynamic.set(file, parsed.bareDynDeps);
 }
 
 /**

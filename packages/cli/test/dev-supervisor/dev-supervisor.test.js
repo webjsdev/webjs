@@ -29,7 +29,12 @@ import { planDevSupervisor, sourceLocationsOn } from '../../lib/dev-supervisor.j
 const ARGV = ['/path/to/webjs.js', 'dev', '--port', '8080'];
 const WATCH = {
   watchDirs: ['app', 'components', 'modules', 'lib', 'actions'],
-  watchFiles: ['middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs'],
+  watchFiles: [
+    'middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs',
+    // The boot hooks run once per process, so an edit restarts it (#1575).
+    'instrumentation.ts', 'instrumentation.js', 'instrumentation.mts', 'instrumentation.mjs',
+    'env.ts', 'env.js', 'env.mts', 'env.mjs',
+  ],
 };
 
 test('Bun runs the child under `bun --hot` and restarts it for plugin-served paths (#1550)', () => {
@@ -43,6 +48,20 @@ test('Bun runs the child under `bun --hot` and restarts it for plugin-served pat
   assert.equal(plan.restartFor('modules/todos/actions/add.server.ts'), true);
   assert.equal(plan.restartFor('app/page.ts'), false);
   assert.equal(plan.restartFor('components/card.js'), false);
+  // The boot hooks never reload in place.
+  assert.equal(plan.restartFor('instrumentation.ts'), true);
+  assert.equal(plan.restartFor('env.ts'), true);
+});
+
+test('a Bun child that reloads in place narrows the restarts to the boot hooks (#1575)', () => {
+  const plan = planDevSupervisor({ isBun: true, argv: ARGV, noHot: false, sourceLocations: true });
+  assert.ok(plan.mode === 'supervise' && plan.inPlaceRestartFor);
+  for (const p of ['modules/todos/actions/add.server.ts', 'app/page.ts', 'components/card.js']) {
+    assert.equal(plan.inPlaceRestartFor(p), false, p);
+  }
+  for (const p of ['instrumentation.ts', 'instrumentation.mjs', 'env.ts', 'env.js']) assert.equal(plan.inPlaceRestartFor(p), true, p);
+  // Only at the app root: a nested file of the same name is an ordinary module.
+  assert.equal(plan.inPlaceRestartFor('lib/env.ts'), false);
 });
 
 test('with source locations on, every app module restarts the Bun child (#1550)', () => {
@@ -124,4 +143,28 @@ test('the watched middleware extensions match the ones the server loads', () => 
     [...serverExts].sort(),
     'every extension the server loads must also be watched in dev',
   );
+});
+
+test('the supervisor narrows to the in-place restarts only after the child announces it (#1575)', async () => {
+  const { inPlaceRestarts, HOT_IN_PLACE_MESSAGE } = await import('../../lib/dev-reload.js');
+  const plan = planDevSupervisor({ isBun: true, argv: ARGV, noHot: false });
+  assert.ok(plan.mode === 'supervise');
+  const r = inPlaceRestarts(plan);
+  const action = 'modules/todos/actions/add.server.ts';
+  // An older server never announces, so it keeps the restart it needs.
+  assert.equal(r.restartFor(action), true);
+  r.onMessage({ webjs: 'something-else' });
+  assert.equal(r.restartFor(action), true);
+  r.onMessage({ webjs: HOT_IN_PLACE_MESSAGE });
+  assert.equal(r.restartFor(action), false);
+  assert.equal(r.restartFor('instrumentation.ts'), true);
+  // A new child starts un-announced again.
+  r.reset();
+  assert.equal(r.restartFor(action), true);
+});
+
+test('the in-place IPC message matches the one @webjsdev/server sends (#1575)', async () => {
+  const cli = await import('../../lib/dev-reload.js');
+  const server = await import('../../../server/src/dev/hot-host.js');
+  assert.equal(cli.HOT_IN_PLACE_MESSAGE, server.HOT_IN_PLACE_MESSAGE);
 });

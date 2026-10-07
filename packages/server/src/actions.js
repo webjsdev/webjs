@@ -20,7 +20,7 @@ import { getBodyLimits } from './context.js';
 import { basePath } from './importmap.js';
 import { withBasePath } from './base-path.js';
 import { FORM_ACTION_ID_KEY } from '@webjsdev/core';
-import { devImportSpecifier } from './dev-import.js';
+import { devImport } from './dev-import.js';
 
 /**
  * The JSON / RPC body cap in effect for the current request: the per-request
@@ -638,5 +638,5 @@ async function actionErrorResponse(err, dev) {
  * @param {boolean} dev
  */
 async function loadModule(file, dev) {
-  return import(devImportSpecifier(file, dev));
+  return devImport(file, dev);
 }

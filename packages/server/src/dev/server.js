@@ -1,7 +1,11 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { strongerVerdict } from '../dev-classify.js';
 import { watchTree } from './watch-tree.js';
-import { relative } from 'node:path';
+import { relative, resolve } from 'node:path';
+import {
+  hotRerunCapable, hotHostKey, getHotHost, setHotHost, deleteHotHost,
+  armHotSentinel, pokeHotSentinel, removeHotSentinel, needsHotReset, announceHotInPlace,
+} from './hot-host.js';
 import { createServer as createHttp1Server } from 'node:http';
 import { createRequestHandler } from './handler.js';
 import { readServerTimeoutsFromApp, readDevWatchPathsFromApp } from './config.js';
@@ -14,6 +18,18 @@ import { basePath } from '../importmap.js';
 import { attachWebSocket } from '../websocket.js';
 import { toWebRequest, sendWebResponse } from './helpers.js';
 import { isAddrInUse, portInUseError, reusePortRequested } from '../port-in-use.js';
+
+/** This copy of `@webjsdev/server`'s version, so a hot re-run can tell the framework itself changed. */
+const SERVER_VERSION = (() => {
+  try { return JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version || ''; } catch { return ''; }
+})();
+
+/**
+ * How long a poked re-run (#1575) may take before the dev server stops waiting
+ * for it and rebuilds anyway, so an edit is never lost to a sentinel `bun --hot`
+ * did not see.
+ */
+const POKE_FALLBACK_MS = 1500;
 
 function debounce(fn, ms) {
   let t;
@@ -237,6 +253,22 @@ export async function startServer(opts) {
   const compress = opts.compress ?? !dev;
   const logger = opts.logger || defaultLogger({ dev });
 
+  // `bun --hot` re-runs the CLI, and so this function, on every edit to a
+  // module it loaded (#1575). The first run owns the process; a later one only
+  // tells it the module registry was reset. See dev/hot-host.js.
+  const hotKey = dev && hotRerunCapable() ? hotHostKey(resolve(opts.appDir), port) : null;
+  const host = hotKey ? getHotHost(hotKey) : undefined;
+  if (host) {
+    if (host.version !== SERVER_VERSION) {
+      // The framework itself changed under a running dev server (an upgrade).
+      // Its first-run code cannot load the new copy in place, so exit and let
+      // the `webjs dev` supervisor start a fresh process on the new version.
+      logger.warn(`[webjs] @webjsdev/server changed (${host.version || '?'} -> ${SERVER_VERSION || '?'}), restarting the dev server`);
+      if (process.env.__WEBJS_DEV_CHILD === '1') process.exit(0);
+    }
+    return /** @type {any} */ (await host.rerun());
+  }
+
   // Runtime-neutral SSE registry + fanout (shared by the node:http and Bun.serve
   // shells via listener-core.js, so live-reload + the dev error overlay behave
   // identically on both). Built before the handler so its onReload / onDevError
@@ -263,6 +295,10 @@ export async function startServer(opts) {
 
   /** @type {AbortController | null} */
   let watcherAbort = null;
+  /** The strongest verdict of the edits a poked re-run has yet to apply. */
+  /** @type {import('../dev-classify.js').ReloadVerdict | null} */
+  let pokedVerdict = null;
+  /** @type {any} */ let pokeFallback = null;
   if (dev) {
     // Watch the app tree with Node's built-in `fs.watch` (no external dep):
     // `watchTree` (#1521) watches the root plus each non-ignored top-level dir,
@@ -273,18 +309,35 @@ export async function startServer(opts) {
     // (module-level, exported for tests) skips node_modules, .git, .webjs/, and
     // the SQLite dev DB (db/dev.db) + db/migrations so a file the dev server itself writes never loops.
     // Live-reload classification (#1398). Several files can change inside one
-    // 80ms debounce window, so hold the STRONGEST verdict of the window and
+    // 50ms debounce window (80ms before #1575), so hold the STRONGEST verdict of the window and
     // hand it to the rebuild. Same rule as the browser relay's cross-batch
     // accumulation, for the same reason: a window mixing a page edit and a
     // component edit is a component edit, and taking the last one would morph
     // fresh markup onto the old component class.
     /** @type {import('../dev-classify.js').ReloadVerdict | null} */
     let pendingVerdict = null;
+    // Under `bun --hot`, a window that changed a module a `Bun.plugin` serves
+    // pokes the re-run sentinel instead of rebuilding (#1575): the rebuild has
+    // to wait for the registry reset, or the next request would still import
+    // the stale module. The re-run (`hotRerun` below) rebuilds with the verdict.
+    let pendingPoke = false;
     const rebuild = debounce(() => {
       const v = pendingVerdict;
       pendingVerdict = null;
+      if (pendingPoke) {
+        pendingPoke = false;
+        pokedVerdict = strongerVerdict(pokedVerdict, v);
+        pokeHotSentinel(app.appDir);
+        clearTimeout(pokeFallback);
+        pokeFallback = setTimeout(() => {
+          const pv = pokedVerdict;
+          pokedVerdict = null;
+          if (pv) app.rebuild(pv);
+        }, POKE_FALLBACK_MS);
+        return;
+      }
       app.rebuild(v || undefined);
-    }, 80);
+    }, 50);
     watcherAbort = new AbortController();
     // One warning per unwatchable path (#1521): an EACCES / ENOENT on a single
     // file must never stop the dev server, and a burst of the same temp file
@@ -307,6 +360,7 @@ export async function startServer(opts) {
           // lives in createRequestHandler's scope, not here.
           if (app.isRegenerateOutput(filename)) return;
           pendingVerdict = strongerVerdict(pendingVerdict, app.classifyWatchPath(filename, root));
+          if (hotKey && needsHotReset(filename, (f) => !app.needsRegistryReset(f, root))) pendingPoke = true;
           rebuild();
         },
         onError: onWatchError,
@@ -341,11 +395,43 @@ export async function startServer(opts) {
   // req/s on the listening path (#511); the Bun shell is dynamically imported so
   // the `Bun.*` global is never referenced on Node.
   try {
+    /** @type {{ server: any, close: () => Promise<void> }} */
+    let handle;
     if (serverRuntime() === 'bun') {
       const { startBunListener } = await import('../listener-bun.js');
-      return startBunListener(ctx);
+      handle = startBunListener(ctx);
+    } else {
+      handle = await startNodeListener(ctx);
     }
-    return await startNodeListener(ctx);
+    if (hotKey) {
+      // Own the process for every later `bun --hot` re-run (#1575).
+      await armHotSentinel(app.appDir);
+      const close = handle.close;
+      handle = { ...handle, close: () => { deleteHotHost(hotKey); removeHotSentinel(app.appDir); return close(); } };
+      const owned = handle;
+      setHotHost(hotKey, {
+        version: SERVER_VERSION,
+        /**
+         * The registry was reset: re-watch the sentinel from the fresh registry,
+         * then re-derive the analysis so it re-imports the app's modules (the
+         * middleware, the components it primes) from that registry. A re-run a
+         * poke asked for carries the verdict of the edits behind it and tells the
+         * browser; any other is silent, since the watcher already sent that
+         * edit's own reload frame.
+         */
+        rerun: async () => {
+          await armHotSentinel(app.appDir);
+          const pv = pokedVerdict;
+          pokedVerdict = null;
+          clearTimeout(pokeFallback);
+          await app.rebuild(pv || undefined, { notify: !!pv });
+          return owned;
+        },
+        poke: () => pokeHotSentinel(app.appDir),
+      });
+      announceHotInPlace();
+    }
+    return handle;
   } catch (e) {
     // The listener never came up (a taken port, #1527): stop what was started
     // for it, so an embedding caller that catches this is not left with a
