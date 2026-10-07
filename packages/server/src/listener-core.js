@@ -351,7 +351,13 @@ export function loadWsModule(file, dev) {
  * tab was hidden can tell, on reconnecting, that it missed an edit.
  */
 export class SseHub {
-  constructor() {
+  /**
+   * @param {{ inPlace?: boolean }} [opts] `inPlace`: this server applies an
+   *   edit without restarting its process (#1575), so its reload frames say so
+   *   and the browser relay need not wait for a restart to settle.
+   */
+  constructor({ inPlace = false } = {}) {
+    this.inPlace = inPlace;
     /** @type {Set<{ send: (s: string) => void, close: () => void }>} */
     this.clients = new Set();
     /** Reload frames sent by this process (#1507). */
@@ -399,7 +405,7 @@ export class SseHub {
   reload(verdict) {
     const v = verdict && typeof verdict.v === 'string' ? verdict : { v: 'reload' };
     this.seq++;
-    this._raw(`event: reload\ndata: ${JSON.stringify({ ...v, seq: this.seq })}\n\n`);
+    this._raw(`event: reload\ndata: ${JSON.stringify({ ...v, seq: this.seq, ...(this.inPlace ? { inPlace: true } : {}) })}\n\n`);
   }
 
   /** Push a dev-error overlay frame (#264) to every open tab. @param {object} frame */
