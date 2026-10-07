@@ -27,11 +27,12 @@ import { maybeRegenerate } from '../dev-regenerate.js';
 import { stripTypeScript } from '../ts-strip.js';
 import { serveDownloadedBundle } from '../vendor.js';
 import { resolveImport } from '../module-graph.js';
-import { elideImportsFromSource } from '../component-elision.js';
+import { elideImportsFromSource, deferLazyImportsFromSource } from '../component-elision.js';
 import { annotateSourceLocations, isSourceLocationCandidate, sourceLocationFile } from '../dev-source-locations.js';
 import { basePath } from '../importmap.js';
 import { withBasePath } from '../base-path.js';
-import { versionModuleImports } from '../asset-hash.js';
+import { versionModuleImports, withAssetHash } from '../asset-hash.js';
+import { toUrlPath } from '../ssr/preloads.js';
 import { BUFFERED_MARKER } from '../conditional-get.js';
 import { MIME, TS_CACHE_MAX, exists, reloadClientJs, reloadWorkerJs } from './helpers.js';
 
@@ -322,6 +323,10 @@ export async function handleCore(req, ctx) {
       const elideOpts = {
         moduleGraph: state.moduleGraph,
         elidableComponents: state.elidableComponents,
+        // A browser test imports the component it tests and expects it defined
+        // when the import resolves, so the test handler serves every import as
+        // written (#1524).
+        lazyComponentFiles: state.testMode ? undefined : state.lazyComponentFiles,
         appDir,
         // Dev source locations (#1499): annotate the served module's `html`
         // templates exactly as the SSR load hook annotates the server's copy.
@@ -416,6 +421,7 @@ export async function handleCore(req, ctx) {
         dev, appDir, moduleGraph: state.moduleGraph,
         serverFiles: state.actionIndex.fileToHash,
         elidableComponents: state.elidableComponents,
+        lazyComponentFiles: state.lazyComponentFiles,
         inertRouteModules: state.inertRouteModules,
         importOnlyRouteModules: state.importOnlyRouteModules,
         notFoundFile: state.routeTable.notFound,
@@ -686,7 +692,7 @@ export async function fileResponse(abs, opts) {
  *
  * @param {string} abs
  * @param {boolean} dev
- * @param {{ moduleGraph: any, elidableComponents: Set<string>|undefined, appDir: string }} elideOpts
+ * @param {{ moduleGraph: any, elidableComponents: Set<string>|undefined, lazyComponentFiles?: Map<string, string[]>, appDir: string }} elideOpts
  * @param {boolean} [immutable]  true for a `?v=<hash>` content-addressed request (#243):
  *   serve `immutable` (1 year) instead of the 1h fallback. Dev stays `no-cache`.
  */
@@ -697,6 +703,7 @@ export async function jsModuleResponse(abs, dev, elideOpts, immutable) {
   let code = elideImportsFromSource(
     annotateServedModule(source, abs, elideOpts), abs, elideOpts.moduleGraph, elideOpts.elidableComponents, resolveImport, elideOpts.appDir,
   );
+  code = deferLazyImports(code, abs, elideOpts);
   // Version same-origin relative import specifiers so the URL the browser
   // fetches matches the `?v=`-versioned modulepreload + boot specifier (#369).
   // A no-op in dev (fingerprinting disabled).
@@ -709,6 +716,26 @@ export async function jsModuleResponse(abs, dev, elideOpts, immutable) {
     [BUFFERED_MARKER]: '1',
   };
   return new Response(code, { status: 200, headers });
+}
+
+/**
+ * Serve a side-effect import of a `static lazy` component as a lazy-loader
+ * registration (#1524). The URL the loader imports is the one the boot script
+ * would use: base-path-prefixed, then content-hashed (`?v=`, a no-op in dev),
+ * the same composition as `wrapHead`'s lazy map in `ssr/head.js`. It is
+ * computed here because `versionModuleImports` (which runs next) deliberately
+ * leaves string literals alone.
+ *
+ * @param {string} code
+ * @param {string} abs
+ * @param {{ moduleGraph: any, lazyComponentFiles?: Map<string, string[]>, appDir: string }} opts
+ * @returns {string}
+ */
+function deferLazyImports(code, abs, opts) {
+  if (!opts.lazyComponentFiles || opts.lazyComponentFiles.size === 0) return code;
+  const bp = basePath();
+  const urlFor = (file) => withAssetHash(withBasePath(toUrlPath(file, opts.appDir), bp), bp);
+  return deferLazyImportsFromSource(code, abs, opts.moduleGraph, opts.lazyComponentFiles, resolveImport, opts.appDir, urlFor);
 }
 
 /**
@@ -767,7 +794,7 @@ export async function stripTs(source, _abs) {
  *
  * @param {string} abs
  * @param {boolean} dev
- * @param {{ moduleGraph: any, elidableComponents: Set<string>|undefined, appDir: string }} [elideOpts]
+ * @param {{ moduleGraph: any, elidableComponents: Set<string>|undefined, lazyComponentFiles?: Map<string, string[]>, appDir: string }} [elideOpts]
  * @param {Map<string, { mtimeMs: number, code: string, map: string | null }>} cache the handler's `state.tsCache`
  * @param {boolean} [immutable]  true for a `?v=<hash>` content-addressed request (#243):
  *   serve `immutable` (1 year) instead of the 1h fallback. The cached BODY is
@@ -841,6 +868,7 @@ export async function tsResponse(abs, dev, elideOpts, cache, immutable, reportDe
     code = elideImportsFromSource(
       code, abs, elideOpts.moduleGraph, elideOpts.elidableComponents, resolveImport, elideOpts.appDir,
     );
+    code = deferLazyImports(code, abs, elideOpts);
   }
   // Version same-origin relative import specifiers so the URL the browser
   // fetches matches the `?v=`-versioned modulepreload + boot specifier (#369).

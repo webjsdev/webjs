@@ -1105,13 +1105,23 @@ export async function ssrPage(route, params, url, opts) {
     // registers; one nested behind an emitted component is absent here and
     // loads via its importer's own imports. Dedup so a component shared
     // across the page and a layout (or two layouts) is emitted once.
+    //
+    // A `static lazy` component in that frontier (#1524) is registered with the
+    // lazy loader instead of imported, exactly as a shipping module's served
+    // source defers its side-effect import of one, so the boot never fetches
+    // it up front and a tag revealed later still loads on first sight.
     const inert = opts.inertRouteModules;
     const importOnly = opts.importOnlyRouteModules;
+    const lazyFiles = opts.lazyComponentFiles;
     const moduleUrls = [];
+    /** @type {Record<string, string>} */
+    const frontierLazy = {};
     {
       const seen = new Set();
       const push = (abs) => {
         const u = toUrlPath(abs, opts.appDir);
+        const tags = lazyFiles && lazyFiles.get(abs);
+        if (tags) { for (const t of tags) frontierLazy[t] = u; return; }
         if (!seen.has(u)) { seen.add(u); moduleUrls.push(u); }
       };
       for (const f of [route.file, ...route.layouts]) {
@@ -1137,8 +1147,15 @@ export async function ssrPage(route, params, url, opts) {
     // the same preload twice. Lazy components are excluded from
     // preloads and instead loaded via IntersectionObserver when they
     // enter the viewport.
-    const { eager: eagerComponents, lazy: lazyComponents } =
-      componentPreloads(suspenseCtx.usedComponents, opts.appDir, opts.elidableComponents);
+    const { eager: eagerComponents, lazy: renderedLazy } =
+      componentPreloads(suspenseCtx.usedComponents, opts.appDir, opts.elidableComponents, lazyFiles);
+    const lazyComponents = { ...frontierLazy, ...renderedLazy };
+    // The preload walks skip a lazy component and the subtree reachable only
+    // through it (#1524), the same way they skip an elided one: the browser
+    // does not fetch it until the loader asks.
+    const preloadSkip = lazyFiles && lazyFiles.size
+      ? new Set([...(opts.elidableComponents || []), ...lazyFiles.keys()])
+      : opts.elidableComponents;
     // The walk roots for BOTH preload passes are the BOOT's actually-shipped
     // module set (`moduleUrls`, which already drops inert page/layout modules and
     // substitutes an import-only page with its components), NOT the raw route
@@ -1155,7 +1172,7 @@ export async function ssrPage(route, params, url, opts) {
       shippedRoots,
       opts.appDir,
       opts.serverFiles,
-      opts.elidableComponents,
+      preloadSkip,
     );
     // Vendor modulepreload (#754): flatten the npm CDN waterfall by hinting the
     // vendor URLs the page's SHIPPED modules actually import, fetched in parallel
@@ -1169,7 +1186,7 @@ export async function ssrPage(route, params, url, opts) {
         shippedRoots,
         eagerComponents,
         opts.appDir,
-        opts.elidableComponents,
+        preloadSkip,
         opts.serverFiles,
       ),
     );

@@ -28,7 +28,7 @@ import { redactToPlaceholders } from './js-scan.js';
  * after a single `stat`). Makes the component scan incremental for large apps.
  * Keyed by mtime AND size (a same-tick length-changing edit is caught even on
  * coarse-mtime filesystems).
- * @type {Map<string, { mtimeMs: number, size: number, comps: Array<{ tag: string, className: string }> }>}
+ * @type {Map<string, { mtimeMs: number, size: number, comps: Array<{ tag: string, className: string }>, lazy: boolean }>}
  */
 const SCAN_CACHE = new Map();
 
@@ -76,15 +76,33 @@ export function extractComponents(src) {
 }
 
 /**
+ * Does this component module declare `static lazy = true` (#1524)? Matched on
+ * the comment- and string-redacted source, so the phrase inside a comment or a
+ * string literal does not count. The answer is per FILE: a lazy module is
+ * loaded whole, so every tag it registers is deferred together (one component
+ * per file is the convention anyway).
+ *
+ * @param {string} src
+ * @returns {boolean}
+ */
+export function declaresLazy(src) {
+  if (!src.includes('lazy')) return false;
+  const { redacted } = redactToPlaceholders(src);
+  return /\bstatic\s+(?:override\s+|readonly\s+)*lazy\s*(?::\s*boolean\s*)?=\s*true\b/.test(redacted);
+}
+
+/**
  * Walk an app directory, return every discovered component with its
  * browser-visible URL (rooted at `/`, matching how the dev server
  * serves module files).
  *
  * @param {string} appDir
- * @returns {Promise<Array<{ tag: string, className: string, moduleUrl: string, file: string }>>}
+ * `lazy` is true when the file declares `static lazy = true` (#1524).
+ *
+ * @returns {Promise<Array<{ tag: string, className: string, moduleUrl: string, file: string, lazy: boolean }>>}
  */
 export async function scanComponents(appDir) {
-  /** @type {Array<{ tag: string, className: string, moduleUrl: string, file: string }>} */
+  /** @type {Array<{ tag: string, className: string, moduleUrl: string, file: string, lazy: boolean }>} */
   const components = [];
   /** @type {Set<string>} live component files this scan, for cache eviction */
   const seen = new Set();
@@ -97,20 +115,22 @@ export async function scanComponents(appDir) {
     let mtimeMs, size;
     try { const st = await stat(file); mtimeMs = st.mtimeMs; size = st.size; } catch { continue; }
     seen.add(file); // mark live (hit and miss) for cache eviction
-    let comps;
+    let comps, lazy;
     const cached = SCAN_CACHE.get(file);
     if (cached && cached.mtimeMs === mtimeMs && cached.size === size) {
       comps = cached.comps;
+      lazy = cached.lazy;
     } else {
       let src;
       try { src = await readFile(file, 'utf8'); } catch { continue; }
       comps = extractComponents(src);
-      SCAN_CACHE.set(file, { mtimeMs, size, comps });
+      lazy = comps.length > 0 && declaresLazy(src);
+      SCAN_CACHE.set(file, { mtimeMs, size, comps, lazy });
     }
     if (!comps.length) continue;
     const moduleUrl = toUrlPath(file, appDir);
     for (const c of comps) {
-      components.push({ ...c, moduleUrl, file });
+      components.push({ ...c, moduleUrl, file, lazy });
     }
   }
   // Evict scan-cache entries for files no longer walked (renamed/deleted),

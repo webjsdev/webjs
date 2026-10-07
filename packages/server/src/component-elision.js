@@ -1519,3 +1519,91 @@ export function elideImportsFromSource(source, importerAbs, moduleGraph, elidabl
   out += source.slice(last);
   return out;
 }
+
+/**
+ * Defer side-effect imports of `static lazy` components (#1524). A lazy
+ * component that a shipping module imports for registration used to load
+ * eagerly as part of that module's static graph, which defeated `static lazy`
+ * whenever the class had to be imported at all (and SSR needs the import: the
+ * server only knows the tag is lazy once the class registered). The SERVER
+ * keeps the real import; this rewrites only the BROWSER copy, replacing the
+ * import line in place (same line, so positions stay stable) with a
+ * registration on the lazy loader:
+ *
+ *     import('@webjsdev/core/lazy-loader').then((m) => m.observeLazy({"x-tag":"/url"}));
+ *
+ * The loader then imports the module the first time an element with one of
+ * its tags is in (or near) the viewport: a hidden tab panel when it first
+ * shows, a closed dialog's content when it opens, a below-the-fold element
+ * when it scrolls near. Its MutationObserver also catches a tag rendered
+ * later on the client, so an imported-but-not-yet-rendered component still
+ * registers when it appears.
+ *
+ * Same contract as {@link elideImportsFromSource}: only a side-effect import
+ * is rewritten (a binding import needs its value now, so it stays eager), the
+ * match runs over a redacted copy so an import-looking line inside a string,
+ * template, or comment is never touched, and an importer with no lazy
+ * dependency in the graph returns untouched with no regex work. Run it AFTER
+ * the elision strip: an elided import is already a comment by then.
+ *
+ * @param {string} source             module source (already type-stripped if TS)
+ * @param {string} importerAbs        absolute path of the importing module
+ * @param {import('./module-graph.js').ModuleGraph | undefined} moduleGraph
+ * @param {Map<string, string[]> | undefined} lazyFiles  lazy component file -> the tags it registers
+ * @param {(spec: string, fromFile: string, appDir: string) => (string|null)} resolveImport
+ * @param {string} appDir
+ * @param {(abs: string) => string} urlFor  the browser URL the loader imports (base path + content hash applied)
+ * @returns {string}
+ */
+export function deferLazyImportsFromSource(source, importerAbs, moduleGraph, lazyFiles, resolveImport, appDir, urlFor) {
+  if (!lazyFiles || lazyFiles.size === 0) return source;
+  const deps = moduleGraph && moduleGraph.get(importerAbs);
+  if (!deps) return source;
+  let hasLazyDep = false;
+  for (const d of deps) {
+    if (lazyFiles.has(d)) { hasLazyDep = true; break; }
+  }
+  if (!hasLazyDep) return source;
+
+  const redacted = redactStringsAndTemplates(source);
+  let out = '';
+  let last = 0;
+  for (const m of redacted.matchAll(SIDE_EFFECT_IMPORT_RE)) {
+    const start = /** @type {number} */ (m.index);
+    const end = start + m[0].length;
+    const resolved = resolveImport(m[3], importerAbs, appDir);
+    const tags = resolved ? lazyFiles.get(resolved) : undefined;
+    out += source.slice(last, start);
+    if (tags && tags.length) {
+      const url = urlFor(/** @type {string} */ (resolved));
+      const entries = Object.fromEntries(tags.map((t) => [t, url]));
+      out += `${m[1]}import('@webjsdev/core/lazy-loader').then((m) => m.observeLazy(${JSON.stringify(entries)}));`;
+    } else {
+      out += source.slice(start, end);
+    }
+    last = end;
+  }
+  out += source.slice(last);
+  return out;
+}
+
+/**
+ * The lazy component files of an app (#1524): every scanned component file
+ * that declares `static lazy = true`, mapped to the tags it registers. An
+ * elided (display-only) file is left out: its import is stripped outright,
+ * which beats deferring it.
+ *
+ * @param {Array<{ tag: string, file: string, lazy?: boolean }>} components
+ * @param {Set<string>} [elidable]
+ * @returns {Map<string, string[]>}
+ */
+export function lazyComponentFiles(components, elidable) {
+  /** @type {Map<string, string[]>} */
+  const out = new Map();
+  for (const c of components) {
+    if (!c.lazy || (elidable && elidable.has(c.file))) continue;
+    const tags = out.get(c.file);
+    if (tags) { if (!tags.includes(c.tag)) tags.push(c.tag); } else out.set(c.file, [c.tag]);
+  }
+  return out;
+}

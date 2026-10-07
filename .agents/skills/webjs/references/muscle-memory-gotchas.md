@@ -206,7 +206,7 @@ The file stays `middleware.ts`, NOT Next 16's renamed `proxy.ts`. WebJs middlewa
 
 ### No `<Link>`, no `next/navigation`, no `next/*` libraries
 
-Navigation is automatic. The client router auto-enables when `@webjsdev/core` loads (any page with a component), so a plain `<a href>` gets soft navigation for free. There is no `<Link>` to import and no `useRouter`. For programmatic navigation import `navigate()` / `revalidate()` from `@webjsdev/core`. There is no `next/image`, `next/font`, `next/script`, or `next/dynamic`. WebJs is no-build: use a plain `<img>`, a `<link>` / `@font-face`, a component's `static lazy = true` for viewport lazy-loading, and a dynamic `import()` where code should load lazily.
+Navigation is automatic. The client router auto-enables when `@webjsdev/core` loads (any page with a component), so a plain `<a href>` gets soft navigation for free. There is no `<Link>` to import and no `useRouter`. For programmatic navigation import `navigate()` / `revalidate()` from `@webjsdev/core`. There is no `next/image`, `next/font`, `next/script`, or `next/dynamic`. WebJs is no-build: use a plain `<img>`, a `<link>` / `@font-face`, a component's `static lazy = true` to load it when it is first visible (scrolled near, or its hidden tab panel or dialog opened, and it stays lazy when another component imports it), and a dynamic `import()` where code should load lazily.
 
 ### No `<ScrollRestoration>`, and no scroll restore of your own
 

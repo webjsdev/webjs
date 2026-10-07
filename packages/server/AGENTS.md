@@ -443,11 +443,14 @@ conditional leaves a CSP-off document one newline shorter than a CSP-on one).
    shipping components reached without passing through another shipping
    component (so a component imported but only conditionally rendered still
    registers; one nested behind another emitted component loads via its
-   importer instead of being re-emitted). A `static lazy` component is not
-   special-cased: it is on the static walk only when imported directly, and
-   such an import already eager-loaded it before elision, so re-emitting it keeps
-   that exact behaviour; a normally-used lazy component is tag-referenced (never
-   on the static walk) and still loads via the IntersectionObserver path. The serving branch in
+   importer instead of being re-emitted). A `static lazy` component in that
+   frontier is registered with the lazy loader in the boot (`observeLazy`)
+   instead of imported (#1524). The same holds one level down: a side-effect
+   import of a `static lazy` component (`state.lazyComponentFiles`, from the
+   scanner's `declaresLazy`) is served as an `observeLazy({...})` registration
+   by `deferLazyImportsFromSource`, and both preload walks skip the lazy file
+   and the subtree reachable only through it, so the server keeps the import
+   for SSR while the browser loads the module on first sight. The serving branch in
    `dev.js` strips side-effect imports of display-only components from the
    browser-served source; `ssr.js` drops inert page/layout modules from
    the boot script's `moduleUrls` entirely (and splices an import-only module's

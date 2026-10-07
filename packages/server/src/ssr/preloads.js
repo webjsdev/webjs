@@ -35,12 +35,17 @@ export function toUrlPath(file, appDir) {
  * are stripped from the served source, so preloading their module would
  * fetch JS the browser never executes.
  *
+ * A tag counts as lazy when its class says so at runtime (`isLazy`) OR its
+ * file declares `static lazy = true` in source (`lazyFiles`, #1524), the same
+ * per-file verdict the served-source rewrite uses, so the two never disagree.
+ *
  * @param {Set<string>} usedTags
  * @param {string} appDir
  * @param {Set<string>} [elidable]  absolute paths of elidable component files
+ * @param {Map<string, string[]>} [lazyFiles]  lazy component file -> its tags
  * @returns {{ eager: string[], lazy: Record<string, string> }}
  */
-export function componentPreloads(usedTags, appDir, elidable) {
+export function componentPreloads(usedTags, appDir, elidable, lazyFiles) {
   const eager = [];
   /** @type {Record<string, string>} */
   const lazy = {};
@@ -52,7 +57,7 @@ export function componentPreloads(usedTags, appDir, elidable) {
       if (!abs.startsWith(appDir)) continue;
       if (elidable && elidable.has(abs)) continue;
       const url = toUrlPath(abs, appDir);
-      if (isLazy(tag)) {
+      if (isLazy(tag) || (lazyFiles && lazyFiles.has(abs))) {
         lazy[tag] = url;
       } else {
         eager.push(url);
