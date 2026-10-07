@@ -36,7 +36,7 @@
  *   serverFileRe: RegExp,
  * }} helpers
  */
-export function installBunSeedPlugin({ isSeedCandidate, buildSeedFacade, serverFileRe }) {
+export function installBunSeedPlugin({ isSeedCandidate, buildSeedFacade, serverFileRe, rewriteAliases = (s) => s }) {
   Bun.plugin({
     name: 'webjs-action-seed',
     setup(build) {
@@ -60,7 +60,7 @@ export function installBunSeedPlugin({ isSeedCandidate, buildSeedFacade, serverF
           // Fail-open: any faceting error serves the raw source (no seeding for
           // this module), the Bun analog of the Node hook's `nextLoad` fallback.
         }
-        return { contents: src, loader };
+        return { contents: rewriteAliases(src, absPath), loader };
       });
     },
   });

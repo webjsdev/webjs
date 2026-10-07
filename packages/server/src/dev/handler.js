@@ -1,6 +1,5 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { registerBunAliasResolver } from './bun-alias-resolve.js';
 import { registerBunAppSource } from './bun-app-source.js';
 import { serverRuntime } from '../listener-core.js';
 import { createHash } from 'node:crypto';
@@ -300,12 +299,6 @@ export async function createRequestHandler(opts) {
   // what a bound `<form action=${action}>` resolves through, so gating the hook
   // on seeding would mean `webjs.seed: false` silently broke every no-JS form.
   await registerActionHooks({ seed: await readSeedEnabled(appDir), dev });
-  // Bun's resolver keeps a stale directory listing for a `#` import under
-  // `bun --hot` (#1575); resolve the app's aliases ourselves in dev.
-  if (dev && serverRuntime() === 'bun') {
-    registerBunAliasResolver(appDir);
-    try { const real = realpathSync(appDir); if (real !== appDir) registerBunAliasResolver(real); } catch { /* appDir only */ }
-  }
 
   // Dev source locations (#1499): `WEBJS_SOURCE_LOCATIONS=1` (or
   // `webjs.dev.sourceLocations: true`) under `webjs dev`

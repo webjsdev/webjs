@@ -22,7 +22,9 @@
  *
  * @module dev/bun-app-source
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync, statSync } from 'node:fs';
+import { resolve as resolvePath } from 'node:path';
+import { expandImportAlias } from '../module-graph.js';
 
 const ROOTS = Symbol.for('webjs.dev.bunAppSourceRoots');
 
@@ -59,8 +61,39 @@ export function registerBunAppSource(appDir) {
         const abs = args.path.split('?')[0];
         // A read failure (the file is gone) propagates, which Bun reports as
         // the load error it would have raised itself.
-        return { contents: readFileSync(abs, 'utf8'), loader: /\.m?ts$/.test(abs) ? 'ts' : 'js' };
+        return { contents: rewriteAppAliases(readFileSync(abs, 'utf8'), abs), loader: /\.m?ts$/.test(abs) ? 'ts' : 'js' };
       });
     },
+  });
+}
+
+/** Static `import`/`export … from '#x'` and `import('#x')` with a literal specifier. */
+const ALIAS_SPEC_RE = /(\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(['"])(#[^'"\s]+)\2/g;
+
+/**
+ * Rewrite the app's `#` import specifiers in a module's source to the absolute
+ * path they name (#1575), when that file exists. Bun's resolver serves a `#`
+ * import of a file created after it listed the directory as "Cannot find
+ * module" under `bun --hot`, and a runtime `onResolve` cannot stand in for it:
+ * its result reaches a dynamic `import()` as a broken `file:/...` path (the
+ * 0.8.85 / 0.8.86 regression). An absolute path resolves through neither.
+ * Anything that is not an app alias, or names no file yet, is left as written,
+ * so Bun reports a missing module exactly as before.
+ *
+ * @param {string} src
+ * @param {string} file  absolute path of the module
+ * @returns {string}
+ */
+export function rewriteAppAliases(src, file) {
+  if (!src.includes('#')) return src;
+  const g = /** @type {any} */ (globalThis);
+  const roots = g[ROOTS] instanceof Set ? [...g[ROOTS]] : [];
+  const appDir = roots.find((r) => file.startsWith(r + '/'));
+  if (!appDir || file.includes('/node_modules/')) return src;
+  return src.replace(ALIAS_SPEC_RE, (m, lead, q, spec) => {
+    const rel = expandImportAlias(spec, appDir);
+    if (!rel) return m;
+    const abs = resolvePath(appDir, rel);
+    try { return existsSync(abs) && statSync(abs).isFile() ? `${lead}${q}${abs}${q}` : m; } catch { return m; }
   });
 }

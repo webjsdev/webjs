@@ -663,7 +663,10 @@ export async function registerActionHooks(opts = {}) {
     g[installed] = true;
     // Bun has no module.registerHooks; install the same facade via Bun.plugin.
     const { installBunSeedPlugin } = await import('./action-seed-bun.js');
-    installBunSeedPlugin({ isSeedCandidate, buildSeedFacade, serverFileRe: SERVER_FILE_RE });
+    // Dev rewrites the app's `#` imports to absolute paths (#1575); the
+    // rewrite reads the app roots dev registered, so it is a no-op in prod.
+    const { rewriteAppAliases } = await import('./dev/bun-app-source.js');
+    installBunSeedPlugin({ isSeedCandidate, buildSeedFacade, serverFileRe: SERVER_FILE_RE, rewriteAliases: rewriteAppAliases });
     _flags.hookInstalled = true;
     return;
   }

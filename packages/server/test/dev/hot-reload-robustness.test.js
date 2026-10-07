@@ -10,7 +10,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { hotRerunCapable, needsHotReset, hotSentinelPath, hotHostKey, getHotHost, setHotHost, deleteHotHost } from '../../src/dev/hot-host.js';
-import { resolveAppAlias } from '../../src/dev/bun-alias-resolve.js';
 import { appSourceFilter } from '../../src/dev/bun-app-source.js';
 import { buildModuleGraph } from '../../src/module-graph.js';
 import { devImport } from '../../src/dev-import.js';
@@ -66,21 +65,6 @@ test('the app-source filter takes app modules and leaves node_modules and *.serv
   const f = appSourceFilter('/srv/app');
   for (const p of ['/srv/app/app/page.ts', '/srv/app/components/c.js?t=abc', '/srv/app/lib/x.mts']) assert.ok(f.test(p), p);
   for (const p of ['/srv/app/node_modules/x/i.js', '/srv/app/modules/a.server.ts', '/srv/other/app/page.ts', '/srv/app/app/style.css']) assert.ok(!f.test(p), p);
-});
-
-test('a # alias resolves to the file on disk, only for an importer inside the app', () => {
-  const dir = tempApp();
-  try {
-    mkdirSync(join(dir, 'modules/u'), { recursive: true });
-    const importer = join(dir, 'modules/a.server.ts');
-    assert.equal(resolveAppAlias('#modules/u/new.ts', importer + '?t=1', dir), null, 'not there yet');
-    writeFileSync(join(dir, 'modules/u/new.ts'), 'export const v = 1;\n');
-    assert.equal(resolveAppAlias('#modules/u/new.ts', importer + '?t=1', dir), join(dir, 'modules/u/new.ts'));
-    assert.equal(resolveAppAlias('#modules/u/new.ts', join(dir, 'node_modules/p/i.js'), dir), null, 'a package keeps its own map');
-    assert.equal(resolveAppAlias('./u/new.ts', importer, dir), null, 'not an alias');
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
 });
 
 test('an importer written before its import target gains the edge once the target exists', async () => {
