@@ -35,9 +35,14 @@ test('bun scaffold: package.json scripts, trustedDependencies, lockfile flavor',
     // The long-running server scripts force --bun (the shebang gotcha).
     assert.equal(p.scripts.dev, 'bun --bun webjs dev');
     assert.equal(p.scripts.start, 'bun --bun webjs start');
-    // Runtime-neutral tooling stays plain webjs (runs on node via the shebang).
+    // The test runner stays plain webjs (it shells `node --test`).
     assert.equal(p.scripts.test, 'webjs test');
-    assert.equal(p.scripts['db:generate'], 'webjs db generate');
+    assert.equal(p.scripts.check, 'webjs check');
+    // The db scripts force --bun too (#1598): through the node shebang they ran
+    // drizzle-kit and the seed on Node, at several times the CPU.
+    for (const verb of ['generate', 'migrate', 'push', 'studio', 'seed']) {
+      assert.equal(p.scripts[`db:${verb}`], `bun --bun webjs db ${verb}`, `db:${verb}`);
+    }
     // SQLite uses the built-in bun:sqlite (no native dependency), so there is
     // nothing to trust: trustedDependencies must be absent.
     assert.equal(p.trustedDependencies, undefined);
@@ -238,6 +243,10 @@ test('node mode (default) is unchanged: no bun flavor leaks in', async () => {
     const p = pkg(appDir);
     assert.equal(p.scripts.dev, 'webjs dev');
     assert.equal(p.scripts.start, 'webjs start');
+    // #1598 counterfactual: a node app's db scripts are plain webjs.
+    for (const verb of ['generate', 'migrate', 'push', 'studio', 'seed']) {
+      assert.equal(p.scripts[`db:${verb}`], `webjs db ${verb}`, `db:${verb}`);
+    }
     assert.equal(p.trustedDependencies, undefined);
     assert.match(read(appDir, 'Dockerfile'), /FROM node:24-alpine/);
     assert.match(read(appDir, 'compose.yaml'), /test: \["CMD", "node", "-e"/);
