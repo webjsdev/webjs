@@ -173,6 +173,10 @@ lib/
                          `workspaces` key is not part of it, it only enriches the
                          message with the member directories that ARE apps.
                          Tests: `test/cli/check-target.test.mjs`.
+  context-pack.js        Writes .agents/context-pack.md at the end of create:
+                         SKILL.md, data-and-actions.md and one real example per
+                         concern from the app just written, byte-stable, imported
+                         by the scaffold CLAUDE.md (cached prompt prefix).
   create.js              `webjs create <name>` scaffold logic. Copies
                          `templates/` into the new app, writes
                          package.json + tsconfig + Drizzle db layer,
