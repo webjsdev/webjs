@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { strongerVerdict } from '../dev-classify.js';
+import { createWatchIgnore } from './watch-ignore.js';
 import { watchTree } from './watch-tree.js';
 import { relative, resolve } from 'node:path';
 import {
@@ -352,8 +353,12 @@ export async function startServer(opts) {
       logger.warn(`file watcher skipped ${err && err.path ? err.path : 'a path'} (${err && err.code ? err.code : String(err)})`);
     };
     const watchRoot = (root) => {
+      // Output nothing serves (`*.log`, coverage/, ...) and the root's
+      // `.gitignore` never reload the page: `npm run dev > dev.log` made every
+      // log line a reload (watch-ignore.js).
+      const unserved = createWatchIgnore(root);
       const close = watchTree(root, {
-        ignore: shouldIgnoreWatchPath,
+        ignore: (rel) => shouldIgnoreWatchPath(rel) || unserved(rel),
         onEvent: (filename) => {
           // A regenerate output (#967) is a build product the server itself
           // writes on request; ignoring it stops a spurious rebuild + reload
