@@ -444,9 +444,20 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       '@webjsdev/cli': 'latest',
       '@webjsdev/core': 'latest',
       '@webjsdev/server': 'latest',
+      // What the production BOOT runs, so production dependencies (#1606):
+      // `webjs start` runs the `webjs.start.before` steps at every boot,
+      // `webjs db migrate` (drizzle-kit) and, on a UI app, the Tailwind
+      // compile. The Dockerfile installs production dependencies only, so as
+      // devDependencies these would be missing from the image and the boot
+      // would fail. `tailwindcss` itself is declared too (#1493):
+      // public/input.css starts with `@import "tailwindcss"`, and bun's
+      // isolated linker and pnpm link only declared packages, so leaving it
+      // transitive (via @tailwindcss/cli) fails the compile with
+      // `Can't resolve 'tailwindcss'`. The api template has no CSS.
+      'drizzle-kit': '1.0.0-rc.3',
+      ...(isApi ? {} : { '@tailwindcss/cli': '^4.1.0', tailwindcss: '^4.1.0' }),
     },
     devDependencies: {
-      'drizzle-kit': '1.0.0-rc.3',
       ...(dialect === 'postgres' ? { '@types/pg': '^8.11.0' } : {}),
       // The TypeScript compiler, for `npm run typecheck` (webjs typecheck runs
       // tsc --noEmit). Not needed at runtime (Node strips types in place), only
@@ -467,15 +478,6 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // assertNoA11yViolations() test helper from @webjsdev/core/testing.
       // Test-only: dynamically imported, never shipped to the app runtime.
       'axe-core': '^4.10.0',
-      // The Tailwind v4 CLI that css:build runs to compile public/input.css into
-      // the static public/tailwind.css the layout links. UI templates only (the
-      // api template has no CSS). Build tooling, never shipped to the runtime.
-      // `tailwindcss` itself is declared too (#1493): public/input.css starts
-      // with `@import "tailwindcss"`, so the app imports that package directly.
-      // Leaving it transitive (via @tailwindcss/cli) breaks under bun's isolated
-      // linker and pnpm, which link only declared packages into the app's
-      // node_modules, so the compile fails with `Can't resolve 'tailwindcss'`.
-      ...(isApi ? {} : { '@tailwindcss/cli': '^4.1.0', tailwindcss: '^4.1.0' }),
       // tsserver plugin, wired into tsconfig below. Gives the language
       // INTELLIGENCE (go-to-def, completions, diagnostics, hover inside html``
       // templates) in any tsserver editor with NO editor plugin installed,

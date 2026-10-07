@@ -30,8 +30,14 @@ WORKDIR /app
 # Install deps first so this layer is cached unless the manifests change.
 # package-lock.json is optional (it's absent when the app was scaffolded with
 # --no-install); the glob keeps the COPY working with or without it.
+# Production dependencies only: the image never runs the type checker, the
+# test runner or the browser tests, and leaving them out keeps it a fraction
+# of the size. What the boot itself runs (drizzle-kit for `webjs db migrate`,
+# the Tailwind CLI for the CSS compile) is a production dependency for that
+# reason. The npm cache is emptied in the same layer: it is a second copy of
+# every package fetched and would otherwise ship in the image.
 COPY package.json package-lock.json* ./
-RUN npm install --no-audit --no-fund
+RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
 
 # App source. node_modules and local state are excluded via .dockerignore.
 COPY . .

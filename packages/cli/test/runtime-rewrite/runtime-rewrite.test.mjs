@@ -87,8 +87,10 @@ test('bunifyDockerfile: pure oven/bun base, bun install, bun -e healthcheck, bun
     'WORKDIR /app',
     "# package-lock.json is optional (it's absent when the app was scaffolded with",
     '# --no-install); the glob keeps the COPY working with or without it.',
+    '# reason. The npm cache is emptied in the same layer: it is a second copy of',
+    '# every package fetched and would otherwise ship in the image.',
     'COPY package.json package-lock.json* ./',
-    'RUN npm install --no-audit --no-fund',
+    'RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force',
     'COPY . .',
     "# The probe is dependency-free (Node 24's built-in fetch, no curl/wget). For",
     'HEALTHCHECK --interval=15s CMD ["node", "-e", "fetch(\'x\')"]',
@@ -104,8 +106,12 @@ test('bunifyDockerfile: pure oven/bun base, bun install, bun -e healthcheck, bun
   assert.doesNotMatch(out, /apk add/);
   assert.doesNotMatch(out, /COPY --from=oven\/bun/);
   assert.match(out, /COPY package\.json bun\.lock\* \.\//);
-  assert.match(out, /RUN bun install/);
+  // Production dependencies only, with bun's package cache left out of the
+  // image (#1606), on the slim base.
+  assert.match(out, /RUN bun install --production && bun pm cache rm/);
+  assert.match(out, /FROM oven\/bun:1-slim/);
   assert.doesNotMatch(out, /npm install/);
+  assert.doesNotMatch(out, /npm cache/);
   // Healthcheck off node (the pure Bun image has none).
   assert.match(out, /CMD \["bun", "-e"/);
   assert.doesNotMatch(out, /CMD \["node", "-e"/);
