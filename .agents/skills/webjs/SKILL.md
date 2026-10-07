@@ -9,6 +9,8 @@ Use this skill for end-to-end WebJs app work. It helps you choose the right laye
 
 ## Full Documentation
 
+In a scaffolded app, `AGENTS.md` carries the build steps and a worked example of every common pattern (pages, layouts, form-bound actions with validation, queries, owner-scoped CRUD, `createAuth`, a component with signals, a test). Build from it first, and come here for a surface it does not show.
+
 This skill is the quick guide. When you need the full API reference for a surface, load the matching file in `references/` (listed below). For even deeper framework detail, WebJs ships buildless, so the source you run IS the source you read: look in `node_modules/@webjsdev/{core,server,cli}/` (each package ships its own `AGENTS.md`). The complete hosted docs live at https://webjs.dev/docs.
 
 ## What WebJs Is
@@ -44,7 +46,6 @@ Rows point rather than explain. The reference is the authority on the rule, and 
 | add a URL, static or with a dynamic segment | a file at `app/<path>/page.ts`, `[id]` for a param | registering the route in a table or config | `references/routing-and-pages.md` | `app/features/routing` |
 | abandon a render because something is missing or not allowed | throw `notFound()` / `forbidden()` / `unauthorized()` | returning an error object and branching in the template | `references/routing-and-pages.md` | `app/features/boundaries` |
 | set a page's title, description, or social preview | `export const metadata` or `generateMetadata()` | writing `<head>` tags in the page | `references/routing-and-pages.md` | `app/features/metadata` |
-| give the app its own favicon, home-screen icon and manifest | replace the placeholder `app/icon.svg` with a simple symbol for the app in its colours, add `app/apple-icon.png`, edit `app/manifest.webmanifest` | leaving the scaffold placeholder, or a hand-written `<link rel="icon">` | `references/routing-and-pages.md` (App icon and manifest) | `app/icon.ts` |
 | make part of the page respond to a click or hold state | a `WebComponent` custom element | expecting the page's own markup to hydrate | `references/components.md` | `app/features/components` |
 | render a keyed list, or swap one node when state changes | `repeat()` / `watch()` from `/directives` | re-rendering the component or diffing by hand | `references/components.md` | `app/features/directives` |
 | get server data into a component's first paint | `async render()` awaiting an action | fetching in `connectedCallback`, which SSR never calls | `references/components.md` | `app/features/async-render` |
