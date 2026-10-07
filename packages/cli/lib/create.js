@@ -383,10 +383,15 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // would exec WebJs under Node, silently running the "bun" app on Node).
       // Baking it into the script body means a plain `bun run dev` (or even
       // `npm run dev`) starts on Bun, so a user never has to remember the flag.
-      // The runtime-neutral tooling scripts below (test / db / check / typecheck
-      // / doctor) stay plain `webjs ...`: they spawn node tooling (`node --test`,
-      // drizzle-kit, tsc) and forcing `--bun` there buys nothing (and `webjs
-      // test` shells `node --test`, which a `bun --test` would not be).
+      // The db scripts force it too (#1598): `webjs db` runs drizzle-kit and the
+      // seed with the CLI's own runtime, and through the node shebang that was
+      // Node, at 2.5 to 4 times the CPU of the same command on Bun (generate
+      // about 3 CPU-s against 1, migrate 1.2 against 0.5, seed 1 against 0.2,
+      // measured on the Postgres scaffold); on Bun the seed also sees `.env`.
+      // It is the path a Node-less oven/bun image already takes (#570). The
+      // other tooling scripts (test / check / typecheck / doctor / ci) stay
+      // plain `webjs ...`: `webjs test` shells `node --test`, which a
+      // `bun --test` would not be, and `check` costs the same on both.
       // Compile Tailwind from public/input.css to a STATIC public/tailwind.css
       // that app/layout.ts links, so the app is fully styled with JavaScript
       // DISABLED (a real stylesheet, not an in-browser compile). Runs inside the
@@ -419,11 +424,11 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // from the step list in the `webjs.ci` block below. Runtime-neutral like
       // the other tooling scripts (it spawns `webjs ...` children).
       ci: 'webjs ci',
-      'db:generate': 'webjs db generate',
-      'db:migrate': 'webjs db migrate',
-      'db:push': 'webjs db push',
-      'db:studio': 'webjs db studio',
-      'db:seed': 'webjs db seed',
+      'db:generate': isBun ? 'bun --bun webjs db generate' : 'webjs db generate',
+      'db:migrate': isBun ? 'bun --bun webjs db migrate' : 'webjs db migrate',
+      'db:push': isBun ? 'bun --bun webjs db push' : 'webjs db push',
+      'db:studio': isBun ? 'bun --bun webjs db studio' : 'webjs db studio',
+      'db:seed': isBun ? 'bun --bun webjs db seed' : 'webjs db seed',
     },
     dependencies: {
       // Drizzle ORM (no codegen, no engine binary). Pinned to the 1.0 line

@@ -198,9 +198,10 @@ lib/
                          `webjs db migrate` (#570) needs no Node in the image),
                          `bunifyCompose` (compose healthcheck -> bun -e), and
                          `bunifyCi` (adds setup-bun
-                         next to setup-node, bun install, plain `bun run`). Only
-                         the dev/start SCRIPTS force `--bun`; the test/db/check
-                         tooling stays on Node (webjs test spawns `node --test`).
+                         next to setup-node, bun install, plain `bun run`). The
+                         dev/start and db:* SCRIPTS force `--bun` (#1598: db on
+                         Node cost 2.5-4x the CPU); the test/check tooling
+                         stays on Node (webjs test spawns `node --test`).
                          No parallel bun template, so no drift. compose.yaml is
                          not transformed (it inherits the Dockerfile CMD). Tests:
                          `test/runtime-rewrite/`.
