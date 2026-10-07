@@ -175,8 +175,8 @@ Regression tests: `test/hooks/block-install-in-linked-worktree.test.mjs`, `test/
 ### Local CI: `npm run ci` at the root and inside each app (#1471, #1474)
 
 The monorepo runs its own local CI the way a scaffolded app does, and the list
-is complete enough to BE the merge gate (the Rails 8.1 posture), though the
-Actions checks remain the required gate until the switch below is run. The root `package.json` declares a
+is complete enough to BE the merge gate (the Rails 8.1 posture), and it is the
+merge gate: see "The gate" below. The root `package.json` declares a
 `webjs.ci` step list that runs EVERYTHING `.github/workflows/ci.yml` runs, step
 for step: a Setup group (the blog and gallery databases, the core dist), then
 one `Gate` group that runs THREE slots at once, longest first (six overloaded a
@@ -208,31 +208,37 @@ every root step invokes the in-repo CLI the same way for the same reason.
 `test/cli/check-target.test.mjs` cross-checks the `webjs check` steps against
 the workspace app list.
 
-**The gate today, and the switch.** `main` requires one approving CODEOWNER
-review plus the six Actions job names in `.github/workflows/ci.yml`; nothing
-requires a local run. `npm run ci -- --signoff` runs the list and, only when
-every step passes, runs `gh signoff` (basecamp/gh-signoff), which posts a green
-`signoff` commit status on the PUSHED head, visible on the PR beside the
-Actions checks and required by nothing yet. `scripts/protect-main.sh` is the
-switch, and it has not been run: plain, it declares the review, the `signoff`
-status through `gh signoff install` (a repository ruleset), and the six Actions
-job names, so both gates apply during a transition; `--local-only` drops the
-Actions names, the final state, after which the workflow is a non-required
-second opinion or deleted. Reverse it with `gh signoff uninstall` and the
-version of the script on `main` before #1474. Push first, then sign off; a
-later push has no signoff until the list is run on it again, so a stale green
-can never carry forward. Sign off from
-a REAL install (the primary checkout, or a worktree whose `node_modules` links
-were replaced by an install): in a linked worktree every bare `@webjsdev/*`
-specifier resolves into the primary checkout, so the listener proofs and the
-config type fixture red there and the rest is partly vacuous.
+**The gate: `scripts/ci.sh`, `scripts/ci-merge.sh`, `local-ci` (#1593).**
+GitHub Actions no longer runs `ci.yml` on a push or a pull request (it is
+`workflow_dispatch` only, kept as the record of what the list must cover).
+`scripts/ci.sh` wraps `npm run ci` with a log under
+`${TMPDIR:-/tmp}/webjs-ci-<sha>/`, a PASS marker per commit, `--only A,B`,
+`--list`, `--release` (the full list plus `npm run release:gate` when
+package.json defines one; run it before a release PR merges) and `--nightly`
+(the live jspm contract tests that `vendor-cdn.yml` used to run on a cron;
+network-bound, so never part of the gate). `scripts/ci-merge.sh <N>` runs the
+list on the PR head (here when this checkout is that head, clean and a real
+install, otherwise in a throwaway worktree with its own `npm ci`), posts the
+`local-ci` commit status, and squash-merges with `--delete-branch
+--match-head-commit` only when green. `main` requires `local-ci` plus one
+CODEOWNER approval (`scripts/protect-main.sh`); a solo maintainer cannot
+approve their own PR, so ci-merge retries with `--admin` only when the review
+is the one thing left blocking, after the green run on that exact head.
+`.hooks/pre-push` runs `scripts/ci.sh` on every push of a branch with an open
+PR, unless every changed file is `*.md`, `docs/**` or `blog/**`. A later push
+has no `local-ci` until the list runs on it again, so a stale green never
+carries forward. Run it from a REAL install (the primary checkout, or a
+worktree with its own `npm ci`): in a linked worktree every bare
+`@webjsdev/*` specifier resolves into the primary checkout, so the run is
+partly vacuous there, and `scripts/ci.sh` writes no PASS marker for it.
+Auto-release and Purge CDN stay on Actions; they publish and are free there.
 
 **Local prerequisites** for the whole list: Node 24+, Bun, Docker (the Postgres
 container and the image build; the user must be in the `docker` group, or set
 `WEBJS_DOCKER` to the command that reaches a daemon, such as `sudo -n docker`
 or `podman`), the Playwright browsers (`npx playwright
 install chromium firefox webkit`), `puppeteer-core` (a root devDependency),
-`gh` with the signoff extension (the script installs it), `setsid` and `pgrep`
+`gh` (authenticated, for the `local-ci` status), `setsid` and `pgrep`
 (util-linux and procps, present on Linux and absent from a stock macOS: the
 website e2e step and the runner's interrupt test use them), and a shell that
 does NOT export `FORCE_COLOR` (it flips tsc to pretty output and reds two type

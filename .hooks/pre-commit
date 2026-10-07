@@ -9,13 +9,11 @@
 #      when a packages/<pkg>/package.json version bumped in the
 #      staged diff.
 #
-# The test suite is NOT run here. CI (.github/workflows/ci.yml) is the
-# test gate: it runs Conventions (webjs check), unit + integration,
-# browser, e2e, and the dist build on every push and PR, and branch
-# protection blocks a merge until all five pass. Running the full
-# ~800-test suite on every local commit was redundant with that gate
-# and made commit-per-logical-unit slow, so it was removed; commits
-# stay fast and the gate lives in CI where it cannot be bypassed.
+# The test suite is NOT run here. Local CI is the test gate (#1593):
+# .hooks/pre-push runs scripts/ci.sh on every push of a branch with an open
+# PR, and scripts/ci-merge.sh runs it on the PR head and posts the `local-ci`
+# status branch protection requires. Running the whole list on every commit
+# would make commit-per-logical-unit slow for no extra protection.
 #
 # Exception: the release workflow's `github-actions[bot]` commits
 # the lockstep wrapper bumps directly to main (.github/workflows/

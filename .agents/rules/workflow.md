@@ -23,7 +23,7 @@ These project-level rules govern all operations inside this workspace. Antigravi
 ## Branch, Merge, and Push Guards
 - **Never push to `main` / `master`.** Always push to the feature branch and create a PR via `gh pr create`.
 - **Never edit or write code on `main` / `master`.** If on `main`/`master`, **STOP** and create a feature branch first (`git checkout -b feature/<name>`).
-- When merging to `main`, the workflow is `gh pr create` -> confirm -> `gh pr merge`. Never do a local `git merge` + push.
+- When merging to `main`, the workflow is `gh pr create` -> confirm -> `scripts/ci-merge.sh <N>`. Never do a local `git merge` + push.
 - **Merge Approval:** Never merge without permission. Ask exactly: "Ready to merge `<branch>` into `<target>`? After merging, should `<branch>` be deleted or kept?" and wait for both answers.
 - **Command Guard:** Ask the user before running any `git merge` command or `git push` targeting `main`/`master`.
 
@@ -65,10 +65,10 @@ These project-level rules govern all operations inside this workspace. Antigravi
 
 ## Enforcement gates
 
-Everything under `.claude/hooks/` fires only inside Claude Code, and that is more than the blocking gates: seven `PreToolUse` hooks that can refuse a tool call, one `UserPromptSubmit` skill router, and three `PostToolUse` hooks. None of it runs here. Two gates bind every agent regardless of engine, and neither is optional.
+Everything under `.claude/hooks/` fires only inside Claude Code, and that is more than the blocking gates: seven `PreToolUse` hooks that can refuse a tool call, one `UserPromptSubmit` skill router, and three `PostToolUse` hooks. None of it runs here. Three gates bind every agent regardless of engine, and none is optional.
 
 - `.hooks/pre-commit` runs on every commit. It blocks a direct commit to `main` or `master` and blocks a published-library version bump on any branch that is not `chore/release-*`. Never pass `git commit --no-verify`.
-- `.github/workflows/ci.yml` is the test gate. Branch protection blocks a merge until the five REQUIRED checks pass: `Conventions (webjs check)`, `Unit + integration (node --test)`, `Browser (web-test-runner / Playwright)`, `E2E (Puppeteer against the blog example)`, and `Build (@webjsdev/core dist)`. The workflow defines more jobs than those five, the Bun matrix among them, so a green required set is not the same as green CI. Read every check rather than trusting the merge button to have judged for you. `.hooks/pre-commit` deliberately does not run the suite because CI does.
+- CI is local (#1593). `scripts/ci.sh` runs every job `.github/workflows/ci.yml` defines (the workflow no longer runs on a push or a PR); `.hooks/pre-push` runs it on every push of a branch with an open PR, skipping only docs-only changes. Merge with `scripts/ci-merge.sh <N>`, which runs it on the PR head, posts the `local-ci` commit status `main` requires, and merges only when green. Never merge with a bare `gh pr merge`. `.hooks/pre-commit` deliberately does not run the suite because the pre-push hook and ci-merge do.
 
 Because the tool-call gates do not fire here, self-check the workflow they enforce before every commit. Root `AGENTS.md` carries the full contract under Code workflow, and each gate has its own trigger conditions, so read the rules there rather than assuming a given change trips all of them. What those gates would otherwise have caught:
 
