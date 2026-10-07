@@ -28,6 +28,9 @@
 set -euo pipefail
 
 REPO="webjsdev/webjs"
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR
+# Bun's shared transpiler cache can be poisoned machine-wide; never read it.
+export BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
 

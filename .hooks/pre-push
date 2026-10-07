@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Pre-push: run local CI before a branch with an open PR is pushed (#1593).
+# Pre-push: run the fast local CI subset before a branch with an open PR is
+# pushed (#1593).
 #
 # CI is local now (scripts/ci.sh; GitHub Actions no longer runs ci.yml on a
 # push or a PR), so this hook is what keeps a red head from reaching a PR.
-# It runs for each pushed branch that has an OPEN pull request, and only
-# when the commit is not already recorded green (scripts/ci.sh writes a PASS
-# marker per commit). The single skip is a docs-only change: every file that
+# It runs `scripts/ci.sh --quick` (setup, conventions, the Node suite: a
+# couple of minutes, nothing load-sensitive) for each pushed branch that has
+# an OPEN pull request, unless the commit already passed the full list. The
+# full list, browsers and e2e included, is scripts/ci-merge.sh's job. The single skip is a docs-only change: every file that
 # differs from origin/main is Markdown, or under docs/ or blog/.
 #
 # The commit being pushed must be the one checked out here, since that is the
@@ -16,6 +18,11 @@
 # (scripts/git-worktree-safe.mjs). Nothing here reads an environment switch:
 # a skipped run is visible as a missing `local-ci` status on the PR.
 set -uo pipefail
+
+# Git exports these to hooks; tests that build scratch repos must not inherit
+# them, or they write into this repository (scripts/ci.sh unsets them too).
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR \
+  GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE
 
 REPO="webjsdev/webjs"
 zero=0000000000000000000000000000000000000000
@@ -52,8 +59,8 @@ while read -r local_ref local_sha remote_ref _remote_sha; do
     continue
   fi
 
-  echo "pre-push: PR #$pr: running local CI on ${local_sha:0:12} (scripts/ci.sh)"
-  if ! bash scripts/ci.sh </dev/null; then
+  echo "pre-push: PR #$pr: running the quick local CI subset on ${local_sha:0:12} (scripts/ci.sh --quick; the full list runs in scripts/ci-merge.sh)"
+  if ! bash scripts/ci.sh --quick </dev/null; then
     echo "pre-push: local CI failed; the push is refused. Fix it, commit, and push again." >&2
     fail=1
   fi

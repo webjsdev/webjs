@@ -18,6 +18,9 @@
 #                                    #   release:gate` when package.json has
 #                                    #   one; run it before a release PR merges
 #   scripts/ci.sh --fail-fast        # stop at the first failing step
+#   scripts/ci.sh --quick            # the fast, flake-free subset the
+#                                    #   pre-push hook runs: setup,
+#                                    #   conventions, the Node suite
 #   scripts/ci.sh --nightly          # ONLY the live jspm CDN contract tests
 #                                    #   (was the nightly vendor-cdn.yml job):
 #                                    #   network-bound, so never part of the
@@ -34,6 +37,39 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.."
 
+# A git hook (pre-push) runs with GIT_DIR and friends exported. Left set, every
+# test that builds a scratch repository with plain `git` operates on THIS one
+# instead: a pre-push run once rewrote the pushed branch with fixture commits,
+# created fixture branches and worktrees, and flipped the shared core.bare.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR \
+  GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_CEILING_DIRECTORIES
+
+# Bun's shared transpiler cache (~/.cache/bun) can be poisoned by one bad run
+# and then breaks every Bun process on the machine; CI never reads it.
+export BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
+
+# Host preflight. A run on an overloaded box fails on timeouts, not on code:
+# wait up to CI_LOAD_WAIT seconds for load1 to drop under 1.5x the cores, and
+# say so loudly (here and in the verdict) when it does not, or a disk is full.
+host_warning=""
+preflight() {
+  local cores limit load waited=0 budget="${CI_LOAD_WAIT:-180}" pct m
+  cores=$(nproc); limit=$(( cores * 3 / 2 ))
+  load=$(cut -d' ' -f1 /proc/loadavg); load=${load%.*}
+  while [ "$load" -gt "$limit" ] && [ "$waited" -lt "$budget" ]; do
+    [ "$waited" = 0 ] && echo "preflight: load1 ${load} is over ${limit} (1.5 x ${cores} cores); waiting up to ${budget}s"
+    sleep 10; waited=$(( waited + 10 ))
+    load=$(cut -d' ' -f1 /proc/loadavg); load=${load%.*}
+  done
+  [ "$load" -gt "$limit" ] && host_warning="load1 ${load} > ${limit}"
+  for m in / /tmp "${TMPDIR:-/tmp}"; do
+    pct=$(df --output=pcent "$m" 2>/dev/null | tail -1 | tr -dc 0-9)
+    [ -n "$pct" ] && [ "$pct" -ge 90 ] && host_warning="${host_warning:+$host_warning, }$m ${pct}% full"
+  done
+  [ -n "$host_warning" ] && echo "WARNING host overloaded (${host_warning}); failures in this run may be timeouts, not code"
+  return 0
+}
+
 list=0 release=0 nightly=0
 args=()
 partial=0
@@ -42,6 +78,9 @@ while [ $# -gt 0 ]; do
     --list) list=1 ;;
     --release) release=1 ;;
     --nightly) nightly=1 ;;
+    --quick)
+      args+=(--only Setup --only Conventions --only "Unit + integration (node --test)")
+      partial=1 ;;
     -f|--fail-fast) args+=(--fail-fast); partial=1 ;;
     --only)
       [ $# -ge 2 ] || { echo "scripts/ci.sh: --only needs a title" >&2; exit 2; }
@@ -49,7 +88,7 @@ while [ $# -gt 0 ]; do
       for t in "${titles[@]}"; do args+=(--only "$t"); done
       partial=1
       shift ;;
-    -h|--help) sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,37p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "scripts/ci.sh: unknown argument '$1' (see --help)" >&2; exit 2 ;;
   esac
   shift
@@ -105,6 +144,7 @@ dirty=0
 [ "$linked" = 1 ] && echo "note: node_modules is a symlink (npm run worktree:link); bare @webjsdev/* imports run the PRIMARY checkout's source, so this run is partly vacuous. scripts/ci-merge.sh runs on a real install." >&2
 [ "$dirty" = 1 ] && echo "note: the tree has uncommitted changes; this run tests them, not ${sha:0:12}." >&2
 
+preflight
 start=$(date +%s)
 node packages/cli/bin/webjs.js ci "${args[@]}" 2>&1 | tee "$log"
 rc=${PIPESTATUS[0]}
@@ -130,5 +170,6 @@ if [ "$rc" = 0 ]; then
   echo "LOCAL CI PASS  ${sha:0:12}  (${secs}s)  log: $log"
 else
   echo "LOCAL CI FAIL  ${sha:0:12}  (${secs}s)  log: $log"
+  [ -n "$host_warning" ] && echo "WARNING host overloaded (${host_warning}) during this run; re-check a timeout-shaped failure on a quiet host before debugging it"
 fi
 exit "$rc"
