@@ -17,12 +17,13 @@
  *
  * @module broadcast
  */
+import { shared } from './process-shared.js';
 
 /**
  * Per-path WebSocket client registry.
  * @type {Map<string, Set<import('ws').WebSocket>>}
  */
-const pathClients = new Map();
+const pathClients = shared('broadcast-clients', () => new Map());
 
 /**
  * Register a WebSocket client for a path. Called internally by the

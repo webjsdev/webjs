@@ -22,9 +22,10 @@
  * The framework ships no middleware; it only runs the chain. Server-only.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { shared } from './process-shared.js';
 
 /** Per-request accumulated context, readable by the action via actionContext(). */
-const als = new AsyncLocalStorage();
+const als = shared('action-middleware-als', () => new AsyncLocalStorage());
 
 /** Shared empty context returned outside an action (a direct server-to-server call). */
 const EMPTY = Object.freeze({});

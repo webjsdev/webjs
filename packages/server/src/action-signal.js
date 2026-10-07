@@ -9,8 +9,9 @@
  * `fetch(url, { signal: actionSignal() })` line is safe everywhere.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { shared } from './process-shared.js';
 
-const als = new AsyncLocalStorage();
+const als = shared('action-signal-als', () => new AsyncLocalStorage());
 
 /** A shared signal that never aborts, returned outside an action. */
 const NEVER = (() => {

@@ -69,18 +69,21 @@ import { hashFile } from './actions.js';
 import { isStreamable } from './action-stream.js';
 import { serverRuntime } from './listener-core.js';
 import { redactStringsAndTemplates } from './js-scan.js';
+import { shared } from './process-shared.js';
 
 /** Ambient per-render seed collector. `Map<key, value>` or undefined. */
-const als = new AsyncLocalStorage();
+const als = shared('action-seed-als', () => new AsyncLocalStorage());
 
-/** Whether seed COLLECTION is on (the `webjs.seed` switch). */
-let _seedEnabled = false;
-/** Dev mode, threaded from `dev.js` at boot. Gates the determinism assertion. */
-let _devMode = false;
-/** Whether the load hook is installed at all (so identity is available). */
-let _hookInstalled = false;
-/** Idempotency guard: `module.registerHooks` must run at most once. */
-let _registered = false;
+/**
+ * The hook's switches, shared by every copy of this module in the process
+ * (#1590): under `bun --hot` an app's `'use server'` facade imports a fresh copy
+ * after a reload, and it must see the switches the running server set.
+ *   seedEnabled: whether seed COLLECTION is on (the `webjs.seed` switch).
+ *   devMode: dev mode, threaded from `dev.js` at boot; gates the determinism assertion.
+ *   hookInstalled: whether the load hook is installed at all (so identity is available).
+ *   registered: idempotency guard, `module.registerHooks` must run at most once.
+ */
+const _flags = shared('action-seed-flags', () => ({ seedEnabled: false, devMode: false, hookInstalled: false, registered: false }));
 
 /**
  * `action function -> { file, fnName }` for every export the hook wrapped.
@@ -103,10 +106,10 @@ let _registered = false;
  *
  * @type {WeakMap<Function, { file: string, fnName: string }[]>}
  */
-const _identity = new WeakMap();
+const _identity = shared('action-identity', () => new WeakMap());
 
 /** Memoized `absPath -> hash` so a hot action call does not re-hash per call. */
-const _hashCache = new Map();
+const _hashCache = shared('action-hash-cache', () => new Map());
 
 /** This module's own URL, embedded into the generated facade's import. */
 const SELF_URL = import.meta.url;
@@ -118,7 +121,7 @@ const SELF_URL = import.meta.url;
  * @returns {boolean}
  */
 export function seedingEnabled() {
-  return _seedEnabled && _hookInstalled;
+  return _flags.seedEnabled && _flags.hookInstalled;
 }
 
 /**
@@ -128,7 +131,7 @@ export function seedingEnabled() {
  * @returns {boolean}
  */
 export function identityHookInstalled() {
-  return _hookInstalled;
+  return _flags.hookInstalled;
 }
 
 /**
@@ -204,7 +207,7 @@ async function recordSeed(collector, file, fnName, args, value) {
     // legitimate second call with different arguments has a different key and
     // cannot false-fire. In its OWN try/catch so a diagnostic failure can never
     // skip `collector.set` and turn observability into a dropped seed.
-    if (_devMode && collector.has(key)) {
+    if (_flags.devMode && collector.has(key)) {
       try { await assertDeterministic(collector.get(key), value, hash, fnName); } catch { /* never affect the seed */ }
     }
     collector.set(key, value);
@@ -214,7 +217,7 @@ async function recordSeed(collector, file, fnName, args, value) {
 }
 
 /** Warned-once ids, keyed `hash/fn` so the Set is bounded by the action count. */
-const _nonDeterministic = new Set();
+const _nonDeterministic = shared('action-seed-nondeterministic', () => new Set());
 
 /**
  * Warn (once per action function) when one render recorded two DIFFERENT results
@@ -276,7 +279,7 @@ export function __actionWrap(file, fnName, orig) {
   const list = _identity.get(orig) || [];
   if (!list.some((e) => e.file === file && e.fnName === fnName)) list.push({ file, fnName });
   _identity.set(orig, list);
-  if (!_seedEnabled) return orig;
+  if (!_flags.seedEnabled) return orig;
   const wrapped = seedProxy(file, fnName, orig);
   // The wrapper is a fresh object every time, so it shares the TARGET's list
   // rather than starting one of its own.
@@ -644,10 +647,10 @@ function seedLoadHook(url, context, nextLoad) {
  * @returns {Promise<void>}
  */
 export async function registerActionHooks(opts = {}) {
-  _seedEnabled = opts.seed !== false;
-  _devMode = opts.dev === true;
-  if (_registered) return;
-  _registered = true;
+  _flags.seedEnabled = opts.seed !== false;
+  _flags.devMode = opts.dev === true;
+  if (_flags.registered) return;
+  _flags.registered = true;
 
   if (serverRuntime() === 'bun') {
     // Once per PROCESS, not per module instance (#1575): `bun --hot` re-runs
@@ -656,12 +659,12 @@ export async function registerActionHooks(opts = {}) {
     // edit (the first one registered keeps answering anyway).
     const g = /** @type {any} */ (globalThis);
     const installed = Symbol.for('webjs.actionSeed.bunPlugin');
-    if (g[installed]) { _hookInstalled = true; return; }
+    if (g[installed]) { _flags.hookInstalled = true; return; }
     g[installed] = true;
     // Bun has no module.registerHooks; install the same facade via Bun.plugin.
     const { installBunSeedPlugin } = await import('./action-seed-bun.js');
     installBunSeedPlugin({ isSeedCandidate, buildSeedFacade, serverFileRe: SERVER_FILE_RE });
-    _hookInstalled = true;
+    _flags.hookInstalled = true;
     return;
   }
 
@@ -676,7 +679,7 @@ export async function registerActionHooks(opts = {}) {
   }
 
   nodeModule.registerHooks({ load: seedLoadHook });
-  _hookInstalled = true;
+  _flags.hookInstalled = true;
 }
 
 /**

@@ -14,6 +14,7 @@
  *
  * @module cache
  */
+import { shared } from './process-shared.js';
 
 /**
  * @typedef {Object} CacheStore
@@ -228,8 +229,13 @@ export function redisStore(opts = {}) {
   };
 }
 
-/** @type {CacheStore | null} */
-let _defaultStore = null;
+/**
+ * The default store lives in process-shared state (#1590), so an app module
+ * that imported a fresh copy of this package after a `bun --hot` reload reads
+ * and writes the same cache as the server.
+ * @type {{ store: CacheStore | null }}
+ */
+const _defaultStore = shared('cache-default-store', () => ({ store: null }));
 
 /**
  * Get the default cache store. Memory store unless explicitly set via
@@ -238,8 +244,8 @@ let _defaultStore = null;
  * @returns {CacheStore}
  */
 export function getStore() {
-  if (!_defaultStore) _defaultStore = memoryStore();
-  return _defaultStore;
+  if (!_defaultStore.store) _defaultStore.store = memoryStore();
+  return _defaultStore.store;
 }
 
 /**
@@ -253,5 +259,5 @@ export function getStore() {
  * @param {CacheStore} store
  */
 export function setStore(store) {
-  _defaultStore = store;
+  _defaultStore.store = store;
 }

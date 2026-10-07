@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { parseCookies } from './csrf.js';
 import { setCspNonceProvider, cspNonce } from '@webjsdev/core';
+import { shared } from './process-shared.js';
 
 /**
  * Per-request context backed by AsyncLocalStorage. Lets server-side code
@@ -39,7 +40,7 @@ import { setCspNonceProvider, cspNonce } from '@webjsdev/core';
  */
 
 /** @type {AsyncLocalStorage<Store>} */
-const als = new AsyncLocalStorage();
+const als = shared('request-als', () => new AsyncLocalStorage());
 
 /**
  * Run `fn` with the given request bound as the current context.

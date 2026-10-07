@@ -30,6 +30,7 @@ import { createHash } from 'node:crypto';
 import { publishedBuildId, basePath } from './importmap.js';
 import { stripBasePath } from './base-path.js';
 import { dynamicAccessed, getRequest } from './context.js';
+import { shared } from './process-shared.js';
 
 /** Namespace prefix for every cached-HTML key, so a flush can target it. */
 const KEY_PREFIX = 'webjs:html:';
@@ -51,9 +52,12 @@ export const HTML_CACHE_MARKER = 'x-webjs-html-cache';
  * clear cannot enumerate keys), and the store TTL eventually reclaims the
  * orphaned entries. A single process clears its own memory store this way
  * synchronously; a Redis-backed multi-process deploy bumps per process and
- * leans on the TTL for the rest (a best-effort global flush).
+ * leans on the TTL for the rest (a best-effort global flush). Held in
+ * process-shared state (#1590), so a `revalidateAll()` from an app module that
+ * imported a fresh copy of this package after a `bun --hot` reload still
+ * reaches the server's keys.
  */
-let _generation = 0;
+const _generation = shared('html-cache-generation', () => ({ n: 0 }));
 
 /**
  * A fingerprint of the served app source, folded into every cache key (#318).
@@ -170,7 +174,7 @@ export function htmlCacheKey(url) {
   // the importmap-only build id misses. Empty (dev / no fingerprint) collapses
   // to the prior key shape, so an unconfigured app is byte-identical.
   const appfp = _appSourceFp ? `${_appSourceFp}:` : '';
-  return `${KEY_PREFIX}${build}:${appfp}${_generation}:${originKey(url)}:${url.pathname}${search}`;
+  return `${KEY_PREFIX}${build}:${appfp}${_generation.n}:${originKey(url)}:${url.pathname}${search}`;
 }
 
 /**
@@ -417,10 +421,10 @@ function warnDynamicRevalidateOnce(pathname) {
 
 /** Evict ALL cached HTML for this process. @returns {void} */
 export function revalidateAll() {
-  _generation++;
+  _generation.n++;
 }
 
 /** Internal: current generation, folded into keys by `htmlCacheKey`. */
 export function htmlCacheGeneration() {
-  return _generation;
+  return _generation.n;
 }
