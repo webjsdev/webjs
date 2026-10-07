@@ -80,8 +80,13 @@ async function renderedIconLinks(dir) {
 /** Pull an attribute off one rendered tag, order-independently. */
 const attr = (tag, name) => (tag.match(new RegExp(`${name}="([^"]*)"`)) || [])[1];
 
+// Each of these boots the app in dev to render its head. A cold boot of the
+// website runs past bun test's 5s default per-test timeout on a loaded host
+// (the same boot the test/docs suites do), so give it room explicitly.
+const BOOT = { timeout: 60_000 };
+
 for (const app of APPS) {
-  test(`${app.name}: the declared favicon size matches the real asset`, async () => {
+  test(`${app.name}: the declared favicon size matches the real asset`, BOOT, async () => {
     const links = await renderedIconLinks(app.dir);
     const png = links.find((l) => attr(l, 'type') === 'image/png');
     assert.ok(png, 'serves a PNG icon with an explicit type');
@@ -105,7 +110,7 @@ for (const app of APPS) {
     assert.equal(Number(w) % 48, 0, 'the size is a multiple of 48px, which Google requires');
   });
 
-  test(`${app.name}: the raster icon is served before the SVG`, async () => {
+  test(`${app.name}: the raster icon is served before the SVG`, BOOT, async () => {
     // Google's favicon crawler takes the first usable icon, and raster is what
     // search results reliably render. All three led with the SVG before.
     const links = await renderedIconLinks(app.dir);
@@ -115,7 +120,7 @@ for (const app of APPS) {
     assert.ok(png < svg, 'the PNG comes first in the head');
   });
 
-  test(`${app.name}: the apple-touch icon points at a correctly sized asset`, async () => {
+  test(`${app.name}: the apple-touch icon points at a correctly sized asset`, BOOT, async () => {
     const links = await renderedIconLinks(app.dir);
     const apple = links.find((l) => attr(l, 'rel') === 'apple-touch-icon');
     assert.ok(apple, 'serves an apple-touch-icon');
@@ -126,7 +131,7 @@ for (const app of APPS) {
       'the declared size matches the real asset');
   });
 
-  test(`${app.name}: every icon it links is actually served`, async () => {
+  test(`${app.name}: every icon it links is actually served`, BOOT, async () => {
     // A head naming a URL nothing answers is the failure mode that took
     // gallery.webjs.dev two PRs to shake out, so resolve each href rather than
     // trusting the markup.
