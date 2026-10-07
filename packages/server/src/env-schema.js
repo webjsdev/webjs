@@ -32,8 +32,8 @@
  * the Node-version preflight).
  */
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { stat } from 'node:fs/promises';
+import { devImportSpecifier } from './dev-import.js';
 
 /** Field type names a schema may declare. */
 const KNOWN_TYPES = new Set(['string', 'number', 'boolean', 'url', 'enum']);
@@ -223,9 +223,7 @@ export async function loadEnvSchema(appDir, opts = {}) {
     }
   }
   if (!file) return null;
-  const url = pathToFileURL(file).toString();
-  const bust = opts.dev ? `?t=${Date.now()}-${Math.random().toString(36).slice(2)}` : '';
-  const mod = await import(url + bust);
+  const mod = await import(devImportSpecifier(file, Boolean(opts.dev)));
   return mod.default ?? null;
 }
 

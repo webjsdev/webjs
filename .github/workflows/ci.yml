@@ -199,11 +199,16 @@ jobs:
         run: bun test/bun/asset-url.mjs
       # Dev hot reload on Bun (#514): start `webjs dev` under Bun, edit a
       # re-imported route module, and assert the response updates with NO manual
-      # restart. The CLI re-execs under `bun --hot` on Bun (vs `node --watch` on
-      # Node); without it Bun ignores the dev `?t=` cache-bust and the edit stays
-      # stale. The same script proves no Node regression under `npm test`.
+      # restart. The same script proves no Node regression under `npm test`.
       - name: webjs dev hot reload on Bun
         run: bun test/bun/dev-hot-reload.mjs
+      # Plugin-served modules (#1550): `bun --hot` never reloaded a module a
+      # Bun.plugin served (every 'use server' module, and every app module with
+      # source locations on), and Bun drops a file:// URL's ?t= cache-bust. The
+      # supervisor now restarts on Bun too, and the cache-bust rides a plain
+      # path; prove page, imported-module and server-module edits all land.
+      - name: webjs dev reload of plugin-served modules on Bun
+        run: bun test/bun/dev-reload-plugin-served.mjs
       # Dev live-reload of a webjs.dev.watch dir OUTSIDE the appDir (#894) and
       # the SSE retry hint on the Bun.serve shell (#893). Plain scripts (no
       # per-test timeout) since each boots the real CLI + polls for readiness;

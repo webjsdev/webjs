@@ -205,11 +205,16 @@ export function watchRestartPaths(cwd, { dirs, files, ignore, onChange, onError,
  *   killTimeoutMs?: number,
  *   finalExitCodes?: number[],
  *   onFinal?: (code: number) => void,
+ *   restartFor?: (path: string) => boolean,
  * }} opts
  */
 export function createSupervisor({
   spawnChild,
   restartOnChange,
+  // Which changed paths restart a live child (default: all). On Bun only the
+  // paths `bun --hot` cannot reload in place do (#1550); the rest it reloads
+  // itself. A dead child is started by any change either way.
+  restartFor = () => true,
   log = () => {},
   timers = globalThis,
   now = Date.now,
@@ -230,6 +235,8 @@ export function createSupervisor({
   let crashes = 0;
   /** @type {string | null} */
   let pendingPath = null;
+  // Whether any change in the current debounce window asks for a restart.
+  let pendingRestart = false;
   /** @type {any} */ let debounceTimer = null;
   /** @type {any} */ let backoffTimer = null;
   /** @type {any} */ let killTimer = null;
@@ -289,7 +296,9 @@ export function createSupervisor({
   const flush = () => {
     debounceTimer = null;
     const path = pendingPath;
+    const wantsRestart = pendingRestart;
     pendingPath = null;
+    pendingRestart = false;
     if (stopping) return;
     if (!child) {
       // Not running (crashed, or waiting out a backoff): a change is the cue.
@@ -297,7 +306,7 @@ export function createSupervisor({
       launch();
       return;
     }
-    if (!restartOnChange || restarting) return;
+    if (!restartOnChange || restarting || !wantsRestart) return;
     restarting = true;
     if (path) log(`${path} changed, restarting the dev server`);
     terminate(child);
@@ -308,7 +317,10 @@ export function createSupervisor({
     /** @param {string} path */
     change(path) {
       if (stopping) return;
-      if (pendingPath === null) pendingPath = path;
+      if (restartFor(path)) {
+        if (!pendingRestart) pendingPath = path;
+        pendingRestart = true;
+      } else if (pendingPath === null) pendingPath = path;
       debounceTimer = clear(debounceTimer);
       debounceTimer = timers.setTimeout(flush, debounceMs);
     },
@@ -331,7 +343,7 @@ export function createSupervisor({
  *
  * @param {{
  *   cwd: string,
- *   plan: { args: string[], restartOnChange: boolean, watchDirs: string[], watchFiles: string[] },
+ *   plan: { args: string[], restartOnChange: boolean, restartFor?: (path: string) => boolean, watchDirs: string[], watchFiles: string[] },
  *   env: NodeJS.ProcessEnv,
  *   onExit: (code: number) => void,
  * }} opts
@@ -356,6 +368,7 @@ export function superviseDevServer({ cwd, plan, env, onExit }) {
 
   const sup = createSupervisor({
     restartOnChange: plan.restartOnChange,
+    ...(plan.restartFor ? { restartFor: plan.restartFor } : {}),
     log,
     // The child already printed why (the port and its holder); stop with its
     // code rather than restarting a server that can never bind.

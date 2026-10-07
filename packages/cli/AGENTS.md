@@ -64,15 +64,17 @@ lib/
                          `resolvePort` so a `.env` PORT is in `process.env` at
                          resolution time; the server loads `.env` too but too late
                          to affect the port the CLI computes. Tests: `test/port/`.
-  dev-supervisor.js      `webjs dev` reload-supervisor planner (#514, #1521).
-                         PURE `planDevSupervisor({ isBun, argv, noHot })`
-                         returns the spawn decision: `supervise` with
-                         `restartOnChange: true` on Node (restart the child on a
-                         change under `WATCH_DIRS` / the root `WATCH_FILES`),
-                         `supervise` with `bun --hot` and `restartOnChange:
-                         false` on Bun (Bun ignores the dev `?t=` cache-bust and
-                         reloads in place; the parent only revives a crashed
-                         child), or `inline` (run in-process) for `--no-hot`.
+  dev-supervisor.js      `webjs dev` reload-supervisor planner (#514, #1521,
+                         #1550). PURE `planDevSupervisor({ isBun, argv, noHot,
+                         sourceLocations })` returns the spawn decision:
+                         `supervise` with `restartOnChange: true` on Node
+                         (restart the child on a change under `WATCH_DIRS` / the
+                         root `WATCH_FILES`), `supervise` with `bun --hot` and a
+                         `restartFor` filter on Bun (`bun --hot` reloads in
+                         place but never a module a `Bun.plugin` serves, so a
+                         `*.server.*` edit, and with source locations on any
+                         app module edit, restarts the child), or `inline`
+                         (run in-process) for `--no-hot`.
                          Node no longer runs under `node --watch`, which crashed
                          on an unhandled watcher error and never came back.
                          Tests: `test/dev-supervisor/`

@@ -15,7 +15,6 @@
  * supplies its own client wrapper to `SseHub`, its own socket-to-`Request` bridge,
  * and its own `closeServer` thunk, and reuses everything else verbatim.
  */
-import { pathToFileURL } from 'node:url';
 import {
   createBrotliCompress, createGzip, createDeflate,
   brotliCompressSync, gzipSync, deflateSync,
@@ -24,6 +23,7 @@ import {
 import { stripBasePath } from './base-path.js';
 import { randomUUID } from 'node:crypto';
 import { isWatchError } from './dev/watch-tree.js';
+import { devImportSpecifier } from './dev-import.js';
 
 /** The dev live-reload SSE path (matched after base-path stripping). */
 export const EVENTS_PATH = '/__webjs/events';
@@ -329,9 +329,7 @@ export async function readBufferedOrStream(web, maxBytes) {
  * @param {boolean} dev
  */
 export function loadWsModule(file, dev) {
-  const url = pathToFileURL(file).toString();
-  const bust = dev ? `?t=${Date.now()}-${Math.random().toString(36).slice(2)}` : '';
-  return import(url + bust);
+  return import(devImportSpecifier(file, dev));
 }
 
 /**

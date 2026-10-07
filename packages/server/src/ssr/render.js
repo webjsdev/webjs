@@ -1,4 +1,3 @@
-import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { renderToString, isNotFound, isRedirect, isForbidden, isUnauthorized } from '@webjsdev/core';
 import { vendorPreloadTargets } from '../importmap.js';
@@ -18,6 +17,7 @@ import { escapeHtml } from './escape.js';
 import {
   cachedHtmlResponse, getNonce, htmlResponse, streamingHtmlResponse,
 } from './responses.js';
+import { devImportSpecifier } from '../dev-import.js';
 
 
 /**
@@ -107,9 +107,7 @@ export function privateFragment(res) {
  * @param {boolean} dev
  */
 async function loadModule(file, dev) {
-  const url = pathToFileURL(file).toString();
-  const bust = dev ? `?t=${Date.now()}-${Math.random().toString(36).slice(2)}` : '';
-  return import(url + bust);
+  return import(devImportSpecifier(file, dev));
 }
 
 /**
