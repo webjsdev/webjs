@@ -310,6 +310,38 @@ export function hoistHeadTags(headHtml, bodyHtml) {
 export const _hoistHeadTags = hoistHeadTags;
 
 /**
+ * The initial-load Suspense resolver: swaps each streamed
+ * `<template data-webjs-resolve>` into its placeholder.
+ *
+ * Two triggers call it. Every streamed template is followed by an inline
+ * script that calls `__webjsResolve(id)`, which runs only after the parser has
+ * closed the template. A MutationObserver also catches templates inserted some
+ * other way. The observer must NOT act on a template the parser is still
+ * filling: the parser inserts the `<template>` element first and appends its
+ * content as bytes arrive, so when the response splits inside a boundary (a
+ * network chunk, or the parser yielding under load) the observer saw a
+ * truncated `content` and swapped in half the markup. The inline script then
+ * found the template already gone, so the truncation stuck (a `<muted-text>`
+ * with no projected text, for one). A template with a next sibling is
+ * complete, since the parser only adds a following node after the closing
+ * tag; one with none is left to its inline script.
+ *
+ * @param {string} n  the ` nonce="..."` attribute, or ''
+ * @returns {string}
+ */
+export function suspenseBootScript(n) {
+  return `<script${n}>(function(){` +
+    `function r(id){var t=document.querySelector('template[data-webjs-resolve="'+id+'"]');` +
+    `var b=document.getElementById(id);if(t&&b){b.replaceWith(t.content.cloneNode(true));t.remove();}}` +
+    `window.__webjsResolve=r;` +
+    `if(typeof MutationObserver!=='undefined'){` +
+    `new MutationObserver(function(ms){ms.forEach(function(m){m.addedNodes.forEach(function(n){` +
+    `if(n.nodeType===1&&n.tagName==='TEMPLATE'&&n.dataset.webjsResolve&&n.nextSibling){r(n.dataset.webjsResolve);}` +
+    `});});}).observe(document.documentElement,{childList:true,subtree:true});}` +
+    `})()</script>`;
+}
+
+/**
  * Serialize a Next.js-shaped viewport object into the comma-separated
  * `content` string the meta tag expects. Recognised fields:
  *   width, height, initialScale, minimumScale, maximumScale,
@@ -394,17 +426,7 @@ export function wrapHead(opts) {
     ? (reloadState ? `<meta name="webjs-dev-reload" content="${escapeAttr(JSON.stringify(reloadState))}">\n` : '') +
       `<script type="module"${n} src="${escapeAttr(withBasePath('/__webjs/reload.js', bp))}"></script>`
     : '';
-  const suspenseBoot = opts.streaming
-    ? `<script${n}>(function(){` +
-      `function r(id){var t=document.querySelector('template[data-webjs-resolve="'+id+'"]');` +
-      `var b=document.getElementById(id);if(t&&b){b.replaceWith(t.content.cloneNode(true));t.remove();}}` +
-      `window.__webjsResolve=r;` +
-      `if(typeof MutationObserver!=='undefined'){` +
-      `new MutationObserver(function(ms){ms.forEach(function(m){m.addedNodes.forEach(function(n){` +
-      `if(n.nodeType===1&&n.tagName==='TEMPLATE'&&n.dataset.webjsResolve){r(n.dataset.webjsResolve);}` +
-      `});});}).observe(document.documentElement,{childList:true,subtree:true});}` +
-      `})()</script>`
-    : '';
+  const suspenseBoot = opts.streaming ? suspenseBootScript(n) : '';
 
   const m = opts.metadata || {};
   const metaTags = [];

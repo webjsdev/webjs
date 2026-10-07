@@ -466,6 +466,12 @@ jobs:
         env:
           WEBJS_E2E: '1'
         run: node --test test/e2e/browser-harness.test.mjs
+      # A streamed Suspense template that arrives in two pieces must resolve
+      # whole: the boot observer used to clone it before the parser finished.
+      - name: Run Suspense split-template e2e
+        env:
+          WEBJS_E2E: '1'
+        run: node --test test/e2e/suspense-partial-template.test.mjs
       # Dev error overlay URL scope (#1047): spawns `webjs dev` against a fixture
       # app and drives a real browser, because both halves of the bug are only
       # observable there. Hovering a link to a throwing page fires a real
