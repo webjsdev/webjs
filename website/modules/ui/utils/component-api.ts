@@ -549,7 +549,44 @@ export const COMPONENT_API: Record<string, ComponentApi> = {
     subcomponents: [{ name: 'separatorClass({ orientation })', description: 'Apply to <div role="separator">.' }],
     props: [{ name: 'orientation', type: '"horizontal" | "vertical"', default: '"horizontal"' }],
   },
+  empty: {
+    subcomponents: [
+      { name: 'emptyClass()', description: 'Root. Centred column with generous padding; add border for the dashed outline.' },
+      { name: 'emptyHeaderClass()', description: 'Groups the media, title, and description.' },
+      { name: 'emptyMediaClass({ variant })', description: 'Icon or illustration. variant icon puts the icon on a muted tile.' },
+      { name: 'emptyTitleClass() / emptyDescriptionClass()', description: 'Use a real heading for the title; the description is muted text saying what to do next.' },
+      { name: 'emptyContentClass()', description: 'Row for the action button(s).' },
+    ],
+    props: [{ name: 'variant', type: '"default" | "icon"', default: '"default"', description: 'On emptyMediaClass. Set data-variant on the same element for shadcn parity.' }],
+  },
+  field: {
+    subcomponents: [
+      { name: 'fieldSetClass() / fieldLegendClass({ variant })', description: 'A native <fieldset> and its <legend>, which names a group of fields.' },
+      { name: 'fieldGroupClass()', description: 'Stacks fields, and is the container responsive fields measure.' },
+      { name: 'fieldClass({ orientation })', description: 'One label, control, and text unit. data-invalid="true" turns it destructive.' },
+      { name: 'fieldContentClass()', description: 'Wraps a label and description beside a horizontal control.' },
+      { name: 'fieldLabelClass() / fieldTitleClass()', description: 'The <label for> of the control, or label-styled text that is not a label.' },
+      { name: 'fieldDescriptionClass()', description: 'Muted helper text. Reference its id from the control with aria-describedby.' },
+      { name: 'fieldErrorClass()', description: 'Inline validation message with role="alert", referenced from the control with aria-describedby.' },
+      { name: 'fieldSeparatorClass() / fieldSeparatorContentClass()', description: 'A rule between fields with optional centred text.' },
+    ],
+    props: [
+      { name: 'orientation', type: '"vertical" | "horizontal" | "responsive"', default: '"vertical"', description: 'On fieldClass. Set data-orientation on the same element.' },
+      { name: 'variant', type: '"legend" | "label"', default: '"legend"', description: 'On fieldLegendClass. Set data-variant on the same element.' },
+    ],
+  },
   skeleton: { subcomponents: [{ name: 'skeletonClass()', description: 'Apply to a div with explicit width/height.' }] },
+  spinner: {
+    subcomponents: [
+      { name: 'spinner({ class, label, decorative })', description: 'The inline SVG as an html template, role="status" and aria-label="Loading" by default.' },
+      { name: 'spinnerClass()', description: 'size-4 animate-spin, for your own <svg>.' },
+    ],
+    props: [
+      { name: 'class', type: 'string', description: 'Merged over spinnerClass(), so a size utility replaces size-4.' },
+      { name: 'label', type: 'string', default: '"Loading"', description: 'The accessible name.' },
+      { name: 'decorative', type: 'boolean', default: 'false', description: 'aria-hidden and no role, for beside visible text such as a busy button label.' },
+    ],
+  },
   table: {
     subcomponents: [
       { name: 'tableContainerClass()', description: 'Scroll wrapper.' },

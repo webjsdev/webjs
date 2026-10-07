@@ -26,7 +26,7 @@ import { splitByTier } from '#modules/ui/utils/tier.ts';
  */
 
 const UI_DESCRIPTION =
-  'The AI-first component library for WebJs: 32 primitives in two tiers, class-helper functions for visuals and custom elements only where state matters, source-copied into your project and styled with Tailwind v4.';
+  'The AI-first component library for WebJs: 35 primitives in two tiers, class-helper functions for visuals and custom elements only where state matters, source-copied into your project and styled with Tailwind v4.';
 const UI_OG_TITLE = 'WebJs UI components';
 
 /**
