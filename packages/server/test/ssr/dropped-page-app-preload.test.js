@@ -102,8 +102,9 @@ test('a SHIPPED page still preloads its transitive relative-helper app modules (
   // The under-fetch guard for the roots change: this is what would break if the
   // moduleUrls -> absolute-path round-trip failed to match the graph's node keys
   // and the walk from `shippedRoots` silently dropped a genuinely-shipped dep.
-  // A page that imports a pure relative helper `./fmt.js` (used as a value) SHIPS,
-  // so `page.js` is a boot module. `fmt.js` and its own helper `./deep.js` are
+  // A page that runs code at module load (`Date.now()` at top level) SHIPS, so
+  // `page.js` is a boot module, while its pure relative helper `./fmt.js` does
+  // nothing at load (an arrow body is a declaration, #1567). `fmt.js` and its own helper `./deep.js` are
   // NOT boot modules; their preloads come ONLY from `deduplicatedPreloads` walking
   // the transitive closure from `shippedRoots` (the boot-module preload loop
   // covers `page.js`, not its deps, and `deduplicatedPreloads` excludes
@@ -116,7 +117,8 @@ test('a SHIPPED page still preloads its transitive relative-helper app modules (
     'app/page.js':
       `import { html } from ${JSON.stringify(HTML_URL)};\n` +
       `import { fmt } from './fmt.js';\n` +
-      `export default () => html\`<p>\${fmt(1)}</p>\`;\n`,
+      `const LOADED_AT = Date.now();\n` +
+      `export default () => html\`<p>\${fmt(LOADED_AT)}</p>\`;\n`,
   });
   const app = await createRequestHandler({ appDir, dev: false });
   await app.warmup();
