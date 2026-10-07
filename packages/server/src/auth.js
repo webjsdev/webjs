@@ -13,6 +13,8 @@ import { readTextBounded, readFormDataBounded, payloadTooLarge, DEFAULT_MAX_BODY
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
+// Base names. In production each is sent with the `__Host-` prefix
+// (cookieName below); development over http keeps the plain name.
 const AUTH_COOKIE = 'webjs.auth';
 const STATE_COOKIE = 'webjs.auth.state';
 // Carries the post-sign-in target across the OAuth round trip (#1495). Signed
@@ -104,14 +106,33 @@ function parseCookies(header) {
   return out;
 }
 
+/**
+ * The name a cookie is sent under. In production it carries the `__Host-`
+ * prefix (#1538): a browser stores a `__Host-` cookie only when it is
+ * `Secure`, has `Path=/` and has NO `Domain` attribute, so an app on a sibling
+ * subdomain (two apps on `a.example.app` and `b.example.app`, with
+ * `example.app` not on the Public Suffix List) can no longer plant its own
+ * `webjs.auth` with `Domain=.example.app` and sign a visitor in to the wrong
+ * account (cookie tossing, session fixation). Production never reads the
+ * unprefixed name: a fallback would reopen exactly that hole.
+ * Development over http keeps the plain name, since `__Host-` needs `Secure`.
+ *
+ * @param {string} base @param {boolean} secure
+ */
+export function cookieName(base, secure) {
+  return secure ? `__Host-${base}` : base;
+}
+
 function setCookie(name, value, maxAge, secure) {
   let s = `${name}=${encodeURIComponent(value)}; Max-Age=${Math.floor(maxAge / 1000)}; Path=/; HttpOnly; SameSite=Lax`;
   if (secure) s += '; Secure';
   return s;
 }
 
-function clearCookie(name) {
-  return `${name}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax`;
+// A `__Host-` cookie is cleared only by a Set-Cookie that also says Secure;
+// a browser ignores one without it, and the cookie would stay.
+function clearCookie(name, secure = false) {
+  return `${name}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`;
 }
 
 // -- JWT --------------------------------------------------------------------
@@ -260,7 +281,7 @@ export function createAuth(config) {
     // page cacheable so a logged-in body could be served to the next visitor.
     markDynamicAccess();
     const cookies = parseCookies(req.headers.get('cookie') || '');
-    const raw = cookies[AUTH_COOKIE];
+    const raw = cookies[cookieName(AUTH_COOKIE, secure())];
     if (!raw) return null;
 
     if (strategy === 'jwt') {
@@ -284,11 +305,11 @@ export function createAuth(config) {
     if (strategy === 'jwt') {
       let token = { sub: user.id, name: user.name, email: user.email, image: user.image, role: user.role, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + maxAge };
       if (cb.jwt) token = await cb.jwt({ token, user });
-      return setCookie(AUTH_COOKIE, await encodeJwt(token, secret), maxAgeMs, secure());
+      return setCookie(cookieName(AUTH_COOKIE, secure()), await encodeJwt(token, secret), maxAgeMs, secure());
     }
     const sid = randomId();
     await dbStore.save(sid, user, maxAgeMs);
-    return setCookie(AUTH_COOKIE, await sign(sid, secret), maxAgeMs, secure());
+    return setCookie(cookieName(AUTH_COOKIE, secure()), await sign(sid, secret), maxAgeMs, secure());
   }
 
   // -- auth() ---------------------------------------------------------------
@@ -333,12 +354,12 @@ export function createAuth(config) {
   async function signOutFn(opts = {}) {
     const hdrs = new Headers();
     hdrs.set('location', opts.redirectTo || pages.signOut || '/');
-    hdrs.append('set-cookie', clearCookie(AUTH_COOKIE));
+    hdrs.append('set-cookie', clearCookie(cookieName(AUTH_COOKIE, secure()), secure()));
 
     if (strategy === 'database' && dbStore) {
       const r = opts.req || getRequest();
       if (r) {
-        const raw = parseCookies(r.headers.get('cookie') || '')[AUTH_COOKIE];
+        const raw = parseCookies(r.headers.get('cookie') || '')[cookieName(AUTH_COOKIE, secure())];
         if (raw) { const sid = await unsign(raw, secret); if (sid) await dbStore.destroy(sid); }
       }
     }
@@ -361,14 +382,14 @@ export function createAuth(config) {
 
     const hdrs = new Headers();
     hdrs.set('location', url.toString());
-    hdrs.append('set-cookie', setCookie(STATE_COOKIE, await sign(state, secret), 600_000, secure()));
+    hdrs.append('set-cookie', setCookie(cookieName(STATE_COOKIE, secure()), await sign(state, secret), 600_000, secure()));
     // The post-sign-in target rides in its own signed cookie (#1495). With no
     // valid target, any leftover cookie from an abandoned earlier attempt is
     // cleared so it cannot steer this sign-in somewhere stale.
     const target = safeRedirectPath(opts.redirectTo);
     hdrs.append('set-cookie', target
-      ? setCookie(REDIRECT_COOKIE, await sign(target, secret), 600_000, secure())
-      : clearCookie(REDIRECT_COOKIE));
+      ? setCookie(cookieName(REDIRECT_COOKIE, secure()), await sign(target, secret), 600_000, secure())
+      : clearCookie(cookieName(REDIRECT_COOKIE, secure()), secure()));
     return new Response(null, { status: 302, headers: hdrs });
   }
 
@@ -381,7 +402,7 @@ export function createAuth(config) {
    * @returns {Promise<string | null>}
    */
   async function readRedirectCookie(req) {
-    const raw = parseCookies(req.headers.get('cookie') || '')[REDIRECT_COOKIE];
+    const raw = parseCookies(req.headers.get('cookie') || '')[cookieName(REDIRECT_COOKIE, secure())];
     if (!raw) return null;
     return safeRedirectPath(await unsign(raw, secret));
   }
@@ -392,7 +413,7 @@ export function createAuth(config) {
     const state = url.searchParams.get('state');
     if (!code || !state) return new Response('Missing code or state', { status: 400 });
 
-    const rawState = parseCookies(req.headers.get('cookie') || '')[STATE_COOKIE];
+    const rawState = parseCookies(req.headers.get('cookie') || '')[cookieName(STATE_COOKIE, secure())];
     if (!rawState) return new Response('Missing state cookie', { status: 403 });
     const verified = await unsign(rawState, secret);
     if (!verified || verified !== state) return new Response('Invalid state', { status: 403 });
@@ -430,8 +451,8 @@ export function createAuth(config) {
       if (ok === false) {
         const denied = new Headers();
         denied.set('location', pages.error || '/?error=AccessDenied');
-        denied.append('set-cookie', clearCookie(STATE_COOKIE));
-        denied.append('set-cookie', clearCookie(REDIRECT_COOKIE));
+        denied.append('set-cookie', clearCookie(cookieName(STATE_COOKIE, secure()), secure()));
+        denied.append('set-cookie', clearCookie(cookieName(REDIRECT_COOKIE, secure()), secure()));
         return new Response(null, { status: 302, headers: denied });
       }
     }
@@ -439,8 +460,8 @@ export function createAuth(config) {
     const hdrs = new Headers();
     hdrs.set('location', (await readRedirectCookie(req)) || '/');
     hdrs.append('set-cookie', await writeSession(user));
-    hdrs.append('set-cookie', clearCookie(STATE_COOKIE));
-    hdrs.append('set-cookie', clearCookie(REDIRECT_COOKIE));
+    hdrs.append('set-cookie', clearCookie(cookieName(STATE_COOKIE, secure()), secure()));
+    hdrs.append('set-cookie', clearCookie(cookieName(REDIRECT_COOKIE, secure()), secure()));
     return new Response(null, { status: 302, headers: hdrs });
   }
 
