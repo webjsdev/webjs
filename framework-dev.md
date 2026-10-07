@@ -218,7 +218,9 @@ and a review rule would block every agent merge, so never add one.
 (`gh pr checks --required --watch`) and squash-merges with `--delete-branch
 --match-head-commit` only when they are green; with `--release` it first runs
 the release gate (`node scripts/release-gate.mjs`) on this machine. It never
-uses `--admin`. The same list still runs by hand: `scripts/ci.sh` wraps
+uses `--admin`. Check the live protection with `gh api
+repos/webjsdev/webjs/branches/main/protection --jq
+'.required_status_checks.contexts'`, which prints the six job names. The same list still runs by hand: `scripts/ci.sh` wraps
 `npm run ci` with a log under `${TMPDIR:-/tmp}/webjs-ci-<sha>/`, `--only A,B`,
 `--list`, `--quick`, `--release` and `--nightly` (the live jspm contract
 tests, network-bound). `.hooks/pre-push` is OFF by default; set
