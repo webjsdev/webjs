@@ -974,9 +974,22 @@ import { Pool } from 'pg';
 import * as schema from './schema.server.ts';
 
 // The only file that opens the driver. Cached on globalThis across dev reloads.
+// The pool relies on no session state (no SET, no LISTEN, no advisory locks
+// held across queries), so it also works behind a transaction pooler. Idle
+// connections close after 10 s; a database that is down fails a request in
+// 5 s instead of hanging it; DATABASE_POOL_MAX caps the pool (default 10).
 const g = globalThis as unknown as { __webjs_db?: unknown };
 function open() {
-  return drizzle({ client: new Pool({ connectionString: process.env.DATABASE_URL }), relations: schema.relations });
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    max: Number(process.env.DATABASE_POOL_MAX) || 10,
+    idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: 5_000,
+  });
+  // An idle connection the server drops (a restart, a failover) emits
+  // 'error' on the pool, and an unhandled one would crash the process.
+  pool.on('error', (err) => console.error('[db] idle connection lost:', err.message));
+  return drizzle({ client: pool, relations: schema.relations });
 }
 export const db = (g.__webjs_db ??= open()) as ReturnType<typeof open>;
 `;

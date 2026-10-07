@@ -730,6 +730,25 @@ test('scaffoldApp --db postgres: json<T>() helper maps to jsonb, one schema both
   }
 });
 
+test('scaffoldApp --db postgres: the pool fails fast and survives a dropped connection', async () => {
+  const cwd = await tempCwd();
+  const restore = muteConsole();
+  try {
+    await scaffoldApp('my-pg', cwd, { template: 'full-stack', db: 'postgres' });
+    const conn = readFileSync(join(cwd, 'my-pg', 'db', 'connection.server.ts'), 'utf8');
+    // Without a connect timeout a request hangs forever while the database is
+    // down, and without an 'error' listener an idle connection the server
+    // drops crashes the process.
+    assert.match(conn, /connectionTimeoutMillis: 5_000/, 'a database that is down fails a request in seconds');
+    assert.match(conn, /idleTimeoutMillis: 10_000/, 'idle connections are closed');
+    assert.match(conn, /max: Number\(process\.env\.DATABASE_POOL_MAX\) \|\| 10/, 'the pool size is capped and configurable');
+    assert.match(conn, /pool\.on\('error'/, 'an idle connection error is handled');
+  } finally {
+    restore();
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
 test('scaffoldApp --db postgres: the DATABASE_URL names a fold-stable database', async () => {
   const cwd = await tempCwd();
   const cap = captureConsole();

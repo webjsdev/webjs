@@ -89,6 +89,10 @@ The scaffold ships a matching Dockerfile per runtime: a Node image for the defau
 
 Both `node:sqlite` and `bun:sqlite` default `busy_timeout` to 0, so a contended write throws `database is locked` immediately. The generated connection sets `PRAGMA busy_timeout = 5000` plus `PRAGMA journal_mode = WAL` on the raw client before Drizzle wraps it, on both runtime branches, so you get a sane 5-second wait instead of an instant failure. This is already wired in the scaffold's `db/connection.server.ts`.
 
+## Postgres pool (`--db postgres`)
+
+A `--db postgres` app opens one `pg` Pool in `db/connection.server.ts`. It holds no session state between queries (no `SET`, `LISTEN`, or advisory lock kept across them), so the same code works behind a transaction pooler. Idle connections close after 10 seconds, a connection attempt gives up after 5 seconds (a database that is down fails the request instead of hanging it), `DATABASE_POOL_MAX` caps the pool (default 10), and an idle connection the server drops (a restart or failover) is logged rather than crashing the process. Keep it that way: do not add `SET` statements or session-scoped features to app code.
+
 ## Verifying a runtime-sensitive change
 
 Most app code needs no runtime-specific testing, because it does not touch a runtime seam. If you DO change something runtime-sensitive (the serializer, a stream, `node:crypto`, low-level request handling, anything that behaves differently under `Bun.serve` versus `node:http`), prove it on both runtimes. The Node suite is the source of truth, and an additive Bun matrix re-runs the runtime-sensitive tests under Bun. See `testing.md` for the cross-runtime matrix and the `test/bun/**` assertions.
