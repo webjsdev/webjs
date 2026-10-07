@@ -824,34 +824,25 @@ test('scaffoldApp: AGENTS.md build playbook is template-specific (#1076)', async
       assert.doesNotMatch(md, /\{\{PLAYBOOK\}\}|\{\{APP_NAME\}\}/, `${label}: no leftover placeholder`);
     }
 
-    // Shared rules on BOTH templates.
+    // Shared, required meta-rules on BOTH templates.
     for (const [label, md] of [['full-stack', fs], ['api', api]]) {
-      assert.match(md, /Read this whole file before you edit anything/, `${label}: read-first rule`);
+      assert.match(md, /Gather context BEFORE you build \(required\)/, `${label}: required context-gathering`);
+      assert.match(md, /Read the framework source for exact contracts/, `${label}: source-reading step`);
       assert.match(md, /Never reach for `any`/, `${label}: no-any strict typing`);
       assert.match(md, /npm run check/, `${label}: verification includes the check script`);
-      assert.match(md, /When you need more/, `${label}: routes rare surfaces to the reference set`);
       // No opt-out / permission-to-skip phrasing (the #1076 regression to
       // prevent; "only when a task needs" is the historical wording).
       assert.doesNotMatch(md, /do not have to read|only exploring|only (if|when) a task needs/i,
         `${label}: no opt-out phrasing`);
     }
 
-    // Full-stack carries the primer: build steps plus a worked example of every
-    // common pattern, so an agent builds straight from it instead of studying
-    // the gallery and the references first (the token-cost benchmark). The
-    // gallery is cleared first, never studied.
-    assert.match(fs, /### Build steps/, 'full-stack: ordered build steps');
-    assert.match(fs, /npm run gallery:clear/, 'full-stack: the gallery is cleared first');
-    assert.match(fs, /never read it/, 'full-stack: the gallery is not study material');
-    assert.doesNotMatch(fs, /Study the gallery|Gather context BEFORE/, 'full-stack: no study-first step');
-    for (const pattern of [
-      /\/\/ db\/schema\.server\.ts/, /createAuth\(/, /<form action=\$\{/, /actionData/,
-      /extends WebComponent\(\{/, /notFound\(\)/, /node:test/, /\.register\('/,
-    ]) assert.match(fs, pattern, `full-stack: worked example covers ${pattern}`);
+    // Full-stack teaches the UI playbook; the api template must NOT.
     assert.match(fs, /light-dark\(LIGHT, DARK\)/, 'full-stack: design-token mandate');
-    assert.match(fs, /npx webjsdev ui add/, 'full-stack: UI kit');
+    assert.match(fs, /Tier 2, custom elements/, 'full-stack: UI kit tier-2 discovery');
+    assert.match(fs, /multi-page app \(MPA\)/, 'full-stack: MPA structure');
     assert.match(fs, /position: fixed/, 'full-stack: fixed navbar');
-    for (const uiOnly of [/light-dark/, /ui add/, /position: fixed/]) {
+    assert.match(fs, /npm run css:build/, 'full-stack: css:build in the pipeline');
+    for (const uiOnly of [/light-dark/, /Tier 2/, /ui add/, /css:build/, /position: fixed/]) {
       assert.doesNotMatch(api, uiOnly, `api: no UI-only guidance (${uiOnly})`);
     }
 
@@ -864,8 +855,8 @@ test('scaffoldApp: AGENTS.md build playbook is template-specific (#1076)', async
 
     // The component guidance (WebComponent, reactive props) is UI-only, so it
     // lives in the full-stack playbook, never in the api AGENTS.md.
-    assert.match(fs, /WebComponent/, 'full-stack: component guidance');
-    assert.doesNotMatch(api, /WebComponent/,
+    assert.match(fs, /Build components for interactivity/, 'full-stack: component guidance');
+    assert.doesNotMatch(api, /Build components for interactivity|WebComponent/,
       'api: no component/reactive-props guidance');
 
     // The sibling agent-doc surfaces (CONVENTIONS.md, .agents/rules/workflow.md)

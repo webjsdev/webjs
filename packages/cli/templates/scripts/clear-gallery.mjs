@@ -147,8 +147,8 @@ for (const f of ['db/dev.db', 'db/dev.db-shm', 'db/dev.db-wal']) rm(f);
 // children before test/ so it reads as empty.
 for (const d of ['app/api', 'test/unit', 'test/e2e', 'test']) if (pruneEmpty(d)) removed++;
 
-console.log(`Gallery cleared (${removed} paths removed). The agent docs and your database wiring are kept.`);
-console.log('Next: follow the build steps in AGENTS.md (schema, then db:generate and db:migrate, then modules/ and app/).');
+console.log(`Gallery cleared (${removed} paths removed). The agent skill and your database wiring are kept. Build your own design system: run \`npx webjsdev ui add <name>\` and theme it (see .agents/skills/webjs/references/styling.md).`);
+console.log('Next: regenerate the database (db:generate then db:migrate), then start the dev server and build your app in app/ and modules/.');
 
 function MINIMAL_PAGE() {
   return `import { html } from '@webjsdev/core';
@@ -163,7 +163,7 @@ export default function Home() {
       <h1 class="text-4xl font-bold tracking-tight m-0">Your app</h1>
       <p class="text-base leading-relaxed m-0 opacity-70">
         The gallery is cleared. This is <code class="text-[0.9em]">app/page.ts</code>. Build your
-        app from here. The guide is <code class="text-[0.9em]">AGENTS.md</code>.
+        app from here. The guide is <code class="text-[0.9em]">.agents/skills/webjs/SKILL.md</code>.
       </p>
       <nav class="flex items-center gap-5 text-sm opacity-70">
         <a href="https://webjs.dev/docs" target="_blank" rel="noopener" class="hover:opacity-100 transition-opacity no-underline">Docs</a>
