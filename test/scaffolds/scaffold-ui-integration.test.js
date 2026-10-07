@@ -75,6 +75,17 @@ test('full-stack scaffold pre-initialises the Webjs UI kit', async () => {
     const inputCss = await readFile(join(appDir, 'public', 'input.css'), 'utf8');
     assert.match(inputCss, /@import "tailwindcss"/, 'input.css imports Tailwind');
     assert.match(inputCss, /color-primary/, 'input.css carries the @theme color maps');
+    // Every fluid --text-<name> size carries its --text-<name>--line-height
+    // companion. Tailwind v4's text-<name> utility emits
+    // `line-height: var(--tw-leading, var(--text-<name>--line-height))`, so a
+    // size without one resolves to an invalid value and the heading falls back
+    // to the body's 1.6 line height, opening huge gaps between lines (#1541).
+    const sizes = [...inputCss.matchAll(/^\s*--text-([a-z0-9-]+?):\s*clamp\(/gm)].map((m) => m[1]);
+    assert.deepEqual(sizes, ['display', 'h1', 'h2', 'lede'], 'the scaffold defines the fluid type scale');
+    for (const name of sizes) {
+      assert.match(inputCss, new RegExp(`--text-${name}--line-height:\\s*[0-9.]+;`),
+        `--text-${name} carries its line-height companion`);
+    }
     assert.match(layout, /--primary:\s*light-dark\(#[0-9a-f]{6}, #[0-9a-f]{6}\)/i, 'the palette VALUES stay inline via light-dark() (JS-off safe)');
   } finally {
     await rm(cwd, { recursive: true, force: true });
