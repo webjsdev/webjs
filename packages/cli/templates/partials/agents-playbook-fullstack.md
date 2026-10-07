@@ -240,6 +240,29 @@ export async function updatePost(fd: FormData) {
 // create: const [post] = await db.insert(posts).values({ ...v.data, ownerId: user.id }).returning(); then redirect to `/posts/${post.id}`
 ```
 
+File uploads use the built-in `FileStore` (bytes under `.webjs/uploads`,
+outside the watched source, never `public/`). The bound form posts the file
+in its `FormData`; store the key and the original name on the row, and serve
+it from a `route.ts` that checks access:
+
+```ts
+// in the action: import { getFileStore, generateKey } from '@webjsdev/server';
+const file = fd.get('attachment');
+if (file instanceof File && file.size > 5 * 1024 * 1024) return { success: false, fieldErrors: { attachment: 'File must be 5 MB or smaller.' } };
+const fileKey = file instanceof File && file.size ? generateKey(file.name) : null;
+if (fileKey) await getFileStore().put(fileKey, file as File);
+// save { fileKey, fileName: (file as File).name } with the row
+
+// app/files/[key]/route.ts
+import { getFileStore } from '@webjsdev/server';
+export async function GET(_req: Request, { params }: { params: { key: string } }) {
+  const row = await findFile(params.key); // your server-only lookup: the row with this key the user may see (auth(req) in a route)
+  const f = row && (await getFileStore().get(params.key));
+  if (!f) return new Response('Not found', { status: 404 });
+  return new Response(f.body as ReadableStream, { headers: { 'content-type': 'application/octet-stream', 'content-disposition': `attachment; filename="${encodeURIComponent(row.fileName)}"`, 'x-content-type-options': 'nosniff' } });
+}
+```
+
 A component calls an RPC action with a typed object; the action checks the
 user and the input and returns a result (never throws or redirects), for
 example `setPostStatus(input: { id: number; status: PostStatus })` returning
