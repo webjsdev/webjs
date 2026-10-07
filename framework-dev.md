@@ -220,10 +220,10 @@ network-bound, so never part of the gate). `scripts/ci-merge.sh <N>` runs the
 list on the PR head (here when this checkout is that head, clean and a real
 install, otherwise in a throwaway worktree with its own `npm ci`), posts the
 `local-ci` commit status, and squash-merges with `--delete-branch
---match-head-commit` only when green. `main` requires `local-ci` plus one
-CODEOWNER approval (`scripts/protect-main.sh`); a solo maintainer cannot
-approve their own PR, so ci-merge retries with `--admin` only when the review
-is the one thing left blocking, after the green run on that exact head.
+--match-head-commit` only when green. `main` requires the `local-ci`
+status and NO review (`scripts/protect-main.sh`): the owner reviews outside
+the merge path, and a review rule would block every agent merge, so never add
+one. ci-merge never uses `--admin`.
 `.hooks/pre-push` runs the quick subset (`scripts/ci.sh --quick`: setup, conventions, the Node suite, about a minute) on every push of a branch with an open
 PR, unless every changed file is `*.md`, `docs/**` or `blog/**`. A later push
 has no `local-ci` until the list runs on it again, so a stale green never

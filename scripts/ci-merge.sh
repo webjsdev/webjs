@@ -18,10 +18,9 @@
 #      required check on main.
 #   4. On success only: gh pr merge --squash --delete-branch
 #      --match-head-commit <sha>, so a push that lands after the run cannot
-#      be merged on its verdict. When the only thing left blocking is the
-#      CODEOWNER review requirement (a solo maintainer cannot approve their
-#      own PR), it retries with --admin, which is the one bypass AGENTS.md
-#      allows: CI is proven green on this exact head a moment earlier.
+#      be merged on its verdict. Never --admin: main requires the local-ci
+#      status and no review (scripts/protect-main.sh), so anything else
+#      blocking the merge is a real problem to report, not to bypass.
 #   5. After the merge, start scripts/purge-cdn.sh for the merge commit in
 #      the background (it waits for the website's Railway deploy, then purges
 #      webjs.dev), when CLOUDFLARE_API_TOKEN is set. This was purge-cdn.yml.
@@ -99,12 +98,7 @@ echo "ci-merge: local CI passed; merging #$pr"
 
 if ! out="$(gh pr merge "$pr" --squash --delete-branch --match-head-commit "$sha" 2>&1)"; then
   echo "$out" >&2
-  if printf '%s' "$out" | grep -qiE 'review|approv'; then
-    echo "ci-merge: only the review requirement blocks it and CI is green on this head; merging with --admin" >&2
-    gh pr merge "$pr" --squash --delete-branch --match-head-commit "$sha" --admin
-  else
-    exit 1
-  fi
+  exit 1
 else
   printf '%s\n' "$out"
 fi
