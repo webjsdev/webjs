@@ -20,7 +20,7 @@
  */
 import { sitemap as sitemapXml, robots as robotsTxt } from './sitemap.js';
 import { isUrlSegment } from './router.js';
-import { devImportSpecifier } from './dev-import.js';
+import { devImport } from './dev-import.js';
 import { siteUrlFromEnv } from './ssr/seo.js';
 import { basePath } from './importmap.js';
 import { withBasePath } from './base-path.js';
@@ -42,7 +42,7 @@ async function isNoindex(files, dev) {
   let robots;
   for (const file of files) {
     try {
-      const mod = await import(devImportSpecifier(file, dev));
+      const mod = await devImport(file, dev);
       if (mod.metadata && typeof mod.metadata === 'object' && mod.metadata.robots !== undefined) {
         robots = mod.metadata.robots;
       }
@@ -120,7 +120,7 @@ export async function listPages(routeTable, { siteUrl, dev }) {
     }
     let mod;
     try {
-      mod = await import(devImportSpecifier(page.file, dev));
+      mod = await devImport(page.file, dev);
     } catch {
       continue;
     }
@@ -167,7 +167,7 @@ function absoluteEntries(entries, siteUrl) {
  * @returns {Promise<Response | null>} null when the module has no default export
  */
 export async function runMetadataRoute(meta, { req, url, path, dev, routeTable }) {
-  const mod = await import(devImportSpecifier(meta.file, dev));
+  const mod = await devImport(meta.file, dev);
   if (typeof mod.default !== 'function') return null;
   const siteUrl = siteUrlFromEnv() || url.origin;
   const ctx = {

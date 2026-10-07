@@ -1,5 +1,5 @@
 import { makeThenable } from './thenable-params.js';
-import { devImportSpecifier } from './dev-import.js';
+import { devImport } from './dev-import.js';
 
 /**
  * Dispatch an incoming request to a matched API route.
@@ -14,7 +14,7 @@ import { devImportSpecifier } from './dev-import.js';
  * @returns {Promise<Response>}
  */
 export async function handleApi(route, params, webRequest, dev) {
-  const mod = await import(devImportSpecifier(route.file, dev));
+  const mod = await devImport(route.file, dev);
   const method = webRequest.method.toUpperCase();
   const handler = mod[method];
   if (!handler) {

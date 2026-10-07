@@ -46,7 +46,29 @@ export const WATCH_DIRS = ['app', 'components', 'modules', 'lib', 'actions'];
  * never restarts the dev server when edited, which is the quiet half of the
  * bug where a `middleware.ts` was loaded by neither.
  */
-export const WATCH_FILES = ['middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs'];
+export const WATCH_FILES = ['middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs', ...bootFiles()];
+
+/**
+ * The app-root boot hooks the server runs ONCE per process (#1575):
+ * `instrumentation.*` (its `register()`) and `env.*` (the env validation). An
+ * edit to one restarts the dev server on either runtime, because no in-place
+ * reload re-runs them.
+ * @returns {string[]}
+ */
+function bootFiles() {
+  return ['instrumentation', 'env'].flatMap((n) => ['ts', 'js', 'mts', 'mjs'].map((x) => `${n}.${x}`));
+}
+
+const BOOT_FILE = /^(?:instrumentation|env)\.m?[jt]s$/;
+
+/**
+ * Whether a changed (app-relative) path is a boot hook (see `bootFiles`).
+ * @param {string} path
+ * @returns {boolean}
+ */
+export function isBootFile(path) {
+  return BOOT_FILE.test(path);
+}
 
 /**
  * Plan how `webjs dev` runs its server.
@@ -56,7 +78,7 @@ export const WATCH_FILES = ['middleware.ts', 'middleware.js', 'middleware.mts', 
  * @param {string[]} opts.argv  `process.argv.slice(1)` (the script path followed by its args), forwarded to the child verbatim.
  * @param {boolean} opts.noHot  Whether `--no-hot` was passed (opt out of the supervisor entirely).
  * @param {boolean} [opts.sourceLocations]  Whether dev source locations are on (`WEBJS_SOURCE_LOCATIONS` / `webjs.dev.sourceLocations`), which puts every app module behind a Bun plugin.
- * @returns {{ mode: 'inline' } | { mode: 'supervise', args: string[], restartOnChange: boolean, restartFor?: (path: string) => boolean, watchDirs: string[], watchFiles: string[] }}
+ * @returns {{ mode: 'inline' } | { mode: 'supervise', args: string[], restartOnChange: boolean, restartFor?: (path: string) => boolean, inPlaceRestartFor?: (path: string) => boolean, watchDirs: string[], watchFiles: string[] }}
  *   `inline` runs the server in this process (no reload watcher); `supervise`
  *   spawns `process.execPath` with `args` and `__WEBJS_DEV_CHILD=1` under the
  *   supervisor, which watches `watchDirs` (recursively) and `watchFiles` (at
@@ -71,7 +93,20 @@ export function planDevSupervisor({ isBun, argv, noHot, sourceLocations = false 
   if (noHot) return { mode: 'inline' };
 
   const watch = { watchDirs: [...WATCH_DIRS], watchFiles: [...WATCH_FILES] };
-  if (isBun) return { mode: 'supervise', args: ['--hot', ...argv], restartOnChange: true, restartFor: bunPluginServed(sourceLocations), ...watch };
+  if (isBun) {
+    // `restartFor` covers a server that cannot reload a plugin-served module in
+    // place. A server that can says so over IPC once it is up (#1575), and the
+    // supervisor narrows to `inPlaceRestartFor`: only the boot hooks restart.
+    const plugin = bunPluginServed(sourceLocations);
+    return {
+      mode: 'supervise',
+      args: ['--hot', ...argv],
+      restartOnChange: true,
+      restartFor: (p) => plugin(p) || isBootFile(p),
+      inPlaceRestartFor: isBootFile,
+      ...watch,
+    };
+  }
   return { mode: 'supervise', args: [...argv], restartOnChange: true, ...watch };
 }
 

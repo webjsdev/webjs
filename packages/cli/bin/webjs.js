@@ -456,6 +456,12 @@ async function refuseOutsideApp(command) {
 }
 
 async function main() {
+  // A `bun --hot` re-run of the dev server child (#1575): the first run's
+  // server owns the process, so hand it the reload and stop here.
+  if (cmd === 'dev' && process.env.__WEBJS_DEV_CHILD === '1' && process.versions.bun) {
+    const { rerunHotDevServer } = await import('../lib/dev-hot-rerun.js');
+    if (await rerunHotDevServer()) return;
+  }
   // `--version` / `-v` (top level): print the installed CLI version and exit.
   if (cmd === '--version' || cmd === '-v') {
     console.log(readCliVersion());
@@ -526,7 +532,11 @@ async function main() {
         // parent is gone (killed outright, or crashed), and a child left
         // running would hold the port against the next `webjs dev`. Unref'd
         // so the channel itself never keeps this process alive.
-        if (process.connected) {
+        // Once per process: `bun --hot` re-runs this file on every edit
+        // (#1575), and each run used to add another listener.
+        const g = /** @type {any} */ (globalThis);
+        if (process.connected && !g.__webjsDevDisconnectHooked) {
+          g.__webjsDevDisconnectHooked = true;
           process.channel?.unref?.();
           process.on('disconnect', () => process.exit(0));
         }

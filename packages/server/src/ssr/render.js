@@ -17,7 +17,7 @@ import { escapeHtml } from './escape.js';
 import {
   cachedHtmlResponse, getNonce, htmlResponse, streamingHtmlResponse,
 } from './responses.js';
-import { devImportSpecifier } from '../dev-import.js';
+import { devImport } from '../dev-import.js';
 import { applySeoDefaults } from './seo.js';
 
 
@@ -108,7 +108,7 @@ export function privateFragment(res) {
  * @param {boolean} dev
  */
 async function loadModule(file, dev) {
-  return import(devImportSpecifier(file, dev));
+  return devImport(file, dev);
 }
 
 /**

@@ -34,7 +34,7 @@ import { versionModuleImports, withAssetHash } from '../asset-hash.js';
 import { toUrlPath } from '../ssr/preloads.js';
 import { BUFFERED_MARKER } from '../conditional-get.js';
 import { MIME, TS_CACHE_MAX, exists, reloadClientJs, reloadWorkerJs } from './helpers.js';
-import { devImportSpecifier } from '../dev-import.js';
+import { devImport } from '../dev-import.js';
 import { runMetadataRoute } from '../metadata-routes.js';
 
 /**
@@ -573,7 +573,7 @@ export async function runWithSegmentMiddleware(req, files, terminal, dev) {
   const handlers = [];
   for (const f of files) {
     try {
-      const mod = await import(devImportSpecifier(f, dev));
+      const mod = await devImport(f, dev);
       if (typeof mod.default === 'function') handlers.push(mod.default);
     } catch {
       // Bad middleware file: skip; top-level error handler will catch real problems.
@@ -617,7 +617,7 @@ export async function loadMiddleware(appDir, dev, logger) {
   }
   if (!file) return null;
   try {
-    const mod = await import(devImportSpecifier(file, dev));
+    const mod = await devImport(file, dev);
     return typeof mod.default === 'function' ? mod.default : null;
   } catch (e) {
     logger.error('failed to load root middleware', { file, err: String(e) });

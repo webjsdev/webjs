@@ -33,7 +33,7 @@
  */
 import { join } from 'node:path';
 import { stat } from 'node:fs/promises';
-import { devImportSpecifier } from './dev-import.js';
+import { devImport } from './dev-import.js';
 
 /** Field type names a schema may declare. */
 const KNOWN_TYPES = new Set(['string', 'number', 'boolean', 'url', 'enum']);
@@ -223,7 +223,7 @@ export async function loadEnvSchema(appDir, opts = {}) {
     }
   }
   if (!file) return null;
-  const mod = await import(devImportSpecifier(file, Boolean(opts.dev)));
+  const mod = await devImport(file, Boolean(opts.dev));
   return mod.default ?? null;
 }
 

@@ -22,13 +22,13 @@ test('outside dev the specifier is the file URL, with no query', () => {
 });
 
 test('in dev on Node the query rides the file URL', () => {
-  const s = devImportSpecifier(FILE, true, { bun: false, now: () => 42 });
-  assert.match(s, /^file:\/\/\/srv\/app\/app\/page\.ts\?t=42-[a-z0-9]+$/);
+  const s = devImportSpecifier(FILE, true, { bun: false, version: () => 'v42' });
+  assert.equal(s, 'file:///srv/app/app/page.ts?t=v42');
 });
 
 test('in dev on Bun the query rides the plain path', () => {
-  const s = devImportSpecifier(FILE, true, { bun: true, now: () => 42 });
-  assert.match(s, /^\/srv\/app\/app\/page\.ts\?t=42-[a-z0-9]+$/);
+  const s = devImportSpecifier(FILE, true, { bun: true, version: () => 'v42' });
+  assert.equal(s, '/srv/app/app/page.ts?t=v42');
 });
 
 test('on Bun a path that already holds ? or # falls back to the file URL', () => {
@@ -37,8 +37,24 @@ test('on Bun a path that already holds ? or # falls back to the file URL', () =>
   }
 });
 
-test('two specifiers for the same file differ', () => {
-  assert.notEqual(devImportSpecifier(FILE, true, { bun: true, now: () => 1 }), devImportSpecifier(FILE, true, { bun: true, now: () => 1 }));
+test('the query names the content: same bytes, same specifier; new bytes, a new one (#1575)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'webjs-dev-import-'));
+  try {
+    const file = join(dir, 'm.mjs');
+    writeFileSync(file, 'export default "a1";\n');
+    const first = devImportSpecifier(file, true);
+    // A random query per call made every request a new, never-freed module.
+    assert.equal(devImportSpecifier(file, true), first);
+    // Same length, written immediately: a coarse mtime cannot tell these apart.
+    writeFileSync(file, 'export default "a2";\n');
+    assert.notEqual(devImportSpecifier(file, true), first);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('an unreadable file gets a unique specifier each call', () => {
+  assert.notEqual(devImportSpecifier('/nope/x.ts', true, { bun: true }), devImportSpecifier('/nope/x.ts', true, { bun: true }));
 });
 
 test('a re-import through the helper sees an edit on this runtime', async () => {

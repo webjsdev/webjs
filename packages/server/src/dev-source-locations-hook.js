@@ -105,6 +105,13 @@ export function registerSourceLocationHook(appDir) {
   if (_roots.has(appDir)) return _installed;
   _roots.add(appDir);
   if (serverRuntime() === 'bun') {
+    // Once per root per PROCESS (#1575): `bun --hot` re-runs this module with
+    // an empty `_roots`, and a `Bun.plugin` cannot be unregistered.
+    const g = /** @type {any} */ (globalThis);
+    const key = Symbol.for('webjs.sourceLocations.bunRoots');
+    if (!(g[key] instanceof Set)) g[key] = new Set();
+    if (g[key].has(appDir)) { _installed = true; return _installed; }
+    g[key].add(appDir);
     // One plugin per root, each with a filter that can never match a
     // `node_modules` or `*.server.*` path (see the module comment).
     const filter = new RegExp(

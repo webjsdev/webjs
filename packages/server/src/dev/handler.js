@@ -1,7 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { registerBunAliasResolver } from './bun-alias-resolve.js';
+import { registerBunAppSource } from './bun-app-source.js';
+import { serverRuntime } from '../listener-core.js';
 import { createHash } from 'node:crypto';
-import { join, resolve, sep } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 
 // Server-side `.ts` imports are handled natively by Node 24+'s default
 // type-stripping (`process.features.typescript === 'strip'`) or by Bun. The
@@ -30,7 +33,7 @@ import { mintNonce, buildCspHeader, cspHeaderName } from '../csp.js';
 import { propagateTrustedRemoteIp } from '../rate-limit.js';
 import { reachedBareImports, resolveVendorImports, clearVendorCache, hasVendorPin, readPinFile, prunePinToReachable } from '../vendor.js';
 import { browserEntryFiles } from '../browser-entries.js';
-import { buildModuleGraph, seenFilesFor, appImportsMap, reachableFromEntries, resolveImport } from '../module-graph.js';
+import { buildModuleGraph, dynamicEdges, seenFilesFor, appImportsMap, reachableFromEntries, resolveImport } from '../module-graph.js';
 import { primeComponentRegistry, findOrphanComponents, scanComponents } from '../component-scanner.js';
 import { analyzeElision, lazyComponentFiles, bindingImportedLazyFiles } from '../component-elision.js';
 
@@ -72,7 +75,7 @@ import {
 import {
   handleCore, loadMiddleware, tryServeFrameworkStatic, tryServePublicAsset,
 } from './serve.js';
-import { devImportSpecifier } from '../dev-import.js';
+import { devImport } from '../dev-import.js';
 
 /**
  * A short content digest of a single file's bytes for the app-source deploy
@@ -297,6 +300,12 @@ export async function createRequestHandler(opts) {
   // what a bound `<form action=${action}>` resolves through, so gating the hook
   // on seeding would mean `webjs.seed: false` silently broke every no-JS form.
   await registerActionHooks({ seed: await readSeedEnabled(appDir), dev });
+  // Bun's resolver keeps a stale directory listing for a `#` import under
+  // `bun --hot` (#1575); resolve the app's aliases ourselves in dev.
+  if (dev && serverRuntime() === 'bun') {
+    registerBunAliasResolver(appDir);
+    try { const real = realpathSync(appDir); if (real !== appDir) registerBunAliasResolver(real); } catch { /* appDir only */ }
+  }
 
   // Dev source locations (#1499): `WEBJS_SOURCE_LOCATIONS=1` (or
   // `webjs.dev.sourceLocations: true`) under `webjs dev`
@@ -311,6 +320,13 @@ export async function createRequestHandler(opts) {
     registerSourceLocationHook(appDir);
     // Module URLs are realpaths, so a symlinked app dir registers both forms.
     try { const real = realpathSync(appDir); if (real !== appDir) registerSourceLocationHook(real); } catch { /* keep appDir only */ }
+  }
+  // Bun under `bun --hot` serves a replaced file's old source forever (#1575):
+  // load app modules through a plugin that reads them fresh. After the
+  // source-locations plugin, so that one wins when it is on.
+  if (dev && serverRuntime() === 'bun') {
+    registerBunAppSource(appDir);
+    try { const real = realpathSync(appDir); if (real !== appDir) registerBunAppSource(real); } catch { /* appDir only */ }
   }
 
   // When an app commits a vendor pin (.webjs/vendor/importmap.json) it carries a
@@ -370,6 +386,7 @@ export async function createRequestHandler(opts) {
   // developer remembering to run `webjs types`. Best-effort and fire-and-
   // forget: a failure logs and never blocks boot. Re-emitted after each route
   // rebuild (see doRebuild) so adding/removing a route refreshes the types.
+  let routeTypesTmpSeq = 0;
   /** @returns {Promise<void>} */
   async function emitRouteTypes() {
     try {
@@ -382,7 +399,9 @@ export async function createRequestHandler(opts) {
       // is atomic within the same dir. Both paths sit under the watcher-ignored
       // .webjs/, so neither the temp write nor the rename re-triggers a rebuild.
       const dest = join(outDir, 'routes.d.ts');
-      const tmp = join(outDir, `routes.d.ts.${process.pid}.tmp`);
+      // pid AND a counter (#1575): two rebuilds in one process used to share
+      // one temp name, so the second rename failed with ENOENT.
+      const tmp = join(outDir, `routes.d.ts.${process.pid}.${++routeTypesTmpSeq}.tmp`);
       await writeFile(tmp, text);
       await rename(tmp, dest);
     } catch (e) {
@@ -858,7 +877,7 @@ export async function createRequestHandler(opts) {
     }
     if (!file) { readinessFn = null; return null; }
     try {
-      const mod = await import(devImportSpecifier(file, dev));
+      const mod = await devImport(file, dev);
       readinessFn = typeof mod.default === 'function' ? mod.default : null;
     } catch (e) {
       logger.error?.(`[webjs] failed to load readiness.{js,ts}`, { err: String(e) });
@@ -878,9 +897,11 @@ export async function createRequestHandler(opts) {
    *   classification of the change that triggered this rebuild (#1398). Absent
    *   (an embedded host calling `rebuild()`, or any caller with no filename to
    *   classify) means a full reload, which is the fail-safe default.
+   * @param {{ notify?: boolean }} [rebuildOpts] `notify: false` re-derives
+   *   without a reload frame (a `bun --hot` registry reset, #1575).
    */
-  async function rebuild(verdict) {
-    rebuildInFlight = rebuildInFlight.then(() => doRebuild(verdict)).catch((e) => {
+  async function rebuild(verdict, { notify = true } = {}) {
+    rebuildInFlight = rebuildInFlight.then(() => doRebuild(verdict, notify)).catch((e) => {
       logger.error?.(`[webjs] rebuild failed:`, e);
       // Push the failure to the open tab so the overlay appears live after a
       // breaking edit, not only on the next manual navigation (#264).
@@ -889,8 +910,13 @@ export async function createRequestHandler(opts) {
     return rebuildInFlight;
   }
 
-  /** @param {import('../dev-classify.js').ReloadVerdict} [verdict] */
-  async function doRebuild(verdict) {
+  /**
+   * @param {import('../dev-classify.js').ReloadVerdict} [verdict]
+   * @param {boolean} [notify] tell the open tabs (`onReload`). False for the
+   *   re-derive a `bun --hot` re-run asks for (#1575), whose edit the watcher
+   *   already announced.
+   */
+  async function doRebuild(verdict, notify = true) {
     // The route table is the only eager artifact (cheap directory scan); rebuild
     // it so routing reflects added/removed route files immediately.
     state.routeTable = await buildRouteTable(appDir);
@@ -934,7 +960,7 @@ export async function createRequestHandler(opts) {
     // reloads every open tab, and if the underlying error is still present the
     // reloaded request re-pushes a fresh frame (a brief dismiss-then-reappear
     // flicker on an unrelated edit, self-correcting to the right end state).
-    state.lastDevError = null;
+    if (notify) state.lastDevError = null;
     // The verdict was computed against the PREVIOUS build's graph, because this
     // rebuild only INVALIDATES the lazy analysis (`analysisDone = false` above)
     // and the fresh graph is not built until the next request. Awaiting
@@ -945,7 +971,25 @@ export async function createRequestHandler(opts) {
     // an otherwise morphable page, is closed on the CLIENT: `addNewHeadElements`
     // runs on both boundary tiers and swaps in the changed boot script, which
     // executes and registers the new component.
-    opts.onReload?.(verdict || { v: 'reload', by: '', why: 'no-verdict' });
+    if (notify) opts.onReload?.(verdict || { v: 'reload', by: '', why: 'no-verdict' });
+  }
+
+  /** A routing-convention module under `app/`, which only the router loads. */
+  const ROUTE_MODULE_FILE = /^app\/(?:.*\/)?(?:page|layout|route|loading|error|not-found|forbidden|unauthorized|global-error|global-not-found|middleware)\.m?[jt]s$/;
+  /** @type {WeakMap<object, Set<string>>} every file some app module imports, per graph */
+  const importedFilesCache = new WeakMap();
+  /**
+   * @param {Map<string, Set<string>>} graph
+   * @returns {Set<string>}
+   */
+  function importedFilesOf(graph) {
+    let set = importedFilesCache.get(graph);
+    if (set) return set;
+    set = new Set();
+    for (const deps of graph.values()) for (const d of deps) set.add(d);
+    for (const deps of dynamicEdges(graph).values()) for (const d of deps) set.add(d);
+    importedFilesCache.set(graph, set);
+    return set;
   }
 
   /** @param {Request} req */
@@ -1410,6 +1454,27 @@ export async function createRequestHandler(opts) {
      * @param {string} [root]  the watched root, defaulting to the app dir
      * @returns {import('../dev-classify.js').ReloadVerdict}
      */
+    /**
+     * Whether an edit to this path needs the runtime's module registry reset
+     * (#1575), the `bun --hot` re-run `startServer` pokes for. A module no
+     * other app module imports is only ever loaded through `devImport`, whose
+     * specifier names the file's content, so its edit is a new specifier and
+     * needs nothing reset. Anything imported by another module, a file the last
+     * analysis never saw (a new file may be the target of an import that
+     * failed), or any edit before the first analysis does.
+     *
+     * @param {string} filename  relative to `root`
+     * @param {string} [root]  the watched root, defaulting to the app dir
+     * @returns {boolean}
+     */
+    needsRegistryReset: (filename, root) => {
+      const abs = resolve(root || appDir, filename);
+      if (!analysisEverDone) return true;
+      // A new routing file (a page, layout, route handler, boundary) is only
+      // ever loaded by the router, and nothing can have tried to import it yet.
+      if (!state.graphFiles.has(abs)) return !ROUTE_MODULE_FILE.test(relative(appDir, abs).split(sep).join('/'));
+      return importedFilesOf(state.moduleGraph).has(abs);
+    },
     classifyWatchPath: (filename, root) => classifyChangedPath(resolve(root || appDir, filename), {
       appDir,
       shippedFiles: state.shippedFiles,
