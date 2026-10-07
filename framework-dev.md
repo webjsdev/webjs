@@ -359,6 +359,16 @@ The first three attempts were a STATIC scan over test sources, and each went bli
 
 ---
 
+### Release gate: run it before every publish (`node scripts/release-gate.mjs`)
+
+**No `@webjsdev/*` release merges until the release gate passes.** 0.8.85 and 0.8.86 shipped with green unit suites and still broke real Bun apps (a dynamic `#` import of a server module 500'd every project page in Crisp; a bound form action failed after any edit), because nothing ran the PACKED packages inside a real app. The gate does:
+
+1. the suites: `npm test` (Node) and `node scripts/run-bun-tests.js` (Bun); run `npm run test:browser` too;
+2. a fresh `webjs create --db postgres` app on Bun AND Node with the candidate packed by `npm pack` (core's `dist` is rebuilt first): every static page renders, sign up and log in, a bound `<form action=${fn}>`, `headers()` request context, a `*.server.ts` with relative imports reached statically and through `await import('#...')`, then the agent-style reload stress (`scripts/dev-reload-stress.mjs`) and every check again after the edits, then `webjs check` and `webjs typecheck`;
+3. with `--crisp <crisp>/apps/web`, the downstream smoke: the candidate swapped into Crisp's install (restored after), Crisp's server and browser suites, and a fresh `bun run dev` loading `/`, `/dashboard`, the provisioning module chain, a server action (`createProject`) and `/projects/<id>`, before and after an edit (`GATE_CRISP_PROVISION=1` also waits for a real project to provision).
+
+It needs a Postgres at `GATE_PG` (default `postgres://crisp:crisp@localhost:5432`) and creates and drops its own databases. Paste its summary into the release PR. **If a release is found broken after publish, deprecate it at once** (`npm deprecate @webjsdev/<pkg>@<version> "<why>; use <good version>"`) and ship the fix through the gate.
+
 ### Changelog: per-package, per-version, auto-generated
 
 WebJs ships per-package per-version changelogs under `changelog/<pkg>/<version>.md`. The model: **a version bump is the trigger**. When any commit on `main` changes the `version` field in `packages/<pkg>/package.json`, the scripts/backfill-changelog.js generator emits a new `changelog/<pkg>/<version>.md` summarising every conventional-commit (`feat:` / `fix:` / `breaking:` / `perf:`) that landed in that package since the prior bump. The website renders the union of all packages' files at `/changelog`.
