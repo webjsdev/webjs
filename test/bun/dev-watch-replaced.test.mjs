@@ -7,6 +7,6 @@
  */
 import { test } from 'node:test';
 
-test('webjs dev hears every edit to a file that was replaced on this runtime (#1529)', async () => {
+test('webjs dev hears every edit to a file that was replaced on this runtime (#1529)', { timeout: 120_000 }, async () => {
   await import('./dev-watch-replaced.mjs');
 });

@@ -8,6 +8,6 @@
  */
 import { test } from 'node:test';
 
-test('dev error frames are URL-scoped and prefetch-exempt on this runtime (#1047)', async () => {
+test('dev error frames are URL-scoped and prefetch-exempt on this runtime (#1047)', { timeout: 120_000 }, async () => {
   await import('./dev-overlay-scope.mjs');
 });

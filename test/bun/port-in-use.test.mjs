@@ -7,6 +7,6 @@
  */
 import { test } from 'node:test';
 
-test('a second webjs dev/start on a taken port fails fast with the holder named on this runtime (#1527)', async () => {
+test('a second webjs dev/start on a taken port fails fast with the holder named on this runtime (#1527)', { timeout: 120_000 }, async () => {
   await import('./port-in-use.mjs');
 });

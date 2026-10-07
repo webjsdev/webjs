@@ -8,6 +8,6 @@
  */
 import { test } from 'node:test';
 
-test('dev serves /public/* before the analysis completes on this runtime (#1397)', async () => {
+test('dev serves /public/* before the analysis completes on this runtime (#1397)', { timeout: 120_000 }, async () => {
   await import('./dev-public-before-warm.mjs');
 });

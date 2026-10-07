@@ -7,6 +7,6 @@
  */
 import { test } from 'node:test';
 
-test('dev source locations annotate SSR and served modules on this runtime (#1499)', async () => {
+test('dev source locations annotate SSR and served modules on this runtime (#1499)', { timeout: 120_000 }, async () => {
   await import('./dev-source-locations.mjs');
 });

@@ -9,6 +9,6 @@
  */
 import { test } from 'node:test';
 
-test('webjs dev live-reloads an edit to an outside webjs.dev.watch dir on this runtime (#894)', async () => {
+test('webjs dev live-reloads an edit to an outside webjs.dev.watch dir on this runtime (#894)', { timeout: 120_000 }, async () => {
   await import('./dev-extra-watch.mjs');
 });

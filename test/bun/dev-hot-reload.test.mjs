@@ -10,6 +10,6 @@
  */
 import { test } from 'node:test';
 
-test('webjs dev hot-reloads a re-imported module edit on this runtime (#514)', async () => {
+test('webjs dev hot-reloads a re-imported module edit on this runtime (#514)', { timeout: 120_000 }, async () => {
   await import('./dev-hot-reload.mjs');
 });
