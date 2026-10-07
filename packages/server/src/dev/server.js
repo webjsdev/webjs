@@ -273,7 +273,9 @@ export async function startServer(opts) {
   // shells via listener-core.js, so live-reload + the dev error overlay behave
   // identically on both). Built before the handler so its onReload / onDevError
   // callbacks can fan out through it.
-  const hub = new SseHub();
+  // A Bun hot host, or a server outside the dev supervisor (`--no-hot`, an
+  // embedder), applies an edit in place; a supervised Node child is restarted.
+  const hub = new SseHub({ inPlace: dev && (!!hotKey || process.env.__WEBJS_DEV_CHILD !== '1') });
   // Pages render the stream's state into a meta tag (#1516), so the relay can
   // re-check a page against the server on every reconnect.
   if (dev) setDevReloadState(() => ({ boot: DEV_BOOT_ID, seq: hub.seq }));

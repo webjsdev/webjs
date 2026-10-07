@@ -37,6 +37,18 @@
 export const RELOAD_QUIET_MS = 2000;
 
 /**
+ * The quiet window for a batch made only of in-process frames from a server
+ * that reloads IN PLACE (#1575): Bun's one long-lived dev server, or any
+ * `--no-hot` server. No restart follows such a frame, so nothing is worth
+ * waiting 2000ms for, and that wait was most of the save-to-paint time (3.8s
+ * measured in a hosted preview). 300ms still folds a save's few frames and a
+ * quick burst into one reload. A batch holding any restart signal (a changed
+ * boot id, a stale page, a frame from a restarting server) keeps the full
+ * `RELOAD_QUIET_MS`, since the restarted process is still warming.
+ */
+export const RELOAD_QUIET_IN_PLACE_MS = 300;
+
+/**
  * The longest a reload is ever held, measured from the FIRST signal of a batch
  * (#1397). A quiet window alone would freeze the page on stale content for a
  * whole agent burst, so a sustained burst still repaints at least this often.
@@ -116,6 +128,19 @@ export function pageIsStale(page, boot, seq) {
 }
 
 /** A reload frame's `seq` (#1507), or null when it carries none. @param {string} data */
+/**
+ * Whether a `reload` frame comes from a server that reloads in place (#1575).
+ * Absent or unreadable means it may restart, the safe (slower) reading.
+ * @param {string} data
+ * @returns {boolean}
+ */
+export function frameInPlace(data) {
+  try {
+    const o = JSON.parse(data);
+    return !!(o && o.inPlace === true);
+  } catch (_) { return false; }
+}
+
 function reloadSeq(data) {
   try {
     const o = JSON.parse(data);
@@ -190,6 +215,8 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl, opts) {
   let batchAll = false;
   /** @type {Set<any>} tabs whose page fell behind, reloaded on their own */
   const batchPorts = new Set();
+  /** Whether the batch holds a signal from a server that restarts (#1575). */
+  let batchRestart = false;
 
   function emitReload() {
     if (quietTimer !== null) { timers.clearTimeout(quietTimer); quietTimer = null; }
@@ -200,6 +227,7 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl, opts) {
     const targets = batchAll ? Array.from(ports.keys()) : Array.from(batchPorts).filter((p) => ports.has(p));
     batchAll = false;
     batchPorts.clear();
+    batchRestart = false;
     for (const p of targets) {
       // The tab applies this reload, so from here its page reflects the state
       // the relay knows now; a later hello compares against that.
@@ -219,11 +247,13 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl, opts) {
    * @param {string} verdict
    * @param {any} [port]  reload only this tab (its page fell behind); omitted, every tab
    */
-  function requestReload(verdict, port) {
+  function requestReload(verdict, port, inPlace) {
     if (port === undefined) batchAll = true; else batchPorts.add(port);
     if (rank(verdict) < rank(batchVerdict)) batchVerdict = VERDICT_STRENGTH[rank(verdict)];
+    // One restart signal anywhere in the batch keeps the long window (#1575).
+    if (!inPlace) batchRestart = true;
     if (quietTimer !== null) timers.clearTimeout(quietTimer);
-    quietTimer = timers.setTimeout(emitReload, RELOAD_QUIET_MS);
+    quietTimer = timers.setTimeout(emitReload, batchRestart ? RELOAD_QUIET_MS : RELOAD_QUIET_IN_PLACE_MS);
     if (capTimer === null) capTimer = timers.setTimeout(emitReload, RELOAD_MAX_HOLD_MS);
   }
 
@@ -278,7 +308,7 @@ export function startReloadWorker(scope, EventSourceCtor, eventsUrl, opts) {
       lastError = null;
       const n = reloadSeq(e.data);
       if (n !== null) lastSeq = n;
-      requestReload(parseVerdict(e.data));
+      requestReload(parseVerdict(e.data), undefined, frameInPlace(e.data));
     });
     es.addEventListener('webjs-error', (e) => { lastError = e.data; fanout({ type: 'webjs-error', data: e.data }); });
     // The stream dropped (a restarting server, a network blip, a host that

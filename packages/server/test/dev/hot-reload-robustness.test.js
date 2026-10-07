@@ -123,3 +123,10 @@ test('devImport never re-imports a specifier that failed, and recovers when the 
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('an in-place server marks its reload frames; a restarting one does not (#1575)', async () => {
+  const { SseHub } = await import('../../src/listener-core.js');
+  const frames = (hub) => { const out = []; hub.add({ send: (s) => out.push(s), close() {} }); hub.reload({ v: 'page' }); return out[0]; };
+  assert.match(frames(new SseHub({ inPlace: true })), /"inPlace":true/);
+  assert.doesNotMatch(frames(new SseHub()), /inPlace/);
+});

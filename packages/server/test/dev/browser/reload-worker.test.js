@@ -10,7 +10,7 @@
  * runs in a real browser. The relay is driven with a fake EventSource + fake
  * MessagePorts so it needs no live SSE server.
  */
-import { startReloadWorker, RELOAD_QUIET_MS, RELOAD_MAX_HOLD_MS, RECONNECT_BASE_MS, RECONNECT_MAX_MS, parseVerdict, parseHello, pageIsStale } from '../../../src/dev-reload-worker.js';
+import { startReloadWorker, RELOAD_QUIET_IN_PLACE_MS, frameInPlace, RELOAD_QUIET_MS, RELOAD_MAX_HOLD_MS, RECONNECT_BASE_MS, RECONNECT_MAX_MS, parseVerdict, parseHello, pageIsStale } from '../../../src/dev-reload-worker.js';
 
 import { assert } from '../../../../../test/browser-assert.js';
 
@@ -671,5 +671,46 @@ suite('dev reload stream pauses when hidden and reconnects with backoff (#1507)'
   test('parseHello reads the JSON hello and the bare boot id an older server sends', () => {
     assert.deepEqual(parseHello('{"boot":"b1","seq":4}'), { boot: 'b1', seq: 4 });
     assert.deepEqual(parseHello('b1'), { boot: 'b1', seq: null });
+  });
+});
+
+// #1575: a server that reloads in place (Bun's one long-lived dev server)
+// marks its frames, and nothing restarts behind them, so the relay need not
+// sit out the 2000ms restart window that was most of the save-to-paint time.
+suite('dev reload settle for an in-place server (#1575)', () => {
+  test('a batch of in-place frames reloads after the short window', () => {
+    const { scope, tick } = fakeClock();
+    startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    FakeEventSource.last.fire('reload', JSON.stringify({ v: 'page', seq: 1, inPlace: true }));
+    FakeEventSource.last.fire('reload', JSON.stringify({ v: 'page', seq: 2, inPlace: true }));
+    tick(RELOAD_QUIET_IN_PLACE_MS - 1);
+    assert.deepEqual(a.received, [], 'still folding the burst');
+    tick(1);
+    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'page' }], 'one reload, right after the burst');
+  });
+
+  test('a restart signal in the batch keeps the full window', () => {
+    const { scope, tick } = fakeClock();
+    startReloadWorker(scope, FakeEventSource, '/__webjs/events');
+    const a = fakePort();
+    scope.onconnect({ ports: [a.port] });
+    FakeEventSource.last.fire('reload', JSON.stringify({ v: 'page', seq: 1 }));
+    FakeEventSource.last.fire('reload', JSON.stringify({ v: 'page', seq: 2, inPlace: true }));
+    tick(RELOAD_QUIET_IN_PLACE_MS);
+    assert.deepEqual(a.received, [], 'a frame from a restarting server waits');
+    tick(RELOAD_QUIET_MS);
+    assert.deepEqual(a.received, [{ type: 'reload', verdict: 'page' }]);
+    // The next batch starts short again.
+    FakeEventSource.last.fire('reload', JSON.stringify({ v: 'page', seq: 3, inPlace: true }));
+    tick(RELOAD_QUIET_IN_PLACE_MS);
+    assert.equal(a.received.length, 2);
+  });
+
+  test('frameInPlace reads only an explicit true', () => {
+    assert.equal(frameInPlace('{"v":"page","inPlace":true}'), true);
+    assert.equal(frameInPlace('{"v":"page"}'), false);
+    assert.equal(frameInPlace('not json'), false);
   });
 });
