@@ -288,6 +288,7 @@ export class PostStatusSelect extends WebComponent({ postId: Number, status: Str
     const select = e.target as HTMLSelectElement;
     const before = this.status;
     this.status = select.value;
+    this.note.set('Saving…');
     const res = await setPostStatus({ id: this.postId, status: select.value as PostStatus });
     if (res.success) this.note.set('Saved');
     else { this.status = before; select.value = before; this.note.set(res.error ?? 'Could not save'); }
@@ -381,7 +382,7 @@ export default async function RootLayout({ children }: LayoutProps) {
         --background: light-dark(#fff, #14161a); --foreground: light-dark(#17191c, #e6e8eb); --card: light-dark(#f7f8fa, #1c1f24);
         --card-foreground: var(--foreground); --primary: light-dark(#2f5bd3, #8fb0ff); --primary-foreground: light-dark(#fff, #0b1530);
         --muted: light-dark(#f1f3f5, #23272d); --muted-foreground: light-dark(#5b626b, #9aa1aa); --accent: light-dark(#e9edf5, #2a3140);
-        --border: light-dark(#e2e5e9, #343a42); --input: var(--border); --ring: light-dark(#8aa4e8, #5b78c4); --destructive: light-dark(#c0362c, #f28b82); }
+        --border: light-dark(#e2e5e9, #343a42); --input: var(--border); --ring: light-dark(#2f5bd3, #8fb0ff); --destructive: light-dark(#c0362c, #f28b82); }
       body { margin: 0; background: var(--background); color: var(--foreground); font: 15px/1.6 system-ui, sans-serif; }
     </style>
     <header class="fixed inset-x-0 top-0 z-40 h-14 border-b border-border bg-background/95 backdrop-blur">
@@ -512,6 +513,10 @@ test('a password hashes with a salt and verifies only itself', async () => {
   text-foreground bg-card bg-primary text-primary-foreground bg-muted
   text-muted-foreground border-border text-destructive`), never a raw colour
   such as `bg-blue-600`.
+- Keep the kit's visible focus ring (`--ring` is a strong colour, as above) and
+  hover states; never `outline-none` without a replacement. Numbers that matter
+  (counts, totals) are small tiles: `<div class="rounded-lg bg-muted px-3 py-2 text-center"><div class="text-xl font-semibold tabular-nums">2</div><div class="text-xs text-muted-foreground">To do</div></div>`
+  in a `grid grid-cols-4 gap-2`.
 - The header is `position: fixed` (never `sticky`) with the content offset by
   its height. Mobile first: one column that widens at `sm:` / `md:`.
 - UI kit helpers in `components/ui/` (no need to open them):
