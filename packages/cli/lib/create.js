@@ -1694,6 +1694,15 @@ ThemeToggle.register('theme-toggle');
   // AGENTS.md is already in place via the shared `templateFiles` loop
   // earlier in this function, so no framework-root fallback needed.
 
+  // --- Agent context pack (.agents/context-pack.md) ---
+  // The skill core and one example per concern, concatenated from the files
+  // just written, imported by CLAUDE.md so they sit in the cached prompt prefix
+  // instead of costing an agent a turn per file (context-pack.js).
+  {
+    const { writeContextPack } = await import('./context-pack.js');
+    await writeContextPack(appDir);
+  }
+
   // --- Git init + configure hooks directory ---
   const { execSync } = await import('node:child_process');
   try {
