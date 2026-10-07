@@ -155,6 +155,14 @@ test('a banner with no PR number does not make an unmerged branch look merged', 
   assert.ok(existsSync(unmerged), 'banner text must never be read as a PR number');
 });
 
+test('also sweeps after scripts/ci-merge.sh, which merges inside the script (#1593)', () => {
+  const repo = makeRepo();
+  const clean = addWorktree(repo, 'feat-merged-clean', { merged: true });
+  const { code } = runHook('scripts/ci-merge.sh 1', repo.main);
+  assert.equal(code, 0);
+  assert.ok(!existsSync(clean), 'merged + clean worktree is removed');
+});
+
 test('does nothing on a command that is not `gh pr merge`', () => {
   const repo = makeRepo();
   const clean = addWorktree(repo, 'feat-merged-clean', { merged: true });

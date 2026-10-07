@@ -1,27 +1,21 @@
 name: CI
 
-# The required merge gate on every PR into main and every push to main. The
-# same checks run locally (#1474): the root package.json `webjs.ci` list runs
-# every job below on the developer's machine through `npm run ci`, and
-# `npm run ci -- --signoff` posts a green `signoff` status on the pushed head.
-# That status is not required yet. scripts/protect-main.sh is the switch:
-# run plain, it requires `signoff` alongside the six job names listed in it;
-# with `--local-only` it drops those names, after which this workflow is
-# informational and may be deleted. Neither has been run.
+# NOT RUN ON PUSH OR PULL REQUEST (#1593). CI is local: `scripts/ci.sh` runs
+# every job below on the developer's machine through the root package.json
+# `webjs.ci` list (`npm run ci`, #1471/#1474), several times faster than a
+# runner, and `scripts/ci-merge.sh` posts the verdict as the `local-ci`
+# commit status on the PR head and merges only when it is green.
+# scripts/protect-main.sh makes `local-ci` the required check on main.
 #
-# The jobs run as separate runners so a failure names the layer that broke;
-# the local list gets the same property from the runner's per-step result
-# lines and its `--only <group>` flag. Keep the job `name:` values in sync
-# with scripts/protect-main.sh: GitHub keys a required check on that exact
-# string, and a rename once left one required check unreportable (#1371,
-# corrected in #1472). Free on public repos (ubuntu-latest has unlimited
-# Actions minutes).
+# This file stays as the readable record of what the local list must cover,
+# and it can still be run by hand (workflow_dispatch) as a second opinion on a
+# clean Ubuntu runner. Keep it and the `webjs.ci` list in step: a job added
+# here and not there is a job nobody runs. Actions is for publishing only:
+# release.yml publishes to npm on a tag scripts/release.sh pushes; the CDN
+# purge and the nightly vendor contract run locally too.
 
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 # A newer push to the same branch cancels the older in-flight run.
 concurrency:

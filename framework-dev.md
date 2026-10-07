@@ -86,9 +86,9 @@ done
 
 `webjs.dev` sits behind Cloudflare, and the site's static assets (`/public/tailwind.css`, the brand SVGs) are served with `cache-control: public, max-age=14400` at STABLE urls. Without an eviction the edge therefore keeps serving the PREVIOUS copy for up to four hours after a deploy. That shipped two visible regressions in one day (a pre-redesign stylesheet after #1179, then the un-fixed logo marks after #1185), and staleness is per-asset rather than all-or-nothing, so the site can look half-updated.
 
-`.github/workflows/purge-cdn.yml` handles this on every push to `main`. It does NOT purge immediately: a Railway build takes minutes, so an immediate purge would evict the cache while the origin still served the old bytes and the next visitor would repopulate the edge with exactly those. Instead the job asks Railway's GraphQL API for the deployment whose `meta.commitHash` matches the pushed sha and reads its real status, then issues a zone-wide `purge_everything` only on `SUCCESS`.
+`scripts/purge-cdn.sh` handles this after every merge: `scripts/ci-merge.sh` starts it in the background for the merge commit (log under `${TMPDIR:-/tmp}/webjs-purge-<sha>.log`), and `scripts/release.sh` runs it after a publish. It ran as `.github/workflows/purge-cdn.yml` on every push to `main` until #1593 moved everything but the npm publish off Actions; that file is now `workflow_dispatch` only. It does NOT purge immediately: a Railway build takes minutes, so an immediate purge would evict the cache while the origin still served the old bytes and the next visitor would repopulate the edge with exactly those. Instead the job asks Railway's GraphQL API for the deployment whose `meta.commitHash` matches the pushed sha and reads its real status, then issues a zone-wide `purge_everything` only on `SUCCESS`.
 
-It is a SEPARATE workflow rather than a step in `release.yml` on purpose: `release.yml` fires only on pushes touching `changelog/**` (an npm package release), while the site redeploys on ordinary merges. None of the four website merges on 2026-07-30 touched `changelog/`, so a purge living there would have fired for none of them.
+It runs after EVERY merge rather than only after a release on purpose: a package release is rare, while the site redeploys on ordinary merges. None of the four website merges on 2026-07-30 touched `changelog/`, so a purge tied to releases would have fired for none of them.
 
 Reading the deployment status rather than inferring it is the second design (#1192). The first version watched the origin's `/__webjs/version` `uptime` for a restart, assuming every push to `main` produces a deploy. It does not: Railway marked #1189's own merge commit `SKIPPED` (it touched only `.github` and a `.md`), no restart ever happened, and the job failed after a 15 minute wait. Every docs-only commit would have been a red X, and a job that cries wolf on routine commits stops being read. So the status now decides:
 
@@ -102,10 +102,10 @@ Reading the deployment status rather than inferring it is the second design (#11
 
 The purge is zone-wide rather than a path list: both asset-serving hostnames (`webjs.dev`, `example-blog.webjs.dev`) are proxied inside the one `webjs.dev` zone, so a single call covers them (`docs.webjs.dev` and `ui.webjs.dev` sit in the same zone but are Cloudflare redirect rules serving no assets), and a zone purge cannot silently miss an asset the way a hand-maintained list does. Purging evicts only; nothing is deleted.
 
-- **Required secrets**, both REPOSITORY secrets. The job declares no `environment:`, so an environment-scoped secret arrives EMPTY and the step fails on the explicit "not set" branch:
-  - `CLOUDFLARE_API_TOKEN`, scoped to **Zone / Cache Purge / Purge** on the `webjs.dev` zone only. Do not reuse a broad account-wide token.
-  - `RAILWAY_TOKEN`, a Railway **project** token for this project's `production` environment (narrower than an account token). A project token authenticates with the `Project-Access-Token` header and an account token with `Authorization: Bearer`, so the workflow tries both and keeps whichever answers without a GraphQL error.
-- **Manual purge:** run the "Purge CDN" workflow from the Actions tab (`workflow_dispatch`), which skips the deploy wait and purges straight away. Use this if a deploy landed after the wait timed out.
+- **Credentials, on the maintainer's machine, never printed:**
+  - `CLOUDFLARE_API_TOKEN` in the environment, scoped to **Zone / Cache Purge / Purge** on the `webjs.dev` zone only. Do not reuse a broad account-wide token. Without it ci-merge skips the purge and says so.
+  - `RAILWAY_TOKEN` from the environment (a Railway **project** token for the `production` environment), else the `railway login` token in `~/.railway/config.json`. A project token authenticates with the `Project-Access-Token` header and an account token with `Authorization: Bearer`, so the script tries both. An expired login reads as "the Railway API never answered"; run `railway login`.
+- **Manual purge:** `scripts/purge-cdn.sh --now` skips the deploy wait and purges straight away; `scripts/purge-cdn.sh <sha>` waits for that commit; `--dry-run` reports the deploy status and purges nothing.
 - **Checking staleness by hand:** compare the edge against the origin rather than trusting `cf-cache-status`, since a `HIT` on fresh content is fine and only differing bytes are a problem.
 
   ```sh
@@ -175,8 +175,8 @@ Regression tests: `test/hooks/block-install-in-linked-worktree.test.mjs`, `test/
 ### Local CI: `npm run ci` at the root and inside each app (#1471, #1474)
 
 The monorepo runs its own local CI the way a scaffolded app does, and the list
-is complete enough to BE the merge gate (the Rails 8.1 posture), though the
-Actions checks remain the required gate until the switch below is run. The root `package.json` declares a
+is complete enough to BE the merge gate (the Rails 8.1 posture), and it is the
+merge gate: see "The gate" below. The root `package.json` declares a
 `webjs.ci` step list that runs EVERYTHING `.github/workflows/ci.yml` runs, step
 for step: a Setup group (the blog and gallery databases, the core dist), then
 one `Gate` group that runs THREE slots at once, longest first (six overloaded a
@@ -208,31 +208,37 @@ every root step invokes the in-repo CLI the same way for the same reason.
 `test/cli/check-target.test.mjs` cross-checks the `webjs check` steps against
 the workspace app list.
 
-**The gate today, and the switch.** `main` requires one approving CODEOWNER
-review plus the six Actions job names in `.github/workflows/ci.yml`; nothing
-requires a local run. `npm run ci -- --signoff` runs the list and, only when
-every step passes, runs `gh signoff` (basecamp/gh-signoff), which posts a green
-`signoff` commit status on the PUSHED head, visible on the PR beside the
-Actions checks and required by nothing yet. `scripts/protect-main.sh` is the
-switch, and it has not been run: plain, it declares the review, the `signoff`
-status through `gh signoff install` (a repository ruleset), and the six Actions
-job names, so both gates apply during a transition; `--local-only` drops the
-Actions names, the final state, after which the workflow is a non-required
-second opinion or deleted. Reverse it with `gh signoff uninstall` and the
-version of the script on `main` before #1474. Push first, then sign off; a
-later push has no signoff until the list is run on it again, so a stale green
-can never carry forward. Sign off from
-a REAL install (the primary checkout, or a worktree whose `node_modules` links
-were replaced by an install): in a linked worktree every bare `@webjsdev/*`
-specifier resolves into the primary checkout, so the listener proofs and the
-config type fixture red there and the rest is partly vacuous.
+**The gate: `scripts/ci.sh`, `scripts/ci-merge.sh`, `local-ci` (#1593).**
+GitHub Actions no longer runs `ci.yml` on a push or a pull request (it is
+`workflow_dispatch` only, kept as the record of what the list must cover).
+`scripts/ci.sh` wraps `npm run ci` with a log under
+`${TMPDIR:-/tmp}/webjs-ci-<sha>/`, a PASS marker per commit, `--only A,B`,
+`--list`, `--release` (the full list plus `npm run release:gate` when
+package.json defines one; run it before a release PR merges) and `--nightly`
+(the live jspm contract tests that `vendor-cdn.yml` used to run on a cron;
+network-bound, so never part of the gate). `scripts/ci-merge.sh <N>` runs the
+list on the PR head (here when this checkout is that head, clean and a real
+install, otherwise in a throwaway worktree with its own `npm ci`), posts the
+`local-ci` commit status, and squash-merges with `--delete-branch
+--match-head-commit` only when green. `main` requires the `local-ci`
+status and NO review (`scripts/protect-main.sh`): the owner reviews outside
+the merge path, and a review rule would block every agent merge, so never add
+one. ci-merge never uses `--admin`.
+`.hooks/pre-push` runs the quick subset (`scripts/ci.sh --quick`: setup, conventions, the Node suite, about a minute) on every push of a branch with an open
+PR, unless every changed file is `*.md`, `docs/**` or `blog/**`. A later push
+has no `local-ci` until the list runs on it again, so a stale green never
+carries forward. Run it from a REAL install (the primary checkout, or a
+worktree with its own `npm ci`): in a linked worktree every bare
+`@webjsdev/*` specifier resolves into the primary checkout, so the run is
+partly vacuous there, and `scripts/ci.sh` writes no PASS marker for it.
+`scripts/ci.sh` also unsets the `GIT_*` variables a hook exports (a pre-push run once let the hook tests write fixture commits into this repository), turns Bun's shared transpiler cache off, and waits up to `CI_LOAD_WAIT` (180s) for load to fall under 1.5x the cores, printing `WARNING host overloaded` in the verdict when it does not or a disk is 90% full. The browser suites run after the Gate rather than beside it, so load cannot time them out, and every web-test-runner config takes a kernel-assigned port (`WTR_PORT` pins one) so two runs at once cannot share port 8000. Only the npm publish stays on Actions (`release.yml`, bound to trusted publishing); the CDN purge and the release steps around the publish run locally (`scripts/purge-cdn.sh`, `scripts/release.sh`).
 
 **Local prerequisites** for the whole list: Node 24+, Bun, Docker (the Postgres
 container and the image build; the user must be in the `docker` group, or set
 `WEBJS_DOCKER` to the command that reaches a daemon, such as `sudo -n docker`
 or `podman`), the Playwright browsers (`npx playwright
 install chromium firefox webkit`), `puppeteer-core` (a root devDependency),
-`gh` with the signoff extension (the script installs it), `setsid` and `pgrep`
+`gh` (authenticated, for the `local-ci` status), `setsid` and `pgrep`
 (util-linux and procps, present on Linux and absent from a stock macOS: the
 website e2e step and the runner's interrupt test use them), and a shell that
 does NOT export `FORCE_COLOR` (it flips tsc to pretty output and reds two type
@@ -384,12 +390,12 @@ If the package has zero `feat:` / `fix:` / `breaking:` / `perf:` commits in the 
 
 The whole flow is tool-agnostic: the universal pre-commit hook fires for every `git commit`, regardless of who or what is running it. AI agents using Claude Code, Cursor, Copilot, Aider, etc. all get the same behavior, as do human contributors.
 
-**npm publishes AND GitHub Releases are auto-created from the same files.** The `.github/workflows/release.yml` workflow watches for new `changelog/**.md` files added in a push to `main`. For each new file:
+**npm publishes AND GitHub Releases come from the same files, cut by `scripts/release.sh` (#1593).** After the release PR merges (through `scripts/ci-merge.sh <N> --release`, which runs the full list plus the release gate on its head), run `scripts/release.sh` from a checkout of `origin/main`. It finds the `changelog/**.md` files the head commit added, requires local CI green on that commit, and pushes the tag `publish-<sha12>`. That tag triggers `.github/workflows/release.yml`, which now ONLY publishes (npm.com, GitHub Packages, the lockstep wrappers), because trusted publishing is bound to it. The script then waits for `npm view` to serve every new version, creates the GitHub Releases locally, and purges the CDN. For each new file:
 
 1. `scripts/publish-npm.js` parses the frontmatter, checks `npm view @webjsdev/<pkg>@<version>`; if the version is not yet on the registry, it runs `npm publish --workspace=@webjsdev/<pkg> --access=public`. Idempotent: already-published versions are skipped.
 2. `scripts/publish-release.js` composes a tag `<pkg>@<version>` (e.g. `core@0.6.0`), title `@webjsdev/<pkg> <version>`, body (the markdown after frontmatter), then runs `gh release create`. Idempotent: existing release tags are skipped.
 
-npm runs first; if it fails (auth, network, transient registry error), the GitHub Release step is skipped and the workflow fails. After fixing, a re-run picks up where it left off: the npm-side check makes the completed package a no-op and only the missing release lands.
+npm runs first (in Actions); if it fails, `scripts/release.sh` stops at the registry wait and no GitHub Release is created. After fixing, re-run `scripts/release.sh` (it re-pushes nothing that exists) or dispatch `release.yml` with `republish_paths`: every step is idempotent.
 
 **npm authentication is trusted publishing (OIDC), not a stored token.** The job declares `id-token: write`, and the npm CLI detects the Actions OIDC environment and exchanges that id-token for a short-lived, workflow-scoped credential. There is no `NPM_TOKEN` secret, nothing to rotate, and nothing that expires. The `GITHUB_TOKEN` the GitHub Packages and Releases steps use is auto-provisioned. Free for public repos.
 

@@ -1,29 +1,22 @@
 name: Auto-release
 
-# Every push to main that lands a new `changelog/<pkg>/<version>.md`
-# file becomes:
-#   1. A published npm.com package via scripts/publish-npm.js.
-#   2. A published GitHub Packages copy via scripts/publish-github-packages.js
-#      (so the repo's Packages sidebar lists each version).
-#   3. A GitHub Release via scripts/publish-release.js.
+# PUBLISH ONLY (#1593). Actions does one thing in a release: the npm
+# publish, because trusted publishing (below) is bound to this file. The rest
+# runs on the maintainer's machine through scripts/release.sh: the local CI
+# and release gate, the tag, waiting for the registry, the GitHub Releases
+# (scripts/publish-release.js) and the CDN purge (scripts/purge-cdn.sh).
 #
-# All three scripts are idempotent: they skip when the version is
-# already on the destination registry / a release with the tag
-# already exists. So workflow retries and force-pushes never
-# duplicate or error on previously-published versions.
+# scripts/release.sh pushes `publish-<sha12>` at the merged release commit.
+# That tag triggers this job, which publishes every `changelog/<pkg>/<v>.md`
+# the commit added:
+#   1. to npm.com via scripts/publish-npm.js (OIDC, with provenance),
+#   2. to GitHub Packages via scripts/publish-github-packages.js,
+#   3. and the unscoped wrappers in lockstep when @webjsdev/cli moved.
+# All of it is idempotent: a version already on a registry is skipped, so a
+# re-push of the tag or a dispatch never duplicates a publish.
 #
-# Order matters: npm.com runs first, then GitHub Packages, then GH
-# Releases. If any step fails (auth, network, transient registry
-# error), later steps are skipped and the workflow fails. A
-# re-run picks up where it left off thanks to the idempotency
-# checks.
-#
-# Triggered only on changelog/** changes so unrelated pushes do
-# not run the job. workflow_dispatch is also wired so a one-time
-# bootstrap can republish every existing changelog file to GitHub
-# Packages without needing a fresh changelog file. Cost on public
-# repos: $0 (Actions has unlimited free minutes for public repos
-# on ubuntu-latest).
+# workflow_dispatch keeps the recovery inputs (republish_paths,
+# lockstep_only, bootstrap_github_packages) for a publish that died.
 #
 # npm auth is TRUSTED PUBLISHING (OIDC), so there is no NPM_TOKEN
 # secret to store, rotate, or let expire. Each of the 8 published
@@ -35,9 +28,8 @@ name: Auto-release
 
 on:
   push:
-    branches: [main]
-    paths:
-      - 'changelog/**'
+    tags:
+      - 'publish-*'
   workflow_dispatch:
     inputs:
       bootstrap_github_packages:
@@ -54,7 +46,7 @@ on:
         default: ''
 
 permissions:
-  contents: write   # gh release create needs write access to the repo
+  contents: read    # GitHub Releases are created locally now (scripts/release.sh)
   packages: write   # npm publish to GitHub Packages
   id-token: write   # mint the OIDC credential npm trusted publishing exchanges
 
@@ -205,50 +197,9 @@ jobs:
             node scripts/publish-github-packages.js "$f"
           done < .new-changelog-files.txt
 
-      - name: Create GitHub Releases
-        if: steps.diff.outputs.count != '0' && steps.diff.outputs.bootstrap != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          while IFS= read -r f; do
-            [ -z "$f" ] && continue
-            node scripts/publish-release.js "$f"
-          done < .new-changelog-files.txt
+      # GitHub Releases are created locally by scripts/release.sh once npm
+      # serves the new versions (#1593).
 
-      # Lockstep-publish the unscoped wrapper packages (`create-webjs`,
-      # `webjsdev`) at the new @webjsdev/cli version whenever this push
-      # landed a new cli changelog. The wrappers exist purely as version
-      # mirrors of cli, so their npm versions MUST equal cli's version
-      # exactly; otherwise the npx cache serves an outdated cli through
-      # them (a wrapper cached at 0.8.4 keeps resolving cli@0.8.4 even
-      # after cli@0.8.5 publishes, because the wrapper's pkg-version is
-      # what npx keys its cache on).
-      #
-      # This step does NOT write back to the repo. Earlier designs tried
-      # to commit the wrapper bumps (direct push, then PR + merge), but
-      # the webjsdev org disables write permissions for GITHUB_TOKEN:
-      # direct pushes are refused by branch protection and `gh pr create`
-      # is refused with "GitHub Actions is not permitted to create or
-      # approve pull requests". Since the wrapper version is recomputed
-      # from CLI_VERSION here on every release, the repo copy of the
-      # wrapper package.json is irrelevant to publishing, so we simply
-      # set the version in the runner's working tree and `npm publish`.
-      # The repo's wrapper package.json versions intentionally drift (npm
-      # is the source of truth for them); nothing reads them.
-      #
-      # Publishing is idempotent: a wrapper already on the registry at
-      # CLI_VERSION is skipped, so re-runs and the `lockstep_only`
-      # manual dispatch are safe.
-      #
-      # `lockstep_only` (workflow_dispatch input) runs ONLY this step at
-      # the current CLI_VERSION: the recovery path for a release whose
-      # wrapper publish did not land.
-      # Also publishes over OIDC, so no NODE_AUTH_TOKEN here either.
-      # `create-webjs` and `webjsdev` each carry their own Trusted
-      # Publisher configuration, since trusted publishing is per package
-      # rather than per repo. This step is the easily-missed second
-      # consumer of the old NPM_TOKEN secret.
       - name: Lockstep-publish wrappers to match @webjsdev/cli
         if: inputs.lockstep_only || (steps.diff.outputs.count != '0' && steps.diff.outputs.bootstrap != 'true')
         run: |

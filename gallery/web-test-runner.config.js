@@ -29,7 +29,30 @@ import { Readable } from 'node:stream';
 // importmap is ready before `testRunnerHtml` is called for the first test file.
 const webjs = await createBrowserTestHandler(resolve('.'));
 
+import { createServer as createPortProbe } from 'node:net';
+
+/**
+ * A kernel-assigned free port for this run's dev server (#1593).
+ * web-test-runner's default is "8000, or the next free one" (portfinder), and
+ * two runs started together (two agents' CI on one machine) both pick 8000,
+ * after which the browsers' module requests are split across the two servers
+ * and a test fails with "Failed to fetch dynamically imported module".
+ * Asking the kernel for port 0 cannot collide. WTR_PORT pins one by hand.
+ * @returns {Promise<number>}
+ */
+function freePort() {
+  return new Promise((resolvePort, reject) => {
+    const probe = createPortProbe();
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const { port } = /** @type {import('node:net').AddressInfo} */ (probe.address());
+      probe.close(() => resolvePort(port));
+    });
+  });
+}
+
 export default {
+  port: Number(process.env.WTR_PORT) || await freePort(),
   // Browser tests are `.js` (web-test-runner serves them through its own test
   // framework); the components + modules they import are `.ts`, served
   // transformed by the webjs middleware below.

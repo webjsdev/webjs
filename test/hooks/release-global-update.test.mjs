@@ -94,6 +94,15 @@ test('reminds when the title is "chore: release" even if the branch differs', ()
   assert.match(out, /npm update -g webjsdev/);
 });
 
+test('reminds after a release PR merged through scripts/ci-merge.sh (#1593)', () => {
+  const { code, out } = runHook('bash scripts/ci-merge.sh 839', {
+    headRefName: 'chore/release-cli-0.10.70',
+    title: 'chore: release cli 0.10.70',
+  });
+  assert.equal(code, 0);
+  assert.match(out, /npm update -g webjsdev/);
+});
+
 test('does NOTHING for a normal (non-release) PR merge', () => {
   const { code, out } = runHook('gh pr merge 840 --squash', {
     headRefName: 'feat/thing',

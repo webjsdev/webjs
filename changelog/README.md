@@ -110,11 +110,12 @@ The AGENTS.md rule that AI agents follow on every code-commit:
 > for `breaking` entries that need migration notes. Then commit the
 > changelog file alongside the version bump.
 
-## GitHub Releases are auto-published from the same files
+## GitHub Releases are published from the same files
 
-The `.github/workflows/release.yml` workflow watches for new
-`changelog/**.md` files added in any push to `main`. For each new
-file it runs `scripts/publish-release.js`, which parses the
+`scripts/release.sh`, run on `origin/main` after a release PR merges,
+pushes the `publish-<sha12>` tag that makes `.github/workflows/release.yml`
+publish to npm, waits for the registry, and then, for each new
+`changelog/**.md` file the commit added, runs `scripts/publish-release.js`, which parses the
 frontmatter, composes a release tag of the shape `<pkg>@<version>`
 (e.g. `core@0.6.0`) with title `@webjsdev/<pkg> <version>` and the
 markdown body as release notes, and calls `gh release create`.
