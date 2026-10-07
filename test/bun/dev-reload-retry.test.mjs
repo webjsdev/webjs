@@ -8,6 +8,6 @@
  */
 import { test } from 'node:test';
 
-test('dev SSE carries the retry reconnect hint on this runtime (#893)', async () => {
+test('dev SSE carries the retry reconnect hint on this runtime (#893)', { timeout: 120_000 }, async () => {
   await import('./dev-reload-retry.mjs');
 });

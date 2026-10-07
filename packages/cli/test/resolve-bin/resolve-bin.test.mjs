@@ -5,7 +5,9 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
@@ -57,4 +59,18 @@ test('throws a clear error when the package is not installed', () => {
     () => resolveBin(repoRoot, 'definitely-not-a-real-package-xyz', 'nope'),
     /Cannot find (module|package)|package.json not found/,
   );
+});
+
+test('an app with no node_modules is not installed, even where Bun would auto-install', () => {
+  // Under Bun, require.resolve from a dir with no node_modules above it
+  // auto-installs the package into the global cache and returns that path, so
+  // `webjs test --browser` launched a downloaded WTR instead of saying it is
+  // not installed. The temp dir has no node_modules ancestor on either runtime.
+  const app = mkdtempSync(join(tmpdir(), 'webjs-resolve-bin-'));
+  try {
+    writeFileSync(join(app, 'package.json'), '{}');
+    assert.throws(() => resolveBin(app, '@web/test-runner', 'wtr'), /Cannot find package '@web\/test-runner'/);
+  } finally {
+    rmSync(app, { recursive: true, force: true });
+  }
 });

@@ -9,6 +9,6 @@
  */
 import { test } from 'node:test';
 
-test('the dev reload SSE frame carries the change verdict on this runtime (#1398)', async () => {
+test('the dev reload SSE frame carries the change verdict on this runtime (#1398)', { timeout: 120_000 }, async () => {
   await import('./dev-morph-verdict.mjs');
 });

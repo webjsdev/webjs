@@ -8,6 +8,6 @@
  */
 import { test } from 'node:test';
 
-test('webjs dev survives an unreadable watched file and restarts a crashed server on this runtime (#1521)', async () => {
+test('webjs dev survives an unreadable watched file and restarts a crashed server on this runtime (#1521)', { timeout: 120_000 }, async () => {
   await import('./dev-watch-error.mjs');
 });

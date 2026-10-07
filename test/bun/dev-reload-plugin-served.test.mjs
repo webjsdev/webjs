@@ -5,6 +5,6 @@
  */
 import { test } from 'node:test';
 
-test('webjs dev reloads plugin-served modules with source locations on (#1550)', async () => {
+test('webjs dev reloads plugin-served modules with source locations on (#1550)', { timeout: 120_000 }, async () => {
   await import('./dev-reload-plugin-served.mjs');
 });
