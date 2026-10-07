@@ -24,6 +24,9 @@ import {
   findCheckTarget,
   notAnAppMessage,
   notAnAppJson,
+  findAncestorApp,
+  findServeTarget,
+  notAnAppServeMessage,
 } from '../../packages/cli/lib/check-target.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -210,3 +213,60 @@ test('the derived app list matches the apps the root local CI list checks (#1474
     'the apps the refusal names must be the apps local CI checks',
   );
 });
+
+// ---- `webjs dev` / `webjs start` outside an app (#1526) ----
+
+test('serve target: an app directory is served', async (t) => {
+  const dir = await fixture(t);
+  await mkdir(join(dir, 'app'));
+  assert.deepEqual(await findServeTarget(dir), { isApp: true, workspaceApps: [], ancestorApp: null });
+});
+
+test('serve target: a workspace root names its member apps, not an ancestor', async (t) => {
+  const dir = await fixture(t);
+  await writeFile(join(dir, 'package.json'), JSON.stringify({ private: true, workspaces: ['apps/*'] }));
+  await mkdir(join(dir, 'apps', 'web', 'app'), { recursive: true });
+  const target = await findServeTarget(dir);
+  assert.deepEqual(target, { isApp: false, workspaceApps: ['apps/web'], ancestorApp: null });
+  const msg = notAnAppServeMessage('dev', dir, target);
+  assert.match(msg, /^webjs dev: this directory is not a WebJs app/);
+  assert.match(msg, /404 for every route/);
+  assert.match(msg, /cd apps\/web && webjs dev/);
+});
+
+test('serve target: a subdirectory of an app names the app root', async (t) => {
+  const dir = await fixture(t);
+  await mkdir(join(dir, 'app', 'blog'), { recursive: true });
+  const sub = join(dir, 'app', 'blog');
+  assert.equal(findAncestorApp(sub), dir);
+  const target = await findServeTarget(sub);
+  assert.equal(target.isApp, false);
+  assert.equal(target.ancestorApp, dir);
+  assert.match(notAnAppServeMessage('start', sub, target), /cd \.\.\/\.\. && webjs start/);
+});
+
+test('serve target: nowhere near an app gets the generic advice', async (t) => {
+  const dir = await fixture(t);
+  const target = await findServeTarget(dir);
+  assert.equal(target.isApp, false);
+  // The tmp dir's ancestors hold no app/ on a sane machine.
+  assert.equal(target.ancestorApp, null);
+  assert.match(notAnAppServeMessage('dev', dir, target), /Change into your app directory/);
+});
+
+for (const cmd of ['dev', 'start']) {
+  test(`webjs ${cmd} outside an app exits 1 before running anything`, async (t) => {
+    const dir = await fixture(t);
+    // A before-step that would leave a marker proves nothing ran first.
+    await writeFile(join(dir, 'package.json'), JSON.stringify({
+      private: true,
+      workspaces: ['apps/*'],
+      webjs: { [cmd]: { before: ['node -e "require(\'fs\').writeFileSync(\'ran\', \'\')"'] } },
+    }));
+    await mkdir(join(dir, 'apps', 'web', 'app'), { recursive: true });
+    const r = spawnSync(process.execPath, [CLI, cmd, '--port', '1'], { cwd: dir, encoding: 'utf8', timeout: 20000 });
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stderr, new RegExp(`cd apps/web && webjs ${cmd}`));
+    await assert.rejects(readFile(join(dir, 'ran')), /ENOENT/);
+  });
+}

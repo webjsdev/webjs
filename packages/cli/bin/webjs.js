@@ -9,7 +9,7 @@ import { checkNodeInline, nodeInlineMessage } from '../lib/node-preflight.js';
 import { loadAppEnv, resolvePort } from '../lib/port.js';
 import { planDevSupervisor } from '../lib/dev-supervisor.js';
 import { checkAppName, appNameErrorMessage } from '../lib/app-name.js';
-import { findCheckTarget, notAnAppMessage, notAnAppJson } from '../lib/check-target.js';
+import { findCheckTarget, notAnAppMessage, notAnAppJson, findServeTarget, notAnAppServeMessage } from '../lib/check-target.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const [cmd, ...rest] = process.argv.slice(2);
@@ -147,7 +147,7 @@ const USAGE = `webjs commands:
 const HELP = {
   dev: {
     usage: 'webjs dev [--port <n>] [--no-hot]',
-    summary: 'Start the dev server with live reload (source is the runtime, no build step).',
+    summary: 'Start the dev server with live reload (source is the runtime, no build step). Run it in the app directory (the one holding app/); anywhere else it exits 1 naming the app to start.',
     options: [
       { flag: '--port <n>', description: 'Port to listen on (else PORT, else 8080).' },
       { flag: '--no-hot', description: 'Run in-process, without the hot-reload supervisor.' },
@@ -156,7 +156,7 @@ const HELP = {
   },
   start: {
     usage: 'webjs start [--port <n>]',
-    summary: 'Start the production server (serves source directly, plain HTTP/1.1).',
+    summary: 'Start the production server (serves source directly, plain HTTP/1.1). Exits 1 outside an app directory.',
     options: [
       { flag: '--port <n>', description: 'Port to listen on (else PORT, else 8080).' },
     ],
@@ -442,6 +442,19 @@ async function startDevParallelTasks(commands, cwd) {
   });
 }
 
+/**
+ * Exit 1 with a clear message when `webjs dev` / `webjs start` runs where there
+ * is no `app/` directory (#1526), naming the app to start instead.
+ *
+ * @param {'dev' | 'start'} command
+ */
+async function refuseOutsideApp(command) {
+  const target = await findServeTarget(process.cwd());
+  if (target.isApp) return;
+  console.error(notAnAppServeMessage(command, process.cwd(), target));
+  process.exit(1);
+}
+
 async function main() {
   // `--version` / `-v` (top level): print the installed CLI version and exit.
   if (cmd === '--version' || cmd === '-v') {
@@ -480,6 +493,15 @@ async function main() {
   // `ERR_MODULE_NOT_FOUND: Cannot find package '@webjsdev/core'`. Probe up front
   // and surface the cause + remedy instead. No-op (a cheap resolve) when the
   // framework resolves, so the happy-path boot is untouched.
+  // #1526: refuse to serve a directory that is not an app, FIRST: before the
+  // resolve probe (whose "run npm install" advice is wrong at a workspace
+  // root), any before-step (a `webjs db migrate` in the wrong directory), or a
+  // spawn. Started from a workspace root, the server used to boot, say it was
+  // ready, and answer 404 for every route. The dev child skips it: its parent
+  // checked the same cwd it spawned the child in.
+  if ((cmd === 'dev' || cmd === 'start') && process.env.__WEBJS_DEV_CHILD !== '1') {
+    await refuseOutsideApp(cmd);
+  }
   if (cmd === 'dev' || cmd === 'start') {
     const { checkFrameworkResolves } = await import('../lib/doctor.js');
     const probe = checkFrameworkResolves(process.cwd());
