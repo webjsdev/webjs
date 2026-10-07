@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  bunifyProse, bunifyDockerfile, bunifyCompose, bunifyCi,
+  bunifyProse, bunifyDockerfile, bunifyCompose, bunifyCi, bunifyEnvExample,
 } from '../../lib/runtime-rewrite.js';
 
 test('bunifyProse: server scripts force --bun, tooling scripts stay on Node', () => {
@@ -155,4 +155,11 @@ test('bunifyCi: keeps setup-node, adds setup-bun, bun install, plain bun run', (
   assert.match(out, /bunx playwright install/);
   // The `node -e` Chromium-path step stays (the Node base provides node).
   assert.match(bunifyCi('        run: X=$(node -e "1") >> $E'), /node -e /);
+});
+
+test('bunifyCompose / bunifyEnvExample: the secret hint runs on bun (#1527)', () => {
+  const hint = '# Generate: node -e "console.log(1)"';
+  assert.equal(bunifyEnvExample(hint), '# Generate: bun -e "console.log(1)"');
+  assert.equal(bunifyCompose(`      ${hint}`), '      # Generate: bun -e "console.log(1)"');
+  assert.equal(bunifyEnvExample('KEY=node -e x'), 'KEY=node -e x', 'only the comment hint changes');
 });

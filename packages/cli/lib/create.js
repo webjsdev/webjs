@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
-import { bunifyProse, bunifyDockerfile, bunifyCompose, bunifyCi } from './runtime-rewrite.js';
+import { bunifyProse, bunifyDockerfile, bunifyCompose, bunifyCi, bunifyEnvExample } from './runtime-rewrite.js';
 import { postgresCompose, postgresCi } from './db-rewrite.js';
 import { assertValidAppName, toDatabaseName } from './app-name.js';
 import { isGalleryAppShellFile } from './gallery-shell-files.js';
@@ -745,6 +745,9 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     'AGENTS.md', 'CLAUDE.md', 'CONVENTIONS.md',
     '.agents/rules/workflow.md',
     'test/hello/browser/hello.test.js', 'test/hello/e2e/hello.test.ts',
+    // Comments that name a command (#1527): `npm run ci` in the hook, the
+    // Tailwind build note in the ignore file.
+    '.hooks/pre-commit', 'gitignore',
   ]);
   // compose.yaml builds from the (pure oven/bun) Dockerfile and inherits its
   // `bun --bun run start` CMD; only its healthcheck needs switching off node
@@ -753,6 +756,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
     'Dockerfile': bunifyDockerfile,
     'compose.yaml': bunifyCompose,
     '.github/workflows/ci.yml': bunifyCi,
+    '.env.example': bunifyEnvExample,
   };
   // Database axis (#1490): the compose + CI templates are the SQLite shape, so
   // a --db postgres app derives its variant (a Postgres service, DATABASE_URL
@@ -1240,7 +1244,13 @@ export type ActionResult<T> =
     const clearScriptSrc = join(TEMPLATES, 'scripts', 'clear-gallery.mjs');
     if (existsSync(clearScriptSrc)) {
       await mkdir(join(appDir, 'scripts'), { recursive: true });
-      await cp(clearScriptSrc, join(appDir, 'scripts', 'clear-gallery.mjs'));
+      // A Bun app gets the Bun spelling of the ui-kit command the script
+      // prints and writes into the reset layout (#1527): `bunx`, never `npx`.
+      const clearScript = await readFile(clearScriptSrc, 'utf8');
+      await writeFile(
+        join(appDir, 'scripts', 'clear-gallery.mjs'),
+        isBun ? clearScript.replaceAll('npx webjsdev ', 'bunx webjsdev ') : clearScript,
+      );
     }
 
     // Fail loudly if the @webjsdev/ui registry sources aren't on disk.
@@ -1746,10 +1756,12 @@ ThemeToggle.register('theme-toggle');
   // single-bin fallback resolves it to the `webjs` binary, so behaviour
   // matches `@webjsdev/cli` exactly while keeping the command short
   // and unambiguous.
+  // A Bun app runs one-off binaries with `bunx` (#1527).
+  const x = isBun ? 'bunx' : 'npx';
   const uiNote = isApi
     ? `# If you later add a UI to this API project:
-  #   npx webjsdev ui init && npx webjsdev ui add button card dialog`
-    : `npx webjsdev ui add <name>     # add more ui-* components later`;
+  #   ${x} webjsdev ui init && ${x} webjsdev ui add button card dialog`
+    : `${x} webjsdev ui add <name>     # add more ui-* components later`;
   console.log(`
 Next steps:
   ${runCommand}

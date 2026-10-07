@@ -52,6 +52,10 @@ lib/
                          gated `error`.
                          Tests: `test/cli/doctor.test.mjs`.
   port.js                Port resolution for `webjs dev` / `start` (#447).
+                         Also `failFastOnPortInUse` + `PORT_IN_USE_EXIT_CODE`
+                         (98, #1527): a server start that fails on a taken port
+                         prints the server's message (it names the holder's PID)
+                         and exits 98.
                          `loadAppEnv(appDir)` loads `<appDir>/.env` into
                          `process.env` (same guard + shell-wins semantics as the
                          server's own load); `resolvePort(portFlag, env?)` is the
@@ -79,7 +83,9 @@ lib/
                          restart state machine: 50ms debounce, SIGTERM then
                          SIGKILL after 2s, the replacement spawned on the old
                          child's exit, crash restart on the next change or after
-                         a 0.5s to 10s backoff), and `superviseDevServer` (real
+                         a 0.5s to 10s backoff; a child exiting 98, the taken
+                         port of #1527, is final: no restart, the supervisor
+                         exits 98), and `superviseDevServer` (real
                          spawn with an IPC channel so an orphaned child exits,
                          signals, an uncaughtException guard that swallows only
                          `syscall: 'watch'` errors). The bin owns the

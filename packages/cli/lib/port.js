@@ -58,3 +58,35 @@ export function resolvePort(portFlag, env = process.env) {
   if (env.PORT) return Number(env.PORT);
   return 8080;
 }
+
+/**
+ * The exit code of a server that could not bind because its port is taken
+ * (#1527): Linux's EADDRINUSE errno. The dev supervisor treats it as final and
+ * stops instead of restarting a child that can never bind.
+ */
+export const PORT_IN_USE_EXIT_CODE = 98;
+
+/**
+ * Await a server start; on a taken port print the server's message (it names
+ * the process holding the port) and exit with `PORT_IN_USE_EXIT_CODE`. Any
+ * other error propagates unchanged.
+ *
+ * @template T
+ * @param {Promise<T>} started
+ * @param {{ error?: (line: string) => void, exit?: (code: number) => never }} [io]
+ * @returns {Promise<T>}
+ */
+export async function failFastOnPortInUse(started, io = {}) {
+  const error = io.error || ((line) => console.error(line));
+  const exit = io.exit || ((code) => process.exit(code));
+  try {
+    return await started;
+  } catch (e) {
+    const err = /** @type {any} */ (e);
+    if (err && err.code === 'EADDRINUSE') {
+      error(`[webjs] ${err.message || 'the port is already in use'}`);
+      return exit(PORT_IN_USE_EXIT_CODE);
+    }
+    throw e;
+  }
+}
