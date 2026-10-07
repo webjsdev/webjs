@@ -1,0 +1,1 @@
+{ "name": "form-cookie-fixture-app", "private": true, "type": "module", "imports": { "#*": "./*" }, "webjs": {} }

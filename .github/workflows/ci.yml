@@ -514,6 +514,14 @@ jobs:
         env:
           WEBJS_E2E: '1'
         run: node --test test/e2e/dev-morph.test.mjs
+      # A cookie-setting form action refreshes the layout (#1557). Only a real
+      # server can show it: the action's redirect is followed by fetch, the
+      # follow-up GET must re-render the layouts, and the swap must morph the
+      # header outside every children range without a reload.
+      - name: Run form-action layout refresh e2e (#1557)
+        env:
+          WEBJS_E2E: '1'
+        run: node --test test/e2e/form-action-layout-refresh.test.mjs
       # Form-submission, concurrent-nav and scroll-restoration e2e (#1310). This
       # one runs against the WEBSITE rather than the blog, because the scroll
       # case needs a page whose content settles taller after the swap, which is

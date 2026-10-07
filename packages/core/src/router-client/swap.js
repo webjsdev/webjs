@@ -12,6 +12,7 @@ import { reportFallback } from './diagnostics.js';
 import { blurOutgoingFocus, diffChildren, replaceBoundaryRange, resyncEnclosingHostSlots, swapMarkerRange } from './dom-differ.js';
 import { trackedReloadSignature } from './frames.js';
 import { addNewHeadElements, mergeHead } from './head-merge.js';
+import { morphLayoutChrome, planLayoutChrome } from './layout-chrome.js';
 import { clearPrefetchRefused, prefetchClearAll } from './prefetch.js';
 import { snapshotCache } from './snapshot-cache.js';
 import { hardNavigate } from './state.js';
@@ -41,11 +42,16 @@ export let _swapCommit = Promise.resolve();
  *   anything (a missing frame, or a degradation to a hard navigation), and
  *   `undefined` when a swap committed. `fetchAndApply` maps the first two to
  *   `applied: false`.
- * @param {'page' | 'shell' | undefined} [refresh]  same-URL in-place refresh
- *   mode (#1398). `'shell'` takes the full-body tier directly, because the
+ * @param {'page' | 'shell' | 'layouts' | undefined} [refresh]  The swap tier
+ *   override. `'shell'` and `'page'` are the same-URL in-place refresh modes
+ *   (#1398). `'shell'` takes the full-body tier directly, because the
  *   layout's OWN markup changed and that lives outside every children range.
  *   `'page'` falls through to the normal two-tier logic, which morphs the
  *   deepest shared boundary and so preserves outer-layout component state.
+ *   `'layouts'` is the response to a mutating form submission (#1557): the
+ *   normal two-tier logic, followed by a morph of the layout chrome outside
+ *   the plan's range (`morphLayoutChrome`), or the full-body tier when that
+ *   chrome cannot be walked safely.
  * @param {(() => void) | null} [recordHistoryNow]  Record this navigation's
  *   history entry (#1406). Called at each COMMIT point, immediately BEFORE the
  *   DOM mutation, for the same reason `ingestSeeds` is: this function can still
@@ -343,6 +349,22 @@ export function applySwap(doc, frameId, revalidating, href, incomingBuild, incom
   const there = collectBoundaries(doc.body);
   const plan = here && there ? planBoundarySwap(here, there) : null;
 
+  // After a mutating submission (#1557) the layouts were re-rendered with
+  // whatever the action changed (a cookie a header reads), and their own markup
+  // sits outside the plan's range. Decide BEFORE writing anything whether that
+  // chrome can be morphed level by level; when it cannot, the full-body tier is
+  // the correct answer, since applying the range alone would leave the stale
+  // header on screen, which is the bug.
+  const chrome = plan && refresh === 'layouts'
+    ? planLayoutChrome(plan.live, plan.incoming, document.body, doc.body)
+    : null;
+  if (plan && refresh === 'layouts' && !chrome) {
+    ingestSeeds();
+    if (recordHistoryNow) recordHistoryNow();
+    swapFullBody(doc);
+    return;
+  }
+
   if (plan) {
     // Committed: this response is being applied, so its seeds are the ones the
     // user is about to look at.
@@ -372,6 +394,9 @@ export function applySwap(doc, frameId, revalidating, href, incomingBuild, incom
       // applySlotAssignments would wipe the freshly swapped content and
       // restore the stale list.
       resyncEnclosingHostSlots(live.start, incoming.start);
+      // The range is final, so the chrome around it can be morphed now
+      // without ever touching it.
+      if (chrome) morphLayoutChrome(chrome);
       // Resolve buffered Suspense boundaries INSIDE the swap so the placeholder
       // exists first. Doing this after `runWithTransition` returned raced the
       // async view-transition swap and stuck the skeleton (#1048).

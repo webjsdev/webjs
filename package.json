@@ -127,6 +127,13 @@
                   }
                 },
                 {
+                  "title": "e2e: form-action layout refresh (#1557)",
+                  "run": "CHROMIUM_PATH=\"$(node -p \"require('playwright-core').chromium.executablePath()\")\" node --test test/e2e/form-action-layout-refresh.test.mjs",
+                  "env": {
+                    "WEBJS_E2E": "1"
+                  }
+                },
+                {
                   "title": "e2e: form submission + scroll restoration (#1310)",
                   "run": "CHROMIUM_PATH=\"$(node -p \"require('playwright-core').chromium.executablePath()\")\" bash scripts/ci-e2e-website.sh",
                   "env": {

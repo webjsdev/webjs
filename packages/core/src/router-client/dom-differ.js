@@ -289,7 +289,7 @@ export function diffElementInPlace(dst, src) {
  * @param {Element} el
  * @returns {boolean}
  */
-function isHydratedComponent(el) {
+export function isHydratedComponent(el) {
   // Opaque to the router when it has rendered (INSTANCE) OR merely has slot
   // state installed but has not yet run its deferred first render (SLOT_STATE):
   // in that window a same-task morph would otherwise reconcile INTO the host
