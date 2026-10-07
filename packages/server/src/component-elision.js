@@ -1608,6 +1608,9 @@ export function lazyComponentFiles(components, elidable) {
   return out;
 }
 
+/** A test module (the same rule the component scanner skips). */
+const TEST_FILE_RE = /\.(test|spec)\.m?[jt]sx?$/;
+
 /** `import <bindings> from 'x'` (the bindings part is captured). */
 const BINDING_IMPORT_RE = /\bimport\s+(type\s+)?([\w$*{}\s,]+?)\s+from\s+(['"])([^'"]+)\3/g;
 /** `export { a } from 'x'` / `export * from 'x'` (a re-export needs the module too). */
@@ -1636,7 +1639,9 @@ function typeOnlyClause(typeKw, clause) {
  * skip a module the browser still fetches up front, which only makes it slower.
  *
  * Only importers whose graph edges reach a lazy file are read. A server file is
- * never served, so its imports do not count.
+ * never served, and a test file (`*.test.*` / `*.spec.*`) never ships to a
+ * page, so their imports do not count: a component's own browser test imports
+ * it with bindings, and that must not make it eager in the app.
  *
  * @param {Map<string, string[]>} lazyFiles
  * @param {import('./module-graph.js').ModuleGraph | undefined} moduleGraph
@@ -1650,7 +1655,7 @@ export async function bindingImportedLazyFiles(lazyFiles, moduleGraph, readFileF
   const out = new Set();
   if (!lazyFiles.size || !moduleGraph) return out;
   for (const [importer, deps] of moduleGraph) {
-    if (SERVER_FILE_RE.test(importer)) continue;
+    if (SERVER_FILE_RE.test(importer) || TEST_FILE_RE.test(importer)) continue;
     let reaches = false;
     for (const d of deps) if (lazyFiles.has(d) && !out.has(d)) { reaches = true; break; }
     if (!reaches) continue;

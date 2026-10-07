@@ -95,6 +95,7 @@ test('bindingImportedLazyFiles finds lazy files a module imports with bindings',
   const g = new Map([
     ['/app/shell.js', new Set([PANE, OTHER, BADGE])],
     ['/app/data.server.js', new Set([BADGE])],
+    ['/app/components/browser/pane.test.js', new Set([PANE, OTHER])],
   ]);
   const files = {
     '/app/shell.js': [
@@ -106,6 +107,8 @@ test('bindingImportedLazyFiles finds lazy files a module imports with bindings',
     ].join('\n'),
     // A server file's imports never reach the browser.
     '/app/data.server.js': `import { Badge } from './components/badge.js';`,
+    // A component's own browser test imports it with bindings; it never ships.
+    '/app/components/browser/pane.test.js': `import { Other } from './components/other.js';`,
   };
   const out = await bindingImportedLazyFiles(lazyFiles, g, async (f) => files[f], resolver, '/app');
   assert.deepEqual([...out], [PANE], 'only the real binding import counts');
