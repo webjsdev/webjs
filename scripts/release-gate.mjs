@@ -426,7 +426,8 @@ async function crispStage(crispWeb, tarballs, port) {
     rmSync(join(crispWeb, 'app/api/zzgate'), { recursive: true, force: true });
     for (const short of readdirSync(backup)) { rmSync(join(nm, short), { recursive: true, force: true }); renameSync(join(backup, short), join(nm, short)); }
     rmSync(backup, { recursive: true, force: true });
-    run('node', ['-e', `const {Client}=require('pg');const c=new Client(${JSON.stringify(PG + '/postgres')});c.connect().then(()=>c.query('DROP DATABASE IF EXISTS ${db} WITH (FORCE)')).then(()=>c.end())`], { cwd: crispWeb, quiet: true });
+    // Crisp's suites make a `<db>_test` database of their own.
+    run('node', ['-e', `const {Client}=require('pg');const c=new Client(${JSON.stringify(PG + '/postgres')});c.connect().then(()=>c.query('DROP DATABASE IF EXISTS ${db} WITH (FORCE)')).then(()=>c.query('DROP DATABASE IF EXISTS ${db}_test WITH (FORCE)')).then(()=>c.end())`], { cwd: crispWeb, quiet: true });
   }
 }
 
