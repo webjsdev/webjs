@@ -14,7 +14,9 @@
  * Every declaration shape is paired with real top-level calls that must keep
  * shipping, because the cheap way to make the first half pass is to stop
  * seeing calls at all. Reverting the frame blanking in `component-elision.js`
- * reds the declaration tests and the route test and nothing else.
+ * reds every declaration test except the block-bodied arrow (which the
+ * depth-0 frame already dropped), plus the route test, and nothing else
+ * (proven at 015faf5c).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
