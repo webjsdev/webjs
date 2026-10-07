@@ -67,6 +67,11 @@ test('attrHoleValue: the shared rule (#1573)', () => {
   assert.equal(attrHoleValue('title', 0), '0');
   assert.equal(attrHoleValue('title', ''), '');
   assert.equal(attrHoleValue('aria-expanded', true), 'true');
+  // #1579: a boolean attribute takes `true` the way `?attr` does.
+  assert.equal(attrHoleValue('checked', true), '');
+  assert.equal(attrHoleValue('SELECTED', true), '');
+  assert.equal(attrHoleValue('checked', false), null);
+  assert.equal(attrHoleValue('data-on', true), 'true', 'a non-boolean attribute still stringifies true');
 });
 
 test('server: a null or undefined plain hole omits the attribute (#1573)', async () => {
@@ -112,4 +117,38 @@ test('client: an aria-* hole flipping true -> false keeps the attribute as "fals
   assert.equal(host.firstElementChild.getAttribute('aria-pressed'), 'false');
   render(tpl(null), host);
   assert.equal(host.firstElementChild.hasAttribute('aria-pressed'), false, 'null is still the omit value on aria-*');
+});
+
+// #1579: the RSVP form from a generated app. Plain holes on boolean attributes
+// served `checked="false"` / `selected="false"`, which HTML reads as PRESENT, so
+// the last radio and the last option won. Each must now render like `?attr`.
+const rsvp = () => html`<form>
+  <input type="radio" name="a" value="yes" checked=${true}>
+  <input type="radio" name="a" value="no" checked=${false}>
+  <select name="n">${[1, 2, 3, 4].map((n, i) => html`<option value=${n} selected=${i === 0}>${n}</option>`)}</select>
+  <button disabled=${false} hidden=${null}>Send</button>
+</form>`;
+
+test('server: a boolean in a plain hole on a boolean attribute renders like ?attr (#1579)', async () => {
+  await bothServers(rsvp, (out, who) => {
+    assert.match(out, /value="yes"\s+checked=""/, `${who}: checked=\${true} must be checked="", got ${out}`);
+    assert.doesNotMatch(out, /="false"/, `${who}: no boolean attribute may serve "false", got ${out}`);
+    assert.doesNotMatch(out, /="true"/, `${who}: no boolean attribute may serve "true", got ${out}`);
+    assert.equal((out.match(/\bselected=""/g) || []).length, 1, `${who}: exactly one option selected, got ${out}`);
+    assert.doesNotMatch(out, /\bdisabled|\bhidden/, `${who}: false / null omit, got ${out}`);
+  });
+});
+
+test('client: the same boolean-attribute rule, so hydration agrees (#1579)', () => {
+  const host = document.createElement('div');
+  render(rsvp(), host);
+  const radios = host.querySelectorAll('input');
+  assert.equal(radios[0].getAttribute('checked'), '');
+  assert.equal(radios[1].hasAttribute('checked'), false);
+  const opts = host.querySelectorAll('option');
+  assert.deepEqual([...opts].map((o) => o.hasAttribute('selected')), [true, false, false, false]);
+  assert.equal(opts[0].getAttribute('selected'), '');
+  const btn = host.querySelector('button');
+  assert.equal(btn.hasAttribute('disabled'), false);
+  assert.equal(btn.hasAttribute('hidden'), false);
 });

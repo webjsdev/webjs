@@ -42,10 +42,25 @@ export function isBindingPrefix(ch) {
 }
 
 /**
+ * The HTML boolean attributes: present means on, absent means off, and the
+ * value is meant to be empty. A boolean in a PLAIN hole on one of these renders
+ * exactly like `?attr` (#1579), so `checked=${isDefault}` cannot serve the
+ * `checked="false"` that HTML reads as checked. Lowercase, from the HTML spec's
+ * attribute index.
+ */
+const BOOLEAN_ATTRIBUTES = new Set([
+  'allowfullscreen', 'async', 'autofocus', 'autoplay', 'checked', 'controls',
+  'default', 'defer', 'disabled', 'formnovalidate', 'hidden', 'inert',
+  'ismap', 'itemscope', 'loop', 'multiple', 'muted', 'nomodule', 'novalidate',
+  'open', 'playsinline', 'readonly', 'required', 'reversed', 'selected',
+  'shadowrootclonable', 'shadowrootdelegatesfocus', 'shadowrootserializable',
+]);
+
+/**
  * What a PLAIN attribute hole (`name=${value}`, unquoted, the whole value)
  * writes, or `null` when the attribute is omitted. The one rule both renderers
  * follow, so the server never serves an attribute the client then removes
- * (#1573):
+ * (#1573, #1579):
  *
  *   - `null` / `undefined` omit the attribute. This is the "omit" value, so a
  *     conditional attribute is `aria-current=${active ? 'page' : null}`.
@@ -53,6 +68,9 @@ export function isBindingPrefix(ch) {
  *     `"false"`. For a tri-state ARIA attribute (`aria-expanded`,
  *     `aria-pressed`, `aria-checked`) `"false"` and absent mean different
  *     things, so the value an author passes is the value the user agent gets.
+ *   - `true` on an HTML boolean attribute (`checked`, `selected`, `disabled`,
+ *     and the rest) writes the empty value, exactly as `?attr=${true}` does. Anywhere
+ *     else it is `"true"`.
  *   - anything else is `String(value)`.
  *
  * A quoted or mixed value (`title="${x}"`, `class="a ${x}"`) is not a plain
@@ -66,5 +84,6 @@ export function isBindingPrefix(ch) {
 export function attrHoleValue(name, value) {
   if (value == null) return null;
   if (value === false) return /^aria-/i.test(name) ? 'false' : null;
+  if (value === true && BOOLEAN_ATTRIBUTES.has(String(name).toLowerCase())) return '';
   return String(value);
 }
