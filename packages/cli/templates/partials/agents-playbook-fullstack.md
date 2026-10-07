@@ -15,8 +15,9 @@ few large writes (one heredoc per group of files), without exploring.
 5. Walk it once in a browser (`curl` cannot submit a bound form: it carries a
    hidden action field). Write `walk.mjs` in the app folder FIRST (Playwright is
    installed: `import { chromium } from 'playwright'`), then start
-   `PORT=<port> npm run dev > dev.log 2>&1 &` (writing files while it runs
-   triggers reloads). In the script: `page.on('dialog', (d) => d.accept())` for
+   `PORT=<port> npm run dev > /tmp/<app-folder>-dev.log 2>&1 &` (never a log or
+   any other file inside the app folder while it runs: every write reloads the
+   page). In the script: `page.on('dialog', (d) => d.accept())` for
    `confirm()`, `getByRole('button', { name, exact: true })`, and wait for each
    outcome with `waitForURL(...)` or `getByText(...).waitFor()` (a submit is
    applied in place, no full load), never a fixed timeout. Save a phone and a
