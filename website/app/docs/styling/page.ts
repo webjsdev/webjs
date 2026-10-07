@@ -39,6 +39,8 @@ export default function Styling() {
   --color-muted-foreground: var(--muted-foreground);
   --font-serif:             var(--font-serif);
   --text-display:           clamp(2.6rem, 1.6rem + 3.2vw, 4.25rem);
+  --text-display--line-height:    1.04;      /* a --text-* size needs its line height */
+  --text-display--letter-spacing: -0.025em;
   --duration-150:          140ms;
 }
 

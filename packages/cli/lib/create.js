@@ -1303,6 +1303,18 @@ ${uiThemeRaw}
   --text-h1:      clamp(2rem, 1.5rem + 1.6vw, 2.85rem);
   --text-h2:      clamp(1.35rem, 1.15rem + 0.7vw, 1.7rem);
   --text-lede:    clamp(1.05rem, 0.95rem + 0.3vw, 1.2rem);
+  /* Each size carries its line height (and, for the large steps, its
+     tracking). Tailwind v4's text-* utility sets
+     line-height: var(--tw-leading, var(--text-<name>--line-height)), so a
+     size with no companion leaves an invalid value and the heading falls
+     back to the body's 1.6, opening huge gaps between wrapped lines.
+     A leading-* / tracking-* class on the element still wins. */
+  --text-display--line-height: 1.04;
+  --text-display--letter-spacing: -0.025em;
+  --text-h1--line-height: 1.1;
+  --text-h1--letter-spacing: -0.02em;
+  --text-h2--line-height: 1.2;
+  --text-lede--line-height: 1.55;
   --duration-fast: 140ms;
   --duration-slow: 380ms;
 }
