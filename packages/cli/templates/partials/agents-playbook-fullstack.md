@@ -309,6 +309,58 @@ export class PostStatusSelect extends WebComponent({ postId: Number, status: Str
 PostStatusSelect.register('post-status');
 ```
 
+Live updates: a `route.ts` with a `WS` export is the socket, an action calls
+`broadcast()` after a write, and a tiny component reloads only the region that
+changed (a `<webjs-frame>`), so a form someone is typing in is untouched.
+Streaming: an action that is an async generator streams over RPC, and a
+component appends each chunk to a signal.
+
+```ts
+// app/live/posts/route.ts
+/** The posts list's live channel; clients connect, actions broadcast. */
+export function WS() {}
+
+// in the create action, after the insert: import { broadcast } from '@webjsdev/server';
+broadcast('/live/posts', JSON.stringify({ id: post.id }));
+
+// modules/posts/components/live-refresh.ts
+import { WebComponent, connectWS, loadFrame } from '@webjsdev/core';
+/** Reloads `<webjs-frame id=frame>` whenever the server broadcasts on `path`. */
+export class LiveRefresh extends WebComponent({ path: String, frame: String }) {
+  connection?: { close(): void };
+  connectedCallback() {
+    super.connectedCallback();
+    this.connection = connectWS(this.path, { onMessage: () => {
+      const frame = document.getElementById(this.frame);
+      if (frame) void loadFrame(frame, location.pathname);
+    } });
+  }
+  disconnectedCallback() { super.disconnectedCallback(); this.connection?.close(); }
+}
+LiveRefresh.register('live-refresh');
+// in the page: <live-refresh path="/live/posts" frame="post-list"></live-refresh>
+// and the list inside <webjs-frame id="post-list"> ... </webjs-frame>
+
+// modules/posts/actions/stream-summary.server.ts ('use server')
+/** Streams a summary word by word. */
+export async function* streamSummary(): AsyncGenerator<string> {
+  const text = `You have ${(await listPosts()).length} posts.`;
+  for (const word of text.split(' ')) { yield word + ' '; await new Promise((resolve) => setTimeout(resolve, 80)); }
+}
+
+// modules/posts/components/post-summary.ts (render: a Summarize button and <p aria-live="polite">${this.text.get()}</p>)
+async summarize() {
+  this.text.set(''); this.busy.set(true);
+  try { for await (const chunk of await streamSummary()) this.text.set(this.text.get() + chunk); }
+  catch { this.text.set('Could not summarize. Try again.'); }
+  finally { this.busy.set(false); }
+}
+```
+
+A job on a timer starts once at boot, in `instrumentation.ts`:
+`export function register() { setInterval(() => void runDigest().catch(console.error), Number(process.env.DIGEST_INTERVAL_MS) || 3_600_000); }`
+(`runDigest` lives in a server-only `.server.ts` module).
+
 ```ts
 // app/layout.ts
 import { html, asset } from '@webjsdev/core';

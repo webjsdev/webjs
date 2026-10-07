@@ -43,8 +43,8 @@ and guessing it from another framework is wrong.
 
 | Building | Read |
 | --- | --- |
-| Live updates, chat, presence (WebSockets, `WS()` route export, `connectWS`, `broadcast()`) | `client-router-and-streaming.md` "WebSockets", `built-ins.md` "Broadcast" |
-| Streaming an AI answer or progress (an action returning an async generator) | `client-router-and-streaming.md` "Streaming (Suspense and RPC)" |
+| Live updates beyond the example above (presence, two-way sockets) | `client-router-and-streaming.md` "WebSockets", `built-ins.md` "Broadcast" |
+| Streaming beyond the example above (Suspense, cancellation) | `client-router-and-streaming.md` "Streaming (Suspense and RPC)" |
 | Refreshing one region, or one element after a write (`<webjs-frame>`, `<webjs-stream>`) | `client-router-and-streaming.md` |
 | File uploads and serving them (`FileStore`, `signedUrl`) | `built-ins.md` "File storage" |
 | Caching, `revalidate`, `cache()`, rate limits | `built-ins.md` "Caching", "Rate limiting" |
@@ -54,7 +54,7 @@ and guessing it from another framework is wrong.
 | Optimistic updates | `optimistic-ui.md` |
 | OAuth sign-in, cookie sessions, `forbidden()` / `unauthorized()` | `auth-and-sessions.md` |
 | Env vars and secrets, boot-time code (`instrumentation.ts` `register()`) | `built-ins.md` "Environment variables", "Observability" |
-| Scheduled or background jobs | no built-in scheduler: start an interval in `instrumentation.ts` `register()` (read "Observability"), or expose a `route.ts` an external cron calls with a secret |
+| Scheduled jobs beyond the timer above | an external cron calling a `route.ts` with a secret |
 | Email, payments, i18n | no built-in: use the provider's SDK from a server-only `.server.ts` utility called by actions; secrets from `process.env` |
 | Browser and e2e tests | `testing.md` |
 
