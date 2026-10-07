@@ -30,6 +30,13 @@ fi
 # Read stdin so we don't break Claude Code's hook contract.
 cat /dev/stdin >/dev/null 2>&1 || true
 
+# A repository with no commit yet is a first build from the scaffold: the whole
+# build is one logical unit (CLAUDE.md), committed once at the end, so nudging
+# mid-build would only split it. The Stop hook still asks for that commit.
+if ! git rev-parse --verify -q HEAD >/dev/null 2>&1; then
+  exit 0
+fi
+
 CHANGED=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
 
 if [ -z "$CHANGED" ] || [ "$CHANGED" -lt "$THRESHOLD" ]; then

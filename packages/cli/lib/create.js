@@ -1716,8 +1716,8 @@ ThemeToggle.register('theme-toggle');
 `);
   }
   console.log(`For AI agents, read this before editing:
-  • Read AGENTS.md, then .agents/skills/webjs/SKILL.md. The skill is the guide
-    to building a WebJs app and routes to focused references on demand.
+  • Read AGENTS.md first: it carries the build steps and a worked example of
+    every common pattern. .agents/skills/webjs/ is the deeper reference.
   • This scaffold is a minimal starting point, not a demo to prune. Grow the app
     in place: add routes under app/, components under components/, and features
     under modules/<feature>/, and keep server-only code behind .server.ts.
