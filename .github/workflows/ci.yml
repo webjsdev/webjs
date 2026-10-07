@@ -254,6 +254,12 @@ jobs:
       # to be proven on both.
       - name: webjs dev source locations on Bun
         run: bun test/bun/dev-source-locations.mjs
+      # Bun's on-disk transpiler cache keys a large module by content and keeps
+      # the absolute paths the dev alias resolver returned, so the dev child
+      # runs with it off; otherwise another checkout of the file imports from
+      # the first one.
+      - name: webjs dev transpiler cache on Bun
+        run: bun test/bun/dev-transpiler-cache.mjs
       # The app-source deploy signal (#899) is derived from an fs source walk +
       # a node:crypto digest, so it must be byte-identical on the Bun.serve path.
       - name: App-source deploy signal on Bun

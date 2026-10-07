@@ -591,7 +591,7 @@ async function main() {
       superviseDevServer({
         cwd: process.cwd(),
         plan,
-        env: { ...process.env, __WEBJS_DEV_CHILD: '1' },
+        env: { ...process.env, ...plan.env, __WEBJS_DEV_CHILD: '1' },
         onExit: (code) => { killTasks(); process.exit(code); },
       });
       break;
