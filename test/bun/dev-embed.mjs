@@ -36,6 +36,11 @@ try {
   assert.ok(html.includes('installEmbedBridge(["https://host.example"])'), `[${runtime}] origins inlined`);
   assert.equal(res.headers.get('x-frame-options'), null, `[${runtime}] X-Frame-Options dropped in dev`);
   assert.match(csp, /frame-ancestors 'self' https:\/\/host\.example/, `[${runtime}] frame-ancestors widened`);
+  // The host's reload hold (#1532): the bridge handles the command, and the
+  // served reload client gates every reload on it.
+  assert.ok(html.includes("d.type === 'hold'"), `[${runtime}] the bridge takes the hold command`);
+  const rjs = await (await dev.handle(new Request('http://localhost/__webjs/reload.js'))).text();
+  assert.ok(rjs.includes('if (__webjsHold.offer(verdict)) return;'), `[${runtime}] the reload client honours the hold`);
 
   const prod = await createRequestHandler({ appDir, dev: false });
   const pres = await prod.handle(new Request('http://localhost/'));

@@ -201,8 +201,13 @@ suite('dev embed bridge, browser half (#1498)', () => {
       await new Promise((r) => setTimeout(r, 10));
     }
     assert.ok(doc.querySelector('[data-webjs-embed-highlight]'), 'the highlight box is mounted');
-    doc.getElementById('target').dispatchEvent(new win.MouseEvent('click', { bubbles: true, composed: true }));
+    doc.getElementById('target').dispatchEvent(new win.MouseEvent('click', { bubbles: true, composed: true, shiftKey: true, metaKey: true }));
     const sel = await waitFor((m) => m.type === 'select', 'select');
+    // Modifier keys ride along so a host can multi-select (#1532).
+    assert.equal(sel.shiftKey, true);
+    assert.equal(sel.metaKey, true);
+    assert.equal(sel.altKey, false);
+    assert.equal(sel.ctrlKey, false);
     assert.equal(sel.src, 'app/page.ts:7');
     assert.equal(sel.tag, 'main', 'the reported element is the one carrying the source location');
     assert.equal(sel.text, 'Hello world');
@@ -265,6 +270,64 @@ suite('dev embed bridge, browser half (#1498)', () => {
     win.eval("postMessage({ source: 'webjs-embed-host', type: 'inspect', enabled: true }, location.origin)");
     await new Promise((r) => setTimeout(r, 100));
     assert.equal(win.document.querySelector('[data-webjs-embed-highlight]'), null);
+    handle.uninstall();
+    iframe.remove();
+  });
+  test('hold pauses the reload client, persists for the tab, and its release applies the pending reload (#1532)', async () => {
+    const { iframe, win, handle } = await mount();
+    let releases = 0;
+    win.__webjsDevReleaseHold = () => { releases++; };
+    host(win, { type: 'hold', enabled: true });
+    const on = await waitFor((m) => m.type === 'hold' && m.enabled === true, 'hold ack');
+    assert.equal(on.enabled, true);
+    assert.equal(win.__webjsEmbedHold, true, 'the reload client reads this flag');
+    assert.equal(win.sessionStorage.getItem('webjs-embed-hold'), '1', 'a new document in this tab starts held');
+    assert.equal(releases, 0, 'holding releases nothing');
+    // A new document in the tab installs held.
+    handle.uninstall();
+    win.__webjsEmbedHold = false;
+    const h2 = installEmbedBridge([location.origin], { win });
+    assert.equal(win.__webjsEmbedHold, true, 'the stored hold is picked up at install');
+    received = [];
+    host(win, { type: 'hold', enabled: false });
+    await waitFor((m) => m.type === 'hold' && m.enabled === false, 'release ack');
+    assert.equal(win.__webjsEmbedHold, false);
+    assert.equal(win.sessionStorage.getItem('webjs-embed-hold'), null);
+    assert.equal(releases, 1, 'the release asks the reload client to apply what it held');
+    h2.uninstall();
+    iframe.remove();
+  });
+
+  test('scroll is restored when the frame reloads on the same path, not on another path (#1532)', async () => {
+    const TALL = new URL('./embed-frame-tall.html', import.meta.url).href;
+    const iframe = document.createElement('iframe');
+    iframe.style.height = '300px';
+    iframe.src = TALL;
+    let loaded = frameLoad(iframe);
+    document.body.appendChild(iframe);
+    await loaded;
+    let win = iframe.contentWindow;
+    // Take the browser's own restoration out of the picture, so only the
+    // bridge can put the position back.
+    win.history.scrollRestoration = 'manual';
+    let handle = installEmbedBridge([location.origin], { win });
+    win.scrollTo(0, 1234);
+    assert.equal(Math.round(win.scrollY), 1234);
+    loaded = frameLoad(iframe);
+    win.location.reload();
+    await loaded;
+    win = iframe.contentWindow;
+    handle = installEmbedBridge([location.origin], { win });
+    assert.equal(Math.round(win.scrollY), 1234, 'the reload kept the scroll position');
+    assert.equal(win.sessionStorage.getItem('webjs-embed-scroll'), null, 'the saved position is used once');
+    // A different path never takes it.
+    win.scrollTo(0, 800);
+    loaded = frameLoad(iframe);
+    win.location.href = TALL + '?other=1';
+    await loaded;
+    win = iframe.contentWindow;
+    handle = installEmbedBridge([location.origin], { win });
+    assert.equal(Math.round(win.scrollY), 0, 'another path starts at the top');
     handle.uninstall();
     iframe.remove();
   });
