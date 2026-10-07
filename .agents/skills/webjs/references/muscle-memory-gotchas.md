@@ -174,7 +174,7 @@ html`<form action=${submitFeedback}><input name="email"></form>`;
 html`<form method="post"><input name="email"></form>`;
 ```
 
-A hole that resolves to `null` is NOT the same as omitting the attribute. `method=${null}` renders `method=""`, which cannot submit and is refused; `?method=${false}` emits nothing at all, so WebJs supplies `method="post"` and the form works. Both leave no attribute in the DOM, which is exactly why the check reads your template rather than the rendered element.
+A plain attribute hole that resolves to `null` or `undefined` omits the attribute on both renderers (#1573), so `method=${null}` and `?method=${false}` both emit nothing and WebJs supplies `method="post"`. An EMPTY string is different: `method=${''}` renders `method=""`, which cannot submit and is refused.
 
 A string stays a string: `action="/search"` and `action=${'/search'}` are unchanged, which is what a search form (`<form method="get" action="/search">`) and a `route.ts` endpoint both want. Other attributes keep their existing stringify behaviour; only a FUNCTION under `action` / `formaction` is claimed.
 

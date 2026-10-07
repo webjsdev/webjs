@@ -740,11 +740,13 @@ their stylesheets key on).
 **`test/ssr-aria.test.js` is the SSR layer, and it is not optional for an ARIA
 change.** It renders Tier-2 components through `renderToString` and asserts the
 ARIA in the SERVED markup. It exists because the browser suite runs only the
-CLIENT renderer, which removes a nullish attribute hole while the server
-stringifies it to `attr=""`. So a component that "omits" ARIA via a null hole
-passes every browser assertion while serving the empty attribute, and SSR then
-disagrees with the hydrated DOM. Three real defects shipped that way before this
-layer existed. Any conditional ARIA needs an assertion here, not just in the
+CLIENT renderer. Before #1573 the client removed a nullish attribute hole while
+the server stringified it to `attr=""`, so a component that "omitted" ARIA via a
+null hole passed every browser assertion while serving the empty attribute.
+Three real defects shipped that way before this layer existed, and the
+components still branch those templates so they render right on an older
+`@webjsdev/core`. Both renderers now omit a nullish hole, but the served markup
+is still what a screen reader meets first. Any conditional ARIA needs an assertion here, not just in the
 browser suite.
 
 Real-browser tests for the kit live under
