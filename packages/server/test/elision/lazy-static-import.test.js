@@ -20,6 +20,7 @@ import { join, dirname } from 'node:path';
 import { createRequestHandler } from '../../src/dev.js';
 import { deferLazyImportsFromSource, lazyComponentFiles } from '../../src/component-elision.js';
 import { declaresLazy } from '../../src/component-scanner.js';
+import { createBrowserTestHandler } from '../../src/testing.js';
 
 // ---- the pure rewrite -------------------------------------------------------
 
@@ -212,6 +213,26 @@ export default () => html\`<x-eager-shell></x-eager-shell>\`;`,
     assert.ok(preloads(html).some((h) => h.includes('/components/pane.ts')), 'an eager pane is preloaded');
     const served = await (await app.handle(new Request('http://x/components/shell.ts'))).text();
     assert.match(served, /import '\.\/pane\.ts';/, 'and its import is served as written');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the browser test handler serves a lazy import as written (a test imports what it tests)', async () => {
+  const dir = makeApp({
+    'app/layout.ts': LAYOUT,
+    'app/page.ts': `import { html } from '@webjsdev/core';
+import '../components/shell.ts';
+export default () => html\`<x-test-shell></x-test-shell>\`;`,
+    'components/shell.ts': SHELL_SRC('x-test-shell', 'x-test-pane'),
+    'components/pane.ts': PANE_SRC('x-test-pane'),
+    'components/pane-helper.ts': HELPER,
+  });
+  try {
+    const t = await createBrowserTestHandler(dir);
+    const served = await (await t.handle(new Request('http://x/components/shell.ts'))).text();
+    assert.match(served, /import '\.\/pane\.ts';/, 'the import is served as written');
+    assert.doesNotMatch(served, /observeLazy/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

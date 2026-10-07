@@ -323,7 +323,10 @@ export async function handleCore(req, ctx) {
       const elideOpts = {
         moduleGraph: state.moduleGraph,
         elidableComponents: state.elidableComponents,
-        lazyComponentFiles: state.lazyComponentFiles,
+        // A browser test imports the component it tests and expects it defined
+        // when the import resolves, so the test handler serves every import as
+        // written (#1524).
+        lazyComponentFiles: state.testMode ? undefined : state.lazyComponentFiles,
         appDir,
         // Dev source locations (#1499): annotate the served module's `html`
         // templates exactly as the SSR load hook annotates the server's copy.
