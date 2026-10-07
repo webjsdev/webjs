@@ -1,3 +1,4 @@
+import { openSync, readSync, closeSync } from 'node:fs';
 import { basePath, buildImportMap, importMapTag, vendorPreconnectOrigins } from '../importmap.js';
 import { withBasePath } from '../base-path.js';
 import { escapeAttr, escapeHtml } from './escape.js';
@@ -10,60 +11,126 @@ import { embedScriptTag } from '../dev-embed.js';
 import { devReloadState } from '../dev-reload-state.js';
 import { openGraphPairs, twitterPairs, setMetadataImageRoutes } from './seo.js';
 
-// Which icon metadata ROUTES the app has (`app/icon.*`, `app/apple-icon.*`).
-// Set at boot and on each route rebuild from the route table, the same shape
-// as setClientRouterEnabled, so no opt has to thread through every render
-// path. Empty by default, which keeps an app that declares its icons (or has
-// neither route) byte-identical.
+// Which icon and manifest metadata the app has: the `app/icon.*`,
+// `app/apple-icon.*` and `app/manifest.*` files (a static file such as
+// `app/icon.svg`, or a route such as `app/icon.ts`). Set at boot and on each
+// route rebuild from the route table, the same shape as setClientRouterEnabled,
+// so no opt has to thread through every render path. Empty by default, which
+// keeps an app that declares its icons (or has none) byte-identical.
 //
 // This sits in head.js rather than in a module of its own the way the
 // client-router flag does: `wrapHead` is the only reader, and module state
 // belongs with the code that uses and writes it. The flag moved out only
 // because it has a second reader in render.js.
-/** @type {{ icon: boolean, apple: boolean }} */
-let _metadataIconRoutes = { icon: false, apple: false };
+/** @typedef {{ url: string, type?: string, sizes?: string }} AutoIcon */
+/** @type {{ icon: AutoIcon[], apple: AutoIcon[], manifest: string | null }} */
+let _metadataIconRoutes = { icon: [], apple: [], manifest: null };
 
 /**
- * Record the icon metadata routes the app defines.
+ * The pixel size of a PNG file (`"180x180"`), read from its IHDR header, or
+ * undefined when the file is not a readable PNG. Only the first 24 bytes are
+ * read, once per route rebuild.
+ * @param {string} file
+ */
+function pngSizes(file) {
+  let fd;
+  try {
+    fd = openSync(file, 'r');
+    const buf = Buffer.alloc(24);
+    if (readSync(fd, buf, 0, 24, 0) < 24) return undefined;
+    if (buf.readUInt32BE(0) !== 0x89504e47 || buf.toString('latin1', 12, 16) !== 'IHDR') return undefined;
+    return `${buf.readUInt32BE(16)}x${buf.readUInt32BE(20)}`;
+  } catch {
+    return undefined;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
+/**
+ * Record the icon and manifest metadata the app defines.
  *
- * @param {Iterable<{ stem: string }> | null | undefined} metadataRoutes
+ * A static file is linked with its type, plus its pixel size for a PNG and
+ * `sizes="any"` for an SVG. A route (`app/icon.ts`) is linked bare: it picks
+ * its own content type at request time, which is the reason to use one, so a
+ * declared type could contradict the bytes. When an app has both a static
+ * icon and an icon route, the static file wins the link: the route then
+ * stays reachable at its URL without becoming the favicon.
+ *
+ * Raster icons are linked before SVG. Google's favicon crawler takes the
+ * first usable icon and wants a square raster, and a browser that reads SVG
+ * picks it from the list regardless of order.
+ *
+ * @param {Iterable<{ stem: string, urlPath?: string, file?: string, static?: boolean, contentType?: string }> | null | undefined} metadataRoutes
  *   The route table's `metadataRoutes`, or nullish to clear.
  */
 export function setMetadataIconRoutes(metadataRoutes) {
-  const stems = new Set();
-  for (const r of metadataRoutes || []) if (r && r.stem) stems.add(r.stem);
-  _metadataIconRoutes = { icon: stems.has('icon'), apple: stems.has('apple-icon') };
-  // The share-image routes (#1564) are recorded from the same table so one
-  // call keeps both in step on boot and on every rebuild.
+  /** @type {Record<string, Array<{ stem: string, urlPath?: string, file?: string, static?: boolean, contentType?: string }>>} */
+  const byStem = { icon: [], 'apple-icon': [], manifest: [] };
+  for (const r of metadataRoutes || []) {
+    if (!r || !byStem[r.stem]) continue;
+    // Only the app-root ones describe the app. A route nested in a segment
+    // (`app/blog/icon.ts`) answers at its own URL but is not the favicon.
+    const url = r.urlPath || '/' + r.stem;
+    if (url.lastIndexOf('/') !== 0) continue;
+    byStem[r.stem].push({ ...r, urlPath: url });
+  }
+  /** @param {typeof byStem.icon} list @returns {AutoIcon[]} */
+  const links = (list) => {
+    const statics = list.filter((r) => r.static);
+    const chosen = statics.length ? statics : list.filter((r) => !r.static);
+    const rank = (/** @type {typeof list[number]} */ r) => (r.contentType === 'image/svg+xml' ? 1 : 0);
+    return chosen.sort((a, b) => rank(a) - rank(b)).map((r) => {
+      /** @type {AutoIcon} */
+      const out = { url: /** @type {string} */ (r.urlPath) };
+      if (r.static && r.contentType) out.type = r.contentType;
+      if (r.contentType === 'image/svg+xml') out.sizes = 'any';
+      else if (r.contentType === 'image/png' && r.file) {
+        const sizes = pngSizes(r.file);
+        if (sizes) out.sizes = sizes;
+      }
+      return out;
+    });
+  };
+  const manifest = byStem.manifest.find((r) => r.static) || byStem.manifest[0];
+  _metadataIconRoutes = {
+    icon: links(byStem.icon),
+    apple: links(byStem['apple-icon']),
+    manifest: manifest ? /** @type {string} */ (manifest.urlPath) : null,
+  };  // The og/twitter image routes ride the same rebuild hook (seo.js).
   setMetadataImageRoutes(metadataRoutes);
 }
 
 /**
- * The implicit `metadata.icons` an app's icon routes stand for, or null when
- * it has none. Base-path prefixed, because that is where the routes are
+ * The implicit `metadata.icons` an app's icon files and routes stand for, or
+ * null when it has none. Base-path prefixed, because that is where they are
  * SERVED: the listener strips the base path before matching, so under
- * `webjs.basePath` the route answers at `<basePath>/icon`. A user-authored
+ * `webjs.basePath` the icon answers at `<basePath>/icon.svg`. A user-authored
  * `icons` URL is deliberately left alone (it may be cross-origin, and the
  * author writes the path they mean), so only these framework-emitted ones
  * are prefixed.
  *
- * No `type` or `sizes` is emitted. A metadata route picks its own content
- * type at request time, which is the reason to use one, so declaring a type
- * here could contradict the bytes; and `sizes` is unknowable without reading
- * the response. Both are optional in HTML, and a browser sniffs the served
- * content type.
- *
- * @returns {{ icon?: string, apple?: string } | null}
+ * @returns {{ icon?: AutoIcon[], apple?: AutoIcon[] } | null}
  */
 function autoMetadataRouteIcons() {
   const { icon, apple } = _metadataIconRoutes;
-  if (!icon && !apple) return null;
+  if (!icon.length && !apple.length) return null;
   const bp = basePath();
-  /** @type {{ icon?: string, apple?: string }} */
+  const prefix = (/** @type {AutoIcon} */ i) => ({ ...i, url: withBasePath(i.url, bp) });
+  /** @type {{ icon?: AutoIcon[], apple?: AutoIcon[] }} */
   const out = {};
-  if (icon) out.icon = withBasePath('/icon', bp);
-  if (apple) out.apple = withBasePath('/apple-icon', bp);
+  if (icon.length) out.icon = icon.map(prefix);
+  if (apple.length) out.apple = apple.map(prefix);
   return out;
+}
+
+/**
+ * The app's `app/manifest.*` URL (base-path prefixed), or null.
+ * @returns {string | null}
+ */
+function autoManifestUrl() {
+  const { manifest } = _metadataIconRoutes;
+  return manifest ? withBasePath(manifest, basePath()) : null;
 }
 
 /**
@@ -787,9 +854,14 @@ export function wrapHead(opts) {
     }
   }
 
-  // manifest: a string URL → <link rel="manifest">
+  // manifest: a string URL → <link rel="manifest">. With none declared, an
+  // `app/manifest.*` file or route is linked automatically, the same way the
+  // icons are; `manifest: null` opts out.
   if (typeof m.manifest === 'string') {
     linkTags.push(`<link rel="manifest" href="${escapeAttr(absUrl(m.manifest))}">`);
+  } else if (m.manifest === undefined) {
+    const auto = autoManifestUrl();
+    if (auto) linkTags.push(`<link rel="manifest" href="${escapeAttr(auto)}">`);
   }
 
   // alternates: { canonical, languages: { '<hreflang>': url }, media: { '<media>': url } }

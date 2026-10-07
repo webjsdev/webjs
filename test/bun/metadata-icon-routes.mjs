@@ -148,4 +148,55 @@ async function headIconHrefs(handle, url = 'http://localhost/') {
   assert.equal(icon.status, 200, `the base-path icon href did not serve on ${runtime}`);
 }
 
+// Static files: app/icon.svg + app/apple-icon.png + app/manifest.webmanifest
+// are served at their own names with the right content type, linked with type
+// and size, and /favicon.ico answers with the icon when no .ico exists.
+{
+  const png = Buffer.alloc(33);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(png, 0);
+  png.writeUInt32BE(13, 8);
+  png.write('IHDR', 12, 'latin1');
+  png.writeUInt32BE(180, 16);
+  png.writeUInt32BE(180, 20);
+  const appDir = makeApp({
+    'app/page.js': PAGE,
+    'app/icon.ts': ICON_ROUTE,
+    'app/icon.svg': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32"/></svg>',
+    'app/manifest.webmanifest': JSON.stringify({ name: 'Static icons' }),
+  });
+  writeFileSync(join(appDir, 'app', 'apple-icon.png'), png);
+  const h = await createRequestHandler({ appDir, dev: false });
+  await h.warmup?.();
+
+  const res = await h.handle(new Request('http://localhost/'));
+  const head = (await res.text()).split('</head>')[0];
+  assert.match(head, /<link rel="icon" href="\/icon\.svg" sizes="any" type="image\/svg\+xml">/, `static icon.svg not linked on ${runtime}`);
+  assert.doesNotMatch(head, /href="\/icon"/, `the icon route was linked beside the static file on ${runtime}`);
+  assert.match(head, /<link rel="apple-touch-icon" href="\/apple-icon\.png" sizes="180x180" type="image\/png">/, `apple-icon.png not linked on ${runtime}`);
+  assert.match(head, /<link rel="manifest" href="\/manifest\.webmanifest">/, `manifest not linked on ${runtime}`);
+
+  const svg = await h.handle(new Request('http://localhost/icon.svg'));
+  assert.equal(svg.status, 200);
+  assert.equal(svg.headers.get('content-type'), 'image/svg+xml');
+  const apple = await h.handle(new Request('http://localhost/apple-icon.png'));
+  assert.equal(apple.headers.get('content-type'), 'image/png');
+  const manifest = await h.handle(new Request('http://localhost/manifest.webmanifest'));
+  assert.equal(manifest.headers.get('content-type'), 'application/manifest+json');
+  assert.equal((await manifest.json()).name, 'Static icons');
+
+  const ico = await h.handle(new Request('http://localhost/favicon.ico'));
+  assert.equal(ico.status, 200, `/favicon.ico did not fall back to the icon on ${runtime}`);
+  assert.equal(ico.headers.get('content-type'), 'image/svg+xml');
+}
+
+// app/favicon.ico, when present, is what /favicon.ico serves.
+{
+  const appDir = makeApp({ 'app/page.js': PAGE, 'app/icon.svg': '<svg/>', 'app/favicon.ico': 'ICO' });
+  const h = await createRequestHandler({ appDir, dev: false });
+  await h.warmup?.();
+  const ico = await h.handle(new Request('http://localhost/favicon.ico'));
+  assert.equal(ico.headers.get('content-type'), 'image/x-icon');
+  assert.equal(await ico.text(), 'ICO');
+}
+
 console.log(`metadata icon routes: auto-link, precedence and basePath OK on ${runtime}`);

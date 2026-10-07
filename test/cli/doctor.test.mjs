@@ -1966,3 +1966,26 @@ test('workspace-overrides: passes for a standalone app, a non-member, or no over
   writeFileSync(join(app, 'package.json'), JSON.stringify({ name: 'web' }));
   assert.equal(checkWorkspaceOverrides(app).status, 'pass');
 });
+
+// APP_ICON: a favicon still the scaffold's (the marked placeholder app/icon.svg,
+// or the WebJs mark earlier scaffolds shipped at public/favicon.svg) makes
+// every app show the same tab icon. Doctor warns until it is replaced.
+const { checkAppIcon } = await import(resolve(CLI_LIB_DIR, 'doctor', 'probes', 'app-icon.js'));
+const { PLACEHOLDER_ICON_SVG } = await import(resolve(CLI_LIB_DIR, 'app-icon.js'));
+
+test('app-icon: warns on the placeholder, the legacy brand mark; passes on an own icon', () => {
+  const app = mkdtempSync(join(tmpdir(), 'webjs-doctor-icon-'));
+  cleanup.push(app);
+  assert.equal(checkAppIcon(app).status, 'pass', 'no app/ directory: nothing to check');
+  mkdirSync(join(app, 'app'));
+  mkdirSync(join(app, 'public'));
+  writeFileSync(join(app, 'app', 'icon.svg'), PLACEHOLDER_ICON_SVG);
+  const r = checkAppIcon(app);
+  assert.equal(r.status, 'warn');
+  assert.match(r.message, /placeholder/);
+  assert.match(r.fix, /legible at 16px/);
+  writeFileSync(join(app, 'app', 'icon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"><circle r="8"/></svg>');
+  assert.equal(checkAppIcon(app).status, 'pass', 'an own icon passes');
+  writeFileSync(join(app, 'public', 'favicon.svg'), '<svg aria-label="WebJs"><defs><linearGradient id="wj"/></defs></svg>');
+  assert.match(checkAppIcon(app).message, /WebJs mark/);
+});

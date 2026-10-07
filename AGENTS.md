@@ -225,6 +225,7 @@ env.js                      optional boot-time env validation (schema or validat
 instrumentation.js          optional boot-time hook (register(); wire APM via setOnError, #848)
 instrumentation-client.js   optional client boot hook (runs first, before app modules, #848)
 sitemap.js robots.js manifest.js icon.js opengraph-image.js twitter-image.js apple-icon.js   metadata routes
+icon.svg icon.png apple-icon.png favicon.ico manifest.webmanifest   static app-root metadata files, auto-linked (replace the placeholder icon.svg)
 lib/                        app-wide code (lib/*.server.js infra, lib/utils/ browser-safe helpers)
 modules/<feature>/          feature-scoped: actions/ (mutations), queries/ (reads), components/, utils/, types.js
 components/*.js             SHARED presentational primitives

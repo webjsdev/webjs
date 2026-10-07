@@ -150,14 +150,20 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.doesNotMatch(layoutSrc, /oklch\(0\.7 0\.16 52\)/,
       'no orange brand color survives in the neutral scaffold');
 
-    // Favicon: declared via metadata.icons (the framework emits it into <head>).
-    // A hand-written <link rel="icon"> in the layout body lands in <body>, where
-    // browsers ignore it, the recurring "favicon never shows" bug this guards.
-    assert.match(layoutSrc, /export const metadata = \{ icons: '\/public\/favicon\.svg' \}/,
-      'layout declares the favicon via metadata.icons');
+    // App icon: the scaffold ships app/icon.svg (a neutral PLACEHOLDER, marked
+    // so webjs doctor can flag it) and app/manifest.webmanifest, both linked by
+    // the framework, so the layout declares no icons. A hand-written
+    // <link rel="icon"> in the layout body lands in <body>, where browsers
+    // ignore it; and a declared metadata.icons would suppress the auto-link.
+    assert.doesNotMatch(layoutSrc, /icons:/, 'layout declares no metadata.icons');
     assert.doesNotMatch(layoutSrc, /<link rel="icon"/,
       'layout must NOT hand-write a <link rel=icon> (it lands in <body>, ignored)');
-    assert.ok(existsSync(join(appDir, 'public', 'favicon.svg')), 'ships public/favicon.svg');
+    assert.match(readFileSync(join(appDir, 'app', 'icon.svg'), 'utf8'), /data-webjs-placeholder="icon"/,
+      'ships the marked placeholder app/icon.svg');
+    assert.ok(!existsSync(join(appDir, 'public', 'favicon.svg')), 'no WebJs-branded public/favicon.svg');
+    const manifest = JSON.parse(readFileSync(join(appDir, 'app', 'manifest.webmanifest'), 'utf8'));
+    assert.equal(manifest.icons[0].src, '/icon.svg', 'the manifest names the app icon');
+    assert.ok(manifest.name, 'the manifest carries the app name');
 
     // The home page is a gallery index: an 'Explore the gallery' hero, a grid
     // linking every feature demo + the example app, and a footer with the docs +

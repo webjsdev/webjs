@@ -191,9 +191,9 @@ import type { LayoutProps } from '@webjsdev/core';
  * to pull primitives, then theme them here.
  */
 
-// Favicon via metadata.icons so the framework emits the <link> into <head> (a
-// hand-written <link> in the template body is ignored by browsers).
-export const metadata = { icons: '/public/favicon.svg' };
+// The favicon is app/icon.svg (and the manifest app/manifest.webmanifest): the
+// framework links both into <head>, so nothing is declared here. Replace the
+// placeholder icon with this app's own.
 
 export default function RootLayout({ children }: LayoutProps) {
   return html\`

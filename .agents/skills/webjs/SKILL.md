@@ -44,6 +44,7 @@ Rows point rather than explain. The reference is the authority on the rule, and 
 | add a URL, static or with a dynamic segment | a file at `app/<path>/page.ts`, `[id]` for a param | registering the route in a table or config | `references/routing-and-pages.md` | `app/features/routing` |
 | abandon a render because something is missing or not allowed | throw `notFound()` / `forbidden()` / `unauthorized()` | returning an error object and branching in the template | `references/routing-and-pages.md` | `app/features/boundaries` |
 | set a page's title, description, or social preview | `export const metadata` or `generateMetadata()` | writing `<head>` tags in the page | `references/routing-and-pages.md` | `app/features/metadata` |
+| give the app its own favicon, home-screen icon and manifest | replace the placeholder `app/icon.svg` with a simple symbol for the app in its colours, add `app/apple-icon.png`, edit `app/manifest.webmanifest` | leaving the scaffold placeholder, or a hand-written `<link rel="icon">` | `references/routing-and-pages.md` (App icon and manifest) | `app/icon.ts` |
 | make part of the page respond to a click or hold state | a `WebComponent` custom element | expecting the page's own markup to hydrate | `references/components.md` | `app/features/components` |
 | render a keyed list, or swap one node when state changes | `repeat()` / `watch()` from `/directives` | re-rendering the component or diffing by hand | `references/components.md` | `app/features/directives` |
 | get server data into a component's first paint | `async render()` awaiting an action | fetching in `connectedCallback`, which SSR never calls | `references/components.md` | `app/features/async-render` |
@@ -174,7 +175,7 @@ Find the right export fast. Load the linked reference for full examples.
 
 ### File conventions
 
-`page.ts` (server-only fn), `layout.ts` (embeds `children`), `route.ts` (HTTP handler), `middleware.ts`, `*.server.ts` (server boundary), `error.ts` / `loading.ts` / `not-found.ts` / `forbidden.ts` / `unauthorized.ts` (boundaries), metadata routes (`sitemap.ts`, `robots.ts`, `manifest.ts`, `icon.ts`, `opengraph-image.ts`).
+`page.ts` (server-only fn), `layout.ts` (embeds `children`), `route.ts` (HTTP handler), `middleware.ts`, `*.server.ts` (server boundary), `error.ts` / `loading.ts` / `not-found.ts` / `forbidden.ts` / `unauthorized.ts` (boundaries), metadata routes (`sitemap.ts`, `robots.ts`, `manifest.ts`, `icon.ts`, `opengraph-image.ts`), and the static app-root icon files (`icon.svg`, `apple-icon.png`, `manifest.webmanifest`, `favicon.ico`), auto-linked into `<head>`. The scaffold's `app/icon.svg` is a placeholder: replace it with the app's own icon.
 
 ## Canonical Patterns
 

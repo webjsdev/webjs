@@ -296,6 +296,8 @@ Three levels, the same scale ESLint uses: `error` fails the exit, `warn` reports
 
 Two guarantees worth knowing. A result that could not check (a network or toolchain outage) is capped at `warn` and can never be escalated, so a jspm or npm outage cannot red your CI. And a malformed gate exits 1 naming the offender rather than being ignored, so a typo cannot silently un-gate the build. That covers an unknown code, a bad severity, a wrong shape (a non-object `doctor` or `gate`), and a misspelled sibling of `gate` such as `gates`, since every one of those would otherwise leave the build un-gated while the `package.json` looks gated. Under `--json` the offenders come back as a `configErrors` array alongside an empty `results`, each entry a `{ kind }` of `malformed` / `unknown-key` / `unknown-code` / `bad-severity`. Wire it up with one workflow step, `npm run doctor`, and change what is fatal in `package.json` rather than in the workflow.
 
+`APP_ICON` warns while the favicon is still the scaffold's: the placeholder `app/icon.svg` (marked `data-webjs-placeholder`) or the WebJs mark older scaffolds shipped at `public/favicon.svg`. Replace it with the app's own icon (`references/routing-and-pages.md`, "App icon and manifest").
+
 ### Dependency audit allowlist
 
 `webjs audit` runs `npm audit` or `bun audit` (by the nearest lockfile, so a workspace member uses the root's) and fails on any advisory at or above `webjs.audit.level` (default `high`) that `webjs.audit.ignore` does not list. The scaffold's `Security: dependency audit` CI step runs it.

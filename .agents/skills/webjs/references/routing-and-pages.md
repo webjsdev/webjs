@@ -278,12 +278,26 @@ export default function robots({ siteUrl }: MetadataRouteContext) {
 
 The IMAGE metadata routes (`icon`, `apple-icon`, `opengraph-image`, `twitter-image`) default-export a function returning a `Response` with an explicit `content-type`, so an inline SVG needs no asset file (buildless).
 
-**`icon` and `apple-icon` are LINKED for you.** An app that declares no `metadata.icons` gets `<link rel="icon" href="/icon">` and `<link rel="apple-touch-icon" href="/apple-icon">` in the head automatically, for whichever of the two routes it defines (base-path prefixed, since that is where the route answers). No `type` or `sizes` is asserted, because the route picks its content type at request time and the browser sniffs the served one.
+### App icon and manifest (replace the placeholder)
 
-Declaring `metadata.icons` **suppresses** the routes rather than merging with them, which is what Next does with its static icon files. So an app that outgrows a placeholder `app/icon.ts` names its real icons and the route stops being linked without having to be deleted:
+**Every app needs its OWN icon.** `webjs create` ships `app/icon.svg` as a neutral PLACEHOLDER (a grey tile with a dashed frame, marked `data-webjs-placeholder="icon"`) and `app/manifest.webmanifest` with the app's name. Replacing the placeholder is part of building the app, not polish: until you do, the tab, the bookmark and the home-screen icon look like every other unfinished app, and `webjs doctor` warns (`APP_ICON`). Draw a simple symbol for what the app IS (a grid for a tic-tac-toe game, a cup for a cafe, a check for a task list), in the app's own colours, on a 32x32 or 24x24 `viewBox`: a filled rounded tile in the primary colour with one bold shape in its foreground colour reads at 16px. Avoid thin strokes (under 2px at 32px), text longer than one letter, and detail that blurs at tab size. Then set `name`, `short_name`, `theme_color` and `background_color` in `app/manifest.webmanifest` to match.
+
+The icon conventions, all at the app ROOT and all auto-linked into `<head>` when the app declares no `metadata.icons`:
+
+| File | Served at | Linked as |
+|---|---|---|
+| `app/icon.svg` / `icon.png` / `icon.ico` | `/icon.svg` ... | `<link rel="icon">` with `type`, `sizes="any"` (SVG) or the PNG's real pixel size |
+| `app/apple-icon.png` (180x180) | `/apple-icon.png` | `<link rel="apple-touch-icon" sizes="180x180">` (iOS needs PNG, not SVG) |
+| `app/icon.ts` / `apple-icon.ts` | `/icon`, `/apple-icon` | bare link (the route picks its content type per request) |
+| `app/manifest.webmanifest` / `manifest.json` / `manifest.ts` | `/manifest.webmanifest`, `/manifest.json` | `<link rel="manifest">` (`metadata.manifest` wins; `manifest: null` opts out) |
+| `app/favicon.ico` | `/favicon.ico` | not linked; browsers request it themselves |
+
+`/favicon.ico` always answers: `public/favicon.ico`, else `app/favicon.ico`, else the app's icon (raster preferred over SVG, then the `icon.ts` route), so a crawler or feed reader that reads no markup gets the same icon. A static icon file wins the link over an icon route when both exist (the route still serves at its URL). Raster icons are linked before SVG, because Google's favicon crawler takes the first usable icon and wants a square raster. Use `icon.ts` only when the mark must be computed per request (per theme, per tenant); a route can render a PNG for `apple-icon.ts` the same way.
+
+Declaring `metadata.icons` **suppresses** all of the above rather than merging with them, which is what Next does with its static icon files. So name icons explicitly only when they live elsewhere (a CDN, `public/`):
 
 ```ts
-// app/layout.ts  ->  these win; /icon and /apple-icon are no longer linked
+// app/layout.ts  ->  these win; app/icon.* and app/apple-icon.* are no longer linked
 export const metadata = {
   icons: {
     icon: [
@@ -295,7 +309,7 @@ export const metadata = {
 };
 ```
 
-Declare a favicon through `metadata.icons` (or a metadata route), never as a hand-written `<link rel="icon">`: only the root layout may write a shell at all (invariant 8), so a hand-written tag is unavailable to every other layout. A `public/favicon.ico` needs no declaration either way, since the framework serves it at the origin root for crawlers that read no markup.
+Never write a favicon as a hand-written `<link rel="icon">`: only the root layout may write a shell at all (invariant 8), so a hand-written tag is unavailable to every other layout.
 
 `opengraph-image` and `twitter-image` are LINKED too, Next's behaviour: a page that declares no `openGraph.images` gets `og:image` pointing at the nearest `opengraph-image` route above it (absolute against the site URL), and likewise `twitter:image`. A page that declares its own image keeps it.
 
