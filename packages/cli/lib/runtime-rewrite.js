@@ -23,7 +23,7 @@
  *   - the `dev` / `start` scripts force `bun --bun` (the server is Bun),
  *   - every other command stays `bun run` / `webjs ...` (runs on Node via the
  *     `webjs` bin's `#!/usr/bin/env node` shebang),
- *   - the Dockerfile is a pure `oven/bun:1` base (#595). This is safe as of
+ *   - the Dockerfile is a pure `oven/bun:1-slim` base (#595, #1606). This is safe as of
  *     `@webjsdev/cli@0.10.20` (#570): `webjs db migrate` resolves drizzle-kit
  *     and runs it under Bun (no `npx`), so a Node-less image works. (Before
  *     #570 shipped as `latest`, this stayed on `node:24-alpine` + a copied Bun
@@ -96,7 +96,7 @@ export function bunifyProse(s) {
 /**
  * Rewrite the scaffolded Dockerfile for Bun.
  *
- * Base decision (acceptance criterion): a pure `oven/bun:1` image (no Node).
+ * Base decision (acceptance criterion): a pure `oven/bun:1-slim` image (no Node).
  * Safe as of `@webjsdev/cli@0.10.20` (#570): `webjs db` / `webjs test` resolve
  * their tools (drizzle-kit, wtr) and spawn them with the current runtime instead
  * of `npx`, so the boot-time `webjs db migrate` runs under Bun with no Node
