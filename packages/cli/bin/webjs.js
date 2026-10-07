@@ -7,7 +7,7 @@ import { resolveBin } from '../lib/resolve-bin.js';
 import { dbGenerateTtyHint } from '../lib/db-hints.js';
 import { checkNodeInline, nodeInlineMessage } from '../lib/node-preflight.js';
 import { loadAppEnv, resolvePort, failFastOnPortInUse } from '../lib/port.js';
-import { planDevSupervisor } from '../lib/dev-supervisor.js';
+import { planDevSupervisor, readDevSourceLocations, sourceLocationsOn } from '../lib/dev-supervisor.js';
 import { checkAppName, appNameErrorMessage } from '../lib/app-name.js';
 import { findCheckTarget, notAnAppMessage, notAnAppJson, findServeTarget, notAnAppServeMessage } from '../lib/check-target.js';
 
@@ -513,7 +513,7 @@ async function main() {
   }
   switch (cmd) {
     case 'dev': {
-      // If we're already inside the reload child (node --watch or bun --hot),
+      // If we're already inside the reload child (under the supervisor),
       // start the server directly.
       if (process.env.__WEBJS_DEV_CHILD === '1') {
         const { startServer } = await import('@webjsdev/server');
@@ -553,13 +553,15 @@ async function main() {
 
       // Decide how to run: in-process (`--no-hot`), or in a child under WebJs's
       // reload supervisor (#1521), which restarts it on a change on Node and
-      // runs it under `bun --hot` on Bun (#514), and brings a crashed child
+      // runs it under `bun --hot` on Bun (#514), restarting it there only for an
+      // edit to a module a Bun.plugin serves (#1550), and brings a crashed child
       // back on either. The branch logic lives in the pure `planDevSupervisor`
       // so it is unit-testable without spawning a process.
       const plan = planDevSupervisor({
         isBun: !!process.versions.bun,
         argv: process.argv.slice(1),
         noHot: rest.includes('--no-hot'),
+        sourceLocations: sourceLocationsOn(process.env, readDevSourceLocations(process.cwd())),
       });
 
       if (plan.mode === 'inline') {

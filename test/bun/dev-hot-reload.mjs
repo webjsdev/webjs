@@ -7,11 +7,11 @@
  *   node test/bun/dev-hot-reload.mjs
  *   bun  test/bun/dev-hot-reload.mjs
  *
- * This is the HEADLINE behaviour for #514. On Node the CLI re-execs under
- * `node --watch` (the process restarts, fresh ESM cache); on Bun it re-execs
- * under `bun --hot` (loaded modules are invalidated in place). Before the fix
- * the CLI used `node --watch` on Bun too, and since Bun ignores the dev
- * re-import's `?t=` cache-bust query, the edited module stayed STALE on Bun.
+ * This is the HEADLINE behaviour for #514. Before #514 the CLI used
+ * `node --watch` on Bun, and since Bun ignored the dev re-import's `?t=`
+ * cache-bust, the edited module stayed STALE on Bun. Today the supervisor
+ * restarts the child on a change on both runtimes, and the cache-bust rides a
+ * plain path on Bun (#1550, see test/bun/dev-reload-plugin-served.mjs).
  *
  * A plain assert script (not node:test) so the SAME file runs identically on
  * both runtimes; it exits non-zero on failure. It spawns the real CLI via the
@@ -85,7 +85,7 @@ try {
   assert.ok(firstReady, `dev server never served the original module on ${runtime}\n--- server log ---\n${log}`);
 
   // Edit the re-imported module and wait for the edit to take effect. No manual
-  // restart: the runtime's supervisor (node --watch / bun --hot) must pick it up.
+  // restart: the dev supervisor must pick it up.
   writeRoute('VERSION_TWO');
   const updated = await until(async () => (await (await fetch(`${BASE}/api/ping`)).text()) === 'VERSION_TWO', { timeoutMs: 20_000 });
   assert.ok(updated, `edited module stayed STALE on ${runtime} (hot reload did not pick up the edit)\n--- server log ---\n${log}`);

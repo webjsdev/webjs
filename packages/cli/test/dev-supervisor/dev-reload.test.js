@@ -63,13 +63,14 @@ function fakeChild() {
   return c;
 }
 
-function harness({ restartOnChange = true } = {}) {
+function harness({ restartOnChange = true, restartFor = undefined } = {}) {
   const timers = fakeTimers();
   const children = [];
   const logs = [];
   const finals = [];
   const sup = createSupervisor({
     restartOnChange,
+    ...(restartFor ? { restartFor } : {}),
     onFinal: (code) => finals.push(code),
     timers,
     now: timers.now,
@@ -183,16 +184,35 @@ test('consecutive crashes back off further, and a stable run resets it', () => {
   assert.equal(children.length, 4, 'back to the first step');
 });
 
-test('Bun (restartOnChange false): a change never restarts a live child, but starts a dead one', () => {
+test('restartOnChange false: a change never restarts a live child, but starts a dead one', () => {
   const { sup, timers, children } = harness({ restartOnChange: false });
   sup.start();
   sup.change('app/page.ts');
   timers.advance(50);
-  assert.deepEqual(children[0].signals, [], 'bun --hot reloads in place');
+  assert.deepEqual(children[0].signals, [], 'no restart for a live child');
   children[0].exit(1);
   sup.change('app/page.ts');
   timers.advance(50);
   assert.equal(children.length, 2);
+});
+
+test('restartFor: only a matching change restarts a live child, even mixed in one debounce window (#1550)', () => {
+  const restartFor = (p) => p.endsWith('.server.ts');
+  const { sup, timers, children } = harness({ restartFor });
+  sup.start();
+  sup.change('app/page.ts');
+  timers.advance(50);
+  assert.deepEqual(children[0].signals, [], 'bun --hot reloads a page edit in place');
+  sup.change('app/page.ts');
+  sup.change('modules/a/add.server.ts');
+  timers.advance(50);
+  assert.deepEqual(children[0].signals, ['SIGTERM'], 'a server-module edit in the same window restarts');
+  children[0].exit(0, 'SIGTERM');
+  assert.equal(children.length, 2);
+  children[1].exit(1);
+  sup.change('app/page.ts');
+  timers.advance(50);
+  assert.equal(children.length, 3, 'any change starts a dead child');
 });
 
 test('stop() terminates the child, resolves on its exit, and nothing restarts after', async () => {

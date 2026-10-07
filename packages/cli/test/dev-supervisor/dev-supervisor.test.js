@@ -7,10 +7,15 @@
  * module stayed STALE on Bun. The fix re-execs under `bun --hot` on Bun, whose
  * file-watching cache invalidation makes the dev re-import pick up the edit.
  *
- * These tests prove the planner's branch logic: Bun yields `bun --hot` with
- * crash-only supervision, Node yields a supervised child that restarts on a
- * change (never `node --watch`, #1521), `--no-hot` opts out on either runtime,
- * and the counterfactual that neither branch emits the `--watch` flags.
+ * `bun --hot` then turned out not to watch a file a `Bun.plugin` `onLoad`
+ * served (#1550): every `'use server'` module, and with source locations on
+ * every app module, so their edits were never reloaded. On Bun the supervisor
+ * now also restarts the child, for exactly those paths.
+ *
+ * These tests prove the planner's branch logic: Bun yields `bun --hot` plus a
+ * restart for plugin-served paths, Node yields a supervised child that
+ * restarts on every change (never `node --watch`, #1521), `--no-hot` opts out
+ * on either runtime, and neither branch emits the `--watch` flags.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -19,7 +24,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { planDevSupervisor } from '../../lib/dev-supervisor.js';
+import { planDevSupervisor, sourceLocationsOn } from '../../lib/dev-supervisor.js';
 
 const ARGV = ['/path/to/webjs.js', 'dev', '--port', '8080'];
 const WATCH = {
@@ -27,14 +32,38 @@ const WATCH = {
   watchFiles: ['middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs'],
 };
 
-test('Bun runs the child under `bun --hot`, forwarding argv verbatim', () => {
+test('Bun runs the child under `bun --hot` and restarts it for plugin-served paths (#1550)', () => {
   const plan = planDevSupervisor({ isBun: true, argv: ARGV, noHot: false });
-  assert.deepEqual(plan, { mode: 'supervise', args: ['--hot', ...ARGV], restartOnChange: false, ...WATCH });
+  assert.ok(plan.mode === 'supervise');
+  assert.deepEqual(plan.args, ['--hot', ...ARGV]);
+  assert.equal(plan.restartOnChange, true);
+  assert.deepEqual({ watchDirs: plan.watchDirs, watchFiles: plan.watchFiles }, WATCH);
+  // A 'use server' module is served by the seed plugin, which bun --hot never
+  // watches; everything else bun --hot reloads in place.
+  assert.equal(plan.restartFor('modules/todos/actions/add.server.ts'), true);
+  assert.equal(plan.restartFor('app/page.ts'), false);
+  assert.equal(plan.restartFor('components/card.js'), false);
+});
+
+test('with source locations on, every app module restarts the Bun child (#1550)', () => {
+  const plan = planDevSupervisor({ isBun: true, argv: ARGV, noHot: false, sourceLocations: true });
+  assert.ok(plan.mode === 'supervise');
+  for (const p of ['app/page.ts', 'components/card.js', 'lib/x.mts', 'modules/a/b.server.ts']) assert.equal(plan.restartFor(p), true, p);
+  assert.equal(plan.restartFor('app/styles.css'), false);
+});
+
+test('sourceLocationsOn: the env var wins, else the app config', () => {
+  assert.equal(sourceLocationsOn({ WEBJS_SOURCE_LOCATIONS: '1' }, false), true);
+  assert.equal(sourceLocationsOn({ WEBJS_SOURCE_LOCATIONS: 'true' }, false), true);
+  assert.equal(sourceLocationsOn({ WEBJS_SOURCE_LOCATIONS: '0' }, true), false);
+  assert.equal(sourceLocationsOn({}, true), true);
+  assert.equal(sourceLocationsOn({}, 'yes'), false);
+  assert.equal(sourceLocationsOn({}, undefined), false);
 });
 
 test('Bun branch NEVER emits the Node-only watch flags (the #514 mismatch)', () => {
   // The counterfactual: the old code passed `--watch` / `--watch-path` to Bun,
-  // which Bun does not understand. The fix must use ONLY `--hot`.
+  // which Bun does not understand.
   const plan = planDevSupervisor({ isBun: true, argv: ARGV, noHot: false });
   assert.ok(plan.mode === 'supervise');
   for (const flag of ['--watch', '--watch-preserve-output', '--watch-path']) {

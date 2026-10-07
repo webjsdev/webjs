@@ -195,6 +195,10 @@
                   "run": "bun test/bun/dev-hot-reload.mjs"
                 },
                 {
+                  "title": "bun proof: dev-reload-plugin-served",
+                  "run": "bun test/bun/dev-reload-plugin-served.mjs"
+                },
+                {
                   "title": "bun proof: dev-extra-watch",
                   "run": "bun test/bun/dev-extra-watch.mjs"
                 },
