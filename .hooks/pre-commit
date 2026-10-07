@@ -10,7 +10,7 @@
 #      staged diff.
 #
 # The test suite is NOT run here. Local CI is the test gate (#1593):
-# .hooks/pre-push runs scripts/ci.sh on every push of a branch with an open
+# .hooks/pre-push runs scripts/ci.sh --quick on every push of a branch with an open
 # PR, and scripts/ci-merge.sh runs it on the PR head and posts the `local-ci`
 # status branch protection requires. Running the whole list on every commit
 # would make commit-per-logical-unit slow for no extra protection.

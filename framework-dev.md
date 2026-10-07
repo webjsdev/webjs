@@ -224,14 +224,14 @@ install, otherwise in a throwaway worktree with its own `npm ci`), posts the
 CODEOWNER approval (`scripts/protect-main.sh`); a solo maintainer cannot
 approve their own PR, so ci-merge retries with `--admin` only when the review
 is the one thing left blocking, after the green run on that exact head.
-`.hooks/pre-push` runs `scripts/ci.sh` on every push of a branch with an open
+`.hooks/pre-push` runs the quick subset (`scripts/ci.sh --quick`: setup, conventions, the Node suite, about a minute) on every push of a branch with an open
 PR, unless every changed file is `*.md`, `docs/**` or `blog/**`. A later push
 has no `local-ci` until the list runs on it again, so a stale green never
 carries forward. Run it from a REAL install (the primary checkout, or a
 worktree with its own `npm ci`): in a linked worktree every bare
 `@webjsdev/*` specifier resolves into the primary checkout, so the run is
 partly vacuous there, and `scripts/ci.sh` writes no PASS marker for it.
-Only the npm publish stays on Actions (`release.yml`, bound to trusted publishing); the CDN purge and the release steps around the publish run locally (`scripts/purge-cdn.sh`, `scripts/release.sh`).
+`scripts/ci.sh` also unsets the `GIT_*` variables a hook exports (a pre-push run once let the hook tests write fixture commits into this repository), turns Bun's shared transpiler cache off, and waits up to `CI_LOAD_WAIT` (180s) for load to fall under 1.5x the cores, printing `WARNING host overloaded` in the verdict when it does not or a disk is 90% full. The browser suites run after the Gate rather than beside it, so load cannot time them out, and every web-test-runner config takes a kernel-assigned port (`WTR_PORT` pins one) so two runs at once cannot share port 8000. Only the npm publish stays on Actions (`release.yml`, bound to trusted publishing); the CDN purge and the release steps around the publish run locally (`scripts/purge-cdn.sh`, `scripts/release.sh`).
 
 **Local prerequisites** for the whole list: Node 24+, Bun, Docker (the Postgres
 container and the image build; the user must be in the `docker` group, or set
