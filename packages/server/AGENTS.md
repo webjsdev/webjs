@@ -475,7 +475,13 @@ conditional leaves a CSP-off document one newline shorter than a CSP-on one).
    if it does real client work). A module-scope pure-data constructor
    (`new Set([...])` / `Map` / `Date` / `RegExp` / typed array / `URL`) is inert
    data, not a side effect; any other constructor (`new WebSocket()` / `Worker()`)
-   still ships. The vendor bare-import scan (`extractPackageName`) treats a
+   still ships. A `function` declaration's parameter list and the expression
+   body of an arrow initializing a `const` / `let` / `var` declarator are
+   dropped from the depth-0 frame before the call scan
+   (`blankDeclarationOnlyCode`, #1567), so `now = Date.now()` and
+   `(m) => Math.round(m) / MICROS` are declarations, not load-time calls; the
+   arrow body ends early (at a newline) whenever continuation is not provable,
+   because ending late could swallow a real statement. The vendor bare-import scan (`extractPackageName`) treats a
    `#`-alias specifier as local and skips it outright (it does not expand the
    map), so a `#` import is never sent to the resolver; the rare alias mapped to
    a real package (`"#x": "some-pkg"`) is consequently not vendored, an accepted

@@ -286,6 +286,118 @@ const PURE_DATA_CONSTRUCTORS = new Set([
 ]);
 
 /**
+ * Marks where `hasModuleScopeSideEffect` dropped a top-level `{...}` body from
+ * its depth-0 frame, so an arrow followed by a block body is not mistaken for
+ * an expression body that runs on into the next statement. Removed again
+ * before the call scan.
+ */
+const BLOCK = '\x01';
+
+/** `function`, `function*`, `async function name` up to its parameter list's `(`. */
+const FUNCTION_PARAMS_RE = /(?<![\w$.])function\s*\*?\s*(?:[A-Za-z_$][\w$]*)?\s*\(/g;
+
+/**
+ * The text before an arrow's `=>` when that arrow is a declarator initializer
+ * (`const usd = (m) =>`, `let f = async x =>`, `, g = (a) =>`). The parameter
+ * list must hold no parens, so a call in a parameter default
+ * (`(a = init()) =>`) keeps its arrow unrecognised and still ships.
+ */
+const ARROW_DECLARATOR_RE =
+  /(?:(?<![\w$.])(?:const|let|var)\s+|,\s*)[A-Za-z_$][\w$]*\s*=\s*(?:async\s*)?(?:\([^()]*\)|[A-Za-z_$][\w$]*)\s*$/;
+
+/**
+ * An expression body that ends this way cannot stop at the newline (a binary
+ * operator, `?`, `:`, or a curried `=>`). Postfix `++` / `--` and a regex
+ * literal's closing `/` end a statement, so neither is listed.
+ */
+const BODY_CONTINUES_RE = /(?:=>|&&|\|\||\?\?|[?:=*%|&^<>]|(?<![+])\+|(?<![-])-)\s*$/;
+
+/** A line starting this way continues the previous one: no statement starts with it. */
+const LINE_CONTINUES_RE = /^\s*(?:\?|:|&&|\|\||\.(?![.\d])|\*|%|=(?!>)|\|)/;
+
+/**
+ * Removes the two depth-0 shapes that look like calls and run nothing at module
+ * load: a `function` declaration's parameter list (a default such as
+ * `now = Date.now()` runs per call) and an arrow's expression body when the
+ * arrow initializes a declarator (`const usd = (m) => Math.round(m) / MICROS`).
+ *
+ * The arrow body ends at a `,` or `;` at its own paren/bracket depth 0, at a
+ * `)` / `]` closing something outside it, or at a newline once the body has
+ * content, unless `BODY_CONTINUES_RE` / `LINE_CONTINUES_RE` prove the
+ * expression carries on. Ending early is always safe, because whatever is left
+ * stays in the frame and is still scanned; ending late could swallow a real
+ * statement, so every rule errs towards ending.
+ *
+ * @param {string} frame depth-0 text, with `BLOCK` where a `{...}` was dropped
+ * @returns {string | null} the frame without those parts, or null when a
+ *   parameter list does not close (the caller then ships)
+ */
+function blankDeclarationOnlyCode(frame) {
+  let out = '';
+  let last = 0;
+  for (const m of frame.matchAll(FUNCTION_PARAMS_RE)) {
+    if (m.index < last) continue;
+    const open = m.index + m[0].length - 1;
+    let depth = 0;
+    let close = -1;
+    for (let j = open; j < frame.length; j++) {
+      if (frame[j] === '(') depth++;
+      else if (frame[j] === ')' && --depth === 0) { close = j; break; }
+    }
+    if (close < 0) return null;
+    out += frame.slice(last, open + 1);
+    last = close;
+  }
+  frame = out + frame.slice(last);
+
+  out = '';
+  let depth = 0;
+  for (let i = 0; i < frame.length; i++) {
+    const c = frame[i];
+    if (c === '(' || c === '[') depth++;
+    else if ((c === ')' || c === ']') && depth > 0) depth--;
+    if (depth === 0 && c === '=' && frame[i + 1] === '>' && ARROW_DECLARATOR_RE.test(out)) {
+      out += '=>';
+      i = arrowBodyEnd(frame, i + 2) - 1;
+      continue;
+    }
+    out += c;
+  }
+  return out;
+}
+
+/**
+ * Index where an arrow's expression body starting at `start` ends (see
+ * `blankDeclarationOnlyCode`).
+ *
+ * @param {string} frame
+ * @param {number} start index just past the `=>`
+ * @returns {number}
+ */
+function arrowBodyEnd(frame, start) {
+  let depth = 0;
+  let i = start;
+  for (; i < frame.length; i++) {
+    const c = frame[i];
+    if (c === '(' || c === '[') { depth++; continue; }
+    if (c === ')' || c === ']') {
+      if (depth === 0) return i;
+      depth--;
+      continue;
+    }
+    if (depth > 0) continue;
+    if (c === ',' || c === ';') return i;
+    if (c === '\n') {
+      const body = frame.slice(start, i);
+      if (!body.trim() || BODY_CONTINUES_RE.test(body)) continue;
+      if (LINE_CONTINUES_RE.test(frame.slice(i + 1))) continue;
+      return i;
+    }
+  }
+  return i;
+}
+
+/**
  * Module-scope client work, detected by an ALLOWLIST of safe top-level forms
  * rather than a denylist of browser globals. A module that runs ANY code when
  * it loads (other than registering a component) does client work the render /
@@ -320,8 +432,13 @@ const PURE_DATA_CONSTRUCTORS = new Set([
  * request path is covered; a DIRECT caller handing it `.ts` source as authored
  * is opting into that false positive.
  *
- * Over-detection is safe (a top-level arrow whose body calls something, or a
- * pure top-level helper call, only ships). The accepted residual misses, all
+ * A `function` declaration's parameter list and the expression body of an
+ * arrow that initializes a `const` / `let` / `var` declarator are dropped from
+ * the frame first (`blankDeclarationOnlyCode`): `now = Date.now()` and
+ * `(m) => Math.round(m) / MICROS` declare code, they do not run it.
+ *
+ * Over-detection is safe (a pure top-level helper call, or an arrow outside a
+ * declarator whose body calls something, only ships). The accepted residual misses, all
  * contrived and structural (so they do not rot), are a call buried inside a
  * top-level object / array initializer or a destructuring default, and a
  * side-effecting tagged-template hole evaluated at module scope.
@@ -361,7 +478,7 @@ export function hasModuleScopeSideEffect(src, literals) {
       if (depth === 0) frame += "''";
       continue;
     }
-    if (c === '{') { depth++; continue; }
+    if (c === '{') { if (depth === 0) frame += BLOCK; depth++; continue; }
     if (c === '}') { if (depth > 0) depth--; continue; }
     if (depth === 0) frame += c;
   }
@@ -369,6 +486,11 @@ export function hasModuleScopeSideEffect(src, literals) {
   // literal with a stray brace is the common case). Ship rather than risk a
   // hidden top-level statement.
   if (depth !== 0) return true;
+  // Parameter lists and declarator arrow bodies are declarations, not code
+  // that runs at load.
+  const declared = blankDeclarationOnlyCode(frame);
+  if (declared === null) return true;
+  frame = declared.replaceAll(BLOCK, '');
   // Optional-chaining call/index: `foo?.()`, `x?.[i]()` (the `?.` defeats the
   // identifier-before-paren match below).
   if (/\?\.\s*[([]/.test(frame)) return true;
