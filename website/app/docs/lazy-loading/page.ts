@@ -58,6 +58,7 @@ import('@webjsdev/core/lazy-loader').then((m) => m.observeLazy({ 'code-pane': '/
 
     <p>The shell no longer waits for the pane (or anything only the pane imports) before it runs, and no <code>modulepreload</code> hint is emitted for that subtree. The pane loads the first time a <code>&lt;code-pane&gt;</code> is visible, including one the shell renders later on the client.</p>
     <p>Only a side-effect import is deferred. A binding import such as <code>import { CodePane } from './code-pane.ts'</code> stays eager, because the importer needs the value when it runs. Code that calls a method on the element should allow for it not being upgraded yet (<code>this.pane?.save?.()</code>, or <code>await customElements.whenDefined('code-pane')</code> once the element is visible).</p>
+    <p>Browser tests (<code>webjs test --browser</code>) are served every import as written, so a test that imports a lazy component has it defined as soon as the import resolves.</p>
     <p>The loader looks for lazy tags in the light DOM, so a lazy tag rendered inside another component's shadow root is not found. Render it in light DOM (the default) or import it eagerly.</p>
 
     <h2>Selective hydration</h2>
