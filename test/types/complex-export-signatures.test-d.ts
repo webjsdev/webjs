@@ -18,7 +18,6 @@
  */
 import {
   WebComponent,
-  register,
   Task,
   createContext,
   ContextProvider,
@@ -27,6 +26,7 @@ import {
   html,
 } from '@webjsdev/core';
 import { ref, createRef } from '@webjsdev/core/directives';
+import { register } from '@webjsdev/core/registry';
 
 /* ---- register(tag, cls): accepts a user component class (#1033) ---- */
 // The second param is a component constructor, NOT the class+factory dual

@@ -236,9 +236,6 @@
     "ref": {
       "demo": "modules/directives/components/directive-demo.ts"
     },
-    "register": {
-      "demo": "modules/components/components/counter-card.ts"
-    },
     "registerKeyTags": {
       "exempt": "internal: keyed-list registry plumbing"
     },
