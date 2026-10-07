@@ -101,6 +101,8 @@ export const GET = handlers.GET;
 export const POST = handlers.POST;
 ```
 
+**Cookie names.** `createAuth` sets `webjs.auth` (session) and, for OAuth, `webjs.auth.state` and `webjs.auth.redirect` in development. In production (`NODE_ENV=production`) each carries the `__Host-` prefix (`__Host-webjs.auth`, ...), which a browser stores only when `Secure`, `Path=/` and without `Domain`, so an app on a sibling subdomain cannot toss its own session cookie into yours. Production reads only the prefixed names; a test or tool that hand-sets the cookie in production must use the prefixed name.
+
 **The no-JS sign-in / sign-out flow is plain forms** (progressive-enhancement-safe). Sign in by POSTing to `/api/auth/signin/credentials` with a hidden `redirectTo`, and read `?error` (mapped from `pages.error`) for feedback; sign out by POSTing to `/api/auth/signout`:
 
 ```html

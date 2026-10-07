@@ -63,7 +63,7 @@ Cross-cutting features are easy to build. The keyspace is one namespace; the mod
 
 `createAuth()` matches the NextAuth / Auth.js shape so an agent that has seen NextAuth writes correct WebJs auth. Three providers in v1: Google, GitHub, and Credentials. The implementation uses Web Crypto HMAC-SHA256, so no external crypto dependency.
 
-Two cookie names from the source (`AUTH_COOKIE = 'webjs.auth'`, `STATE_COOKIE = 'webjs.auth.state'`). Default session lifetime is 30 days. Sessions can be JWT (opaque token, no server lookup) or database-backed (token is a key into the cache store).
+Two cookie names from the source (`AUTH_COOKIE = 'webjs.auth'`, `STATE_COOKIE = 'webjs.auth.state'`), sent with the `__Host-` prefix in production so a sibling subdomain cannot plant them. Default session lifetime is 30 days. Sessions can be JWT (opaque token, no server lookup) or database-backed (token is a key into the cache store).
 
 The credentials provider's `verify` callback returns the user object (or null on failure). The framework then issues the cookie. This is the simpler shape than NextAuth's `Promise<User | null>` of the exact same name, but functionally compatible.
 

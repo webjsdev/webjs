@@ -161,6 +161,9 @@ session?.user.role; // typed as 'admin' | 'member', no cast</code-block>
   // ...
 });</code-block>
 
+    <h2>Cookie names</h2>
+    <p>In development the session cookie is <code>webjs.auth</code>, and the OAuth round trip uses <code>webjs.auth.state</code> and <code>webjs.auth.redirect</code>. In production (<code>NODE_ENV=production</code>) each name carries the <code>__Host-</code> prefix: <code>__Host-webjs.auth</code>, <code>__Host-webjs.auth.state</code>, <code>__Host-webjs.auth.redirect</code>. A browser stores a <code>__Host-</code> cookie only when it is <code>Secure</code>, has <code>Path=/</code> and has no <code>Domain</code>, so an app on a sibling subdomain of a shared hosting domain cannot plant its own session cookie in yours and sign a visitor in to the wrong account. Production reads only the prefixed names, so a production app upgrading from an earlier version signs its users in once more. A test or tool that sets the cookie by hand in production uses the prefixed name.</p>
+
     <h2>Environment variables</h2>
     <code-block>AUTH_SECRET=your-random-secret-32-chars-minimum
 AUTH_GOOGLE_ID=your-google-oauth-client-id
