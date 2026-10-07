@@ -404,6 +404,29 @@ suite('SSR/client parity: nullish and false plain attribute holes (#1573)', () =
   });
 });
 
+suite('SSR/client parity: booleans in plain holes on boolean attributes (#1579)', () => {
+  test('the SSR markup and the client render select the same radio and option', async () => {
+    const tpl = () => html`<form><input type="radio" name="a" value="yes" checked=${true}><input type="radio" name="a" value="no" checked=${false}><select name="n">${[1, 2, 3].map((n, i) => html`<option value=${n} selected=${i === 0}>${n}</option>`)}</select></form>`;
+    const state = (root) => ({
+      checked: [...root.querySelectorAll('input')].map((i) => i.checked),
+      selected: root.querySelector('select').value,
+    });
+    const ssrHost = document.createElement('div');
+    ssrHost.innerHTML = normalize(await renderToString(tpl(), { ssr: true }));
+    document.body.appendChild(ssrHost);
+    const clientHost = document.createElement('div');
+    document.body.appendChild(clientHost);
+    render(tpl(), clientHost);
+    try {
+      assert.deepEqual(state(ssrHost), { checked: [true, false], selected: '1' }, 'SSR markup selects the first radio and option');
+      assert.deepEqual(state(clientHost), state(ssrHost), 'the client agrees');
+    } finally {
+      ssrHost.remove();
+      clientHost.remove();
+    }
+  });
+});
+
 suite('SSR/client parity: form actions (#1155)', () => {
   setup(() => { setFormActionResolver((fn) => (fn[FORM_ACTION_ID_KEY] ? ACTION_ID : null)); });
   teardown(() => { setFormActionResolver(() => null); });
