@@ -128,7 +128,9 @@ test('the inlined bridge is comment-free, contains no script closer, and stays s
   assert.ok(!/<\/script/i.test(body), 'no </script inside the inline body');
   assert.ok(!body.includes('<!--'), 'no comment opener that would flip the script parser state');
   assert.ok(!/^\s*\/\//m.test(body), 'whole-line comments are stripped');
-  assert.ok(body.length < 10_000, `the bridge stays small (${body.length} bytes)`);
+  // 11k since #1532 added the reload hold and scroll restore (about 10.1k). It
+  // rides only on dev documents of an app that opted into embedding.
+  assert.ok(body.length < 11_000, `the bridge stays small (${body.length} bytes)`);
   assert.equal(embedScriptTag({ dev: false }), '', 'never emitted outside dev');
   // The stripper is regex-based, so the source must not hide a comment opener
   // inside a string or a regex literal, where stripping would corrupt code.

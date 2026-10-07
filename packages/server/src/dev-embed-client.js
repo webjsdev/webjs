@@ -266,6 +266,11 @@ export function installEmbedBridge(origins, opts) {
       tag: picked.localName,
       text: (picked.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80),
       rect: rectOf(picked),
+      // Modifier keys (#1532), so a host can multi-select (shift/cmd-click).
+      shiftKey: !!e.shiftKey,
+      metaKey: !!e.metaKey,
+      altKey: !!e.altKey,
+      ctrlKey: !!e.ctrlKey,
     });
   }
   function setInspect(on) {
@@ -290,6 +295,57 @@ export function installEmbedBridge(origins, opts) {
     }
   }
   cleanups.push(function () { setInspect(false); });
+
+  // Reload hold (#1532). While the host holds, the reload client keeps every
+  // live-reload signal instead of applying it (dev-reload-hold.js), and the
+  // release applies the one strongest reload, or none. The switch is a page
+  // global because the reload client is a separate script, and it is kept in
+  // sessionStorage so a new document in this tab (a full navigation or a host
+  // `reload` mid-build) starts held too.
+  var HOLD_KEY = 'webjs-embed-hold';
+  function store() {
+    try { return win.sessionStorage || null; } catch (_) { return null; }
+  }
+  function setHold(on) {
+    win.__webjsEmbedHold = on;
+    var s = store();
+    try { if (s) { if (on) s.setItem(HOLD_KEY, '1'); else s.removeItem(HOLD_KEY); } } catch (_) { /* storage blocked */ }
+    if (!on && typeof win.__webjsDevReleaseHold === 'function') {
+      try { win.__webjsDevReleaseHold(); } catch (_) { /* no reload client */ }
+    }
+    post('hold', { enabled: on });
+  }
+  try { if (store() && store().getItem(HOLD_KEY) === '1') win.__webjsEmbedHold = true; } catch (_) { /* storage blocked */ }
+  cleanups.push(function () { win.__webjsEmbedHold = false; });
+
+  // Scroll restore across a reload (#1532). A full dev reload, or the host's
+  // `reload`, would otherwise land at the top. The position is saved per path
+  // on pagehide and put back when the next document is a RELOAD of the same
+  // path: at once, after parsing, and after load (late images move layout),
+  // unless the user scrolls first.
+  var SCROLL_KEY = 'webjs-embed-scroll';
+  listen(win, 'pagehide', function () {
+    var s = store();
+    try { if (s) s.setItem(SCROLL_KEY, JSON.stringify({ path: here(), x: win.scrollX, y: win.scrollY })); } catch (_) { /* storage blocked */ }
+  });
+  (function restoreScroll() {
+    var s = store();
+    var saved = null;
+    try {
+      if (s) { saved = JSON.parse(s.getItem(SCROLL_KEY) || 'null'); s.removeItem(SCROLL_KEY); }
+    } catch (_) { saved = null; }
+    if (!saved || saved.path !== here() || typeof saved.y !== 'number') return;
+    var nav = null;
+    try { nav = win.performance.getEntriesByType('navigation')[0]; } catch (_) { /* no timing api */ }
+    if (!nav || nav.type !== 'reload') return;
+    var userMoved = false;
+    function moved() { userMoved = true; }
+    function put() { if (!userMoved) win.scrollTo(saved.x || 0, saved.y); }
+    ['wheel', 'touchstart', 'keydown', 'pointerdown'].forEach(function (t) { listen(win, t, moved, true); });
+    put();
+    if (doc.readyState === 'loading') listen(doc, 'DOMContentLoaded', put);
+    if (doc.readyState !== 'complete') listen(win, 'load', put);
+  })();
 
   // Host commands. Only from the parent window, only from an allowed origin.
   listen(win, 'message', function (e) {
@@ -322,6 +378,8 @@ export function installEmbedBridge(origins, opts) {
       a.remove();
     } else if (d.type === 'inspect') {
       setInspect(d.enabled === true);
+    } else if (d.type === 'hold') {
+      setHold(d.enabled === true);
     }
     // { type: 'resume' } needs nothing beyond the activity call above.
   });

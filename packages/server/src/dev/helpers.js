@@ -360,6 +360,10 @@ const RELOAD_WORKER_SRC = readFileSync(new URL('../dev-reload-worker.js', import
 const DEV_STYLES_SRC = readFileSync(new URL('../dev-styles.js', import.meta.url), 'utf8')
   .replace(/^export /gm, '');
 
+// The embed host's reload hold (#1532), same shared-source rule.
+const DEV_RELOAD_HOLD_SRC = readFileSync(new URL('../dev-reload-hold.js', import.meta.url), 'utf8')
+  .replace(/^export /gm, '');
+
 /**
  * The dev live-reload client. The `EventSource` URL is a framework-emitted
  * same-origin path, so it must carry the base path under a sub-path deploy
@@ -419,6 +423,12 @@ export function reloadClientJs(bp) {
 ${DEV_OVERLAY_SRC}
 ${RELOAD_WORKER_SRC}
 ${DEV_STYLES_SRC}
+${DEV_RELOAD_HOLD_SRC}
+// A framing host holds reloads while its agent builds (#1532): the embed bridge
+// sets __webjsEmbedHold, every signal below is kept (strongest verdict wins),
+// and releasing the hold applies that one reload, or none if nothing changed.
+var __webjsHold = createReloadHold(function (v) { __webjsApplyReload(v); }, function () { return globalThis.__webjsEmbedHold === true; });
+globalThis.__webjsDevReleaseHold = function () { __webjsHold.release(); };
 function __webjsApplyError(data) {
   let f; try { f = JSON.parse(data); } catch (_) { return; }
   renderDevOverlay(f);
@@ -453,6 +463,7 @@ function __webjsWhenReady(then) {
 // survive. Anything else, including every signal the server could not classify,
 // is the full reload this always was.
 function __webjsApplyReload(verdict) {
+  if (__webjsHold.offer(verdict)) return;
   __webjsWhenReady(function () {
     // Runtime feature detection, never an assumption. The refresh entry is
     // published by enableClientRouter and removed by disableClientRouter, so its

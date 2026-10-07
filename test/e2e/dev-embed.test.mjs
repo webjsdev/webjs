@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createServer as createNetServer } from 'node:net';
 import { createServer as createHttpServer } from 'node:http';
-import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { appendFileSync, cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -220,5 +220,38 @@ describe('E2E: dev embed bridge (#1498)', {
     await page.evaluate(() => window.send({ type: 'reload' }));
     const ready = await message((m) => m.type === 'ready', from);
     assert.equal(ready.path, '/');
+  });
+  test('hold keeps edits off the preview until release, then reloads once (#1532)', async () => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    await frame().waitForFunction(() => typeof window.__webjsDevReleaseHold === 'function', { timeout: 10000 });
+    // Released with nothing changed: no reload at all.
+    await frame().evaluate(() => { window.__mark = 'same-document'; });
+    let from = await count();
+    await page.evaluate(() => window.send({ type: 'hold', enabled: true }));
+    await message((m) => m.type === 'hold' && m.enabled === true, from);
+    await page.evaluate(() => window.send({ type: 'hold', enabled: false }));
+    await message((m) => m.type === 'hold' && m.enabled === false, from);
+    await sleep(1500);
+    assert.equal(await frame().evaluate(() => window.__mark), 'same-document', 'an empty hold reloads nothing');
+
+    // Held across two component edits (each a full-reload verdict): nothing.
+    from = await count();
+    await page.evaluate(() => window.send({ type: 'hold', enabled: true }));
+    await message((m) => m.type === 'hold' && m.enabled === true, from);
+    appendFileSync(join(dir, 'components/trouble.ts'), '\n// held edit 1\n');
+    await sleep(400);
+    appendFileSync(join(dir, 'components/trouble.ts'), '\n// held edit 2\n');
+    await sleep(2500);
+    assert.equal(await frame().evaluate(() => window.__mark), 'same-document', 'no reload while held');
+    assert.equal((await page.evaluate(() => window.__msgs)).slice(from).filter((m) => m.type === 'ready').length, 0);
+
+    // Release: exactly one reload.
+    const before = await count();
+    await page.evaluate(() => window.send({ type: 'hold', enabled: false }));
+    await message((m) => m.type === 'ready', before);
+    await sleep(1500);
+    const readies = (await page.evaluate(() => window.__msgs)).slice(before).filter((m) => m.type === 'ready');
+    assert.equal(readies.length, 1, 'one reload for the whole held batch');
+    assert.equal(await frame().evaluate(() => window.__mark), undefined, 'a new document');
   });
 });
