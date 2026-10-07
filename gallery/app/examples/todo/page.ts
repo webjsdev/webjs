@@ -1,8 +1,6 @@
-// A THIN route adapter: app/ is routing only. It fetches the initial data
-// (server-side) via the 'use server' query and renders the interactive
-// component. All the real logic lives in modules/todo/, including the action
-// the component's forms bind to. This is the idiomatic app-thin +
-// modules-logic split.
+// A thin route adapter (app/ is routing only): it awaits the 'use server'
+// query on the server and renders the interactive component. The logic, and
+// the action the component's forms bind to, live in modules/todo/.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core'; // Metadata is a @webjsdev/core type
 import { pageHeading } from '#lib/utils/ui.ts';
@@ -12,8 +10,7 @@ import '#modules/todo/components/todo-app.ts';
 export const metadata: Metadata = { title: 'Todo (optimistic UI) | examples' };
 
 export default async function TodoExample() {
-  // Fetched here on the server and handed down as a property, so <todo-app>
-  // paints the real list on the first byte with nothing to fetch on hydration.
+  // Handed down as a property, so the first paint carries the real list.
   const todos = await listTodos();
   return html`
     ${pageHeading('Optimistic todo')}

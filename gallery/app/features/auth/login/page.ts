@@ -7,10 +7,8 @@ export const metadata = { title: 'Log in' };
 
 const inputCls = inputClass();
 
-// A failed sign-in 302s back here with ?error=... (createAuth is configured with
-// pages.error: '/features/auth/login' in modules/auth/auth.server.ts). Map the
-// code to a plain message so a bad password gets visible feedback instead of a
-// silent bounce.
+// A failed sign-in 302s back here with ?error=<code> (pages.error in
+// modules/auth/auth.server.ts); map the code to a visible message.
 function errorMessage(code: string | undefined): string | null {
   if (!code) return null;
   if (code === 'CredentialsSignin') return 'Invalid email or password.';
@@ -25,7 +23,7 @@ export default function LoginPage({ searchParams }: { searchParams: { error?: st
       <p class="text-muted-foreground mb-5">Welcome back: log in to continue.</p>
       ${error ? html`<p role="alert" class="mb-4 text-sm text-destructive">${error}</p>` : ''}
       <form method="POST" action="/api/auth/signin/credentials" class="${cardClass()} grid gap-4 p-5">
-        <!-- createAuth reads redirectTo from the posted form and 302s there after a successful signin. -->
+        <!-- createAuth 302s to redirectTo after a successful sign-in. -->
         <input type="hidden" name="redirectTo" value="/features/auth/dashboard">
         <div class="grid gap-1.5">
           <label for="email" class="text-[13px] font-medium text-muted-foreground">Email</label>

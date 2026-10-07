@@ -1,10 +1,7 @@
-// File storage: a no-JS upload. A <form> bound to a 'use server' action streams
-// the bytes into the FileStore (the progressive-enhancement write path). The
-// framework emits the multipart enctype an upload needs, so the binding is the
-// whole wiring. On success the action redirects (PRG) with the new key in the
-// query, and the page renders a download link that streams the file back
-// through file/[key]/route.ts. Works with JS off; the client router applies the
-// same flow in place with JS on.
+// A no-JS upload: a form bound to a 'use server' action streams the bytes into
+// the FileStore (the framework emits the multipart enctype). On success the
+// action redirects with the key in the query and the page links to
+// file/[key]/route.ts, which streams the file back.
 import { html } from '@webjsdev/core';
 import { buttonClass } from '#components/ui/button.ts';
 import { cardClass } from '#components/ui/card.ts';

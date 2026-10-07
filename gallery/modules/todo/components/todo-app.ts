@@ -1,14 +1,9 @@
-// The interactive surface. Demonstrates: the WebComponent factory + reactive
-// prop, the DECLARATIVE optimistic() API (instant update, auto-rollback), and
-// progressive enhancement (each mutation is a <form action=${submitTodo}> bound to a server action,
-// intercepted by JS for the optimistic path). All interactivity lives in a
-// component; a page/layout cannot be interactive in its own markup.
-//
-// Styling uses the shadcn-standard design tokens the @webjsdev/ui theme defines
-// (bg-card, text-foreground, bg-primary, text-muted-foreground, border-border,
-// ...), so the whole app (this component AND any `webjs ui add` component) shares
-// one coherent theme. Prefer these tokens (and opacity modifiers like
-// bg-primary/90) over ad-hoc colors.
+// The interactive surface: the WebComponent factory with a reactive prop, the
+// declarative optimistic() store (instant update, auto-rollback), and
+// progressive enhancement (every mutation is a <form action=${submitTodo}>
+// that JS intercepts for the optimistic path). Styling uses the @webjsdev/ui
+// theme tokens (bg-card, text-foreground, bg-primary, border-border), never
+// ad-hoc colors, so this and any `webjs ui add` component share one theme.
 import { WebComponent, prop, optimistic, html } from '@webjsdev/core';
 import { cardClass } from '#components/ui/card.ts';
 import { buttonClass } from '#components/ui/button.ts';
@@ -29,9 +24,9 @@ export class TodoApp extends WebComponent({
   // A reactive prop: the SSR'd list arrives via `.todos=${todos}` and hydrates.
   todos: prop<Todo[]>(Array),
 }) {
-  // One optimistic store, three ops. `.add(payload, promise)` applies `update`
-  // instantly and auto-releases when the promise settles (resolve OR reject),
-  // so there is no manual try-catch / rollback / temp-id bookkeeping.
+  // One store, three ops: `.add(payload, promise)` applies `update` at once
+  // and releases it when the promise settles either way, so there is no
+  // manual rollback bookkeeping.
   private store = optimistic(this, {
     source: () => this.todos ?? [],
     update: (state: Todo[], op: Op): Todo[] => {
@@ -96,8 +91,7 @@ export class TodoApp extends WebComponent({
           </div>
         </header>
 
-        <!-- Add: a real <form> bound to the server action, so it works with JS
-             off; with JS, @submit intercepts and runs the optimistic path. -->
+        <!-- A bound form works with JS off; @submit runs the optimistic path. -->
         <form action=${submitTodo} @submit=${(e: SubmitEvent) => this.add(e)}
           class="${cardClass()} flex items-center gap-2 p-2 pl-4 shadow-[0_1px_0_0_color-mix(in_oklch,var(--foreground)_5%,transparent)]">
           <input type="hidden" name="intent" value="create" />
@@ -110,14 +104,11 @@ export class TodoApp extends WebComponent({
         <ul class="list-none m-0 p-0 grid gap-2">
           ${list.length ? list.map((todo) => html`
             <li>
-              <!-- One form, two submit buttons: each carries its own
-                   name="intent", which the bound action dispatches on. -->
+              <!-- One form, two submitters: the bound action dispatches on name="intent". -->
               <form action=${submitTodo}
                 class="group flex items-center gap-3 px-3 py-2.5 rounded-xl bg-card border border-border transition-colors hover:border-border-strong ${todo.pending ? 'opacity-55' : ''}">
                 <input type="hidden" name="id" value=${todo.id} />
-                <!-- Toggle is a submit button (degrades to a form POST no-JS); with JS
-                     @click intercepts for the optimistic toggle. The check is centered
-                     (grid place-items-center) and only visible once completed. -->
+                <!-- A submit button, so it degrades to a form POST; @click runs the optimistic toggle. -->
                 <button id="t-${todo.id}" type="submit" name="intent" value="toggle"
                   aria-pressed=${todo.completed ? 'true' : 'false'}
                   aria-label=${todo.completed ? 'Mark as not done' : 'Mark as done'}
@@ -125,10 +116,9 @@ export class TodoApp extends WebComponent({
                   class="shrink-0 grid place-items-center w-5 h-5 rounded-full border-2 cursor-pointer transition-all ${todo.completed ? 'bg-primary border-primary text-primary-foreground' : 'bg-transparent border-border-strong text-transparent hover:border-primary'}">
                   <svg viewBox="0 0 24 24" class="w-3 h-3 stroke-current fill-none" style="stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round"><path d="m5 13 4 4L19 7"/></svg>
                 </button>
-                <!-- The title is a <label for> the toggle: clicking the text toggles
-                     the task (works on JS and no-JS paths, and screen readers). -->
+                <!-- The title labels the toggle, so clicking the text toggles the task. -->
                 <label for="t-${todo.id}" class="flex-1 min-w-0 text-[15px] leading-snug break-words cursor-pointer select-none ${todo.completed ? 'line-through text-muted-foreground' : 'text-foreground'}">${todo.title}</label>
-                <!-- Delete: a proper icon button, revealed on row hover / focus. -->
+                <!-- An icon button, revealed on row hover or focus. -->
                 <button type="submit" name="intent" value="delete" aria-label="Delete task"
                   @click=${(e: Event) => this.removeTodo(e, todo)}
                   class=${cn(buttonClass({ variant: 'destructive', size: 'none' }), 'w-7 h-7 rounded-lg opacity-0 group-hover:opacity-100 focus:opacity-100')}>

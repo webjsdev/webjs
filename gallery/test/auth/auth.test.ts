@@ -8,23 +8,16 @@ import { testRequest, submitForm, loginAndGetCookies, withSessionCookie } from '
 
 const appDir = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-// The auth pages + dashboard middleware query the users table via Drizzle. Until
-// `db:generate` has authored the migration (then `db:migrate` applies it, or
-// `dev` applies it via webjs.dev.before), a request hitting those modules 500s;
-// we detect that at the RESPONSE level (a 5xx on the dashboard) and SKIP with a
-// clear message rather than report a misleading failure. After the db is set up
-// every assertion runs for real.
-// The SAME path `.env.example` and `drizzle.config.ts` use, so `db:migrate`
-// prepares the database this test connects to. Pointing somewhere else made the
-// skip below permanent: it told you to run `db:migrate`, and running it
-// migrated a different file.
+// Until `db:migrate` has run, a request that reaches the users table 500s; the
+// tests detect that on the response (a 5xx on the dashboard) and skip with a
+// clear message instead of a misleading failure. The DATABASE_URL below is the
+// one `.env.example` and `drizzle.config.ts` use, so `db:migrate` prepares the
+// database this test connects to.
 process.env.DATABASE_URL ||= 'file:./db/dev.db';
 process.env.AUTH_SECRET ||= 'test-secret-at-least-32-characters-long!!';
 
 function makeHandler() {
-  // createRequestHandler builds lazily, so it succeeds even before the DB is
-  // migrated; the missing table only surfaces when a request reaches a module
-  // that queries it. That is why readiness is probed per-response.
+  // Builds lazily, so a missing table only surfaces per request.
   return createRequestHandler({ appDir, dev: true });
 }
 
@@ -35,9 +28,7 @@ test('protected route redirects to login when unauthenticated', async (t) => {
     t.skip('app deps not ready (run db:generate + db:migrate)');
     return;
   }
-  // The dashboard middleware calls auth(req); with no session cookie it 302s to
-  // login. This needs no DB row, only a cookie read, so it is always real once
-  // the modules import.
+  // A cookie read, no DB row: real as soon as the modules import.
   assert.equal(res.status, 302, 'unauthenticated dashboard is gated');
   assert.equal(res.headers.get('location'), '/features/auth/login');
 });
@@ -51,14 +42,11 @@ test('signup -> login -> dashboard renders for the authenticated user', async (t
   const email = `harness+${Date.now()}@example.com`;
   const password = 'password123';
 
-  // Real signup through the bound server action (the no-JS form write-path).
-  // `submitForm` renders the page and reuses the identity the server put in the
-  // form's hidden field, exactly as a browser with JS off submits it; a POST
-  // without that field is not a form submission and is answered 405.
-  // Only the REQUEST is guarded: an unmigrated table makes the action throw, and
-  // that is the one condition worth skipping for. The assertions below stay
-  // outside the try on purpose, so a genuine regression fails loudly instead of
-  // being caught and reported as a database that was never set up.
+  // `submitForm` renders the page and submits with the identity the server put
+  // in the form's hidden field, as a browser with JS off does (a POST without
+  // it is a 405). Only the request is guarded: an unmigrated table makes the
+  // action throw, and that is the one condition worth skipping for; the
+  // assertions stay outside the try so a real regression fails loudly.
   let signupRes: Response | null = null;
   try {
     signupRes = await submitForm(app.handle, '/features/auth/signup', {
@@ -71,8 +59,7 @@ test('signup -> login -> dashboard renders for the authenticated user', async (t
     t.skip('no migrated DB; run db:migrate to enable the full flow');
     return;
   }
-  // Success auto-logs-in and 302s to the dashboard (carrying the session
-  // cookie); a 422 means validation failed. Either way the action ran.
+  // Success signs in and 302s to the dashboard; a 422 means validation failed.
   assert.ok([302, 422].includes(signupRes.status), 'signup action ran');
   if (signupRes.status === 302) {
     assert.equal(signupRes.headers.get('location'), '/features/auth/dashboard', 'signup lands on the dashboard');
@@ -89,8 +76,7 @@ test('signup -> login -> dashboard renders for the authenticated user', async (t
   assert.equal(dash.status, 200, 'the session cookie unlocks the dashboard');
   const body = await dash.text();
   assert.match(body, /Dashboard/, 'the dashboard content rendered');
-  // The greeting interpolates the real user, so the name renders and the literal
-  // template source never leaks (a counterfactual for the escaping bug).
+  // The greeting interpolates the real user (a counterfactual for the escaping bug).
   assert.match(body, /Harness/, 'the dashboard greets the signed-in user by name');
   assert.ok(!body.includes('${user'), 'the greeting interpolation is not a literal string');
 });

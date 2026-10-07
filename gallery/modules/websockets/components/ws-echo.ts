@@ -1,9 +1,7 @@
-// A WebSocket echo client. connectWS() (from '@webjsdev/core') opens the socket,
-// auto-reconnects with backoff, JSON-encodes/decodes, and queues sends while
-// disconnected. The connection is opened in connectedCallback (browser-only, so
-// it never runs during SSR) and closed in disconnectedCallback. At SSR the
-// component renders its disconnected state, so with JS off the page still reads
-// (a live socket has no no-JS equivalent, which is the honest fallback here).
+// connectWS() opens the socket, reconnects with backoff, JSON-encodes and
+// queues sends while disconnected. Open it in connectedCallback (browser-only,
+// never during SSR) and close it in disconnectedCallback; SSR renders the
+// disconnected state.
 import { WebComponent, signal, html, connectWS, renderStream } from '@webjsdev/core';
 import { buttonClass } from '#components/ui/button.ts';
 import { inputClass } from '#components/ui/input.ts';
@@ -39,11 +37,10 @@ export class WsEcho extends WebComponent {
   }
 
   #streamN = 0;
-  // renderStream() applies a <webjs-stream> payload with native DOM methods:
-  // the SAME element-level applier a connectWS onMessage handler (or a
-  // broadcast() push) uses for surgical live updates, so a chat / presence /
-  // toast reuses it instead of hand-written DOM code. Here a button drives it
-  // locally; over a channel the server would send this HTML string.
+  // renderStream() applies a <webjs-stream> payload with native DOM methods,
+  // the same element-level applier an onMessage handler or a broadcast() push
+  // uses for live updates. A button drives it here; a server would send the
+  // HTML string over the channel.
   private applyStreamUpdate() {
     this.#streamN += 1;
     renderStream(

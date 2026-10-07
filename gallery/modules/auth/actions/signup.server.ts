@@ -5,16 +5,10 @@ import { users } from '#db/schema.server.ts';
 import { hash } from '../password.server.ts';
 import { signIn } from '../auth.server.ts';
 
-// The action the signup <form> is bound to. It takes the FormData directly:
-// that is what a form-bound action always receives, on the JS path and the
-// no-JS path alike, so validation lives HERE rather than in a per-page adapter.
-//
-// A validation failure returns fieldErrors + values, which re-renders the SAME
-// page at 422 with the messages and the user's typed input preserved. On
-// success it signs the new user in: signIn returns a 302 Response carrying the
-// session cookie, and an action may return a Response, which the framework
-// honors verbatim. signIn lives in the server-only auth module, imported here
-// server-to-server, so it never reaches the browser.
+// The signup form's action, so it receives the FormData and validates here. A
+// failure returns fieldErrors and values (a 422 re-render with the typed input
+// kept); a success returns signIn's 302 Response carrying the session cookie,
+// which the framework honors verbatim.
 export async function signup(formData: FormData) {
   const name = String(formData.get('name') || '').trim();
   const email = String(formData.get('email') || '').trim();

@@ -1,12 +1,7 @@
-// forms: the no-JS write path. Bind a server action straight into the form with
-// `action=${sendMessage}` and that is the whole wiring: the framework posts to
-// this page's own url, runs the action, and re-renders the SAME page with the
-// result on `actionData`. WHY it matters: the form works with JS OFF (a plain
-// server round-trip), and with JS the client router applies the response in
-// place (no full reload). Never reach for fetch() + a click handler where a
-// bound <form> does. On failure the framework re-renders at 422 with the
-// result; on success it does a 303 Post-Redirect-Get, so we redirect to ?sent=1
-// to show a confirmation.
+// The no-JS write path. `action=${sendMessage}` is the whole wiring: the form
+// posts to this page's own url, a failure re-renders it at 422 with the result
+// on `actionData`, a success is a 303 Post-Redirect-Get (here to ?sent=1). It
+// works with JS off; with JS the client router applies the response in place.
 import { html } from '@webjsdev/core';
 import { sendMessage, type Result } from '#modules/forms/actions/send-message.server.ts';
 import { cardClass } from '#components/ui/card.ts';

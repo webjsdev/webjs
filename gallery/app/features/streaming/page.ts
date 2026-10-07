@@ -1,10 +1,7 @@
-// Streaming server-action results (#489). A `'use server'` action that returns
-// an async generator streams its chunks over the one RPC response; the call
-// site consumes them with `for await`, rendering each as it arrives. This is
-// the token-by-token shape (LLM output, a log tail, a DB cursor) over the
-// normal action call site, back-pressured and cancelled on client disconnect.
-// Contrast with a route.ts that hands back a raw HTTP ReadableStream: this rides
-// the typed action mechanism, no hand-written fetch.
+// A 'use server' action that returns an async generator streams its chunks
+// over the one RPC response (#489): the token-by-token shape (LLM output, a
+// log tail, a cursor) through the typed action call site, with no hand-written
+// fetch. The component consumes it with `for await`.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
 import { pageHeading, lede } from '#lib/utils/ui.ts';

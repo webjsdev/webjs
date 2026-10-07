@@ -1,7 +1,5 @@
-// Password hashing with scrypt from node:crypto (built into Node AND Bun, no
-// dependency). A server-only utility: hashes live server-side and never reach
-// the browser. Swap in argon2/bcrypt here if you prefer; the call sites only use
-// hash() and compare().
+// scrypt from node:crypto (Node and Bun, no dependency) in a server-only
+// utility. Swap in argon2 or bcrypt here; call sites use hash() and compare().
 import { scrypt, randomBytes, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 

@@ -1,9 +1,7 @@
-// WebSockets: a route.ts exports WS(ws, req) for the server endpoint, and a
-// component uses connectWS() to talk to it. WebSockets are inherently JS-only
-// (there is no no-JS fallback for a live socket), so the component degrades to a
-// clear "requires JavaScript" note at SSR and enhances on hydration. The echo
-// endpoint lives at app/features/websockets/echo/route.ts (a sibling folder, so
-// it does not collide with this page).
+// A route.ts exports WS(ws, req) for the endpoint (echo/route.ts, a sibling
+// folder so it does not collide with this page) and a component talks to it
+// with connectWS(). A live socket has no no-JS form, so the component renders
+// a "needs JavaScript" state at SSR and enhances on hydration.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
 import { pageHeading, lede } from '#lib/utils/ui.ts';
