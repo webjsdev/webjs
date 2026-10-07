@@ -2,21 +2,23 @@
 
 You are working on a WebJs app (AI-first, no-build, web-components-first). This
 file is the WORKFLOW contract (git, tests, review). For HOW to build (routing,
-components, actions, styling, the framework API), read `AGENTS.md`; the
-deeper reference set is `.agents/skills/webjs/SKILL.md`. Full hosted docs are
-at https://webjs.dev/docs.
+components, actions, styling, the framework API), read
+`.agents/skills/webjs/SKILL.md`, which routes to focused references on demand.
+Read `AGENTS.md` first. Full hosted docs are at https://webjs.dev/docs.
 
 ## Grow the app in place (non-negotiable)
 
-- **Clear the showcase, then build.** The scaffold is a starting point with a
-  browsable demo showcase plus a database wired up. A full-stack app ships a UI
-  feature gallery (`app/features/`, `app/examples/todo`); the api template ships
-  a backend-features showcase (`app/api/features/`), with logic in `modules/`.
-  Building a real app: run `npm run gallery:clear` to shed the showcase (it
-  keeps the agent docs and the database wiring, and resets to a clean base),
-  then regenerate the database and grow the app in place under `app/`,
-  `components/`, and `modules/<feature>/`. `AGENTS.md` carries the
-  template-specific build steps and the order to follow.
+- **Study the shipped examples, then clear them and build.** The scaffold is a
+  starting point with a browsable showcase to learn the real idioms from, plus a
+  database wired up. A full-stack app ships a UI feature gallery (`app/features/`,
+  `app/examples/todo`); the api template ships a backend-features showcase
+  (`app/api/features/`), with logic in `modules/`. Building a real app: study the
+  parts that match your task (the skill teaches the same and SURVIVES the clear),
+  run `npm run gallery:clear` to shed the showcase (it keeps the agent skill and
+  the database wiring, and resets to a clean base), then regenerate the database
+  and grow the app in place under `app/`, `components/`, and `modules/<feature>/`.
+  `AGENTS.md` carries the full template-specific build playbook and the order to
+  follow.
 - **Use the wired-up database (Drizzle), never JSON files.** For any data the app
   stores, define a Drizzle table in `db/schema.server.ts`, then
   `npm run db:generate` and `npm run db:migrate`. Never use a JSON file, a
@@ -24,8 +26,9 @@ at https://webjs.dev/docs.
 - **`app/` is routing-only.** Only routing files live in `app/` (page, layout,
   route, middleware, metadata routes). Browser-safe helpers go in `lib/utils/`,
   feature logic in `modules/`, server-only code behind `.server.ts`.
-- **For a UI app, render and LOOK before calling it done.** Give the design
-  tokens in `public/input.css` a palette that fits the app, then open every
+- **For a UI app, render and LOOK before calling it done.** Define design tokens
+  in `app/layout.ts` with a palette that fits the app
+  (`.agents/skills/webjs/references/styling.md` is the guide), then open every
   route you changed in a real browser and play through its states.
   `npm run check` and `npm run typecheck` pass even when a layout collapses, so
   the browser is the real check.

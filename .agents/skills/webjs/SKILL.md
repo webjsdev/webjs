@@ -9,8 +9,6 @@ Use this skill for end-to-end WebJs app work. It helps you choose the right laye
 
 ## Full Documentation
 
-In a scaffolded app, `AGENTS.md` carries the build steps and a worked example of every common pattern (pages, layouts, form-bound actions with validation, queries, owner-scoped CRUD, `createAuth`, a component with signals, a test). Build from it first, and come here for a surface it does not show.
-
 This skill is the quick guide. When you need the full API reference for a surface, load the matching file in `references/` (listed below). For even deeper framework detail, WebJs ships buildless, so the source you run IS the source you read: look in `node_modules/@webjsdev/{core,server,cli}/` (each package ships its own `AGENTS.md`). The complete hosted docs live at https://webjs.dev/docs.
 
 ## What WebJs Is

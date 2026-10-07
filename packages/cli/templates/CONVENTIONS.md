@@ -1,9 +1,9 @@
 # Conventions for {{APP_NAME}}
 
-The conventions for building a WebJs app live in **`AGENTS.md`**, which shows
-every common pattern as a worked example. The deeper reference set is
-`.agents/skills/webjs/` (`SKILL.md` routes to `references/*.md`), for the rarer
-surfaces. This file is the short version.
+The conventions for building a WebJs app live in the agent skill. **Read
+`AGENTS.md` first, then `.agents/skills/webjs/SKILL.md`** (it routes to focused
+references under `.agents/skills/webjs/references/`, loaded on demand). This file
+is the short version.
 
 ## The essentials
 
@@ -17,12 +17,13 @@ surfaces. This file is the short version.
 - **Use the wired-up database (Drizzle).** Define real models in
   `db/schema.server.ts`, then `npm run db:generate` and `npm run db:migrate`.
   Never persist to a JSON file, an in-memory array or Map, or localStorage.
-- **The scaffold ships a demo showcase.** A full-stack app ships a UI feature
-  gallery (`app/features/`, `app/examples/todo`); the api template ships a
-  backend-features showcase (`app/api/features/`), with logic in `modules/`.
-  When you build a real app, run `npm run gallery:clear` first to shed the
-  showcase, then grow the app in place. `AGENTS.md` has the template-specific
-  build steps.
+- **The scaffold ships a showcase to learn from.** A full-stack app ships a UI
+  feature gallery (`app/features/`, `app/examples/todo`); the api template ships
+  a backend-features showcase (`app/api/features/`), with logic in `modules/`.
+  When you build a real app, study the parts that match your task (the skill
+  teaches the same and survives the clear), run `npm run gallery:clear` to shed
+  the showcase, then grow the app in place. `AGENTS.md` has the full
+  template-specific playbook.
 - **Derive types at every boundary.** Rows from `$inferSelect`, action inputs
   from an `interface`, routing files from `PageProps` / `LayoutProps`. Never
   `any`, and never `unknown` where a real type exists.
