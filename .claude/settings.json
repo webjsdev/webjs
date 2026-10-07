@@ -48,6 +48,10 @@
         "hooks": [
           {
             "type": "command",
+            "command": ".claude/hooks/block-admin-merge.sh"
+          },
+          {
+            "type": "command",
             "command": ".claude/hooks/require-tests-with-src.sh"
           },
           {
