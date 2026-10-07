@@ -493,6 +493,14 @@ test('a post without a title is refused with the message', () => {
 test('a valid post is trimmed and typed', () => {
   assert.deepEqual(validatePost(form({ title: ' Hi ', status: 'review' })), { ok: true, data: { title: 'Hi', body: '', status: 'review', publishOn: null } });
 });
+
+// test/auth/auth.test.ts (keep sign-up and sign-in checks in a pure validate function so they are testable)
+test('a password hashes with a salt and verifies only itself', async () => {
+  const stored = await hashPassword('correct horse');
+  assert.notEqual(stored, await hashPassword('correct horse'));
+  assert.equal(await verifyPassword('correct horse', stored), true);
+  assert.equal(await verifyPassword('wrong', stored), false);
+});
 ```
 
 ### Look and the UI kit
