@@ -7,6 +7,7 @@ import {
   assertIdentifiableAction, FORM_ACTION_FIELD,
 } from '../form-action.js';
 import { isLive } from '../directives.js';
+import { attrHoleValue } from '../binding-prefixes.js';
 import { RENDERING, SLOT_OWNER, SLOT_STATE, drainRendererBackstop, rescueAssignedNodes } from '../slot.js';
 import { compile, submitterActionBindings, INSTANCE } from './template-compiler.js';
 import {
@@ -132,13 +133,17 @@ function reconcileFormActions(formActions, bound, values) {
           rec,
         );
       } else {
-        // What SSR would have emitted for this pass. An attribute hole always
-        // emits (even `name=${null}`, as `name=""`); a boolean hole emits only
-        // when truthy. Both identity channels ask the same question, through
-        // one predicate, so they cannot drift apart again.
+        // What SSR would have emitted for this pass. A plain attribute hole
+        // emits unless `attrHoleValue` omits it (`null` / `undefined` /
+        // `false`, since `name` and `value` are not aria-*, #1573), a mixed
+        // one always emits, and a boolean hole emits only when truthy. Both
+        // identity channels ask the same question, through one predicate, so
+        // they cannot drift apart again.
         const emits = (parts) => parts.some((np) => (np.kind === 'bool'
           ? !!resolveHoleValue(values[np.i])
-          : true));
+          : np.kind === 'attr'
+            ? attrHoleValue('name', resolveHoleValue(values[np.i])) !== null
+            : true));
         reconcileSubmitterAction(
           /** @type any */ (part.el), val, rec,
           emits(rec.nameParts), emits(rec.valueParts),
@@ -267,8 +272,10 @@ function effectiveFormAttr(attrParts, staticValue, values) {
   for (const p of attrParts) {
     if (p.kind === 'bool') return resolveHoleValue(values[p.i]) ? '' : ABSENT;
     if (p.kind === 'attr') {
-      const v = resolveHoleValue(values[p.i]);
-      return v == null ? '' : String(v);
+      // #1573: an omitted plain hole is ABSENT, exactly as SSR emits it, so
+      // `method=${null}` leaves the framework to supply `method="post"`.
+      const w = attrHoleValue('method', resolveHoleValue(values[p.i]));
+      return w === null ? ABSENT : w;
     }
     // A mixed attribute is the concatenation of its static pieces and EVERY one
     // of its holes, so the anchor's own value is only part of the answer.

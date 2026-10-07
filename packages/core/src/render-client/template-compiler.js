@@ -440,9 +440,9 @@ function buildFormActionRecord(el, onEl, parts) {
   /** Prop bindings that cannot converge with SSR; refused when actually bound. */
   const propAttrs = [];
   // `name` holes on a submitter, recorded WITH their kind. Whether one occupies
-  // the identity's channel is not a property of the hole alone: SSR emits
-  // `name=""` for an attribute hole whatever it resolved to, but emits nothing
-  // at all for a FALSY boolean hole and nothing for an `@name` listener. Asking
+  // the identity's channel is not a property of the hole alone: SSR omits an
+  // attribute hole that resolved to `null` / `undefined` / `false` (#1573),
+  // emits nothing for a FALSY boolean hole, and nothing for an `@name` listener. Asking
   // only "is there a part called name" therefore refused templates SSR renders
   // happily, which is the render-on-the-server-throw-on-hydration direction.
   // The kinds travel with the record and `reconcileFormActions` resolves them.

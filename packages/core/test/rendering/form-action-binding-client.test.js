@@ -174,12 +174,11 @@ test('a re-render that breaks an already-bound form is refused (QUOTED hole)', (
   assert.throws(() => render(tpl('get'), host), /cannot work/);
 });
 
-test('a hole resolving to null is refused, with SSR\'s own message', () => {
-  // An attribute hole emits an EMPTY value for null (SSR: `String(val ?? '')`),
-  // and an empty method cannot submit. What matters is not just that it throws
-  // but that it throws the SAME thing SSR does: an earlier design invented a
-  // "lost its method attribute" message here, which no server render could ever
-  // produce.
+test('a hole resolving to null omits the attribute, so the binding supplies it (#1573)', () => {
+  // A plain attribute hole holding null is the "omit" value in BOTH renderers
+  // now. An omitted method on a bound form is what `?method=${false}` already
+  // produced, so WebJs supplies `method="post"` exactly as SSR does, rather
+  // than refusing an empty method that neither renderer emits any more.
   for (const attr of ['method', 'enctype']) {
     const fn = HOISTED();
     const host = document.createElement('div');
@@ -187,23 +186,18 @@ test('a hole resolving to null is refused, with SSR\'s own message', () => {
       ? (v) => html`<form action=${fn} method=${v}></form>`
       : (v) => html`<form action=${fn} enctype=${v}></form>`;
     render(tpl(attr === 'method' ? 'post' : 'multipart/form-data'), host);
-    assert.throws(
-      () => render(tpl(null), host),
-      new RegExp(`<form ${attr}="" action=\\$\\{action\\}> cannot work`),
-      `a null ${attr} hole must be refused the way SSR refuses it`,
-    );
+    render(tpl(null), host);
+    const form = host.querySelector('form');
+    assert.equal(form.getAttribute('method'), 'post', `a null ${attr} hole leaves the supplied method`);
+    if (attr === 'enctype') assert.notEqual(form.getAttribute('enctype'), '', 'no empty enctype is left behind');
   }
 });
 
-test('a null hole is refused on the FIRST render too, not only a re-render', () => {
-  // The old write-tracking design only noticed this on a re-render, because its
-  // check ran before the form was registered as bound. SSR always threw.
+test('a null method hole is accepted on the FIRST render too (#1573)', () => {
   const fn = HOISTED();
   const host = document.createElement('div');
-  assert.throws(
-    () => render(html`<form action=${fn} method=${null}></form>`, host),
-    /cannot work/,
-  );
+  render(html`<form action=${fn} method=${null}></form>`, host);
+  assert.equal(host.querySelector('form').getAttribute('method'), 'post');
 });
 
 test('an action hole that resolves to a URL releases the binding', () => {
@@ -765,21 +759,22 @@ test('a .name / .value on a NON-binding submitter is left alone', () => {
 });
 
 test('an empty name PART on a bound submitter is refused, matching SSR', () => {
-  // Judged on the part, not on what it resolved to. `name=${null}` leaves no
-  // attribute on the client while SSR emits `name=""` beside the identity, so
-  // reading the live value back returned '' and the client waved through a
-  // template SSR hard-refuses.
+  // `name=${''}` emits `name=""` beside the identity on both renderers, so it
+  // is refused. `null` / `undefined` omit the attribute on both (#1573), so the
+  // identity's channel is free and the template is accepted.
   const formAction = HOISTED();
   const buttonAction = HOISTED();
-  for (const value of [null, '', undefined]) {
-    assert.throws(
-      () => render(
-        html`<form action=${formAction}><button name=${value} formaction=${buttonAction}>x</button></form>`,
-        document.createElement('div'),
-      ),
-      /already carries a "name" attribute/,
-      `name=\${${String(value)}}`,
-    );
+  assert.throws(
+    () => render(
+      html`<form action=${formAction}><button name=${''} formaction=${buttonAction}>x</button></form>`,
+      document.createElement('div'),
+    ),
+    /already carries a "name" attribute/,
+  );
+  for (const value of [null, undefined]) {
+    const host = document.createElement('div');
+    render(html`<form action=${formAction}><button name=${value} formaction=${buttonAction}>x</button></form>`, host);
+    assert.equal(host.querySelector('button').getAttribute('name'), '__webjs_action', `name=\${${String(value)}} leaves the identity's channel free`);
   }
 });
 

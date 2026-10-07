@@ -105,12 +105,11 @@ test('a mixed attribute hole resolves live() in every position (#1443)', async (
   });
 });
 
-test('a null attribute hole keeps the documented empty-string emit through live() (#1443)', async () => {
-  // AGENTS.md: the server STRINGIFIES a nullish plain-attribute hole to
-  // `attr=""` (only the client removes it). Unwrapping must not quietly change
-  // that documented asymmetry into an omission.
+test('a null attribute hole is omitted through live() exactly like a bare null (#1443, #1573)', async () => {
+  // A nullish plain-attribute hole omits the attribute on both renderers
+  // (#1573). Unwrapping live() must reach that rule, not stringify the wrapper.
   await bothRenderers(() => html`<div title=${live(null)}></div>`, (out, who) => {
-    assert.match(out, /title=""/, `${who}: live(null) must emit title="" like a bare null, got ${out}`);
+    assert.doesNotMatch(out, /title=/, `${who}: live(null) must omit title like a bare null, got ${out}`);
   });
 });
 
