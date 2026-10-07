@@ -1577,7 +1577,16 @@ async function main() {
       let tscPath;
       try {
         const req = createRequire(join(cwd, 'package.json'));
-        tscPath = req.resolve('typescript/bin/tsc');
+        // The `tsc` bin the package itself declares. TypeScript 7 (the native
+        // compiler) restricts its subpaths with `exports`, so
+        // `typescript/bin/tsc` no longer resolves; its package.json does, in
+        // every major, and names the bin. Its launcher spawns the native
+        // binary: about a quarter of the 6.x compiler's memory, five times
+        // faster.
+        const pkgPath = req.resolve('typescript/package.json');
+        const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+        const bin = typeof pkg.bin === 'string' ? pkg.bin : pkg.bin?.tsc;
+        tscPath = bin ? join(dirname(pkgPath), bin) : req.resolve('typescript/bin/tsc');
       } catch {
         console.error(
           'webjs typecheck: TypeScript is not installed in this project.\n' +

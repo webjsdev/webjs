@@ -11,7 +11,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -69,4 +69,22 @@ test('webjs typecheck degrades gracefully when TypeScript is not installed', () 
   assert.notEqual(r.status, 0, 'exits non-zero when typescript is missing');
   assert.match(r.stderr, /TypeScript is not installed/, 'prints a clear message');
   assert.match(r.stderr, /npm install -D typescript/, 'tells the user how to fix it');
+});
+
+test('webjs typecheck runs the tsc bin a package with restricted exports declares (TypeScript 7)', () => {
+  // TypeScript 7 lists only a few subpaths in `exports`, so
+  // `typescript/bin/tsc` does not resolve; its package.json does and names
+  // the bin. A stand-in package with the same shape proves the CLI runs it.
+  const dir = makeFixture(tmpdir(), 'export const n = 1;\n');
+  const pkgDir = join(dir, 'node_modules', 'typescript');
+  mkdirSync(join(pkgDir, 'bin'), { recursive: true });
+  writeFileSync(join(pkgDir, 'package.json'), JSON.stringify({
+    name: 'typescript', version: '7.0.0', type: 'module',
+    bin: { tsc: './bin/tsc' },
+    exports: { './package.json': './package.json', '.': './lib/version.cjs' },
+  }));
+  writeFileSync(join(pkgDir, 'bin', 'tsc'), "console.log('stand-in tsc ' + process.argv.slice(2).join(' '));\n");
+  const r = typecheck(dir);
+  assert.equal(r.status, 0, `expected exit 0, got ${r.status}\n${r.stdout}\n${r.stderr}`);
+  assert.match(r.stdout, /stand-in tsc --noEmit/, 'runs the declared bin with --noEmit');
 });
