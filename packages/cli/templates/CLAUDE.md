@@ -1,4 +1,5 @@
 @AGENTS.md
+@.agents/context-pack.md
 
 # Committing per logical unit (this OVERRIDES Claude Code's default)
 
