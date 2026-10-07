@@ -1,20 +1,21 @@
 name: CI
 
-# NOT RUN ON PUSH OR PULL REQUEST (#1593). CI is local: `scripts/ci.sh` runs
-# every job below on the developer's machine through the root package.json
-# `webjs.ci` list (`npm run ci`, #1471/#1474), several times faster than a
-# runner, and `scripts/ci-merge.sh` posts the verdict as the `local-ci`
-# commit status on the PR head and merges only when it is green.
-# scripts/protect-main.sh makes `local-ci` the required check on main.
+# The required merge gate on every PR into main and every push to main. This
+# repository is public, so Actions is free, and running the full list on a
+# laptop made it lag: CI runs HERE. scripts/protect-main.sh makes the six job
+# names below the required checks (keep their `name:` values in sync with it:
+# GitHub keys a required check on that exact string), and scripts/ci-merge.sh
+# waits for them to go green before it merges.
 #
-# This file stays as the readable record of what the local list must cover,
-# and it can still be run by hand (workflow_dispatch) as a second opinion on a
-# clean Ubuntu runner. Keep it and the `webjs.ci` list in step: a job added
-# here and not there is a job nobody runs. Actions is for publishing only:
-# release.yml publishes to npm on a tag scripts/release.sh pushes; the CDN
-# purge and the nightly vendor contract run locally too.
+# The same checks can still be run by hand on a laptop: `scripts/ci.sh` runs
+# every job below through the root package.json `webjs.ci` list (`--only
+# <title>` for one group). Keep this file and that list in step.
 
 on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
 
 # A newer push to the same branch cancels the older in-flight run.

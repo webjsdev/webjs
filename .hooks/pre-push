@@ -1,23 +1,13 @@
 #!/usr/bin/env bash
-# Pre-push: run the fast local CI subset before a branch with an open PR is
-# pushed (#1593).
-#
-# CI is local now (scripts/ci.sh; GitHub Actions no longer runs ci.yml on a
-# push or a PR), so this hook is what keeps a red head from reaching a PR.
-# It runs `scripts/ci.sh --quick` (setup, conventions, the Node suite: a
-# couple of minutes, nothing load-sensitive) for each pushed branch that has
-# an OPEN pull request, unless the commit already passed the full list. The
-# full list, browsers and e2e included, is scripts/ci-merge.sh's job. The single skip is a docs-only change: every file that
-# differs from origin/main is Markdown, or under docs/ or blog/.
-#
-# The commit being pushed must be the one checked out here, since that is the
-# tree the run tests. A branch with no PR yet is pushed without a run; the
-# PR's next push, and scripts/ci-merge.sh, run it.
-#
-# Installed by core.hooksPath=.hooks, which `npm install` sets
-# (scripts/git-worktree-safe.mjs). Nothing here reads an environment switch:
-# a skipped run is visible as a missing `local-ci` status on the PR.
+# Pre-push: OFF by default. CI runs on GitHub Actions on every PR push, and
+# running it here too made the laptop lag. Opt in per shell with
+# WEBJS_PREPUSH_CI=1 to run the fast local subset (`scripts/ci.sh --quick`:
+# setup, conventions, the Node suite) before pushing a branch that has an
+# open PR. A docs-only change (every changed file is Markdown, or under docs/
+# or blog/) is skipped either way. Installed by core.hooksPath=.hooks, which
+# `npm install` sets (scripts/git-worktree-safe.mjs).
 set -uo pipefail
+[ "${WEBJS_PREPUSH_CI:-0}" = 1 ] || exit 0
 
 # Git exports these to hooks; tests that build scratch repos must not inherit
 # them, or they write into this repository (scripts/ci.sh unsets them too).

@@ -101,8 +101,8 @@ updated. If it ever has to change, the regexes in
 git state. The REST equivalent needs all three passed explicitly and is easy to
 get subtly wrong.
 
-**`gh pr checks`.** This one reads the merge gate (the `local-ci` commit
-status `scripts/ci-merge.sh` posts, #1593), and it merges check-runs AND
+**`gh pr checks`.** This one reads the merge gate (the six required `ci.yml`
+checks `scripts/ci-merge.sh` waits for), and it merges check-runs AND
 legacy commit statuses into a single verdict. A hand-rolled replacement has to
 read `commits/<sha>/check-runs` and `commits/<sha>/status` and combine them, and
 would have to keep doing so correctly forever. The combined-status endpoint also
