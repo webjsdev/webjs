@@ -203,6 +203,10 @@
                   "run": "bun test/bun/dev-watch-error.mjs"
                 },
                 {
+                  "title": "bun proof: dev-watch-replaced",
+                  "run": "bun test/bun/dev-watch-replaced.mjs"
+                },
+                {
                   "title": "bun proof: dev-reload-retry",
                   "run": "bun test/bun/dev-reload-retry.mjs"
                 },

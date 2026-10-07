@@ -21,6 +21,7 @@
 import { spawn } from 'node:child_process';
 import { watch, statSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { watchRecursive } from './watch-recursive.js';
 
 /**
  * Quiet window between a file event and the restart. `node --watch` used
@@ -127,10 +128,14 @@ export function watchRestartPaths(cwd, { dirs, files, ignore, onChange, onError,
   const watchDir = (name) => {
     if (closed || watchers.has(name) || !isDir(name)) return;
     try {
-      watchers.set(name, guard(watchFn(join(cwd, name), { recursive: true }, (_type, filename) => {
+      // `watchRecursive` (#1529): on Linux under Node a per-directory walker,
+      // since Node 24's recursive watcher goes deaf to a file once it is
+      // replaced (`sed -i`, an editor's atomic save), so a second edit to the
+      // same file never restarted the server.
+      watchers.set(name, guard(watchRecursive(join(cwd, name), (_type, filename) => {
         const rel = filename ? join(name, String(filename)) : name;
         if (!ignore(rel)) onChange(rel);
-      })));
+      }, { ignore: (rel) => ignore(join(name, rel)), watchFn })));
     } catch (err) {
       onError(/** @type {NodeJS.ErrnoException} */ (err));
     }

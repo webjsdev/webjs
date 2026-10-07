@@ -86,6 +86,19 @@ lib/
                          `__WEBJS_DEV_CHILD` re-entry. Tests:
                          `test/dev-supervisor/dev-reload.test.js`
                          (unit) + `test/bun/dev-hot-reload.mjs` (cross-runtime).
+  watch-recursive.js     `watchRecursive(dir, listener, { ignore })` (#1529), the
+                         recursive watch under `watchRestartPaths` AND the
+                         server's `watchTree` (a byte-identical copy in
+                         `@webjsdev/server` `src/dev/`, drift-tested). On Linux
+                         under Node it watches each DIRECTORY non-recursively,
+                         following subdirs as they appear and go: Node 24's
+                         recursive watcher keeps one watch per FILE and goes
+                         deaf to a file once it is replaced (`sed -i`, an
+                         editor's atomic save), so a second edit never
+                         restarted the server. Native recursive elsewhere (macOS,
+                         Windows, Bun). Tests:
+                         `test/dev-supervisor/watch-recursive.test.js`,
+                         `test/bun/dev-watch-replaced.mjs` (cross-runtime).
   resolve-bin.js         Resolve a dependency's bin from the app's node_modules
                          (#570). `resolveBin(cwd, pkgName, binName)` so `webjs db`
                          / `webjs test --browser` spawn the tool with

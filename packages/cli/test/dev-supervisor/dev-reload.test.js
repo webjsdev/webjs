@@ -24,6 +24,7 @@ import {
   readRegenerateOutputs,
   CRASH_BACKOFF_MS,
 } from '../../lib/dev-reload.js';
+import { needsDirWalker } from '../../lib/watch-recursive.js';
 
 /** A controllable clock + timer queue. */
 function fakeTimers() {
@@ -206,7 +207,7 @@ function fakeWatch() {
   return { fn, made };
 }
 
-test('watchRestartPaths: a watcher error is reported to onError, never thrown (#1521)', () => {
+test('watchRestartPaths: a watcher error is reported to onError, never thrown (#1521)', async () => {
   const root = mkdtempSync(join(tmpdir(), 'webjs-restart-watch-'));
   try {
     mkdirSync(join(root, 'app'));
@@ -219,11 +220,13 @@ test('watchRestartPaths: a watcher error is reported to onError, never thrown (#
       onChange: (p) => changes.push(p), onError: (e) => errors.push(e), watchFn: fn,
     });
     const appW = made.find((w) => w.path === join(root, 'app'));
-    assert.ok(appW && appW.opts.recursive, 'existing dir watched recursively');
+    // Natively recursive, or (Linux under Node, #1529) one watcher per dir.
+    assert.ok(appW && !!appW.opts.recursive === !needsDirWalker(), 'existing dir watched recursively');
     assert.ok(!made.some((w) => w.path === join(root, 'lib')), 'a missing dir is not watched yet');
     // The exact failure from the bug: Node's recursive watcher emits 'error'.
     const err = Object.assign(new Error('EACCES: permission denied, watch'), { code: 'EACCES', syscall: 'watch', path: join(root, 'app/sedX') });
     assert.doesNotThrow(() => appW.emit('error', err));
+    await new Promise((r) => setImmediate(r));
     assert.deepEqual(errors, [err]);
     appW.cb('rename', 'page.ts');
     assert.deepEqual(changes, [join('app', 'page.ts')], 'events keep flowing after the error');

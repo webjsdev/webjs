@@ -233,6 +233,7 @@ jobs:
         run: |
           bun test/bun/dev-extra-watch.mjs
           bun test/bun/dev-watch-error.mjs
+          bun test/bun/dev-watch-replaced.mjs
           bun test/bun/dev-reload-retry.mjs
           bun test/bun/dev-overlay-scope.mjs
           bun test/bun/dev-public-before-warm.mjs
