@@ -208,37 +208,32 @@ every root step invokes the in-repo CLI the same way for the same reason.
 `test/cli/check-target.test.mjs` cross-checks the `webjs check` steps against
 the workspace app list.
 
-**The gate: `scripts/ci.sh`, `scripts/ci-merge.sh`, `local-ci` (#1593).**
-GitHub Actions no longer runs `ci.yml` on a push or a pull request (it is
-`workflow_dispatch` only, kept as the record of what the list must cover).
-`scripts/ci.sh` wraps `npm run ci` with a log under
-`${TMPDIR:-/tmp}/webjs-ci-<sha>/`, a PASS marker per commit, `--only A,B`,
-`--list`, `--release` (the full list plus `npm run release:gate` when
-package.json defines one; run it before a release PR merges) and `--nightly`
-(the live jspm contract tests that `vendor-cdn.yml` used to run on a cron;
-network-bound, so never part of the gate). `scripts/ci-merge.sh <N>` runs the
-list on the PR head (here when this checkout is that head, clean and a real
-install, otherwise in a throwaway worktree with its own `npm ci`), posts the
-`local-ci` commit status, and squash-merges with `--delete-branch
---match-head-commit` only when green. `main` requires the `local-ci`
-status and NO review (`scripts/protect-main.sh`): the owner reviews outside
-the merge path, and a review rule would block every agent merge, so never add
-one. ci-merge never uses `--admin`.
-`.hooks/pre-push` runs the quick subset (`scripts/ci.sh --quick`: setup, conventions, the Node suite, about a minute) on every push of a branch with an open
-PR, unless every changed file is `*.md`, `docs/**` or `blog/**`. A later push
-has no `local-ci` until the list runs on it again, so a stale green never
-carries forward. Run it from a REAL install (the primary checkout, or a
-worktree with its own `npm ci`): in a linked worktree every bare
-`@webjsdev/*` specifier resolves into the primary checkout, so the run is
-partly vacuous there, and `scripts/ci.sh` writes no PASS marker for it.
-`scripts/ci.sh` also unsets the `GIT_*` variables a hook exports (a pre-push run once let the hook tests write fixture commits into this repository), turns Bun's shared transpiler cache off, and waits up to `CI_LOAD_WAIT` (180s) for load to fall under 1.5x the cores, printing `WARNING host overloaded` in the verdict when it does not or a disk is 90% full. The browser suites run after the Gate rather than beside it, so load cannot time them out, and every web-test-runner config takes a kernel-assigned port (`WTR_PORT` pins one) so two runs at once cannot share port 8000. Only the npm publish stays on Actions (`release.yml`, bound to trusted publishing); the CDN purge and the release steps around the publish run locally (`scripts/purge-cdn.sh`, `scripts/release.sh`).
+**The gate: GitHub Actions CI, merged with `scripts/ci-merge.sh`.**
+`ci.yml` runs on every pull request into `main` and every push to `main`
+(free on this public repository; running the full list locally made the
+owner's laptop lag). `main` requires its six job checks, strict, and NO
+review (`scripts/protect-main.sh`): the owner reviews outside the merge path,
+and a review rule would block every agent merge, so never add one.
+`scripts/ci-merge.sh <N>` waits for those required checks on the PR head
+(`gh pr checks --required --watch`) and squash-merges with `--delete-branch
+--match-head-commit` only when they are green; with `--release` it first runs
+the release gate (`node scripts/release-gate.mjs`) on this machine. It never
+uses `--admin`. The same list still runs by hand: `scripts/ci.sh` wraps
+`npm run ci` with a log under `${TMPDIR:-/tmp}/webjs-ci-<sha>/`, `--only A,B`,
+`--list`, `--quick`, `--release` and `--nightly` (the live jspm contract
+tests, network-bound). `.hooks/pre-push` is OFF by default; set
+`WEBJS_PREPUSH_CI=1` to have it run `scripts/ci.sh --quick` before pushing a
+branch with an open PR. Run the list from a REAL install (the primary
+checkout, or a worktree with its own `npm ci`): in a linked worktree every
+bare `@webjsdev/*` specifier resolves into the primary checkout.
+`scripts/ci.sh` also unsets the `GIT_*` variables a hook exports (a pre-push run once let the hook tests write fixture commits into this repository), turns Bun's shared transpiler cache off, and waits up to `CI_LOAD_WAIT` (180s) for load to fall under 1.5x the cores, printing `WARNING host overloaded` in the verdict when it does not or a disk is 90% full. The browser suites run after the Gate rather than beside it, so load cannot time them out, and every web-test-runner config takes a kernel-assigned port (`WTR_PORT` pins one) so two runs at once cannot share port 8000. CI and the npm publish run on Actions (`ci.yml`, and `release.yml` bound to trusted publishing); the CDN purge and the release steps around the publish run locally (`scripts/purge-cdn.sh`, `scripts/release.sh`).
 
 **Local prerequisites** for the whole list: Node 24+, Bun, Docker (the Postgres
 container and the image build; the user must be in the `docker` group, or set
 `WEBJS_DOCKER` to the command that reaches a daemon, such as `sudo -n docker`
 or `podman`), the Playwright browsers (`npx playwright
 install chromium firefox webkit`), `puppeteer-core` (a root devDependency),
-`gh` (authenticated, for the `local-ci` status), `setsid` and `pgrep`
+`gh` (authenticated), `setsid` and `pgrep`
 (util-linux and procps, present on Linux and absent from a stock macOS: the
 website e2e step and the runner's interrupt test use them), and a shell that
 does NOT export `FORCE_COLOR` (it flips tsc to pretty output and reds two type

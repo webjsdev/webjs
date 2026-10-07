@@ -9,10 +9,9 @@
 #      when a packages/<pkg>/package.json version bumped in the
 #      staged diff.
 #
-# The test suite is NOT run here. Local CI is the test gate (#1593):
-# .hooks/pre-push runs scripts/ci.sh --quick on every push of a branch with an open
-# PR, and scripts/ci-merge.sh runs it on the PR head and posts the `local-ci`
-# status branch protection requires. Running the whole list on every commit
+# The test suite is NOT run here. GitHub CI (ci.yml) is the test gate on every
+# PR, and scripts/ci-merge.sh merges only when its required checks are green
+# (scripts/ci.sh runs the same list by hand). Running the whole list on every commit
 # would make commit-per-logical-unit slow for no extra protection.
 #
 # Exception: the release workflow's `github-actions[bot]` commits

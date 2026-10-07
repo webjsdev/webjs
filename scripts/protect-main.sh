@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
-# The merge gate for main: a green LOCAL CI run recorded on the PR head
-# (#1593), and nothing else. Run once (needs repo admin); re-running is
+# The merge gate for main: the six GitHub CI job checks from ci.yml, green on
+# the PR head, and nothing else. Run once (needs repo admin); re-running is
 # idempotent.
 #
-# Local CI is the gate. `scripts/ci-merge.sh` runs `scripts/ci.sh` (the root
-# `webjs.ci` list, every job ci.yml defines) on the PR head and posts the
-# verdict as the `local-ci` commit status, which this script makes the one
-# required status check. A later push has no `local-ci` status until the list
-# is run on it again, so a stale green never carries forward, and `strict`
-# keeps the head current with main.
+# CI runs on GitHub Actions (free on this public repository). The contexts
+# are ci.yml's job `name:` values, which GitHub keys a required check on
+# exactly; a rename in ci.yml must be made here too. `strict` keeps the head
+# current with main. scripts/ci-merge.sh waits for these and merges.
 #
 # NO REVIEW REQUIREMENT, and none may be added here. The owner reviews pull
 # requests outside the merge path, and agents merge their own work through
@@ -17,15 +15,18 @@
 # approve it. A PUT replaces the whole protection object, so writing
 # `required_pull_request_reviews: null` and
 # `required_conversation_resolution: false` here is what keeps them off.
-#
-# The six GitHub Actions job names were required until #1593; ci.yml now runs
-# only by hand (workflow_dispatch), so requiring them would block every merge.
-# Run this AFTER the PR that adds scripts/ci-merge.sh has merged.
 
 set -euo pipefail
 
 REPO="webjsdev/webjs"
-CONTEXTS='["local-ci"]'
+CONTEXTS='[
+      "Conventions (webjs check)",
+      "Unit + integration (node --test)",
+      "Browser (web-test-runner / Playwright)",
+      "E2E (Puppeteer against the blog example)",
+      "Build (@webjsdev/core dist)",
+      "In-repo app tests (website + blog + gallery)"
+    ]'
 
 gh api -X PUT "repos/${REPO}/branches/main/protection" \
   --input - <<JSON
@@ -41,4 +42,4 @@ gh api -X PUT "repos/${REPO}/branches/main/protection" \
 }
 JSON
 
-echo "main is now protected: a green local-ci status (scripts/ci-merge.sh) before merge; no review requirement."
+echo "main is now protected: the six GitHub CI checks green before merge (scripts/ci-merge.sh); no review requirement."

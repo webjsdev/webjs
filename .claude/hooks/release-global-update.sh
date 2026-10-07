@@ -30,7 +30,7 @@ cmd=$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2>/dev/null 
 if [ -z "$cmd" ]; then exit 0; fi
 
 # Only after a `gh pr merge`.
-# scripts/ci-merge.sh counts too: it runs local CI and then `gh pr merge`
+# scripts/ci-merge.sh counts too: it waits for GitHub CI and then `gh pr merge`
 # inside the script, where this hook cannot see the literal string (#1593).
 if ! printf '%s' "$cmd" | grep -Eq '(^|[^[:alnum:]-])(gh pr merge|ci-merge\.sh)([^[:alnum:]-]|$)'; then
   exit 0
