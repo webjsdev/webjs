@@ -2,15 +2,11 @@
  * handleApi() dev cache-bust: in dev, a route module is re-imported per request
  * with a `?t=<timestamp>` query so an edit is picked up without a restart.
  *
- * SPLIT OUT of api.test.js (#509) because this is the ONE handleApi behavior that
- * is NODE-ONLY: Bun's ESM loader ignores the query cache-bust (and exposes no
- * module-eviction API), so this assertion cannot hold on Bun. It is denylisted in
- * the Bun matrix (see scripts/run-bun-tests.js); the rest of handleApi (routing,
- * 405, params, Response.json) stays in api.test.js and DOES run under Bun. This
- * test exercises the bare server-level `?t=` mechanism directly (no supervisor),
- * which Bun ignores by design. The USER-FACING dev hot reload it underpins IS
- * fixed for Bun at the CLI level via `bun --hot` (#514), proven cross-runtime by
- * test/bun/dev-hot-reload.mjs.
+ * Split out of api.test.js (#509) when this held on Node only: Bun drops the
+ * query of a `file://` specifier, so the bust was a no-op there. Since #1550
+ * the bust rides a plain absolute path on Bun (`devImportSpecifier`), which
+ * Bun loads fresh, so this runs on both runtimes (no longer denylisted in
+ * scripts/run-bun-tests.js).
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';

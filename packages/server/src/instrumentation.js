@@ -16,9 +16,9 @@
  */
 
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { stat } from 'node:fs/promises';
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { devImportSpecifier } from './dev-import.js';
 
 /**
  * Per-boot handoff channel for a `register()`-registered error sink. An
@@ -86,9 +86,7 @@ export async function runInstrumentation(appDir, opts = {}) {
   const store = { onError: null };
   await _als.run(store, async () => {
     try {
-      const url = pathToFileURL(file).toString();
-      const bust = dev ? `?t=${Date.now()}-${Math.random().toString(36).slice(2)}` : '';
-      const mod = await import(url + bust);
+      const mod = await import(devImportSpecifier(file, dev));
       const register = typeof mod.default === 'function'
         ? mod.default
         : (typeof mod.register === 'function' ? mod.register : null);

@@ -1,5 +1,4 @@
 import { digestHex } from './crypto-utils.js';
-import { pathToFileURL } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { walk } from './fs-walk.js';
@@ -21,6 +20,7 @@ import { getBodyLimits } from './context.js';
 import { basePath } from './importmap.js';
 import { withBasePath } from './base-path.js';
 import { FORM_ACTION_ID_KEY } from '@webjsdev/core';
+import { devImportSpecifier } from './dev-import.js';
 
 /**
  * The JSON / RPC body cap in effect for the current request: the per-request
@@ -638,7 +638,5 @@ async function actionErrorResponse(err, dev) {
  * @param {boolean} dev
  */
 async function loadModule(file, dev) {
-  const url = pathToFileURL(file).toString();
-  const bust = dev ? `?t=${Date.now()}-${Math.random().toString(36).slice(2)}` : '';
-  return import(url + bust);
+  return import(devImportSpecifier(file, dev));
 }

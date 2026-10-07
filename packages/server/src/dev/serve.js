@@ -9,7 +9,6 @@
  */
 import { stat, readFile } from 'node:fs/promises';
 import { join, extname, resolve, relative, sep } from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 import { matchPage, matchApi } from '../router.js';
 import { ssrPage, ssrNotFound } from '../ssr.js';
@@ -35,6 +34,7 @@ import { versionModuleImports, withAssetHash } from '../asset-hash.js';
 import { toUrlPath } from '../ssr/preloads.js';
 import { BUFFERED_MARKER } from '../conditional-get.js';
 import { MIME, TS_CACHE_MAX, exists, reloadClientJs, reloadWorkerJs } from './helpers.js';
+import { devImportSpecifier } from '../dev-import.js';
 
 /**
  * Serve framework-internal static assets that depend on NEITHER the whole-app
@@ -363,7 +363,7 @@ export async function handleCore(req, ctx) {
     const meta = state.routeTable.metadataRoutes.find((r) => r.urlPath === path);
     if (meta) {
       try {
-        const mod = await import(pathToFileURL(meta.file).toString() + (dev ? `?t=${Date.now()}` : ''));
+        const mod = await import(devImportSpecifier(meta.file, dev));
         if (mod.default) {
           const result = await mod.default();
           // If the function returns a Response, use it directly.
@@ -582,9 +582,7 @@ export async function runWithSegmentMiddleware(req, files, terminal, dev) {
   const handlers = [];
   for (const f of files) {
     try {
-      const url = pathToFileURL(f).toString();
-      const bust = dev ? `?t=${Date.now()}-${Math.random().toString(36).slice(2)}` : '';
-      const mod = await import(url + bust);
+      const mod = await import(devImportSpecifier(f, dev));
       if (typeof mod.default === 'function') handlers.push(mod.default);
     } catch {
       // Bad middleware file: skip; top-level error handler will catch real problems.
@@ -627,10 +625,8 @@ export async function loadMiddleware(appDir, dev, logger) {
     if (await exists(candidate)) { file = candidate; break; }
   }
   if (!file) return null;
-  const url = pathToFileURL(file).toString();
-  const bust = dev ? `?t=${Date.now()}-${Math.random().toString(36).slice(2)}` : '';
   try {
-    const mod = await import(url + bust);
+    const mod = await import(devImportSpecifier(file, dev));
     return typeof mod.default === 'function' ? mod.default : null;
   } catch (e) {
     logger.error('failed to load root middleware', { file, err: String(e) });

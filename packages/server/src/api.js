@@ -1,5 +1,5 @@
-import { pathToFileURL } from 'node:url';
 import { makeThenable } from './thenable-params.js';
+import { devImportSpecifier } from './dev-import.js';
 
 /**
  * Dispatch an incoming request to a matched API route.
@@ -14,9 +14,7 @@ import { makeThenable } from './thenable-params.js';
  * @returns {Promise<Response>}
  */
 export async function handleApi(route, params, webRequest, dev) {
-  const url = pathToFileURL(route.file).toString();
-  const bust = dev ? `?t=${Date.now()}-${Math.random().toString(36).slice(2)}` : '';
-  const mod = await import(url + bust);
+  const mod = await import(devImportSpecifier(route.file, dev));
   const method = webRequest.method.toUpperCase();
   const handler = mod[method];
   if (!handler) {

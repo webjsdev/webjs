@@ -2,7 +2,6 @@ import { readFile } from 'node:fs/promises';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, resolve, sep } from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 // Server-side `.ts` imports are handled natively by Node 24+'s default
 // type-stripping (`process.features.typescript === 'strip'`) or by Bun. The
@@ -73,6 +72,7 @@ import {
 import {
   handleCore, loadMiddleware, tryServeFrameworkStatic, tryServePublicAsset,
 } from './serve.js';
+import { devImportSpecifier } from '../dev-import.js';
 
 /**
  * A short content digest of a single file's bytes for the app-source deploy
@@ -858,9 +858,7 @@ export async function createRequestHandler(opts) {
     }
     if (!file) { readinessFn = null; return null; }
     try {
-      const url = pathToFileURL(file).toString();
-      const bust = dev ? `?t=${Date.now()}-${Math.random().toString(36).slice(2)}` : '';
-      const mod = await import(url + bust);
+      const mod = await import(devImportSpecifier(file, dev));
       readinessFn = typeof mod.default === 'function' ? mod.default : null;
     } catch (e) {
       logger.error?.(`[webjs] failed to load readiness.{js,ts}`, { err: String(e) });

@@ -32,12 +32,11 @@ const PER_FILE_TIMEOUT_MS = Number(process.env.WEBJS_BUN_TEST_TIMEOUT_MS || 120_
 /**
  * Files SKIPPED under Bun, each with a reason and where the Bun-relevant behavior
  * is otherwise covered. A file-level skip is coarse, so node-only behavior is
- * SPLIT into its own file (api dev-cache-bust, body-limit server-timeouts) rather
+ * SPLIT into its own file (body-limit server-timeouts) rather
  * than denylisting a file that also carries runtime-agnostic tests. Match is by
  * the exact repo-relative path (normalized to `/`).
  */
 const DENYLIST = [
-  { match: 'packages/server/test/api/dev-cache-bust.test.js', reason: 'asserts the bare server-level dev ?t= import cache-bust directly (no supervisor), which Bun ignores by keying its module cache on path. The USER-FACING hot reload is fixed for Bun at the CLI level via `bun --hot` (#514), proven cross-runtime by test/bun/dev-hot-reload.mjs; this unit test exercises the Node-only `?t=` mechanism. The rest of handleApi runs on Bun via api.test.js.' },
   { match: 'packages/server/test/body-limit/server-timeouts.test.js', reason: 'asserts node:http server.requestTimeout/headersTimeout/keepAliveTimeout; the Bun shell uses Bun.serve idleTimeout instead (#511). The runtime-agnostic 413 body-limit tests run on Bun via integration.test.js.' },
   { match: 'packages/server/test/dev/dev-handler.test.js', reason: 'node:http shell internals (toWebRequest / sendWebResponse / server.address, the node ServerResponse streaming path). The Bun shell is covered by test/bun/listener.mjs and test/bun/compression.mjs + listener/compression-parity.test.js (which now assert brotli on the Bun shell too, #517).' },
   { match: 'packages/server/test/dev/watch-extra-paths-live.test.js', reason: 'boots startServer and reads the port via the node:http `server.address()` shape (#894), which the Bun.serve shell does not expose. The Bun behavior (an outside webjs.dev.watch dir live-reloads over SSE) is proven on Bun by test/bun/dev-extra-watch.mjs, which drives the real CLI + fetch. The readDevWatchPathsFromApp reader logic is runtime-agnostic and covered by watch-extra-paths.test.js.' },
