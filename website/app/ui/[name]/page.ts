@@ -50,14 +50,14 @@ import '#modules/ui/components/tooltip.ts';
  * so it is title-cased for the human-facing title only.
  *
  * Each page describes ITSELF rather than inheriting one section description
- * from the layout for all 33 URLs. A set of byte-identical descriptions across
+ * from the layout for all 36 URLs. A set of byte-identical descriptions across
  * a section is exactly the duplicate-content shape this migration exists to
- * avoid, and it would have been self-defeating to introduce 33 of them in a
+ * avoid, and it would have been self-defeating to introduce 36 of them in a
  * change whose stated purpose is search consolidation.
  *
  * The sentence is DERIVED rather than hand-written. The registry carries no
  * per-item description (checked: every `registry:ui` item omits it), so a
- * hand-written map would be 33 more strings to drift out of sync with the kit.
+ * hand-written map would be 36 more strings to drift out of sync with the kit.
  * Tier plus the naming convention is enough to say something true and distinct
  * about every component, and it stays correct when one moves between tiers.
  */

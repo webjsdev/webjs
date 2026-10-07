@@ -53,6 +53,32 @@ import {
 } from '#modules/ui/components/avatar.ts';
 import { separatorClass } from '#modules/ui/components/separator.ts';
 import { skeletonClass } from '#modules/ui/components/skeleton.ts';
+import {
+  emptyClass,
+  emptyHeaderClass,
+  emptyMediaClass,
+  emptyTitleClass,
+  emptyDescriptionClass,
+  emptyContentClass,
+} from '#modules/ui/components/empty.ts';
+import { spinnerClass } from '#modules/ui/components/spinner.ts';
+// field.ts reuses the fieldClass / fieldLabelClass names that lib/utils/cn.ts
+// already exports (the older single-field rhythm helpers the input examples
+// use), so the kit versions are aliased here and swapped in for the field
+// example only, through FIELD_HELPERS below.
+import {
+  fieldSetClass,
+  fieldLegendClass,
+  fieldGroupClass,
+  fieldClass as kitFieldClass,
+  fieldContentClass,
+  fieldLabelClass as kitFieldLabelClass,
+  fieldTitleClass,
+  fieldDescriptionClass,
+  fieldErrorClass,
+  fieldSeparatorClass,
+  fieldSeparatorContentClass,
+} from '#modules/ui/components/field.ts';
 import { aspectRatioClass } from '#modules/ui/components/aspect-ratio.ts';
 import { kbdClass, kbdGroupClass } from '#modules/ui/components/kbd.ts';
 import {
@@ -156,6 +182,9 @@ const HELPERS: Record<string, (...args: never[]) => string> = {
   checkboxClass,
   collapsibleClass, collapsibleContentClass, collapsibleTriggerClass,
   dialogDescriptionClass, dialogFooterClass, dialogHeaderClass, dialogTitleClass,
+  emptyClass, emptyContentClass, emptyDescriptionClass, emptyHeaderClass, emptyMediaClass, emptyTitleClass,
+  fieldContentClass, fieldDescriptionClass, fieldErrorClass, fieldGroupClass, fieldLegendClass,
+  fieldSeparatorClass, fieldSeparatorContentClass, fieldSetClass, fieldTitleClass,
   fieldClass, hintClass, inputClass, kbdClass, kbdGroupClass, labelClass,
   nativeSelectClass, nativeSelectIconClass, nativeSelectWrapperClass,
   paginationClass, paginationContentClass, paginationLinkClass, paginationNextClass, paginationPreviousClass,
@@ -168,12 +197,23 @@ const HELPERS: Record<string, (...args: never[]) => string> = {
   tabsListClass, textareaClass, toggleClass,
 };
 
+// The field example's scope: the kit's fieldClass / fieldLabelClass in place of
+// the cn() module's same-named rhythm helpers. Chosen by comparing the snippet
+// against EXAMPLES.field, so no other example changes what its holes evaluate
+// to, and nothing runs at module scope (a module-scope call would make the
+// elision analyser read this module as client work).
+const FIELD_HELPERS: Record<string, (...args: never[]) => string> = {
+  ...HELPERS,
+  fieldClass: kitFieldClass,
+  fieldLabelClass: kitFieldLabelClass,
+};
+
 // Evaluate one authored call expression such as buttonClass({ variant: 'x' })
 // against HELPERS. Runs server-side only (from the page render), over strings
 // this module authored, never user input. Fails soft to an empty class.
-function evalHole(expr: string): string {
+function evalHole(expr: string, helpers = HELPERS): string {
   try {
-    return String(new Function('H', `return (H.${expr});`)(HELPERS));
+    return String(new Function('H', `return (H.${expr});`)(helpers));
   } catch {
     return '';
   }
@@ -185,6 +225,7 @@ function evalHole(expr: string): string {
 // becomes the call verbatim, and when the hole is the ENTIRE quoted attribute
 // value the quotes are dropped so it reads as the idiomatic unquoted form.
 function buildExample(src: string, mode: 'render' | 'code'): string {
+  const helpers = src === EXAMPLES.field ? FIELD_HELPERS : HELPERS;
   let out = '';
   let i = 0;
   while (i < src.length) {
@@ -206,7 +247,7 @@ function buildExample(src: string, mode: 'render' | 'code'): string {
     const before = src.slice(i, open);
     const expr = src.slice(open + 2, j).trim();
     if (mode === 'render') {
-      out += before + evalHole(expr);
+      out += before + evalHole(expr, helpers);
       i = j + 1;
     } else if (before.endsWith('="') && src[j + 1] === '"') {
       out += before.slice(0, -1) + '${' + expr + '}';
@@ -380,6 +421,63 @@ const EXAMPLES: Record<string, string> = {
       <div class="\${skeletonClass()} h-4 w-1/2"></div>
       <div class="\${skeletonClass()} h-4 w-2/3"></div>
     </div>
+  `,
+
+  empty: `
+    <div class="\${emptyClass()} border w-full max-w-lg">
+      <div class="\${emptyHeaderClass()}">
+        <div class="\${emptyMediaClass({ variant: 'icon' })}" data-variant="icon">
+          <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+        </div>
+        <h3 class="\${emptyTitleClass()}">No projects yet</h3>
+        <p class="\${emptyDescriptionClass()}">You have not created any projects. Create your first one to get started.</p>
+      </div>
+      <div class="\${emptyContentClass()}">
+        <a class="\${buttonClass()}" href="#">Create project</a>
+      </div>
+    </div>
+  `,
+
+  spinner: `
+    <div class="flex flex-wrap items-center gap-6">
+      <div class="flex items-center gap-2 text-sm text-muted-foreground">
+        <svg data-slot="spinner" role="status" aria-label="Loading" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="\${spinnerClass()}"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
+        Loading invoices
+      </div>
+      <button class="\${buttonClass()}" type="button" disabled aria-busy="true">
+        <svg data-slot="spinner" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="\${spinnerClass()}"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
+        Saving
+      </button>
+    </div>
+  `,
+
+  field: `
+    <form class="w-full max-w-md">
+      <fieldset class="\${fieldSetClass()}">
+        <legend class="\${fieldLegendClass()}" data-variant="legend">Profile</legend>
+        <p class="\${fieldDescriptionClass()}">This is how others see you.</p>
+        <div class="\${fieldGroupClass()}" data-slot="field-group">
+          <div class="\${fieldClass()}" data-slot="field" data-orientation="vertical">
+            <label class="\${fieldLabelClass()}" data-slot="field-label" for="field-demo-name">Name</label>
+            <input class="\${inputClass()}" id="field-demo-name" name="name" value="Ada Lovelace" aria-describedby="field-demo-name-desc">
+            <p class="\${fieldDescriptionClass()}" id="field-demo-name-desc">Shown on your public page.</p>
+          </div>
+          <div class="\${fieldClass()}" data-slot="field" data-orientation="vertical" data-invalid="true">
+            <label class="\${fieldLabelClass()}" data-slot="field-label" for="field-demo-email">Email</label>
+            <input class="\${inputClass()}" id="field-demo-email" name="email" type="email" value="ada@" aria-invalid="true" aria-describedby="field-demo-email-error">
+            <div class="\${fieldErrorClass()}" id="field-demo-email-error" role="alert">Enter a valid email address.</div>
+          </div>
+          <div class="\${fieldSeparatorClass()}" role="none"><span class="\${fieldSeparatorContentClass()}">Notifications</span></div>
+          <div class="\${fieldClass({ orientation: 'horizontal' })}" data-slot="field" data-orientation="horizontal">
+            <input class="\${checkboxClass()}" data-slot="checkbox" type="checkbox" id="field-demo-digest" name="digest" checked>
+            <div class="\${fieldContentClass()}" data-slot="field-content">
+              <label class="\${fieldLabelClass()}" data-slot="field-label" for="field-demo-digest">Weekly digest</label>
+              <p class="\${fieldDescriptionClass()}">A summary of activity, every Monday.</p>
+            </div>
+          </div>
+        </div>
+      </fieldset>
+    </form>
   `,
 
   'aspect-ratio': `

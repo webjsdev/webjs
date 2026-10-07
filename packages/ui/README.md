@@ -8,7 +8,8 @@ function calls, not for a layered React abstraction over every primitive:
 
 - **Tier 1, class-helper functions** (`buttonClass`, `cardClass`,
   `inputClass`, `labelClass`, `alertClass`, `popoverContentClass`,
-  `accordionItemClass`, `collapsibleTriggerClass`, …). Pure functions that
+  `accordionItemClass`, `collapsibleTriggerClass`, `emptyClass`,
+  `fieldClass`, `fieldErrorClass`, `spinnerClass`, …). Pure functions that
   return Tailwind class strings. You spread them onto raw native elements
  , including `<button class=${buttonClass({ variant: 'outline' })}>`,
   `<details name="faq" class=${accordionItemClass()}>`, and
@@ -55,8 +56,9 @@ Tier-1 class helpers return only classes, so the semantic element and ARIA are
 yours to supply. Each one's JSDoc carries an `A11y (required for accessible
 output)` block stating exactly what to add: a name on an icon-only button, a
 role on an alert, `scope` on table headers, `alt` on an avatar image, a
-labelled `<nav>` with `aria-current="page"` on pagination and breadcrumb, and
-so on. Follow that block and the markup is fully accessible.
+labelled `<nav>` with `aria-current="page"` on pagination and breadcrumb,
+`aria-describedby` from a control to its field description and error, a
+disabled `aria-busy` button around a decorative spinner, and so on. Follow that block and the markup is fully accessible.
 
 ## Install
 

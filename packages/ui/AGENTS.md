@@ -1,7 +1,7 @@
 # AGENTS.md : @webjsdev/ui
 
 The webjs **AI-first component library + CLI**, `webjsui init` / `add` /
-`list` / `view` / `diff` / `info` / `build` / `lint`. Ships 32 primitives across two
+`list` / `view` / `diff` / `info` / `build` / `lint`. Ships 35 primitives across two
 tiers: class-helper functions for visual components, custom elements only
 where state matters. Variant names, sizes, and data-attribute conventions
 mirror shadcn so existing shadcn knowledge transfers directly.
@@ -161,7 +161,7 @@ This trap exists ONLY in the marketing site. Scaffolded user apps,
 `examples/blog`, and every other WebJs app keep `components/ui/` as normal
 tracked source, the standard shadcn "you own it" pattern.
 
-## v1 component inventory (32 components)
+## Component inventory (35 components)
 
 | Tier | Component | Surface |
 |---|---|---|
@@ -177,6 +177,9 @@ tracked source, the standard shadcn "you own it" pattern.
 | 1a | `avatar` | `avatarClass`, `avatarImageClass`, `avatarFallbackClass`, `avatarBadgeClass`, `avatarGroupClass`, `avatarGroupCountClass` |
 | 1a | `separator` | `separatorClass({ orientation })` |
 | 1a | `skeleton` | `skeletonClass` |
+| 1a | `spinner` | `spinnerClass`, plus `spinner({ class, label, decorative })`, which returns an `html` inline SVG (the Lucide loader-circle path) with `role="status"` + `aria-label="Loading"`. It imports `html` from `@webjsdev/core` but registers no element, so it stays Tier 1. |
+| 1a | `empty` | `emptyClass`, `emptyHeaderClass`, `emptyMediaClass({ variant })`, `emptyTitleClass`, `emptyDescriptionClass`, `emptyContentClass`. The root has `border-dashed` but no width (shadcn parity), so add `border` for the outline. |
+| 1a | `field` | `fieldSetClass`, `fieldLegendClass({ variant })`, `fieldGroupClass`, `fieldClass({ orientation })`, `fieldContentClass`, `fieldLabelClass`, `fieldTitleClass`, `fieldDescriptionClass`, `fieldErrorClass`, `fieldSeparatorClass`, `fieldSeparatorContentClass`. Invalid state is `data-invalid="true"` on the field plus `aria-invalid` on the control. `fieldClass` and `fieldLabelClass` share their names with the older rhythm helpers in `lib/utils.ts` (copied to `lib/utils/cn.ts`); both sets keep working from their own modules, so a file needing both aliases one. |
 | 1a | `aspect-ratio` | `aspectRatioClass`, use Tailwind `aspect-[16/9]` directly |
 | 1a | `kbd` | `kbdClass`, `kbdGroupClass` |
 | 1a | `table` | `tableContainerClass`, `tableClass`, `tableHeaderClass`, `tableBodyClass`, `tableFooterClass`, `tableRowClass`, `tableHeadClass`, `tableCellClass`, `tableCaptionClass` |
@@ -268,6 +271,9 @@ obligations:
 - `alert`: choose `role="alert"` (urgent) or `role="status"` (polite).
 - `separator`: `role="separator"` + `aria-orientation`, or `role="none"` when decorative.
 - `skeleton`: `aria-hidden="true"` (or `aria-busy` on the region), since it is a placeholder.
+- `spinner`: `spinner()` is a named `role="status"`. Inside a busy button, mark the BUTTON `disabled` + `aria-busy="true"`, keep its visible text, and render `spinner({ decorative: true })` so a second live status is not nested in the button's name.
+- `empty`: a real heading for `emptyTitleClass()`, `aria-hidden` on the decorative media, and `role="status"` on the root only when the empty state answers a user action (a search or filter that matched nothing).
+- `field`: a real `<label for>` per control, `aria-describedby` listing the description id and, when invalid, the error id (only ids that exist), `aria-invalid` on the control, `role="alert"` on the error, and the typed values kept when the server re-renders the form with an error. A radio or checkbox set goes in a `<fieldset>` named by its `<legend>`.
 - `avatar`: an `alt` that names the person, plus the text fallback.
 - `table`: `scope="col"` / `scope="row"` on header cells, and a `<caption>`.
 - `pagination` / `breadcrumb`: a labelled `<nav>`, `aria-current="page"`, and hidden separators / icon-only control names.

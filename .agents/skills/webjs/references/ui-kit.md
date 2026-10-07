@@ -81,9 +81,9 @@ So the loop is: `add` the component, then query `ui <name>` (MCP) or
 ## Inventory (run `npx webjsdev ui list` or the MCP `ui` tool for the authoritative, current set)
 
 **Tier 1 (class helpers):** accordion, alert, aspect-ratio, avatar, badge,
-breadcrumb, button, card, checkbox, collapsible, input, kbd, label,
-native-select, pagination, popover, progress, radio-group, separator, skeleton,
-switch, table, textarea.
+breadcrumb, button, card, checkbox, collapsible, empty, field, input, kbd,
+label, native-select, pagination, popover, progress, radio-group, separator,
+skeleton, spinner, switch, table, textarea.
 
 **Tier 2 (custom elements, own their ARIA):** alert-dialog, dialog,
 dropdown-menu, hover-card, sonner, tabs, tooltip, plus toggle and toggle-group
@@ -93,6 +93,17 @@ dropdown-menu, hover-card, sonner, tabs, tooltip, plus toggle and toggle-group
 
 - A helper is a function, so compose it: `class=${buttonClass({ variant: 'outline' })}`.
   The unquoted `${...}` is a normal `html` attribute hole.
+- The three states a screen owes its user each have a primitive, so do not hand-roll
+  them. A list or table with no rows renders `empty` (title as a real heading, a
+  description saying what to do next, and the create action). A form field is
+  `field` (`fieldClass()` holding a `<label for>`, the control, `fieldDescriptionClass()`
+  text, and on a validation error `data-invalid="true"`, `aria-invalid` on the control,
+  and a `fieldErrorClass()` message with `role="alert"` whose id the control's
+  `aria-describedby` lists, with the typed value kept). A pending save puts
+  `spinner({ decorative: true })` in a `disabled` + `aria-busy="true"` submit button
+  that keeps its text. The `fieldClass` / `fieldLabelClass` in `components/ui/field.ts`
+  are not the same-named rhythm helpers in `lib/utils/cn.ts`; import each from its own
+  module and alias one if a file needs both.
 - Tier-1 helpers assume the design tokens exist; if a component paints unstyled,
   the tokens are missing (re-run `npx webjsdev ui init` or let `add` self-heal them).
 - Custom elements are display-only-safe at SSR and hydrate in the browser, the

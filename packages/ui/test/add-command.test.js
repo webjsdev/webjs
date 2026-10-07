@@ -279,6 +279,38 @@ test('add: local-first (no --registry) installs a real component, strips its exa
   }
 });
 
+test('add: local-first installs empty, spinner and field together (#1569)', async () => {
+  globalThis.fetch = async () => { throw new Error('should not fetch (local-first)'); };
+  const d = mkdtempSync(join(tmpdir(), 'webjsui-add-real-'));
+  writeFileSync(join(d, 'components.json'), JSON.stringify({
+    style: 'default',
+    tailwind: { css: 'styles/globals.css', baseColor: 'neutral', cssVariables: true },
+    aliases: { components: 'components', utils: 'lib/utils', ui: 'components/ui', lib: 'lib' },
+  }));
+  const origLog = console.log;
+  console.log = () => {};
+  try {
+    await add.parseAsync(['empty', 'spinner', 'field', '--yes', '--no-deps', '--cwd', d], { from: 'user' });
+    const read = (n) => readFileSync(join(d, 'components', 'ui', `${n}.ts`), 'utf8');
+    assert.match(read('empty'), /export const emptyClass/);
+    assert.match(read('field'), /export function fieldClass/);
+    const spin = read('spinner');
+    assert.match(spin, /export function spinner\(/);
+    assert.match(spin, /from '@webjsdev\/core'/);
+    // The cn import is rewritten to the app's utils alias, not left relative.
+    assert.doesNotMatch(spin, /from '\.\.\/lib\/utils\.ts'/);
+    assert.match(spin, /from '\.\.\/\.\.\/lib\/utils/);
+    for (const n of ['empty', 'spinner', 'field']) {
+      assert.doesNotMatch(read(n), /@example/, `${n}: example stripped`);
+      assert.match(read(n), new RegExp(`npx @webjsdev/ui view ${n}`), `${n}: pointer left`);
+    }
+  } finally {
+    console.log = origLog;
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});
+
 test('ensureTheme: returns a failure (does not throw) when css path / baseColor is missing', async () => {
   // Defensive: a direct caller passing an incomplete config must get a
   // structured failure, never a synchronous crash on join(cwd, undefined). #983.

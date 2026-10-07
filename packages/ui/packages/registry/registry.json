@@ -233,6 +233,38 @@
       ]
     },
     {
+      "name": "empty",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "lib-utils"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/empty.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "field",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "lib-utils"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/field.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
       "name": "hover-card",
       "type": "registry:ui",
       "registryDependencies": [
@@ -406,6 +438,22 @@
       "files": [
         {
           "path": "components/sonner.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "spinner",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "lib-utils"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/spinner.ts",
           "type": "registry:ui"
         }
       ]
