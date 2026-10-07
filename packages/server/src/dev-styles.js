@@ -17,39 +17,42 @@
  */
 
 /**
- * Re-request every same-origin stylesheet under `root`, cache-busted.
+ * Load the rebuilt stylesheets BEFORE the in-place refresh swaps the markup in
+ * (#1535), so a new class never paints without its rule.
  *
- * The replacement is inserted BESIDE the old link, and which of the two
- * survives depends on how the request went. That asymmetry is the whole point
- * and must not be collapsed into one shared handler:
+ * The re-request used to run AFTER the swap, and that order was the flash: the new
+ * markup is on screen while its stylesheet is still being rebuilt and fetched
+ * (a `webjs.dev.regenerate` compile is 100ms to seconds), so an element that
+ * gained a utility class shows with no rule for it until the sheet lands.
+ * Measured on a fixture with an 800ms compile: 56 animation frames (about
+ * 0.9s) painted the edited element unstyled. A full reload never had the
+ * problem, because a `<head>` stylesheet is render-blocking and the browser
+ * holds the old page until it loads.
  *
- * - On `load` the OLD link is dropped, so the page is never briefly unstyled.
- * - On `error` the NEW link is dropped and the old one kept. A re-request can
- *   fail (the server is mid-restart, the file was renamed or deleted), and
- *   removing the last working sheet there would leave the page permanently
- *   unstyled, which is exactly the failure #936 and #1400 exist to prevent.
- *
- * Duplicates are collapsed to one link per IDENTITY, where the identity is
- * every attribute except the href's query. The duplicate being collapsed is the
- * one the head merge re-appends (the incoming bare-href link beside the busted
- * one), so the head would otherwise gain a link on every refresh. Keying on the
- * path alone would be wrong in the other direction: it would delete an author's
- * second, legitimately distinct link to the same file, such as a `media="print"`
- * sheet.
+ * So the cache-busted replacements go in first, BESIDE the current links
+ * (both apply meanwhile, the same rules twice), and the returned promise
+ * resolves once each has loaded or failed, or after `timeoutMs` for one that
+ * hangs. The caller swaps the markup in and then calls `commit()`, which drops
+ * each old link whose replacement loaded, plus any same-identity copy the head
+ * merge appended, keeping the replacement. A replacement that failed is
+ * removed and the old link kept (#936, #1400: never take the last working
+ * sheet down). One still pending at commit finishes the same way when it
+ * settles.
  *
  * @param {ParentNode} [root]  where to scan, defaulting to the whole document.
- *   Injectable so a browser test can scope itself to its own container.
  * @param {() => number} [now]  cache-buster source, injectable for tests.
- * @returns {Element[]} the replacement links, so a caller (a test) can await them.
+ * @param {number} [timeoutMs]  the longest to hold the swap for a stylesheet.
+ * @returns {Promise<{ links: Element[], commit: () => void }>}
  */
-export function refreshStyles(root, now) {
+export function preloadStyles(root, now, timeoutMs) {
   const scope = root || (typeof document !== 'undefined' ? document : null);
-  if (!scope) return [];
+  const limit = typeof timeoutMs === 'number' ? timeoutMs : 10000;
+  if (!scope) return Promise.resolve({ links: [], commit: function () {} });
   const stamp = now || Date.now;
   /** @type {Record<string, { el: Element, url: URL }>} */
   const kept = Object.create(null);
-  const links = [].slice.call(scope.querySelectorAll('link[rel~="stylesheet"][href]'));
-  for (const el of links) {
+  const current = [].slice.call(scope.querySelectorAll('link[rel~="stylesheet"][href]'));
+  for (const el of current) {
     let url;
     try { url = new URL(el.getAttribute('href'), location.href); } catch (_) { continue; }
     if (url.origin !== location.origin) continue;
@@ -57,7 +60,21 @@ export function refreshStyles(root, now) {
     if (kept[key]) { if (el.parentNode) el.parentNode.removeChild(el); continue; }
     kept[key] = { el, url };
   }
-  const added = [];
+  let committed = false;
+  /** @type {Array<{ key: string, old: Element, next: Element, state: string }>} */
+  const pairs = [];
+  // Drop every other copy of this sheet (the old link, a copy the head merge
+  // re-appended) so exactly the replacement is left.
+  const settleLoaded = function (pair) {
+    const links = [].slice.call(scope.querySelectorAll('link[rel~="stylesheet"][href]'));
+    for (const el of links) {
+      if (el === pair.next) continue;
+      let url;
+      try { url = new URL(el.getAttribute('href'), location.href); } catch (_) { continue; }
+      if (url.origin === location.origin && identityKey(el, url) === pair.key && el.parentNode) el.parentNode.removeChild(el);
+    }
+  };
+  const waits = [];
   for (const key of Object.keys(kept)) {
     const old = kept[key].el;
     const url = kept[key].url;
@@ -65,17 +82,34 @@ export function refreshStyles(root, now) {
     url.searchParams.set('__webjs_dev', String(stamp()));
     const next = /** @type {Element} */ (old.cloneNode(false));
     next.setAttribute('href', url.pathname + url.search);
-    next.addEventListener('load', function () {
-      if (old.parentNode) old.parentNode.removeChild(old);
-    });
-    next.addEventListener('error', function () {
-      // Keep the sheet that still works rather than the one that just failed.
-      if (next.parentNode) next.parentNode.removeChild(next);
-    });
+    const pair = { key, old, next, state: 'pending' };
+    pairs.push(pair);
+    waits.push(new Promise(function (resolve) {
+      next.addEventListener('load', function () {
+        pair.state = 'load';
+        if (committed) settleLoaded(pair);
+        resolve(undefined);
+      });
+      next.addEventListener('error', function () {
+        pair.state = 'error';
+        if (next.parentNode) next.parentNode.removeChild(next);
+        resolve(undefined);
+      });
+    }));
     old.parentNode.insertBefore(next, old.nextSibling);
-    added.push(next);
   }
-  return added;
+  const commit = function () {
+    committed = true;
+    for (const pair of pairs) if (pair.state === 'load') settleLoaded(pair);
+  };
+  const links = pairs.map(function (p) { return p.next; });
+  if (!waits.length) return Promise.resolve({ links, commit });
+  return new Promise(function (resolve) {
+    let done = false;
+    const finish = function () { if (!done) { done = true; resolve({ links, commit }); } };
+    Promise.all(waits).then(finish);
+    setTimeout(finish, limit);
+  });
 }
 
 /**

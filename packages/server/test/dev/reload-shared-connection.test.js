@@ -191,8 +191,13 @@ test('the reload client probes the server is up before reloading (no restart fla
   assert.notEqual(dismissAt, -1, 'the refresh path dismisses a live error overlay');
   assert.notEqual(refreshAt, -1, 'and the refresh call is present at all');
   assert.ok(dismissAt < refreshAt, 'the dismiss happens BEFORE the re-render, not after it');
-  assert.match(clientSrc, /function refreshStyles/, 'the stylesheet re-request ships in the client (#967 regenerate runs ON REQUEST)');
-  assert.match(clientSrc, /^\s*refreshStyles\(\);$/m, 'and an applied refresh actually calls it');
+  assert.match(clientSrc, /function preloadStyles/, 'the stylesheet re-request ships in the client (#967 regenerate runs ON REQUEST)');
+  // #1535: the rebuilt sheets load BEFORE the markup swap, and the old ones
+  // go only after it, so a new class never paints without its rule.
+  const preloadAt = clientSrc.indexOf('preloadStyles().then(');
+  assert.notEqual(preloadAt, -1, 'an applied refresh preloads the stylesheets');
+  assert.ok(preloadAt < refreshAt, 'BEFORE the markup swap, not after it');
+  assert.ok(clientSrc.indexOf('styles.commit();') > refreshAt, 'and commits (drops the old sheets) after the swap');
   // The verdict parser ships too, so an unparseable frame resolves to reload
   // inside the tab rather than being trusted.
   assert.match(clientSrc, /function parseVerdict/, 'the verdict parser ships in the client fallback');
