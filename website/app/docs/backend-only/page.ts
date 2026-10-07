@@ -297,10 +297,10 @@ fastify.listen({ port: 8080 });</code-block>
     "@webjsdev/cli": "0.1.0",
     "@webjsdev/core": "0.1.0",
     "@webjsdev/server": "0.1.0",
-    "drizzle-orm": "^1.0.0-rc.3"
+    "drizzle-orm": "^1.0.0-rc.3",
+    "drizzle-kit": "^1.0.0-rc.3"
   },
   "devDependencies": {
-    "drizzle-kit": "^1.0.0-rc.3",
     "typescript": "^6.0.3"
   }
 }</code-block>

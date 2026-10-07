@@ -360,12 +360,19 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
       inputs: ['app', 'components', 'modules', 'lib', 'public/input.css'],
     }], 'webjs.dev.regenerate recompiles the static CSS on request (#967)');
     assert.equal(pkg.scripts['css:build'], 'tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify');
-    assert.ok(pkg.devDependencies['@tailwindcss/cli'], 'the Tailwind CLI is a devDependency');
+    // A production DEPENDENCY (#1606): `webjs start` compiles the CSS at every
+    // boot, and the Dockerfile installs production dependencies only.
+    assert.ok(pkg.dependencies['@tailwindcss/cli'], 'the Tailwind CLI is a production dependency');
+    assert.equal(pkg.devDependencies['@tailwindcss/cli'], undefined, 'and not also a devDependency');
+    assert.ok(pkg.dependencies['drizzle-kit'], 'drizzle-kit (webjs db migrate at boot) is a production dependency');
+    assert.equal(pkg.devDependencies['drizzle-kit'], undefined, 'and not also a devDependency');
+    assert.match(readFileSync(join(appDir, 'Dockerfile'), 'utf8'), /RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force/,
+      'the image installs production dependencies only');
     // public/input.css does `@import "tailwindcss"`, so the package is a DIRECT
     // dependency (#1493): bun's isolated linker and pnpm link only declared
     // packages, so a transitive-only tailwindcss fails the compile there.
-    assert.ok(pkg.devDependencies.tailwindcss, 'tailwindcss is declared directly (input.css imports it)');
-    assert.equal(pkg.devDependencies.tailwindcss.split('.')[0], pkg.devDependencies['@tailwindcss/cli'].split('.')[0],
+    assert.ok(pkg.dependencies.tailwindcss, 'tailwindcss is declared directly (input.css imports it)');
+    assert.equal(pkg.dependencies.tailwindcss.split('.')[0], pkg.dependencies['@tailwindcss/cli'].split('.')[0],
       'tailwindcss is on the same major as @tailwindcss/cli');
     assert.ok(pkg.dependencies['@webjsdev/core']);
     assert.ok(pkg.dependencies['@webjsdev/server']);

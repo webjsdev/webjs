@@ -192,7 +192,7 @@ lib/
   runtime-rewrite.js     Pure transforms (#541) that DERIVE the bun-mode
                          variant of each canonical node template:
                          `bunifyProse` (npm->bun command forms in markdown),
-                         `bunifyDockerfile` (a pure `oven/bun:1` base + bun
+                         `bunifyDockerfile` (a pure `oven/bun:1-slim` base + bun
                          install + `bun --bun run start` CMD + bun -e
                          healthcheck, #595; safe since cli@0.10.20's npx-free
                          `webjs db migrate` (#570) needs no Node in the image),

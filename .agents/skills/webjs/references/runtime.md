@@ -68,7 +68,7 @@ One limit worth knowing: the rewrite belongs to `startServer`. An app embedded t
 webjs create my-app --runtime bun
 ```
 
-`--runtime` is orthogonal to `--template`, so it re-flavors either full-stack or api. A Bun scaffold emits a `bun.lock`, a pure `oven/bun:1` Dockerfile plus a bun-install CI, and bun-command agent docs. The test, db, and check tooling still runs on Node.
+`--runtime` is orthogonal to `--template`, so it re-flavors either full-stack or api. A Bun scaffold emits a `bun.lock`, a pure `oven/bun:1-slim` Dockerfile plus a bun-install CI, and bun-command agent docs. The test, db, and check tooling still runs on Node.
 
 ## Running on Bun
 
@@ -79,13 +79,13 @@ bun install
 bun run dev      # or: bun run start
 ```
 
-`bun --bun` overrides the `webjs` bin's Node shebang so the server runs on Bun, selecting the native `Bun.serve` listener and `amaro` type stripping. The app's dependencies resolve from `node_modules` exactly as on Node. The `start.before` migrate step (`webjs db migrate`) runs under Bun too. Commit the `bun.lock` for reproducible, offline installs. The scaffold's Bun Dockerfile runs `bun install` and serves via `CMD ["bun", "--bun", "run", "start"]`.
+`bun --bun` overrides the `webjs` bin's Node shebang so the server runs on Bun, selecting the native `Bun.serve` listener and `amaro` type stripping. The app's dependencies resolve from `node_modules` exactly as on Node. The `start.before` migrate step (`webjs db migrate`) runs under Bun too. Commit the `bun.lock` for reproducible, offline installs. The scaffold's Bun Dockerfile runs `bun install --production` and serves via `CMD ["bun", "--bun", "run", "start"]`.
 
 ## Deploying either runtime
 
 Production runs `npm run start` (Node) or `bun run start` (Bun), which serves the source directly with no build step. Both speak plain HTTP/1.1, so put a reverse proxy or platform edge in front for TLS and HTTP/2 (production perf leans on HTTP/2 multiplexing plus `modulepreload` hints, not a bundle). A `start.before` migrate runs first on both runtimes.
 
-The scaffold ships a matching Dockerfile per runtime: a Node image for the default, a pure `oven/bun:1` image for `--runtime bun`. Commit the lockfile the runtime uses (`package-lock.json` for Node, `bun.lock` for Bun) so the deploy install is reproducible and offline.
+The scaffold ships a matching Dockerfile per runtime: a Node image for the default, a pure `oven/bun:1-slim` image for `--runtime bun`. Both install production dependencies only and leave the package manager's cache out of the image. What the boot runs is a production dependency for that reason: `drizzle-kit` (the `start.before` migrate) and, on a UI app, `@tailwindcss/cli` + `tailwindcss` (the CSS compile). Keep a tool the boot runs in `dependencies`; one moved to `devDependencies` is missing from the image and the boot fails. Commit the lockfile the runtime uses (`package-lock.json` for Node, `bun.lock` for Bun) so the deploy install is reproducible and offline.
 
 ## SQLite busy_timeout
 

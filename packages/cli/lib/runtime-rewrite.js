@@ -23,7 +23,7 @@
  *   - the `dev` / `start` scripts force `bun --bun` (the server is Bun),
  *   - every other command stays `bun run` / `webjs ...` (runs on Node via the
  *     `webjs` bin's `#!/usr/bin/env node` shebang),
- *   - the Dockerfile is a pure `oven/bun:1` base (#595). This is safe as of
+ *   - the Dockerfile is a pure `oven/bun:1-slim` base (#595, #1606). This is safe as of
  *     `@webjsdev/cli@0.10.20` (#570): `webjs db migrate` resolves drizzle-kit
  *     and runs it under Bun (no `npx`), so a Node-less image works. (Before
  *     #570 shipped as `latest`, this stayed on `node:24-alpine` + a copied Bun
@@ -96,7 +96,7 @@ export function bunifyProse(s) {
 /**
  * Rewrite the scaffolded Dockerfile for Bun.
  *
- * Base decision (acceptance criterion): a pure `oven/bun:1` image (no Node).
+ * Base decision (acceptance criterion): a pure `oven/bun:1-slim` image (no Node).
  * Safe as of `@webjsdev/cli@0.10.20` (#570): `webjs db` / `webjs test` resolve
  * their tools (drizzle-kit, wtr) and spawn them with the current runtime instead
  * of `npx`, so the boot-time `webjs db migrate` runs under Bun with no Node
@@ -123,7 +123,9 @@ export function bunifyDockerfile(s) {
       '# runs on Node 24+; for a Node base instead, swap to `node:24-alpine` and start with\n' +
       '# `npm start`.\n',
     )
-    .replace('FROM node:24-alpine', 'FROM oven/bun:1')
+    // The slim variant: the same Bun on a Debian slim base (ca-certificates
+    // included), without the full image's extra system packages.
+    .replace('FROM node:24-alpine', 'FROM oven/bun:1-slim')
     // Debian base: ca-certificates already present, no `apk`. Drop the alpine line.
     .replace(
       /# ca-certificates for outbound TLS \(e\.g\. a managed Postgres\)\. SQLite uses the\n# built-in node:sqlite \(no native module, no build toolchain needed\)\.\nRUN apk add --no-cache ca-certificates\n\n/,
@@ -131,8 +133,12 @@ export function bunifyDockerfile(s) {
     )
     // Lockfile + install (bun.lock, bun install).
     .replace(
-      '# package-lock.json is optional (it\'s absent when the app was scaffolded with\n# --no-install); the glob keeps the COPY working with or without it.\nCOPY package.json package-lock.json* ./\nRUN npm install --no-audit --no-fund',
-      '# bun.lock is optional (absent when scaffolded with --no-install); the glob keeps\n# the COPY working with or without it. SQLite uses the built-in bun:sqlite, so no\n# native dependency or postinstall is involved.\nCOPY package.json bun.lock* ./\nRUN bun install',
+      '# package-lock.json is optional (it\'s absent when the app was scaffolded with\n# --no-install); the glob keeps the COPY working with or without it.\n',
+      '# bun.lock is optional (absent when scaffolded with --no-install); the glob keeps\n# the COPY working with or without it. SQLite uses the built-in bun:sqlite, so no\n# native dependency or postinstall is involved.\n',
+    )
+    .replace(
+      'reason. The npm cache is emptied in the same layer: it is a second copy of\n# every package fetched and would otherwise ship in the image.\nCOPY package.json package-lock.json* ./\nRUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force',
+      'reason. bun\'s package cache is emptied in the same layer: it is a second copy\n# of every package fetched and would otherwise ship in the image.\nCOPY package.json bun.lock* ./\nRUN bun install --production && bun pm cache rm',
     )
     // Healthcheck: the pure Bun image has no node; use `bun -e`. Keep the
     // dependency-free-probe comment accurate (the probe runs under Bun now).

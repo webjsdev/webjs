@@ -107,7 +107,12 @@ test('bun scaffold: Dockerfile / compose / CI run on Bun', async () => {
     assert.doesNotMatch(dockerfile, /FROM node:24-alpine/);
     assert.doesNotMatch(dockerfile, /COPY --from=oven\/bun/);
     assert.doesNotMatch(dockerfile, /apk add/);
-    assert.match(dockerfile, /RUN bun install/);
+    // The REAL template through the rewrite (#1606): production dependencies
+    // only, bun's cache left out of the image, on the slim base. A template
+    // edit that the rewrite's string match misses fails here.
+    assert.match(dockerfile, /RUN bun install --production && bun pm cache rm/);
+    assert.match(dockerfile, /FROM oven\/bun:1-slim/);
+    assert.doesNotMatch(dockerfile, /npm (install|cache)/);
     assert.match(dockerfile, /COPY package\.json bun\.lock\* \.\//);
     assert.match(dockerfile, /CMD \["bun", "--bun", "run", "start"\]/);
     assert.match(dockerfile, /CMD \["bun", "-e"/); // healthcheck off node
