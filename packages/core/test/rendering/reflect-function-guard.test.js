@@ -577,11 +577,12 @@ describe('reflect:true drops an unserializable JSON value (#1253)', () => {
     assert.ok(!out.includes('val=null'), `the attribute reached the reader: ${out}`);
   });
 
-  test('a camelCase source attribute is not read at SSR either (#1341)', async () => {
-    // The HTML parser lowercases this to `cfgdata`, which never matches the
-    // `cfg-data` entry in `observedAttributes`, so the client never reads it.
-    // The SSR reader lowercases the source name before resolving for exactly
-    // that reason, so it does not read it either.
+  test('a camelCase source attribute goes through the typed reader at SSR (#1341, #1540)', async () => {
+    // The HTML parser lowercases this to `cfgdata`, which `observedAttributes`
+    // lists as the lowercased alias of `cfgData` (#1540), so the client reads it
+    // and SSR, lowercasing the source name first, reads it too. Either way it
+    // goes through the shared typed reader, so the unparseable JSON lands as the
+    // #1253 `null` fallback and never as the raw string.
     class CamelAttr extends WebComponent({ cfgData: prop(Object) }) {
       constructor() {
         super();
@@ -595,13 +596,12 @@ describe('reflect:true drops an unserializable JSON value (#1253)', () => {
 
     const out = await renderToString(html`<reflect-unser-camel cfgData="oops"></reflect-unser-camel>`);
 
-    assert.ok(out.includes('val={"fromCtor":true}'), `the attribute was read: ${out}`);
+    assert.ok(out.includes('val=null'), `the attribute did not reach the typed reader: ${out}`);
     // Scoped to the RENDERED value, not the whole output: SSR echoes the source
     // attribute back into the emitted tag, so `oops` legitimately appears there.
     assert.ok(
       !out.includes('val=&quot;oops&quot;') && !out.includes('val="oops"'),
       `a raw string reached an Object-typed prop: ${out}`
     );
-    assert.ok(!out.includes('val=null'), `the attribute reached the reader: ${out}`);
   });
 });

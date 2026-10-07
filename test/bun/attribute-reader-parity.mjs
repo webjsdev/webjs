@@ -173,8 +173,13 @@ for (const [source, expected] of ENTITY_MATRIX) {
 // --- 3. A camelCase source name -------------------------------------------
 
 {
-  const out = await ssr('<bun-attr-camel cfgData="oops"></bun-attr-camel>');
-  assert.ok(out.includes('val=CTOR'), `[${runtime}] a camelCase attribute name resolved: ${out}`);
+  // The parser lowercases `cfgData` to `cfgdata`, which `observedAttributes`
+  // lists as the prop's lowercased alias (lit's default name), so it resolves
+  // on both sides (#1540).
+  const out = await ssr('<bun-attr-camel cfgData="camel"></bun-attr-camel>');
+  assert.ok(out.includes('val=camel'), `[${runtime}] a camelCase attribute name did not resolve: ${out}`);
+  const lower = await ssr('<bun-attr-camel cfgdata="lower"></bun-attr-camel>');
+  assert.ok(lower.includes('val=lower'), `[${runtime}] the lowercased alias did not resolve: ${lower}`);
 }
 
 {

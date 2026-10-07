@@ -35,13 +35,38 @@ test('observedAttributes derives from static properties, excluding state', () =>
   class A extends WebComponent({
     foo: String,
     bar: prop(Number, { state: true }),       // state → excluded
-    fooBar: String,                           // camelCase → kebab-case
+    fooBar: String,                           // camelCase → kebab-case + lowercased alias
+    baz: prop(String, { attribute: 'data-baz' }), // custom attribute → verbatim, no alias
   }) {}
   A.register('obs-attrs');
   assert.deepEqual(
     A.observedAttributes.sort(),
-    ['foo', 'foo-bar'].sort(),
+    ['foo', 'foo-bar', 'foobar', 'data-baz'].sort(),
   );
+});
+
+test('a camelCase prop answers to its kebab name and its lowercased name (#1540)', () => {
+  // The parser lowercases `quizId=` to `quizid`, lit's default attribute name,
+  // so the prop must answer to it as well as to the kebab `quiz-id`.
+  class Q extends WebComponent({ quizId: Number }) {}
+  Q.register('obs-camel-alias');
+  for (const name of ['quiz-id', 'quizid']) {
+    const el = document.createElement('obs-camel-alias');
+    el.attributeChangedCallback(name, null, '7');
+    assert.equal(el.quizId, 7, `${name} did not reach quizId`);
+  }
+});
+
+test('a primary attribute name wins over a sibling prop alias (#1540)', () => {
+  // `foobar` is the PRIMARY name of the `foobar` prop and the alias of
+  // `fooBar`; the primary must win so the alias never steals a real prop.
+  class P extends WebComponent({ fooBar: String, foobar: String }) {}
+  P.register('obs-alias-collide');
+  assert.deepEqual(P.observedAttributes.sort(), ['foo-bar', 'foobar'].sort());
+  const el = document.createElement('obs-alias-collide');
+  el.attributeChangedCallback('foobar', null, 'x');
+  assert.equal(el.foobar, 'x');
+  assert.equal(el.fooBar, undefined);
 });
 
 test('attributeChangedCallback coerces String / Number / Boolean / Object / Array', () => {

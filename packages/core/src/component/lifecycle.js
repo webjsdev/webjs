@@ -1,5 +1,5 @@
 import { render as clientRender } from '../render-client.js';
-import { readAttributeValue, resolveAttributeProperty } from '../attribute-reader.js';
+import { readAttributeValue, resolveAttributeProperty, observedAttributeNames } from '../attribute-reader.js';
 import { setActiveActionSignal, activeActionSignal } from '../action-abort-client.js';
 import { carriesFunction } from '../form-action.js';
 import { isCSS, adoptStyles } from '../css.js';
@@ -184,10 +184,12 @@ class WebComponentBase extends Base {
    * @returns {string[]}
    */
   static get observedAttributes() {
-    const props = this.properties || {};
-    return Object.keys(props)
-      .filter((k) => !(typeof props[k] === 'object' && props[k].state))
-      .map((k) => (typeof props[k] === 'object' && props[k].attribute) || hyphenate(k));
+    // Derived from the same walk `resolveAttributeProperty` matches against, so
+    // every observed name resolves and nothing else does. A camelCase prop with
+    // no custom `attribute` is observed under its kebab name AND its lowercased
+    // name (lit's default), since the parser turns `quizId=` into `quizid`
+    // (#1540).
+    return observedAttributeNames(this);
   }
 
   constructor() {

@@ -663,19 +663,47 @@ suite('the SSR and client attribute readers see the same attribute set (#1341)',
     assert.ok(ssr.includes('val={"fromCtor":true}'), `the SSR reader disagreed with the client: ${ssr}`);
   });
 
-  test('a camelCase attribute name resolves to nothing on both sides', async () => {
-    // The parser lowercases the name, so it can never match `cfg-data` in
-    // `observedAttributes`. SSR matched the SOURCE case and did read it.
-    const markup = '<parity-camel-el cfgData="oops"></parity-camel-el>';
+  test('a camelCase attribute name resolves to the same prop on both sides (#1540)', async () => {
+    // The parser lowercases the name to `cfgdata`, lit's default attribute name,
+    // which `observedAttributes` lists beside the kebab `cfg-data`. SSR
+    // lowercases its source name first and resolves the same prop.
+    const markup = '<parity-camel-el cfgData="ok"></parity-camel-el>';
     const el = await upgrade('parity-camel-el', markup, mounted);
 
     const names = el.getAttributeNames();
     assert.ok(names.includes('cfgdata'), `the parser lowercased the name: ${names.join(', ')}`);
     assert.ok(!names.includes('cfgData'), `the source case did not survive parsing: ${names.join(', ')}`);
-    assert.equal(el.cfgData, 'CTOR', 'the browser resolved the lowercased name to nothing');
+    assert.equal(el.cfgData, 'ok', 'the browser resolved the lowercased name to cfgData');
 
     const ssr = await renderToString(html([markup]));
-    assert.ok(ssr.includes('val=CTOR'), `the SSR reader disagreed with the client: ${ssr}`);
+    assert.ok(ssr.includes('val=ok'), `the SSR reader disagreed with the client: ${ssr}`);
+  });
+
+  test('quizId=, quizid= and quiz-id= all reach a camelCase Number prop on both sides (#1540)', async () => {
+    class QuizEl extends WebComponent({ quizId: Number }) {
+      render() { return html`<i>quiz=${String(this.quizId)}</i>`; }
+    }
+    if (!customElements.get('parity-quiz-player')) QuizEl.register('parity-quiz-player');
+    for (const attr of ['quizId', 'quizid', 'quiz-id']) {
+      const markup = `<parity-quiz-player ${attr}="42"></parity-quiz-player>`;
+      const el = await upgrade('parity-quiz-player', markup, mounted);
+      assert.equal(el.quizId, 42, `${attr}= did not reach quizId in the browser`);
+      const ssr = await renderToString(html([markup]));
+      assert.ok(ssr.includes('quiz=42'), `${attr}= did not reach quizId at SSR: ${ssr}`);
+    }
+  });
+
+  test('a client-rendered camelCase attribute hole reaches the child prop (#1540)', async () => {
+    // The real-app shape: a parent template binding `quizId=${id}`. The
+    // client template is parsed by the platform, so the name arrives lowercased.
+    class QuizHost extends WebComponent({}) {
+      render() { return html`<parity-quiz-player quizId=${7}></parity-quiz-player>`; }
+    }
+    if (!customElements.get('parity-quiz-host')) QuizHost.register('parity-quiz-host');
+    const el = await upgrade('parity-quiz-host', '<parity-quiz-host></parity-quiz-host>', mounted);
+    const child = el.querySelector('parity-quiz-player');
+    await child.updateComplete;
+    assert.equal(child.quizId, 7);
   });
 
   test('a named character reference in a String attribute decodes on both sides', async () => {

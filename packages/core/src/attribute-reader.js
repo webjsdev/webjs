@@ -109,9 +109,8 @@ export function readAttributeValue(def, value) {
     //
     // The two readers now see the SAME attribute set, so this fallback is not
     // the only thing they agree on (#1341). Both resolve a name through
-    // `resolveAttributeProperty` below, which matches the same
-    // `d.attribute || hyphenate(k)` expression `observedAttributes` maps over
-    // and nothing else, so it skips a `state: true` prop and ignores a name that
+    // `resolveAttributeProperty` below, which matches the same names
+    // `observedAttributes` lists (via `observedAttributeNames`) and nothing else, so it skips a `state: true` prop and ignores a name that
     // maps to no attribute-backed property exactly as the observed list does.
     // The SSR caller lowercases its source name first, because the browser
     // lowercases while parsing. And both are handed a value with every
@@ -148,8 +147,9 @@ function hyphenate(s) {
  * SSR read MORE than a browser can deliver, which is the bug this function
  * exists to remove, so do not add it.
  *
- * The match is EXACTLY `d.attribute || hyphenate(k)`, the same expression
- * `observedAttributes` maps over, and nothing else. A `props[attrName] ||
+ * The match is EXACTLY the names `observedAttributeNames` lists (the
+ * `d.attribute || hyphenate(k)` primary plus, for a camelCase prop with no
+ * custom attribute, its lowercased alias, #1540), and nothing else. A `props[attrName] ||
  * props[camelCase(attrName)]` fallback used to sit after the loop, so a prop
  * declaring a custom attribute also answered to its PROPERTY name. Both readers
  * carried that code, which read like an agreement and was not one: the browser
@@ -168,11 +168,59 @@ function hyphenate(s) {
  *   which case the caller must IGNORE the attribute entirely (#1341).
  */
 export function resolveAttributeProperty(Cls, attrName) {
+  // Primary names first, so a prop literally named `foobar` keeps `foobar`
+  // even when a sibling `fooBar` would answer to it as an alias.
+  let aliasHit;
+  for (const { propName, def, primary, alias } of attributeBackedProps(Cls)) {
+    if (primary === attrName) return { propName, def };
+    if (aliasHit === undefined && alias === attrName) aliasHit = { propName, def };
+  }
+  return aliasHit;
+}
+
+/**
+ * Every attribute name the browser must observe for `Cls`, the list
+ * `observedAttributes` returns. Built from the same `attributeBackedProps` walk
+ * `resolveAttributeProperty` matches against, so a name is observed exactly
+ * when it resolves, on both sides (#1341, #1540).
+ *
+ * @param {any} Cls  the component class
+ * @returns {string[]}
+ */
+export function observedAttributeNames(Cls) {
+  const names = new Set();
+  const entries = attributeBackedProps(Cls);
+  for (const { primary } of entries) names.add(primary);
+  for (const { alias } of entries) if (alias) names.add(alias);
+  return [...names];
+}
+
+/**
+ * The attribute-backed props of `Cls` with the names each answers to.
+ *
+ * `primary` is the custom `attribute` option, matched VERBATIM, or else the
+ * kebab-cased property name. `alias` is the LOWERCASED property name, lit's
+ * default attribute name, present only when the prop has no custom `attribute`
+ * and the lowercased name differs from the kebab one. Without it,
+ * `<quiz-player quizId=${id}>` against `{ quizId: Number }` reached neither
+ * side: the parser lowercases the name to `quizid`, which matched nothing, so
+ * the prop silently stayed undefined on the server AND the client (#1540).
+ * The alias is only ever lowercase, which is the one form the platform can
+ * deliver, so this does not reopen the SSR-reads-more gap #1341 closed.
+ *
+ * @param {any} Cls
+ * @returns {{ propName: string, def: PropertyDeclaration, primary: string, alias: string | undefined }[]}
+ */
+function attributeBackedProps(Cls) {
   const props = (Cls && Cls.properties) || {};
+  const out = [];
   for (const [k, decl] of Object.entries(props)) {
     const d = typeof decl === 'object' && decl !== null ? decl : { type: decl };
     if (d.state) continue;
-    if ((d.attribute || hyphenate(k)) === attrName) return { propName: k, def: d };
+    const primary = d.attribute || hyphenate(k);
+    const lower = k.toLowerCase();
+    const alias = !d.attribute && lower !== primary ? lower : undefined;
+    out.push({ propName: k, def: d, primary, alias });
   }
-  return undefined;
+  return out;
 }
