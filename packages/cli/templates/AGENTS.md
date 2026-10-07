@@ -9,27 +9,22 @@ from that memory. Read this whole file before you edit anything.
 
 ## Rules that hold everywhere
 
-- **Type every boundary from its source.** A row is
-  `typeof posts.$inferSelect` (exported from `db/schema.server.ts`, carried
-  into browser code with `import type`), an action's input is a named
-  `interface`, a routing file uses `PageProps<'/posts/[id]'>` / `LayoutProps` /
-  `RouteHandlerContext` from `@webjsdev/core`, and a component prop that holds
-  an object is `prop<Post>(Object)`. Never reach for `any` or `as any`, and
-  keep `unknown` for an untrusted payload you narrow on the next line.
-- **Server-only code stays behind `.server.ts`.** A file WITH `'use server'`
-  exposes its exported async functions as actions; a file WITHOUT it is a
-  server-only utility that only other server code may import. Never add
-  `'use server'` to a file only server code imports (the DB connection, the
-  schema).
-- **Store data with Drizzle** in the wired-up database (`db/`), never in a
-  JSON file, an in-memory array or Map, or localStorage. Every schema change is
-  `npm run db:generate` then `npm run db:migrate`, and the generated
-  migrations are committed.
-- **TypeScript is erasable:** no `enum`, no `namespace`, no constructor
-  parameter properties, no decorators. Never put a backtick inside an
-  `html` template body, even in a comment.
-- **Errors tell you the fix.** `npm run check` and `npm run typecheck` name
-  the file, the rule and the fix; do what they say rather than searching.
+- Type every boundary from its source: rows are `typeof posts.$inferSelect`
+  (into browser code with `import type`), action inputs a named `interface`,
+  routing files `PageProps<'/posts/[id]'>` / `LayoutProps`, object props
+  `prop<Post>(Object)`. `unknown` only for an untrusted payload
+  narrowed on the next line. Never reach for `any`.
+- Never add `'use server'` to a file only server code imports (the DB
+  connection, the schema).
+- Store data with Drizzle in the wired-up database, never in a JSON file, an
+  in-memory array or localStorage. Every schema change is `npm run db:generate`
+  then `npm run db:migrate`, and the migrations are committed.
+- TypeScript is erasable: no `enum`, `namespace`, parameter properties or
+  decorators. Never put a backtick inside an `html` template, even in a comment.
+- Descriptive names (`formData`, `values`, `errors`, never `fd`, `v`, `e`) and a
+  one-line doc comment on every exported function.
+- `npm run check` and `npm run typecheck` name the file and the fix; do what
+  they say.
 
 ## Git
 
@@ -38,6 +33,30 @@ from a spec in one session, the build is one unit: work on a feature branch
 (commits to `main` are refused), and commit once at the end after the checks
 pass (`git add -A && git commit -m "<imperative subject>"`). Team workflow
 (pull requests, CI, worktrees) is in `.agents/rules/workflow.md`.
+
+## Before you build these, read the reference first
+
+This file covers the common app. For any surface below, read the named
+section of `.agents/skills/webjs/references/` BEFORE writing that part (one
+`sed -n '/^## Heading/,/^## /p' <file>` call), because the API is WebJs's own
+and guessing it from another framework is wrong.
+
+| Building | Read |
+| --- | --- |
+| Live updates beyond the example above (presence, two-way sockets) | `client-router-and-streaming.md` "WebSockets", `built-ins.md` "Broadcast" |
+| Streaming beyond the example above (Suspense, cancellation) | `client-router-and-streaming.md` "Streaming (Suspense and RPC)" |
+| Refreshing one region, or one element after a write (`<webjs-frame>`, `<webjs-stream>`) | `client-router-and-streaming.md` |
+| File uploads and serving them (`FileStore`, `signedUrl`) | `built-ins.md` "File storage" |
+| Caching, `revalidate`, `cache()`, rate limits | `built-ins.md` "Caching", "Rate limiting" |
+| Middleware (`middleware.ts`, per segment) and JSON API routes (`route.ts`, `route()` adapter, CORS) | `routing-and-pages.md`, `data-and-actions.md` |
+| SEO: `metadata`, `generateMetadata`, sitemap, robots, social images; the app icon | `routing-and-pages.md` "Metadata", "App icon and manifest" |
+| Browser-only code (`window`, `localStorage`, timers) and component lifecycle, slots, context, directives | `components.md` |
+| Optimistic updates | `optimistic-ui.md` |
+| OAuth sign-in, cookie sessions, `forbidden()` / `unauthorized()` | `auth-and-sessions.md` |
+| Env vars and secrets, boot-time code (`instrumentation.ts` `register()`) | `built-ins.md` "Environment variables", "Observability" |
+| Scheduled jobs beyond the timer above | an external cron calling a `route.ts` with a secret |
+| Email, payments, i18n | no built-in: use the provider's SDK from a server-only `.server.ts` utility called by actions; secrets from `process.env` |
+| Browser and e2e tests | `testing.md` |
 
 ## When you need more
 
