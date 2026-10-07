@@ -1,0 +1,12 @@
+{
+  "name": "dev-css-flash-fixture-app",
+  "private": true,
+  "type": "module",
+  "webjs": {
+    "dev": {
+      "regenerate": [
+        { "output": "public/app.css", "command": "node gen-css.mjs", "inputs": ["app", "components"] }
+      ]
+    }
+  }
+}

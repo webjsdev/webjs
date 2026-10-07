@@ -492,10 +492,16 @@ function __webjsApplyReload(verdict) {
       // overlay comes back describing the CURRENT error. Dismissing afterwards
       // would race that push and wipe a legitimately new overlay.
       dismissDevOverlay();
-      refresh(verdict).then(function (ok) {
-        if (!ok) { location.reload(); return; }
-        refreshStyles();
-      }, function () { location.reload(); });
+      // Load the rebuilt stylesheets FIRST and swap the markup in only once
+      // they are in (#1535): a \`webjs.dev.regenerate\` compile takes 100ms to
+      // seconds, and markup swapped in before it lands paints a new class with
+      // no rule. The old sheets stay applied until the swap, then go.
+      preloadStyles().then(function (styles) {
+        return refresh(verdict).then(function (ok) {
+          if (!ok) { location.reload(); return; }
+          styles.commit();
+        });
+      }).then(null, function () { location.reload(); });
       return;
     }
     location.reload();

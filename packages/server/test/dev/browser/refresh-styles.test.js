@@ -1,18 +1,17 @@
 /**
- * Real-browser tests for the dev stylesheet re-request (#1398).
+ * Real-browser tests for the dev stylesheet re-request (#1398, #1535).
  *
  * `dev-styles.js` is the BROWSER half of the in-place refresh: the exact source
  * the served reload client inlines (`reloadClientJs` reads this file, strips
  * `export`, and embeds it), so driving it here tests the code that ships.
  *
- * It runs in a real browser because the headline rule is about REAL `load` and
- * `error` events on real `<link>` elements, and which node survives each. A
- * source-shape assertion cannot observe that: an implementation that removed
- * the wrong node in a differently-formatted handler would satisfy a regex and
- * still leave the page unstyled, which is the #936 / #1400 failure mode this
- * asymmetry exists to prevent.
+ * It runs in a real browser because the headline rules are about REAL `load`
+ * and `error` events on real `<link>` elements, and which node survives each.
+ * `preloadStyles` loads the cache-busted replacements BESIDE the live links and
+ * resolves once they have settled, so the caller can swap the markup in only
+ * when the rebuilt rules are there (#1535); `commit()` then drops the old ones.
  */
-import { refreshStyles } from '../../../src/dev-styles.js';
+import { preloadStyles } from '../../../src/dev-styles.js';
 
 import { assert } from '../../../../../test/browser-assert.js';
 
@@ -39,7 +38,7 @@ function link(container, href, attrs) {
   return el;
 }
 
-suite('dev stylesheet re-request (#1398)', () => {
+suite('dev stylesheet re-request (#1398, #1535)', () => {
   let container;
 
   function setup() {
@@ -48,42 +47,39 @@ suite('dev stylesheet re-request (#1398)', () => {
   }
   function teardown() { container.remove(); }
 
-  test('a stylesheet that loads replaces the old link, and the page is never unstyled', async () => {
+  test('resolves only once the replacement has LOADED, keeping the old sheet until commit', async () => {
     setup();
     try {
       const old = link(container, SHEET);
       await settled(old);
 
-      const [next] = refreshStyles(container);
-      assert.ok(next, 'a replacement link was inserted');
+      const pending = preloadStyles(container);
+      // Synchronously, both are in: the overlap is what keeps the page styled.
+      assert.equal(container.querySelectorAll('link').length, 2, 'the replacement went in beside the live sheet');
+      const { links, commit } = await pending;
+      const next = links[0];
       assert.match(next.getAttribute('href'), /__webjs_dev=/, 'cache-busted, so the server re-runs its regenerate step');
-      // BOTH are live until the new one loads. That overlap is what stops the
-      // page flashing unstyled.
-      assert.equal(container.querySelectorAll('link').length, 2, 'the old sheet is still applied while the new one loads');
+      assert.ok(next.sheet, 'the promise resolved after the replacement loaded, so its rules apply');
+      assert.equal(old.parentNode, container, 'the old sheet is kept until the markup has been swapped in');
 
-      await settled(next);
-      assert.equal(old.parentNode, null, 'the old link is dropped once the replacement loaded');
+      commit();
+      assert.equal(old.parentNode, null, 'commit drops the old link');
       assert.equal(next.parentNode, container, 'and the replacement stays');
     } finally {
       teardown();
     }
   });
 
-  // THE counterfactual, and the case that matters most: a failed re-request
-  // must never take the working sheet down with it.
-  test('a stylesheet that FAILS drops the replacement and keeps the working sheet', async () => {
+  // A failed re-request must never take the working sheet down with it.
+  test('a replacement that FAILS is removed and the working sheet kept', async () => {
     setup();
     try {
       const old = link(container, SHEET);
       await settled(old);
-
-      // Point the busted request at a path that 404s, which is what a
-      // mid-restart server or a renamed file produces.
       old.setAttribute('href', MISSING);
-      const [next] = refreshStyles(container);
-      await settled(next);
-
-      assert.equal(next.parentNode, null, 'the failed replacement removes itself');
+      const { links, commit } = await preloadStyles(container);
+      commit();
+      assert.equal(links[0].parentNode, null, 'the failed replacement removes itself');
       assert.equal(old.parentNode, container, 'and the sheet that still works stays on the page');
       assert.equal(container.querySelectorAll('link').length, 1, 'so the page is never left with no stylesheet at all');
     } finally {
@@ -91,32 +87,60 @@ suite('dev stylesheet re-request (#1398)', () => {
     }
   });
 
-  test('a duplicate link to the same file is collapsed, so the head cannot grow per refresh', async () => {
+  test('a stylesheet that hangs does not hold the swap past the timeout', async () => {
     setup();
     try {
-      // What the head merge produces: the incoming bare href beside the one a
-      // previous refresh busted.
       link(container, SHEET);
-      link(container, SHEET + '?__webjs_dev=1');
-      refreshStyles(container);
-      assert.equal(container.querySelectorAll('link').length, 2,
-        'one survivor plus its replacement, not three');
+      // An href the browser never finishes within 50ms is hard to guarantee,
+      // so the clock is the contract: a zero timeout resolves at once.
+      const t0 = performance.now();
+      await preloadStyles(container, undefined, 0);
+      assert.ok(performance.now() - t0 < 1000, 'resolved on the timeout');
     } finally {
       teardown();
     }
   });
 
-  // The other direction of the same rule: two links to one file are NOT
-  // necessarily duplicates, and deleting the second is a real loss.
+  test('commit collapses a copy the head merge appended, so the head cannot grow per refresh', async () => {
+    setup();
+    try {
+      link(container, SHEET);
+      const { links, commit } = await preloadStyles(container);
+      // What the head merge produces after the swap: the incoming bare href.
+      link(container, SHEET);
+      commit();
+      const left = container.querySelectorAll('link');
+      assert.equal(left.length, 1, 'exactly one link to the file is left');
+      assert.equal(left[0], links[0], 'and it is the loaded replacement');
+    } finally {
+      teardown();
+    }
+  });
+
+  test('duplicates present before the preload are collapsed first', async () => {
+    setup();
+    try {
+      link(container, SHEET);
+      link(container, SHEET + '?__webjs_dev=1');
+      const pending = preloadStyles(container);
+      assert.equal(container.querySelectorAll('link').length, 2, 'one survivor plus its replacement, not three');
+      await pending;
+    } finally {
+      teardown();
+    }
+  });
+
+  // Two links to one file are NOT necessarily duplicates.
   test('a media-scoped link to the same file is kept, not treated as a duplicate', async () => {
     setup();
     try {
       link(container, SHEET);
       const print = link(container, SHEET, { media: 'print' });
-      refreshStyles(container);
-      assert.equal(print.parentNode, container, 'the print sheet survives');
-      assert.equal(container.querySelectorAll('link[media="print"]').length, 2,
-        'and it got its own replacement rather than being deleted');
+      const { commit } = await preloadStyles(container);
+      commit();
+      assert.equal(container.querySelectorAll('link[media="print"]').length, 1, 'the print sheet is still there (replaced, not deleted)');
+      assert.equal(container.querySelectorAll('link').length, 2, 'one per identity');
+      assert.ok(print.parentNode === null, 'the old print link made way for its own replacement');
     } finally {
       teardown();
     }
@@ -126,8 +150,8 @@ suite('dev stylesheet re-request (#1398)', () => {
     setup();
     try {
       const ext = link(container, 'https://example.invalid/x.css');
-      const added = refreshStyles(container);
-      assert.deepEqual(added, [], 'nothing was re-requested');
+      const { links } = await preloadStyles(container);
+      assert.deepEqual(links, [], 'nothing was re-requested');
       assert.equal(ext.getAttribute('href'), 'https://example.invalid/x.css', 'and its href is untouched');
     } finally {
       teardown();
