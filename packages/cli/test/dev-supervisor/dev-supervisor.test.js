@@ -168,3 +168,13 @@ test('the in-place IPC message matches the one @webjsdev/server sends (#1575)', 
   const server = await import('../../../server/src/dev/hot-host.js');
   assert.equal(cli.HOT_IN_PLACE_MESSAGE, server.HOT_IN_PLACE_MESSAGE);
 });
+
+test('the Bun child runs with the transpiler cache off; Node gets no extra env', () => {
+  // Bun's on-disk transpiler cache keys a large module by content and bakes in
+  // the absolute paths the dev alias resolver returned, so another checkout of
+  // the same file imports from the first one. The child must never write it.
+  const bun = planDevSupervisor({ isBun: true, argv: ARGV, noHot: false });
+  assert.deepEqual(bun.env, { BUN_RUNTIME_TRANSPILER_CACHE_PATH: '0' });
+  const node = planDevSupervisor({ isBun: false, argv: ARGV, noHot: false });
+  assert.equal(node.env, undefined);
+});

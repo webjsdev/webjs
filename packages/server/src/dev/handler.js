@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { registerBunAliasResolver } from './bun-alias-resolve.js';
 import { registerBunAppSource } from './bun-app-source.js';
+import { evictPoisonedBunTranspilerCache } from '../bun-transpiler-cache.js';
 import { serverRuntime } from '../listener-core.js';
 import { createHash } from 'node:crypto';
 import { join, relative, resolve, sep } from 'node:path';
@@ -135,6 +135,9 @@ export async function createRequestHandler(opts) {
   // on Bun. Doing it here pays the (one-time) amaro import up front and surfaces
   // a missing-amaro error at boot rather than on the first `.ts` request.
   await ensureStripper();
+  // Old (0.8.85 / 0.8.86) Bun transpiler-cache entries carry broken import
+  // paths keyed by unchanged file content; empty the cache once (#1575).
+  evictPoisonedBunTranspilerCache();
   const appDir = resolve(opts.appDir);
   // Load <appDir>/.env into process.env BEFORE anything else.
   // buildActionIndex below imports server-only files (lib/*.server.ts,
@@ -300,12 +303,6 @@ export async function createRequestHandler(opts) {
   // what a bound `<form action=${action}>` resolves through, so gating the hook
   // on seeding would mean `webjs.seed: false` silently broke every no-JS form.
   await registerActionHooks({ seed: await readSeedEnabled(appDir), dev });
-  // Bun's resolver keeps a stale directory listing for a `#` import under
-  // `bun --hot` (#1575); resolve the app's aliases ourselves in dev.
-  if (dev && serverRuntime() === 'bun') {
-    registerBunAliasResolver(appDir);
-    try { const real = realpathSync(appDir); if (real !== appDir) registerBunAliasResolver(real); } catch { /* appDir only */ }
-  }
 
   // Dev source locations (#1499): `WEBJS_SOURCE_LOCATIONS=1` (or
   // `webjs.dev.sourceLocations: true`) under `webjs dev`

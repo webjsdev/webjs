@@ -78,7 +78,7 @@ export function isBootFile(path) {
  * @param {string[]} opts.argv  `process.argv.slice(1)` (the script path followed by its args), forwarded to the child verbatim.
  * @param {boolean} opts.noHot  Whether `--no-hot` was passed (opt out of the supervisor entirely).
  * @param {boolean} [opts.sourceLocations]  Whether dev source locations are on (`WEBJS_SOURCE_LOCATIONS` / `webjs.dev.sourceLocations`), which puts every app module behind a Bun plugin.
- * @returns {{ mode: 'inline' } | { mode: 'supervise', args: string[], restartOnChange: boolean, restartFor?: (path: string) => boolean, inPlaceRestartFor?: (path: string) => boolean, watchDirs: string[], watchFiles: string[] }}
+ * @returns {{ mode: 'inline' } | { mode: 'supervise', args: string[], env?: Record<string, string>, restartOnChange: boolean, restartFor?: (path: string) => boolean, inPlaceRestartFor?: (path: string) => boolean, watchDirs: string[], watchFiles: string[] }}
  *   `inline` runs the server in this process (no reload watcher); `supervise`
  *   spawns `process.execPath` with `args` and `__WEBJS_DEV_CHILD=1` under the
  *   supervisor, which watches `watchDirs` (recursively) and `watchFiles` (at
@@ -101,6 +101,7 @@ export function planDevSupervisor({ isBun, argv, noHot, sourceLocations = false 
     return {
       mode: 'supervise',
       args: ['--hot', ...argv],
+      env: BUN_CHILD_ENV,
       restartOnChange: true,
       restartFor: (p) => plugin(p) || isBootFile(p),
       inPlaceRestartFor: isBootFile,
@@ -109,6 +110,20 @@ export function planDevSupervisor({ isBun, argv, noHot, sourceLocations = false 
   }
   return { mode: 'supervise', args: [...argv], restartOnChange: true, ...watch };
 }
+
+/**
+ * Extra env for the Bun dev child: turn off Bun's runtime transpiler cache.
+ *
+ * Bun caches the transpile of every source over 50KB on disk, keyed by the
+ * file's CONTENT, with the import paths a `Bun.plugin` `onResolve` returned
+ * baked in. The dev alias resolver (#1575) returns absolute paths, so the
+ * cached output of a large app module pins its `#` imports to the checkout
+ * that first ran `webjs dev`. Any other copy of the same file (a git worktree,
+ * a moved or copied app, a later `webjs start`) then imports from that old
+ * directory: a 500 when it is gone, the other copy's code when it is not. The
+ * variable is read at process start, so it has to be set on the child.
+ */
+const BUN_CHILD_ENV = Object.freeze({ BUN_RUNTIME_TRANSPILER_CACHE_PATH: '0' });
 
 const SERVER_MODULE = /\.server\.m?[jt]s$/;
 const APP_MODULE = /\.m?[jt]s$/;

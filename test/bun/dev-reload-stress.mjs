@@ -23,9 +23,9 @@
  */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runDevReloadStress, runDevReloadSoak, summarizeStress, listenerRssMb } from '../../scripts/dev-reload-stress.mjs';
 
@@ -50,9 +50,17 @@ try {
   put('components/.keep', '');
   put('modules/.keep', '');
   mkdirSync(join(dir, 'node_modules/@webjsdev'), { recursive: true });
-  for (const p of ['core', 'server']) symlinkSync(join(ROOT, 'packages', p), join(dir, 'node_modules/@webjsdev', p));
+  // A COPY, not a symlink, like a real install: on Bun a framework package
+  // symlinked from outside the app breaks a dynamic `#` import on its own,
+  // which would mask the dynamic-alias-import check.
+  for (const p of ['core', 'server', 'cli']) {
+    cpSync(join(ROOT, 'packages', p), join(dir, 'node_modules/@webjsdev', p), { recursive: true, dereference: true, filter: (src) => basename(src) !== 'test' });
+  }
 
-  child = spawn(process.execPath, [CLI, 'dev', '--port', String(PORT)], {
+  // The CLI runs from the app's own node_modules, as in a real install: under
+  // `bun --hot` an entry outside the app breaks dynamic `#` imports by itself,
+  // and a CLI outside it would load whatever server its own location resolves.
+  child = spawn(process.execPath, [join(dir, 'node_modules/@webjsdev/cli/bin/webjs.js'), 'dev', '--port', String(PORT)], {
     cwd: dir,
     detached: true,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -71,6 +79,7 @@ try {
   const results = await runDevReloadStress({ appDir: dir, base: BASE, timeoutMs: 10_000, tolerateRestarts: !isBun });
   const failed = results.filter((r) => !r.ok);
   console.log(`${runtime}: ${summarizeStress(results)}`);
+  if (failed.length) console.log((log.match(/.*(Cannot find|ENOENT|error:).*/g) || []).slice(0, 6).join("\n"));
   assert.deepEqual(failed, [], `the dev server did not settle on the current files on ${runtime}\n--- server log (tail) ---\n${log.slice(-6000)}`);
 
   if (isBun) {

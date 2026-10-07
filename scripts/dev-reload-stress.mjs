@@ -262,6 +262,18 @@ export async function runDevReloadStress({ appDir, base, only = [], timeoutMs = 
       settle('feature-action', () => call(f, 'feat'), has('act:F1'), t0)]);
     return [a, b];
   });
+  S('dynamic-alias-import', async () => {
+    // A server module that imports a sibling relatively, reached through a
+    // dynamic `#` import (Crisp's provisioning does exactly this). A Bun
+    // runtime onResolve turned that into a `file:/...` path (#1575 regression).
+    write(`modules/${NS}d/types.ts`, `export const T = 'dyn-ok';\n`);
+    write(`modules/${NS}d/engine.server.ts`, `import { T } from './types.ts';\nexport function eng() { return T; }\n`);
+    write(`app/api/${NS}d/route.ts`, `export async function GET() {\n  const { eng } = await import('#modules/${NS}d/engine.server.ts');\n  return new Response('route:' + eng());\n}\n`);
+    const t0 = performance.now();
+    const r = await settle('dynamic-alias-import', () => get(`/api/${NS}d`), has('route:dyn-ok'), t0);
+    rm(`modules/${NS}d`); rm(`app/api/${NS}d`);
+    return r;
+  });
   S('mass-churn', async () => {
     // a git-checkout-like burst: delete and recreate many files
     for (let i = 0; i < 12; i++) write(`app/${NS}/m${i}/page.ts`, page('m' + i));

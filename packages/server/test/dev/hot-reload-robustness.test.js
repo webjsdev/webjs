@@ -10,7 +10,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { hotRerunCapable, needsHotReset, hotSentinelPath, hotHostKey, getHotHost, setHotHost, deleteHotHost } from '../../src/dev/hot-host.js';
-import { resolveAppAlias } from '../../src/dev/bun-alias-resolve.js';
 import { appSourceFilter } from '../../src/dev/bun-app-source.js';
 import { buildModuleGraph } from '../../src/module-graph.js';
 import { devImport } from '../../src/dev-import.js';
@@ -68,21 +67,6 @@ test('the app-source filter takes app modules and leaves node_modules and *.serv
   for (const p of ['/srv/app/node_modules/x/i.js', '/srv/app/modules/a.server.ts', '/srv/other/app/page.ts', '/srv/app/app/style.css']) assert.ok(!f.test(p), p);
 });
 
-test('a # alias resolves to the file on disk, only for an importer inside the app', () => {
-  const dir = tempApp();
-  try {
-    mkdirSync(join(dir, 'modules/u'), { recursive: true });
-    const importer = join(dir, 'modules/a.server.ts');
-    assert.equal(resolveAppAlias('#modules/u/new.ts', importer + '?t=1', dir), null, 'not there yet');
-    writeFileSync(join(dir, 'modules/u/new.ts'), 'export const v = 1;\n');
-    assert.equal(resolveAppAlias('#modules/u/new.ts', importer + '?t=1', dir), join(dir, 'modules/u/new.ts'));
-    assert.equal(resolveAppAlias('#modules/u/new.ts', join(dir, 'node_modules/p/i.js'), dir), null, 'a package keeps its own map');
-    assert.equal(resolveAppAlias('./u/new.ts', importer, dir), null, 'not an alias');
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
 test('an importer written before its import target gains the edge once the target exists', async () => {
   const dir = tempApp();
   try {
@@ -129,4 +113,23 @@ test('an in-place server marks its reload frames; a restarting one does not (#15
   const frames = (hub) => { const out = []; hub.add({ send: (s) => out.push(s), close() {} }); hub.reload({ v: 'page' }); return out[0]; };
   assert.match(frames(new SseHub({ inPlace: true })), /"inPlace":true/);
   assert.doesNotMatch(frames(new SseHub()), /inPlace/);
+});
+
+test('the Bun transpiler cache is emptied once per machine, then left alone (#1575)', async () => {
+  const { evictPoisonedBunTranspilerCache, bunTranspilerCacheDir } = await import('../../src/bun-transpiler-cache.js');
+  const home = mkdtempSync(join(tmpdir(), 'webjs-tcache-'));
+  try {
+    const env = { XDG_CACHE_HOME: join(home, 'c') };
+    const dir = bunTranspilerCacheDir(env, home);
+    assert.equal(dir, join(home, 'c', 'bun', '@t@'));
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'poisoned.pile'), 'import("file:/x/engine.server.ts")');
+    assert.equal(evictPoisonedBunTranspilerCache({ env, home, isBun: true }), 1);
+    writeFileSync(join(dir, 'fresh.pile'), 'ok');
+    assert.equal(evictPoisonedBunTranspilerCache({ env, home, isBun: true }), 0, 'once only');
+    assert.equal(evictPoisonedBunTranspilerCache({ env: { BUN_RUNTIME_TRANSPILER_CACHE_PATH: '0' }, home, isBun: true }), 0, 'cache off');
+    assert.equal(evictPoisonedBunTranspilerCache({ env, home, isBun: false }), 0, 'Node never touches it');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });
