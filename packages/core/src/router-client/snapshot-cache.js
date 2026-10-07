@@ -9,7 +9,7 @@
 import { SNAPSHOT_CAP } from './constants.js';
 
 /** @typedef {{ html: string, scrollX: number, scrollY: number, scrollHeight: number }} Snapshot */
-/** @type {Map<string, Snapshot | string>} */
+/** @type {Map<string, Snapshot>} */
 export const snapshotCache = new Map();
 
 /**
@@ -59,9 +59,7 @@ export function snapshotCurrent(url) {
 }
 
 /**
- * Look up a cached snapshot by URL. Returns a normalized Snapshot or
- * null. Tolerates legacy string entries (e.g. from test fixtures that
- * `_snapshotCache.set('/x', 'snap')`).
+ * Look up a cached snapshot by URL, or null on a miss.
  *
  * @param {string} url
  * @returns {Snapshot | null}
@@ -73,14 +71,6 @@ export function snapshotGet(url) {
   // Move-to-front.
   snapshotCache.delete(key);
   snapshotCache.set(key, v);
-  // A legacy string entry carries no offsets and no height. `scrollHeight: 0`
-  // is stated rather than left undefined so the returned object satisfies the
-  // `Snapshot` typedef, and because `reserveRestoredHeight` treats a
-  // non-positive height as "nothing to reserve" and no-ops: there is no
-  // recorded height to hold, so reserving is not merely skippable, it is
-  // meaningless. Such an entry restores with no reservation, which is the
-  // pre-#1428 behaviour and correct for a snapshot that never recorded one.
-  if (typeof v === 'string') return { html: v, scrollX: 0, scrollY: 0, scrollHeight: 0 };
   return v;
 }
 

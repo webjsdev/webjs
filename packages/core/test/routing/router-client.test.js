@@ -3347,12 +3347,15 @@ test('onPopState: the empty fragment is absorbed too (#1437)', async () => {
  * revalidate: snapshot-cache invalidation
  * ==================================================================== */
 
+/** A minimal Snapshot entry for the revalidate tests (no scroll recorded). */
+const snap = (id) => ({ html: `snap-${id}`, scrollX: 0, scrollY: 0, scrollHeight: 0 });
+
 test('revalidate(url): removes one URL from the snapshot cache', () => {
   const origLoc = globalThis.location;
   globalThis.location = /** @type any */ ({ href: 'http://localhost/' });
   try {
-    _snapshotCache.set('/a', 'snap-a');
-    _snapshotCache.set('/b', 'snap-b');
+    _snapshotCache.set('/a', snap('a'));
+    _snapshotCache.set('/b', snap('b'));
     revalidate('http://localhost/a');
     assert.ok(!_snapshotCache.has('/a'), '/a evicted');
     assert.ok(_snapshotCache.has('/b'), '/b still cached');
@@ -3362,8 +3365,8 @@ test('revalidate(url): removes one URL from the snapshot cache', () => {
 });
 
 test('revalidate(): clears the entire snapshot cache when called with no args', () => {
-  _snapshotCache.set('/a', 'snap-a');
-  _snapshotCache.set('/b', 'snap-b');
+  _snapshotCache.set('/a', snap('a'));
+  _snapshotCache.set('/b', snap('b'));
   revalidate();
   assert.equal(_snapshotCache.size, 0);
 });
@@ -3625,18 +3628,18 @@ test('restoreOptimistic: current token applies the restore', () => {
  * ==================================================================== */
 
 test("revalidate(''): empty-string url clears the entire cache", () => {
-  _snapshotCache.set('/a', 'snap-a');
-  _snapshotCache.set('/b', 'snap-b');
+  _snapshotCache.set('/a', snap('a'));
+  _snapshotCache.set('/b', snap('b'));
   revalidate('');
   assert.equal(_snapshotCache.size, 0,
     "empty string is treated as 'no specific URL': clear everything");
 });
 
 test('revalidate(null) / revalidate(undefined): both clear entire cache', () => {
-  _snapshotCache.set('/a', 'snap-a');
+  _snapshotCache.set('/a', snap('a'));
   revalidate(null);
   assert.equal(_snapshotCache.size, 0);
-  _snapshotCache.set('/a', 'snap-a');
+  _snapshotCache.set('/a', snap('a'));
   revalidate(undefined);
   assert.equal(_snapshotCache.size, 0);
 });
