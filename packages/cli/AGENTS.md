@@ -177,6 +177,12 @@ lib/
                          SKILL.md, data-and-actions.md and one real example per
                          concern from the app just written, byte-stable, imported
                          by the scaffold CLAUDE.md (cached prompt prefix).
+                         A skill file wraps a worked example the pack's own
+                         code already shows in `<!-- pack:omit <pointer> -->`
+                         ... `<!-- /pack:omit -->`; `stripPackOmit()` swaps the
+                         region for its one-line pointer in the pack only, so
+                         the file on disk stays complete. Test:
+                         `test/scaffolds/context-pack.test.js`.
   create.js              `webjs create <name>` scaffold logic. Copies
                          `templates/` into the new app, writes
                          package.json + tsconfig + Drizzle db layer,

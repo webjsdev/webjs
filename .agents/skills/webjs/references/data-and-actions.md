@@ -42,6 +42,7 @@ Read this when a task touches a server mutation, a data read, input validation, 
 
 Reads live in `queries/`, mutations in `actions/`. Both are `.server.ts` with `'use server'`, so their browser imports become typed RPC stubs. Args and returns round-trip through the serializer (it carries `Date` / `Map` / `Set` / `BigInt` / `Error` / typed arrays / `Blob` / `File` / `FormData` / cycles), so a query may return a `Date` and the client receives a real `Date`.
 
+<!-- pack:omit `modules/todo/queries/list-todos.server.ts` and `modules/todo/actions/create-todo.server.ts` above are this pair. -->
 ```ts
 // modules/posts/queries/list-posts.server.ts
 'use server';
@@ -66,6 +67,7 @@ export async function createPost(input: { title: string; body: string }) {
   return { success: true, data: row };
 }
 ```
+<!-- /pack:omit -->
 
 A page runs on the server, so it imports the query directly and awaits it. A client component imports the action and calls it (rewritten to an RPC stub).
 
@@ -166,6 +168,7 @@ A `'use server'` action is a POST by default. Reserved sibling exports, read sta
 | **RPC Read Action (Query)** | **GET** | `export const method = 'GET'` | Read-only RPC calls (`await getTodos()`). Args ride URL query params (with POST fallback over 4KB). CSRF-exempt, supports ETags, 304 revalidation, and `export const cache`. |
 | **RPC Write Action (Mutation)** | **POST** / **PUT** / **PATCH** / **DELETE** | Default or `export const method = 'DELETE'` | Data-modifying RPC calls (`await deleteUser(4)`). Carries CSRF protection, serialized payload body, and evicts cached query tags via `export const invalidates`. |
 
+<!-- pack:omit The table above is the rule; `list-todos.server.ts` (a GET read) and `create-todo.server.ts` (a POST mutation) above show both kinds. -->
 ### Choosing the right HTTP verb
 
 1. **Form-Bound Actions (`<form action=${fn}>` / `<button formaction=${fn}>`):**
@@ -183,6 +186,7 @@ A `'use server'` action is a POST by default. Reserved sibling exports, read sta
    - Use default `POST` or explicitly export `PUT`/`PATCH`/`DELETE` for RESTful RPC calls (`await removeUser(id)`).
    - Pair mutating actions with `export const invalidates = (args...) => ['tag']` to evict cached reads matching those tags upon completion.
 
+<!-- /pack:omit -->
 ```ts
 // modules/users/queries/get-user.server.ts: a cached, tagged GET read
 'use server';

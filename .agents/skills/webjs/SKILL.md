@@ -180,6 +180,7 @@ Find the right export fast. Load the linked reference for full examples.
 
 ### A page
 
+<!-- pack:omit `app/features/auth/login/page.ts` above is one: a default-export function returning `html`, with `export const metadata`. -->
 ```ts
 // app/about/page.ts
 import { html } from '@webjsdev/core';
@@ -187,6 +188,7 @@ export default function About() {
   return html`<h1>About</h1>`;
 }
 ```
+<!-- /pack:omit -->
 
 ### A dynamic route reading data through an action
 
@@ -202,6 +204,7 @@ export default async function User({ params }: { params: { id: string } }) {
 
 ### A server action
 
+<!-- pack:omit `modules/todo/actions/create-todo.server.ts` above is one: a mutation returning the `ActionResult` envelope, reading the row back with `.returning()`. -->
 ```ts
 // modules/users/actions/update-profile.server.ts
 'use server';
@@ -215,11 +218,13 @@ export async function updateProfile(input: { id: string; name: string }) {
   return { success: true, data: row };
 }
 ```
+<!-- /pack:omit -->
 
 Call it from a component via a normal import (rewritten to a typed RPC stub). Never hand-write `fetch()`.
 
 ### An interactive component
 
+<!-- pack:omit `modules/todo/components/todo-app.ts` above is one: a reactive prop through the `WebComponent({ ... })` factory, unquoted `@click` / `.todos` holes, `Class.register('tag-name')`; `modules/streaming/components/token-stream.ts` shows instance signals. -->
 ```ts
 // components/counter.ts
 import { WebComponent, prop, html } from '@webjsdev/core';
@@ -231,9 +236,11 @@ class Counter extends WebComponent({ count: prop(Number) }) {
 }
 Counter.register('my-counter');
 ```
+<!-- /pack:omit -->
 
 ### The no-JS write path (a form-bound action)
 
+<!-- pack:omit `app/features/forms/page.ts` and `modules/forms/actions/send-message.server.ts` above are this pattern. -->
 ```ts
 // modules/contact/actions/send-message.server.ts
 'use server';
@@ -249,6 +256,7 @@ export default function Contact({ actionData }) {
   return html`<form action=${sendMessage}><input name="email"></form>`;
 }
 ```
+<!-- /pack:omit -->
 
 Binding the action is the whole wiring: the renderer omits `action` (so the form posts to the page's own url), supplies `method="post"` and an enctype, and emits a hidden `__webjs_action` identity field. A form-bound action always receives the `FormData`.
 

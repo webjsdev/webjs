@@ -111,6 +111,16 @@ it applies, then update or consciously skip each.
      the gotcha, matching the depth of the sibling entries.
    - Edit the repo-root copy; `scripts/sync-scaffold-skill.mjs` bundles it into
      `templates/` at prepack (do NOT hand-edit a bundled copy).
+   - `SKILL.md` and `references/data-and-actions.md` also ride in the agent
+     context pack (`packages/cli/lib/context-pack.js`), next to the real todo,
+     forms, auth, WebSocket, upload and streaming files. A worked example in
+     them that one of those files already shows sits inside
+     `<!-- pack:omit <one-line pointer to that file> -->` ... `<!-- /pack:omit -->`,
+     which the pack replaces with the pointer; the file on disk keeps the
+     example. Keep the markers when you edit those regions, and mark a new
+     worked example the same way when a pack file shows it, so the pack carries
+     each pattern once (the code plus the rules). `test/scaffolds/context-pack.test.js`
+     fails when a marker reaches the pack.
 2. **The generators** (the code that writes the app):
    - `packages/cli/lib/create.js` (the main generator: layout, home page, the
      theme block, db/schema, the full-stack gallery wiring, the per-template

@@ -35,7 +35,7 @@ export const PACK_EXAMPLES = [
   ]],
   ['A form bound to an action, with validation and kept values', [
     'app/features/forms/page.ts',
-    'modules/forms/actions/submit-feedback.server.ts',
+    'modules/forms/actions/send-message.server.ts',
   ]],
   ['Auth: createAuth, password hashing, sign-up, a login page, a protected segment', [
     'modules/auth/auth.server.ts',
@@ -80,6 +80,22 @@ async function moduleFilesFor(appDir, rel) {
     .sort();
 }
 
+/**
+ * A skill file marks a region whose pattern the pack's own example code already
+ * shows with `<!-- pack:omit <one-line replacement> -->` ... `<!-- /pack:omit -->`.
+ * On disk the file stays complete (a Markdown renderer hides the markers, and
+ * an agent reading it after `gallery:clear` still gets the code), while the pack
+ * carries the one-line pointer at the code it already holds, so each pattern is
+ * in context once: the real file plus the rules, not a second worked example.
+ * @param {string} text
+ * @returns {string}
+ */
+export function stripPackOmit(text) {
+  return text
+    .replace(/<!-- pack:omit(?:[ \t]+([^\n]*?))?[ \t]*-->[ \t]*\n?[\s\S]*?<!-- \/pack:omit -->[ \t]*\n?/g, (_, line) => (line ? line + '\n\n' : ''))
+    .replace(/\n{3,}/g, '\n\n');
+}
+
 const fence = (rel) => ({ '.ts': 'ts', '.js': 'js', '.md': 'md', '.mjs': 'js' }[extname(rel)] || '');
 
 /**
@@ -98,8 +114,9 @@ export async function buildContextPack(appDir) {
   const add = async (rel) => {
     if (seen.has(rel) || !existsSync(join(appDir, rel))) return;
     seen.add(rel);
-    const text = (await readFile(join(appDir, rel), 'utf8')).replace(/\s+$/, '');
     const f = fence(rel);
+    let text = (await readFile(join(appDir, rel), 'utf8')).replace(/\s+$/, '');
+    if (f === 'md') text = stripPackOmit(text).replace(/\s+$/, '');
     out.push(`### \`${rel}\``, '', f === 'md' ? text : `\`\`\`\`${f}\n${text}\n\`\`\`\``, '');
   };
   out.push('## Example code', '');
