@@ -22,10 +22,13 @@ This is what separates a working app from a broken one.
    rules (git, tests, review) are in `.agents/rules/workflow.md`; follow them
    too.
 3. **Read the framework source for exact contracts.** WebJs is 100% buildless
-   native ES modules, so the source you run IS the source you read. When you
-   need a precise API signature or behavior, open the package source under
-   `node_modules/@webjsdev/*` directly (each package ships its own `AGENTS.md`).
-   The full hosted docs are at https://webjs.dev/docs.
+   native ES modules, so the source you run IS the source you read. For one
+   export's signature and doc comment run `npx webjs source <Export>` (for
+   example `npx webjs source createAuth`); it reads the installed package and
+   prints the declaration, not the file. When you need the behaviour behind a
+   signature, open the package source under `node_modules/@webjsdev/*` directly
+   (each package ships its own `AGENTS.md`). The full hosted docs are at
+   https://webjs.dev/docs.
 
 {{PLAYBOOK}}
 

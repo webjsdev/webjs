@@ -49,6 +49,11 @@ webjs routes --table --no-headers   # same, without the header row (pipe-friendl
 webjs routes --json             # structured JSON (matches the MCP list_routes tool)</code-block>
     <p>Prints the route table to stdout: every page (path, owner file, dynamic params) and every <code>route.&#123;js,ts&#125;</code> handler (path, owner file, HTTP methods). It reuses the same route walker that backs the typed-routes generator and the dev server, so it always reflects exactly what the framework will serve. The <code>--json</code> shape is byte-identical to the read-only MCP <code>list_routes</code> tool, so an agent gets the same data whether it shells out or calls the MCP.</p>
 
+    <h3>webjs source</h3>
+    <code-block>webjs source createAuth           # one export: its signature plus the doc comment above it
+webjs source optimistic --pkg core   # narrow to one installed @webjsdev/* package</code-block>
+    <p>Prints one export's declaration from the installed framework packages instead of the file around it: the typed declaration (<code>index.d.ts</code> or <code>src/*.d.ts</code>) with the doc comment above it, the authored JSDoc from <code>src/</code> when no typed declaration carries one, and every overload. A miss names the packages that were searched. The read-only MCP <code>source</code> tool returns the same text for <code>&#123; export: "createAuth" &#125;</code>, so an agent checks a contract for the price of the declaration, and opens the source file only for behaviour the signature does not state.</p>
+
     <h3>webjs doctor</h3>
     <code-block>webjs doctor            # human-readable project-health checklist
 webjs doctor --json     # structured results (each with a stable code) + a summary
