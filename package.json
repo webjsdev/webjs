@@ -278,6 +278,10 @@
                   "run": "bun test/bun/forwarded-proto.mjs"
                 },
                 {
+                  "title": "bun proof: seo-metadata",
+                  "run": "bun test/bun/seo-metadata.mjs"
+                },
+                {
                   "title": "bun proof: forwarded-trust",
                   "run": "bun test/bun/forwarded-trust.mjs"
                 },

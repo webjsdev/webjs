@@ -33,7 +33,25 @@ export default function MetadataRoutes() {
       <tr><td><code>twitter-image.ts</code></td><td><code>/twitter-image</code></td><td>Twitter card image</td></tr>
     </table>
 
+    <h2>What a metadata route receives</h2>
+    <p>Every metadata route's default export is called with <code>{ request, url, siteUrl, pages }</code>. <code>siteUrl</code> is the <code>SITE_URL</code> env var (your public origin) when set, else the request origin. <code>pages()</code> lists every public page of the app as sitemap entries. Type the argument with <code>MetadataRouteContext</code> from <code>@webjsdev/server</code>.</p>
+
     <h2>sitemap.ts</h2>
+    <p>The shortest sitemap that stays correct as pages are added returns <code>pages()</code>. A sitemap may return an ARRAY of entries (urls may be paths; they resolve against <code>siteUrl</code>), the same shape Next uses, and the server serializes it:</p>
+    <code-block>// app/sitemap.ts
+import type { MetadataRouteContext } from '@webjsdev/server';
+
+export default async function sitemap({ pages }: MetadataRouteContext) {
+  return [...await pages(), { url: '/feed.xml', changeFrequency: 'daily' }];
+}</code-block>
+    <p><code>pages()</code> includes every static page (route groups dropped), skips any page whose static metadata, or a layout above it, says <code>robots: { index: false }</code>, and includes a dynamic page only when it exports <code>generateSitemapParams()</code>, which lists the params that route serves, usually from a query:</p>
+    <code-block>// app/blog/[slug]/page.ts
+import { listPostSlugs } from '#modules/blog/queries/list-post-slugs.server.ts';
+
+export async function generateSitemapParams() {
+  const posts = await listPostSlugs();
+  return posts.map((p) => ({ params: { slug: p.slug }, lastModified: p.updatedAt }));
+}</code-block>
     <p>The <code>sitemap()</code> helper from <code>@webjsdev/server</code> turns an array of entries into spec-valid <code>&lt;urlset&gt;</code> XML for you (escaping each URL, formatting <code>lastModified</code> as a W3C datetime, validating <code>priority</code> and <code>changeFrequency</code>). Return its output from the default export.</p>
     <code-block>// app/sitemap.ts
 import { sitemap } from '@webjsdev/server';
@@ -74,11 +92,14 @@ export default function () {
 }</code-block>
 
     <h2>robots.ts</h2>
+    <p>Return Next's robots object and the server writes robots.txt (the <code>robots()</code> helper from <code>@webjsdev/server</code> is the same serializer, for a route building its own Response). A string or a Response works too.</p>
     <code-block>// app/robots.ts
-export default function robots() {
+import type { MetadataRouteContext } from '@webjsdev/server';
+
+export default function robots({ siteUrl }: MetadataRouteContext) {
   return {
-    rules: [{ userAgent: '*', allow: '/' }],
-    sitemap: 'https://example.com/sitemap.xml',
+    rules: [{ userAgent: '*', allow: '/', disallow: ['/account', '/api/'] }],
+    sitemap: ${'`${siteUrl}/sitemap.xml`'},
   };
 }</code-block>
 
@@ -122,7 +143,8 @@ export const metadata = {
   },
 };</code-block>
     <p>Declare a favicon one of those two ways, never as a hand-written <code>&lt;link rel="icon"&gt;</code>: only the root layout may write a document shell at all, so a hand-written tag is unavailable to every other layout. A <code>public/favicon.ico</code> needs no declaration either way, since it is served at the origin root for crawlers that read no markup.</p>
-    <p><code>opengraph-image.ts</code> and <code>twitter-image.ts</code> are <em>not</em> auto-linked, because a preview image is a per-page editorial choice rather than a site-wide default. Point <code>openGraph.images</code> / <code>twitter.images</code> at them.</p>
+    <h3>opengraph-image.ts and twitter-image.ts</h3>
+    <p>These are linked too, the way Next does it: a page that declares no <code>openGraph.images</code> gets <code>og:image</code> pointing at the nearest <code>opengraph-image</code> route above it (absolute against your site URL), and likewise <code>twitter:image</code>. A nested one answers under its segment, so <code>app/blog/opengraph-image.ts</code> is <code>/blog/opengraph-image</code> and covers the blog pages. A page that declares its own image keeps it.</p>
 
     <h2>Page-level metadata</h2>
     <p>For per-page title, description, and Open Graph tags, export a <code>metadata</code> object from any <code>page.ts</code>. Annotate it with the <code>Metadata</code> type (imported from <code>@webjsdev/core</code>) so a misspelled field or a wrong-typed value is a compile-time error:</p>
@@ -137,6 +159,15 @@ export const metadata: Metadata = {
 };</code-block>
 
     <p>The SSR pipeline reads <code>metadata</code> and injects <code>&lt;title&gt;</code>, <code>&lt;meta&gt;</code>, and <code>&lt;meta property="og:..."&gt;</code> tags into the HTML head. For a request-scoped title (a dynamic route building its metadata from the loaded record), export an async <code>generateMetadata(ctx)</code> returning <code>Promise&lt;Metadata&gt;</code> instead. See <a href="/docs/typescript">TypeScript</a> for the typed-metadata surface.</p>
+
+    <h3>Search and share defaults</h3>
+    <p>Set <code>SITE_URL</code> to your public origin (for example <code>https://shop.example.com</code>) in production. It becomes the default <code>metadataBase</code>, and every page then gets, unless it sets its own:</p>
+    <ul>
+      <li>a <code>&lt;link rel="canonical"&gt;</code> of the site URL plus the page path (the query is dropped). Opt a page out with <code>alternates: { canonical: null }</code>. With no site URL configured, no canonical is emitted, because the request host can be set by a client.</li>
+      <li><code>og:title</code> and <code>og:description</code> from <code>title</code> and <code>description</code>, <code>og:type</code> <code>website</code>, and <code>og:url</code> equal to the canonical.</li>
+      <li><code>twitter:card</code>: <code>summary_large_image</code> when the page has an image, else <code>summary</code>.</li>
+    </ul>
+    <p><code>openGraph</code> and <code>twitter</code> accept Next's shapes: <code>images</code> may be a string, a <code>URL</code>, an object <code>{ url, width, height, alt, type }</code>, or an array of these, and emits <code>og:image</code> with its <code>og:image:width</code> / <code>height</code> / <code>alt</code>; camelCase keys become snake_case (<code>siteName</code> is <code>og:site_name</code>); <code>publishedTime</code>, <code>modifiedTime</code>, <code>authors</code>, <code>section</code> and <code>tags</code> emit <code>article:*</code>. So a public page usually needs only a specific <code>title</code> and <code>description</code>, and a private page needs <code>robots: { index: false }</code> (on its section's layout, so every page under it inherits it).</p>
 
     <h3>JSON-LD structured data</h3>
     <p><code>metadata.jsonLd</code> emits schema.org structured data as one or more <code>&lt;script type="application/ld+json"&gt;</code> blocks in <code>&lt;head&gt;</code>. This is the highest-leverage modern SEO surface (Google's Article, Product, BreadcrumbList, Organization, and FAQ rich results all read it). WebJs stays true to its no-build identity here. JSON-LD is a web standard rendered as a plain script tag, so the framework ONLY serializes and escapes. There is no schema library and no validation, so you own the schema.org object.</p>
@@ -193,6 +224,7 @@ export const metadata: Metadata = {
     <ul>
       <li>Metadata route files must live at the root or in static segments, not inside <code>[dynamic]</code> folders.</li>
       <li>They are scanned at server startup, not on every request.</li>
+      <li>A crawler gets a real 404 status for an unknown URL and for a page that throws <code>notFound()</code>, so missing records never index as empty pages.</li>
     </ul>
 
     <h2>Next steps</h2>

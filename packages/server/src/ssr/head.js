@@ -8,6 +8,7 @@ import { publicEnvShim } from './env-shim.js';
 import { clientRouterEnabled } from './client-router-flag.js';
 import { embedScriptTag } from '../dev-embed.js';
 import { devReloadState } from '../dev-reload-state.js';
+import { openGraphPairs, twitterPairs, setMetadataImageRoutes } from './seo.js';
 
 // Which icon metadata ROUTES the app has (`app/icon.*`, `app/apple-icon.*`).
 // Set at boot and on each route rebuild from the route table, the same shape
@@ -32,6 +33,9 @@ export function setMetadataIconRoutes(metadataRoutes) {
   const stems = new Set();
   for (const r of metadataRoutes || []) if (r && r.stem) stems.add(r.stem);
   _metadataIconRoutes = { icon: stems.has('icon'), apple: stems.has('apple-icon') };
+  // The share-image routes (#1564) are recorded from the same table so one
+  // call keeps both in step on boot and on every rebuild.
+  setMetadataImageRoutes(metadataRoutes);
 }
 
 /**
@@ -348,7 +352,8 @@ export function wrapHead(opts) {
   // value looks like a relative URL (no scheme, no `//` prefix), resolve
   // it. Otherwise return as-is. Used by og:image, twitter:image,
   // alternates.canonical / languages / media.
-  const base = typeof m.metadataBase === 'string' ? m.metadataBase : '';
+  const base = m.metadataBase instanceof URL ? m.metadataBase.toString()
+    : typeof m.metadataBase === 'string' ? m.metadataBase : '';
   /** @param {unknown} v */
   const absUrl = (v) => {
     const s = String(v);
@@ -556,10 +561,11 @@ export function wrapHead(opts) {
     }
   }
 
+  // Open Graph: both the Next shape (`images` array / objects, camelCase
+  // `siteName`, article fields) and the raw `og:<key>` shape (#1564).
   if (m.openGraph && typeof m.openGraph === 'object') {
-    for (const [k, v] of Object.entries(m.openGraph)) {
-      const out = k === 'image' || k === 'url' ? absUrl(v) : String(v);
-      metaTags.push(`<meta property="og:${escapeAttr(k)}" content="${escapeAttr(out)}">`);
+    for (const [prop, value] of openGraphPairs(m.openGraph, absUrl)) {
+      metaTags.push(`<meta property="${escapeAttr(prop)}" content="${escapeAttr(value)}">`);
     }
   }
 
@@ -567,9 +573,8 @@ export function wrapHead(opts) {
   // but won't upgrade to summary_large_image without an explicit
   // twitter:card entry.
   if (m.twitter && typeof m.twitter === 'object') {
-    for (const [k, v] of Object.entries(m.twitter)) {
-      const out = k === 'image' ? absUrl(v) : String(v);
-      metaTags.push(`<meta name="twitter:${escapeAttr(k)}" content="${escapeAttr(out)}">`);
+    for (const [name, value] of twitterPairs(m.twitter, absUrl)) {
+      metaTags.push(`<meta name="${escapeAttr(name)}" content="${escapeAttr(value)}">`);
     }
   }
 

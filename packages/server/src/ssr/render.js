@@ -18,6 +18,7 @@ import {
   cachedHtmlResponse, getNonce, htmlResponse, streamingHtmlResponse,
 } from './responses.js';
 import { devImportSpecifier } from '../dev-import.js';
+import { applySeoDefaults } from './seo.js';
 
 
 /**
@@ -192,7 +193,11 @@ async function collectMetadata(route, ctx, dev) {
       // ignore: metadata collection never fails the request
     }
   }
-  return meta;
+  try {
+    return applySeoDefaults(meta, { url: String(ctx.url) });
+  } catch {
+    return meta;
+  }
 }
 
 /**

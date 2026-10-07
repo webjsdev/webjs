@@ -910,6 +910,47 @@ export declare function sitemap(entries: SitemapEntry[]): string;
 /** Serialize child sitemaps into a `<sitemapindex>` XML document. */
 export declare function sitemapIndex(sitemaps: SitemapIndexEntry[]): string;
 
+/** One `User-agent` group of a robots.txt (Next's `MetadataRoute.Robots` rule). */
+export interface RobotsRule {
+  userAgent?: string | string[];
+  allow?: string | string[];
+  disallow?: string | string[];
+  crawlDelay?: number;
+}
+/** A robots.txt as data (Next's `MetadataRoute.Robots`). `app/robots.ts` may return it. */
+export interface RobotsConfig {
+  /** Defaults to allowing every crawler everywhere. */
+  rules?: RobotsRule | RobotsRule[];
+  sitemap?: string | string[];
+  host?: string;
+}
+/** Serialize a robots config into robots.txt text. */
+export declare function robots(config?: RobotsConfig): string;
+
+/**
+ * The argument every metadata route (`app/sitemap.ts`, `app/robots.ts`, the
+ * image routes, ...) receives (#1564).
+ */
+export interface MetadataRouteContext {
+  request: Request;
+  url: URL;
+  /** The public origin: `SITE_URL` when set, else the request origin. No trailing slash. */
+  siteUrl: string;
+  /**
+   * Every public page as a sitemap entry: static pages, plus dynamic pages that
+   * export `generateSitemapParams()`. Pages whose static metadata says
+   * `robots: { index: false }` are left out.
+   */
+  pages(): Promise<SitemapEntry[]>;
+}
+/**
+ * What `app/sitemap.ts` may return: an array of entries (urls may be paths,
+ * resolved against `siteUrl`), an XML string, or a Response.
+ */
+export type SitemapRouteResult = SitemapEntry[] | string | Response;
+/** What `app/robots.ts` may return: a config object, text, or a Response. */
+export type RobotsRouteResult = RobotsConfig | string | Response;
+
 // ---------------------------------------------------------------------------
 // stream.js (#248): stream-action helpers (the `<webjs-stream>` HTML the
 // client `renderStream` / element applies surgically)

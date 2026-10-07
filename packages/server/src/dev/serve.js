@@ -35,6 +35,7 @@ import { toUrlPath } from '../ssr/preloads.js';
 import { BUFFERED_MARKER } from '../conditional-get.js';
 import { MIME, TS_CACHE_MAX, exists, reloadClientJs, reloadWorkerJs } from './helpers.js';
 import { devImportSpecifier } from '../dev-import.js';
+import { runMetadataRoute } from '../metadata-routes.js';
 
 /**
  * Serve framework-internal static assets that depend on NEITHER the whole-app
@@ -363,20 +364,10 @@ export async function handleCore(req, ctx) {
     const meta = state.routeTable.metadataRoutes.find((r) => r.urlPath === path);
     if (meta) {
       try {
-        const mod = await import(devImportSpecifier(meta.file, dev));
-        if (mod.default) {
-          const result = await mod.default();
-          // If the function returns a Response, use it directly.
-          if (result instanceof Response) return result;
-          // If it returns a string, determine content type from the URL path.
-          const ct = path.endsWith('.xml') ? 'application/xml; charset=utf-8'
-            : path.endsWith('.txt') ? 'text/plain; charset=utf-8'
-            : path.endsWith('.json') ? 'application/json; charset=utf-8'
-            : 'application/octet-stream';
-          return new Response(typeof result === 'string' ? result : JSON.stringify(result), {
-            headers: { 'content-type': ct, 'cache-control': dev ? 'no-cache' : 'public, max-age=3600' },
-          });
-        }
+        // The route gets `{ request, url, siteUrl, pages }` and may return a
+        // Response, a string, or Next's sitemap array / robots object (#1564).
+        const res = await runMetadataRoute(meta, { req, url, path, dev, routeTable: state.routeTable });
+        if (res) return res;
       } catch (e) {
         if (reportError) reportError(e, req, 'metadata');
         if (dev) console.error(`[webjs] metadata route error (${meta.stem}):`, e);

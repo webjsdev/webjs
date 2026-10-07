@@ -157,3 +157,18 @@ function badContext(ctx: MetadataContext): unknown { return ctx.body; }
 void badContext;
 
 export {};
+
+/* ------------- Next-shaped Open Graph / Twitter (#1564) ------------- */
+
+const nextShaped: Metadata = {
+  metadataBase: new URL('https://example.com'),
+  alternates: { canonical: null },
+  openGraph: {
+    siteName: 'Shop',
+    images: ['/og.png', { url: new URL('https://cdn.test/a.png'), width: 1200, height: 630, alt: 'A' }],
+    publishedTime: new Date(),
+    tags: ['a', 'b'],
+  },
+  twitter: { images: [{ url: '/tw.png', alt: 'B' }], siteId: '1' },
+};
+void nextShaped;

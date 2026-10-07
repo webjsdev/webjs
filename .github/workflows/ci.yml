@@ -308,6 +308,11 @@ jobs:
       # a route handler's raw req.url both carry the forwarded scheme + host.
       - name: Forwarded proto/host on Bun
         run: bun test/bun/forwarded-proto.mjs
+      # Search and share metadata on Bun (#1564): metadata routes get a context
+      # built from the request, and sitemap / robots / canonical tags are what a
+      # crawler reads, so assert them on the Bun.serve shell too.
+      - name: SEO metadata on Bun
+        run: bun test/bun/seo-metadata.mjs
       # Reverse-proxy TRUST posture on Bun (#1097, #1104). The companion to the
       # step above: that one proves the url CORRECTION, this one proves what the
       # correction is then allowed to reach. The url is corrected in a different
