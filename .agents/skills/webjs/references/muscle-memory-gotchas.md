@@ -176,6 +176,8 @@ html`<form method="post"><input name="email"></form>`;
 
 A plain attribute hole that resolves to `null` or `undefined` omits the attribute on both renderers (#1573), so `method=${null}` and `?method=${false}` both emit nothing and WebJs supplies `method="post"`. An EMPTY string is different: `method=${''}` renders `method=""`, which cannot submit and is refused.
 
+A boolean in a plain hole on an HTML boolean attribute renders like `?attr` (core 0.7.64+, #1579): `<option selected=${i === 0}>` and `<input type="radio" checked=${v.attending !== 'no'}>` mark only the true one. On an older core the server served `selected="false"` / `checked="false"`, which HTML reads as PRESENT, so the LAST option or radio won on first paint. `?selected=${...}` / `?checked=${...}` is correct on every version.
+
 A string stays a string: `action="/search"` and `action=${'/search'}` are unchanged, which is what a search form (`<form method="get" action="/search">`) and a `route.ts` endpoint both want. Other attributes keep their existing stringify behaviour; only a FUNCTION under `action` / `formaction` is claimed.
 
 ### `params` and `searchParams` are awaitable AND synchronously readable

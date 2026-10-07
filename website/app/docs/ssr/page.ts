@@ -156,7 +156,7 @@ async function loadExpensiveItems() {
       </thead>
       <tbody>
         <tr><td><code>&lt;div&gt;\${x}&lt;/div&gt;</code> (text)</td><td>Rendered with HTML escaping</td><td>Same</td></tr>
-        <tr><td><code>class=\${x}</code> (attribute)</td><td>Serialized as <code>class="x"</code>. <code>null</code> / <code>undefined</code> omit the attribute, and so does <code>false</code> except on <code>aria-*</code>, where it is <code>"false"</code></td><td>Same</td></tr>
+        <tr><td><code>class=\${x}</code> (attribute)</td><td>Serialized as <code>class="x"</code>. <code>null</code> / <code>undefined</code> omit the attribute, and so does <code>false</code> except on <code>aria-*</code>, where it is <code>"false"</code>. <code>true</code> on a boolean attribute such as <code>checked</code> emits <code>checked=""</code>, like <code>?checked</code></td><td>Same</td></tr>
         <tr><td><code>?disabled=\${b}</code> (boolean)</td><td>Emits <code>disabled=""</code> iff truthy</td><td>Same</td></tr>
         <tr><td><code>.prop=\${v}</code> on a <strong>custom element</strong></td><td>Round-trips via <code>data-webjs-prop-*</code> attribute carrying the wire-encoded value; consumed by the SSR walker before <code>render()</code></td><td>Applied + stripped on <code>connectedCallback</code></td></tr>
         <tr><td><code>.prop=\${v}</code> on a <strong>native element</strong></td><td>Dropped (no SSR walker for native tags). Use the attribute form for SSR-visible values.</td><td>Applied directly as <code>el[prop] = v</code> when the template runs in the browser</td></tr>
