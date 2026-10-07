@@ -21,6 +21,8 @@ from that memory. Read this whole file before you edit anything.
   then `npm run db:migrate`, and the migrations are committed.
 - TypeScript is erasable: no `enum`, `namespace`, parameter properties or
   decorators. Never put a backtick inside an `html` template, even in a comment.
+- Descriptive names (`formData`, `values`, `errors`, never `fd`, `v`, `e`) and a
+  one-line doc comment on every exported function.
 - `npm run check` and `npm run typecheck` name the file and the fix; do what
   they say.
 

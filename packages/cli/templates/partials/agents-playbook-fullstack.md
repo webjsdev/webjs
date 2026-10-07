@@ -98,7 +98,9 @@ import { textareaClass } from '#components/ui/textarea.ts';
 import { nativeSelectClass, nativeSelectWrapperClass, nativeSelectIconClass } from '#components/ui/native-select.ts';
 export interface FormState { error?: string; fieldErrors?: Record<string, string>; values?: Record<string, string> }
 export const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
-export const str = (fd: FormData, k: string) => String(fd.get(k) ?? '').trim();
+/** A trimmed text field from a submitted form ('' when absent). */
+export const str = (formData: FormData, name: string) => String(formData.get(name) ?? '').trim();
+/** A positive integer id from a param or field, or null. */
 export const toId = (v: unknown) => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : null; };
 interface Field { label: string; name: string; value?: string; error?: string; required?: boolean; id?: string }
 const wrap = (o: Field, control: unknown) => html`
@@ -167,9 +169,10 @@ import { users } from '#db/schema.server.ts';
 import { isEmail, str } from '#lib/utils/form.ts';
 import { hashPassword } from '../password.server.ts';
 import { signIn } from '../auth.server.ts';
-export async function signUp(fd: FormData) {
-  const email = str(fd, 'email').toLowerCase();
-  const password = String(fd.get('password') ?? '');
+/** Creates the account, then signs in. Fails with a message per field. */
+export async function signUp(formData: FormData) {
+  const email = str(formData, 'email').toLowerCase();
+  const password = String(formData.get('password') ?? '');
   const fieldErrors: Record<string, string> = {};
   if (!isEmail(email)) fieldErrors.email = 'Enter a valid email address.';
   if (password.length < 8) fieldErrors.password = 'Password must be at least 8 characters.';
@@ -183,15 +186,16 @@ export async function signUp(fd: FormData) {
 Sign-in: look the user up, `verifyPassword`, return
 `{ success: false, error: 'Invalid email or password.' }` on a mismatch, else
 the same `return signIn(...)`. Sign-out: an action
-`export async function signOutUser(_fd: FormData) { return signOut({ redirectTo: '/signin' }); }`
+`export async function signOutUser(_formData: FormData) { return signOut({ redirectTo: '/signin' }); }`
 bound to a form in the layout.
 
 ```ts
 // modules/posts/utils/validate-post.ts (pure, shared by create and update, unit-tested)
 import { str } from '#lib/utils/form.ts';
 import { POST_STATUSES, type PostStatus } from '../types.ts';
-export function validatePost(fd: FormData) {
-  const values = { title: str(fd, 'title'), body: str(fd, 'body'), status: str(fd, 'status') || 'draft', publishOn: str(fd, 'publishOn') };
+/** Checks a submitted post form: the clean data, or the errors with what was typed. */
+export function validatePost(formData: FormData) {
+  const values = { title: str(formData, 'title'), body: str(formData, 'body'), status: str(formData, 'status') || 'draft', publishOn: str(formData, 'publishOn') };
   const fieldErrors: Record<string, string> = {};
   if (!values.title) fieldErrors.title = 'Title is required.';
   if (!(POST_STATUSES as readonly string[]).includes(values.status)) fieldErrors.status = 'Pick a status.';
@@ -228,16 +232,17 @@ Writes use the query builder with `eq` / `and` and put the owner in the
 
 ```ts
 // modules/posts/actions/update-post.server.ts ('use server'; create and delete are the same shape)
-export async function updatePost(fd: FormData) {
+/** Saves an edited post the signed-in user owns; a foreign or missing id is not found. */
+export async function updatePost(formData: FormData) {
   const user = await getUser();
-  const id = toId(fd.get('id'));
+  const id = toId(formData.get('id'));
   if (!user || !id) return { success: false, error: 'Not found.', status: 404 };
-  const v = validatePost(fd);
-  if (!v.ok) return { success: false, fieldErrors: v.fieldErrors, values: v.values };
-  const rows = await db.update(posts).set(v.data).where(and(eq(posts.id, id), eq(posts.ownerId, user.id))).returning();
+  const result = validatePost(formData);
+  if (!result.ok) return { success: false, fieldErrors: result.fieldErrors, values: result.values };
+  const rows = await db.update(posts).set(result.data).where(and(eq(posts.id, id), eq(posts.ownerId, user.id))).returning();
   return rows.length ? { success: true, redirect: `/posts/${id}` } : { success: false, error: 'Not found.', status: 404 };
 }
-// create: const [post] = await db.insert(posts).values({ ...v.data, ownerId: user.id }).returning(); then redirect to `/posts/${post.id}`
+// create: const [post] = await db.insert(posts).values({ ...result.data, ownerId: user.id }).returning(); then redirect to `/posts/${post.id}`
 ```
 
 File uploads use the built-in `FileStore` (bytes under `.webjs/uploads`,
@@ -247,7 +252,7 @@ it from a `route.ts` that checks access:
 
 ```ts
 // in the action: import { getFileStore, generateKey } from '@webjsdev/server';
-const file = fd.get('attachment');
+const file = formData.get('attachment');
 if (file instanceof File && file.size > 5 * 1024 * 1024) return { success: false, fieldErrors: { attachment: 'File must be 5 MB or smaller.' } };
 const fileKey = file instanceof File && file.size ? generateKey(file.name) : null;
 if (fileKey) await getFileStore().put(fileKey, file as File);
@@ -367,8 +372,8 @@ const CARD = 'rounded-xl border border-border bg-card text-card-foreground shado
 export default async function PostsPage({ actionData }: PageProps<'/posts'> & { actionData?: FormState }) {
   await requireUser();
   const items = await listPosts();
-  const e = actionData?.fieldErrors ?? {};
-  const v = actionData?.values ?? {};
+  const errors = actionData?.fieldErrors ?? {};
+  const typed = actionData?.values ?? {};
   return html`
     <header class="flex flex-wrap items-end justify-between gap-3">
       <div><h1 class="text-2xl font-semibold tracking-tight">Posts</h1>
@@ -377,8 +382,8 @@ export default async function PostsPage({ actionData }: PageProps<'/posts'> & { 
     <section class="${CARD} mt-6 p-5">
       <h2 class="text-base font-semibold">New post</h2>
       <form action=${createPost} class="mt-4 grid gap-4 sm:grid-cols-2">
-        ${field({ label: 'Title', name: 'title', value: v.title, error: e.title, required: true })}
-        ${selectField({ label: 'Status', name: 'status', value: v.status ?? 'draft', options: POST_STATUSES })}
+        ${field({ label: 'Title', name: 'title', value: typed.title, error: errors.title, required: true })}
+        ${selectField({ label: 'Status', name: 'status', value: typed.status ?? 'draft', options: POST_STATUSES })}
         <div class="sm:col-span-2"><button class=${buttonClass()}>Create post</button></div>
       </form>
     </section>
@@ -386,17 +391,17 @@ export default async function PostsPage({ actionData }: PageProps<'/posts'> & { 
       <h2 class="text-lg font-semibold">All posts</h2>
       ${items.length ? html`
         <ul class="${CARD} mt-3 divide-y divide-border">
-          ${items.map((p) => html`
+          ${items.map((post) => html`
             <li class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
               <div class="min-w-0 w-full sm:w-auto sm:flex-1">
-                <a href="/posts/${p.id}" class="font-medium text-foreground hover:underline">${p.title}</a>
-                <p class="truncate text-sm text-muted-foreground">${[p.body, p.publishOn && `Publish ${p.publishOn}`].filter(Boolean).join(' · ')}</p>
+                <a href="/posts/${post.id}" class="font-medium text-foreground hover:underline">${post.title}</a>
+                <p class="truncate text-sm text-muted-foreground">${[post.body, post.publishOn && `Publish ${post.publishOn}`].filter(Boolean).join(' · ')}</p>
               </div>
               <div class="flex items-center gap-2">
-                <post-status post-id=${p.id} status=${p.status}></post-status>
-                <a href="/posts/${p.id}/edit" class=${buttonClass({ variant: 'ghost', size: 'sm' })}>Edit</a>
+                <post-status post-id=${post.id} status=${post.status}></post-status>
+                <a href="/posts/${post.id}/edit" class=${buttonClass({ variant: 'ghost', size: 'sm' })}>Edit</a>
                 <form action=${deletePost} onsubmit="return confirm('Delete this post?')">
-                  <input type="hidden" name="id" value=${p.id}>
+                  <input type="hidden" name="id" value=${post.id}>
                   <button class="${buttonClass({ variant: 'ghost', size: 'sm' })} text-destructive">Delete</button>
                 </form>
               </div>
@@ -410,7 +415,7 @@ export default async function PostsPage({ actionData }: PageProps<'/posts'> & { 
 A detail or edit page loads its row with the owner check and stops on a miss:
 `const post = await getPost(params.id); if (!post) notFound();`
 (`PageProps<'/posts/[id]/edit'>`, `notFound` from `@webjsdev/core`). The edit
-form is the same card, pre-filled (`const v = actionData?.values ?? { title: post.title, ... }`),
+form is the same card, pre-filled (`const typed = actionData?.values ?? { title: post.title, ... }`),
 with a hidden `id` input, `textareaField` / `selectField` for long text and
 choices, and Save plus a ghost Cancel link. Sign-in and sign-up pages are one
 narrow form card (`mx-auto max-w-sm`), starting with
@@ -418,10 +423,25 @@ narrow form card (`mx-auto max-w-sm`), starting with
 Destructive buttons are `ghost` or `outline` with `text-destructive`; a solid
 red button is too loud for a row or a page header.
 
-Write one test file per feature, `test/<feature>/<feature>.test.ts` (node:test:
-`import { test } from 'node:test'`, `import assert from 'node:assert/strict'`),
-covering its validation (each error message, the trimmed valid result) and any
-pure helper.
+Write one test file per feature (`test/<feature>/<feature>.test.ts`, node:test)
+that asserts each validation message, the clean result, and every pure helper
+(password hashing, summaries, counts):
+
+```ts
+// test/posts/posts.test.ts
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { validatePost } from '#modules/posts/utils/validate-post.ts';
+const form = (fields: Record<string, string>) => { const f = new FormData(); for (const [k, v] of Object.entries(fields)) f.set(k, v); return f; };
+test('a post without a title is refused with the message', () => {
+  const result = validatePost(form({ title: '  ' }));
+  assert.equal(result.ok, false);
+  assert.equal(!result.ok && result.fieldErrors.title, 'Title is required.');
+});
+test('a valid post is trimmed and typed', () => {
+  assert.deepEqual(validatePost(form({ title: ' Hi ', status: 'review' })), { ok: true, data: { title: 'Hi', body: '', status: 'review', publishOn: null } });
+});
+```
 
 ### Look and the UI kit
 
