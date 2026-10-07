@@ -128,6 +128,8 @@ A `redirectTo` that arrives from a request (a form field or a query param, for O
 
 For a programmatic sign-in (the auto-login-after-signup pattern), `signIn('credentials', creds, { redirectTo })` returns a `302` `Response` that a form-bound action can return directly (the framework honors a returned `Response` verbatim).
 
+**The header updates on its own after sign-in and sign-out.** A layout that reads `auth()` to render "Sign in" / "Sign out" is re-rendered after any mutating form submission the router handles (a form bound to a sign-in action, or a plain POST to `/api/auth/signin/credentials` / `/api/auth/signout`), and its markup is morphed in place, so there is nothing to refresh by hand (#1557). Only a sign-out done over RPC from a component (`await logout(); navigate('/')`) needs `await refreshPage('shell')` after it, since that navigation is a plain GET.
+
 Sessions are JWT by default (stateless, scales horizontally). OAuth
 providers handle the full redirect flow. Read the session anywhere on the
 server with `auth()`.

@@ -75,6 +75,10 @@ import { _swapCommit, applySwap } from './swap.js';
 export async function fetchAndApply(href, frameId, recordHistory, optimisticState, method, body, signal, token, revalidating, opts) {
   method = method || 'GET';
   const refresh = (opts && opts.refresh) || undefined;
+  // A write submitted to the PAGE (#1557): its response re-renders the layouts
+  // and the swap refreshes their chrome too. A frame-targeted submission swaps
+  // one region by contract and keeps its own path.
+  const mutation = body != null && method !== 'GET' && method !== 'HEAD' && !frameId;
   const noPrefetch = !!(opts && opts.noPrefetch);
   const preserveScroll = !!(opts && opts.preserveScroll);
   const myToken = typeof token === 'number' ? token : currentNavigationToken;
@@ -143,7 +147,13 @@ export async function fetchAndApply(href, frameId, recordHistory, optimisticStat
     // matches every one of them, so the response would omit the layouts and a
     // layout edit would be invisible. Sending nothing forces the full chain to
     // render.
-    const have = refresh ? '' : buildHaveHeader();
+    //
+    // A mutating submission sends none either (#1557), for the same reason
+    // reached differently: the action may have changed what a layout renders
+    // (a sign-in sets the cookie the header reads), and `fetch` follows the
+    // redirect carrying this header, so the server would short-circuit the
+    // very layouts that need to re-run.
+    const have = refresh || mutation ? '' : buildHaveHeader();
     if (have) headers['x-webjs-have'] = have;
     if (frameId) headers['x-webjs-frame'] = frameId;
     // Content-negotiate a stream-action response on a write submission (a
@@ -325,7 +335,7 @@ export async function fetchAndApply(href, frameId, recordHistory, optimisticStat
     }
     : null;
 
-  const disposition = applySwap(doc, frameId, !!revalidating, finalUrl, incomingBuild, incomingSrc, refresh, recordHistoryNow);
+  const disposition = applySwap(doc, frameId, !!revalidating, finalUrl, incomingBuild, incomingSrc, refresh || (mutation ? 'layouts' : undefined), recordHistoryNow);
   // `'none'` means applySwap returned WITHOUT committing anything: the frame the
   // response was for is missing, or it degraded to a hard navigation (an
   // importmap/build mismatch, a poisoned boundary scan). The page is not left

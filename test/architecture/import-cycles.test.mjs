@@ -45,6 +45,9 @@ const ALLOWED = {
     'packages/core/src/router-client/dom-differ.js',
     'packages/core/src/router-client/events.js',
     'packages/core/src/router-client/fetch-apply.js',
+    // The swap's post-mutation chrome morph (#1557): a swap tier, so it sits
+    // in the swap's cycle for the same reason `swap.js` does.
+    'packages/core/src/router-client/layout-chrome.js',
     'packages/core/src/router-client/navigator.js',
     'packages/core/src/router-client/stream.js',
     'packages/core/src/router-client/swap.js',

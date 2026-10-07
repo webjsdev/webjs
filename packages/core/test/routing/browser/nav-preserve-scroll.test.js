@@ -147,12 +147,17 @@ const FRAME_RESPONSE =
  * failing to start.
  */
 function pageResponse() {
-  return '<!doctype html><html><head>' + document.head.innerHTML + '</head><body>'
+  // Wrapped in a `<div>` like the live container, so the response has the
+  // live page's SHAPE. A form submission morphs the layout chrome around the
+  // range level by level (#1557), which needs the two ancestor chains to pair;
+  // a bare body-level range would take the full-body tier and swap out the
+  // whole harness instead.
+  return '<!doctype html><html><head>' + document.head.innerHTML + '</head><body><div>'
     + '<!--wj:children:/:/preserve-scroll-a-->'
     + '<span id="wj-hash-target">anchor</span>'
     + `<div id="wj-swapped-1436" style="height:${SPACER}px">swapped</div>`
     + '<!--/wj:children:/-->'
-    + '</body></html>';
+    + '</div></body></html>';
 }
 
 suite('Client router: data-preserve-scroll keeps the reader in place (#1436)', () => {
@@ -169,7 +174,10 @@ suite('Client router: data-preserve-scroll keeps the reader in place (#1436)', (
 
     container = document.createElement('div');
     container.innerHTML = liveHtml();
-    document.body.appendChild(container);
+    // PREPENDED so the runner's own body nodes trail the fixture, where the
+    // chrome morph after a submission (#1557) treats them as runtime additions
+    // and leaves them alone.
+    document.body.prepend(container);
 
     fetched = [];
     origFetch = window.fetch;
