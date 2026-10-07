@@ -97,7 +97,12 @@ test('dev serves the reload SharedWorker, and the client uses it with a direct E
   assert.notEqual(tryAt, -1, 'the guard is present at all');
   assert.notEqual(reloadAt, -1, 'the reload call is present at all');
   assert.ok(tryAt < reloadAt, 'the guard opens BEFORE the reload call, not around something else');
-  assert.match(clientSrc, /catch\s*\(_\)\s*\{\s*__webjsDirectEvents/, 'a worker failure falls back');
+  assert.match(clientSrc, /catch\s*\(_\)\s*\{\s*__webjsFallBack\(\)/, 'a worker that throws on construction falls back');
+  // A worker whose SCRIPT fails to load (a partitioned cookie Chromium does
+  // not send with a shared worker's script request from a third-party frame)
+  // is an error event, not a throw: it must fall back too, exactly once.
+  assert.match(clientSrc, /w\.onerror = function \(\) \{[\s\S]*?__webjsFallBack\(\);/, 'a worker that fails to load falls back');
+  assert.match(clientSrc, /function __webjsFallBack\(\) \{\s*if \(__webjsFellBack\) return;\s*__webjsFellBack = true;\s*__webjsDirectEvents\(\);/, 'the fallback runs once');
   // The debounce (#1397) is part of the relay, so it ships in BOTH scripts.
   assert.match(clientSrc, /const RELOAD_QUIET_MS/, 'the reload debounce ships in the client fallback');
   assert.match(clientSrc, /const RELOAD_MAX_HOLD_MS/, 'including the max-hold cap');
