@@ -22,6 +22,7 @@
 
 import { getStore } from './cache.js';
 import { markDynamicAccess } from './context.js';
+import { shared } from './process-shared.js';
 
 // -- Web Crypto helpers ------------------------------------------------------
 // Same shape as auth.js. We duplicate here rather than share a module
@@ -293,7 +294,7 @@ function serializeCookie(name, value, opts) {
 // ---------------------------------------------------------------------------
 
 /** @type {WeakMap<Request, Session>} */
-const sessionMap = new WeakMap();
+const sessionMap = shared('session-map', () => new WeakMap());
 
 // ---------------------------------------------------------------------------
 // Session middleware

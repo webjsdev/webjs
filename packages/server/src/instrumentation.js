@@ -19,6 +19,7 @@ import { join } from 'node:path';
 import { stat } from 'node:fs/promises';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { devImport } from './dev-import.js';
+import { shared } from './process-shared.js';
 
 /**
  * Per-boot handoff channel for a `register()`-registered error sink. An
@@ -29,7 +30,7 @@ import { devImport } from './dev-import.js';
  * context propagates across the `await register()` awaits.
  * @type {AsyncLocalStorage<{ onError: ((error: unknown, ctx?: any) => void) | null }>}
  */
-const _als = new AsyncLocalStorage();
+const _als = shared('instrumentation-als', () => new AsyncLocalStorage());
 
 /**
  * Register an error sink from inside `instrumentation.register()`. Composes with
