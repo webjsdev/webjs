@@ -114,3 +114,22 @@ test('an in-place server marks its reload frames; a restarting one does not (#15
   assert.match(frames(new SseHub({ inPlace: true })), /"inPlace":true/);
   assert.doesNotMatch(frames(new SseHub()), /inPlace/);
 });
+
+test('the Bun transpiler cache is emptied once per machine, then left alone (#1575)', async () => {
+  const { evictPoisonedBunTranspilerCache, bunTranspilerCacheDir } = await import('../../src/bun-transpiler-cache.js');
+  const home = mkdtempSync(join(tmpdir(), 'webjs-tcache-'));
+  try {
+    const env = { XDG_CACHE_HOME: join(home, 'c') };
+    const dir = bunTranspilerCacheDir(env, home);
+    assert.equal(dir, join(home, 'c', 'bun', '@t@'));
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'poisoned.pile'), 'import("file:/x/engine.server.ts")');
+    assert.equal(evictPoisonedBunTranspilerCache({ env, home, isBun: true }), 1);
+    writeFileSync(join(dir, 'fresh.pile'), 'ok');
+    assert.equal(evictPoisonedBunTranspilerCache({ env, home, isBun: true }), 0, 'once only');
+    assert.equal(evictPoisonedBunTranspilerCache({ env: { BUN_RUNTIME_TRANSPILER_CACHE_PATH: '0' }, home, isBun: true }), 0, 'cache off');
+    assert.equal(evictPoisonedBunTranspilerCache({ env, home, isBun: false }), 0, 'Node never touches it');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
