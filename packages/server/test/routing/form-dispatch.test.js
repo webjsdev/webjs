@@ -1233,3 +1233,67 @@ test('#1307: an ordinary page GET and a non-form POST report nothing', async () 
   assert.equal(probe.status, 405);
   assert.deepEqual(seen, []);
 });
+
+// #1581: `actionData.values` carries every submitted text field on a failure,
+// so the page's ordinary `value=${actionData?.values?.x}` refills fields the
+// action never echoed, with JS off as much as on.
+const ECHOLESS_APP = {
+  'modules/contact/actions/contact.server.ts': `
+'use server';
+export async function contact(formData) {
+  return { fieldErrors: { name: 'Required' }, values: { venue: 'normalized' } };
+}
+`,
+  'app/contact/page.ts': `
+import { html } from ${CORE};
+import { contact } from '../../modules/contact/actions/contact.server.ts';
+export default function Contact({ actionData }) {
+  const v = actionData?.values || {};
+  return html\`
+    <form action=\${contact}>
+      <input name="name" value=\${v.name}>
+      <input name="email" value=\${v.email}>
+      <input name="venue" value=\${v.venue}>
+      <textarea name="message">\${v.message}</textarea>
+      <p id="keys">\${Object.keys(v).sort().join(',')}</p>
+    </form>
+  \`;
+}
+`,
+};
+
+test('a failure re-render carries every submitted text field on actionData.values (#1581)', async () => {
+  const app = await createRequestHandler({ appDir: makeApp(ECHOLESS_APP), dev: true });
+  await app.warmup();
+  const res = await submit(app, '/contact', { name: '', email: 'a@b.c', venue: 'Hall', message: 'Hello there' });
+  assert.equal(res.status, 422);
+  const body = await res.text();
+  assert.match(body, /name="email" value="a@b\.c"/, 'an unechoed field comes back');
+  assert.match(body, /<textarea name="message">Hello there<\/textarea>/);
+  assert.match(body, /name="venue" value="normalized"/, "the action's own values win");
+  assert.match(body, /<p id="keys">email,message,name,venue<\/p>/, 'the identity field is not among the values');
+});
+
+test('a failing validate re-render carries the submitted values too (#1581)', async () => {
+  const app = await createRequestHandler({
+    appDir: makeApp({
+      'modules/v/actions/v.server.ts': `
+'use server';
+export function validate(fd) { return { fieldErrors: { email: 'Bad' } }; }
+export async function save(input) { return { success: true }; }
+`,
+      'app/v/page.ts': `
+import { html } from ${CORE};
+import { save } from '../../modules/v/actions/v.server.ts';
+export default function V({ actionData }) {
+  return html\`<form action=\${save}><input name="email" value=\${actionData?.values?.email}></form>\`;
+}
+`,
+    }),
+    dev: true,
+  });
+  await app.warmup();
+  const res = await submit(app, '/v', { email: 'typed@x' });
+  assert.equal(res.status, 422);
+  assert.match(await res.text(), /name="email" value="typed@x"/);
+});

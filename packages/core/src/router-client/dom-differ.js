@@ -554,11 +554,15 @@ export function reconcileChildren(dst, src) {
         keyedLive.delete(k);
         continue;
       }
-      // Positional match: same tag, same index, neither has a key.
+      // Positional match: same tag, same index, neither has a key. A form
+      // control must also be the SAME control (#1581): reusing the `email`
+      // input for an incoming `name` input carries the live typed value into
+      // the wrong field, because `value` is a live attribute the diff keeps.
       const livePeer = liveChildren[i];
       if (livePeer && livePeer.nodeType === 1 &&
           !keyOf(/** @type {Element} */ (livePeer)) &&
-          /** @type {Element} */ (livePeer).tagName === /** @type {Element} */ (inc).tagName) {
+          /** @type {Element} */ (livePeer).tagName === /** @type {Element} */ (inc).tagName &&
+          sameControlIdentity(/** @type {Element} */ (livePeer), /** @type {Element} */ (inc))) {
         diffElementInPlace(/** @type {Element} */ (livePeer), /** @type {Element} */ (inc));
         finalNodes.push(livePeer);
         continue;
@@ -595,6 +599,25 @@ export function reconcileChildren(dst, src) {
       dst.insertBefore(n, dst.childNodes[i] || null);
     }
   }
+}
+
+/**
+ * Whether two same-tag elements may stand for each other in a positional
+ * match. Anything but a form control always may. An `<input>`, `<select>` or
+ * `<textarea>` must agree on `name` (and an input on `type`), since the
+ * differ keeps a reused control's live value and a mismatch would move typed
+ * text into another field (#1581).
+ *
+ * @param {Element} a
+ * @param {Element} b
+ * @returns {boolean}
+ */
+function sameControlIdentity(a, b) {
+  const tag = a.localName;
+  if (tag !== 'input' && tag !== 'select' && tag !== 'textarea') return true;
+  if (a.getAttribute('name') !== b.getAttribute('name')) return false;
+  if (tag === 'input' && (a.getAttribute('type') || 'text').toLowerCase() !== (b.getAttribute('type') || 'text').toLowerCase()) return false;
+  return true;
 }
 
 /**
