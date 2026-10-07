@@ -4,7 +4,7 @@
  *
  * KEEP IN SYNC: `packages/cli/lib/watch-recursive.js` and
  * `packages/server/src/dev/watch-recursive.js` are byte-identical copies (the
- * CLI does not import server internals); `packages/cli/test/dev-supervisor/
+ * CLI does not depend on server internals); `packages/cli/test/dev-supervisor/
  * watch-recursive.test.js` fails when they drift.
  *
  * Node 24's `fs.watch(dir, { recursive: true })` on Linux is implemented in JS
@@ -57,7 +57,8 @@ export function needsDirWalker({ platform = process.platform, isBun = !!process.
  *   its events; `watchFn` is injectable for tests; `walker` forces the mode.
  * @returns {import('node:events').EventEmitter & { close: () => void }}
  */
-export function watchRecursive(dir, listener, { ignore = () => false, watchFn = watch, walker = needsDirWalker() } = {}) {
+export function watchRecursive(dir, listener, opts = {}) {
+  const { ignore = () => false, watchFn = watch, walker = needsDirWalker() } = opts;
   if (!walker) return /** @type {any} */ (watchFn(dir, { recursive: true }, listener));
 
   const out = /** @type {EventEmitter & { close: () => void }} */ (new EventEmitter());
