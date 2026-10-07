@@ -81,6 +81,8 @@ bun run dev      # or: bun run start
 
 `bun --bun` overrides the `webjs` bin's Node shebang so the server runs on Bun, selecting the native `Bun.serve` listener and `amaro` type stripping. The app's dependencies resolve from `node_modules` exactly as on Node. The `start.before` migrate step (`webjs db migrate`) runs under Bun too. Commit the `bun.lock` for reproducible, offline installs. The scaffold's Bun Dockerfile runs `bun install --production` and serves via `CMD ["bun", "--bun", "run", "start"]`.
 
+**What the dev watcher ignores.** On both runtimes a change to a file nothing serves never reloads the page: `*.log`, `coverage/`, `.cache/`, `test-results/`, `playwright-report/`, and anything the app's `.gitignore` ignores (except `.env*`). So `npm run dev > dev.log` in the app folder is safe.
+
 ## Deploying either runtime
 
 Production runs `npm run start` (Node) or `bun run start` (Bun), which serves the source directly with no build step. Both speak plain HTTP/1.1, so put a reverse proxy or platform edge in front for TLS and HTTP/2 (production perf leans on HTTP/2 multiplexing plus `modulepreload` hints, not a bundle). A `start.before` migrate runs first on both runtimes.

@@ -196,6 +196,28 @@ const probeFiles = {
   'app/zzgate/page.ts': "import { html } from '@webjsdev/core';\nimport { headers } from '@webjsdev/server';\nimport { act } from '#modules/zzgate/act.server.ts';\nimport { bigEng } from '#modules/zzgate/big.server.ts';\nexport default async function P() {\n  const { eng } = await import('#modules/zzgate/engine.server.ts');\n  if (await bigEng() !== eng()) throw new Error('big module mismatch');\n  const ua = headers().get('x-gate') || 'none';\n  return html`<p>dyn:${eng()} hdr:${ua}</p><form method=\"post\" action=${act}><input name=\"q\"><button>go</button></form>`;\n}\n",
 };
 
+/** Whether the dev reload stream sends a reload frame within `ms`. */
+async function reloadFrameWithin(base, ms) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const res = await fetch(`${base}/__webjs/events`, { headers: { accept: 'text/event-stream' }, signal: ctrl.signal });
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) return false;
+      buf += dec.decode(value, { stream: true });
+      if (/(^|\n)event: reload(\n|$)/.test(buf)) return true;
+    }
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** The app checks, run before and after the reload stress. */
 async function appChecks(stage, appDir, base, when) {
   const bad = [];
@@ -280,6 +302,14 @@ async function scaffoldStage(runtime, tarballs, port) {
     }
     await sleep(runtime === 'node' ? 4000 : 1500);
     await appChecks(stage, appDir, base, 'after edits');
+    // Files nothing serves never reload the page: a gitignored dev.log in the
+    // app root (what `npm run dev > dev.log` writes) and a coverage/ file.
+    const quiet = reloadFrameWithin(base, 3000);
+    await sleep(300);
+    for (let i = 0; i < 5; i++) { appendFileSync(join(appDir, 'dev.log'), `line ${i}\n`); await sleep(100); }
+    mkdirSync(join(appDir, 'coverage'), { recursive: true });
+    writeFileSync(join(appDir, 'coverage/lcov.info'), 'x');
+    record(stage, 'after edits: writing dev.log or coverage/ sends no reload frame', (await quiet) === false);
     if (runtime === 'bun') {
       const restarts = (dev.log().match(/restarting the dev server/g) || []).length;
       record(stage, 'no dev-server restart on Bun', restarts === 0, `${restarts} restarts`);
