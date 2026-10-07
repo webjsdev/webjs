@@ -80,9 +80,7 @@ test('buildCoreEntries: pre-setCoreInstall fail-open defaults', async () => {
   // Document the contract: a fresh-import of importmap.js (no setter
   // call yet) still exposes the two minimum-safe @webjsdev/core
   // entries so any consumer that calls `buildImportMap()` before
-  // dev.js boots `setCoreInstall` still gets a usable map. Pre-#118
-  // the legacy `coreMappings` were derived inline from a boolean
-  // and so were never empty; this preserves that posture.
+  // dev.js boots `setCoreInstall` still gets a usable map.
   const url = new URL('../../src/importmap.js', import.meta.url).href +
     '?fail-open=' + Date.now();
   const freshModule = await import(url);

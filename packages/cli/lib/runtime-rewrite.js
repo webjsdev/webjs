@@ -23,11 +23,9 @@
  *   - the `dev` / `start` scripts force `bun --bun` (the server is Bun),
  *   - every other command stays `bun run` / `webjs ...` (runs on Node via the
  *     `webjs` bin's `#!/usr/bin/env node` shebang),
- *   - the Dockerfile is a pure `oven/bun:1-slim` base (#595, #1606). This is safe as of
- *     `@webjsdev/cli@0.10.20` (#570): `webjs db migrate` resolves drizzle-kit
- *     and runs it under Bun (no `npx`), so a Node-less image works. (Before
- *     #570 shipped as `latest`, this stayed on `node:24-alpine` + a copied Bun
- *     binary, since the installed CLI could still shell `npx`.)
+ *   - the Dockerfile is a pure `oven/bun:1-slim` base (#595, #1606): `webjs db
+ *     migrate` resolves drizzle-kit and runs it under Bun (no `npx`, #570), so
+ *     a Node-less image works.
  */
 
 /**
@@ -97,15 +95,11 @@ export function bunifyProse(s) {
  * Rewrite the scaffolded Dockerfile for Bun.
  *
  * Base decision (acceptance criterion): a pure `oven/bun:1-slim` image (no Node).
- * Safe as of `@webjsdev/cli@0.10.20` (#570): `webjs db` / `webjs test` resolve
- * their tools (drizzle-kit, wtr) and spawn them with the current runtime instead
- * of `npx`, so the boot-time `webjs db migrate` runs under Bun with no Node
- * toolchain. (Before #570 was the published `latest`, this stayed on a
- * `node:24-alpine` base with a copied Bun binary, since the installed CLI could
- * still shell `npx`, which a pure Bun image lacks. #595 flipped it once the
- * npx-free CLI shipped.) `oven/bun:1` is Debian-based: `ca-certificates` ship in
- * the image, and SQLite uses the built-in bun:sqlite (no native module), so no
- * build toolchain is needed.
+ * `webjs db` / `webjs test` resolve their tools (drizzle-kit, wtr) and spawn
+ * them with the current runtime instead of `npx` (#570), so the boot-time
+ * `webjs db migrate` runs under Bun with no Node toolchain. `oven/bun:1` is
+ * Debian-based: `ca-certificates` ship in the image, and SQLite uses the
+ * built-in bun:sqlite (no native module), so no build toolchain is needed.
  *
  * @param {string} s
  * @returns {string}

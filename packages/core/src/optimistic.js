@@ -44,7 +44,7 @@ class OptimisticState {
   }
 }
 
-async function runLegacyOptimistic(signal, value, action) {
+async function runImperativeOptimistic(signal, value, action) {
   const prev = signal.get();
   signal.set(value);
   let result;
@@ -105,7 +105,7 @@ async function runLegacyOptimistic(signal, value, action) {
  *   4. The returned `release()` fn removes the update by ID and re-renders.
  *   5. Concurrent updates stack; each release removes only its own entry.
  *
- * Backward-compatible imperative API (signal-based rollback):
+ * Imperative form (signal-based rollback), for a one-shot toggle:
  *   await optimistic(signal, value, () => likePost(postId));
  *
  * Client-only: it calls `host.requestUpdate()` (client work), so a component
@@ -119,7 +119,7 @@ async function runLegacyOptimistic(signal, value, action) {
  */
 export function optimistic(first, second, third) {
   if (first && typeof first.get === 'function' && typeof first.set === 'function') {
-    return runLegacyOptimistic(first, second, third);
+    return runImperativeOptimistic(first, second, third);
   }
   return new OptimisticState(first, second);
 }

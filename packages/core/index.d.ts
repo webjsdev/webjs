@@ -152,7 +152,7 @@ export function optimistic<State>(
 ): OptimisticState<State, State>;
 
 
-// Legacy Imperative Signature (Signal-based rollback)
+// Imperative signature (signal-based rollback)
 export function optimistic<T, R>(
   signal: { get(): T; set(v: T): void },
   value: T,
