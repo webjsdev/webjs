@@ -23,7 +23,7 @@
  */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, cpSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, cpSync, readdirSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,6 +55,14 @@ try {
   // which would mask the dynamic-alias-import check.
   for (const p of ['core', 'server', 'cli']) {
     cpSync(join(ROOT, 'packages', p), join(dir, 'node_modules/@webjsdev', p), { recursive: true, dereference: true, filter: (src) => basename(src) !== 'test' });
+  }
+  // The copies need their third-party dependencies, which a real install puts
+  // next to them. Link the repo's hoisted ones (amaro, the TS stripper Bun
+  // needs, among them); a symlinked third-party package is harmless, only the
+  // framework packages have to be real copies.
+  for (const name of readdirSync(join(ROOT, 'node_modules'))) {
+    if (name === '@webjsdev' || name.startsWith('.')) continue;
+    symlinkSync(join(ROOT, 'node_modules', name), join(dir, 'node_modules', name));
   }
 
   // The CLI runs from the app's own node_modules, as in a real install: under
