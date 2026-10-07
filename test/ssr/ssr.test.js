@@ -716,6 +716,83 @@ test('no icon route and no declared icons: no icon link at all', (t) => {
   assert.doesNotMatch(render({}), /<link rel="[^"]*icon/);
 });
 
+/* ------------ Static icon and manifest files (app/icon.svg, ...) ------------ */
+
+// A static `app/icon.svg` / `app/icon.png` / `app/apple-icon.png` /
+// `app/manifest.webmanifest` is linked with what is known about it: the type
+// from its extension, `sizes="any"` for SVG and the real pixel size for PNG.
+const withStaticIcons = (t, routes) => {
+  setMetadataIconRoutes(routes);
+  t.after(() => setMetadataIconRoutes(null));
+};
+
+/** A minimal PNG header (signature + IHDR) of the given size. */
+function pngFile(w, h) {
+  const dir = mkdtempSync(join(tmpdir(), 'webjs-png-'));
+  const buf = Buffer.alloc(33);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(buf, 0);
+  buf.writeUInt32BE(13, 8);
+  buf.write('IHDR', 12, 'latin1');
+  buf.writeUInt32BE(w, 16);
+  buf.writeUInt32BE(h, 20);
+  const file = join(dir, 'icon.png');
+  writeFileSync(file, buf);
+  return file;
+}
+
+test('static app/icon.svg: linked with its type and sizes="any"', (t) => {
+  withStaticIcons(t, [{ stem: 'icon', urlPath: '/icon.svg', static: true, contentType: 'image/svg+xml' }]);
+  assert.match(render({}), /<link rel="icon" href="\/icon\.svg" sizes="any" type="image\/svg\+xml">/);
+});
+
+test('static app/icon.png + apple-icon.png: linked with their real pixel sizes, raster first', (t) => {
+  withStaticIcons(t, [
+    { stem: 'icon', urlPath: '/icon.svg', static: true, contentType: 'image/svg+xml' },
+    { stem: 'icon', urlPath: '/icon.png', static: true, contentType: 'image/png', file: pngFile(192, 192) },
+    { stem: 'apple-icon', urlPath: '/apple-icon.png', static: true, contentType: 'image/png', file: pngFile(180, 180) },
+  ]);
+  const html = render({});
+  assert.match(html, /<link rel="icon" href="\/icon\.png" sizes="192x192" type="image\/png">\s*<link rel="icon" href="\/icon\.svg"/);
+  assert.match(html, /<link rel="apple-touch-icon" href="\/apple-icon\.png" sizes="180x180" type="image\/png">/);
+});
+
+test('a static icon file wins the link over an icon route', (t) => {
+  // Both serve; only the static file becomes the favicon. A scaffold ships a
+  // static placeholder beside the gallery's /icon demo route, and the demo must
+  // not turn into the app's tab icon.
+  withStaticIcons(t, [
+    { stem: 'icon', urlPath: '/icon' },
+    { stem: 'icon', urlPath: '/icon.svg', static: true, contentType: 'image/svg+xml' },
+  ]);
+  const html = render({});
+  assert.match(html, /href="\/icon\.svg"/);
+  assert.doesNotMatch(html, /href="\/icon"/);
+});
+
+test('app/favicon.ico is served but not linked (browsers ask for it themselves)', (t) => {
+  withStaticIcons(t, [{ stem: 'favicon', urlPath: '/favicon.ico', static: true, contentType: 'image/x-icon' }]);
+  assert.doesNotMatch(render({}), /<link rel="[^"]*icon/);
+});
+
+test('a nested icon route is not the app favicon', (t) => {
+  withStaticIcons(t, [{ stem: 'icon', urlPath: '/blog/icon' }]);
+  assert.doesNotMatch(render({}), /<link rel="[^"]*icon/);
+});
+
+test('app/manifest.*: linked automatically, a declared manifest wins, null opts out', (t) => {
+  withStaticIcons(t, [{ stem: 'manifest', urlPath: '/manifest.webmanifest', static: true, contentType: 'application/manifest+json' }]);
+  assert.match(render({}), /<link rel="manifest" href="\/manifest\.webmanifest">/);
+  const declared = render({ manifest: '/public/site.webmanifest' });
+  assert.match(declared, /<link rel="manifest" href="\/public\/site\.webmanifest">/);
+  assert.doesNotMatch(declared, /href="\/manifest\.webmanifest"/);
+  assert.doesNotMatch(render({ manifest: null }), /rel="manifest"/);
+});
+
+test('app/manifest.ts route: linked at /manifest.json', (t) => {
+  withStaticIcons(t, [{ stem: 'manifest', urlPath: '/manifest.json' }]);
+  assert.match(render({}), /<link rel="manifest" href="\/manifest\.json">/);
+});
+
 test('metadata.icons + metadataBase: relative URLs are absolutified', () => {
   const html = render({
     metadataBase: 'https://example.com',

@@ -26,7 +26,7 @@ import { findInstrumentationClient } from './instrumentation.js';
  *   middlewares: string[],
  * }} ApiRoute
  *
- * @typedef {{ stem: string, file: string, urlPath: string }} MetadataRoute
+ * @typedef {{ stem: string, file: string, urlPath: string, static?: boolean, contentType?: string }} MetadataRoute
  *
  * @typedef {{
  *   pages: PageRoute[],
@@ -60,6 +60,10 @@ import { findInstrumentationClient } from './instrumentation.js';
  *   app/sitemap.js                  → serves /sitemap.xml
  *   app/robots.js                   → serves /robots.txt
  *   app/icon.js                     → serves /icon (dynamic)
+ *   app/icon.svg | icon.png         → serves /icon.svg | /icon.png (static file)
+ *   app/apple-icon.png              → serves /apple-icon.png (static file)
+ *   app/favicon.ico                 → serves /favicon.ico (static file)
+ *   app/manifest.webmanifest        → serves /manifest.webmanifest (static file)
  *   app/opengraph-image.js          → serves /opengraph-image (dynamic)
  *
  * @param {string} appDir
@@ -113,6 +117,19 @@ export async function buildRouteTable(appDir) {
 
     // Private folders (any segment starting with _) are excluded from routing.
     if (dir !== '.' && dir.split('/').some((s) => s.startsWith('_'))) continue;
+
+    // Static metadata FILES at the app root (`app/icon.svg`, `app/icon.png`,
+    // `app/apple-icon.png`, `app/favicon.ico`, `app/manifest.webmanifest`):
+    // served as is at `/<file name>` and auto-linked into <head> like their
+    // `.ts` counterparts. Root only: an icon or manifest describes the whole
+    // app, and a nested copy has no meaning a browser would act on.
+    if (dir === '.') {
+      const staticMeta = staticMetadataFile(base);
+      if (staticMeta) {
+        metadataRoutes.push({ ...staticMeta, file, urlPath: '/' + base, static: true });
+        continue;
+      }
+    }
 
     // Match `<name>.<js|mjs|ts|mts>` conventions. Stem is the name without ext.
     const stem = stemOf(base);
@@ -215,6 +232,37 @@ export async function buildRouteTable(appDir) {
  * @param {string} base
  * @returns {string | null}
  */
+/**
+ * The static metadata file conventions, keyed by file name pattern. Each maps
+ * to the metadata stem it stands for and the content type it is served with.
+ * @type {Array<[RegExp, string, Record<string, string>]>}
+ */
+const STATIC_METADATA_FILES = [
+  [/^icon\.(svg|png|ico|jpg|jpeg|webp|gif)$/, 'icon', {}],
+  [/^apple-icon\.(png|jpg|jpeg)$/, 'apple-icon', {}],
+  [/^favicon\.(ico)$/, 'favicon', {}],
+  [/^manifest\.(json|webmanifest)$/, 'manifest', { json: 'application/manifest+json', webmanifest: 'application/manifest+json' }],
+];
+
+/** @type {Record<string, string>} */
+const IMAGE_TYPES = {
+  svg: 'image/svg+xml', png: 'image/png', ico: 'image/x-icon', jpg: 'image/jpeg',
+  jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif',
+};
+
+/**
+ * Classify an app-root file name as a static metadata file, or null.
+ * @param {string} base
+ * @returns {{ stem: string, contentType: string } | null}
+ */
+export function staticMetadataFile(base) {
+  for (const [re, stem, types] of STATIC_METADATA_FILES) {
+    const m = re.exec(base);
+    if (m) return { stem, contentType: types[m[1]] || IMAGE_TYPES[m[1]] };
+  }
+  return null;
+}
+
 function stemOf(base) {
   const m = /^([A-Za-z0-9_.-]+)\.(?:m?[jt]s)$/.exec(base);
   return m ? m[1] : null;

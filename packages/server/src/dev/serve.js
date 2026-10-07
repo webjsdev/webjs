@@ -361,7 +361,15 @@ export async function handleCore(req, ctx) {
 
   // Metadata routes: /sitemap.xml, /robots.txt, /icon, /opengraph-image, etc.
   if (method === 'GET' && state.routeTable.metadataRoutes) {
-    const meta = state.routeTable.metadataRoutes.find((r) => r.urlPath === path);
+    const meta = state.routeTable.metadataRoutes.find((r) => r.urlPath === path)
+      || (path === '/favicon.ico' ? faviconFallback(state.routeTable.metadataRoutes) : undefined);
+    if (meta && meta.static) {
+      // A static metadata file (`app/icon.svg`, `app/manifest.webmanifest`):
+      // the file's bytes with the convention's content type.
+      const res = await fileResponse(meta.file, { dev, immutable: versioned });
+      if (res.ok && meta.contentType) res.headers.set('content-type', meta.contentType);
+      return res;
+    }
     if (meta) {
       try {
         // The route gets `{ request, url, siteUrl, pages }` and may return a
@@ -633,6 +641,26 @@ export async function loadMiddleware(appDir, dev, logger) {
  * @param {string} abs
  * @param {{ dev: boolean, immutable: boolean }} opts
  */
+/**
+ * What answers `/favicon.ico` when neither `public/favicon.ico` nor
+ * `app/favicon.ico` exists: the app's own icon. Browsers and crawlers request
+ * `/favicon.ico` without reading the page's <head> (a feed reader, a bookmark
+ * import, a page served without HTML), so an app with only `app/icon.svg`
+ * would otherwise answer them with a 404. An `.ico` or raster file is
+ * preferred over SVG, which some of those clients cannot read; the dynamic
+ * `app/icon.ts` route is the last resort.
+ *
+ * @param {Array<{ stem: string, urlPath: string, static?: boolean, contentType?: string }>} routes
+ */
+export function faviconFallback(routes) {
+  const icons = routes.filter((r) => r.stem === 'icon' && (r.static || r.urlPath === '/icon'));
+  const rank = (/** @type {typeof icons[number]} */ r) => !r.static ? 9
+    : r.contentType === 'image/x-icon' ? 0
+      : r.contentType === 'image/png' ? 1
+        : r.contentType === 'image/svg+xml' ? 3 : 2;
+  return icons.sort((a, b) => rank(a) - rank(b))[0];
+}
+
 export async function fileResponse(abs, opts) {
   try {
     let data = await readFile(abs);

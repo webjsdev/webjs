@@ -6,7 +6,7 @@
  * live app deployed on its own, so it needs a root layout, a home page, a theme
  * toggle, and the `cn()` helper. The scaffold writes all four itself, with
  * things the gallery's copies cannot carry: the app's `displayName`, the
- * `cspNonce()` wiring, `LayoutProps` typing, the `metadata.icons` favicon, and
+ * `cspNonce()` wiring, `LayoutProps` typing, and
  * a `cn.ts` read verbatim from the `@webjsdev/ui` registry so `webjs ui add`
  * stays in lockstep with the kit.
  *

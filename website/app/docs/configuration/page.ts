@@ -69,6 +69,8 @@ webjs doctor --strict   # also fail on EVERY remaining warning, not just hard fa
 
     <p>One more check, <code>WORKSPACE_OVERRIDES</code>, warns when the app is a member of an npm or bun workspace and its own <code>package.json</code> carries <code>overrides</code> (or <code>resolutions</code>): package managers honour those only at the workspace root, so the block is silently ignored there. Move it into the root <code>package.json</code>.</p>
 
+    <p>And <code>APP_ICON</code> warns while the app's favicon is still the one the scaffold shipped: the placeholder <code>app/icon.svg</code>, or the WebJs mark earlier scaffolds put at <code>public/favicon.svg</code>. Replace it with the app's own icon (see <a href="/docs/metadata-routes#app-icon">App icon and manifest</a>).</p>
+
     <h3>webjs audit</h3>
     <code-block>webjs audit            # npm audit or bun audit, minus the accepted advisories
 webjs audit --json     # &#123; ok, manager, level, failing, ignored, stale &#125;</code-block>

@@ -21,6 +21,7 @@ import { bunifyProse, bunifyDockerfile, bunifyCompose, bunifyCi, bunifyEnvExampl
 import { postgresCompose, postgresCi } from './db-rewrite.js';
 import { assertValidAppName, toDatabaseName } from './app-name.js';
 import { isGalleryAppShellFile } from './gallery-shell-files.js';
+import { PLACEHOLDER_ICON_SVG, appManifest } from './app-icon.js';
 import { detectPackageManager } from './package-manager.js';
 
 /**
@@ -1246,10 +1247,15 @@ export type ActionResult<T> =
       const swSrc = join(TEMPLATES, 'public', swFile);
       if (existsSync(swSrc)) await cp(swSrc, join(publicDir, swFile));
     }
-    // A base SVG favicon (the root layout links it). It ships with the app, not
-    // the gallery, so it survives `npm run gallery:clear`.
-    const faviconSrc = join(TEMPLATES, 'public', 'favicon.svg');
-    if (existsSync(faviconSrc)) await cp(faviconSrc, join(publicDir, 'favicon.svg'));
+    // The app icon and web app manifest: `app/icon.svg` (a neutral PLACEHOLDER
+    // the agent replaces with the app's own icon; `webjs doctor` warns while it
+    // is still there) and `app/manifest.webmanifest` (the app's name). The
+    // framework links both into <head> and answers /favicon.ico with the icon,
+    // so the layout declares nothing. They ship with the app, not the gallery,
+    // so they survive `gallery:clear`.
+    await mkdir(join(appDir, 'app'), { recursive: true });
+    await writeFile(join(appDir, 'app', 'icon.svg'), PLACEHOLDER_ICON_SVG);
+    await writeFile(join(appDir, 'app', 'manifest.webmanifest'), appManifest(displayName));
 
     // The gallery-reset script (wired as `gallery:clear`). Only UI templates have
     // a gallery, so it ships here (NOT in the flat templateFiles list, which would
@@ -1355,11 +1361,10 @@ import '#components/theme-toggle.ts';
  * text-foreground, bg-card, bg-primary, and border-border all work.
  */
 
-// Declare the favicon via metadata.icons (NOT a hand-written <link> in the
-// template): the framework emits metadata links into <head>, whereas a <link>
-// written in the layout body stays in <body>, where browsers ignore it. The SVG
-// lives at public/favicon.svg and serves at /public/favicon.svg.
-export const metadata = { icons: '/public/favicon.svg' };
+// The favicon and manifest are app/icon.svg and app/manifest.webmanifest: the
+// framework links them into <head> itself, so nothing is declared here. Replace
+// the placeholder icon with this app's own (see the skill's routing-and-pages
+// reference, "App icon").
 
 // LayoutProps types every layout argument (children, params, searchParams,
 // url) from the framework, so children is a TemplateResult rather than an

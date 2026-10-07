@@ -16,7 +16,7 @@ export default function MetadataRoutes() {
 
     <h2>When NOT to use</h2>
     <ul>
-      <li>For static files that never change. Put them in <code>public/</code> instead (e.g. <code>public/favicon.ico</code>).</li>
+      <li>For an icon or manifest that never changes. Write the plain file at the app root instead (<code>app/icon.svg</code>, <code>app/apple-icon.png</code>, <code>app/manifest.webmanifest</code>, see <a href="#app-icon">App icon and manifest</a>): it is served and linked the same way.</li>
     </ul>
 
     <h2>Supported files</h2>
@@ -29,6 +29,10 @@ export default function MetadataRoutes() {
       <tr><td><code>manifest.ts</code></td><td><code>/manifest.json</code></td><td>PWA web app manifest</td></tr>
       <tr><td><code>icon.ts</code></td><td><code>/icon</code></td><td>Dynamic favicon</td></tr>
       <tr><td><code>apple-icon.ts</code></td><td><code>/apple-icon</code></td><td>Apple touch icon</td></tr>
+      <tr><td><code>icon.svg</code> / <code>icon.png</code> / <code>icon.ico</code> (app root, static file)</td><td><code>/icon.svg</code> ...</td><td>Favicon, linked with its type and size</td></tr>
+      <tr><td><code>apple-icon.png</code> (app root, static file)</td><td><code>/apple-icon.png</code></td><td>Home-screen icon (180x180 PNG)</td></tr>
+      <tr><td><code>manifest.webmanifest</code> / <code>manifest.json</code> (app root, static file)</td><td>same name</td><td>Web app manifest</td></tr>
+      <tr><td><code>favicon.ico</code> (app root, static file)</td><td><code>/favicon.ico</code></td><td>Legacy favicon, never linked</td></tr>
       <tr><td><code>opengraph-image.ts</code></td><td><code>/opengraph-image</code></td><td>OG preview image</td></tr>
       <tr><td><code>twitter-image.ts</code></td><td><code>/twitter-image</code></td><td>Twitter card image</td></tr>
     </table>
@@ -128,10 +132,21 @@ export default function Icon() {
 &lt;link rel="icon" href="/icon"&gt;
 &lt;link rel="apple-touch-icon" href="/apple-icon"&gt;</code-block>
     <p>The href carries your <code>basePath</code>, because that is where the route answers. No <code>type</code> or <code>sizes</code> is asserted: a metadata route picks its content type at request time, which is the reason to use one, so declaring a type here could contradict the bytes it serves. Browsers sniff the served type.</p>
-    <p>Reach for a route when the mark must be computed per request (per theme, per tenant). For a favicon that never changes, a static file in <code>public/</code> declared through <code>metadata.icons</code> is simpler and cacheable.</p>
+    <p>Reach for a route when the mark must be computed per request (per theme, per tenant). For a favicon that never changes, the static <code>app/icon.svg</code> below is simpler and cacheable.</p>
+
+    <h3 id="app-icon">App icon and manifest</h3>
+    <p>Every app should carry its <strong>own</strong> icon. <code>webjs create</code> ships <code>app/icon.svg</code> as a neutral placeholder (a grey tile with a dashed frame) and <code>app/manifest.webmanifest</code> with the app's name. Replace the placeholder with a simple symbol for what the app is, in its own colours, on a 32x32 view box: a filled rounded tile in the primary colour with one bold shape in its foreground colour stays legible at 16 pixels. <code>webjs doctor</code> warns (<code>APP_ICON</code>) while the placeholder is still there.</p>
+    <p>The static files are served at their own names and linked with what is known about them:</p>
+    <code-block>&lt;!-- app/icon.png (192x192), app/icon.svg, app/apple-icon.png, app/manifest.webmanifest --&gt;
+&lt;link rel="icon" href="/icon.png" sizes="192x192" type="image/png"&gt;
+&lt;link rel="icon" href="/icon.svg" sizes="any" type="image/svg+xml"&gt;
+&lt;link rel="apple-touch-icon" href="/apple-icon.png" sizes="180x180" type="image/png"&gt;
+&lt;link rel="manifest" href="/manifest.webmanifest"&gt;</code-block>
+    <p>Raster icons come first, because Google's favicon crawler takes the first usable icon and wants a square raster; a browser that reads SVG picks it regardless. iOS reads only a PNG <code>apple-touch-icon</code>, so add <code>app/apple-icon.png</code> (180x180) for the home screen. When an app has a static icon and an <code>icon.ts</code> route, the file wins the link and the route still serves at <code>/icon</code>. A declared <code>metadata.manifest</code> wins over the manifest file, and <code>manifest: null</code> turns the link off.</p>
+    <p><code>/favicon.ico</code> always answers: <code>public/favicon.ico</code> if it exists, else <code>app/favicon.ico</code>, else the app's icon (an <code>.ico</code> or PNG ahead of SVG, then the <code>icon.ts</code> route). Feed readers, bookmark imports and crawlers that read no markup request that path directly.</p>
 
     <h3>Declaring icons wins</h3>
-    <p>A <code>metadata.icons</code> declaration <strong>replaces</strong> the routes rather than merging with them, the same precedence Next applies to its static icon files. An app that outgrows a placeholder <code>app/icon.ts</code> names its real icons and the route stops being linked, without the file having to be deleted:</p>
+    <p>A <code>metadata.icons</code> declaration <strong>replaces</strong> the icon files and routes rather than merging with them, the same precedence Next applies to its static icon files. An app that outgrows a placeholder <code>app/icon.ts</code> names its real icons and the route stops being linked, without the file having to be deleted:</p>
     <code-block>// app/layout.ts  ->  these win; /icon is no longer linked
 export const metadata = {
   icons: {
@@ -142,7 +157,7 @@ export const metadata = {
     apple: { url: '/public/apple-touch-icon.png', sizes: '180x180' },
   },
 };</code-block>
-    <p>Declare a favicon one of those two ways, never as a hand-written <code>&lt;link rel="icon"&gt;</code>: only the root layout may write a document shell at all, so a hand-written tag is unavailable to every other layout. A <code>public/favicon.ico</code> needs no declaration either way, since it is served at the origin root for crawlers that read no markup.</p>
+    <p>Declare a favicon one of those ways, never as a hand-written <code>&lt;link rel="icon"&gt;</code>: only the root layout may write a document shell at all, so a hand-written tag is unavailable to every other layout. A <code>public/favicon.ico</code> needs no declaration either way, since it is served at the origin root for crawlers that read no markup.</p>
     <h3>opengraph-image.ts and twitter-image.ts</h3>
     <p>These are linked too, the way Next does it: a page that declares no <code>openGraph.images</code> gets <code>og:image</code> pointing at the nearest <code>opengraph-image</code> route above it (absolute against your site URL), and likewise <code>twitter:image</code>. A nested one answers under its segment, so <code>app/blog/opengraph-image.ts</code> is <code>/blog/opengraph-image</code> and covers the blog pages. A page that declares its own image keeps it.</p>
 
