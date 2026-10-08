@@ -238,17 +238,158 @@ export async function readSource(deps, path) {
   }
 }
 
+/** Bound one export's rendered declaration (a long interface body is cut here). */
+const MAX_DECL_LINES = 40;
+/** Bound the hits one lookup returns (overloads plus a JS fallback stay well under this). */
+const MAX_EXPORT_HITS = 8;
+
 /**
- * The `source` tool entry point. Dispatches on the args: `path` reads a file,
- * `query` greps, otherwise (or with `package`) lists the packages. PURE given
- * `deps` (`{ roots, readFile, readdir }`).
+ * Collect the JSDoc block (or the `//` run) that ends on the line right above
+ * `line`, as the lines themselves, or `[]` when the declaration has no comment.
+ * @param {string[]} lines
+ * @param {number} line index of the declaration line
+ * @returns {string[]}
+ */
+function docAbove(lines, line) {
+  let i = line - 1;
+  if (i < 0) return [];
+  if (lines[i].trim().endsWith('*/')) {
+    const end = i;
+    while (i >= 0 && !lines[i].trim().startsWith('/**')) {
+      if (lines[i].trim().startsWith('/*') && !lines[i].trim().startsWith('/**')) return [];
+      i--;
+    }
+    return i < 0 ? [] : lines.slice(i, end + 1);
+  }
+  const end = i;
+  while (i >= 0 && lines[i].trim().startsWith('//')) i--;
+  return i === end ? [] : lines.slice(i + 1, end + 1);
+}
+
+/**
+ * The declaration that starts on `line`: a `function` / `const` / `type`
+ * statement runs to its terminating `;` (a `.js` function stops at its opening
+ * brace, so the body is never printed); an `interface` / `class` runs to the
+ * brace that closes it. Capped at {@link MAX_DECL_LINES}.
+ * @param {string[]} lines
+ * @param {number} line
+ * @param {boolean} isTypes true for a `.d.ts` file
+ * @returns {string[]}
+ */
+function declarationFrom(lines, line, isTypes) {
+  const first = lines[line];
+  const braced = /^export\s+(?:declare\s+)?(?:abstract\s+)?(?:interface|class|enum)\b/.test(first)
+    || (/^export\s+(?:declare\s+)?(?:const|let|var|type)\b/.test(first) && /[{(]\s*$/.test(first) && !/;\s*$/.test(first));
+  const out = [];
+  let depth = 0;
+  // An authored `export const x = (...) => {` is its first line: the value is
+  // the implementation, and the doc above it is the contract.
+  if (!isTypes && /^export\s+(?:const|let|var)\b/.test(first)) return [first];
+  for (let i = line; i < lines.length && out.length < MAX_DECL_LINES; i++) {
+    const l = lines[i];
+    if (!isTypes && /^export\s+(?:async\s+)?function\b/.test(first)) {
+      // A JS function: the signature only, cut at the body's opening brace.
+      const cut = l.indexOf('{');
+      if (cut >= 0 && (i > line || !/^\s*\/\//.test(l))) { out.push(l.slice(0, cut).trimEnd()); return out; }
+      out.push(l);
+      continue;
+    }
+    out.push(l);
+    if (braced) {
+      for (const ch of l) { if (ch === '{') depth++; else if (ch === '}') depth--; }
+      if (depth <= 0 && /}/.test(l) && i > line) return out;
+      if (depth <= 0 && i === line && /}\s*;?\s*$/.test(l)) return out;
+    } else {
+      // Balanced parens and braces matter for a multi-line signature; angle
+      // brackets are not counted (an arrow's `=>` would unbalance them).
+      for (const ch of l) { if (ch === '(' || ch === '{') depth++; else if (ch === ')' || ch === '}') depth--; }
+      if (depth <= 0 && /;\s*$/.test(l)) return out;
+      if (depth <= 0 && !isTypes && /=\s*\(.*\)\s*=>/.test(first) && i === line) return out;
+    }
+  }
+  if (out.length >= MAX_DECL_LINES) out.push(`  ... (cut at ${MAX_DECL_LINES} lines; read the file with \`path\` for the rest)`);
+  return out;
+}
+
+/**
+ * `export` mode: ONE export's signature plus its doc comment, so an agent
+ * checking a contract pays for the declaration instead of the whole file. The
+ * typed declarations win (`index.d.ts` and `src/**\/*.d.ts` under each package
+ * root, where `@webjsdev/server` keeps every export with its doc and
+ * `@webjsdev/core` keeps them beside the source); the authored `.js` is the
+ * fallback when no typed hit exists or none of them carries a doc, since the
+ * JSDoc there is the behaviour contract. Overloads are consecutive hits and
+ * all print. A miss discloses the searched packages (the #837 rule): nothing
+ * resolvable means NOTHING was searched, never "not found".
+ *
+ * @param {{ roots: Array<{ pkg: string, root: string, src: string }>, readFile: Function, readdir: Function }} deps
+ * @param {string} name an export name, e.g. `createAuth`
+ * @param {string} [pkgFilter] one of the framework packages, e.g. `server`
+ * @returns {Promise<string>}
+ */
+export async function lookupExport(deps, name, pkgFilter) {
+  const n = String(name || '').trim();
+  if (!/^[A-Za-z_$][\w$]*$/.test(n)) return 'Pass an export name (letters, digits, _ or $), e.g. `createAuth`.';
+  const roots = pkgFilter ? deps.roots.filter((r) => r.pkg === pkgFilter) : deps.roots;
+  if (!deps.roots.length) {
+    return 'No @webjsdev/* source is resolvable here, so NOTHING was searched (run inside a webjs app or the monorepo). This is not the same as "not found".';
+  }
+  if (!roots.length) {
+    return `@webjsdev/${pkgFilter} is not installed/resolvable here. Resolvable: ${deps.roots.map((r) => r.pkg).join(', ')}.`;
+  }
+  const typesRe = new RegExp(`^export\\s+(?:declare\\s+)?(?:abstract\\s+)?(?:async\\s+)?(?:function\\*?|const|let|var|class|interface|type|enum)\\s+${n.replace(/\$/g, '\\$')}\\b`);
+  const jsRe = new RegExp(`^export\\s+(?:async\\s+)?(?:function\\*?|const|let|var|class)\\s+${n.replace(/\$/g, '\\$')}\\b`);
+  /** @type {Array<{ pkg: string, rel: string, line: number, doc: string[], decl: string[], types: boolean }>} */
+  const hits = [];
+  for (const r of roots) {
+    const typeFiles = walkSource(r.root, deps).filter((f) => /\.d\.(?:ts|mts|cts)$/.test(f));
+    const jsFiles = walkSource(r.src, deps).filter((f) => /\.(?:js|mjs)$/.test(f));
+    for (const [files, isTypes] of [[typeFiles, true], [jsFiles, false]]) {
+      for (const file of files) {
+        let text = '';
+        try { text = await deps.readFile(file, 'utf8'); } catch { continue; }
+        if (!text.includes(n)) continue;
+        const lines = text.split('\n');
+        const rel = relative(r.root, file).split(sep).join('/');
+        for (let i = 0; i < lines.length; i++) {
+          if (!(isTypes ? typesRe : jsRe).test(lines[i])) continue;
+          hits.push({ pkg: r.pkg, rel, line: i + 1, doc: docAbove(lines, i), decl: declarationFrom(lines, i, isTypes), types: isTypes });
+        }
+      }
+    }
+  }
+  const searched = deps.roots.map((r) => r.pkg).join(', ');
+  if (!hits.length) {
+    return `No export named "${n}" in the searched @webjsdev/* packages (${roots.map((r) => r.pkg).join(', ')}${pkgFilter ? `; resolvable: ${searched}` : ''}). Try \`query\` for a substring search, or \`path\` to read a file.`;
+  }
+  // The typed declarations are the answer; the JS doc is added only when the
+  // typed hits say nothing about behaviour (no doc on any of them), or there
+  // is no typed hit at all.
+  const typed = hits.filter((h) => h.types);
+  const typedHasDoc = typed.some((h) => h.doc.length);
+  const shown = typed.length && typedHasDoc ? typed : typed.length ? [...typed, ...hits.filter((h) => !h.types && h.doc.length)] : hits;
+  const out = [];
+  for (const h of shown.slice(0, MAX_EXPORT_HITS)) {
+    out.push(`@webjsdev/${h.pkg} ${h.rel}:${h.line}`);
+    out.push(...h.doc, ...h.decl, '');
+  }
+  if (shown.length > MAX_EXPORT_HITS) out.push(`... (${shown.length - MAX_EXPORT_HITS} more declarations; narrow with \`package\`)`);
+  return out.join('\n').trimEnd();
+}
+
+/**
+ * The `source` tool entry point. Dispatches on the args: `export` looks up one
+ * export's signature and doc, `path` reads a file, `query` greps, otherwise
+ * (or with `package`) lists the packages. PURE given `deps`
+ * (`{ roots, readFile, readdir }`).
  *
  * @param {object} deps
- * @param {{ query?: string, path?: string, package?: string }} [args]
+ * @param {{ export?: string, query?: string, path?: string, package?: string }} [args]
  * @returns {Promise<string>}
  */
 export async function runSourceTool(deps, args) {
   const a = args || {};
+  if (a.export) return lookupExport(deps, a.export, a.package);
   if (a.path) return readSource(deps, a.path);
   if (a.query) return grepSources(deps, a.query);
   return listSources(deps, a.package);

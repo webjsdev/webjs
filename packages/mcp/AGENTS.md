@@ -77,7 +77,12 @@ src/
                          source from node_modules/@webjsdev/*/src (read-only,
                          traversal-guarded via realpath, loads no module).
                          resolveFrameworkRoots locates each package by probing
-                         the require.resolve node_modules dirs.
+                         the require.resolve node_modules dirs. lookupExport
+                         (the tool's `export` arg and `webjs source <Export>`)
+                         returns ONE export's signature plus the doc above it:
+                         the .d.ts declarations under the package root first,
+                         the authored src JSDoc as the fallback, overloads all,
+                         a miss naming the searched packages (#837).
   check-report.js        projectCheck(violations) -> { violations, summary }.
                          The shared shape returned by BOTH the MCP `check` tool
                          and `webjs check --json` (the CLI imports it from

@@ -175,3 +175,110 @@ test('resolveFrameworkRoots: fail-soft when nothing resolves', () => {
   const roots = resolveFrameworkRoots('/nonexistent-xyz', { exists: () => false });
   assert.deepEqual(roots, []);
 });
+
+const { lookupExport } = await import(resolve(REPO, 'packages', 'mcp', 'src', 'mcp-source.js'));
+
+/** A tree with typed declarations beside the authored source, the real layout. */
+function exportTree() {
+  return fakeTree({
+    '/fw/server/index.d.ts': [
+      '/** Auth configuration for `createAuth`. */',
+      'export interface AuthConfig {',
+      '  providers: unknown[];',
+      '  secret: string;',
+      '}',
+      '',
+      '/**',
+      ' * Create the auth system.',
+      ' */',
+      'export declare function createAuth<TUser = unknown>(config: AuthConfig): AuthInstance<TUser>;',
+      '// Overload for a bare store.',
+      'export declare function diskStore(opts?: { dir?: string }): FileStore;',
+      'export declare function diskStore(dir: string): FileStore;',
+      'export declare const DEFAULT_UPLOAD_DIR: string;',
+      '',
+    ].join('\n'),
+    '/fw/server/src/auth.js': [
+      '/**',
+      ' * Create the auth system. Long behaviour notes live here.',
+      ' * @param {AuthConfig} config',
+      ' */',
+      'export function createAuth(config) {',
+      '  return config;',
+      '}',
+      '',
+    ].join('\n'),
+    '/fw/core/src/html.d.ts': 'export function html(strings: TemplateStringsArray, ...values: unknown[]): TemplateResult;\n',
+    '/fw/core/src/html.js': [
+      '/**',
+      ' * Tagged template literal producing a TemplateResult.',
+      ' */',
+      'export function html(strings, ...values) {',
+      '  return { strings, values };',
+      '}',
+      '',
+    ].join('\n'),
+    '/fw/core/src/opt.js': 'export const optimistic = (host, options) => {\n  return host;\n};\n',
+  });
+}
+
+test('lookupExport: a typed declaration with its doc wins; the file body is not printed', async () => {
+  const out = await lookupExport(exportTree(), 'createAuth');
+  assert.match(out, /^@webjsdev\/server index\.d\.ts:10$/m, 'names the package, file and line');
+  assert.match(out, /Create the auth system\.\n \*\/\nexport declare function createAuth<TUser = unknown>\(config: AuthConfig\): AuthInstance<TUser>;/);
+  assert.doesNotMatch(out, /Long behaviour notes/, 'the JS doc is not added when the typed hit carries one');
+  assert.doesNotMatch(out, /providers: unknown/, 'the sibling interface is not printed');
+});
+
+test('lookupExport: an interface runs to its closing brace; a const is one line', async () => {
+  const out = await lookupExport(exportTree(), 'AuthConfig');
+  assert.match(out, /export interface AuthConfig \{\n  providers: unknown\[\];\n  secret: string;\n\}/);
+  assert.doesNotMatch(out, /createAuth</, 'stops at the closing brace');
+  const c = await lookupExport(exportTree(), 'DEFAULT_UPLOAD_DIR');
+  assert.match(c, /export declare const DEFAULT_UPLOAD_DIR: string;/);
+});
+
+test('lookupExport: overloads all print, each with the comment above it', async () => {
+  const out = await lookupExport(exportTree(), 'diskStore');
+  assert.equal((out.match(/export declare function diskStore/g) || []).length, 2);
+  assert.match(out, /Overload for a bare store/);
+});
+
+test('lookupExport: the authored JS doc is the fallback when the typed hit has no doc, cut at the body', async () => {
+  const out = await lookupExport(exportTree(), 'html');
+  assert.match(out, /@webjsdev\/core src\/html\.d\.ts:1\nexport function html\(strings: TemplateStringsArray/);
+  assert.match(out, /Tagged template literal producing a TemplateResult\.\n \*\/\nexport function html\(strings, \.\.\.values\)$/m, 'the JS signature stops at the opening brace');
+  assert.doesNotMatch(out, /return \{ strings, values \}/, 'no function body');
+  const arrow = await lookupExport(exportTree(), 'optimistic');
+  assert.match(arrow, /export const optimistic = \(host, options\) => \{/);
+  assert.doesNotMatch(arrow, /return host/, 'an arrow const stops at its first line');
+});
+
+test('lookupExport: a miss discloses the searched packages; empty roots say nothing was searched (#837)', async () => {
+  const out = await lookupExport(exportTree(), 'nopeNothing');
+  assert.match(out, /No export named "nopeNothing" in the searched @webjsdev\/\* packages \(core, server, cli\)/);
+  const filtered = await lookupExport(exportTree(), 'createAuth', 'core');
+  assert.match(filtered, /No export named "createAuth".*\(core; resolvable: core, server, cli\)/);
+  const none = await lookupExport({ roots: [], readFile: async () => '', readdir: () => [] }, 'createAuth');
+  assert.match(none, /NOTHING was searched/);
+  assert.match(await lookupExport(exportTree(), 'not a name'), /Pass an export name/);
+});
+
+test('lookupExport: the package filter narrows, and runSourceTool dispatches `export`', async () => {
+  const out = await lookupExport(exportTree(), 'createAuth', 'server');
+  assert.match(out, /^@webjsdev\/server index\.d\.ts:10$/m);
+  const viaTool = await runSourceTool(exportTree(), { export: 'createAuth' });
+  assert.equal(viaTool, out, 'runSourceTool routes `export` to lookupExport');
+  assert.match(await runSourceTool(exportTree(), { export: 'createAuth', package: 'core' }), /No export named/);
+});
+
+test('lookupExport: finds createAuth in the real @webjsdev/server typed declarations', async () => {
+  const { existsSync, readdirSync } = await import('node:fs');
+  const { readFile } = await import('node:fs/promises');
+  const roots = resolveFrameworkRoots(resolve(REPO, 'gallery'), { exists: existsSync });
+  const readdir = (d) => readdirSync(d, { withFileTypes: true }).map((e) => ({ name: e.name, isDir: e.isDirectory() }));
+  const out = await lookupExport({ roots, readFile, readdir }, 'createAuth', 'server');
+  assert.match(out, /@webjsdev\/server index\.d\.ts:\d+/);
+  assert.match(out, /export declare function createAuth</);
+  assert.ok(out.split('\n').length < 40, `one export, not the file: ${out.split('\n').length} lines`);
+});

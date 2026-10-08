@@ -9,7 +9,7 @@ Use this skill for end-to-end WebJs app work. It helps you choose the right laye
 
 ## Full Documentation
 
-This skill is the quick guide. When you need the full API reference for a surface, load the matching file in `references/` (listed below). For even deeper framework detail, WebJs ships buildless, so the source you run IS the source you read: look in `node_modules/@webjsdev/{core,server,cli}/` (each package ships its own `AGENTS.md`). The complete hosted docs live at https://webjs.dev/docs.
+This skill is the quick guide. When you need the full API reference for a surface, load the matching file in `references/` (listed below). For even deeper framework detail, WebJs ships buildless, so the source you run IS the source you read: look in `node_modules/@webjsdev/{core,server,cli}/` (each package ships its own `AGENTS.md`). To check ONE export's contract, run `npx webjs source <Export>` (for example `npx webjs source createAuth`, or `--pkg core` to narrow): it prints that export's signature and the doc comment above it from the installed package, so you read the declaration instead of the file. The MCP `source` tool does the same with `export`. Open the source file when the question is about behaviour the signature does not state. The complete hosted docs live at https://webjs.dev/docs.
 
 ## What WebJs Is
 
