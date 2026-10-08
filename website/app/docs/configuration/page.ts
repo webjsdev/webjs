@@ -74,8 +74,6 @@ webjs doctor --strict   # also fail on EVERY remaining warning, not just hard fa
 
     <p>One more check, <code>WORKSPACE_OVERRIDES</code>, warns when the app is a member of an npm or bun workspace and its own <code>package.json</code> carries <code>overrides</code> (or <code>resolutions</code>): package managers honour those only at the workspace root, so the block is silently ignored there. Move it into the root <code>package.json</code>.</p>
 
-    <p><code>DARK_THEME_UNREACHABLE</code> warns when the app defines colour tokens (<code>--background</code> / <code>--foreground</code> in the root layout, <code>public/*.css</code> or <code>styles/**.css</code>) with a light value only and nothing applies a dark half: no <code>light-dark()</code>, no <code>@media (prefers-color-scheme: dark)</code> rule, no theme script in the root layout, so the OS dark setting is ignored and any <code>.dark</code> block is dead CSS. A design convention rather than a runtime break, so it is a doctor check and not a <code>webjs check</code> rule; the scaffold gates it <code>error</code> because its <code>AGENTS.md</code> mandates <code>light-dark()</code> tokens.</p>
-
     <p>And <code>APP_ICON</code> warns while the app's favicon is still the placeholder <code>app/icon.svg</code> the scaffold shipped. Replace it with the app's own icon (see <a href="/docs/metadata-routes#app-icon">App icon and manifest</a>).</p>
 
     <h3>webjs audit</h3>

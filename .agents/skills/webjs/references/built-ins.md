@@ -298,8 +298,6 @@ Two guarantees worth knowing. A result that could not check (a network or toolch
 
 `APP_ICON` warns while the favicon is still the scaffold's placeholder `app/icon.svg` (marked `data-webjs-placeholder`). Replace it with the app's own icon (`references/routing-and-pages.md`, "App icon and manifest").
 
-`DARK_THEME_UNREACHABLE` warns when the app defines colour tokens with a light value only and nothing applies a dark half: no `light-dark()`, no `@media (prefers-color-scheme: dark)` rule, no theme script in the root layout. The scaffold gates it `error` in its `package.json` because its AGENTS.md mandates `light-dark()` tokens; the fix is the token block in `references/styling.md`.
-
 ### Dependency audit allowlist
 
 `webjs audit` runs `npm audit` or `bun audit` (by the nearest lockfile, so a workspace member uses the root's) and fails on any advisory at or above `webjs.audit.level` (default `high`) that `webjs.audit.ignore` does not list. The scaffold's `Security: dependency audit` CI step runs it.

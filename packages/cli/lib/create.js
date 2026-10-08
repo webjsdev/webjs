@@ -585,13 +585,9 @@ export async function scaffoldApp(name, cwd, opts = {}) {
       // layout already writes asset(), so a fresh app is green on day one.
       // Two checks are fatal with no entry here at all, NODE_VERSION and
       // TSCONFIG_ERASABLE, because either would 500 the app at runtime;
-      // DARK_THEME_UNREACHABLE is at error too: AGENTS.md mandates light-dark()
-      // tokens, the generated layout writes them, and a layout that drops them
-      // leaves the stylesheet's .dark block dead and the OS setting ignored
-      // (#1628); elsewhere it is a design convention and stays a warning.
-      // Everything else keeps its default warn. Add a code with "off" to
+      // everything else keeps its default warn. Add a code with "off" to
       // silence it, or "error" to make it fatal too.
-      doctor: { gate: { UNMARKED_ASSET_LINKS: 'error', DARK_THEME_UNREACHABLE: 'error' } },
+      doctor: { gate: { UNMARKED_ASSET_LINKS: 'error' } },
       // The dependency audit's allowlist (#1492), the ONE place an accepted
       // advisory is listed, each with the reason it is safe. `webjs audit`
       // (the CI step below) fails on every other advisory at `level` or above,
