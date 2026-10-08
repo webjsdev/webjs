@@ -46,7 +46,8 @@ cross-origin access use the `cors()` middleware from `@webjsdev/server`; with
 
 Run `npm run ci` and fix what it reports. It runs every gate declared under
 `webjs.ci` in `package.json` (`webjs check`, `webjs doctor`, `webjs typecheck`,
-a dependency audit, then the test layers), and the GitHub workflow runs the
+a dependency audit, then the test layers for the endpoints and modules you
+built), and the GitHub workflow runs the
 same list; `.agents/rules/workflow.md` has what each gate checks. While
 iterating, `npm run ci -- --only Tests` runs one layer.
 

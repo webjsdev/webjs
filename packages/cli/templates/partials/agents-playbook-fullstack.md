@@ -95,7 +95,8 @@ base-class factory (the skill's "Core WebJs Rules" 11). Use the shorthand for pr
 
 Run `npm run ci` and fix what it reports. It runs every gate declared under
 `webjs.ci` in `package.json` (`webjs check`, `webjs doctor`, `webjs typecheck`,
-a dependency audit, then the test layers), and the GitHub workflow runs the
+a dependency audit, then the server, browser, and e2e test layers for the
+features you built), and the GitHub workflow runs the
 same list; `.agents/rules/workflow.md` has what each gate checks. While
 iterating, `npm run ci -- --only Tests` runs one layer. Then
 `npm run css:build` (compile Tailwind).
