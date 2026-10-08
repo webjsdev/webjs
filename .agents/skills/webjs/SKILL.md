@@ -104,12 +104,12 @@ Common bundles:
 1. **Classify the change.** Route contract, data model, server mutation, auth, or only UI?
 2. **Start from the server.** Add the page/route and its server action or query before wiring interactive UI. A page render or a `<form>` POST should already return correct HTML before any component hydrates.
 3. **Put code in the narrowest owner.** Route-local first (`modules/<feature>/`), promote to `lib/` or `components/` only when reuse is real.
-4. **Keep server-only code behind `.server.ts`** (Core WebJs Rules 1 and 2).
+4. **Keep server-only code behind `.server.ts`.** The DB driver, secrets, and `node:*` never belong in a page, layout, or component.
 5. **Add interactivity per behaviour.** Reach for a component (and a signal or `@event`) only where the UI is genuinely interactive. A display-only component is elided from the browser. Then wrap the interactive part and STOP: the static markup around it stays in the page, where it costs nothing.
 6. **Validate input at the boundary.** Declare `export const validate` on an action; the RPC and `route()` boundaries run it.
 7. **Default mutations to optimistic UI** where the client can predict the result (`optimistic()` from `@webjsdev/core`).
-8. **Type every boundary from its source, never `unknown` or `any`.** The row type comes from the schema (`typeof todos.$inferSelect`), the action's input from a named `interface` and its result from `ActionResult<T>`, the routing files from `PageProps` / `LayoutProps` / `RouteHandlerContext`. `unknown` belongs on a payload nothing has vouched for yet that the next line narrows, and on a parameter of your own helper that forwards into an `html` template hole. Everywhere else, including a layout's `children`, it is a missing type. Carry a row type into a shipping component with `import type` (erased before the browser sees it). Nothing enforces this (both spellings are valid TypeScript, so `webjs check` and `tsc` pass either way), which is why it is written down. See `references/typescript.md`.
-9. **Test the narrowest meaningful layer**, and look at any UI change in a real browser (see Testing Defaults).
+8. **Type every boundary from its source, never `unknown` or `any`.** The row type comes from the schema (`typeof todos.$inferSelect`), the action's input from a named `interface` and its result from `ActionResult<T>`, the routing files from `PageProps` / `LayoutProps` / `RouteHandlerContext`. `unknown` belongs on a payload nothing has vouched for yet that the next line narrows, and on a parameter of your own helper that forwards into an `html` template hole. Everywhere else, including a layout's `children`, it is a missing type. See `references/typescript.md`.
+9. **Test the narrowest meaningful layer**, and render the app in a real browser for any UI change (static checks do not catch a collapsed layout).
 
 ## Project Layout
 
@@ -137,7 +137,7 @@ App-internal imports use the `#` root alias (`import { db } from '#db/connection
 ## Core WebJs Rules (invariants)
 
 1. Server-only code lives in `.server.ts`, `route.ts`, or `middleware.ts`. Never in a page, layout, or component (it crashes the browser at module load).
-2. `'use server'` exports are `async` functions returning serializer-safe values, callable from browser code as RPC. Files without `'use server'` are server-only utilities: reach them only from `'use server'` actions, `route.ts`, or middleware. Never add `'use server'` to a file only other server code imports (the DB connection, the schema).
+2. `'use server'` exports are `async` functions returning serializer-safe values. Files without `'use server'` are server-only utilities.
 3. Custom element tag names contain a hyphen. Pass the tag to `Class.register('tag-name')`.
 4. Event (`@`), property (`.`), and boolean (`?`) holes in `html` are UNQUOTED: `@click=${fn}`, never `@click="${fn}"`.
 5. Signals are the default state primitive. Import `signal` / `computed` from `@webjsdev/core`, read via `signal.get()` inside `render()`. The base-class factory `WebComponent({ ... })` is only for values riding an HTML attribute or arriving via SSR hydration.
@@ -147,7 +147,7 @@ App-internal imports use the `#` root alias (`import { db } from '#db/connection
 9. No backtick characters inside an `html\`...\`` body, even in comments (it closes the literal and 500s).
 10. TypeScript must be erasable (`erasableSyntaxOnly: true`): no `enum`, no value `namespace`, no constructor parameter properties, no legacy decorators.
 11. Reactive properties are declared ONLY through the base-class factory `extends WebComponent({ count: Number })`. Never a `static properties` block, never a class-field initializer (it clobbers the reactive accessor).
-12. A form that writes binds its action: `<form action=${importedAction}>`, or a per-button `<button formaction=${importedAction}>`. A bound submitter is SELF-SUFFICIENT (#1307): the renderer puts `formmethod="post"` and `formenctype` on the button itself, so it needs no bound form around it and works inside any form or none. Quoted bindings, non-submit controls, `<input type="submit">` (the identity needs its `value`, which is also its label, so use a `<button>`), submitter `name` / `value` / `form` / static `formaction` attributes (the identity IS the button's name/value pair, so both halves are spoken for), a `.prop` spelling of any of those, `action=${fn}` off a `<form>`, a bound form with `method="get"` (a GET sends no body for the action to read), a BOUND submitter's own non-post `formmethod` or unparseable `formenctype`, and a non-action function all throw. A PLAIN button's own `formmethod` / `formenctype` is a legal native override and is left alone. A page has no `action` export, so a bare `<form method="post">` is a 405.
+12. A form that writes binds its action: `<form action=${importedAction}>`, or a per-button `<button formaction=${importedAction}>`. A bound submitter is SELF-SUFFICIENT (#1307): the renderer puts `formmethod="post"` and `formenctype` on the button itself, so it needs no bound form around it and works inside any form or none. Quoted bindings, non-submit controls, `<input type="submit">` (the identity needs its `value`, which is also its label, so use a `<button>`), submitter `name` / `value` / `form` / static `formaction` attributes, a `.prop` spelling of any of those, `action=${fn}` off a `<form>`, a bound form with `method="get"`, a BOUND submitter's own non-post `formmethod` or unparseable `formenctype`, and a non-action function all throw. A PLAIN button's own `formmethod` / `formenctype` is a legal native override and is left alone. A page has no `action` export, so a bare `<form method="post">` is a 405.
 
 ## Export Map
 
@@ -272,12 +272,18 @@ Success is a 303 (PRG); failure re-renders the page at 422 with the result on `a
 
 ## Common Mistakes To Avoid
 
-The invariants above are not repeated here; this list is the mistakes they do not already name.
-
+- Treating a page or layout like a React component and expecting its markup to hydrate. It runs server-only; put interactivity in a component.
 - Promoting a whole page section to a component so that one control inside it can be interactive. The island should wrap the control and the state it reads. An oversized island ships its own JS AND un-elides every display-only component inside it, so the cost is not linear in what you moved.
+- Importing a `.server.ts` utility (no `'use server'`) directly into a shipping component. Its browser stub throws at load; reach it through a `'use server'` action.
+- Using a `static properties` block or a class-field initializer for reactive props instead of the `WebComponent({ ... })` factory.
+- Quoting an event / property / boolean hole (`@click="${fn}"`).
 - Writing `fetch()` to call your own server instead of importing the action.
+- Writing a bare `<form method="post">` and expecting a page `action` export to catch it. There is no such export; bind the action with `action=${fn}` or the submission is a 405.
+- Putting a submitter's `formaction=${fn}` on anything that is not a submit control, or on a button carrying its own `name` / `value`. The identity IS the button's name/value pair, so both halves are spoken for.
+- Writing `formmethod="get"` or `formenctype="text/plain"` on a button that BINDS an action. Neither can carry that action's body, so the pair contradicts itself and throws. On a button that binds nothing it is a legal native override and is honoured.
 - Binding an action whose file declares `export const method = 'GET'`. Form-bound actions strictly require POST (default). Binding a GET action to a form is a 405 at runtime and a `webjs check` error (`form-action-not-a-get-action`).
 - Leaving read-only RPC server query actions as default `POST`. Always export `export const method = 'GET'` for RPC data queries so arguments ride URL params, ETags/304 caching work, and CSRF is safely bypassed.
+- Writing `method="get"` on a bound `<form action=${fn}>`. WebJs supplies `method="post"` and `formenctype` automatically, and a bound form declaring `method="get"` is REFUSED at render (a thrown error, not a warning), because a GET sends no body for the action to read.
 - Throwing `redirect()` / `notFound()` inside a `route.ts` handler (uncaught 500). Return a `Response` there.
 - A placeholder first paint that fetches in `connectedCallback`. SSR does not call `connectedCallback`; put first-paint data in the constructor (server-known inputs) or use `async render()`.
 - A browser global (`window`, `document`, `localStorage`) in the constructor or `render()`. It throws at SSR; do browser-only work in `connectedCallback`.

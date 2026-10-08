@@ -44,12 +44,20 @@ cross-origin access use the `cors()` middleware from `@webjsdev/server`; with
 
 ### 5. Verify before you call it done
 
-Run `npm run ci` and fix what it reports. It runs every gate declared under
-`webjs.ci` in `package.json` (`webjs check`, `webjs doctor`, `webjs typecheck`,
-a dependency audit, then the test layers for the endpoints and modules you
-built), and the GitHub workflow runs the
-same list; `.agents/rules/workflow.md` has what each gate checks. While
-iterating, `npm run ci -- --only Tests` runs one layer.
+Run `npm run ci` and fix what it reports. It is one command for every gate,
+the step list declared in `package.json` under `webjs.ci`, with a result line
+per step:
+
+- `webjs check` (correctness: no browser-import or boundary violation).
+- `webjs doctor` (project health). It fails on whatever `package.json`
+  `webjs.doctor.gate` marks `error`, plus the two hard toolchain checks that
+  are fatal with no gate entry, `NODE_VERSION` and `TSCONFIG_ERASABLE`.
+- `webjs typecheck` (zero type errors).
+- A dependency audit.
+- The test layers for the endpoints and modules you built.
+
+The GitHub workflow runs the same list, so a green local run predicts CI.
+While iterating, `npm run ci -- --only Tests` runs one layer.
 
 Then boot `npm run dev` and probe each endpoint for the expected status and JSON
 shape.
