@@ -36,7 +36,16 @@ This is what separates a working app from a broken one.
 
 Derive the type at every boundary from its source. Never reach for `any`, and
 never `unknown` where a real type exists. The rule is step 8 of the skill's "Default
-Workflow"; the full ladder, with an end-to-end example, is
+Workflow"; the forms to reach for:
+
+- A database row: `typeof table.$inferSelect` (`$inferInsert` for a write),
+  carried into a shipping component with `import type`.
+- An action's input: a named `interface`. Its result: `ActionResult<T>`.
+- Routing files: `PageProps<'/blog/[slug]'>`, `LayoutProps`,
+  `RouteHandlerContext`. `npx webjsdev types` writes the typed `Route` union.
+- A reactive property: `prop<Student>(Object)`, `prop<Tag[]>(Array)`.
+
+The full ladder, with an end-to-end example, is
 `.agents/skills/webjs/references/typescript.md`.
 
 Keep server-only code (database drivers, secrets, `node:*` builtins) in
