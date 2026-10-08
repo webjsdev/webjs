@@ -191,26 +191,21 @@ test('the monorepo root itself refuses instead of reporting cross-app findings',
   assert.doesNotMatch(r.stdout, /violation\(s\) found/);
 });
 
-test('the derived app list matches the apps the root local CI list checks (#1474)', async () => {
-  // The gate is the root `webjs.ci` list (#1474), not the GitHub workflow: one
-  // `webjs check (<app>)` step per in-repo app, each a `cd <dir> && node
-  // .../webjs.js check`. The refusal's derived list and that step set must be
-  // the same apps, which is what replaces a `--workspaces` flag.
-  const pkg = JSON.parse(await readFile(join(REPO, 'package.json'), 'utf8'));
-  const walk = (nodes) => nodes.flatMap((n) => (n.steps ? walk(n.steps) : [n]));
-  const checkSteps = walk(pkg.webjs.ci.steps).filter((s) => /^webjs check \(/.test(s.title || ''));
-  assert.ok(checkSteps.length > 0, 'the root webjs.ci list has webjs check steps');
-  const fromCi = checkSteps
-    .map((s) => /^cd (\S+) &&/.exec(s.run)?.[1])
-    .filter(Boolean)
-    .sort();
-  assert.equal(fromCi.length, checkSteps.length, 'every check step cds into its app');
+test('the derived app list matches the apps the CI workflow checks (#1474, #1627)', async () => {
+  // The gate is GitHub Actions: the Conventions job in `.github/workflows/ci.yml`
+  // runs `webjs check` on each in-repo app through one `for app in ...; do`
+  // loop. The refusal's derived list and that loop's app set must be the same
+  // apps, which is what replaces a `--workspaces` flag.
+  const workflow = await readFile(join(REPO, '.github', 'workflows', 'ci.yml'), 'utf8');
+  const loops = [...workflow.matchAll(/for app in ([^;]+); do\n\s+echo "::group::webjs check /g)];
+  assert.equal(loops.length, 1, 'ci.yml has exactly one `webjs check` loop over the in-repo apps');
+  const fromCi = loops[0][1].trim().split(/\s+/).sort();
 
   const { workspaceApps } = await findCheckTarget(REPO);
   assert.deepEqual(
     workspaceApps,
     fromCi,
-    'the apps the refusal names must be the apps local CI checks',
+    'the apps the refusal names must be the apps CI checks',
   );
 });
 
