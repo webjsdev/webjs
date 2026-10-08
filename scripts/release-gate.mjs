@@ -51,7 +51,7 @@ function run(cmd, argv, opts = {}) {
   return { ok: r.status === 0, out: `${r.stdout || ''}${r.stderr || ''}` };
 }
 
-/** Pack core, server and cli as npm would publish them. */
+/** Pack core, server, cli and mcp as npm would publish them (cli depends on mcp). */
 function packCandidate() {
   // Build core's dist from THIS checkout (a linked worktree has it as a symlink
   // into another checkout, which `npm pack` would silently leave out).
@@ -60,7 +60,7 @@ function packCandidate() {
   execFileSync('node', ['scripts/build-framework-dist.js'], { cwd: ROOT, stdio: 'pipe' });
   const dir = mkdtempSync(join(tmpdir(), 'webjs-gate-pack-'));
   const tarballs = {};
-  for (const pkg of ['core', 'server', 'cli']) {
+  for (const pkg of ['core', 'server', 'cli', 'mcp']) {
     const out = execFileSync('npm', ['pack', '--silent', '--pack-destination', dir], { cwd: join(ROOT, 'packages', pkg), encoding: 'utf8' }).trim().split('\n').pop();
     tarballs[`@webjsdev/${pkg}`] = join(dir, out);
   }
