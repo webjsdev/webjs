@@ -6,7 +6,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { register, lookup, primeModuleUrl, isLazy, tagOf, allTags } from '../../index.js';
+import { lookup, primeModuleUrl, isLazy, tagOf, allTags } from '../../index.js';
+import { register } from '../../src/registry.js';
 
 class Base {}
 class A extends Base {}

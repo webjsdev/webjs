@@ -457,9 +457,9 @@ export function wrapHead(opts) {
 
   if (m.description) metaTags.push(`<meta name="description" content="${escapeAttr(m.description)}">`);
 
-  // viewport: support string form (legacy), `metadata.viewport` object form,
-  // and the new Next.js 14+ `export const viewport = { … }` shape captured
-  // into `_viewport` by collectMetadata.
+  // viewport: the `metadata.viewport` string or object form, or the Next.js
+  // 14+ `export const viewport = { … }` shape captured into `_viewport` by
+  // collectMetadata.
   let viewportStr = '';
   if (typeof m.viewport === 'string') {
     viewportStr = m.viewport;

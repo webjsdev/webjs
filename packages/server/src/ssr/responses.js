@@ -16,19 +16,15 @@ import { escapeAttr, escapeHtml } from './escape.js';
  * scope. Delegates to `cspNonce()`, which returns the per-request nonce
  * the handler MINTED when CSP is enabled (issue #233), or, as a fallback,
  * the nonce parsed from an inbound `Content-Security-Policy` request
- * header (the legacy consume-only path). Using the same source as the
+ * header (a proxy that mints its own). Using the same source as the
  * `Content-Security-Policy` response header is what guarantees the inline
  * boot script, the importmap, the modulepreload hints, and the header all
- * carry the EXACT same nonce: one minted value, no drift.
+ * carry the EXACT same nonce: one minted value, no drift. The value comes
+ * from the request-scoped AsyncLocalStorage store, so it takes no request.
  *
- * `req` is accepted (and ignored) so existing call sites stay unchanged;
- * the value comes from the request-scoped AsyncLocalStorage store, not
- * the argument.
- *
- * @param {Request} [_req]
  * @returns {string | undefined}
  */
-export function getNonce(_req) {
+export function getNonce() {
   return cspNonce() || undefined;
 }
 

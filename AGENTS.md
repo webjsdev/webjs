@@ -271,7 +271,6 @@ The bare `@webjsdev/core` specifier resolves to a BROWSER bundle dropping server
 | `html` / `css` | Tagged template literals. `css` goes in `static styles`. |
 | `WebComponent` | Base class for interactive components. Called as `WebComponent({ ... })` it returns a typed base declaring reactive properties. |
 | `prop(type?, opts?)` | Declares one reactive property inside the `WebComponent({ ... })` factory with options (`reflect`, `state`, `attribute`, `default`, `converter`, `hasChanged`) and a narrowable TS type (`prop<Student>(Object)`). |
-| `register(tag, C)` | Tag binding. Auto-called by `Class.register('tag')`. |
 | `render(v, el)` | Client-side render into a DOM element. |
 | `renderToString` | Server-side async render to HTML with DSD (from `/server`). |
 | `notFound()` / `redirect(url[, status])` | Throw to return 404, or a redirect. No-status default is convention-picked at the catching site: 302 for a GET page-render gate, 307 (method-preserving) for a server-action redirect. Override with `redirect(url, 308)` or `redirect(url, { status })`. **NEVER** throw `redirect()` inside API route handlers (`route.ts`), as they must return a standard `Response.redirect(url, 303)` response object instead. |

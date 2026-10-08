@@ -313,9 +313,3 @@ export function parseWindow(w) {
   const mult = { ms: 1, s: 1000, m: 60_000, h: 3_600_000 }[unit];
   return n * (mult || 1);
 }
-
-/** Testing hook: reset the default store (for unit tests). */
-export function _resetRateLimits() {
-  // With the cache store, there's nothing to reset here: the store
-  // handles its own state. This function exists for API compatibility.
-}

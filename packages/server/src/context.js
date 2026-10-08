@@ -178,9 +178,9 @@ setCspNonceProvider(() => {
   return match ? match[1] : '';
 });
 
-// Re-export for backwards-compat: callers that imported cspNonce from
-// @webjsdev/server still work. New code should import from
-// @webjsdev/core for browser-isomorphism.
+// `cspNonce` is also reachable from @webjsdev/server for server-only modules
+// (route handlers, actions); a layout or page imports it from @webjsdev/core
+// so the module stays browser-isomorphic.
 export { cspNonce };
 
 /**

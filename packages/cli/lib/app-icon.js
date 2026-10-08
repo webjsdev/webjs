@@ -43,13 +43,3 @@ export function appManifest(name) {
     icons: [{ src: '/icon.svg', sizes: 'any', type: 'image/svg+xml' }],
   }, null, 2) + '\n';
 }
-
-/**
- * Whether an SVG is the WebJs brand mark earlier scaffolds shipped as
- * `public/favicon.svg` (a rounded square with the gallery's grey gradient).
- * Apps made before the placeholder still serve it as their favicon.
- * @param {string} svg
- */
-export function isLegacyBrandFavicon(svg) {
-  return /aria-label="WebJs"/.test(svg) && /<linearGradient id="wj"/.test(svg);
-}

@@ -126,9 +126,10 @@ if (!isBrowser) {
  * ------------------------------------------------------------------ */
 
 /**
- * @deprecated Low-level internal: prefer `customElements.define(tag, cls)`.
- * Kept as a minimal wrapper for back-compat with any framework code that
- * calls it directly.
+ * Register a component class under a tag. The primitive behind
+ * `Class.register('tag')` (the app-facing idiom): `customElements.define` in
+ * the browser, the SSR registry on the server. Reachable as
+ * `@webjsdev/core/registry` for framework tooling; apps use the static method.
  *
  * @param {string} tag
  * @param {typeof import('./component.js').WebComponent} cls

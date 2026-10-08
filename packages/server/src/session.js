@@ -235,7 +235,7 @@ export function storeSessionStorage(opts = {}) {
   };
 }
 
-// Backwards-compatible aliases
+// Short aliases
 export const cookieSession = cookieSessionStorage;
 export const storeSession = storeSessionStorage;
 

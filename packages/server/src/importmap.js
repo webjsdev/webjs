@@ -296,11 +296,9 @@ export function vendorIntegrityFor(url) {
  * Initialized to the two minimum-safe defaults (the bare specifier
  * pointing at the browser source-mode entry and the catch-all prefix
  * pointing at `src/`) so any consumer that calls `buildImportMap()`
- * before `setCoreInstall` runs still gets a usable map. Pre-#118 the
- * legacy `coreMappings` were always derived from a boolean and so
- * could not be empty; this keeps that fail-open posture for embedded
- * SSR test helpers and one-shot tooling that imports `importmap.js`
- * without booting `dev.js`.
+ * before `setCoreInstall` runs still gets a usable map: a fail-open
+ * posture for embedded SSR test helpers and one-shot tooling that
+ * imports `importmap.js` without booting `dev.js`.
  *
  * @type {Record<string, string>}
  */
@@ -329,9 +327,7 @@ let _coreEntries = {
  * rebuilds today; if `@webjsdev/core/package.json` is edited in a
  * long-running dev session (e.g. workspace dev that runs a fresh
  * `npm run build:dist`), the derivation is refreshed on next server
- * restart, not on the watcher tick. Pre-#118 the legacy
- * `setCoreDistMode` had the same behaviour: only the dist-presence
- * boolean was watched, not the package.json itself.
+ * restart, not on the watcher tick.
  *
  * Like `setVendorEntries`, the importmap-hash is recomputed eagerly
  * so `importMapHash()` stays synchronous on the per-request SSR

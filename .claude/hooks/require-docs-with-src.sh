@@ -35,8 +35,7 @@
 
 set -euo pipefail
 
-# WEBJS_NO_DOC_REMINDER kept for back-compat with the pre-gate name.
-if [ "${WEBJS_NO_DOC_GATE:-}" = "1" ] || [ "${WEBJS_NO_DOC_REMINDER:-}" = "1" ]; then
+if [ "${WEBJS_NO_DOC_GATE:-}" = "1" ]; then
   exit 0
 fi
 

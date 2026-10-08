@@ -830,7 +830,7 @@ async function ssrBoundaryHtml(file, heading, opts) {
       moduleUrls = [];
     }
   }
-  const nonce = opts.req ? getNonce(opts.req) : undefined;
+  const nonce = getNonce();
   return wrapInDocument(body, {
     metadata: { title: heading.replace(/^\d+:\s*/, '') },
     moduleUrls,
@@ -900,7 +900,7 @@ async function ssrNotFoundHtml(notFoundFile, opts) {
       moduleUrls = [];
     }
   }
-  const nonce = opts.req ? getNonce(opts.req) : undefined;
+  const nonce = getNonce();
   return wrapInDocument(body, {
     metadata: { title: 'Not found' },
     moduleUrls,
@@ -1194,7 +1194,7 @@ export async function ssrPage(route, params, url, opts) {
       ),
     );
     // Extract CSP nonce from request headers (if present).
-    const nonce = opts.req ? getNonce(opts.req) : undefined;
+    const nonce = getNonce();
     const wrapOpts = {
       metadata,
       moduleUrls,
@@ -1342,7 +1342,7 @@ export async function ssrPage(route, params, url, opts) {
     // Error paths still need to honor the request's CSP nonce so the
     // error page's boot scripts (when moduleUrls is non-empty) and
     // the meta csp-nonce tag both pass strict-CSP enforcement.
-    const errNonce = opts.req ? getNonce(opts.req) : undefined;
+    const errNonce = getNonce();
     // One dedup set for the whole 500 path: the walk below and the
     // global-error attempt after it collapse REPEATS of the same cause (a
     // shared layout that fails every attempt) while still reporting a

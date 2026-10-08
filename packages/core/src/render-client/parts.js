@@ -453,8 +453,8 @@ export function applyElement(part, value) {
       }
     }
     partAny.__refElement = part.el;
-    // Keep the legacy `lastTarget` field in sync for clearInstance /
-    // disposeInstance which read it for template-disposal cleanup.
+    // Keep `lastTarget` in sync for clearInstance / disposeInstance, which
+    // read it for template-disposal cleanup.
     part.lastTarget = nextTarget;
   }
 }

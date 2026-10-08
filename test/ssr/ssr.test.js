@@ -854,7 +854,7 @@ test('metadata.viewport: user-scalable=false emits user-scalable=no', () => {
   assert.match(html, /user-scalable=no/);
 });
 
-test('metadata.viewport: string form still works (legacy)', () => {
+test('metadata.viewport: string form is emitted verbatim', () => {
   const html = render({ viewport: 'width=device-width,initial-scale=1.0' });
   assert.match(html, /<meta name="viewport" content="width=device-width,initial-scale=1\.0">/);
 });

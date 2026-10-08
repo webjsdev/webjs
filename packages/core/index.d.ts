@@ -80,7 +80,7 @@ export { html, isTemplate, MARKER } from './src/html.js';
 // docs/website can annotate a value as `TemplateResult` (#772).
 export type { TemplateResult } from './src/html.js';
 export { css, isCSS, adoptStyles, stylesToString } from './src/css.js';
-export { register, lookup, lookupModuleUrl, isLazy, allTags, primeModuleUrl, tagOf } from './src/registry.js';
+export { lookup, lookupModuleUrl, isLazy, allTags, primeModuleUrl, tagOf } from './src/registry.js';
 export { renderToString, renderToStream } from './src/render-server.js';
 export { render } from './src/render-client.js';
 export { escapeText, escapeAttr } from './src/escape.js';
@@ -152,7 +152,7 @@ export function optimistic<State>(
 ): OptimisticState<State, State>;
 
 
-// Legacy Imperative Signature (Signal-based rollback)
+// Imperative signature (signal-based rollback)
 export function optimistic<T, R>(
   signal: { get(): T; set(v: T): void },
   value: T,
