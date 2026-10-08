@@ -18,7 +18,6 @@ import {
   checkNoServerEnvInComponents,
   checkShellInNonRootLayout,
 } from './rules-routing.js';
-import { checkDarkThemeUnreachable } from './rules-styling.js';
 import {
   checkErasableTypescriptOnly,
   checkNoNonErasableTypescript,
@@ -109,7 +108,6 @@ export async function checkConventions(appDir) {
   await checkServerImportInBrowserModule(appDir, violations);
   checkNoMissingLocalImport(appDir, files, violations);
   checkFormActionNotAGetAction(appDir, files, violations);
-  await checkDarkThemeUnreachable(appDir, files, violations);
 
   return violations;
 }

@@ -193,7 +193,7 @@ Whichever form you use, a token nothing references is dropped in both, so an unu
 </style>
 ```
 
-`light-dark()` is a native CSS function (CSS Color 5, Baseline 2024), not a library, so nothing to import. A single-theme app drops the `[data-theme]` rules and gives each token one colour. `webjs check` enforces the floor with `dark-theme-unreachable`: an app whose tokens have a light value only, with no `light-dark()`, no `prefers-color-scheme` rule and no theme script in the root layout, fails the check, because the scaffold stylesheet's `.dark` block would then be dead CSS and the OS dark setting ignored.
+`light-dark()` is a native CSS function (CSS Color 5, Baseline 2024), not a library, so nothing to import. A single-theme app drops the `[data-theme]` rules and gives each token one colour. `webjs doctor` reports the floor as `DARK_THEME_UNREACHABLE` (the scaffold gates it `error`): an app whose tokens have a light value only, with no `light-dark()`, no `prefers-color-scheme` rule and no theme script in the root layout, because the scaffold stylesheet's `.dark` block would then be dead CSS and the OS dark setting ignored.
 
 **A manual theme toggle** writes `data-theme` on `<html>` (`light` / `dark`, or removes it for "follow the OS"). If you use `@webjsdev/ui` components, ALSO keep the `.dark` class in sync (the ui kit keys its own tokens off `.dark`), and apply the saved choice in a tiny inline `<script>` in the layout head so there is no first-paint flash. Verify dark mode in a real browser. Light mode passing proves nothing about dark.
 
