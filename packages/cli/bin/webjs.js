@@ -99,6 +99,8 @@ const USAGE = `webjs commands:
   webjs elision [--json] [--verify]               Report which component modules are elided and why each shipped one ships;
                                                   --verify diffs SSR output with elision on vs off (exits non-zero on a divergence)
   webjs mcp                                       Start the read-only MCP server (routes / actions / components / elision / check)
+  webjs source <Export> [--pkg <name>]            Print the signature plus doc comment of one export from the installed @webjsdev/*
+                                                  packages (typed declarations first, the authored JSDoc as the fallback); exit 1 on a miss
   webjs doctor [--json] [--strict]                Verify project health (Node, tsconfig, env, vendor pins, importmap coherence, @webjsdev versions, git hook, page/layout elision, component elision, un-versioned stylesheet links).
                                                   --json emits the structured results (with stable codes). --strict additionally fails on every remaining warning.
                                                   Per-check severity is CONFIG: map a code to off/warn/error under "webjs": { "doctor": { "gate": {...} } }
@@ -325,6 +327,19 @@ const HELP = {
     usage: 'webjs mcp',
     summary: 'Start the read-only MCP server (routes / actions / components / elision / check + a docs/source knowledge layer).',
     examples: ['webjs mcp'],
+  },
+  source: {
+    usage: 'webjs source <Export> [--pkg <name>]',
+    summary: 'Print one framework export\'s signature plus the doc comment above it, read from the installed @webjsdev/* packages (the typed declarations first, the authored JSDoc when none carries a doc; every overload). The cheap way to check a contract before opening the source file.',
+    options: [
+      { flag: '--pkg <name>', description: 'Search one package only: core, server, cli, ui or intellisense.' },
+    ],
+    notesTitle: 'Exit status',
+    notes: [
+      '0 when at least one declaration printed; 1 on a miss (the message names the packages that were searched).',
+      'The read-only MCP `source` tool returns the same text for { export: "<Export>" }.',
+    ],
+    examples: ['webjs source createAuth', 'webjs source optimistic --pkg core', 'webjs source getFileStore'],
   },
   version: {
     usage: 'webjs version',
@@ -1967,6 +1982,29 @@ Full docs: https://webjs.dev/docs`);
         `\n` +
         `  --from PROVIDER     CDN to resolve through. One of: ${[...SUPPORTED_PROVIDERS].join(', ')}. Default: jspm.`);
       process.exit(1);
+    }
+    case 'source': {
+      // One export's signature plus its doc comment from the installed
+      // @webjsdev/* packages (#1623): the same lookup the MCP `source` tool
+      // runs for its `export` arg, so a Bash-only agent (no MCP) checks a
+      // contract for the price of the declaration instead of the whole file.
+      // Read-only: it reads the resolved package roots and loads no module.
+      const name = rest.find((a) => !a.startsWith('--'));
+      const pkgAt = rest.indexOf('--pkg');
+      const pkg = pkgAt >= 0 ? rest[pkgAt + 1] : undefined;
+      if (!name) {
+        console.error('usage: webjs source <Export> [--pkg core|server|cli|ui|intellisense]');
+        process.exit(1);
+      }
+      const { lookupExport, resolveFrameworkRoots } = await import('@webjsdev/mcp');
+      const { existsSync, readdirSync } = await import('node:fs');
+      const { readFile } = await import('node:fs/promises');
+      const roots = resolveFrameworkRoots(process.cwd(), { exists: existsSync });
+      const readdir = (d) => readdirSync(d, { withFileTypes: true }).map((e) => ({ name: e.name, isDir: e.isDirectory() }));
+      const out = await lookupExport({ roots, readFile, readdir }, name, pkg);
+      console.log(out);
+      if (!/^@webjsdev\//m.test(out)) process.exit(1);
+      break;
     }
     case 'mcp': {
       // Read-only MCP server (#262, #415) over stdio. STDOUT is the JSON-RPC

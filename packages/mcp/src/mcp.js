@@ -33,6 +33,9 @@ import {
   getPrompt,
 } from './mcp-docs.js';
 import { resolveFrameworkRoots, runSourceTool } from './mcp-source.js';
+// The export lookup behind the `source` tool's `export` arg, re-exported for
+// `webjs source <Export>` in the CLI (#1623), which shells the same text.
+export { lookupExport, resolveFrameworkRoots } from './mcp-source.js';
 import { projectRoutes } from './routes-report.js';
 
 const PROTOCOL_VERSION = '2024-11-05';
@@ -118,6 +121,10 @@ const UI_SCHEMA = {
 const SOURCE_SCHEMA = {
   type: 'object',
   properties: {
+    export: {
+      type: 'string',
+      description: 'One export name, e.g. createAuth or optimistic: returns its signature plus the doc comment above it (from the typed declarations, with the authored JSDoc as the fallback), not the whole file. The cheapest way to check a contract.',
+    },
     path: {
       type: 'string',
       description: 'A framework source file to read, e.g. server/src/ssr/head.js or @webjsdev/core/src/render-client/parts.js. The top-level ssr.js / render-client.js paths are barrels; the code is in the sibling directory.',
@@ -157,7 +164,7 @@ const TOOL_DEFS = [
   {
     name: 'source',
     description:
-      'Read the FRAMEWORK authored source (webjs is buildless: node_modules/@webjsdev/*/src is the JSDoc source, run directly server-side; only the core browser bundle is built into dist/, which this skips). Pass `path` to read a file (e.g. server/src/ssr/head.js; the bare server/src/ssr.js is a barrel that re-exports from the sibling directory), `query` to grep the @webjsdev/* src trees, or no args to list the packages + entry points. Use when the docs do not answer something. Read-only.',
+      'Read the FRAMEWORK authored source (webjs is buildless: node_modules/@webjsdev/*/src is the JSDoc source, run directly server-side; only the core browser bundle is built into dist/, which this skips). Pass `export` for the signature plus doc comment of ONE export (the cheap way to check a contract: `export: "createAuth"`), `path` to read a file (e.g. server/src/ssr/head.js; the bare server/src/ssr.js is a barrel that re-exports from the sibling directory), `query` to grep the @webjsdev/* src trees, or no args to list the packages + entry points. Use when the docs do not answer something. Read-only.',
     inputSchema: SOURCE_SCHEMA,
   },
   {
