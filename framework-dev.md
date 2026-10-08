@@ -172,75 +172,39 @@ So prevention lives one layer up, and the rest is repair:
 
 Regression tests: `test/hooks/block-install-in-linked-worktree.test.mjs`, `test/repo-health/warn-worktree-install.test.mjs`, `test/repo-health/link-worktree-deps.test.mjs`, `test/hooks/cleanup-merged-worktree.test.mjs`, `test/cli/doctor.test.mjs`.
 
-### Local CI: `npm run ci` at the root and inside each app (#1471, #1474)
+### CI: GitHub Actions is the only CI (#1627)
 
-The monorepo runs its own local CI the way a scaffolded app does, and the list
-is complete enough to BE the merge gate (the Rails 8.1 posture), and it is the
-merge gate: see "The gate" below. The root `package.json` declares a
-`webjs.ci` step list that runs EVERYTHING `.github/workflows/ci.yml` runs, step
-for step: a Setup group (the blog and gallery databases, the core dist), then
-one `Gate` group that runs THREE slots at once, longest first (six overloaded a
-24-core box: Firefox timed out launching a test page): the Node e2e group (the
-blog in a real browser, the browser-test harness, the dev overlay, seed
-observability, morph, the form-submission run against a live website dev
-server via `scripts/ci-e2e-website.sh`, the two ui e2e), the Bun group (all 31
-proof scripts, then the matrix), the blog e2e served on Bun, one slot holding the
-browser suite and then the in-repo app typechecks and suites plus the website
-boot-check (every suite that starts a web-test-runner binds its fixed port
-8000, so two in flight at once make the later one fetch its test modules from
-the wrong server; sequential in one slot costs no wall-clock), the root `npm
-test`, the Conventions group (`webjs check` and `webjs doctor` per in-repo
-app, the buildless-packages invariant, the em-dash scan), and the Postgres
-round-trip against a throwaway `postgres:16` container (`scripts/ci-postgres.sh`,
-which also installs the `pg` driver `--no-save` into the repo's own
-`node_modules` and refuses to do so through a symlinked one, so the shared lock
-stays without it, the same posture the CI job takes). The Docker image build is its own top-level step after the
-Gate, so `--only Gate` skips it on a routine run and a signoff run includes it.
-Each slot's output is replayed whole when it finishes, and the wall-clock is the
-longest slot rather than the sum. `npm run ci` runs the lot; `npm run ci --
---only Conventions` runs one group, and `npm run -s ci -- --json` gives an
-agent the verdict as one JSON document (npm's `-s` keeps its own run banner
-off stdout). The root script runs `node packages/cli/bin/webjs.js ci` rather than a
-hoisted `webjs` bin because in a linked worktree `node_modules/.bin/webjs`
-resolves into the PRIMARY checkout, which may not carry the branch's CLI, and
-every root step invokes the in-repo CLI the same way for the same reason.
-`test/repo-health/in-repo-ci-blocks.test.mjs` pins that, and
-`test/cli/check-target.test.mjs` cross-checks the `webjs check` steps against
-the workspace app list.
+`.github/workflows/ci.yml` runs on every pull request into `main` and every
+push to `main`, with every job's steps written inline (free on this public
+repository). Nothing runs the suite locally as a gate: there is no root
+`webjs.ci` list, no `scripts/ci.sh`, no pre-push hook. Run the layer you
+touched by hand while you work (`npm test`, `npm run test:browser`,
+`WEBJS_E2E=1 node --test test/e2e/e2e.test.mjs`, `node scripts/run-bun-tests.js`,
+`webjs check` inside an app) and let Actions run the whole list on the PR.
+The live jspm contract tests (`*.live.test.*`, network-bound) run nightly on
+Actions too (`vendor-cdn.yml`, also dispatchable by hand).
 
-**The gate: GitHub Actions CI, merged with `scripts/ci-merge.sh`.**
-`ci.yml` runs on every pull request into `main` and every push to `main`
-(free on this public repository; running the full list locally made the
-owner's laptop lag). `main` requires its six job checks, strict, and NO
-review (`scripts/protect-main.sh`): the owner reviews outside the merge path,
-and a review rule would block every agent merge, so never add one.
-`scripts/ci-merge.sh <N>` waits for those required checks on the PR head
-(`gh pr checks --required --watch`) and squash-merges with `--delete-branch
---match-head-commit` only when they are green; with `--release` it first runs
-the release gate (`node scripts/release-gate.mjs`) on this machine. It never
-uses `--admin`. Check the live protection with `gh api
+**The gate, merged with `scripts/ci-merge.sh`.** `main` requires six
+`ci.yml` job checks, strict, and NO review (`scripts/protect-main.sh`): the
+owner reviews outside the merge path, and a review rule would block every
+agent merge, so never add one. `scripts/ci-merge.sh <N>` waits for the
+required checks on the PR head (`gh pr checks --required --watch`) and
+squash-merges with `--delete-branch --match-head-commit` only when they are
+green. It never uses `--admin`. Check the live protection with `gh api
 repos/webjsdev/webjs/branches/main/protection --jq
-'.required_status_checks.contexts'`, which prints the six job names. The same list still runs by hand: `scripts/ci.sh` wraps
-`npm run ci` with a log under `${TMPDIR:-/tmp}/webjs-ci-<sha>/`, `--only A,B`,
-`--list`, `--quick`, `--release` and `--nightly` (the live jspm contract
-tests, network-bound). `.hooks/pre-push` is OFF by default; set
-`WEBJS_PREPUSH_CI=1` to have it run `scripts/ci.sh --quick` before pushing a
-branch with an open PR. Run the list from a REAL install (the primary
-checkout, or a worktree with its own `npm ci`): in a linked worktree every
-bare `@webjsdev/*` specifier resolves into the primary checkout.
-`scripts/ci.sh` also unsets the `GIT_*` variables a hook exports (a pre-push run once let the hook tests write fixture commits into this repository), turns Bun's shared transpiler cache off, and waits up to `CI_LOAD_WAIT` (180s) for load to fall under 1.5x the cores, printing `WARNING host overloaded` in the verdict when it does not or a disk is 90% full. The browser suites run after the Gate rather than beside it, so load cannot time them out, and every web-test-runner config takes a kernel-assigned port (`WTR_PORT` pins one) so two runs at once cannot share port 8000. CI and the npm publish run on Actions (`ci.yml`, and `release.yml` bound to trusted publishing); the CDN purge and the release steps around the publish run locally (`scripts/purge-cdn.sh`, `scripts/release.sh`).
+'.required_status_checks.contexts'`, which prints the six job names. A
+release PR merges the same way; the release gate runs in `scripts/release.sh`
+on the merged commit (see "Releases" below). CI and the npm publish run on
+Actions (`ci.yml`, and `release.yml` bound to trusted publishing); the CDN
+purge and the release steps around the publish run locally
+(`scripts/purge-cdn.sh`, `scripts/release.sh`).
 
-**Local prerequisites** for the whole list: Node 24+, Bun, Docker (the Postgres
-container and the image build; the user must be in the `docker` group, or set
-`WEBJS_DOCKER` to the command that reaches a daemon, such as `sudo -n docker`
-or `podman`), the Playwright browsers (`npx playwright
-install chromium firefox webkit`), `puppeteer-core` (a root devDependency),
-`gh` (authenticated), `setsid` and `pgrep`
-(util-linux and procps, present on Linux and absent from a stock macOS: the
-website e2e step and the runner's interrupt test use them), and a shell that
-does NOT export `FORCE_COLOR` (it flips tsc to pretty output and reds two type
-guards that parse the plain format) or `PORT` (the website e2e step pins 5001
-itself, but nothing else in the list should be steered by it either).
+**Local prerequisites** for the suites: Node 24+, Bun, the Playwright
+browsers (`npx playwright install chromium firefox webkit`), `puppeteer-core`
+(a root devDependency), `gh` (authenticated), and a shell that does NOT export
+`FORCE_COLOR` (it flips tsc to pretty output and reds two type guards that
+parse the plain format). Every web-test-runner config takes a kernel-assigned
+port (`WTR_PORT` pins one) so two runs at once cannot share port 8000.
 
 `gallery`, `examples/blog`, and `website` each declare their own shorter list
 (setup, then `webjs check` / `webjs doctor` / typecheck / tests two at a time)
@@ -387,7 +351,7 @@ If the package has zero `feat:` / `fix:` / `breaking:` / `perf:` commits in the 
 
 The whole flow is tool-agnostic: the universal pre-commit hook fires for every `git commit`, regardless of who or what is running it. AI agents using Claude Code, Cursor, Copilot, Aider, etc. all get the same behavior, as do human contributors.
 
-**npm publishes AND GitHub Releases come from the same files, cut by `scripts/release.sh` (#1593).** After the release PR merges (through `scripts/ci-merge.sh <N> --release`, which runs the full list plus the release gate on its head), run `scripts/release.sh` from a checkout of `origin/main`. It finds the `changelog/**.md` files the head commit added, requires local CI green on that commit, and pushes the tag `publish-<sha12>`. That tag triggers `.github/workflows/release.yml`, which now ONLY publishes (npm.com, GitHub Packages, the lockstep wrappers), because trusted publishing is bound to it. The script then waits for `npm view` to serve every new version, creates the GitHub Releases locally, and purges the CDN. For each new file:
+**npm publishes AND GitHub Releases come from the same files, cut by `scripts/release.sh` (#1593).** After the release PR merges (through `scripts/ci-merge.sh <N>`, like any PR), run `scripts/release.sh` from a checkout of `origin/main`. It finds the `changelog/**.md` files the commit added, requires that exact commit green on GitHub CI (every required check `success` on its sha) and the release gate (`node scripts/release-gate.mjs`) passing on that checkout, and pushes the tag `publish-<sha12>`. That tag triggers `.github/workflows/release.yml`, which now ONLY publishes (npm.com, GitHub Packages, the lockstep wrappers), because trusted publishing is bound to it. The script then waits for `npm view` to serve every new version, creates the GitHub Releases locally, and purges the CDN. For each new file:
 
 1. `scripts/publish-npm.js` parses the frontmatter, checks `npm view @webjsdev/<pkg>@<version>`; if the version is not yet on the registry, it runs `npm publish --workspace=@webjsdev/<pkg> --access=public`. Idempotent: already-published versions are skipped.
 2. `scripts/publish-release.js` composes a tag `<pkg>@<version>` (e.g. `core@0.6.0`), title `@webjsdev/<pkg> <version>`, body (the markdown after frontmatter), then runs `gh release create`. Idempotent: existing release tags are skipped.

@@ -38,12 +38,13 @@ name: Vendor CDN contract (nightly)
 # There is deliberately no `pull_request` trigger, so this can never become a
 # required check and can never block a merge.
 #
-# NO SCHEDULE EITHER (#1593). Actions here is for publishing only; this check
-# runs locally as `scripts/ci.sh --nightly` (same two files, same skip
-# accounting), daily by hand or before a vendor-resolver change merges. The
-# file stays as documentation and can still be dispatched by hand.
+# Scheduled nightly (#1627): GitHub Actions is the only CI, so the live check
+# runs here, not on a laptop. It can also be dispatched by hand before a
+# vendor-resolver change merges.
 
 on:
+  schedule:
+    - cron: '20 4 * * *'
   workflow_dispatch:
 
 permissions:
