@@ -3,19 +3,16 @@
 #
 #   scripts/ci-merge.sh            # the open PR for the current branch
 #   scripts/ci-merge.sh 1234       # a PR by number
-#   scripts/ci-merge.sh 1234 --release   # a release PR: also run the release gate
 #
-# CI runs on GitHub Actions (.github/workflows/ci.yml, on every PR and every
-# push to main). This repository is public, so Actions is free, and running
-# the full list locally made the owner's laptop lag. So this script:
+# GitHub Actions is the only CI (.github/workflows/ci.yml, on every PR and
+# every push to main; nothing runs locally, #1627). This script:
 #   1. resolves the PR and its head commit,
-#   2. with --release, runs the release gate (node scripts/release-gate.mjs)
-#      on this machine first, because it exercises the packed candidate in
-#      real apps and is not part of ci.yml,
-#   3. waits for the PR's required GitHub checks on that head
+#   2. waits for the PR's required GitHub checks on that head
 #      (gh pr checks --watch --required) and stops if any fails,
-#   4. squash-merges with --delete-branch --match-head-commit <sha>, so a push
+#   3. squash-merges with --delete-branch --match-head-commit <sha>, so a push
 #      that lands while it waited is never merged on the older verdict.
+# A release PR merges the same way; scripts/release.sh runs the release gate
+# (node scripts/release-gate.mjs) on the merged commit before publishing.
 # Never --admin: main requires the six CI checks and no review
 # (scripts/protect-main.sh), so anything else blocking the merge is a real
 # problem to report, not to bypass.
@@ -28,11 +25,10 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
 
-pr="" release=0
+pr=""
 for a in "$@"; do
   case "$a" in
-    --release) release=1 ;;
-    -h|--help) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) pr="$a" ;;
   esac
 done
@@ -47,13 +43,6 @@ fi
 read -r state sha ref < <(gh api "repos/$REPO/pulls/$pr" --jq '"\(.state) \(.head.sha) \(.head.ref)"')
 [ "$state" = open ] || { echo "ci-merge: PR #$pr is $state" >&2; exit 2; }
 echo "ci-merge: PR #$pr ($ref) at ${sha:0:12}"
-
-if [ "$release" = 1 ]; then
-  [ "$(git rev-parse HEAD)" = "$sha" ] && [ -z "$(git status --porcelain --untracked-files=no)" ] \
-    || { echo "ci-merge: --release runs the gate on this checkout; check out ${sha:0:12} cleanly first" >&2; exit 2; }
-  echo "ci-merge: running the release gate (node scripts/release-gate.mjs)"
-  node scripts/release-gate.mjs || { echo "ci-merge: release gate FAILED; not merging" >&2; exit 1; }
-fi
 
 echo "ci-merge: waiting for the required GitHub checks on ${sha:0:12}"
 # --watch exits non-zero when a check fails; give the runs a moment to register.
@@ -77,6 +66,4 @@ if [ -n "$merged" ] && [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -f "$root/scripts
 elif [ -n "$merged" ]; then
   echo "ci-merge: CLOUDFLARE_API_TOKEN is not set; purge the CDN later with scripts/purge-cdn.sh ${merged:0:12}"
 fi
-if [ "$release" = 1 ]; then
-  echo "ci-merge: release PR merged; publish it with scripts/release.sh from a checkout of origin/main"
-fi
+case "$ref" in chore/release-*) echo "ci-merge: release PR merged; publish it with scripts/release.sh from a checkout of origin/main" ;; esac

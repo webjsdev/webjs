@@ -1,13 +1,12 @@
 /**
- * The monorepo and its three in-repo apps each declare a `webjs.ci` step list
- * (#1471), so `npm run ci` runs local CI at the root and inside each app. This
- * guard keeps those blocks honest without running them: each parses with zero
- * problems through the same reader `webjs ci` uses, and every step that goes
- * through an npm script names a script that exists in the package it targets
- * (a step naming a missing script fails at run time with a message that never
- * mentions the block). It also pins that every step at the root runs the CLI
- * from THIS checkout rather than a hoisted `webjs` bin, since a linked
- * worktree's node_modules/.bin resolves into the primary checkout.
+ * The three in-repo apps each declare a `webjs.ci` step list (#1471), so
+ * `npm run ci` inside an app runs the app's own gate the way a scaffolded app
+ * does. (The monorepo itself has none: GitHub Actions is its only CI, #1627.)
+ * This guard keeps those blocks honest without running them: each parses with
+ * zero problems through the same reader `webjs ci` uses, and every step that
+ * goes through an npm script names a script that exists in the package it
+ * targets (a step naming a missing script fails at run time with a message
+ * that never mentions the block).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -17,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { readCiConfig, flattenSteps } from '../../packages/cli/lib/ci-config.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const PACKAGES = { '.': 'root', gallery: 'gallery', 'examples/blog': 'blog', website: 'website' };
+const PACKAGES = { gallery: 'gallery', 'examples/blog': 'blog', website: 'website' };
 
 /** `@webjsdev/<name>` workspace -> its directory, for `npm <cmd> --workspace=` steps. */
 function workspaceDirs() {
@@ -68,12 +67,3 @@ for (const [rel, label] of Object.entries(PACKAGES)) {
     }
   });
 }
-
-test('the root list runs the CLI from this checkout, never a hoisted bin', () => {
-  const cfg = readCiConfig(ROOT);
-  const root = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
-  assert.match(root.scripts.ci, /^node packages\/cli\/bin\/webjs\.js ci$/, 'the root ci script runs this checkout\'s CLI');
-  for (const step of flattenSteps(cfg.steps)) {
-    assert.doesNotMatch(step.run, /(^|[\s(;&|])webjs /, `root step "${step.title}" must not call a bare bin (a linked worktree resolves it into the primary): ${step.run}`);
-  }
-});

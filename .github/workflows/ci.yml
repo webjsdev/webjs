@@ -1,15 +1,11 @@
 name: CI
 
-# The required merge gate on every PR into main and every push to main. This
-# repository is public, so Actions is free, and running the full list on a
-# laptop made it lag: CI runs HERE. scripts/protect-main.sh makes the six job
-# names below the required checks (keep their `name:` values in sync with it:
-# GitHub keys a required check on that exact string), and scripts/ci-merge.sh
-# waits for them to go green before it merges.
-#
-# The same checks can still be run by hand on a laptop: `scripts/ci.sh` runs
-# every job below through the root package.json `webjs.ci` list (`--only
-# <title>` for one group). Keep this file and that list in step.
+# The required merge gate on every PR into main and every push to main, and
+# the ONLY CI this repository has (#1627): no local battery mirrors it.
+# scripts/protect-main.sh makes the six job names below the required checks
+# (keep their `name:` values in sync with it: GitHub keys a required check on
+# that exact string), and scripts/ci-merge.sh waits for them to go green
+# before it merges.
 
 on:
   pull_request:
