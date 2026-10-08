@@ -84,31 +84,20 @@ action without also triggering the row navigation.
 
 ### 6. Build components for interactivity
 
-Pages and layouts (`app/**/page.ts`, `app/**/layout.ts`) are server-only HTML
-generators, so put every interactive behavior inside a `WebComponent` custom
-element. Declare a component's reactive properties in the base-class factory,
-never as a class-field initializer (`items = []` clobbers the reactive
-accessor). Use the shorthand for primitives
+Pages and layouts never hydrate, so put every interactive behavior inside a
+`WebComponent` custom element, and declare its reactive properties only in the
+base-class factory (the skill's "Core WebJs Rules" 11). Use the shorthand for primitives
 (`extends WebComponent({ name: String, count: Number, open: Boolean })`) and the
 `prop<T>()` helper for typed objects and arrays
 (`extends WebComponent({ items: prop<Item[]>(Array), user: prop<User>(Object) })`).
 
 ### 7. Verify before you call it done
 
-Run `npm run ci` and fix what it reports. It is one command for every gate,
-the step list declared in `package.json` under `webjs.ci`, with a result line
-per step:
-
-- `webjs check` (correctness: no browser-import or boundary violation).
-- `webjs doctor` (project health). It fails on whatever `package.json`
-  `webjs.doctor.gate` marks `error`, plus the two hard toolchain checks that
-  are fatal with no gate entry, `NODE_VERSION` and `TSCONFIG_ERASABLE`.
-- `webjs typecheck` (zero type errors).
-- A dependency audit.
-- The server, browser, and e2e test layers for the features you built.
-
-The GitHub workflow runs the same list, so a green local run predicts CI.
-While iterating, `npm run ci -- --only Tests` runs one layer. Then
+Run `npm run ci` and fix what it reports. It runs every gate declared under
+`webjs.ci` in `package.json` (`webjs check`, `webjs doctor`, `webjs typecheck`,
+a dependency audit, then the test layers), and the GitHub workflow runs the
+same list; `.agents/rules/workflow.md` has what each gate checks. While
+iterating, `npm run ci -- --only Tests` runs one layer. Then
 `npm run css:build` (compile Tailwind).
 
 Then boot `npm run dev`, confirm every page route returns HTTP 200, and open
