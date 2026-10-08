@@ -13,7 +13,6 @@ import { checkUnmarkedAssetLinks } from './probes/unmarked-asset-links.js';
 import { checkFrameworkResolves, checkFrameworkLinks } from './probes/framework-resolves.js';
 import { checkWorkspaceOverrides } from './probes/workspace-overrides.js';
 import { checkAppIcon } from './probes/app-icon.js';
-import { checkDarkTheme } from './probes/dark-theme.js';
 
 /**
  * @typedef {import('./codes.js').DoctorResult} DoctorResult
@@ -69,7 +68,6 @@ export async function runDoctorChecks(appDir, opts = {}) {
     checkUnmarkedAssetLinks(appDir),
     Promise.resolve(checkWorkspaceOverrides(appDir)),
     Promise.resolve(checkAppIcon(appDir)),
-    checkDarkTheme(appDir),
   ]);
   // Attach the stable machine code to every result (#975). Centralized here so
   // each check function stays free of the code-contract concern.
