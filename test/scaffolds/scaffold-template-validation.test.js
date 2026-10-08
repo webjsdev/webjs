@@ -136,6 +136,7 @@ for (const template of ['full-stack', 'api']) {
       await scaffoldApp('my-app', cwd, { template, install: false });
       const pkg = JSON.parse(await readFile(join(cwd, 'my-app', 'package.json'), 'utf8'));
       assert.equal(pkg.webjs.doctor.gate.UNMARKED_ASSET_LINKS, 'error');
+      assert.equal(pkg.webjs.doctor.gate.DARK_THEME_UNREACHABLE, 'error', 'the scaffold AGENTS.md mandates light-dark() tokens, so the scaffold enforces them (#1628)');
       assert.equal(pkg.scripts.doctor, 'webjs doctor');
       const ci = await readFile(join(cwd, 'my-app', '.github', 'workflows', 'ci.yml'), 'utf8');
       assert.match(ci, /^\s+- run: npm run ci$/m, 'the workflow runs the declared step list');
