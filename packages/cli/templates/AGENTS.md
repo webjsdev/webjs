@@ -34,23 +34,49 @@ This is what separates a working app from a broken one.
 
 ## Type everything (all templates)
 
-Derive the type at every boundary from its source. Never reach for `any`, and
-never `unknown` where a real type exists. The rule is step 8 of the skill's "Default
-Workflow"; the forms to reach for:
+Full-stack type safety is what the `.server.ts` boundary buys you: a client
+component importing a server action resolves to that action's real signature at
+type-check time, with no build step and no code generation in between. So
+DERIVE the type at every boundary instead of widening it:
 
-- A database row: `typeof table.$inferSelect` (`$inferInsert` for a write),
-  carried into a shipping component with `import type`.
+- A database row: `export type Todo = typeof todos.$inferSelect` in
+  `db/schema.server.ts` (`$inferInsert` for a write), carried into a
+  browser-shipped component with `import type` (erased before it reaches the
+  browser, so it does not trip the server-import boundary).
 - An action's input: a named `interface`. Its result: `ActionResult<T>`.
+  Narrow with `if (result.success && result.data)`.
 - Routing files: `PageProps<'/blog/[slug]'>`, `LayoutProps`,
-  `RouteHandlerContext`. `npx webjsdev types` writes the typed `Route` union.
+  `RouteHandlerContext`, all from `@webjsdev/core`. Run `npx webjsdev types`
+  for the typed `Route` union and per-route `params`.
 - A reactive property: `prop<Student>(Object)`, `prop<Tag[]>(Array)`.
 
-The full ladder, with an end-to-end example, is
+Never reach for `any` or a loose `as any` cast, and do not reach for `unknown`
+either just because it looks safer. `unknown` is right for a payload nothing
+has vouched for yet, narrowed on the very next line (a `route.ts` `await
+req.json()`, an action's `export const validate` or a validator it delegates
+to, a `catch` binding), and for a parameter of YOUR OWN helper that forwards
+into an `html` template hole (a hole renders a string, a number, a
+`TemplateResult`, or an array of those, so `TemplateResult` alone is too
+narrow). That second case is about a value you accept, never one the framework
+already types. Everywhere else it is a missing type, not a safe one: `unknown`
+that survives into a return type, a component prop, a layout's `children`, or
+an action signature is the shape to fix.
+Nothing enforces this (both are valid TypeScript, so `webjs check` and `tsc`
+pass either way), which is exactly why it is written down. The full ladder,
+with an end-to-end example, is in
 `.agents/skills/webjs/references/typescript.md`.
 
 Keep server-only code (database drivers, secrets, `node:*` builtins) in
-`.server.ts` modules. The two kinds (with and without `'use server'`) are the
-skill's "Core WebJs Rules" 1 and 2.
+`.server.ts` modules. There are exactly two kinds:
+
+- A `.server.ts` file WITH `'use server';` as its first line is a server
+  action: WebJs exposes its exported async functions to browser code as RPC
+  calls, so browser modules may import it directly.
+- A `.server.ts` file WITHOUT `'use server'` is a server-only utility:
+  importing it from a page, layout, or component CRASHES in the browser at
+  module load. Reach it only from `'use server'` actions, `route.ts` handlers,
+  or middleware. Never add `'use server'` to a file only other server code
+  imports (the DB connection, the schema).
 
 ## Data (all templates)
 
