@@ -1,21 +1,21 @@
 /**
- * The agent context pack: the scaffold's real example code and the core of the
- * agent skill, concatenated into ONE file (`.agents/context-pack.md`) that the
- * scaffold's CLAUDE.md imports, so an agent starts a session with it already
- * in context instead of spending turns opening each file.
+ * The agent context pack: the WHOLE example gallery and the WHOLE agent skill,
+ * concatenated into ONE file (`.agents/context-pack.md`) that the scaffold's
+ * CLAUDE.md imports, so an agent starts a session with every context layer
+ * already in context instead of spending turns opening files, and so quality
+ * never depends on which file it decides to open.
  *
- * It keeps every context layer intact (the gallery is still studied, the skill
- * is still read, `node_modules/@webjsdev/*` stays the source of truth); it only
- * makes the first two cheap. Loaded before the user's message, the pack sits in
+ * It keeps every layer intact (the gallery is studied, the skill is read,
+ * `node_modules/@webjsdev/*` stays the source of truth); it only makes the
+ * first two cheap, and it is paid once per hour at cache-write price. Loaded before the user's message, the pack sits in
  * the model's cached prompt prefix, so it is paid once at cache-write price and
  * then read at a tenth of that on every later turn. A host that runs many
  * builds from one image (Crisp) can put it in the system prompt instead, where
  * separate builds share the same cached prefix.
  *
- * The content is BYTE-STABLE: a fixed, ordered file list, no timestamps, no
- * absolute paths, so two apps scaffolded by the same CLI version get the same
- * pack and the same cache key. A listed file that a template does not ship is
- * skipped. The pack is generated once at `webjs create` from the files just
+ * The content is BYTE-STABLE: fixed roots walked in sorted order, no
+ * timestamps, no absolute paths, so two apps scaffolded by the same CLI version
+ * get the same pack and the same cache key. The pack is generated once at `webjs create` from the files just
  * written, so it shows exactly the code this app was scaffolded with; it is
  * kept by `gallery:clear`, so the patterns stay in context after the demos go.
  */
@@ -23,64 +23,37 @@ import { existsSync } from 'node:fs';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, extname } from 'node:path';
 
-/** Example code, one per concern, in reading order. Paths are app-relative. */
-export const PACK_EXAMPLES = [
-  ['A page, a query, actions and an interactive component (the todo example app)', [
-    'app/examples/todo/page.ts',
-    'modules/todo/types.ts',
-    'modules/todo/queries/list-todos.server.ts',
-    'modules/todo/actions/create-todo.server.ts',
-    'modules/todo/actions/toggle-todo.server.ts',
-    'modules/todo/components/todo-app.ts',
-  ]],
-  ['A form bound to an action, with validation and kept values', [
-    'app/features/forms/page.ts',
-    'modules/forms/actions/submit-feedback.server.ts',
-  ]],
-  ['Auth: createAuth, password hashing, sign-up, a login page, a protected segment', [
-    'modules/auth/auth.server.ts',
-    'modules/auth/password.server.ts',
-    'modules/auth/actions/signup.server.ts',
-    'modules/auth/queries/current-user.server.ts',
-    'app/api/auth/[...path]/route.ts',
-    'app/features/auth/login/page.ts',
-    'app/features/auth/dashboard/middleware.ts',
-  ]],
-  ['A WebSocket route and its client component', ['app/features/websockets/page.ts']],
-  ['File upload and serving', ['app/features/file-storage/page.ts']],
-  ['Streaming from an action', ['app/features/streaming/page.ts']],
-  ['A server test', ['test/auth/auth.test.ts']],
-];
+/**
+ * Everything the gallery ships, in a fixed order: the example app first, then
+ * every feature demo, then every gallery module. Sorted paths within each
+ * group, so two apps scaffolded by the same CLI get the same bytes.
+ */
+export const PACK_CODE_ROOTS = ['app/examples', 'app/features', 'modules'];
 
-/** Skill files every build needs; the other references stay on demand. */
-export const PACK_SKILL = [
-  '.agents/skills/webjs/SKILL.md',
-  '.agents/skills/webjs/references/data-and-actions.md',
-];
+/** The whole agent skill: SKILL.md, then every reference by name. */
+export const PACK_SKILL_ROOT = '.agents/skills/webjs';
+
+/** Gallery files the pack leaves out: browser tests need a runner, not reading. */
+const SKIP = /(^|\/)browser\/|\.test\.(ts|js)$/;
+
+const fence = (rel) => ({ '.ts': 'ts', '.js': 'js', '.md': 'md', '.mjs': 'js' }[extname(rel)] || '');
 
 /**
- * The files a feature's page imports from its own module, added after the
- * page so a one-path entry (`app/features/websockets/page.ts`) brings its
- * module along. Same-feature `modules/<name>/` only, sorted, so the order is
- * stable.
+ * App-relative paths of every file under `rel` (recursive), sorted.
  * @param {string} appDir
  * @param {string} rel
  * @returns {Promise<string[]>}
  */
-async function moduleFilesFor(appDir, rel) {
-  const m = /^app\/features\/([^/]+)\//.exec(rel);
-  if (!m) return [];
-  const dir = join(appDir, 'modules', m[1]);
+async function filesUnder(appDir, rel) {
+  const dir = join(appDir, rel);
   if (!existsSync(dir)) return [];
   const { readdir } = await import('node:fs/promises');
   const entries = await readdir(dir, { recursive: true, withFileTypes: true });
   return entries
-    .filter((e) => e.isFile() && /\.(ts|js)$/.test(e.name) && !/[\\/]browser[\\/]/.test(e.parentPath || '') && !/\.test\.(ts|js)$/.test(e.name))
+    .filter((e) => e.isFile())
     .map((e) => join(e.parentPath || dir, e.name).slice(appDir.length + 1).replace(/\\/g, '/'))
     .sort();
 }
-
-const fence = (rel) => ({ '.ts': 'ts', '.js': 'js', '.md': 'md', '.mjs': 'js' }[extname(rel)] || '');
 
 /**
  * Build the pack text for an app.
@@ -91,7 +64,7 @@ export async function buildContextPack(appDir) {
   const out = [
     '# WebJs context pack',
     '',
-    'Generated by `webjs create` from this app\'s own files: the scaffold\'s example code and the core of the agent skill, loaded at the start of every session so they are already in your context. Reading a file below IS reading it; do not open it again. Everything else (the other references, the other gallery demos, `node_modules/@webjsdev/*`) is still on disk for when you need it.',
+    'Generated by `webjs create` from this app\'s own files, loaded at the start of every session so they are already in your context: the WHOLE agent skill (`SKILL.md` and every reference) and the WHOLE example gallery (`app/examples`, `app/features` and the gallery\'s `modules/`, as shipped, before `gallery:clear`). Reading a file below IS reading it: the context-gathering steps in AGENTS.md (read the skill, study the gallery) are done here, so do not open these files again. `node_modules/@webjsdev/*` stays the source of truth for an exact API and is on disk.',
     '',
   ];
   const seen = new Set();
@@ -102,18 +75,15 @@ export async function buildContextPack(appDir) {
     const f = fence(rel);
     out.push(`### \`${rel}\``, '', f === 'md' ? text : `\`\`\`\`${f}\n${text}\n\`\`\`\``, '');
   };
-  out.push('## Example code', '');
-  for (const [title, files] of PACK_EXAMPLES) {
-    const present = files.filter((rel) => existsSync(join(appDir, rel)));
-    if (!present.length) continue;
-    out.push(`## ${title}`, '');
-    for (const rel of present) {
-      await add(rel);
-      for (const extra of await moduleFilesFor(appDir, rel)) await add(extra);
+  out.push('## The example gallery', '');
+  for (const root of PACK_CODE_ROOTS) {
+    for (const rel of await filesUnder(appDir, root)) {
+      if (!SKIP.test(rel) && /\.(ts|js|mjs|md)$/.test(rel)) await add(rel);
     }
   }
   out.push('## The agent skill', '');
-  for (const rel of PACK_SKILL) await add(rel);
+  await add(`${PACK_SKILL_ROOT}/SKILL.md`);
+  for (const rel of await filesUnder(appDir, `${PACK_SKILL_ROOT}/references`)) if (rel.endsWith('.md')) await add(rel);
   return out.join('\n') + '\n';
 }
 

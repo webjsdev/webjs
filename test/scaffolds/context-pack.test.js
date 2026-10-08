@@ -1,5 +1,5 @@
 // The agent context pack (.agents/context-pack.md): `webjs create` writes the
-// skill core and one example per concern into one file that CLAUDE.md
+// whole skill and the whole gallery into one file that CLAUDE.md
 // imports, so an agent starts with them in its cached prompt prefix instead of
 // opening each file. It must be byte-stable across apps (one cache key), show
 // the app's own files verbatim, and survive gallery:clear.
@@ -25,7 +25,7 @@ test('webjs create writes a byte-stable context pack that CLAUDE.md imports and 
     const other = readFileSync(join(cwd, 'other-app/.agents/context-pack.md'), 'utf8');
     assert.equal(one, other, 'two apps get the same pack, so they share a cache key');
     assert.match(readFileSync(join(cwd, 'one-app/CLAUDE.md'), 'utf8'), /^@AGENTS\.md\n@\.agents\/context-pack\.md\n/);
-    for (const rel of ['modules/todo/components/todo-app.ts', 'modules/auth/auth.server.ts', 'app/features/forms/page.ts', '.agents/skills/webjs/SKILL.md', '.agents/skills/webjs/references/data-and-actions.md']) {
+    for (const rel of ['modules/todo/components/todo-app.ts', 'modules/auth/auth.server.ts', 'app/features/forms/page.ts', 'app/features/streaming/page.ts', '.agents/skills/webjs/SKILL.md', '.agents/skills/webjs/references/data-and-actions.md', '.agents/skills/webjs/references/styling.md', '.agents/skills/webjs/references/testing.md']) {
       assert.ok(one.includes(`### \`${rel}\``), `the pack includes ${rel}`);
       assert.ok(one.includes(readFileSync(join(cwd, 'one-app', rel), 'utf8').trimEnd()), `${rel} is verbatim`);
     }
