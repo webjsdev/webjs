@@ -97,6 +97,8 @@ const BOUNDARY = /[\s/>]/;
 // character compare so the sigil guard (no `=== '<sigil>'` literal in a
 // renderer) stays meaningful.
 const QUESTION = /^\?$/;
+// The states between a start tag's `<name` and its `>`.
+const START_TAG_STATES = new Set(['tag-name', 'in-tag', 'attr-name', 'after-name', 'after-eq', 'attr-quoted', 'attr-unquoted']);
 
 /**
  * @param {Strings} strings
@@ -117,6 +119,7 @@ function tokenize(strings) {
   let currentTag = '';
   /** @type {Op | null} */
   let pendingOpen = null;  // the OPEN op whose name is still being read
+  let openIndex = -1;      // index in `ops` of the start tag being read
   let closeStart = 0;      // index into `chunk` of a close tag's `<`
   let solidus = false;     // a `/` in a tag state that may be a self-closing solidus
   // Raw text (`script` / `style`): ends at `</script>` / `</style>`, with the
@@ -196,6 +199,7 @@ function tokenize(strings) {
             chunk = chunk.slice(0, -1);
             flush();
             pendingOpen = { t: OPEN, tag: '' };
+            openIndex = ops.length;
             ops.push(pendingOpen);
             chunk = '<' + c;
             currentTag = c.toLowerCase();
@@ -399,8 +403,12 @@ function tokenize(strings) {
     }
   }
   // An unterminated tag, comment or close tag: the bytes stay text, as a
-  // browser treats them.
+  // browser treats them. A start tag still open here has no TAG_END, so its
+  // OPEN is dropped too: the walker would otherwise begin taking the element
+  // (a registered tag moves the page built so far aside until the `>`) and
+  // never finish, losing everything before it (a truncated `unsafeHTML`).
   if (pendingOpen) pendingOpen.tag = currentTag;
+  if (openIndex !== -1 && START_TAG_STATES.has(state)) ops.splice(openIndex, 1);
   flush();
   return ops;
 }

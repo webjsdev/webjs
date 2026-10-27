@@ -84,3 +84,8 @@ test('a throw inside a streamed boundary of a component template leaves the defe
   )));
   assert.ok(out.includes(GOOD), out);
 });
+
+test('a registered start tag cut off by the end of an unsafeHTML string keeps the page before it', async () => {
+  const out = await renderToString(html`<header>SITE</header><p>${unsafeHTML('excerpt <iso-good class="x')}</p><footer>END</footer>`);
+  assert.equal(out, '<header>SITE</header><p>excerpt <iso-good class="x</p><footer>END</footer>');
+});
