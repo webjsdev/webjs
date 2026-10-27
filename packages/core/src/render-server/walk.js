@@ -365,9 +365,12 @@ export class Walker {
     }
     if (op.kind === 'prop') {
       // `<webjs-suspense .fallback=${html`...`}>` (#471) is the boundary's
-      // placeholder, rendered now so the walker can emit it at the tag.
+      // placeholder, rendered now so the walker can emit it at the tag. Only
+      // a streamed boundary (a ctx) shows it: a blocking one renders its
+      // children inline, so expanding the fallback's components there would
+      // run their renders (and their data fetches) for bytes that are dropped.
       if (tag === 'webjs-suspense' && name === 'fallback') {
-        if (this.expand && ts) ts.fallback = await this.capture(() => this.value(val));
+        if (this.expand && this.ctx && ts) ts.fallback = await this.capture(() => this.value(val));
         return;
       }
       if (!tag.includes('-')) {

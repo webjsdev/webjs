@@ -94,3 +94,10 @@ test('whitespace before the > of a valueless attribute still enters raw text for
   const out = await renderToString(html`<script async >var a = ${'1 < 2 && 3'};</script>`);
   assert.equal(out, '<script async >var a = 1 < 2 && 3;</script>');
 });
+
+test('a blocking boundary does not render the fallback it drops', async () => {
+  fallbackRenders = 0;
+  const out = await renderToString(html`<webjs-suspense .fallback=${html`<iso-fallback-probe></iso-fallback-probe>`}><iso-good></iso-good></webjs-suspense>`);
+  assert.equal(out, `<webjs-suspense>${GOOD}</webjs-suspense>`);
+  assert.equal(fallbackRenders, 0);
+});
