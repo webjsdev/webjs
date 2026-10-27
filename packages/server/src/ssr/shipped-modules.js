@@ -54,6 +54,24 @@ const MEMO = new WeakMap();
 export function shippedBootModules(route, deps) {
   const hit = MEMO.get(route);
   if (hit && hit.epoch === buildEpoch()) return hit.value;
+  const value = assembleBootModules([route.file, ...route.layouts], deps);
+  MEMO.set(route, { epoch: buildEpoch(), value, hinted: null, hintedBasePath: '' });
+  return value;
+}
+
+/**
+ * The assembly itself, un-memoized: the one loop behind `shippedBootModules`
+ * (a matched page and its layouts) and the boundary render in `ssr/render.js`
+ * (an error / not-found / forbidden / unauthorized file and the layouts it is
+ * wrapped in, a per-render list with no stable object to key a memo on). One
+ * function so the two cannot drift, which is how the 103 Early Hints lost the
+ * lazy-frontier rule before #1644.
+ *
+ * @param {string[]} files  the route modules in import order (page or boundary first, then its layouts)
+ * @param {ShippedDeps} deps
+ * @returns {ShippedModules}
+ */
+export function assembleBootModules(files, deps) {
   const { appDir, inert, importOnly, lazyFiles, instrumentationClient } = deps;
   /** @type {string[]} */
   const moduleUrls = [];
@@ -66,7 +84,7 @@ export function shippedBootModules(route, deps) {
     if (tags) { for (const t of tags) frontierLazy[t] = u; return; }
     if (!seen.has(u)) { seen.add(u); moduleUrls.push(u); }
   };
-  for (const f of [route.file, ...route.layouts]) {
+  for (const f of files) {
     if (inert && inert.has(f)) continue;
     const emit = importOnly && importOnly.get(f);
     if (emit) emit.forEach(push);
@@ -81,9 +99,7 @@ export function shippedBootModules(route, deps) {
     if (i !== -1) moduleUrls.splice(i, 1);
     moduleUrls.unshift(u);
   }
-  const value = { moduleUrls, frontierLazy };
-  MEMO.set(route, { epoch: buildEpoch(), value, hinted: null, hintedBasePath: '' });
-  return value;
+  return { moduleUrls, frontierLazy };
 }
 
 /**

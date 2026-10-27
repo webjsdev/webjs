@@ -3,7 +3,7 @@ import { vendorPreloadTargets } from '../importmap.js';
 import {
   componentPreloads, pagePreloadHints, toUrlPath,
 } from './preloads.js';
-import { shippedBootModules } from './shipped-modules.js';
+import { shippedBootModules, assembleBootModules } from './shipped-modules.js';
 import { seedingEnabled, collectSeeds, buildSeedScript, SEED_DROP_BLOCK } from '../action-seed.js';
 import {
   readRevalidate,
@@ -674,34 +674,21 @@ function reportBoundaryLayoutError(err, opts, cfg = {}) {
  * @returns {string[]}
  */
 function boundaryModuleUrls(boundaryFile, wrapLayouts, opts) {
-  /** @type {string[]} */
-  const urls = [];
-  const seen = new Set();
-  const push = (abs) => {
-    const u = toUrlPath(abs, opts.appDir);
-    if (!seen.has(u)) { seen.add(u); urls.push(u); }
-  };
-  for (const f of (boundaryFile ? [boundaryFile, ...wrapLayouts] : [...wrapLayouts])) {
-    if (opts.inertRouteModules && opts.inertRouteModules.has(f)) continue;
-    const emit = opts.importOnlyRouteModules && opts.importOnlyRouteModules.get(f);
-    if (emit) emit.forEach(push);
-    else push(f);
-  }
-  // instrumentation-client.{js,ts} (#848) rides the SAME first-import contract
-  // it has on the happy path: it runs before app modules so the app's client
-  // error reporting is installed before anything can throw. A boundary page is
-  // where that matters most, so it must not be the one place it is missing.
-  // The set is never empty by the time we get here (the boundary file is
-  // always pushed above, since only pages and layouts are fed to the elision
-  // analysis, so a boundary is never inert and never import-only), which is
-  // why this needs no non-empty guard.
-  if (opts.instrumentationClient) {
-    const u = toUrlPath(opts.instrumentationClient, opts.appDir);
-    const i = urls.indexOf(u);
-    if (i !== -1) urls.splice(i, 1);
-    urls.unshift(u);
-  }
-  return urls;
+  // The happy path's own assembly (`shipped-modules.js`), un-memoized because a
+  // boundary's file list is built per render. instrumentation-client.{js,ts}
+  // (#848) rides the SAME first-import contract it has on the happy path: it
+  // runs before app modules so the app's client error reporting is installed
+  // before anything can throw, and a boundary page is where that matters most.
+  // `lazyFiles` is deliberately not passed: a boundary render has no lazy map
+  // of its own to register a diverted frontier component with, so a `static
+  // lazy` component imported by a boundary is imported eagerly, as before.
+  return assembleBootModules(boundaryFile ? [boundaryFile, ...wrapLayouts] : wrapLayouts, {
+    appDir: opts.appDir,
+    inert: opts.inertRouteModules,
+    importOnly: opts.importOnlyRouteModules,
+    lazyFiles: undefined,
+    instrumentationClient: opts.instrumentationClient,
+  }).moduleUrls;
 }
 
 /**

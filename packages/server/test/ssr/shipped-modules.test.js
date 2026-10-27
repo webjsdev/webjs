@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { shippedBootModules, hintedBootModules } from '../../src/ssr/shipped-modules.js';
+import { shippedBootModules, hintedBootModules, assembleBootModules } from '../../src/ssr/shipped-modules.js';
 import { bumpBuildEpoch } from '../../src/build-epoch.js';
 
 const appDir = '/srv/app';
@@ -65,4 +65,16 @@ test('memoized per route object within a build; a bump or a different route reco
   assert.notEqual(b, a, 'a new build recomputes');
   assert.deepEqual(b, a, 'with the same inputs, the same answer');
   assert.notEqual(shippedBootModules(route(), deps), b, 'a different route object is a different entry');
+});
+
+test('assembleBootModules is the un-memoized loop the boundary render shares (#1645 review)', () => {
+  const ic = `${appDir}/instrumentation-client.ts`;
+  const boundary = `${appDir}/app/error.ts`;
+  const deps = { appDir, inert: new Set([layout]), importOnly: new Map([[page, [hot]]]), lazyFiles: new Map([[lazy, ['lazy-panel']]]), instrumentationClient: ic };
+  const a = assembleBootModules([boundary, layout], deps);
+  assert.deepEqual(a.moduleUrls, ['/instrumentation-client.ts', '/app/error.ts'], 'a boundary is pushed as is, the inert layout dropped, instrumentation first');
+  assert.notEqual(assembleBootModules([boundary, layout], deps), a, 'never memoized: a boundary list is built per render');
+  // The memoized form is the same loop over the route's own file list.
+  const r = route();
+  assert.deepEqual(shippedBootModules(r, deps), assembleBootModules([r.file, ...r.layouts], deps));
 });
