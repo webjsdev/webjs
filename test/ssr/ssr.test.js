@@ -3001,6 +3001,12 @@ test('ssrPage: WEBJS_PUBLIC_* env vars are injected into window.process.env', as
   const prevSecret = process.env.NOT_PUBLIC_SECRET;
   process.env.WEBJS_PUBLIC_API_URL = 'https://api.example.test';
   process.env.NOT_PUBLIC_SECRET = 'must-not-leak';
+  // The shim is a per-build snapshot (#1644): thousands of renders above have
+  // already warmed it in this process, so a variable set now is a NEW build
+  // as far as the shim is concerned. Bump on the way in, and again on the way
+  // out so the value does not leak into a later test's render.
+  const { bumpBuildEpoch } = await import('../../packages/server/src/build-epoch.js');
+  bumpBuildEpoch();
   try {
     const { route, appDir } = await makeRoute({
       pageSrc:
@@ -3021,6 +3027,7 @@ test('ssrPage: WEBJS_PUBLIC_* env vars are injected into window.process.env', as
     else process.env.WEBJS_PUBLIC_API_URL = prevApi;
     if (prevSecret === undefined) delete process.env.NOT_PUBLIC_SECRET;
     else process.env.NOT_PUBLIC_SECRET = prevSecret;
+    bumpBuildEpoch();
   }
 });
 

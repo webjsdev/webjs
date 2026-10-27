@@ -13,7 +13,9 @@
  * (1) two renders of the same page are byte-identical apart from the CSP
  *     nonce, so a memo serving the second render changed nothing observable;
  * (2) the importmap JSON is the same string across the two renders (the tag
- *     body memo) while the nonce attribute differs (assembled per call), and
+ *     body memo) while the nonce attribute differs (assembled per call),
+ * (2b) a `WEBJS_PUBLIC_*` variable set AFTER the first render is not in the
+ *     second (the env shim is a per-build snapshot), and
  * (3) a `static lazy` component rendered by the page is registered with the
  *     lazy loader rather than imported by the boot, and the Node shell's 103
  *     Early Hints still name the interactive component (Bun.serve has no
@@ -81,7 +83,11 @@ try {
   }
 
   const one = await (await fetch(`${base}/`)).text();
+  // Set AFTER the first render: the env shim is a per-build snapshot, so this
+  // must not be picked up until the next build.
+  process.env.WEBJS_PUBLIC_LATE = 'late-value';
   const two = await (await fetch(`${base}/`)).text();
+  delete process.env.WEBJS_PUBLIC_LATE;
 
   // (1) byte-identical modulo the nonce (CSP is on, so every render mints one).
   const nonceOf = (html) => /<meta name="csp-nonce" content="([^"]+)">/.exec(html)?.[1];
@@ -102,6 +108,7 @@ try {
   assert.ok(m1[1].includes(`nonce="${n1}"`) && m2[1].includes(`nonce="${n2}"`), `[${runtime}] the importmap tag carries each render's own nonce`);
 
   assert.ok(one.includes('"NODE_ENV":"production"'), `[${runtime}] the shim carries NODE_ENV`);
+  assert.ok(!two.includes('WEBJS_PUBLIC_LATE'), `[${runtime}] a WEBJS_PUBLIC_* set after the first render is not reflected until the next build`);
 
   // The lazy component is registered with the lazy loader, not imported.
   assert.ok(/import "\/components\/hot-button\.ts[^"]*";/.test(one), `[${runtime}] the boot imports the interactive component`);
