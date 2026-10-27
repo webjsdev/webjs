@@ -49,6 +49,7 @@ import { registerClient } from './broadcast.js';
 import { setTrustedRemoteIp, propagateTrustedRemoteIp } from './rate-limit.js';
 import { applyForwarded } from './forwarded.js';
 import { isAddrInUse, portInUseError, reusePortRequested } from './port-in-use.js';
+import { isBufferedResponse } from './conditional-get.js';
 import {
   isCompressible,
   isEventsPath,
@@ -476,8 +477,14 @@ async function maybeCompress(resp, req) {
   // runtime a buffered body and a streamed one compress identically (the wire is
   // self-describing via content-encoding either way). A streamed / oversized body
   // falls through to the bridge below.
-  const peeked = await readBufferedOrStream(resp.body, MAX_SYNC_COMPRESS_BYTES);
-  if (peeked.buffered !== undefined) {
+  // A response the framework built from a string or bytes is read whole
+  // (`isBufferedResponse`, #1644: the reader peek costs about 45 µs per
+  // response on Bun against 3 µs for `arrayBuffer()`); anything else is peeked
+  // without reading ahead of the client.
+  const peeked = isBufferedResponse(resp)
+    ? { buffered: new Uint8Array(await resp.arrayBuffer()) }
+    : await readBufferedOrStream(resp.body, MAX_SYNC_COMPRESS_BYTES);
+  if (peeked.buffered !== undefined && peeked.buffered.byteLength <= MAX_SYNC_COMPRESS_BYTES) {
     // Under the shared floor (#1644) the body goes out uncompressed, with the
     // ORIGINAL headers (the encoding + vary written above are not applied).
     // The peek consumed the body, so rebuild the Response from the bytes.
@@ -502,8 +509,9 @@ async function maybeCompress(resp, req) {
   // so a source error (or a client disconnect destroying the output) tears down
   // the whole chain instead of leaking/hanging the compressor. Backpressure is
   // preserved: a slow client stalls `toWeb`, which stalls the compressor, which
-  // pauses the source.
-  const source = Readable.from(peeked.stream);
+  // pauses the source. A known-buffered body over the sync cap is replayed as
+  // a single chunk through the same path.
+  const source = Readable.from(peeked.buffered !== undefined ? [peeked.buffered] : peeked.stream);
   pipeline(source, compressor, () => {});
   const body = Readable.toWeb(compressor);
   return new Response(body, { status: resp.status, statusText: resp.statusText, headers });

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { withBasePath } from '../base-path.js';
 import { Readable, pipeline } from 'node:stream';
+import { isBufferedResponse } from '../conditional-get.js';
 import {
   isCompressible, negotiateEncoding, createCompressor, compressBufferSync, readBufferedOrStream,
   varyWithAcceptEncoding, MAX_SYNC_COMPRESS_BYTES, MIN_COMPRESS_BYTES,
@@ -90,8 +91,13 @@ export async function sendWebResponse(res, webRes, req, opts) {
   // page, which is also where the arena fragmentation that held RSS after a
   // load burst came from. A body under `MIN_COMPRESS_BYTES` is sent as is on
   // both shells: at that size the encoding costs more than the bytes it saves.
-  const peeked = await readBufferedOrStream(webRes.body, MAX_SYNC_COMPRESS_BYTES);
-  if (peeked.buffered !== undefined) {
+  // A response the framework built from a string or bytes is read whole
+  // (`isBufferedResponse`, set when the funnel consumed the buffered marker);
+  // anything else, a user stream above all, is peeked without reading ahead.
+  const peeked = isBufferedResponse(webRes)
+    ? { buffered: new Uint8Array(await webRes.arrayBuffer()) }
+    : await readBufferedOrStream(webRes.body, MAX_SYNC_COMPRESS_BYTES);
+  if (peeked.buffered !== undefined && peeked.buffered.byteLength <= MAX_SYNC_COMPRESS_BYTES) {
     const buf = peeked.buffered;
     if (encoding && buf.byteLength >= MIN_COMPRESS_BYTES) {
       const out = compressBufferSync(encoding, buf);
@@ -113,8 +119,9 @@ export async function sendWebResponse(res, webRes, req, opts) {
   // `pipeline` so a client disconnect destroys the compressor and cancels the
   // web reader instead of leaving a paused Transform with a live native handle,
   // and so a slow client exerts backpressure on the source (the old reader loop
-  // never waited for `drain`).
-  const source = Readable.from(peeked.stream);
+  // never waited for `drain`). A known-buffered body over the sync cap is
+  // replayed as a single chunk through the same path.
+  const source = Readable.from(peeked.buffered !== undefined ? [peeked.buffered] : peeked.stream);
   if (encoding) {
     const compressor = createCompressor(encoding);
     if (compressor) {

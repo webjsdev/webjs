@@ -28,7 +28,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { createRequestHandler } from '../../src/dev.js';
-import { applyConditionalGet, ifNoneMatchSatisfied } from '../../src/conditional-get.js';
+import { applyConditionalGet, ifNoneMatchSatisfied, isBufferedResponse, BUFFERED_MARKER } from '../../src/conditional-get.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HTML_URL = pathToFileURL(
@@ -62,6 +62,32 @@ const CACHEABLE_PAGE =
 const DYNAMIC_PAGE =
   `import { html } from ${JSON.stringify(HTML_URL)};\n` +
   `export default function P() { return html\`<h1>dynamic</h1>\`; }\n`;
+
+/* ---------------- the known-buffered verdict (#1644) ---------------- */
+
+test('isBufferedResponse: true only for a response that passed the funnel carrying the buffered marker', async () => {
+  const req = new Request('http://x/');
+  const marked = new Response('<p>page</p>', { headers: { 'content-type': 'text/html', 'cache-control': 'no-store', [BUFFERED_MARKER]: '1' } });
+  assert.equal(isBufferedResponse(marked), false, 'not before the funnel');
+  const out = await applyConditionalGet(req, marked);
+  assert.equal(out, marked, 'a no-store response comes back as the same object');
+  assert.equal(out.headers.has(BUFFERED_MARKER), false, 'the marker never reaches a client');
+  assert.equal(isBufferedResponse(out), true, 'the verdict survives the strip, so the shell can read the body whole');
+
+  const stream = new Response(new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode('x')); c.close(); } }), { headers: { 'content-type': 'text/html' } });
+  const out2 = await applyConditionalGet(req, stream);
+  assert.equal(isBufferedResponse(out2), false, 'an unmarked user stream is never read ahead of the client');
+
+  // A 304 is a fresh body-less object and is not marked.
+  const cacheable = new Response('body', { headers: { 'content-type': 'text/plain', 'cache-control': 'public, max-age=60', [BUFFERED_MARKER]: '1' } });
+  const first = await applyConditionalGet(req, cacheable);
+  const etag = first.headers.get('etag');
+  assert.ok(etag);
+  const again = new Response('body', { headers: { 'content-type': 'text/plain', 'cache-control': 'public, max-age=60', [BUFFERED_MARKER]: '1' } });
+  const notModified = await applyConditionalGet(new Request('http://x/', { headers: { 'if-none-match': etag } }), again);
+  assert.equal(notModified.status, 304);
+  assert.equal(isBufferedResponse(notModified), false);
+});
 
 /* ---------------- cacheable page: ETag + 304 ---------------- */
 

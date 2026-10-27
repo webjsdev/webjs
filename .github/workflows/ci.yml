@@ -166,8 +166,8 @@ jobs:
       - name: WebJs production render memos on Bun
         run: bun test/bun/prod-perf-memos.mjs
       # Settled RSS after a load burst (#1644): a prod server on the Bun.serve
-      # shell releases memory after 20,000 compressed requests and a second
-      # burst does not ratchet it up. Plain script: it runs about 20 s.
+      # shell releases memory after 20,000 compressed requests. Plain script:
+      # the burst plus a settle poll of up to a minute.
       - name: WebJs prod load settled RSS on Bun
         run: bun test/bun/prod-load-rss.mjs
       # FileStore streaming on Bun (#509): put/get round-trip + the
