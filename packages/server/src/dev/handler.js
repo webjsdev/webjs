@@ -44,6 +44,7 @@ import { resolveActionIdentity } from '../form-action-identity.js';
 import { setAssetRoots, clearAssetHashCache, setElisionFingerprint, withAssetHash, assetHashFor, resolveAssetUrl } from '../asset-hash.js';
 import { bumpBuildEpoch } from '../build-epoch.js';
 import { hintedBootModules } from '../ssr/shipped-modules.js';
+import { createRetryBackoff } from './vendor-retry.js';
 import { applySecurityHeaders, webRequestIsHttps } from '../headers.js';
 import { resolveEmbedOrigins, setEmbedOrigins, allowEmbedFraming } from '../dev-embed.js';
 import {
@@ -590,8 +591,18 @@ export async function createRequestHandler(opts) {
     // This is the request/probe-driven retry (no timer). Until it succeeds the
     // served build id stays empty (reload-safe), so no navigation hard-reloads.
     if (analysisDone && vendorAttemptedOnce) {
-      const gen = vendorGen;
-      resolveAndApplyVendor().then((ok) => { if (ok && gen === vendorGen) { vendorResolved = true; if (!bootVendorPinned) publishBuildId(); } }).catch(() => {});
+      // Gated by a backoff window (#1644): before it, EVERY request during an
+      // outage restarted the resolve (the single flight only collapsed
+      // concurrent ones), re-running the scan, the manifest reads, and a jspm
+      // fetch per request for as long as the CDN was down. The window starts
+      // at 2 s and doubles to a minute; a success or a rebuild clears it.
+      if (vendorBackoff.allow()) {
+        const gen = vendorGen;
+        resolveAndApplyVendor().then((ok) => {
+          if (ok) vendorBackoff.succeeded(); else vendorBackoff.failed();
+          if (ok && gen === vendorGen) { vendorResolved = true; if (!bootVendorPinned) publishBuildId(); }
+        }).catch(() => { vendorBackoff.failed(); });
+      }
       return;
     }
     // Otherwise run the (single-flighted) full warm: the analysis, then the
@@ -777,6 +788,10 @@ export async function createRequestHandler(opts) {
             const ok = await resolveAndApplyVendor();
             t.vendor = now() - m;
             ranVendor = true;
+            // Seed the retry backoff (#1644): a transient first failure opens
+            // the first window, so the request-driven retry above does not
+            // fire on the very next request.
+            if (ok) vendorBackoff.succeeded(); else vendorBackoff.failed();
             // Only memoize success (and only if a rebuild didn't intervene). A
             // transient failure leaves vendorResolved false; the next ensureReady
             // call re-attempts it non-blocking. A permanent unresolvable (jspm
@@ -835,6 +850,9 @@ export async function createRequestHandler(opts) {
   // partial map resolved so the app is no worse off).
   /** @type {Promise<boolean> | null} */
   let vendorResolveInFlight = null;
+  // The retry gate for a transiently failed live resolve (#1644): see the
+  // request-driven retry in `ensureReady`. Pure state, cleared on a rebuild.
+  const vendorBackoff = createRetryBackoff();
   function resolveAndApplyVendor() {
     if (vendorResolveInFlight) return vendorResolveInFlight;
     vendorResolveInFlight = (async () => {
@@ -933,6 +951,9 @@ export async function createRequestHandler(opts) {
     // best-effort (see emitRouteTypes).
     if (dev) void emitRouteTypes();
     clearVendorCache();
+    // A rebuild changes the bare-import set, so a failed resolve's backoff
+    // window no longer describes anything; the next request may try at once.
+    vendorBackoff.reset();
     // Content-hash asset cache (#243): clear so a changed file re-hashes and
     // its emitted `?v` busts the stale immutable copy. A no-op in dev (the
     // module is never enabled there), kept for correctness + the deploy-busts

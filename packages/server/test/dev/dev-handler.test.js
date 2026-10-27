@@ -128,6 +128,38 @@ test('handle: a transient vendor failure does not block readiness', async () => 
   }
 });
 
+test('handle: a transiently failed vendor resolve is retried per backoff window, not per request (#1644)', async () => {
+  // The request-driven retry used to restart the resolve on EVERY request
+  // once the first attempt had failed (the single flight only collapsed
+  // concurrent ones), so an outage cost a scan, the manifest reads, and a
+  // jspm fetch per request. The backoff gate opens a 2 s window after the
+  // first failure, so fifty requests inside it fire no second attempt.
+  const appDir = makeApp({
+    'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
+    'node_modules/testpkg/package.json': JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }),
+    'node_modules/testpkg/index.js': 'export const x = 1;\n',
+    'app/page.ts': `import 'testpkg';\nexport default () => 'ok';`,
+  });
+  const origFetch = globalThis.fetch;
+  let jspmAttempts = 0;
+  globalThis.fetch = async (url) => { if (String(url).includes('jspm')) jspmAttempts++; throw new Error('ECONNREFUSED'); };
+  try {
+    const app = await createRequestHandler({ appDir, dev: true });
+    await app.warmup();
+    const afterWarm = jspmAttempts;
+    assert.ok(afterWarm >= 1, 'the first attempt ran during warmup');
+    for (let i = 0; i < 50; i++) {
+      const r = await app.handle(new Request('http://x/'));
+      assert.equal(r.status, 200, 'the page still serves during the outage');
+    }
+    // The retry is fire-and-forget; give any attempt that DID start a tick.
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(jspmAttempts, afterWarm, 'fifty requests inside the backoff window fire no further jspm attempt (without the gate this is about fifty)');
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
 test('handle: a malformed pin file falls through to the real deferred resolve', async () => {
   // Regression: hasVendorPin is a cheap existence check, but a malformed pin
   // (exists, unparseable) must NOT be treated as pinned-at-boot. If it were,
