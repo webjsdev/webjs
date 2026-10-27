@@ -638,7 +638,7 @@ class WebComponentBase extends Base {
       // b. SSR hydration (first mount, <!--webjs-hydrate--> marker
       //    present). Children are already inside their
       //    <slot data-webjs-light data-projection="actual"> elements
-      //    (injectDSD placed them). Adopt those assignments BEFORE
+      //    (the SSR walk placed them). Adopt those assignments BEFORE
       //    _performRender so we retain references to the SSR'd nodes;
       //    the renderer's createInstance().replaceChildren() will
       //    detach them, but the slot-apply step re-attaches the same

@@ -74,7 +74,7 @@
  *
  * SSR. This module is import-safe in Node (DOM access is guarded on
  * `typeof HTMLSlotElement !== 'undefined'`). Server-side slot substitution
- * lives in render-server.js (injectDSD); slot.js drives the client runtime.
+ * lives in render-server/expand.js (`finishSlot`); slot.js drives the client runtime.
  */
 
 // ---------------------------------------------------------------------------

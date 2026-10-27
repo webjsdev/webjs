@@ -31,7 +31,7 @@
  *   user-app:  ThemeToggle.register('theme-toggle')   → instance-A registry
  *   server:    lookup('theme-toggle')                  → instance-B registry (empty)
  *
- * SSR's `injectDSD` would then skip the tag and emit bare
+ * The SSR walk's `lookup(tag)` would then find no class and emit bare
  * `<theme-toggle></theme-toggle>` even though the user registered it
  * correctly. Symptom: components render with no children server-side
  * and only "appear" after the browser hydrates.
