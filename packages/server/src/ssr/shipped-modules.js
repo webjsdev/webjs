@@ -22,7 +22,7 @@
  */
 import { buildEpoch } from '../build-epoch.js';
 import { withBasePath } from '../base-path.js';
-import { withAssetHash } from '../asset-hash.js';
+import { withAssetHash, assetHashMisses } from '../asset-hash.js';
 import { toUrlPath } from './preloads.js';
 
 /**
@@ -100,8 +100,14 @@ export function hintedBootModules(route, deps, basePath) {
   const { moduleUrls } = shippedBootModules(route, deps);
   const entry = /** @type {NonNullable<ReturnType<typeof MEMO.get>>} */ (MEMO.get(route));
   if (entry.hinted && entry.hintedBasePath === basePath) return entry.hinted;
+  // Not stored when a hash read failed transiently while computing it
+  // (`assetHashMisses` moved): the list is served with the un-fingerprinted
+  // url, and the next request re-attempts the read (see `asset-hash.js`).
+  const missesBefore = assetHashMisses();
   const hinted = moduleUrls.map((u) => withAssetHash(withBasePath(u, basePath), basePath));
-  entry.hinted = hinted;
-  entry.hintedBasePath = basePath;
+  if (assetHashMisses() === missesBefore) {
+    entry.hinted = hinted;
+    entry.hintedBasePath = basePath;
+  }
   return hinted;
 }

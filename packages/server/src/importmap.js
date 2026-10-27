@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { digestHex } from './crypto-utils.js';
 import { jsonForScriptTag } from './script-tag-json.js';
 import { withBasePath } from './base-path.js';
-import { withAssetHash } from './asset-hash.js';
+import { withAssetHash, assetHashMisses } from './asset-hash.js';
 import { buildEpoch, bumpBuildEpoch } from './build-epoch.js';
 
 // Local attribute escaper, byte-identical to the pair in `ssr/escape.js`,
@@ -480,6 +480,11 @@ export function buildImportMap(opts = {}) {
   // the build-id hash stays live, since it is what the memo is derived from.
   // Callers only READ the returned object.
   if (fingerprint && _mapMemo.epoch === buildEpoch()) return _mapMemo.value;
+  // A transient hash miss during this build (`assetHashMisses` moved) means a
+  // target fell back to its un-fingerprinted url; that map is served but NOT
+  // memoized, so the next render re-attempts the read as `asset-hash.js`
+  // promises, instead of pinning the fallback for the rest of the build.
+  const missesBefore = assetHashMisses();
   const merged = {
     ..._coreEntries,
     ..._extraEntries,
@@ -531,7 +536,7 @@ export function buildImportMap(opts = {}) {
     for (const k of intKeys) integrity[withBasePath(k, _basePath)] = _vendorIntegrity[k];
     out.integrity = integrity;
   }
-  if (fingerprint) _mapMemo = { epoch: buildEpoch(), value: out };
+  if (fingerprint && assetHashMisses() === missesBefore) _mapMemo = { epoch: buildEpoch(), value: out };
   return out;
 }
 
@@ -651,8 +656,12 @@ export function importMapTag(opts = {}) {
   // The JSON body is memoized by build epoch (#1644); the nonce and the two
   // deploy signals above are assembled per call, which is why `publishBuildId`
   // and `setAppSourceId` need no epoch bump.
-  if (_tagJsonMemo.epoch !== buildEpoch()) {
-    _tagJsonMemo = { epoch: buildEpoch(), value: jsonForScriptTag(buildImportMap()) };
+  let json = _tagJsonMemo.epoch === buildEpoch() ? _tagJsonMemo.value : null;
+  if (json === null) {
+    json = jsonForScriptTag(buildImportMap());
+    // Stored only when the map itself memoized: a transient hash miss leaves
+    // both live for the next render (see `buildImportMap`).
+    if (_mapMemo.epoch === buildEpoch()) _tagJsonMemo = { epoch: buildEpoch(), value: json };
   }
-  return `<script type="importmap"${n}${b}${s}>${_tagJsonMemo.value}</script>`;
+  return `<script type="importmap"${n}${b}${s}>${json}</script>`;
 }

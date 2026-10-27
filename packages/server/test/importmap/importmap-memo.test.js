@@ -175,6 +175,45 @@ test('importMapTag: the JSON body is memoized while the nonce and build id stay 
   if (!NODE_ONLY_SPY) assert.equal(countReads(() => importMapTag()), 0, 'the tag never rebuilds the map within a build');
 });
 
+test('buildImportMap / importMapTag: a transient hash read failure is served but never memoized (#1644 review)', { skip: NODE_ONLY_SPY }, () => {
+  // `asset-hash.js` promises that a read failure other than EISDIR is not
+  // memoized, so the next emit re-attempts instead of pinning the bare url
+  // for the process lifetime. The epoch memos over those hashes must keep
+  // that promise: a map built while one read failed (EMFILE here) is served
+  // with the fallback and NOT stored, and the first call after the failure
+  // clears re-reads, carries the `?v`, and is the one that memoizes. With the
+  // guard removed, that call returns the bare map by identity and this fails.
+  clearAssetHashCache();
+  const real = fs.readFileSync;
+  let thrown = 0;
+  fs.readFileSync = function (p, ...rest) {
+    if (String(p).endsWith('index-browser.js')) {
+      thrown++;
+      const e = /** @type {NodeJS.ErrnoException} */ (new Error('EMFILE: too many open files'));
+      e.code = 'EMFILE';
+      throw e;
+    }
+    return real.call(this, p, ...rest);
+  };
+  syncBuiltinESMExports();
+  let tagDuring, mapDuring;
+  try {
+    tagDuring = importMapTag();
+    mapDuring = buildImportMap();
+  } finally {
+    fs.readFileSync = real;
+    syncBuiltinESMExports();
+  }
+  assert.ok(thrown >= 1, 'the spy failed the read');
+  assert.doesNotMatch(mapDuring.imports['@webjsdev/core'], /\?v=/, 'the failed read fell back to the bare url');
+  assert.doesNotMatch(tagDuring, /index-browser\.js\?v=/, 'and the tag served that fallback');
+  const mapAfter = buildImportMap();
+  assert.notEqual(mapAfter, mapDuring, 'the fallback map was not memoized');
+  assert.match(mapAfter.imports['@webjsdev/core'], /\?v=[0-9a-f]{12}$/, 'the next call re-read the file and fingerprinted it');
+  assert.equal(buildImportMap(), mapAfter, 'and that map is the one memoized');
+  assert.match(importMapTag(), /index-browser\.js\?v=[0-9a-f]{12}/, 'the tag follows: its JSON was not pinned to the fallback either');
+});
+
 test('vendorPreconnectOrigins: same array within a build, a new one after setVendorEntries', async () => {
   await setVendorEntries({ a: 'https://ga.jspm.io/npm:a@1/a.js', b: 'https://ga.jspm.io/npm:b@1/b.js' });
   const x = vendorPreconnectOrigins();
