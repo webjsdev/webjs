@@ -88,6 +88,8 @@ try {
   // out-of-band WeakMap re-stamp vs the ALS store).
   w('ipcheck.server.ts', `'use server';\nimport { redirect } from ${JSON.stringify(CORE)};\nimport { clientIp, getRequest, actionContext } from ${JSON.stringify(SERVER)};\nexport const middleware = [async (ctx: any, next: any) => { ctx.context.rebuiltIp = clientIp(ctx.request); return next(); }];\nexport async function seeIp() { const q = new URLSearchParams({ seenip: clientIp(getRequest()), rebuiltip: String(actionContext().rebuiltIp) }); throw redirect('/?' + q.toString()); }`);
   w('app/ipcheck/page.ts', `import { html } from ${JSON.stringify(CORE)};\nimport { seeIp } from '../../ipcheck.server.ts';\nexport default () => html\`<main><form action=\${seeIp}><button>go</button></form></main>\`;`);
+  // An under-floor buffered body (#1644): 80 bytes of text/plain.
+  w('app/api/tiny/route.ts', `export async function GET() {\n  return new Response('tiny'.repeat(20), { headers: { 'content-type': 'text/plain' } });\n}`);
   // A genuinely STREAMED, compressible body whose SECOND chunk is far off. The
   // compression classifier must not block the response head on it (#756 review).
   w('app/api/slow/route.ts', `export async function GET() {\n  const enc = new TextEncoder();\n  let pulled = 0;\n  const stream = new ReadableStream({\n    start(c) { c.enqueue(enc.encode('shell-chunk-' + 'a'.repeat(64) + ';')); },\n    async pull(c) { if (pulled++) { c.close(); return; } await new Promise((r) => setTimeout(r, 400)); c.enqueue(enc.encode('boundary-chunk;')); c.close(); },\n  });\n  return new Response(stream, { headers: { 'content-type': 'text/html; charset=utf-8' } });\n}`);
@@ -106,17 +108,29 @@ try {
     assert.ok(body.includes(MARKER.trim()), `[${runtime}] ${enc} body decodes to the original page`);
   }
 
-  // (1b) On Bun, prove the BUFFERED sync-compress fast path is actually TAKEN
-  // (not silently falling back to the stream bridge): the sync path SETS
+  // (1b) Prove the BUFFERED sync-compress fast path is actually TAKEN on BOTH
+  // shells (not silently falling back to the stream bridge): the sync path SETS
   // `content-length` on the fully-compressed buffer, the bridge DELETES it. A raw
   // probe is required because `fetch` strips `content-length` when it
-  // decompresses. Bun-only: the node shell stream-compresses a buffered page too,
-  // so it carries no content-length (the classifier is a Bun-shell optimization).
-  if (process.versions.bun) {
+  // decompresses. This was Bun-only until #1644 ported the fast path to the
+  // node shell, which stream-compressed every buffered page through a
+  // per-response zlib Transform on the threadpool.
+  {
     const head = await rawHead(port, '/', { 'accept-encoding': 'gzip' });
     assert.ok(/content-encoding:\s*gzip/.test(head), `[${runtime}] buffered page served gzip (raw head)`);
     assert.ok(/content-length:\s*\d+/.test(head),
-      `[${runtime}] the Bun buffered fast path set content-length (sync compress, not the stream bridge)`);
+      `[${runtime}] the buffered fast path set content-length (sync compress, not the stream bridge)`);
+  }
+
+  // (1c) A buffered body under the shared 1 KB floor (#1644) is sent as is on
+  // both shells: no content-encoding, the original bytes, content-length set.
+  {
+    const r = await fetch(`${base}/api/tiny`, { headers: { 'accept-encoding': 'gzip, br' } });
+    assert.equal(r.status, 200);
+    assert.equal(r.headers.get('content-encoding'), null, `[${runtime}] an under-floor body is not compressed`);
+    assert.equal(await r.text(), 'tiny'.repeat(20), `[${runtime}] and arrives verbatim`);
+    const head = await rawHead(port, '/api/tiny', { 'accept-encoding': 'gzip' });
+    assert.ok(/content-length:\s*80\b/.test(head), `[${runtime}] with its own content-length`);
   }
 
   // (2) The trusted remote IP reaches clientIp; a spoofed header does not win.

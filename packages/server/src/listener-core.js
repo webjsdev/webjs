@@ -122,6 +122,16 @@ export function createCompressor(encoding) {
 export const MAX_SYNC_COMPRESS_BYTES = 256 * 1024;
 
 /**
+ * The smallest BUFFERED body worth compressing (#1644), shared by both shells.
+ * Below it the encoding's own cost (a zlib context, the framing bytes, a
+ * decode on the client) outweighs the few bytes it saves, so the body is sent
+ * as is with no `content-encoding`. 1 KB is the threshold Express's
+ * `compression` middleware has used for years. A STREAMED body is never
+ * measured against it (its size is unknown when the head goes out).
+ */
+export const MIN_COMPRESS_BYTES = 1024;
+
+/**
  * Compress an already-buffered body synchronously, byte-for-byte identical to
  * the streaming `createCompressor` ON THE SAME RUNTIME (same algorithm + params:
  * brotli quality 4, gzip / deflate level 6, over the same `node:zlib`), so a

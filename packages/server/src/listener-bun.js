@@ -59,6 +59,7 @@ import {
   createCompressor,
   compressBufferSync,
   MAX_SYNC_COMPRESS_BYTES,
+  MIN_COMPRESS_BYTES,
   varyWithAcceptEncoding,
   readBufferedOrStream,
 } from './listener-core.js';
@@ -477,6 +478,12 @@ async function maybeCompress(resp, req) {
   // falls through to the bridge below.
   const peeked = await readBufferedOrStream(resp.body, MAX_SYNC_COMPRESS_BYTES);
   if (peeked.buffered !== undefined) {
+    // Under the shared floor (#1644) the body goes out uncompressed, with the
+    // ORIGINAL headers (the encoding + vary written above are not applied).
+    // The peek consumed the body, so rebuild the Response from the bytes.
+    if (peeked.buffered.byteLength < MIN_COMPRESS_BYTES) {
+      return new Response(peeked.buffered, { status: resp.status, statusText: resp.statusText, headers: resp.headers });
+    }
     const out = compressBufferSync(encoding, peeked.buffered);
     headers.set('content-length', String(out.length));
     return new Response(out, { status: resp.status, statusText: resp.statusText, headers });
