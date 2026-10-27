@@ -35,7 +35,7 @@ Three seams pick a runtime-specific implementation, all inside the framework, no
 | Hot reload | restart on change (the `webjs dev` supervisor, #1521) | in place in one long-lived process (`bun --hot` resets the module registry, #1575); only an `instrumentation.*` / `env.*` edit restarts it |
 | WebSocket | the `ws` library | native `Bun.serve` + a bridge adapter |
 | 103 Early Hints | yes | no (`Bun.serve` has no informational-response API) |
-| Response compression (prod) | brotli / gzip / deflate over `node:zlib`: a buffered body (an SSR page, JSON, a module) is compressed synchronously and sent with its `Content-Length`, a streamed body through a streaming compressor, and a buffered body under 1 KB is sent as is | same (both shells share the seam and the 1 KB floor) |
+| Response compression (prod) | brotli / gzip / deflate over `node:zlib`: a buffered body (an SSR page, JSON, a module) is compressed synchronously and sent with its `Content-Length`, a streamed body through a streaming compressor, a buffered body under 1 KB is sent as is, and a buffered body under 32 KB is gzip-encoded even when brotli is accepted (gzip 6 is 2 to 3x cheaper than brotli 4 at that size for a few percent more bytes, #1646) | same (both shells share the seam, the 1 KB floor and the 32 KB brotli floor) |
 | Dev edit to a page / layout | full reload (the dev restart replaces the process) | refreshes IN PLACE, no reload (#1398) |
 | Reverse-proxy headers | `X-Forwarded-Proto` / `X-Forwarded-Host` honored | same |
 

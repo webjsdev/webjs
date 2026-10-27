@@ -1098,7 +1098,9 @@ test('startServer: brotli wins over gzip when both are offered', async () => {
       headers: { 'accept-encoding': 'br, gzip' },
     });
     assert.equal(resp.status, 200);
-    assert.equal(resp.headers.get('content-encoding'), 'br');
+    // A small buffered page prefers gzip over brotli when both are accepted
+    // (#1646): at this size gzip is 2 to 3x cheaper for a few percent more bytes.
+    assert.equal(resp.headers.get('content-encoding'), 'gzip');
   } finally {
     await close();
   }

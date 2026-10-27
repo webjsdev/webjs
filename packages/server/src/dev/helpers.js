@@ -123,9 +123,12 @@ export async function sendWebResponse(res, webRes, req, opts) {
   if (peeked.buffered !== undefined && peeked.buffered.byteLength <= MAX_SYNC_COMPRESS_BYTES) {
     const buf = peeked.buffered;
     if (encoding && buf.byteLength >= MIN_COMPRESS_BYTES) {
-      const out = compressBufferSync(encoding, buf);
+      // The size is known now, so the small-body gzip preference applies (#1646).
+      const sized = negotiateEncoding(req.headers['accept-encoding'], buf.byteLength);
+      const out = compressBufferSync(sized, buf);
       if (out) {
         withEncoding();
+        headers['content-encoding'] = sized;
         headers['content-length'] = String(out.length);
         res.writeHead(webRes.status, headers);
         res.end(out);

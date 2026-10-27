@@ -34,6 +34,8 @@ before(async () => {
   // A route that sets its own Vary header on a compressible body.
   // 2000 bytes: above the shared MIN_COMPRESS_BYTES floor (#1644), so the
   // body is compressed and the Vary merge is observable.
+  // A body over BROTLI_MIN_BYTES, where brotli is still preferred (#1646).
+  w('app/api/big/route.ts', `export async function GET() {\n  return new Response('lorem ipsum dolor sit amet '.repeat(2000), { headers: { 'content-type': 'text/plain' } });\n}\n`);
   w('app/api/vary/route.ts', `export async function GET() {\n  return new Response('x'.repeat(2000), { headers: { 'content-type': 'text/plain', vary: 'Cookie' } });\n}\n`);
   // A user SSE stream (text/event-stream) that must never be compressed.
   w('app/api/sse/route.ts', `export async function GET() {\n  const body = new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode('data: hi\\n\\n')); c.close(); } });\n  return new Response(body, { headers: { 'content-type': 'text/event-stream' } });\n}\n`);
@@ -58,15 +60,25 @@ test('a normal compressible body IS gzipped when accepted', async () => {
   assert.ok((await r.text()).includes('compressible page body'), 'decodes back to the page');
 });
 
-test('brotli is served when accepted (parity on both shells, #517)', async () => {
+test('brotli is served when accepted, above the small-body floor (parity on both shells, #517, #1646)', async () => {
   // Both the node:http shell (node:zlib) and the Bun.serve shell (node:zlib,
-  // which is native on Bun) prefer brotli now. This test runs under whichever
-  // runtime executes it, so it asserts brotli on BOTH shells.
+  // which is native on Bun) negotiate through one seam. This test runs under
+  // whichever runtime executes it, so it asserts BOTH shells. A SMALL buffered
+  // body (the page) prefers gzip when brotli and gzip are both accepted, since
+  // gzip 6 is 2 to 3x cheaper than brotli 4 there for a few percent more
+  // bytes; a body over BROTLI_MIN_BYTES gets brotli, and a client that accepts
+  // only brotli gets brotli at any size.
   const r = await fetch(`${base}/`, { headers: { 'accept-encoding': 'br, gzip' } });
-  assert.equal(r.headers.get('content-encoding'), 'br', 'brotli is preferred over gzip when both are accepted');
-  assert.ok((await r.text()).includes('compressible page body'), 'the brotli body decodes back to the page');
+  assert.equal(r.headers.get('content-encoding'), 'gzip', 'a small page is gzip-encoded when both are accepted');
+  assert.ok((await r.text()).includes('compressible page body'), 'the gzip body decodes back to the page');
   const vary = r.headers.get('vary') || '';
-  assert.ok(/accept-encoding/i.test(vary), 'Accept-Encoding is in Vary on the brotli response');
+  assert.ok(/accept-encoding/i.test(vary), 'Accept-Encoding is in Vary on the response');
+  const brOnly = await fetch(`${base}/`, { headers: { 'accept-encoding': 'br' } });
+  assert.equal(brOnly.headers.get('content-encoding'), 'br', 'brotli alone is still honoured on a small page');
+  assert.ok((await brOnly.text()).includes('compressible page body'), 'the brotli body decodes back to the page');
+  const big = await fetch(`${base}/api/big`, { headers: { 'accept-encoding': 'br, gzip' } });
+  assert.equal(big.headers.get('content-encoding'), 'br', 'a large body is brotli-encoded when both are accepted');
+  assert.equal((await big.text()).length, 'lorem ipsum dolor sit amet '.length * 2000, 'the brotli body decodes whole');
 });
 
 test('a pre-encoded (content-encoding: gzip) body is NOT double-compressed', async () => {

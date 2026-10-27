@@ -491,7 +491,10 @@ async function maybeCompress(resp, req) {
     if (peeked.buffered.byteLength < MIN_COMPRESS_BYTES) {
       return new Response(peeked.buffered, { status: resp.status, statusText: resp.statusText, headers: resp.headers });
     }
-    const out = compressBufferSync(encoding, peeked.buffered);
+    // The size is known now, so the small-body gzip preference applies (#1646).
+    const sized = negotiateEncoding(req.headers.get('accept-encoding'), peeked.buffered.byteLength);
+    headers.set('content-encoding', sized);
+    const out = compressBufferSync(sized, peeked.buffered);
     headers.set('content-length', String(out.length));
     return new Response(out, { status: resp.status, statusText: resp.statusText, headers });
   }

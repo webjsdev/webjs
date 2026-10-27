@@ -298,6 +298,16 @@ test('negotiateEncoding prefers brotli, then gzip, then deflate', () => {
   assert.equal(negotiateEncoding(['br', 'gzip']), 'br', 'an array header (node multi-value) is joined');
 });
 
+test('negotiateEncoding prefers gzip over brotli for a small buffered body (#1646)', async () => {
+  const { BROTLI_MIN_BYTES } = await import('../../src/listener-core.js');
+  assert.equal(negotiateEncoding('br, gzip', 2400), 'gzip', 'a 2.4 KB page is gzip when both are accepted');
+  assert.equal(negotiateEncoding('br, gzip', BROTLI_MIN_BYTES - 1), 'gzip', 'just under the floor is gzip');
+  assert.equal(negotiateEncoding('br, gzip', BROTLI_MIN_BYTES), 'br', 'at the floor brotli wins again');
+  assert.equal(negotiateEncoding('br', 2400), 'br', 'brotli alone is honoured at any size');
+  assert.equal(negotiateEncoding('br, deflate', 2400), 'br', 'deflate never displaces brotli');
+  assert.equal(negotiateEncoding('br, gzip'), 'br', 'counterfactual: with no size (a streamed body) brotli is preferred as before');
+});
+
 test('createCompressor returns a node:zlib Transform per encoding, null otherwise', () => {
   for (const enc of ['br', 'gzip', 'deflate']) {
     const c = createCompressor(enc);

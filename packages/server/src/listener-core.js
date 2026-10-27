@@ -80,18 +80,36 @@ export function isCompressible(contentType) {
 }
 
 /**
+ * The smallest BUFFERED body brotli is worth on the sync path (#1646). Below
+ * it gzip level 6 is preferred when the client accepts both: measured on the
+ * two runtimes, a 2.4 KB SSR page costs 60 to 82 µs at brotli quality 4
+ * against 18 to 29 µs at gzip 6 for 912 against 986 bytes, and at 8 KB the
+ * byte gap is 3 percent for a 1.7 to 2.8x CPU gap. From about 32 KB brotli's
+ * ratio advantage and Node's slower gzip cross over (a 133 KB page compresses
+ * to 36.3 KB either way, brotli 1.1 to 1.4 ms, gzip 1.3 to 1.8 ms). This is
+ * the sync, buffered path only; a streamed body's size is unknown when its
+ * head goes out, and a streamed body is large or Suspense-driven by nature.
+ */
+export const BROTLI_MIN_BYTES = 32 * 1024;
+
+/**
  * Negotiate a response content-encoding from a request's `Accept-Encoding`,
  * preferring brotli (best ratio), then gzip, then deflate. Returns `''` when
  * none is acceptable. Shared by BOTH listener shells so they negotiate
  * identically; the matching uses the same `(?:^|,\s*)<enc>(?:;|,|$)` token test
- * the node shell has always used.
+ * the node shell has always used. With a known body size (the buffered path),
+ * gzip wins over brotli under `BROTLI_MIN_BYTES` when both are accepted.
  * @param {string | string[] | undefined | null} acceptEncoding
+ * @param {number} [bodyBytes]  the buffered body's size, when known
  * @returns {'br' | 'gzip' | 'deflate' | ''}
  */
-export function negotiateEncoding(acceptEncoding) {
+export function negotiateEncoding(acceptEncoding, bodyBytes) {
   const accept = Array.isArray(acceptEncoding) ? acceptEncoding.join(',') : String(acceptEncoding || '');
-  if (/(?:^|,\s*)br(?:;|,|$)/.test(accept)) return 'br';
-  if (/(?:^|,\s*)gzip(?:;|,|$)/.test(accept)) return 'gzip';
+  const br = /(?:^|,\s*)br(?:;|,|$)/.test(accept);
+  const gzip = /(?:^|,\s*)gzip(?:;|,|$)/.test(accept);
+  if (br && gzip && bodyBytes !== undefined && bodyBytes < BROTLI_MIN_BYTES) return 'gzip';
+  if (br) return 'br';
+  if (gzip) return 'gzip';
   if (/(?:^|,\s*)deflate(?:;|,|$)/.test(accept)) return 'deflate';
   return '';
 }

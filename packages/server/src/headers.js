@@ -270,8 +270,13 @@ export function webRequestIsHttps(req) {
     const proto = req.headers.get('x-forwarded-proto');
     if (proto) return proto.split(',')[0].trim().toLowerCase() === 'https';
   }
+  // The request url is absolute on every runtime the shells run on, so the
+  // scheme is its prefix; parsing a URL per request to read five characters
+  // was a measurable share of a Bun request (#1646).
+  const url = req.url;
+  if (typeof url === 'string') return /^https:/i.test(url);
   try {
-    return new URL(req.url).protocol === 'https:';
+    return new URL(url).protocol === 'https:';
   } catch {
     return false;
   }
