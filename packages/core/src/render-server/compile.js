@@ -284,10 +284,20 @@ function tokenize(strings) {
           break;
         case 'attr-name':
           if (c === '=') { state = 'after-eq'; chunk += c; }
-          else if (WS.test(c)) { state = 'in-tag'; attrName = ''; chunk += c; }
+          else if (WS.test(c)) { state = 'after-name'; chunk += c; }
           else if (c === '/') { state = 'in-tag'; attrName = ''; solidus = true; chunk += c; }
           else if (c === '>') { chunk += c; finishStartTag(false); }
           else { attrName += c; chunk += c; }
+          break;
+        case 'after-name':
+          // Whitespace after an attribute name (after-attribute-name state):
+          // an `=` still belongs to that attribute, so `href = ${x}` binds.
+          chunk += c;
+          if (c === '=') state = 'after-eq';
+          else if (WS.test(c)) { /* keep waiting */ }
+          else if (c === '>') finishStartTag(false);
+          else if (c === '/') { state = 'in-tag'; attrName = ''; solidus = true; }
+          else { state = 'attr-name'; attrName = c; attrStart = chunk.length - 1; }
           break;
         case 'after-eq':
           // Whitespace after `=` is skipped (before-attribute-value state), so
