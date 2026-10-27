@@ -34,18 +34,20 @@ import {
  * @param {any} Cls
  * @param {string} opening   the opening tag as written, `<tag attrs>`
  * @param {string} attrs     the attribute text between the tag name and `>`
- * @returns {Promise<any>} the frame
+ * @returns {any} the frame; `pending` is set when `render()` returned a
+ *   promise, and the caller awaits `settleRender` before using it
  */
-export async function beginComponent(w, tag, Cls, opening, attrs) {
+export function beginComponent(w, tag, Cls, opening, attrs) {
   if (w.ctx && w.ctx.usedComponents) w.ctx.usedComponents.add(tag);
   const isShadow = Cls.shadow === true;
   const frame = {
     kind: 'component', tag, Cls, isShadow, instance: null, opening, tpl: undefined,
+    pending: /** @type {Promise<unknown> | null} */ (null), presentAttrNames: /** @type {Set<string> | null} */ (null),
     error: /** @type {unknown} */ (null), outer: '',
     // Light-DOM children partition: element depth, the open top-level
     // segment, and the named-slot segments seen so far.
     partition: !isShadow, depth: 0, seg: null, pendingSeg: null,
-    /** @type {{ start: number, end: number, slot: string }[]} */ segments: [],
+    /** @type {{ start: number, end: number, slot: string }[] | null} */ segments: null,
     closeText: '',
   };
   try {
@@ -57,17 +59,19 @@ export async function beginComponent(w, tag, Cls, opening, attrs) {
     // closest() sees the chain.
     instance.__ssrTag = tag;
     instance.__ssrAncestors = w.ancestors.slice();
-    const attrMap = parseAttrs(attrs);
+    const attrMap = attrs ? parseAttrs(attrs) : {};
+    // Names already in the source opening tag (the data-webjs-prop-* bindings
+    // included, which the consume step below strips from attrMap but which
+    // stay in the emitted text). Reflected/added attributes are appended only
+    // when their name is NOT already here, so output stays byte-identical
+    // when nothing reflects.
+    const presentAttrNames = new Set();
+    for (const n in attrMap) presentAttrNames.add(n.toLowerCase());
     // Decode `data-webjs-prop-*` first (rich-typed values emitted for
     // `.prop=${val}` bindings in the parent template), then coerce the
     // ordinary string attributes by declared type. Property bindings take
     // priority on a name collision because they preserve the JS reference.
     const propValues = consumePropAttrs(attrMap);
-    // Names already in the source opening tag (the data-webjs-prop-* bindings
-    // included, stripped from attrMap above but still in the emitted text).
-    // Reflected/added attributes are appended only when their name is NOT
-    // already here, so output stays byte-identical when nothing reflects.
-    const presentAttrNames = new Set(Object.keys(parseAttrs(attrs)).map((n) => n.toLowerCase()));
     seedServerAttrs(instance, attrMap);
     applyAttrsToInstance(instance, attrMap, Cls);
     for (const [k, v] of Object.entries(propValues)) instance[k] = v;
@@ -75,21 +79,44 @@ export async function beginComponent(w, tag, Cls, opening, attrs) {
     // reflect:true reflection), matching lit's update cycle at SSR. Bare
     // Base-extending kit components have no lifecycle, so it is guarded.
     if (typeof instance.performServerUpdate === 'function') instance.performServerUpdate();
-    let tpl = instance.render ? instance.render() : '';
-    if (tpl && typeof tpl.then === 'function') tpl = await tpl;
+    const tpl = instance.render ? instance.render() : '';
+    frame.presentAttrNames = presentAttrNames;
+    if (tpl && typeof tpl.then === 'function') {
+      // An async render() is awaited by the walker through `settleRender`.
+      frame.pending = tpl;
+      return frame;
+    }
     frame.tpl = tpl;
-    // Surface attributes the component set up to and including render() that
-    // were not in the source tag (reflected props, an explicit setAttribute,
-    // a host mutation inside render()). Reading after render() captures all.
-    frame.opening = appendReflectedAttrs(opening, instance, presentAttrNames);
-    // Mark LIGHT-DOM hosts for the `@layer webjs-host` display:block default.
-    // Shadow hosts are NOT marked: a document-level rule on the host beats the
-    // shadow tree's own `:host { display }`.
-    if (!isShadow) frame.opening = withHostMarker(frame.opening);
+    afterRender(frame);
   } catch (e) {
     frame.error = e;
   }
   return frame;
+}
+
+/**
+ * Finish `beginComponent` for an async `render()`.
+ * @param {any} frame
+ */
+export async function settleRender(frame) {
+  try {
+    frame.tpl = await frame.pending;
+    afterRender(frame);
+  } catch (e) {
+    frame.error = e;
+  }
+  frame.pending = null;
+}
+
+function afterRender(frame) {
+  // Surface attributes the component set up to and including render() that
+  // were not in the source tag (reflected props, an explicit setAttribute,
+  // a host mutation inside render()). Reading after render() captures all.
+  frame.opening = appendReflectedAttrs(frame.opening, frame.instance, frame.presentAttrNames);
+  // Mark LIGHT-DOM hosts for the `@layer webjs-host` display:block default.
+  // Shadow hosts are NOT marked: a document-level rule on the host beats the
+  // shadow tree's own `:host { display }`.
+  if (!frame.isShadow) frame.opening = withHostMarker(frame.opening);
 }
 
 /**
@@ -136,7 +163,7 @@ export async function finishComponent(w, frame, children, closed) {
  */
 async function renderOwnTemplate(w, frame, children) {
   const owner = w.owner;
-  w.owner = frame.isShadow ? null : { tag: frame.tag, partition: partitionChildren(children, frame.segments), consumed: new Set() };
+  w.owner = frame.isShadow ? null : { tag: frame.tag, partition: partitionChildren(children, frame.segments), consumed: null };
   try {
     return await w.capture(() => w.value(frame.tpl));
   } finally {
@@ -155,6 +182,10 @@ async function renderOwnTemplate(w, frame, children) {
 function partitionChildren(children, segments) {
   /** @type {Map<string|null, string>} */
   const groups = new Map();
+  if (!segments) {
+    if (children.length > 0) groups.set(null, children);
+    return groups;
+  }
   let def = '';
   let cursor = 0;
   for (const seg of segments) {
@@ -242,15 +273,19 @@ export function extractSlotAttr(attrsRaw) {
 export function finishSlot(frame, fallback) {
   const { attrsRaw, owner } = frame;
   const ownerAttr = owner.tag ? ` data-wj-slot-owner="${escapeAttr(owner.tag)}"` : '';
-  const nameMatch = /\bname\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrsRaw);
-  const name = nameMatch ? (nameMatch[1] ?? nameMatch[2] ?? nameMatch[3]) : null;
-  const otherAttrs = attrsRaw.replace(/\bname\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/i, '').trim();
+  let name = null;
+  let otherAttrs = '';
+  if (attrsRaw.trim() !== '') {
+    const nameMatch = /\bname\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrsRaw);
+    name = nameMatch ? (nameMatch[1] ?? nameMatch[2] ?? nameMatch[3]) : null;
+    otherAttrs = attrsRaw.replace(/\bname\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/i, '').trim();
+  }
   const slotKey = name === 'default' || name === '' ? null : name;
   const projected = owner.partition.get(slotKey);
   const nameAttr = name !== null ? ` name="${escapeAttr(name)}"` : '';
   const extraAttrs = otherAttrs ? ` ${otherAttrs}` : '';
-  if (projected !== undefined && !owner.consumed.has(slotKey)) {
-    owner.consumed.add(slotKey);
+  if (projected !== undefined && !(owner.consumed && owner.consumed.has(slotKey))) {
+    (owner.consumed ??= new Set()).add(slotKey);
     return `<slot data-webjs-light data-projection="actual"${ownerAttr}${nameAttr}${extraAttrs}>${projected}</slot>`;
   }
   return `<slot data-webjs-light data-projection="fallback"${ownerAttr}${nameAttr}${extraAttrs}>${fallback}</slot>`;

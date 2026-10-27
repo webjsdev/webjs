@@ -55,7 +55,7 @@ export function seedServerAttrs(instance, attrs) {
  * @returns {string}
  */
 export function withHostMarker(opening) {
-  if (/\sdata-wj-host(?=[\s>=])/i.test(opening)) return opening;
+  if (opening.includes('data-wj-host') && /\sdata-wj-host(?=[\s>=])/i.test(opening)) return opening;
   return `${opening.slice(0, -1)} data-wj-host>`;
 }
 

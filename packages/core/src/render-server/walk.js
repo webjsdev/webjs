@@ -17,7 +17,7 @@ import { lookup } from '../registry.js';
 import { kebabCase } from './text.js';
 import { isTextOnlyTag } from './html-scan.js';
 import { compile, compileRaw, TEXT, OPEN, TAG_END, CLOSE, HOLE, CHILD, RAW, ATTR, VALUE, isVoidElement } from './compile.js';
-import { beginComponent, finishComponent, finishSlot, finishSuspense, extractSlotAttr } from './expand.js';
+import { beginComponent, settleRender, finishComponent, finishSlot, finishSuspense, extractSlotAttr } from './expand.js';
 
 /**
  * The SSR op walker (#1646): ONE interpreter over the compiled ops that
@@ -229,18 +229,6 @@ export class Walker {
     this.flush();
   }
 
-  /**
-   * Await a hole's value and unwrap live() once, here, before the position
-   * dispatch, exactly where the client's applyPart() does (#1443). AFTER the
-   * await, since a hole may hold a promise that resolves TO a live().
-   * @param {unknown} val
-   */
-  async resolve(val) {
-    if (val && typeof (/** @type any */ (val).then) === 'function') val = await val;
-    if (isLive(val)) val = /** @type any */ (val).value;
-    return val;
-  }
-
   // -------------------------------------------------------------------------
   // The op loop
   // -------------------------------------------------------------------------
@@ -260,18 +248,31 @@ export class Walker {
         case OPEN:
           this.open(/** @type string */ (op.tag));
           break;
-        case TAG_END:
-          await this.tagEnd(op);
+        case TAG_END: {
+          // Sync for an ordinary element; a frame-taking tag returns a promise.
+          const p = this.tagEnd(op);
+          if (p) await p;
           break;
-        case CLOSE:
-          await this.close(op);
+        }
+        case CLOSE: {
+          const p = this.close(op);
+          if (p) await p;
           break;
+        }
         case HOLE: {
-          const val = await this.resolve(values[vi++]);
+          let val = values[vi++];
+          if (val && typeof (/** @type any */ (val).then) === 'function') val = await val;
+          // Unwrap live() once, here, before the position dispatch, exactly
+          // where the client's applyPart() unwraps it (#1443). AFTER the
+          // await, since a hole may hold a promise that resolves TO a live().
+          if (isLive(val)) val = /** @type any */ (val).value;
           switch (op.k) {
             case CHILD:
               this.flush();
-              await this.value(val);
+              // The common primitive child needs no promise.
+              if (typeof val === 'string') this.emit(escapeText(val));
+              else if (typeof val === 'number') this.emit(escapeText(String(val)));
+              else await this.value(val);
               break;
             case RAW:
               // Inside a comment, a <script> or a <style>: emitted as-is. The
@@ -310,8 +311,8 @@ export class Walker {
       actionId: /** @type {string | null} */ (null),
       submitterTag: /** @type {string | null} */ (null),
       actionCount: 0,
-      /** @type {string[]} */ propAttrs: [],
-      /** @type {string[]} */ submitterProps: [],
+      /** @type {string[] | null} */ propAttrs: null,
+      /** @type {string[] | null} */ submitterProps: null,
       /** @type {string | null} */ fallback: null,
     };
     // A top-level child of a light-DOM component: the segment it occupies in
@@ -409,14 +410,19 @@ export class Walker {
     if (written !== null) this.buf += `${op.lead}"${escapeAttr(written)}"`;
   }
 
-  /** @param {import('./compile.js').Op} op */
-  async tagEnd(op) {
+  /**
+   * The `>` of a start tag. Returns a promise only when the tag takes a
+   * frame, so the op loop stays synchronous across ordinary markup.
+   * @param {import('./compile.js').Op} op
+   * @returns {Promise<void> | undefined}
+   */
+  tagEnd(op) {
     const ts = this.tagState;
     this.tagState = null;
     this.buf += op.close;
     if (!ts) return;
     const tag = ts.tag;
-    this.closeBoundFormTag(ts);
+    if (ts.actionId != null || ts.submitterTag != null) this.closeBoundFormTag(ts);
 
     if (this.inert.length) return;
     const selfClose = !!op.selfClose;
@@ -424,47 +430,11 @@ export class Walker {
 
     const top = this.frames[this.frames.length - 1];
     if (this.expand && this.defer === 0 && !this.inert.length) {
-      if (tag === 'webjs-suspense') {
-        this.closeSeg(top, ts);
-        const frame = { kind: 'suspense', tag, outer: '', fallback: ts.fallback || '', id: /** @type {string | null} */ (null) };
-        if (this.ctx) frame.id = `s${this.ctx.nextId++}`;
-        this.buf = this.buf.slice(0, ts.start);
-        frame.outer = this.buf;
-        this.buf = '';
-        if (this.ctx) this.defer += 1;
-        if (selfClose) { await this.finish(frame, true); return; }
-        this.frames.push(frame);
-        return;
-      }
-      if (tag === 'slot' && this.owner) {
-        this.closeSeg(top, ts);
-        const startTag = this.buf.slice(ts.start);
-        const attrsRaw = startTag.slice(1 + tag.length, startTag.length - op.close.length);
-        this.buf = this.buf.slice(0, ts.start);
-        const frame = { kind: 'slot', tag, outer: this.buf, attrsRaw, owner: this.owner };
-        this.buf = '';
-        if (selfClose) { await this.finish(frame, true); return; }
-        this.frames.push(frame);
-        return;
-      }
+      if (tag === 'webjs-suspense') return this.openSuspense(op, ts, top, selfClose);
+      if (tag === 'slot' && this.owner) return this.openSlot(op, ts, top, selfClose);
       if (tag.includes('-')) {
         const Cls = lookup(tag);
-        if (Cls) {
-          this.closeSeg(top, ts);
-          const startTag = this.buf.slice(ts.start);
-          // The opening tag as the DSD walk had it, `<tag attrs>`, with a
-          // self-closing solidus dropped.
-          const opening = startTag.slice(0, startTag.length - op.close.length) + '>';
-          const attrs = startTag.slice(1 + tag.length, startTag.length - op.close.length);
-          this.buf = this.buf.slice(0, ts.start);
-          const frame = await beginComponent(this, tag, Cls, opening, attrs);
-          frame.outer = this.buf;
-          this.buf = '';
-          this.ancestors.push(frame.instance);
-          if (selfClose) { await this.finish(frame, true); return; }
-          this.frames.push(frame);
-          return;
-        }
+        if (Cls) return this.openComponent(op, ts, top, selfClose, Cls);
       }
     }
     // An ordinary element.
@@ -476,6 +446,48 @@ export class Walker {
     } else if (top && top.partition && !selfClose && !isVoidElement(tag)) {
       top.depth += 1;
     }
+  }
+
+  async openSuspense(op, ts, top, selfClose) {
+    this.closeSeg(top, ts);
+    const frame = { kind: 'suspense', tag: ts.tag, outer: '', fallback: ts.fallback || '', id: /** @type {string | null} */ (null) };
+    if (this.ctx) frame.id = `s${this.ctx.nextId++}`;
+    this.buf = this.buf.slice(0, ts.start);
+    frame.outer = this.buf;
+    this.buf = '';
+    if (this.ctx) this.defer += 1;
+    if (selfClose) { await this.finish(frame, true); return; }
+    this.frames.push(frame);
+  }
+
+  async openSlot(op, ts, top, selfClose) {
+    const tag = ts.tag;
+    this.closeSeg(top, ts);
+    const startTag = this.buf.slice(ts.start);
+    const attrsRaw = startTag.slice(1 + tag.length, startTag.length - op.close.length);
+    this.buf = this.buf.slice(0, ts.start);
+    const frame = { kind: 'slot', tag, outer: this.buf, attrsRaw, owner: this.owner };
+    this.buf = '';
+    if (selfClose) { await this.finish(frame, true); return; }
+    this.frames.push(frame);
+  }
+
+  async openComponent(op, ts, top, selfClose, Cls) {
+    const tag = ts.tag;
+    this.closeSeg(top, ts);
+    const startTag = this.buf.slice(ts.start);
+    // The opening tag as the DSD walk had it, `<tag attrs>`, with a
+    // self-closing solidus dropped.
+    const opening = startTag.slice(0, startTag.length - op.close.length) + '>';
+    const attrs = startTag.slice(1 + tag.length, startTag.length - op.close.length);
+    this.buf = this.buf.slice(0, ts.start);
+    const frame = beginComponent(this, tag, Cls, opening, attrs);
+    if (frame.pending) await settleRender(frame);
+    frame.outer = this.buf;
+    this.buf = '';
+    this.ancestors.push(frame.instance);
+    if (selfClose) { await this.finish(frame, true); return; }
+    this.frames.push(frame);
   }
 
   /**
@@ -497,7 +509,7 @@ export class Walker {
     frame.seg = null;
     if (!seg || seg.slot === null) return;
     seg.end = this.buf.length;
-    frame.segments.push(seg);
+    (frame.segments ??= []).push(seg);
   }
 
   /**
@@ -509,13 +521,13 @@ export class Walker {
   closeBoundFormTag(ts) {
     const duplicateAction = ts.actionCount > 1;
     if (ts.actionId != null) {
-      assertConvergentBoundForm({ duplicateAction, propAttrs: ts.propAttrs });
+      assertConvergentBoundForm({ duplicateAction, propAttrs: ts.propAttrs || [] });
       const bound = bindFormActionStartTag(this.buf.slice(ts.start), ts.actionId);
       this.buf = this.buf.slice(0, ts.start) + bound.tag + bound.hidden;
     }
     if (ts.submitterTag != null) {
       this.buf = this.buf.slice(0, ts.start)
-        + bindSubmitterStartTag(this.buf.slice(ts.start), ts.submitterTag, { duplicateAction, propAttrs: ts.submitterProps });
+        + bindSubmitterStartTag(this.buf.slice(ts.start), ts.submitterTag, { duplicateAction, propAttrs: ts.submitterProps || [] });
     }
   }
 
@@ -523,8 +535,12 @@ export class Walker {
   // End tags and frames
   // -------------------------------------------------------------------------
 
-  /** @param {import('./compile.js').Op} op */
-  async close(op) {
+  /**
+   * An end tag. Returns a promise only when it finishes a frame.
+   * @param {import('./compile.js').Op} op
+   * @returns {Promise<void> | undefined}
+   */
+  close(op) {
     const tag = /** @type string */ (op.tag);
     if (this.inert.length) {
       if (this.inert[this.inert.length - 1] !== tag) { this.buf += op.text; return; }
@@ -536,14 +552,17 @@ export class Walker {
     // The nearest frame this end tag closes; frames above it are unclosed.
     for (let k = this.frames.length - 1; k >= 0; k--) {
       if (this.frames[k].tag !== tag) continue;
-      while (this.frames.length - 1 > k) await this.finish(this.frames.pop(), false);
-      const frame = this.frames.pop();
-      frame.closeText = op.text;
-      await this.finish(frame, true);
-      return;
+      return this.closeFrames(k, op.text);
     }
     this.buf += op.text;
     this.ordinaryClose();
+  }
+
+  async closeFrames(k, closeText) {
+    while (this.frames.length - 1 > k) await this.finish(this.frames.pop(), false);
+    const frame = this.frames.pop();
+    frame.closeText = closeText;
+    await this.finish(frame, true);
   }
 
   /** Depth bookkeeping for an ordinary element's end tag. */
@@ -595,7 +614,7 @@ export class Walker {
     frame.seg = null;
     if (seg.slot === null) return;
     seg.end = children.length;
-    frame.segments.push(seg);
+    (frame.segments ??= []).push(seg);
   }
 }
 
@@ -611,13 +630,13 @@ const EMPTY = Object.freeze([]);
 function notePropAttr(ts, name, tag) {
   const t = String(tag).toLowerCase();
   if (t === 'button' || t === 'input') {
-    if (isSubmitterReflectedProp(name)) ts.submitterProps.push(String(name));
+    if (isSubmitterReflectedProp(name)) (ts.submitterProps ??= []).push(String(name));
     return;
   }
   if (t !== 'form') return;
   let n = String(name).toLowerCase();
   if (n === 'encoding') n = 'enctype';
-  if (n === 'method' || n === 'enctype') ts.propAttrs.push(String(name));
+  if (n === 'method' || n === 'enctype') (ts.propAttrs ??= []).push(String(name));
 }
 
 function noteActionHole(ts, name, tag) {
