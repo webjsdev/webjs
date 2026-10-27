@@ -89,3 +89,8 @@ test('a registered start tag cut off by the end of an unsafeHTML string keeps th
   const out = await renderToString(html`<header>SITE</header><p>${unsafeHTML('excerpt <iso-good class="x')}</p><footer>END</footer>`);
   assert.equal(out, '<header>SITE</header><p>excerpt <iso-good class="x</p><footer>END</footer>');
 });
+
+test('whitespace before the > of a valueless attribute still enters raw text for script', async () => {
+  const out = await renderToString(html`<script async >var a = ${'1 < 2 && 3'};</script>`);
+  assert.equal(out, '<script async >var a = 1 < 2 && 3;</script>');
+});

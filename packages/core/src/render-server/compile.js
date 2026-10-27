@@ -299,7 +299,10 @@ function tokenize(strings) {
           chunk += c;
           if (c === '=') state = 'after-eq';
           else if (WS.test(c)) { /* keep waiting */ }
-          else if (c === '>') finishStartTag(false);
+          // Whitespace already ended the attribute, the renderer this replaces
+          // was back in `in-tag` here, and that exit entered raw text, so
+          // `<script async >` keeps its holes raw.
+          else if (c === '>') finishStartTag(true);
           else if (c === '/') { state = 'in-tag'; attrName = ''; solidus = true; }
           else { state = 'attr-name'; attrName = c; attrStart = chunk.length - 1; }
           break;
