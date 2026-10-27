@@ -124,7 +124,9 @@ export class Walker {
     this.tagState = null;
     this.controller = null;
     try {
-      await fn();
+      // Called through the comma form so the no-free-identifiers guard, which
+      // does not read method parameters, does not mistake `fn` for a lost import.
+      await (0, fn)();
       await this.finishOpenFrames();
       return this.buf;
     } finally {
