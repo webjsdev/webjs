@@ -331,15 +331,25 @@ export class Walker {
     // buffer, so taking it at the `>` never slices the page built so far:
     // on JavaScriptCore that slice materialised the whole rope each time.
     let outer;
+    let formOuter;
     if (this.expand && this.defer === 0 && !this.inert.length
         && (tag === 'webjs-suspense' || (tag === 'slot' && this.owner !== null) || (tag.includes('-') && lookup(tag)))) {
       outer = this.buf;
+      this.buf = '';
+    } else if (tag === 'form' || tag === 'button' || tag === 'input') {
+      // The tags a form action can bind to. The bound-form edits rewrite the
+      // start tag (strip the action attribute's trailing whitespace, parse the
+      // attributes, splice in method / enctype and the identity), so that tag
+      // is built in its own buffer and joined back at its `>`: rewriting it in
+      // place copied the whole page built so far, once per bound form.
+      formOuter = this.buf;
       this.buf = '';
     }
     this.tagState = {
       tag,
       start: this.buf.length,
       outer,
+      formOuter,
       // #1155 / #1207 bookkeeping, judged at the `>` because the action hole
       // may come after the shapes it refuses.
       actionId: /** @type {string | null} */ (null),
@@ -461,6 +471,11 @@ export class Walker {
     if (!ts) return;
     const tag = ts.tag;
     if (ts.actionId != null || ts.submitterTag != null) this.closeBoundFormTag(ts);
+    if (ts.formOuter !== undefined) {
+      // Rejoin a form-capable start tag built in its own buffer (see `open`).
+      ts.start = ts.formOuter.length;
+      this.buf = ts.formOuter + this.buf;
+    }
 
     if (this.inert.length) return;
     const selfClose = !!op.selfClose;
