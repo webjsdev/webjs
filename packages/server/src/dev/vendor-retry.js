@@ -52,8 +52,7 @@ export function createRetryBackoff(opts = {}) {
       notBefore = 0;
     },
     reset() {
-      windowMs = 0;
-      notBefore = 0;
+      this.succeeded();
     },
     windowMs() {
       return windowMs;

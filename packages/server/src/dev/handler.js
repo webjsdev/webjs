@@ -595,13 +595,17 @@ export async function createRequestHandler(opts) {
       // outage restarted the resolve (the single flight only collapsed
       // concurrent ones), re-running the scan, the manifest reads, and a jspm
       // fetch per request for as long as the CDN was down. The window starts
-      // at 2 s and doubles to a minute; a success or a rebuild clears it.
+      // at 2 s and doubles to a minute; a success or a rebuild clears it. The
+      // verdict is recorded INSIDE the single flight (`resolveAndApplyVendor`),
+      // once per attempt, never here: every request that lands while an
+      // attempt is in flight shares its promise, and recording per caller
+      // widened the window once per concurrent request, so one failed attempt
+      // under load jumped straight to the cap.
       if (vendorBackoff.allow()) {
         const gen = vendorGen;
         resolveAndApplyVendor().then((ok) => {
-          if (ok) vendorBackoff.succeeded(); else vendorBackoff.failed();
           if (ok && gen === vendorGen) { vendorResolved = true; if (!bootVendorPinned) publishBuildId(); }
-        }).catch(() => { vendorBackoff.failed(); });
+        }).catch(() => {});
       }
       return;
     }
@@ -788,10 +792,9 @@ export async function createRequestHandler(opts) {
             const ok = await resolveAndApplyVendor();
             t.vendor = now() - m;
             ranVendor = true;
-            // Seed the retry backoff (#1644): a transient first failure opens
-            // the first window, so the request-driven retry above does not
-            // fire on the very next request.
-            if (ok) vendorBackoff.succeeded(); else vendorBackoff.failed();
+            // The attempt itself seeded the retry backoff (#1644): a transient
+            // first failure opened the first window, so the request-driven
+            // retry above does not fire on the very next request.
             // Only memoize success (and only if a rebuild didn't intervene). A
             // transient failure leaves vendorResolved false; the next ensureReady
             // call re-attempts it non-blocking. A permanent unresolvable (jspm
@@ -874,9 +877,13 @@ export async function createRequestHandler(opts) {
           ({ imports, integrity } = prunePinToReachable(imports, integrity, reachable, { appDir }));
         }
         await setVendorEntries(imports, integrity);
+        // The backoff verdict is recorded here, once per attempt (#1644):
+        // every caller awaiting this flight shares the one promise.
+        if (v.ok) vendorBackoff.succeeded(); else vendorBackoff.failed();
         return v.ok;
       } catch (e) {
         logger.error?.(`[webjs] vendor resolve failed (will retry on the next request):`, e);
+        vendorBackoff.failed();
         return false;
       }
     })().finally(() => { vendorResolveInFlight = null; });
