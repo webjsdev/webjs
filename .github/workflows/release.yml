@@ -1,23 +1,25 @@
 name: Auto-release
 
-# PUBLISH ONLY (#1593). Actions does one thing in a release: the npm
-# publish, because trusted publishing (below) is bound to this file. The rest
-# runs on the maintainer's machine through scripts/release.sh: the local CI
-# and release gate, the tag, waiting for the registry, the GitHub Releases
-# (scripts/publish-release.js) and the CDN purge (scripts/purge-cdn.sh).
-#
-# scripts/release.sh pushes `publish-<sha12>` at the merged release commit.
-# That tag triggers this job, which publishes every `changelog/<pkg>/<v>.md`
-# the commit added:
+# Publishes a release when its release PR merges (#1650). A merged
+# `chore: release ...` PR lands `changelog/<pkg>/<v>.md` files on main; the CI
+# run for that push (ci.yml, `name: CI`) completing GREEN triggers this job
+# through `workflow_run`, and it publishes every changelog file the commit
+# added:
 #   1. to npm.com via scripts/publish-npm.js (OIDC, with provenance),
 #   2. to GitHub Packages via scripts/publish-github-packages.js,
-#   3. and the unscoped wrappers in lockstep when @webjsdev/cli moved.
-# All of it is idempotent: a version already on a registry is skipped, so a
-# re-push of the tag or a dispatch never duplicates a publish.
+#   3. as GitHub Releases via scripts/publish-release.js,
+#   4. and the unscoped wrappers in lockstep when @webjsdev/cli moved.
+# A push that adds no changelog file stops after a checkout and a git diff.
+# The CDN purge is not here: scripts/ci-merge.sh starts it for every merge.
 #
-# workflow_dispatch keeps the recovery inputs (republish_paths,
-# lockstep_only, bootstrap_github_packages) for a publish that died.
-#
+# The other triggers are the manual and recovery paths: scripts/release.sh
+# pushes `publish-<sha12>` at a release commit (it was the ONLY path between
+# #1594 and #1650, when CI ran locally), and workflow_dispatch keeps the
+# recovery inputs (republish_paths, lockstep_only, bootstrap_github_packages)
+# for a publish that died. Everything is idempotent: a version already on a
+# registry and a release that already exists are skipped, so an automatic
+# run followed by release.sh, or a re-push of the tag, never duplicates.
+
 # npm auth is TRUSTED PUBLISHING (OIDC), so there is no NPM_TOKEN
 # secret to store, rotate, or let expire. Each of the 8 published
 # packages carries its own Trusted Publisher configuration on
@@ -27,6 +29,15 @@ name: Auto-release
 # rather than as an auth error. See framework-dev.md.
 
 on:
+  # The automatic path: CI finished on a push to main. The job's `if:` keeps
+  # only a GREEN run for a PUSH (a PR's CI run and a red run never publish).
+  # `workflows` must match the `name:` of .github/workflows/ci.yml exactly; a
+  # renamed CI workflow silently stops every release, which
+  # test/repo-health/release-workflow-trigger.test.mjs guards.
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   push:
     tags:
       - 'publish-*'
@@ -46,40 +57,34 @@ on:
         default: ''
 
 permissions:
-  contents: read    # GitHub Releases are created locally now (scripts/release.sh)
+  contents: write   # gh release create (scripts/publish-release.js)
   packages: write   # npm publish to GitHub Packages
   id-token: write   # mint the OIDC credential npm trusted publishing exchanges
 
+# One release run per commit: an automatic run and a manually pushed tag for
+# the same commit queue rather than race the registry checks.
+concurrency:
+  group: release-${{ github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: false
+
 jobs:
   release:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     steps:
       # Pinned to v6: both actions ship a Node 24 runtime, which is
       # what GitHub Actions will default to from June 2nd, 2026. v4
       # / v5 ran on Node 20 and triggered the deprecation banner.
+      # On workflow_run the default ref is the CURRENT tip of main, which may
+      # have moved past the commit CI just passed; check out that exact commit
+      # so `HEAD~1..HEAD` below is what the release PR added.
       - uses: actions/checkout@v6
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 2
-
-      # `registry-url` is REQUIRED for trusted publishing, not optional
-      # decoration: it writes the .npmrc that points npm at the registry
-      # the OIDC exchange authenticates against. Removing it breaks the
-      # exchange even though no token is involved any more.
-      #
-      # Node 24 bundles npm 11.19.x, which clears trusted publishing's
-      # npm >= 11.5.1 floor. Do NOT add `npm install -g npm@latest` to
-      # "make sure npm is new enough": npm `latest` is 12.x, and npm 12
-      # turns on the install-time security defaults (`allowScripts` off),
-      # which blocks esbuild's postinstall, which means packages/core/dist
-      # never builds. The bundled 11.19.x satisfies OIDC without opting
-      # into that.
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-          registry-url: 'https://registry.npmjs.org'
-
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
 
       - name: Find new changelog files
         id: diff
@@ -166,6 +171,30 @@ jobs:
           echo "count=${#NEW[@]}" >> "$GITHUB_OUTPUT"
           echo "bootstrap=$BOOTSTRAP" >> "$GITHUB_OUTPUT"
 
+      # `registry-url` is REQUIRED for trusted publishing, not optional
+      # decoration: it writes the .npmrc that points npm at the registry
+      # the OIDC exchange authenticates against. Removing it breaks the
+      # exchange even though no token is involved any more.
+      #
+      # Node 24 bundles npm 11.19.x, which clears trusted publishing's
+      # npm >= 11.5.1 floor. Do NOT add `npm install -g npm@latest` to
+      # "make sure npm is new enough": npm `latest` is 12.x, and npm 12
+      # turns on the install-time security defaults (`allowScripts` off),
+      # which blocks esbuild's postinstall, which means packages/core/dist
+      # never builds. The bundled 11.19.x satisfies OIDC without opting
+      # into that.
+      # Runs before setup and install so a push with no new changelog file
+      # (most CI runs on main) costs a checkout and a git diff, nothing more.
+      - uses: actions/setup-node@v6
+        if: steps.diff.outputs.count != '0' || inputs.lockstep_only
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        if: steps.diff.outputs.count != '0' || inputs.lockstep_only
+        run: npm install --no-audit --no-fund
+
       # No NODE_AUTH_TOKEN: this publishes via npm trusted publishing
       # (OIDC). The npm CLI detects the Actions OIDC environment and
       # exchanges the job's id-token for a short-lived, workflow-scoped
@@ -197,8 +226,20 @@ jobs:
             node scripts/publish-github-packages.js "$f"
           done < .new-changelog-files.txt
 
-      # GitHub Releases are created locally by scripts/release.sh once npm
-      # serves the new versions (#1593).
+      # After both registries, in the same date-sorted order, so the newest
+      # release lands at the top of the Releases page. Idempotent: an existing
+      # `<pkg>@<version>` release is skipped (scripts/release.sh creates the
+      # same releases when it is the path that published).
+      - name: Create GitHub Releases
+        if: steps.diff.outputs.count != '0' && steps.diff.outputs.bootstrap != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            node scripts/publish-release.js "$f"
+          done < .new-changelog-files.txt
 
       - name: Lockstep-publish wrappers to match @webjsdev/cli
         if: inputs.lockstep_only || (steps.diff.outputs.count != '0' && steps.diff.outputs.bootstrap != 'true')
