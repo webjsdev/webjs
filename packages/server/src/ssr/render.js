@@ -1,8 +1,7 @@
-import { resolve } from 'node:path';
 import { renderToString, isNotFound, isRedirect, isForbidden, isUnauthorized } from '@webjsdev/core';
 import { vendorPreloadTargets } from '../importmap.js';
 import {
-  componentPreloads, deduplicatedPreloads, reachedVendorSpecifiers, toUrlPath,
+  componentPreloads, pagePreloadHints, toUrlPath,
 } from './preloads.js';
 import { shippedBootModules } from './shipped-modules.js';
 import { seedingEnabled, collectSeeds, buildSeedScript, SEED_DROP_BLOCK } from '../action-seed.js';
@@ -1136,46 +1135,26 @@ export async function ssrPage(route, params, url, opts) {
     const { eager: eagerComponents, lazy: renderedLazy } =
       componentPreloads(suspenseCtx.usedComponents, opts.appDir, opts.elidableComponents, lazyFiles);
     const lazyComponents = { ...frontierLazy, ...renderedLazy };
-    // The preload walks skip a lazy component and the subtree reachable only
-    // through it (#1524), the same way they skip an elided one: the browser
-    // does not fetch it until the loader asks.
-    const preloadSkip = lazyFiles && lazyFiles.size
-      ? new Set([...(opts.elidableComponents || []), ...lazyFiles.keys()])
-      : opts.elidableComponents;
-    // The walk roots for BOTH preload passes are the BOOT's actually-shipped
-    // module set (`moduleUrls`, which already drops inert page/layout modules and
-    // substitutes an import-only page with its components), NOT the raw route
-    // entries `[route.file, ...route.layouts]`. Rooting at the raw entries would
-    // walk a dropped page's SSR-only subtree (a direct import OR a relative
-    // helper) and hint a `modulepreload` for a module nothing that ships imports,
-    // an over-fetch (#780, the app-module analog of the #754 vendor over-fetch).
-    const shippedRoots = moduleUrls.map((u) =>
-      resolve(opts.appDir, u.startsWith('/') ? u.slice(1) : u));
-    const preloads = deduplicatedPreloads(
-      eagerComponents,
+    // Both preload passes (the app-module hints and the vendor hints, #754)
+    // root at the BOOT's shipped set plus the rendered components and skip a
+    // lazy component (#1524) or an elided one and the subtree only it reaches;
+    // `pagePreloadHints` walks that closure ONCE for both (#1644), where the
+    // two passes used to walk it twice. The over-fetch rules (#780, #754) are
+    // documented on the helper.
+    const hints = pagePreloadHints({
+      graph: opts.moduleGraph,
+      appDir: opts.appDir,
       moduleUrls,
-      opts.moduleGraph,
-      shippedRoots,
-      opts.appDir,
-      opts.serverFiles,
-      preloadSkip,
-    );
+      eagerComponents,
+      elidableComponents: opts.elidableComponents,
+      lazyFiles,
+      serverFiles: opts.serverFiles,
+    });
+    const preloads = hints.preloads;
     // Vendor modulepreload (#754): flatten the npm CDN waterfall by hinting the
-    // vendor URLs the page's SHIPPED modules actually import, fetched in parallel
-    // instead of discovered level by level. Same shipped-module roots as the
-    // app-module walk above, so a vendor reached ONLY through a dropped module
-    // (a page's SSR-only direct import OR its SSR-only relative helper) is never
-    // preloaded (no over-fetch).
-    const vendorPreloads = vendorPreloadTargets(
-      reachedVendorSpecifiers(
-        opts.moduleGraph,
-        shippedRoots,
-        eagerComponents,
-        opts.appDir,
-        preloadSkip,
-        opts.serverFiles,
-      ),
-    );
+    // vendor URLs the page's SHIPPED modules actually import, fetched in
+    // parallel instead of discovered level by level.
+    const vendorPreloads = vendorPreloadTargets(hints.vendorSpecifiers);
     // Extract CSP nonce from request headers (if present).
     const nonce = getNonce();
     const wrapOpts = {
