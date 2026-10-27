@@ -51,9 +51,11 @@ const registry = _g[REGISTRY_KEY] || (_g[REGISTRY_KEY] = new Map());
 const classToTag = _g[CLASS_TO_TAG_KEY] || (_g[CLASS_TO_TAG_KEY] = new WeakMap());
 
 /**
- * The registry's tag-set version (#1644): bumped whenever a NEW tag is
- * registered, so the SSR scanner can memoize the regex it builds from every
- * registered tag and rebuild it only when the set changed. Shared on
+ * The registry's tag-set version (#1644): bumped whenever a NEW key enters
+ * the registry, by a class registration OR by `primeModuleUrl` (the prod
+ * component scan creates the entry before the class arrives), so the SSR
+ * scanner can memoize the regex it builds from every registered tag and
+ * rebuild it only when the set changed. Shared on
  * `globalThis` like the registry itself, because under `bun --hot` the app
  * imports a fresh copy of this module while the first run's server keeps
  * rendering through the old one; a copy-local counter would leave that server
@@ -179,6 +181,10 @@ export function primeModuleUrl(tag, moduleUrl) {
     lazy: false,
     tag,
   });
+  // A primed tag is a new KEY, and `allTags()` lists keys: the SSR scanner's
+  // pattern must include it before its class arrives, or a pattern memoized
+  // while the registry was empty would stay empty for the process (#1644).
+  version.v += 1;
 }
 
 /** @param {string} tag */

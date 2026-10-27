@@ -15,3 +15,8 @@ export function lookupModuleUrl(tag: string): string | undefined;
 export function isLazy(tag: string): boolean;
 export function tagOf(cls: WebComponentInstanceConstructor): string | undefined;
 export function allTags(): string[];
+/**
+ * The registry's tag-set version: bumped on a first-time registration, so a
+ * memo keyed on it (the SSR scanner's tag regex) is valid while it is unchanged.
+ */
+export function registryVersion(): number;

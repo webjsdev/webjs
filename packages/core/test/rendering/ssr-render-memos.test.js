@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { html, WebComponent } from '../../index.js';
 import { renderToString } from '../../src/render-server.js';
 import { tagPattern } from '../../src/render-server/dsd.js';
-import { registryVersion } from '../../src/registry.js';
+import { registryVersion, primeModuleUrl } from '../../src/registry.js';
 import { tagRegexes, findClosingTagInString, closingTagLength } from '../../src/render-server/html-scan.js';
 
 class MemoBadge extends WebComponent({ label: String }) {
@@ -40,6 +40,31 @@ test('the tag pattern is one object per registry version, and a new registration
   const v = registryVersion();
   MemoLate.register('memo-late');
   assert.equal(registryVersion(), v);
+});
+
+test('a tag primed by the component scan before its class arrives enters the pattern (the prod order)', async () => {
+  // In prod the scanner primes every component tag with its module url at
+  // warm-up and the class registers later, when the page module imports it.
+  // The pattern memoized in between must already carry the primed tag, or a
+  // process whose first render happened on an empty registry would never
+  // expand a component (the #1644 regression a pattern keyed only on class
+  // registrations produced: the two elision suites rendered `<x-tag></x-tag>`
+  // verbatim).
+  const warm = tagPattern();
+  const before = registryVersion();
+  primeModuleUrl('memo-primed', '/components/memo-primed.ts');
+  assert.ok(registryVersion() > before, 'priming a new tag bumps the version');
+  assert.notEqual(tagPattern(), warm, 'and the pattern is rebuilt to include it');
+  assert.ok(tagPattern().source.includes('memo-primed'));
+  class MemoPrimed extends WebComponent({}) {
+    render() { return html`<b>primed</b>`; }
+  }
+  MemoPrimed.register('memo-primed');
+  const out = await renderToString(html`<memo-primed></memo-primed>`);
+  assert.ok(out.includes('<b>primed</b>'), 'the late-registered class renders through the primed pattern');
+  const settled = registryVersion();
+  primeModuleUrl('memo-primed', '/components/memo-primed.ts');
+  assert.equal(registryVersion(), settled, 're-priming an existing tag is a no-op');
 });
 
 test('cached per-tag regexes still find the right closing tag through nesting, from any start', () => {
