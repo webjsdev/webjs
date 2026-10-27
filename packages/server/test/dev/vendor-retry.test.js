@@ -74,3 +74,15 @@ test('defaults: 2 s initial, 60 s cap', () => {
   for (let i = 0; i < 10; i++) b.failed();
   assert.equal(b.windowMs(), 60000);
 });
+
+test('the handle is closure-based: a destructured reset or succeeded still works (#1645 review)', () => {
+  const b = createRetryBackoff({ initialMs: 1000, now: () => 0 });
+  const { reset, succeeded, failed, allow } = b;
+  failed();
+  assert.equal(allow(), false);
+  reset();
+  assert.equal(allow(), true, 'reset works without a receiver');
+  failed();
+  succeeded();
+  assert.equal(b.windowMs(), 0, 'succeeded works without a receiver');
+});

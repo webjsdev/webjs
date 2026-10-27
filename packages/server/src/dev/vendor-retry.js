@@ -39,23 +39,21 @@ export function createRetryBackoff(opts = {}) {
   const now = opts.now ?? Date.now;
   let windowMs = 0;
   let notBefore = 0;
+  // Closures over the state, not methods reading `this`, so a handle can be
+  // destructured or passed as a callback (`onRebuild(backoff.reset)`).
+  const succeeded = () => {
+    windowMs = 0;
+    notBefore = 0;
+  };
   return {
-    allow() {
-      return windowMs === 0 || now() >= notBefore;
-    },
-    failed() {
+    allow: () => windowMs === 0 || now() >= notBefore,
+    failed: () => {
       windowMs = windowMs === 0 ? initialMs : Math.min(maxMs, windowMs * 2);
       notBefore = now() + windowMs;
     },
-    succeeded() {
-      windowMs = 0;
-      notBefore = 0;
-    },
-    reset() {
-      this.succeeded();
-    },
-    windowMs() {
-      return windowMs;
-    },
+    succeeded,
+    // A rebuild forgets the same thing a success does.
+    reset: succeeded,
+    windowMs: () => windowMs,
   };
 }
