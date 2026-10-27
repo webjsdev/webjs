@@ -12,7 +12,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { devImportSpecifier } from '../../src/dev-import.js';
+import { devImportSpecifier, devImport, clearProdImportCache } from '../../src/dev-import.js';
 
 const FILE = '/srv/app/app/page.ts';
 
@@ -65,6 +65,69 @@ test('a re-import through the helper sees an edit on this runtime', async () => 
     assert.equal((await import(devImportSpecifier(file, true))).default, 'one');
     writeFileSync(file, 'export default "two";\n');
     assert.equal((await import(devImportSpecifier(file, true))).default, 'two');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/* ------------ the prod import memo (#1644) ------------ */
+
+test('outside dev, devImport hands back the same module namespace, before and after a clear', async () => {
+  // `devImport` is an async function, so each call wraps the memoized import
+  // in a fresh outer promise; the namespace is what must be shared. The
+  // loader-count test below is the counterfactual that proves the memo.
+  const dir = mkdtempSync(join(tmpdir(), 'webjs-prod-import-'));
+  try {
+    const file = join(dir, 'memo.mjs');
+    writeFileSync(file, 'export default "memo";\n');
+    clearProdImportCache();
+    const [a, b] = await Promise.all([devImport(file, false), devImport(file, false)]);
+    assert.equal(a, b, 'concurrent calls share one evaluation');
+    assert.equal(a.default, 'memo');
+    clearProdImportCache();
+    const c = await devImport(file, false);
+    assert.equal(c, a, 'a cleared memo goes through the loader again and lands on the same cached module');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('outside dev, a module that throws at evaluation rejects on every call (no poisoned memo)', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'webjs-prod-import-throw-'));
+  try {
+    const file = join(dir, 'boom.mjs');
+    writeFileSync(file, 'throw new Error("boom at load");\n');
+    clearProdImportCache();
+    await assert.rejects(devImport(file, false), /boom at load/);
+    await assert.rejects(devImport(file, false), /boom at load/, 'the rejection was evicted, so the second call re-imports and rejects again rather than hanging or resolving undefined');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('outside dev on Node, the loader resolves a route module once per build, not once per call', { skip: !!process.versions.bun && 'module.registerHooks is Node-only; the Bun half is the identity test above' }, async () => {
+  const { registerHooks } = await import('node:module');
+  const dir = mkdtempSync(join(tmpdir(), 'webjs-prod-import-hooks-'));
+  try {
+    const file = join(dir, 'counted.mjs');
+    writeFileSync(file, 'export default "counted";\n');
+    const target = pathToFileURL(file).toString();
+    let resolves = 0;
+    const hook = registerHooks({
+      resolve(specifier, context, next) {
+        if (specifier === target) resolves++;
+        return next(specifier, context);
+      },
+    });
+    try {
+      clearProdImportCache();
+      await devImport(file, false);
+      await devImport(file, false);
+      await devImport(file, false);
+      assert.equal(resolves, 1, 'three renders, one loader resolve (without the memo it is three)');
+    } finally {
+      hook.deregister();
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

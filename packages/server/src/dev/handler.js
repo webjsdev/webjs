@@ -77,7 +77,7 @@ import {
 import {
   handleCore, loadMiddleware, tryServeFrameworkStatic, tryServePublicAsset,
 } from './serve.js';
-import { devImport } from '../dev-import.js';
+import { devImport, clearProdImportCache } from '../dev-import.js';
 
 /**
  * A short content digest of a single file's bytes for the app-source deploy
@@ -941,6 +941,9 @@ export async function createRequestHandler(opts) {
     // Explicit as well as implicit (`clearAssetHashCache` bumps too): a rebuild
     // is a new build for every epoch-keyed memo, whatever else changed (#1644).
     bumpBuildEpoch();
+    // A prod handler an embedded host rebuilds must re-import its route
+    // modules too (#1644); the plain `webjs start` path never gets here.
+    clearProdImportCache();
     state.tsCache.clear();
     // Invalidate the lazy analysis; the next request rebuilds the graph,
     // component scan, gate, action index, middleware, elision, and vendor map.
