@@ -40,7 +40,10 @@ if (process.platform !== 'linux') {
 }
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const PORT = 48_144 + (process.versions.bun ? 1 : 0);
+// A random high port, so two runs on one host (a second worktree's `npm test`
+// under CI=1, the node and bun halves back to back) do not collide on a fixed
+// number and fail as "never became ready".
+const PORT = 40_000 + Math.floor(Math.random() * 20_000);
 const BASE = `http://127.0.0.1:${PORT}`;
 const BURST = 20_000;
 const CONCURRENCY = 50;
