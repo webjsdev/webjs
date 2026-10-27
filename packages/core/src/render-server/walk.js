@@ -111,6 +111,14 @@ export class Walker {
    * template leaves no partial bytes behind). The per-start-tag state is
    * saved too, because a `.fallback=${html\`...\`}` hole renders a template
    * while its own start tag is still being read.
+   *
+   * The open text-only elements, the deferred-region depth and the ancestor
+   * chain are restored as well. A throw abandons the frames and text-only
+   * elements opened inside `fn` without finishing them, and the per-component
+   * error isolation (#469) catches that throw and keeps walking, so without
+   * the restore one failed component left every later element on the page
+   * unexpanded (a stale `inert` or `defer`) or resolving `closest()` against
+   * an instance it does not sit inside (a stale ancestor).
    * @param {() => Promise<void>} fn
    * @returns {Promise<string>}
    */
@@ -119,10 +127,14 @@ export class Walker {
     const frames = this.frames;
     const tagState = this.tagState;
     const controller = this.controller;
+    const inert = this.inert;
+    const defer = this.defer;
+    const ancestorDepth = this.ancestors.length;
     this.buf = '';
     this.frames = [];
     this.tagState = null;
     this.controller = null;
+    this.inert = inert.slice();
     try {
       // Called through the comma form so the no-free-identifiers guard, which
       // does not read method parameters, does not mistake `fn` for a lost import.
@@ -134,6 +146,9 @@ export class Walker {
       this.frames = frames;
       this.tagState = tagState;
       this.controller = controller;
+      this.inert = inert;
+      this.defer = defer;
+      this.ancestors.length = ancestorDepth;
     }
   }
 
