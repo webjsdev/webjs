@@ -99,19 +99,38 @@ export const BROTLI_MIN_BYTES = 32 * 1024;
  * identically; the matching uses the same `(?:^|,\s*)<enc>(?:;|,|$)` token test
  * the node shell has always used. With a known body size (the buffered path),
  * gzip wins over brotli under `BROTLI_MIN_BYTES` when both are accepted.
+ * A coding listed with `q=0` is refused (RFC 9110), so `gzip;q=0, br` never
+ * gets gzip from the small-body preference and `br;q=0, gzip` gets gzip.
  * @param {string | string[] | undefined | null} acceptEncoding
  * @param {number} [bodyBytes]  the buffered body's size, when known
  * @returns {'br' | 'gzip' | 'deflate' | ''}
  */
 export function negotiateEncoding(acceptEncoding, bodyBytes) {
   const accept = Array.isArray(acceptEncoding) ? acceptEncoding.join(',') : String(acceptEncoding || '');
-  const br = /(?:^|,\s*)br(?:;|,|$)/.test(accept);
-  const gzip = /(?:^|,\s*)gzip(?:;|,|$)/.test(accept);
+  const br = accepts(ACCEPT_BR, accept);
+  const gzip = accepts(ACCEPT_GZIP, accept);
   if (br && gzip && bodyBytes !== undefined && bodyBytes < BROTLI_MIN_BYTES) return 'gzip';
   if (br) return 'br';
   if (gzip) return 'gzip';
-  if (/(?:^|,\s*)deflate(?:;|,|$)/.test(accept)) return 'deflate';
+  if (accepts(ACCEPT_DEFLATE, accept)) return 'deflate';
   return '';
+}
+
+// One coding token with its optional parameters, matched as a whole list
+// member (`xbr` and `brx` are not `br`).
+const ACCEPT_BR = /(?:^|,\s*)br(;[^,]*)?(?:,|$)/;
+const ACCEPT_GZIP = /(?:^|,\s*)gzip(;[^,]*)?(?:,|$)/;
+const ACCEPT_DEFLATE = /(?:^|,\s*)deflate(;[^,]*)?(?:,|$)/;
+const Q_ZERO = /;\s*q\s*=\s*0(?:\.0*)?\s*(?:;|$)/i;
+
+/**
+ * Whether the header lists the coding with a non-zero quality.
+ * @param {RegExp} token
+ * @param {string} accept
+ */
+function accepts(token, accept) {
+  const m = token.exec(accept);
+  return m !== null && !(m[1] && Q_ZERO.test(m[1]));
 }
 
 /**

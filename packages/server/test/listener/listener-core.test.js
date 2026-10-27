@@ -308,6 +308,14 @@ test('negotiateEncoding prefers gzip over brotli for a small buffered body (#164
   assert.equal(negotiateEncoding('br, gzip'), 'br', 'counterfactual: with no size (a streamed body) brotli is preferred as before');
 });
 
+test('negotiateEncoding refuses a coding listed with q=0', () => {
+  assert.equal(negotiateEncoding('gzip;q=0, br', 2400), 'br', 'the small-body preference never picks a refused gzip');
+  assert.equal(negotiateEncoding('br;q=0, gzip'), 'gzip', 'a refused brotli falls through to gzip');
+  assert.equal(negotiateEncoding('br;q=0.0, gzip;q=0'), '', 'every listed coding refused');
+  assert.equal(negotiateEncoding('gzip;q=0.5, br', 2400), 'gzip', 'a non-zero quality still accepts');
+  assert.equal(negotiateEncoding('deflate;q=0'), '');
+});
+
 test('createCompressor returns a node:zlib Transform per encoding, null otherwise', () => {
   for (const enc of ['br', 'gzip', 'deflate']) {
     const c = createCompressor(enc);

@@ -58,6 +58,10 @@ try {
   const both = await fetch(`${base}/`, { headers: { 'accept-encoding': 'br, gzip' } });
   assert.equal(both.headers.get('content-encoding'), 'gzip', 'a small page served gzip when brotli and gzip are both accepted');
   assert.ok((await both.text()).includes('compressible content'), 'the gzip body decodes');
+  // A coding listed with q=0 is refused, so that preference never picks it.
+  const noGzip = await fetch(`${base}/`, { headers: { 'accept-encoding': 'gzip;q=0, br' } });
+  assert.equal(noGzip.headers.get('content-encoding'), 'br', 'a small page is not gzip when the client refuses gzip');
+  await noGzip.arrayBuffer();
 
   // gzip fallback when brotli is not accepted.
   const gz = await fetch(`${base}/`, { headers: { 'accept-encoding': 'gzip' } });
