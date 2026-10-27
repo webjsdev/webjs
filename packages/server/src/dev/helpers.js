@@ -99,8 +99,12 @@ export async function sendWebResponse(res, webRes, req, opts) {
   const encoding = (opts?.compress && req && !headers['content-encoding'] && isCompressible(headers['content-type']))
     ? negotiateEncoding(req.headers['accept-encoding'])
     : '';
-  const withEncoding = () => {
-    headers['content-encoding'] = encoding;
+  // `encoding` decides WHETHER the response is compressed and is the coding a
+  // streamed body gets; a buffered body re-asks with its size (the small-body
+  // gzip preference, #1646). Either way the header is written once, here.
+  /** @param {string} enc */
+  const withEncoding = (enc) => {
+    headers['content-encoding'] = enc;
     headers['vary'] = varyWithAcceptEncoding(typeof headers['vary'] === 'string' ? headers['vary'] : '');
   };
 
@@ -127,8 +131,7 @@ export async function sendWebResponse(res, webRes, req, opts) {
       const sized = negotiateEncoding(req.headers['accept-encoding'], buf.byteLength);
       const out = compressBufferSync(sized, buf);
       if (out) {
-        withEncoding();
-        headers['content-encoding'] = sized;
+        withEncoding(sized);
         headers['content-length'] = String(out.length);
         res.writeHead(webRes.status, headers);
         res.end(out);
@@ -151,7 +154,7 @@ export async function sendWebResponse(res, webRes, req, opts) {
   if (encoding) {
     const compressor = createCompressor(encoding);
     if (compressor) {
-      withEncoding();
+      withEncoding(encoding);
       delete headers['content-length'];
       res.writeHead(webRes.status, headers);
       await sendBody(source, compressor, res);
