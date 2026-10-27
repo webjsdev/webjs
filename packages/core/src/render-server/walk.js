@@ -14,7 +14,7 @@ import { isSuspense } from '../suspense.js';
 import { isUnsafeHTML, isLive, isKeyed, isGuard, isTemplateContent, isRef, isCache, isUntil, isAsyncAppend, isAsyncReplace, isWatch } from '../directives.js';
 import { stringify } from '../serialize.js';
 import { lookup } from '../registry.js';
-import { kebabCase } from './text.js';
+import { kebabCase, decodeAttrEntities } from './text.js';
 import { isTextOnlyTag } from './html-scan.js';
 import { compile, compileRaw, TEXT, OPEN, TAG_END, CLOSE, HOLE, CHILD, RAW, ATTR, VALUE, isVoidElement } from './compile.js';
 import { beginComponent, settleRender, finishComponent, finishSlot, finishSuspense, extractSlotAttr } from './expand.js';
@@ -421,6 +421,13 @@ export class Walker {
   tagEnd(op) {
     const ts = this.tagState;
     this.tagState = null;
+    // A boundary met while a streamed boundary's children are being captured
+    // is expanded later, from the string: its rendered `.fallback` rides the
+    // tag as `data-webjs-fallback` (what the old machine emitted for every
+    // boundary) and `openSuspense` reads it back at stream time.
+    if (ts && ts.fallback != null && this.defer > 0 && ts.tag === 'webjs-suspense') {
+      this.buf += ` data-webjs-fallback="${escapeAttr(ts.fallback)}"`;
+    }
     this.buf += op.close;
     if (!ts) return;
     const tag = ts.tag;
@@ -439,7 +446,15 @@ export class Walker {
         if (Cls) return this.openComponent(op, ts, top, selfClose, Cls);
       }
     }
-    // An ordinary element.
+    // An ordinary element. One that shares its tag with an open frame (a
+    // boundary or a component inside a deferred region, a same-tag element
+    // left as text) nests inside that frame, so its end tag must not close
+    // the frame: count it on the nearest frame with that tag.
+    if (!selfClose && !isVoidElement(tag)) {
+      for (let k = this.frames.length - 1; k >= 0; k--) {
+        if (this.frames[k].tag === tag) { this.frames[k].nested = (this.frames[k].nested || 0) + 1; break; }
+      }
+    }
     if (top && top.partition && top.seg && top.depth === 0) {
       const startTag = this.buf.slice(ts.start);
       top.seg.slot = extractSlotAttr(startTag.slice(1 + tag.length, startTag.length - op.close.length));
@@ -452,7 +467,18 @@ export class Walker {
 
   async openSuspense(op, ts, top, selfClose) {
     this.closeSeg(top, ts);
-    const frame = { kind: 'suspense', tag: ts.tag, outer: '', fallback: ts.fallback || '', id: /** @type {string | null} */ (null) };
+    let fallback = ts.fallback;
+    if (fallback === null) {
+      // A boundary arriving as a string (a streamed parent's children) carries
+      // its fallback as `data-webjs-fallback`; expand it now, as the old scan
+      // did over the placeholder after reading it.
+      const m = /data-webjs-fallback="([^"]*)"/i.exec(this.buf.slice(ts.start));
+      if (m) {
+        const raw = decodeAttrEntities(m[1]);
+        fallback = await this.capture(() => this.ops(compileRaw(raw), EMPTY));
+      }
+    }
+    const frame = { kind: 'suspense', tag: ts.tag, outer: '', fallback: fallback || '', id: /** @type {string | null} */ (null) };
     if (this.ctx) frame.id = `s${this.ctx.nextId++}`;
     this.buf = this.buf.slice(0, ts.start);
     frame.outer = this.buf;
@@ -487,7 +513,7 @@ export class Walker {
     if (frame.pending) await settleRender(frame);
     frame.outer = this.buf;
     this.buf = '';
-    this.ancestors.push(frame.instance);
+    if (frame.instance) { this.ancestors.push(frame.instance); frame.pushedAncestor = true; }
     if (selfClose) { await this.finish(frame, true); return; }
     this.frames.push(frame);
   }
@@ -552,8 +578,10 @@ export class Walker {
       return;
     }
     // The nearest frame this end tag closes; frames above it are unclosed.
+    // A same-tag element nested inside that frame closes itself instead.
     for (let k = this.frames.length - 1; k >= 0; k--) {
       if (this.frames[k].tag !== tag) continue;
+      if (this.frames[k].nested > 0) { this.frames[k].nested -= 1; break; }
       return this.closeFrames(k, op.text);
     }
     this.buf += op.text;
@@ -593,7 +621,7 @@ export class Walker {
     if (frame.kind === 'component') {
       if (frame.seg) this.endSegIn(frame, children);
       out = await finishComponent(this, frame, children, closed);
-      this.ancestors.pop();
+      if (frame.pushedAncestor) this.ancestors.pop();
     } else if (frame.kind === 'slot') {
       out = finishSlot(frame, children);
     } else {

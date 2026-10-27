@@ -310,6 +310,10 @@ export const cases = [
   { name: 'webjs-suspense-streamed-throw', run: () => quiet(() => chunked(html`<webjs-suspense .fallback=${html`f`}><gold-async-thrower></gold-async-thrower><gold-badge label="sib"></gold-badge></webjs-suspense>`, { ssr: true, suspenseCtx: ctx(), dev: true })) },
   { name: 'webjs-suspense-ssr-false', run: () => chunked(html`<webjs-suspense .fallback=${html`f`}><gold-badge label="raw"></gold-badge></webjs-suspense>`, { ssr: false }) },
   { name: 'webjs-suspense-in-comment', run: () => chunked(html`<!-- <webjs-suspense><gold-badge></gold-badge></webjs-suspense> --><webjs-suspense .fallback=${html`f`}><gold-badge label="real"></gold-badge></webjs-suspense>`, { ssr: true, suspenseCtx: ctx() }) },
+  { name: 'webjs-suspense-nested-streamed', run: () => chunked(html`<webjs-suspense .fallback=${html`outer`}><webjs-suspense .fallback=${html`inner <gold-badge label="fb"></gold-badge>`}><gold-async-item label="x"></gold-async-item></webjs-suspense>${'tail'}</webjs-suspense>`, { ssr: true, suspenseCtx: ctx() }) },
+  { name: 'webjs-suspense-nested-blocking', run: () => renderToString(html`<webjs-suspense .fallback=${html`outer`}><webjs-suspense .fallback=${html`inner`}><gold-async-item label="x"></gold-async-item></webjs-suspense></webjs-suspense>`) },
+  { name: 'component-same-tag-inside-deferred', run: () => chunked(html`<gold-shell><webjs-suspense .fallback=${html`f`}><gold-shell><b slot="head">in</b></gold-shell></webjs-suspense><p slot="foot">foot</p></gold-shell>`, { ssr: true, suspenseCtx: ctx() }) },
+  { name: 'component-same-tag-ordinary-nesting', run: () => renderToString(html`<gold-shell><div><gold-shell-x></gold-shell-x></div><gold-shell><i slot="head">deep</i></gold-shell></gold-shell>`) },
   { name: 'stream-ssr-false-chunks', run: () => chunked(html`<div>${'a'}<p class=${'c'}>${html`<b>${'n'}</b>`}</p>${[1, 2].map((n) => html`<i>${n}</i>`)}</div>`, { ssr: false }) },
   { name: 'stream-ssr-true-whole', run: () => chunked(html`<div><gold-badge label="s"></gold-badge>${'x'}</div>`, { ssr: true }) },
 
