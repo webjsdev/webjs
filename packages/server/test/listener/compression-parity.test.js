@@ -32,7 +32,9 @@ before(async () => {
   // A route that returns a body ALREADY gzip-encoded (content-encoding: gzip).
   w('app/api/preenc/route.ts', `import { gzipSync } from 'node:zlib';\nexport async function GET() {\n  const payload = JSON.stringify({ hello: 'world', n: 42 });\n  return new Response(gzipSync(payload), { headers: { 'content-type': 'application/json', 'content-encoding': 'gzip' } });\n}\n`);
   // A route that sets its own Vary header on a compressible body.
-  w('app/api/vary/route.ts', `export async function GET() {\n  return new Response('x'.repeat(500), { headers: { 'content-type': 'text/plain', vary: 'Cookie' } });\n}\n`);
+  // 2000 bytes: above the shared MIN_COMPRESS_BYTES floor (#1644), so the
+  // body is compressed and the Vary merge is observable.
+  w('app/api/vary/route.ts', `export async function GET() {\n  return new Response('x'.repeat(2000), { headers: { 'content-type': 'text/plain', vary: 'Cookie' } });\n}\n`);
   // A user SSE stream (text/event-stream) that must never be compressed.
   w('app/api/sse/route.ts', `export async function GET() {\n  const body = new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode('data: hi\\n\\n')); c.close(); } });\n  return new Response(body, { headers: { 'content-type': 'text/event-stream' } });\n}\n`);
 

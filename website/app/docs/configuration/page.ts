@@ -256,7 +256,7 @@ export default (env) =&gt; { schema.parse(env); };</code-block>
     <p>Any environment variable that does not start with <code>WEBJS_PUBLIC_</code> is <strong>server-only</strong>. It is never sent to the browser. <code>DATABASE_URL</code>, <code>AUTH_SECRET</code>, OAuth client secrets, third-party API keys: read them in server actions, route handlers, middleware, or page functions, and pass derived values (not the raw secret) to components.</p>
 
     <h3>Public env vars (WEBJS_PUBLIC_*)</h3>
-    <p>Any env var whose name starts with <code>WEBJS_PUBLIC_</code> is exposed to the browser as <code>process.env.WEBJS_PUBLIC_X</code>. WebJs injects an inline script in the SSR'd HTML head that sets <code>window.process.env</code> before any user code or vendor bundle runs. Components can read these directly:</p>
+    <p>Any env var whose name starts with <code>WEBJS_PUBLIC_</code> is exposed to the browser as <code>process.env.WEBJS_PUBLIC_X</code>. WebJs injects an inline script in the SSR'd HTML head that sets <code>window.process.env</code> before any user code or vendor bundle runs. The public set is read once, at the first render after boot (and again after a dev rebuild), so set these before the server starts: in <code>.env</code>, in the deploy environment, or as an <code>env.js</code> default. Mutating <code>process.env</code> at runtime does not change what the browser receives until the next restart. Components can read these directly:</p>
     <code-block>// .env at the app root (auto-loaded at boot)
 WEBJS_PUBLIC_API_URL=https://api.example.com
 WEBJS_PUBLIC_STRIPE_KEY=pk_live_abc

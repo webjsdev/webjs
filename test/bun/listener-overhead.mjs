@@ -64,6 +64,11 @@ const CORE = pathToFileURL(resolve(__dirname, '../../packages/core/index.js')).t
 const SERVER = pathToFileURL(resolve(__dirname, '../../packages/server/index.js')).toString();
 const runtime = process.versions.bun ? `bun ${process.versions.bun}` : `node ${process.versions.node}`;
 const quiet = { info() {}, warn() {}, error() {}, debug() {} };
+// The main server's logger keeps its error lines (message plus the stringified
+// fields) so (4b) can assert a mid-stream source error is reported.
+/** @type {string[]} */
+const logged = [];
+const capturing = { ...quiet, error(...args) { logged.push(args.map((a) => typeof a === 'string' ? a : JSON.stringify(a)).join(' ')); } };
 
 const dir = mkdtempSync(join(tmpdir(), 'webjs-756-'));
 const w = (rel, body) => { const abs = join(dir, rel); mkdirSync(dirname(abs), { recursive: true }); writeFileSync(abs, body); };
@@ -88,12 +93,17 @@ try {
   // out-of-band WeakMap re-stamp vs the ALS store).
   w('ipcheck.server.ts', `'use server';\nimport { redirect } from ${JSON.stringify(CORE)};\nimport { clientIp, getRequest, actionContext } from ${JSON.stringify(SERVER)};\nexport const middleware = [async (ctx: any, next: any) => { ctx.context.rebuiltIp = clientIp(ctx.request); return next(); }];\nexport async function seeIp() { const q = new URLSearchParams({ seenip: clientIp(getRequest()), rebuiltip: String(actionContext().rebuiltIp) }); throw redirect('/?' + q.toString()); }`);
   w('app/ipcheck/page.ts', `import { html } from ${JSON.stringify(CORE)};\nimport { seeIp } from '../../ipcheck.server.ts';\nexport default () => html\`<main><form action=\${seeIp}><button>go</button></form></main>\`;`);
+  // An under-floor buffered body (#1644): 80 bytes of text/plain.
+  w('app/api/tiny/route.ts', `export async function GET() {\n  return new Response('tiny'.repeat(20), { headers: { 'content-type': 'text/plain' } });\n}`);
+  // A streamed body that ERRORS after its first chunk (a route stream whose
+  // source breaks mid-way). The shell must surface that, not swallow it.
+  w('app/api/broken/route.ts', `export async function GET() {\n  const enc = new TextEncoder();\n  let pulled = 0;\n  const stream = new ReadableStream({\n    start(c) { c.enqueue(enc.encode('first-chunk;')); },\n    async pull(c) { if (pulled++) return; await new Promise((r) => setTimeout(r, 50)); c.error(new Error('mid-stream boom')); },\n  });\n  return new Response(stream, { headers: { 'content-type': 'text/html; charset=utf-8' } });\n}`);
   // A genuinely STREAMED, compressible body whose SECOND chunk is far off. The
   // compression classifier must not block the response head on it (#756 review).
   w('app/api/slow/route.ts', `export async function GET() {\n  const enc = new TextEncoder();\n  let pulled = 0;\n  const stream = new ReadableStream({\n    start(c) { c.enqueue(enc.encode('shell-chunk-' + 'a'.repeat(64) + ';')); },\n    async pull(c) { if (pulled++) { c.close(); return; } await new Promise((r) => setTimeout(r, 400)); c.enqueue(enc.encode('boundary-chunk;')); c.close(); },\n  });\n  return new Response(stream, { headers: { 'content-type': 'text/html; charset=utf-8' } });\n}`);
 
   let server;
-  ({ server, close } = await startServer({ appDir: dir, dev: true, compress: true, port: 0, logger: quiet }));
+  ({ server, close } = await startServer({ appDir: dir, dev: true, compress: true, port: 0, logger: capturing }));
   const port = typeof server.port === 'number' ? server.port : server.address().port;
   const base = `http://localhost:${port}`;
 
@@ -106,17 +116,29 @@ try {
     assert.ok(body.includes(MARKER.trim()), `[${runtime}] ${enc} body decodes to the original page`);
   }
 
-  // (1b) On Bun, prove the BUFFERED sync-compress fast path is actually TAKEN
-  // (not silently falling back to the stream bridge): the sync path SETS
+  // (1b) Prove the BUFFERED sync-compress fast path is actually TAKEN on BOTH
+  // shells (not silently falling back to the stream bridge): the sync path SETS
   // `content-length` on the fully-compressed buffer, the bridge DELETES it. A raw
   // probe is required because `fetch` strips `content-length` when it
-  // decompresses. Bun-only: the node shell stream-compresses a buffered page too,
-  // so it carries no content-length (the classifier is a Bun-shell optimization).
-  if (process.versions.bun) {
+  // decompresses. This was Bun-only until #1644 ported the fast path to the
+  // node shell, which stream-compressed every buffered page through a
+  // per-response zlib Transform on the threadpool.
+  {
     const head = await rawHead(port, '/', { 'accept-encoding': 'gzip' });
     assert.ok(/content-encoding:\s*gzip/.test(head), `[${runtime}] buffered page served gzip (raw head)`);
     assert.ok(/content-length:\s*\d+/.test(head),
-      `[${runtime}] the Bun buffered fast path set content-length (sync compress, not the stream bridge)`);
+      `[${runtime}] the buffered fast path set content-length (sync compress, not the stream bridge)`);
+  }
+
+  // (1c) A buffered body under the shared 1 KB floor (#1644) is sent as is on
+  // both shells: no content-encoding, the original bytes, content-length set.
+  {
+    const r = await fetch(`${base}/api/tiny`, { headers: { 'accept-encoding': 'gzip, br' } });
+    assert.equal(r.status, 200);
+    assert.equal(r.headers.get('content-encoding'), null, `[${runtime}] an under-floor body is not compressed`);
+    assert.equal(await r.text(), 'tiny'.repeat(20), `[${runtime}] and arrives verbatim`);
+    const head = await rawHead(port, '/api/tiny', { 'accept-encoding': 'gzip' });
+    assert.ok(/content-length:\s*80\b/.test(head), `[${runtime}] with its own content-length`);
   }
 
   // (2) The trusted remote IP reaches clientIp; a spoofed header does not win.
@@ -158,6 +180,27 @@ try {
   const slowBody = await slow.text(); // fetch transparently decompresses
   assert.ok(slowBody.includes('shell-chunk') && slowBody.includes('boundary-chunk'),
     `[${runtime}] the streamed body still decodes in full under compression`);
+
+  // (4b) A streamed body that errors after its first chunk is torn down AND
+  // reported (#1644 review). The node shell's `sendWebResponse` drives the body
+  // through `stream.pipeline`; a plain `() => {}` callback there swallowed the
+  // source error that the old reader loop threw into the listener's catch, so
+  // a broken `route.ts` stream left no `request pipeline threw` line in prod
+  // logs. Now the pipeline is awaited and only a client that went away
+  // (`ERR_STREAM_PREMATURE_CLOSE`) is swallowed. The log line is the node
+  // shell's; the Bun shell reports through `Bun.serve`'s own error path, so the
+  // assertion on the line is node-only while the truncation is checked on both.
+  {
+    logged.length = 0;
+    const broken = await fetch(`${base}/api/broken`, { headers: { 'accept-encoding': 'gzip' } });
+    assert.equal(broken.status, 200, `[${runtime}] the head went out before the source broke`);
+    await assert.rejects(broken.text(), `[${runtime}] the client sees a truncated body, not a clean end`);
+    if (!process.versions.bun) {
+      await new Promise((r) => setTimeout(r, 100));
+      assert.ok(logged.some((m) => /request pipeline threw/.test(m) && /mid-stream boom/.test(m)),
+        `[${runtime}] the mid-stream error reached the listener log (got: ${JSON.stringify(logged)})`);
+    }
+  }
 
   await close();
   close = null;

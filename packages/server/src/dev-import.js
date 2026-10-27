@@ -71,6 +71,23 @@ const RETRY_KEYS = new Map();
 let retrySeq = 0;
 
 /**
+ * Prod import memo (#1644): absolute file path -> the `import()` promise.
+ * @type {Map<string, Promise<any>>}
+ */
+const PROD_MODULES = new Map();
+
+/**
+ * Forget every memoized prod import, so the next `devImport(file, false)`
+ * goes through the loader again. Called from the dev handler's rebuild path
+ * (an embedded host can call `rebuild()` on a prod handler); a plain
+ * `webjs start` never rebuilds and never needs it.
+ * @returns {void}
+ */
+export function clearProdImportCache() {
+  PROD_MODULES.clear();
+}
+
+/**
  * `import()` a module the dev server re-imports on every request, through
  * `devImportSpecifier`. Use this rather than `import(devImportSpecifier(...))`.
  *
@@ -80,7 +97,23 @@ let retrySeq = 0;
  */
 export async function devImport(file, dev) {
   const base = devImportSpecifier(file, dev);
-  if (!dev) return import(base);
+  if (!dev) {
+    // Prod memo (#1644). The URL is stable outside dev, so Node's module cache
+    // already serves one evaluation, but every `import()` still paid the ESM
+    // loader's resolve, the always-installed seed load hook, and
+    // `pathToFileURL`, about 5 to 12 µs each, and a page render does it for
+    // the page, its layouts, its metadata files, its loading templates, and
+    // each segment middleware on EVERY request. One Map hands back the same
+    // promise instead. A rejection is evicted so the next call re-imports (the
+    // retry semantic a cold import had), and `clearProdImportCache` drops the
+    // whole map on an embedded host's `rebuild()`.
+    const hit = PROD_MODULES.get(file);
+    if (hit) return hit;
+    const p = import(base);
+    PROD_MODULES.set(file, p);
+    p.catch(() => { if (PROD_MODULES.get(file) === p) PROD_MODULES.delete(file); });
+    return p;
+  }
   const spec = RETRY_KEYS.get(base) || base;
   try {
     return await import(spec);

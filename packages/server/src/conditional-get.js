@@ -74,6 +74,29 @@ export const BUFFERED_MARKER = 'x-webjs-buffered';
 export const STREAM_MARKER = 'x-webjs-stream';
 
 /**
+ * The Response objects whose body the framework positively marked as fully
+ * buffered (`BUFFERED_MARKER`), recorded when the funnel strips the marker so
+ * the listener shells can still tell (#1644). A WeakSet, so a response holds
+ * nothing once it is sent.
+ * @type {WeakSet<Response>}
+ */
+const KNOWN_BUFFERED = new WeakSet();
+
+/**
+ * Whether `res` is a response the framework built from a string or bytes
+ * (an SSR page, a served module, a static file, a JSON response), as opposed
+ * to a user stream the shell must never read ahead of the client. True only
+ * for an object that passed through `applyConditionalGet` carrying the
+ * buffered marker; a response the funnel never saw, or a user `route.ts`
+ * `ReadableStream`, is false, and the shell then peeks it the slow, safe way.
+ * @param {Response} res
+ * @returns {boolean}
+ */
+export function isBufferedResponse(res) {
+  return KNOWN_BUFFERED.has(res);
+}
+
+/**
  * Headers that must not ride a 304 response (it has no body). Everything
  * else (ETag, Cache-Control, Vary, the framework's X-Webjs-Build /
  * X-Request-Id, Set-Cookie) is preserved so a shared cache and the client
@@ -159,7 +182,16 @@ export async function applyConditionalGet(req, res) {
   const method = req.method.toUpperCase();
   // Always consume the internal buffered marker so it never reaches a client.
   const buffered = res.headers.has(BUFFERED_MARKER);
-  if (buffered) res.headers.delete(BUFFERED_MARKER);
+  if (buffered) {
+    res.headers.delete(BUFFERED_MARKER);
+    // Remember the verdict off the headers (#1644), so the listener shell can
+    // read a KNOWN-buffered body whole instead of peeking it chunk by chunk
+    // through a reader (on Bun the reader machinery costs about 45 µs per
+    // response against 3 µs for `arrayBuffer()`). Keyed by the Response
+    // object the funnel hands to the shell; a 304 built below is a new,
+    // body-less object and is never marked.
+    KNOWN_BUFFERED.add(res);
+  }
   // A genuinely streamed Suspense response is flagged by the SSR pipeline.
   // Strip that marker too and skip conditional-GET so the live stream is
   // never consumed.

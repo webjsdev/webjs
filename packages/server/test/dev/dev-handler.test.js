@@ -128,6 +128,82 @@ test('handle: a transient vendor failure does not block readiness', async () => 
   }
 });
 
+test('handle: a transiently failed vendor resolve is retried per backoff window, not per request (#1644)', async () => {
+  // The request-driven retry used to restart the resolve on EVERY request
+  // once the first attempt had failed (the single flight only collapsed
+  // concurrent ones), so an outage cost a scan, the manifest reads, and a
+  // jspm fetch per request. The backoff gate opens a 2 s window after the
+  // first failure, so fifty requests inside it fire no second attempt.
+  const appDir = makeApp({
+    'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
+    'node_modules/testpkg/package.json': JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }),
+    'node_modules/testpkg/index.js': 'export const x = 1;\n',
+    'app/page.ts': `import 'testpkg';\nexport default () => 'ok';`,
+  });
+  const origFetch = globalThis.fetch;
+  let jspmAttempts = 0;
+  globalThis.fetch = async (url) => { if (String(url).includes('jspm')) jspmAttempts++; throw new Error('ECONNREFUSED'); };
+  try {
+    const app = await createRequestHandler({ appDir, dev: true });
+    await app.warmup();
+    const afterWarm = jspmAttempts;
+    assert.ok(afterWarm >= 1, 'the first attempt ran during warmup');
+    for (let i = 0; i < 50; i++) {
+      const r = await app.handle(new Request('http://x/'));
+      assert.equal(r.status, 200, 'the page still serves during the outage');
+    }
+    // The retry is fire-and-forget; give any attempt that DID start a tick.
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(jspmAttempts, afterWarm, 'fifty requests inside the backoff window fire no further jspm attempt (without the gate this is about fifty)');
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
+test('handle: one failed vendor attempt widens the backoff window once, however many requests shared it (#1644 review)', async () => {
+  // The verdict is recorded inside the single flight, once per attempt. The
+  // first cut recorded it per CALLER: every request that landed while an
+  // attempt was in flight attached its own `.then` and called `failed()`, so
+  // one failed attempt under load doubled the window once per concurrent
+  // request and jumped straight to the 60 s cap. Timeline: the warm attempt
+  // fails (window 2 s); 30 requests share the second attempt (window 4 s);
+  // a request 4.1 s after that failure fires a third attempt. With per-caller
+  // bookkeeping the window is at the cap and the third attempt never comes.
+  const appDir = makeApp({
+    'package.json': JSON.stringify({ name: 'host', webjs: { elide: false } }),
+    'node_modules/testpkg/package.json': JSON.stringify({ name: 'testpkg', version: '1.0.0', main: 'index.js' }),
+    'node_modules/testpkg/index.js': 'export const x = 1;\n',
+    'app/page.ts': `import 'testpkg';\nexport default () => 'ok';`,
+  });
+  const origFetch = globalThis.fetch;
+  let jspmAttempts = 0;
+  // A slow failure, so the concurrent requests below all land mid-flight.
+  globalThis.fetch = async (url) => {
+    if (String(url).includes('jspm')) jspmAttempts++;
+    await new Promise((r) => setTimeout(r, 100));
+    throw new Error('ECONNREFUSED');
+  };
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  try {
+    const app = await createRequestHandler({ appDir, dev: true });
+    await app.warmup();
+    assert.equal(jspmAttempts, 1, 'the warm attempt ran and failed');
+    await sleep(2_100);
+    await Promise.all(Array.from({ length: 30 }, () => app.handle(new Request('http://x/'))));
+    await sleep(300);
+    assert.equal(jspmAttempts, 2, 'the thirty requests past the first window shared ONE second attempt');
+    await sleep(4_100);
+    await app.handle(new Request('http://x/'));
+    // Let the third attempt settle (100 ms mock delay) before the mock is
+    // restored, so its in-flight jspm resolve cannot be shared with a later
+    // test's first attempt.
+    await sleep(300);
+    assert.equal(jspmAttempts, 3, 'the window after the shared failure is 4 s, not the 60 s cap (one failure, one doubling)');
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
 test('handle: a malformed pin file falls through to the real deferred resolve', async () => {
   // Regression: hasVendorPin is a cheap existence check, but a malformed pin
   // (exists, unparseable) must NOT be treated as pinned-at-boot. If it were,

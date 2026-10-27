@@ -4,7 +4,35 @@ import { stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { withBasePath } from '../base-path.js';
-import { isCompressible, negotiateEncoding, createCompressor, varyWithAcceptEncoding } from '../listener-core.js';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { isBufferedResponse } from '../conditional-get.js';
+import {
+  isCompressible, negotiateEncoding, createCompressor, compressBufferSync, readBufferedOrStream,
+  varyWithAcceptEncoding, MAX_SYNC_COMPRESS_BYTES, MIN_COMPRESS_BYTES,
+} from '../listener-core.js';
+
+/**
+ * Drive a response body through `pipeline` and resolve once it is sent, so
+ * `sendWebResponse` still completes when the body does (the reader loop it
+ * replaced did). A client that went away mid-body is the one error that is
+ * nobody's bug and is swallowed; anything else (a `route.ts` stream that
+ * errors after its first chunk, a compressor failure) propagates to the
+ * listener's catch and its `request pipeline threw` log line, as it did
+ * before #1644. By then `pipeline` has destroyed the response, so the
+ * listener's `res.end(...)` fallback is a no-op rather than a write after end.
+ * @param {import('node:stream').Readable} source
+ * @param {import('node:stream').Duplex | null} compressor
+ * @param {import('node:http').ServerResponse} res
+ */
+async function sendBody(source, compressor, res) {
+  try {
+    if (compressor) await pipeline(source, compressor, res);
+    else await pipeline(source, res);
+  } catch (e) {
+    if (!(e && typeof e === 'object' && /** @type {{ code?: string }} */ (e).code === 'ERR_STREAM_PREMATURE_CLOSE')) throw e;
+  }
+}
 
 /** @param {import('node:http').IncomingMessage} req @param {URL} url */
 export function toWebRequest(req, url) {
@@ -61,47 +89,74 @@ export async function sendWebResponse(res, webRes, req, opts) {
     headers[k] = v;
   });
 
+  if (!webRes.body) { res.writeHead(webRes.status, headers); res.end(); return; }
+
   // Negotiate compression via the SHARED seam (listener-core.js), so the node and
   // Bun shells negotiate + compress identically (brotli > gzip > deflate, node:zlib
   // both sides). Skip a body that is already content-encoded (a route.ts returning
   // pre-compressed bytes), and merge into any pre-existing `Vary` rather than
   // clobbering it (`isCompressible` already excludes `text/event-stream`).
-  let compressor = null;
-  if (opts?.compress && req && webRes.body && !headers['content-encoding'] && isCompressible(headers['content-type'])) {
-    const encoding = negotiateEncoding(req.headers['accept-encoding']);
-    compressor = createCompressor(encoding);
-    if (compressor) {
-      headers['content-encoding'] = encoding;
-      headers['vary'] = varyWithAcceptEncoding(typeof headers['vary'] === 'string' ? headers['vary'] : '');
-      delete headers['content-length'];
-    }
-  }
+  const encoding = (opts?.compress && req && !headers['content-encoding'] && isCompressible(headers['content-type']))
+    ? negotiateEncoding(req.headers['accept-encoding'])
+    : '';
+  const withEncoding = () => {
+    headers['content-encoding'] = encoding;
+    headers['vary'] = varyWithAcceptEncoding(typeof headers['vary'] === 'string' ? headers['vary'] : '');
+  };
 
-  res.writeHead(webRes.status, headers);
-  if (!webRes.body) { res.end(); return; }
-
-  if (compressor) {
-    compressor.pipe(res);
-    const reader = webRes.body.getReader();
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        compressor.write(value);
+  // Buffered-body fast path, the same one the Bun shell has had since #756 and
+  // the node shell lacked (#1644): peek the body to tell a single bounded chunk
+  // (the common SSR page / JSON / file response) from a genuinely streamed one
+  // (Suspense, an action / route stream) WITHOUT buffering a real stream. A
+  // buffered body is compressed SYNCHRONOUSLY on the main thread and sent with
+  // its `content-length`; the node shell used to allocate a streaming zlib
+  // Transform per response and run it on the libuv threadpool even for a 2 KB
+  // page, which is also where the arena fragmentation that held RSS after a
+  // load burst came from. A body under `MIN_COMPRESS_BYTES` is sent as is on
+  // both shells: at that size the encoding costs more than the bytes it saves.
+  // A response the framework built from a string or bytes is read whole
+  // (`isBufferedResponse`, set when the funnel consumed the buffered marker);
+  // anything else, a user stream above all, is peeked without reading ahead.
+  const peeked = isBufferedResponse(webRes)
+    ? { buffered: new Uint8Array(await webRes.arrayBuffer()) }
+    : await readBufferedOrStream(webRes.body, MAX_SYNC_COMPRESS_BYTES);
+  if (peeked.buffered !== undefined && peeked.buffered.byteLength <= MAX_SYNC_COMPRESS_BYTES) {
+    const buf = peeked.buffered;
+    if (encoding && buf.byteLength >= MIN_COMPRESS_BYTES) {
+      const out = compressBufferSync(encoding, buf);
+      if (out) {
+        withEncoding();
+        headers['content-length'] = String(out.length);
+        res.writeHead(webRes.status, headers);
+        res.end(out);
+        return;
       }
-    } finally {
-      compressor.end();
     }
+    if (headers['content-length'] === undefined) headers['content-length'] = String(buf.byteLength);
+    res.writeHead(webRes.status, headers);
+    res.end(buf.byteLength ? Buffer.from(buf.buffer, buf.byteOffset, buf.byteLength) : undefined);
     return;
   }
 
-  const reader = webRes.body.getReader();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    res.write(value);
+  // A genuinely streamed (or oversized) body keeps the streaming path, driven by
+  // `pipeline` so a client disconnect destroys the compressor and cancels the
+  // web reader instead of leaving a paused Transform with a live native handle,
+  // and so a slow client exerts backpressure on the source (the old reader loop
+  // never waited for `drain`). A known-buffered body over the sync cap is
+  // replayed as a single chunk through the same path.
+  const source = Readable.from(peeked.buffered !== undefined ? [peeked.buffered] : peeked.stream);
+  if (encoding) {
+    const compressor = createCompressor(encoding);
+    if (compressor) {
+      withEncoding();
+      delete headers['content-length'];
+      res.writeHead(webRes.status, headers);
+      await sendBody(source, compressor, res);
+      return;
+    }
   }
-  res.end();
+  res.writeHead(webRes.status, headers);
+  await sendBody(source, null, res);
 }
 
 export const MIME = {

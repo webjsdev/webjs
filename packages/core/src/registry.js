@@ -50,6 +50,21 @@ const registry = _g[REGISTRY_KEY] || (_g[REGISTRY_KEY] = new Map());
 /** @type {WeakMap<Function, string>} */
 const classToTag = _g[CLASS_TO_TAG_KEY] || (_g[CLASS_TO_TAG_KEY] = new WeakMap());
 
+/**
+ * The registry's tag-set version (#1644): bumped whenever a NEW key enters
+ * the registry, by a class registration OR by `primeModuleUrl` (the prod
+ * component scan creates the entry before the class arrives), so the SSR
+ * scanner can memoize the regex it builds from every registered tag and
+ * rebuild it only when the set changed. Shared on
+ * `globalThis` like the registry itself, because under `bun --hot` the app
+ * imports a fresh copy of this module while the first run's server keeps
+ * rendering through the old one; a copy-local counter would leave that server
+ * blind to a tag the new copy registered.
+ * @type {{ v: number }}
+ */
+const REGISTRY_VERSION_KEY = Symbol.for('webjs:registryVersion');
+const version = _g[REGISTRY_VERSION_KEY] || (_g[REGISTRY_VERSION_KEY] = { v: 0 });
+
 const isBrowser =
   typeof window !== 'undefined' && typeof customElements !== 'undefined';
 
@@ -76,6 +91,8 @@ function registerInternal(tag, cls) {
     entry.lazy = lazy;
   } else {
     registry.set(tag, { cls, moduleUrl: null, lazy, tag });
+    // A new tag changes the set the SSR scanner matches on (#1644).
+    version.v += 1;
   }
   classToTag.set(cls, tag);
 }
@@ -164,6 +181,10 @@ export function primeModuleUrl(tag, moduleUrl) {
     lazy: false,
     tag,
   });
+  // A primed tag is a new KEY, and `allTags()` lists keys: the SSR scanner's
+  // pattern must include it before its class arrives, or a pattern memoized
+  // while the registry was empty would stay empty for the process (#1644).
+  version.v += 1;
 }
 
 /** @param {string} tag */
@@ -188,4 +209,13 @@ export function tagOf(cls) {
 
 export function allTags() {
   return [...registry.keys()];
+}
+
+/**
+ * The current tag-set version: moves only when a tag is registered for the
+ * first time. A memo keyed on it is valid for as long as it is unchanged.
+ * @returns {number}
+ */
+export function registryVersion() {
+  return version.v;
 }

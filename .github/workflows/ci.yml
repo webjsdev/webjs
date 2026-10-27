@@ -159,6 +159,17 @@ jobs:
       # per-test timeout while it boots two servers + does a deliberate 400ms stall.
       - name: webjs listener overhead on Bun
         run: bun test/bun/listener-overhead.mjs
+      # Production render memos (#1644): two prod renders are byte-identical
+      # apart from the CSP nonce, the importmap JSON is memoized per build,
+      # the public env shim is a per-build snapshot, and a lazy component is
+      # registered with the lazy loader rather than imported.
+      - name: WebJs production render memos on Bun
+        run: bun test/bun/prod-perf-memos.mjs
+      # Settled RSS after a load burst (#1644): a prod server on the Bun.serve
+      # shell releases memory after 20,000 compressed requests. Plain script:
+      # the burst plus a settle poll of up to a minute.
+      - name: WebJs prod load settled RSS on Bun
+        run: bun test/bun/prod-load-rss.mjs
       # FileStore streaming on Bun (#509): put/get round-trip + the
       # no-orphan-on-mid-stream-error invariant (the Readable.fromWeb->reader-loop
       # fix, which Readable.fromWeb hangs on under Bun).

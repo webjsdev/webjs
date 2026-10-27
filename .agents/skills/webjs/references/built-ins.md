@@ -15,7 +15,7 @@ Read this when wiring caching or rate limiting, storing uploads, hardening heade
 
 ## Environment variables
 
-`process.env.X` reads are **server-only**. `NODE_ENV` is defined both sides. A variable named with the `WEBJS_PUBLIC_` prefix is exposed to the browser via an inline `<script>` (no build step), so read it client-side as `process.env.WEBJS_PUBLIC_ANALYTICS_ID`.
+`process.env.X` reads are **server-only**. `NODE_ENV` is defined both sides. A variable named with the `WEBJS_PUBLIC_` prefix is exposed to the browser via an inline `<script>` (no build step), so read it client-side as `process.env.WEBJS_PUBLIC_ANALYTICS_ID`. The public set is read **once, at the first render of a build**: set it before boot (`.env`, the deploy environment, an `env.js` default), because a `process.env` mutation made at runtime is not reflected in the browser until the next restart or dev rebuild.
 
 | Variable | Effect |
 |---|---|

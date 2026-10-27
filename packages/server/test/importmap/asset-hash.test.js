@@ -11,7 +11,8 @@
  */
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import fs, { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -126,4 +127,43 @@ test('a ..-escaping url resolves to null and is emitted unchanged', () => {
   setAssetRoots({ appDir, coreDir, enabled: true });
   // Even with a real file outside the root, the containment guard rejects it.
   assert.equal(withAssetHash('/../etc/passwd'), '/../etc/passwd');
+});
+
+/**
+ * Count `fs.readFileSync` calls across `fn`. `asset-hash.js` holds a NAMED
+ * import binding, so the patch goes on the `fs` namespace object and
+ * `syncBuiltinESMExports()` re-syncs the binding to the wrapper.
+ */
+function countReads(fn) {
+  const real = fs.readFileSync;
+  let n = 0;
+  fs.readFileSync = function (...args) { n++; return real.apply(this, args); };
+  syncBuiltinESMExports();
+  try { fn(); } finally { fs.readFileSync = real; syncBuiltinESMExports(); }
+  return n;
+}
+
+// The read counter patches the `fs` namespace and re-syncs the named-import
+// binding with `module.syncBuiltinESMExports()`, a Node mechanism Bun does not
+// implement (its bindings never see the wrapper, so the count is always 0).
+// The memo itself is exercised on Bun by test/bun/prod-perf-memos.mjs.
+const NODE_ONLY_SPY = process.versions.bun ? 'fs spying through syncBuiltinESMExports is Node-only; the memo is covered on Bun by test/bun/prod-perf-memos.mjs' : false;
+
+test('a directory target is read once per build: EISDIR is memoized as the empty hash (#1644)', { skip: NODE_ONLY_SPY }, () => {
+  setAssetRoots({ appDir, coreDir, enabled: true });
+  const dir = join(appDir, 'app');
+  assert.equal(countReads(() => assetHashFor(dir)), 1, 'first call reads (and throws EISDIR inside)');
+  assert.equal(assetHashFor(dir), '', 'a directory has no content hash');
+  assert.equal(countReads(() => assetHashFor(dir)), 0, 'the second call in the same build never touches the filesystem');
+  clearAssetHashCache();
+  assert.equal(countReads(() => assetHashFor(dir)), 1, 'a cleared cache (a rebuild) re-attempts, since a directory can become a file across builds');
+});
+
+test('a missing file is NOT memoized: a transient read failure re-attempts on the next emit', { skip: NODE_ONLY_SPY }, () => {
+  setAssetRoots({ appDir, coreDir, enabled: true });
+  const missing = join(appDir, 'app', 'later.js');
+  assert.equal(countReads(() => assetHashFor(missing)), 1);
+  assert.equal(countReads(() => assetHashFor(missing)), 1, 'ENOENT is re-attempted every call (the fail-safe contract)');
+  writeFileSync(missing, 'export default 1;\n');
+  assert.match(assetHashFor(missing), /^[0-9a-f]{12}$/, 'and succeeds once the file exists, with no clear needed');
 });

@@ -42,6 +42,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { redactStringsAndTemplates } from './js-scan.js';
 import { resolveImport, expandImportAlias } from './module-graph.js';
+import { bumpBuildEpoch } from './build-epoch.js';
 
 /**
  * Length of the emitted hex hash. 12 hex chars (48 bits) is plenty to
@@ -111,6 +112,9 @@ export function setAssetRoots(opts) {
   _appDir = opts.appDir || '';
   _coreDir = opts.coreDir || '';
   _enabled = !!opts.enabled && !!_appDir && !!_coreDir;
+  // Flipping the roots or the enable switch changes every `?v` the memoized
+  // importmap carries (#1644).
+  bumpBuildEpoch();
 }
 
 /**
@@ -129,6 +133,9 @@ export function setElisionFingerprint(fp) {
   if (next === _elisionFp) return;
   _elisionFp = next;
   _hashCache.clear();
+  // Past the early return on purpose: an unchanged fingerprint moves no hash,
+  // so the epoch-keyed memos over those hashes stay valid (#1644).
+  bumpBuildEpoch();
 }
 
 /**
@@ -139,8 +146,26 @@ export function setElisionFingerprint(fp) {
  *
  * @returns {void}
  */
+/**
+ * How many times `assetHashFor` fell back to '' on a TRANSIENT read failure
+ * (anything but EISDIR and ENOENT). A memo keyed on the build epoch compares this
+ * before and after computing its value and skips storing when it moved, so a
+ * transient EMFILE / EIO on one render cannot pin an un-fingerprinted url for
+ * the rest of the build (in prod, the process lifetime); the next render
+ * re-attempts the read, exactly as the hash cache itself does.
+ * @returns {number}
+ */
+export function assetHashMisses() {
+  return _misses;
+}
+let _misses = 0;
+
 export function clearAssetHashCache() {
   _hashCache.clear();
+  // The memoized importmap and every other epoch-keyed value embed these
+  // hashes, so a cleared cache is a new build as far as they are concerned
+  // (#1644).
+  bumpBuildEpoch();
 }
 
 /**
@@ -191,10 +216,26 @@ export function assetHashFor(absPath) {
     const hash = h.digest('hex').slice(0, HASH_LEN);
     _hashCache.set(absPath, hash);
     return hash;
-  } catch {
-    // A transient read failure is NOT memoized (returning '' fails safe to the
+  } catch (err) {
+    // A DIRECTORY is memoized as '' (#1644): the importmap carries trailing-slash
+    // prefix targets (the core `src/` catch-all and every `#<dir>/` alias scope),
+    // each of which resolved to a directory and threw EISDIR on EVERY request,
+    // an open + read + throw per entry per render. A directory never becomes a
+    // file without a rebuild, and a rebuild clears this cache.
+    //
+    // Any OTHER read failure stays un-memoized (returning '' fails safe to the
     // 1h fallback), so a later emit re-attempts instead of pinning the file to
-    // the fallback for the process lifetime.
+    // the fallback for the process lifetime. A TRANSIENT one (EMFILE, EAGAIN,
+    // EIO, anything but a missing file) also moves `assetHashMisses`, so an
+    // epoch-keyed memo built over this url (the served importmap, the
+    // early-hint list) declines to store a value that carries the fallback.
+    // ENOENT does not count: like a directory, a missing file stays missing
+    // until a rebuild, so a memo over its bare url is not stale, and counting
+    // it would keep the memo from ever filling for an app whose map names a
+    // file that is not there.
+    const code = err && /** @type {{ code?: string }} */ (err).code;
+    if (code === 'EISDIR') _hashCache.set(absPath, '');
+    else if (code !== 'ENOENT') _misses += 1;
     return '';
   }
 }

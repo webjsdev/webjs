@@ -42,6 +42,9 @@ import { stripBasePath, withBasePath } from '../base-path.js';
 import { setAssetUrlProvider, setFormActionResolver } from '@webjsdev/core';
 import { resolveActionIdentity } from '../form-action-identity.js';
 import { setAssetRoots, clearAssetHashCache, setElisionFingerprint, withAssetHash, assetHashFor, resolveAssetUrl } from '../asset-hash.js';
+import { bumpBuildEpoch } from '../build-epoch.js';
+import { hintedBootModules } from '../ssr/shipped-modules.js';
+import { createRetryBackoff } from './vendor-retry.js';
 import { applySecurityHeaders, webRequestIsHttps } from '../headers.js';
 import { resolveEmbedOrigins, setEmbedOrigins, allowEmbedFraming } from '../dev-embed.js';
 import {
@@ -75,7 +78,7 @@ import {
 import {
   handleCore, loadMiddleware, tryServeFrameworkStatic, tryServePublicAsset,
 } from './serve.js';
-import { devImport } from '../dev-import.js';
+import { devImport, clearProdImportCache } from '../dev-import.js';
 
 /**
  * A short content digest of a single file's bytes for the app-source deploy
@@ -588,8 +591,22 @@ export async function createRequestHandler(opts) {
     // This is the request/probe-driven retry (no timer). Until it succeeds the
     // served build id stays empty (reload-safe), so no navigation hard-reloads.
     if (analysisDone && vendorAttemptedOnce) {
-      const gen = vendorGen;
-      resolveAndApplyVendor().then((ok) => { if (ok && gen === vendorGen) { vendorResolved = true; if (!bootVendorPinned) publishBuildId(); } }).catch(() => {});
+      // Gated by a backoff window (#1644): before it, EVERY request during an
+      // outage restarted the resolve (the single flight only collapsed
+      // concurrent ones), re-running the scan, the manifest reads, and a jspm
+      // fetch per request for as long as the CDN was down. The window starts
+      // at 2 s and doubles to a minute; a success or a rebuild clears it. The
+      // verdict is recorded INSIDE the single flight (`resolveAndApplyVendor`),
+      // once per attempt, never here: every request that lands while an
+      // attempt is in flight shares its promise, and recording per caller
+      // widened the window once per concurrent request, so one failed attempt
+      // under load jumped straight to the cap.
+      if (vendorBackoff.allow()) {
+        const gen = vendorGen;
+        resolveAndApplyVendor().then((ok) => {
+          if (ok && gen === vendorGen) { vendorResolved = true; if (!bootVendorPinned) publishBuildId(); }
+        }).catch(() => {});
+      }
       return;
     }
     // Otherwise run the (single-flighted) full warm: the analysis, then the
@@ -756,6 +773,13 @@ export async function createRequestHandler(opts) {
                   : `[webjs] elision: disabled (WEBJS_ELIDE / webjs.elide), every module ships.`,
               );
             }
+            // The analysis stage is the last writer of per-build inputs (the
+            // elision fingerprint, the import-only and lazy sets, the route
+            // table), so every epoch-keyed memo is invalidated here once,
+            // unconditionally: a request that rendered in the pre-warm window
+            // hinted against an empty fingerprint and must not keep serving
+            // that memo (#1644).
+            bumpBuildEpoch();
             analysisDone = true;
             analysisEverDone = true;
             ranAnalysis = true;
@@ -768,6 +792,9 @@ export async function createRequestHandler(opts) {
             const ok = await resolveAndApplyVendor();
             t.vendor = now() - m;
             ranVendor = true;
+            // The attempt itself seeded the retry backoff (#1644): a transient
+            // first failure opened the first window, so the request-driven
+            // retry above does not fire on the very next request.
             // Only memoize success (and only if a rebuild didn't intervene). A
             // transient failure leaves vendorResolved false; the next ensureReady
             // call re-attempts it non-blocking. A permanent unresolvable (jspm
@@ -826,6 +853,9 @@ export async function createRequestHandler(opts) {
   // partial map resolved so the app is no worse off).
   /** @type {Promise<boolean> | null} */
   let vendorResolveInFlight = null;
+  // The retry gate for a transiently failed live resolve (#1644): see the
+  // request-driven retry in `ensureReady`. Pure state, cleared on a rebuild.
+  const vendorBackoff = createRetryBackoff();
   function resolveAndApplyVendor() {
     if (vendorResolveInFlight) return vendorResolveInFlight;
     vendorResolveInFlight = (async () => {
@@ -847,9 +877,13 @@ export async function createRequestHandler(opts) {
           ({ imports, integrity } = prunePinToReachable(imports, integrity, reachable, { appDir }));
         }
         await setVendorEntries(imports, integrity);
+        // The backoff verdict is recorded here, once per attempt (#1644):
+        // every caller awaiting this flight shares the one promise.
+        if (v.ok) vendorBackoff.succeeded(); else vendorBackoff.failed();
         return v.ok;
       } catch (e) {
         logger.error?.(`[webjs] vendor resolve failed (will retry on the next request):`, e);
+        vendorBackoff.failed();
         return false;
       }
     })().finally(() => { vendorResolveInFlight = null; });
@@ -924,11 +958,20 @@ export async function createRequestHandler(opts) {
     // best-effort (see emitRouteTypes).
     if (dev) void emitRouteTypes();
     clearVendorCache();
+    // A rebuild changes the bare-import set, so a failed resolve's backoff
+    // window no longer describes anything; the next request may try at once.
+    vendorBackoff.reset();
     // Content-hash asset cache (#243): clear so a changed file re-hashes and
     // its emitted `?v` busts the stale immutable copy. A no-op in dev (the
     // module is never enabled there), kept for correctness + the deploy-busts
     // regression test, which clears + re-hashes to observe a changed `?v`.
     clearAssetHashCache();
+    // Explicit as well as implicit (`clearAssetHashCache` bumps too): a rebuild
+    // is a new build for every epoch-keyed memo, whatever else changed (#1644).
+    bumpBuildEpoch();
+    // A prod handler an embedded host rebuilds must re-import its route
+    // modules too (#1644); the plain `webjs start` path never gets here.
+    clearProdImportCache();
     state.tsCache.clear();
     // Invalidate the lazy analysis; the next request rebuilds the graph,
     // component scan, gate, action index, middleware, elision, and vendor map.
@@ -1374,32 +1417,25 @@ export async function createRequestHandler(opts) {
     if (matchPathname === null) return null;
     const page = matchPage(state.routeTable, matchPathname);
     if (!page) return null;
-    // Mirror ssr.js's boot assembly EXACTLY: drop inert route modules, and
-    // splice an import-only module's component imports in place of the module
-    // (#605). Otherwise the 103 Early Hints would preload the page / layout
-    // modules the body no longer imports (a wasted hint) and miss the component
-    // modules it actually fetches (a double-fetch on the real module).
-    const inert = state.inertRouteModules;
-    const importOnly = state.importOnlyRouteModules;
-    const files = [];
-    const seenFiles = new Set();
-    for (const f of [page.route.file, ...page.route.layouts]) {
-      if (inert && inert.has(f)) continue;
-      const emit = importOnly && importOnly.get(f);
-      for (const t of emit || [f]) if (!seenFiles.has(t)) { seenFiles.add(t); files.push(t); }
-    }
-    const moduleUrls = files.map((f) => {
-      let rel = f.startsWith(appDir) ? f.slice(appDir.length) : f;
-      const url = rel.split('\\').join('/').replace(/^\/?/, '/');
-      // Mirror ssr.js's emit (basePath THEN `?v`) so the 103 Early Hints preload
-      // the SAME url the body's modulepreload + boot specifiers request (#243).
-      // A bare url would warm a different url and waste the hint. No-op in dev.
-      // Best-effort: a request landing in the narrow pre-warm window (before the
-      // elision verdict is set) hashes against an empty fingerprint, so the hint
-      // can mismatch the post-warm body for that one request, only a wasted
-      // speculative preload, never a stale body (the body url is authoritative).
-      return withAssetHash(withBasePath(url, basePathValue), basePathValue);
-    });
+    // The boot's OWN assembly (#1644): the same inert drop, import-only splice
+    // (#605), lazy-frontier diversion (#1524) and instrumentation-client
+    // ordering (#848) the render emits, from one memoized function, so the
+    // 103 Early Hints preload exactly the urls the body's boot + modulepreload
+    // request (basePath THEN `?v`, #243) and never a module the boot does not
+    // import. This used to be a second copy of the loop, which had drifted: it
+    // knew nothing of lazy files, so a lazy frontier component was hinted
+    // although the boot registers it with the lazy loader instead. Memoized
+    // per route object and build epoch, so a warm GET costs one WeakMap read.
+    // Best-effort in the pre-warm window as before: the analysis stage bumps
+    // the epoch, so a hint computed against an empty fingerprint is recomputed
+    // on the first warm request.
+    const moduleUrls = hintedBootModules(page.route, {
+      appDir,
+      inert: state.inertRouteModules,
+      importOnly: state.importOnlyRouteModules,
+      lazyFiles: state.lazyComponentFiles,
+      instrumentationClient: state.routeTable.instrumentationClient,
+    }, basePathValue);
     return { moduleUrls };
   }
 

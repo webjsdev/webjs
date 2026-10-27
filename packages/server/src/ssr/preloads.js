@@ -93,7 +93,7 @@ export function componentPreloads(usedTags, appDir, elidable, lazyFiles) {
  * @param {Set<string>} [elidableComponents]  absolute paths to skip in the walk
  * @returns {string[]}
  */
-export function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFiles, appDir, serverFiles, elidableComponents) {
+export function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFiles, appDir, serverFiles, elidableComponents, precomputedDeps) {
   const seen = new Set(moduleUrls);
   const result = [];
 
@@ -119,17 +119,22 @@ export function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFile
 
   // Add transitive deps from the module graph
   if (graph) {
-    // Combine entry files + component files for graph lookup
-    const allEntries = [...entryFiles];
-    for (const url of componentUrls) {
-      // Convert URL back to absolute path for graph lookup
-      const abs = resolve(appDir, url.startsWith('/') ? url.slice(1) : url);
-      allEntries.push(abs);
+    // `precomputedDeps` is the closure `pagePreloadHints` already walked for
+    // this render (#1644); without it (a direct caller) walk it here.
+    let deps = precomputedDeps;
+    if (!deps) {
+      // Combine entry files + component files for graph lookup
+      const allEntries = [...entryFiles];
+      for (const url of componentUrls) {
+        // Convert URL back to absolute path for graph lookup
+        const abs = resolve(appDir, url.startsWith('/') ? url.slice(1) : url);
+        allEntries.push(abs);
+      }
+      // Skip elidable components and any subtree reachable only through
+      // them: their imports are stripped from served source, so the
+      // browser never fetches these modules.
+      deps = transitiveDeps(graph, allEntries, appDir, elidableComponents);
     }
-    // Skip elidable components and any subtree reachable only through
-    // them: their imports are stripped from served source, so the
-    // browser never fetches these modules.
-    const deps = transitiveDeps(graph, allEntries, appDir, elidableComponents);
     for (const dep of deps) {
       if (byIndex(dep)) continue;
       const url = toUrlPath(dep, appDir);
@@ -169,7 +174,7 @@ export function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFile
  * @param {Set<string>} [serverFiles]  the action / server-file index (`'use server'`, incl. no-`.server.` files)
  * @returns {Set<string>}
  */
-export function reachedVendorSpecifiers(graph, entryFiles, componentUrls, appDir, elidableComponents, serverFiles) {
+export function reachedVendorSpecifiers(graph, entryFiles, componentUrls, appDir, elidableComponents, serverFiles, precomputedDeps) {
   /** @type {Set<string>} */
   const specs = new Set();
   if (!graph) return specs;
@@ -177,13 +182,14 @@ export function reachedVendorSpecifiers(graph, entryFiles, componentUrls, appDir
   if (!bare.size) return specs;
   // Roots = the SHIPPED page/layout modules (already inert-dropped + import-only
   // expanded by the caller) + the rendered components, keyed by the graph's own
-  // absolute paths. Walk their non-elided transitive closure.
+  // absolute paths. Walk their non-elided transitive closure, unless
+  // `pagePreloadHints` already walked it for this render (#1644).
   const allEntries = [...entryFiles];
   for (const url of componentUrls) {
     allEntries.push(resolve(appDir, url.startsWith('/') ? url.slice(1) : url));
   }
   const files = new Set(allEntries);
-  for (const dep of transitiveDeps(graph, allEntries, appDir, elidableComponents)) files.add(dep);
+  for (const dep of precomputedDeps || transitiveDeps(graph, allEntries, appDir, elidableComponents)) files.add(dep);
   for (const file of files) {
     // A server file is never served to the browser (its source is an RPC /
     // throw-at-load stub), so a vendor it imports never ships and must NOT be
@@ -197,4 +203,72 @@ export function reachedVendorSpecifiers(graph, entryFiles, componentUrls, appDir
     if (fileBare) for (const spec of fileBare) specs.add(spec);
   }
   return specs;
+}
+
+/**
+ * The skip set for the preload walks: the elidable components plus, when the
+ * app has `static lazy` components (#1524), every lazy file. Built once per
+ * lazy map (a per-build object), since it was rebuilt per render (#1644).
+ * @type {WeakMap<Map<string, string[]>, WeakMap<Set<string>, Set<string>>>}
+ */
+const SKIP_MEMO = new WeakMap();
+const NO_ELIDABLE = new Set();
+
+/**
+ * @param {Set<string> | undefined} elidable
+ * @param {Map<string, string[]> | undefined} lazyFiles
+ * @returns {Set<string> | undefined}
+ */
+function preloadSkipSet(elidable, lazyFiles) {
+  if (!lazyFiles || !lazyFiles.size) return elidable;
+  const key = elidable || NO_ELIDABLE;
+  let byElidable = SKIP_MEMO.get(lazyFiles);
+  if (!byElidable) { byElidable = new WeakMap(); SKIP_MEMO.set(lazyFiles, byElidable); }
+  let skip = byElidable.get(key);
+  if (!skip) {
+    skip = new Set([...(elidable || []), ...lazyFiles.keys()]);
+    byElidable.set(key, skip);
+  }
+  return skip;
+}
+
+/**
+ * The page's preload hints in ONE graph walk (#1644). The app-module preload
+ * pass (`deduplicatedPreloads`) and the vendor pass
+ * (`reachedVendorSpecifiers`) root at the same shipped set with the same skip
+ * set, so they used to walk the identical closure twice per render. This
+ * walks it once and hands the closure to both.
+ *
+ * The walk roots are the BOOT's actually-shipped module set (`moduleUrls`,
+ * inert modules already dropped and an import-only page already substituted)
+ * plus the rendered eager components, NOT the raw route entries: rooting at
+ * the raw entries would walk a dropped page's SSR-only subtree and hint a
+ * `modulepreload` for a module nothing that ships imports (#780, the
+ * app-module analog of the #754 vendor over-fetch).
+ *
+ * @param {{
+ *   graph: import('../module-graph.js').ModuleGraph | undefined,
+ *   appDir: string,
+ *   moduleUrls: string[],
+ *   eagerComponents: string[],
+ *   elidableComponents: Set<string> | undefined,
+ *   lazyFiles: Map<string, string[]> | undefined,
+ *   serverFiles: Set<string> | undefined,
+ * }} input
+ * @returns {{ preloads: string[], vendorSpecifiers: Set<string>, skip: Set<string> | undefined }}
+ */
+export function pagePreloadHints(input) {
+  const { graph, appDir, moduleUrls, eagerComponents, elidableComponents, lazyFiles, serverFiles } = input;
+  const skip = preloadSkipSet(elidableComponents, lazyFiles);
+  const shippedRoots = moduleUrls.map((u) => resolve(appDir, u.startsWith('/') ? u.slice(1) : u));
+  /** @type {string[] | undefined} */
+  let deps;
+  if (graph) {
+    const allEntries = [...shippedRoots];
+    for (const url of eagerComponents) allEntries.push(resolve(appDir, url.startsWith('/') ? url.slice(1) : url));
+    deps = transitiveDeps(graph, allEntries, appDir, skip);
+  }
+  const preloads = deduplicatedPreloads(eagerComponents, moduleUrls, graph, shippedRoots, appDir, serverFiles, skip, deps);
+  const vendorSpecifiers = reachedVendorSpecifiers(graph, shippedRoots, eagerComponents, appDir, skip, serverFiles, deps);
+  return { preloads, vendorSpecifiers, skip };
 }
