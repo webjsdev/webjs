@@ -5,6 +5,7 @@ import { digestHex } from './crypto-utils.js';
 import { jsonForScriptTag } from './script-tag-json.js';
 import { withBasePath } from './base-path.js';
 import { withAssetHash } from './asset-hash.js';
+import { buildEpoch, bumpBuildEpoch } from './build-epoch.js';
 
 // Local attribute escaper, byte-identical to the pair in `ssr/escape.js`,
 // which is the source of truth for HTML attribute escaping in this package.
@@ -31,6 +32,18 @@ function escapeAttr(s) {
 
 /** @type {Record<string, string>} */
 let _extraEntries = {};
+
+/**
+ * Per-build memos (#1644), each `{ epoch, value }` keyed on `buildEpoch()`.
+ * Every setter in this module bumps the epoch, as do the asset-hash roots,
+ * the elision fingerprint, the hash-cache clear, and the dev rebuild.
+ * @type {{ epoch: number, value: { imports: Record<string, string>, integrity?: Record<string, string> } }}
+ */
+let _mapMemo = { epoch: 0, value: { imports: {} } };
+/** @type {{ epoch: number, value: string }} */
+let _tagJsonMemo = { epoch: 0, value: '' };
+/** @type {{ epoch: number, max: number, value: string[] }} */
+let _preconnectMemo = { epoch: 0, max: -1, value: [] };
 
 /**
  * Browser importmap entries for the app's `package.json "imports"` subpath
@@ -68,6 +81,9 @@ let _basePath = '';
  * @returns {Promise<void>}
  */
 export async function setBasePath(basePath) {
+  // Bumped BEFORE the await below so a render racing this setter cannot
+  // refill the importmap memo with the old base path (#1644).
+  bumpBuildEpoch();
   _basePath = basePath || '';
   _importMapHash = await digestHex('SHA-256', JSON.stringify(buildImportMap({ fingerprint: false })));
 }
@@ -137,6 +153,7 @@ export function importAliasBrowserEntries(importsMap, topLevelDirs = []) {
  * @returns {Promise<void>}
  */
 export async function setImportAliasEntries(entries) {
+  bumpBuildEpoch();
   _aliasEntries = entries && typeof entries === 'object' ? entries : {};
   _importMapHash = await digestHex('SHA-256', JSON.stringify(buildImportMap({ fingerprint: false })));
 }
@@ -160,6 +177,7 @@ let _vendorIntegrity = {};
  * @returns {Promise<void>}
  */
 export async function setVendorEntries(entries, integrity) {
+  bumpBuildEpoch();
   _extraEntries = entries;
   _vendorIntegrity = integrity || {};
   _importMapHash = await digestHex('SHA-256', JSON.stringify(buildImportMap({ fingerprint: false })));
@@ -338,6 +356,7 @@ let _coreEntries = {
  * @returns {Promise<void>}
  */
 export async function setCoreInstall(coreDir, distMode) {
+  bumpBuildEpoch();
   _coreEntries = buildCoreEntries(coreDir, !!distMode);
   // Capture the installed @webjsdev/core version (#899). The importmap targets
   // core at a version-independent URL, so a core RELEASE (new implementation,
@@ -454,6 +473,13 @@ export function buildCoreEntries(coreDir, distMode) {
  */
 export function buildImportMap(opts = {}) {
   const fingerprint = opts.fingerprint !== false;
+  // The SERVED (fingerprinted) map is request-independent within a build and
+  // was rebuilt two or three times per page render, each pass running
+  // `withAssetHash` over every target (#1644). Memoized by build epoch; every
+  // setter above bumps it. The `fingerprint: false` form the setters use for
+  // the build-id hash stays live, since it is what the memo is derived from.
+  // Callers only READ the returned object.
+  if (fingerprint && _mapMemo.epoch === buildEpoch()) return _mapMemo.value;
   const merged = {
     ..._coreEntries,
     ..._extraEntries,
@@ -505,6 +531,7 @@ export function buildImportMap(opts = {}) {
     for (const k of intKeys) integrity[withBasePath(k, _basePath)] = _vendorIntegrity[k];
     out.integrity = integrity;
   }
+  if (fingerprint) _mapMemo = { epoch: buildEpoch(), value: out };
   return out;
 }
 
@@ -563,6 +590,10 @@ export function vendorPreloadTargets(specifiers) {
  * @returns {string[]}  e.g. `['https://ga.jspm.io']`
  */
 export function vendorPreconnectOrigins(max = 2) {
+  // Request-independent within a build (it reads only `_extraEntries`), and
+  // it re-parsed every vendor url with `new URL` per render (#1644). Keyed by
+  // epoch AND `max`, since a caller can ask for a different cap.
+  if (_preconnectMemo.epoch === buildEpoch() && _preconnectMemo.max === max) return _preconnectMemo.value;
   /** @type {Map<string, number>} */
   const counts = new Map();
   for (const target of Object.values(_extraEntries)) {
@@ -575,10 +606,12 @@ export function vendorPreconnectOrigins(max = 2) {
     try { origin = new URL(target).origin; } catch { continue; }
     counts.set(origin, (counts.get(origin) || 0) + 1);
   }
-  return [...counts.entries()]
+  const origins = [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, Math.max(0, max))
     .map(([origin]) => origin);
+  _preconnectMemo = { epoch: buildEpoch(), max, value: origins };
+  return origins;
 }
 
 /**
@@ -615,5 +648,11 @@ export function importMapTag(opts = {}) {
   // change here evicts the client caches softly (see appSourceId()); empty until
   // the analysis is ready, which the client reads as "unknown".
   const s = ` data-webjs-src="${appSourceId()}"`;
-  return `<script type="importmap"${n}${b}${s}>${jsonForScriptTag(buildImportMap())}</script>`;
+  // The JSON body is memoized by build epoch (#1644); the nonce and the two
+  // deploy signals above are assembled per call, which is why `publishBuildId`
+  // and `setAppSourceId` need no epoch bump.
+  if (_tagJsonMemo.epoch !== buildEpoch()) {
+    _tagJsonMemo = { epoch: buildEpoch(), value: jsonForScriptTag(buildImportMap()) };
+  }
+  return `<script type="importmap"${n}${b}${s}>${_tagJsonMemo.value}</script>`;
 }

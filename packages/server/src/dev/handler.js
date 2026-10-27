@@ -42,6 +42,7 @@ import { stripBasePath, withBasePath } from '../base-path.js';
 import { setAssetUrlProvider, setFormActionResolver } from '@webjsdev/core';
 import { resolveActionIdentity } from '../form-action-identity.js';
 import { setAssetRoots, clearAssetHashCache, setElisionFingerprint, withAssetHash, assetHashFor, resolveAssetUrl } from '../asset-hash.js';
+import { bumpBuildEpoch } from '../build-epoch.js';
 import { applySecurityHeaders, webRequestIsHttps } from '../headers.js';
 import { resolveEmbedOrigins, setEmbedOrigins, allowEmbedFraming } from '../dev-embed.js';
 import {
@@ -756,6 +757,13 @@ export async function createRequestHandler(opts) {
                   : `[webjs] elision: disabled (WEBJS_ELIDE / webjs.elide), every module ships.`,
               );
             }
+            // The analysis stage is the last writer of per-build inputs (the
+            // elision fingerprint, the import-only and lazy sets, the route
+            // table), so every epoch-keyed memo is invalidated here once,
+            // unconditionally: a request that rendered in the pre-warm window
+            // hinted against an empty fingerprint and must not keep serving
+            // that memo (#1644).
+            bumpBuildEpoch();
             analysisDone = true;
             analysisEverDone = true;
             ranAnalysis = true;
@@ -929,6 +937,9 @@ export async function createRequestHandler(opts) {
     // module is never enabled there), kept for correctness + the deploy-busts
     // regression test, which clears + re-hashes to observe a changed `?v`.
     clearAssetHashCache();
+    // Explicit as well as implicit (`clearAssetHashCache` bumps too): a rebuild
+    // is a new build for every epoch-keyed memo, whatever else changed (#1644).
+    bumpBuildEpoch();
     state.tsCache.clear();
     // Invalidate the lazy analysis; the next request rebuilds the graph,
     // component scan, gate, action index, middleware, elision, and vendor map.

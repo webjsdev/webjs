@@ -10,6 +10,7 @@ import { clientRouterEnabled } from './client-router-flag.js';
 import { embedScriptTag } from '../dev-embed.js';
 import { devReloadState } from '../dev-reload-state.js';
 import { openGraphPairs, twitterPairs, setMetadataImageRoutes } from './seo.js';
+import { buildEpoch, bumpBuildEpoch } from '../build-epoch.js';
 
 // Which icon and manifest metadata the app has: the `app/icon.*`,
 // `app/apple-icon.*` and `app/manifest.*` files (a static file such as
@@ -99,6 +100,33 @@ export function setMetadataIconRoutes(metadataRoutes) {
     manifest: manifest ? /** @type {string} */ (manifest.urlPath) : null,
   };  // The og/twitter image routes ride the same rebuild hook (seo.js).
   setMetadataImageRoutes(metadataRoutes);
+  // The auto-link memos below key on the epoch (#1644).
+  bumpBuildEpoch();
+}
+
+/**
+ * Memo for `autoMetadataRouteIcons` / `autoManifestUrl` (#1644): both read
+ * only `_metadataIconRoutes` and `basePath()`, and `setMetadataIconRoutes` and
+ * `setBasePath` both bump the epoch, so one entry serves every render of a
+ * build instead of re-prefixing the lists per request.
+ * @type {{ epoch: number, icons: { icon?: AutoIcon[], apple?: AutoIcon[] } | null, manifest: string | null }}
+ */
+let _autoLinkMemo = { epoch: 0, icons: null, manifest: null };
+
+/** @returns {void} */
+function refreshAutoLinkMemo() {
+  if (_autoLinkMemo.epoch === buildEpoch()) return;
+  const { icon, apple, manifest } = _metadataIconRoutes;
+  const bp = basePath();
+  const prefix = (/** @type {AutoIcon} */ i) => ({ ...i, url: withBasePath(i.url, bp) });
+  /** @type {{ icon?: AutoIcon[], apple?: AutoIcon[] } | null} */
+  let icons = null;
+  if (icon.length || apple.length) {
+    icons = {};
+    if (icon.length) icons.icon = icon.map(prefix);
+    if (apple.length) icons.apple = apple.map(prefix);
+  }
+  _autoLinkMemo = { epoch: buildEpoch(), icons, manifest: manifest ? withBasePath(manifest, bp) : null };
 }
 
 /**
@@ -112,25 +140,18 @@ export function setMetadataIconRoutes(metadataRoutes) {
  *
  * @returns {{ icon?: AutoIcon[], apple?: AutoIcon[] } | null}
  */
-function autoMetadataRouteIcons() {
-  const { icon, apple } = _metadataIconRoutes;
-  if (!icon.length && !apple.length) return null;
-  const bp = basePath();
-  const prefix = (/** @type {AutoIcon} */ i) => ({ ...i, url: withBasePath(i.url, bp) });
-  /** @type {{ icon?: AutoIcon[], apple?: AutoIcon[] }} */
-  const out = {};
-  if (icon.length) out.icon = icon.map(prefix);
-  if (apple.length) out.apple = apple.map(prefix);
-  return out;
+export function autoMetadataRouteIcons() {
+  refreshAutoLinkMemo();
+  return _autoLinkMemo.icons;
 }
 
 /**
  * The app's `app/manifest.*` URL (base-path prefixed), or null.
  * @returns {string | null}
  */
-function autoManifestUrl() {
-  const { manifest } = _metadataIconRoutes;
-  return manifest ? withBasePath(manifest, basePath()) : null;
+export function autoManifestUrl() {
+  refreshAutoLinkMemo();
+  return _autoLinkMemo.manifest;
 }
 
 /**
