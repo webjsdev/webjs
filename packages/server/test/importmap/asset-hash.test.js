@@ -143,7 +143,13 @@ function countReads(fn) {
   return n;
 }
 
-test('a directory target is read once per build: EISDIR is memoized as the empty hash (#1644)', () => {
+// The read counter patches the `fs` namespace and re-syncs the named-import
+// binding with `module.syncBuiltinESMExports()`, a Node mechanism Bun does not
+// implement (its bindings never see the wrapper, so the count is always 0).
+// The memo itself is exercised on Bun by test/bun/prod-perf-memos.mjs.
+const NODE_ONLY_SPY = process.versions.bun ? 'fs spying through syncBuiltinESMExports is Node-only; the memo is covered on Bun by test/bun/prod-perf-memos.mjs' : false;
+
+test('a directory target is read once per build: EISDIR is memoized as the empty hash (#1644)', { skip: NODE_ONLY_SPY }, () => {
   setAssetRoots({ appDir, coreDir, enabled: true });
   const dir = join(appDir, 'app');
   assert.equal(countReads(() => assetHashFor(dir)), 1, 'first call reads (and throws EISDIR inside)');
@@ -153,7 +159,7 @@ test('a directory target is read once per build: EISDIR is memoized as the empty
   assert.equal(countReads(() => assetHashFor(dir)), 1, 'a cleared cache (a rebuild) re-attempts, since a directory can become a file across builds');
 });
 
-test('a missing file is NOT memoized: a transient read failure re-attempts on the next emit', () => {
+test('a missing file is NOT memoized: a transient read failure re-attempts on the next emit', { skip: NODE_ONLY_SPY }, () => {
   setAssetRoots({ appDir, coreDir, enabled: true });
   const missing = join(appDir, 'app', 'later.js');
   assert.equal(countReads(() => assetHashFor(missing)), 1);

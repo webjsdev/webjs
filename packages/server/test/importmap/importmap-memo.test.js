@@ -83,7 +83,14 @@ function countReads(fn) {
   return n;
 }
 
-test('buildImportMap: the second call in a build reads nothing and returns the same object', () => {
+// The read counter patches the `fs` namespace and re-syncs the named-import
+// binding with `module.syncBuiltinESMExports()`, a Node mechanism Bun does not
+// implement (its bindings never see the wrapper, so the count is always 0).
+// The identity and invalidation tests below run on both runtimes, and the
+// served bytes are proven on Bun by test/bun/prod-perf-memos.mjs.
+const NODE_ONLY_SPY = process.versions.bun ? 'fs spying through syncBuiltinESMExports is Node-only' : false;
+
+test('buildImportMap: the second call in a build reads nothing and returns the same object', { skip: NODE_ONLY_SPY }, () => {
   clearAssetHashCache();
   const firstReads = countReads(() => buildImportMap());
   assert.ok(firstReads >= 1, 'the first build hashes at least one file target');
@@ -99,7 +106,7 @@ test('buildImportMap: the second call in a build reads nothing and returns the s
   assert.match(first.imports['@webjsdev/core'], /\?v=[0-9a-f]{12}$/);
 });
 
-test('buildImportMap: a directory target is read once per build, not once per call', () => {
+test('buildImportMap: a directory target is read once per build, not once per call', { skip: NODE_ONLY_SPY }, () => {
   clearAssetHashCache();
   // Warm the map once, then clear only the hash cache (a new build) so the next
   // build re-hashes every target, and count that one against a third build in
@@ -165,7 +172,7 @@ test('importMapTag: the JSON body is memoized while the nonce and build id stay 
   assert.equal(body(a), body(b), 'same JSON body within a build');
   assert.match(a, /nonce="n1"/);
   assert.match(b, /nonce="n2"/);
-  assert.equal(countReads(() => importMapTag()), 0, 'the tag never rebuilds the map within a build');
+  if (!NODE_ONLY_SPY) assert.equal(countReads(() => importMapTag()), 0, 'the tag never rebuilds the map within a build');
 });
 
 test('vendorPreconnectOrigins: same array within a build, a new one after setVendorEntries', async () => {
