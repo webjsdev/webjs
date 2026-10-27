@@ -4,6 +4,7 @@ import { vendorPreloadTargets } from '../importmap.js';
 import {
   componentPreloads, deduplicatedPreloads, reachedVendorSpecifiers, toUrlPath,
 } from './preloads.js';
+import { shippedBootModules } from './shipped-modules.js';
 import { seedingEnabled, collectSeeds, buildSeedScript, SEED_DROP_BLOCK } from '../action-seed.js';
 import {
   readRevalidate,
@@ -1113,37 +1114,19 @@ export async function ssrPage(route, params, url, opts) {
     // lazy loader instead of imported, exactly as a shipping module's served
     // source defers its side-effect import of one, so the boot never fetches
     // it up front and a tag revealed later still loads on first sight.
-    const inert = opts.inertRouteModules;
-    const importOnly = opts.importOnlyRouteModules;
+    //
+    // The assembly itself lives in `shipped-modules.js` (#1644), shared with
+    // the Node listener's 103 Early Hints and memoized per route object and
+    // build epoch; nothing below mutates `moduleUrls`, which is what lets the
+    // memoized array be handed out as is.
     const lazyFiles = opts.lazyComponentFiles;
-    const moduleUrls = [];
-    /** @type {Record<string, string>} */
-    const frontierLazy = {};
-    {
-      const seen = new Set();
-      const push = (abs) => {
-        const u = toUrlPath(abs, opts.appDir);
-        const tags = lazyFiles && lazyFiles.get(abs);
-        if (tags) { for (const t of tags) frontierLazy[t] = u; return; }
-        if (!seen.has(u)) { seen.add(u); moduleUrls.push(u); }
-      };
-      for (const f of [route.file, ...route.layouts]) {
-        if (inert && inert.has(f)) continue;
-        const emit = importOnly && importOnly.get(f);
-        if (emit) emit.forEach(push);
-        else push(f);
-      }
-    }
-    // instrumentation-client.{js,ts} (#848): import it FIRST in the client boot
-    // so it runs before app modules (Next's instrumentation-client ordering).
-    // It ships even on an otherwise-static page (the app opted into client work),
-    // so it is prepended AFTER the component/page modules are collected.
-    if (opts.instrumentationClient) {
-      const u = toUrlPath(opts.instrumentationClient, opts.appDir);
-      const i = moduleUrls.indexOf(u);
-      if (i !== -1) moduleUrls.splice(i, 1);
-      moduleUrls.unshift(u);
-    }
+    const { moduleUrls, frontierLazy } = shippedBootModules(route, {
+      appDir: opts.appDir,
+      inert: opts.inertRouteModules,
+      importOnly: opts.importOnlyRouteModules,
+      lazyFiles,
+      instrumentationClient: opts.instrumentationClient,
+    });
     // Emit <link rel="modulepreload"> for every custom element that
     // actually rendered PLUS their transitive dependencies (from the
     // module graph). URLs are deduplicated so the browser never sees

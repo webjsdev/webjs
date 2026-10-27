@@ -119,6 +119,7 @@ try {
     assert.ok(raw.includes('http/1.1 103'), `[${runtime}] the node shell sends 103 Early Hints`);
     const hints = raw.slice(0, raw.indexOf('http/1.1 200'));
     assert.ok(hints.includes('/components/hot-button.ts'), `[${runtime}] the interactive component is early-hinted`);
+    assert.ok(!hints.includes('/components/lazy-panel.ts'), `[${runtime}] the lazy component is NOT early-hinted (the hints share the boot's assembly)`);
   }
 
   console.log(`OK  prod-perf-memos #1644 passed on ${runtime} (identical renders modulo nonce, memoized importmap body)`);

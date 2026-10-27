@@ -43,6 +43,7 @@ import { setAssetUrlProvider, setFormActionResolver } from '@webjsdev/core';
 import { resolveActionIdentity } from '../form-action-identity.js';
 import { setAssetRoots, clearAssetHashCache, setElisionFingerprint, withAssetHash, assetHashFor, resolveAssetUrl } from '../asset-hash.js';
 import { bumpBuildEpoch } from '../build-epoch.js';
+import { hintedBootModules } from '../ssr/shipped-modules.js';
 import { applySecurityHeaders, webRequestIsHttps } from '../headers.js';
 import { resolveEmbedOrigins, setEmbedOrigins, allowEmbedFraming } from '../dev-embed.js';
 import {
@@ -1385,32 +1386,25 @@ export async function createRequestHandler(opts) {
     if (matchPathname === null) return null;
     const page = matchPage(state.routeTable, matchPathname);
     if (!page) return null;
-    // Mirror ssr.js's boot assembly EXACTLY: drop inert route modules, and
-    // splice an import-only module's component imports in place of the module
-    // (#605). Otherwise the 103 Early Hints would preload the page / layout
-    // modules the body no longer imports (a wasted hint) and miss the component
-    // modules it actually fetches (a double-fetch on the real module).
-    const inert = state.inertRouteModules;
-    const importOnly = state.importOnlyRouteModules;
-    const files = [];
-    const seenFiles = new Set();
-    for (const f of [page.route.file, ...page.route.layouts]) {
-      if (inert && inert.has(f)) continue;
-      const emit = importOnly && importOnly.get(f);
-      for (const t of emit || [f]) if (!seenFiles.has(t)) { seenFiles.add(t); files.push(t); }
-    }
-    const moduleUrls = files.map((f) => {
-      let rel = f.startsWith(appDir) ? f.slice(appDir.length) : f;
-      const url = rel.split('\\').join('/').replace(/^\/?/, '/');
-      // Mirror ssr.js's emit (basePath THEN `?v`) so the 103 Early Hints preload
-      // the SAME url the body's modulepreload + boot specifiers request (#243).
-      // A bare url would warm a different url and waste the hint. No-op in dev.
-      // Best-effort: a request landing in the narrow pre-warm window (before the
-      // elision verdict is set) hashes against an empty fingerprint, so the hint
-      // can mismatch the post-warm body for that one request, only a wasted
-      // speculative preload, never a stale body (the body url is authoritative).
-      return withAssetHash(withBasePath(url, basePathValue), basePathValue);
-    });
+    // The boot's OWN assembly (#1644): the same inert drop, import-only splice
+    // (#605), lazy-frontier diversion (#1524) and instrumentation-client
+    // ordering (#848) the render emits, from one memoized function, so the
+    // 103 Early Hints preload exactly the urls the body's boot + modulepreload
+    // request (basePath THEN `?v`, #243) and never a module the boot does not
+    // import. This used to be a second copy of the loop, which had drifted: it
+    // knew nothing of lazy files, so a lazy frontier component was hinted
+    // although the boot registers it with the lazy loader instead. Memoized
+    // per route object and build epoch, so a warm GET costs one WeakMap read.
+    // Best-effort in the pre-warm window as before: the analysis stage bumps
+    // the epoch, so a hint computed against an empty fingerprint is recomputed
+    // on the first warm request.
+    const moduleUrls = hintedBootModules(page.route, {
+      appDir,
+      inert: state.inertRouteModules,
+      importOnly: state.importOnlyRouteModules,
+      lazyFiles: state.lazyComponentFiles,
+      instrumentationClient: state.routeTable.instrumentationClient,
+    }, basePathValue);
     return { moduleUrls };
   }
 
