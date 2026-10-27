@@ -4,12 +4,35 @@ import { stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { withBasePath } from '../base-path.js';
-import { Readable, pipeline } from 'node:stream';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { isBufferedResponse } from '../conditional-get.js';
 import {
   isCompressible, negotiateEncoding, createCompressor, compressBufferSync, readBufferedOrStream,
   varyWithAcceptEncoding, MAX_SYNC_COMPRESS_BYTES, MIN_COMPRESS_BYTES,
 } from '../listener-core.js';
+
+/**
+ * Drive a response body through `pipeline` and resolve once it is sent, so
+ * `sendWebResponse` still completes when the body does (the reader loop it
+ * replaced did). A client that went away mid-body is the one error that is
+ * nobody's bug and is swallowed; anything else (a `route.ts` stream that
+ * errors after its first chunk, a compressor failure) propagates to the
+ * listener's catch and its `request pipeline threw` log line, as it did
+ * before #1644. By then `pipeline` has destroyed the response, so the
+ * listener's `res.end(...)` fallback is a no-op rather than a write after end.
+ * @param {import('node:stream').Readable} source
+ * @param {import('node:stream').Duplex | null} compressor
+ * @param {import('node:http').ServerResponse} res
+ */
+async function sendBody(source, compressor, res) {
+  try {
+    if (compressor) await pipeline(source, compressor, res);
+    else await pipeline(source, res);
+  } catch (e) {
+    if (!(e && typeof e === 'object' && /** @type {{ code?: string }} */ (e).code === 'ERR_STREAM_PREMATURE_CLOSE')) throw e;
+  }
+}
 
 /** @param {import('node:http').IncomingMessage} req @param {URL} url */
 export function toWebRequest(req, url) {
@@ -128,12 +151,12 @@ export async function sendWebResponse(res, webRes, req, opts) {
       withEncoding();
       delete headers['content-length'];
       res.writeHead(webRes.status, headers);
-      pipeline(source, compressor, res, () => {});
+      await sendBody(source, compressor, res);
       return;
     }
   }
   res.writeHead(webRes.status, headers);
-  pipeline(source, res, () => {});
+  await sendBody(source, null, res);
 }
 
 export const MIME = {

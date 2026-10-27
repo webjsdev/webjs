@@ -64,6 +64,11 @@ const CORE = pathToFileURL(resolve(__dirname, '../../packages/core/index.js')).t
 const SERVER = pathToFileURL(resolve(__dirname, '../../packages/server/index.js')).toString();
 const runtime = process.versions.bun ? `bun ${process.versions.bun}` : `node ${process.versions.node}`;
 const quiet = { info() {}, warn() {}, error() {}, debug() {} };
+// The main server's logger keeps its error lines (message plus the stringified
+// fields) so (4b) can assert a mid-stream source error is reported.
+/** @type {string[]} */
+const logged = [];
+const capturing = { ...quiet, error(...args) { logged.push(args.map((a) => typeof a === 'string' ? a : JSON.stringify(a)).join(' ')); } };
 
 const dir = mkdtempSync(join(tmpdir(), 'webjs-756-'));
 const w = (rel, body) => { const abs = join(dir, rel); mkdirSync(dirname(abs), { recursive: true }); writeFileSync(abs, body); };
@@ -90,12 +95,15 @@ try {
   w('app/ipcheck/page.ts', `import { html } from ${JSON.stringify(CORE)};\nimport { seeIp } from '../../ipcheck.server.ts';\nexport default () => html\`<main><form action=\${seeIp}><button>go</button></form></main>\`;`);
   // An under-floor buffered body (#1644): 80 bytes of text/plain.
   w('app/api/tiny/route.ts', `export async function GET() {\n  return new Response('tiny'.repeat(20), { headers: { 'content-type': 'text/plain' } });\n}`);
+  // A streamed body that ERRORS after its first chunk (a route stream whose
+  // source breaks mid-way). The shell must surface that, not swallow it.
+  w('app/api/broken/route.ts', `export async function GET() {\n  const enc = new TextEncoder();\n  let pulled = 0;\n  const stream = new ReadableStream({\n    start(c) { c.enqueue(enc.encode('first-chunk;')); },\n    async pull(c) { if (pulled++) return; await new Promise((r) => setTimeout(r, 50)); c.error(new Error('mid-stream boom')); },\n  });\n  return new Response(stream, { headers: { 'content-type': 'text/html; charset=utf-8' } });\n}`);
   // A genuinely STREAMED, compressible body whose SECOND chunk is far off. The
   // compression classifier must not block the response head on it (#756 review).
   w('app/api/slow/route.ts', `export async function GET() {\n  const enc = new TextEncoder();\n  let pulled = 0;\n  const stream = new ReadableStream({\n    start(c) { c.enqueue(enc.encode('shell-chunk-' + 'a'.repeat(64) + ';')); },\n    async pull(c) { if (pulled++) { c.close(); return; } await new Promise((r) => setTimeout(r, 400)); c.enqueue(enc.encode('boundary-chunk;')); c.close(); },\n  });\n  return new Response(stream, { headers: { 'content-type': 'text/html; charset=utf-8' } });\n}`);
 
   let server;
-  ({ server, close } = await startServer({ appDir: dir, dev: true, compress: true, port: 0, logger: quiet }));
+  ({ server, close } = await startServer({ appDir: dir, dev: true, compress: true, port: 0, logger: capturing }));
   const port = typeof server.port === 'number' ? server.port : server.address().port;
   const base = `http://localhost:${port}`;
 
@@ -172,6 +180,27 @@ try {
   const slowBody = await slow.text(); // fetch transparently decompresses
   assert.ok(slowBody.includes('shell-chunk') && slowBody.includes('boundary-chunk'),
     `[${runtime}] the streamed body still decodes in full under compression`);
+
+  // (4b) A streamed body that errors after its first chunk is torn down AND
+  // reported (#1644 review). The node shell's `sendWebResponse` drives the body
+  // through `stream.pipeline`; a plain `() => {}` callback there swallowed the
+  // source error that the old reader loop threw into the listener's catch, so
+  // a broken `route.ts` stream left no `request pipeline threw` line in prod
+  // logs. Now the pipeline is awaited and only a client that went away
+  // (`ERR_STREAM_PREMATURE_CLOSE`) is swallowed. The log line is the node
+  // shell's; the Bun shell reports through `Bun.serve`'s own error path, so the
+  // assertion on the line is node-only while the truncation is checked on both.
+  {
+    logged.length = 0;
+    const broken = await fetch(`${base}/api/broken`, { headers: { 'accept-encoding': 'gzip' } });
+    assert.equal(broken.status, 200, `[${runtime}] the head went out before the source broke`);
+    await assert.rejects(broken.text(), `[${runtime}] the client sees a truncated body, not a clean end`);
+    if (!process.versions.bun) {
+      await new Promise((r) => setTimeout(r, 100));
+      assert.ok(logged.some((m) => /request pipeline threw/.test(m) && /mid-stream boom/.test(m)),
+        `[${runtime}] the mid-stream error reached the listener log (got: ${JSON.stringify(logged)})`);
+    }
+  }
 
   await close();
   close = null;
