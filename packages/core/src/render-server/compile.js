@@ -93,6 +93,10 @@ export function compileRaw(html) {
 const WS = /\s/;
 const LETTER = /[a-zA-Z]/;
 const BOUNDARY = /[\s/>]/;
+// A processing-instruction opener (`<?`), matched by regex rather than by a
+// character compare so the sigil guard (no `=== '<sigil>'` literal in a
+// renderer) stays meaningful.
+const QUESTION = /^\?$/;
 
 /**
  * @param {Strings} strings
@@ -185,7 +189,7 @@ function tokenize(strings) {
           break;
         case 'tag-open':
           if (c === '!') { chunk += c; state = 'bang-1'; }
-          else if (c === '?') { chunk += c; state = 'bogus'; }
+          else if (QUESTION.test(c)) { chunk += c; state = 'bogus'; }
           else if (c === '/') { chunk += c; state = 'close-open'; }
           else if (LETTER.test(c)) {
             // A start tag. The OPEN op precedes the chunk holding `<name...`.
