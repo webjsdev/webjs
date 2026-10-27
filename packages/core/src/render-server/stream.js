@@ -1,7 +1,7 @@
 import { cspNonce } from '../csp-nonce.js';
 import { escapeAttr } from '../escape.js';
-import { render, defaultSSRErrorTemplate } from './template-renderer.js';
-import { injectDSD } from './dsd.js';
+import { defaultSSRErrorTemplate, streamRender } from './template-renderer.js';
+import { renderValue } from './walk.js';
 
 /**
  * Render a TemplateResult (or any renderable value) to an HTML string.
@@ -39,8 +39,7 @@ export async function renderToString(value, opts = { ssr: true }) {
   // sharing it see the same flag. Undefined stays undefined (NODE_ENV fallback).
   const dev = opts && opts.dev !== undefined ? opts.dev : ctx && ctx.dev;
   if (ctx && ctx.dev === undefined && dev !== undefined) ctx.dev = dev;
-  const html = await render(value, ctx);
-  return opts && opts.ssr === false ? html : await injectDSD(html, ctx, [], dev);
+  return renderValue(value, ctx, { expand: !(opts && opts.ssr === false), dev });
 }
 
 /**
@@ -72,14 +71,12 @@ export function renderToStream(value, opts = { ssr: true }) {
       try {
         if (opts && opts.ssr === false) {
           // No DSD injection: just stream the raw rendered chunks.
-          const { streamRender } = await import('./template-renderer.js');
           await streamRender(value, ctx, controller);
         } else {
-          // Render to string first to run DSD injection (which operates on
-          // the full HTML), then enqueue the result. This matches the
-          // semantics of renderToString but still gives us a stream.
-          const html = await render(value, ctx);
-          const full = await injectDSD(html, ctx, [], dev);
+          // Render the whole document first (the server pipeline slices the
+          // full body for frames, `X-Webjs-Have` and the head splice), then
+          // enqueue it. Same semantics as renderToString, as a stream.
+          const full = await renderValue(value, ctx, { expand: true, dev });
           controller.enqueue(full);
         }
 
@@ -120,8 +117,9 @@ async function streamSuspenseBoundaries(ctx, controller, dev) {
       batch.map(async ({ id, promise }) => {
         try {
           const resolved = await promise;
-          const html = await render(resolved, ctx);
-          const full = await injectDSD(html, ctx, [], dev);
+          // A streamed `<webjs-suspense>` pushes its children as raw markup
+          // (`unsafeHTML`), which the walk expands like any template.
+          const full = await renderValue(resolved, ctx, { expand: true, dev });
           controller.enqueue(
             `<template data-webjs-resolve="${id}">${full}</template>` +
             `<script${nonceAttr}>` +
@@ -141,7 +139,7 @@ async function streamSuspenseBoundaries(ctx, controller, dev) {
           // error render itself throwing) leaves the fallback in place.
           try {
             const e = err instanceof Error ? err : new Error(String(err));
-            const errHtml = await injectDSD(await render(defaultSSRErrorTemplate('webjs-suspense', e, dev), ctx), ctx, [], dev);
+            const errHtml = await renderValue(defaultSSRErrorTemplate('webjs-suspense', e, dev), ctx, { expand: true, dev });
             controller.enqueue(
               `<template data-webjs-resolve="${id}">${errHtml}</template>` +
               `<script${nonceAttr}>` +
