@@ -129,10 +129,9 @@ function afterRender(frame) {
  * @param {import('./walk.js').Walker} w
  * @param {any} frame
  * @param {string} children  the captured authored children, expanded
- * @param {boolean} closed   whether a matching end tag was found
  * @returns {Promise<string>}
  */
-export async function finishComponent(w, frame, children, closed) {
+export async function finishComponent(w, frame, children) {
   const { tag, Cls, isShadow } = frame;
   if (frame.error === null) {
     try {
@@ -155,7 +154,7 @@ export async function finishComponent(w, frame, children, closed) {
       frame.error = e;
     }
   }
-  return errorState(w, frame, closed);
+  return errorState(w, frame);
 }
 
 /**
@@ -217,7 +216,7 @@ function styleString(Cls) {
  * component's error state rides a DSD template too, matching its success
  * path.
  */
-async function errorState(w, frame, closed) {
+async function errorState(w, frame) {
   const { tag, Cls, instance, isShadow } = frame;
   const e = frame.error;
   const hint = browserMemberHint(e);
@@ -240,7 +239,6 @@ async function errorState(w, frame, closed) {
     console.error(`[webjs] renderError() for <${tag}> also threw:`, renderErrorThrew);
     errorInner = '';
   }
-  void closed;
   let opening = frame.opening;
   if (!isShadow) opening = withHostMarker(opening);
   if (isShadow) return `${opening}<template shadowrootmode="open">${styleString(Cls)}${errorInner}</template>`;

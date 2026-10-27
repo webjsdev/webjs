@@ -508,7 +508,7 @@ export class Walker {
     if (this.ctx) frame.id = `s${this.ctx.nextId++}`;
     this.buf = '';
     if (this.ctx) this.defer += 1;
-    if (selfClose) { await this.finish(frame, true); return; }
+    if (selfClose) { await this.finish(frame); return; }
     this.frames.push(frame);
   }
 
@@ -519,7 +519,7 @@ export class Walker {
     const attrsRaw = startTag.slice(1 + tag.length, startTag.length - op.close.length);
     const frame = { kind: 'slot', tag, outer: ts.outer, attrsRaw, owner: this.owner };
     this.buf = '';
-    if (selfClose) { await this.finish(frame, true); return; }
+    if (selfClose) { await this.finish(frame); return; }
     this.frames.push(frame);
   }
 
@@ -536,7 +536,7 @@ export class Walker {
     if (frame.pending) await settleRender(frame);
     frame.outer = ts.outer;
     if (frame.instance) { this.ancestors.push(frame.instance); frame.pushedAncestor = true; }
-    if (selfClose) { await this.finish(frame, true); return; }
+    if (selfClose) { await this.finish(frame); return; }
     this.frames.push(frame);
   }
 
@@ -611,10 +611,10 @@ export class Walker {
   }
 
   async closeFrames(k, closeText) {
-    while (this.frames.length - 1 > k) await this.finish(this.frames.pop(), false);
+    while (this.frames.length - 1 > k) await this.finish(this.frames.pop());
     const frame = this.frames.pop();
     frame.closeText = closeText;
-    await this.finish(frame, true);
+    await this.finish(frame);
   }
 
   /** Depth bookkeeping for an ordinary element's end tag. */
@@ -627,22 +627,21 @@ export class Walker {
 
   /** Close every frame still open at the end of a walk (unclosed in source). */
   async finishOpenFrames() {
-    while (this.frames.length) await this.finish(this.frames.pop(), false);
+    while (this.frames.length) await this.finish(this.frames.pop());
   }
 
   /**
    * Emit a finished frame into its outer buffer.
    * @param {any} frame
-   * @param {boolean} closed  whether a matching end tag was found
    */
-  async finish(frame, closed) {
+  async finish(frame) {
     if (frame.kind === 'suspense' && this.ctx && frame.id) this.defer -= 1;
     const children = this.buf;
     this.buf = frame.outer;
     let out;
     if (frame.kind === 'component') {
       if (frame.seg) this.endSegIn(frame, children);
-      out = await finishComponent(this, frame, children, closed);
+      out = await finishComponent(this, frame, children);
       if (frame.pushedAncestor) this.ancestors.pop();
     } else if (frame.kind === 'slot') {
       out = finishSlot(frame, children);
