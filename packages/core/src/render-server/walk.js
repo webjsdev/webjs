@@ -305,9 +305,26 @@ export class Walker {
 
   /** @param {string} tag */
   open(tag) {
+    // A top-level child of a light-DOM component: the segment it occupies in
+    // the captured children is what the slot partition is built from.
+    const top = this.frames[this.frames.length - 1];
+    if (top && top.partition && top.depth === 0 && !this.inert.length) {
+      top.seg = { start: this.buf.length, end: 0, slot: null };
+    }
+    // A tag the walker will take over (a registered element, a boundary, a
+    // slot inside a light-DOM template) accumulates its start tag in a FRESH
+    // buffer, so taking it at the `>` never slices the page built so far:
+    // on JavaScriptCore that slice materialised the whole rope each time.
+    let outer;
+    if (this.expand && this.defer === 0 && !this.inert.length
+        && (tag === 'webjs-suspense' || (tag === 'slot' && this.owner !== null) || (tag.includes('-') && lookup(tag)))) {
+      outer = this.buf;
+      this.buf = '';
+    }
     this.tagState = {
       tag,
       start: this.buf.length,
+      outer,
       // #1155 / #1207 bookkeeping, judged at the `>` because the action hole
       // may come after the shapes it refuses.
       actionId: /** @type {string | null} */ (null),
@@ -317,12 +334,6 @@ export class Walker {
       /** @type {string[] | null} */ submitterProps: null,
       /** @type {string | null} */ fallback: null,
     };
-    // A top-level child of a light-DOM component: the segment it occupies in
-    // the captured children is what the slot partition is built from.
-    const top = this.frames[this.frames.length - 1];
-    if (top && top.partition && top.depth === 0 && !this.inert.length) {
-      top.seg = { start: this.buf.length, end: 0, slot: null };
-    }
   }
 
   /**
@@ -438,13 +449,10 @@ export class Walker {
     if (isTextOnlyTag(tag) && !selfClose) this.inert.push(tag);
 
     const top = this.frames[this.frames.length - 1];
-    if (this.expand && this.defer === 0 && !this.inert.length) {
+    if (ts.outer !== undefined) {
       if (tag === 'webjs-suspense') return this.openSuspense(op, ts, top, selfClose);
-      if (tag === 'slot' && this.owner) return this.openSlot(op, ts, top, selfClose);
-      if (tag.includes('-')) {
-        const Cls = lookup(tag);
-        if (Cls) return this.openComponent(op, ts, top, selfClose, Cls);
-      }
+      if (tag === 'slot') return this.openSlot(op, ts, top, selfClose);
+      return this.openComponent(op, ts, top, selfClose, lookup(tag));
     }
     // An ordinary element. One that shares its tag with an open frame (a
     // boundary or a component inside a deferred region, a same-tag element
@@ -472,16 +480,14 @@ export class Walker {
       // A boundary arriving as a string (a streamed parent's children) carries
       // its fallback as `data-webjs-fallback`; expand it now, as the old scan
       // did over the placeholder after reading it.
-      const m = /data-webjs-fallback="([^"]*)"/i.exec(this.buf.slice(ts.start));
+      const m = /data-webjs-fallback="([^"]*)"/i.exec(this.buf);
       if (m) {
         const raw = decodeAttrEntities(m[1]);
         fallback = await this.capture(() => this.ops(compileRaw(raw), EMPTY));
       }
     }
-    const frame = { kind: 'suspense', tag: ts.tag, outer: '', fallback: fallback || '', id: /** @type {string | null} */ (null) };
+    const frame = { kind: 'suspense', tag: ts.tag, outer: ts.outer, fallback: fallback || '', id: /** @type {string | null} */ (null) };
     if (this.ctx) frame.id = `s${this.ctx.nextId++}`;
-    this.buf = this.buf.slice(0, ts.start);
-    frame.outer = this.buf;
     this.buf = '';
     if (this.ctx) this.defer += 1;
     if (selfClose) { await this.finish(frame, true); return; }
@@ -491,10 +497,9 @@ export class Walker {
   async openSlot(op, ts, top, selfClose) {
     const tag = ts.tag;
     this.closeSeg(top, ts);
-    const startTag = this.buf.slice(ts.start);
+    const startTag = this.buf;
     const attrsRaw = startTag.slice(1 + tag.length, startTag.length - op.close.length);
-    this.buf = this.buf.slice(0, ts.start);
-    const frame = { kind: 'slot', tag, outer: this.buf, attrsRaw, owner: this.owner };
+    const frame = { kind: 'slot', tag, outer: ts.outer, attrsRaw, owner: this.owner };
     this.buf = '';
     if (selfClose) { await this.finish(frame, true); return; }
     this.frames.push(frame);
@@ -503,16 +508,15 @@ export class Walker {
   async openComponent(op, ts, top, selfClose, Cls) {
     const tag = ts.tag;
     this.closeSeg(top, ts);
-    const startTag = this.buf.slice(ts.start);
+    const startTag = this.buf;
     // The opening tag as the DSD walk had it, `<tag attrs>`, with a
     // self-closing solidus dropped.
-    const opening = startTag.slice(0, startTag.length - op.close.length) + '>';
+    const opening = op.selfClose ? startTag.slice(0, startTag.length - op.close.length) + '>' : startTag;
     const attrs = startTag.slice(1 + tag.length, startTag.length - op.close.length);
-    this.buf = this.buf.slice(0, ts.start);
+    this.buf = '';
     const frame = beginComponent(this, tag, Cls, opening, attrs);
     if (frame.pending) await settleRender(frame);
-    frame.outer = this.buf;
-    this.buf = '';
+    frame.outer = ts.outer;
     if (frame.instance) { this.ancestors.push(frame.instance); frame.pushedAncestor = true; }
     if (selfClose) { await this.finish(frame, true); return; }
     this.frames.push(frame);
@@ -525,7 +529,7 @@ export class Walker {
    */
   closeSeg(top, ts) {
     if (!(top && top.partition && top.seg && top.depth === 0)) return;
-    const startTag = this.buf.slice(ts.start);
+    const startTag = this.buf;
     top.seg.slot = extractSlotAttr(startTag.slice(1 + ts.tag.length).replace(/\/?>$/, ''));
     top.pendingSeg = top.seg;
     top.seg = null;

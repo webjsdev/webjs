@@ -23,6 +23,10 @@ import {
  * `finishSuspense` is the `<webjs-suspense>` boundary (#471).
  */
 
+// Stops at the first non-whitespace character; `trim()` copied the whole
+// rendered template per component to answer the same question.
+const NON_BLANK = /\S/;
+
 /**
  * Instantiate and pre-render a registered custom element at its start tag.
  * A throw anywhere here is caught into the frame (#469): the walker still
@@ -74,7 +78,7 @@ export function beginComponent(w, tag, Cls, opening, attrs) {
     const propValues = consumePropAttrs(attrMap);
     seedServerAttrs(instance, attrMap);
     applyAttrsToInstance(instance, attrMap, Cls);
-    for (const [k, v] of Object.entries(propValues)) instance[k] = v;
+    for (const k in propValues) instance[k] = propValues[k];
     // The pre-render lifecycle (willUpdate, controllers' hostUpdate, then
     // reflect:true reflection), matching lit's update cycle at SSR. Bare
     // Base-extending kit components have no lifecycle, so it is guarded.
@@ -139,7 +143,7 @@ export async function finishComponent(w, frame, children, closed) {
         // place after the template, and the source end tag is kept.
         return `${frame.opening}<template shadowrootmode="open">${styleString(Cls)}${inner}</template>${children}${frame.closeText}`;
       }
-      if (inner.trim() === '') {
+      if (!NON_BLANK.test(inner)) {
         // An empty rendered template (a decorator component with no render(),
         // or a render() returning an empty template): the host is a
         // transparent wrapper and the authored children stay in place next to

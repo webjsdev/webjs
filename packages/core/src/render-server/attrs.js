@@ -42,8 +42,8 @@ export function parseAttrs(attrStr) {
  */
 export function seedServerAttrs(instance, attrs) {
   if (!instance || typeof instance.setAttribute !== 'function') return;
-  for (const [name, raw] of Object.entries(attrs)) {
-    instance.setAttribute(name, decodeAttrEntities(raw));
+  for (const name in attrs) {
+    instance.setAttribute(name, decodeAttrEntities(attrs[name]));
   }
 }
 
@@ -94,7 +94,8 @@ export function appendReflectedAttrs(opening, instance, presentAttrNames) {
  * based on its static `properties` declaration.
  */
 export function applyAttrsToInstance(instance, attrs, Cls) {
-  for (const [sourceName, sourceValue] of Object.entries(attrs)) {
+  for (const sourceName in attrs) {
+    const sourceValue = attrs[sourceName];
     // The browser LOWERCASES every attribute name while parsing an HTML
     // document, so `cfgData="x"` reaches the client reader as `cfgdata` and a
     // camelCase name can never match anything in `observedAttributes`.
