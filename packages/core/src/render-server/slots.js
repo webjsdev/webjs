@@ -1,6 +1,6 @@
 import { escapeAttr } from '../escape.js';
 import {
-  endOfComment, escapeRegex, findClosingTagInString, inertAt, inertRanges, isVoidElement,
+  endOfComment, closingTagLength, findClosingTagInString, inertAt, inertRanges, isVoidElement,
 } from './html-scan.js';
 
 /**
@@ -106,10 +106,7 @@ export function partitionAuthoredBySlot(html) {
         cursor = html.length;
         continue;
       }
-      const closeRe = new RegExp(`</${escapeRegex(lower)}\\s*>`, 'i');
-      const tail = html.slice(closeIdx);
-      const closeMatch = closeRe.exec(tail);
-      const closeLen = closeMatch ? closeMatch[0].length : `</${lower}>`.length;
+      const closeLen = closingTagLength(html.slice(closeIdx), lower);
       elemEnd = closeIdx + closeLen;
     }
     const elementHTML = html.slice(lt, elemEnd);

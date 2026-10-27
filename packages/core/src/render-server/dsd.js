@@ -1,8 +1,8 @@
-import { lookup, allTags } from '../registry.js';
+import { lookup, allTags, registryVersion } from '../registry.js';
 import { stylesToString, isCSS } from '../css.js';
 import { unsafeHTML } from '../directives.js';
 import { render, defaultSSRErrorTemplate, browserMemberHint } from './template-renderer.js';
-import { escapeRegex, findClosingTagInString, inertAt, inertRanges } from './html-scan.js';
+import { escapeRegex, findClosingTagInString, inertAt, inertRanges, closingTagLength } from './html-scan.js';
 import { decodeAttrEntities } from './text.js';
 import {
   appendReflectedAttrs, applyAttrsToInstance, consumePropAttrs, parseAttrs, seedServerAttrs,
@@ -26,6 +26,40 @@ import { partitionAuthoredBySlot, substituteSlotsInRender } from './slots.js';
  */
 
 /**
+ * The regex matching any registered custom element's opening tag, built from
+ * every registered tag and memoized on the registry's tag-set version
+ * (#1644). It used to be rebuilt on EVERY `injectDSD` call, which is once per
+ * render plus once per nested component, and the alternation grows with the
+ * app, so for a large component set this was a measurable share of a render.
+ *
+ * Sort longest tag name first so the regex alternation tries the most
+ * specific match before its prefixes. Combined with the (?=[\s>/]) lookahead
+ * this prevents `my-card` from spuriously matching the prefix of `<my-card-2>`
+ * (or `slot-ssr-1` matching `<slot-ssr-14>`, etc). Attribute section is
+ * "anything that isn't `>`, with quoted values as a single unit" so slashes
+ * in URL-valued attrs (e.g. then="/dashboard") don't prevent the match.
+ * Non-greedy so self-closing `/>` still captures into the third group.
+ *
+ * Global and stateful, but every consumer reads it through `matchAll`, which
+ * clones the regex, so sharing one object is safe.
+ *
+ * @returns {RegExp | null}  null when nothing is registered
+ */
+export function tagPattern() {
+  const v = registryVersion();
+  if (_patternMemo.v === v) return _patternMemo.pattern;
+  const tags = allTags();
+  const sortedTags = [...tags].sort((a, b) => b.length - a.length);
+  const pattern = tags.length
+    ? new RegExp(`<(${sortedTags.map(escapeRegex).join('|')})(?=[\\s>/])((?:"[^"]*"|'[^']*'|[^>])*?)(/?)>`, 'g')
+    : null;
+  _patternMemo = { v, pattern };
+  return pattern;
+}
+/** @type {{ v: number, pattern: RegExp | null }} */
+let _patternMemo = { v: -1, pattern: null };
+
+/**
  * Scan an HTML string for registered custom elements and inject
  * Declarative Shadow DOM (`<template shadowrootmode="open">`).
  * Awaits each component's render() so async components are fully resolved.
@@ -44,21 +78,8 @@ export async function injectDSD(html, ctx, ancestors = [], dev) {
   // inline (blocking). Run before the custom-element walk so a streamed
   // boundary's children leave the main flow and are not double-processed.
   html = await processSuspenseElements(html, ctx, ancestors, dev);
-  const tags = allTags();
-  if (!tags.length) return html;
-  // Sort longest tag name first so the regex alternation tries the most
-  // specific match before its prefixes. Combined with the (?=[\s>/])
-  // lookahead this prevents `my-card` from spuriously matching the prefix
-  // of `<my-card-2>` (or `slot-ssr-1` matching `<slot-ssr-14>`, etc).
-  // Attribute section is "anything that isn't `>`, with quoted values as a
-  // single unit" so slashes in URL-valued attrs (e.g. then="/dashboard") don't
-  // prevent the match. Non-greedy so self-closing `/>` still captures into the
-  // third group.
-  const sortedTags = [...tags].sort((a, b) => b.length - a.length);
-  const pattern = new RegExp(
-    `<(${sortedTags.map(escapeRegex).join('|')})(?=[\\s>/])((?:"[^"]*"|'[^']*'|[^>])*?)(/?)>`,
-    'g'
-  );
+  const pattern = tagPattern();
+  if (!pattern) return html;
   /** @type {{start:number, end:number, text:string}[]} */
   const edits = [];
   // A tag name inside a comment, a script, a style, RCDATA, or another tag's
@@ -118,11 +139,7 @@ export async function injectDSD(html, ctx, ancestors = [], dev) {
         const closeIdx = findClosingTagInString(html, innerStart, tag, inert);
         if (closeIdx !== -1) {
           authoredInner = html.slice(innerStart, closeIdx);
-          const closeRe = new RegExp(`</${escapeRegex(tag)}\\s*>`, 'i');
-          const tail = html.slice(closeIdx);
-          const closeMatch = closeRe.exec(tail);
-          const closeLen = closeMatch ? closeMatch[0].length : `</${tag}>`.length;
-          closeEnd = closeIdx + closeLen;
+          closeEnd = closeIdx + closingTagLength(html.slice(closeIdx), tag);
         } else {
           // Unclosed in source. Take rest of html as authored content
           // and synthesize a closing tag on output.
@@ -270,9 +287,7 @@ export async function injectDSD(html, ctx, ancestors = [], dev) {
         const innerStart = m.index + match.length;
         const closeIdx = findClosingTagInString(html, innerStart, tag, inert);
         if (closeIdx !== -1) {
-          const closeRe = new RegExp(`</${escapeRegex(tag)}\\s*>`, 'i');
-          const cm = closeRe.exec(html.slice(closeIdx));
-          closeEnd = closeIdx + (cm ? cm[0].length : `</${tag}>`.length);
+          closeEnd = closeIdx + closingTagLength(html.slice(closeIdx), tag);
         } else {
           closeEnd = html.length;
         }

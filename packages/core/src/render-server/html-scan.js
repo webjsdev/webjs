@@ -316,11 +316,11 @@ export function inertAt(ranges) {
  * @returns {number}
  */
 export function findClosingTagInString(html, fromIndex, tagName, inert) {
-  const esc = escapeRegex(tagName);
   // Match same-name opening tags. Followed by a name-boundary character
-  // so we don't accept <table> as opening <tab>.
-  const openRe = new RegExp(`<${esc}(?:[\\s>/])`, 'gi');
-  const closeRe = new RegExp(`</${esc}\\s*>`, 'gi');
+  // so we don't accept <table> as opening <tab>. Compiled once per tag name
+  // (#1644): this runs once per component per render, and compiling two
+  // regexes each time was a measurable share of the render.
+  const { open: openRe, close: closeRe } = tagRegexes(tagName);
   // A tag inside a comment, raw text, RCDATA, or an attribute value is text
   // and must count for NEITHER side of the depth ledger (#1133). Counting a
   // commented `<my-card>` as a nested open meant depth never returned to zero,
@@ -359,6 +359,50 @@ export function findClosingTagInString(html, fromIndex, tagName, inert) {
 /** @param {string} s */
 export function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * The per-tag regexes the scanners use, compiled once per tag name (#1644).
+ * `open` and `close` are global and stateful (callers seed `lastIndex` before
+ * every use, as `findClosingTagInString` does); `closeOnce` is the stateless
+ * single-match form for reading the length of a closing tag. Bounded: the
+ * key set is element names seen in rendered HTML, so it is small in practice,
+ * and the map is cleared past a cap rather than grown without limit.
+ * @type {Map<string, { open: RegExp, close: RegExp, closeOnce: RegExp }>}
+ */
+const TAG_REGEXES = new Map();
+const TAG_REGEXES_CAP = 1000;
+
+/**
+ * @param {string} tagName
+ * @returns {{ open: RegExp, close: RegExp, closeOnce: RegExp }}
+ */
+export function tagRegexes(tagName) {
+  let entry = TAG_REGEXES.get(tagName);
+  if (entry) return entry;
+  if (TAG_REGEXES.size >= TAG_REGEXES_CAP) TAG_REGEXES.clear();
+  const esc = escapeRegex(tagName);
+  entry = {
+    open: new RegExp(`<${esc}(?:[\\s>/])`, 'gi'),
+    close: new RegExp(`</${esc}\\s*>`, 'gi'),
+    closeOnce: new RegExp(`</${esc}\\s*>`, 'i'),
+  };
+  TAG_REGEXES.set(tagName, entry);
+  return entry;
+}
+
+/**
+ * The length of the closing tag for `tagName` at the start of `tail`, or the
+ * canonical `</tag>` length when the bytes there are not a closing tag.
+ * Shared by the DSD walk and the slot partitioner, which each compiled this
+ * regex per component before (#1644).
+ * @param {string} tail  the HTML from the `<` of the expected closing tag
+ * @param {string} tagName
+ * @returns {number}
+ */
+export function closingTagLength(tail, tagName) {
+  const m = tagRegexes(tagName).closeOnce.exec(tail);
+  return m ? m[0].length : `</${tagName}>`.length;
 }
 
 /** @param {string} tag */
