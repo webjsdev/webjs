@@ -87,10 +87,10 @@ import { escapeAttr } from './escape.js';
  * it looks like from any one file and are easy to change one at a time. That
  * is why the predicates live here rather than at each site.
  *
- * The second SSR machine (`streamTemplate`) is reached only through
- * `renderToStream(v, { ssr: false })`, which no page render uses: the server
- * renders every page, Suspense included, via `renderToString`. It is kept in
- * lockstep for the public API surface rather than for a live page.
+ * Since #1646 there is ONE SSR interpreter (`render-server/walk.js`), shared
+ * by the buffered page render and `renderToStream(v, { ssr: false })`, so the
+ * two can no longer drift; the predicates still live here because the CLIENT
+ * renderer applies the same rules.
  */
 
 /**
@@ -967,9 +967,9 @@ function ensureIdentityField(form, id) {
 /**
  * SSR: judge one submitter's emitted START TAG, at its `>`.
  *
- * Called from BOTH state machines so the rules cannot drift between them, which
- * is the failure #1154 already had once (a guard shipped in `renderTemplate`
- * and not in `streamTemplate`). Judged at the `>` rather than at the hole
+ * Called from the one SSR interpreter (`render-server/walk.js`, #1646); there
+ * used to be two hand-synchronised state machines, which is the failure #1154
+ * had once (a guard shipped in one and not the other). Judged at the `>` rather than at the hole
  * because every input is an attribute the author may have written AFTER the
  * binding.
  *

@@ -189,6 +189,13 @@ jobs:
       # silently vanish on the other. Asserts both directions.
       - name: SSR comment and raw-text handling on Bun
         run: bun test/bun/comment-not-an-element.mjs
+      # The one-pass SSR renderer on Bun (#1646): the per-template tokenizer,
+      # the op walker and the in-walk component expansion are string slicing
+      # and regex work on the hot path, where a V8-versus-JSC difference shows
+      # up as a byte difference rather than a throw. Renders the whole golden
+      # corpus and holds it to the committed fixtures.
+      - name: One-pass SSR renderer byte parity on Bun
+        run: bun test/bun/ssr-one-pass-parity.mjs
       # asset() url resolution on Bun (#1194): the helper reads the file
       # synchronously, hashes it with node:crypto, and compares node:path
       # containment to decide whether a url may be fingerprinted at all. A

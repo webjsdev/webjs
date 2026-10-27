@@ -96,6 +96,12 @@ export function clearProdImportCache() {
  * @returns {Promise<any>}
  */
 export async function devImport(file, dev) {
+  if (!dev) {
+    // The memo is consulted BEFORE the specifier is built: `pathToFileURL`
+    // was still paid on every hit, about 3 percent of a Bun request (#1646).
+    const hit = PROD_MODULES.get(file);
+    if (hit) return hit;
+  }
   const base = devImportSpecifier(file, dev);
   if (!dev) {
     // Prod memo (#1644). The URL is stable outside dev, so Node's module cache
@@ -107,8 +113,6 @@ export async function devImport(file, dev) {
     // promise instead. A rejection is evicted so the next call re-imports (the
     // retry semantic a cold import had), and `clearProdImportCache` drops the
     // whole map on an embedded host's `rebuild()`.
-    const hit = PROD_MODULES.get(file);
-    if (hit) return hit;
     const p = import(base);
     PROD_MODULES.set(file, p);
     p.catch(() => { if (PROD_MODULES.get(file) === p) PROD_MODULES.delete(file); });

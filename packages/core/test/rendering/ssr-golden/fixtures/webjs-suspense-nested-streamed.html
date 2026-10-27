@@ -1,0 +1,5 @@
+<webjs-suspense id="s1">outer</webjs-suspense>
+<!--CHUNK-->
+<template data-webjs-resolve="s1"><webjs-suspense id="s2">inner <gold-badge label="fb" data-wj-host><!--webjs-hydrate--><span class="badge">fb:0:off</span></gold-badge></webjs-suspense>tail</template><script>(function(){var t=document.currentScript.previousElementSibling;var b=document.getElementById("s1");if(b&&t){b.replaceWith(t.content.cloneNode(true));t.remove()}document.currentScript.remove()})()</script>
+<!--CHUNK-->
+<template data-webjs-resolve="s2"><gold-async-item label="x" data-wj-host><!--webjs-hydrate--><p class="item">x</p></gold-async-item></template><script>(function(){var t=document.currentScript.previousElementSibling;var b=document.getElementById("s2");if(b&&t){b.replaceWith(t.content.cloneNode(true));t.remove()}document.currentScript.remove()})()</script>

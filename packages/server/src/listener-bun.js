@@ -464,8 +464,10 @@ async function maybeCompress(resp, req) {
   const encoding = negotiateEncoding(req.headers.get('accept-encoding'));
   if (!encoding) return resp;
 
+  // `encoding` decides WHETHER the response is compressed and is the coding a
+  // streamed body gets; a buffered body re-asks with its size (the small-body
+  // gzip preference, #1646). The header is set once, where the coding is final.
   const headers = new Headers(resp.headers);
-  headers.set('content-encoding', encoding);
   headers.set('vary', varyWithAcceptEncoding(headers.get('vary')));
 
   // Buffered-body fast path (#756): peek the body to tell a single bounded
@@ -486,12 +488,15 @@ async function maybeCompress(resp, req) {
     : await readBufferedOrStream(resp.body, MAX_SYNC_COMPRESS_BYTES);
   if (peeked.buffered !== undefined && peeked.buffered.byteLength <= MAX_SYNC_COMPRESS_BYTES) {
     // Under the shared floor (#1644) the body goes out uncompressed, with the
-    // ORIGINAL headers (the encoding + vary written above are not applied).
+    // ORIGINAL headers (the vary written above is not applied).
     // The peek consumed the body, so rebuild the Response from the bytes.
     if (peeked.buffered.byteLength < MIN_COMPRESS_BYTES) {
       return new Response(peeked.buffered, { status: resp.status, statusText: resp.statusText, headers: resp.headers });
     }
-    const out = compressBufferSync(encoding, peeked.buffered);
+    // The size is known now, so the small-body gzip preference applies (#1646).
+    const sized = negotiateEncoding(req.headers.get('accept-encoding'), peeked.buffered.byteLength);
+    headers.set('content-encoding', sized);
+    const out = compressBufferSync(sized, peeked.buffered);
     headers.set('content-length', String(out.length));
     return new Response(out, { status: resp.status, statusText: resp.statusText, headers });
   }
@@ -502,6 +507,7 @@ async function maybeCompress(resp, req) {
   // hoisting this would waste a native zlib/brotli handle on the common case.
   // `encoding` is guaranteed br/gzip/deflate (negotiateEncoding), so
   // `createCompressor` never returns null here.
+  headers.set('content-encoding', encoding);
   const compressor = createCompressor(encoding);
   // Feed the (peeked + drained) web body into the compressor through the reader
   // loop (NOT Readable.fromWeb, which does not propagate a mid-stream source

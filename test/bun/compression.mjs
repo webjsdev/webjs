@@ -53,6 +53,16 @@ try {
   assert.equal(br.headers.get('content-encoding'), 'br', 'a compressible body is brotli-encoded on this shell');
   assert.ok((await br.text()).includes('compressible content'), 'the brotli body decodes back to the page');
 
+  // A small buffered body prefers gzip when BOTH are accepted (#1646): gzip 6
+  // is 2 to 3x cheaper than brotli 4 at this size for a few percent more bytes.
+  const both = await fetch(`${base}/`, { headers: { 'accept-encoding': 'br, gzip' } });
+  assert.equal(both.headers.get('content-encoding'), 'gzip', 'a small page served gzip when brotli and gzip are both accepted');
+  assert.ok((await both.text()).includes('compressible content'), 'the gzip body decodes');
+  // A coding listed with q=0 is refused, so that preference never picks it.
+  const noGzip = await fetch(`${base}/`, { headers: { 'accept-encoding': 'gzip;q=0, br' } });
+  assert.equal(noGzip.headers.get('content-encoding'), 'br', 'a small page is not gzip when the client refuses gzip');
+  await noGzip.arrayBuffer();
+
   // gzip fallback when brotli is not accepted.
   const gz = await fetch(`${base}/`, { headers: { 'accept-encoding': 'gzip' } });
   assert.equal(gz.headers.get('content-encoding'), 'gzip', 'gzip is served when brotli is not accepted');

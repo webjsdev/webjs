@@ -212,6 +212,26 @@ export function observedAttributeNames(Cls) {
  * @returns {{ propName: string, def: PropertyDeclaration, primary: string, alias: string | undefined }[]}
  */
 function attributeBackedProps(Cls) {
+  // Memoized per class (#1646): the SSR walk resolves every source attribute
+  // of every instance through this list, and rebuilding it (one hyphenate per
+  // declared prop) was a measurable share of a component's render. A class's
+  // declarations never change after it is defined (a `static properties`
+  // block throws at runtime, and the factory fixes the set), so the first
+  // walk is the only one.
+  if (Cls && typeof Cls === 'function') {
+    const hit = BACKED_PROPS.get(Cls);
+    if (hit) return hit;
+    const built = buildAttributeBackedProps(Cls);
+    BACKED_PROPS.set(Cls, built);
+    return built;
+  }
+  return buildAttributeBackedProps(Cls);
+}
+
+/** @type {WeakMap<Function, { propName: string, def: any, primary: string, alias: string | undefined }[]>} */
+const BACKED_PROPS = new WeakMap();
+
+function buildAttributeBackedProps(Cls) {
   const props = (Cls && Cls.properties) || {};
   const out = [];
   for (const [k, decl] of Object.entries(props)) {

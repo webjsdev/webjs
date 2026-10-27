@@ -115,6 +115,56 @@ const FACTORY_PROPS = Symbol('webjs.factoryProps');
 // Per-class memo so the constructor-time enforcement walk runs once per class.
 const _propsChecked = new WeakSet();
 
+/** A settled `updateComplete` shared by every instance until its first update. */
+const RESOLVED_TRUE = Promise.resolve(true);
+/** Iterated in place of a controller set no instance has created. */
+const NO_CONTROLLERS = new Set();
+
+/**
+ * Per class, the declared reactive properties with their accessors installed
+ * on the prototype.
+ * @type {WeakMap<Function, { propName: string, decl: any }[]>}
+ */
+const _accessorPlans = new WeakMap();
+
+/**
+ * Define the getter/setter pair for every declared property on the class's
+ * prototype, once, and record the plan the constructor applies per instance
+ * (own-value capture and `default`). The setter coerces nothing itself (the
+ * attribute readers do), runs `hasChanged`, reflects, and schedules an update.
+ * @param {any} Ctor
+ * @param {Record<string, unknown>} props
+ */
+function installAccessors(Ctor, props) {
+  /** @type {{ propName: string, decl: any }[]} */
+  const plan = [];
+  for (const [propName, decl] of Object.entries(props)) {
+    const d = typeof decl === 'object' && decl !== null ? decl : { type: decl };
+    plan.push({ propName, decl: d });
+    const changedCheck = d.hasChanged || defaultHasChanged;
+    Object.defineProperty(Ctor.prototype, propName, {
+      configurable: true,
+      enumerable: true,
+      get() { return this.__propValues[propName]; },
+      set(newVal) {
+        const oldVal = this.__propValues[propName];
+        if (!changedCheck(newVal, oldVal)) return;
+        this.__propValues[propName] = newVal;
+        // Reflect to attribute if requested (and not internal state).
+        if (d.reflect && !d.state && this._connected) {
+          this._reflectAttribute(propName, newVal, d);
+        }
+        // requestUpdate records the (name, oldValue) entry AND schedules a
+        // render. During the update phase the scheduler short-circuits and
+        // the entry folds into the current cycle's changedProperties.
+        this.requestUpdate(propName, oldVal);
+      },
+    });
+  }
+  _accessorPlans.set(Ctor, plan);
+  return plan;
+}
+
 class WebComponentBase extends Base {
   /** Whether to use shadow DOM. Default: false (light DOM). @type {boolean} */
   static shadow = false;
@@ -199,10 +249,12 @@ class WebComponentBase extends Base {
     this._connected = false;
 
     /**
-     * Set of attached reactive controllers.
-     * @type {Set<ReactiveController>}
+     * Set of attached reactive controllers, created by the first
+     * `addController` (#1646: most instances never attach one, and the SSR
+     * walk constructs an instance per rendered element).
+     * @type {Set<ReactiveController> | null}
      */
-    this.__controllers = new Set();
+    this.__controllers = null;
 
     /**
      * Whether the component has completed its first render.
@@ -235,7 +287,7 @@ class WebComponentBase extends Base {
      * @type {Promise<boolean>}
      * @private
      */
-    this._updatePromise = Promise.resolve(true);
+    this._updatePromise = RESOLVED_TRUE;
 
     /**
      * Set while the component is inside the update phase (between
@@ -288,13 +340,14 @@ class WebComponentBase extends Base {
   }
 
   /**
-   * For every key in `static properties`, create a getter/setter pair on
-   * the instance that coerces values, runs `hasChanged`, schedules updates,
-   * and optionally reflects to the HTML attribute.
+   * Give the instance its reactive-property backing store and make sure the
+   * class's getter/setter pairs (which run `hasChanged`, schedule updates and
+   * optionally reflect to the HTML attribute) are installed on its PROTOTYPE,
+   * once per class. Per instance this only lifts a value written before the
+   * element upgraded and applies the declared `default`s.
    *
-   * This is called once from the constructor. The backing store is a plain
-   * object (`this.__propValues`) so accessors don't collide with the
-   * prototype.
+   * Called once from the constructor. The backing store is a plain object
+   * (`this.__propValues`), so the accessors never collide with it.
    * @private
    */
   _initializeProperties() {
@@ -305,35 +358,24 @@ class WebComponentBase extends Base {
     /** @type {Record<string, unknown>} */
     this.__propValues = {};
 
-    for (const [propName, decl] of Object.entries(props)) {
-      const d = typeof decl === 'object' ? decl : { type: decl };
-      // Capture any value set before the accessor was installed (e.g. via
-      // attribute or property assignment before `super()` returns).
-      const initial = /** @type {any} */ (this)[propName];
+    // The accessors live on the PROTOTYPE, installed once per class (#1646).
+    // They used to be defined on every instance, two closures and a
+    // defineProperty per declared property, which was the largest single
+    // cost of constructing a component on the SSR path (one instance per
+    // rendered element) and a measurable one on upgrade in the browser.
+    let plan = _accessorPlans.get(Ctor);
+    if (plan === undefined) plan = installAccessors(Ctor, props);
 
-      Object.defineProperty(this, propName, {
-        configurable: true,
-        enumerable: true,
-        get: () => this.__propValues[propName],
-        set: (newVal) => {
-          const oldVal = this.__propValues[propName];
-          const changed = (d.hasChanged || defaultHasChanged)(newVal, oldVal);
-          if (!changed) return;
-          this.__propValues[propName] = newVal;
-
-          // Reflect to attribute if requested (and not internal state).
-          if (d.reflect && !d.state && this._connected) {
-            this._reflectAttribute(propName, newVal, d);
-          }
-
-          // requestUpdate records the (name, oldValue) entry AND schedules
-          // a render. When called during the update phase (willUpdate /
-          // hostUpdate / update / hostUpdated), the scheduler short-circuits
-          // and the entry folds into the current cycle's changedProperties.
-          this.requestUpdate(propName, oldVal);
-        },
-      });
-
+    for (let i = 0; i < plan.length; i++) {
+      const { propName, decl: d } = plan[i];
+      // Capture any value set before the accessor could apply (an own data
+      // property written on the element before it upgraded). It shadows the
+      // prototype accessor, so it is lifted into the backing store.
+      let initial;
+      if (Object.hasOwn(this, propName)) {
+        initial = /** @type {any} */ (this)[propName];
+        delete (/** @type {any} */ (this))[propName];
+      }
       if (initial !== undefined) {
         this.__propValues[propName] = initial;
       } else if (d.default !== undefined) {
@@ -596,7 +638,7 @@ class WebComponentBase extends Base {
       // b. SSR hydration (first mount, <!--webjs-hydrate--> marker
       //    present). Children are already inside their
       //    <slot data-webjs-light data-projection="actual"> elements
-      //    (injectDSD placed them). Adopt those assignments BEFORE
+      //    (the SSR walk placed them). Adopt those assignments BEFORE
       //    _performRender so we retain references to the SSR'd nodes;
       //    the renderer's createInstance().replaceChildren() will
       //    detach them, but the slot-apply step re-attaches the same
@@ -648,7 +690,7 @@ class WebComponentBase extends Base {
     }
 
     // Notify all controllers that the host is connected.
-    for (const c of this.__controllers) {
+    for (const c of this.__controllers || NO_CONTROLLERS) {
       if (c.hostConnected) c.hostConnected();
     }
 
@@ -735,7 +777,7 @@ class WebComponentBase extends Base {
       this.__signalWatcher.dispose();
       this.__signalWatcher = undefined;
     }
-    for (const c of this.__controllers) {
+    for (const c of this.__controllers || NO_CONTROLLERS) {
       if (c.hostDisconnected) c.hostDisconnected();
     }
   }
@@ -862,7 +904,7 @@ class WebComponentBase extends Base {
         this.willUpdate(changedProperties);
 
         // --- 4. controllers' hostUpdate ---
-        for (const c of this.__controllers) {
+        for (const c of this.__controllers || NO_CONTROLLERS) {
           if (c.hostUpdate) c.hostUpdate();
         }
 
@@ -890,7 +932,7 @@ class WebComponentBase extends Base {
 
         if (!pendingCommit) {
           // --- 6. controllers' hostUpdated (sync commit) ---
-          for (const c of this.__controllers) {
+          for (const c of this.__controllers || NO_CONTROLLERS) {
             if (c.hostUpdated) c.hostUpdated();
           }
           didCommit = true;
@@ -926,7 +968,7 @@ class WebComponentBase extends Base {
         // A newer render superseded this one; let the newer cycle finish.
         if (token !== this.__renderToken) return;
         // --- 6. controllers' hostUpdated (after the async commit) ---
-        for (const c of this.__controllers) {
+        for (const c of this.__controllers || NO_CONTROLLERS) {
           if (c.hostUpdated) c.hostUpdated();
         }
         // --- 7-8 + updateComplete ---
@@ -1018,7 +1060,7 @@ class WebComponentBase extends Base {
     this._isUpdating = true;
     try {
       this.willUpdate(changedProperties);
-      for (const c of this.__controllers) {
+      for (const c of this.__controllers || NO_CONTROLLERS) {
         if (c.hostUpdate) c.hostUpdate();
       }
       this._reflectDeclaredAttributes();
@@ -1374,7 +1416,7 @@ class WebComponentBase extends Base {
    * @param {ReactiveController} controller
    */
   addController(controller) {
-    this.__controllers.add(controller);
+    (this.__controllers ??= new Set()).add(controller);
     if (this._connected && controller.hostConnected) {
       controller.hostConnected();
     }
@@ -1393,7 +1435,7 @@ class WebComponentBase extends Base {
    * @param {ReactiveController} controller
    */
   removeController(controller) {
-    this.__controllers.delete(controller);
+    if (this.__controllers) this.__controllers.delete(controller);
   }
 
   /**
