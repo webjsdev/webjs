@@ -279,7 +279,7 @@ export function finishSlot(frame, fallback) {
   const ownerAttr = owner.tag ? ` data-wj-slot-owner="${escapeAttr(owner.tag)}"` : '';
   let name = null;
   let otherAttrs = '';
-  if (attrsRaw.trim() !== '') {
+  if (NON_BLANK.test(attrsRaw)) {
     const nameMatch = /\bname\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrsRaw);
     name = nameMatch ? (nameMatch[1] ?? nameMatch[2] ?? nameMatch[3]) : null;
     otherAttrs = attrsRaw.replace(/\bname\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/i, '').trim();
