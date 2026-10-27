@@ -11,8 +11,9 @@
 #      (gh pr checks --watch --required) and stops if any fails,
 #   3. squash-merges with --delete-branch --match-head-commit <sha>, so a push
 #      that lands while it waited is never merged on the older verdict.
-# A release PR merges the same way; scripts/release.sh runs the release gate
-# (node scripts/release-gate.mjs) on the merged commit before publishing.
+# A release PR merges the same way. Run the release gate
+# (node scripts/release-gate.mjs) on its head BEFORE merging; once CI passes on
+# the merge commit, release.yml publishes it on its own (#1650).
 # Never --admin: main requires the six CI checks and no review
 # (scripts/protect-main.sh), so anything else blocking the merge is a real
 # problem to report, not to bypass.
@@ -66,4 +67,4 @@ if [ -n "$merged" ] && [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -f "$root/scripts
 elif [ -n "$merged" ]; then
   echo "ci-merge: CLOUDFLARE_API_TOKEN is not set; purge the CDN later with scripts/purge-cdn.sh ${merged:0:12}"
 fi
-case "$ref" in chore/release-*) echo "ci-merge: release PR merged; publish it with scripts/release.sh from a checkout of origin/main" ;; esac
+case "$ref" in chore/release-*) echo "ci-merge: release PR merged; release.yml publishes it once CI passes on main (watch: gh run list --workflow release.yml). scripts/release.sh is the manual fallback" ;; esac

@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Cut a release from the maintainer's machine (#1593). GitHub Actions does ONE
-# thing in a release now, the npm publish itself, because npm trusted
-# publishing (OIDC, with provenance) is bound to .github/workflows/release.yml.
-# Everything around it runs here.
+# The MANUAL / RECOVERY path for a release (#1593, #1650). A merged release PR
+# publishes on its own now: .github/workflows/release.yml runs when CI passes on
+# the merge commit and publishes to npm and GitHub Packages and creates the
+# GitHub Releases. Run this when that automatic run did not happen or did not
+# finish (a dispatch you want to drive from here, a release commit CI passed
+# before #1650 landed); every step below is idempotent, so running it after an
+# automatic release is a no-op apart from the CDN purge.
 #
 # The flow, end to end:
 #   1. A release PR (branch chore/release-*, title "chore: release ...")
