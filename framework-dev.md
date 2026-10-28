@@ -193,11 +193,12 @@ squash-merges with `--delete-branch --match-head-commit` only when they are
 green. It never uses `--admin`. Check the live protection with `gh api
 repos/webjsdev/webjs/branches/main/protection --jq
 '.required_status_checks.contexts'`, which prints the six job names. A
-release PR merges the same way; the release gate runs in `scripts/release.sh`
-on the merged commit (see "Releases" below). CI and the npm publish run on
-Actions (`ci.yml`, and `release.yml` bound to trusted publishing); the CDN
-purge and the release steps around the publish run locally
-(`scripts/purge-cdn.sh`, `scripts/release.sh`).
+release PR merges the same way, after its release gate passed on the PR head
+(see "Releases" below). CI and the release both run on Actions (`ci.yml`, and
+`release.yml`, which CI passing on a release merge commit triggers and which
+is bound to trusted publishing); the CDN purge runs locally from
+`scripts/ci-merge.sh` (`scripts/purge-cdn.sh`), and `scripts/release.sh` is
+the manual fallback.
 
 **Local prerequisites** for the suites: Node 24+, Bun, the Playwright
 browsers (`npx playwright install chromium firefox webkit`), `puppeteer-core`
@@ -351,12 +352,12 @@ If the package has zero `feat:` / `fix:` / `breaking:` / `perf:` commits in the 
 
 The whole flow is tool-agnostic: the universal pre-commit hook fires for every `git commit`, regardless of who or what is running it. AI agents using Claude Code, Cursor, Copilot, Aider, etc. all get the same behavior, as do human contributors.
 
-**npm publishes AND GitHub Releases come from the same files, cut by `scripts/release.sh` (#1593).** After the release PR merges (through `scripts/ci-merge.sh <N>`, like any PR), run `scripts/release.sh` from a checkout of `origin/main`. It finds the `changelog/**.md` files the commit added, requires that exact commit green on GitHub CI (every required check `success` on its sha) and the release gate (`node scripts/release-gate.mjs`) passing on that checkout, and pushes the tag `publish-<sha12>`. That tag triggers `.github/workflows/release.yml`, which now ONLY publishes (npm.com, GitHub Packages, the lockstep wrappers), because trusted publishing is bound to it. The script then waits for `npm view` to serve every new version, creates the GitHub Releases locally, and purges the CDN. For each new file:
+**npm publishes AND GitHub Releases come from the same files, and a merged release PR publishes them on its own (#1650).** Run the release gate (`node scripts/release-gate.mjs`) on the release PR's head and paste its summary into the PR, then merge it through `scripts/ci-merge.sh <N>` like any PR. When CI completes green on that merge commit, `.github/workflows/release.yml` runs (its `workflow_run` trigger names `ci.yml` by its `name:`, `CI`), checks out that exact commit, finds the `changelog/**.md` files it added, and publishes them: npm.com, GitHub Packages, the GitHub Releases, and the lockstep wrappers when `@webjsdev/cli` moved. A push that adds no changelog file stops after a checkout and a `git diff`; a PR's CI run and a red run never publish. The CDN purge is not in the workflow: `scripts/ci-merge.sh` starts it for every merge. `scripts/release.sh` remains the manual and recovery path (between #1594 and #1650, while CI ran locally, it was the only one): it requires the commit green on GitHub CI, pushes the tag `publish-<sha12>` (the workflow's other trigger), waits for `npm view` to serve every new version, creates any missing GitHub Releases, and purges the CDN; every step is idempotent, so running it after an automatic release changes nothing. For each new file:
 
 1. `scripts/publish-npm.js` parses the frontmatter, checks `npm view @webjsdev/<pkg>@<version>`; if the version is not yet on the registry, it runs `npm publish --workspace=@webjsdev/<pkg> --access=public`. Idempotent: already-published versions are skipped.
 2. `scripts/publish-release.js` composes a tag `<pkg>@<version>` (e.g. `core@0.6.0`), title `@webjsdev/<pkg> <version>`, body (the markdown after frontmatter), then runs `gh release create`. Idempotent: existing release tags are skipped.
 
-npm runs first (in Actions); if it fails, `scripts/release.sh` stops at the registry wait and no GitHub Release is created. After fixing, re-run `scripts/release.sh` (it re-pushes nothing that exists) or dispatch `release.yml` with `republish_paths`: every step is idempotent.
+npm runs first; if it fails, the run stops before the GitHub Releases. After fixing, dispatch `release.yml` with `republish_paths` (or run `scripts/release.sh`, which re-pushes nothing that exists): every step is idempotent. Re-running a FAILED release run does not pick up a fix (see below), but re-running a red CI run on the merge commit does publish, since its green completion triggers `release.yml` again.
 
 **npm authentication is trusted publishing (OIDC), not a stored token.** The job declares `id-token: write`, and the npm CLI detects the Actions OIDC environment and exchanges that id-token for a short-lived, workflow-scoped credential. There is no `NPM_TOKEN` secret, nothing to rotate, and nothing that expires. The `GITHUB_TOKEN` the GitHub Packages and Releases steps use is auto-provisioned. Free for public repos.
 

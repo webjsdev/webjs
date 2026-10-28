@@ -14,7 +14,8 @@
 #
 # It REMINDS rather than runs, on purpose: those commands pull the LATEST
 # PUBLISHED version, so they must run AFTER `.github/workflows/release.yml`
-# publishes (verify with `npm view @webjsdev/cli version`), not at merge time.
+# publishes (it runs on its own once CI passes on the merge commit, #1650;
+# verify with `npm view @webjsdev/cli version`), not at merge time.
 # Only fires for a release PR (a normal PR merge is ignored). Needs `gh`.
 # Disable with WEBJS_NO_RELEASE_GLOBAL_UPDATE=1.
 #
