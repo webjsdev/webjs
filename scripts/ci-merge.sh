@@ -17,8 +17,9 @@
 # Never --admin: main requires the six CI checks and no review
 # (scripts/protect-main.sh), so anything else blocking the merge is a real
 # problem to report, not to bypass.
-# After the merge it starts scripts/purge-cdn.sh for the merge commit in the
-# background when CLOUDFLARE_API_TOKEN is set.
+# The CDN purge is not started here: the merge commit's push to main runs
+# .github/workflows/purge-cdn.yml, which purges once Railway deployed it
+# (#1652).
 set -euo pipefail
 
 REPO="webjsdev/webjs"
@@ -58,13 +59,5 @@ now="$(gh api "repos/$REPO/pulls/$pr" --jq .head.sha)"
 echo "ci-merge: GitHub CI is green; merging #$pr"
 gh pr merge "$pr" --repo "$REPO" --squash --delete-branch --match-head-commit "$sha"
 
-merged="$(gh api "repos/$REPO/pulls/$pr" --jq '.merge_commit_sha // empty' 2>/dev/null | tail -n1)"
-if [ -n "$merged" ] && [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -f "$root/scripts/purge-cdn.sh" ]; then
-  plog="$HOME/agent-scratch/webjs-purge-${merged:0:12}.log"
-  mkdir -p "$HOME/agent-scratch"
-  setsid nohup bash "$root/scripts/purge-cdn.sh" "$merged" >"$plog" 2>&1 < /dev/null &
-  echo "ci-merge: CDN purge for ${merged:0:12} runs in the background once the deploy is live: $plog"
-elif [ -n "$merged" ]; then
-  echo "ci-merge: CLOUDFLARE_API_TOKEN is not set; purge the CDN later with scripts/purge-cdn.sh ${merged:0:12}"
-fi
+echo "ci-merge: the CDN purge runs on Actions once the deploy is live (watch: gh run list --workflow purge-cdn.yml)"
 case "$ref" in chore/release-*) echo "ci-merge: release PR merged; release.yml publishes it once CI passes on main (watch: gh run list --workflow release.yml). scripts/release.sh is the manual fallback" ;; esac

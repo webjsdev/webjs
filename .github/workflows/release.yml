@@ -10,7 +10,7 @@ name: Auto-release
 #   3. as GitHub Releases via scripts/publish-release.js,
 #   4. and the unscoped wrappers in lockstep when @webjsdev/cli moved.
 # A push that adds no changelog file stops after a checkout and a git diff.
-# The CDN purge is not here: scripts/ci-merge.sh starts it for every merge.
+# The CDN purge is not here: purge-cdn.yml runs for every push to main (#1652).
 #
 # The other triggers are the manual and recovery paths: scripts/release.sh
 # pushes `publish-<sha12>` at a release commit (it was the ONLY path between
