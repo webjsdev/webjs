@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Purge the webjs.dev Cloudflare cache once the website's Railway deploy of a
-# commit is live (#1593). This is `.github/workflows/purge-cdn.yml` run from
-# the maintainer's machine: Actions is for publishing only now.
+# commit is live (#1593). The automatic purge is `.github/workflows/purge-cdn.yml`,
+# which runs for every push to main (#1652); this is the same logic for a
+# manual run from the maintainer's machine.
 #
 #   scripts/purge-cdn.sh            # wait for origin/main's deploy, then purge
 #   scripts/purge-cdn.sh <sha>      # wait for that commit's deploy
