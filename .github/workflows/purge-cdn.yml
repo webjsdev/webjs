@@ -35,12 +35,15 @@ name: Purge CDN
 # Manual purge: run this workflow from the Actions tab (workflow_dispatch),
 # which skips the deploy wait entirely and purges immediately.
 
-# NOT RUN ON PUSH (#1593). Actions is for publishing only; this runs locally
-# as scripts/purge-cdn.sh, which scripts/ci-merge.sh starts in the background
-# after every merge and scripts/release.sh runs after a publish. The file
-# stays as documentation and can still be dispatched by hand (it then purges
-# without waiting for a deploy).
+# Runs on every push to main (#1652). #1594 moved this to the merging machine
+# (scripts/ci-merge.sh started scripts/purge-cdn.sh), which silently skipped
+# whenever that shell lacked CLOUDFLARE_API_TOKEN or held an expired Railway
+# login, and never ran at all for a merge done anywhere else. The repository
+# secrets below make it independent of who merged. scripts/purge-cdn.sh stays
+# as the manual tool.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 # Nothing here reads or writes repo contents (there is no checkout), so the

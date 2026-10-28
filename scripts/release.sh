@@ -5,7 +5,7 @@
 # GitHub Releases. Run this when that automatic run did not happen or did not
 # finish (a dispatch you want to drive from here, a release commit CI passed
 # before #1650 landed); every step below is idempotent, so running it after an
-# automatic release is a no-op apart from the CDN purge.
+# automatic release is a no-op.
 #
 # The flow, end to end:
 #   1. A release PR (branch chore/release-*, title "chore: release ...")
@@ -22,29 +22,31 @@
 #          lockstep-publish the wrappers when cli moved,
 #        - waits until `npm view` shows every new version,
 #        - creates the GitHub Releases (scripts/publish-release.js, gh CLI),
-#        - purges the webjs.dev CDN once the website deploy is live
-#          (scripts/purge-cdn.sh).
+#        - with --purge only, purges the webjs.dev CDN once the website
+#          deploy is live (scripts/purge-cdn.sh). The release commit's own
+#          push to main already ran .github/workflows/purge-cdn.yml (#1652),
+#          so this is for a run that was missed.
 #   Every step is idempotent, so re-running after a partial failure is safe.
 #
 #   scripts/release.sh                      # the checked-out release commit
 #   scripts/release.sh changelog/core/0.7.65.md changelog/cli/0.10.70.md
-#   scripts/release.sh --no-purge           # skip the CDN purge
+#   scripts/release.sh --purge              # also purge the CDN locally
 #   scripts/release.sh --gate               # also run scripts/release-gate.mjs here first
 #
 # Credentials stay where they are: gh's login (tag push, releases), the npm
-# registry is only read, CLOUDFLARE_API_TOKEN for the purge. Nothing here
+# registry is only read, CLOUDFLARE_API_TOKEN for --purge. Nothing here
 # prints a token.
 set -euo pipefail
 
 REPO="webjsdev/webjs"
 cd "$(git rev-parse --show-toplevel)"
 
-purge=1 gate=0 files=()
+purge=0 gate=0 files=()
 for a in "$@"; do
   case "$a" in
-    --no-purge) purge=0 ;;
+    --purge) purge=1 ;;
     --gate) gate=1 ;;
-    -h|--help) sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     changelog/*.md) files+=("$a") ;;
     *) echo "release: unknown argument '$a'" >&2; exit 2 ;;
   esac
@@ -118,7 +120,7 @@ done
 # 4. GitHub Releases, one per changelog file (idempotent).
 for f in "${files[@]}"; do node scripts/publish-release.js "$f"; done
 
-# 5. The CDN, once the website's deploy of this commit is live.
+# 5. The CDN, on request only: purge-cdn.yml already runs for every push to main.
 if [ "$purge" = 1 ]; then
   bash scripts/purge-cdn.sh "$sha" || echo "release: the CDN purge did not complete; run scripts/purge-cdn.sh $sha again later" >&2
 fi
