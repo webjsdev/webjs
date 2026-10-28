@@ -91,6 +91,9 @@ export function componentPreloads(usedTags, appDir, elidable, lazyFiles) {
  * @param {string[]} entryFiles     absolute paths of the SHIPPED page/layout modules (from `moduleUrls`)
  * @param {string} appDir
  * @param {Set<string>} [elidableComponents]  absolute paths to skip in the walk
+ * @param {Set<string>} [serverFiles]  the action / server-file index, never preloaded
+ * @param {string[]} [precomputedDeps]  the transitive closure `pagePreloadHints` already walked for
+ *   THESE roots and THIS skip set. Omitted, the walk runs here (a direct caller)
  * @returns {string[]}
  */
 export function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFiles, appDir, serverFiles, elidableComponents, precomputedDeps) {
@@ -172,6 +175,8 @@ export function deduplicatedPreloads(componentUrls, moduleUrls, graph, entryFile
  * @param {string} appDir
  * @param {Set<string>} [elidableComponents]
  * @param {Set<string>} [serverFiles]  the action / server-file index (`'use server'`, incl. no-`.server.` files)
+ * @param {string[]} [precomputedDeps]  the transitive closure `pagePreloadHints` already walked for
+ *   THESE roots and THIS skip set. Omitted, the walk runs here (a direct caller)
  * @returns {Set<string>}
  */
 export function reachedVendorSpecifiers(graph, entryFiles, componentUrls, appDir, elidableComponents, serverFiles, precomputedDeps) {

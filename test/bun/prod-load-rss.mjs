@@ -93,9 +93,17 @@ async function burst(count) {
       await r.arrayBuffer();
     }
   };
-  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
-  sampling = false;
-  await sampler;
+  // The sampler is stopped on the failure path too: a worker throw that left
+  // it looping (its fetch errors are caught, so it never ends on its own) kept
+  // the event loop alive, and under the node:test wrapper, which imports this
+  // script and never calls process.exit, a failed burst hung the job instead
+  // of failing it.
+  try {
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+  } finally {
+    sampling = false;
+    await sampler;
+  }
   return peak;
 }
 
