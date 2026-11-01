@@ -52,6 +52,7 @@ webjs ci                       # local CI: run the webjs.ci step list in package
                                # typecheck, audit, every test layer), one result line per step;
                                # --only <title>, --fail-fast, --json, --signoff (gh signoff after a green run)
 webjs create <name> --skip-ci  # omit the GitHub workflow (the local ci list always ships)
+webjs create <name> --hosted   # for a product that gives the agent its own rules: short AGENTS.md, no workflow rules or commit hooks
 webjs vendor pin [--download]  # pin client deps to a committable importmap (offline/reproducible)
 webjs db <generate|migrate|push|studio|seed>   # drizzle-kit passthrough (+ seed) by default; a package.json webjs.db block maps any verb to your own ORM's command
 

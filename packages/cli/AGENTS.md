@@ -206,6 +206,9 @@ lib/
                          not transformed (it inherits the Dockerfile CMD). Tests:
                          `test/runtime-rewrite/`.
 templates/               Verbatim files copied into every new app.
+                         `--hosted` (#1658) swaps AGENTS.md for AGENTS.hosted.md
+                         and omits the workflow rules, Claude hooks, git hook and
+                         PR template. A host product owns those.
                          {{APP_NAME}} placeholder is substituted at
                          copy time. The AGENTS.md / CLAUDE.md /
                          CONVENTIONS.md / .cursorrules / .agents/rules/workflow.md

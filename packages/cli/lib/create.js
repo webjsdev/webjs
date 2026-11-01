@@ -283,6 +283,17 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   // workflow. The local `webjs ci` list in package.json is always emitted, so
   // the app still has its gate; only the cloud half is optional.
   const skipCi = opts.skipCi === true;
+  // `--hosted` (#1658): a host product supplies the agent's working rules, so
+  // the app ships the short AGENTS.hosted.md and none of the scaffold's own
+  // process (workflow rules, commit hooks, the commit-per-unit CLAUDE.md). The
+  // skill still ships in full. Off by default, so every other app is unchanged.
+  const hosted = opts.hosted === true;
+  // Files that state how to run the work, which is the host's call when hosted.
+  const HOSTED_OMITS = (f) => f === '.agents/rules/workflow.md'
+    || f === '.claude/settings.json'
+    || f.startsWith('.claude/hooks/')
+    || f === '.hooks/pre-commit'
+    || f === '.github/pull_request_template.md';
   // Defence in depth. The CLI already validates this, but library
   // callers (tests, programmatic use) might pass anything.
   const VALID_TEMPLATES = ['full-stack', 'api'];
@@ -777,7 +788,8 @@ export async function scaffoldApp(name, cwd, opts = {}) {
   for (const f of templateFiles) {
     // `--skip-ci` drops only the workflow; the PR template still ships.
     if (skipCi && f === '.github/workflows/ci.yml') continue;
-    const src = join(TEMPLATES, f);
+    if (hosted && HOSTED_OMITS(f)) continue;
+    const src = join(TEMPLATES, hosted && f === 'AGENTS.md' ? 'AGENTS.hosted.md' : f);
     if (existsSync(src)) {
       // `gitignore` ships without a dot (npm strips a published `.gitignore`)
       // and is written to `.gitignore` in the generated app.
@@ -795,6 +807,11 @@ export async function scaffoldApp(name, cwd, opts = {}) {
         const playbook = await readFile(join(TEMPLATES, 'partials', playbookFile), 'utf8');
         content = content.replace('{{PLAYBOOK}}', () => playbook.trimEnd());
       }
+      // CLAUDE.md and CONVENTIONS.md carry git and CI process the host owns: the
+      // one keeps only its import of AGENTS.md, the other drops its pointer to the
+      // workflow file, which a hosted app does not have.
+      if (hosted && f === 'CLAUDE.md') content = '@AGENTS.md\n';
+      if (hosted && f === 'CONVENTIONS.md') content = content.replace(/^.*\.agents\/rules\/workflow\.md.*\n/gm, '');
       if (DB_REWRITE[f]) content = DB_REWRITE[f](content);
       if (isBun) {
         if (PROSE_REWRITE.has(f)) content = bunifyProse(content);
@@ -1699,7 +1716,7 @@ ThemeToggle.register('theme-toggle');
   try {
     execSync('git init', { cwd: appDir, stdio: 'pipe' });
     // Use the tracked .hooks/ dir (the pre-commit blocks commits to main).
-    execSync('git config core.hooksPath .hooks', { cwd: appDir, stdio: 'pipe' });
+    if (!hosted) execSync('git config core.hooksPath .hooks', { cwd: appDir, stdio: 'pipe' });
   } catch { /* git not available: skip */ }
 
   // --- Print success ---

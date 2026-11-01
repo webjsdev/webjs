@@ -53,6 +53,8 @@ Options:
   --no-install          skip running the package manager's install in the new directory
   --skip-ci             omit the GitHub workflow (.github/workflows/ci.yml); the local
                         \`npm run ci\` step list in package.json is always emitted
+  --hosted              for a product that gives the agent its own rules: a short
+                        AGENTS.md, no workflow rules or commit hooks
   -h, --help            show this help`;
 
 if (args.length === 0 || args.includes('-h') || args.includes('--help')) {
@@ -114,5 +116,6 @@ const noInstall = args.includes('--no-install');
 // --skip-ci (#1471), forwarded so the wrapper matches `webjs create`: omits
 // the GitHub workflow only; the local ci list always ships.
 const skipCi = args.includes('--skip-ci');
+const hosted = args.includes('--hosted');
 
-await scaffoldApp(name, process.cwd(), { template, db, runtime, install: !noInstall, skipCi });
+await scaffoldApp(name, process.cwd(), { template, db, runtime, install: !noInstall, skipCi, hosted });
