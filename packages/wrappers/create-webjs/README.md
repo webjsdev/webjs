@@ -28,6 +28,7 @@ Only three templates exist; the CLI rejects anything else.
 | `--template <full-stack \| api \| saas>` | `full-stack` | Pick the scaffold variant. |
 | `--no-install` | install runs | Skip the post-scaffold `<pm> install`. |
 | `--skip-ci` | the workflow ships | Omit `.github/workflows/ci.yml`; the local `npm run ci` step list in `package.json` is always emitted. |
+| `--hosted` | the full agent docs ship | For a product that gives the agent its own rules: a short `AGENTS.md`, no workflow rules or commit hooks. The skill still ships. |
 | `-h`, `--help` | | Show help. |
 
 The package manager is detected from `npm_config_user_agent`: pnpm / yarn / bun users get their own. When nothing set it (a globally installed `webjs create`), the lockfile of the enclosing project or workspace decides, so an app created inside a Bun workspace installs with Bun. The `--runtime` default reads only the invoking tool.
