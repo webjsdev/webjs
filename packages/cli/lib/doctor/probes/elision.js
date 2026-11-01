@@ -43,7 +43,7 @@ export async function checkElisionCarriers(elisionPromise) {
     message:
       `${shipped.length} page/layout module(s) ship to the browser instead of being elided:\n` +
       lines.map((l) => `    ${l}`).join('\n'),
-    fix: 'Move the client work out of the page/layout closure (into a component, or a .server module reached through an action) so the carrier can be elided, or accept that it ships. See references/components.md in the skill.',
+    fix: 'Move the client work out of the page/layout closure (into a component, or a .server module reached through an action) so the carrier can be elided, or accept that it ships. See references/components-advanced.md in the skill.',
   };
 }
 

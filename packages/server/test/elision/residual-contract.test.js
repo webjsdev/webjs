@@ -3,7 +3,7 @@
  * residual but is not (#1308).
  *
  * `packages/server/AGENTS.md` invariant 7 and the skill's
- * `references/components.md` both promise that `static interactive = true`
+ * `references/components-advanced.md` both promise that `static interactive = true`
  * rescues the interactivity static analysis cannot see. Until now that promise
  * was prose: nothing asserted any residual, so a change in either direction
  * (the analyser learning to see one, or the escape hatch quietly ceasing to
@@ -351,7 +351,7 @@ test('every surface that enumerates the residuals names all three', async () => 
     'packages/server/AGENTS.md',
     'packages/server/src/component-elision.js',
     'packages/core/src/component.d.ts',
-    '.agents/skills/webjs/references/components.md',
+    '.agents/skills/webjs/references/components-advanced.md',
     'website/app/docs/elision/page.ts',
     'website/app/docs/data-fetching/page.ts',
     'website/app/docs/progressive-enhancement/page.ts',

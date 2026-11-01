@@ -189,7 +189,7 @@ WEBJS_ELIDE=1 npm run test:e2e
 WEBJS_ELIDE=0 npm run test:e2e
 ```
 
-A test that passes under one and fails under the other is a wrong verdict, and `webjs elision` tells you which module and on what evidence. If the component's interactivity is genuinely invisible to static analysis, the fix is `static interactive = true` on it; see `components.md` for what that override does and does not rescue.
+A test that passes under one and fails under the other is a wrong verdict, and `webjs elision` tells you which module and on what evidence. If the component's interactivity is genuinely invisible to static analysis, the fix is `static interactive = true` on it; see `components-advanced.md` for what that override does and does not rescue.
 
 ## One command for every layer (`webjs ci`)
 

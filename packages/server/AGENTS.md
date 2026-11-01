@@ -582,7 +582,7 @@ conditional leaves a CSP-off document one newline shorter than a CSP-on one).
    cannot see (an OBSERVER that computes the tag it waits for, a
    `:defined` rule in an external stylesheet outside the module graph, a
    consumer reaching the element through a string selector),
-   documented in the skill's `references/components.md` and asserted in
+   documented in the skill's `references/components-advanced.md` and asserted in
    `test/elision/residual-contract.test.js`; for those, add an
    interactivity signal, in practice `static interactive = true`. A
    component's OWN registration tag is a different case: invariant 3
