@@ -41,6 +41,24 @@ set -euo pipefail
 
 payload=$(cat)
 
+# Step aside for a repo with its own router. This script is also wired as a
+# user-level hook, which runs in every repo and which project settings cannot
+# turn off, so without this a repo with its own skills would still be told to
+# invoke the webjs ones. Read the checkout from the payload's cwd, not
+# CLAUDE_PROJECT_DIR, which a test spawned from an agent session inherits.
+# realpath because the user-level path is a symlink back to this file. In a
+# linked worktree of this repo the two copies differ, so the user-level run goes
+# quiet and the project-level run answers. Anything unusual keeps routing.
+cwd=$(printf '%s' "$payload" | jq -r '.cwd // empty' 2>/dev/null || true)
+if [ -n "$cwd" ]; then
+  toplevel=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null || true)
+  own="${toplevel:+$toplevel/.claude/hooks/route-skills.sh}"
+  if [ -n "$own" ] && [ -x "$own" ] \
+     && [ "$(realpath "$own")" != "$(realpath "${BASH_SOURCE[0]}")" ]; then
+    exit 0
+  fi
+fi
+
 prompt=$(printf '%s' "$payload" | jq -r '.prompt // empty' 2>/dev/null || true)
 if [ -z "$prompt" ]; then
   exit 0
