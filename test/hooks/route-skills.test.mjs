@@ -11,9 +11,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const HOOK = resolve(here, '../../.claude/hooks/route-skills.sh');
@@ -33,6 +34,74 @@ function run(prompt) {
   const parsed = JSON.parse(r.stdout);
   return { code: 0, ctx: parsed.hookSpecificOutput?.additionalContext ?? '' };
 }
+
+/** A git env var inherited from a calling hook would override `git -C`. */
+function cleanEnv() {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) if (key.startsWith('GIT_')) delete env[key];
+  return env;
+}
+
+/** Run the hook at `hook` for a session in `cwd`. Returns its raw stdout. */
+function runIn(cwd, hook = HOOK) {
+  const r = spawnSync('bash', [hook], {
+    input: JSON.stringify({ prompt: 'file a task for X', cwd }),
+    encoding: 'utf8',
+    env: cleanEnv(),
+  });
+  assert.equal(r.status, 0, `hook exited non-zero: ${r.stderr}`);
+  return r.stdout;
+}
+
+/** A throwaway git repo. `router` is its .claude/hooks/route-skills.sh, if any. */
+function tempRepo(t, router) {
+  const dir = mkdtempSync(join(tmpdir(), 'route-skills-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const init = spawnSync('git', ['init', '-q', dir], { env: cleanEnv() });
+  assert.equal(init.status, 0);
+  if (router) {
+    mkdirSync(join(dir, '.claude/hooks'), { recursive: true });
+    router(join(dir, '.claude/hooks/route-skills.sh'));
+  }
+  return dir;
+}
+
+test('a repo with its own router silences this one', (t) => {
+  const dir = tempRepo(t, (p) => writeFileSync(p, '#!/bin/sh\n', { mode: 0o755 }));
+  assert.equal(runIn(dir), '');
+  // From a subdirectory too: the check goes by the git toplevel, not the cwd.
+  mkdirSync(join(dir, 'app'));
+  assert.equal(runIn(join(dir, 'app')), '');
+});
+
+test('routing is unchanged where no other router applies', (t) => {
+  const noRouter = tempRepo(t);
+  assert.match(runIn(noRouter), /webjs-file-issue/, 'a repo with no router');
+
+  const notGit = mkdtempSync(join(tmpdir(), 'route-skills-'));
+  t.after(() => rmSync(notGit, { recursive: true, force: true }));
+  assert.match(runIn(notGit), /webjs-file-issue/, 'a cwd outside any git repo');
+
+  assert.match(runIn('/nonexistent/route-skills'), /webjs-file-issue/, 'a cwd that is gone');
+
+  const notExecutable = tempRepo(t, (p) => writeFileSync(p, '#!/bin/sh\n', { mode: 0o644 }));
+  assert.match(runIn(notExecutable), /webjs-file-issue/, 'a router that cannot run');
+});
+
+test('this script does not silence itself', (t) => {
+  assert.match(runIn(REPO), /webjs-file-issue/, 'its own repo');
+
+  // The user-level wiring: run through a symlink, from this repo.
+  const home = mkdtempSync(join(tmpdir(), 'route-skills-'));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  const link = join(home, 'route-skills.sh');
+  symlinkSync(HOOK, link);
+  assert.match(runIn(REPO, link), /webjs-file-issue/, 'through a symlink');
+
+  // A project whose router is a symlink to this very file.
+  const linked = tempRepo(t, (p) => symlinkSync(HOOK, p));
+  assert.match(runIn(linked), /webjs-file-issue/, 'a project router linked to this file');
+});
 
 /** Count how many times a skill name was routed (one bullet per skill). */
 function routed(ctx, skill) {

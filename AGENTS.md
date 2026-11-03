@@ -76,7 +76,7 @@ Git enforces one-branch-per-worktree, so separate worktrees make the collision i
 
 ### Skills are routed deterministically, never skipped
 
-A Skill is model-invoked, so it fires only when the model judges a match. The `.claude/hooks/route-skills.sh` `UserPromptSubmit` hook makes routing deterministic: it keyword-matches each prompt against every skill's documented triggers and injects a directive to invoke the matched skill before other work. Check the available skills and invoke a matching one before starting. The skills themselves are committed under `.claude/skills/` (alongside the hooks), so a fresh clone has both the router and the skills it routes to (no machine-local dependency). Tests in `test/hooks/route-skills.test.mjs`, which also asserts every skill the hook references is committed in-repo.
+A Skill is model-invoked, so it fires only when the model judges a match. The `.claude/hooks/route-skills.sh` `UserPromptSubmit` hook makes routing deterministic: it keyword-matches each prompt against every skill's documented triggers and injects a directive to invoke the matched skill before other work. Check the available skills and invoke a matching one before starting. The skills themselves are committed under `.claude/skills/` (alongside the hooks), so a fresh clone has both the router and the skills it routes to (no machine-local dependency). When the same script is wired as a user-level hook it runs in every repo, so it stays silent in a checkout that has a different `.claude/hooks/route-skills.sh` of its own: that repo's router and skills apply there instead. Tests in `test/hooks/route-skills.test.mjs`, which also asserts every skill the hook references is committed in-repo.
 
 ### Talking to GitHub: `gh api` over REST, never the porcelain
 
