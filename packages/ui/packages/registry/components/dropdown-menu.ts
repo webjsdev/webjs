@@ -147,6 +147,11 @@ import { onBeforeCache } from '../lib/dom.ts';
 function fam(el: Element): string {
   return (el.constructor as { family?: string }).family ?? 'ui-dropdown-menu';
 }
+
+/** The data-slot for one part of an element's family: `dropdown-menu-item`, `context-menu-item`. */
+function slot(el: Element, part: string): string {
+  return fam(el).replace(/^ui-/, '') + part;
+}
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
 // --------------------------------------------------------------------------
@@ -256,7 +261,7 @@ export class UiDropdownMenu extends WebComponent({
   }
 
   render() {
-    return html`<div data-slot="dropdown-menu" data-state=${this.open ? 'open' : 'closed'}>
+    return html`<div data-slot=${slot(this, '')} data-state=${this.open ? 'open' : 'closed'}>
       <slot></slot>
     </div>`;
   }
@@ -580,7 +585,7 @@ export class UiDropdownMenuTrigger extends WebComponent {
   static family = 'ui-dropdown-menu';
   render() {
     return html`<div
-      data-slot="dropdown-menu-trigger"
+      data-slot=${slot(this, '-trigger')}
       @click=${this._onClick}
     ><slot></slot></div>`;
   }
@@ -597,7 +602,7 @@ export class UiDropdownMenuContent extends WebComponent {
   static family = 'ui-dropdown-menu';
   render() {
     return html`<div
-      data-slot="dropdown-menu-content"
+      data-slot=${slot(this, '-content')}
       role="menu"
       aria-orientation="vertical"
       popover="manual"
@@ -679,7 +684,7 @@ export class UiDropdownMenuItem extends WebComponent({
       >${this.checked ? unsafeHTML(radio ? RADIO_DOT_SVG : CHECK_SVG) : ''}</span><slot></slot></div>`;
     }
     return html`<div
-      data-slot="dropdown-menu-item"
+      data-slot=${slot(this, '-item')}
       role="menuitem"
       tabindex="-1"
       data-variant=${this.variant}
@@ -777,7 +782,7 @@ export class UiDropdownMenuLabel extends WebComponent({ inset: Boolean }) {
 
   render() {
     return html`<div
-      data-slot="dropdown-menu-label"
+      data-slot=${slot(this, '-label')}
       ?data-inset=${this.inset}
       class=${dropdownMenuLabelClass()}
     ><slot></slot></div>`;
@@ -793,7 +798,7 @@ export class UiDropdownMenuSeparator extends WebComponent {
   static family = 'ui-dropdown-menu';
   render() {
     return html`<div
-      data-slot="dropdown-menu-separator"
+      data-slot=${slot(this, '-separator')}
       role="separator"
       class=${dropdownMenuSeparatorClass()}
     ></div>`;
@@ -809,7 +814,7 @@ export class UiDropdownMenuShortcut extends WebComponent {
   static family = 'ui-dropdown-menu';
   render() {
     return html`<span
-      data-slot="dropdown-menu-shortcut"
+      data-slot=${slot(this, '-shortcut')}
       class=${dropdownMenuShortcutClass()}
     ><slot></slot></span>`;
   }
@@ -840,20 +845,20 @@ export class UiDropdownMenuGroup extends WebComponent {
     const label = attr('aria-label');
     if (labelledBy) {
       return html`<div
-        data-slot="dropdown-menu-group"
+        data-slot=${slot(this, '-group')}
         role="group"
         aria-labelledby=${labelledBy}
       ><slot></slot></div>`;
     }
     if (label) {
       return html`<div
-        data-slot="dropdown-menu-group"
+        data-slot=${slot(this, '-group')}
         role="group"
         aria-label=${label}
       ><slot></slot></div>`;
     }
     return html`<div
-      data-slot="dropdown-menu-group"
+      data-slot=${slot(this, '-group')}
       role="group"
     ><slot></slot></div>`;
   }
@@ -923,7 +928,7 @@ export class UiDropdownMenuSub extends WebComponent({
 
   render() {
     return html`<div
-      data-slot="dropdown-menu-sub"
+      data-slot=${slot(this, '-sub')}
       data-state=${this.open ? 'open' : 'closed'}
       @pointerenter=${this._cancelCloseHandler}
       @pointerleave=${this._scheduleCloseHandler}
@@ -1016,7 +1021,7 @@ export class UiDropdownMenuSubTrigger extends WebComponent({ inset: Boolean }) {
     const open = !!this._sub()?.open;
     const disabled = typeof this.hasAttribute === 'function' && this.hasAttribute('data-disabled');
     return html`<div
-      data-slot="dropdown-menu-sub-trigger"
+      data-slot=${slot(this, '-sub-trigger')}
       role="menuitem"
       tabindex="-1"
       aria-haspopup="menu"
@@ -1054,7 +1059,7 @@ export class UiDropdownMenuSubContent extends WebComponent {
   static family = 'ui-dropdown-menu';
   render() {
     return html`<div
-      data-slot="dropdown-menu-sub-content"
+      data-slot=${slot(this, '-sub-content')}
       role="menu"
       aria-orientation="vertical"
       popover="manual"
