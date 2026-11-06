@@ -23,6 +23,7 @@
 import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync, copyFileSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { writeScopedStyles } from './scope-ui-styles.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SITE_ROOT = resolve(__dirname, '..');
@@ -109,3 +110,6 @@ for (const name of upstream) {
 console.log(
   `[website] ui gallery mirror: ${upstream.size} components + lib/utils/{cn,dom}.ts, ${changed} file(s) written`,
 );
+
+// The scoped kit styles public/ui.css compiles (scripts/scope-ui-styles.mjs).
+writeScopedStyles();

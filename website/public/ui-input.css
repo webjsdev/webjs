@@ -32,8 +32,11 @@
 @import "./ui-typeset.css";
 @import "../../packages/ui/packages/registry/styles/tw-animate.css";
 @import "../../packages/ui/packages/registry/styles/shadcn-tailwind.css";
-@import "../../packages/ui/packages/registry/styles/style-new-york.css" layer(base);
-@import "../../packages/ui/packages/registry/styles/style-nova.css" layer(base);
+/* Each style is compiled from its scoped copy (scripts/scope-ui-styles.mjs),
+   so a region in one style nested inside a region in another takes only the
+   nearer one's rules. */
+@import "../node_modules/.cache/ui-styles/scoped/style-new-york.css" layer(base);
+@import "../node_modules/.cache/ui-styles/scoped/style-nova.css" layer(base);
 
 @source "../app/ui/**/*.ts";
 @source "../modules/ui/**/*.{ts,js}";

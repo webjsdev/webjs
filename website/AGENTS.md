@@ -375,8 +375,13 @@ four hooks), and a page links only the styles it renders, listed once in
 `lib/ui/style-links.ts`. The `dark` and `not-dark` variants and the theme
 mapping live in `public/ui-theme.css`, which both builds import ahead of the
 styles, since a style's `@apply` can use a variant only once it exists. Each
-region names its own `.style-<name>` wrapper (`.ui-site` carries none),
-because two style wrappers on one path both apply. `ui.css` holds the
+region names its own `.style-<name>` wrapper (`.ui-site` carries none). The
+builds compile each style as an `@scope` block that stops at any nested style
+wrapper (`scripts/scope-ui-styles.mjs`, run by `copy-registry.mjs` and by
+`build-ui-styles.mjs`, writing to `node_modules/.cache/ui-styles/scoped/`), so
+the NEAREST wrapper wins: a nova demo inside the new-york docs chrome takes
+only nova, the way shadcn's baked imports do. The registry's style files stay
+byte-for-byte shadcn's, since the CLI bake reads them. `ui.css` holds the
 `/ui` tokens on `.ui-site` and the utilities only `/ui` code uses, and no
 preflight, since the root stylesheet already supplies it. The link is emitted
 TWICE, deliberately. The root layout emits it in its leading head run for a

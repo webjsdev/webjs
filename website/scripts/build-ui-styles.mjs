@@ -24,6 +24,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { writeScopedStyles, SCOPED_DIR } from './scope-ui-styles.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const site = resolve(here, '..');
@@ -37,6 +38,8 @@ const outDir = join(site, 'public', 'ui-styles');
 mkdirSync(cacheDir, { recursive: true });
 mkdirSync(outDir, { recursive: true });
 
+writeScopedStyles();
+
 const only = process.argv.slice(2);
 const names = only.length ? EXTRA_STYLES.filter((n) => only.includes(n)) : EXTRA_STYLES;
 
@@ -48,7 +51,7 @@ for (const name of names) {
     `@import "${join(site, 'public', 'ui-theme.css')}";`,
     `@import "${join(styles, 'tw-animate.css')}";`,
     `@import "${join(styles, 'shadcn-tailwind.css')}";`,
-    `@import "${join(styles, `style-${name}.css`)}" layer(base);`,
+    `@import "${join(SCOPED_DIR, `style-${name}.css`)}" layer(base);`,
     '',
   ].join('\n'));
   const out = join(outDir, `${name}.css`);

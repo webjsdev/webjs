@@ -24,7 +24,9 @@ export const metadata = {
  * The list is modules/ui/directory/registries.ts, the same data
  * /ui/r/registries.json serves. The search is a GET form, so it filters on
  * the server and works with JavaScript off; shadcn's filters as you type.
- * Each "Add" opens a dialog with the command, in the four package managers,
+ * The list renders in the nova style, as shadcn's (base-nova) does, while
+ * the docs chrome around it stays new-york. Each "Add" opens a dialog with
+ * the command, in the four package managers,
  * that installs from that registry with this kit's CLI. shadcn's
  * `registry add` has no equivalent here, since the CLI takes a registry per
  * command through `--registry`.
@@ -100,7 +102,7 @@ export default async function DirectoryPage({ searchParams }: PageProps) {
       <code>modules/ui/directory/registries.ts</code> in the WebJs repository and it is listed here and in
       <a href="/ui/r/registries.json">/ui/r/registries.json</a>.
     </p>
-    <div data-not-typeset class="mt-6">
+    <div data-not-typeset class="style-nova mt-6">
       <form method="get" action="/ui/docs/directory" role="search" data-slot="field" class="flex w-full flex-col gap-3">
         <div data-slot="input-group" role="group" class=${inputGroupClass()}>
           <div data-slot="input-group-addon" data-align="inline-start" class=${inputGroupAddonClass({ align: 'inline-start' })}>${searchIcon}</div>

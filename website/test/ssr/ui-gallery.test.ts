@@ -456,3 +456,20 @@ test('the home page serves shadcn\'s chat card on its empty state, with the firs
   assert.match(card, /<span class="sr-only">Send<\/span>/);
   assert.ok(!card.includes(String.fromCharCode(0x2014)), 'the script keeps the prose rule');
 });
+
+test('each kit style is scoped to its nearest wrapper, so a nested region takes one style', async () => {
+  // A nova demo sits inside the new-york docs chrome. As plain descendant
+  // rules both styles matched it; as @scope blocks that stop at any style
+  // wrapper, only the nearer one does (scripts/scope-ui-styles.mjs).
+  const { scopeStyle, STYLE_NAMES } = await import('../../scripts/scope-ui-styles.mjs');
+  const out = scopeStyle('nova', '/* x */\n.style-nova {\n  .cn-button { @apply rounded-lg; }\n}\n.style-nova {\n  .cn-card { @apply p-4; }\n}\n');
+  assert.equal((out.match(/@scope \(\.style-nova\) to \(:is\(/g) || []).length, 2, 'both top-level blocks become scopes');
+  for (const n of STYLE_NAMES) assert.ok(out.includes(`.style-${n}`), `the scope stops at .style-${n}`);
+  assert.throws(() => scopeStyle('nova', '.cn-button {}'), /no top-level/);
+  const ui = readFileSync(resolve(WEBSITE_ROOT, 'public/ui-input.css'), 'utf8');
+  assert.match(ui, /cache\/ui-styles\/scoped\/style-new-york\.css/, 'ui.css compiles the scoped copies');
+  assert.match(ui, /cache\/ui-styles\/scoped\/style-nova\.css/);
+  assert.ok(!/registry\/styles\/style-(nova|new-york)\.css/.test(ui), 'and not the unscoped originals');
+  const build = readFileSync(resolve(WEBSITE_ROOT, 'scripts/build-ui-styles.mjs'), 'utf8');
+  assert.match(build, /SCOPED_DIR/, 'the per-style build compiles them too');
+});
