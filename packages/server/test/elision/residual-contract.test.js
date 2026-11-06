@@ -352,9 +352,9 @@ test('every surface that enumerates the residuals names all three', async () => 
     'packages/server/src/component-elision.js',
     'packages/core/src/component.d.ts',
     '.agents/skills/webjs/references/components.md',
-    'website/app/docs/elision/page.ts',
-    'website/app/docs/data-fetching/page.ts',
-    'website/app/docs/progressive-enhancement/page.ts',
+    'website/app/(site)/docs/elision/page.ts',
+    'website/app/(site)/docs/data-fetching/page.ts',
+    'website/app/(site)/docs/progressive-enhancement/page.ts',
   ];
 
   const problems = [];

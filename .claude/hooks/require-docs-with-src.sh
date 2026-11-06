@@ -61,7 +61,7 @@ if [ -z "$src_touched" ]; then exit 0; fi
 # Any documentation surface staged in the same commit? The curated set of
 # real doc surfaces: AGENTS / CLAUDE / CONVENTIONS / README markdown at any
 # depth (root, per-package, per-example), the skill at .agents/skills/webjs/,
-# the marketing website (which carries the docs site at website/app/docs/),
+# the marketing website (which carries the docs site at website/app/(site)/docs/),
 # and the scaffold templates. NOT every *.md, so a stray note cannot be
 # staged to slip the gate.
 #
@@ -85,7 +85,7 @@ package.json webjs.* key, an html hole, a lifecycle hook, a convention, or
 the behaviour of an already-documented feature), invoke the webjs-doc-sync
 skill, then `git add` EVERY applicable surface and commit again:
   AGENTS.md + .agents/skills/webjs/      agent reference (SKILL.md + references/)
-  website/app/docs/<topic>               the docs site (served at webjs.dev/docs)
+  website/app/(site)/docs/<topic>               the docs site (served at webjs.dev/docs)
   README.md                              if a headline capability
   website/                               marketing copy, if headline
   packages/cli/templates/                scaffold per-agent rule files
