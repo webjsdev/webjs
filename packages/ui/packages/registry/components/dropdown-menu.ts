@@ -305,9 +305,13 @@ export class UiDropdownMenu extends WebComponent({
     return document.getElementById(id);
   }
 
-  /** The element the panel is positioned against: the trigger part, or the named control. */
+  /**
+   * The element the panel is positioned against: the control itself, as
+   * Radix's asChild trigger is, never the `-trigger` wrapper, which is a block
+   * and would lend the panel a whole row's width and start edge.
+   */
   _anchor(): HTMLElement | null {
-    return this.querySelector<HTMLElement>(`${fam(this)}-trigger`) ?? this._external();
+    return this._triggerControl();
   }
 
   /** Inside the menu for an outside-click check: the menu itself, or its named trigger. */
@@ -491,6 +495,7 @@ export class UiDropdownMenu extends WebComponent({
       align: (host.getAttribute('align') ?? 'start') as PopoverAlign,
       sideOffset: Number(host.getAttribute('side-offset') ?? placement.sideOffset),
       alignOffset: Number(host.getAttribute('align-offset') ?? placement.alignOffset),
+      radix: fam(this).slice(3),
     });
   }
 
@@ -1139,6 +1144,7 @@ export class UiDropdownMenuSub extends WebComponent({
       align: (contentHost.getAttribute('align') ?? 'start') as PopoverAlign,
       sideOffset: Number(contentHost.getAttribute('side-offset') ?? -4),
       alignOffset: Number(contentHost.getAttribute('align-offset') ?? 0),
+      radix: fam(this).slice(3),
     });
   }
 }

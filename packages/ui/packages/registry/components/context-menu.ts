@@ -129,7 +129,7 @@ export class UiContextMenu extends UiDropdownMenu {
     if (!content) return;
     const p = this._point ?? { x: 0, y: 0 };
     const anchor = { getBoundingClientRect: () => new DOMRect(p.x, p.y, 0, 0) } as unknown as HTMLElement;
-    positionFloating(anchor, content, { side: 'bottom', align: 'start', sideOffset: 0, alignOffset: 0 });
+    positionFloating(anchor, content, { side: 'bottom', align: 'start', sideOffset: 0, alignOffset: 0, radix: this.localName.slice(3) });
   }
 
   // Every close path returns focus through this: to the element that had focus

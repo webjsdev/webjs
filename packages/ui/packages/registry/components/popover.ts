@@ -233,6 +233,18 @@ export const popoverDescriptionClass = (): string => 'text-muted-foreground';
 export type PopoverSide = 'top' | 'bottom' | 'left' | 'right';
 export type PopoverAlign = 'start' | 'center' | 'end';
 
+/**
+ * Places `content` beside `trigger`, flipping to the opposite side when it
+ * does not fit, and keeps it 8px inside the viewport.
+ *
+ * `radix` names the component the way Radix does (`dropdown-menu`,
+ * `tooltip`), and makes this set the variables Radix's positioner sets on the
+ * panel, which shadcn's classes read: `--radix-<name>-trigger-width` /
+ * `-height`, `--radix-<name>-content-available-width` / `-height` and
+ * `--radix-<name>-content-transform-origin`. Without them a class such as
+ * `w-(--radix-dropdown-menu-trigger-width)` resolves to nothing, and a fixed
+ * panel with no width stretches across the viewport.
+ */
 export function positionFloating(
   trigger: HTMLElement,
   content: HTMLElement,
@@ -241,6 +253,7 @@ export function positionFloating(
     align?: PopoverAlign;
     sideOffset?: number;
     alignOffset?: number;
+    radix?: string;
   } = {},
 ): void {
   const side = opts.side ?? 'bottom';
@@ -248,6 +261,13 @@ export function positionFloating(
   const sideOffset = opts.sideOffset ?? 4;
   const alignOffset = opts.alignOffset ?? 0;
   const tr = trigger.getBoundingClientRect();
+  const vars = opts.radix ? `--radix-${opts.radix}` : '';
+  // The trigger's size first: a panel sized from it can only be measured
+  // once it is set.
+  if (vars) {
+    content.style.setProperty(`${vars}-trigger-width`, `${tr.width}px`);
+    content.style.setProperty(`${vars}-trigger-height`, `${tr.height}px`);
+  }
   const cr = content.getBoundingClientRect();
   const vw = window.innerWidth;
   const vh = window.innerHeight;
@@ -299,6 +319,27 @@ export function positionFloating(
 
   content.style.top = `${top}px`;
   content.style.left = `${left}px`;
+  if (vars) {
+    // What Radix's size and transform-origin middleware report, with no
+    // collision padding and no arrow.
+    const availableHeight =
+      actualSide === 'bottom' ? vh - tr.bottom - sideOffset
+        : actualSide === 'top' ? tr.top - sideOffset
+          : vh;
+    const availableWidth =
+      actualSide === 'right' ? vw - tr.right - sideOffset
+        : actualSide === 'left' ? tr.left - sideOffset
+          : vw;
+    const along = align === 'start' ? '0%' : align === 'end' ? '100%' : '50%';
+    const origin =
+      actualSide === 'bottom' ? `${along} 0px`
+        : actualSide === 'top' ? `${along} 100%`
+          : actualSide === 'right' ? `0px ${along}`
+            : `100% ${along}`;
+    content.style.setProperty(`${vars}-content-available-height`, `${Math.max(0, availableHeight)}px`);
+    content.style.setProperty(`${vars}-content-available-width`, `${Math.max(0, availableWidth)}px`);
+    content.style.setProperty(`${vars}-content-transform-origin`, origin);
+  }
   content.setAttribute('data-side', actualSide);
   content.setAttribute('data-align', align);
 }

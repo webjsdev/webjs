@@ -1730,7 +1730,8 @@ suite('ui-menubar', () => {
     buttons[1].click();
     await tick();
     const panel = menus[1].querySelector('ui-menubar-content [role="menu"]');
-    const t = menus[1].querySelector('ui-menubar-trigger').getBoundingClientRect();
+    // shadcn's MenubarTrigger is the button, so the panel is placed against it.
+    const t = buttons[1].getBoundingClientRect();
     assert.ok(Math.abs(parseFloat(panel.style.top) - (t.bottom + 8)) <= 1, `top ${panel.style.top} vs ${t.bottom + 8}`);
     const expectLeft = Math.max(8, t.left - 4);
     assert.ok(Math.abs(parseFloat(panel.style.left) - expectLeft) <= 1, `left ${panel.style.left} vs ${expectLeft}`);
@@ -2669,6 +2670,67 @@ suite('ui-dropdown-menu: a trigger outside the menu, and the panel shadcn styles
       assert.equal(document.activeElement.textContent.trim(), 'One', 'a keyboard open (detail 0) moves straight to the first item');
     } finally {
       menu.hide();
+      root.remove();
+    }
+  });
+});
+
+suite('overlay positioning: the Radix variables shadcn\'s classes read', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/dropdown-menu.ts`);
+    await import(`${COMPONENTS_DIR}/tooltip.ts`);
+  });
+
+  test('a dropdown panel sized from the trigger width stays the menu\'s width, not the viewport\'s', async () => {
+    // The browser suite loads no stylesheet, so the rule under test is written
+    // here: shadcn's dropdown content classes w-(--radix-dropdown-menu-trigger-width)
+    // and min-w-32. With the variable unset the width is invalid, falls back
+    // to auto, and the fixed panel stretches to the viewport's edge.
+    const style = document.createElement('style');
+    style.textContent = '[data-slot="dropdown-menu-content"] { box-sizing: border-box; width: var(--radix-dropdown-menu-trigger-width); min-width: 128px; }';
+    document.head.append(style);
+    const root = await mount(html`
+      <ui-dropdown-menu>
+        <ui-dropdown-menu-trigger><button style="width: 28px">More</button></ui-dropdown-menu-trigger>
+        <ui-dropdown-menu-content>
+          <ui-dropdown-menu-item>Profile</ui-dropdown-menu-item>
+        </ui-dropdown-menu-content>
+      </ui-dropdown-menu>
+    `);
+    const dm = root.querySelector('ui-dropdown-menu');
+    try {
+      dm.show();
+      await tick();
+      const panel = root.querySelector('[role="menu"]');
+      assert.equal(panel.style.getPropertyValue('--radix-dropdown-menu-trigger-width'), '28px');
+      assert.ok(parseFloat(panel.style.getPropertyValue('--radix-dropdown-menu-content-available-height')) > 0, 'the room beside the trigger');
+      assert.ok(panel.style.getPropertyValue('--radix-dropdown-menu-content-transform-origin'), 'the corner it grows from');
+      const width = Math.round(panel.getBoundingClientRect().width);
+      assert.equal(width, 128, `min-w-32 over the trigger width, not the viewport (got ${width})`);
+    } finally {
+      dm.hide();
+      root.remove();
+      style.remove();
+    }
+  });
+
+  test('a tooltip panel carries its own component\'s variables', async () => {
+    const root = await mount(html`
+      <ui-tooltip delay-duration="0">
+        <ui-tooltip-trigger><button>Tip</button></ui-tooltip-trigger>
+        <ui-tooltip-content>Reset</ui-tooltip-content>
+      </ui-tooltip>
+    `);
+    try {
+      const button = root.querySelector('button');
+      button.focus();
+      await new Promise((r) => setTimeout(r, 50));
+      await tick();
+      const panel = root.querySelector('ui-tooltip-content [popover]');
+      assert.ok(panel.style.getPropertyValue('--radix-tooltip-trigger-width'), 'the trigger width');
+      assert.ok(panel.style.getPropertyValue('--radix-tooltip-content-transform-origin'), 'the corner it grows from');
+    } finally {
+      root.querySelector('button')?.blur();
       root.remove();
     }
   });

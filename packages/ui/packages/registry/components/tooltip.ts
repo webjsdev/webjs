@@ -250,6 +250,7 @@ export class UiTooltip extends WebComponent({
       align: (contentHost.getAttribute('align') ?? 'center') as PopoverAlign,
       sideOffset: Number(contentHost.getAttribute('side-offset') ?? 4),
       alignOffset: Number(contentHost.getAttribute('align-offset') ?? 0),
+      radix: this.localName.slice(3),
     });
   }
 }
