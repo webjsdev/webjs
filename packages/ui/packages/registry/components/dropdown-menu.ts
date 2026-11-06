@@ -152,6 +152,15 @@ function fam(el: Element): string {
 function slot(el: Element, part: string): string {
   return fam(el).replace(/^ui-/, '') + part;
 }
+
+/**
+ * The tag of the element that owns one menu: the family tag itself for a
+ * dropdown or a context menu, and `ui-menubar-menu` for a menubar, whose
+ * family tag is the bar that holds several menus.
+ */
+function rootTag(el: Element): string {
+  return (el.constructor as { rootTag?: string }).rootTag ?? fam(el);
+}
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
 // --------------------------------------------------------------------------
@@ -198,7 +207,8 @@ export interface MenuClasses {
   item(): string;
   checkboxItem(): string;
   radioItem(): string;
-  itemIndicator(): string;
+  /** A checkable item's indicator; menubar styles the checkbox and radio ones apart. */
+  itemIndicator(type?: 'checkbox' | 'radio'): string;
   label(): string;
   separator(): string;
   shortcut(): string;
@@ -301,7 +311,7 @@ export class UiDropdownMenu extends WebComponent({
   }
 
   render() {
-    return html`<div data-slot=${slot(this, '')} data-state=${this.open ? 'open' : 'closed'}>
+    return html`<div data-slot=${rootTag(this).replace(/^ui-/, '')} data-state=${this.open ? 'open' : 'closed'}>
       <slot></slot>
     </div>`;
   }
@@ -409,7 +419,14 @@ export class UiDropdownMenu extends WebComponent({
     else if (!this.open && p.matches(':popover-open')) p.hidePopover();
   }
 
+  /**
+   * The panel's offsets when its content element names none: shadcn's
+   * dropdown sits 4px off its trigger, a menubar menu 8px off and 4px back.
+   */
+  static placement = { sideOffset: 4, alignOffset: 0 };
+
   _reposition(): void {
+    const placement = (this.constructor as typeof UiDropdownMenu).placement;
     const trigger = this.querySelector<HTMLElement>(`${fam(this)}-trigger`);
     const content = this._content();
     const host = this.querySelector<HTMLElement>(`${fam(this)}-content`);
@@ -417,8 +434,8 @@ export class UiDropdownMenu extends WebComponent({
     positionFloating(trigger, content, {
       side: (host.getAttribute('side') ?? 'bottom') as PopoverSide,
       align: (host.getAttribute('align') ?? 'start') as PopoverAlign,
-      sideOffset: Number(host.getAttribute('side-offset') ?? 4),
-      alignOffset: Number(host.getAttribute('align-offset') ?? 0),
+      sideOffset: Number(host.getAttribute('side-offset') ?? placement.sideOffset),
+      alignOffset: Number(host.getAttribute('align-offset') ?? placement.alignOffset),
     });
   }
 
@@ -631,7 +648,7 @@ export class UiDropdownMenuTrigger extends WebComponent {
     ><slot></slot></div>`;
   }
 
-  _onClick = (): void => (this.closest(`${fam(this)}`) as UiDropdownMenu | null)?.toggle();
+  _onClick = (): void => (this.closest(rootTag(this)) as UiDropdownMenu | null)?.toggle();
 }
 UiDropdownMenuTrigger.register('ui-dropdown-menu-trigger');
 
@@ -723,7 +740,7 @@ export class UiDropdownMenuItem extends WebComponent({
         @focus=${this._onFocus}
         @blur=${this._onBlur}
       ><span
-        class=${cls(this).itemIndicator()}
+        class=${cls(this).itemIndicator(checkbox ? 'checkbox' : 'radio')}
       >${this.checked ? unsafeHTML(radio ? RADIO_DOT_SVG : CHECK_SVG) : ''}</span><slot></slot></div>`;
     }
     return html`<div
@@ -764,7 +781,7 @@ export class UiDropdownMenuItem extends WebComponent({
       }),
     );
     if (!proceed) return;
-    (this.closest(`${fam(this)}`) as UiDropdownMenu | null)?._closeAndRestoreFocus();
+    (this.closest(rootTag(this)) as UiDropdownMenu | null)?._closeAndRestoreFocus();
   }
 
   // The radio set is the nearest <ui-dropdown-menu-group>, which is the APG
