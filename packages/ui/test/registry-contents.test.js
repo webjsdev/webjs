@@ -43,7 +43,7 @@ const V1_COMPONENTS = [
   // #1666: the components shadcn ships that the kit did not.
   'button-group', 'marker', 'message', 'scroll-area',
   'attachment', 'bubble', 'item', 'trace', 'input-group', 'direction',
-  'sheet', 'drawer',
+  'sheet', 'drawer', 'context-menu',
 ];
 
 // Components that are Tier 2, must register a custom element.
@@ -55,7 +55,7 @@ const TIER_2 = new Set([
   'dialog', 'alert-dialog', 'tooltip', 'hover-card',
   'tabs',
   'dropdown-menu', 'sonner',
-  'sheet', 'drawer',
+  'sheet', 'drawer', 'context-menu',
 ]);
 
 /**

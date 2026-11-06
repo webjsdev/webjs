@@ -202,3 +202,16 @@ test('ui-sheet: a sheet panel serves no vaul direction at SSR', { skip }, async 
   const out = await ssr(['sheet.ts'], (html) => html`<ui-sheet><ui-sheet-content><h2>T</h2></ui-sheet-content></ui-sheet>`);
   assert.doesNotMatch(out, /data-vaul-drawer-direction=/, 'the null direction omits the attribute');
 });
+
+test('ui-context-menu: the served parts carry context-menu slots and the menu role, and the region no popup ARIA', { skip }, async () => {
+  const out = await ssr(
+    ['context-menu.ts'],
+    (html) => html`<ui-context-menu><ui-context-menu-trigger><div tabindex="0">Region</div></ui-context-menu-trigger><ui-context-menu-content><ui-context-menu-item>Rename</ui-context-menu-item><ui-context-menu-item type="checkbox" checked>Show</ui-context-menu-item></ui-context-menu-content></ui-context-menu>`,
+  );
+  assert.match(out, /data-slot="context-menu-content"[^>]*role="menu"|role="menu"[^>]*data-slot="context-menu-content"/, 'the panel is a menu under its own slot');
+  assert.match(out, /data-slot="context-menu-item"[^>]*role="menuitem"|role="menuitem"[^>]*data-slot="context-menu-item"/, 'a plain item');
+  assert.match(out, /data-slot="context-menu-checkbox-item"/, 'a checkbox item takes the family slot too');
+  assert.match(out, /aria-checked="true"/, 'its state is served');
+  assert.doesNotMatch(out, /data-slot="dropdown-menu/, 'no dropdown slot names');
+  assert.doesNotMatch(out, /aria-haspopup|aria-expanded/, 'a context region is not a menu button');
+});

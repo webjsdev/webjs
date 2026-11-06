@@ -246,6 +246,23 @@
       ]
     },
     {
+      "name": "context-menu",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "dropdown-menu",
+        "popover"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/context-menu.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
       "name": "dialog",
       "type": "registry:ui",
       "registryDependencies": [

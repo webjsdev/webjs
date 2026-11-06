@@ -1312,3 +1312,193 @@ suite('ui-drawer', () => {
     root.remove();
   });
 });
+
+suite('ui-context-menu', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/context-menu.ts`);
+  });
+
+  const region = (label = 'File actions') => html`
+    <ui-context-menu>
+      <ui-context-menu-trigger>
+        <div tabindex="0" data-testid="region" style="width: 300px; height: 120px">Right-click here</div>
+      </ui-context-menu-trigger>
+      <ui-context-menu-content aria-label=${label}>
+        <ui-context-menu-item>Rename</ui-context-menu-item>
+        <ui-context-menu-item>Duplicate</ui-context-menu-item>
+        <ui-context-menu-separator></ui-context-menu-separator>
+        <ui-context-menu-item variant="destructive">Delete<ui-context-menu-shortcut>⌘⌫</ui-context-menu-shortcut></ui-context-menu-item>
+      </ui-context-menu-content>
+    </ui-context-menu>
+  `;
+
+  // Where the component placed the panel. The kit's style supplies the
+  // `fixed m-0` that makes these coordinates the painted ones, and this suite
+  // loads no stylesheet, so the UA [popover] rule would centre the rect.
+  const placed = (cm) => {
+    const panel = cm.querySelector('ui-context-menu-content [role="menu"]');
+    return { left: parseFloat(panel.style.left), top: parseFloat(panel.style.top) };
+  };
+
+  const rightClick = (el, x, y) => {
+    const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 2 });
+    el.dispatchEvent(ev);
+    return ev;
+  };
+
+  test('a right-click opens the menu at the pointer, cancels the native menu and focuses the first item', async () => {
+    const root = await mount(region());
+    const cm = root.querySelector('ui-context-menu');
+    const area = root.querySelector('[data-testid="region"]');
+    const r = area.getBoundingClientRect();
+    const x = Math.round(r.left + 60);
+    const y = Math.round(r.top + 30);
+    const ev = rightClick(area, x, y);
+    await tick();
+    assert.ok(ev.defaultPrevented, 'the native context menu is suppressed');
+    assert.ok(cm.hasAttribute('open'), 'the menu opened');
+    const p = placed(cm);
+    assert.ok(Math.abs(p.left - x) <= 1, `the panel starts at the pointer x (${p.left} vs ${x})`);
+    assert.ok(Math.abs(p.top - y) <= 1, `the panel starts at the pointer y (${p.top} vs ${y})`);
+    const first = cm.querySelector('ui-context-menu-item [role="menuitem"]');
+    assert.equal(document.activeElement, first, 'the first item has focus');
+    cm.hide();
+    root.remove();
+  });
+
+  test('a second right-click while open moves the menu to the new point', async () => {
+    const root = await mount(region());
+    const cm = root.querySelector('ui-context-menu');
+    const area = root.querySelector('[data-testid="region"]');
+    const r = area.getBoundingClientRect();
+    rightClick(area, Math.round(r.left + 10), Math.round(r.top + 10));
+    await tick();
+    const x = Math.round(r.left + 120);
+    const y = Math.round(r.top + 50);
+    rightClick(area, x, y);
+    await tick();
+    assert.ok(cm.hasAttribute('open'), 'still open');
+    const p = placed(cm);
+    assert.ok(Math.abs(p.left - x) <= 1 && Math.abs(p.top - y) <= 1, `repositioned at the second point (${p.left},${p.top} vs ${x},${y})`);
+    cm.hide();
+    root.remove();
+  });
+
+  test('a left click on the region never opens the menu', async () => {
+    const root = await mount(region());
+    const cm = root.querySelector('ui-context-menu');
+    root.querySelector('[data-testid="region"]').click();
+    await tick();
+    assert.equal(cm.hasAttribute('open'), false);
+    root.remove();
+  });
+
+  test('Shift+F10 on the focused region opens it, and Escape returns focus to the region', async () => {
+    const root = await mount(region());
+    const cm = root.querySelector('ui-context-menu');
+    const area = root.querySelector('[data-testid="region"]');
+    area.focus();
+    area.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }));
+    await tick();
+    assert.ok(cm.hasAttribute('open'), 'Shift+F10 opened the menu');
+    const r = area.getBoundingClientRect();
+    const p = placed(cm);
+    assert.ok(Math.abs(p.left - r.left) <= 1 && Math.abs(p.top - r.bottom) <= 1, `placed below the region start corner (${p.left},${p.top} vs ${r.left},${r.bottom})`);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await tick();
+    assert.equal(cm.hasAttribute('open'), false, 'Escape closed it');
+    assert.equal(document.activeElement, area, 'focus went back to the region');
+    root.remove();
+  });
+
+  test('the ContextMenu key opens it too', async () => {
+    const root = await mount(region());
+    const cm = root.querySelector('ui-context-menu');
+    const area = root.querySelector('[data-testid="region"]');
+    area.focus();
+    area.dispatchEvent(new KeyboardEvent('keydown', { key: 'ContextMenu', bubbles: true, cancelable: true }));
+    await tick();
+    assert.ok(cm.hasAttribute('open'));
+    cm.hide();
+    root.remove();
+  });
+
+  test('the region gets no popup ARIA, and the menu is named by its aria-label or a fallback', async () => {
+    const root = await mount(html`${region()}${region('')}`);
+    const [named, unnamed] = root.querySelectorAll('ui-context-menu');
+    for (const cm of [named, unnamed]) {
+      const area = cm.querySelector('[data-testid="region"]');
+      const r = area.getBoundingClientRect();
+      rightClick(area, Math.round(r.left + 5), Math.round(r.top + 5));
+      await tick();
+      assert.equal(area.hasAttribute('aria-haspopup'), false, 'no aria-haspopup on the region');
+      assert.equal(area.hasAttribute('aria-expanded'), false, 'no aria-expanded on the region');
+      cm.hide();
+      await tick();
+    }
+    assert.equal(named.querySelector('[role="menu"]').getAttribute('aria-label'), 'File actions', 'the authored name');
+    assert.equal(unnamed.querySelector('[role="menu"]').getAttribute('aria-label'), 'Context menu', 'the fallback name');
+    root.remove();
+  });
+
+  test('activating an item closes the menu and returns focus to the region', async () => {
+    const root = await mount(region());
+    const cm = root.querySelector('ui-context-menu');
+    const area = root.querySelector('[data-testid="region"]');
+    area.focus();
+    const r = area.getBoundingClientRect();
+    rightClick(area, Math.round(r.left + 20), Math.round(r.top + 20));
+    await tick();
+    cm.querySelector('ui-context-menu-item [role="menuitem"]').click();
+    await tick();
+    assert.equal(cm.hasAttribute('open'), false, 'closed on activation');
+    assert.equal(document.activeElement, area, 'focus is back on the region');
+    root.remove();
+  });
+
+  test('a right-click outside closes the menu', async () => {
+    const root = await mount(html`${region()}<div data-testid="elsewhere" style="height: 40px">elsewhere</div>`);
+    const cm = root.querySelector('ui-context-menu');
+    const area = root.querySelector('[data-testid="region"]');
+    const r = area.getBoundingClientRect();
+    rightClick(area, Math.round(r.left + 20), Math.round(r.top + 20));
+    await tick();
+    assert.ok(cm.hasAttribute('open'));
+    root.querySelector('[data-testid="elsewhere"]').dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true, composed: true, button: 2 }),
+    );
+    await tick();
+    assert.equal(cm.hasAttribute('open'), false, 'an outside right-click dismissed it');
+    root.remove();
+  });
+
+  test('a left click on the region closes an open menu', async () => {
+    const root = await mount(region());
+    const cm = root.querySelector('ui-context-menu');
+    const area = root.querySelector('[data-testid="region"]');
+    const r = area.getBoundingClientRect();
+    rightClick(area, Math.round(r.left + 20), Math.round(r.top + 20));
+    await tick();
+    assert.ok(cm.hasAttribute('open'));
+    area.click();
+    await tick();
+    assert.equal(cm.hasAttribute('open'), false);
+    root.remove();
+  });
+
+  test('every part carries a context-menu slot and class name, never a dropdown one', async () => {
+    const root = await mount(region());
+    const cm = root.querySelector('ui-context-menu');
+    cm.show();
+    await tick();
+    const item = cm.querySelector('ui-context-menu-item [role="menuitem"]');
+    assert.equal(item.getAttribute('data-slot'), 'context-menu-item');
+    assert.ok(item.classList.contains('cn-context-menu-item'), 'the item takes its style name from its family');
+    assert.ok(item.classList.contains('group/context-menu-item'), 'the item is the shortcut group-focus target');
+    assert.equal(cm.querySelector('[role="menu"]').getAttribute('data-slot'), 'context-menu-content');
+    assert.equal(cm.querySelector('[role="separator"], ui-context-menu-separator > *').getAttribute('data-slot'), 'context-menu-separator');
+    assert.equal(cm.querySelectorAll('[data-slot^="dropdown-menu"], [class*="cn-dropdown-menu"]').length, 0, 'no dropdown names leak in');
+    cm.hide();
+    root.remove();
+  });
+});
