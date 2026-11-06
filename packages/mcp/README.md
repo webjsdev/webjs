@@ -41,10 +41,18 @@ subcommand) delegates to this same server, so both routes run identical code.
   guided workflows).
 - **`source` tool**: reads the framework's own no-build source from
   `node_modules/@webjsdev/*/src` (read-only, traversal-guarded).
-- **`ui` tool**: the `@webjsdev/ui` kit inventory (no args) or one component's
-  helper signatures, paste-ready structural example, a11y header, and deps (pass
-  `name`). Kit-scoped (not `appDir`-scoped); shares one projector with
-  `webjsui view`.
+- **`ui` tool**: the `@webjsdev/ui` kit. With no args it returns the
+  component inventory plus the block and chart NAMES grouped by category (a
+  block is a ready-made view you install and then edit: a login or signup
+  page, a sidebar shell, a dashboard, a chart). `type` (`ui` / `block` /
+  `chart` / `all`) and `category` (`login`, `sidebar`, `area`, ...) list the
+  matches with one-line descriptions. `name` returns one component's helper
+  signatures, paste-ready structural example, a11y header and deps, or one
+  block's description, dependencies, install command
+  (`npx @webjsdev/ui add <name>`) and files with their targets; `source: true`
+  adds a block's sources. Everything it returns is baked plain Tailwind, never
+  a `cn-*` name, and a test caps the no-args payload size. Kit-scoped (not
+  `appDir`-scoped); shares one projector with `webjsui view`.
 
 ## Which docs you get
 

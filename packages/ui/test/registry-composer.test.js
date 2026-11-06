@@ -190,3 +190,23 @@ test('loadRegistryManifest: schema field is set on every item', { skip }, async 
     assert.equal(it.$schema, 'https://ui.webjs.dev/schema/registry-item.json', `${it.name}: missing $schema`);
   }
 });
+
+test('loadRegistryItem: a block inlines the files in its nested directories (#1666, D18)', { skip }, async () => {
+  const { loadRegistryItem } = await import(COMPOSER_PATH);
+  const item = await loadRegistryItem('login-02');
+  assert.equal(item.type, 'registry:block');
+  assert.deepEqual(item.categories, ['authentication', 'login']);
+  const byTarget = Object.fromEntries(item.files.map((f) => [f.target, f]));
+  assert.match(byTarget['app/login/page.ts'].content, /export default function LoginPage/);
+  assert.match(byTarget['components/login-form.ts'].content, /export function loginForm/);
+  assert.match(byTarget['public/placeholder.svg'].content, /^<svg/);
+});
+
+test('loadRegistryIndex: a block entry carries its title and categories, so a page can group it without its files', { skip }, async () => {
+  const { loadRegistryIndex } = await import(COMPOSER_PATH);
+  const entry = (await loadRegistryIndex()).find((i) => i.name === 'signup-03');
+  assert.equal(entry.type, 'registry:block');
+  assert.equal(entry.title, 'Signup 03');
+  assert.deepEqual(entry.categories, ['authentication', 'signup']);
+  assert.equal(entry.files, undefined);
+});

@@ -141,3 +141,12 @@ test('tier classification: dialog is Tier-2, button is Tier-1 (production path)'
   assert.equal(uiComponent('dialog').tier, 2);
   assert.equal(uiComponent('button').tier, 1);
 });
+
+test('loadRegistryIndex: a block entry carries its categories; loadRegistryItem inlines its nested files (#1666, D18)', () => {
+  const entry = loadRegistryIndex().find((i) => i.name === 'login-01');
+  assert.equal(entry.type, 'registry:block');
+  assert.deepEqual(entry.categories, ['authentication', 'login']);
+  const item = loadRegistryItem('login-01');
+  const page = item.files.find((f) => f.target === 'app/login/page.ts');
+  assert.match(page.content, /export default function LoginPage/);
+});

@@ -305,7 +305,19 @@ function replaceImportSpecifier(content, spec, destAbs, target) {
     .replaceAll(`"${spec}"`, `"${rel}"`);
 }
 
-function resolveTarget(cwd, config, item, file) {
+/**
+ * The absolute path a registry file is written to: the helper alias for the
+ * shared helpers, else the file's own `target`, else a folder picked by the
+ * file's type. `diff` reads the same answer, so it compares the file `add`
+ * would have written.
+ *
+ * @param {string} cwd
+ * @param {any} config parsed components.json
+ * @param {any} item the registry item
+ * @param {{ path: string, type?: string, target?: string }} file
+ * @returns {string}
+ */
+export function resolveTarget(cwd, config, item, file) {
   // The two shared helpers are pinned to `lib/utils.ts` / `lib/dom.ts` by the
   // registry manifest, but where they actually BELONG is wherever the project's
   // `utils` alias points, because that is the path `rewriteUtilsImport` writes

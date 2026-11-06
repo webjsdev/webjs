@@ -127,3 +127,56 @@ test('view projection: uiComponent is baked, for the default and for a named sty
     assert.ok(c.helpers.some((h) => /buttonClass/.test(h)), 'the helper signatures survive the bake');
   }
 });
+
+/* -------------------- blocks (#1666, D18) -------------------- */
+
+test('list: prints components, blocks and charts in labelled groups', async () => {
+  const output = await captureLog(() => list.parseAsync([], { from: 'user' }));
+  assert.match(output, /Components:/);
+  assert.match(output, /Blocks \(a ready-made view you install and then edit\):/);
+  assert.match(output, /login-01/);
+  assert.match(output, /\d+ components, \d+ blocks/);
+  assert.ok(output.indexOf('Components:') < output.indexOf('Blocks'), 'components first');
+});
+
+test('list --type block --json: one compact array of blocks, nothing else on stdout', async () => {
+  const output = await captureLog(() => list.parseAsync(['--type', 'block', '--json'], { from: 'user' }));
+  const items = JSON.parse(output);
+  assert.ok(items.length >= 10);
+  assert.ok(items.every((i) => i.type === 'block'), 'blocks only');
+  assert.deepEqual(Object.keys(items[0]).sort(), ['categories', 'description', 'name', 'type']);
+  assert.ok(!output.includes('\n'), 'compact, one line');
+});
+
+test('list --category signup: only the blocks in that category', async () => {
+  const output = await captureLog(() => list.parseAsync(['--category', 'signup', '--json'], { from: 'user' }));
+  assert.deepEqual(JSON.parse(output).map((i) => i.name), ['signup-01', 'signup-02', 'signup-03', 'signup-04', 'signup-05']);
+});
+
+test('view <block>: description, install command and file targets, then the sources', async () => {
+  const output = await captureLog(() => view.parseAsync(['login-04'], { from: 'user' }));
+  assert.match(output, /A login page with form and image\./);
+  assert.match(output, /Install: npx @webjsdev\/ui add login-04/);
+  assert.match(output, /app\/login\/page\.ts/);
+  assert.match(output, /public\/placeholder\.svg/);
+  assert.match(output, /export function loginForm/, 'the sources follow');
+});
+
+test('view <block> --files-only stops before the sources; --json is one document', async () => {
+  const short = await captureLog(() => view.parseAsync(['login-01', '--files-only'], { from: 'user' }));
+  assert.match(short, /components\/login-form\.ts/);
+  assert.doesNotMatch(short, /export function loginForm/);
+
+  const json = JSON.parse(await captureLog(() => view.parseAsync(['login-01', '--json', '--files-only'], { from: 'user' })));
+  assert.equal(json.install, 'npx @webjsdev/ui add login-01');
+  assert.deepEqual(json.categories, ['authentication', 'login']);
+  assert.ok(json.files.every((f) => f.target && f.content === undefined));
+});
+
+test('info: counts the blocks and charts beside the components', async () => {
+  const d = mkdtempSync(join(tmpdir(), 'webjsui-info-kit-'));
+  try {
+    const output = await captureLog(() => info.parseAsync(['--cwd', d], { from: 'user' }));
+    assert.match(output, /\d+ components, \d+ blocks, \d+ charts/);
+  } finally { rmSync(d, { recursive: true }); }
+});

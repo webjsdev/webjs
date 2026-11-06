@@ -147,10 +147,14 @@ export function loadRegistryItem(name) {
  */
 export function loadRegistryIndex() {
   if (indexCache) return indexCache;
+  // `title` and `categories` ride along so a block or chart can be listed and
+  // grouped without loading its files (D18).
   const fromManifest = readManifest().items.map((item) => ({
     name: item.name,
     type: item.type,
+    title: item.title,
     description: item.description,
+    categories: item.categories,
     dependencies: item.dependencies,
     registryDependencies: item.registryDependencies,
   }));

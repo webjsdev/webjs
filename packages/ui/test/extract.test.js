@@ -105,3 +105,86 @@ test('extractHelperAxes: a comment inside the variant map cannot swallow the obj
     .replace("'icon-lg': 'cn-button-size-icon-lg',", "'icon-lg': 'cn-button-size-icon-lg', // the app's largest icon button\n  none: '', /* don't */");
   assert.deepEqual(extractHelperAxes(src).buttonClass.size, ['default', 'xs', 'sm', 'lg', 'icon', 'icon-xs', 'icon-sm', 'icon-lg', 'none']);
 });
+
+/* -------------------- blocks and charts (#1666, D18) -------------------- */
+
+const {
+  uiBlocks, uiBlockIndex, uiBlock, projectBlock, itemKind, primaryCategory, renderBlockText,
+} = await import('../src/registry/extract.js');
+
+// A fixed index, so the chart branch is exercised before the kit ships charts.
+const INDEX = [
+  { name: 'button', type: 'registry:ui', description: 'A button.' },
+  { name: 'lib-utils', type: 'registry:lib' },
+  { name: 'login-01', type: 'registry:block', categories: ['authentication', 'login'], description: 'A simple login form.' },
+  { name: 'chart-area-default', type: 'registry:block', categories: ['chart', 'area'], description: 'An area chart.' },
+  { name: 'loose', type: 'registry:block', description: 'No categories.' },
+];
+
+test('itemKind: a chart is a block carrying the chart category, a lib or theme is nothing', () => {
+  assert.deepEqual(INDEX.map(itemKind), ['ui', null, 'block', 'chart', 'block']);
+});
+
+test('primaryCategory: the most specific category, with chart dropped, else other', () => {
+  assert.equal(primaryCategory(INDEX[2]), 'login');
+  assert.equal(primaryCategory(INDEX[3]), 'area');
+  assert.equal(primaryCategory(INDEX[4]), 'other');
+});
+
+test('uiBlocks: blocks and charts by default, filtered by type and by any category', () => {
+  assert.deepEqual(uiBlocks({}, INDEX).map((b) => b.name), ['chart-area-default', 'login-01', 'loose']);
+  assert.deepEqual(uiBlocks({ type: 'chart' }, INDEX).map((b) => b.name), ['chart-area-default']);
+  assert.deepEqual(uiBlocks({ type: 'all' }, INDEX).map((b) => b.name), ['button', 'chart-area-default', 'login-01', 'loose']);
+  assert.deepEqual(uiBlocks({ category: 'authentication' }, INDEX).map((b) => b.name), ['login-01'], 'a broad category matches too');
+  assert.deepEqual(uiBlocks({ type: 'block' }, INDEX)[0], {
+    name: 'login-01', type: 'block', categories: ['authentication', 'login'], description: 'A simple login form.',
+  }, 'one compact entry, no files');
+});
+
+test('uiBlockIndex: name lists grouped by category, blocks apart from charts, no descriptions', () => {
+  assert.deepEqual(uiBlockIndex(INDEX), {
+    blocks: { login: ['login-01'], other: ['loose'] },
+    charts: { area: ['chart-area-default'] },
+  });
+});
+
+test('uiBlockIndex over the packaged registry lists the authentication blocks', () => {
+  const { blocks } = uiBlockIndex();
+  assert.deepEqual(blocks.login, ['login-01', 'login-02', 'login-03', 'login-04', 'login-05']);
+  assert.deepEqual(blocks.signup, ['signup-01', 'signup-02', 'signup-03', 'signup-04', 'signup-05']);
+});
+
+test('uiBlock: the install command and files with targets, sources only on request', () => {
+  const b = uiBlock('login-01');
+  assert.ok(b);
+  assert.equal(b.type, 'block');
+  assert.equal(b.install, 'npx @webjsdev/ui add login-01');
+  assert.deepEqual(b.files.map((f) => f.target), ['app/login/page.ts', 'components/login-form.ts']);
+  assert.ok(b.files.every((f) => f.content === undefined), 'no source by default');
+  assert.ok(b.registryDependencies.includes('field'));
+
+  const withSource = uiBlock('login-01', { source: true });
+  assert.match(withSource.files[1].content, /export function loginForm/);
+  assert.equal(uiBlock('button'), null, 'a component is not a block');
+  assert.equal(uiBlock('nope-nope'), null);
+});
+
+test('projectBlock: sources are baked, so no cn-* name reaches an agent', () => {
+  const item = {
+    name: 'x', type: 'registry:block', categories: ['dashboard'],
+    files: [{ path: 'blocks/x/page.ts', type: 'registry:page', target: 'app/x/page.ts', content: "const c = 'cn-card flex';\n" }],
+  };
+  const out = projectBlock(item, { source: true });
+  assert.doesNotMatch(out.files[0].content, /cn-card/);
+  assert.match(out.files[0].content, /flex/);
+  assert.equal(projectBlock({ name: 'b', type: 'registry:ui' }), null);
+});
+
+test('renderBlockText: description, install command and targets, then the sources', () => {
+  const text = renderBlockText(uiBlock('signup-02', { source: true }));
+  assert.match(text, /# signup-02 {2}\(block\)/);
+  assert.match(text, /Install: npx @webjsdev\/ui add signup-02/);
+  assert.match(text, /^ {2}public\/placeholder\.svg$/m);
+  assert.match(text, /# --- components\/signup-form\.ts ---/);
+  assert.doesNotMatch(renderBlockText(uiBlock('signup-02')), /# ---/, 'no sources without them');
+});

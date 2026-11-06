@@ -311,8 +311,8 @@ const HELP = {
   },
   ui: {
     usage: 'webjs ui <init|add|list|view|diff|info|lint> [names...]',
-    summary: 'AI-first component library CLI. Requires @webjsdev/ui installed in the project.',
-    examples: ['webjs ui init', 'webjs ui add button card', 'webjs ui list'],
+    summary: 'AI-first component library CLI: components, plus blocks (ready-made views you install and then edit). Requires @webjsdev/ui installed in the project.',
+    examples: ['webjs ui init', 'webjs ui add button card', 'webjs ui list --type block', 'webjs ui view login-01 --files-only', 'webjs ui add login-01'],
   },
   vendor: {
     usage: 'webjs vendor <pin|unpin|list|audit|outdated|update> [--from <provider>] [--download]',

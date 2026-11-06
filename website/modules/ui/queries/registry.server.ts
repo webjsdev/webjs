@@ -68,15 +68,26 @@ export type RegistryFile = {
   content?: string;
 };
 
+export type RegistryCssVars = {
+  theme?: Record<string, string>;
+  light?: Record<string, string>;
+  dark?: Record<string, string>;
+};
+
 export type RegistryItem = {
   $schema?: string;
   name: string;
   type: string;
   description?: string;
   title?: string;
+  /** A block's or chart's groups, e.g. `['authentication', 'login']`. */
+  categories?: string[];
   dependencies?: string[];
   devDependencies?: string[];
   registryDependencies?: string[];
+  /** Theme tokens `add` merges into the app's stylesheet. */
+  cssVars?: RegistryCssVars;
+  meta?: Record<string, unknown>;
   files?: RegistryFile[];
 };
 
@@ -146,7 +157,9 @@ function synthesizeColorTheme(color: string): RegistryItem | null {
 export async function loadRegistryItem(name: string): Promise<RegistryItem | null> {
   if (itemCache.has(name)) return itemCache.get(name)!;
 
-  // Manifest items (components, lib-utils, theme-neutral): inline file content.
+  // Manifest items (components, blocks, lib-utils, theme-neutral): inline
+  // file content. A block's files sit in nested directories under
+  // `blocks/<name>/`, which the REGISTRY_ROOT-relative resolve reads as is.
   const manifestItem = readManifest().items.find((it) => it.name === name);
   if (manifestItem) {
     const composed = inlineFiles(manifestItem);
@@ -170,10 +183,14 @@ export async function loadRegistryItem(name: string): Promise<RegistryItem | nul
 /** Load the flat registry index (one entry per item, metadata-only: no inlined content). */
 export async function loadRegistryIndex(): Promise<RegistryItem[]> {
   if (indexCache) return indexCache;
+  // `title` and `categories` ride along so the /ui blocks and charts pages can
+  // list and group a block without loading its files (D18).
   const fromManifest = readManifest().items.map((item) => ({
     name: item.name,
     type: item.type,
+    title: item.title,
     description: item.description,
+    categories: item.categories,
     dependencies: item.dependencies,
     registryDependencies: item.registryDependencies,
   }));

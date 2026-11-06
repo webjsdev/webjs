@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { getRegistryItem, DEFAULT_REGISTRY_URL, isDefaultRegistry } from '../registry/fetcher.js';
-import { uiComponent, renderComponentText } from '../registry/extract.js';
+import { uiComponent, renderComponentText, itemKind, projectBlock, renderBlockText } from '../registry/extract.js';
 import { logger } from '../utils/logger.js';
 import { getConfig } from '../utils/get-config.js';
 import { bakeForStyle } from '../registry/style-bake.js';
@@ -18,12 +18,25 @@ function styleFor(opts) {
 export const view = new Command()
   .name('view')
   .description("Print a registry item's source (and the paste-ready example) to stdout")
-  .argument('<name>', 'component name')
+  .argument('<name>', 'component, block or chart name')
   .option('--registry <url>', 'registry base URL', DEFAULT_REGISTRY_URL)
   .option('--source', 'print only the raw source, not the projected view')
   .option('--style <name>', 'the style to bake the source with (default: components.json, else new-york)')
+  .option('--json', 'a block or chart: print the projection as one JSON document')
+  .option('--files-only', 'a block or chart: print the file list and stop before the sources')
   .action(async (name, opts) => {
     const style = styleFor(opts);
+
+    // A block or chart (D18) prints what it is, how to install it and where
+    // its files land, then the sources, all from the projector the MCP `ui`
+    // tool shares. Resolved first, since a block has no component projection.
+    const item = await getRegistryItem(name, opts.registry);
+    const kind = itemKind(item);
+    if (kind === 'block' || kind === 'chart') {
+      const block = projectBlock(item, { style, source: !opts.filesOnly });
+      console.log(opts.json ? JSON.stringify(block, null, 2) : renderBlockText(block));
+      return;
+    }
     // For a local registry:ui component, lead with the projected view (helper
     // signatures + the paste-ready @example + deps). This is the human /
     // offline path to the example that `add` strips from the copied file, and
@@ -37,7 +50,6 @@ export const view = new Command()
       logger.info(logger.dim('# --- full source ---'));
     }
 
-    const item = await getRegistryItem(name, opts.registry);
     logger.info(logger.dim(`# ${item.name}: ${item.type}`));
     if (item.description) logger.info(logger.dim(`# ${item.description}`));
     for (const f of item.files || []) {

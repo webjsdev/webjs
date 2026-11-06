@@ -993,6 +993,342 @@
           "type": "registry:ui"
         }
       ]
+    },
+    {
+      "name": "login-01",
+      "type": "registry:block",
+      "title": "Login 01",
+      "description": "A simple login form.",
+      "categories": [
+        "authentication",
+        "login"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "button",
+        "card",
+        "field",
+        "input"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/login-01/page.ts",
+          "type": "registry:page",
+          "target": "app/login/page.ts"
+        },
+        {
+          "path": "blocks/login-01/components/login-form.ts",
+          "type": "registry:component",
+          "target": "components/login-form.ts"
+        }
+      ]
+    },
+    {
+      "name": "login-02",
+      "type": "registry:block",
+      "title": "Login 02",
+      "description": "A two column login page with a cover image.",
+      "categories": [
+        "authentication",
+        "login"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "button",
+        "field",
+        "input"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/login-02/page.ts",
+          "type": "registry:page",
+          "target": "app/login/page.ts"
+        },
+        {
+          "path": "blocks/login-02/components/login-form.ts",
+          "type": "registry:component",
+          "target": "components/login-form.ts"
+        },
+        {
+          "path": "blocks/_shared/placeholder.svg",
+          "type": "registry:file",
+          "target": "public/placeholder.svg"
+        }
+      ]
+    },
+    {
+      "name": "login-03",
+      "type": "registry:block",
+      "title": "Login 03",
+      "description": "A login page with a muted background color.",
+      "categories": [
+        "authentication",
+        "login"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "button",
+        "card",
+        "field",
+        "input"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/login-03/page.ts",
+          "type": "registry:page",
+          "target": "app/login/page.ts"
+        },
+        {
+          "path": "blocks/login-03/components/login-form.ts",
+          "type": "registry:component",
+          "target": "components/login-form.ts"
+        }
+      ]
+    },
+    {
+      "name": "login-04",
+      "type": "registry:block",
+      "title": "Login 04",
+      "description": "A login page with form and image.",
+      "categories": [
+        "authentication",
+        "login"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "button",
+        "card",
+        "field",
+        "input"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/login-04/page.ts",
+          "type": "registry:page",
+          "target": "app/login/page.ts"
+        },
+        {
+          "path": "blocks/login-04/components/login-form.ts",
+          "type": "registry:component",
+          "target": "components/login-form.ts"
+        },
+        {
+          "path": "blocks/_shared/placeholder.svg",
+          "type": "registry:file",
+          "target": "public/placeholder.svg"
+        }
+      ]
+    },
+    {
+      "name": "login-05",
+      "type": "registry:block",
+      "title": "Login 05",
+      "description": "A simple email-only login page.",
+      "categories": [
+        "authentication",
+        "login"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "button",
+        "field",
+        "input"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/login-05/page.ts",
+          "type": "registry:page",
+          "target": "app/login/page.ts"
+        },
+        {
+          "path": "blocks/login-05/components/login-form.ts",
+          "type": "registry:component",
+          "target": "components/login-form.ts"
+        }
+      ]
+    },
+    {
+      "name": "signup-01",
+      "type": "registry:block",
+      "title": "Signup 01",
+      "description": "A simple signup form.",
+      "categories": [
+        "authentication",
+        "signup"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "button",
+        "card",
+        "field",
+        "input"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/signup-01/page.ts",
+          "type": "registry:page",
+          "target": "app/signup/page.ts"
+        },
+        {
+          "path": "blocks/signup-01/components/signup-form.ts",
+          "type": "registry:component",
+          "target": "components/signup-form.ts"
+        }
+      ]
+    },
+    {
+      "name": "signup-02",
+      "type": "registry:block",
+      "title": "Signup 02",
+      "description": "A two column signup page with a cover image.",
+      "categories": [
+        "authentication",
+        "signup"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "button",
+        "field",
+        "input"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/signup-02/page.ts",
+          "type": "registry:page",
+          "target": "app/signup/page.ts"
+        },
+        {
+          "path": "blocks/signup-02/components/signup-form.ts",
+          "type": "registry:component",
+          "target": "components/signup-form.ts"
+        },
+        {
+          "path": "blocks/_shared/placeholder.svg",
+          "type": "registry:file",
+          "target": "public/placeholder.svg"
+        }
+      ]
+    },
+    {
+      "name": "signup-03",
+      "type": "registry:block",
+      "title": "Signup 03",
+      "description": "A signup page with a muted background color.",
+      "categories": [
+        "authentication",
+        "signup"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "button",
+        "card",
+        "field",
+        "input"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/signup-03/page.ts",
+          "type": "registry:page",
+          "target": "app/signup/page.ts"
+        },
+        {
+          "path": "blocks/signup-03/components/signup-form.ts",
+          "type": "registry:component",
+          "target": "components/signup-form.ts"
+        }
+      ]
+    },
+    {
+      "name": "signup-04",
+      "type": "registry:block",
+      "title": "Signup 04",
+      "description": "A signup page with form and image.",
+      "categories": [
+        "authentication",
+        "signup"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "button",
+        "card",
+        "field",
+        "input"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/signup-04/page.ts",
+          "type": "registry:page",
+          "target": "app/signup/page.ts"
+        },
+        {
+          "path": "blocks/signup-04/components/signup-form.ts",
+          "type": "registry:component",
+          "target": "components/signup-form.ts"
+        },
+        {
+          "path": "blocks/_shared/placeholder.svg",
+          "type": "registry:file",
+          "target": "public/placeholder.svg"
+        }
+      ]
+    },
+    {
+      "name": "signup-05",
+      "type": "registry:block",
+      "title": "Signup 05",
+      "description": "A simple signup form with social providers.",
+      "categories": [
+        "authentication",
+        "signup"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "button",
+        "field",
+        "input"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/signup-05/page.ts",
+          "type": "registry:page",
+          "target": "app/signup/page.ts"
+        },
+        {
+          "path": "blocks/signup-05/components/signup-form.ts",
+          "type": "registry:component",
+          "target": "components/signup-form.ts"
+        }
+      ]
     }
   ]
 }

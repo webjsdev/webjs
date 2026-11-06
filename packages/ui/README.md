@@ -125,6 +125,21 @@ component that needs design tokens your theme may lack (the sidebar's
 `--sidebar-*`, a chart's `--chart-*`) carries them, and `add` adds the missing
 ones to your stylesheet without touching a token you already define.
 
+Before hand-writing a login or signup page, an app sidebar shell, a dashboard
+or a chart, list the blocks and install the closest one:
+
+```sh
+npx @webjsdev/ui list --type block          # every block, with its description
+npx @webjsdev/ui view login-03 --files-only  # what it installs, and where
+npx @webjsdev/ui add login-03                # app/login/page.ts + components/login-form.ts
+```
+
+The kit ships shadcn's ten authentication blocks today (`login-01` to
+`login-05`, `signup-01` to `signup-05`). Each page is a server-rendered page
+module and each form a real `<form>` built from the kit's class helpers, with
+no JavaScript. The form has no `action` yet: bind a server action
+(`<form action=${signIn}>`) when you wire it up.
+
 The install runs with your project's package manager. `add` looks for a
 lockfile in the current directory and then each parent, stopping at the
 workspace root, so an app inside a monorepo uses the root's lockfile:
@@ -142,11 +157,11 @@ always compares against the live upstream.
 | Command | Effect |
 |---|---|
 | `webjsui init` | Initialize a project (writes `components.json`, `lib/utils/cn.ts`, the theme tokens). Preserves an existing project's settings and helper files; `-o, --overwrite` resets them. Exits non-zero if the tokens cannot be written. |
-| `webjsui add <names...>` | Add components (copies helpers + a pointer for Tier-1, self-heals theme tokens) |
-| `webjsui list` | List all available components |
-| `webjsui view <name>` | Print a component's projected view (helpers + paste-ready example) and full source |
-| `webjsui diff [name]` | Show diff between your local copy and the live registry |
-| `webjsui info` | Print project diagnostics |
+| `webjsui add <names...>` | Add components or blocks (copies helpers + a pointer for Tier-1, writes a block's files to their targets, self-heals theme tokens) |
+| `webjsui list [filter]` | List the components, blocks and charts in three labelled groups. `--type <ui\|block\|chart\|all>`, `--category <name>`, and `--json` for one compact array of `{ name, type, categories, description }` |
+| `webjsui view <name>` | A component: its projected view (helpers + paste-ready example) and full source. A block: its description, categories, dependencies, install command and files with targets, then the sources (`--files-only` stops before them, `--json` prints one document) |
+| `webjsui diff [name]` | Show diff between your local copy and the live registry, installed blocks included |
+| `webjsui info` | Print project diagnostics, with the kit's component, block and chart counts |
 | `webjsui build` | (For registry authors) Compile a custom registry |
 | `webjsui lint` | Opt-in design-system linter. Reports raw palette colors, arbitrary values and classes composed over a kit helper, at the line, with a message built from your own theme tokens and helper variants. Configured by a `lint` block in `components.json`; with no block it reports nothing and exits 0. `--json` for an agent loop, `--max-warnings <n>` to pin a count. |
 

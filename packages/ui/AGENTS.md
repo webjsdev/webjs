@@ -108,7 +108,7 @@ packages/ui/
       local.js                    LOCAL-FIRST composer: read the packaged registry from disk (no network)
       fetcher.js                  network GET + cache; local-vs-network dispatch (getRegistryItem/Index)
       example.js                  extract / strip the module-JSDoc @example block
-      extract.js                  shared kit projector (view + MCP `ui` tool): inventory + per-component helpers/example/deps, plus extractHelperAxes() (the variant / size VALUES a `webjsui lint` no-restyle message names)
+      extract.js                  shared kit projector (view + MCP `ui` tool): inventory + per-component helpers/example/deps, the block projector (uiBlocks / uiBlockIndex / uiBlock / projectBlock, #1666 D18), plus extractHelperAxes() (the variant / size VALUES a `webjsui lint` no-restyle message names)
       style-bake.js               the style bake (#1666): createStyleMap() (a style file's @apply rules -> { 'cn-x': classes }), classSegments() (the one lexer that finds class strings), bakeSource() / bakeForStyle() (replace every cn-* name with the chosen style's classes)
       resolver.js                 walk registryDependencies transitively
     utils/
@@ -123,6 +123,7 @@ packages/ui/
 
   packages/registry/              the registry (internal, not published)
     components/                   .ts files, one per component
+    blocks/<name>/                a block's files (page.ts, components/*.ts), each with a `target` under the app; blocks/_shared/ holds files several blocks install (placeholder.svg)
     lib/utils.ts                  cn() helper + layout/typography helpers (Tier-2 components extend WebComponent from @webjsdev/core directly)
     styles/                       the styles the bake applies (#1666): style-new-york.css (the default), the eight ported shadcn styles + supplement.json, shadcn-tailwind.css and tw-animate.css (vendored)
     themes/
@@ -243,6 +244,55 @@ function per component (`buttonVariants`, `badgeVariants`, `toggleVariants`,
 its own helper, so shadcn code ports verbatim. Each returns exactly what the
 helper returns, and like `cva` it merges a `className` option into the result.
 
+## Blocks and charts (#1666, D18)
+
+A block is **a ready-made view you install and then edit**: a login or signup
+page, an app sidebar shell, a dashboard, a chart. Use that phrasing wherever an
+agent reads about them. On the wire a block and a chart are both
+`registry:block` items (shadcn parity, invariant 3); a chart is the block whose
+`categories` include `chart` (`itemKind()` in `registry/extract.js` is the one
+place that decides).
+
+**What a block item carries.** `title`, `description`, `categories` (broad to
+specific: `["authentication", "login"]`, `["chart", "area"]`),
+`registryDependencies` (the components its files import, plus `lib-utils`),
+optional item-level `cssVars`, and files under `packages/registry/blocks/<name>/`,
+EACH with an explicit `target` under the app (`app/...`, `components/...`,
+`modules/...`, `public/...`). `test/blocks.test.js` enforces the target, that
+every file exists and is non-empty, that every relative import resolves to a
+file the install also writes, and it installs real blocks with `add` and
+renders the installed page through `renderToString`.
+
+**How a block is written.** Registry-relative imports
+(`'../../../components/card.ts'`, `'../../../lib/utils.ts'`, `'./components/x.ts'`),
+which `add` rewrites through the app's aliases (`rewriteRegistryImports`). A
+page is a server-rendered page module (`export default function`, plus a
+`metadata` export). A part that is not interactive is a FRAGMENT helper (a
+camelCase function returning an `html` template, `loginForm({ class })`), not a
+custom element: two blocks share a tag name (every login block has a login
+form), and a tag can be defined once per page session, which would break the
+site rendering two of them across a soft navigation. A form is a real `<form>`
+with named controls; a block ships no server action, so the form has no
+`action` and its header comment says to bind one (`<form action=${signIn}>`).
+Inline SVG for icons and brand marks (there is no icon module in the registry
+yet). No `cn-*` names in a block's own markup: it composes the kit's helpers,
+which carry them, so the bake still yields plain Tailwind.
+
+**The ten shipped blocks** are shadcn's authentication set: `login-01` to
+`login-05` (target `app/login/page.ts` + `components/login-form.ts`) and
+`signup-01` to `signup-05` (`app/signup/page.ts` + `components/signup-form.ts`),
+with `public/placeholder.svg` for the four with a cover image. Blocks of one
+family share targets, so installing a second one keeps the first one's files
+unless `--overwrite` is passed.
+
+**The projector** (`registry/extract.js`), shared by `view` and the MCP `ui`
+tool: `uiBlocks({ type, category })` (one compact `{ name, type, categories,
+description }` per match), `uiBlockIndex()` (names only, grouped by each
+block's most specific category, the no-args MCP payload), `uiBlock(name,
+{ style, source })` / `projectBlock(item, opts)` (description, dependencies,
+`install: 'npx @webjsdev/ui add <name>'`, files with targets, baked sources
+only on request), and `renderBlockText()` for `view`.
+
 ## Accessibility
 
 The kit aims for 100% accessibility out of the box, but the responsibility
@@ -345,10 +395,10 @@ later change cannot quietly make the test non-discriminating.
 |---|---|
 | `webjsui init` | Initialize a project, writes `components.json`, copies the `cn()` helper to `lib/utils/cn.ts` (plus `lib/utils/dom.ts` beside it), installs the theme tokens. Its defaults are fixed constants, not derived from the host project (#1129). NON-DESTRUCTIVE on a re-run: an existing `components.json` keeps its settings (aliases, `tailwind.css`, base color, and any unknown keys) and an existing helper file is left alone, since both are yours; a config that cannot be parsed at all is a hard error rather than a silent replacement. `--overwrite` opts into replacing them. HARD-FAILS (non-zero exit) when the tokens cannot be written (an unstyled install with a clean exit code was the old trap). |
 | `webjsui add <names...>` | Resolve transitive deps, copy component sources, install npm deps. Self-heals missing theme tokens. Leaves an existing `cn()` / dom helper alone (see the placement section), and `--overwrite` replaces it. For a Tier-1 helper it strips the worked `@example` and leaves a pointer (see Registry resolution). A `registry:block` item's files land at their own `target`s with every registry-relative import rewritten to where its file landed (`rewriteRegistryImports`), are never replaced without `--overwrite` (not even under `--yes`), and are listed when written. An item's `cssVars` are merged into the app's stylesheet, adding only tokens its `:root`, `.dark` or `@theme inline` block lacks (`mergeCssVars`). |
-| `webjsui list [filter]` | List components in the registry |
-| `webjsui view <name>` | Print a component's source to stdout (the human / offline path to the full example) |
-| `webjsui diff [name]` | Show diffs between local and registry (against the LIVE upstream) |
-| `webjsui info` | Print cwd + config + registry URL |
+| `webjsui list [filter]` | List the components, blocks and charts in three labelled groups. `--type <ui\|block\|chart\|all>` (default `all`), `--category <name>`, `--json` (one compact array of `{ name, type, categories, description }`, and nothing else on stdout) |
+| `webjsui view <name>` | A component: its projected view and source (the human / offline path to the full example). A block or chart: description, categories, dependencies, the install command and the files with their targets, then the baked sources. `--files-only` stops before the sources, `--json` prints the projection as one document |
+| `webjsui diff [name]` | Show diffs between local and registry (against the LIVE upstream), installed blocks included. Files are compared at the path `add` writes (`resolveTarget`); a target several blocks write is current when it matches any of them and is reported once otherwise |
+| `webjsui info` | Print cwd + config + registry URL, and the kit's component, block and chart counts |
 | `webjsui build [file]` | Compile a custom registry (for registry authors) |
 | `webjsui lint` | Opt-in design-system linter over the app's own source (see the section below). Reports nothing and exits 0 with no `lint` block in `components.json`. `--json` emits `{ violations, summary }`, `--max-warnings <n>` caps warnings, exit is 1 on an error-level violation, an exceeded cap, or a config it cannot run against. |
 
