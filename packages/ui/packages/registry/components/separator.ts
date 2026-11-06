@@ -25,7 +25,7 @@
 import { cn } from '../lib/utils.ts';
 
 const BASE =
-  'shrink-0 bg-border data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px';
+  'cn-separator';
 
 export type SeparatorOrientation = 'horizontal' | 'vertical';
 

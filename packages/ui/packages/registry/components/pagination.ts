@@ -37,9 +37,9 @@
 import { cn } from '../lib/utils.ts';
 import { buttonClass, type ButtonSize } from './button.ts';
 
-export const paginationClass = (): string => 'mx-auto flex w-full justify-center';
+export const paginationClass = (): string => 'cn-pagination mx-auto flex w-full justify-center';
 
-export const paginationContentClass = (): string => 'flex flex-row items-center gap-1';
+export const paginationContentClass = (): string => 'cn-pagination-content flex items-center';
 
 export function paginationLinkClass(opts: { isActive?: boolean; size?: ButtonSize } = {}): string {
   return cn(buttonClass({ variant: opts.isActive ? 'outline' : 'ghost', size: opts.size ?? 'icon' }));
@@ -51,4 +51,4 @@ export const paginationPreviousClass = (): string =>
 export const paginationNextClass = (): string =>
   cn(buttonClass({ variant: 'ghost', size: 'default' }), 'gap-1 px-2.5 sm:pr-2.5');
 
-export const paginationEllipsisClass = (): string => 'flex size-9 items-center justify-center';
+export const paginationEllipsisClass = (): string => 'cn-pagination-ellipsis flex items-center justify-center';

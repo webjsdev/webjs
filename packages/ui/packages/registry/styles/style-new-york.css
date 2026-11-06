@@ -5,6 +5,111 @@
    the bake of this file to the pre-conversion classes, so edit it only to
    change the look on purpose, and re-capture the fixture in the same commit. */
 .style-new-york {
+  /* MARK: accordion */
+  .cn-accordion-item {
+    @apply group border-b last:border-b-0;
+  }
+
+  .cn-accordion-trigger {
+    @apply w-full cursor-pointer list-none items-center gap-4 py-4 text-left text-sm font-medium hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 marker:hidden [&::-webkit-details-marker]:hidden;
+  }
+
+  .cn-accordion-content {
+    @apply pb-4 text-sm;
+  }
+
+  /* MARK: alert */
+  .cn-alert {
+    @apply grid grid-cols-[0_1fr] items-start gap-y-0.5 rounded-lg border px-4 py-3 text-sm has-[>svg]:grid-cols-[calc(var(--spacing)*4)_1fr] has-[>svg]:gap-x-3 [&>svg]:size-4 [&>svg]:translate-y-0.5 [&>svg]:text-current;
+  }
+
+  .cn-alert-variant-default {
+    @apply bg-card text-card-foreground;
+  }
+
+  .cn-alert-variant-destructive {
+    @apply bg-card text-destructive *:data-[slot=alert-description]:text-destructive/90 [&>svg]:text-current;
+  }
+
+  .cn-alert-title {
+    @apply col-start-2 line-clamp-1 min-h-4 font-medium tracking-tight;
+  }
+
+  .cn-alert-description {
+    @apply col-start-2 grid justify-items-start gap-1 text-sm text-muted-foreground [&_p]:leading-relaxed;
+  }
+
+  /* MARK: avatar */
+  .cn-avatar {
+    @apply size-8 overflow-hidden rounded-full data-[size=lg]:size-10 data-[size=sm]:size-6;
+  }
+
+  .cn-avatar-fallback {
+    @apply rounded-full bg-muted text-muted-foreground;
+  }
+
+  .cn-avatar-badge {
+    @apply bg-primary text-primary-foreground ring-background group-data-[size=sm]/avatar:size-2 group-data-[size=sm]/avatar:[&>svg]:hidden group-data-[size=default]/avatar:size-2.5 group-data-[size=default]/avatar:[&>svg]:size-2 group-data-[size=lg]/avatar:size-3 group-data-[size=lg]/avatar:[&>svg]:size-2;
+  }
+
+  .cn-avatar-group-count {
+    @apply size-8 rounded-full bg-muted text-sm text-muted-foreground group-has-data-[size=lg]/avatar-group:size-10 group-has-data-[size=sm]/avatar-group:size-6 [&>svg]:size-4 group-has-data-[size=lg]/avatar-group:[&>svg]:size-5 group-has-data-[size=sm]/avatar-group:[&>svg]:size-3;
+  }
+
+  /* MARK: badge */
+  .cn-badge {
+    @apply gap-1 rounded-full border border-transparent px-2 py-0.5 text-xs font-medium transition-[color,box-shadow] [&>svg]:size-3;
+  }
+
+  .cn-badge-variant-default {
+    @apply bg-primary text-primary-foreground [a&]:hover:bg-primary/90;
+  }
+
+  .cn-badge-variant-secondary {
+    @apply bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90;
+  }
+
+  .cn-badge-variant-destructive {
+    @apply bg-destructive text-white focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40 [a&]:hover:bg-destructive/90;
+  }
+
+  .cn-badge-variant-outline {
+    @apply border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground;
+  }
+
+  .cn-badge-variant-ghost {
+    @apply [a&]:hover:bg-accent [a&]:hover:text-accent-foreground;
+  }
+
+  .cn-badge-variant-link {
+    @apply text-primary underline-offset-4 [a&]:hover:underline;
+  }
+
+  /* MARK: breadcrumb */
+  .cn-breadcrumb-list {
+    @apply gap-1.5 text-sm break-words text-muted-foreground sm:gap-2.5;
+  }
+
+  .cn-breadcrumb-item {
+    @apply gap-1.5;
+  }
+
+  .cn-breadcrumb-link {
+    @apply transition-colors hover:text-foreground;
+  }
+
+  .cn-breadcrumb-page {
+    @apply font-normal text-foreground;
+  }
+
+  .cn-breadcrumb-separator {
+    @apply [&>svg]:size-3.5;
+  }
+
+  .cn-breadcrumb-ellipsis {
+    @apply size-9;
+  }
+
   /* MARK: button */
   .cn-button {
     @apply cursor-pointer gap-2 rounded-md text-sm font-medium focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg:not([class*='size-'])]:size-4;
@@ -64,5 +169,306 @@
 
   .cn-button-size-icon-lg {
     @apply size-10;
+  }
+
+  /* MARK: card */
+  .cn-card {
+    @apply rounded-xl border bg-card text-card-foreground shadow-sm;
+  }
+
+  .cn-card-size-sm {
+    @apply gap-3 py-3;
+  }
+
+  .cn-card-size-default {
+    @apply gap-6 py-6;
+  }
+
+  .cn-card-header {
+    @apply grid-rows-[auto_auto] gap-2 px-6 [.border-b]:pb-6 group-data-[size=sm]/card:px-4 group-data-[size=sm]/card:gap-1 group-data-[size=sm]/card:[.border-b]:pb-3;
+  }
+
+  .cn-card-title {
+    @apply leading-none font-semibold group-data-[size=sm]/card:text-sm;
+  }
+
+  .cn-card-description {
+    @apply text-sm text-muted-foreground;
+  }
+
+  .cn-card-content {
+    @apply px-6 group-data-[size=sm]/card:px-4;
+  }
+
+  .cn-card-footer {
+    @apply px-6 [.border-t]:pt-6 group-data-[size=sm]/card:px-4 group-data-[size=sm]/card:[.border-t]:pt-3;
+  }
+
+  /* MARK: checkbox */
+  .cn-checkbox {
+    @apply size-4 appearance-none rounded-[4px] border border-input bg-transparent shadow-xs transition-shadow focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 checked:border-primary checked:bg-primary checked:bg-no-repeat checked:bg-center dark:bg-input/30 dark:aria-invalid:ring-destructive/40;
+  }
+
+  /* MARK: empty */
+  .cn-empty-media {
+    @apply mb-2;
+  }
+
+  .cn-empty-media-default {
+    @apply bg-transparent;
+  }
+
+  .cn-empty-media-icon {
+    @apply flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground [&_svg:not([class*='size-'])]:size-6;
+  }
+
+  .cn-empty {
+    @apply gap-6 rounded-lg border-dashed p-6 md:p-12;
+  }
+
+  .cn-empty-header {
+    @apply gap-2 text-center;
+  }
+
+  .cn-empty-title {
+    @apply text-lg font-medium tracking-tight;
+  }
+
+  .cn-empty-description {
+    @apply text-sm/relaxed;
+  }
+
+  .cn-empty-content {
+    @apply gap-4 text-sm;
+  }
+
+  /* MARK: field */
+  .cn-field-legend-variant-legend {
+    @apply text-base;
+  }
+
+  .cn-field-legend-variant-label {
+    @apply text-sm;
+  }
+
+  .cn-field-orientation-vertical {
+    @apply [&>*]:w-full;
+  }
+
+  .cn-field-orientation-horizontal {
+    @apply [&>[data-slot=field-label]]:flex-auto has-[>[data-slot=field-content]]:[&>[type=checkbox],[type=radio]]:mt-px;
+  }
+
+  .cn-field-orientation-responsive {
+    @apply [&>*]:w-full @md/field-group:[&>*]:w-auto @md/field-group:[&>[data-slot=field-label]]:flex-auto @md/field-group:has-[>[data-slot=field-content]]:[&>[type=checkbox],[type=radio]]:mt-px;
+  }
+
+  .cn-field-set {
+    @apply gap-6 has-[>[data-slot=checkbox-group]]:gap-3 has-[>[data-slot=radio-group]]:gap-3;
+  }
+
+  .cn-field-legend {
+    @apply mb-3 font-medium;
+  }
+
+  .cn-field-group {
+    @apply gap-7 data-[slot=checkbox-group]:gap-3 [&>[data-slot=field-group]]:gap-4;
+  }
+
+  .cn-field-content {
+    @apply gap-1.5;
+  }
+
+  .cn-field-label {
+    @apply items-center gap-2 text-sm leading-snug font-medium select-none group-data-[disabled=true]/field:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col has-[>[data-slot=field]]:rounded-md has-[>[data-slot=field]]:border [&>*]:data-[slot=field]:p-4 has-checked:border-primary has-checked:bg-primary/5 dark:has-checked:bg-primary/10;
+  }
+
+  .cn-field-title {
+    @apply gap-2 text-sm leading-snug font-medium group-data-[disabled=true]/field:opacity-50;
+  }
+
+  .cn-field-description {
+    @apply text-sm text-muted-foreground group-has-[[data-orientation=horizontal]]/field:text-balance last:mt-0 nth-last-2:-mt-1 [[data-variant=legend]+&]:-mt-1.5 [&>a]:underline [&>a]:underline-offset-4 [&>a:hover]:text-primary;
+  }
+
+  .cn-field-error {
+    @apply text-sm text-destructive;
+  }
+
+  .cn-field-separator {
+    @apply -my-2 h-5 text-sm group-data-[variant=outline]/field-group:-mb-2 before:absolute before:inset-x-0 before:top-1/2 before:h-px before:bg-border;
+  }
+
+  .cn-field-separator-content {
+    @apply px-2 text-muted-foreground;
+  }
+
+  /* MARK: input */
+  .cn-input {
+    @apply h-9 rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] selection:bg-primary selection:text-primary-foreground file:h-7 file:text-sm file:font-medium md:text-sm dark:bg-input/30;
+  }
+
+  .cn-input-focus {
+    @apply focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50;
+  }
+
+  .cn-input-invalid {
+    @apply aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40;
+  }
+
+  /* MARK: kbd */
+  .cn-kbd {
+    @apply h-5 w-fit min-w-5 gap-1 rounded-sm bg-muted px-1 font-sans text-xs font-medium text-muted-foreground [&_svg:not([class*='size-'])]:size-3 [[data-slot=tooltip-content]_&]:bg-background/20 [[data-slot=tooltip-content]_&]:text-background dark:[[data-slot=tooltip-content]_&]:bg-background/10;
+  }
+
+  .cn-kbd-group {
+    @apply gap-1;
+  }
+
+  /* MARK: label */
+  .cn-label {
+    @apply gap-2 text-sm leading-none font-medium group-data-[disabled=true]:opacity-50 peer-disabled:opacity-50;
+  }
+
+  /* MARK: native */
+  .cn-native-select {
+    @apply h-9 w-full min-w-0 appearance-none rounded-md border border-input bg-transparent px-3 py-2 pr-9 text-sm shadow-xs transition-[color,box-shadow] selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground data-[size=sm]:h-8 data-[size=sm]:py-1 dark:bg-input/30 dark:hover:bg-input/50;
+  }
+
+  .cn-native-select-part-2 {
+    @apply focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50;
+  }
+
+  .cn-native-select-part-3 {
+    @apply aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40;
+  }
+
+  .cn-native-select-icon {
+    @apply top-1/2 right-3.5 size-4 -translate-y-1/2 text-muted-foreground opacity-50;
+  }
+
+  /* MARK: pagination */
+  .cn-pagination-content {
+    @apply flex-row gap-1;
+  }
+
+  .cn-pagination-ellipsis {
+    @apply size-9;
+  }
+
+  /* MARK: progress */
+  .cn-progress {
+    @apply block h-2 overflow-hidden rounded-full;
+  }
+
+  /* MARK: radio */
+  .cn-radio-group-item {
+    @apply size-4 appearance-none rounded-full border-input bg-transparent shadow-xs transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 checked:border-primary checked:bg-no-repeat checked:bg-center dark:bg-input/30 dark:aria-invalid:ring-destructive/40;
+  }
+
+  .cn-radio-group {
+    @apply grid gap-3;
+  }
+
+  /* MARK: separator */
+  .cn-separator {
+    @apply shrink-0 bg-border data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px;
+  }
+
+  /* MARK: skeleton */
+  .cn-skeleton {
+    @apply rounded-md bg-accent;
+  }
+
+  /* MARK: switch */
+  .cn-switch {
+    @apply shrink-0 cursor-pointer rounded-full border border-transparent shadow-xs peer-focus-visible:border-ring peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 bg-input dark:bg-input/80 peer-checked:bg-primary;
+  }
+
+  .cn-switch-size-default {
+    @apply h-[1.15rem] w-8;
+  }
+
+  .cn-switch-size-sm {
+    @apply h-3.5 w-6;
+  }
+
+  .cn-switch-thumb-size-default {
+    @apply after:size-4 after:translate-x-px peer-checked:after:translate-x-[calc(100%-2px)];
+  }
+
+  .cn-switch-thumb-size-sm {
+    @apply after:size-3 after:translate-x-px peer-checked:after:translate-x-[calc(100%-1px)];
+  }
+
+  .cn-switch-thumb {
+    @apply after:pointer-events-none after:absolute after:left-0 after:rounded-full after:bg-background after:transition-transform peer-checked:after:bg-primary-foreground dark:after:bg-foreground;
+  }
+
+  /* MARK: table */
+  .cn-table-container {
+    @apply relative w-full overflow-x-auto;
+  }
+
+  .cn-table {
+    @apply w-full caption-bottom text-sm;
+  }
+
+  .cn-table-header {
+    @apply [&_tr]:border-b;
+  }
+
+  .cn-table-body {
+    @apply [&_tr:last-child]:border-0;
+  }
+
+  .cn-table-footer {
+    @apply border-t bg-muted/50 font-medium [&>tr]:last:border-b-0;
+  }
+
+  .cn-table-row {
+    @apply border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted;
+  }
+
+  .cn-table-head {
+    @apply h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px];
+  }
+
+  .cn-table-cell {
+    @apply p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px];
+  }
+
+  .cn-table-caption {
+    @apply mt-4 text-sm text-muted-foreground;
+  }
+
+  /* MARK: textarea */
+  .cn-textarea {
+    @apply rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:aria-invalid:ring-destructive/40;
+  }
+
+  /* MARK: toggle */
+  .cn-toggle {
+    @apply cursor-pointer gap-2 rounded-md text-sm font-medium select-none transition-[color,box-shadow] hover:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 data-[state=on]:bg-accent data-[state=on]:text-accent-foreground dark:aria-invalid:ring-destructive/40 [&_svg:not([class*='size-'])]:size-4;
+  }
+
+  .cn-toggle-variant-default {
+    @apply bg-transparent;
+  }
+
+  .cn-toggle-variant-outline {
+    @apply border border-input bg-transparent shadow-xs hover:bg-accent hover:text-accent-foreground;
+  }
+
+  .cn-toggle-size-default {
+    @apply h-9 min-w-9 px-2;
+  }
+
+  .cn-toggle-size-sm {
+    @apply h-8 min-w-8 px-1.5;
+  }
+
+  .cn-toggle-size-lg {
+    @apply h-10 min-w-10 px-2.5;
   }
 }

@@ -41,7 +41,7 @@ export const progressClass = (): string =>
   [
     // Reset native styling. WebKit / Blink draw a default 3D bar that we
     // strip via appearance-none + classic clear of border/bg.
-    'block h-2 w-full overflow-hidden rounded-full',
+    'cn-progress w-full',
     'appearance-none border-0 bg-primary/20 [&::-webkit-progress-bar]:bg-primary/20',
     // Bar fill: blink/webkit + firefox both via Tailwind 4's arbitrary-
     // pseudo variant. Smooth animation on width change matches shadcn.

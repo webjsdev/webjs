@@ -70,7 +70,7 @@ const DOT_DARK =
   "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><circle cx='10' cy='10' r='5' fill='oklch(0.985 0 0)'/></svg>\")";
 
 const RADIO_CLASS =
-  'aspect-square size-4 shrink-0 appearance-none rounded-full border border-input bg-transparent shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 checked:border-primary checked:bg-no-repeat checked:bg-center dark:bg-input/30 dark:aria-invalid:ring-destructive/40';
+  'cn-radio-group-item group/radio-group-item peer aspect-square shrink-0 border outline-none disabled:cursor-not-allowed disabled:opacity-50';
 
 // Three sibling rule blocks for theme selection: mirrors the
 // checkbox.ts pattern in this same registry:
@@ -127,7 +127,7 @@ export function radioGroupClass(opts: { orientation?: RadioGroupOrientation } = 
   const orientation = opts.orientation ?? 'vertical';
   return orientation === 'horizontal'
     ? 'flex flex-wrap gap-x-6 gap-y-3'
-    : 'grid gap-3';
+    : 'cn-radio-group';
 }
 
 /**

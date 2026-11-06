@@ -64,14 +64,14 @@
  */
 
 /** Root wrapper. Holds the column-of-items rhythm; no display: rules. */
-export const accordionClass = (): string => 'w-full';
+export const accordionClass = (): string => 'cn-accordion w-full';
 
 /**
  * Item: each <details>. The `group` utility lets the trigger's chevron
  * rotate on open via `group-open:rotate-180`. `last:border-b-0` cleans
  * the trailing edge.
  */
-export const accordionItemClass = (): string => 'group border-b last:border-b-0';
+export const accordionItemClass = (): string => 'cn-accordion-item';
 
 /**
  * Trigger: applied to <summary>. Hides the native disclosure triangle so
@@ -85,7 +85,7 @@ export const accordionItemClass = (): string => 'group border-b last:border-b-0'
  * prop combines both; native HTML has no `disabled` on <details>.
  */
 export const accordionTriggerClass = (opts: { disabled?: boolean } = {}): string => {
-  const base = 'flex w-full cursor-pointer list-none items-center justify-between gap-4 py-4 text-left text-sm font-medium outline-none transition-all hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 marker:hidden [&::-webkit-details-marker]:hidden';
+  const base = 'cn-accordion-trigger group/accordion-trigger flex justify-between outline-none transition-all';
   if (opts.disabled) return `${base} pointer-events-none cursor-not-allowed opacity-50`;
   return base;
 };
@@ -94,4 +94,4 @@ export const accordionTriggerClass = (opts: { disabled?: boolean } = {}): string
  * Content: <details> hides this entirely when not [open], so all we add
  * is the typography rhythm matching shadcn (bottom padding, small text).
  */
-export const accordionContentClass = (): string => 'pb-4 text-sm';
+export const accordionContentClass = (): string => 'cn-accordion-content';

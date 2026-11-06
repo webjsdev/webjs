@@ -52,21 +52,20 @@ import { cn } from '../lib/utils.ts';
 export const switchInputClass = (): string => 'peer sr-only';
 
 const TRACK_BASE =
-  'inline-flex shrink-0 cursor-pointer items-center rounded-full border border-transparent shadow-xs transition-all outline-none peer-focus-visible:border-ring peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 bg-input dark:bg-input/80 peer-checked:bg-primary relative';
+  'cn-switch peer group/switch inline-flex items-center transition-all outline-none relative';
 
 const TRACK_SIZES = {
-  default: 'h-[1.15rem] w-8',
-  sm: 'h-3.5 w-6',
+  default: 'cn-switch-size-default',
+  sm: 'cn-switch-size-sm',
 } as const;
 
 const THUMB_SIZES = {
-  default:
-    "after:size-4 after:translate-x-px peer-checked:after:translate-x-[calc(100%-2px)]",
-  sm: "after:size-3 after:translate-x-px peer-checked:after:translate-x-[calc(100%-1px)]",
+  default: 'cn-switch-thumb-size-default',
+  sm: 'cn-switch-thumb-size-sm',
 } as const;
 
 const THUMB_BASE =
-  'after:pointer-events-none after:absolute after:left-0 after:rounded-full after:bg-background after:transition-transform peer-checked:after:bg-primary-foreground dark:after:bg-foreground';
+  'cn-switch-thumb';
 
 export type SwitchSize = keyof typeof TRACK_SIZES;
 

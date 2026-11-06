@@ -20,4 +20,4 @@
  * ```
  */
 
-export const skeletonClass = (): string => 'animate-pulse rounded-md bg-accent';
+export const skeletonClass = (): string => 'cn-skeleton animate-pulse';
