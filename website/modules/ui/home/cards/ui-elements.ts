@@ -5,18 +5,13 @@ import { buttonGroupClass } from '#modules/ui/components/button-group.ts';
 import { inputGroupClass, inputGroupAddonClass, inputGroupInputClass, inputGroupTextClass } from '#modules/ui/components/input-group.ts';
 import { radioGroupClass, radioClass } from '#modules/ui/components/radio-group.ts';
 import { checkboxClass } from '#modules/ui/components/checkbox.ts';
-import { switchInputClass, switchTrackClass } from '#modules/ui/components/switch.ts';
 import { alertDialogHeaderClass, alertDialogTitleClass, alertDialogDescriptionClass, alertDialogFooterClass } from '#modules/ui/components/alert-dialog.ts';
 import { ArrowRight02Icon, ArrowUp01Icon, Search01Icon } from '#lib/ui/hugeicons.ts';
 import { Card, CardContent, Button, Badge, FieldGroup, Field, Textarea } from '../parts.ts';
 
 /** shadcn's UIElements card (apps/v4/app/(app)/(root)/cards/ui-elements.tsx). */
 export function uiElements() {
-  const toggle = (label: string, cls: string) => html`
-    <label class=${cn('inline-flex items-center', cls)}>
-      <input type="checkbox" role="switch" checked aria-label=${label} class=${switchInputClass()}>
-      <span class=${switchTrackClass()}></span>
-    </label>`;
+  const toggle = (label: string, cls: string) => html`<ui-switch checked aria-label=${label} class=${cls}></ui-switch>`;
   return Card('w-full', CardContent('flex flex-col gap-6', html`
     <div class="flex gap-2">
       ${Button({}, html`Button ${ArrowRight02Icon('', 2)}`)}
