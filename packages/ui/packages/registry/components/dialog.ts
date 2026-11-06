@@ -178,22 +178,22 @@ export function wireDialogLabels(host: Element, panelSelector: string): void {
 // --------------------------------------------------------------------------
 
 export const dialogHeaderClass = (): string =>
-  'flex flex-col gap-2 text-center sm:text-left';
+  'cn-dialog-header flex flex-col';
 
 export const dialogTitleClass = (): string =>
-  'text-lg leading-none font-semibold';
+  'cn-dialog-title';
 
 export const dialogDescriptionClass = (): string =>
-  'text-sm text-muted-foreground';
+  'cn-dialog-description';
 
 export const dialogFooterClass = (): string =>
-  'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end';
+  'cn-dialog-footer flex flex-col-reverse gap-2 sm:flex-row sm:justify-end';
 
 export const dialogContentClass = (): string =>
-  'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none sm:max-w-lg';
+  'cn-dialog-content fixed z-50 w-full outline-none';
 
 export const dialogCloseButtonClass = (): string =>
-  "absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
+  'cn-dialog-close';
 
 const DIALOG_CLOSE_X_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>';

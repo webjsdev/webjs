@@ -74,14 +74,14 @@ const idSafe = (s: string): string => s.replace(/[^A-Za-z0-9_-]/g, '-');
 // Class helpers
 // --------------------------------------------------------------------------
 
-const TABS_BASE = 'group/tabs flex gap-2 data-[orientation=horizontal]:flex-col';
+const TABS_BASE = 'cn-tabs group/tabs flex';
 
 const TABS_LIST_BASE =
-  'group/tabs-list inline-flex w-fit items-center justify-center rounded-lg p-[3px] text-muted-foreground group-data-[orientation=horizontal]/tabs:h-9 group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:flex-col data-[variant=underline]:rounded-none';
+  'cn-tabs-list group/tabs-list inline-flex w-fit items-center justify-center text-muted-foreground';
 
 const TABS_LIST_VARIANTS = {
-  default: 'bg-muted',
-  underline: 'gap-1 bg-transparent',
+  default: 'cn-tabs-list-variant-default bg-muted',
+  underline: 'cn-tabs-list-variant-line gap-1 bg-transparent',
 } as const;
 
 export type TabsListVariant = keyof typeof TABS_LIST_VARIANTS;
@@ -96,17 +96,17 @@ export function tabsListClass(opts: { variant?: TabsListVariant } = {}): string 
 // us cursor-pointer + Enter/Space activation + focus for free. The class
 // here is essentially shadcn's tabs.tsx trigger output.
 const TABS_TRIGGER_CLASS = [
-  "relative inline-flex h-[calc(100%-1px)] flex-1 cursor-pointer select-none items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium whitespace-nowrap text-foreground/60 transition-all group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-sm group-data-[variant=underline]/tabs-list:data-[state=active]:shadow-none dark:text-muted-foreground dark:hover:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  'cn-tabs-trigger relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center whitespace-nowrap text-foreground/60 transition-all hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 dark:text-muted-foreground dark:hover:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0',
   // These mirror shadcn's tabs.tsx (modulo variant=line → variant=underline).
   // Light-mode active state uses bg-background + shadow only; dark mode
   // additionally borders. Adding light-mode border made the underline
   // variant look like outline and made default look like two buttons.
-  'group-data-[variant=underline]/tabs-list:bg-transparent group-data-[variant=underline]/tabs-list:data-[state=active]:bg-transparent dark:group-data-[variant=underline]/tabs-list:data-[state=active]:border-transparent dark:group-data-[variant=underline]/tabs-list:data-[state=active]:bg-transparent',
-  'data-[state=active]:bg-background data-[state=active]:text-foreground dark:data-[state=active]:border-input dark:data-[state=active]:bg-input/30 dark:data-[state=active]:text-foreground',
-  'after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=underline]/tabs-list:data-[state=active]:after:opacity-100',
+  'cn-tabs-trigger-part-2',
+  'cn-tabs-trigger-part-3',
+  'cn-tabs-trigger-part-4',
 ].join(' ');
 
-const TABS_CONTENT_CLASS = 'flex-1 outline-none';
+const TABS_CONTENT_CLASS = 'cn-tabs-content flex-1 outline-none';
 
 // --------------------------------------------------------------------------
 // <ui-tabs> owns active `value` + `orientation`. Children read its state

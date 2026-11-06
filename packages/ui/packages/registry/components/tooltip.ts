@@ -67,7 +67,7 @@ import { positionFloating, type PopoverSide, type PopoverAlign } from './popover
 // top layer. UA `[popover]:not(:popover-open) { display: none }` keeps
 // the closed state hidden.
 export const tooltipContentClass = (): string =>
-  'fixed z-50 w-fit m-0 border-0 overflow-visible rounded-md bg-foreground px-3 py-1.5 text-xs text-balance text-background';
+  'cn-tooltip-content z-50 w-fit bg-foreground text-background';
 
 // Module-level "last close" timestamp, shared across every <ui-tooltip>
 // on the page. When the next tooltip is hovered within

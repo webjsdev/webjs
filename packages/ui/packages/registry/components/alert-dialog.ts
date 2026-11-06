@@ -98,17 +98,17 @@ import { onBeforeCache } from '../lib/dom.ts';
 import { buttonClass, type ButtonVariant, type ButtonSize } from './button.ts';
 
 export const alertDialogContentClass = (): string =>
-  'group/alert-dialog-content fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadcn-lg shadow-lg duration-200 data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-lg';
+  'cn-alert-dialog-content group/alert-dialog-content fixed z-50 grid w-full';
 
 export const alertDialogHeaderClass = (): string =>
-  'grid grid-rows-[auto_1fr] place-items-center gap-1.5 text-center sm:group-data-[size=default]/alert-dialog-content:place-items-start sm:group-data-[size=default]/alert-dialog-content:text-left';
+  'cn-alert-dialog-header';
 
 export const alertDialogFooterClass = (): string =>
-  'flex flex-col-reverse gap-2 group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2 sm:flex-row sm:justify-end';
+  'cn-alert-dialog-footer flex flex-col-reverse gap-2 group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2 sm:flex-row sm:justify-end';
 
-export const alertDialogTitleClass = (): string => 'text-lg font-semibold';
+export const alertDialogTitleClass = (): string => 'cn-alert-dialog-title';
 
-export const alertDialogDescriptionClass = (): string => 'text-sm text-muted-foreground';
+export const alertDialogDescriptionClass = (): string => 'cn-alert-dialog-description';
 
 // Pre-hydration paint fallback (see dialog.ts for the long version).
 const STYLES = `

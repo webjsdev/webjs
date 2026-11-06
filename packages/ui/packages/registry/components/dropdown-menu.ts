@@ -144,30 +144,30 @@ import { positionFloating, type PopoverSide, type PopoverAlign } from './popover
 // --------------------------------------------------------------------------
 
 export const dropdownMenuContentClass = (): string =>
-  'fixed z-50 max-h-[--available-height] min-w-[8rem] m-0 overflow-x-hidden overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md';
+  'cn-dropdown-menu-content z-50 overflow-x-hidden overflow-y-auto';
 
 export const dropdownMenuItemClass = (): string =>
-  "relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:hover:bg-destructive/10 data-[variant=destructive]:hover:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 dark:data-[variant=destructive]:hover:bg-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
+  'cn-dropdown-menu-item group/dropdown-menu-item relative flex cursor-default items-center outline-hidden select-none [&_svg]:pointer-events-none [&_svg]:shrink-0';
 
 export const dropdownMenuCheckboxItemClass = (): string =>
-  "relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0";
+  'cn-dropdown-menu-checkbox-item relative flex cursor-default items-center outline-hidden select-none [&_svg]:pointer-events-none [&_svg]:shrink-0';
 
 export const dropdownMenuRadioItemClass = (): string =>
-  "relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8";
+  'cn-dropdown-menu-radio-item relative flex cursor-default items-center outline-hidden select-none';
 
 export const dropdownMenuLabelClass = (): string =>
-  'px-2 pt-2 pb-1.5 text-xs font-semibold text-muted-foreground data-[inset]:pl-8';
+  'cn-dropdown-menu-label';
 
-export const dropdownMenuSeparatorClass = (): string => '-mx-1 my-1 h-px bg-border';
+export const dropdownMenuSeparatorClass = (): string => 'cn-dropdown-menu-separator';
 
 export const dropdownMenuShortcutClass = (): string =>
-  'ml-auto text-xs tracking-widest text-muted-foreground';
+  'cn-dropdown-menu-shortcut';
 
 export const dropdownMenuSubTriggerClass = (): string =>
-  "flex cursor-default items-center rounded-sm px-2 py-1.5 text-sm select-none outline-hidden focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&>svg:last-child]:ml-auto";
+  'cn-dropdown-menu-sub-trigger flex cursor-default items-center select-none outline-hidden [&_svg]:pointer-events-none [&_svg]:shrink-0';
 
 export const dropdownMenuSubContentClass = (): string =>
-  'fixed z-50 min-w-[8rem] m-0 overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg';
+  'cn-dropdown-menu-sub-content z-50 overflow-hidden';
 
 const CHEVRON_RIGHT_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-auto size-4" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>';
@@ -661,7 +661,7 @@ export class UiDropdownMenuItem extends WebComponent({
         @focus=${this._onFocus}
         @blur=${this._onBlur}
       ><span
-        class="pointer-events-none absolute left-2 flex size-3.5 items-center justify-center"
+        class='cn-dropdown-menu-item-indicator pointer-events-none'
       >${this.checked ? unsafeHTML(radio ? RADIO_DOT_SVG : CHECK_SVG) : ''}</span><slot></slot></div>`;
     }
     return html`<div

@@ -1845,6 +1845,9 @@
   .cn-alert-description {
     @apply [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground;
   }
+  .cn-alert-dialog-content {
+    @apply top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 outline-none;
+  }
   .cn-alert-title {
     @apply [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground;
   }
@@ -1869,6 +1872,24 @@
   .cn-checkbox {
     @apply relative after:absolute after:-inset-x-3 after:-inset-y-2;
   }
+  .cn-dialog-content {
+    @apply top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2;
+  }
+  .cn-dropdown-menu-checkbox-item {
+    @apply data-disabled:pointer-events-none data-disabled:opacity-50;
+  }
+  .cn-dropdown-menu-content {
+    @apply max-h-(--radix-dropdown-menu-content-available-height) w-(--radix-dropdown-menu-trigger-width) origin-(--radix-dropdown-menu-content-transform-origin) data-[state=closed]:overflow-hidden;
+  }
+  .cn-dropdown-menu-item {
+    @apply data-disabled:pointer-events-none data-disabled:opacity-50;
+  }
+  .cn-dropdown-menu-radio-item {
+    @apply data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0;
+  }
+  .cn-dropdown-menu-sub-content {
+    @apply origin-(--radix-dropdown-menu-content-transform-origin);
+  }
   .cn-empty {
     @apply w-full;
   }
@@ -1884,6 +1905,12 @@
   .cn-field-orientation-vertical {
     @apply *:w-full;
   }
+  .cn-hover-card-content {
+    @apply origin-(--radix-hover-card-content-transform-origin);
+  }
+  .cn-popover-content {
+    @apply z-50 origin-(--radix-popover-content-transform-origin);
+  }
   .cn-progress {
     @apply relative flex items-center overflow-x-hidden;
   }
@@ -1898,5 +1925,23 @@
   }
   .cn-switch-thumb {
     @apply pointer-events-none block ring-0 transition-transform;
+  }
+  .cn-tabs {
+    @apply data-horizontal:flex-col;
+  }
+  .cn-tabs-list {
+    @apply group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col;
+  }
+  .cn-tabs-trigger {
+    @apply group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start;
+  }
+  .cn-toggle-group {
+    @apply flex-row gap-[--spacing(var(--gap))] data-vertical:flex-col data-vertical:items-stretch;
+  }
+  .cn-toggle-group-item {
+    @apply group-data-horizontal/toggle-group:data-[spacing=0]:data-[variant=outline]:border-l-0 group-data-vertical/toggle-group:data-[spacing=0]:data-[variant=outline]:border-t-0 group-data-horizontal/toggle-group:data-[spacing=0]:data-[variant=outline]:first:border-l group-data-vertical/toggle-group:data-[spacing=0]:data-[variant=outline]:first:border-t;
+  }
+  .cn-tooltip-content {
+    @apply max-w-xs origin-(--radix-tooltip-content-transform-origin);
   }
 }

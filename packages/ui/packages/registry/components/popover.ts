@@ -213,14 +213,14 @@ export function popoverContentClass(opts: PopoverContentOptions = {}): string {
     alignClass = ALIGN_OFFSET_CLASS[`${axis}-${align}`][alignOffset];
   }
   return [
-    'w-72 m-0 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-hidden',
+    'cn-popover-content w-72 outline-hidden',
     POSITION_AREA_CLASS[`${side}-${align}`],
     MARGIN_OFFSET_CLASS[side][sideOffset],
     alignClass,
   ].filter(Boolean).join(' ');
 }
 
-export const popoverHeaderClass = (): string => 'flex flex-col gap-1 text-sm';
+export const popoverHeaderClass = (): string => 'cn-popover-header';
 export const popoverTitleClass = (): string => 'font-medium';
 export const popoverDescriptionClass = (): string => 'text-muted-foreground';
 

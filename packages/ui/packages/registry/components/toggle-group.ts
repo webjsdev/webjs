@@ -77,7 +77,7 @@ import { cn } from '../lib/utils.ts';
 import { toggleClass, type ToggleVariant, type ToggleSize } from './toggle.ts';
 
 const ROOT_BASE =
-  'group/toggle-group flex w-fit items-center rounded-md data-[spacing=default]:data-[variant=outline]:shadow-xs data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch';
+  'cn-toggle-group group/toggle-group flex w-fit items-center';
 
 // The `disabled:` variants inside toggleClass() key on the :disabled pseudo,
 // which only ever matches a real form control. An item's host IS the button
@@ -85,7 +85,7 @@ const ROOT_BASE =
 // browser are concerned, and the disabled look has to come from the
 // aria-disabled variant instead.
 const ITEM_EXTRA =
-  'w-auto min-w-0 shrink-0 px-3 focus:z-10 focus-visible:z-10 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[spacing=0]:rounded-none data-[spacing=0]:shadow-none data-[spacing=0]:first:rounded-l-md data-[spacing=0]:last:rounded-r-md data-[spacing=0]:data-[variant=outline]:border-l-0 data-[spacing=0]:data-[variant=outline]:first:border-l';
+  'cn-toggle-group-item shrink-0 focus:z-10 focus-visible:z-10';
 
 // --------------------------------------------------------------------------
 // <ui-toggle-group>
