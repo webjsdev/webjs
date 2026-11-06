@@ -279,3 +279,157 @@ suite('ui-sonner', () => {
     root.remove();
   });
 });
+
+suite('ui-slider', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/slider.ts`);
+  });
+
+  const range = () => html`
+    <form>
+      <label for="lo">Minimum</label>
+      <ui-slider style="width: 200px">
+        <input type="range" id="lo" name="lo" min="0" max="100" step="5" value="20">
+        <input type="range" name="hi" min="0" max="100" step="5" value="80" aria-label="Maximum">
+      </ui-slider>
+    </form>
+  `;
+  const parts = (root) => {
+    const el = root.querySelector('ui-slider');
+    const inputs = [...el.querySelectorAll('input[type="range"]')];
+    const thumbs = () => [...el.querySelectorAll('[data-slot="slider-thumb"]')];
+    return { el, inputs, thumbs };
+  };
+  const key = (target, k, opts = {}) =>
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...opts }));
+
+  test('it hides the inputs visually, keeps them in the form, and draws one slider thumb per input', async () => {
+    const root = await mount(range());
+    await tick();
+    const { inputs, thumbs } = parts(root);
+    assert.equal(thumbs().length, 2);
+    for (const input of inputs) {
+      assert.equal(getComputedStyle(input).opacity, '0');
+      assert.equal(input.getAttribute('aria-hidden'), 'true');
+    }
+    const [a, b] = thumbs();
+    assert.equal(a.getAttribute('role'), 'slider');
+    assert.equal(a.getAttribute('aria-valuemin'), '0');
+    assert.equal(a.getAttribute('aria-valuemax'), '100');
+    assert.equal(a.getAttribute('aria-valuenow'), '20');
+    assert.equal(b.getAttribute('aria-valuenow'), '80');
+    assert.equal(a.getAttribute('aria-orientation'), 'horizontal');
+    assert.equal(a.tabIndex, 0);
+    const data = new FormData(root.querySelector('form'));
+    assert.deepEqual([data.get('lo'), data.get('hi')], ['20', '80']);
+    root.remove();
+  });
+
+  test('a thumb is named by its input\'s label or aria-label, and a label click focuses it', async () => {
+    const root = await mount(range());
+    await tick();
+    const { thumbs } = parts(root);
+    const label = root.querySelector('label');
+    assert.equal(thumbs()[0].getAttribute('aria-labelledby'), label.id);
+    assert.equal(thumbs()[1].getAttribute('aria-label'), 'Maximum');
+    label.click();
+    await tick();
+    assert.equal(document.activeElement, thumbs()[0]);
+    root.remove();
+  });
+
+  test('keys move a thumb by the step, ten steps with Shift or Page keys, to the ends with Home / End', async () => {
+    const root = await mount(range());
+    await tick();
+    const { el, inputs, thumbs } = parts(root);
+    const seen = [];
+    inputs[0].addEventListener('input', () => seen.push('input'));
+    inputs[0].addEventListener('change', () => seen.push('change'));
+    el.addEventListener('ui-value-change', (e) => seen.push(`v:${e.detail.value.join(',')}`));
+    el.addEventListener('ui-value-commit', (e) => seen.push(`c:${e.detail.value.join(',')}`));
+    key(thumbs()[0], 'ArrowRight');
+    assert.equal(inputs[0].value, '25');
+    assert.deepEqual(seen, ['input', 'v:25,80', 'change', 'c:25,80']);
+    key(thumbs()[0], 'ArrowUp', { shiftKey: true });
+    assert.equal(inputs[0].value, '75');
+    key(thumbs()[0], 'PageDown');
+    assert.equal(inputs[0].value, '25');
+    key(thumbs()[0], 'Home');
+    assert.equal(inputs[0].value, '0');
+    await tick();
+    assert.equal(thumbs()[0].getAttribute('aria-valuenow'), '0', 'the thumb reflects it');
+    root.remove();
+  });
+
+  test('a thumb never passes its neighbour', async () => {
+    const root = await mount(range());
+    await tick();
+    const { inputs, thumbs } = parts(root);
+    key(thumbs()[0], 'End');
+    assert.equal(inputs[0].value, '80', 'the lower thumb stops at the upper one');
+    key(thumbs()[1], 'Home');
+    assert.equal(inputs[1].value, '80', 'the upper thumb stops at the lower one');
+    root.remove();
+  });
+
+  test('ArrowLeft and ArrowRight swap under dir="rtl"', async () => {
+    const root = await mount(html`<div dir="rtl">${range()}</div>`);
+    await tick();
+    const { inputs, thumbs } = parts(root);
+    key(thumbs()[0], 'ArrowLeft');
+    assert.equal(inputs[0].value, '25', 'left is up in RTL');
+    root.remove();
+  });
+
+  test('a press on the track moves the nearest thumb there, a drag follows, and the release commits', async () => {
+    // This suite loads no stylesheet; give the track the box a style gives it.
+    const root = await mount(html`<style>[data-slot="slider"]{display:flex;align-items:center;position:relative}[data-slot="slider-track"]{display:block;flex:1;height:6px;position:relative}</style>${range()}`);
+    await tick();
+    const { el, inputs, thumbs } = parts(root);
+    const commits = [];
+    el.addEventListener('ui-value-commit', (e) => commits.push(e.detail.value.join(',')));
+    const track = el.querySelector('[data-slot="slider-track"]').getBoundingClientRect();
+    const at = (pct) => track.left + (track.width * pct) / 100;
+    const root2 = el.querySelector('[data-slot="slider"]');
+    const y = track.top + track.height / 2;
+    root2.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: at(70), clientY: y, button: 0, pointerId: 1 }));
+    assert.equal(inputs[1].value, '70', 'the upper thumb was nearer');
+    assert.equal(document.activeElement, thumbs()[1], 'and takes focus');
+    root2.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: at(90), clientY: y, pointerId: 1 }));
+    assert.equal(inputs[1].value, '90');
+    assert.equal(commits.length, 0, 'no commit mid-drag');
+    root2.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: at(90), clientY: y, pointerId: 1 }));
+    assert.deepEqual(commits, ['20,90']);
+    root.remove();
+  });
+
+  test('the range spans the two thumbs and each thumb sits at its value, inside the track', async () => {
+    const root = await mount(range());
+    await tick();
+    const { el, thumbs } = parts(root);
+    const r = el.querySelector('[data-slot="slider-range"]');
+    assert.ok(r.style.insetInlineStart === '20%' && r.style.insetInlineEnd === '20%', `range ${r.getAttribute('style')}`);
+    const wrap = thumbs()[1].parentElement.style;
+    assert.equal(wrap.insetInlineStart, '80%');
+    assert.equal(wrap.transform, 'translateX(-80%)');
+    root.remove();
+  });
+
+  test('a disabled input disables its thumb, and a form reset restores the values', async () => {
+    const root = await mount(range());
+    await tick();
+    const { inputs, thumbs } = parts(root);
+    key(thumbs()[0], 'ArrowRight');
+    root.querySelector('form').reset();
+    await tick();
+    assert.equal(inputs[0].value, '20');
+    assert.equal(thumbs()[0].getAttribute('aria-valuenow'), '20', 'the thumb follows the reset');
+    inputs[1].disabled = true;
+    await tick();
+    assert.equal(thumbs()[1].getAttribute('aria-disabled'), 'true');
+    assert.equal(thumbs()[1].tabIndex, -1);
+    key(thumbs()[1], 'ArrowLeft');
+    assert.equal(inputs[1].value, '80', 'a disabled thumb does not move');
+    root.remove();
+  });
+});

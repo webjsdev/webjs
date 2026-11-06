@@ -265,3 +265,13 @@ test('ui-select: the first paint is the authored native select, visible and unen
   assert.doesNotMatch(out, /<select[^>]*(hidden|aria-hidden|style=)/, 'and not hidden: with JavaScript off it is the control');
   assert.doesNotMatch(out, /role="combobox"|role="listbox"|<button/, 'no drawn trigger or list before the element upgrades');
 });
+
+test('ui-slider: the first paint is the authored range inputs, unenhanced (D13)', { skip }, async () => {
+  const out = await ssr(
+    ['slider.ts'],
+    (html) => html`<ui-slider><input type="range" name="lo" min="0" max="100" value="20" aria-label="Minimum"><input type="range" name="hi" min="0" max="100" value="80" aria-label="Maximum"></ui-slider>`,
+  );
+  assert.match(out, /<input type="range" name="lo" min="0" max="100" value="20" aria-label="Minimum">/, 'the inputs are served as authored');
+  assert.doesNotMatch(out, /<input[^>]*(aria-hidden|style=)/, 'and not hidden: with JavaScript off they are the control');
+  assert.doesNotMatch(out, /role="slider"/, 'no drawn thumbs before the element upgrades');
+});

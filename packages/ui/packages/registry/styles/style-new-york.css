@@ -1147,4 +1147,21 @@
   .cn-select-scroll-down-button {
     @apply flex cursor-default items-center justify-center py-1;
   }
+
+  /* MARK: slider */
+  .cn-slider {
+    @apply data-[orientation=vertical]:min-h-44;
+  }
+
+  .cn-slider-track {
+    @apply rounded-full bg-muted data-[orientation=horizontal]:h-1.5 data-[orientation=vertical]:w-1.5;
+  }
+
+  .cn-slider-range {
+    @apply bg-primary;
+  }
+
+  .cn-slider-thumb {
+    @apply size-4 rounded-full border border-primary bg-white shadow-sm ring-ring/50 transition-[color,box-shadow] hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden;
+  }
 }
