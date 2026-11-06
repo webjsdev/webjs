@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { add, rewriteUtilsImport } from '../src/commands/add.js';
@@ -552,3 +552,109 @@ for (const [style, expectIn, expectOut] of [
     }
   });
 }
+
+/* -------------------- blocks (#1666, D18) -------------------- */
+
+const BLOCK_REG = {
+  ...REG,
+  'dashboard-01': {
+    name: 'dashboard-01', type: 'registry:block',
+    description: 'A dashboard with a sidebar.',
+    categories: ['dashboard'],
+    registryDependencies: ['button'],
+    cssVars: { light: { 'chart-1': 'oklch(0.6 0.2 40)' }, dark: { 'chart-1': 'oklch(0.5 0.2 40)' }, theme: { 'color-chart-1': 'var(--chart-1)' } },
+    files: [
+      {
+        path: 'blocks/dashboard-01/page.ts', type: 'registry:block', target: 'app/dashboard/page.ts',
+        content: "import { buttonClass } from '../../components/button.ts';\nimport { ChartArea } from './components/chart-area.ts';\nimport { cn } from '../../lib/utils.ts';\nexport default () => [buttonClass, ChartArea, cn];\n",
+      },
+      {
+        path: 'blocks/dashboard-01/components/chart-area.ts', type: 'registry:block', target: 'modules/dashboard/components/chart-area.ts',
+        content: "import { cardClass } from '../../../components/card.ts';\nexport const ChartArea = cardClass;\n",
+      },
+    ],
+  },
+  'untargeted': {
+    name: 'untargeted', type: 'registry:block',
+    files: [
+      { path: 'blocks/untargeted/a/page.ts', type: 'registry:block', content: 'export const a = 1;\n' },
+      { path: 'blocks/untargeted/b/page.ts', type: 'registry:block', content: 'export const b = 2;\n' },
+    ],
+  },
+};
+
+function stubBlockFetch() {
+  globalThis.fetch = async (url) => {
+    const name = String(url).split('/').pop().replace('.json', '');
+    if (!BLOCK_REG[name]) return new Response('not found', { status: 404 });
+    return new Response(JSON.stringify(BLOCK_REG[name]), { status: 200 });
+  };
+}
+
+test('add <block>: each file lands at its target, its imports rewritten to where their files landed', async () => {
+  stubBlockFetch();
+  const d = tmp();
+  try {
+    await add.parseAsync(['dashboard-01', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
+    const page = readFileSync(join(d, 'app', 'dashboard', 'page.ts'), 'utf8');
+    assert.match(page, /from '\.\.\/\.\.\/components\/ui\/button\.ts'/, 'a component import points into the ui alias');
+    assert.match(page, /from '\.\.\/\.\.\/modules\/dashboard\/components\/chart-area\.ts'/, 'a sibling block file points at its own target');
+    assert.match(page, /from '\.\.\/\.\.\/lib\/utils\.ts'/, 'the utils import points at the utils alias');
+    const chart = readFileSync(join(d, 'modules', 'dashboard', 'components', 'chart-area.ts'), 'utf8');
+    assert.match(chart, /from '\.\.\/\.\.\/\.\.\/components\/ui\/card\.ts'/, 'a deeper file resolves the same way');
+    assert.ok(existsSync(join(d, 'components', 'ui', 'button.ts')), 'the block\'s registry dependency is installed');
+  } finally {
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});
+
+test('add <block>: an existing block file is kept under --yes and replaced only with --overwrite', async () => {
+  stubBlockFetch();
+  const d = tmp();
+  try {
+    await add.parseAsync(['dashboard-01', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
+    const page = join(d, 'app', 'dashboard', 'page.ts');
+    writeFileSync(page, '// my edits\n');
+    await add.parseAsync(['dashboard-01', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
+    assert.equal(readFileSync(page, 'utf8'), '// my edits\n', '--yes does not replace a block file');
+    await add.parseAsync(['dashboard-01', '--overwrite', '--no-deps', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
+    assert.notEqual(readFileSync(page, 'utf8'), '// my edits\n', '--overwrite does');
+  } finally {
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});
+
+test('add <block>: a file with no target keeps its registry path, so same-named files do not collide', async () => {
+  stubBlockFetch();
+  const d = tmp();
+  try {
+    await add.parseAsync(['untargeted', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
+    assert.equal(readFileSync(join(d, 'blocks', 'untargeted', 'a', 'page.ts'), 'utf8'), 'export const a = 1;\n');
+    assert.equal(readFileSync(join(d, 'blocks', 'untargeted', 'b', 'page.ts'), 'utf8'), 'export const b = 2;\n');
+    assert.equal(existsSync(join(d, 'page.ts')), false, 'nothing lands flat in the project root');
+  } finally {
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});
+
+test('add <block>: an item\'s cssVars are added to the app\'s stylesheet, leaving tokens it has', async () => {
+  stubBlockFetch();
+  const d = tmp();
+  try {
+    const css = join(d, 'app', 'globals.css');
+    mkdirSync(join(d, 'app'), { recursive: true });
+    writeFileSync(css, '/* @webjsdev/ui theme */\n@theme inline {\n  --color-background: var(--background);\n}\n:root {\n  --background: white;\n  --chart-1: red;\n}\n.dark {\n  --background: black;\n}\n');
+    await add.parseAsync(['dashboard-01', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
+    const out = readFileSync(css, 'utf8');
+    assert.match(out, /:root \{[^}]*--chart-1: red;/, 'an existing token keeps its value');
+    assert.doesNotMatch(out, /oklch\(0\.6 0\.2 40\)/, 'and is not added a second time');
+    assert.match(out, /\.dark \{[^}]*--chart-1: oklch\(0\.5 0\.2 40\);/, 'a missing dark token is added to .dark');
+    assert.match(out, /@theme inline \{[^}]*--color-chart-1: var\(--chart-1\);/, 'a missing theme token to @theme inline');
+  } finally {
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});

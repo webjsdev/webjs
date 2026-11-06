@@ -113,6 +113,18 @@ it on demand with `npx @webjsdev/ui view <name>`, which is what the pointer it
 leaves behind says too). It also self-heals the theme tokens if
 they are missing.
 
+A block (a ready-made view such as a dashboard or a chart, registry type
+`registry:block`) installs the same way. Each of its files lands at its own
+target under the app (`app/...`, `modules/...`, `components/...`), and every
+relative import in it is rewritten to where the imported file landed: a kit
+component into your ui alias, the `cn()` helper to your utils alias, another
+file of the same block to its own target. A block's files are app code you
+own, so `add` never replaces one that exists unless you pass `--overwrite`
+(`--yes` alone keeps it), and it prints the list of files it wrote. A block or
+component that needs design tokens your theme may lack (the sidebar's
+`--sidebar-*`, a chart's `--chart-*`) carries them, and `add` adds the missing
+ones to your stylesheet without touching a token you already define.
+
 The install runs with your project's package manager. `add` looks for a
 lockfile in the current directory and then each parent, stopping at the
 workspace root, so an app inside a monorepo uses the root's lockfile:
