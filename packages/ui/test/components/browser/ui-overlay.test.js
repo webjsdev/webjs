@@ -2098,6 +2098,12 @@ suite('ui-select', () => {
     const root = await mount(field());
     await tick();
     const { el, select, trigger, options, value } = parts(root);
+    select.value = 'apple';
+    select.dispatchEvent(new Event('change'));
+    await tick();
+    select.querySelector('option[value="apple"]').textContent = 'Green apple';
+    await tick();
+    assert.equal(value(), 'Green apple', 'an edit to the chosen option reaches the trigger with no interaction');
     const o = document.createElement('option');
     o.value = 'mango';
     o.textContent = 'Mango';
