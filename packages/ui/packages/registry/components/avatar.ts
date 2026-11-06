@@ -56,7 +56,7 @@ export const avatarFallbackClass = (): string =>
   'cn-avatar-fallback flex size-full items-center justify-center text-sm group-data-[size=sm]/avatar:text-xs';
 
 export const avatarBadgeClass = (): string =>
-  'cn-avatar-badge absolute right-0 bottom-0 z-10 inline-flex items-center justify-center rounded-full ring-2 select-none';
+  'cn-avatar-badge absolute end-0 bottom-0 z-10 inline-flex items-center justify-center rounded-full ring-2 select-none';
 
 export const avatarGroupClass = (): string =>
   'cn-avatar-group group/avatar-group flex -space-x-2 *:data-[slot=avatar]:ring-2 *:data-[slot=avatar]:ring-background';

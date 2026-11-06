@@ -46,9 +46,9 @@ export function paginationLinkClass(opts: { isActive?: boolean; size?: ButtonSiz
 }
 
 export const paginationPreviousClass = (): string =>
-  cn(buttonClass({ variant: 'ghost', size: 'default' }), 'gap-1 px-2.5 sm:pl-2.5');
+  cn(buttonClass({ variant: 'ghost', size: 'default' }), 'gap-1 px-2.5 sm:ps-2.5');
 
 export const paginationNextClass = (): string =>
-  cn(buttonClass({ variant: 'ghost', size: 'default' }), 'gap-1 px-2.5 sm:pr-2.5');
+  cn(buttonClass({ variant: 'ghost', size: 'default' }), 'gap-1 px-2.5 sm:pe-2.5');
 
 export const paginationEllipsisClass = (): string => 'cn-pagination-ellipsis flex items-center justify-center';
