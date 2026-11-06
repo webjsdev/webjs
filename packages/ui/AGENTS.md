@@ -1,7 +1,7 @@
 # AGENTS.md : @webjsdev/ui
 
 The webjs **AI-first component library + CLI**, `webjsui init` / `add` /
-`list` / `view` / `diff` / `info` / `build` / `lint`. Ships 57 primitives across two
+`list` / `view` / `diff` / `info` / `build` / `lint`. Ships 62 primitives across two
 tiers: class-helper functions for visual components, custom elements only
 where state matters. Variant names, sizes, and data-attribute conventions
 mirror shadcn so existing shadcn knowledge transfers directly.
@@ -48,7 +48,8 @@ For things the browser doesn't provide natively: dialogs, alert-dialogs,
 sheets, drawers, tabs, dropdowns, context menus, menubars, navigation menus,
 tooltips, hover-cards, toggle / toggle-group, sonner, and the rich form
 controls (select, combobox, command, input-otp, slider, calendar,
-questionnaire).
+questionnaire), and the layout family (carousel, resizable, message-scroller,
+sidebar).
 Tier-2 components extend the `WebComponent({ ... })` factory from
 `@webjsdev/core` and are Lit-shaped: the factory shape declares reactive
 attributes, `render()`
@@ -170,7 +171,7 @@ This trap exists ONLY in the marketing site. Scaffolded user apps,
 `examples/blog`, and every other WebJs app keep `components/ui/` as normal
 tracked source, the standard shadcn "you own it" pattern.
 
-## Component inventory (57 components)
+## Component inventory (62 components)
 
 | Tier | Component | Surface |
 |---|---|---|
@@ -229,6 +230,11 @@ tracked source, the standard shadcn "you own it" pattern.
 | 2  | `combobox` | `<ui-combobox name multiple value>` + Input (`input-id`, `show-clear`) / Content / List / Item / Group / Label / Empty / Separator, and Chips + Chips Input for `multiple`. Base UI's model: the value rides one `<input type="hidden" name>` per choice, served at SSR; the input is a `role="combobox"` with `aria-activedescendant`, items carry `data-highlighted` / `data-selected`, and the content carries `data-empty` when nothing matches. Chips are drawn from the values, each with a remove button naming its value; Backspace in an empty input drops the last. |
 | 2  | `calendar` | `<ui-calendar mode value month number-of-months min max caption-layout name>`, a hand-rolled month grid on `Intl.DateTimeFormat`, rendered by the server. Single, multiple and range (`"from/to"`) modes, with the date maths on UTC calendar dates, exported and unit-tested. A `role="grid"` per month with named day buttons, one roving tab stop and the APG date-grid keys. `name` adds hidden inputs (`name[from]` / `name[to]` for a range). |
 | 2  | `questionnaire` | `<ui-questionnaire shortcuts>` + Progress / Item (`name`, `required`, `multiple`, `disabled`) / Title / Description / Choices / Choice / Input / Error / Actions / Previous / Skip / Next / Submit, ported from `@shadcn/react`. A native `<form>` of `<fieldset>`s whose answers share the question's name. Without JavaScript every question shows and only Submit is offered. With it one question shows at a time, Next validates (an `aria-invalid` question and a `role="alert"` error), Skip clears an optional one, Enter steps forward, and letter or number shortcuts pick answers. |
+| 2  | `carousel` | `<ui-carousel orientation loop>` + Content / Item / Previous / Next on CSS scroll snap, not Embla (D10), so the slides scroll and snap natively with JavaScript off. A slide carries its classes, `role="group"` and `aria-roledescription="slide"` on its own host and snaps on its content through a 1px marker (a zero-size snap area is ignored and mandatory snapping then has nowhere to land). The element is the `api`: `scrollPrev`, `scrollNext`, `scrollTo`, `selectedIndex`, `ui-slide-change`. Name the region with `aria-label`. |
+| 2  | `resizable` | `<ui-resizable-panel-group orientation>` + Panel (`default-size`, `min-size`, `max-size`, percentages) / Handle (`with-handle`). Each panel is a flex share on its own host, served at its default size. The handle is the WAI-ARIA window splitter (`role="separator"` with `aria-valuenow` for the panel before it), moved by a drag or the arrows across the group, 10 points a step, and `ui-layout-change` reports the sizes. |
+| 2  | `message-scroller` | `<ui-message-scroller auto-scroll default-scroll-position>` + Viewport / Content / Item (`message-id`, `scroll-anchor`) / Button, ported from `@shadcn/react`. Opens at the end, the start or the last anchored message with the viewport hidden until placed, follows new messages while the reader is at the end, and the content is a `role="log"`. The element is the api (`scrollToEnd`, `scrollToMessage`, `visibleMessageIds`). |
+| 1a/2 | `code-block` | Class helpers for the frame (`codeBlockClass` / `codeBlockVariants`), header, title, actions, content, code, line (`codeBlockLineClass` / `codeBlockLineVariants`) and footer, plus `codeBlockLines(text, { variants })` for numbered and highlighted lines, and `<ui-code-block-copy-button value>`, which copies its block's code and announces "Copied". Keep `tabindex="0"` and `dir="ltr"` on the `<pre>`. |
+| 2  | `sidebar` | `<ui-sidebar-provider default-open>` + Sidebar (`side`, `variant`, `collapsible`) / Trigger / Rail / Inset as elements, and class helpers for everything inside (header, footer, content, groups, menus, `sidebarMenuButtonClass` / `sidebarMenuButtonVariants`, actions, badges, `sidebarMenuSkeleton`, submenus). The open state rides the `sidebar_state` cookie and Ctrl / Cmd+B. The sidebar and the inset carry their state on their own hosts so `peer-data-*` and `group-data-*` reach them, and on a phone the sidebar is a `<ui-sheet>`. |
 
 **shadcn's style-function names (#1666, D9).** shadcn exports a `cva`
 function per component (`buttonVariants`, `badgeVariants`, `toggleVariants`,
@@ -897,8 +903,7 @@ shape so `webjsui init --base-color <name>` works uniformly.
 not shipped yet, and land in later steps of that work, following the Tier-1 /
 Tier-2 conventions above:
 
-carousel, chart, form, resizable, sidebar, and the code-block and
-message-scroller primitives.
+chart and form.
 
 ---
 
