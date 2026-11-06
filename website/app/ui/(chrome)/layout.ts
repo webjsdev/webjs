@@ -26,14 +26,14 @@ import { brandMark } from '#lib/design/brand.ts';
  */
 
 /**
- * The main nav. shadcn's nav also lists Docs, Components, Blocks, Charts,
- * Directory, Typeset and Create. Each one joins this list in the step of
- * #1666 that builds its page, so the header never links to a page that does
- * not exist yet.
+ * The main nav. shadcn's nav also lists Blocks, Charts, Directory, Typeset
+ * and Create. Each one joins this list in the step of #1666 that builds its
+ * page, so the header never links to a page that does not exist yet.
  */
 const NAV = [
   { href: '/ui', label: 'Home' },
   { href: '/ui/docs', label: 'Docs' },
+  { href: '/ui/docs/components', label: 'Components' },
 ];
 
 // shadcn's ghost `sm` button with its nav padding (`px-2.5`), written out so
