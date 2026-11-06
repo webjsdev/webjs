@@ -41,8 +41,9 @@ import { join } from 'node:path';
  * Project directories whose changes restart the dev server on Node. `db` is in
  * the list so a schema edit (a new table or relation) reaches a fresh process
  * on Node, where the edited module is otherwise never evaluated again (#1664).
- * The database file and its WAL / journal sidecars, which change on every
- * write, are carved out by `shouldIgnoreRestartPath` in `dev-reload.js`.
+ * Only JS / TS source under it counts: `shouldIgnoreRestartPath` in
+ * `dev-reload.js` skips every other file there, so a database file and its
+ * sidecars, which change on every write, never restart anything.
  */
 export const WATCH_DIRS = ['app', 'components', 'modules', 'lib', 'actions', 'db'];
 

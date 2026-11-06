@@ -343,11 +343,13 @@ test('a db/ source edit restarts on Node, a SQLite write never does (#1664)', as
   assert.ok(WATCH_DIRS.includes('db'), 'db is watched for restarts');
   assert.equal(shouldIgnoreRestartPath('db/schema.server.ts'), false);
   assert.equal(shouldIgnoreRestartPath('db/connection.server.ts'), false);
-  for (const p of ['db/dev.db', 'db/dev.db-wal', 'db/dev.db-shm', 'db/app.sqlite', 'db/app.sqlite-wal', 'db/data.db3-journal', 'db/migrations/0001/migration.sql']) {
+  for (const p of ['db/dev.db', 'db/dev.db-wal', 'db/dev.db-shm', 'db/app.sqlite', 'db/app.sqlite-wal', 'db/data.db3-journal', 'db/migrations/0001/migration.sql',
+    'db/data/app.db', 'db/local.db-info', 'db/local.db-client_wal_index']) {
     assert.equal(shouldIgnoreRestartPath(p), true, p);
   }
   const { shouldIgnoreWatchPath } = await import('../../../server/src/dev/server.js');
-  for (const p of ['db/schema.server.ts', 'db/dev.db', 'db/app.sqlite-shm', 'db/migrations/x.sql', 'db/sqlite-helpers.ts']) {
+  for (const p of ['db/schema.server.ts', 'db/dev.db', 'db/app.sqlite-shm', 'db/migrations/x.sql', 'db/sqlite-helpers.ts',
+    'db/data/app.db', 'db/local.db-info', 'db/local.db-client_wal_index', 'db/legacy/connection.js', 'lib/db/x.ts']) {
     assert.equal(shouldIgnoreRestartPath(p), shouldIgnoreWatchPath(p), `the CLI and server agree on ${p}`);
   }
 });
