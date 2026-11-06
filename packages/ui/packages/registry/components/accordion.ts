@@ -71,7 +71,7 @@ export const accordionClass = (): string => 'cn-accordion w-full';
  * rotate on open via `group-open:rotate-180`. `last:border-b-0` cleans
  * the trailing edge.
  */
-export const accordionItemClass = (): string => 'cn-accordion-item';
+export const accordionItemClass = (): string => 'cn-accordion-item group';
 
 /**
  * Trigger: applied to <summary>. Hides the native disclosure triangle so

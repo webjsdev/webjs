@@ -174,3 +174,18 @@ test('classSegments: every registry component lexes without a segment running in
     }
   }
 });
+
+test('no shipped style maps a marker class, which @apply cannot carry', async () => {
+  // A marker (`group`, `group/item`, `peer`) names an element for a group-* or
+  // peer-* variant and has no CSS of its own, so Tailwind refuses to @apply it
+  // ("Cannot apply unknown utility class `group`") and the site's stylesheet
+  // build fails. Markers stay inline in the base-form component instead.
+  const { STYLE_NAMES, styleFilePath } = await import('../src/registry/style-bake.js');
+  for (const name of STYLE_NAMES) {
+    const map = createStyleMap(readFileSync(styleFilePath(name), 'utf8'));
+    for (const [cnName, classes] of Object.entries(map)) {
+      const markers = classes.split(/\s+/).filter((t) => /^(group|peer)(\/[\w-]+)?$/.test(t));
+      assert.deepEqual(markers, [], `style-${name}.css maps ${cnName} to the marker(s) ${markers.join(', ')}`);
+    }
+  }
+});

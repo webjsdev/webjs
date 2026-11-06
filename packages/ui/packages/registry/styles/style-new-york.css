@@ -7,7 +7,7 @@
 .style-new-york {
   /* MARK: accordion */
   .cn-accordion-item {
-    @apply group border-b last:border-b-0;
+    @apply border-b last:border-b-0;
   }
 
   .cn-accordion-trigger {
