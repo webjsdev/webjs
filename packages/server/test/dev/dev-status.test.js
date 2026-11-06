@@ -219,3 +219,72 @@ test('a thrown redirect() from an action is control flow, not an error', async (
   assert.deepEqual(body.errors, [], 'the redirect is not listed');
   assert.equal(body.status, 'ok');
 });
+
+// #1664 second review round.
+test('a change noted while a rebuild runs keeps the status unsettled after that rebuild', () => {
+  let t = 1000;
+  const s = createDevStatus({ now: () => t });
+  s.noteChange();
+  s.rebuildStarted();
+  s.noteChange(); // a second save lands while the first rebuild runs
+  s.rebuildFinished();
+  assert.equal(s.changing(), true, 'the second change is still waiting on its own rebuild');
+  s.rebuildStarted();
+  s.rebuildFinished();
+  assert.equal(s.changing(), false);
+});
+
+test('an error object thrown again after a rebuild is recorded again', async () => {
+  const restore = quiet();
+  try {
+    const appDir = makeApp();
+    // The same Error instance on every call: a rejected module-scope init.
+    writeFileSync(join(appDir, 'modules/x/init.server.ts'), `'use server';\nconst failure = new Error('init failed');\nexport async function useInit() { throw failure; }\n`);
+    const app = await createRequestHandler({ appDir, dev: true, logger: { info() {}, warn() {}, error() {} } });
+    await app.warmup();
+    await invokeActionForTest(app, join(appDir, 'modules/x/init.server.ts'), 'useInit', []).catch(() => {});
+    assert.equal((await status(app)).errors.length, 1);
+    await app.rebuild();
+    assert.equal((await status(app, '?wait=5')).errors.length, 0, 'an action error is cleared by the rebuild');
+    await invokeActionForTest(app, join(appDir, 'modules/x/init.server.ts'), 'useInit', []).catch(() => {});
+    const body = await status(app);
+    assert.equal(body.errors.length, 1, 'the same object thrown again is recorded again');
+    assert.match(body.errors[0].message, /init failed/);
+  } finally { restore(); }
+});
+
+test('a deleted page that now answers 404 clears its render error', async () => {
+  const restore = quiet();
+  try {
+    const appDir = makeApp();
+    const app = await createRequestHandler({ appDir, dev: true, logger: { info() {}, warn() {}, error() {} } });
+    await app.warmup();
+    await app.handle(new Request('http://x/boom'));
+    assert.equal((await status(app)).errors.length, 1);
+    rmSync(join(appDir, 'app/boom'), { recursive: true, force: true });
+    await app.rebuild();
+    assert.equal((await app.handle(new Request('http://x/boom'))).status, 404);
+    assert.deepEqual((await status(app, '?wait=5')).errors, [], 'a page that is gone has no render error');
+  } finally { restore(); }
+});
+
+test('a POST form that binds no action is recorded against the page, not framework source', async () => {
+  const restore = quiet();
+  try {
+    const appDir = makeApp();
+    const app = await createRequestHandler({ appDir, dev: true, logger: { info() {}, warn() {}, error() {} } });
+    await app.warmup();
+    const res = await app.handle(new Request('http://x/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'http://x' },
+      body: 'name=ada',
+    }));
+    assert.equal(res.status, 405);
+    const body = await status(app);
+    assert.equal(body.errors.length, 1);
+    assert.equal(body.errors[0].kind, 'form');
+    assert.match(body.errors[0].message, /^WEBJS_FORM_ACTION_MISSING: /);
+    assert.equal(body.errors[0].url, '/');
+    assert.equal(body.errors[0].file, null, 'no file inside the framework');
+  } finally { restore(); }
+});

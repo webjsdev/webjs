@@ -106,6 +106,10 @@ export async function runStatus(opts) {
   // Then every page with a recorded render error, so an error the edit fixed is
   // cleared and one it did not fix is confirmed, rather than reported stale.
   const toRequest = paths.length ? [...paths] : ['/'];
+  // Paths the caller named, or the default root: any status at 400 or above
+  // fails the run. A page re-requested only because it had a render error may
+  // since have been deleted or renamed, so for those only a server error fails.
+  const named = new Set(toRequest.map((r) => (r.startsWith('/') ? r : '/' + r)));
   for (const e of body.errors) {
     if (e.kind !== 'render' || !e.url) continue;
     let p = String(e.url);
@@ -131,7 +135,7 @@ export async function runStatus(opts) {
     } catch { /* keep the settled body */ }
   }
 
-  const failingPaths = results.filter((r) => r.status === null || r.status >= 400);
+  const failingPaths = results.filter((r) => r.status === null || r.status >= (named.has(r.path) ? 400 : 500));
   const ok = body.errors.length === 0 && failingPaths.length === 0 && body.ready === 'ok';
   return finish({ ok, url: base, settled: true, ready: body.ready, rebuilds: body.rebuilds, paths: results, errors: body.errors }, ok ? 0 : 1);
 

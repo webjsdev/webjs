@@ -463,10 +463,11 @@ export async function handleCore(req, ctx) {
         // to turn any page into an error.
         reportFormSubmittedAsGet(
           url, req,
-          // Gated on hasOnError, not on `reportError`: that is always a
-          // function here and no-ops internally, so passing it would spend a
-          // dedupe slot on a report nobody receives.
-          hasOnError ? (e) => reportError(e, req, 'action') : undefined,
+          // Gated on a sink OR dev, not on `reportError` alone, which is
+          // always a function: with neither, nobody receives the report and it
+          // would only spend a dedupe slot. In dev the dev status receives it
+          // (#1664), the same as the POST variant below.
+          hasOnError || dev ? (e) => reportError(e, req, 'action') : undefined,
           logger, dev, page.route,
         );
         // A successful render of URL U supersedes a RETAINED render error for
@@ -485,9 +486,6 @@ export async function handleCore(req, ctx) {
               before && state.lastDevError === before
               && before.kind === 'render' && before.url === devErrorUrl
             ) state.lastDevError = null;
-            // A page that renders again supersedes its recorded render error in
-            // the dev status, which keeps render errors across a rebuild (#1664).
-            if (resp.status < 500) state.devStatus?.renderSucceeded([url.pathname, devErrorUrl]);
             return resp;
           }
           : () => ssrPage(page.route, page.params, url, { ...ssrOpts, req });

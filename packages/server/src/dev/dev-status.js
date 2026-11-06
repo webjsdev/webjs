@@ -82,8 +82,12 @@ export function createDevStatus({ now = Date.now } = {}) {
     },
     /** A watcher saw an app change that a rebuild will follow. */
     noteChange() { changeAt = now(); },
-    /** A rebuild started. */
-    rebuildStarted() { rebuildsInFlight++; },
+    /**
+     * A rebuild started. It builds every change noted so far, so the pending
+     * marker clears HERE; a change noted while it runs sets it again and keeps
+     * the status unsettled until the rebuild that change schedules.
+     */
+    rebuildStarted() { rebuildsInFlight++; changeAt = null; },
     /**
      * A rebuild finished.
      * @param {{ cleared?: boolean }} [opts] `cleared` drops the recorded errors
@@ -93,7 +97,6 @@ export function createDevStatus({ now = Date.now } = {}) {
     rebuildFinished({ cleared = true } = {}) {
       rebuildsInFlight = Math.max(0, rebuildsInFlight - 1);
       rebuilds++;
-      if (rebuildsInFlight === 0) changeAt = null;
       if (cleared) errors = errors.filter((e) => e.kind === 'render');
     },
     /**

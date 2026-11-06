@@ -156,3 +156,19 @@ test('with no paths it checks the root, and re-requests every page with a record
     assert.doesNotMatch(out, /error since/);
   } finally { restore(); }
 });
+
+// #1664 second review: a page re-requested only because of an old render error
+// may have been deleted since, so a 404 there is not a failure.
+test('a re-requested page that now answers 404 does not fail the run', async () => {
+  const restore = quiet();
+  try {
+    const { app, appDir, run, lines } = await harness();
+    await app.handle(new Request('http://x/boom'));
+    rmSync(join(appDir, 'app/boom'), { recursive: true, force: true });
+    await app.rebuild();
+    const code = await run();
+    const out = lines.join('\n');
+    assert.equal(code, 0, out);
+    assert.match(out, /GET \/boom  404/, 'the old page was re-requested and is gone');
+  } finally { restore(); }
+});

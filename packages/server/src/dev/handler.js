@@ -200,8 +200,10 @@ export async function createRequestHandler(opts) {
   // root middleware wrapping it reports the same error as `middleware`, and a
   // render error the overlay already framed is not recorded again from the
   // onError funnel.
-  /** @type {WeakSet<object>} */
-  const devRecorded = new WeakSet();
+  /** @type {WeakSet<object>} Reset on every rebuild, so an error object an
+   * unchanged module throws again after a rebuild (a rejected module-scope
+   * promise awaited per request) is recorded again. */
+  let devRecorded = new WeakSet();
 
   /**
    * Record an error in the dev status. A thrown redirect() / notFound() /
@@ -221,6 +223,14 @@ export async function createRequestHandler(opts) {
     try {
       let url;
       try { url = request && request.url ? new URL(request.url).pathname : undefined; } catch { /* no url */ }
+      const code = error && typeof error === 'object' ? /** @type {any} */ (error).code : undefined;
+      if (typeof code === 'string' && code.startsWith('WEBJS_FORM_')) {
+        // A framework diagnostic about the page's own markup (a POST form that
+        // binds no action, a bound form submitted as GET). Its stack points
+        // into the framework, so it is recorded against the page instead.
+        devStatus.record({ kind: 'form', message: `${code}: ${/** @type {any} */ (error).message}`, url });
+        return;
+      }
       devStatus.record(frame || buildDevErrorFrame(error, { kind, appDir, url }));
     } catch { /* best effort */ }
   }
@@ -979,8 +989,10 @@ export async function createRequestHandler(opts) {
     rebuildInFlight = rebuildInFlight.then(() => doRebuild(verdict, notify)).then(() => {
       // The recorded errors described the build this one replaced.
       devStatus?.rebuildFinished();
+      devRecorded = new WeakSet();
     }, (e) => {
       devStatus?.rebuildFinished();
+      devRecorded = new WeakSet();
       logger.error?.(`[webjs] rebuild failed:`, e);
       // Push the failure to the open tab so the overlay appears live after a
       // breaking edit, not only on the next manual navigation (#264).
@@ -1265,6 +1277,15 @@ export async function createRequestHandler(opts) {
       // Use the STRIPPED path for the suppression check (issue #256) so a
       // framework probe at `<basePath>/__webjs/*` is suppressed just like the
       // root-mounted `/__webjs/*`. The logged `path` stays the RAW client URL.
+      // Dev status (#1664): a GET that answered below 500 supersedes a render
+      // error recorded for that url, whatever answered it. A page fixed in
+      // place renders 200, a deleted or renamed one 404s or redirects, and in
+      // every case its old render error is stale. A speculative prefetch is
+      // not a view of anything, so it clears nothing.
+      if (devStatus && (req.method === 'GET' || req.method === 'HEAD') && conditioned.status < 500
+        && req.headers.get('x-webjs-prefetch') !== '1') {
+        devStatus.renderSucceeded([headerPathname, pathname]);
+      }
       if (shouldAccessLog(headerPathname)) {
         try {
           // #1309: fold the dev-only seeding counters into the ONE access-log
@@ -1482,7 +1503,9 @@ export async function createRequestHandler(opts) {
       dev,
       reportError,
       reportDevError,
-      recordDevStatus,
+      // Dev only: in production the API dispatch takes its plain path with no
+      // recording wrapper at all.
+      recordDevStatus: dev ? recordDevStatus : undefined,
       hasOnError,
       logger,
       cspEnabled: cspConfig.enabled,
