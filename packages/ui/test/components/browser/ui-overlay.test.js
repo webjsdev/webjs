@@ -1502,3 +1502,211 @@ suite('ui-context-menu', () => {
     root.remove();
   });
 });
+
+suite('ui-menubar', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/menubar.ts`);
+  });
+
+  const bar = () => html`
+    <ui-menubar aria-label="Editor">
+      <ui-menubar-menu>
+        <ui-menubar-trigger>File</ui-menubar-trigger>
+        <ui-menubar-content>
+          <ui-menubar-item>New Tab</ui-menubar-item>
+          <ui-menubar-item>New Window</ui-menubar-item>
+          <ui-menubar-item>Print</ui-menubar-item>
+        </ui-menubar-content>
+      </ui-menubar-menu>
+      <ui-menubar-menu>
+        <ui-menubar-trigger>Edit</ui-menubar-trigger>
+        <ui-menubar-content>
+          <ui-menubar-item>Undo</ui-menubar-item>
+          <ui-menubar-sub>
+            <ui-menubar-sub-trigger>Find</ui-menubar-sub-trigger>
+            <ui-menubar-sub-content>
+              <ui-menubar-item>Search the web</ui-menubar-item>
+            </ui-menubar-sub-content>
+          </ui-menubar-sub>
+        </ui-menubar-content>
+      </ui-menubar-menu>
+      <ui-menubar-menu>
+        <ui-menubar-trigger>View</ui-menubar-trigger>
+        <ui-menubar-content>
+          <ui-menubar-item type="checkbox" checked>Status Bar</ui-menubar-item>
+        </ui-menubar-content>
+      </ui-menubar-menu>
+    </ui-menubar>
+  `;
+
+  const parts = (root) => {
+    const menus = [...root.querySelectorAll('ui-menubar-menu')];
+    const buttons = menus.map((m) => m.querySelector('ui-menubar-trigger button'));
+    const firstItem = (m) => m.querySelector('ui-menubar-content [role^="menuitem"]');
+    return { menus, buttons, firstItem };
+  };
+  const key = (target, k, opts = {}) =>
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...opts }));
+
+  test('the bar is one tab stop, and ArrowRight / ArrowLeft / Home / End move between triggers', async () => {
+    const root = await mount(bar());
+    await tick();
+    const { buttons } = parts(root);
+    assert.deepEqual(buttons.map((b) => b.tabIndex), [0, -1, -1], 'only the first trigger is tabbable');
+    buttons[0].focus();
+    key(buttons[0], 'ArrowRight');
+    assert.equal(document.activeElement, buttons[1]);
+    assert.deepEqual(buttons.map((b) => b.tabIndex), [-1, 0, -1], 'the tab stop follows focus');
+    key(buttons[1], 'ArrowLeft');
+    key(buttons[0], 'ArrowLeft');
+    assert.equal(document.activeElement, buttons[2], 'ArrowLeft wraps');
+    key(buttons[2], 'Home');
+    assert.equal(document.activeElement, buttons[0]);
+    key(buttons[0], 'End');
+    assert.equal(document.activeElement, buttons[2]);
+    root.remove();
+  });
+
+  test('ArrowDown opens a menu on its first item, ArrowUp on its last', async () => {
+    const root = await mount(bar());
+    await tick();
+    const { menus, buttons, firstItem } = parts(root);
+    buttons[0].focus();
+    key(buttons[0], 'ArrowDown');
+    await tick();
+    assert.ok(menus[0].open, 'ArrowDown opened File');
+    assert.equal(document.activeElement, firstItem(menus[0]));
+    key(document.activeElement, 'Escape');
+    await tick();
+    assert.equal(menus[0].open, false);
+    assert.equal(document.activeElement, buttons[0], 'Escape returns focus to the trigger button');
+    key(buttons[0], 'ArrowUp');
+    await tick();
+    const items = menus[0].querySelectorAll('ui-menubar-content [role^="menuitem"]');
+    assert.equal(document.activeElement, items[items.length - 1], 'ArrowUp lands on the last item');
+    menus[0].hide();
+    root.remove();
+  });
+
+  test('ArrowRight / ArrowLeft in an open menu open the neighbouring menu, and only one is open', async () => {
+    const root = await mount(bar());
+    await tick();
+    const { menus, buttons, firstItem } = parts(root);
+    buttons[0].click();
+    await tick();
+    assert.ok(menus[0].open);
+    key(document.activeElement, 'ArrowRight');
+    await tick();
+    assert.deepEqual(menus.map((m) => m.open), [false, true, false], 'Edit replaced File');
+    assert.equal(document.activeElement, firstItem(menus[1]), 'focus is on Edit\'s first item');
+    key(document.activeElement, 'ArrowLeft');
+    await tick();
+    assert.deepEqual(menus.map((m) => m.open), [true, false, false], 'back to File');
+    key(document.activeElement, 'ArrowLeft');
+    await tick();
+    assert.deepEqual(menus.map((m) => m.open), [false, false, true], 'ArrowLeft wraps to View');
+    menus[2].hide();
+    root.remove();
+  });
+
+  test('ArrowRight on a sub-trigger opens the sub-menu instead of moving on', async () => {
+    const root = await mount(bar());
+    await tick();
+    const { menus, buttons } = parts(root);
+    buttons[1].click();
+    await tick();
+    const subItem = menus[1].querySelector('ui-menubar-sub-trigger [role="menuitem"]');
+    subItem.focus();
+    key(subItem, 'ArrowRight');
+    await tick();
+    assert.ok(menus[1].open, 'Edit stays open');
+    assert.equal(menus[2].open, false, 'View did not open');
+    assert.ok(menus[1].querySelector('ui-menubar-sub').open, 'the sub-menu opened');
+    menus[1].hide();
+    root.remove();
+  });
+
+  test('with a menu open, pointing at another trigger switches to it; with none open it does nothing', async () => {
+    const root = await mount(bar());
+    await tick();
+    const { menus, buttons } = parts(root);
+    buttons[1].dispatchEvent(new PointerEvent('pointerenter'));
+    await tick();
+    assert.equal(menus[1].open, false, 'a bare hover opens nothing');
+    buttons[0].click();
+    await tick();
+    buttons[2].dispatchEvent(new PointerEvent('pointerenter'));
+    await tick();
+    assert.deepEqual(menus.map((m) => m.open), [false, false, true], 'View replaced File');
+    menus[2].hide();
+    root.remove();
+  });
+
+  test('clicking a trigger toggles its menu, and clicking another closes the first', async () => {
+    const root = await mount(bar());
+    await tick();
+    const { menus, buttons } = parts(root);
+    buttons[0].click();
+    await tick();
+    assert.ok(menus[0].open);
+    buttons[1].click();
+    await tick();
+    assert.deepEqual(menus.map((m) => m.open), [false, true, false]);
+    buttons[1].click();
+    await tick();
+    assert.deepEqual(menus.map((m) => m.open), [false, false, false], 'a second click closes it');
+    root.remove();
+  });
+
+  test('the trigger button carries the popup ARIA, open state and the menu is named by it', async () => {
+    const root = await mount(bar());
+    await tick();
+    const { menus, buttons } = parts(root);
+    const b = buttons[0];
+    assert.equal(b.getAttribute('role'), 'menuitem');
+    assert.equal(b.getAttribute('aria-haspopup'), 'menu');
+    assert.equal(b.getAttribute('aria-expanded'), 'false');
+    b.click();
+    await tick();
+    assert.equal(b.getAttribute('aria-expanded'), 'true');
+    assert.equal(b.getAttribute('data-state'), 'open', 'the open styling hook');
+    const menu = menus[0].querySelector('[role="menu"]');
+    assert.equal(b.getAttribute('aria-controls'), menu.id);
+    assert.equal(menu.getAttribute('aria-labelledby'), b.id, 'the menu is named by its trigger');
+    assert.equal(root.querySelector('[role="menubar"]').getAttribute('aria-label'), 'Editor');
+    menus[0].hide();
+    await tick();
+    assert.equal(b.getAttribute('data-state'), 'closed');
+    root.remove();
+  });
+
+  test('the panel sits 8px below its trigger and 4px back, shadcn\'s menubar offsets', async () => {
+    const root = await mount(bar());
+    await tick();
+    const { menus, buttons } = parts(root);
+    buttons[1].click();
+    await tick();
+    const panel = menus[1].querySelector('ui-menubar-content [role="menu"]');
+    const t = menus[1].querySelector('ui-menubar-trigger').getBoundingClientRect();
+    assert.ok(Math.abs(parseFloat(panel.style.top) - (t.bottom + 8)) <= 1, `top ${panel.style.top} vs ${t.bottom + 8}`);
+    const expectLeft = Math.max(8, t.left - 4);
+    assert.ok(Math.abs(parseFloat(panel.style.left) - expectLeft) <= 1, `left ${panel.style.left} vs ${expectLeft}`);
+    menus[1].hide();
+    root.remove();
+  });
+
+  test('every part carries a menubar slot and class name, the item the shortcut group target', async () => {
+    const root = await mount(bar());
+    await tick();
+    const { menus, buttons } = parts(root);
+    buttons[2].click();
+    await tick();
+    const item = menus[2].querySelector('[role="menuitemcheckbox"]');
+    assert.equal(item.getAttribute('data-slot'), 'menubar-checkbox-item');
+    assert.ok(item.querySelector('.cn-menubar-checkbox-item-indicator'), 'the checkbox indicator class');
+    assert.ok(menus[0].querySelector('ui-menubar-item [role="menuitem"]').classList.contains('group/menubar-item'));
+    assert.equal(root.querySelectorAll('[data-slot^="dropdown-menu"], [class*="cn-dropdown-menu"]').length, 0);
+    menus[2].hide();
+    root.remove();
+  });
+});

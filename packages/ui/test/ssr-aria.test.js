@@ -215,3 +215,18 @@ test('ui-context-menu: the served parts carry context-menu slots and the menu ro
   assert.doesNotMatch(out, /data-slot="dropdown-menu/, 'no dropdown slot names');
   assert.doesNotMatch(out, /aria-haspopup|aria-expanded/, 'a context region is not a menu button');
 });
+
+test('ui-menubar: the bar serves role=menubar, each trigger a menuitem button with its popup, and menubar slots', { skip }, async () => {
+  const out = await ssr(
+    ['menubar.ts'],
+    (html) => html`<ui-menubar aria-label="Editor"><ui-menubar-menu><ui-menubar-trigger>File</ui-menubar-trigger><ui-menubar-content><ui-menubar-item>New</ui-menubar-item><ui-menubar-item type="radio" value="a" checked>A</ui-menubar-item></ui-menubar-content></ui-menubar-menu></ui-menubar>`,
+  );
+  assert.match(out, /data-slot="menubar"[^>]*role="menubar"/, 'the bar is a menubar');
+  assert.match(out, /role="menubar"[^>]*aria-label="Editor"/, 'the bar carries its name');
+  assert.match(out, /<button[^>]*data-slot="menubar-trigger"[^>]*role="menuitem"[^>]*aria-haspopup="menu"[^>]*aria-expanded="false"/, 'the trigger is the focusable menuitem with its popup state');
+  assert.match(out, /data-slot="menubar-menu"/, 'each menu takes its own root slot');
+  assert.match(out, /data-slot="menubar-content"[^>]*role="menu"|role="menu"[^>]*data-slot="menubar-content"/, 'the panel is a menu');
+  assert.match(out, /data-slot="menubar-radio-item"/, 'a radio item takes the family slot');
+  assert.match(out, /cn-menubar-radio-item-indicator/, 'the radio indicator is styled apart from the checkbox one');
+  assert.doesNotMatch(out, /data-slot="dropdown-menu/, 'no dropdown slot names');
+});

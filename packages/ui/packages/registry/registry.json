@@ -470,6 +470,23 @@
       ]
     },
     {
+      "name": "menubar",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "dropdown-menu",
+        "popover"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/menubar.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
       "name": "message",
       "type": "registry:ui",
       "registryDependencies": [],

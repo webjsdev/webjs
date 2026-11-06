@@ -1867,6 +1867,21 @@
   .cn-checkbox {
     @apply relative after:absolute after:-inset-x-3 after:-inset-y-2;
   }
+  .cn-context-menu-checkbox-item {
+    @apply data-disabled:pointer-events-none data-disabled:opacity-50;
+  }
+  .cn-context-menu-content {
+    @apply max-h-(--radix-context-menu-content-available-height) origin-(--radix-context-menu-content-transform-origin);
+  }
+  .cn-context-menu-item {
+    @apply data-disabled:pointer-events-none data-disabled:opacity-50;
+  }
+  .cn-context-menu-radio-item {
+    @apply data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0;
+  }
+  .cn-context-menu-sub-content {
+    @apply origin-(--radix-context-menu-content-transform-origin);
+  }
   .cn-dialog-content {
     @apply top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2;
   }
@@ -1902,6 +1917,36 @@
   }
   .cn-hover-card-content {
     @apply origin-(--radix-hover-card-content-transform-origin);
+  }
+  .cn-menubar-checkbox-item {
+    @apply data-disabled:pointer-events-none;
+  }
+  .cn-menubar-checkbox-item-indicator {
+    @apply absolute flex items-center justify-center;
+  }
+  .cn-menubar-content {
+    @apply origin-(--radix-menubar-content-transform-origin) overflow-hidden;
+  }
+  .cn-menubar-item {
+    @apply data-disabled:pointer-events-none;
+  }
+  .cn-menubar-radio-item {
+    @apply data-disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0;
+  }
+  .cn-menubar-radio-item-indicator {
+    @apply absolute flex items-center justify-center;
+  }
+  .cn-menubar-separator {
+    @apply -mx-1 my-1 h-px;
+  }
+  .cn-menubar-shortcut {
+    @apply ms-auto;
+  }
+  .cn-menubar-sub-content {
+    @apply origin-(--radix-menubar-content-transform-origin);
+  }
+  .cn-menubar-sub-trigger {
+    @apply outline-none;
   }
   .cn-popover-content {
     @apply z-50 origin-(--radix-popover-content-transform-origin);
