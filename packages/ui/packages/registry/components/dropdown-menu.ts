@@ -184,6 +184,45 @@ export const dropdownMenuSubTriggerClass = (): string =>
 export const dropdownMenuSubContentClass = (): string =>
   'cn-dropdown-menu-sub-content z-50 overflow-hidden';
 
+const dropdownMenuItemIndicatorClass = (): string =>
+  'cn-dropdown-menu-item-indicator pointer-events-none';
+
+/**
+ * The classes one menu family paints its parts with. Every element reads its
+ * classes through its family's table, so context-menu and menubar render the
+ * same elements under their own `cn-context-menu-*` / `cn-menubar-*` names,
+ * which is what each style keys on.
+ */
+export interface MenuClasses {
+  content(): string;
+  item(): string;
+  checkboxItem(): string;
+  radioItem(): string;
+  itemIndicator(): string;
+  label(): string;
+  separator(): string;
+  shortcut(): string;
+  subTrigger(): string;
+  subContent(): string;
+}
+
+const DROPDOWN_MENU_CLASSES: MenuClasses = {
+  content: dropdownMenuContentClass,
+  item: dropdownMenuItemClass,
+  checkboxItem: dropdownMenuCheckboxItemClass,
+  radioItem: dropdownMenuRadioItemClass,
+  itemIndicator: dropdownMenuItemIndicatorClass,
+  label: dropdownMenuLabelClass,
+  separator: dropdownMenuSeparatorClass,
+  shortcut: dropdownMenuShortcutClass,
+  subTrigger: dropdownMenuSubTriggerClass,
+  subContent: dropdownMenuSubContentClass,
+};
+
+function cls(el: Element): MenuClasses {
+  return (el.constructor as { classes?: MenuClasses }).classes ?? DROPDOWN_MENU_CLASSES;
+}
+
 const CHEVRON_RIGHT_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-auto size-4" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>';
 
@@ -211,6 +250,7 @@ export class UiDropdownMenu extends WebComponent({
   open: prop(Boolean, { reflect: true }),
 }) {
   static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
   _typeBuffer = '';
   _typeBufferTimer: number | undefined;
 
@@ -583,6 +623,7 @@ UiDropdownMenu.register('ui-dropdown-menu');
 
 export class UiDropdownMenuTrigger extends WebComponent {
   static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
   render() {
     return html`<div
       data-slot=${slot(this, '-trigger')}
@@ -600,13 +641,14 @@ UiDropdownMenuTrigger.register('ui-dropdown-menu-trigger');
 
 export class UiDropdownMenuContent extends WebComponent {
   static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
   render() {
     return html`<div
       data-slot=${slot(this, '-content')}
       role="menu"
       aria-orientation="vertical"
       popover="manual"
-      class=${dropdownMenuContentClass()}
+      class=${cls(this).content()}
     ><slot></slot></div>`;
   }
 }
@@ -628,6 +670,7 @@ export class UiDropdownMenuItem extends WebComponent({
   value: prop(String, { reflect: true }),
 }) {
   static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
   // Keyboard / pointer highlight state for the own-rendered menuitem. A
   // local signal bound with ?data-highlighted keeps the highlight in the
   // declarative template instead of an imperative setAttribute on
@@ -664,7 +707,7 @@ export class UiDropdownMenuItem extends WebComponent({
     // shapes differ by the indicator anyway.
     if (checkbox || radio) {
       return html`<div
-        data-slot=${`dropdown-menu-${this.type}-item`}
+        data-slot=${slot(this, `-${this.type}-item`)}
         role=${checkbox ? 'menuitemcheckbox' : 'menuitemradio'}
         tabindex="-1"
         data-variant=${this.variant}
@@ -674,13 +717,13 @@ export class UiDropdownMenuItem extends WebComponent({
         aria-checked=${String(this.checked)}
         data-state=${this.checked ? 'checked' : 'unchecked'}
         ?data-highlighted=${this.#highlighted.get()}
-        class=${checkbox ? dropdownMenuCheckboxItemClass() : dropdownMenuRadioItemClass()}
+        class=${checkbox ? cls(this).checkboxItem() : cls(this).radioItem()}
         @click=${this._onClick}
         @pointerenter=${this._onPointerEnter}
         @focus=${this._onFocus}
         @blur=${this._onBlur}
       ><span
-        class='cn-dropdown-menu-item-indicator pointer-events-none'
+        class=${cls(this).itemIndicator()}
       >${this.checked ? unsafeHTML(radio ? RADIO_DOT_SVG : CHECK_SVG) : ''}</span><slot></slot></div>`;
     }
     return html`<div
@@ -692,7 +735,7 @@ export class UiDropdownMenuItem extends WebComponent({
       ?data-disabled=${disabled}
       aria-disabled=${disabled ? 'true' : 'false'}
       ?data-highlighted=${this.#highlighted.get()}
-      class=${dropdownMenuItemClass()}
+      class=${cls(this).item()}
       @click=${this._onClick}
       @pointerenter=${this._onPointerEnter}
       @focus=${this._onFocus}
@@ -775,6 +818,7 @@ UiDropdownMenuItem.register('ui-dropdown-menu-item');
 
 export class UiDropdownMenuLabel extends WebComponent({ inset: Boolean }) {
   static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
   constructor() {
     super();
     this.inset = false;
@@ -784,7 +828,7 @@ export class UiDropdownMenuLabel extends WebComponent({ inset: Boolean }) {
     return html`<div
       data-slot=${slot(this, '-label')}
       ?data-inset=${this.inset}
-      class=${dropdownMenuLabelClass()}
+      class=${cls(this).label()}
     ><slot></slot></div>`;
   }
 }
@@ -796,11 +840,12 @@ UiDropdownMenuLabel.register('ui-dropdown-menu-label');
 
 export class UiDropdownMenuSeparator extends WebComponent {
   static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
   render() {
     return html`<div
       data-slot=${slot(this, '-separator')}
       role="separator"
-      class=${dropdownMenuSeparatorClass()}
+      class=${cls(this).separator()}
     ></div>`;
   }
 }
@@ -812,10 +857,11 @@ UiDropdownMenuSeparator.register('ui-dropdown-menu-separator');
 
 export class UiDropdownMenuShortcut extends WebComponent {
   static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
   render() {
     return html`<span
       data-slot=${slot(this, '-shortcut')}
-      class=${dropdownMenuShortcutClass()}
+      class=${cls(this).shortcut()}
     ><slot></slot></span>`;
   }
 }
@@ -827,6 +873,7 @@ UiDropdownMenuShortcut.register('ui-dropdown-menu-shortcut');
 
 export class UiDropdownMenuGroup extends WebComponent {
   static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
   // role="group", NOT role="radiogroup". radiogroup is the grouping role for
   // role="radio"; the grouping role ARIA specifies for menuitemradio is plain
   // group, so a radio set inside this element is already correctly grouped.
@@ -873,6 +920,7 @@ export class UiDropdownMenuSub extends WebComponent({
   open: prop(Boolean, { reflect: true }),
 }) {
   static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
   _closeTimer: number | undefined;
 
   constructor() {
@@ -1006,6 +1054,7 @@ UiDropdownMenuSub.register('ui-dropdown-menu-sub');
 
 export class UiDropdownMenuSubTrigger extends WebComponent({ inset: Boolean }) {
   static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
   constructor() {
     super();
     this.inset = false;
@@ -1030,7 +1079,7 @@ export class UiDropdownMenuSubTrigger extends WebComponent({ inset: Boolean }) {
       data-state=${open ? 'open' : 'closed'}
       ?data-inset=${this.inset}
       ?data-disabled=${disabled}
-      class=${dropdownMenuSubTriggerClass()}
+      class=${cls(this).subTrigger()}
       @click=${this._onClick}
       @pointerenter=${this._onPointerEnter}
     ><slot></slot>${unsafeHTML(CHEVRON_RIGHT_SVG)}</div>`;
@@ -1057,13 +1106,14 @@ UiDropdownMenuSubTrigger.register('ui-dropdown-menu-sub-trigger');
 
 export class UiDropdownMenuSubContent extends WebComponent {
   static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
   render() {
     return html`<div
       data-slot=${slot(this, '-sub-content')}
       role="menu"
       aria-orientation="vertical"
       popover="manual"
-      class=${dropdownMenuSubContentClass()}
+      class=${cls(this).subContent()}
     ><slot></slot></div>`;
   }
 }
