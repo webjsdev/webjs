@@ -42,6 +42,7 @@ const V1_COMPONENTS = [
   'empty', 'spinner', 'field',
   // #1666: the components shadcn ships that the kit did not.
   'button-group', 'marker', 'message', 'scroll-area',
+  'attachment', 'bubble', 'item', 'trace', 'input-group', 'direction',
 ];
 
 // Components that are Tier 2, must register a custom element.
@@ -164,8 +165,13 @@ test('Tier-2 components register at least one ui-* element via WebComponent.regi
   }
 });
 
+// Tier-1 components with no classes at all. `direction` is the native `dir`
+// attribute, which every component already follows through logical
+// properties, so it exports only readDirection() (#1666).
+const NO_CLASS_HELPER = new Set(['direction']);
+
 test('Tier-1 components export named class-helper functions ending in *Class', { skip }, () => {
-  const tier1 = V1_COMPONENTS.filter((n) => !TIER_2.has(n));
+  const tier1 = V1_COMPONENTS.filter((n) => !TIER_2.has(n) && !NO_CLASS_HELPER.has(n));
   for (const name of tier1) {
     const src = readSource(name);
     assert.match(

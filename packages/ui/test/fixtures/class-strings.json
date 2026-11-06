@@ -96,6 +96,28 @@
  "components/aspect-ratio.ts": [
   "relative w-full"
  ],
+ "components/attachment.ts": [
+  "../lib/utils.ts",
+  "w-fit rounded-xl focus-within:ring-1 focus-within:ring-ring/50 group/attachment relative flex max-w-full min-w-0 shrink-0 flex-wrap border bg-card text-card-foreground transition-colors has-[>a,>button]:hover:bg-muted/50 data-[state=error]:border-destructive/30 data-[state=idle]:border-dashed",
+  "gap-2 text-sm has-data-[slot=attachment-content]:px-2.5 has-data-[slot=attachment-content]:py-2 has-data-[slot=attachment-media]:p-2",
+  "gap-2.5 text-xs has-data-[slot=attachment-content]:px-2 has-data-[slot=attachment-content]:py-1.5 has-data-[slot=attachment-media]:p-1.5",
+  "gap-1.5 rounded-lg text-xs has-data-[slot=attachment-content]:px-1.5 has-data-[slot=attachment-content]:py-1 has-data-[slot=attachment-media]:p-1",
+  "min-w-40 items-center",
+  "w-24 has-data-[slot=attachment-content]:w-30 flex-col",
+  "default",
+  "horizontal",
+  "w-10 rounded-lg bg-muted text-foreground group-data-[orientation=vertical]/attachment:w-full group-data-[size=sm]/attachment:w-8 group-data-[size=xs]/attachment:w-7 group-data-[size=xs]/attachment:rounded-md group-data-[orientation=vertical]/attachment:*:data-[slot=spinner]:size-6! [&_svg:not([class*='size-'])]:size-4 group-data-[orientation=vertical]/attachment:[&_svg:not([class*='size-'])]:size-6 group-data-[size=xs]/attachment:[&_svg:not([class*='size-'])]:size-3.5 relative flex aspect-square shrink-0 items-center justify-center overflow-hidden group-data-[state=error]/attachment:bg-destructive/10 group-data-[state=error]/attachment:text-destructive [&_svg]:pointer-events-none",
+  "",
+  "opacity-60 group-data-[state=done]/attachment:opacity-100 group-data-[state=idle]/attachment:opacity-100 *:[img]:aspect-square *:[img]:w-full *:[img]:object-cover",
+  "icon",
+  "leading-tight group-data-[orientation=vertical]/attachment:px-1 max-w-full min-w-0 flex-1",
+  "font-medium block max-w-full min-w-0 truncate group-data-[state=processing]/attachment:shimmer group-data-[state=uploading]/attachment:shimmer",
+  "mt-0.5 text-xs block min-w-0 truncate text-muted-foreground group-data-[state=error]/attachment:text-destructive/80",
+  "relative z-20 group-data-[orientation=vertical]/attachment:absolute group-data-[orientation=vertical]/attachment:top-3 group-data-[orientation=vertical]/attachment:end-3 group-data-[orientation=vertical]/attachment:gap-1 flex shrink-0 items-center",
+  "",
+  "absolute inset-0 z-10 outline-none",
+  "scroll-px-1 gap-3 py-1 flex min-w-0 scroll-fade-x snap-x snap-mandatory scrollbar-none overflow-x-auto overscroll-x-contain *:data-[slot=attachment]:flex-none *:data-[slot=attachment]:snap-start"
+ ],
  "components/avatar.ts": [
   "../lib/utils.ts",
   "default",
@@ -126,6 +148,27 @@
   "font-normal text-foreground",
   "[&>svg]:size-3.5",
   "flex size-9 items-center justify-center"
+ ],
+ "components/bubble.ts": [
+  "../lib/utils.ts",
+  "gap-2 flex min-w-0 flex-col",
+  "max-w-[80%] gap-1 group-data-[align=end]/message:self-end data-[align=end]:self-end data-[variant=ghost]:max-w-full group/bubble relative flex w-fit min-w-0 flex-col",
+  "*:data-[slot=bubble-content]:bg-primary *:data-[slot=bubble-content]:text-primary-foreground [&>[data-slot=bubble-content]:is(button,a):hover]:bg-primary/80",
+  "*:data-[slot=bubble-content]:bg-secondary *:data-[slot=bubble-content]:text-secondary-foreground [&>[data-slot=bubble-content]:is(button,a):hover]:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)]",
+  "*:data-[slot=bubble-content]:bg-muted [&>[data-slot=bubble-content]:is(button,a):hover]:bg-[color-mix(in_oklch,var(--muted),var(--foreground)_5%)]",
+  "*:data-[slot=bubble-content]:bg-[oklch(from_var(--primary)_0.93_calc(c*0.4)_h)] *:data-[slot=bubble-content]:text-foreground dark:*:data-[slot=bubble-content]:bg-[oklch(from_var(--primary)_0.3_calc(c*0.4)_h)] [&>[data-slot=bubble-content]:is(button,a):hover]:bg-[oklch(from_var(--primary)_0.88_calc(c*0.5)_h)] dark:[&>[data-slot=bubble-content]:is(button,a):hover]:bg-[oklch(from_var(--primary)_0.35_calc(c*0.5)_h)]",
+  "*:data-[slot=bubble-content]:border-border *:data-[slot=bubble-content]:bg-background [&>[data-slot=bubble-content]:is(button,a):hover]:bg-muted [&>[data-slot=bubble-content]:is(button,a):hover]:text-foreground dark:[&>[data-slot=bubble-content]:is(button,a):hover]:bg-input/30",
+  "border-none *:data-[slot=bubble-content]:rounded-none *:data-[slot=bubble-content]:bg-transparent *:data-[slot=bubble-content]:p-0 [&>[data-slot=bubble-content]:is(button,a):hover]:bg-muted [&>[data-slot=bubble-content]:is(button,a):hover]:text-foreground dark:[&>[data-slot=bubble-content]:is(button,a):hover]:bg-muted/50",
+  "*:data-[slot=bubble-content]:bg-destructive/10 *:data-[slot=bubble-content]:text-destructive dark:*:data-[slot=bubble-content]:bg-destructive/20 [&>[data-slot=bubble-content]:is(button,a):hover]:bg-destructive/20 dark:[&>[data-slot=bubble-content]:is(button,a):hover]:bg-destructive/30",
+  "default",
+  "rounded-xl border border-transparent px-3 py-2 text-sm leading-relaxed group-data-[align=end]/bubble:self-end [button,a]:outline-none [button,a]:focus-visible:border-ring [button,a]:focus-visible:ring-3 [button,a]:focus-visible:ring-ring/50 w-fit max-w-full min-w-0 overflow-hidden wrap-break-word [button]:text-start [button,a]:transition-colors",
+  "shrink-0 gap-1 rounded-full bg-muted px-1.5 py-0.5 text-sm ring-3 ring-card has-[button]:p-0 absolute z-10 flex w-fit items-center justify-center",
+  "top-0 -translate-y-3/4",
+  "bottom-0 translate-y-3/4",
+  "start-3",
+  "end-3",
+  "bottom",
+  "end"
  ],
  "components/button-group.ts": [
   "../lib/utils.ts",
@@ -267,6 +310,15 @@
   "outline",
   "",
   "ui-dialog-footer"
+ ],
+ "components/direction.ts": [
+  "ltr",
+  "rtl",
+  "[dir]",
+  "dir",
+  "rtl",
+  "rtl",
+  "ltr"
  ],
  "components/dropdown-menu.ts": [
   "@webjsdev/core",
@@ -551,11 +603,61 @@
   "ui-hover-card",
   "ui-hover-card-content"
  ],
+ "components/input-group.ts": [
+  "../lib/utils.ts",
+  "rounded-md border border-input shadow-xs transition-[color,box-shadow] dark:bg-input/30 group/input-group relative flex w-full min-w-0 items-center outline-none has-[>textarea]:h-auto",
+  "h-auto gap-2 py-1.5 text-sm font-medium text-muted-foreground group-data-[disabled=true]/input-group:opacity-50 [&>kbd]:rounded-[calc(var(--radius)-5px)] [&>svg:not([class*='size-'])]:size-4 flex cursor-text items-center justify-center select-none",
+  "inline-start",
+  "ps-3 has-[>button]:ms-[-0.45rem] has-[>kbd]:ms-[-0.35rem] order-first",
+  "inline-end",
+  "pe-3 has-[>button]:me-[-0.45rem] has-[>kbd]:me-[-0.35rem] order-last",
+  "block-start",
+  "px-3 pt-3 group-has-[>input]/input-group:pt-2.5 [.border-b]:pb-3 order-first w-full justify-start",
+  "block-end",
+  "px-3 pb-3 group-has-[>input]/input-group:pb-2.5 [.border-t]:pt-3 order-last w-full justify-start",
+  "inline-start",
+  "gap-2 text-sm flex items-center shadow-none",
+  "h-6 gap-1 rounded-[calc(var(--radius)-5px)] px-2 has-[>svg]:px-2 [&>svg:not([class*='size-'])]:size-3.5",
+  "h-8 gap-1.5 rounded-md px-2.5 has-[>svg]:px-2.5",
+  "icon-xs",
+  "size-6 rounded-[calc(var(--radius)-5px)] p-0 has-[>svg]:p-0",
+  "icon-sm",
+  "size-8 p-0 has-[>svg]:p-0",
+  "xs",
+  "gap-2 text-sm text-muted-foreground [&_svg:not([class*='size-'])]:size-4 flex items-center [&_svg]:pointer-events-none",
+  "rounded-none border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent flex-1",
+  "rounded-none border-0 bg-transparent py-3 shadow-none focus-visible:ring-0 dark:bg-transparent flex-1 resize-none"
+ ],
  "components/input.ts": [
   "../lib/utils.ts",
   "h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none selection:bg-primary selection:text-primary-foreground file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30",
   "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
   "aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40"
+ ],
+ "components/item.ts": [
+  "../lib/utils.ts",
+  "group/item-group flex w-full flex-col",
+  "my-0",
+  "rounded-md border border-transparent text-sm [a]:hover:bg-accent/50 group/item flex w-full flex-wrap items-center transition-colors duration-100 outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [a]:transition-colors",
+  "bg-transparent",
+  "border-border",
+  "bg-muted/50",
+  "gap-4 p-4",
+  "gap-2.5 px-4 py-3",
+  "",
+  "default",
+  "default",
+  "gap-2 group-has-[[data-slot=item-description]]/item:translate-y-0.5 group-has-[[data-slot=item-description]]/item:self-start flex shrink-0 items-center justify-center [&_svg]:pointer-events-none",
+  "bg-transparent",
+  "size-8 rounded-sm border bg-muted [&_svg:not([class*='size-'])]:size-4",
+  "size-10 overflow-hidden rounded-sm [&_img]:size-full [&_img]:object-cover",
+  "default",
+  "gap-1 flex flex-1 flex-col [&+[data-slot=item-content]]:flex-none",
+  "gap-2 text-sm leading-snug font-medium line-clamp-1 flex w-fit items-center",
+  "text-sm leading-normal text-balance text-muted-foreground line-clamp-2 font-normal [&>a]:underline [&>a]:underline-offset-4 [&>a:hover]:text-primary",
+  "gap-2 flex items-center",
+  "gap-2 flex basis-full items-center justify-between",
+  "gap-2 flex basis-full items-center justify-between"
  ],
  "components/kbd.ts": [
   "pointer-events-none inline-flex h-5 w-fit min-w-5 items-center justify-center gap-1 rounded-sm bg-muted px-1 font-sans text-xs font-medium text-muted-foreground select-none [&_svg:not([class*='size-'])]:size-3 [[data-slot=tooltip-content]_&]:bg-background/20 [[data-slot=tooltip-content]_&]:text-background dark:[[data-slot=tooltip-content]_&]:bg-background/10",
@@ -1081,5 +1183,15 @@
   "ui-tooltip",
   "ui-tooltip-trigger",
   "ui-tooltip-content"
+ ],
+ "components/trace.ts": [
+  "gap-2 *:has-[>[data-slot=trace-line]]:rounded-md *:has-[>[data-slot=trace-line]]:focus-visible:ring-3 *:has-[>[data-slot=trace-line]]:focus-visible:ring-ring/50 flex w-full min-w-0 flex-col *:has-[>[data-slot=trace-line]]:flex *:has-[>[data-slot=trace-line]]:w-fit *:has-[>[data-slot=trace-line]]:max-w-full *:has-[>[data-slot=trace-line]]:min-w-0 *:has-[>[data-slot=trace-line]]:text-start *:has-[>[data-slot=trace-line]]:outline-none",
+  "gap-2 text-sm flex w-fit max-w-full min-w-0 items-center text-muted-foreground transition-colors in-[a,button]:cursor-pointer in-[a:hover,button:hover]:text-foreground data-[status=error]:text-destructive data-[status=error]:in-[a:hover,button:hover]:text-destructive data-[status=pending]:opacity-60 data-[status=running]:*:data-[slot=trace-title]:shimmer",
+  "size-4 [&_svg:not([class*='size-'])]:size-4 [[data-slot=trace-title]~&]:-ms-1 flex shrink-0 items-center justify-center [&_svg]:pointer-events-none",
+  "min-w-0 truncate motion-reduce:shimmer-none",
+  "shrink-0 text-muted-foreground/70 tabular-nums",
+  "flex w-full min-w-0 flex-col",
+  "gap-1 rounded-md focus-visible:ring-3 focus-visible:ring-ring/50 group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center text-start text-muted-foreground transition-colors outline-none hover:text-foreground has-[[data-status=error]]:text-destructive",
+  "mt-2 mb-1 ms-[calc(--spacing(2)-1px)] border-s pe-1 ps-4 leading-relaxed min-w-0 wrap-break-word text-muted-foreground"
  ]
 }

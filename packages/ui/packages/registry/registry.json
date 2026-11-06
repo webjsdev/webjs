@@ -98,6 +98,22 @@
       ]
     },
     {
+      "name": "attachment",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "lib-utils"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/attachment.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
       "name": "avatar",
       "type": "registry:ui",
       "dependencies": [
@@ -135,6 +151,22 @@
       "files": [
         {
           "path": "components/breadcrumb.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "bubble",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "lib-utils"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/bubble.ts",
           "type": "registry:ui"
         }
       ]
@@ -232,6 +264,20 @@
       ]
     },
     {
+      "name": "direction",
+      "type": "registry:ui",
+      "registryDependencies": [],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/direction.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
       "name": "dropdown-menu",
       "type": "registry:ui",
       "registryDependencies": [
@@ -309,6 +355,38 @@
       "files": [
         {
           "path": "components/input.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "input-group",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "lib-utils"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/input-group.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "item",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "lib-utils"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/item.ts",
           "type": "registry:ui"
         }
       ]
@@ -614,6 +692,22 @@
       "files": [
         {
           "path": "components/tooltip.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "trace",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "lib-utils"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/trace.ts",
           "type": "registry:ui"
         }
       ]
