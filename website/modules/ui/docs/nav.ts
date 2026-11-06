@@ -77,14 +77,14 @@ export const COMPONENTS: ComponentDoc[] = [
     description: "A vertically stacked set of interactive headings that each reveal a section of content."
   },
   {
-    slug: "alert-dialog",
-    title: "Alert Dialog",
-    description: "A modal dialog that interrupts the user with important content and expects a response."
-  },
-  {
     slug: "alert",
     title: "Alert",
     description: "Displays a callout for user attention."
+  },
+  {
+    slug: "alert-dialog",
+    title: "Alert Dialog",
+    description: "A modal dialog that interrupts the user with important content and expects a response."
   },
   {
     slug: "aspect-ratio",
@@ -117,14 +117,14 @@ export const COMPONENTS: ComponentDoc[] = [
     description: "Displays conversational content in a message bubble. Supports variants, alignment, grouping, reactions, and collapsible content."
   },
   {
-    slug: "button-group",
-    title: "Button Group",
-    description: "A container that groups related buttons together with consistent styling."
-  },
-  {
     slug: "button",
     title: "Button",
     description: "Displays a button or a component that looks like a button."
+  },
+  {
+    slug: "button-group",
+    title: "Button Group",
+    description: "A container that groups related buttons together with consistent styling."
   },
   {
     slug: "calendar",
@@ -222,6 +222,11 @@ export const COMPONENTS: ComponentDoc[] = [
     description: "For sighted users to preview content available behind a link."
   },
   {
+    slug: "input",
+    title: "Input",
+    description: "A text input component for forms and user data entry with built-in styling and accessibility features."
+  },
+  {
     slug: "input-group",
     title: "Input Group",
     description: "Add addons, buttons, and helper content to inputs."
@@ -230,11 +235,6 @@ export const COMPONENTS: ComponentDoc[] = [
     slug: "input-otp",
     title: "Input OTP",
     description: "Accessible one-time password component with copy-paste functionality."
-  },
-  {
-    slug: "input",
-    title: "Input",
-    description: "A text input component for forms and user data entry with built-in styling and accessibility features."
   },
   {
     slug: "item",
@@ -262,14 +262,14 @@ export const COMPONENTS: ComponentDoc[] = [
     description: "A visually persistent menu common in desktop applications that provides quick access to a consistent set of commands."
   },
   {
-    slug: "message-scroller",
-    title: "Message Scroller",
-    description: "A chat scroll container that anchors turns, opens saved transcripts, follows streamed responses, loads history without jumping, and jumps to any message."
-  },
-  {
     slug: "message",
     title: "Message",
     description: "Displays a message in a conversation, with optional avatar, header, footer, and alignment."
+  },
+  {
+    slug: "message-scroller",
+    title: "Message Scroller",
+    description: "A chat scroll container that anchors turns, opens saved transcripts, follows streamed responses, loads history without jumping, and jumps to any message."
   },
   {
     slug: "native-select",
@@ -382,14 +382,14 @@ export const COMPONENTS: ComponentDoc[] = [
     description: "A succinct message that is displayed temporarily."
   },
   {
-    slug: "toggle-group",
-    title: "Toggle Group",
-    description: "A set of two-state buttons that can be toggled on or off."
-  },
-  {
     slug: "toggle",
     title: "Toggle",
     description: "A two-state button that can be either on or off."
+  },
+  {
+    slug: "toggle-group",
+    title: "Toggle Group",
+    description: "A set of two-state buttons that can be toggled on or off."
   },
   {
     slug: "tooltip",
@@ -418,12 +418,12 @@ export const NAV: DocGroup[] = [
         href: "/ui/docs/components/accordion"
       },
       {
-        title: "Alert Dialog",
-        href: "/ui/docs/components/alert-dialog"
-      },
-      {
         title: "Alert",
         href: "/ui/docs/components/alert"
+      },
+      {
+        title: "Alert Dialog",
+        href: "/ui/docs/components/alert-dialog"
       },
       {
         title: "Aspect Ratio",
@@ -450,12 +450,12 @@ export const NAV: DocGroup[] = [
         href: "/ui/docs/components/bubble"
       },
       {
-        title: "Button Group",
-        href: "/ui/docs/components/button-group"
-      },
-      {
         title: "Button",
         href: "/ui/docs/components/button"
+      },
+      {
+        title: "Button Group",
+        href: "/ui/docs/components/button-group"
       },
       {
         title: "Calendar",
@@ -534,16 +534,16 @@ export const NAV: DocGroup[] = [
         href: "/ui/docs/components/hover-card"
       },
       {
+        title: "Input",
+        href: "/ui/docs/components/input"
+      },
+      {
         title: "Input Group",
         href: "/ui/docs/components/input-group"
       },
       {
         title: "Input OTP",
         href: "/ui/docs/components/input-otp"
-      },
-      {
-        title: "Input",
-        href: "/ui/docs/components/input"
       },
       {
         title: "Item",
@@ -566,12 +566,12 @@ export const NAV: DocGroup[] = [
         href: "/ui/docs/components/menubar"
       },
       {
-        title: "Message Scroller",
-        href: "/ui/docs/components/message-scroller"
-      },
-      {
         title: "Message",
         href: "/ui/docs/components/message"
+      },
+      {
+        title: "Message Scroller",
+        href: "/ui/docs/components/message-scroller"
       },
       {
         title: "Native Select",
@@ -662,12 +662,12 @@ export const NAV: DocGroup[] = [
         href: "/ui/docs/components/toast"
       },
       {
-        title: "Toggle Group",
-        href: "/ui/docs/components/toggle-group"
-      },
-      {
         title: "Toggle",
         href: "/ui/docs/components/toggle"
+      },
+      {
+        title: "Toggle Group",
+        href: "/ui/docs/components/toggle-group"
       },
       {
         title: "Tooltip",

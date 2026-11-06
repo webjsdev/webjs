@@ -78,3 +78,18 @@ test('the nav keeps shadcn\'s section order and leaves out what cannot exist', (
   }
   assert.equal(COMPONENTS.length, 67, 'all of shadcn\'s component pages');
 });
+
+test('the components index lists every component page, in title order as shadcn\'s does', async () => {
+  // shadcn's components folder takes fumadocs' default order, by title, so
+  // Alert comes before Alert Dialog and Button before Button Group. The
+  // sidebar and the index read the same list.
+  const items = NAV.find((g) => g.title === 'Components')!.items;
+  const titles = items.map((i) => i.title);
+  assert.deepEqual(titles, [...titles].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())));
+  assert.ok(titles.indexOf('Alert') < titles.indexOf('Alert Dialog'));
+  const res = await handle('/ui/docs/components');
+  assert.equal(res.status, 200, 'the page the sidebar\'s Components link opens');
+  const page = await res.text();
+  assert.match(page, /<h1[^>]*>Components<\/h1>/);
+  for (const i of items) assert.ok(page.includes(`href="${i.href}"`), `links ${i.title}`);
+});
