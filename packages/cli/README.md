@@ -48,6 +48,8 @@ webjs start                    # production server (no build step, serves source
 webjs check                    # validate source-code conventions (CI gate)
 webjs doctor                   # verify the project/toolchain setup (per-check severity via webjs.doctor.gate, so CI can gate a subset)
 webjs test                     # run server + browser tests
+webjs status [path...]         # after an edit, wait for the dev server to settle and print every error since the last rebuild
+                               # (file, line, code frame); exit 1 on a problem, 2 if no dev server; --json for agents
 webjs ci                       # local CI: run the webjs.ci step list in package.json (check, doctor,
                                # typecheck, audit, every test layer), one result line per step;
                                # --only <title>, --fail-fast, --json, --signoff (gh signoff after a green run)
