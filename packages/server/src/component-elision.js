@@ -606,7 +606,7 @@ function importsClientRouter(src, literals) {
  * `customElements.define` at module top level) imported via a binding clause
  * is NOT caught here, so eliding the importer drops that registration and the
  * element silently does not upgrade. This is the cross-module-registration
- * caveat documented in the skill's references/components.md and server AGENTS invariant 7;
+ * caveat documented in the skill's references/components-advanced.md and server AGENTS invariant 7;
  * the fix is `.server.{js,ts}` for genuinely server-only deps, or an
  * interactivity signal on the consumer. (It is not caught by an SSR crash:
  * the SSR `customElements` shim makes `define` a no-op server-side.)

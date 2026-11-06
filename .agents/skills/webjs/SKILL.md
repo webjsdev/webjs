@@ -45,7 +45,7 @@ Rows point rather than explain. The reference is the authority on the rule, and 
 | abandon a render because something is missing or not allowed | throw `notFound()` / `forbidden()` / `unauthorized()` | returning an error object and branching in the template | `references/routing-and-pages.md` | `app/features/boundaries` |
 | set a page's title, description, or social preview | `export const metadata` or `generateMetadata()` | writing `<head>` tags in the page | `references/routing-and-pages.md` | `app/features/metadata` |
 | make part of the page respond to a click or hold state | a `WebComponent` custom element | expecting the page's own markup to hydrate | `references/components.md` | `app/features/components` |
-| render a keyed list, or swap one node when state changes | `repeat()` / `watch()` from `/directives` | re-rendering the component or diffing by hand | `references/components.md` | `app/features/directives` |
+| render a keyed list, or swap one node when state changes | `repeat()` / `watch()` from `/directives` | re-rendering the component or diffing by hand | `references/components-advanced.md` | `app/features/directives` |
 | get server data into a component's first paint | `async render()` awaiting an action | fetching in `connectedCallback`, which SSR never calls | `references/components.md` | `app/features/async-render` |
 | call server code from the browser | import the `'use server'` function and call it | hand-writing `fetch()` against an endpoint | `references/data-and-actions.md` | `app/features/server-actions` |
 | expose JSON to a caller outside the app | `route.ts` with named `GET` / `POST` exports | a server action, which is the in-app path | `references/routing-and-pages.md` | `app/features/route-handler` |
@@ -76,7 +76,7 @@ The table above routes by the job; this one routes by the topic, for when you al
 | --------------------------------------------------------------------------- | --------------------------------------------- |
 | Pages, layouts, dynamic routes, route handlers, metadata, redirects, 404s   | `references/routing-and-pages.md`             |
 | Writing components: what a component owns, reactive props, signals, lifecycle, light vs shadow DOM  | `references/components.md`                     |
-| Why a component's JS was or was not downloaded, `webjs elision`, `static interactive = true` | `references/components.md`                     |
+| Why a component's JS was or was not downloaded, `webjs elision`, `static interactive = true`, slots, `Task`, context, directives, lazy components | `references/components-advanced.md`            |
 | Server actions, mutations, queries, validation, the `ActionResult` envelope | `references/data-and-actions.md`              |
 | Sessions, login flows, route protection, `forbidden()` / `unauthorized()`   | `references/auth-and-sessions.md`             |
 | Tailwind, light-DOM tag-prefix rule, tokens, fixed headers, no-reflow layout | `references/styling.md`                        |
