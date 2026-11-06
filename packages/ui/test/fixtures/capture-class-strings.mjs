@@ -38,7 +38,7 @@ const merge = process.argv.includes('--merge') || process.argv.includes('--allow
 // name). Those may leave the baseline; a multi-class list never may, and every
 // drop is printed for review.
 const allowDrop = process.argv.includes('--allow-drop');
-const droppable = (v) => !/\s/.test(v.trim()) || /["{}\n]/.test(v);
+const droppable = (v) => !/\s/.test(v.trim()) || /["{}\n]/.test(v) || /^ui-[\w-]+([\s[]|$)/.test(v.trim());
 
 const stringsOf = (src) => classSegments(src).map((s) => segmentValue(src, s));
 const key = (v) => v.split(/\s+/).filter((t) => !/^(group|peer)(\/[\w-]+)?$/.test(t)).sort().join(' ');
