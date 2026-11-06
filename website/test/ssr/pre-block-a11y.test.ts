@@ -34,13 +34,15 @@ import assert from 'node:assert/strict';
 import { readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { renderToString } from '@webjsdev/core/server';
-import type { LayoutProps } from '@webjsdev/core';
+import type { LayoutProps, TemplateResult } from '@webjsdev/core';
 import Home from '#app/(site)/page.ts';
 import WhatIsWebJs from '#app/(site)/what-is-webjs/page.ts';
 import Why from '#app/(site)/why-webjs/page.ts';
 import ErrorBoundary from '#app/error.ts';
 import DocsLayout from '#app/(site)/docs/layout.ts';
 import UiLayout from '#app/ui/layout.ts';
+import UiChromeLayout from '#app/ui/(chrome)/layout.ts';
+import { layoutProps } from '#test/helpers/layout-props.ts';
 import { renderPostBody } from '#modules/blog/utils/render-post.ts';
 
 /** Every `<pre …>` open tag in the rendered HTML, attribute order as authored. */
@@ -80,6 +82,16 @@ async function htmlOf(page: Page) {
   return typeof out === 'string' ? out : await renderToString(out);
 }
 
+/**
+ * A /ui page wrapped the way the server wraps it: the `(chrome)` group layout
+ * (header, footer, the interim gallery shell) inside the minimal /ui layout,
+ * so the chrome's own markup is covered too.
+ */
+async function uiShell(children: TemplateResult, path: string) {
+  const props = layoutProps(children, { url: 'https://webjs.dev' + path });
+  return UiLayout(layoutProps(await UiChromeLayout(props), { url: props.url }));
+}
+
 /** Discover a section's pages instead of listing them by hand. */
 async function sectionPages(dir: string, base: string, layout: (p: LayoutProps) => unknown, expectSome = true): Promise<Page[]> {
   const entries = await readdir(new URL(`../../app/${dir}`, import.meta.url), { withFileTypes: true });
@@ -105,8 +117,8 @@ async function sectionPages(dir: string, base: string, layout: (p: LayoutProps) 
   return pages;
 }
 
-const uiDetail = await import('#app/ui/[name]/page.ts');
-const uiIntro = await import('#app/ui/page.ts');
+const uiDetail = await import('#app/ui/(chrome)/[name]/page.ts');
+const uiIntro = await import('#app/ui/(chrome)/page.ts');
 const { loadRegistryIndex } = await import('#modules/ui/queries/registry.server.ts');
 
 /**
@@ -126,10 +138,10 @@ const PAGES: Page[] = [
   },
   ...await sectionPages('(site)/docs', '/docs', DocsLayout),
   ...await sectionPages('ui', '/ui', UiLayout, false),
-  { name: '/ui', render: async () => UiLayout({ children: await uiIntro.default() } as unknown as LayoutProps) },
+  { name: '/ui', render: async () => uiShell(await uiIntro.default(), '/ui') },
   ...uiComponents.map((name) => ({
     name: `/ui/${name}`,
-    render: async () => UiLayout({ children: await uiDetail.default({ params: { name } }) } as unknown as LayoutProps),
+    render: async () => uiShell(await uiDetail.default({ params: { name } }), `/ui/${name}`),
   })),
   // The markdown renderer is one body shared by /blog/[slug], /articles/[slug],
   // and /compare/[slug], so covering it covers all three route families. A

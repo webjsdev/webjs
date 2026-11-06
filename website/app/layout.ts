@@ -1,6 +1,7 @@
 import { html, cspNonce, asset } from '@webjsdev/core';
 import type { LayoutProps } from '@webjsdev/core';
 import { THEME_STORAGE_KEY, FORCED_THEMES } from '#lib/theme.ts';
+import { isUiPath } from '#lib/links.ts';
 
 /**
  * Root layout: the document shell every page shares.
@@ -117,8 +118,17 @@ export function generateMetadata(ctx: { url: string }) {
   };
 }
 
-export default function RootLayout({ children }: LayoutProps) {
+export default function RootLayout({ children, url }: LayoutProps) {
   const nonce = cspNonce();
+  // /ui has its own stylesheet and fonts (#1666). They are emitted HERE, in
+  // the leading run of head-bound tags, because the framework hoists only the
+  // ROOT layout's leading <link> run into <head>, and a stylesheet left in
+  // <body> is not reliably render-blocking (#406), so a full load of a /ui
+  // page would flash unstyled. app/ui/layout.ts emits the same link again at
+  // the top of its own markup, which covers a soft navigation INTO /ui (this
+  // layout is not re-rendered then, and the router's head merge only adds).
+  // The same URL twice costs one fetch. A marketing page emits neither.
+  const ui = isUiPath(new URL(url).pathname);
   return html`
     <!-- Favicons are declared in generateMetadata above (metadata.icons), not
          written here. The framework splices them into <head>. -->
@@ -175,6 +185,9 @@ export default function RootLayout({ children }: LayoutProps) {
     </script>
 
     <link rel="stylesheet" href=${asset('/public/tailwind.css')}>
+    ${ui ? html`<link rel="stylesheet" href=${asset('/public/ui.css')}>
+    <link rel="preload" href="/public/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/public/fonts/geist-mono.woff2" as="font" type="font/woff2" crossorigin>` : ''}
     <style>
       /* Foundation tokens + effects that Tailwind utilities cannot express. */
       /* A single static gradient glow layer. It used to breathe (two layers

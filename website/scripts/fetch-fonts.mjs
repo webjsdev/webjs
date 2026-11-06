@@ -10,7 +10,12 @@
  * re-downloads). The font-family names match the --font-* stacks in
  * app/layout.ts.
  *
- *   node scripts/fetch-fonts.mjs
+ *   node scripts/fetch-fonts.mjs                 every family
+ *   node scripts/fetch-fonts.mjs geist geist-mono  only the named slugs
+ *
+ * Geist and Geist Mono are the faces of the /ui section, ported from
+ * shadcn/ui's site (#1666), and are declared in public/ui-input.css rather
+ * than input.css, so a marketing page never downloads them.
  *
  * The site is English, so the latin subset (which already includes the General
  * Punctuation block: curly quotes, the middle dot) is enough.
@@ -25,7 +30,15 @@ const FAMILIES = [
   { name: 'Inter Tight', slug: 'inter-tight', range: '100..900' },
   { name: 'Inter', slug: 'inter', range: '100..900' },
   { name: 'JetBrains Mono', slug: 'jetbrains-mono', range: '100..800' },
+  { name: 'Geist', slug: 'geist', range: '100..900' },
+  { name: 'Geist Mono', slug: 'geist-mono', range: '100..900' },
 ];
+
+// Optional slug filter, so adding a family does not re-download (and possibly
+// change the bytes of) the files already committed.
+const only = process.argv.slice(2);
+const wanted = only.length ? FAMILIES.filter((f) => only.includes(f.slug)) : FAMILIES;
+if (only.length && wanted.length !== only.length) throw new Error(`unknown slug in: ${only.join(', ')}`);
 
 const cssUrl = (name, range) =>
   `https://fonts.googleapis.com/css2?family=${name.replace(/ /g, '+')}:wght@${range}&display=swap`;
@@ -45,7 +58,7 @@ const parseLatin = (css) => {
 await mkdir(OUT_DIR, { recursive: true });
 const faces = [];
 
-for (const fam of FAMILIES) {
+for (const fam of wanted) {
   const res = await fetch(cssUrl(fam.name, fam.range), { headers: { 'User-Agent': UA } });
   if (!res.ok) throw new Error(`CSS fetch failed for ${fam.name}: ${res.status}`);
   const latin = parseLatin(await res.text());
@@ -61,4 +74,4 @@ for (const fam of FAMILIES) {
   );
 }
 
-console.log('\n/* paste into public/input.css */\n' + faces.join('\n'));
+console.log('\n/* paste into public/input.css (or public/ui-input.css for the /ui faces) */\n' + faces.join('\n'));

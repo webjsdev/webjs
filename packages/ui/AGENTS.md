@@ -130,9 +130,10 @@ now live outside this package:
 
 ```
 website/                          the marketing site, at the repo root
-  app/ui/page.ts                  /ui, the gallery introduction
-  app/ui/layout.ts                the sidebar shell, shared with /docs
-  app/ui/[name]/page.ts           /ui/<name>, one page per component
+  app/ui/layout.ts                the minimal /ui layout: the .ui-site tokens + the /ui stylesheet link
+  app/ui/(chrome)/layout.ts       the /ui header and footer, plus the sidebar shell shared with /docs
+  app/ui/(chrome)/page.ts         /ui, the gallery introduction
+  app/ui/(chrome)/[name]/page.ts  /ui/<name>, one page per component
   app/ui/registry/route.ts               GET /ui/registry, full manifest
   app/ui/registry/index.json/route.ts    GET /ui/registry/index.json, flat list
   app/ui/registry/[name]/route.ts        GET /ui/registry/<name>.json (the CLI fetches here)
@@ -143,11 +144,14 @@ website/                          the marketing site, at the repo root
 ### ⚠️ Mirror footgun : do NOT hand-write files into the marketing site's `modules/ui/components/`
 
 The marketing site is a consumer of this kit (its `/ui` pages import the
-components to render live previews), so `website/components/ui/` and
-`website/lib/ui/` are gitignored: `website/scripts/copy-registry.mjs`
+components to render live previews), so `website/modules/ui/components/` and
+`website/lib/utils/{cn,dom}.ts` are gitignored: `website/scripts/copy-registry.mjs`
 regenerates them via `webjs.dev.before` / `webjs.start.before` (#550) by
-mirroring `../registry/` with each component's `'../lib/utils.ts'` import
-rewritten to the site's depth. **Anything hand-written you put in those two
+mirroring `../registry/` with each component's `'../lib/utils.ts'` and
+`'../lib/dom.ts'` import rewritten to `'../../../lib/utils/cn.ts'` and
+`'../../../lib/utils/dom.ts'`. (`website/components/ui/` is gitignored too,
+but it is kept EMPTY for `webjs ui add`, and `website/lib/ui/` is tracked,
+hand-written site code.) **Anything hand-written you put in the mirrored paths
 directories is invisible to git, never reaches the deploy, and breaks SSR with
 a prod 500** (this has happened, see git log for the favicon / theme-toggle
 incidents on the old ui site).

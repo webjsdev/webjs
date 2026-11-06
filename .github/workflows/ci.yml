@@ -557,7 +557,11 @@ jobs:
       #
       # `webjs dev` runs the website's own `webjs.dev.before` tasks (the registry
       # copy and the Tailwind build), so no extra setup step is needed here.
-      - name: Run form-submission + scroll-restoration e2e (#1310)
+      #
+      # The same server also runs the chrome-swap e2e (#1666): the marketing
+      # site and /ui have different chrome owned by two route-group layouts,
+      # and a soft navigation between them must swap it with no full load.
+      - name: Run form-submission + scroll-restoration + chrome-swap e2e (#1310, #1666)
         env:
           WEBJS_E2E: '1'
         run: |
@@ -590,7 +594,7 @@ jobs:
           done
           curl -sf -o /dev/null http://localhost:5001/ui/button \
             || { echo "website dev server never came up"; exit 1; }
-          node --test test/e2e/form-submission-and-race.test.mjs
+          node --test test/e2e/form-submission-and-race.test.mjs test/e2e/ui-chrome-swap.test.mjs
       # Touch-emulation e2e for interactive Tier-2 ui components (#745/#747):
       # boots the site serving the gallery and taps hover-card / dropdown-submenu / sonner
       # under a Chromium iPhone context (faithful touch events, no real device).

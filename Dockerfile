@@ -124,8 +124,10 @@ RUN cd website && node scripts/copy-registry.mjs
 # Each compose service's command invokes `webjs.js start` directly, which
 # bypasses the per-package `prestart: css:build` hook in npm; the CSS has
 # to be ready in the image. Keep this list in sync with the apps that
-# have a public/input.css and a `css:build` script in their package.json.
+# have a public/input.css and a `css:build` script in their package.json
+# (website also builds public/ui.css, the /ui section's own stylesheet).
 RUN npx tailwindcss -i website/public/input.css                       -o website/public/tailwind.css                       --minify \
+ && npx tailwindcss -i website/public/ui-input.css                    -o website/public/ui.css                             --minify \
  && npx tailwindcss -i examples/blog/public/input.css                 -o examples/blog/public/tailwind.css                 --minify \
  && npx tailwindcss -i gallery/public/input.css                       -o gallery/public/tailwind.css                       --minify
 

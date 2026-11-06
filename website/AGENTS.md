@@ -69,13 +69,6 @@ website/
                        labels are component names from the live registry.
                        Both rules are enforced in test/ssr/docs-links.test.ts,
                        which carries the specifics and the current counts.
-    ui/                /ui, the @webjsdev/ui component gallery (#1099 moved it
-                       here from ui.webjs.dev). page.ts is the introduction,
-                       [name]/page.ts one page per component, layout.ts the
-                       sidebar built from the live registry index, and
-                       registry/** the JSON API that shipped CLI versions fetch
-                       (see modules/ui/ below). No landing page: /ui opens on
-                       the introduction, the way /docs opens on Getting Started.
     founder-resources/page.ts
                        /founder-resources, outside services for founders.
                        UNLISTED on purpose: it is reached by direct URL only,
@@ -85,6 +78,24 @@ website/
                        anything links it. It stays indexable and its links
                        are followed (no rel=nofollow). Do not add it to the
                        sitemap.
+    ui/                /ui, the @webjsdev/ui section (#1099 moved it here from
+                       ui.webjs.dev; #1666 is turning it into a replica of the
+                       shadcn/ui site, with its own chrome)
+      layout.ts        MINIMAL on purpose: the `.ui-site` token wrapper and the
+                       /ui stylesheet link. Every /ui page renders inside it,
+                       the bare iframe targets included, so nothing visible
+                       may live here
+      (chrome)/        the /ui header and footer, a route group so the iframe
+                       targets outside it render with no chrome
+        layout.ts      the fixed header with its --header-h script, the footer
+                       with the one shadcn/ui credit line, and (for now) the
+                       component-gallery sidebar built from the registry index
+        not-found.ts error.ts
+                       section boundaries, rendered inside the /ui chrome
+        page.ts        /ui, the introduction
+        [name]/page.ts /ui/<name>, one page per component
+      registry/**      the JSON API that shipped CLI versions fetch (see
+                       modules/ui/ below). Its paths never move
     sitemap.ts         /sitemap.xml (enumerates docs + ui + articles + compare + blog)
     robots.ts          /robots.txt (allow-all, points at the sitemap)
     llms.txt/route.ts  /llms.txt (llmstxt.org overview for AI agents)
@@ -300,7 +311,10 @@ site and the component library under `/ui` (#1666). The chrome therefore
 belongs to a SECTION layout, never to `app/layout.ts`:
 
 - `app/(site)/layout.ts` owns the marketing chrome.
-- `app/ui/layout.ts` owns the `/ui` section.
+- `app/ui/(chrome)/layout.ts` owns the `/ui` chrome. Its parent,
+  `app/ui/layout.ts`, stays minimal (the `.ui-site` tokens and the stylesheet
+  link), because the bare iframe targets under `/ui/view` and `/ui/preview`
+  render inside it too and must show no chrome.
 
 Do not make the root layout branch on the pathname instead. On a GET soft
 navigation the client sends `X-Webjs-Have`, the server short-circuits at the
@@ -309,6 +323,22 @@ from `/` to `/ui` would keep the marketing header. A group layout sits INSIDE
 the root's children range, which is the range a navigation between the two
 sections replaces, so the chrome swaps with no full page load. That is also why
 the root layout must keep rendering `${children}` with nothing around it.
+
+`/ui` also has its own stylesheet, `public/ui.css`, built from
+`public/ui-input.css` (`npm run css:build:ui`, and in `webjs.dev.before`,
+`webjs.dev.regenerate`, `webjs.start.before` and the Dockerfile). It holds the
+`/ui` tokens on `.ui-site` and the utilities only `/ui` code uses, and no
+preflight, since the root stylesheet already supplies it. The link is emitted
+TWICE, deliberately. The root layout emits it in its leading head run for a
+`/ui` path, because only the root layout's leading `<link>` run is hoisted into
+`<head>` and a body stylesheet is not reliably render-blocking (#406).
+`app/ui/layout.ts` emits it again, which covers a soft navigation into `/ui`,
+where the root layout is not re-rendered and the router's head merge only
+adds. The links that commonly cross sections (the marketing header and footer
+UI links, the docs sidebar link, the `/ui` header's link back) also carry
+`data-no-router`, so the usual path is a full load. Both stylesheets declare
+the same `dark:` variant on `data-theme`, so a theme choice holds across the
+two sections. `test/e2e/ui-chrome-swap.test.mjs` proves the swap in a browser.
 
 Anything that reads a marketing route from the filesystem names the group
 folder: `lib/docs-llms.server.ts` walks `app/(site)/docs`, and the tests import

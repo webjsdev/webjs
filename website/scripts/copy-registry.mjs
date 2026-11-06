@@ -12,8 +12,8 @@
  * normally; only the ui/ subdirectories are generated.
  *
  * Each component's relative `../lib/utils.ts` / `../lib/dom.ts` import
- * (the registry's local layout) is rewritten to `../../lib/ui/*` (this
- * site's layout). The kit's helpers land at `lib/utils/cn.ts` and
+ * (the registry's local layout) is rewritten to `../../../lib/utils/cn.ts` /
+ * `../../../lib/utils/dom.ts` (this site's layout, from modules/ui/components/). The kit's helpers land at `lib/utils/cn.ts` and
  * `lib/utils/dom.ts`, which is exactly where `webjs ui add` writes them in a
  * real app (see packages/ui/src/commands/add.js: "the scaffold puts it at
  * lib/utils/dom.ts, next to cn.ts"). The site is the dogfood, so the mirror

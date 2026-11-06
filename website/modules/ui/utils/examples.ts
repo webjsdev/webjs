@@ -1180,7 +1180,7 @@ function sonnerTypeExamples(): Record<string, string> {
  *
  * They used to be module-scope IIFEs, and that single detail made this module
  * "client-effecting" to the elision analyser, which pinned
- * `app/ui/[name]/page.ts` and shipped the whole snippet map plus the API
+ * `app/ui/(chrome)/[name]/page.ts` and shipped the whole snippet map plus the API
  * metadata to the browser on all 33 component pages. Nothing there is of any
  * use client-side: a page function never re-runs in the browser, and these
  * strings are consumed during SSR only. Building them inside a function keeps

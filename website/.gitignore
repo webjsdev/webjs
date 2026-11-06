@@ -14,3 +14,8 @@
 # accident once: eleven byte-identical copies of the generated mirror above
 # landed here and sat unimported until they were noticed.
 /components/ui/
+
+# The /ui stylesheet, compiled from public/ui-input.css by `npm run
+# css:build:ui` (and by webjs.dev.before / webjs.start.before / the
+# Dockerfile), the same way public/tailwind.css is built. A build output.
+/public/ui.css

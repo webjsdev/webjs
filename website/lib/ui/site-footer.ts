@@ -9,8 +9,12 @@ import { brandLockup } from '#lib/design/brand.ts';
  */
 
 /**
- * The site-wide footer, rendered once by the root layout (app/layout.ts) so it
- * appears on every page, the same way the header/nav does.
+ * The marketing footer, rendered by the `(site)` chrome layout
+ * (app/(site)/layout.ts) on every marketing page, the same way the header is.
+ * /ui has its own footer in app/ui/(chrome)/layout.ts.
+ *
+ * The UI link carries `data-no-router`: crossing into /ui takes a full load,
+ * so the /ui stylesheet arrives in <head> instead of after a soft swap.
  *
  * It lives here rather than inline in the layout so the chrome stays readable.
  * Pure SSR-time helper: it returns an `html` fragment and touches no client
@@ -28,7 +32,7 @@ export function siteFooter() {
             <h4 class="text-xs font-bold uppercase tracking-wider text-fg">Product</h4>
             <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${DOCS_START_PATH}>Docs</a>
             <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${GALLERY_URL} target="_blank" rel="noopener noreferrer">Gallery${NEW_TAB}</a>
-            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${UI_PATH}>UI components</a>
+            <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href=${UI_PATH} data-no-router>UI components</a>
             <a class="text-fg-muted hover:text-accent no-underline text-sm transition-colors" href="/#templates">Templates</a>
           </div>
           <div class="flex flex-col gap-3">

@@ -89,7 +89,7 @@ const NAV_SECTIONS = [
     // permanently redirects to /ui.
     title: 'Component Library',
     items: [
-      { href: '/ui', label: '@webjsdev/ui (AI-first)' },
+      { href: '/ui', label: '@webjsdev/ui (AI-first)', fullLoad: true },
     ],
   },
   {

@@ -17,7 +17,8 @@
     "bin",
     "src",
     "packages/registry",
-    "README.md"
+    "README.md",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
     "test": "node --test test/*.test.js",

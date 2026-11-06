@@ -15,6 +15,7 @@
     "pretest:browser": "node scripts/copy-registry.mjs",
     "test:browser": "webjs test --browser",
     "css:build": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify",
+    "css:build:ui": "tailwindcss -i ./public/ui-input.css -o ./public/ui.css --minify",
     "ci": "webjs ci"
   },
   "webjs": {
@@ -34,7 +35,8 @@
     "dev": {
       "before": [
         "node scripts/copy-registry.mjs",
-        "npm run css:build"
+        "npm run css:build",
+        "npm run css:build:ui"
       ],
       "regenerate": [
         {
@@ -49,6 +51,19 @@
             "../packages/ui/packages/registry/lib",
             "public/input.css"
           ]
+        },
+        {
+          "output": "public/ui.css",
+          "command": "node scripts/copy-registry.mjs && tailwindcss -i ./public/ui-input.css -o ./public/ui.css --minify",
+          "inputs": [
+            "app/ui",
+            "components",
+            "lib/ui",
+            "modules/ui",
+            "../packages/ui/packages/registry/components",
+            "../packages/ui/packages/registry/lib",
+            "public/ui-input.css"
+          ]
         }
       ],
       "watch": [
@@ -58,7 +73,8 @@
     "start": {
       "before": [
         "node scripts/copy-registry.mjs",
-        "npm run css:build"
+        "npm run css:build",
+        "npm run css:build:ui"
       ]
     },
     "doctor": {
