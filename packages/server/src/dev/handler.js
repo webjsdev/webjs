@@ -54,6 +54,7 @@ import {
 import { applyConditionalGet } from '../conditional-get.js';
 import { commitHtmlCache, setAppSourceFingerprint } from '../html-cache.js';
 import { buildDevErrorFrame } from '../dev-error.js';
+import { isControlFlowThrow } from '../action-error.js';
 import { createDevStatus } from './dev-status.js';
 import { devReloadState } from '../dev-reload-state.js';
 
@@ -208,7 +209,9 @@ export async function createRequestHandler(opts) {
     // already arrives through `reportDevError` with a richer frame. Recorded
     // BEFORE the no-sink return, because an app with no onError sink is exactly
     // the one whose action errors were invisible to an agent.
-    if (devStatus && phase !== 'ssr') {
+    // A thrown redirect() / notFound() / forbidden() / unauthorized() is control
+    // flow the framework answers, not a failure, so it is never recorded.
+    if (devStatus && phase !== 'ssr' && !isControlFlowThrow(error)) {
       try {
         const path = request && request.url ? new URL(request.url).pathname : undefined;
         devStatus.record(buildDevErrorFrame(error, { kind: phase, appDir, url: path }));
@@ -1054,9 +1057,11 @@ export async function createRequestHandler(opts) {
       await Promise.race([warm, new Promise((r) => setTimeout(r, left))]);
     }
     const { rebuilds, errors } = status.snapshot();
-    const ready = readyError ? 'error' : readyDone ? 'ok' : 'pending';
+    // The same decision `/__webjs/ready` makes: once warm, a later retry's error
+    // (a transient vendor failure the server tolerates) does not un-ready it.
+    const ready = readyDone ? 'ok' : readyError ? 'error' : 'pending';
     const settled = !status.changing() && ready !== 'pending';
-    if (readyError) {
+    if (ready === 'error') {
       errors.unshift({
         kind: 'ready', message: String((readyError && readyError.message) || readyError),
         file: null, line: null, column: null, codeFrame: null, hint: null, url: null, at: new Date().toISOString(),

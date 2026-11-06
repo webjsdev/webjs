@@ -27,6 +27,7 @@ function makeApp() {
     'app/page.ts': `import { html } from ${CORE};\nexport default () => html\`<p>home</p>\`;\n`,
     'app/boom/page.ts': `export default () => { throw new Error('page exploded'); };\n`,
     'modules/x/fail.server.ts': `'use server';\nexport async function failHard() { throw new Error('action exploded'); }\n`,
+    'modules/x/go.server.ts': `'use server';\nimport { redirect } from ${CORE};\nexport async function goHome() { redirect('/'); }\n`,
     'app/act/page.ts': `import { html } from ${CORE};\nimport { failHard } from '../../modules/x/fail.server.ts';\nexport default () => html\`<form action=\${failHard}><button>go</button></form>\`;\n`,
   };
   for (const [rel, body] of Object.entries(files)) {
@@ -156,4 +157,14 @@ test('the status ring dedupes a repeated report, caps its length, and expires a 
   s.rebuildFinished();
   assert.equal(s.changing(), false);
   assert.equal(s.snapshot().errors.length, 0, 'a finished rebuild drops the errors it replaced');
+});
+
+test('a thrown redirect() from an action is control flow, not an error', async () => {
+  const appDir = makeApp();
+  const app = await createRequestHandler({ appDir, dev: true, logger: { info() {}, warn() {}, error() {} } });
+  await app.warmup();
+  await invokeActionForTest(app, join(appDir, 'modules/x/go.server.ts'), 'goHome', []).catch(() => {});
+  const body = await status(app);
+  assert.deepEqual(body.errors, [], 'the redirect is not listed');
+  assert.equal(body.status, 'ok');
 });
