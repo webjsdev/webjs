@@ -298,3 +298,14 @@ test('ui-command: the served list shows every item as an option, under a combobo
   assert.match(out, /data-slot="command-empty"[^>]*hidden/, 'the empty state is hidden');
   assert.match(out, /cmdk-group-heading=""[^>]*>Pages|cmdk-group-heading="">Pages/, 'the heading carries the hook shadcn styles key on');
 });
+
+test('ui-combobox: the initial value is served in a hidden form control, so it submits with JavaScript off', { skip }, async () => {
+  const out = await ssr(
+    ['combobox.ts'],
+    (html) => html`<ui-combobox name="tags" multiple value="a,b"><ui-combobox-chips><ui-combobox-chips-input aria-label="Tags"></ui-combobox-chips-input></ui-combobox-chips><ui-combobox-content><ui-combobox-list><ui-combobox-item value="a">A</ui-combobox-item></ui-combobox-list></ui-combobox-content></ui-combobox>`,
+  );
+  assert.match(out, /<input type="hidden" name="tags" value="a">/, 'one control per value');
+  assert.match(out, /<input type="hidden" name="tags" value="b">/);
+  assert.match(out, /<input[^>]*role="combobox"[^>]*aria-expanded="false"/, 'a collapsed combobox input');
+  assert.match(out, /role="listbox"[^>]*aria-multiselectable="true"|aria-multiselectable="true"[^>]*role="listbox"/, 'a multiselectable listbox');
+});

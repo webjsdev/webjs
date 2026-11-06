@@ -2372,3 +2372,186 @@ suite('ui-command', () => {
     root.remove();
   });
 });
+
+suite('ui-combobox', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/combobox.ts`);
+  });
+
+  const single = (value = '') => html`
+    <form>
+      <label for="fw">Framework</label>
+      <ui-combobox name="framework" value=${value}>
+        <ui-combobox-input input-id="fw" placeholder="Select a framework" show-clear></ui-combobox-input>
+        <ui-combobox-content>
+          <ui-combobox-empty>No items found.</ui-combobox-empty>
+          <ui-combobox-list>
+            <ui-combobox-group>
+              <ui-combobox-label>React</ui-combobox-label>
+              <ui-combobox-item value="next">Next.js</ui-combobox-item>
+              <ui-combobox-item value="remix" disabled>Remix</ui-combobox-item>
+            </ui-combobox-group>
+            <ui-combobox-separator></ui-combobox-separator>
+            <ui-combobox-item value="sveltekit">SvelteKit</ui-combobox-item>
+            <ui-combobox-item value="astro">Astro</ui-combobox-item>
+          </ui-combobox-list>
+        </ui-combobox-content>
+      </ui-combobox>
+    </form>
+  `;
+  const chips = () => html`
+    <form>
+      <ui-combobox name="tags" multiple value="next,astro">
+        <ui-combobox-chips><ui-combobox-chips-input aria-label="Tags" placeholder="Add"></ui-combobox-chips-input></ui-combobox-chips>
+        <ui-combobox-content>
+          <ui-combobox-list>
+            <ui-combobox-item value="next">Next.js</ui-combobox-item>
+            <ui-combobox-item value="sveltekit">SvelteKit</ui-combobox-item>
+            <ui-combobox-item value="astro">Astro</ui-combobox-item>
+          </ui-combobox-list>
+        </ui-combobox-content>
+      </ui-combobox>
+    </form>
+  `;
+  const parts = (root) => {
+    const el = root.querySelector('ui-combobox');
+    const input = el._input();
+    const form = () => new FormData(root.querySelector('form'));
+    const shown = () => el.visibleItems().map((i) => i.itemValue);
+    const option = (v) => [...el.querySelectorAll('ui-combobox-item')].find((i) => i.itemValue === v).querySelector('[role="option"]');
+    return { el, input, form, shown, option };
+  };
+  const type = async (input, text) => {
+    input.value = text;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await tick();
+  };
+  const key = (target, k) => target.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+
+  test('the value lives in a hidden form control, and the input shows its label', async () => {
+    const root = await mount(single('astro'));
+    await tick();
+    const { el, input, form } = parts(root);
+    assert.equal(form().get('framework'), 'astro');
+    assert.equal(input.value, 'Astro');
+    assert.equal(input.getAttribute('role'), 'combobox');
+    assert.equal(input.labels[0].textContent, 'Framework', 'the label names the rendered input');
+    assert.equal(input.getAttribute('aria-controls'), el.querySelector('[role="listbox"]').id);
+    root.remove();
+  });
+
+  test('typing opens and filters the list, hides an empty group, and marks the content empty when nothing matches', async () => {
+    const root = await mount(single());
+    await tick();
+    const { el, input, shown } = parts(root);
+    await type(input, 'st');
+    assert.ok(el.open, 'typing opens the list');
+    assert.deepEqual(shown(), ['astro']);
+    assert.equal(el.querySelector('ui-combobox-group').hidden, true, 'the React group has no match');
+    await type(input, 'zz');
+    const content = el.querySelector('[data-slot="combobox-content"]');
+    assert.ok(content.hasAttribute('data-empty'), 'the empty state is shown through data-empty');
+    root.remove();
+  });
+
+  test('arrows highlight through aria-activedescendant past a disabled item, and Enter picks', async () => {
+    const root = await mount(single());
+    await tick();
+    const { el, input, form, option } = parts(root);
+    input.focus();
+    key(input, 'ArrowDown');
+    await tick();
+    assert.ok(el.open);
+    assert.equal(input.getAttribute('aria-activedescendant'), option('next').id);
+    assert.ok(option('next').hasAttribute('data-highlighted'));
+    key(input, 'ArrowDown');
+    await tick();
+    assert.equal(input.getAttribute('aria-activedescendant'), option('sveltekit').id, 'Remix is disabled');
+    const seen = [];
+    el.addEventListener('ui-value-change', (e) => seen.push(e.detail.value));
+    key(input, 'Enter');
+    await tick();
+    assert.deepEqual(seen, ['sveltekit']);
+    assert.equal(form().get('framework'), 'sveltekit');
+    assert.equal(input.value, 'SvelteKit');
+    assert.equal(el.open, false, 'a single pick closes the list');
+    assert.equal(option('sveltekit').getAttribute('aria-selected'), 'true');
+    root.remove();
+  });
+
+  test('Escape closes, and leaving puts the chosen label back in the input', async () => {
+    const root = await mount(html`${single('next')}<button data-testid="after">after</button>`);
+    await tick();
+    const { el, input } = parts(root);
+    input.focus();
+    await type(input, 'sv');
+    key(input, 'Escape');
+    await tick();
+    assert.equal(el.open, false);
+    root.querySelector('[data-testid="after"]').focus();
+    await tick();
+    assert.equal(input.value, 'Next.js', 'the half-typed text reverts to the choice');
+    root.remove();
+  });
+
+  test('the clear button empties the value and the form control', async () => {
+    const root = await mount(single('astro'));
+    await tick();
+    const { el, input, form } = parts(root);
+    const clear = el.querySelector('[data-slot="combobox-clear"]');
+    assert.ok(clear, 'a clear button shows while there is a value');
+    clear.click();
+    await tick();
+    assert.equal(form().get('framework'), null);
+    assert.equal(input.value, '');
+    assert.equal(el.querySelector('[data-slot="combobox-clear"]'), null, 'and goes once it is empty');
+    root.remove();
+  });
+
+  test('an outside press closes the list, and a click on an item picks it', async () => {
+    const root = await mount(single());
+    await tick();
+    const { el, input, option, form } = parts(root);
+    input.click();
+    await tick();
+    assert.ok(el.open);
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true }));
+    await tick();
+    assert.equal(el.open, false);
+    input.click();
+    await tick();
+    option('astro').click();
+    await tick();
+    assert.equal(form().get('framework'), 'astro');
+    root.remove();
+  });
+
+  test('chips mode: one hidden control per value, chips drawn and removable, Backspace drops the last', async () => {
+    const root = await mount(chips());
+    await tick();
+    const { el, input, form, option } = parts(root);
+    assert.deepEqual(form().getAll('tags'), ['next', 'astro']);
+    const chipsEl = () => [...el.querySelectorAll('[data-slot="combobox-chip"]')];
+    assert.deepEqual(chipsEl().map((c) => c.firstChild.textContent.trim()), ['Next.js', 'Astro']);
+    assert.equal(el.querySelector('[role="listbox"]').getAttribute('aria-multiselectable'), 'true');
+    input.click();
+    await tick();
+    option('sveltekit').click();
+    await tick();
+    assert.deepEqual(form().getAll('tags'), ['next', 'astro', 'sveltekit']);
+    assert.ok(el.open, 'a pick keeps the list open in chips mode');
+    option('next').click();
+    await tick();
+    assert.deepEqual(form().getAll('tags'), ['astro', 'sveltekit'], 'picking again toggles it off');
+    const remove = chipsEl()[0].querySelector('[data-slot="combobox-chip-remove"]');
+    assert.equal(remove.getAttribute('aria-label'), 'Remove Astro');
+    remove.click();
+    await tick();
+    assert.deepEqual(form().getAll('tags'), ['sveltekit']);
+    input.focus();
+    key(input, 'Backspace');
+    await tick();
+    assert.deepEqual(form().getAll('tags'), []);
+    root.remove();
+  });
+});
