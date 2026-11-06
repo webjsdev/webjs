@@ -122,6 +122,22 @@ export function commandScore(text: string, search: string): number {
 const ROOT = 'ui-command';
 let uid = 0;
 
+// shadcn's className on each Command part lands on the element that part
+// renders (the command, its input, list, empty state, groups and items), so a
+// class written on the host moves there, read once at first render. The
+// hosts stay boxes rather than display: contents, since a group, an item and
+// the empty state hide themselves through the hidden attribute, which a
+// display utility on the host would override.
+type Part = HTMLElement & { _authored?: string | null; _captured?: boolean };
+function takeAuthored(part: Part): string | null {
+  if (!part._captured) {
+    part._authored = part.getAttribute?.('class') || null;
+    part._captured = true;
+    part.removeAttribute?.('class');
+  }
+  return part._authored ?? null;
+}
+
 type ItemState = { visible: boolean; selected: boolean; order: number };
 
 export class UiCommand extends WebComponent({
@@ -157,7 +173,7 @@ export class UiCommand extends WebComponent({
   }
 
   render() {
-    return html`<div data-slot="command" cmdk-root="" class=${commandClass()} @keydown=${this._onKeyDown}>${this.label
+    return html`<div data-slot="command" cmdk-root="" class=${cn(commandClass(), takeAuthored(this))} @keydown=${this._onKeyDown}>${this.label
       ? html`<label id=${this.labelId} cmdk-label="" class="sr-only">${this.label}</label>`
       : ''}<slot></slot></div>`;
   }
@@ -341,7 +357,7 @@ export class UiCommandInput extends WebComponent({
       aria-label=${named ? null : this.getAttribute?.('aria-label') || this.placeholder || null}
       aria-activedescendant=${this.activeId || null}
       placeholder=${this.placeholder || null}
-      class=${commandInputClass()}
+      class=${cn(commandInputClass(), takeAuthored(this))}
       @input=${this._onInput}
     ><div data-slot="input-group-addon" class=${inputGroupAddonClass()}><svg
       xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
@@ -368,7 +384,7 @@ export class UiCommandList extends WebComponent {
       role="listbox"
       id=${root?.listId ?? null}
       aria-label=${this.getAttribute?.('aria-label') || 'Suggestions'}
-      class=${commandListClass()}
+      class=${cn(commandListClass(), takeAuthored(this))}
     ><slot></slot></div>`;
   }
 }
@@ -392,7 +408,7 @@ export class UiCommandEmpty extends WebComponent({
   }
 
   render() {
-    return html`<div data-slot="command-empty" cmdk-empty="" role="presentation" ?hidden=${!this.shown} class=${commandEmptyClass()}><slot></slot></div>`;
+    return html`<div data-slot="command-empty" cmdk-empty="" role="presentation" ?hidden=${!this.shown} class=${cn(commandEmptyClass(), takeAuthored(this))}><slot></slot></div>`;
   }
 }
 UiCommandEmpty.register('ui-command-empty');
@@ -429,7 +445,7 @@ export class UiCommandGroup extends WebComponent({
 
   render() {
     const headingId = `${this._id}-heading`;
-    return html`<div data-slot="command-group" cmdk-group="" role="presentation" class=${commandGroupClass()}>${this.heading
+    return html`<div data-slot="command-group" cmdk-group="" role="presentation" class=${cn(commandGroupClass(), takeAuthored(this))}>${this.heading
       ? html`<div cmdk-group-heading="" aria-hidden="true" id=${headingId}>${this.heading}</div>`
       : ''}<div cmdk-group-items="" role="group" aria-labelledby=${this.heading ? headingId : null} class="flex flex-col"><slot></slot></div></div>`;
   }
@@ -522,7 +538,7 @@ export class UiCommandItem extends WebComponent({
       data-disabled=${this.disabled ? 'true' : 'false'}
       data-checked=${this.checked ? 'true' : null}
       data-value=${this.value || null}
-      class=${commandItemClass()}
+      class=${cn(commandItemClass(), takeAuthored(this))}
       @pointermove=${this._onPointerMove}
       @click=${this._onClick}
     ><slot></slot><svg

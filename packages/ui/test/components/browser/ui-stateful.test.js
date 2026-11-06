@@ -1618,3 +1618,39 @@ suite('ui-message-scroller: a new anchored turn settles near the top', () => {
     }
   });
 });
+
+suite('ui-command: a class on a part lands on the element it renders', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/command.ts`);
+  });
+
+  test('as shadcn\'s className does on Command, CommandInput, CommandList, CommandEmpty, CommandGroup and CommandItem', async () => {
+    const root = await mount(html`<ui-command label="Search" class="c-root">
+      <ui-command-input class="c-input" placeholder="Search"></ui-command-input>
+      <ui-command-list class="c-list">
+        <ui-command-empty class="c-empty">No results.</ui-command-empty>
+        <ui-command-group heading="Pages" class="c-group">
+          <ui-command-item class="c-item">Home</ui-command-item>
+        </ui-command-group>
+      </ui-command-list>
+    </ui-command>`);
+    try {
+      await tick();
+      await tick();
+      const pairs = [
+        ['ui-command', '[data-slot="command"]', 'c-root'],
+        ['ui-command-input', 'input[data-slot="command-input"]', 'c-input'],
+        ['ui-command-list', '[data-slot="command-list"]', 'c-list'],
+        ['ui-command-empty', '[data-slot="command-empty"]', 'c-empty'],
+        ['ui-command-group', '[data-slot="command-group"]', 'c-group'],
+        ['ui-command-item', '[data-slot="command-item"]', 'c-item'],
+      ];
+      for (const [host, part, cls] of pairs) {
+        assert.match(root.querySelector(part).className, new RegExp(`\\b${cls}\\b`), `${host}'s class is on ${part}`);
+        assert.equal(root.querySelector(host).getAttribute('class'), null, `and ${host} is left bare`);
+      }
+    } finally {
+      root.remove();
+    }
+  });
+});
