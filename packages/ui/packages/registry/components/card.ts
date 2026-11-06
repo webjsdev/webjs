@@ -78,7 +78,7 @@ export const cardClass = (opts: { size?: CardSize } = {}): string => {
   const size = opts.size ?? 'default';
   const base =
     'cn-card group/card flex flex-col';
-  return size === 'sm' ? base + 'cn-card-size-sm' : base + 'cn-card-size-default';
+  return size === 'sm' ? base + ' cn-card-size-sm' : base + ' cn-card-size-default';
 };
 
 /**

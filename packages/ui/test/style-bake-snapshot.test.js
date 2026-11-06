@@ -59,6 +59,12 @@ for (const [file, before] of Object.entries(fixture)) {
       const a = sorted(cn(withoutHooks(after[i], before[i])));
       const b = sorted(cn(before[i]));
       assert.equal(a, b, `${file}, string ${i}: baked ${JSON.stringify(after[i])} merges to ${JSON.stringify(a)}, expected ${JSON.stringify(b)}`);
+      // cn() trims, so the merged comparison above cannot see the edges. A
+      // string that is CONCATENATED into another (card's ' gap-6 py-6' size
+      // suffix) depends on its leading space, and losing it glues two classes
+      // together in the installed file (flex-colgap-6).
+      const edges = (x) => [/^\s/.test(x), /\s$/.test(x)];
+      assert.deepEqual(edges(after[i]), edges(before[i]), `${file}, string ${i}: the leading or trailing whitespace changed (${JSON.stringify(before[i])} became ${JSON.stringify(after[i])})`);
     }
     assert.deepEqual(leftoverCnNames(baked), [], `${file}: a cn- name survived the bake`);
   });

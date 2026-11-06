@@ -110,7 +110,7 @@ export const fieldSetClass = (): string =>
  * tightens its spacing.
  */
 export function fieldLegendClass(opts: { variant?: FieldLegendVariant } = {}): string {
-  return 'cn-field-legend' + LEGEND_VARIANTS[opts.variant ?? 'legend'];
+  return 'cn-field-legend ' + LEGEND_VARIANTS[opts.variant ?? 'legend'];
 }
 
 /** Field group: stacks fields, and is the container `responsive` fields measure. */
