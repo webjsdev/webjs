@@ -309,3 +309,17 @@ test('ui-combobox: the initial value is served in a hidden form control, so it s
   assert.match(out, /<input[^>]*role="combobox"[^>]*aria-expanded="false"/, 'a collapsed combobox input');
   assert.match(out, /role="listbox"[^>]*aria-multiselectable="true"|aria-multiselectable="true"[^>]*role="listbox"/, 'a multiselectable listbox');
 });
+
+test('ui-calendar: the server renders the month grid, the chosen day and its hidden form value', { skip }, async () => {
+  const out = await ssr(
+    ['calendar.ts'],
+    (html) => html`<ui-calendar mode="single" value="2025-06-12" name="day" locale="en-US"></ui-calendar>`,
+  );
+  assert.match(out, /role="grid"/, 'a grid');
+  assert.match(out, />June 2025</, 'captioned by its month');
+  assert.match(out, /aria-label="Thursday, June 12, 2025, selected"/, 'the chosen day is named and marked');
+  assert.match(out, /data-day="2025-06-12"[^>]*aria-selected="true"/, 'and selected');
+  assert.equal((out.match(/<button[^>]*data-day="2025-06-/g) ?? []).length, 30, 'every day of June is a button');
+  assert.match(out, /<input type="hidden" name="day" value="2025-06-12">/, 'the value is in the form');
+  assert.match(out, /<button[^>]*tabindex="0"[^>]*data-day="2025-06-12"|<button[^>]*data-day="2025-06-12"[^>]*tabindex="0"/, 'the chosen day holds the tab stop');
+});

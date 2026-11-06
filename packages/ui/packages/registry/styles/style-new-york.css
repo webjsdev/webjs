@@ -1283,4 +1283,17 @@
   .cn-combobox-chip-remove {
     @apply -ms-1 opacity-50 hover:opacity-100;
   }
+
+  /* MARK: calendar */
+  .cn-calendar {
+    @apply p-3 [--cell-radius:var(--radius-md)] [--cell-size:--spacing(8)];
+  }
+
+  .cn-calendar-dropdown-root {
+    @apply border border-input shadow-xs has-focus:border-ring has-focus:ring-[3px] has-focus:ring-ring/50;
+  }
+
+  .cn-calendar-caption-label {
+    @apply h-8 ps-2 pe-1;
+  }
 }

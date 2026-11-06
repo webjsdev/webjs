@@ -565,3 +565,157 @@ suite('ui-input-otp', () => {
     root.remove();
   });
 });
+
+suite('ui-calendar', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/calendar.ts`);
+  });
+
+  const btn = (el, iso) => el.querySelector(`button[data-day="${iso}"]`);
+  const cell = (el, iso) => el.querySelector(`td[data-day="${iso}"]`);
+  const key = (target, k, opts = {}) =>
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...opts }));
+
+  test('single: a click picks and reports the day, a second click on it clears', async () => {
+    const root = await mount(html`<form><ui-calendar mode="single" month="2025-06" name="day" locale="en-US"></ui-calendar></form>`);
+    await tick();
+    const el = root.querySelector('ui-calendar');
+    const seen = [];
+    el.addEventListener('ui-value-change', (e) => seen.push(e.detail.value));
+    btn(el, '2025-06-12').click();
+    await tick();
+    assert.deepEqual(seen, ['2025-06-12']);
+    assert.equal(cell(el, '2025-06-12').getAttribute('aria-selected'), 'true');
+    assert.equal(btn(el, '2025-06-12').getAttribute('data-selected-single'), 'true');
+    assert.equal(new FormData(root.querySelector('form')).get('day'), '2025-06-12');
+    btn(el, '2025-06-12').click();
+    await tick();
+    assert.equal(seen[1], '');
+    root.remove();
+  });
+
+  test('multiple: clicks toggle days in and out', async () => {
+    const root = await mount(html`<ui-calendar mode="multiple" month="2025-06" locale="en-US"></ui-calendar>`);
+    await tick();
+    const el = root.querySelector('ui-calendar');
+    btn(el, '2025-06-03').click();
+    btn(el, '2025-06-01').click();
+    await tick();
+    assert.deepEqual(el.selected, ['2025-06-01', '2025-06-03']);
+    btn(el, '2025-06-03').click();
+    await tick();
+    assert.deepEqual(el.selected, ['2025-06-01']);
+    assert.equal(el.querySelector('[role="grid"]').getAttribute('aria-multiselectable'), 'true');
+    root.remove();
+  });
+
+  test('range: the ends are drawn as start and end, the days between as the middle', async () => {
+    const root = await mount(html`<form><ui-calendar mode="range" value="2025-06-10/2025-06-13" name="stay" locale="en-US"></ui-calendar></form>`);
+    await tick();
+    const el = root.querySelector('ui-calendar');
+    assert.equal(btn(el, '2025-06-10').getAttribute('data-range-start'), 'true');
+    assert.equal(btn(el, '2025-06-11').getAttribute('data-range-middle'), 'true');
+    assert.equal(btn(el, '2025-06-13').getAttribute('data-range-end'), 'true');
+    assert.equal(cell(el, '2025-06-14').hasAttribute('aria-selected'), false);
+    const data = new FormData(root.querySelector('form'));
+    assert.deepEqual([data.get('stay[from]'), data.get('stay[to]')], ['2025-06-10', '2025-06-13']);
+    btn(el, '2025-06-20').click();
+    await tick();
+    assert.deepEqual(el.selected, { from: '2025-06-20', to: '' }, 'a pick on a complete range starts a new one');
+    btn(el, '2025-06-18').click();
+    await tick();
+    assert.deepEqual(el.selected, { from: '2025-06-18', to: '2025-06-20' }, 'an earlier end swaps');
+    root.remove();
+  });
+
+  test('the arrows, Home / End and PageDown move focus through days and months, Enter picks', async () => {
+    const root = await mount(html`<ui-calendar mode="single" month="2025-06" value="2025-06-12" locale="en-US"></ui-calendar>`);
+    await tick();
+    const el = root.querySelector('ui-calendar');
+    btn(el, '2025-06-12').focus();
+    key(document.activeElement, 'ArrowRight');
+    await tick();
+    assert.equal(document.activeElement, btn(el, '2025-06-13'));
+    key(document.activeElement, 'ArrowDown');
+    await tick();
+    assert.equal(document.activeElement, btn(el, '2025-06-20'));
+    key(document.activeElement, 'Home');
+    await tick();
+    assert.equal(document.activeElement, btn(el, '2025-06-15'), 'the week starts on Sunday');
+    key(document.activeElement, 'PageDown');
+    await tick();
+    assert.ok(el.textContent.includes('July 2025'), 'the page turned');
+    assert.equal(document.activeElement, btn(el, '2025-07-15'));
+    assert.equal(btn(el, '2025-07-15').tabIndex, 0, 'the focused day holds the tab stop');
+    key(document.activeElement, 'Enter');
+    await tick();
+    assert.equal(el.selected, '2025-07-15');
+    root.remove();
+  });
+
+  test('ArrowLeft moves forward under dir="rtl"', async () => {
+    const root = await mount(html`<div dir="rtl"><ui-calendar mode="single" month="2025-06" value="2025-06-12" locale="en-US"></ui-calendar></div>`);
+    await tick();
+    const el = root.querySelector('ui-calendar');
+    btn(el, '2025-06-12').focus();
+    key(document.activeElement, 'ArrowLeft');
+    await tick();
+    assert.equal(document.activeElement, btn(el, '2025-06-13'));
+    root.remove();
+  });
+
+  test('min and max disable the days outside them and the buttons that would pass them', async () => {
+    const root = await mount(html`<ui-calendar mode="single" month="2025-06" min="2025-06-05" max="2025-06-25" locale="en-US"></ui-calendar>`);
+    await tick();
+    const el = root.querySelector('ui-calendar');
+    assert.ok(btn(el, '2025-06-04').disabled);
+    assert.equal(btn(el, '2025-06-05').disabled, false);
+    assert.ok(btn(el, '2025-06-26').disabled);
+    btn(el, '2025-06-04').click();
+    await tick();
+    assert.equal(el.selected, '', 'a disabled day cannot be picked');
+    assert.equal(el.querySelector('[aria-label="Go to the Previous Month"]').getAttribute('aria-disabled'), 'true');
+    assert.equal(el.querySelector('[aria-label="Go to the Next Month"]').getAttribute('aria-disabled'), 'true');
+    root.remove();
+  });
+
+  test('the next button turns the page and reports the month; two months show side by side', async () => {
+    const root = await mount(html`<ui-calendar mode="range" month="2025-06" number-of-months="2" locale="en-US"></ui-calendar>`);
+    await tick();
+    const el = root.querySelector('ui-calendar');
+    assert.equal(el.querySelectorAll('[role="grid"]').length, 2);
+    const months = [];
+    el.addEventListener('ui-month-change', (e) => months.push(e.detail.month));
+    el.querySelector('[aria-label="Go to the Next Month"]').click();
+    await tick();
+    assert.deepEqual(months, ['2025-07']);
+    assert.ok(el.textContent.includes('July 2025') && el.textContent.includes('August 2025'));
+    root.remove();
+  });
+
+  test('show-outside-days="false" leaves the neighbouring months blank', async () => {
+    const root = await mount(html`<ui-calendar month="2025-06" show-outside-days="false" locale="en-US"></ui-calendar>`);
+    await tick();
+    const el = root.querySelector('ui-calendar');
+    assert.equal(btn(el, '2025-07-01'), null);
+    assert.ok(btn(el, '2025-06-30'));
+    root.remove();
+  });
+
+  test('caption-layout="dropdown" picks the month and year from selects', async () => {
+    const root = await mount(html`<ui-calendar month="2025-06" caption-layout="dropdown" locale="en-US"></ui-calendar>`);
+    await tick();
+    const el = root.querySelector('ui-calendar');
+    const [monthSel, yearSel] = el.querySelectorAll('select');
+    assert.equal(monthSel.getAttribute('aria-label'), 'Choose the Month');
+    monthSel.value = '1';
+    monthSel.dispatchEvent(new Event('change', { bubbles: true }));
+    await tick();
+    yearSel.value = '2024';
+    el.querySelectorAll('select')[1].value = '2024';
+    el.querySelectorAll('select')[1].dispatchEvent(new Event('change', { bubbles: true }));
+    await tick();
+    assert.ok(btn(el, '2024-02-29'), 'February 2024 is shown');
+    root.remove();
+  });
+});

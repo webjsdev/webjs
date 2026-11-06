@@ -204,6 +204,22 @@
       ]
     },
     {
+      "name": "calendar",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "button"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/calendar.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
       "name": "card",
       "type": "registry:ui",
       "registryDependencies": [
