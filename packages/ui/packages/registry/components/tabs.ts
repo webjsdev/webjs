@@ -117,6 +117,25 @@ const TABS_TRIGGER_CLASS = [
 
 const TABS_CONTENT_CLASS = 'cn-tabs-content flex-1 outline-none';
 
+/**
+ * The class an author wrote on a tabs part, as shadcn's `className`: it
+ * belongs on the element the part RENDERS (the tablist, the tab button, the
+ * panel), which is what shadcn's styles and an author's utilities target. It
+ * is read once from the host, before the part re-renders, and the host then
+ * carries `hostClass` instead (or nothing).
+ */
+function takeAuthored(part: HTMLElement & { _authored?: string | null; _captured?: boolean }, hostClass: string | null): string | null {
+  if (!part._captured) {
+    part._authored = part.getAttribute?.('class') ?? null;
+    part._captured = true;
+    if (typeof part.setAttribute === 'function') {
+      if (hostClass) part.setAttribute('class', hostClass);
+      else part.removeAttribute('class');
+    }
+  }
+  return part._authored ?? null;
+}
+
 // --------------------------------------------------------------------------
 // <ui-tabs> owns active `value` + `orientation`. Children read its state
 // via closest('ui-tabs'); when value changes, the parent fires a
@@ -158,11 +177,15 @@ export class UiTabs extends WebComponent({
     return { trigger: `${this.scopeId}-trigger-${v}`, panel: `${this.scopeId}-panel-${v}` };
   }
 
+  _authored: string | null = null;
+  _captured = false;
+
   render() {
+    const authored = takeAuthored(this, null);
     return html`<div
       data-slot="tabs"
       data-orientation=${this.orientation}
-      class=${TABS_BASE}
+      class=${cn(TABS_BASE, authored)}
     ><slot></slot></div>`;
   }
 
@@ -205,14 +228,18 @@ export class UiTabsList extends WebComponent({
     return this.closest('ui-tabs') as UiTabs | null;
   }
 
+  _authored: string | null = null;
+  _captured = false;
+
   render() {
+    const authored = takeAuthored(this, 'contents');
     const orientation = this._tabs?.orientation ?? 'horizontal';
     return html`<div
       data-slot="tabs-list"
       role="tablist"
       aria-orientation=${orientation}
       data-variant=${this.variant}
-      class=${tabsListClass({ variant: this.variant })}
+      class=${cn(tabsListClass({ variant: this.variant }), authored)}
     ><slot></slot></div>`;
   }
 }
@@ -238,7 +265,11 @@ export class UiTabsTrigger extends WebComponent({
     return this.closest('ui-tabs') as UiTabs | null;
   }
 
+  _authored: string | null = null;
+  _captured = false;
+
   render() {
+    const authored = takeAuthored(this, 'contents');
     const tabs = this._tabs;
     const active = !!tabs && tabs.value === this.value && this.value !== '';
     const ids = tabs && this.value ? tabs.idsFor(this.value) : null;
@@ -251,7 +282,7 @@ export class UiTabsTrigger extends WebComponent({
       data-state=${active ? 'active' : 'inactive'}
       aria-selected=${String(active)}
       tabindex=${active ? '0' : '-1'}
-      class=${TABS_TRIGGER_CLASS}
+      class=${cn(TABS_TRIGGER_CLASS, authored)}
       @click=${this._onClick}
       @keydown=${this._onKeyDown}
     ><slot></slot></button>`;
@@ -316,7 +347,13 @@ export class UiTabsContent extends WebComponent({
     return this.closest('ui-tabs') as UiTabs | null;
   }
 
+  _authored: string | null = null;
+  _captured = false;
+
   render() {
+    // The panel's host keeps no class of its own (it toggles `hidden`, which a
+    // `display` utility would override), so the authored class moves whole.
+    const authored = takeAuthored(this, null);
     const tabs = this._tabs;
     const active = !!tabs && tabs.value === this.value && this.value !== '';
     const ids = tabs && this.value ? tabs.idsFor(this.value) : null;
@@ -335,7 +372,7 @@ export class UiTabsContent extends WebComponent({
       aria-labelledby=${ids ? ids.trigger : ''}
       tabindex="0"
       data-state=${active ? 'active' : 'inactive'}
-      class=${TABS_CONTENT_CLASS}
+      class=${cn(TABS_CONTENT_CLASS, authored)}
     ><slot></slot></section>`;
   }
 }

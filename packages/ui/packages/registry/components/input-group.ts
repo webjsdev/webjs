@@ -33,6 +33,9 @@
  * ```
  */
 import { cn } from '../lib/utils.ts';
+import { inputClass } from './input.ts';
+import { textareaClass } from './textarea.ts';
+import { buttonClass, type ButtonVariant } from './button.ts';
 
 /** Set `data-slot="input-group"` on the element. */
 export function inputGroupClass(): string {
@@ -72,16 +75,22 @@ const INPUT_GROUP_BUTTON_SIZES = {
   'icon-sm': 'cn-input-group-button-size-icon-sm',
 } as const;
 
-/** The part, with its variant options. Set its `data-slot` and any `data-variant` / `data-size` to match. */
-export function inputGroupButtonClass(opts: { size?: keyof typeof INPUT_GROUP_BUTTON_SIZES } = {}): string {
-  return cn(INPUT_GROUP_BUTTON_BASE, INPUT_GROUP_BUTTON_SIZES[opts.size ?? 'xs']);
+/**
+ * The part, with its variant options. Set its `data-slot` and any `data-variant` / `data-size` to match.
+ *
+ * shadcn's InputGroupButton IS its Button (`variant` defaulting to ghost)
+ * with these classes on top, so the button's own classes come first and the
+ * group's size wins a conflict.
+ */
+export function inputGroupButtonClass(opts: { size?: keyof typeof INPUT_GROUP_BUTTON_SIZES; variant?: ButtonVariant } = {}): string {
+  return cn(buttonClass({ variant: opts.variant ?? 'ghost' }), INPUT_GROUP_BUTTON_BASE, INPUT_GROUP_BUTTON_SIZES[opts.size ?? 'xs']);
 }
 
 /**
  * shadcn's name for {@link inputGroupButtonClass}, so shadcn code ports verbatim. Like cva,
  * it merges a `className` into the result.
  */
-export function inputGroupButtonVariants(opts: { size?: keyof typeof INPUT_GROUP_BUTTON_SIZES } & { className?: string } = {}): string {
+export function inputGroupButtonVariants(opts: { size?: keyof typeof INPUT_GROUP_BUTTON_SIZES; variant?: ButtonVariant } & { className?: string } = {}): string {
   return cn(inputGroupButtonClass(opts), opts.className);
 }
 
@@ -90,12 +99,18 @@ export function inputGroupTextClass(): string {
   return 'cn-input-group-text flex items-center [&_svg]:pointer-events-none';
 }
 
-/** Set `data-slot="input-group-control"` on the element. */
+/**
+ * Set `data-slot="input-group-control"` on the element. shadcn's
+ * InputGroupInput is its Input with these classes on top, so the input's own
+ * base (its `outline-none` and focus treatment included) comes first and the
+ * group's resets win a conflict. Without it a focused control shows the
+ * browser's own outline inside the group's ring.
+ */
 export function inputGroupInputClass(): string {
-  return 'cn-input-group-input flex-1';
+  return cn(inputClass(), 'cn-input-group-input flex-1');
 }
 
-/** Set `data-slot="input-group-control"` on the element. */
+/** Set `data-slot="input-group-control"` on the element. The Textarea's classes, then the group's, as shadcn composes it. */
 export function inputGroupTextareaClass(): string {
-  return 'cn-input-group-textarea flex-1 resize-none';
+  return cn(textareaClass(), 'cn-input-group-textarea flex-1 resize-none');
 }

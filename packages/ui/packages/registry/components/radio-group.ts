@@ -70,7 +70,7 @@ const DOT_DARK =
   "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><circle cx='10' cy='10' r='5' fill='oklch(0.985 0 0)'/></svg>\")";
 
 const RADIO_CLASS =
-  'cn-radio-group-item group/radio-group-item peer aspect-square shrink-0 border outline-none disabled:cursor-not-allowed disabled:opacity-50';
+  'cn-radio-group-item group/radio-group-item peer aspect-square shrink-0 appearance-none border outline-none disabled:cursor-not-allowed disabled:opacity-50';
 
 // Three sibling rule blocks for theme selection: mirrors the
 // checkbox.ts pattern in this same registry:

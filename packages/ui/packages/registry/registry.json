@@ -479,7 +479,10 @@
       "name": "input-group",
       "type": "registry:ui",
       "registryDependencies": [
-        "lib-utils"
+        "lib-utils",
+        "input",
+        "textarea",
+        "button"
       ],
       "dependencies": [
         "@webjsdev/core"

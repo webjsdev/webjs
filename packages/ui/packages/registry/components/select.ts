@@ -44,6 +44,12 @@
  * part: a real `<label for>` on the select, and the field's error text wired
  * through `aria-describedby` on the select as for any control.
  *
+ * The native select stands in for the trigger, so the classes written on it
+ * are the trigger's classes (shadcn's `className` on SelectTrigger): the drawn
+ * trigger takes them, and falls back to `selectTriggerClass()` when the select
+ * carries none. `class=${cn(selectTriggerClass(), 'w-full')}` on the select
+ * gives a full-width trigger with JavaScript on and off alike.
+ *
  * Style the native select for the no-JavaScript paint: `selectTriggerClass()`
  * gives it the trigger's look with the browser's own arrow.
  *
@@ -348,7 +354,7 @@ export class UiSelect extends WebComponent({
       aria-invalid=${invalid ? 'true' : null}
       aria-required=${select?.required ? 'true' : null}
       ?disabled=${!!select?.disabled}
-      class=${selectTriggerClass()}
+      class=${select?.getAttribute('class') || selectTriggerClass()}
       @click=${this._onTriggerClick}
       @keydown=${this._onTriggerKeyDown}
     ><span data-slot="select-value">${shown ? shown.label || shown.text : this._placeholderText()}</span><svg
