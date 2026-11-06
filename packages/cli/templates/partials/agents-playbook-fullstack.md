@@ -76,8 +76,11 @@ Structure the product as real routes, not one page that swaps client state:
 
 Give `app/layout.ts` a navbar that links the main pages, pinned with
 `position: fixed` (never `position: sticky`, which flickers on iOS during a
-client-router navigation), and reserve its height on the content with a
-`--header-height` offset. In a list or table, clicking a row or card navigates
+client-router navigation). Size it with the layout's `--header-h` token
+(`h-[var(--header-h)]`) and never measure it with JavaScript, since a
+client-router swap that replaces the header leaves a `ResizeObserver` reading
+a detached node of height 0. The scaffold's `body:has(> header.fixed)` rule
+already reserves the space, so pinning is adding `fixed inset-x-0 top-0 z-20`. In a list or table, clicking a row or card navigates
 to that item's detail page. Wrap each row action button (edit, delete, status)
 so its handler calls `event.stopPropagation()`, letting the button run its own
 action without also triggering the row navigation.

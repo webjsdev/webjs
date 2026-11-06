@@ -141,9 +141,15 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // Re-skinned shell: a JetBrains Mono type system on a cool neutral-grey
     // surface palette (not the old orange brand), a floating top navbar, and a
     // main that fills the viewport minus the navbar.
-    assert.match(layoutSrc, /<main class="min-h-\[calc\(100dvh-3\.5rem\)\][^"]*">/,
+    assert.match(layoutSrc, /<main class="min-h-\[calc\(100dvh-var\(--header-h\)\)\][^"]*">/,
       'layout main fills the viewport minus the navbar');
     assert.match(layoutSrc, /<header\b/, 'the shell ships a floating top navbar');
+    // #1660: the navbar is sized by --header-h and nothing measures it, so a
+    // client-router swap that replaces the header cannot zero the offset.
+    assert.match(layoutSrc, /<header class="[^"]*h-\[var\(--header-h\)\]/, 'the navbar is sized by the token');
+    assert.match(layoutSrc, /body:has\(> header\.fixed\) \{ padding-top: var\(--header-h\); \}/,
+      'pinning the navbar is a one-class edit');
+    assert.doesNotMatch(layoutSrc, /ResizeObserver/, 'the layout does not measure the header');
     assert.match(layoutSrc, /JetBrains\+Mono/, 'layout loads the JetBrains Mono font');
     assert.match(layoutSrc, /--primary:\s*light-dark\(#1e2226, #dee2e6\)/,
       'layout ships the DRY light-dark() surface palette');

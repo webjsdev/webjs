@@ -40,21 +40,6 @@ export default function RootLayout({ children }: { children: unknown }) {
             if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
           } catch (_) {}
         })();
-        (function(){
-          function measure(){
-            try {
-              var hdr = document.querySelector('header');
-              if (!hdr || getComputedStyle(hdr).position !== 'fixed') return;
-              var apply = function(){
-                document.documentElement.style.setProperty('--header-h', hdr.offsetHeight + 'px');
-              };
-              apply();
-              if (window.ResizeObserver) new ResizeObserver(apply).observe(hdr);
-            } catch (_) {}
-          }
-          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', measure);
-          else measure();
-        })();
       </script>
       <meta name="color-scheme" content="light dark">
       <!-- Self-hosted fonts, declared via @font-face in public/input.css.
@@ -77,8 +62,10 @@ export default function RootLayout({ children }: { children: unknown }) {
           --font-display: 'Inter Tight', 'Inter', system-ui, -apple-system, sans-serif;
           --font-serif:   ui-serif, 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, Cambria, serif;
           --font-mono:    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-          /* A real default so no-JS and first paint reserve the header height
-             before the measure script above runs. h-14 plus the 1px border. */
+          /* The header's height, and the offset the content below reserves for
+             it. The header is sized BY this token and nothing measures it, so a
+             client-router swap that replaces the header cannot zero the offset
+             (#1660). 56px row plus the 1px border. */
           --header-h: 57px;
 
           color-scheme: light dark;
@@ -164,8 +151,8 @@ export default function RootLayout({ children }: { children: unknown }) {
            top: 1.5rem, measured against an in-flow navbar (its own comment says
            so), so under this app's fixed header it would pin 33px UNDER the bar
            and sit behind the blur wherever the page is long enough to hold the
-           pin. Re-express the offset against --header-h, which the measure
-           script keeps current. Scoped to the lg breakpoint because below it the
+           pin. Re-express the offset against --header-h, the token the header
+           is sized by. Scoped to the lg breakpoint because below it the
            payload hides the aside and renders its own in-flow back link.
 
            This does NOT make the sidebar hold its pin on a short page. The
@@ -183,12 +170,10 @@ export default function RootLayout({ children }: { children: unknown }) {
     <body>
       <div class="glow-layer" aria-hidden="true"></div>
       <!-- position:fixed, never sticky. A sticky header flickers on iOS WebKit
-           during a client-router nav (#610). Fixed goes on the <header> itself
-           rather than a wrapper, because the measure script above queries
-           document.querySelector('header') and bails unless THAT element
-           computes to fixed. -->
-      <header class="fixed inset-x-0 top-0 z-20 backdrop-blur-md bg-[color-mix(in_oklch,var(--color-background)_50%,transparent)] border-b border-border">
-        <div class="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+           during a client-router nav (#610). Its height is the --header-h
+           token, the same value the body offsets by. -->
+      <header class="fixed inset-x-0 top-0 z-20 h-[var(--header-h)] backdrop-blur-md bg-[color-mix(in_oklch,var(--color-background)_50%,transparent)] border-b border-border">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 h-full flex items-center justify-between gap-4">
           <a href="/" aria-label="WebJs Gallery home" class="inline-flex items-center gap-3 no-underline text-foreground shrink-0 transition-opacity duration-150 hover:opacity-80">
             <!-- Two files swapped by the dark: variant rather than one file
                  inverted, because invert() flips the paper along with the ink

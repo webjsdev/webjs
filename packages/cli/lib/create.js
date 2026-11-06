@@ -1403,27 +1403,6 @@ export default function RootLayout({ children }: LayoutProps) {
           mq.addEventListener('change', apply);
         } catch (_) {}
       })();
-      // Header-measure: dormant until you add a fixed header. A fixed header
-      // (use position:fixed, NOT sticky, which flickers on iOS WebKit during a
-      // client-router nav) leaves normal flow, so --header-h reserves its height
-      // for the content below. No header means a no-op and --header-h stays 0.
-      (function(){
-        function measure(){
-          try {
-            var hdr = document.querySelector('header');
-            // Only a FIXED header leaves normal flow and needs its height
-            // reserved; a normal in-flow header (the gallery's navbar) does not.
-            if (!hdr || getComputedStyle(hdr).position !== 'fixed') return;
-            var apply = function(){
-              document.documentElement.style.setProperty('--header-h', hdr.offsetHeight + 'px');
-            };
-            apply();
-            if (window.ResizeObserver) new ResizeObserver(apply).observe(hdr);
-          } catch (_) {}
-        }
-        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', measure);
-        else measure();
-      })();
     </script>
     <meta name="color-scheme" content="light dark">
     <!-- JetBrains Mono for body/UI (its monospaced, developer-console feel) and
@@ -1471,7 +1450,9 @@ export default function RootLayout({ children }: LayoutProps) {
         --font-serif: ui-serif, 'Iowan Old Style', Palatino, Georgia, serif;
         --font-mono:  'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
         --font-display: 'Bricolage Grotesque', 'JetBrains Mono', ui-sans-serif, system-ui, sans-serif;
-        --header-h: 0px;
+        /* The navbar height. The header is sized BY this token and nothing
+           measures it, so the offset below can never drift from the header. */
+        --header-h: 3.5rem;
 
         color-scheme: light dark;                              /* default: follow the OS */
         --background:         light-dark(#ffffff, #1e2226);
@@ -1505,19 +1486,23 @@ export default function RootLayout({ children }: LayoutProps) {
       /* Base styles utility classes can't reach. */
       html, body { margin: 0; }
       body {
-        padding-top: var(--header-h);
         background: var(--background);
         color: var(--foreground);
         font: 15px/1.6 var(--font-sans);
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
       }
+      /* A fixed header leaves normal flow, so reserve its height. Keyed on the
+         class, so pinning the navbar below is a one-class edit. */
+      body:has(> header.fixed) { padding-top: var(--header-h); }
     </style>
     <!-- Top navbar, on every page: brand on the left, links + theme toggle on
          the right. It floats (no separator) and is in normal flow, so it just
-         scrolls with the page; make it a fixed header only if you want it pinned
-         (position: fixed, never sticky, which flickers on iOS during a nav). -->
-    <header class="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+         scrolls with the page. To pin it, add fixed inset-x-0 top-0 z-20 to its
+         class (position: fixed, never sticky, which flickers on iOS during a nav).
+         Its height is the --header-h token, so keep it one row: nothing measures
+         it, which is what keeps the offset right after a client-router swap. -->
+    <header class="max-w-5xl mx-auto px-4 sm:px-6 h-[var(--header-h)] flex items-center justify-between gap-4">
       <a href="/" class="inline-flex items-center gap-2 no-underline text-foreground font-bold tracking-tight" style="font-family: var(--font-display)">
         <span class="w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-foreground to-muted-foreground" aria-hidden="true"></span>
         WebJs Gallery
@@ -1528,9 +1513,9 @@ export default function RootLayout({ children }: LayoutProps) {
         <theme-toggle></theme-toggle>
       </nav>
     </header>
-    <!-- Fill the viewport minus the h-14 (3.5rem) navbar, so a short page has no
-         spurious scrollbar (min-h-dvh alone would overflow by the navbar height). -->
-    <main class="min-h-[calc(100dvh-3.5rem)] max-w-5xl mx-auto px-4 sm:px-6 py-8">
+    <!-- Fill the viewport minus the navbar, so a short page has no spurious
+         scrollbar (min-h-dvh alone would overflow by the navbar height). -->
+    <main class="min-h-[calc(100dvh-var(--header-h))] max-w-5xl mx-auto px-4 sm:px-6 py-8">
       \${children}
     </main>
   \`;
