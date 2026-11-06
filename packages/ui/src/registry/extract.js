@@ -275,6 +275,21 @@ export function uiComponent(name, opts = {}) {
 }
 
 /**
+ * A component's files baked for a style, as `webjs ui view` prints them and
+ * `add` writes them (paths are the registry's). The /ui docs' Manual tab
+ * shows these, so the page and the CLI cannot disagree about the source.
+ *
+ * @param {string} name
+ * @param {{ style?: string }} [opts]
+ * @returns {Array<{ path: string, content: string }> | null}
+ */
+export function uiComponentFiles(name, opts = {}) {
+  const item = loadRegistryItem(name);
+  if (!item) return null;
+  return (item.files || []).map((f) => ({ path: f.path, content: bakeForStyle(f.content || '', opts.style) }));
+}
+
+/**
  * The kit inventory: one compact entry per `registry:ui` component (name, tier,
  * helper signatures, npm deps). The no-args payload for the MCP `ui` tool and
  * the `references/ui-kit.md` skill surface, so an agent reaches for a helper

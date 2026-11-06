@@ -43,6 +43,7 @@ import DocsLayout from '#app/(site)/docs/layout.ts';
 import UiLayout from '#app/ui/layout.ts';
 import UiChromeLayout from '#app/ui/(chrome)/layout.ts';
 import UiGalleryLayout from '#app/ui/(chrome)/(gallery)/layout.ts';
+import UiDocsLayout from '#app/ui/(chrome)/docs/layout.ts';
 import { layoutProps } from '#test/helpers/layout-props.ts';
 import { renderPostBody } from '#modules/blog/utils/render-post.ts';
 
@@ -88,9 +89,11 @@ async function htmlOf(page: Page) {
  * (header, footer) inside the minimal /ui layout, and for a gallery page the
  * interim gallery shell inside that, so the chrome's own markup is covered too.
  */
-async function uiShell(children: TemplateResult, path: string, gallery = true) {
+async function uiShell(children: TemplateResult, path: string, section: 'gallery' | 'docs' | null = 'gallery') {
   const url = 'https://webjs.dev' + path;
-  const inner = gallery ? await UiGalleryLayout(layoutProps(children, { url })) : children;
+  const inner = section === 'gallery'
+    ? await UiGalleryLayout(layoutProps(children, { url }))
+    : section === 'docs' ? UiDocsLayout(layoutProps(children, { url })) : children;
   return UiLayout(layoutProps(await UiChromeLayout(layoutProps(inner, { url })), { url }));
 }
 
@@ -120,7 +123,9 @@ async function sectionPages(dir: string, base: string, layout: (p: LayoutProps) 
 }
 
 const uiDetail = await import('#app/ui/(chrome)/(gallery)/[name]/page.ts');
-const uiIntro = await import('#app/ui/(chrome)/(gallery)/docs/page.ts');
+const uiIntro = await import('#app/ui/(chrome)/docs/page.ts');
+const uiComponentDoc = await import('#app/ui/(chrome)/docs/components/[name]/page.ts');
+const { COMPONENTS } = await import('#modules/ui/docs/nav.ts');
 const uiHome = await import('#app/ui/(chrome)/page.ts');
 const { loadRegistryIndex } = await import('#modules/ui/queries/registry.server.ts');
 
@@ -141,8 +146,14 @@ const PAGES: Page[] = [
   },
   ...await sectionPages('(site)/docs', '/docs', DocsLayout),
   ...await sectionPages('ui', '/ui', UiLayout, false),
-  { name: '/ui', render: async () => uiShell(uiHome.default({ url: 'https://webjs.dev/ui' }), '/ui', false) },
-  { name: '/ui/docs', render: async () => uiShell(await uiIntro.default(), '/ui/docs') },
+  { name: '/ui', render: async () => uiShell(uiHome.default({ url: 'https://webjs.dev/ui' }), '/ui', null) },
+  { name: '/ui/docs', render: async () => uiShell(await uiIntro.default(), '/ui/docs', 'docs') },
+  // Every docs component page: the code figures, the install command and the
+  // preview's source all render a <pre>, so each is covered.
+  ...COMPONENTS.map((c) => ({
+    name: `/ui/docs/components/${c.slug}`,
+    render: async () => uiShell(await uiComponentDoc.default({ params: { name: c.slug } } as never), `/ui/docs/components/${c.slug}`, 'docs'),
+  })),
   ...uiComponents.map((name) => ({
     name: `/ui/${name}`,
     render: async () => uiShell(await uiDetail.default({ params: { name } }), `/ui/${name}`),
@@ -182,9 +193,16 @@ for (const page of PAGES) {
 test('the suite still has scrollable blocks to check rule 3 against', async () => {
   const counts = await Promise.all(PAGES.map(async (p) => [p.name, scrollableTags(await htmlOf(p)).length] as const));
   const total = counts.reduce((n, [, c]) => n + c, 0);
-  const pagesWithBlocks = counts.filter(([, c]) => c > 0).map(([n]) => n);
+  // A docs page for a component with no registry item (shadcn's docs-only
+  // pages: chart, data-table, date-picker, toast, typography) has no
+  // installation block until its content lands, so it is not counted.
+  const { componentSource } = await import('#modules/ui/queries/component-source.server.ts');
+  const noInstall = new Set<string>();
+  for (const c of COMPONENTS) if (!(await componentSource(c.slug))) noInstall.add(`/ui/docs/components/${c.slug}`);
+  const considered = counts.filter(([n]) => !noInstall.has(n));
+  const pagesWithBlocks = considered.filter(([, c]) => c > 0).map(([n]) => n);
   assert.ok(total > 400, `only ${total} scrollable blocks found across the site, so rule 3 is checking far less than it should`);
-  assert.ok(pagesWithBlocks.length > PAGES.length - 5, `${PAGES.length - pagesWithBlocks.length} pages render no scrollable block at all: ${counts.filter(([, c]) => !c).map(([n]) => n).join(', ')}`);
+  assert.ok(pagesWithBlocks.length > considered.length - 5, `${considered.length - pagesWithBlocks.length} pages render no scrollable block at all: ${considered.filter(([, c]) => !c).map(([n]) => n).join(', ')}`);
 });
 
 test('the suite still has named blocks to check rules 1 and 2 against', async () => {

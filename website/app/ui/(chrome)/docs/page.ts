@@ -1,11 +1,12 @@
 import { html } from '@webjsdev/core';
 import { loadRegistryIndex } from '#modules/ui/queries/registry.server.ts';
 import { splitByTier } from '#modules/ui/utils/tier.ts';
+import { docsPage, heading, type TocEntry } from '#lib/ui/docs/page.ts';
 
 // Same "<Page> | <Section>" shape the documentation uses, so a tab or a search
 // result reads consistently across /docs and /ui.
 export const metadata = {
-  title: 'WebJs UI | AI-first components for WebJs',
+  title: 'Introduction | WebJs UI',
 };
 
 /**
@@ -26,9 +27,8 @@ export default async function UiIntro() {
   const { tier1, tier2 } = splitByTier(all.filter((i) => i.type === 'registry:ui'));
   const total = tier1.length + tier2.length;
 
-  return html`
-    <div class="prose-docs">
-      <h1>WebJs UI</h1>
+  const toc: TocEntry[] = [];
+  const body = html`
       <p>
         An AI-first component library of ${total} primitives, built on native HTML and styled with
         Tailwind v4. The source is copied into your project, so you own every line and edit it
@@ -41,7 +41,7 @@ export default async function UiIntro() {
         <code>@webjsdev/core</code>, so the kit assumes the runtime a WebJs app already has.
       </p>
 
-      <h2>Two tiers, one mental model</h2>
+      ${heading(toc, 2, 'Two tiers, one mental model')}
       <p>
         <strong>Tier 1 (${tier1.length} components)</strong> is pure class-helper functions.
         <code>buttonClass()</code>, <code>cardClass()</code>, and <code>inputClass()</code> return
@@ -86,7 +86,7 @@ import { buttonClass } from '#modules/ui/components/button.ts';
         behaviour natively.
       </p>
 
-      <h2>Install</h2>
+      ${heading(toc, 2, 'Install')}
       <p>
         In a WebJs app there is nothing to install. <code>@webjsdev/ui</code> is a hard dependency
         of <code>@webjsdev/cli</code>, so a global WebJs install already carries it. A scaffolded
@@ -103,7 +103,7 @@ webjs ui add button card dialog input label</code-block>
         <code>components/ui/</code>, which is yours to edit from that point on.
       </p>
 
-      <h2>Commands</h2>
+      ${heading(toc, 2, 'Commands')}
       <table>
         <thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead>
         <tbody>
@@ -126,7 +126,7 @@ webjs ui add button card dialog input label</code-block>
         than copied into your file.
       </p>
 
-      <h2>Accessibility</h2>
+      ${heading(toc, 2, 'Accessibility')}
       <p>
         Responsibility splits by tier, and it matters which half you own.
         <strong>Tier-2 elements wire their own ARIA</strong>, so do not hand-add it: tabs
@@ -145,7 +145,7 @@ webjs ui add button card dialog input label</code-block>
         <code>aria-current="page"</code> on pagination and breadcrumb.
       </p>
 
-      <h2>Dependencies</h2>
+      ${heading(toc, 2, 'Dependencies')}
       <p>
         None beyond Tailwind v4 and <code>@webjsdev/core</code>. No Radix, no clsx, no
         tailwind-merge, no Floating UI, no Sonner. The <code>cn()</code> helper, the positioning,
@@ -153,7 +153,7 @@ webjs ui add button card dialog input label</code-block>
         an afternoon and every line is yours to edit.
       </p>
 
-      <h2>Migrating from shadcn</h2>
+      ${heading(toc, 2, 'Migrating from shadcn')}
       <p>
         A Tier-2 element maps mechanically: <code>&lt;DialogContent&gt;</code> becomes
         <code>&lt;ui-dialog-content&gt;</code>, and variant and size props keep their names. A
@@ -165,6 +165,12 @@ webjs ui add button card dialog input label</code-block>
         <code>onValueChange</code> prop becomes an
         <code>addEventListener('ui-value-change', fn)</code>.
       </p>
-    </div>
   `;
+  return docsPage({
+    href: '/ui/docs',
+    title: 'Introduction',
+    description: 'WebJs UI is a set of beautifully-designed, accessible components and a code distribution platform for WebJs apps. Open Source. Open Code.',
+    toc,
+    body,
+  });
 }

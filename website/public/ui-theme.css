@@ -90,3 +90,16 @@
   --color-selection: var(--selection);
   --color-selection-foreground: var(--selection-foreground);
 }
+
+/* shadcn's per-style and layout variants (apps/v4/app/globals.css). A demo
+   writes `style-sera:md:hidden` to adapt to the style it renders in, and the
+   site chrome writes `fixed:` for its fixed-width layout. */
+@custom-variant style-vega (&:where(.style-vega *));
+@custom-variant style-nova (&:where(.style-nova *));
+@custom-variant style-lyra (&:where(.style-lyra *));
+@custom-variant style-maia (&:where(.style-maia *));
+@custom-variant style-mira (&:where(.style-mira *));
+@custom-variant style-luma (&:where(.style-luma *));
+@custom-variant style-sera (&:where(.style-sera *));
+@custom-variant style-rhea (&:where(.style-rhea *));
+@custom-variant fixed (&:is(.layout-fixed *));

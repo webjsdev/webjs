@@ -1,5 +1,7 @@
 import { html, asset } from '@webjsdev/core';
 import type { LayoutProps } from '@webjsdev/core';
+// Every kit element, so the docs demos (rendered to strings) upgrade (D14).
+import '#modules/ui/elements.ts';
 
 /**
  * The /ui section's outermost layout, deliberately minimal (#1666).

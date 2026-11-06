@@ -93,10 +93,21 @@ website/
                        section boundaries, rendered inside the /ui chrome
         page.ts        /ui, shadcn's home page: the hero over the card grid
                        (modules/ui/home/), in the luma and rhea styles
-        (gallery)/     the interim component gallery, until the /ui docs
-                       replace it: layout.ts is the sidebar built from the
-                       registry index (in the new-york style)
-          docs/page.ts /ui/docs, the introduction
+        docs/          /ui/docs, shadcn's docs (#1666, D15). layout.ts is the
+                       sticky sidebar (lib/ui/docs/sidebar.ts, kept current on
+                       a soft navigation by components/ui-docs-sidebar.ts) and
+                       every page renders through lib/ui/docs/page.ts (title,
+                       previous / next, typeset body, On This Page). The nav,
+                       its order and the component records live in ONE
+                       module, modules/ui/docs/nav.ts
+          page.ts      /ui/docs, the introduction
+          components/[name]/page.ts
+                       /ui/docs/components/<name>: the lead demo, Installation
+                       (the add command and the baked source), then the
+                       component's own sections from
+                       modules/ui/docs/components/<name>.ts
+        (gallery)/     the interim component gallery, until the docs pages
+                       replace it: layout.ts is its sidebar (new-york style)
           [name]/page.ts /ui/<name>, one page per component
       registry/**      the JSON API that shipped CLI versions fetch (see
                        modules/ui/ below). Its paths never move
@@ -219,6 +230,13 @@ website/
                        not this site's UI kit. That keeps components/ui/ free
                        so `webjs ui add` works here the same way it does in a
                        scaffolded app.
+    ui/examples/<name>.ts  one docs demo per file (D14): a default export
+                       returning an `html` template. ui/queries/render-demo.server.ts
+                       renders it (custom elements left unexpanded, so the page
+                       expands each once) and reads the same file for the Code
+                       tab, behind a name allowlist since it is RPC-callable.
+                       ui/elements.ts imports every Tier-2 element once, from
+                       app/ui/layout.ts, so a demo string's elements upgrade
     ui/queries/registry.server.ts  composes the registry JSON on demand from
                        packages/ui/packages/registry/ (the source of truth).
                        This is what /ui/registry/** serves.

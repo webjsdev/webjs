@@ -144,7 +144,7 @@ test('the gallery uses the SAME sidebar shell as the docs', async () => {
 });
 
 test('the sidebar groups components under bare Tier 1 and Tier 2 headers', async () => {
-  const ui = await bodyOf('/ui/docs');
+  const ui = await bodyOf(UI_COMPONENT);
   assert.match(ui, />Tier 1</, 'Tier 1 section header');
   assert.match(ui, />Tier 2</, 'Tier 2 section header');
   // The old site spelled these out as "Tier 1 Class helpers" / "Tier 2 Custom
@@ -163,7 +163,8 @@ test('/ui is the shadcn-shaped home page, and the introduction moved to /ui/docs
   assert.ok(!home.includes('id="docs-sidebar"'), 'with no docs sidebar');
   assert.equal(home.split('<main').length - 1, 1, 'and one main landmark');
   const docs = await bodyOf('/ui/docs');
-  assert.ok(docs.includes('id="docs-sidebar"'), '/ui/docs renders inside the gallery shell');
+  assert.match(docs, /<ui-docs-sidebar[\s>]/, '/ui/docs renders inside the docs layout');
+  assert.match(docs, /<h1[^>]*>Introduction<\/h1>/, 'with the introduction as its page');
 });
 
 test('every component in the registry has a reachable page', async () => {
