@@ -247,6 +247,9 @@ export const cases = [
   { name: 'component-in-unsafe-html', run: () => renderToString(html`<div>${unsafeHTML('<gold-badge label="raw" count="1"></gold-badge>')}</div>`) },
   { name: 'component-in-template-and-noscript', run: () => renderToString(html`<template><gold-badge label="t"></gold-badge></template><noscript><gold-badge label="n"></gold-badge></noscript>`) },
   { name: 'component-unclosed', run: () => renderToString(html`<div><gold-shell><p slot="head">h</p>rest`) },
+  // #1666: a child's slot is its `slot` ATTRIBUTE, never the tail of data-slot
+  // or text inside a quoted value.
+  { name: 'component-slot-attr-reading', run: () => renderToString(html`<gold-shell><button data-slot="button">btn</button><b data-slot="x" slot="head">h</b><i title="a slot=foot">i</i></gold-shell>`) },
   { name: 'component-page-counter', run: () => renderToString(html`<!doctype html><html><head><meta charset="utf-8"><title>Counter</title></head><body><gold-counter count=${3}></gold-counter></body></html>`) },
   { name: 'component-rawtext-in-template', run: () => renderToString(html`<gold-raw-host></gold-raw-host>`) },
   { name: 'component-async', run: () => renderToString(html`<gold-async-item label="A"></gold-async-item><gold-async-item label="B"></gold-async-item>`) },
