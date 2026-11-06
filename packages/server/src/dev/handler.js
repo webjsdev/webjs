@@ -54,6 +54,8 @@ import {
 import { applyConditionalGet } from '../conditional-get.js';
 import { commitHtmlCache, setAppSourceFingerprint } from '../html-cache.js';
 import { buildDevErrorFrame } from '../dev-error.js';
+import { createDevStatus } from './dev-status.js';
+import { devReloadState } from '../dev-reload-state.js';
 
 import {
   readElideEnabled,
@@ -189,6 +191,9 @@ export async function createRequestHandler(opts) {
   // Both the programmatic opts.onError AND any sink an instrumentation.{js,ts}
   // register() installed via setOnError fire (they compose, #848).
   const onErrorSinks = [opts.onError, instrumentationOnError].filter((f) => typeof f === 'function');
+  // What `/__webjs/dev/status` reports (#1664): the errors since the last
+  // rebuild and whether a change is still in flight. Dev only.
+  const devStatus = dev ? createDevStatus() : null;
   const hasOnError = onErrorSinks.length > 0;
 
   /**
@@ -199,6 +204,16 @@ export async function createRequestHandler(opts) {
    * @param {string} phase
    */
   function reportError(error, request, phase) {
+    // Dev status (#1664) records every phase except `ssr`, whose render error
+    // already arrives through `reportDevError` with a richer frame. Recorded
+    // BEFORE the no-sink return, because an app with no onError sink is exactly
+    // the one whose action errors were invisible to an agent.
+    if (devStatus && phase !== 'ssr') {
+      try {
+        const path = request && request.url ? new URL(request.url).pathname : undefined;
+        devStatus.record(buildDevErrorFrame(error, { kind: phase, appDir, url: path }));
+      } catch { /* best effort */ }
+    }
     if (!hasOnError) return;
     const ctx = { request, requestId: getRequestId(), phase };
     for (const sink of onErrorSinks) {
@@ -529,6 +544,7 @@ export async function createRequestHandler(opts) {
     try {
       const frame = buildDevErrorFrame(error, { ...info, appDir });
       state.lastDevError = frame;
+      devStatus?.record(frame);
       opts.onDevError?.(frame);
     } catch { /* ignore */ }
   }
@@ -932,7 +948,12 @@ export async function createRequestHandler(opts) {
    *   without a reload frame (a `bun --hot` registry reset, #1575).
    */
   async function rebuild(verdict, { notify = true } = {}) {
-    rebuildInFlight = rebuildInFlight.then(() => doRebuild(verdict, notify)).catch((e) => {
+    devStatus?.rebuildStarted();
+    rebuildInFlight = rebuildInFlight.then(() => doRebuild(verdict, notify)).then(() => {
+      // The recorded errors described the build this one replaced.
+      devStatus?.rebuildFinished();
+    }, (e) => {
+      devStatus?.rebuildFinished();
       logger.error?.(`[webjs] rebuild failed:`, e);
       // Push the failure to the open tab so the overlay appears live after a
       // breaking edit, not only on the next manual navigation (#264).
@@ -1012,6 +1033,46 @@ export async function createRequestHandler(opts) {
     // runs on both boundary tiers and swaps in the changed boot script, which
     // executes and registers the new component.
     if (notify) opts.onReload?.(verdict || { v: 'reload', by: '', why: 'no-verdict' });
+  }
+
+  /**
+   * The `/__webjs/dev/status` body (#1664). Waits up to `waitMs` for a pending
+   * change to be rebuilt, then drives the lazy analysis so readiness describes
+   * the CURRENT source rather than the build before the edit.
+   * @param {number} waitMs
+   * @returns {Promise<Response>}
+   */
+  async function devStatusResponse(waitMs) {
+    const status = /** @type {NonNullable<typeof devStatus>} */ (devStatus);
+    const deadline = Date.now() + waitMs;
+    while (waitMs && status.changing() && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    const warm = ensureReady().catch(() => {});
+    if (waitMs && !status.changing()) {
+      const left = Math.max(0, deadline - Date.now());
+      await Promise.race([warm, new Promise((r) => setTimeout(r, left))]);
+    }
+    const { rebuilds, errors } = status.snapshot();
+    const ready = readyError ? 'error' : readyDone ? 'ok' : 'pending';
+    const settled = !status.changing() && ready !== 'pending';
+    if (readyError) {
+      errors.unshift({
+        kind: 'ready', message: String((readyError && readyError.message) || readyError),
+        file: null, line: null, column: null, codeFrame: null, hint: null, url: null, at: new Date().toISOString(),
+      });
+    }
+    const reload = devReloadState();
+    const body = {
+      status: errors.length ? 'error' : settled ? 'ok' : 'pending',
+      settled,
+      ready,
+      boot: reload ? reload.boot : null,
+      seq: reload ? reload.seq : null,
+      rebuilds,
+      errors,
+    };
+    return Response.json(body, { headers: { 'cache-control': 'no-store' } });
   }
 
   /** A routing-convention module under `app/`, which only the router loads. */
@@ -1335,6 +1396,19 @@ export async function createRequestHandler(opts) {
       return Response.json({ status: 'ok' }, { headers: noStore });
     }
 
+    // Dev status (#1664): has the last edit settled, and what broke since the
+    // last rebuild. Answered before ensureReady like the other probes, and only
+    // in dev, since it carries file paths and stacks, the same exposure as the
+    // error overlay. `?wait=<seconds>` (capped at 60) holds the response until
+    // the change has been rebuilt and the analysis re-run, which is the part
+    // the reload frame cannot tell anyone: it goes out before any re-import.
+    if (probePath === '/__webjs/dev/status') {
+      if (!devStatus) return new Response('Not Found', { status: 404 });
+      let waitParam = 0;
+      try { waitParam = Number(new URL(req.url).searchParams.get('wait')) || 0; } catch { /* no wait */ }
+      return devStatusResponse(Math.min(Math.max(waitParam, 0), 60) * 1000);
+    }
+
     // Framework-internal static assets (the @webjsdev/core runtime, the dev
     // reload client, downloaded vendor bundles) depend on neither the analysis
     // nor the vendor importmap, so serve them BEFORE ensureReady(). Otherwise a
@@ -1464,6 +1538,9 @@ export async function createRequestHandler(opts) {
      * startServer to a freshly-connected SSE client so the overlay shows even
      * after a navigation, not only on the breaking edit. Always null in prod. */
     getLastDevError: () => state.lastDevError,
+    /** Tell the dev status (#1664) a watched app file changed, so a status
+     * wait holds until the rebuild that follows. A no-op in prod. */
+    noteChange: () => devStatus?.noteChange(),
     /** Whether a dev-watcher filename is a `webjs.dev.regenerate` OUTPUT (#967),
      * so `startServer`'s file watcher (a different scope, with no access to
      * `state`) can skip a build product the server itself writes and avoid a

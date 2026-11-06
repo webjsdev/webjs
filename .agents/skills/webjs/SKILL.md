@@ -106,10 +106,10 @@ Common bundles:
 3. **Put code in the narrowest owner.** Route-local first (`modules/<feature>/`), promote to `lib/` or `components/` only when reuse is real.
 4. **Keep server-only code behind `.server.ts`** (Core WebJs Rules 1 and 2).
 5. **Add interactivity per behaviour.** Reach for a component (and a signal or `@event`) only where the UI is genuinely interactive. A display-only component is elided from the browser. Then wrap the interactive part and STOP: the static markup around it stays in the page, where it costs nothing.
-6. **Validate input at the boundary.** Declare `export const validate` on an action; the RPC and `route()` boundaries run it.
+6. **Validate input at the boundary.** Declare `export const validate` on an action; the RPC, `route()` and bound-form boundaries all run it, and all hand it the same shape (fields read by property, `raw.title`).
 7. **Default mutations to optimistic UI** where the client can predict the result (`optimistic()` from `@webjsdev/core`).
 8. **Type every boundary from its source, never `unknown` or `any`.** The row type comes from the schema (`typeof todos.$inferSelect`), the action's input from a named `interface` and its result from `ActionResult<T>`, the routing files from `PageProps` / `LayoutProps` / `RouteHandlerContext`. `unknown` belongs on a payload nothing has vouched for yet that the next line narrows, and on a parameter of your own helper that forwards into an `html` template hole. Everywhere else, including a layout's `children`, it is a missing type. Carry a row type into a shipping component with `import type` (erased before the browser sees it). Nothing enforces this (both spellings are valid TypeScript, so `webjs check` and `tsc` pass either way), which is why it is written down. See `references/typescript.md`.
-9. **Test the narrowest meaningful layer**, and look at any UI change in a real browser (see Testing Defaults).
+9. **Test the narrowest meaningful layer**, and look at any UI change in a real browser (see Testing Defaults). With `npm run dev` running, run `npx webjs status /the-route` after each edit instead of sleeping and fetching: it waits for the reload to settle and prints every error since the last rebuild with its file and line (`references/runtime.md`).
 
 ## Project Layout
 

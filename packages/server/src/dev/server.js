@@ -372,6 +372,8 @@ export async function startServer(opts) {
           if (app.isRegenerateOutput(filename)) return;
           pendingVerdict = strongerVerdict(pendingVerdict, app.classifyWatchPath(filename, root));
           if (hotKey && needsHotReset(filename, (f) => !app.needsRegistryReset(f, root))) pendingPoke = true;
+          // A status wait (#1664) holds until the rebuild this event schedules.
+          app.noteChange?.();
           rebuild();
         },
         onError: onWatchError,

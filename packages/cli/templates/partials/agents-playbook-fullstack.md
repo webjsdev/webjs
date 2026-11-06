@@ -104,7 +104,11 @@ same list; `.agents/rules/workflow.md` has what each gate checks. While
 iterating, `npm run ci -- --only Tests` runs one layer. Then
 `npm run css:build` (compile Tailwind).
 
-Then boot `npm run dev`, confirm every page route returns HTTP 200, and open
+Then boot `npm run dev`. After each edit, run `npx webjs status /the-route /another`
+instead of sleeping and fetching a page: it waits until the dev server has
+rebuilt and re-analysed the app, requests each path, and prints every error
+since the last rebuild (render, server action, TypeScript, middleware) with its
+file and line, exiting non-zero on any problem. Confirm every page route returns HTTP 200, and open
 every route you changed in a real browser and play through its states: `check`
 and `typecheck` pass even when a layout collapses, so the browser is the real
 check for UI work.

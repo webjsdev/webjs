@@ -490,7 +490,9 @@ export async function handleCore(req, ctx) {
       const deps = {
         actionIndex: state.actionIndex,
         allowedOrigins,
-        onError: hasOnError ? (e) => reportError(e, req, 'action') : undefined,
+        // Also passed in dev with no sink, so a failing form action reaches the
+        // dev status error list (#1664); `reportError` records it first.
+        onError: hasOnError || dev ? (e) => reportError(e, req, 'action') : undefined,
         logger,
       };
       const handler = () => runFormAction(page.route, page.params, url, req, ssrOpts, deps);

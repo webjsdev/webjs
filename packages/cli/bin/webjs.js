@@ -98,6 +98,8 @@ const USAGE = `webjs commands:
   webjs routes [--json|--table] [--no-headers]    Print the route table (path / owner file / methods). Default tree; --json matches the MCP list_routes shape; --no-headers drops the --table header
   webjs elision [--json] [--verify]               Report which component modules are elided and why each shipped one ships;
                                                   --verify diffs SSR output with elision on vs off (exits non-zero on a divergence)
+  webjs status [path...] [--port N] [--json]      Wait for a running dev server to settle after an edit, request each path, and
+                                                  report every error since the last rebuild; exit 1 on any problem, 2 if no server
   webjs mcp                                       Start the read-only MCP server (routes / actions / components / elision / check)
   webjs source <Export> [--pkg <name>]            Print the signature plus doc comment of one export from the installed @webjsdev/*
                                                   packages (typed declarations first, the authored JSDoc as the fallback); exit 1 on a miss
@@ -340,6 +342,23 @@ const HELP = {
       'The read-only MCP `source` tool returns the same text for { export: "<Export>" }.',
     ],
     examples: ['webjs source createAuth', 'webjs source optimistic --pkg core', 'webjs source getFileStore'],
+  },
+  status: {
+    usage: 'webjs status [path...] [--port N] [--json] [--timeout <seconds>]',
+    summary: 'Wait for a running `webjs dev` server to settle after an edit (the change rebuilt and the app analysed again), request each given path so a render error surfaces, then print every error recorded since the last rebuild: render, TypeScript strip, rebuild, server action, middleware. Use it after each edit instead of sleeping and fetching a page.',
+    options: [
+      { flag: '--port <N>', description: 'The dev server port. Defaults to PORT (the shell or .env), then 8080, the same resolution `webjs dev` uses.' },
+      { flag: '--json', description: 'Print one JSON document: { ok, url, settled, ready, rebuilds, paths, errors }, each error carrying kind, message, file, line, column and codeFrame.' },
+      { flag: '--timeout <seconds>', description: 'How long to wait for the server to settle (default 30). A restarting Node dev server is retried until then.' },
+    ],
+    notesTitle: 'Exit status',
+    notes: [
+      '0 when settled, ready, error-free, and every requested path answered below 400.',
+      '1 on any recorded error, a path at 400 or above, or no settle before the timeout.',
+      '2 when no dev server answered on the port.',
+      'The same data is GET /__webjs/dev/status?wait=<seconds> on the dev server, which answers 404 in production.',
+    ],
+    examples: ['webjs status', 'webjs status / /todos --json', 'webjs status /blog --port 3000'],
   },
   version: {
     usage: 'webjs version',
@@ -2005,6 +2024,26 @@ Full docs: https://webjs.dev/docs`);
       console.log(out);
       if (!/^@webjsdev\//m.test(out)) process.exit(1);
       break;
+    }
+    case 'status': {
+      // Dev status (#1664): wait for the running dev server to settle, request
+      // the given paths, report every error since the last rebuild.
+      const { runStatus } = await import('../lib/status.js');
+      const { readAppBasePath } = await import('../lib/doctor.js');
+      loadAppEnv(process.cwd());
+      const valued = new Set(['--port', '--timeout']);
+      const paths = rest.filter((a, i) => !a.startsWith('--') && !valued.has(rest[i - 1]));
+      const timeout = Number(flag(rest, '--timeout')) || 30;
+      let basePath = '';
+      try { basePath = (await readAppBasePath(process.cwd())) || ''; } catch { /* root mount */ }
+      const code = await runStatus({
+        port: resolvePort(flag(rest, '--port')),
+        paths,
+        basePath,
+        json: rest.includes('--json'),
+        timeoutMs: timeout * 1000,
+      });
+      process.exit(code);
     }
     case 'mcp': {
       // Read-only MCP server (#262, #415) over stdio. STDOUT is the JSON-RPC
