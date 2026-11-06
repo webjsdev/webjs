@@ -225,8 +225,8 @@ function providerOf(el: Element): UiSidebarProvider | null {
 export class UiSidebarProvider extends WebComponent({
   defaultOpen: prop(String, { attribute: 'default-open' }),
   open: prop(Boolean, { reflect: true }),
-  openMobile: prop({ state: true }),
-  isMobile: prop({ state: true }),
+  openMobile: prop<boolean>({ state: true }),
+  isMobile: prop<boolean>({ state: true }),
 }) {
   _query: MediaQueryList | null = null;
   _parsed = false;

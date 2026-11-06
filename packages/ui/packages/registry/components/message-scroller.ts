@@ -80,7 +80,7 @@ function rootOf(el: Element): UiMessageScroller | null {
 export class UiMessageScroller extends WebComponent({
   autoScroll: prop(Boolean, { attribute: 'auto-scroll' }),
   defaultScrollPosition: prop<'end' | 'start' | 'last-anchor'>(String, { attribute: 'default-scroll-position' }),
-  pending: prop({ state: true }),
+  pending: prop<boolean>({ state: true }),
 }) {
   /** The edges the viewport can still scroll toward. */
   scrollable = { start: false, end: false };

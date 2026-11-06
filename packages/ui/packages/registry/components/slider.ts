@@ -79,8 +79,8 @@ const HIDDEN_CONTROL =
 
 export class UiSlider extends WebComponent({
   orientation: prop<'horizontal' | 'vertical'>(String, { reflect: true }),
-  enhanced: prop({ state: true }),
-  revision: prop({ state: true }),
+  enhanced: prop<boolean>({ state: true }),
+  revision: prop<number>({ state: true }),
 }) {
   _observer: MutationObserver | null = null;
   _waiting: MutationObserver | null = null;

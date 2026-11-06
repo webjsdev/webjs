@@ -70,8 +70,8 @@ const OVERLAY =
 const ROOT = 'ui-input-otp';
 
 export class UiInputOtp extends WebComponent({
-  enhanced: prop({ state: true }),
-  revision: prop({ state: true }),
+  enhanced: prop<boolean>({ state: true }),
+  revision: prop<number>({ state: true }),
 }) {
   _observer: MutationObserver | null = null;
   _waiting: MutationObserver | null = null;
@@ -258,7 +258,7 @@ UiInputOtp.register('ui-input-otp');
 // --------------------------------------------------------------------------
 
 export class UiInputOtpGroup extends WebComponent({
-  shown: prop({ state: true }),
+  shown: prop<boolean>({ state: true }),
 }) {
   constructor() {
     super();
@@ -334,7 +334,7 @@ UiInputOtpSlot.register('ui-input-otp-slot');
 // --------------------------------------------------------------------------
 
 export class UiInputOtpSeparator extends WebComponent({
-  shown: prop({ state: true }),
+  shown: prop<boolean>({ state: true }),
 }) {
   constructor() {
     super();

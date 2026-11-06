@@ -130,7 +130,7 @@ export class UiCommand extends WebComponent({
   loop: Boolean,
   // The selected item's value.
   value: prop(String, { reflect: true }),
-  search: prop({ state: true }),
+  search: prop<string>({ state: true }),
 }) {
   _id = '';
 
@@ -304,7 +304,7 @@ UiCommand.register('ui-command');
 
 export class UiCommandInput extends WebComponent({
   placeholder: String,
-  activeId: prop({ state: true }),
+  activeId: prop<string>({ state: true }),
 }) {
   constructor() {
     super();
@@ -379,7 +379,7 @@ UiCommandList.register('ui-command-list');
 // --------------------------------------------------------------------------
 
 export class UiCommandEmpty extends WebComponent({
-  shown: prop({ state: true }),
+  shown: prop<boolean>({ state: true }),
 }) {
   constructor() {
     super();
@@ -403,8 +403,8 @@ UiCommandEmpty.register('ui-command-empty');
 
 export class UiCommandGroup extends WebComponent({
   heading: String,
-  shown: prop({ state: true }),
-  order: prop({ state: true }),
+  shown: prop<boolean>({ state: true }),
+  order: prop<number>({ state: true }),
 }) {
   _id = '';
 
@@ -441,7 +441,7 @@ UiCommandGroup.register('ui-command-group');
 // --------------------------------------------------------------------------
 
 export class UiCommandSeparator extends WebComponent({
-  shown: prop({ state: true }),
+  shown: prop<boolean>({ state: true }),
 }) {
   constructor() {
     super();

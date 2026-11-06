@@ -140,7 +140,7 @@ export class UiCodeBlockCopyButton extends WebComponent({
   value: String,
   variant: String,
   size: String,
-  copied: prop({ state: true }),
+  copied: prop<boolean>({ state: true }),
 }) {
   _timer = 0;
 

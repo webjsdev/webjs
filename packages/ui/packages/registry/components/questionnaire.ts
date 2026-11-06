@@ -138,8 +138,8 @@ export class UiQuestionnaire extends WebComponent({
   action: String,
   method: String,
   shortcuts: prop<'' | 'letters' | 'numbers'>(String),
-  enhanced: prop({ state: true }),
-  active: prop({ state: true }),
+  enhanced: prop<boolean>({ state: true }),
+  active: prop<string>({ state: true }),
 }) {
   _queued = false;
 
@@ -389,7 +389,7 @@ export class UiQuestionnaireItem extends WebComponent({
   multiple: Boolean,
   disabled: Boolean,
   flow: prop<{ enhanced: boolean; active: boolean }>({ state: true }),
-  invalid: prop({ state: true }),
+  invalid: prop<boolean>({ state: true }),
 }) {
   _id = '';
 
@@ -443,10 +443,15 @@ export class UiQuestionnaireItem extends WebComponent({
     return Array.from(this.querySelectorAll<UiQuestionnaireChoice>('ui-questionnaire-choice')).filter((c) => itemOf(c) === this);
   }
 
+  /** Whether the item holds a `tag` part, or false on the server, where there is no DOM to query. */
+  _has(tag: string): boolean {
+    return typeof this.querySelector === 'function' && !!this.querySelector(tag);
+  }
+
   render() {
     const hide = this.flow.enhanced && !this.flow.active;
-    const hasTitle = !!this.querySelector?.('ui-questionnaire-title');
-    const hasDescription = !!this.querySelector?.('ui-questionnaire-description');
+    const hasTitle = this._has('ui-questionnaire-title');
+    const hasDescription = this._has('ui-questionnaire-description');
     const described = [hasDescription ? this.descriptionId : '', this.invalid ? this.errorId : ''].filter(Boolean).join(' ');
     return html`<fieldset
       data-slot="questionnaire-item"
@@ -508,7 +513,7 @@ export class UiQuestionnaireChoice extends WebComponent({
   value: String,
   checked: Boolean,
   disabled: Boolean,
-  live: prop({ state: true }),
+  live: prop<boolean>({ state: true }),
 }) {
   constructor() {
     super();
@@ -662,7 +667,7 @@ UiQuestionnaireActions.register('ui-questionnaire-actions');
 export class UiQuestionnaireButton extends WebComponent({
   variant: String,
   size: String,
-  visible: prop({ state: true }),
+  visible: prop<boolean>({ state: true }),
 }) {
   static part = '';
   static label = '';

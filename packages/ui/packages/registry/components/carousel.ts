@@ -138,8 +138,18 @@ export class UiCarousel extends WebComponent({
     return typeof getComputedStyle === 'function' && getComputedStyle(this).direction === 'rtl';
   }
 
-  /** Scroll slide `index` to the start. */
-  scrollTo(index: number): void {
+  /**
+   * Scroll slide `index` to the start, shadcn's `api.scrollTo(index)`. The
+   * element IS the api, so this sits on Element.scrollTo: one number is a
+   * slide index, and the native forms (`scrollTo(x, y)`, `scrollTo(options)`)
+   * still scroll the element itself.
+   */
+  scrollTo(index?: number | ScrollToOptions, y?: number): void {
+    if (typeof index !== 'number' || y !== undefined) {
+      if (typeof index === 'number') super.scrollTo(index, y as number);
+      else super.scrollTo(index);
+      return;
+    }
     const scroller = this._scroller();
     const items = this._items();
     const item = items[index];

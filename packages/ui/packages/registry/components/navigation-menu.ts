@@ -386,7 +386,7 @@ UiNavigationMenuItem.register('ui-navigation-menu-item');
 // --------------------------------------------------------------------------
 
 export class UiNavigationMenuTrigger extends WebComponent({
-  open: prop({ state: true }),
+  open: prop<boolean>({ state: true }),
 }) {
   // After a click closes the panel, the pointer still on the trigger must not
   // reopen it until it leaves.
@@ -455,7 +455,7 @@ UiNavigationMenuTrigger.register('ui-navigation-menu-trigger');
 // --------------------------------------------------------------------------
 
 export class UiNavigationMenuContent extends WebComponent({
-  open: prop({ state: true }),
+  open: prop<boolean>({ state: true }),
 }) {
   constructor() {
     super();

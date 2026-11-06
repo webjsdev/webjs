@@ -120,11 +120,11 @@ export class UiSelect extends WebComponent({
   position: prop<'popper' | 'item-aligned'>(String),
   open: prop(Boolean, { reflect: true }),
   // Set once the element has taken over from the native select.
-  enhanced: prop({ state: true }),
+  enhanced: prop<boolean>({ state: true }),
   // Bumped whenever the native select changes under the element.
-  revision: prop({ state: true }),
+  revision: prop<number>({ state: true }),
   // A failed constraint check, until the value is valid again.
-  invalid: prop({ state: true }),
+  invalid: prop<boolean>({ state: true }),
 }) {
   _id = '';
   _observer: MutationObserver | null = null;
@@ -259,7 +259,7 @@ export class UiSelect extends WebComponent({
   }
 
   static _isPlaceholder(o: HTMLOptionElement): boolean {
-    return o.value === '' && (o.hidden || o.disabled);
+    return o.value === '' && (!!o.hidden || o.disabled);
   }
 
   _entries(): Entry[] {

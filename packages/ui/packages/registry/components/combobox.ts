@@ -123,8 +123,8 @@ export class UiCombobox extends WebComponent({
   open: prop(Boolean, { reflect: true }),
   // The chosen values (the form's view of `value`).
   values: prop<string[]>({ state: true }),
-  query: prop({ state: true }),
-  highlighted: prop({ state: true }),
+  query: prop<string>({ state: true }),
+  highlighted: prop<string>({ state: true }),
 }) {
   _id = '';
   _parsed = false;
@@ -241,8 +241,12 @@ export class UiCombobox extends WebComponent({
     this._emit('ui-value-change', { value: this.multiple ? [...this.values] : value });
   }
 
-  /** Remove one chosen value. */
-  remove(value: string): void {
+  /**
+   * Remove one chosen value. Not named `remove`: that would override the
+   * native Element.remove(), so taking the element out of the page would
+   * silently do nothing instead.
+   */
+  removeValue(value: string): void {
     if (!this.values.includes(value)) return;
     this.values = this.values.filter((v) => v !== value);
     this._emit('ui-value-change', { value: this.multiple ? [...this.values] : '' });
@@ -371,7 +375,7 @@ export class UiCombobox extends WebComponent({
     } else if (e.key === 'Tab') {
       this.hide();
     } else if (e.key === 'Backspace' && this.multiple && !input.value && this.values.length) {
-      this.remove(this.values[this.values.length - 1]);
+      this.removeValue(this.values[this.values.length - 1]);
     }
   };
 
@@ -493,8 +497,8 @@ UiComboboxInput.register('ui-combobox-input');
 // --------------------------------------------------------------------------
 
 export class UiComboboxContent extends WebComponent({
-  open: prop({ state: true }),
-  empty: prop({ state: true }),
+  open: prop<boolean>({ state: true }),
+  empty: prop<boolean>({ state: true }),
 }) {
   connectedCallback(): void {
     super.connectedCallback?.();
@@ -523,7 +527,7 @@ export class UiComboboxContent extends WebComponent({
 UiComboboxContent.register('ui-combobox-content');
 
 export class UiComboboxList extends WebComponent({
-  empty: prop({ state: true }),
+  empty: prop<boolean>({ state: true }),
 }) {
   connectedCallback(): void {
     super.connectedCallback?.();
@@ -636,7 +640,7 @@ UiComboboxItem.register('ui-combobox-item');
 // --------------------------------------------------------------------------
 
 export class UiComboboxGroup extends WebComponent({
-  shown: prop({ state: true }),
+  shown: prop<boolean>({ state: true }),
 }) {
   constructor() {
     super();
@@ -648,8 +652,13 @@ export class UiComboboxGroup extends WebComponent({
     this.hidden = !this.shown;
   }
 
+  /** The group's label, or null on the server, where there is no DOM to query. */
+  _label(): Element | null {
+    return typeof this.querySelector === 'function' ? this.querySelector('ui-combobox-label [data-slot="combobox-label"]') : null;
+  }
+
   render() {
-    const label = this.querySelector?.('ui-combobox-label [data-slot="combobox-label"]');
+    const label = this._label();
     return html`<div data-slot="combobox-group" role="group" aria-labelledby=${label?.id || null} class=${comboboxGroupClass()}><slot></slot></div>`;
   }
 
@@ -728,7 +737,7 @@ export class UiComboboxChips extends WebComponent({
       aria-label=${`Remove ${c.label}`}
       ?disabled=${disabled}
       class=${cn(buttonClass({ variant: 'ghost', size: 'icon-xs' }), comboboxChipRemoveClass())}
-      @click=${(e: Event) => { e.stopPropagation(); rootOf(this)?.remove(c.value); rootOf(this)?._input()?.focus(); }}
+      @click=${(e: Event) => { e.stopPropagation(); rootOf(this)?.removeValue(c.value); rootOf(this)?._input()?.focus(); }}
     >${X_ICON(comboboxChipIndicatorIconClass())}</button></div>`)}<slot></slot></div>`;
   }
 

@@ -178,8 +178,8 @@ export class UiCalendar extends WebComponent({
   locale: String,
   // The live state: what is chosen, which month is shown, which day has focus.
   selection: prop<{ days: string[]; from: string; to: string }>({ state: true }),
-  shown: prop({ state: true }),
-  focused: prop({ state: true }),
+  shown: prop<string>({ state: true }),
+  focused: prop<string>({ state: true }),
 }) {
   _id = '';
   _parsed = false;
