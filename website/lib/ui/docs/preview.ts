@@ -17,16 +17,29 @@ import { codeFigure } from './code.ts';
  * The demo string comes from renderDemo, which renders custom elements
  * unexpanded so this page's own render expands each exactly once.
  */
-export async function componentPreview(name: string, opts: { align?: 'center' | 'start' | 'end'; previewClass?: string; hideCode?: boolean } = {}) {
+export interface PreviewOptions {
+  align?: 'center' | 'start' | 'end';
+  /** Classes for the preview pane, shadcn's previewClassName. */
+  previewClass?: string;
+  /** Classes for the whole preview, shadcn's className. */
+  className?: string;
+  /** The kit style the demo renders in, shadcn's styleName; nova by default. */
+  style?: string;
+  hideCode?: boolean;
+  /** The demo's writing direction, shadcn's direction prop. */
+  direction?: 'ltr' | 'rtl';
+}
+
+export async function componentPreview(name: string, opts: PreviewOptions = {}) {
   const demo = await renderDemo(name);
   if (!demo) {
     return html`<p class="mt-6 text-sm text-muted-foreground">Component <code>${name}</code> not found in registry.</p>`;
   }
   const align = opts.align ?? 'center';
   return html`
-    <div data-slot="component-preview" data-not-typeset class="group relative mt-4 mb-12 flex flex-col overflow-hidden rounded-2xl border">
-      <div data-slot="preview" dir="ltr">
-        <div data-align=${align} class=${cn('preview style-nova relative flex h-72 w-full justify-center p-10 data-[align=center]:items-center data-[align=end]:items-start data-[align=start]:items-start sm:data-[align=end]:items-end', opts.previewClass)}>
+    <div data-slot="component-preview" data-not-typeset class=${cn('group relative mt-4 mb-12 flex flex-col overflow-hidden rounded-2xl border', opts.className)}>
+      <div data-slot="preview" dir=${opts.direction ?? 'ltr'}>
+        <div data-align=${align} class=${cn(`preview style-${opts.style ?? 'nova'} relative flex h-72 w-full justify-center p-10 data-[align=center]:items-center data-[align=end]:items-start data-[align=start]:items-start sm:data-[align=end]:items-end`, opts.previewClass)}>
           ${unsafeHTML(demo.html)}
         </div>
       </div>

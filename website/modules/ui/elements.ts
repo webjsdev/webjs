@@ -38,4 +38,6 @@ import '#modules/ui/components/sonner.ts';
 import '#modules/ui/components/tabs.ts';
 import '#modules/ui/components/toggle.ts';
 import '#modules/ui/components/toggle-group.ts';
+// The site's own chat card, which the message scroller docs page shows.
+import '#components/message-scroller-demo.ts';
 import '#modules/ui/components/tooltip.ts';

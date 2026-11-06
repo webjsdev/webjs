@@ -2,6 +2,7 @@ import { html } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
 import { neighbours } from '#modules/ui/docs/nav.ts';
+import { extraStyleLinks } from '#lib/ui/style-links.ts';
 
 /**
  * The frame of every /ui docs page, shadcn's apps/v4/app/(app)/docs/[[...slug]]/page.tsx
@@ -56,6 +57,7 @@ export function docsPage(opts: { href: string; title: string; description?: stri
   const iconButton = cn(buttonClass({ variant: 'secondary', size: 'icon' }), 'extend-touch-target size-8 shadow-none no-underline md:size-7');
   const textButton = cn(buttonClass({ variant: 'secondary', size: 'sm' }), 'shadow-none no-underline');
   return html`
+    ${extraStyleLinks(opts.href)}
     <main id="main" data-slot="docs" class="flex scroll-mt-24 items-stretch pb-8 text-[1.05rem] sm:text-[15px] xl:w-full">
       <div class="flex min-w-0 flex-1 flex-col">
         <div class="h-(--top-spacing) shrink-0"></div>

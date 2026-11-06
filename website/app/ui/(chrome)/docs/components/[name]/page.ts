@@ -6,6 +6,7 @@ import { componentSource } from '#modules/ui/queries/component-source.server.ts'
 import { docsPage, heading, type TocEntry } from '#lib/ui/docs/page.ts';
 import { componentPreview } from '#lib/ui/docs/preview.ts';
 import { installTabs } from '#lib/ui/docs/install.ts';
+import { LEAD_PREVIEWS } from '#modules/ui/docs/lead-previews.ts';
 
 /**
  * /ui/docs/components/<name>, shadcn's component page (#1666): the lead demo,
@@ -26,7 +27,7 @@ export default async function ComponentPage({ params }: PageProps<'/ui/docs/comp
   const mod = load ? await load() : null;
   const files = await componentSource(doc.slug);
   const toc: TocEntry[] = [];
-  const lead = mod?.demo ? await componentPreview(mod.demo) : '';
+  const lead = mod?.demo ? await componentPreview(mod.demo, { ...LEAD_PREVIEWS[doc.slug], ...mod.demoOptions }) : '';
   const install = files?.length
     ? html`${heading(toc, 2, 'Installation')}${installTabs(doc.slug, { source: files[0].content, title: `components/ui/${doc.slug}.ts` })}`
     : '';

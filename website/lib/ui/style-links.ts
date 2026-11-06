@@ -1,4 +1,5 @@
 import { html, asset } from '@webjsdev/core';
+import { LEAD_PREVIEWS } from '#modules/ui/docs/lead-previews.ts';
 
 /**
  * Which /ui pages render in a kit style public/ui.css does not carry, and so
@@ -18,10 +19,21 @@ const STYLES_BY_PATH: Record<string, string[]> = {
   '/ui': ['luma', 'rhea'],
 };
 
+const COMPONENT_PAGE = '/ui/docs/components/';
+// The styles public/ui.css carries, which need no link of their own.
+const BUILT_IN = new Set(['nova', 'new-york']);
+
 /** The extra kit styles a /ui pathname renders in, in link order. */
 export function extraStylesFor(pathname: string): string[] {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
-  return STYLES_BY_PATH[path] ?? [];
+  if (STYLES_BY_PATH[path]) return STYLES_BY_PATH[path];
+  // A component page whose lead demo shadcn shows in another style
+  // (modules/ui/docs/lead-previews.ts).
+  if (path.startsWith(COMPONENT_PAGE)) {
+    const style = LEAD_PREVIEWS[path.slice(COMPONENT_PAGE.length)]?.style;
+    if (style && !BUILT_IN.has(style)) return [style];
+  }
+  return [];
 }
 
 /** The stylesheet links for those styles. */
