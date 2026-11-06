@@ -230,7 +230,9 @@ suite('ui-sonner', () => {
     assert.ok(inner, 'inner wrapper rendered');
     assert.equal(inner.getAttribute('data-slot'), 'sonner');
     assert.match(inner.className, /top-4/);
-    assert.match(inner.className, /right-4/);
+    // Logical side since #1666, so top-right sits at the inline end and
+    // flips under dir="rtl".
+    assert.match(inner.className, /end-4/);
     assert.match(inner.className, /fixed/);
     root.remove();
   });
