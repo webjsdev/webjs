@@ -439,3 +439,20 @@ test('both /ui stylesheet inputs import the shared variants before any kit style
   const theme = readFileSync(resolve(WEBSITE_ROOT, 'public/ui-theme.css'), 'utf8');
   assert.match(theme, /@custom-variant not-dark \{/, 'not-dark is spelled out, since the two-branch dark variant cannot be negated');
 });
+
+test('the home page serves shadcn\'s chat card on its empty state, with the first question queued', async () => {
+  // The card is <message-scroller-demo>, shadcn's MessageScrollerDemo. Its
+  // first paint is the server's: the empty state and the queued question,
+  // inside the wrapper that hides the card's footnote on the home page.
+  const home = await bodyOf(UI_INDEX);
+  const at = home.indexOf('<message-scroller-demo');
+  assert.ok(at > 0, 'the card is in the grid');
+  const card = home.slice(at, home.indexOf('</message-scroller-demo>', at));
+  assert.match(home.slice(at - 120, at), /\*\*:\[\.text-center\.text-xs\]:hidden/, 'inside the wrapper that hides its footnote');
+  assert.match(card, /New Chat/);
+  assert.match(card, /data-slot="empty-title"[^>]*>Morning, shadcn!/, 'the empty state, before anything is sent');
+  assert.match(card, /data-status="ready"[^>]*>I'm building a chat for our app/, 'the first question waits in the box');
+  assert.match(card, /aria-label="Reset conversation"/);
+  assert.match(card, /<span class="sr-only">Send<\/span>/);
+  assert.ok(!card.includes(String.fromCharCode(0x2014)), 'the script keeps the prose rule');
+});

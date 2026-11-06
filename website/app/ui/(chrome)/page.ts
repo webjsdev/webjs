@@ -11,6 +11,7 @@ import '#modules/ui/components/alert-dialog.ts';
 import '#modules/ui/components/dropdown-menu.ts';
 import '#modules/ui/components/select.ts';
 import '#modules/ui/components/switch.ts';
+import '#components/message-scroller-demo.ts';
 
 /**
  * The /ui home page, ported from shadcn/ui's

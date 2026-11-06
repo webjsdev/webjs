@@ -34,6 +34,9 @@ export function cardsDemo() {
         </div>
         <div class="hidden flex-col gap-(--gap) md:flex">
           ${qrConnect()}
+          <div class="**:[.text-center.text-xs]:hidden">
+            <message-scroller-demo></message-scroller-demo>
+          </div>
           ${payments()}
         </div>
       </div>

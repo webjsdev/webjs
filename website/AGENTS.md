@@ -125,6 +125,11 @@ website/
     preview-tabs.ts    Preview / Code toggle around a gallery demo
     docs-drawer.ts     the /docs + /ui sidebar shell and its mobile drawer:
                        backdrop, toggle, aside, open state, every close path
+    message-scroller-demo.ts
+                       shadcn's MessageScrollerDemo, the /ui home page's
+                       "New Chat" card: a scripted conversation that streams
+                       its answers a word at a time, on the kit's
+                       <ui-message-scroller>
     site-nav-menu.ts   the header's mobile menu, wrapping a native <details>
                        so it still opens with JS off
                        (components/ui/ is intentionally EMPTY here, left free
