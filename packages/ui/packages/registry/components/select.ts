@@ -10,7 +10,9 @@
  *   Select                   → <ui-select placeholder size position>
  *   SelectTrigger (size)     → drawn by the element (`size="sm" | "default"`)
  *   SelectValue placeholder  → the `placeholder` attribute, or a placeholder <option>
- *   SelectContent            → drawn by the element (`position="popper" | "item-aligned"`)
+ *   SelectContent            → drawn by the element (`position="item-aligned"`, the
+ *                              default, opens over the trigger on the chosen option;
+ *                              `"popper"` opens below it)
  *   SelectGroup + SelectLabel→ <optgroup label="...">
  *   SelectItem               → <option value="...">
  *   SelectSeparator          → <hr> between options
@@ -138,7 +140,7 @@ export class UiSelect extends WebComponent({
     super();
     this.placeholder = '';
     this.size = 'default';
-    this.position = 'popper';
+    this.position = 'item-aligned';
     this.open = false;
     this.enhanced = false;
     this.revision = 0;
@@ -359,7 +361,7 @@ export class UiSelect extends WebComponent({
       popover="manual"
       aria-labelledby=${labels.length ? labels.join(' ') : null}
       data-state=${this.open ? 'open' : 'closed'}
-      data-position=${this.position || 'popper'}
+      data-position=${this.position || 'item-aligned'}
       class=${selectContentClass()}
       @keydown=${this._onListKeyDown}
       @pointerdown=${this._onListPointerDown}
@@ -367,7 +369,7 @@ export class UiSelect extends WebComponent({
     ><div data-slot="select-scroll-up-button" aria-hidden="true" hidden class=${selectScrollUpButtonClass()}
         @pointerenter=${() => this._autoScroll(-1)} @pointerleave=${this._stopScroll}
       ><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path></svg></div><div
-      data-slot="select-viewport" data-position=${this.position || 'popper'} class=${selectViewportClass()}
+      data-slot="select-viewport" data-position=${this.position || 'item-aligned'} class=${selectViewportClass()}
     >${this._entries().map(renderEntry)}</div><div data-slot="select-scroll-down-button" aria-hidden="true" hidden class=${selectScrollDownButtonClass()}
         @pointerenter=${() => this._autoScroll(1)} @pointerleave=${this._stopScroll}
       ><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></div></div></div>`;
@@ -429,7 +431,32 @@ export class UiSelect extends WebComponent({
     const room = Math.max(window.innerHeight - t.bottom, t.top) - 12;
     panel.style.setProperty('--radix-select-content-available-height', `${Math.max(room, 120)}px`);
     panel.style.minWidth = `${t.width}px`;
-    positionFloating(trigger, panel, { side: 'bottom', align: 'start', sideOffset: 4 });
+    if (this.position === 'popper') {
+      positionFloating(trigger, panel, { side: 'bottom', align: 'start', sideOffset: 4 });
+      return;
+    }
+    // item-aligned: open OVER the trigger, the chosen option's text lying on
+    // the trigger's value text, as Radix does, kept inside the viewport.
+    const option =
+      this._optionEls().find((o) => o.getAttribute('aria-selected') === 'true') ??
+      this._enabledOptionEls()[0];
+    const valueEl = trigger.querySelector<HTMLElement>('[data-slot="select-value"]');
+    if (!option || !valueEl) {
+      positionFloating(trigger, panel, { side: 'bottom', align: 'start', sideOffset: 4 });
+      return;
+    }
+    const p = panel.getBoundingClientRect();
+    const o = option.getBoundingClientRect();
+    const text = (option.lastElementChild as HTMLElement | null)?.getBoundingClientRect() ?? o;
+    const v = valueEl.getBoundingClientRect();
+    const margin = 10;
+    let top = t.top + t.height / 2 - (o.top - p.top + o.height / 2);
+    let left = v.left - (text.left - p.left);
+    top = Math.max(margin, Math.min(top, window.innerHeight - p.height - margin));
+    left = Math.max(margin, Math.min(left, window.innerWidth - p.width - margin));
+    panel.style.top = `${top}px`;
+    panel.style.left = `${left}px`;
+    panel.setAttribute('data-side', 'none');
   };
 
   /** Choose the option at `index` in the native select, then close. */

@@ -2142,6 +2142,49 @@ suite('ui-select', () => {
     root.remove();
   });
 
+  const placed = (panel) => ({ top: parseFloat(panel.style.top), left: parseFloat(panel.style.left) });
+
+  test('by default the list opens over the trigger, the chosen option lying on the value', async () => {
+    const root = await mount(html`<div style="padding: 220px 0 0 240px">${field()}</div>`);
+    await tick();
+    const { el, select, trigger, panel, options } = parts(root);
+    select.value = 'banana';
+    select.dispatchEvent(new Event('change'));
+    await tick();
+    trigger.click();
+    await tick();
+    assert.equal(panel.getAttribute('data-position'), 'item-aligned');
+    // This suite loads no stylesheet, so the UA [popover] rule moves the
+    // painted panel; offsets INSIDE the panel are unaffected, so the check
+    // composes the written top with the option's offset in the panel.
+    const p = panel.getBoundingClientRect();
+    const o = options()[1].getBoundingClientRect();
+    const t = trigger.getBoundingClientRect();
+    const optionCentre = placed(panel).top + (o.top - p.top) + o.height / 2;
+    assert.ok(Math.abs(optionCentre - (t.top + t.height / 2)) <= 1, `option centre ${optionCentre} vs trigger centre ${t.top + t.height / 2}`);
+    const textLeft = placed(panel).left + (options()[1].lastElementChild.getBoundingClientRect().left - p.left);
+    const valueLeft = el.querySelector('[data-slot="select-value"]').getBoundingClientRect().left;
+    assert.ok(Math.abs(textLeft - valueLeft) <= 1, `option text ${textLeft} vs value text ${valueLeft}`);
+    el.hide();
+    root.remove();
+  });
+
+  test('position="popper" opens the list below the trigger, at least as wide', async () => {
+    const root = await mount(html`<ui-select position="popper"><select name="s"><option value="a">A</option><option value="b">B</option></select></ui-select>`);
+    await tick();
+    const el = root.querySelector('ui-select');
+    const trigger = el.querySelector('[data-slot="select-trigger"]');
+    const panel = el.querySelector('[data-slot="select-content"]');
+    trigger.click();
+    await tick();
+    const t = trigger.getBoundingClientRect();
+    assert.equal(panel.getAttribute('data-position'), 'popper');
+    assert.ok(Math.abs(placed(panel).top - (t.bottom + 4)) <= 1, 'below the trigger');
+    assert.ok(Math.abs(parseFloat(panel.style.minWidth) - t.width) < 0.01, `min-width ${panel.style.minWidth}`);
+    el.hide();
+    root.remove();
+  });
+
   test('an outside press closes the list', async () => {
     const root = await mount(field());
     await tick();
