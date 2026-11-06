@@ -101,3 +101,27 @@ test('a repeated plain name warns once per action and field, only when a warn si
   formInput(fd([['size', 's'], ['size', 'm']]), { label: 'pickColorsB' });
   assert.equal(messages.length, 1);
 });
+
+// Review follow-ups on #1664: the readers must agree with the properties for a
+// `[]` group, and a name mixed with its `[]` form must not drop a value.
+test('the bracket-less name reads a [] group through get, getAll and has', () => {
+  const input = formInput(fd([['tags[]', 'a'], ['tags[]', 'b']]));
+  assert.deepEqual(input.tags, ['a', 'b']);
+  assert.deepEqual(input.getAll('tags'), ['a', 'b'], 'getAll agrees with the property');
+  assert.equal(input.get('tags'), 'a');
+  assert.equal(input.has('tags'), true);
+  assert.equal(input.has('missing'), false);
+  assert.deepEqual(input.getAll('tags[]'), ['a', 'b'], 'the submitted spelling still reads');
+  assert.deepEqual(Object.fromEntries(input), { 'tags[]': 'b' }, 'iteration reports names as submitted, like FormData');
+});
+
+test('a plain name mixed with its [] form is one array group, in either order, with no warning', () => {
+  const messages = [];
+  const warn = (m) => messages.push(m);
+  const a = formInput(fd([['x', '1'], ['x[]', '2']]), { warn, label: 'mixA' });
+  assert.deepEqual(a.x, ['1', '2'], 'the plain value is kept');
+  const b = formInput(fd([['x[]', '1'], ['x', '2']]), { warn, label: 'mixB' });
+  assert.deepEqual(b.x, ['1', '2'], 'and the array is not replaced');
+  assert.deepEqual(b.getAll('x').sort(), ['1', '2']);
+  assert.equal(messages.length, 0, 'an array group never warns');
+});

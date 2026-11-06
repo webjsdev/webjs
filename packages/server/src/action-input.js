@@ -19,8 +19,15 @@
  *   - The `FormData` READERS are present as non-enumerable methods delegating
  *     to the original (`get`, `getAll`, `has`, `entries`, `keys`, `values`,
  *     `forEach`, iteration), so code written against a `FormData` keeps
- *     working, and so do `Object.fromEntries(input)`, `[...input]` and
- *     `new URLSearchParams(input)`.
+ *     working, and so do `[...input]` and `new URLSearchParams(input)`.
+ *     `get`, `getAll` and `has` also accept the bracket-less name, so
+ *     `input.getAll('tags')` reads a `tags[]` group and agrees with
+ *     `input.tags`. Iteration (`entries`, `keys`, `values`, `forEach`,
+ *     `Object.fromEntries(input)`) reports the names as SUBMITTED, brackets
+ *     included, the way a `FormData` does.
+ *   - A name submitted both plain and with `[]` (`x=1&x[]=2`) is one group:
+ *     the property is the array of every value in submission order, so
+ *     nothing is dropped.
  *
  * Deliberately absent: the WRITERS (`append`, `set`, `delete`). A write through
  * to the original would leave the field properties stale, and an action has no
@@ -56,10 +63,16 @@ export function formInput(formData, opts = {}) {
   /** @type {Map<string, number>} */
   const counts = new Map();
 
+  // Every key that arrives in its `[]` form at least once is an array group,
+  // and its plain-name entries join the group instead of overwriting it.
+  /** @type {Set<string>} */
+  const grouped = new Set();
+  for (const name of formData.keys()) if (isGroupName(name)) grouped.add(name.slice(0, -2));
+
   for (const [name, value] of formData.entries()) {
-    counts.set(name, (counts.get(name) || 0) + 1);
-    if (name.endsWith('[]') && name.length > 2) {
-      const key = name.slice(0, -2);
+    const key = isGroupName(name) ? name.slice(0, -2) : name;
+    counts.set(key, (counts.get(key) || 0) + 1);
+    if (grouped.has(key)) {
       const prev = Object.prototype.hasOwnProperty.call(input, key) ? input[key] : undefined;
       define(input, key, Array.isArray(prev) ? [...prev, value] : [value]);
     } else {
@@ -67,10 +80,22 @@ export function formInput(formData, opts = {}) {
     }
   }
 
+  /** @type {Record<string, Function>} */
+  const readers = {
+    // The bracket-less name reads a `[]` group, so `getAll('tags')` agrees
+    // with `input.tags`. A name the form submitted in both forms reads both.
+    get: (/** @type {string} */ n) => (formData.has(n) ? formData.get(n) : alias(n) && formData.has(alias(n)) ? formData.get(alias(n)) : null),
+    getAll: (/** @type {string} */ n) => (alias(n) ? [...formData.getAll(n), ...formData.getAll(alias(n))] : formData.getAll(n)),
+    has: (/** @type {string} */ n) => formData.has(n) || (!!alias(n) && formData.has(alias(n))),
+    entries: () => formData.entries(),
+    keys: () => formData.keys(),
+    values: () => formData.values(),
+    forEach: (/** @type {any} */ cb, /** @type {any} */ thisArg) => formData.forEach(cb, thisArg),
+  };
   for (const reader of READERS) {
     if (Object.prototype.hasOwnProperty.call(input, reader)) continue;
     Object.defineProperty(input, reader, {
-      value: /** @type {any} */ (formData)[reader].bind(formData),
+      value: readers[reader],
       enumerable: false, writable: false, configurable: true,
     });
   }
@@ -81,7 +106,7 @@ export function formInput(formData, opts = {}) {
 
   if (typeof opts.warn === 'function') {
     for (const [name, n] of counts) {
-      if (n < 2 || name.endsWith('[]')) continue;
+      if (n < 2 || grouped.has(name)) continue;
       const key = `${opts.label || ''}\u0000${name}`;
       if (warned.has(key)) continue;
       warned.add(key);
@@ -102,6 +127,22 @@ export function formInput(formData, opts = {}) {
  */
 export function isFormData(value) {
   return typeof FormData !== 'undefined' && value instanceof FormData;
+}
+
+/**
+ * True for a submitted name in the array form (`tags[]`).
+ * @param {string} name
+ */
+function isGroupName(name) {
+  return name.length > 2 && name.endsWith('[]');
+}
+
+/**
+ * The `[]` spelling of a bracket-less name, or null for a name already in it.
+ * @param {string} name
+ */
+function alias(name) {
+  return isGroupName(name) ? null : name + '[]';
 }
 
 /**

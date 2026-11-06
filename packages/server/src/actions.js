@@ -448,8 +448,11 @@ function buildStubBody({ hash, method, fnNames, actionUrl }) {
  *   it so a throwing sink can never affect the response.
  * @param {string[]} [allowedOrigins] cross-site origins the CSRF check allows
  *   (the app's `webjs.allowedOrigins`), for reverse-proxy / multi-domain setups.
+ * @param {{ warn?: (msg: string) => void }} [logger] where a dev diagnostic
+ *   goes (the repeated-field warning, #1664), so it lands with the form path's
+ *   warnings instead of on the console. Falls back to `console.warn`.
  */
-export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigins = []) {
+export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigins = [], logger) {
   const file = idx.hashToFile.get(hash);
   if (!file) return rpcResponse({ error: 'Unknown action' }, { status: 404 });
   const mod = await loadModule(file, idx.dev);
@@ -501,7 +504,8 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
   // shape a bound form submission does, so an action's input never depends on
   // the boundary it was reached through (#1664, `action-input.js`).
   if (isFormData(args[0])) {
-    args = [formInput(args[0], idx.dev ? { warn: (m) => console.warn(m), label: fnName } : {}), ...args.slice(1)];
+    const warn = logger && logger.warn ? (m) => logger.warn(m) : (m) => console.warn(m);
+    args = [formInput(args[0], idx.dev ? { warn, label: fnName } : {}), ...args.slice(1)];
   }
   // Input validation (#245): a validator declared via the `validate` config
   // export (#488) runs SERVER-SIDE before the body on this RPC path. The RPC

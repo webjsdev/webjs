@@ -240,7 +240,7 @@ export async function handleCore(req, ctx) {
     // Pass the onError sink (issue #239): a server action that throws
     // unexpectedly is reported to the APM hook before the sanitized 500.
     const onActionError = reportError ? (e) => reportError(e, req, 'action') : undefined;
-    return invokeAction(state.actionIndex, actMatch[1], actMatch[2], req, onActionError, allowedOrigins);
+    return invokeAction(state.actionIndex, actMatch[1], actMatch[2], req, onActionError, allowedOrigins, logger);
   }
 
   // Static: /public/*, the #830 root remaps, and /favicon.ico. In dev this
