@@ -105,6 +105,7 @@ packages/ui/
       fetcher.js                  network GET + cache; local-vs-network dispatch (getRegistryItem/Index)
       example.js                  extract / strip the module-JSDoc @example block
       extract.js                  shared kit projector (view + MCP `ui` tool): inventory + per-component helpers/example/deps, plus extractHelperAxes() (the variant / size VALUES a `webjsui lint` no-restyle message names)
+      style-bake.js               the style bake (#1666): createStyleMap() (a style file's @apply rules -> { 'cn-x': classes }), classSegments() (the one lexer that finds class strings), bakeSource() / bakeForStyle() (replace every cn-* name with the chosen style's classes)
       resolver.js                 walk registryDependencies transitively
     utils/
       get-config.js               read components.json
@@ -445,6 +446,41 @@ to agree, and the alias is the one that has consumers.
 Both files are also treated as user-owned once they exist. `init` and `add`
 leave them alone (`add`'s `--yes` suppresses prompts but does not license
 replacing them); only an explicit `--overwrite` replaces one.
+
+### Base form and the style bake (#1666)
+
+shadcn authors each component once, in BASE FORM: semantic `cn-*` names
+(`cn-button`, `cn-button-variant-default`) beside the layout classes it keeps
+inline. A STYLE is a CSS file of nested rules, under one `.style-<name>`
+wrapper, mapping each name to Tailwind through `@apply`. The kit is moving to
+the same architecture so all of shadcn's styles apply to it.
+
+`src/registry/style-bake.js` is the one bake. It is a port of shadcn's
+`createStyleMap` and `transformStyle`, written without postcss or ts-morph so
+the CLI gains no dependency:
+
+- `createStyleMap(css)` reads a style file. Every rule with `@apply` gives its
+  classes to the LAST `cn-*` class of each selector (with `&` removed), and a
+  later rule for the same name is prepended, as in shadcn.
+- `classSegments(src)` is the ONE lexer for "which strings carry classes":
+  every string literal, plus the static runs of a `class="..."` attribute in an
+  `html` template. The bake rewrites what it finds, and the fixture and the
+  snapshot test enumerate with it, so the three cannot disagree. A `cn-*` name
+  produced inside a `${...}` hole is never seen, so a name must always sit in
+  static text.
+- `bakeSource(src, map)` replaces each name with its classes, mapped classes
+  FIRST so an inline layout class wins a conflict under `cn()` (the precedence
+  `twMerge(mapped, original)` gives shadcn), drops exact duplicates, and keeps
+  the five allowlisted hooks (`CN_ALLOWLIST`). Two departures from shadcn: every
+  occurrence of a name is inlined (shadcn inlines only the first per file, but a
+  Tier-2 template can render a part in two branches), and the merge is order
+  plus exact-duplicate removal rather than tailwind-merge.
+
+The guard is `test/style-bake-snapshot.test.js`: baking each component with
+`new-york` must equal, string by string and THROUGH the kit's real `cn()`, the
+classes recorded in `test/fixtures/class-strings.json`, which was captured from
+the components before the conversion started. Never regenerate that fixture
+from base-form sources, which would compare the bake with itself.
 
 ### Registry resolution: LOCAL-FIRST (#983)
 
