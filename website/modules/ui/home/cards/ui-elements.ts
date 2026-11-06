@@ -64,21 +64,19 @@ export function uiElements() {
         </ui-alert-dialog-content>
       </ui-alert-dialog>
       <div role="group" data-slot="button-group" data-orientation="horizontal" class=${cn(buttonGroupClass(), 'ml-auto')}>
-        <button type="button" data-slot="button" class=${buttonClass({ variant: 'outline' })}>Button Group</button>
-        <ui-dropdown-menu>
-          <ui-dropdown-menu-trigger>
-            <button type="button" data-slot="button" aria-label="Open quick actions" class=${buttonClass({ variant: 'outline', size: 'icon' })}>${ArrowUp01Icon('', 2)}</button>
-          </ui-dropdown-menu-trigger>
-          <ui-dropdown-menu-content align="end" side="top" class="w-40">
-            <ui-dropdown-menu-label>Quick Actions</ui-dropdown-menu-label>
-            <ui-dropdown-menu-item>Mute Conversation</ui-dropdown-menu-item>
-            <ui-dropdown-menu-item>Mark as Read</ui-dropdown-menu-item>
-            <ui-dropdown-menu-item>Block User</ui-dropdown-menu-item>
-            <ui-dropdown-menu-separator></ui-dropdown-menu-separator>
-            <ui-dropdown-menu-item variant="destructive">Delete Conversation</ui-dropdown-menu-item>
-          </ui-dropdown-menu-content>
-        </ui-dropdown-menu>
+        <button type="button" data-slot="button" data-variant="outline" class=${buttonClass({ variant: 'outline' })}>Button Group</button>
+        <button type="button" id="home-quick-actions" data-slot="button" data-variant="outline" data-size="icon" aria-label="Open quick actions" class=${buttonClass({ variant: 'outline', size: 'icon' })}>${ArrowUp01Icon('', 2)}</button>
       </div>
+      <ui-dropdown-menu trigger="home-quick-actions" class="absolute">
+        <ui-dropdown-menu-content align="end" side="top" class="w-40">
+          <ui-dropdown-menu-label>Quick Actions</ui-dropdown-menu-label>
+          <ui-dropdown-menu-item>Mute Conversation</ui-dropdown-menu-item>
+          <ui-dropdown-menu-item>Mark as Read</ui-dropdown-menu-item>
+          <ui-dropdown-menu-item>Block User</ui-dropdown-menu-item>
+          <ui-dropdown-menu-separator></ui-dropdown-menu-separator>
+          <ui-dropdown-menu-item variant="destructive">Delete Conversation</ui-dropdown-menu-item>
+        </ui-dropdown-menu-content>
+      </ui-dropdown-menu>
       ${toggle('Enable advanced setting', 'hidden 4xl:flex')}
     </div>
   `));
