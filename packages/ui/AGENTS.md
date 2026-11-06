@@ -1,7 +1,7 @@
 # AGENTS.md : @webjsdev/ui
 
 The webjs **AI-first component library + CLI**, `webjsui init` / `add` /
-`list` / `view` / `diff` / `info` / `build` / `lint`. Ships 50 primitives across two
+`list` / `view` / `diff` / `info` / `build` / `lint`. Ships 57 primitives across two
 tiers: class-helper functions for visual components, custom elements only
 where state matters. Variant names, sizes, and data-attribute conventions
 mirror shadcn so existing shadcn knowledge transfers directly.
@@ -46,7 +46,9 @@ Helpers that take options accept an object: `buttonClass({ variant: 'outline', s
 
 For things the browser doesn't provide natively: dialogs, alert-dialogs,
 sheets, drawers, tabs, dropdowns, context menus, menubars, navigation menus,
-tooltips, hover-cards, toggle / toggle-group, sonner.
+tooltips, hover-cards, toggle / toggle-group, sonner, and the rich form
+controls (select, combobox, command, input-otp, slider, calendar,
+questionnaire).
 Tier-2 components extend the `WebComponent({ ... })` factory from
 `@webjsdev/core` and are Lit-shaped: the factory shape declares reactive
 attributes, `render()`
@@ -168,7 +170,7 @@ This trap exists ONLY in the marketing site. Scaffolded user apps,
 `examples/blog`, and every other WebJs app keep `components/ui/` as normal
 tracked source, the standard shadcn "you own it" pattern.
 
-## Component inventory (50 components)
+## Component inventory (57 components)
 
 | Tier | Component | Surface |
 |---|---|---|
@@ -220,6 +222,13 @@ tracked source, the standard shadcn "you own it" pattern.
 | 2  | `context-menu` | `<ui-context-menu>` + Trigger (around the region) / Content and every dropdown-menu part under `ui-context-menu-*`. Opens on right-click at the pointer, and on Shift+F10 or the ContextMenu key below the focused element. A left click never opens it. The region gets no `aria-haspopup` / `aria-expanded`, the menu is named by the content's `aria-label` (else "Context menu"), and every close returns focus to what had it. Make the region focusable and put each command somewhere a keyboard or touch user reaches without a right-click. |
 | 2  | `menubar` | `<ui-menubar>` + Menu / Trigger / Content and every dropdown-menu part under `ui-menubar-*`. `role="menubar"` with one tab stop over the triggers, ArrowLeft / ArrowRight / Home / End between them, ArrowDown / ArrowUp to open on the first / last item, ArrowLeft / ArrowRight in an open menu to the neighbouring menu, a pointer switch while one is open, and one open menu per bar. The trigger renders the `role="menuitem"` button with `aria-haspopup` served. |
 | 2  | `navigation-menu` | `<ui-navigation-menu viewport delay-duration skip-delay-duration>` + List / Item / Trigger / Content / Link / Indicator, plus `navigationMenuLinkClass` and `navigationMenuTriggerStyle`. A set of disclosures in a `<nav>` (named "Main" by default), never an ARIA menu: a real `ul` / `li`, button triggers with `aria-expanded` / `aria-controls`, panels named by their trigger, and `<ui-navigation-menu-link active>` rendering a real `<a>` with `aria-current="page"`. The root renders the viewport frame and sizes it to the open panel instead of moving the panel into it, so the frame does not animate its size between panels. |
+| 2  | `select` | `<ui-select placeholder size position>` around an authored native `<select>` (D13): with JavaScript off the select is the control. On upgrade it is hidden visually only (never `display: none`, so it still submits, resets and anchors a validation bubble) and a `role="combobox"` trigger plus a `role="listbox"` are drawn from its options (`<optgroup>` a named group, `<hr>` a separator, a placeholder option of `value=""` plus `hidden` or `disabled` left out). The trigger is named by the select's labels and carries its `aria-describedby` / `aria-invalid`, and a label click and a failed submit both land on it. Options take real focus, as in Radix, because every style highlights with `focus:`. `position="item-aligned"` (default) opens over the trigger on the chosen option, `"popper"` below it. `selectTriggerClass()` also styles the native select for the no-JavaScript paint. |
+| 1a/2 | `slider` | `sliderClass()` styles one native `<input type="range">` with no JavaScript. `<ui-slider orientation>` enhances one authored range input per thumb (D13): focusable `role="slider"` thumbs named by their input's labels, Radix's keys (Left / Right swap under RTL), a press on the track moves the nearest thumb, and a thumb never passes its neighbour. `ui-value-change` per move, `ui-value-commit` (and `change`) per gesture. |
+| 2  | `input-otp` | `<ui-input-otp>` around one real `<input autocomplete="one-time-code">` (D13) plus Group / Slot / Separator. The input is laid transparent over the slots and stays the control (label, paste, SMS autofill, the mobile keyboard), while the slots draw the characters and a blinking caret, and are `aria-hidden`. A keystroke that breaks the input's `pattern` or `maxlength` is refused, and `ui-complete` fires once every slot is filled. Each slot styles its own host, so shadcn's `first:` / `last:` corners see siblings. |
+| 2  | `command` | `<ui-command label should-filter loop>` + Input / List / Empty / Group (`heading`) / Item (`value`, `keywords`, `disabled`) / Shortcut / Separator, on cmdk's model: the input is a `role="combobox"` keeping focus with `aria-activedescendant`, items carry `data-selected="true"`, typing ranks by value and keywords (prefix, word start, substring, then letters in order) through CSS `order`, empty groups and separators hide. Enter runs the item (`ui-select`) and follows a link inside it. `<ui-command-dialog>` puts a `<ui-command>` in a native modal dialog with a screen-reader title. |
+| 2  | `combobox` | `<ui-combobox name multiple value>` + Input (`input-id`, `show-clear`) / Content / List / Item / Group / Label / Empty / Separator, and Chips + Chips Input for `multiple`. Base UI's model: the value rides one `<input type="hidden" name>` per choice, served at SSR; the input is a `role="combobox"` with `aria-activedescendant`, items carry `data-highlighted` / `data-selected`, and the content carries `data-empty` when nothing matches. Chips are drawn from the values, each with a remove button naming its value; Backspace in an empty input drops the last. |
+| 2  | `calendar` | `<ui-calendar mode value month number-of-months min max caption-layout name>`, a hand-rolled month grid on `Intl.DateTimeFormat`, rendered by the server. Single, multiple and range (`"from/to"`) modes, with the date maths on UTC calendar dates, exported and unit-tested. A `role="grid"` per month with named day buttons, one roving tab stop and the APG date-grid keys. `name` adds hidden inputs (`name[from]` / `name[to]` for a range). |
+| 2  | `questionnaire` | `<ui-questionnaire shortcuts>` + Progress / Item (`name`, `required`, `multiple`, `disabled`) / Title / Description / Choices / Choice / Input / Error / Actions / Previous / Skip / Next / Submit, ported from `@shadcn/react`. A native `<form>` of `<fieldset>`s whose answers share the question's name. Without JavaScript every question shows and only Submit is offered. With it one question shows at a time, Next validates (an `aria-invalid` question and a `role="alert"` error), Skip clears an optional one, Enter steps forward, and letter or number shortcuts pick answers. |
 
 **shadcn's style-function names (#1666, D9).** shadcn exports a `cva`
 function per component (`buttonVariants`, `badgeVariants`, `toggleVariants`,
@@ -888,8 +897,8 @@ shape so `webjsui init --base-color <name>` works uniformly.
 not shipped yet, and land in later steps of that work, following the Tier-1 /
 Tier-2 conventions above:
 
-calendar, carousel, chart, combobox, command, form, input-otp, resizable,
-select (rich), sidebar, slider.
+carousel, chart, form, resizable, sidebar, and the code-block and
+message-scroller primitives.
 
 ---
 
