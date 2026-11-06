@@ -323,3 +323,18 @@ test('ui-calendar: the server renders the month grid, the chosen day and its hid
   assert.match(out, /<input type="hidden" name="day" value="2025-06-12">/, 'the value is in the form');
   assert.match(out, /<button[^>]*tabindex="0"[^>]*data-day="2025-06-12"|<button[^>]*data-day="2025-06-12"[^>]*tabindex="0"/, 'the chosen day holds the tab stop');
 });
+
+test('ui-questionnaire: without JavaScript it is one plain form, every question shown and only Submit offered', { skip }, async () => {
+  const out = await ssr(
+    ['questionnaire.ts'],
+    (html) => html`<ui-questionnaire><ui-questionnaire-item name="a" required><ui-questionnaire-title>First?</ui-questionnaire-title><ui-questionnaire-choices><ui-questionnaire-choice value="x">X</ui-questionnaire-choice></ui-questionnaire-choices></ui-questionnaire-item><ui-questionnaire-item name="b"><ui-questionnaire-title>Second?</ui-questionnaire-title><ui-questionnaire-choices><ui-questionnaire-choice value="y">Y</ui-questionnaire-choice></ui-questionnaire-choices></ui-questionnaire-item><ui-questionnaire-actions><ui-questionnaire-previous></ui-questionnaire-previous><ui-questionnaire-next></ui-questionnaire-next><ui-questionnaire-submit></ui-questionnaire-submit></ui-questionnaire-actions></ui-questionnaire>`,
+  );
+  assert.match(out, /<form\s+data-slot="questionnaire"/, 'a native form');
+  assert.doesNotMatch(out, /<form[^>]*novalidate/, 'with the browser\'s own validation');
+  assert.equal((out.match(/<fieldset/g) ?? []).length, 2);
+  assert.doesNotMatch(out, /<fieldset[^>]*hidden/, 'every question is shown');
+  assert.match(out, /<input[^>]*type="radio"[^>]*name="a"[^>]*value="x"[^>]*required|<input[^>]*name="a"[^>]*required/, 'a required question\'s radios are required');
+  assert.match(out, /data-slot="questionnaire-next"[^>]*hidden/, 'Next is hidden');
+  assert.match(out, /data-slot="questionnaire-previous"[^>]*hidden/, 'Previous is hidden');
+  assert.doesNotMatch(out, /data-slot="questionnaire-submit"[^>]*hidden/, 'Submit is offered');
+});

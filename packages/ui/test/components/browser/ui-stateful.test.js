@@ -719,3 +719,175 @@ suite('ui-calendar', () => {
     root.remove();
   });
 });
+
+suite('ui-questionnaire', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/questionnaire.ts`);
+  });
+
+  const flow = (shortcuts = '') => html`
+    <ui-questionnaire shortcuts=${shortcuts}>
+      <ui-questionnaire-progress></ui-questionnaire-progress>
+      <ui-questionnaire-item name="direction" required>
+        <ui-questionnaire-title>What next?</ui-questionnaire-title>
+        <ui-questionnaire-description>Pick one.</ui-questionnaire-description>
+        <ui-questionnaire-choices>
+          <ui-questionnaire-choice value="delegation">Delegation</ui-questionnaire-choice>
+          <ui-questionnaire-choice value="questions">Questions</ui-questionnaire-choice>
+          <ui-questionnaire-input aria-label="Another answer"></ui-questionnaire-input>
+        </ui-questionnaire-choices>
+        <ui-questionnaire-error></ui-questionnaire-error>
+      </ui-questionnaire-item>
+      <ui-questionnaire-item name="tags" multiple>
+        <ui-questionnaire-title>Tags?</ui-questionnaire-title>
+        <ui-questionnaire-choices>
+          <ui-questionnaire-choice value="a">A</ui-questionnaire-choice>
+          <ui-questionnaire-choice value="b">B</ui-questionnaire-choice>
+        </ui-questionnaire-choices>
+      </ui-questionnaire-item>
+      <ui-questionnaire-item name="skipped" disabled>
+        <ui-questionnaire-title>Not asked</ui-questionnaire-title>
+      </ui-questionnaire-item>
+      <ui-questionnaire-item name="detail">
+        <ui-questionnaire-title>Detail?</ui-questionnaire-title>
+        <ui-questionnaire-choices>
+          <ui-questionnaire-choice value="focused">Focused</ui-questionnaire-choice>
+        </ui-questionnaire-choices>
+      </ui-questionnaire-item>
+      <ui-questionnaire-actions>
+        <ui-questionnaire-previous></ui-questionnaire-previous>
+        <ui-questionnaire-skip></ui-questionnaire-skip>
+        <ui-questionnaire-next></ui-questionnaire-next>
+        <ui-questionnaire-submit></ui-questionnaire-submit>
+      </ui-questionnaire-actions>
+    </ui-questionnaire>
+  `;
+  const parts = (root) => {
+    const el = root.querySelector('ui-questionnaire');
+    const form = el.querySelector('form');
+    const fieldset = (name) => el.querySelector(`ui-questionnaire-item[name="${name}"] fieldset`);
+    const button = (part) => el.querySelector(`[data-slot="questionnaire-${part}"]`);
+    const shownButtons = () => ['previous', 'skip', 'next', 'submit'].filter((p) => !button(p).hidden);
+    const radio = (name, value) => el.querySelector(`input[name="${name}"][value="${value}"]`);
+    const progress = () => el.querySelector('[role="progressbar"]');
+    return { el, form, fieldset, button, shownButtons, radio, progress };
+  };
+
+  test('one question shows at a time, named and described, with progress over the questions in the flow', async () => {
+    const root = await mount(flow());
+    await tick();
+    const { el, fieldset, shownButtons, progress } = parts(root);
+    assert.equal(fieldset('direction').hidden, false);
+    assert.equal(fieldset('tags').hidden, true);
+    assert.ok(fieldset('tags').inert, 'an off-screen question is inert');
+    assert.equal(progress().textContent.trim(), 'Question 1 of 3', 'the disabled question is left out');
+    assert.equal(progress().getAttribute('aria-valuenow'), '1');
+    const fs = fieldset('direction');
+    assert.equal(document.getElementById(fs.getAttribute('aria-labelledby')).textContent, 'What next?');
+    assert.equal(document.getElementById(fs.getAttribute('aria-describedby')).textContent, 'Pick one.');
+    assert.deepEqual(shownButtons(), ['next'], 'a required first question offers only Next');
+    assert.ok(el.querySelector('form').noValidate, 'the element validates once it runs');
+    root.remove();
+  });
+
+  test('Next refuses an unanswered required question, announcing the error; an answer clears it', async () => {
+    const root = await mount(flow());
+    await tick();
+    const { el, fieldset, button, radio } = parts(root);
+    button('next').click();
+    await tick();
+    const fs = fieldset('direction');
+    assert.equal(fs.hidden, false, 'still on the first question');
+    assert.equal(fs.getAttribute('aria-invalid'), 'true');
+    const error = el.querySelector('[data-slot="questionnaire-error"]');
+    assert.equal(error.hidden, false);
+    assert.equal(error.getAttribute('role'), 'alert');
+    assert.equal(error.textContent.trim(), 'Choose an answer to continue.');
+    assert.ok(fs.getAttribute('aria-describedby').includes(error.id));
+    radio('direction', 'questions').click();
+    await tick();
+    assert.equal(fs.hasAttribute('aria-invalid'), false, 'answering clears it');
+    button('next').click();
+    await tick();
+    assert.equal(fieldset('tags').hidden, false, 'on to the next question');
+    root.remove();
+  });
+
+  test('Previous goes back, Skip clears an optional question, the disabled one is skipped, and Submit ends it', async () => {
+    const root = await mount(flow());
+    await tick();
+    const { el, form, fieldset, button, radio, shownButtons } = parts(root);
+    radio('direction', 'delegation').click();
+    button('next').click();
+    await tick();
+    assert.deepEqual(shownButtons(), ['previous', 'skip', 'next']);
+    radio('tags', 'a').click();
+    button('skip').click();
+    await tick();
+    assert.equal(radio('tags', 'a').checked, false, 'Skip leaves it unanswered');
+    assert.equal(fieldset('detail').hidden, false, 'the disabled question is passed over');
+    assert.deepEqual(shownButtons(), ['previous', 'skip', 'submit'], 'Submit on the last question');
+    button('previous').click();
+    await tick();
+    assert.equal(fieldset('tags').hidden, false);
+    const answers = new FormData(form);
+    assert.equal(answers.get('direction'), 'delegation');
+    let submitted = 0;
+    form.addEventListener('submit', (e) => { submitted++; e.preventDefault(); });
+    button('next').click();
+    await tick();
+    button('submit').click();
+    await tick();
+    assert.equal(submitted, 1, 'the last question submits the form');
+    root.remove();
+  });
+
+  test('Enter submits the form, which steps forward until the last question', async () => {
+    const root = await mount(flow());
+    await tick();
+    const { el, form, fieldset, radio } = parts(root);
+    radio('direction', 'delegation').click();
+    form.requestSubmit();
+    await tick();
+    assert.equal(fieldset('tags').hidden, false, 'a submit before the end goes to the next question');
+    root.remove();
+  });
+
+  test('a multiple question takes several answers, and a typed answer clears a single question\'s choices', async () => {
+    const root = await mount(flow());
+    await tick();
+    const { el, form, radio, button } = parts(root);
+    radio('direction', 'questions').click();
+    const text = el.querySelector('input[data-slot="questionnaire-input"]');
+    text.value = 'Something else';
+    text.dispatchEvent(new Event('input', { bubbles: true }));
+    await tick();
+    assert.equal(radio('direction', 'questions').checked, false, 'the typed answer replaces the choice');
+    assert.deepEqual(new FormData(form).getAll('direction'), ['Something else']);
+    radio('direction', 'delegation').click();
+    await tick();
+    assert.equal(text.value, '', 'and a choice replaces the typed answer');
+    button('next').click();
+    await tick();
+    assert.equal(radio('tags', 'a').type, 'checkbox');
+    radio('tags', 'a').click();
+    radio('tags', 'b').click();
+    await tick();
+    assert.deepEqual(new FormData(form).getAll('tags'), ['a', 'b']);
+    assert.ok(radio('tags', 'a').closest('label').hasAttribute('data-checked'), 'a checked answer is marked for the styles');
+    root.remove();
+  });
+
+  test('shortcuts: a letter picks the matching answer and the key is shown', async () => {
+    const root = await mount(flow('letters'));
+    await tick();
+    const { el, radio } = parts(root);
+    const shortcut = el.querySelector('ui-questionnaire-choice [data-slot="questionnaire-choice-shortcut"]');
+    assert.equal(shortcut.textContent.trim(), 'A');
+    assert.equal(shortcut.hidden, false);
+    el.querySelector('form').dispatchEvent(new KeyboardEvent('keydown', { key: 'b', bubbles: true, cancelable: true }));
+    await tick();
+    assert.equal(radio('direction', 'questions').checked, true);
+    root.remove();
+  });
+});

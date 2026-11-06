@@ -637,6 +637,22 @@
       ]
     },
     {
+      "name": "questionnaire",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "button"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/questionnaire.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
       "name": "radio-group",
       "type": "registry:ui",
       "dependencies": [
