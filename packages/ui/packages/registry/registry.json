@@ -514,6 +514,22 @@
       ]
     },
     {
+      "name": "navigation-menu",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "lib-utils"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/navigation-menu.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
       "name": "pagination",
       "type": "registry:ui",
       "registryDependencies": [

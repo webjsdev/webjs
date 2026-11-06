@@ -230,3 +230,28 @@ test('ui-menubar: the bar serves role=menubar, each trigger a menuitem button wi
   assert.match(out, /cn-menubar-radio-item-indicator/, 'the radio indicator is styled apart from the checkbox one');
   assert.doesNotMatch(out, /data-slot="dropdown-menu/, 'no dropdown slot names');
 });
+
+test('ui-navigation-menu: a named nav of ul / li, a closed disclosure trigger, a hidden panel and a current-page link at SSR', { skip }, async () => {
+  const out = await ssr(
+    ['navigation-menu.ts'],
+    (html) => html`<ui-navigation-menu><ui-navigation-menu-list><ui-navigation-menu-item><ui-navigation-menu-trigger>Components</ui-navigation-menu-trigger><ui-navigation-menu-content><ui-navigation-menu-link href="/ui/dialog">Dialog</ui-navigation-menu-link></ui-navigation-menu-content></ui-navigation-menu-item><ui-navigation-menu-item><ui-navigation-menu-link href="/docs" active>Docs</ui-navigation-menu-link></ui-navigation-menu-item></ui-navigation-menu-list></ui-navigation-menu>`,
+  );
+  assert.match(out, /<nav[^>]*data-slot="navigation-menu"[^>]*aria-label="Main"/, 'a nav named Main by default');
+  assert.match(out, /data-viewport="true"/, 'the viewport is on by default');
+  assert.match(out, /<ul[^>]*data-slot="navigation-menu-list"/, 'the list is a real ul');
+  assert.match(out, /<li[^>]*data-slot="navigation-menu-item"/, 'each item is a real li');
+  assert.match(out, /<button[^>]*data-slot="navigation-menu-trigger"[^>]*aria-expanded="false"/, 'the trigger is a collapsed disclosure button');
+  assert.match(out, /data-slot="navigation-menu-content"[^>]*hidden/, 'a closed panel is hidden in the first paint');
+  assert.match(out, /<a[^>]*href="\/docs"[^>]*data-active="true"[^>]*aria-current="page"|<a[^>]*aria-current="page"[^>]*href="\/docs"/, 'the active link is a real anchor marked as the current page');
+  assert.doesNotMatch(out, /<a[^>]*href="\/ui\/dialog"[^>]*aria-current/, 'an inactive link carries no aria-current');
+  assert.doesNotMatch(out, /role="menu/, 'navigation is not an ARIA menu');
+});
+
+test('ui-navigation-menu: viewport="false" serves no viewport frame', { skip }, async () => {
+  const out = await ssr(
+    ['navigation-menu.ts'],
+    (html) => html`<ui-navigation-menu viewport="false"><ui-navigation-menu-list></ui-navigation-menu-list></ui-navigation-menu>`,
+  );
+  assert.match(out, /data-viewport="false"/);
+  assert.doesNotMatch(out, /data-slot="navigation-menu-viewport"/);
+});

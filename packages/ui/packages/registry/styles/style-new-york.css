@@ -1069,4 +1069,37 @@
   .cn-menubar-sub-content {
     @apply fixed min-w-[8rem] m-0 rounded-md border bg-popover p-1 text-popover-foreground shadow-lg;
   }
+
+  /* MARK: navigation-menu */
+  .cn-navigation-menu {
+    @apply max-w-max;
+  }
+
+  .cn-navigation-menu-list {
+    @apply gap-1;
+  }
+
+  .cn-navigation-menu-trigger {
+    @apply rounded-md bg-background px-4 py-2 text-sm font-medium transition-[color,box-shadow] hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 disabled:opacity-50 data-[state=open]:bg-accent/50 data-[state=open]:text-accent-foreground data-[state=open]:hover:bg-accent data-[state=open]:focus:bg-accent;
+  }
+
+  .cn-navigation-menu-trigger-icon {
+    @apply relative top-[1px] ms-1 size-3 transition duration-300 group-data-[state=open]/navigation-menu-trigger:rotate-180;
+  }
+
+  .cn-navigation-menu-content {
+    @apply p-2 pe-2.5 text-popover-foreground group-data-[viewport=false]/navigation-menu:rounded-md group-data-[viewport=false]/navigation-menu:border group-data-[viewport=false]/navigation-menu:bg-popover group-data-[viewport=false]/navigation-menu:shadow;
+  }
+
+  .cn-navigation-menu-viewport {
+    @apply rounded-md border bg-popover text-popover-foreground shadow;
+  }
+
+  .cn-navigation-menu-link {
+    @apply flex flex-col gap-1 rounded-sm p-2 text-sm transition-all outline-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 data-[active=true]:bg-accent/50 data-[active=true]:text-accent-foreground data-[active=true]:hover:bg-accent data-[active=true]:focus:bg-accent [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground;
+  }
+
+  .cn-navigation-menu-indicator-arrow {
+    @apply rounded-ss-sm bg-border shadow-md;
+  }
 }

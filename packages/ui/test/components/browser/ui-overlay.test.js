@@ -1723,3 +1723,214 @@ suite('ui-menubar', () => {
     root.remove();
   });
 });
+
+suite('ui-navigation-menu', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/navigation-menu.ts`);
+  });
+
+  const nav = (attrs = '') => html`
+    <ui-navigation-menu ${attrs}>
+      <ui-navigation-menu-list>
+        <ui-navigation-menu-item>
+          <ui-navigation-menu-trigger>Getting started</ui-navigation-menu-trigger>
+          <ui-navigation-menu-content>
+            <div style="width: 320px">
+              <ui-navigation-menu-link href="#intro">Introduction</ui-navigation-menu-link>
+              <ui-navigation-menu-link href="#install">Installation</ui-navigation-menu-link>
+            </div>
+          </ui-navigation-menu-content>
+        </ui-navigation-menu-item>
+        <ui-navigation-menu-item>
+          <ui-navigation-menu-trigger>Components</ui-navigation-menu-trigger>
+          <ui-navigation-menu-content>
+            <div style="width: 480px; height: 120px">
+              <ui-navigation-menu-link href="#dialog">Dialog</ui-navigation-menu-link>
+            </div>
+          </ui-navigation-menu-content>
+        </ui-navigation-menu-item>
+        <ui-navigation-menu-item>
+          <ui-navigation-menu-link href="#docs">Docs</ui-navigation-menu-link>
+        </ui-navigation-menu-item>
+      </ui-navigation-menu-list>
+      <ui-navigation-menu-indicator></ui-navigation-menu-indicator>
+    </ui-navigation-menu>
+  `;
+  const parts = (root) => {
+    const menu = root.querySelector('ui-navigation-menu');
+    const items = [...root.querySelectorAll('ui-navigation-menu-item')];
+    const buttons = [...root.querySelectorAll('[data-slot="navigation-menu-trigger"]')];
+    const panels = [...root.querySelectorAll('[data-slot="navigation-menu-content"]')];
+    return { menu, items, buttons, panels };
+  };
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const key = (target, k) =>
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+  const hover = (el, type) => el.dispatchEvent(new PointerEvent(type, { pointerType: 'mouse' }));
+
+  test('a click toggles a panel and wires trigger and panel to each other', async () => {
+    const root = await mount(nav());
+    await tick();
+    const { buttons, panels } = parts(root);
+    assert.equal(panels[0].hidden, true);
+    buttons[0].click();
+    await tick();
+    assert.equal(panels[0].hidden, false, 'the panel shows');
+    assert.equal(buttons[0].getAttribute('aria-expanded'), 'true');
+    assert.equal(buttons[0].getAttribute('data-state'), 'open');
+    assert.equal(buttons[0].getAttribute('aria-controls'), panels[0].id);
+    assert.equal(panels[0].getAttribute('aria-labelledby'), buttons[0].id);
+    buttons[0].click();
+    await tick();
+    assert.equal(panels[0].hidden, true, 'a second click closes it');
+    assert.equal(buttons[0].getAttribute('aria-expanded'), 'false');
+    root.remove();
+  });
+
+  test('pointing opens after the delay, switches at once while open, and leaving closes after a grace', async () => {
+    const root = await mount(nav());
+    await tick();
+    const { menu, buttons, panels } = parts(root);
+    hover(buttons[0], 'pointerenter');
+    await wait(80);
+    assert.equal(panels[0].hidden, true, 'not before the 200ms delay');
+    await wait(200);
+    await tick();
+    assert.equal(panels[0].hidden, false, 'open after the delay');
+    hover(buttons[0], 'pointerleave');
+    hover(buttons[1], 'pointerenter');
+    await tick();
+    assert.equal(panels[1].hidden, false, 'the next trigger opens at once');
+    assert.equal(panels[0].hidden, true, 'and the first closes');
+    hover(buttons[1], 'pointerleave');
+    await wait(60);
+    assert.equal(menu.value !== '', true, 'still open inside the grace');
+    await wait(150);
+    await tick();
+    assert.equal(panels[1].hidden, true, 'closed after the grace');
+    root.remove();
+  });
+
+  test('moving from the trigger into its panel keeps it open', async () => {
+    const root = await mount(nav());
+    await tick();
+    const { buttons, panels } = parts(root);
+    buttons[0].click();
+    await tick();
+    hover(buttons[0], 'pointerleave');
+    hover(panels[0], 'pointerenter');
+    await wait(220);
+    assert.equal(panels[0].hidden, false);
+    hover(panels[0], 'pointerleave');
+    await wait(220);
+    await tick();
+    assert.equal(panels[0].hidden, true, 'leaving the panel closes it');
+    root.remove();
+  });
+
+  test('ArrowRight / ArrowLeft walk the bar, ArrowDown opens on the first link, Escape returns to the trigger', async () => {
+    const root = await mount(nav());
+    await tick();
+    const { buttons, panels } = parts(root);
+    const docs = root.querySelector('a[href="#docs"]');
+    buttons[0].focus();
+    key(buttons[0], 'ArrowRight');
+    assert.equal(document.activeElement, buttons[1]);
+    key(buttons[1], 'ArrowRight');
+    assert.equal(document.activeElement, docs, 'a link in the bar is part of the walk');
+    key(docs, 'ArrowRight');
+    assert.equal(document.activeElement, buttons[0], 'wraps');
+    key(buttons[0], 'ArrowDown');
+    await tick();
+    assert.equal(panels[0].hidden, false);
+    const intro = panels[0].querySelector('a[href="#intro"]');
+    assert.equal(document.activeElement, intro, 'focus is on the first link');
+    key(intro, 'ArrowDown');
+    assert.equal(document.activeElement, panels[0].querySelector('a[href="#install"]'), 'ArrowDown moves within the panel');
+    key(document.activeElement, 'Escape');
+    await tick();
+    assert.equal(panels[0].hidden, true);
+    assert.equal(document.activeElement, buttons[0], 'Escape returns to the trigger');
+    root.remove();
+  });
+
+  test('a click outside, focus leaving the nav, or following a link closes the panel', async () => {
+    const root = await mount(html`${nav()}<button data-testid="after">after</button>`);
+    await tick();
+    const { buttons, panels } = parts(root);
+    buttons[0].click();
+    await tick();
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true }));
+    await tick();
+    assert.equal(panels[0].hidden, true, 'an outside pointerdown');
+    buttons[0].focus();
+    buttons[0].click();
+    await tick();
+    root.querySelector('[data-testid="after"]').focus();
+    await tick();
+    assert.equal(panels[0].hidden, true, 'focus leaving the nav');
+    buttons[0].click();
+    await tick();
+    const link = panels[0].querySelector('a[href="#intro"]');
+    link.addEventListener('click', (e) => e.preventDefault(), { once: true });
+    link.click();
+    await tick();
+    assert.equal(panels[0].hidden, true, 'following a link');
+    root.remove();
+  });
+
+  test('the viewport frame takes the open panel\'s size, and a panel sits over it', async () => {
+    const root = await mount(nav());
+    await tick();
+    const { buttons, panels } = parts(root);
+    const frame = root.querySelector('[data-slot="navigation-menu-viewport"]');
+    assert.equal(frame.hidden, true, 'no frame while closed');
+    buttons[1].click();
+    await tick();
+    assert.equal(frame.hidden, false);
+    assert.equal(frame.getAttribute('data-state'), 'open');
+    assert.equal(frame.style.getPropertyValue('--radix-navigation-menu-viewport-width'), `${panels[1].offsetWidth}px`);
+    assert.equal(frame.style.getPropertyValue('--radix-navigation-menu-viewport-height'), `${panels[1].offsetHeight}px`);
+    // This suite loads no stylesheet, so the class is the observable: an item
+    // positions its panel only when there is no viewport frame to sit over.
+    const li = root.querySelector('[data-slot="navigation-menu-item"]').classList;
+    assert.ok(li.contains('group-data-[viewport=false]/navigation-menu:relative'), 'positioned without a viewport');
+    assert.equal(li.contains('relative'), false, 'never positioned unconditionally');
+    buttons[1].click();
+    root.remove();
+  });
+
+  test('switching panels sets the slide direction', async () => {
+    const root = await mount(nav());
+    await tick();
+    const { buttons, panels } = parts(root);
+    buttons[0].click();
+    await tick();
+    assert.equal(panels[0].hasAttribute('data-motion'), false, 'a first open has no direction');
+    buttons[1].click();
+    await tick();
+    assert.equal(panels[1].getAttribute('data-motion'), 'from-end');
+    buttons[0].click();
+    await tick();
+    assert.equal(panels[0].getAttribute('data-motion'), 'from-start');
+    buttons[0].click();
+    root.remove();
+  });
+
+  test('the indicator sits under the open trigger', async () => {
+    const root = await mount(nav());
+    await tick();
+    const { menu, buttons } = parts(root);
+    const ind = root.querySelector('[data-slot="navigation-menu-indicator"]');
+    assert.equal(ind.getAttribute('data-state'), 'hidden');
+    buttons[1].click();
+    await tick();
+    assert.equal(ind.getAttribute('data-state'), 'visible');
+    const b = buttons[1].getBoundingClientRect();
+    const n = menu.querySelector('[data-slot="navigation-menu"]').getBoundingClientRect();
+    assert.ok(Math.abs(parseFloat(ind.style.left) - (b.left - n.left)) < 0.01, `left ${ind.style.left}`);
+    assert.ok(Math.abs(parseFloat(ind.style.width) - b.width) < 0.01, `width ${ind.style.width}`);
+    buttons[1].click();
+    root.remove();
+  });
+});
