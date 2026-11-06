@@ -1680,6 +1680,19 @@ suite('ui-menubar', () => {
     root.remove();
   });
 
+  test('opening a menu programmatically closes the open one', async () => {
+    const root = await mount(bar());
+    await tick();
+    const { menus } = parts(root);
+    menus[0].show();
+    await tick();
+    menus[2].show();
+    await tick();
+    assert.deepEqual(menus.map((m) => m.open), [false, false, true], 'one open menu per bar');
+    menus[2].hide();
+    root.remove();
+  });
+
   test('the panel sits 8px below its trigger and 4px back, shadcn\'s menubar offsets', async () => {
     const root = await mount(bar());
     await tick();
