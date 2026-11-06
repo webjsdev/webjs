@@ -161,3 +161,26 @@ test('a FormData first RPC argument arrives as the readable form input (#1664)',
   const out = await invokeActionForTest(app, join(appDir, 'modules/f/describe.server.js'), 'describeInput', [fd]);
   assert.deepEqual(out, { title: 'Hello', via: 'Hello', n: ['1', '2'] });
 });
+
+// #1664 review: a caller that builds a FormData keeps every FormData behaviour,
+// and the hidden identity of an intercepted bound form never reaches the action.
+test('an RPC FormData stays a FormData and drops the bound-form identity field (#1664)', async () => {
+  const appDir = makeApp({
+    'app/page.js':
+      `import { html } from ${HTML_URL};\n` +
+      `import { inspect } from '../modules/f/inspect.server.js';\n` +
+      `export default () => html\`<p>\${inspect}</p>\`;\n`,
+    'modules/f/inspect.server.js':
+      `'use server';\n` +
+      `export async function inspect(fd) {\n` +
+      `  fd.append('added', 'yes');\n` +
+      `  return { isFd: fd instanceof FormData, keys: Object.keys(fd), added: fd.added, identity: fd.has('__webjs_action') };\n` +
+      `}\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: false });
+  const fd = new FormData();
+  fd.append('__webjs_action', 'abc123/whatever');
+  fd.append('title', 'Hi');
+  const out = await invokeActionForTest(app, join(appDir, 'modules/f/inspect.server.js'), 'inspect', [fd]);
+  assert.deepEqual(out, { isFd: true, keys: ['title', 'added'], added: 'yes', identity: false });
+});

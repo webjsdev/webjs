@@ -19,7 +19,7 @@ import { ifNoneMatchSatisfied } from './conditional-get.js';
 import { getBodyLimits } from './context.js';
 import { basePath } from './importmap.js';
 import { withBasePath } from './base-path.js';
-import { FORM_ACTION_ID_KEY } from '@webjsdev/core';
+import { FORM_ACTION_ID_KEY, FORM_ACTION_FIELD } from '@webjsdev/core';
 import { devImport } from './dev-import.js';
 import { formInput, isFormData } from './action-input.js';
 
@@ -502,10 +502,14 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
   }
   // A FormData first argument (the serializer round-trips one) gets the same
   // shape a bound form submission does, so an action's input never depends on
-  // the boundary it was reached through (#1664, `action-input.js`).
+  // the boundary it was reached through (#1664, `action-input.js`). It stays a
+  // real FormData, so a caller that built one keeps every FormData behaviour.
+  // A component that intercepts a bound form and passes `new FormData(form)`
+  // carries the framework's hidden identity field, which the form path removes
+  // before the action runs; it is removed here too.
   if (isFormData(args[0])) {
     const warn = logger && logger.warn ? (m) => logger.warn(m) : (m) => console.warn(m);
-    args = [formInput(args[0], idx.dev ? { warn, label: fnName } : {}), ...args.slice(1)];
+    args = [formInput(args[0], { omit: FORM_ACTION_FIELD, ...(idx.dev ? { warn, label: fnName } : {}) }), ...args.slice(1)];
   }
   // Input validation (#245): a validator declared via the `validate` config
   // export (#488) runs SERVER-SIDE before the body on this RPC path. The RPC

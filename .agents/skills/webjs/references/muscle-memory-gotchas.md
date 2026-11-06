@@ -180,9 +180,9 @@ A boolean in a plain hole on an HTML boolean attribute renders like `?attr` (cor
 
 A string stays a string: `action="/search"` and `action=${'/search'}` are unchanged, which is what a search form (`<form method="get" action="/search">`) and a `route.ts` endpoint both want. Other attributes keep their existing stringify behaviour; only a FUNCTION under `action` / `formaction` is claimed.
 
-### A form action's input is an object, not a `FormData`
+### Read a form action's fields as properties, not only through `get()`
 
-Next hands a form-bound action a raw `FormData`, so the reflex is `formData.get('title')`. In WebJs that still works, but the input is a plain object of the submitted fields (#1664), the same shape the action receives over RPC, so the idiomatic read is `input.title`, and one `validate` serves every boundary:
+Next hands a form-bound action a raw `FormData`, so the reflex is `formData.get('title')`. In WebJs that still works (the input is a real `FormData`), but each submitted field is also a property (#1664), the same shape the action receives over RPC, so the idiomatic read is `input.title`, and one `validate` serves every boundary:
 
 ```ts
 'use server';
@@ -197,7 +197,7 @@ export const validate = (raw: unknown) => {
 Three edges where the Next reflex goes wrong:
 
 - **A checkbox group.** A name submitted more than once keeps only its LAST value on the property, so `input.tags` is one string. Name the controls `tags[]` to get `input.tags` as an array, or read `input.getAll('tags')`. Dev warns once when a plain name repeats.
-- **`instanceof FormData` is false**, and the writers (`append`, `set`, `delete`) are absent. The readers (`get`, `getAll`, `has`, `entries`, `keys`, `values`, `forEach`, iteration) are all there.
+- **Iteration reports names as submitted.** `Object.fromEntries(input)` and `entries()` show `tags[]`, brackets included, like any `FormData`; read the property or `getAll('tags')` for the group.
 - **Values are still strings and `File`s.** `input.count` is `'7'`, not `7`: coerce in `validate`.
 
 ### `params` and `searchParams` are awaitable AND synchronously readable

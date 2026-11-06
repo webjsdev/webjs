@@ -65,7 +65,7 @@ test('a File stays a real File', async () => {
 
 test('a field named __proto__ is plain data and never reaches the prototype', () => {
   const input = formInput(fd([['__proto__', 'polluted'], ['constructor', 'x']]));
-  assert.equal(Object.getPrototypeOf(input), Object.prototype);
+  assert.ok(input instanceof FormData);
   assert.equal(Object.getOwnPropertyDescriptor(input, '__proto__').value, 'polluted');
   assert.equal(input.constructor, 'x');
   assert.equal(({}).polluted, undefined);
@@ -77,15 +77,24 @@ test('a field sharing a reader name wins as data', () => {
   assert.equal(input.getAll('title')[0], 't', 'the other readers stay');
 });
 
-test('it is not a FormData and carries no writers', () => {
-  const input = formInput(fd([['a', '1']]));
-  assert.equal(input instanceof FormData, false);
-  assert.equal(isFormData(input), false);
+test('it is a real FormData, and the writers keep the properties in step', async () => {
+  const input = formInput(fd([['a', '1'], ['tags[]', 'x']]));
+  assert.ok(input instanceof FormData, 'instanceof FormData holds, as Next and TanStack hand an action');
+  assert.equal(isFormData(input), false, 'isFormData means a FormData not yet converted');
   assert.equal(isFormData(new FormData()), true);
-  assert.equal(input.append, undefined);
-  assert.equal(input.set, undefined);
-  assert.equal(input.delete, undefined);
+  input.append('tags[]', 'y');
+  assert.deepEqual(input.tags, ['x', 'y']);
+  input.set('a', '2');
+  assert.equal(input.a, '2');
+  input.append('b', 'new');
+  assert.equal(input.b, 'new');
+  input.delete('a');
+  assert.equal('a' in input, false, 'a deleted field loses its property');
+  assert.deepEqual(Object.keys(input), ['tags', 'b']);
+  const body = await new Response(input).text();
+  assert.match(body, /name="tags\[\]"/, 'it serializes as a multipart body, like any FormData');
 });
+
 
 test('a repeated plain name warns once per action and field, only when a warn sink is given', () => {
   const messages = [];

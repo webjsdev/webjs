@@ -1368,8 +1368,8 @@ export default ({ actionData }) => html\`<form action=\${saveNote}><p class="out
   });
   await app.warmup();
   const res = await submit(app, '/note', { note: 'hi' });
-  assert.match(await res.text(), /note=hi get=hi keys=note fd=false/,
-    'the identity field is gone, the fields enumerate, and it is not a FormData');
+  assert.match(await res.text(), /note=hi get=hi keys=note fd=true/,
+    'the identity field is gone, the fields enumerate, and it is still a FormData');
   const blocked = await submit(app, '/note', { note: 'blocked' });
   assert.match(await blocked.text(), /middleware saw note/, 'middleware reads ctx.args[0] as properties too');
 });

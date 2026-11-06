@@ -250,7 +250,7 @@ export default function Contact({ actionData }) {
 }
 ```
 
-Binding the action is the whole wiring: the renderer omits `action` (so the form posts to the page's own url), supplies `method="post"` and an enctype, and emits a hidden `__webjs_action` identity field. A form-bound action receives the submitted fields as ONE object read by property (`input.email`), the same shape it gets over RPC, which also answers the `FormData` readers (`input.get('email')`, `input.getAll('tags')`). A name ending in `[]` arrives as an array (`name="tags[]"` gives `input.tags`), a file field is a real `File`, and `instanceof FormData` is false.
+Binding the action is the whole wiring: the renderer omits `action` (so the form posts to the page's own url), supplies `method="post"` and an enctype, and emits a hidden `__webjs_action` identity field. A form-bound action receives the submitted fields as ONE object read by property (`input.email`), the same shape it gets over RPC, which also answers the `FormData` readers (`input.get('email')`, `input.getAll('tags')`). A name ending in `[]` arrives as an array (`name="tags[]"` gives `input.tags`), a file field is a real `File`, and it is still a real `FormData`.
 
 Success is a 303 (PRG); failure re-renders the page at 422 with the result on `actionData`. With JS the client router applies the response in place. A submission that binds nothing is a 405, and the submission is Origin-verified like an RPC call.
 
