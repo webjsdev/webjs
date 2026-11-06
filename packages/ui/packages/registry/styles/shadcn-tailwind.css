@@ -4,10 +4,11 @@
    and blocks rely on (#1666). See packages/ui/THIRD_PARTY_NOTICES.md.
 
    One local change: data-checked and data-unchecked also match a native
-   checkbox or radio by its :checked state. shadcn's controls are Radix
-   buttons that carry data-state; the kit's are native inputs, whose checked
-   state IS :checked, so without this every shadcn style leaves them drawn
-   as the browser's own control. */
+   checkbox or radio by its :checked state, and <ui-switch>'s root and thumb
+   by the state of the checkbox inside. shadcn's controls are Radix buttons
+   that carry data-state; the kit's are native inputs, whose checked state IS
+   :checked, so without this every shadcn style leaves them drawn as the
+   browser's own control, and a switch would only follow it with script. */
 @theme inline {
   @keyframes accordion-down {
     from {
@@ -52,7 +53,9 @@
 @custom-variant data-checked {
   &:where([data-state="checked"]),
   &:where([data-checked]:not([data-checked="false"])),
-  &:where(input:is([type="checkbox"], [type="radio"]):checked) {
+  &:where(input:is([type="checkbox"], [type="radio"]):checked),
+  &:where([data-slot="switch"]:has(> input:checked)),
+  &:where(input:checked ~ [data-slot="switch-thumb"]) {
     @slot;
   }
 }
@@ -60,7 +63,9 @@
 @custom-variant data-unchecked {
   &:where([data-state="unchecked"]),
   &:where([data-unchecked]:not([data-unchecked="false"])),
-  &:where(input:is([type="checkbox"], [type="radio"]):not(:checked)) {
+  &:where(input:is([type="checkbox"], [type="radio"]):not(:checked)),
+  &:where([data-slot="switch"]:has(> input:not(:checked))),
+  &:where(input:not(:checked) ~ [data-slot="switch-thumb"]) {
     @slot;
   }
 }

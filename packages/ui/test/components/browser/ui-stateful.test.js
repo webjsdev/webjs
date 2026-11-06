@@ -1425,3 +1425,42 @@ suite('ui-sidebar', () => {
     root.remove();
   });
 });
+
+suite('ui-switch', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/switch.ts`);
+  });
+
+  test('a click toggles the real checkbox, and the root and thumb follow', async () => {
+    const root = await mount(html`<ui-switch name="wifi" aria-label="Wi-Fi"></ui-switch>`);
+    try {
+      const sw = root.querySelector('ui-switch');
+      const input = root.querySelector('input[role="switch"]');
+      const changes = [];
+      sw.addEventListener('ui-checked-change', (e) => changes.push(e.detail.checked));
+      assert.equal(input.checked, false);
+      input.click();
+      await tick();
+      assert.equal(input.checked, true, 'the checkbox is checked');
+      assert.equal(root.querySelector('[data-slot="switch"]').dataset.state, 'checked', 'the root says checked');
+      assert.equal(root.querySelector('[data-slot="switch-thumb"]').dataset.state, 'checked', 'and so does the thumb');
+      assert.deepEqual(changes, [true], 'ui-checked-change reports it');
+    } finally {
+      root.remove();
+    }
+  });
+
+  test('a wrapping label names and toggles it, and it submits with its form', async () => {
+    const root = await mount(html`<form><label><ui-switch name="notify" value="yes"></ui-switch> Notifications</label></form>`);
+    try {
+      const input = root.querySelector('input[role="switch"]');
+      root.querySelector('label').click();
+      await tick();
+      assert.equal(input.checked, true, 'the label toggles it');
+      assert.equal(new FormData(root.querySelector('form')).get('notify'), 'yes', 'and the form submits its value');
+      assert.equal(root.querySelector('[data-slot="switch"]').dataset.state, 'checked');
+    } finally {
+      root.remove();
+    }
+  });
+});

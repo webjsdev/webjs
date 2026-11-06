@@ -48,50 +48,20 @@
  */
 import { cn } from '../lib/utils.ts';
 
-// Two SVGs, one per theme. The dot needs to contrast with the radio's
-// inner surface: and that surface flips between themes:
-//
-//   light: input bg is `bg-transparent` (so the page bg shows through;
-//          page bg is near-white) → dot must be DARK to be visible.
-//   dark : input bg is `dark:bg-input/30` (a translucent white over the
-//          near-black page bg; resolves to near-black) → dot must be
-//          LIGHT to be visible.
-//
-// Hardcoding a single dark-coloured dot (the original implementation)
-// painted invisibly on the near-black dark-mode surface, making the
-// :checked state indistinguishable from unchecked. Same pattern the
-// checkbox fix uses (CHECKMARK_LIGHT / CHECKMARK_DARK): `currentColor`
-// in a data:url SVG used as background-image does not inherit from the
-// host element, so we ship two SVGs and toggle them via a theme
-// selector.
-const DOT_LIGHT =
-  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><circle cx='10' cy='10' r='5' fill='oklch(0.205 0 0)'/></svg>\")";
-const DOT_DARK =
-  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><circle cx='10' cy='10' r='5' fill='oklch(0.985 0 0)'/></svg>\")";
-
 const RADIO_CLASS =
   'cn-radio-group-item group/radio-group-item peer aspect-square shrink-0 appearance-none border outline-none disabled:cursor-not-allowed disabled:opacity-50';
 
-// Three sibling rule blocks for theme selection: mirrors the
-// checkbox.ts pattern in this same registry:
-//   - prefers-color-scheme: dark (OS preference, gated by
-//     :not([data-theme='light']):not(.light) so an explicit-light
-//     toggle still wins over the OS)
-//   - :root[data-theme='dark'] (explicit data-attribute toggle)
-//   - :root.dark (explicit class toggle, shadcn convention)
+// The dot is a radial gradient in `currentColor`, the radio's own text colour,
+// which the style chooses. shadcn's styles fill a checked radio with the
+// primary colour and set `data-checked:text-primary-foreground`, so the dot is
+// the light one on the fill; the default style keeps a transparent ring and
+// sets `checked:text-primary`, so the dot is the primary one. A fixed colour
+// (the SVG this replaced, one per theme) could only match one of the two, and
+// disappeared into the fill under every shadcn style. Half the box across,
+// as shadcn's indicator is.
 const STYLES = `
 input[type="radio"][data-slot="radio"]:checked {
-  background-image: ${DOT_LIGHT};
-  background-size: 100%;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']):not(.light) input[type="radio"][data-slot="radio"]:checked {
-    background-image: ${DOT_DARK};
-  }
-}
-:root[data-theme='dark'] input[type="radio"][data-slot="radio"]:checked,
-:root.dark input[type="radio"][data-slot="radio"]:checked {
-  background-image: ${DOT_DARK};
+  background-image: radial-gradient(circle closest-side, currentColor 50%, transparent calc(50% + 0.5px));
 }
 `;
 

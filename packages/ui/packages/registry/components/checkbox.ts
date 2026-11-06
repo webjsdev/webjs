@@ -66,10 +66,12 @@ import { cn } from '../lib/utils.ts';
 // standing browser limitation: and pseudo-elements (::before/::after) on
 // `<input>` aren't reliable cross-browser, so the simplest correct fix is
 // to ship two SVGs and toggle them via a theme selector.
+// shadcn's tick: Lucide's CheckIcon (stroke 2, round caps and joins), drawn at
+// size-3.5 in the 16px box, so 87.5% (see STYLES).
 const CHECKMARK_LIGHT =
-  'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 20 20\' fill=\'white\'><path d=\'M16.704 5.293a1 1 0 010 1.414l-7.001 7a1 1 0 01-1.414 0l-3-3a1 1 0 011.414-1.414L9 11.586l6.29-6.293a1 1 0 011.414 0z\'/></svg>")';
+  'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'white\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'><path d=\'M20 6 9 17l-5-5\'/></svg>")';
 const CHECKMARK_DARK =
-  'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 20 20\' fill=\'black\'><path d=\'M16.704 5.293a1 1 0 010 1.414l-7.001 7a1 1 0 01-1.414 0l-3-3a1 1 0 011.414-1.414L9 11.586l6.29-6.293a1 1 0 011.414 0z\'/></svg>")';
+  'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'black\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'><path d=\'M20 6 9 17l-5-5\'/></svg>")';
 
 const CHECKBOX_CLASS =
   'cn-checkbox peer shrink-0 appearance-none outline-none disabled:cursor-not-allowed disabled:opacity-50';
@@ -85,7 +87,9 @@ const CHECKBOX_CLASS =
 const STYLES = `
 input[type="checkbox"][data-slot="checkbox"]:checked {
   background-image: ${CHECKMARK_LIGHT};
-  background-size: 80%;
+  background-size: 87.5%;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 input[type="checkbox"][data-slot="checkbox"]:indeterminate {
   background-color: var(--primary);

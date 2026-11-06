@@ -459,7 +459,7 @@
 
   /* MARK: radio */
   .cn-radio-group-item {
-    @apply size-4 appearance-none rounded-full border-input bg-transparent shadow-xs transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 checked:border-primary checked:bg-no-repeat checked:bg-center dark:bg-input/30 dark:aria-invalid:ring-destructive/40;
+    @apply size-4 appearance-none rounded-full border-input bg-transparent shadow-xs transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 checked:border-primary checked:text-primary checked:bg-no-repeat checked:bg-center dark:bg-input/30 dark:aria-invalid:ring-destructive/40;
   }
 
   .cn-radio-group {
@@ -478,7 +478,7 @@
 
   /* MARK: switch */
   .cn-switch {
-    @apply shrink-0 cursor-pointer rounded-full border border-transparent shadow-xs peer-focus-visible:border-ring peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 bg-input dark:bg-input/80 peer-checked:bg-primary;
+    @apply shrink-0 cursor-pointer rounded-full border border-transparent shadow-xs peer-focus-visible:border-ring peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 bg-input dark:bg-input/80 peer-checked:bg-primary data-checked:bg-primary;
   }
 
   .cn-switch-size-default {

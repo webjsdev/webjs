@@ -408,3 +408,22 @@ test('ui-sidebar: the served sidebar carries its state on its own host, so the i
   assert.match(out, /<ui-sidebar-inset class="[^"]*authored[^"]*"[^>]*role="main"/, 'the inset is the main landmark, keeping the author\'s classes');
   assert.match(out, /<span class="sr-only">Toggle Sidebar<\/span>/);
 });
+
+test('ui-switch: the served switch is a real, named, checked control inside shadcn\'s root and thumb', { skip }, async () => {
+  const out = await ssr(['switch.ts'], (html) => html`<ui-switch name="airplane" value="on" checked aria-label="Airplane mode" input-id="airplane"></ui-switch>`);
+  assert.match(out, /<span\s+data-slot="switch"\s+data-size="default"\s+data-state="checked"/, 'the root carries shadcn\'s slot, size and state');
+  const input = (out.match(/<input[^>]*>/) ?? [''])[0];
+  for (const attr of ['type="checkbox"', 'role="switch"', 'id="airplane"', 'name="airplane"', 'value="on"', 'checked', 'aria-label="Airplane mode"']) {
+    assert.ok(input.includes(attr), `the checkbox carries ${attr}, so it submits and is named with JavaScript off`);
+  }
+  assert.match(out, /<span\s+data-slot="switch-thumb"\s+data-state="checked"/, 'and the thumb follows');
+  // The checkbox is laid over the whole track, transparent, so a click
+  // anywhere on the switch is a click on the real control. (The browser suite
+  // loads no stylesheet, so this is asserted on the served classes.)
+  for (const cls of ['absolute', 'inset-0', 'size-full', 'opacity-0', 'z-10']) {
+    assert.match(input, new RegExp(`class="[^"]*\\b${cls}\\b`), `the checkbox carries ${cls}`);
+  }
+  const off = await ssr(['switch.ts'], (html) => html`<ui-switch aria-label="Wi-Fi"></ui-switch>`);
+  assert.match(off, /data-state="unchecked"/);
+  assert.doesNotMatch((off.match(/<input[^>]*>/) ?? [''])[0], /\s(checked|name|id|value)[=\s>]/, 'an unset attribute is not served empty');
+});

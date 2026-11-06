@@ -180,9 +180,9 @@ tracked source, the standard shadcn "you own it" pattern.
 | 1a | `alert` | `alertClass({ variant })`, `alertTitleClass`, `alertDescriptionClass` |
 | 1a | `card` | `cardClass`, `cardHeaderClass`, `cardTitleClass`, `cardDescriptionClass`, `cardActionClass`, `cardContentClass`, `cardFooterClass` |
 | 1a | `input` / `textarea` / `label` | `inputClass`, `textareaClass`, `labelClass` |
-| 1a | `checkbox` | `checkboxClass`, native `<input type="checkbox">` with SVG check on `:checked`. REQUIRES `data-slot="checkbox"` on the input for the check to render. |
-| 1a | `radio-group` | `radioGroupClass`, `radioClass`, native `<input type="radio">`. REQUIRES `data-slot="radio"` on the input for the dot to render. |
-| 1a | `switch` | `switchInputClass`, `switchTrackClass({ size })`, hidden native checkbox + visible track |
+| 1a | `checkbox` | `checkboxClass`, native `<input type="checkbox">` with shadcn's Lucide check drawn on `:checked`. REQUIRES `data-slot="checkbox"` on the input for the check to render. The `data-checked:` variant also matches `:checked`, so every style fills it. |
+| 1a | `radio-group` | `radioGroupClass`, `radioClass`, native `<input type="radio">`. REQUIRES `data-slot="radio"` on the input for the dot to render. The dot is drawn in `currentColor`, so it takes the style's colour (light on a filled radio, primary on a ring). |
+| 1a/2 | `switch` | `<ui-switch size checked name value disabled required input-id>` renders shadcn's switch, a `data-slot="switch"` root and a `switch-thumb`, around a real `role="switch"` checkbox laid transparent over the track, so it submits, takes a `<label>`, and toggles with JavaScript off, and every style draws it. `data-state` follows the checkbox and `ui-checked-change` reports a change. `switchInputClass` / `switchTrackClass({ size })` still give the plain-markup switch (hidden checkbox plus a sibling track), which only the default style draws. |
 | 1a | `native-select` | `nativeSelectWrapperClass`, `nativeSelectClass`, `nativeSelectIconClass`, `nativeSelectOptionClass`, `nativeSelectOptGroupClass`. The `<option>` / `<optgroup>` colours come from the theme block's `select option, select optgroup` rule, NOT from importing the module (#1320), so they are in the first paint and hold with JavaScript off. |
 | 1a | `avatar` | `avatarClass`, `avatarImageClass`, `avatarFallbackClass`, `avatarBadgeClass`, `avatarGroupClass`, `avatarGroupCountClass` |
 | 1a | `separator` | `separatorClass({ orientation })` |
