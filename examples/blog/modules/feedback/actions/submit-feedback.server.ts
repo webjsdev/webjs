@@ -13,8 +13,8 @@
  * Kept intentionally minimal and self-contained so the e2e probe can assert the
  * headline behavior in a real browser with JS both off and on.
  */
-export async function submitFeedback(formData: FormData) {
-  const email = String(formData.get('email') || '').trim();
+export async function submitFeedback(input: { email?: string }) {
+  const email = String(input.email || '').trim();
   // Server-side validation the browser cannot do: this address is "already on
   // the list". The input is a valid email format (so the native Constraint
   // Validation API lets it submit), but the server rejects it and re-renders

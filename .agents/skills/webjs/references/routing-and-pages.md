@@ -178,14 +178,14 @@ A page imports a `'use server'` action and binds it into the form: `<form action
 
 **Do not treat the page's segment middleware as the action's authorization gate.** An identity names the action, not the page that rendered it, so the same action is reachable by submitting to any page path (and, being a `'use server'` export, at its RPC endpoint too, where no segment middleware runs at all). That is the same reachability every server action has always had, and the removed page `action` export was the one shape where the URL really did scope the handler. Authorize the action itself: an `export const middleware = [requireAdmin]` on the action, or a check in its body, both of which run on either transport.
 
-A form-bound action always receives the `FormData` as its first argument, which is where it differs from the same action called over RPC. `validate` is the typing seam: it receives that `FormData`, and its transform-return becomes the action's typed input.
+A form-bound action receives the submitted fields as ONE object, the same shape the action gets over RPC: each field is a property (`input.email`), and the `FormData` readers work on it too (`input.get('email')`, `input.getAll('tags')`). A name ending in `[]` arrives as an array, a file field is a real `File`, and a plain name submitted twice keeps its last value on the property. `validate` is the typing seam: its transform-return becomes the action's typed input. See `data-and-actions.md` for the full shape.
 
 ```ts
 // modules/contact/actions/send-message.server.ts
 'use server';
-export async function sendMessage(formData: FormData) {
-  const email = String(formData.get('email') || '').trim();
-  const body = String(formData.get('body') || '').trim();
+export async function sendMessage(input: { email?: string; body?: string }) {
+  const email = String(input.email || '').trim();
+  const body = String(input.body || '').trim();
   const values = { email, body };
   const fieldErrors: Record<string, string> = {};
   if (!email.includes('@')) fieldErrors.email = 'Enter a valid email';

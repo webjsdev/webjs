@@ -30,10 +30,16 @@ import { deleteTodo } from './delete-todo.server.ts';
 //
 // With JS the component intercepts the submit and calls the underlying action
 // directly for the optimistic path, so this runs only with JS off.
-export async function submitTodo(formData: FormData) {
-  const intent = String(formData.get('intent') ?? '');
-  const id = String(formData.get('id') ?? '');
-  if (intent === 'create') return createTodo({ title: String(formData.get('title') ?? '') });
+export interface TodoFormInput {
+  intent?: string;
+  id?: string;
+  title?: string;
+}
+
+export async function submitTodo(input: TodoFormInput) {
+  const intent = String(input.intent ?? '');
+  const id = String(input.id ?? '');
+  if (intent === 'create') return createTodo({ title: String(input.title ?? '') });
   if (intent === 'toggle') return toggleTodo({ id });
   if (intent === 'delete') return deleteTodo({ id });
   return { success: false as const, error: 'Unknown action.', status: 400 };

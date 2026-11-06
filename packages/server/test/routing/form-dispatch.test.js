@@ -1297,3 +1297,79 @@ export default function V({ actionData }) {
   assert.equal(res.status, 422);
   assert.match(await res.text(), /name="email" value="typed@x"/);
 });
+
+// #1664: a form-bound action, its validate, its middleware and its invalidates
+// get ONE input that reads as a plain object (the shape RPC and route() give)
+// and through the FormData readers. Before, they got the raw FormData, so this
+// validator, written the way the docs and every RPC action read input, saw
+// `raw.title` as undefined and answered every submission with a 422.
+test('a form-bound validate reads fields as properties, the RPC shape (#1664)', async () => {
+  const app = await createRequestHandler({
+    appDir: makeApp({
+      'modules/todo/actions/add.server.ts': `
+'use server';
+export const validate = (raw) => {
+  const title = String(raw.title ?? '').trim();
+  if (!title) return { success: false, fieldErrors: { title: 'Required' } };
+  return { success: true, data: { title, viaReader: raw.get('title'), tags: raw.tags ?? [] } };
+};
+export async function addTodo(input) {
+  return { success: false, error: 'got:' + input.title + '|' + input.viaReader + '|' + input.tags.join(',') };
+}
+`,
+      'app/todo/page.ts': `
+import { html } from ${CORE};
+import { addTodo } from '../../modules/todo/actions/add.server.ts';
+export default ({ actionData }) => html\`<form action=\${addTodo}><p class="out">\${actionData?.error ?? actionData?.fieldErrors?.title ?? ''}</p></form>\`;
+`,
+    }),
+    dev: true,
+  });
+  await app.warmup();
+
+  const page = await app.handle(new Request('http://x/todo'));
+  const id = identityOf(await page.text());
+  const body = new URLSearchParams([['title', ' Buy milk '], ['tags[]', 'home'], ['tags[]', 'errand'], ['__webjs_action', id]]);
+  const res = await app.handle(new Request('http://x/todo', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'http://x' },
+    body: body.toString(),
+  }));
+  assert.equal(res.status, 422, 'the action ran and returned its failure envelope');
+  assert.match(await res.text(), /got:Buy milk\| Buy milk \|home,errand/,
+    'validate read raw.title and raw.get(\'title\'), and a [] name arrived as an array');
+
+  const empty = await submit(app, '/todo', { title: '  ' });
+  assert.equal(empty.status, 422);
+  assert.match(await empty.text(), /Required/, 'the validator still rejects a blank title');
+});
+
+test('a form action with no validate receives the same readable input (#1664)', async () => {
+  const app = await createRequestHandler({
+    appDir: makeApp({
+      'modules/note/actions/note.server.ts': `
+'use server';
+export const middleware = [async (ctx, next) => {
+  if (ctx.args[0].note === 'blocked') return { success: false, error: 'middleware saw note' };
+  return next();
+}];
+export async function saveNote(input) {
+  const keys = Object.keys(input).join(',');
+  return { success: false, error: 'note=' + input.note + ' get=' + input.get('note') + ' keys=' + keys + ' fd=' + (input instanceof FormData) };
+}
+`,
+      'app/note/page.ts': `
+import { html } from ${CORE};
+import { saveNote } from '../../modules/note/actions/note.server.ts';
+export default ({ actionData }) => html\`<form action=\${saveNote}><p class="out">\${actionData?.error ?? ''}</p></form>\`;
+`,
+    }),
+    dev: true,
+  });
+  await app.warmup();
+  const res = await submit(app, '/note', { note: 'hi' });
+  assert.match(await res.text(), /note=hi get=hi keys=note fd=false/,
+    'the identity field is gone, the fields enumerate, and it is not a FormData');
+  const blocked = await submit(app, '/note', { note: 'blocked' });
+  assert.match(await blocked.text(), /middleware saw note/, 'middleware reads ctx.args[0] as properties too');
+});

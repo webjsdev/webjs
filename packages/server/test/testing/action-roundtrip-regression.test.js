@@ -138,3 +138,26 @@ test('ERROR SANITIZATION: prod hides the thrown error stack/extra fields the dir
   assert.ok(!/boom message/.test(text), 'the raw thrown message is not leaked');
   assert.ok(!/hunter2|secretField|DB_PASSWORD/.test(text), 'no secret field leaks over the wire');
 });
+
+// #1664: a FormData sent as the first RPC argument reaches the action (and its
+// validate) in the SAME readable shape a bound form submission gives, so an
+// action's input never depends on the boundary it was reached through.
+test('a FormData first RPC argument arrives as the readable form input (#1664)', async () => {
+  const appDir = makeApp({
+    'app/page.js':
+      `import { html } from ${HTML_URL};\n` +
+      `import { describeInput } from '../modules/f/describe.server.js';\n` +
+      `export default () => html\`<p>\${describeInput}</p>\`;\n`,
+    'modules/f/describe.server.js':
+      `'use server';\n` +
+      `export const validate = (raw) => ({ success: true, data: { title: raw.title, via: raw.get('title'), n: raw.getAll('n') } });\n` +
+      `export async function describeInput(input) { return input; }\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: false });
+  const fd = new FormData();
+  fd.append('title', 'Hello');
+  fd.append('n', '1');
+  fd.append('n', '2');
+  const out = await invokeActionForTest(app, join(appDir, 'modules/f/describe.server.js'), 'describeInput', [fd]);
+  assert.deepEqual(out, { title: 'Hello', via: 'Hello', n: ['1', '2'] });
+});

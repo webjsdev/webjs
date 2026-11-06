@@ -590,7 +590,10 @@ test('scaffoldApp full-stack: the auth card wires createAuth + dashboard + User 
     assert.match(signup, /actionData/, 'signup page reads actionData for re-render');
     const signupAction = readFileSync(
       join(appDir, 'modules', 'auth', 'actions', 'signup.server.ts'), 'utf8');
-    assert.match(signupAction, /formData: FormData/, 'the action takes the FormData directly');
+    // #1664: a form-bound action reads its fields as properties, the same shape
+    // it would get over RPC, so a scaffolded app teaches that shape.
+    assert.match(signupAction, /input: SignupInput/, 'the action takes the readable form input');
+    assert.match(signupAction, /input\.email/, 'and reads a field as a property');
     assert.match(signupAction, /fieldErrors/, 'and returns field errors');
 
     // #904: a signed-in user must be able to log out. The dashboard subtree ships

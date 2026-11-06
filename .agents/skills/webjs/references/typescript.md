@@ -105,7 +105,7 @@ The ladder, in the order to climb it:
 | That row inside a shipping component | `import type { Todo } from '#db/schema.server.ts'` | `any[]`, or re-declaring the shape by hand |
 | A server action's input | a named `interface CreatePostInput` | `input: unknown` / `input: any` |
 | A server action's result | `Promise<ActionResult<Post>>` | `Promise<any>` |
-| `export const validate` | `(input: unknown)`, narrowed in the body, returning `data` that `satisfies` the action's input type | `(input: any)`, which un-types the returned `data` too |
+| `export const validate` | `(input: unknown)`, narrowed in the body, returning `data` that `satisfies` the action's input type. On every boundary the input reads by property (`raw.title`), on a form submission as strings and `File`s | `(input: any)`, which un-types the returned `data` too |
 | A page | `PageProps<'/blog/[slug]'>` | `{ params: Record<string, any> }` |
 | A layout | `LayoutProps` (whose `children` is a `TemplateResult`) | `{ children: unknown }` |
 | A route handler's 2nd argument | `RouteHandlerContext<'/api/users/[id]'>` | `{ params: any }` |

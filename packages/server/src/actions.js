@@ -21,6 +21,7 @@ import { basePath } from './importmap.js';
 import { withBasePath } from './base-path.js';
 import { FORM_ACTION_ID_KEY } from '@webjsdev/core';
 import { devImport } from './dev-import.js';
+import { formInput, isFormData } from './action-input.js';
 
 /**
  * The JSON / RPC body cap in effect for the current request: the per-request
@@ -495,6 +496,12 @@ export async function invokeAction(idx, hash, fnName, req, onError, allowedOrigi
     if (!Array.isArray(args)) args = [args];
   } catch {
     return rpcResponse({ error: 'Invalid request body' }, { status: 400 });
+  }
+  // A FormData first argument (the serializer round-trips one) gets the same
+  // shape a bound form submission does, so an action's input never depends on
+  // the boundary it was reached through (#1664, `action-input.js`).
+  if (isFormData(args[0])) {
+    args = [formInput(args[0], idx.dev ? { warn: (m) => console.warn(m), label: fnName } : {}), ...args.slice(1)];
   }
   // Input validation (#245): a validator declared via the `validate` config
   // export (#488) runs SERVER-SIDE before the body on this RPC path. The RPC

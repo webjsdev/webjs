@@ -180,6 +180,26 @@ A boolean in a plain hole on an HTML boolean attribute renders like `?attr` (cor
 
 A string stays a string: `action="/search"` and `action=${'/search'}` are unchanged, which is what a search form (`<form method="get" action="/search">`) and a `route.ts` endpoint both want. Other attributes keep their existing stringify behaviour; only a FUNCTION under `action` / `formaction` is claimed.
 
+### A form action's input is an object, not a `FormData`
+
+Next hands a form-bound action a raw `FormData`, so the reflex is `formData.get('title')`. In WebJs that still works, but the input is a plain object of the submitted fields (#1664), the same shape the action receives over RPC, so the idiomatic read is `input.title`, and one `validate` serves every boundary:
+
+```ts
+'use server';
+export const validate = (raw: unknown) => {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const title = String(r.title ?? '').trim();   // works for a form post AND an RPC call
+  if (!title) return { success: false, fieldErrors: { title: 'Required' } };
+  return { success: true, data: { title } };
+};
+```
+
+Three edges where the Next reflex goes wrong:
+
+- **A checkbox group.** A name submitted more than once keeps only its LAST value on the property, so `input.tags` is one string. Name the controls `tags[]` to get `input.tags` as an array, or read `input.getAll('tags')`. Dev warns once when a plain name repeats.
+- **`instanceof FormData` is false**, and the writers (`append`, `set`, `delete`) are absent. The readers (`get`, `getAll`, `has`, `entries`, `keys`, `values`, `forEach`, iteration) are all there.
+- **Values are still strings and `File`s.** `input.count` is `'7'`, not `7`: coerce in `validate`.
+
 ### `params` and `searchParams` are awaitable AND synchronously readable
 
 Next 15/16 made `params` / `searchParams` Promises. WebJs supports BOTH, so either muscle memory is correct.

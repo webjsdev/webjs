@@ -13,8 +13,8 @@
  * claim of #1207, and the e2e asserts it in a real browser with scripting
  * disabled.
  */
-export async function publishDraft(formData: FormData) {
-  const note = String(formData.get('note') || '').trim();
+export async function publishDraft(input: { note?: string }) {
+  const note = String(input.note || '').trim();
   if (!note) {
     return {
       success: false as const,
