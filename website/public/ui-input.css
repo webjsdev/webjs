@@ -14,6 +14,25 @@
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities) source(none);
 
+/* The kit's styles (#1666, D8). The registry components are in BASE FORM,
+   carrying semantic cn-* names, and a style maps each name to Tailwind. In an
+   app the CLI bakes the chosen style into the installed file. On this site
+   the components are rendered as they are, so the styles are loaded as CSS
+   instead, in layer(base) the way shadcn's own preview route does, and a
+   `.style-<name>` wrapper picks the look: .style-new-york for the current
+   gallery, .style-nova for the docs. Being in layer(base), below utilities,
+   a utility written on a demo still overrides the style.
+
+   shadcn-tailwind.css carries the custom variants (data-open and the rest)
+   and the scroll-fade and shimmer utilities the styles use, and
+   tw-animate.css the enter and exit animations. Both are vendored into the
+   registry (see packages/ui/THIRD_PARTY_NOTICES.md). The other seven styles
+   go in a separate stylesheet, linked only by the pages that switch styles. */
+@import "../../packages/ui/packages/registry/styles/tw-animate.css";
+@import "../../packages/ui/packages/registry/styles/shadcn-tailwind.css";
+@import "../../packages/ui/packages/registry/styles/style-new-york.css" layer(base);
+@import "../../packages/ui/packages/registry/styles/style-nova.css" layer(base);
+
 @source "../app/ui/**/*.ts";
 @source "../modules/ui/**/*.{ts,js}";
 @source "../components/**/*.ts";
@@ -199,11 +218,6 @@
 }
 @utility border-grid {
   @apply border-border/50 dark:border-border;
-}
-@utility no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-  &::-webkit-scrollbar { display: none; }
 }
 @utility extend-touch-target {
   @media (pointer: coarse) {

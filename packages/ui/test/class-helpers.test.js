@@ -19,8 +19,9 @@ import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { bakedComponentsDir } from './helpers/baked-registry.js';
 
-const COMPONENTS_DIR = join(
+const SOURCE_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
   '..',
   'packages',
@@ -28,7 +29,11 @@ const COMPONENTS_DIR = join(
   'components',
 );
 
-const skip = !existsSync(join(COMPONENTS_DIR, 'button.ts'));
+const skip = !existsSync(join(SOURCE_DIR, 'button.ts'));
+
+// The helpers are asserted as an app runs them: baked with the default
+// new-york style, since the registry sources are in base form (#1666).
+const COMPONENTS_DIR = skip ? SOURCE_DIR : bakedComponentsDir('new-york');
 
 /** Call a value if it's a function, otherwise return it as-is. */
 function resolve(v) {

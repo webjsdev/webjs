@@ -62,6 +62,7 @@
             "modules/ui",
             "../packages/ui/packages/registry/components",
             "../packages/ui/packages/registry/lib",
+            "../packages/ui/packages/registry/styles",
             "public/ui-input.css"
           ]
         }

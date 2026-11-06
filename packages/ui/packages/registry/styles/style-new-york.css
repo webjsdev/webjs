@@ -1,0 +1,68 @@
+/* The new-york style (#1666): the look every @webjsdev/ui component had
+   before the kit moved to base form, and the default when components.json
+   names no style. It holds, per semantic name, the classes the base-form
+   component no longer carries inline. test/style-bake-snapshot.test.js holds
+   the bake of this file to the pre-conversion classes, so edit it only to
+   change the look on purpose, and re-capture the fixture in the same commit. */
+.style-new-york {
+  /* MARK: button */
+  .cn-button {
+    @apply cursor-pointer gap-2 rounded-md text-sm font-medium focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg:not([class*='size-'])]:size-4;
+  }
+
+  .cn-button-variant-default {
+    @apply bg-primary text-primary-foreground hover:bg-primary/90;
+  }
+
+  .cn-button-variant-destructive {
+    @apply bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40;
+  }
+
+  .cn-button-variant-outline {
+    @apply border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50;
+  }
+
+  .cn-button-variant-secondary {
+    @apply bg-secondary text-secondary-foreground hover:bg-secondary/80;
+  }
+
+  .cn-button-variant-ghost {
+    @apply hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50;
+  }
+
+  .cn-button-variant-link {
+    @apply text-primary underline-offset-4 hover:underline;
+  }
+
+  .cn-button-size-default {
+    @apply h-9 px-4 py-2 has-[>svg]:px-3;
+  }
+
+  .cn-button-size-xs {
+    @apply h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3;
+  }
+
+  .cn-button-size-sm {
+    @apply h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5;
+  }
+
+  .cn-button-size-lg {
+    @apply h-10 rounded-md px-6 has-[>svg]:px-4;
+  }
+
+  .cn-button-size-icon {
+    @apply size-9;
+  }
+
+  .cn-button-size-icon-xs {
+    @apply size-6 rounded-md [&_svg:not([class*='size-'])]:size-3;
+  }
+
+  .cn-button-size-icon-sm {
+    @apply size-8;
+  }
+
+  .cn-button-size-icon-lg {
+    @apply size-10;
+  }
+}

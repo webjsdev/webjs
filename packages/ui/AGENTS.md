@@ -120,6 +120,7 @@ packages/ui/
   packages/registry/              the registry (internal, not published)
     components/                   .ts files, one per component
     lib/utils.ts                  cn() helper + layout/typography helpers (Tier-2 components extend WebComponent from @webjsdev/core directly)
+    styles/                       the styles the bake applies (#1666): style-new-york.css (the default), the eight ported shadcn styles + supplement.json, shadcn-tailwind.css and tw-animate.css (vendored)
     themes/
       index.css                   @theme block + CSS variables (light + dark, neutral defaults)
       base-colors.js              per-base-colour overrides (stone/zinc/mauve/olive/mist/taupe) + mergeThemeCss
@@ -475,6 +476,44 @@ the CLI gains no dependency:
   occurrence of a name is inlined (shadcn inlines only the first per file, but a
   Tier-2 template can render a part in two branches), and the merge is order
   plus exact-duplicate removal rather than tailwind-merge.
+
+**Where the styles live** (`packages/registry/styles/`):
+
+- `style-new-york.css` is the kit's own look, the classes each component used
+  to carry inline. It is the default when `components.json` names no style
+  (or `"default"`), so an app's installed files keep exactly the classes they
+  had before the conversion.
+- `style-{vega,nova,maia,lyra,mira,luma,sera,rhea}.css` are shadcn's eight
+  styles, copied unchanged by `scripts/port-styles.mjs` plus one appended BASE
+  SUPPLEMENT block. The kit's base form keeps inline only the classes shadcn's
+  base form ALSO keeps, which is what lets `new-york` reproduce the old look;
+  where shadcn keeps a layout utility the kit never had (`select-none` on the
+  button), it is recorded in `supplement.json` and the port adds it to every
+  shadcn style, so each renders as it does in shadcn/ui. Marker classes
+  (`group/button`, `peer`) cannot ride `@apply`, so those stay inline in the
+  component; they carry no CSS of their own, and the snapshot ignores one a
+  base-form component added. Regenerate the eight with
+  `node packages/ui/scripts/port-styles.mjs <shadcn>/apps/v4/registry/styles`.
+- `shadcn-tailwind.css` (shadcn's `packages/shadcn/src/tailwind.css`: the
+  `data-open` / `data-closed` / `data-checked` custom variants, the accordion
+  keyframes, the `scroll-fade` and `shimmer` utilities) and `tw-animate.css`
+  (tw-animate-css 1.4.0, the `animate-in` / `fade-in-0` / `zoom-in-95`
+  utilities) are vendored as CSS, since the kit takes no third-party
+  dependency. The shadcn styles use both, so a project baked with one of them
+  needs both in its stylesheet. Notices in `THIRD_PARTY_NOTICES.md`.
+
+A test that IMPORTS a component and asserts on the classes a helper returns
+must import the baked copy, since the raw source returns `cn-*` names:
+`test/helpers/baked-registry.js` writes a `new-york`-baked mirror of the
+registry under the gitignored `test/.baked/` (inside the package, so a bare
+`@webjsdev/core` import still resolves). Source-text assertions read the baked
+text the same way (`readSource` in `registry-contents.test.js`).
+
+The marketing site renders the components UNBAKED and loads the styles as CSS
+in `layer(base)` instead, under a `.style-<name>` wrapper, the way shadcn's own
+preview route does (see `website/public/ui-input.css`). One base-form module
+styled by its wrapper is what lets two styles share a page session, since a
+custom element tag can be defined only once.
 
 The guard is `test/style-bake-snapshot.test.js`: baking each component with
 `new-york` must equal, string by string and THROUGH the kit's real `cn()`, the

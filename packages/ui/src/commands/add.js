@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { bakeForStyle } from '../registry/style-bake.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, basename, relative as relPath } from 'node:path';
 import prompts from 'prompts';
@@ -106,8 +107,12 @@ async function writeRegistryFile(cwd, config, item, file, opts) {
 /**
  * The single transform that turns a registry file's raw content into what
  * lands in the user's project. `add` writes this; `diff` compares against it,
- * so the two cannot disagree (#983). Two steps:
+ * so the two cannot disagree (#983). Three steps:
  *
+ *  0. Bake the style (#1666): a registry file in base form carries semantic
+ *     `cn-*` names, which are replaced by the Tailwind classes of the style
+ *     `components.json` names (`new-york` when it names none), so the file an
+ *     app owns is plain Tailwind. A file with no `cn-*` name is untouched.
  *  1. Retarget the registry-relative `../lib/utils.ts` / `../lib/dom.ts` imports
  *     to the project's resolved helper paths (see {@link rewriteUtilsImport}).
  *  2. For a Tier-1 helper component (a `registry:ui` file that is NOT a custom
@@ -118,12 +123,13 @@ async function writeRegistryFile(cwd, config, item, file, opts) {
  *
  * @param {string} content raw registry file content
  * @param {string} target absolute path where the file will be written
- * @param {{ resolvedPaths: { utils: string } }} config parsed components.json
+ * @param {{ resolvedPaths: { utils: string }, style?: string }} config parsed components.json
  * @param {{ name: string, type?: string }} [item] the registry item
  * @returns {string}
  */
 export function transformForProject(content, target, config, item) {
-  let out = rewriteUtilsImport(content, target, config);
+  let out = bakeForStyle(content, config?.style);
+  out = rewriteUtilsImport(out, target, config);
   if (item && item.type === 'registry:ui' && !isCustomElementSource(content)) {
     out = stripExample(out, item.name);
   }

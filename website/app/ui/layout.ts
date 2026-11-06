@@ -12,7 +12,10 @@ import type { LayoutProps } from '@webjsdev/core';
  *
  * - the `.ui-site` wrapper, which declares the /ui palette and type (see
  *   public/ui-input.css). The tokens live on the wrapper rather than :root so
- *   they never leak into a marketing page.
+ *   they never leak into a marketing page. It also carries the kit STYLE the
+ *   components render in (`style-new-york` for now, the kit's default look),
+ *   because the registry components are in base form and take their look
+ *   from a `.style-<name>` ancestor (#1666, D8).
  * - the /ui stylesheet link. The root layout already emits it in <head> on a
  *   full load of a /ui page. This copy covers a SOFT navigation into /ui from
  *   a marketing page, where the root layout is not re-rendered and the
@@ -59,7 +62,7 @@ export function generateMetadata(ctx: { url: string }) {
 export default function UiLayout({ children }: LayoutProps) {
   return html`
     <link rel="stylesheet" href=${asset('/public/ui.css')}>
-    <div class="ui-site">
+    <div class="ui-site style-new-york">
       ${children}
     </div>
   `;

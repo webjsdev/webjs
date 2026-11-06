@@ -102,6 +102,6 @@ test('extractHelperAxes: a helper matching neither shape yields no axes rather t
 
 test('extractHelperAxes: a comment inside the variant map cannot swallow the object', () => {
   const src = readFileSync(new URL('../packages/registry/components/button.ts', import.meta.url), 'utf8')
-    .replace("'icon-lg': 'size-10',", "'icon-lg': 'size-10', // the app's largest icon button\n  none: '', /* don't */");
+    .replace("'icon-lg': 'cn-button-size-icon-lg',", "'icon-lg': 'cn-button-size-icon-lg', // the app's largest icon button\n  none: '', /* don't */");
   assert.deepEqual(extractHelperAxes(src).buttonClass.size, ['default', 'xs', 'sm', 'lg', 'icon', 'icon-xs', 'icon-sm', 'icon-lg', 'none']);
 });

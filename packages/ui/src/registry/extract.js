@@ -19,6 +19,7 @@
  */
 
 import { loadRegistryItem, loadRegistryIndex, isCustomElementSource } from './local.js';
+import { bakeForStyle } from './style-bake.js';
 import { extractExample } from './example.js';
 
 /**
@@ -243,17 +244,23 @@ export function extractDocHeader(src) {
  * Project one registry component into the agent-facing shape. Returns null when
  * the name is not a `registry:ui` component.
  *
+ * The source is BAKED first (#1666): the registry is in base form, and what an
+ * agent copies from this projection must be the plain Tailwind an app gets,
+ * never a `cn-*` name. `style` is the app's `components.json` style, and an
+ * absent one means `new-york`, the kit's default look.
+ *
  * @param {string} name
+ * @param {{ style?: string }} [opts]
  * @returns {{
  *   name: string, tier: 1|2, type: string,
  *   description: string, helpers: string[], example: string,
  *   dependencies: string[], registryDependencies: string[],
  * } | null}
  */
-export function uiComponent(name) {
+export function uiComponent(name, opts = {}) {
   const item = loadRegistryItem(name);
   if (!item || item.type !== 'registry:ui') return null;
-  const src = (item.files || []).map((f) => f.content || '').join('\n');
+  const src = (item.files || []).map((f) => bakeForStyle(f.content || '', opts.style)).join('\n');
   const tier = isCustomElementSource(src) ? 2 : 1;
   return {
     name: item.name,

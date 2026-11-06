@@ -19,6 +19,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { bakeForStyle } from '../src/registry/style-bake.js';
 
 const REGISTRY_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'packages', 'registry');
 const COMPONENTS_DIR = join(REGISTRY_DIR, 'components');
@@ -52,8 +53,16 @@ const TIER_2 = new Set([
   'dropdown-menu', 'sonner',
 ]);
 
+/**
+ * A component's source as an app receives it: baked with the default
+ * `new-york` style (#1666). The registry files are in base form, carrying
+ * semantic `cn-*` names where the classes used to be, so the hallmark class
+ * assertions below read what `add` writes rather than the base form itself.
+ * The bake only rewrites class strings, so the JSDoc and structure checks see
+ * the file unchanged.
+ */
 function readSource(name) {
-  return readFileSync(join(COMPONENTS_DIR, `${name}.ts`), 'utf8');
+  return bakeForStyle(readFileSync(join(COMPONENTS_DIR, `${name}.ts`), 'utf8'), 'new-york');
 }
 
 function readManifest() {

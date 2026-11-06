@@ -520,3 +520,35 @@ test('add: the no-components hint prints resolvable commands (#1264)', async () 
   assert.match(text, /npx @webjsdev\/ui list/);
   assert.doesNotMatch(text, /npx webjsui/);
 });
+
+// The style bake (#1666): the registry is in base form, so what `add` writes
+// must be plain Tailwind for the project's style, with no cn-* name left in it.
+for (const [style, expectIn, expectOut] of [
+  ['default', /hover:bg-primary\/90/, /hover:bg-primary\/80/],
+  ['nova', /hover:bg-primary\/80/, /hover:bg-primary\/90/],
+]) {
+  test(`add: bakes the components.json style into the written file (style ${style})`, async () => {
+    globalThis.fetch = async () => { throw new Error('should not fetch (local-first)'); };
+    const d = mkdtempSync(join(tmpdir(), 'webjsui-add-bake-'));
+    writeFileSync(join(d, 'components.json'), JSON.stringify({
+      style,
+      tailwind: { css: 'styles/globals.css', baseColor: 'neutral', cssVariables: true },
+      aliases: { components: 'components', utils: 'lib/utils', ui: 'components/ui', lib: 'lib' },
+    }));
+    const origLog = console.log;
+    console.log = () => {};
+    try {
+      await add.parseAsync(['button', '--yes', '--no-deps', '--cwd', d], { from: 'user' });
+      const body = readFileSync(join(d, 'components', 'ui', 'button.ts'), 'utf8');
+      const classStrings = body.replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, '');
+      assert.doesNotMatch(classStrings, /(['"\s])cn-[a-z]/, 'no cn-* name reaches the installed file');
+      assert.match(body, expectIn, `the ${style} style's default variant is baked in`);
+      assert.doesNotMatch(body, expectOut, 'and no other style leaks in');
+      assert.match(body, /inline-flex shrink-0 items-center/, 'the layout kept inline survives');
+    } finally {
+      console.log = origLog;
+      globalThis.fetch = origFetch;
+      rmSync(d, { recursive: true });
+    }
+  });
+}

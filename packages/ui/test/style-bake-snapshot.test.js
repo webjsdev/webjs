@@ -33,8 +33,15 @@ const tmp = mkdtempSync(join(tmpdir(), 'webjs-ui-bake-'));
 writeFileSync(join(tmp, 'utils.mjs'), utilsJs);
 const { cn } = await import(pathToFileURL(join(tmp, 'utils.mjs')).href);
 
-/** The allowlisted hooks survive the bake by design, so they are not a difference. */
-const withoutHooks = (s) => s.split(/(\s+)/).filter((t) => !CN_ALLOWLIST.has(t)).join('');
+/**
+ * Two kinds of class survive the bake without being a difference in LOOK: the
+ * allowlisted hooks, and the marker classes (`group`, `group/button`, `peer`)
+ * that shadcn's base form keeps inline. A marker has no CSS of its own, it only
+ * names an element for a `group-*` / `peer-*` variant, so a base-form component
+ * may carry one the old source lacked.
+ */
+const MARKER = /^(group|peer)(\/[\w-]+)?$/;
+const withoutHooks = (s, before) => s.split(/(\s+)/).filter((t) => !CN_ALLOWLIST.has(t) && !(MARKER.test(t) && !before.split(/\s+/).includes(t))).join('');
 
 const newYork = loadStyleMap('new-york');
 
@@ -45,8 +52,12 @@ for (const [file, before] of Object.entries(fixture)) {
     const after = classSegments(baked).map((s) => segmentValue(baked, s));
     assert.equal(after.length, before.length, `${file}: the conversion added or removed a string`);
     for (let i = 0; i < before.length; i++) {
-      const a = cn(withoutHooks(after[i]));
-      const b = cn(before[i]);
+      // Order is not part of the look (the bake puts the style's classes first),
+      // so each merged result is compared as a sorted list. A class the merger
+      // EVICTED still shows up as missing.
+      const sorted = (x) => x.split(/\s+/).filter(Boolean).sort().join(' ');
+      const a = sorted(cn(withoutHooks(after[i], before[i])));
+      const b = sorted(cn(before[i]));
       assert.equal(a, b, `${file}, string ${i}: baked ${JSON.stringify(after[i])} merges to ${JSON.stringify(a)}, expected ${JSON.stringify(b)}`);
     }
     assert.deepEqual(leftoverCnNames(baked), [], `${file}: a cn- name survived the bake`);

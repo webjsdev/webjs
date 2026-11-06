@@ -112,3 +112,18 @@ test('info: reports config when present, read from the file not inferred', async
     assert.doesNotMatch(output, /next/);
   } finally { rmSync(d, { recursive: true }); }
 });
+
+// The style bake (#1666): `view` and the projector it shares with the MCP `ui`
+// tool print what an app would get, so no cn-* name may appear in either.
+test('view projection: uiComponent is baked, for the default and for a named style', async () => {
+  const { uiComponent } = await import('../src/registry/extract.js');
+  const { bakeForStyle, leftoverCnNames } = await import('../src/registry/style-bake.js');
+  const { loadRegistryItem } = await import('../src/registry/local.js');
+  for (const style of [undefined, 'nova']) {
+    const c = uiComponent('button', { style });
+    assert.ok(c, 'button projects');
+    const src = loadRegistryItem('button').files.map((f) => bakeForStyle(f.content, style)).join('\n');
+    assert.deepEqual(leftoverCnNames(src), [], `the baked button source carries no cn-* name (style ${style ?? 'default'})`);
+    assert.ok(c.helpers.some((h) => /buttonClass/.test(h)), 'the helper signatures survive the bake');
+  }
+});
