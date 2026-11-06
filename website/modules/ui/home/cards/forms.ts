@@ -58,7 +58,9 @@ export function payoutThreshold() {
         ${FieldLabel({ for: 'preferred-currency' }, 'Preferred Currency')}
         <ui-select class="w-full">
           <select id="preferred-currency" class=${cn(selectTriggerClass(), 'w-full')}>
-            ${CURRENCIES.map((c) => html`<option value=${c.value} selected=${c.value === 'usd'}>${c.label}</option>`)}
+            <optgroup>
+              ${CURRENCIES.map((c) => html`<option value=${c.value} selected=${c.value === 'usd'}>${c.label}</option>`)}
+            </optgroup>
           </select>
         </ui-select>`)}
       ${Field('', html`
