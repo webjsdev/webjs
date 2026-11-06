@@ -258,9 +258,21 @@ export class UiCarouselItem extends WebComponent {
   _authored: string | null = null;
   _captured = false;
 
+  _root: UiCarousel | null = null;
+
+  // Adding or removing a slide changes how far the strip scrolls without
+  // resizing it, so the carousel re-measures. A removed slide can no longer
+  // find its carousel, so it remembers it.
   connectedCallback(): void {
     super.connectedCallback?.();
-    rootOf(this)?._onScroll();
+    this._root = rootOf(this);
+    this._root?._onScroll();
+  }
+
+  disconnectedCallback(): void {
+    this._root?._onScroll();
+    this._root = null;
+    super.disconnectedCallback?.();
   }
 
   // A slide is the flex child itself, so it carries its own classes, role and

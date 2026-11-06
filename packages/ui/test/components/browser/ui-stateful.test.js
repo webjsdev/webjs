@@ -1002,6 +1002,40 @@ suite('ui-carousel', () => {
     root.remove();
   });
 
+  test('the ends are re-measured when the strip resizes, not only when it scrolls', async () => {
+    const root = await mount(carousel());
+    await tick();
+    const { items, next } = parts(root);
+    await until(() => !next.disabled);
+    // Removing slides connects nothing and scrolls nothing; only the strip
+    // shrinking says there is no longer anywhere to go.
+    items[1].remove();
+    items[2].remove();
+    await until(() => next.disabled);
+    assert.ok(next.disabled, 'one slide left, so Next is disabled');
+    root.remove();
+  });
+
+  test('the ends are re-measured when the container resizes', async () => {
+    const root = await mount(html`${LAYOUT}<div data-testid="box" style="width: 250px; margin: 0 60px"><ui-carousel>
+      <ui-carousel-content>
+        <ui-carousel-item style="flex-basis: 100px"><div class="slide">1</div></ui-carousel-item>
+        <ui-carousel-item style="flex-basis: 100px"><div class="slide">2</div></ui-carousel-item>
+        <ui-carousel-item style="flex-basis: 100px"><div class="slide">3</div></ui-carousel-item>
+      </ui-carousel-content>
+      <ui-carousel-next></ui-carousel-next>
+    </ui-carousel></div>`);
+    await tick();
+    const next = root.querySelector('[data-slot="carousel-next"]');
+    await until(() => !next.disabled);
+    assert.equal(next.disabled, false, 'three 100px slides overflow 250px');
+    // No scroll and no window resize: only the strip's own size changes.
+    root.querySelector('[data-testid="box"]').style.width = '600px';
+    await until(() => next.disabled);
+    assert.ok(next.disabled, 'they fit in 600px, so there is nowhere to go');
+    root.remove();
+  });
+
   test('loop wraps from the last slide to the first and keeps both buttons enabled', async () => {
     const root = await mount(carousel('loop'));
     await tick();
