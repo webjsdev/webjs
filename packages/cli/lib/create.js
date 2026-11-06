@@ -1514,8 +1514,12 @@ export default function RootLayout({ children }: LayoutProps) {
         -moz-osx-font-smoothing: grayscale;
       }
       /* A fixed header leaves normal flow, so reserve its height. Keyed on the
-         class, so pinning the navbar below is a one-class edit. */
+         class, so pinning the navbar below is a one-class edit, and pinning it
+         only from a breakpoint up (md:fixed) reserves the space from there. */
       body:has(> header.fixed) { padding-top: var(--header-h); }
+      @media (min-width: 40rem) { body:has(> header[class~="sm:fixed"]) { padding-top: var(--header-h); } }
+      @media (min-width: 48rem) { body:has(> header[class~="md:fixed"]) { padding-top: var(--header-h); } }
+      @media (min-width: 64rem) { body:has(> header[class~="lg:fixed"]) { padding-top: var(--header-h); } }
     </style>
     <!-- Top navbar, on every page: brand on the left, links + theme toggle on
          the right. It floats (no separator) and is in normal flow, so it just

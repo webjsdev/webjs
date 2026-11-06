@@ -257,7 +257,7 @@ header { position: fixed; inset-inline: 0; top: 0; height: var(--header-h); }
 body   { padding-top: var(--header-h); }
 ```
 
-With Tailwind, that is `class="fixed inset-x-0 top-0 h-[var(--header-h)]"` on the header. The scaffold's layout already carries the token and a `body:has(> header.fixed)` rule, so pinning its navbar is adding `fixed inset-x-0 top-0 z-20` and nothing else.
+With Tailwind, that is `class="fixed inset-x-0 top-0 h-[var(--header-h)]"` on the header. The scaffold's layout already carries the token and a `body:has(> header.fixed)` rule, so pinning its navbar is adding `fixed inset-x-0 top-0 z-20` and nothing else. Matching rules for `sm:fixed`, `md:fixed` and `lg:fixed` reserve the space from that breakpoint up, so `md:fixed md:inset-x-0 md:top-0` pins it on wider screens only. Any other breakpoint (or a custom one) needs its own `@media` rule beside them.
 
 **Do not measure the header with JavaScript.** The tempting version, a `<head>` script that writes `offsetHeight` into `--header-h` from a `ResizeObserver`, breaks on a client-router swap that replaces the header (a layout refresh, a form action that re-renders the layouts): the observer fires for the detached old node, reads a height of 0, and the content slides under the navbar with no way back short of a reload. The head script never re-runs, so nothing re-measures. A token the header is sized by cannot drift, because there is nothing to keep in sync.
 
