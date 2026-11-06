@@ -317,6 +317,11 @@ export class UiSelect extends WebComponent({
         return html`<div data-slot="select-separator" aria-hidden="true" class=${selectSeparatorClass()}></div>`;
       }
       if (e.kind === 'group') {
+        // An <optgroup> with no label is shadcn's SelectGroup with no
+        // SelectLabel: the group's spacing around its items, and no heading.
+        if (!e.label) {
+          return html`<div data-slot="select-group" role="group" class=${selectGroupClass()}>${e.options.map(renderEntry)}</div>`;
+        }
         const labelId = `${this._id}-group-${e.label.replace(/\W+/g, '-')}`;
         return html`<div data-slot="select-group" role="group" aria-labelledby=${labelId} class=${selectGroupClass()}><div
           data-slot="select-label" id=${labelId} class=${selectLabelClass()}>${e.label}</div>${e.options.map(renderEntry)}</div>`;

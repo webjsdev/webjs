@@ -1464,3 +1464,24 @@ suite('ui-switch', () => {
     }
   });
 });
+
+suite('ui-select: an unlabelled optgroup', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/select.ts`);
+  });
+
+  test('is shadcn\'s SelectGroup with no SelectLabel: a group of the options, with no heading', async () => {
+    const root = await mount(html`<ui-select><select aria-label="Currency"><optgroup><option value="usd" selected>USD</option><option value="eur">EUR</option></optgroup></select></ui-select>`);
+    try {
+      await new Promise((r) => setTimeout(r, 50));
+      await tick();
+      const group = root.querySelector('[data-slot="select-group"]');
+      assert.ok(group, 'the options sit in a group, which carries the style\'s spacing');
+      assert.equal(group.querySelectorAll('[role="option"]').length, 2);
+      assert.equal(root.querySelector('[data-slot="select-label"]'), null, 'with no heading row');
+      assert.equal(group.hasAttribute('aria-labelledby'), false, 'and no reference to a missing label');
+    } finally {
+      root.remove();
+    }
+  });
+});
