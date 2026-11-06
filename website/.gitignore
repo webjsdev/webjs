@@ -19,3 +19,6 @@
 # css:build:ui` (and by webjs.dev.before / webjs.start.before / the
 # Dockerfile), the same way public/tailwind.css is built. A build output.
 /public/ui.css
+# The seven kit styles ui.css does not carry, one file each, compiled by
+# scripts/build-ui-styles.mjs (`npm run css:build:ui-styles`). Build outputs.
+/public/ui-styles/

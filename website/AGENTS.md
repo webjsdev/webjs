@@ -87,13 +87,17 @@ website/
                        may live here
       (chrome)/        the /ui header and footer, a route group so the iframe
                        targets outside it render with no chrome
-        layout.ts      the fixed header with its --header-h script, the footer
-                       with the one shadcn/ui credit line, and (for now) the
-                       component-gallery sidebar built from the registry index
+        layout.ts      the fixed header with its --header-h script and the
+                       footer with the one shadcn/ui credit line
         not-found.ts error.ts
                        section boundaries, rendered inside the /ui chrome
-        page.ts        /ui, the introduction
-        [name]/page.ts /ui/<name>, one page per component
+        page.ts        /ui, shadcn's home page: the hero over the card grid
+                       (modules/ui/home/), in the luma and rhea styles
+        (gallery)/     the interim component gallery, until the /ui docs
+                       replace it: layout.ts is the sidebar built from the
+                       registry index (in the new-york style)
+          docs/page.ts /ui/docs, the introduction
+          [name]/page.ts /ui/<name>, one page per component
       registry/**      the JSON API that shipped CLI versions fetch (see
                        modules/ui/ below). Its paths never move
     sitemap.ts         /sitemap.xml (enumerates docs + ui + articles + compare + blog)
@@ -326,7 +330,15 @@ the root layout must keep rendering `${children}` with nothing around it.
 
 `/ui` also has its own stylesheet, `public/ui.css`, built from
 `public/ui-input.css` (`npm run css:build:ui`, and in `webjs.dev.before`,
-`webjs.dev.regenerate`, `webjs.start.before` and the Dockerfile). It holds the
+`webjs.dev.regenerate`, `webjs.start.before` and the Dockerfile). It carries
+two kit styles, nova and new-york. The other seven compile one file each into
+`public/ui-styles/<name>.css` (`scripts/build-ui-styles.mjs`, run by the same
+four hooks), and a page links only the styles it renders, listed once in
+`lib/ui/style-links.ts`. The `dark` and `not-dark` variants and the theme
+mapping live in `public/ui-theme.css`, which both builds import ahead of the
+styles, since a style's `@apply` can use a variant only once it exists. Each
+region names its own `.style-<name>` wrapper (`.ui-site` carries none),
+because two style wrappers on one path both apply. `ui.css` holds the
 `/ui` tokens on `.ui-site` and the utilities only `/ui` code uses, and no
 preflight, since the root stylesheet already supplies it. The link is emitted
 TWICE, deliberately. The root layout emits it in its leading head run for a

@@ -42,6 +42,7 @@ import ErrorBoundary from '#app/error.ts';
 import DocsLayout from '#app/(site)/docs/layout.ts';
 import UiLayout from '#app/ui/layout.ts';
 import UiChromeLayout from '#app/ui/(chrome)/layout.ts';
+import UiGalleryLayout from '#app/ui/(chrome)/(gallery)/layout.ts';
 import { layoutProps } from '#test/helpers/layout-props.ts';
 import { renderPostBody } from '#modules/blog/utils/render-post.ts';
 
@@ -84,12 +85,13 @@ async function htmlOf(page: Page) {
 
 /**
  * A /ui page wrapped the way the server wraps it: the `(chrome)` group layout
- * (header, footer, the interim gallery shell) inside the minimal /ui layout,
- * so the chrome's own markup is covered too.
+ * (header, footer) inside the minimal /ui layout, and for a gallery page the
+ * interim gallery shell inside that, so the chrome's own markup is covered too.
  */
-async function uiShell(children: TemplateResult, path: string) {
-  const props = layoutProps(children, { url: 'https://webjs.dev' + path });
-  return UiLayout(layoutProps(await UiChromeLayout(props), { url: props.url }));
+async function uiShell(children: TemplateResult, path: string, gallery = true) {
+  const url = 'https://webjs.dev' + path;
+  const inner = gallery ? await UiGalleryLayout(layoutProps(children, { url })) : children;
+  return UiLayout(layoutProps(await UiChromeLayout(layoutProps(inner, { url })), { url }));
 }
 
 /** Discover a section's pages instead of listing them by hand. */
@@ -117,8 +119,9 @@ async function sectionPages(dir: string, base: string, layout: (p: LayoutProps) 
   return pages;
 }
 
-const uiDetail = await import('#app/ui/(chrome)/[name]/page.ts');
-const uiIntro = await import('#app/ui/(chrome)/page.ts');
+const uiDetail = await import('#app/ui/(chrome)/(gallery)/[name]/page.ts');
+const uiIntro = await import('#app/ui/(chrome)/(gallery)/docs/page.ts');
+const uiHome = await import('#app/ui/(chrome)/page.ts');
 const { loadRegistryIndex } = await import('#modules/ui/queries/registry.server.ts');
 
 /**
@@ -138,7 +141,8 @@ const PAGES: Page[] = [
   },
   ...await sectionPages('(site)/docs', '/docs', DocsLayout),
   ...await sectionPages('ui', '/ui', UiLayout, false),
-  { name: '/ui', render: async () => uiShell(await uiIntro.default(), '/ui') },
+  { name: '/ui', render: async () => uiShell(uiHome.default({ url: 'https://webjs.dev/ui' }), '/ui', false) },
+  { name: '/ui/docs', render: async () => uiShell(await uiIntro.default(), '/ui/docs') },
   ...uiComponents.map((name) => ({
     name: `/ui/${name}`,
     render: async () => uiShell(await uiDetail.default({ params: { name } }), `/ui/${name}`),

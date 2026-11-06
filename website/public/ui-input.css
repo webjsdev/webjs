@@ -28,6 +28,7 @@
    tw-animate.css the enter and exit animations. Both are vendored into the
    registry (see packages/ui/THIRD_PARTY_NOTICES.md). The other seven styles
    go in a separate stylesheet, linked only by the pages that switch styles. */
+@import "./ui-theme.css";
 @import "../../packages/ui/packages/registry/styles/tw-animate.css";
 @import "../../packages/ui/packages/registry/styles/shadcn-tailwind.css";
 @import "../../packages/ui/packages/registry/styles/style-new-york.css" layer(base);
@@ -38,81 +39,6 @@
 @source "../components/**/*.ts";
 @source "../lib/ui/**/*.ts";
 @source "../lib/utils/{cn,dom}.ts";
-
-/* The same `dark:` variant as public/input.css. Tailwind's default `dark:` is
-   the OS preference alone, while this site's theme is the OS preference
-   UNLESS the reader picked one, which is `data-theme` on the root. Declaring
-   it again here matters: without it, every `dark:` utility compiled into
-   THIS file would follow the OS and ignore the toggle, so a reader on a dark
-   OS who picked light would get dark component internals on /ui. The light
-   or dark choice carries across both sections because both read the one
-   attribute, set by the theme bootstrap in app/layout.ts. */
-@custom-variant dark {
-  @media (prefers-color-scheme: dark) {
-    &:where(:root:not([data-theme='light']) *) { @slot; }
-  }
-  &:where(:root[data-theme='dark'] *) { @slot; }
-}
-
-/* shadcn's token-to-utility mapping (apps/v4/app/globals.css), `inline` so a
-   utility compiles to the variable itself (`bg-background` is
-   `background-color: var(--background)`). The variables are declared on
-   `.ui-site` below, so these utilities resolve to the /ui palette inside the
-   section and to nothing outside it. */
-@theme inline {
-  --breakpoint-3xl: 1600px;
-  --breakpoint-4xl: 2000px;
-  --font-sans: var(--font-sans);
-  --font-heading: var(--font-heading);
-  --font-mono: var(--font-mono);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-surface: var(--surface);
-  --color-surface-foreground: var(--surface-foreground);
-  --color-code: var(--code);
-  --color-code-foreground: var(--code-foreground);
-  --color-code-highlight: var(--code-highlight);
-  --color-code-number: var(--code-number);
-  --color-selection: var(--selection);
-  --color-selection-foreground: var(--selection-foreground);
-}
 
 /* The /ui palette: shadcn's site tokens, the same values as its :root and
    .dark blocks, written once each as light-dark(LIGHT, DARK) the way the
@@ -171,6 +97,19 @@
   /* shadcn's type: Geist for text and headings, Geist Mono for code. */
   --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-sans);
+
+  /* The radius scale, restated here because the kit styles read it raw
+     (rhea's cards are rounded-[min(var(--radius-4xl),24px)]). Tailwind emits
+     a raw-read theme variable at :root, where --radius is not declared, so
+     there it computes invalid and the corner falls to 0. Declared on the
+     wrapper, it computes against the wrapper's --radius. */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
   --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* shadcn sizes its header and footer from these (14 and 16 spacing steps
@@ -186,6 +125,44 @@
   font-synthesis-weight: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+}
+/* shadcn's neutral theme (apps/v4/app/legacy-themes.css), which its home
+   card grid wears. It differs from the site palette above mainly in the chart
+   ramp, which is grey rather than blue. Written in the same light-dark() form.
+   The rest of shadcn's themes join it with the theme work in #1666. */
+.ui-site .theme-neutral {
+  --background:         light-dark(oklch(1 0 0),               oklch(0.145 0 0));
+  --foreground:         light-dark(oklch(0.145 0 0),           oklch(0.985 0 0));
+  --card:               light-dark(oklch(1 0 0),               oklch(0.205 0 0));
+  --card-foreground:    light-dark(oklch(0.145 0 0),           oklch(0.985 0 0));
+  --popover:            light-dark(oklch(1 0 0),               oklch(0.205 0 0));
+  --popover-foreground: light-dark(oklch(0.145 0 0),           oklch(0.985 0 0));
+  --primary:            light-dark(oklch(0.205 0 0),           oklch(0.922 0 0));
+  --primary-foreground: light-dark(oklch(0.985 0 0),           oklch(0.205 0 0));
+  --secondary:          light-dark(oklch(0.97 0 0),            oklch(0.269 0 0));
+  --secondary-foreground: light-dark(oklch(0.205 0 0),         oklch(0.985 0 0));
+  --muted:              light-dark(oklch(0.97 0 0),            oklch(0.269 0 0));
+  --muted-foreground:   light-dark(oklch(0.556 0 0),           oklch(0.708 0 0));
+  --accent:             light-dark(oklch(0.97 0 0),            oklch(0.269 0 0));
+  --accent-foreground:  light-dark(oklch(0.205 0 0),           oklch(0.985 0 0));
+  --destructive:        light-dark(oklch(0.577 0.245 27.325),  oklch(0.704 0.191 22.216));
+  --border:             light-dark(oklch(0.922 0 0),           oklch(1 0 0 / 10%));
+  --input:              light-dark(oklch(0.922 0 0),           oklch(1 0 0 / 15%));
+  --ring:               light-dark(oklch(0.708 0 0),           oklch(0.556 0 0));
+  --chart-1:            oklch(0.87 0 0);
+  --chart-2:            oklch(0.556 0 0);
+  --chart-3:            oklch(0.439 0 0);
+  --chart-4:            oklch(0.371 0 0);
+  --chart-5:            oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar:            light-dark(oklch(0.985 0 0),           oklch(0.205 0 0));
+  --sidebar-foreground: light-dark(oklch(0.145 0 0),           oklch(0.985 0 0));
+  --sidebar-primary:    light-dark(oklch(0.205 0 0),           oklch(0.488 0.243 264.376));
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent:     light-dark(oklch(0.97 0 0),            oklch(0.269 0 0));
+  --sidebar-accent-foreground: light-dark(oklch(0.205 0 0),    oklch(0.985 0 0));
+  --sidebar-border:     light-dark(oklch(0.922 0 0),           oklch(1 0 0 / 10%));
+  --sidebar-ring:       light-dark(oklch(0.708 0 0),           oklch(0.556 0 0));
 }
 @media (width >= 64rem) {
   .ui-site { --header-height: calc(var(--spacing) * 16); }

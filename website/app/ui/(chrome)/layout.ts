@@ -2,13 +2,8 @@ import { html, cspNonce } from '@webjsdev/core';
 import type { LayoutProps } from '@webjsdev/core';
 import '#components/theme-toggle.ts';
 import '#components/site-nav-menu.ts';
-import '#components/docs-drawer.ts';
-import '#components/code-block.ts';
 import { GH_URL, NEW_TAB } from '#lib/links.ts';
 import { brandMark } from '#lib/design/brand.ts';
-import { docsShell } from '#lib/ui/docs-shell.ts';
-import { loadRegistryIndex } from '#modules/ui/queries/registry.server.ts';
-import { splitByTier } from '#modules/ui/utils/tier.ts';
 
 /**
  * The /ui chrome: header and footer, ported from shadcn/ui's site
@@ -36,7 +31,10 @@ import { splitByTier } from '#modules/ui/utils/tier.ts';
  * #1666 that builds its page, so the header never links to a page that does
  * not exist yet.
  */
-const NAV = [{ href: '/ui', label: 'Home' }];
+const NAV = [
+  { href: '/ui', label: 'Home' },
+  { href: '/ui/docs', label: 'Docs' },
+];
 
 // shadcn's ghost `sm` button with its nav padding (`px-2.5`), written out so
 // the chrome does not depend on the kit mirror the gallery previews use.
@@ -47,28 +45,9 @@ const panelLink = 'rounded-md px-3 py-2.5 text-sm font-medium no-underline text-
 
 const githubIcon = html`<svg viewBox="0 0 24 24" aria-hidden="true" class="size-4 fill-current"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.07 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3"/></svg>`;
 
-export default async function UiChromeLayout({ children, url }: LayoutProps) {
+export default function UiChromeLayout({ children, url }: LayoutProps) {
   const nonce = cspNonce();
   const { pathname } = new URL(url);
-
-  // Interim: the existing component gallery keeps its sidebar shell until the
-  // /ui docs tree replaces it later in #1666.
-  const all = await loadRegistryIndex();
-  const { tier1, tier2 } = splitByTier(all.filter((i) => i.type === 'registry:ui'));
-  const body = docsShell({
-    nav: [
-      { title: 'Getting Started', items: [{ href: '/ui', label: 'Introduction' }] },
-      { title: 'Tier 1', count: tier1.length, items: tier1.map((c) => ({ href: `/ui/${c.name}`, label: c.name })) },
-      { title: 'Tier 2', count: tier2.length, items: tier2.map((c) => ({ href: `/ui/${c.name}`, label: c.name })) },
-    ],
-    label: 'Component library',
-    menuLabel: 'Components menu',
-    // No prose wrapper: the component pages carry live previews that the
-    // unlayered .prose-docs rules would restyle. Pages wrap their genuinely
-    // prose regions themselves.
-    contentClass: '',
-    children,
-  });
 
   return html`
     <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[60] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground">Skip to content</a>
@@ -114,10 +93,11 @@ export default async function UiChromeLayout({ children, url }: LayoutProps) {
     </script>
 
     <div data-slot="layout" class="relative z-10 flex min-h-[calc(100svh-var(--header-h))] flex-col bg-background">
-      <!-- A div, not main: the interim gallery shell (components/docs-drawer.ts)
-           renders the page's one main landmark, id="main", itself. -->
+      <!-- A div, not main: each page renders the one main landmark, id="main",
+           itself (the interim gallery's shell does it in components/docs-drawer.ts,
+           and the home page wraps its own content). -->
       <div class="flex min-h-0 flex-1 flex-col">
-        ${body}
+        ${children}
       </div>
       <footer>
         <div class="container-wrapper px-4 xl:px-6">

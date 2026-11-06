@@ -2,6 +2,7 @@ import { html, cspNonce, asset } from '@webjsdev/core';
 import type { LayoutProps } from '@webjsdev/core';
 import { THEME_STORAGE_KEY, FORCED_THEMES } from '#lib/theme.ts';
 import { isUiPath } from '#lib/links.ts';
+import { extraStyleLinks } from '#lib/ui/style-links.ts';
 
 /**
  * Root layout: the document shell every page shares.
@@ -128,7 +129,8 @@ export default function RootLayout({ children, url }: LayoutProps) {
   // the top of its own markup, which covers a soft navigation INTO /ui (this
   // layout is not re-rendered then, and the router's head merge only adds).
   // The same URL twice costs one fetch. A marketing page emits neither.
-  const ui = isUiPath(new URL(url).pathname);
+  const { pathname } = new URL(url);
+  const ui = isUiPath(pathname);
   return html`
     <!-- Favicons are declared in generateMetadata above (metadata.icons), not
          written here. The framework splices them into <head>. -->
@@ -186,6 +188,7 @@ export default function RootLayout({ children, url }: LayoutProps) {
 
     <link rel="stylesheet" href=${asset('/public/tailwind.css')}>
     ${ui ? html`<link rel="stylesheet" href=${asset('/public/ui.css')}>
+    ${extraStyleLinks(pathname)}
     <link rel="preload" href="/public/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/public/fonts/geist-mono.woff2" as="font" type="font/woff2" crossorigin>` : ''}
     <style>

@@ -144,7 +144,7 @@ test('the gallery uses the SAME sidebar shell as the docs', async () => {
 });
 
 test('the sidebar groups components under bare Tier 1 and Tier 2 headers', async () => {
-  const ui = await bodyOf(UI_INDEX);
+  const ui = await bodyOf('/ui/docs');
   assert.match(ui, />Tier 1</, 'Tier 1 section header');
   assert.match(ui, />Tier 2</, 'Tier 2 section header');
   // The old site spelled these out as "Tier 1 Class helpers" / "Tier 2 Custom
@@ -153,14 +153,17 @@ test('the sidebar groups components under bare Tier 1 and Tier 2 headers', async
   assert.ok(!/Tier 1\s*<span[^>]*>\s*Class helpers/.test(ui), 'no descriptive suffix in the nav');
 });
 
-test('/ui opens on the introduction, with no separate landing page', async () => {
-  // A marketing landing page in front of the gallery is exactly what this
-  // migration removed: /ui IS the gallery, the way /docs opens on Getting
-  // Started rather than on a pitch for the documentation.
-  const res = await handle(UI_INDEX);
-  assert.equal(res.status, 200, '/ui renders directly, no redirect to a sub-path');
-  const html = await res.text();
-  assert.ok(html.includes('id="docs-sidebar"'), 'and it renders inside the gallery shell');
+test('/ui is the shadcn-shaped home page, and the introduction moved to /ui/docs', async () => {
+  // #1666 replicates ui.shadcn.com, whose home is a hero over a grid of live
+  // component cards with no sidebar. The introduction is a docs page.
+  const home = await bodyOf(UI_INDEX);
+  assert.match(home, /<h1[^>]*>The Foundation for your Design System<\/h1>/, 'the hero heading');
+  assert.match(home, /data-slot="demo"/, 'the card grid');
+  assert.match(home, /class="style-rhea"/, 'rendered in the rhea style, as shadcn renders it');
+  assert.ok(!home.includes('id="docs-sidebar"'), 'with no docs sidebar');
+  assert.equal(home.split('<main').length - 1, 1, 'and one main landmark');
+  const docs = await bodyOf('/ui/docs');
+  assert.ok(docs.includes('id="docs-sidebar"'), '/ui/docs renders inside the gallery shell');
 });
 
 test('every component in the registry has a reachable page', async () => {
@@ -196,7 +199,8 @@ test('the /ui tokens are scoped to .ui-site, so they cannot leak into the market
   assert.ok(!layout.includes('@theme'), 'the /ui layout declares no tokens itself');
   assert.ok(!/--background\s*:|--fg\s*:|--accent\s*:/.test(layout), 'and redefines no color token');
   const css = readFileSync(resolve(WEBSITE_ROOT, 'public/ui-input.css'), 'utf8');
-  const inlineBlock = css.match(/@theme inline\s*\{[^}]*\}/)?.[0] ?? '';
+  const shared = readFileSync(resolve(WEBSITE_ROOT, 'public/ui-theme.css'), 'utf8');
+  const inlineBlock = shared.match(/@theme inline\s*\{[^}]*\}/)?.[0] ?? '';
   for (const t of ['--color-background', '--color-primary', '--color-chart-1', '--color-sidebar']) {
     assert.ok(inlineBlock.includes(t), `${t} maps through @theme inline`);
   }
@@ -230,9 +234,10 @@ test('the dark variant tracks the site theme, not just the OS preference', () =>
   // is the OS preference alone, so without this override a reader on a dark OS
   // who picks light gets light page tokens and dark component internals. BOTH
   // stylesheets need it: a `dark:` utility compiled into ui.css follows only
-  // the variant declared in ui-input.css. One attribute drives both, which is
-  // what makes a theme choice hold across the two sections.
-  for (const file of ['public/input.css', 'public/ui-input.css']) {
+  // the variant declared in ui-theme.css (imported by ui-input.css). One
+  // attribute drives both, which is what makes a theme choice hold across the
+  // two sections.
+  for (const file of ['public/input.css', 'public/ui-theme.css']) {
     const css = readFileSync(resolve(WEBSITE_ROOT, file), 'utf8');
     const variant = css.match(/@custom-variant dark \{[\s\S]*?\n\}/)?.[0];
     assert.ok(variant, `${file} redefines the dark variant`);
@@ -403,4 +408,33 @@ test('the old /docs/ui page is gone, permanently redirected to the gallery', asy
   const res = await handle('/docs/ui');
   assert.ok([301, 308].includes(res.status), `expected a permanent redirect, got ${res.status}`);
   assert.equal(new URL(res.headers.get('location')!, 'http://localhost').pathname, '/ui');
+});
+
+test('a page in an extra kit style links that style, in <head> and in its own markup', async () => {
+  // public/ui.css carries nova and new-york only. The other seven styles are
+  // one file each under public/ui-styles/, linked by the pages that render in
+  // them (lib/ui/style-links.ts). The root layout's copy makes a full load
+  // flash-free, and the page's copy covers a soft navigation in.
+  const headOf = (html: string) => html.slice(0, html.indexOf('</head>'));
+  const bodyPart = (html: string) => html.slice(html.indexOf('</head>'));
+  const home = await bodyOf(UI_INDEX);
+  assert.match(headOf(home), /<link rel="stylesheet" href="\/public\/ui-styles\/rhea\.css/, 'the home page has rhea in <head>');
+  assert.match(bodyPart(home), /<link rel="stylesheet" href="\/public\/ui-styles\/rhea\.css/, 'and in its own markup');
+  for (const path of [UI_COMPONENT, MARKETING_PATH, DOC_PATH]) {
+    const html = await bodyOf(path);
+    assert.ok(!html.includes('/public/ui-styles/'), `${path} links no extra style`);
+  }
+});
+
+test('both /ui stylesheet inputs import the shared variants before any kit style', () => {
+  // A style's @apply can use a variant (rhea's `not-dark:`) only once it is
+  // declared, and CSS allows no rule ahead of an @import, so the variants
+  // live in public/ui-theme.css and are imported first.
+  const ui = readFileSync(resolve(WEBSITE_ROOT, 'public/ui-input.css'), 'utf8');
+  assert.ok(ui.indexOf('./ui-theme.css') >= 0 && ui.indexOf('./ui-theme.css') < ui.indexOf('style-new-york.css'), 'ui-input.css imports ui-theme.css before the styles');
+  assert.ok(!ui.includes('@custom-variant dark'), 'and does not redeclare the variant');
+  const build = readFileSync(resolve(WEBSITE_ROOT, 'scripts/build-ui-styles.mjs'), 'utf8');
+  assert.ok(build.indexOf('ui-theme.css') < build.indexOf('style-${name}.css'), 'the per-style build imports it before the style too');
+  const theme = readFileSync(resolve(WEBSITE_ROOT, 'public/ui-theme.css'), 'utf8');
+  assert.match(theme, /@custom-variant not-dark \{/, 'not-dark is spelled out, since the two-branch dark variant cannot be negated');
 });
