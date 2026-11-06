@@ -846,9 +846,14 @@ suite('ui-questionnaire', () => {
     const root = await mount(flow());
     await tick();
     const { el, form, fieldset, radio } = parts(root);
+    // Seen after the element's own handler (the event bubbles to the host),
+    // and always cancelled so a real submit cannot navigate the suite away.
+    const prevented = [];
+    el.addEventListener('submit', (e) => { prevented.push(e.defaultPrevented); e.preventDefault(); });
     radio('direction', 'delegation').click();
     form.requestSubmit();
     await tick();
+    assert.deepEqual(prevented, [true], 'the element held the submit back');
     assert.equal(fieldset('tags').hidden, false, 'a submit before the end goes to the next question');
     root.remove();
   });
