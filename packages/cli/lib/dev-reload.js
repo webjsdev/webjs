@@ -68,7 +68,7 @@ export const KILL_TIMEOUT_MS = 2000;
  * @returns {boolean}
  */
 export function shouldIgnoreRestartPath(rel) {
-  return /(?:^|[\\/])(?:node_modules|\.git|\.webjs)(?:[\\/]|$)|(?:^|[\\/])db[\\/](?:dev\.db|migrations)/.test(rel || '')
+  return /(?:^|[\\/])(?:node_modules|\.git|\.webjs)(?:[\\/]|$)|(?:^|[\\/])db[\\/](?:dev\.db|migrations|[^\\/]*\.(?:db|db3|sqlite|sqlite3)(?:-(?:wal|shm|journal))?$)/.test(rel || '')
     // Tool output nothing serves, as the server's watcher skips it (watch-ignore.js).
     || /(?:^|[\\/])(?:coverage|\.cache|\.nyc_output|test-results|playwright-report|\.turbo)(?:[\\/]|$)|\.log$|(?:^|[\\/])\.DS_Store$|\.swp$|~$/.test(rel || '');
 }

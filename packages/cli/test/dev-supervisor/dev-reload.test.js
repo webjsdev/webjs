@@ -334,3 +334,20 @@ test('readRegenerateOutputs reads webjs.dev.regenerate outputs, normalized', () 
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// #1664: `db` is a restart dir on Node, so a schema edit reaches a fresh
+// process. The SQLite file and its sidecars change on every write and must not
+// restart anything; the pattern matches the server watcher's exactly.
+test('a db/ source edit restarts on Node, a SQLite write never does (#1664)', async () => {
+  const { WATCH_DIRS } = await import('../../lib/dev-supervisor.js');
+  assert.ok(WATCH_DIRS.includes('db'), 'db is watched for restarts');
+  assert.equal(shouldIgnoreRestartPath('db/schema.server.ts'), false);
+  assert.equal(shouldIgnoreRestartPath('db/connection.server.ts'), false);
+  for (const p of ['db/dev.db', 'db/dev.db-wal', 'db/dev.db-shm', 'db/app.sqlite', 'db/app.sqlite-wal', 'db/data.db3-journal', 'db/migrations/0001/migration.sql']) {
+    assert.equal(shouldIgnoreRestartPath(p), true, p);
+  }
+  const { shouldIgnoreWatchPath } = await import('../../../server/src/dev/server.js');
+  for (const p of ['db/schema.server.ts', 'db/dev.db', 'db/app.sqlite-shm', 'db/migrations/x.sql', 'db/sqlite-helpers.ts']) {
+    assert.equal(shouldIgnoreRestartPath(p), shouldIgnoreWatchPath(p), `the CLI and server agree on ${p}`);
+  }
+});

@@ -58,14 +58,18 @@ function debounce(fn, ms) {
  * (drizzle-kit output) churn during db:migrate. The `db/dev.db` branch is
  * prefix-only (no trailing separator) so the `-journal` / `-wal` sidecars match
  * too, while staying anchored to `db/dev.db` so a SOURCE file like
- * `db/schema.server.ts` still triggers a reload. The others stay
+ * `db/schema.server.ts` still triggers a reload. Any other SQLite file under
+ * `db/` (`.db`, `.db3`, `.sqlite`, `.sqlite3`, plus its `-wal` / `-shm` /
+ * `-journal` sidecar) is skipped too, since `DATABASE_URL` can name one and it
+ * changes on every write (#1664; the CLI's `shouldIgnoreRestartPath` carries the
+ * same pattern, and the two must stay identical). The others stay
  * separator-anchored so an unrelated name like `node_modules.bak/foo` does not.
  *
  * @param {string} filename relative path from an fs.watch `event.filename`
  * @returns {boolean} true when the change should be ignored
  */
 export function shouldIgnoreWatchPath(filename) {
-  return /(?:^|[\\/])(?:node_modules|\.git|\.webjs)(?:[\\/]|$)|(?:^|[\\/])db[\\/](?:dev\.db|migrations)/.test(filename || '');
+  return /(?:^|[\\/])(?:node_modules|\.git|\.webjs)(?:[\\/]|$)|(?:^|[\\/])db[\\/](?:dev\.db|migrations|[^\\/]*\.(?:db|db3|sqlite|sqlite3)(?:-(?:wal|shm|journal))?$)/.test(filename || '');
 }
 
 /**

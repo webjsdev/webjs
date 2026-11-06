@@ -48,20 +48,27 @@ export async function deletePost(id: number) {
 import * as schema from './schema.server.ts';
 
 const url = process.env.DATABASE_URL?.replace(/^file:/, '') ?? 'db/dev.db';
-const g = globalThis as unknown as { __webjs_db?: unknown };
+// Cache the driver handle across dev reloads, never the Drizzle instance, which
+// captures schema.relations (see the database docs).
+const g = globalThis as unknown as { __webjs_db_clients?: Map&lt;string, unknown&gt; };
+const clients = (g.__webjs_db_clients ??= new Map());
+const cached = &lt;T,&gt;(open: () =&gt; T): T =&gt; {
+  if (!clients.has(url)) clients.set(url, open());
+  return clients.get(url) as T;
+};
 
-async function open() {
+async function connect() {
   if ((globalThis as { Bun?: unknown }).Bun) {
     const { Database } = await import('bun:sqlite');
     const { drizzle } = await import('drizzle-orm/bun-sqlite');
-    return drizzle({ client: new Database(url), relations: schema.relations });
+    return drizzle({ client: cached(() =&gt; new Database(url)), relations: schema.relations });
   }
   const { DatabaseSync } = await import('node:sqlite');
   const { drizzle } = await import('drizzle-orm/node-sqlite');
-  return drizzle({ client: new DatabaseSync(url), relations: schema.relations });
+  return drizzle({ client: cached(() =&gt; new DatabaseSync(url)), relations: schema.relations });
 }
 
-export const db = (g.__webjs_db ??= await open()) as Awaited&lt;ReturnType&lt;typeof open&gt;&gt;;</code-block>
+export const db = await connect();</code-block>
 
     <p><strong>Do not import a server-only utility directly into a page, layout, or component.</strong> The stub throws when the module <em>loads</em> (not when called), so it works during SSR but crashes when a component hydrates or a page/layout module loads in the browser. Use server-only utilities <em>inside</em> server actions, <code>route.{js,ts}</code> handlers, or <code>middleware</code> (which only ever run on the server). A page reaches server logic by importing a <code>'use server'</code> <strong>action</strong> instead: its RPC stub loads safely on the client and isn't even called there.</p>
 

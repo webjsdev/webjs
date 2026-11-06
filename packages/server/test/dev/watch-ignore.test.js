@@ -64,3 +64,17 @@ test('the scaffold .gitignore rules match like git, with last-match negation', (
   assert.equal(isGitignored(rules, 'build', true), true, 'but does match the directory itself');
   assert.equal(isGitignored(rules, 'app/page.ts'), false);
 });
+
+// #1664: the CLI's Node supervisor now restarts on a `db/` edit (a schema
+// change has to reach a fresh process there). Any SQLite file under db/, plus
+// its WAL / shm / journal sidecars, changes on EVERY write, so it must be
+// skipped or every form post would restart the dev server. DATABASE_URL can
+// name a file other than dev.db, so the carve-out matches by extension.
+test('shouldIgnoreWatchPath skips any SQLite file under db/ and its sidecars (#1664)', () => {
+  for (const p of ['db/dev.db-wal', 'db/dev.db-shm', 'db/app.sqlite', 'db/app.sqlite-wal', 'db/app.sqlite3', 'db/data.db3-journal', 'db/other.db', 'db/other.db-shm']) {
+    assert.equal(shouldIgnoreWatchPath(p), true, p);
+  }
+  for (const p of ['db/schema.server.ts', 'db/seed.server.ts', 'db/columns.server.ts', 'db/sqlite-helpers.ts']) {
+    assert.equal(shouldIgnoreWatchPath(p), false, p);
+  }
+});

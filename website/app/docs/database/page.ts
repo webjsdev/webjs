@@ -58,7 +58,6 @@ npm run db:migrate      # webjs db migrate  -> drizzle-kit migrate (apply)</code
 import * as schema from './schema.server.ts';
 
 const url = process.env.DATABASE_URL?.replace(/^file:/, '') ?? 'db/dev.db';
-const g = globalThis as unknown as { __webjs_db?: unknown };
 
 // node:sqlite and bun:sqlite default busy_timeout to 0, so a contended write
 // throws "database is locked". Set a 5s wait (+ WAL) so it waits instead.
@@ -68,19 +67,27 @@ function tune&lt;T extends { exec(sql: string): unknown }&gt;(client: T): T {
   return client;
 }
 
-async function open() {
+// Cache the DRIVER handle, never the Drizzle instance (see below).
+const g = globalThis as unknown as { __webjs_db_clients?: Map&lt;string, unknown&gt; };
+const clients = (g.__webjs_db_clients ??= new Map());
+function cached&lt;T&gt;(open: () =&gt; T): T {
+  if (!clients.has(url)) clients.set(url, open());
+  return clients.get(url) as T;
+}
+
+async function connect() {
   if ((globalThis as { Bun?: unknown }).Bun) {
     const { Database } = await import('bun:sqlite');
     const { drizzle } = await import('drizzle-orm/bun-sqlite');
-    return drizzle({ client: tune(new Database(url)), relations: schema.relations });
+    return drizzle({ client: cached(() =&gt; tune(new Database(url))), relations: schema.relations });
   }
   const { DatabaseSync } = await import('node:sqlite');
   const { drizzle } = await import('drizzle-orm/node-sqlite');
-  return drizzle({ client: tune(new DatabaseSync(url)), relations: schema.relations });
+  return drizzle({ client: cached(() =&gt; tune(new DatabaseSync(url))), relations: schema.relations });
 }
 
-export const db = (g.__webjs_db ??= await open()) as Awaited&lt;ReturnType&lt;typeof open&gt;&gt;;</code-block>
-    <p>The <code>globalThis</code> cache reuses one connection across dev-server reloads. This is the only file that opens the driver, and it is server-only (<code>.server.ts</code>), so it never reaches the browser.</p>
+export const db = await connect();</code-block>
+    <p>The <code>globalThis</code> cache reuses one open connection per database url across dev-server reloads. It holds the driver handle only: the Drizzle instance is rebuilt each time the module is evaluated, because it captures <code>schema.relations</code>. Caching the instance instead kept the relations from the first load, so a table added while <code>npm run dev</code> ran stayed <code>undefined</code> on <code>db.query</code> until a restart. This is the only file that opens the driver, and it is server-only (<code>.server.ts</code>), so it never reaches the browser.</p>
 
     <h2>Queries and mutations</h2>
     <p>Reads use the relational query builder with object filters; writes use the builder with <code>.returning()</code> (both SQLite and Postgres support it).</p>

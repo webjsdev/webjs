@@ -942,15 +942,25 @@ import { fileURLToPath } from 'node:url';
 import * as schema from './schema.server.ts';
 
 // The only file that opens the driver. Runtime-neutral and ZERO native deps:
-// built-in bun:sqlite on Bun, built-in node:sqlite on Node. Cached on
-// globalThis across dev reloads.
+// built-in bun:sqlite on Bun, built-in node:sqlite on Node.
 // A relative SQLite path resolves against the app root (the parent of db/), not
 // process.cwd(), so the connection works under \`webjs dev\` AND when the app is
 // embedded via createRequestHandler from a different working directory.
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const raw = process.env.DATABASE_URL?.replace(/^file:/, '') ?? 'db/dev.db';
 const url = raw === ':memory:' || isAbsolute(raw) ? raw : resolve(appRoot, raw);
-const g = globalThis as unknown as { __webjs_db?: unknown };
+
+// Only the DRIVER handle is cached on globalThis (per database url), so a dev
+// reload reuses one open connection. The Drizzle wrapper below is rebuilt each
+// time this module is evaluated, because it captures schema.relations: caching
+// the wrapper kept the first load's relations, so a table added while
+// \`webjs dev\` ran stayed undefined on db.query until a restart.
+const g = globalThis as unknown as { __webjs_db_clients?: Map<string, unknown> };
+const clients = (g.__webjs_db_clients ??= new Map());
+function cached<T>(open: () => T): T {
+  if (!clients.has(url)) clients.set(url, open());
+  return clients.get(url) as T;
+}
 
 // Both node:sqlite and bun:sqlite default \`busy_timeout\` to 0, so a concurrent
 // writer throws \`database is locked\` immediately. Restore a 5s wait (the old
@@ -962,32 +972,41 @@ function tune<T extends { exec(sql: string): unknown }>(client: T): T {
   return client;
 }
 
-async function open() {
+async function connect() {
   if ((globalThis as { Bun?: unknown }).Bun) {
     // @ts-expect-error bun:sqlite is a Bun builtin with no Node typings
     const { Database } = await import('bun:sqlite');
     const { drizzle } = await import('drizzle-orm/bun-sqlite');
-    return drizzle({ client: tune(new Database(url)), relations: schema.relations });
+    return drizzle({ client: cached(() => tune(new Database(url))), relations: schema.relations });
   }
   const { DatabaseSync } = await import('node:sqlite');
   const { drizzle } = await import('drizzle-orm/node-sqlite');
-  return drizzle({ client: tune(new DatabaseSync(url)), relations: schema.relations });
+  return drizzle({ client: cached(() => tune(new DatabaseSync(url))), relations: schema.relations });
 }
 
-export const db = (g.__webjs_db ??= await open()) as Awaited<ReturnType<typeof open>>;
+export const db = await connect();
 `;
 
   const connPg = `import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema.server.ts';
 
-// The only file that opens the driver. Cached on globalThis across dev reloads.
-// The pool relies on no session state (no SET, no LISTEN, no advisory locks
-// held across queries), so it also works behind a transaction pooler. Idle
-// connections close after 10 s; a database that is down fails a request in
-// 5 s instead of hanging it; DATABASE_POOL_MAX caps the pool (default 10).
-const g = globalThis as unknown as { __webjs_db?: unknown };
-function open() {
+// The only file that opens the driver. The pool relies on no session state (no
+// SET, no LISTEN, no advisory locks held across queries), so it also works
+// behind a transaction pooler. Idle connections close after 10 s; a database
+// that is down fails a request in 5 s instead of hanging it; DATABASE_POOL_MAX
+// caps the pool (default 10).
+//
+// Only the POOL is cached on globalThis (per connection string), so a dev
+// reload reuses it. The Drizzle wrapper is rebuilt each time this module is
+// evaluated, because it captures schema.relations: caching the wrapper kept the
+// first load's relations, so a table added while \`webjs dev\` ran stayed
+// undefined on db.query until a restart.
+const url = process.env.DATABASE_URL ?? '';
+const g = globalThis as unknown as { __webjs_db_pools?: Map<string, Pool> };
+const pools = (g.__webjs_db_pools ??= new Map());
+
+function openPool() {
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     max: Number(process.env.DATABASE_POOL_MAX) || 10,
@@ -997,9 +1016,11 @@ function open() {
   // An idle connection the server drops (a restart, a failover) emits
   // 'error' on the pool, and an unhandled one would crash the process.
   pool.on('error', (err) => console.error('[db] idle connection lost:', err.message));
-  return drizzle({ client: pool, relations: schema.relations });
+  return pool;
 }
-export const db = (g.__webjs_db ??= open()) as ReturnType<typeof open>;
+
+if (!pools.has(url)) pools.set(url, openPool());
+export const db = drizzle({ client: pools.get(url) as Pool, relations: schema.relations });
 `;
 
   await writeFile(join(appDir, 'db', 'connection.server.ts'), dialect === 'postgres' ? connPg : connSqlite);
