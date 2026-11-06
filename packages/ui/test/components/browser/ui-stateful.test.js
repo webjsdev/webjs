@@ -1534,3 +1534,87 @@ suite('ui-message-scroller: the parts render the boxes, not their hosts', () => 
     }
   });
 });
+
+suite('ui-message-scroller: a new anchored turn settles near the top', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/message-scroller.ts`);
+  });
+
+  const until = async (fn, ms = 3000) => {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      if (fn()) return true;
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    return fn();
+  };
+
+  test('it sits 64px below the top, and stays there while the reply grows under it', async () => {
+    // Only what the base classes say, as in the suite above, plus a list
+    // padding the anchoring has to account for.
+    const root = await mount(html`<style>
+        .an-box { height: 300px; }
+        .an-box .contents { display: contents; }
+        .an-box [data-slot="message-scroller"] { position: relative; display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; }
+        .an-box [data-slot="message-scroller-viewport"] { height: 100%; min-height: 0; overflow-y: auto; }
+        .an-box [data-slot="message-scroller-content"] { display: flex; flex-direction: column; gap: 10px; padding-top: 20px; }
+        .an-box [data-slot="message-scroller-button"] { position: absolute; }
+        .an-row { height: 100px; }
+      </style>
+      <div class="an-box">
+        <ui-message-scroller>
+          <ui-message-scroller-viewport>
+            <ui-message-scroller-content aria-label="Conversation">
+              <ui-message-scroller-item message-id="q1" scroll-anchor><div class="an-row">Question</div></ui-message-scroller-item>
+              <ui-message-scroller-item message-id="a1"><div class="an-row">Answer</div></ui-message-scroller-item>
+            </ui-message-scroller-content>
+          </ui-message-scroller-viewport>
+          <ui-message-scroller-button></ui-message-scroller-button>
+        </ui-message-scroller>
+      </div>`);
+    try {
+      const el = root.querySelector('ui-message-scroller');
+      await until(() => !el.pending);
+      const viewport = el.querySelector('[data-slot="message-scroller-viewport"]');
+      const list = el.querySelector('ui-message-scroller-content');
+      assert.equal(viewport.scrollTop, 0, 'two turns fit, nothing to scroll yet');
+
+      const ask = (id, tag) => {
+        const item = document.createElement('ui-message-scroller-item');
+        item.setAttribute('message-id', id);
+        if (tag) item.setAttribute('scroll-anchor', '');
+        const row = document.createElement('div');
+        row.className = 'an-row';
+        item.append(row);
+        list.append(item);
+        return { item, row };
+      };
+      const { item: q2 } = ask('q2', true);
+      // q2's top in the list: padding 20 + two 100px rows + two 10px gaps.
+      const target = 20 + 2 * 100 + 2 * 10 - 20 - 64;
+      assert.ok(await until(() => Math.abs(viewport.scrollTop - target) <= 1), `scrolled to ${target} (at ${viewport.scrollTop})`);
+      const spacer = el.querySelector('[data-message-scroller-spacer]');
+      assert.equal(spacer.hidden, false, 'a tail spacer makes the room to scroll that far');
+      assert.equal(getComputedStyle(spacer).overflowAnchor, 'none', 'and is never the browser\'s scroll anchor');
+      const spacerBefore = spacer.getBoundingClientRect().height;
+      const turnTop = () => Math.round(q2.getBoundingClientRect().top - viewport.getBoundingClientRect().top);
+      // Let a smooth scroll finish its last pixel.
+      await until(() => turnTop() === 84);
+      assert.equal(turnTop(), 84, 'the question sits the padding plus a 64px peek below the top');
+
+      // The reply arrives and grows a little at a time.
+      const { row } = ask('a2', false);
+      row.style.height = '20px';
+      for (const h of [40, 60, 80]) {
+        await tick();
+        row.style.height = `${h}px`;
+        await tick();
+        await tick();
+        assert.ok(Math.abs(turnTop() - 84) <= 1, `the question stays put while the reply is ${h}px (at ${turnTop()})`);
+      }
+      assert.ok(spacer.getBoundingClientRect().height < spacerBefore, 'the spacer gives up the room the reply took');
+    } finally {
+      root.remove();
+    }
+  });
+});

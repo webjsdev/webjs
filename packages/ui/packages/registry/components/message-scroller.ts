@@ -24,6 +24,11 @@
  * or "last-anchor", the last item marked `scroll-anchor` at the top (a new
  * question with the answer streaming in under it). The viewport stays
  * invisible until that position applies, so the reader never sees a jump.
+ * After that, an item that ARRIVES marked `scroll-anchor` (the question a
+ * reader just sent) settles near the top with 64px of the previous turn
+ * still in view, and stays there while the reply streams in below it: a
+ * tail spacer at the end of the list makes the room, and shrinks as the
+ * reply grows. Once the reply fills the viewport, `auto-scroll` follows it.
  * Messages added at the top keep the reader's place through the browser's
  * own scroll anchoring.
  *
@@ -68,6 +73,8 @@ export const messageScrollerButtonClass = (): string =>
 const ROOT = 'ui-message-scroller';
 // How near an edge counts as being at it, in pixels.
 const EDGE = 24;
+// How much of the previous turn stays in view above a newly anchored one.
+const PEEK = 64;
 
 // shadcn's className lands on the element each part renders (the frame, the
 // viewport, the list, the button), so each host hands its authored class to
@@ -106,6 +113,13 @@ export class UiMessageScroller extends WebComponent({
   _resize: ResizeObserver | null = null;
   _visible: IntersectionObserver | null = null;
   _shown = new Set<string>();
+  // Turn anchoring: the anchored items already placed, the one being held,
+  // the scroll position that holds it, and the tail spacer's height.
+  _anchored = new WeakSet<Element>();
+  _held: Element | null = null;
+  _heldTop = 0;
+  _spacerHeight = 0;
+  _growFrame = 0;
 
   constructor() {
     super();
@@ -120,6 +134,7 @@ export class UiMessageScroller extends WebComponent({
   }
 
   disconnectedCallback(): void {
+    cancelAnimationFrame(this._growFrame);
     this._resize?.disconnect();
     this._visible?.disconnect();
     this._resize = null;
@@ -154,7 +169,15 @@ export class UiMessageScroller extends WebComponent({
     viewport.addEventListener('scroll', this._onScroll, { passive: true });
     // New or growing messages: follow them if the reader is at the end.
     if (typeof ResizeObserver === 'function') {
-      this._resize = new ResizeObserver(() => this._onGrow());
+      // Following the end is decided at once, before the next frame's scroll
+      // event can read the grown list as "scrolled away". The spacer is fitted
+      // a frame later, since resizing it inside the observed content would
+      // otherwise loop the observer; its own resize then comes back here.
+      this._resize = new ResizeObserver(() => {
+        this._onGrow();
+        cancelAnimationFrame(this._growFrame);
+        this._growFrame = requestAnimationFrame(() => this._fitSpacer());
+      });
       this._resize.observe(content);
     }
     if (typeof IntersectionObserver === 'function') {
@@ -177,6 +200,8 @@ export class UiMessageScroller extends WebComponent({
       else viewport.scrollTop = viewport.scrollHeight;
     } else viewport.scrollTop = viewport.scrollHeight;
     this._opened = true;
+    // The turns present at open are placed by the opening position.
+    for (const item of this._items()) if (item.hasAttribute('scroll-anchor')) this._anchored.add(item);
     this._following = this._atEnd();
     this.pending = false;
     // The viewport draws its own pending flag, so it redraws with it.
@@ -235,6 +260,61 @@ export class UiMessageScroller extends WebComponent({
   // An item that arrives after setup is tracked too.
   _itemConnected(item: UiMessageScrollerItem): void {
     this._visible?.observe(item);
+    // A new turn marked scroll-anchor settles near the top, a peek of the
+    // previous turn above it, as shadcn's does. Placed once per item, since
+    // an item can connect again when the list re-renders around it.
+    if (this._opened && item.hasAttribute('scroll-anchor') && !this._anchored.has(item)) {
+      this._anchored.add(item);
+      requestAnimationFrame(() => this._anchorTurn(item));
+    }
+  }
+
+  _spacer(): HTMLElement | null {
+    return this.querySelector<HTMLElement>('[data-message-scroller-spacer]');
+  }
+
+  // Scroll a new anchored turn to the top, keeping PEEK pixels of the turn
+  // before it, with room made below by the tail spacer when the conversation
+  // is still too short to scroll that far.
+  _anchorTurn(item: Element): void {
+    const v = this.viewport();
+    const content = this._content();
+    if (!v || !content || !item.isConnected) return;
+    const pad = parseFloat(getComputedStyle(content).paddingTop) || 0;
+    // Where the turn sits in the layout, read through offsetTop so a
+    // transform on it (an entrance sliding it up) does not move the target.
+    const listTop = v.scrollTop + content.getBoundingClientRect().top - v.getBoundingClientRect().top;
+    const top = listTop + (item as HTMLElement).offsetTop - content.offsetTop;
+    this._held = item;
+    this._heldTop = Math.max(0, top - pad - PEEK);
+    this._fitSpacer();
+    v.scrollTo({ top: this._heldTop, behavior: this._behavior() });
+  }
+
+  // The spacer fills exactly the room the held turn needs below it, so it
+  // shrinks as the reply streams in and the turn stays where it is. Once the
+  // reply fills the viewport the spacer is gone, and a following viewport
+  // (auto-scroll) takes over from the end.
+  _fitSpacer(): void {
+    const v = this.viewport();
+    const spacer = this._spacer();
+    if (!v || !spacer) return;
+    if (this._held && !this._held.isConnected) this._held = null;
+    const natural = v.scrollHeight - this._spacerHeight;
+    const next = this._held ? Math.max(0, Math.ceil(this._heldTop + v.clientHeight - natural)) : 0;
+    if (next === this._spacerHeight) return;
+    this._spacerHeight = next;
+    if (next === 0) this._held = null;
+    const content = this._content();
+    const gap = content ? parseFloat(getComputedStyle(content).rowGap) || 0 : 0;
+    spacer.hidden = next === 0;
+    spacer.style.height = `${next}px`;
+    // The list's flex gap would add itself above the spacer, so it is taken
+    // back. The spacer is never the browser's scroll anchor (overflow-anchor:
+    // none): it is the last thing in view, so the browser would keep IT in
+    // place as the reply grows above it, pushing the held turn up a line at
+    // a time.
+    spacer.style.marginTop = next > 0 ? `${-gap}px` : '';
   }
 
   _scrollToItem(item: Element, align: 'start' | 'center' | 'end' | 'nearest', behavior: ScrollBehavior): void {
@@ -297,7 +377,7 @@ export class UiMessageScrollerContent extends WebComponent {
       aria-relevant="additions"
       aria-label=${this.getAttribute?.('aria-label') || null}
       class=${cn(messageScrollerContentClass(), takeAuthored(this))}
-    ><slot></slot></div>`;
+    ><slot></slot><div data-message-scroller-spacer aria-hidden="true" hidden style="overflow-anchor: none"></div></div>`;
   }
 }
 UiMessageScrollerContent.register('ui-message-scroller-content');
