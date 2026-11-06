@@ -1,7 +1,7 @@
 # AGENTS.md : @webjsdev/ui
 
 The webjs **AI-first component library + CLI**, `webjsui init` / `add` /
-`list` / `view` / `diff` / `info` / `build` / `lint`. Ships 35 primitives across two
+`list` / `view` / `diff` / `info` / `build` / `lint`. Ships 50 primitives across two
 tiers: class-helper functions for visual components, custom elements only
 where state matters. Variant names, sizes, and data-attribute conventions
 mirror shadcn so existing shadcn knowledge transfers directly.
@@ -45,7 +45,8 @@ Helpers that take options accept an object: `buttonClass({ variant: 'outline', s
 ### Tier 2 : stateful custom elements
 
 For things the browser doesn't provide natively: dialogs, alert-dialogs,
-tabs, dropdowns, tooltips, hover-cards, toggle / toggle-group, sonner.
+sheets, drawers, tabs, dropdowns, context menus, menubars, navigation menus,
+tooltips, hover-cards, toggle / toggle-group, sonner.
 Tier-2 components extend the `WebComponent({ ... })` factory from
 `@webjsdev/core` and are Lit-shaped: the factory shape declares reactive
 attributes, `render()`
@@ -167,7 +168,7 @@ This trap exists ONLY in the marketing site. Scaffolded user apps,
 `examples/blog`, and every other WebJs app keep `components/ui/` as normal
 tracked source, the standard shadcn "you own it" pattern.
 
-## Component inventory (35 components)
+## Component inventory (50 components)
 
 | Tier | Component | Surface |
 |---|---|---|
@@ -204,6 +205,21 @@ tracked source, the standard shadcn "you own it" pattern.
 | 2  | `tabs` | `<ui-tabs value orientation>` + List / Trigger / Content. Arrow / Home / End move focus AND selection via a roving tabindex (one Tab stop). Triggers carry `aria-controls`, panels `aria-labelledby` (cross-linked per group), the list `aria-orientation`, and an inactive panel is `inert`. |
 | 2  | `dropdown-menu` | `<ui-dropdown-menu>` + Trigger / Content / Item (variant, `type="checkbox"` / `type="radio"` + `checked` / `value`) / Label / Separator / Shortcut / Group. Content uses `popover="manual"` for top-layer rendering. ArrowUp/Down nav, Home/End, typeahead, and synthesized Enter / Space activation (a `div[role=menuitem]` gets none natively). Escape closes the menu holding focus (a submenu first) and Tab closes and moves on; both return focus to the trigger, as do item activation and an outside click that did not itself land focus. Each submenu panel is named by its sub-trigger. Menu declares `aria-orientation`, a `data-disabled` item reflects `aria-disabled`, a checkable item carries `menuitemcheckbox` / `menuitemradio` + `aria-checked`, and the trigger gets `aria-haspopup` / `aria-expanded` / `aria-controls`. Emits a cancelable `ui-item-select`. |
 | 2  | `sonner` | `<ui-sonner position>` + `toast()` / `toast.success` / `toast.error` / `toast.promise` API, with `action` and `cancel` per toast. The viewport is a persistent polite `aria-live` region so inserted toasts are announced, and it is the ONLY live root an ordinary toast resolves under (an `error` toast additionally carries `role=alert`, which is the only way to make one item assertive inside a polite viewport, so it accepts a second live root; a non-error toast carries no role of its own). Every toast carries a labelled close button so even a never-auto-dismissing `toast.loading()` can be dismissed by hand. |
+| 1a | `button-group` | `buttonGroupClass({ orientation })` (alias `buttonGroupVariants`), `buttonGroupTextClass`, `buttonGroupSeparatorClass`. Joins adjacent buttons into one control. Give the group `role="group"` and an `aria-label`. |
+| 1a | `input-group` | `inputGroupClass`, `inputGroupAddonClass({ align })` (alias `inputGroupAddonVariants`), `inputGroupButtonClass({ size })` (alias `inputGroupButtonVariants`), `inputGroupTextClass`, `inputGroupInputClass`, `inputGroupTextareaClass`. An input or textarea with addons (icons, text, buttons) inside one border. |
+| 1a | `item` | `itemGroupClass`, `itemSeparatorClass`, `itemClass({ variant, size })` (alias `itemVariants`), `itemMediaClass({ variant })` (alias `itemMediaVariants`), `itemContentClass`, `itemTitleClass`, `itemDescriptionClass`, `itemActionsClass`, `itemHeaderClass`, `itemFooterClass`. A list row with media, text and actions. |
+| 1a | `scroll-area` | `scrollAreaClass`. A native scroll container with a thin themed scrollbar. |
+| 1a | `direction` | `readDirection(el)`. RTL needs no provider: every component uses logical properties, so `dir="rtl"` on an ancestor flips it. `readDirection` is for code that branches on the direction (an arrow-key handler). |
+| 1a | `marker` | `markerClass({ variant })` (alias `markerVariants`), `markerIconClass`, `markerContentClass`. |
+| 1a | `message` | `messageGroupClass`, `messageClass`, `messageAvatarClass`, `messageContentClass`, `messageHeaderClass`, `messageFooterClass`. A chat message row. |
+| 1a | `bubble` | `bubbleGroupClass`, `bubbleClass({ variant })` (alias `bubbleVariants`), `bubbleContentClass`, `bubbleReactionsClass({ side })` (alias `bubbleReactionsVariants`). |
+| 1a | `attachment` | `attachmentClass` / `attachmentVariants`, `attachmentMediaClass` / `attachmentMediaVariants`, `attachmentContentClass`, `attachmentTitleClass`, `attachmentDescriptionClass`, `attachmentActionsClass`, `attachmentActionClass`, `attachmentTriggerClass`, `attachmentGroupClass`. A file chip. |
+| 1a | `trace` | `traceClass`, `traceLineClass`, `traceIconClass`, `traceTitleClass`, `traceDescriptionClass`, `traceCollapsibleClass`, `traceCollapsibleTriggerClass`, `traceCollapsibleContentClass`. A step-by-step activity log, collapsible through native `<details>`. |
+| 2  | `sheet` | `<ui-sheet open>` + Trigger / Content (`side="top" \| "right" \| "bottom" \| "left"`) / Close, plus `sheetHeaderClass`, `sheetFooterClass`, `sheetTitleClass`, `sheetDescriptionClass`. A subclass of the dialog elements, so it is the same native `<dialog>` with the same focus trap, Escape and backdrop close, focus return, scroll lock and label wiring (`sheet-title` / `sheet-description`). `side` is a physical edge, as in shadcn. |
+| 2  | `drawer` | `<ui-drawer open>` + Trigger / Content (`direction`) / Close, plus the header, footer, title and description helpers. The dialog elements again, with a hidden drag handle and drag-to-dismiss on Pointer Events (a quarter of the panel or a flick closes it, a drag never starts on a control). The panel carries `data-vaul-drawer-direction`, which shadcn's styles key on. Put a visible close button in every drawer, since dragging is a pointer convenience only. |
+| 2  | `context-menu` | `<ui-context-menu>` + Trigger (around the region) / Content and every dropdown-menu part under `ui-context-menu-*`. Opens on right-click at the pointer, and on Shift+F10 or the ContextMenu key below the focused element. A left click never opens it. The region gets no `aria-haspopup` / `aria-expanded`, the menu is named by the content's `aria-label` (else "Context menu"), and every close returns focus to what had it. Make the region focusable and put each command somewhere a keyboard or touch user reaches without a right-click. |
+| 2  | `menubar` | `<ui-menubar>` + Menu / Trigger / Content and every dropdown-menu part under `ui-menubar-*`. `role="menubar"` with one tab stop over the triggers, ArrowLeft / ArrowRight / Home / End between them, ArrowDown / ArrowUp to open on the first / last item, ArrowLeft / ArrowRight in an open menu to the neighbouring menu, a pointer switch while one is open, and one open menu per bar. The trigger renders the `role="menuitem"` button with `aria-haspopup` served. |
+| 2  | `navigation-menu` | `<ui-navigation-menu viewport delay-duration skip-delay-duration>` + List / Item / Trigger / Content / Link / Indicator, plus `navigationMenuLinkClass` and `navigationMenuTriggerStyle`. A set of disclosures in a `<nav>` (named "Main" by default), never an ARIA menu: a real `ul` / `li`, button triggers with `aria-expanded` / `aria-controls`, panels named by their trigger, and `<ui-navigation-menu-link active>` rendering a real `<a>` with `aria-current="page"`. The root renders the viewport frame and sizes it to the open panel instead of moving the panel into it, so the frame does not animate its size between panels. |
 
 **shadcn's style-function names (#1666, D9).** shadcn exports a `cva`
 function per component (`buttonVariants`, `badgeVariants`, `toggleVariants`,
@@ -240,8 +256,10 @@ relationship on its (focus-openable) trigger, always names its `role="dialog"`
 panel, dismisses on Escape, and keeps itself open while focus is inside so its
 content is Tab-reachable; sonner is a persistent polite `aria-live` region that
 is the only live root an ordinary toast resolves under, and whose every
-toast carries a labelled close button. Do not hand-add these attributes; the
-element already has.
+toast carries a labelled close button. sheet and drawer inherit all of the
+dialog's wiring. context-menu, menubar and navigation-menu are described in
+their inventory rows above, each with the ARIA it owns. Do not hand-add these
+attributes, since the element already has them.
 
 **The focusable element is the one that needs the ARIA.** The recurring bug
 class in this kit (#1078, and finding 1 of #1080) is a Tier-2 element whose host
@@ -864,20 +882,14 @@ overrides from `themes/base-colors.js` into the neutral CSS. All 7
 themes return the same `files: [{ target: 'app/globals.css', content }]`
 shape so `webjsui init --base-color <name>` works uniformly.
 
-## Deferred to v2 (not in the registry)
+## Not in the registry yet
 
-These shadcn components are NOT shipped in v1, their old-pattern source
-files have been **removed entirely** from `packages/registry/components/`.
-When v2 starts, write fresh files following the Tier-1 / Tier-2 conventions
-above:
+#1666 is bringing the kit to shadcn's full set. These shadcn components are
+not shipped yet, and land in later steps of that work, following the Tier-1 /
+Tier-2 conventions above:
 
-button-group, calendar, carousel, chart, combobox, command, context-menu,
-direction, drawer, empty, field, form, input-group, input-otp, item,
-menubar, navigation-menu, resizable, scroll-area, select (rich), sheet,
-sidebar, slider, spinner.
-
-Each will get a "v2" docs page that explains the scope cut and a workaround
-(native equivalent, or recommended alternative library) until shipped.
+calendar, carousel, chart, combobox, command, form, input-otp, resizable,
+select (rich), sidebar, slider.
 
 ---
 
