@@ -40,6 +40,8 @@ const V1_COMPONENTS = [
   'tabs', 'accordion', 'collapsible',
   'dropdown-menu', 'sonner',
   'empty', 'spinner', 'field',
+  // #1666: the components shadcn ships that the kit did not.
+  'button-group', 'marker', 'message', 'scroll-area',
 ];
 
 // Components that are Tier 2, must register a custom element.

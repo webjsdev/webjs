@@ -605,4 +605,63 @@
   .cn-tooltip-content {
     @apply fixed m-0 border-0 overflow-visible rounded-md px-3 py-1.5 text-xs text-balance;
   }
+
+  /* MARK: button-group */
+  .cn-button-group {
+    @apply has-[>[data-slot=button-group]]:gap-2 [&>*]:focus-visible:relative [&>*]:focus-visible:z-10 has-[select[aria-hidden=true]:last-child]:[&>[data-slot=select-trigger]:last-of-type]:rounded-e-md;
+  }
+
+  .cn-button-group-text {
+    @apply gap-2 rounded-md border bg-muted px-4 text-sm font-medium shadow-xs [&_svg:not([class*='size-'])]:size-4;
+  }
+
+  .cn-button-group-separator {
+    @apply m-0! bg-input data-[orientation=vertical]:h-auto;
+  }
+
+  /* MARK: marker */
+  .cn-marker {
+    @apply min-h-4 gap-2 text-start text-sm text-muted-foreground [&_svg:not([class*='size-'])]:size-4 [a]:underline [a]:underline-offset-3 [a]:hover:text-foreground;
+  }
+
+  .cn-marker-variant-separator {
+    @apply before:me-1 before:h-px before:min-w-0 before:flex-1 before:bg-border after:ms-1 after:h-px after:min-w-0 after:flex-1 after:bg-border;
+  }
+
+  .cn-marker-variant-border {
+    @apply border-b border-border pb-2;
+  }
+
+  .cn-marker-icon {
+    @apply size-4 [&_svg:not([class*='size-'])]:size-4;
+  }
+
+  .cn-marker-content {
+    @apply group-data-[variant=separator]/marker:flex-none group-data-[variant=separator]/marker:text-center *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground;
+  }
+
+  /* MARK: message */
+  .cn-message-group {
+    @apply gap-2;
+  }
+
+  .cn-message {
+    @apply gap-2 text-sm;
+  }
+
+  .cn-message-avatar {
+    @apply min-w-8 group-has-data-[slot=message-footer]/message:-translate-y-8;
+  }
+
+  .cn-message-content {
+    @apply gap-2.5 group-data-[align=end]/message:*:data-slot:self-end;
+  }
+
+  .cn-message-header {
+    @apply px-3 text-xs font-medium text-muted-foreground group-has-data-[variant=ghost]/message:px-0;
+  }
+
+  .cn-message-footer {
+    @apply px-3 text-xs font-medium text-muted-foreground group-has-data-[variant=ghost]/message:px-0;
+  }
 }
