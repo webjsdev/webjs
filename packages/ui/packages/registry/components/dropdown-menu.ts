@@ -5,8 +5,12 @@
  * APG pattern: https://www.w3.org/WAI/ARIA/apg/patterns/menu/
  *
  * shadcn parity:
- *   DropdownMenu              → <ui-dropdown-menu open>
- *   DropdownMenuTrigger       → <ui-dropdown-menu-trigger>
+ *   DropdownMenu              → <ui-dropdown-menu open trigger>
+ *   DropdownMenuTrigger       → <ui-dropdown-menu-trigger>, or, for a trigger
+ *                               that must be a direct child of something
+ *                               else (a button group's corner rules select
+ *                               direct children), the button itself named by
+ *                               the menu's `trigger="<id>"`
  *   DropdownMenuContent       → <ui-dropdown-menu-content side align side-offset align-offset>
  *   DropdownMenuItem          → <ui-dropdown-menu-item variant inset>
  *   DropdownMenuCheckboxItem  → <ui-dropdown-menu-item type="checkbox" checked>
@@ -135,7 +139,7 @@
  * ```
  */
 import { WebComponent, html, unsafeHTML, signal, prop } from '@webjsdev/core';
-import { ensureId } from '../lib/utils.ts';
+import { cn, ensureId } from '../lib/utils.ts';
 import { onBeforeCache } from '../lib/dom.ts';
 
 /**
@@ -266,6 +270,8 @@ export class UiDropdownMenu extends WebComponent({
 
   _docClickHandler = (e: MouseEvent): void => this._onDocClick(e);
   _docPointerDownHandler = (e: Event): void => this._onDocPointerDown(e);
+  _externalClick = (e: MouseEvent): void => this.toggle(e);
+  _wiredExternal: HTMLElement | null = null;
   _keyHandler = (e: KeyboardEvent): void => this._onKeyDown(e);
   _resizeHandler = (): void => this._reposition();
 
@@ -279,10 +285,56 @@ export class UiDropdownMenu extends WebComponent({
   disconnectedCallback(): void {
     if (this.open) this._teardown();
     this._disposeBeforeCache?.();
+    this._wiredExternal?.removeEventListener('click', this._externalClick);
+    this._wiredExternal = null;
     super.disconnectedCallback?.();
   }
 
-  toggle(): void { this.open = !this.open; }
+  /**
+   * The control a `trigger="<id>"` attribute names, when the menu has no
+   * <ui-dropdown-menu-trigger> child. shadcn's trigger is `asChild`, so the
+   * button is wherever the author put it, typically the direct child of a
+   * button group, whose corner rules select direct children. A wrapper there
+   * would be the child instead of the button, so the menu can name a button
+   * that lives outside it.
+   */
+  _external(): HTMLElement | null {
+    const id = typeof this.getAttribute === 'function' ? this.getAttribute('trigger') : null;
+    if (!id || typeof document === 'undefined') return null;
+    if (this.querySelector(`${fam(this)}-trigger`)) return null;
+    return document.getElementById(id);
+  }
+
+  /** The element the panel is positioned against: the trigger part, or the named control. */
+  _anchor(): HTMLElement | null {
+    return this.querySelector<HTMLElement>(`${fam(this)}-trigger`) ?? this._external();
+  }
+
+  /** Inside the menu for an outside-click check: the menu itself, or its named trigger. */
+  _owns(n: EventTarget): boolean {
+    return n === this || (!!this._wiredExternal && n === this._wiredExternal);
+  }
+
+  _wireExternal(): void {
+    const control = this._external();
+    if (control === this._wiredExternal) return;
+    this._wiredExternal?.removeEventListener('click', this._externalClick);
+    control?.addEventListener('click', this._externalClick);
+    this._wiredExternal = control;
+  }
+
+  /**
+   * Whether the menu was last opened by a pointer. A click a keyboard
+   * produced (Enter or Space on the trigger) has `detail` 0; a real press
+   * counts its clicks. As in shadcn, a pointer open focuses the panel and
+   * highlights nothing, and a keyboard open moves to the first item.
+   */
+  _pointerOpen = false;
+
+  toggle(e?: MouseEvent): void {
+    this._pointerOpen = !!e && e.detail > 0;
+    this.open = !this.open;
+  }
   show(): void { this.open = true; }
   hide(): void { this.open = false; }
 
@@ -329,7 +381,10 @@ export class UiDropdownMenu extends WebComponent({
     // render, so the trigger button and the menu are not in place at
     // connect. Defer to the next frame, when the projection has run.
     if (typeof requestAnimationFrame === 'function') {
-      requestAnimationFrame(() => this._wireAria());
+      requestAnimationFrame(() => {
+        this._wireExternal();
+        this._wireAria();
+      });
     }
     // Close (and tear down) before a back/forward snapshot so the menu does not
     // restore open (#766). Closing the root also hides any open submenu.
@@ -353,7 +408,7 @@ export class UiDropdownMenu extends WebComponent({
   // because the menu is JS-driven (never shown without script).
   _triggerControl(): HTMLElement | null {
     const trigger = this.querySelector(`${fam(this)}-trigger`);
-    if (!trigger) return null;
+    if (!trigger) return this._external();
     return (
       trigger.querySelector<HTMLElement>('button, [role="button"], a[href], [tabindex]') ??
       (trigger as HTMLElement)
@@ -427,7 +482,7 @@ export class UiDropdownMenu extends WebComponent({
 
   _reposition(): void {
     const placement = (this.constructor as typeof UiDropdownMenu).placement;
-    const trigger = this.querySelector<HTMLElement>(`${fam(this)}-trigger`);
+    const trigger = this._anchor();
     const content = this._content();
     const host = this.querySelector<HTMLElement>(`${fam(this)}-content`);
     if (!trigger || !content || !host) return;
@@ -447,6 +502,10 @@ export class UiDropdownMenu extends WebComponent({
     window.addEventListener('resize', this._resizeHandler);
     window.addEventListener('scroll', this._resizeHandler, true);
     queueMicrotask(() => {
+      if (this._pointerOpen) {
+        this._menuEl()?.focus();
+        return;
+      }
       const first = this.querySelector<HTMLElement>(
         `${fam(this)}-item:not([data-disabled]) ${MENU_ITEM}`,
       );
@@ -475,13 +534,13 @@ export class UiDropdownMenu extends WebComponent({
 
   _onDocPointerDown(e: Event): void {
     if (!this.open) return;
-    if (e.composedPath().some((n) => n === this)) return;
+    if (e.composedPath().some((n) => this._owns(n))) return;
     this._focusWasInsideAtPointerDown = this._focusIsInside();
   }
 
   _onDocClick(e: MouseEvent): void {
     if (!this.open) return;
-    if (e.composedPath().some((n) => n === this)) return;
+    if (e.composedPath().some((n) => this._owns(n))) return;
     // An outside click dismisses the menu, and it is still a close of a
     // popover="manual" panel, so it owes the same focus care as Escape: leaving
     // focus on an item that is about to become display:none drops it to <body>.
@@ -549,7 +608,8 @@ export class UiDropdownMenu extends WebComponent({
       items[(idx + 1) % items.length].focus();
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      items[(idx - 1 + items.length) % items.length].focus();
+      // From the panel itself (a pointer open), ArrowUp goes to the last item.
+      items[idx < 0 ? items.length - 1 : (idx - 1 + items.length) % items.length].focus();
     } else if (e.key === 'Home') {
       e.preventDefault();
       items[0].focus();
@@ -648,7 +708,7 @@ export class UiDropdownMenuTrigger extends WebComponent {
     ><slot></slot></div>`;
   }
 
-  _onClick = (): void => (this.closest(rootTag(this)) as UiDropdownMenu | null)?.toggle();
+  _onClick = (e: MouseEvent): void => (this.closest(rootTag(this)) as UiDropdownMenu | null)?.toggle(e);
 }
 UiDropdownMenuTrigger.register('ui-dropdown-menu-trigger');
 
@@ -659,13 +719,28 @@ UiDropdownMenuTrigger.register('ui-dropdown-menu-trigger');
 export class UiDropdownMenuContent extends WebComponent {
   static family = 'ui-dropdown-menu';
   static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
+  _authored: string | null = null;
+  _captured = false;
+
+  // The class an author writes on the content is shadcn's `className` on
+  // DropdownMenuContent, which lands on the menu panel (a `w-40`, say), so it
+  // moves from this host onto the panel. `text-start` undoes the legacy HTML
+  // `align` attribute: `align="end"` here means "align the panel's end with
+  // the trigger's", but browsers also map it to `text-align: end`, which every
+  // label and item in the menu would inherit.
   render() {
+    if (!this._captured) {
+      this._authored = typeof this.getAttribute === 'function' ? this.getAttribute('class') : null;
+      this._captured = true;
+      if (this._authored && typeof this.removeAttribute === 'function') this.removeAttribute('class');
+    }
     return html`<div
       data-slot=${slot(this, '-content')}
       role="menu"
       aria-orientation="vertical"
       popover="manual"
-      class=${cls(this).content()}
+      tabindex="-1"
+      class=${cn(cls(this).content(), 'text-start', this._authored)}
     ><slot></slot></div>`;
   }
 }

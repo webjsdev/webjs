@@ -2585,3 +2585,91 @@ suite('ui-combobox', () => {
     root.remove();
   });
 });
+
+suite('ui-dropdown-menu: a trigger outside the menu, and the panel shadcn styles', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/dropdown-menu.ts`);
+  });
+
+  async function group() {
+    const root = await mount(html`
+      <div role="group" data-slot="button-group">
+        <button type="button">Archive</button>
+        <button type="button" id="dd-ext" aria-label="More">+</button>
+      </div>
+      <ui-dropdown-menu trigger="dd-ext" class="absolute">
+        <ui-dropdown-menu-content align="end" class="w-40 dd-authored">
+          <ui-dropdown-menu-label>Actions</ui-dropdown-menu-label>
+          <ui-dropdown-menu-item>One</ui-dropdown-menu-item>
+          <ui-dropdown-menu-item>Two</ui-dropdown-menu-item>
+        </ui-dropdown-menu-content>
+      </ui-dropdown-menu>
+    `);
+    await tick();
+    return root;
+  }
+
+  test('the named button opens and closes the menu, and carries its ARIA', async () => {
+    const root = await group();
+    const menu = root.querySelector('ui-dropdown-menu');
+    const button = root.querySelector('#dd-ext');
+    try {
+      assert.equal(button.getAttribute('aria-haspopup'), 'menu', 'the button is announced as a menu button');
+      button.click();
+      await tick();
+      assert.equal(menu.open, true, 'a click opens the menu');
+      assert.equal(button.getAttribute('aria-expanded'), 'true');
+      button.click();
+      await tick();
+      assert.equal(menu.open, false, 'a second click closes it, rather than the outside-click handler reopening it');
+      button.click();
+      await tick();
+      document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      document.body.click();
+      await tick();
+      assert.equal(menu.open, false, 'a click elsewhere closes it');
+    } finally {
+      menu.hide();
+      root.remove();
+    }
+  });
+
+  test('the class written on the content is on the panel, which keeps start alignment under align="end"', async () => {
+    const root = await group();
+    try {
+      const host = root.querySelector('ui-dropdown-menu-content');
+      const panel = root.querySelector('[role="menu"]');
+      assert.match(panel.className, /\bw-40\b/, 'shadcn\'s className lands on the panel');
+      assert.match(panel.className, /\bdd-authored\b/);
+      assert.equal(host.getAttribute('class'), null, 'and leaves the host');
+      // Chromium and WebKit map the legacy align attribute to text-align: end
+      // (Firefox does not on a custom element). The browser suite loads no
+      // stylesheet, so the reset is asserted as the class that carries it.
+      assert.match(panel.className, /\btext-start\b/, 'the panel resets the legacy alignment');
+    } finally {
+      root.remove();
+    }
+  });
+
+  test('a pointer open focuses the panel, a keyboard open the first item', async () => {
+    const root = await group();
+    const menu = root.querySelector('ui-dropdown-menu');
+    const button = root.querySelector('#dd-ext');
+    try {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+      await tick();
+      assert.equal(document.activeElement, root.querySelector('[role="menu"]'), 'a pointer open highlights nothing');
+      document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      await tick();
+      assert.equal(document.activeElement.textContent.trim(), 'One', 'and ArrowDown then moves to the first item');
+      menu.hide();
+      await tick();
+      button.click();
+      await tick();
+      assert.equal(document.activeElement.textContent.trim(), 'One', 'a keyboard open (detail 0) moves straight to the first item');
+    } finally {
+      menu.hide();
+      root.remove();
+    }
+  });
+});

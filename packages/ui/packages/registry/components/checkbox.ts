@@ -67,7 +67,9 @@ import { cn } from '../lib/utils.ts';
 // `<input>` aren't reliable cross-browser, so the simplest correct fix is
 // to ship two SVGs and toggle them via a theme selector.
 // shadcn's tick: Lucide's CheckIcon (stroke 2, round caps and joins), drawn at
-// size-3.5 in the 16px box, so 87.5% (see STYLES).
+// size-3.5 in the 16px box, so 87.5% of the BORDER box (see STYLES): a
+// percentage size otherwise measures the padding box, which the 1px border
+// shrinks to 14px, and the tick comes out a size smaller than shadcn's.
 const CHECKMARK_LIGHT =
   'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'white\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'><path d=\'M20 6 9 17l-5-5\'/></svg>")';
 const CHECKMARK_DARK =
@@ -90,6 +92,7 @@ input[type="checkbox"][data-slot="checkbox"]:checked {
   background-size: 87.5%;
   background-position: center;
   background-repeat: no-repeat;
+  background-origin: border-box;
 }
 input[type="checkbox"][data-slot="checkbox"]:indeterminate {
   background-color: var(--primary);
