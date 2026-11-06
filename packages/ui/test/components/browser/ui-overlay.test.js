@@ -103,6 +103,36 @@ suite('ui-dialog', () => {
     root.remove();
   });
 
+  // The content renders its data-state from the root's `open`. Every shadcn
+  // style animates on data-open / data-closed, so content left "closed" while
+  // the native dialog opens plays its EXIT animation as it appears (#1666).
+  for (const [tag, file, slot] of [['ui-dialog', 'dialog.ts', 'dialog-content'], ['ui-alert-dialog', 'alert-dialog.ts', 'alert-dialog-content']]) {
+    test(`${tag}: the content reads open as the dialog opens, and closed again after`, async () => {
+      await import(`${COMPONENTS_DIR}/${file}`);
+      const root = document.createElement('div');
+      document.body.appendChild(root);
+      root.innerHTML = `<${tag}><${tag}-content><h2>T</h2></${tag}-content></${tag}>`;
+      await tick();
+      const host = root.querySelector(tag);
+      const content = root.querySelector(`[data-slot="${slot}"]`);
+      try {
+        assert.equal(content.getAttribute('data-state'), 'closed');
+        host.show();
+        await tick();
+        assert.ok(root.querySelector('dialog').open, 'the native dialog is open');
+        assert.equal(content.getAttribute('data-state'), 'open', 'and the content says so');
+        host.hide();
+        await tick();
+        assert.equal(content.getAttribute('data-state'), 'closed');
+      } finally {
+        // A modal left open covers every later test in the file.
+        host.hide();
+        await tick();
+        root.remove();
+      }
+    });
+  }
+
   test('dialog-content has data-state="closed" when host is not open', async () => {
     const root = await mount(html`
       <ui-dialog>

@@ -319,6 +319,11 @@ export class UiAlertDialog extends WebComponent({
     // Skip the constructor's initial open=false set so we don't fire
     // teardown for the closed-on-mount state.
     if (changedProperties.get('open') === undefined) return;
+    // The content renders its data-state from this element's `open`, and
+    // nothing else re-renders it, so ask it to now. Every shadcn style
+    // animates out on data-closed: left closed while the native dialog
+    // opens, the content played its exit animation as it appeared.
+    this._content?.requestUpdate?.();
     // Defer one microtask so the content child has rendered its inner
     // native <dialog>; that's where showModal() / close() act.
     queueMicrotask(() => {

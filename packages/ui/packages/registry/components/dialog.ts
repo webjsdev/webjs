@@ -430,6 +430,11 @@ export class UiDialog extends WebComponent({
     // transition in the first update. Skip it so the dialog doesn't
     // emit a teardown + ui-open-change for the initial state.
     if (changedProperties.get('open') === undefined) return;
+    // The content renders its data-state from this element's `open`, and
+    // nothing else re-renders it, so ask it to now. Every shadcn style
+    // animates out on data-closed: left closed while the native dialog
+    // opens, the content played its exit animation as it appeared.
+    this._content?.requestUpdate?.();
     // Defer one microtask so the content child has committed its own
     // render (the native <dialog> element lives in the content's template).
     queueMicrotask(() => {
