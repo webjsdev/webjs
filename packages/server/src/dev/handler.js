@@ -195,6 +195,35 @@ export async function createRequestHandler(opts) {
   // What `/__webjs/dev/status` reports (#1664): the errors since the last
   // rebuild and whether a change is still in flight. Dev only.
   const devStatus = dev ? createDevStatus() : null;
+  // Each error OBJECT is recorded once, under the first (most specific) kind
+  // that reaches it: a route handler's throw is recorded as `route` before the
+  // root middleware wrapping it reports the same error as `middleware`, and a
+  // render error the overlay already framed is not recorded again from the
+  // onError funnel.
+  /** @type {WeakSet<object>} */
+  const devRecorded = new WeakSet();
+
+  /**
+   * Record an error in the dev status. A thrown redirect() / notFound() /
+   * forbidden() / unauthorized() is control flow the framework answers, not a
+   * failure, so it is never recorded.
+   * @param {unknown} error
+   * @param {Request | null | undefined} request
+   * @param {string} kind
+   * @param {Record<string, unknown>} [frame] an already-built dev error frame
+   */
+  function recordDevStatus(error, request, kind, frame) {
+    if (!devStatus || isControlFlowThrow(error)) return;
+    if (error && typeof error === 'object') {
+      if (devRecorded.has(error)) return;
+      devRecorded.add(error);
+    }
+    try {
+      let url;
+      try { url = request && request.url ? new URL(request.url).pathname : undefined; } catch { /* no url */ }
+      devStatus.record(frame || buildDevErrorFrame(error, { kind, appDir, url }));
+    } catch { /* best effort */ }
+  }
   const hasOnError = onErrorSinks.length > 0;
 
   /**
@@ -205,18 +234,10 @@ export async function createRequestHandler(opts) {
    * @param {string} phase
    */
   function reportError(error, request, phase) {
-    // Dev status (#1664) records every phase except `ssr`, whose render error
-    // already arrives through `reportDevError` with a richer frame. Recorded
-    // BEFORE the no-sink return, because an app with no onError sink is exactly
-    // the one whose action errors were invisible to an agent.
-    // A thrown redirect() / notFound() / forbidden() / unauthorized() is control
-    // flow the framework answers, not a failure, so it is never recorded.
-    if (devStatus && phase !== 'ssr' && !isControlFlowThrow(error)) {
-      try {
-        const path = request && request.url ? new URL(request.url).pathname : undefined;
-        devStatus.record(buildDevErrorFrame(error, { kind: phase, appDir, url: path }));
-      } catch { /* best effort */ }
-    }
+    // Dev status (#1664). Recorded BEFORE the no-sink return, because an app
+    // with no onError sink is exactly the one whose action errors were
+    // invisible to an agent. An `ssr` error is a render failure.
+    recordDevStatus(error, request, phase === 'ssr' ? 'render' : phase);
     if (!hasOnError) return;
     const ctx = { request, requestId: getRequestId(), phase };
     for (const sink of onErrorSinks) {
@@ -513,6 +534,9 @@ export async function createRequestHandler(opts) {
     // SSE channel for the live overlay and replayed to a freshly-connected tab.
     // Dev-only (never populated when !dev); cleared on a successful rebuild.
     lastDevError: null,
+    // The dev status (#1664), on `state` so the page-render path can tell it a
+    // page rendered again. Null in prod.
+    devStatus,
     // On-request regeneration rules (#967): `webjs.dev.regenerate` from the app's
     // package.json. Dev-only (prod builds its outputs via `start.before`). Loaded
     // now and refreshed on each rebuild so a config edit takes effect without a
@@ -547,7 +571,7 @@ export async function createRequestHandler(opts) {
     try {
       const frame = buildDevErrorFrame(error, { ...info, appDir });
       state.lastDevError = frame;
-      devStatus?.record(frame);
+      recordDevStatus(error, null, frame.kind, frame);
       opts.onDevError?.(frame);
     } catch { /* ignore */ }
   }
@@ -1458,6 +1482,7 @@ export async function createRequestHandler(opts) {
       dev,
       reportError,
       reportDevError,
+      recordDevStatus,
       hasOnError,
       logger,
       cspEnabled: cspConfig.enabled,

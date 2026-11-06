@@ -10,10 +10,13 @@
  *
  * This module holds two things the handler feeds:
  *
- *   - A short ring of the errors seen since the last rebuild: render, TS strip,
- *     rebuild, action, middleware, metadata, and request-pipeline failures,
- *     each as a dev error frame (message, file, line, code frame). The overlay
- *     keeps only the newest one, and never saw an action error at all.
+ *   - A short ring of recent errors: render, TS strip, rebuild, route,
+ *     action, middleware, metadata, and request-pipeline failures, each as a
+ *     dev error frame (message, file, line, code frame). The overlay keeps only
+ *     the newest one, and never saw an action error at all. A rebuild clears
+ *     every kind EXCEPT `render`: a page broken by an edit stays broken across
+ *     an unrelated rebuild, so its error stays listed until that page renders
+ *     again (`renderSucceeded`).
  *   - Whether a change is still in flight: a watcher event not yet rebuilt, or
  *     a rebuild still running. The handler adds readiness on top, since the
  *     lazy analysis is what actually re-imports the app.
@@ -70,11 +73,10 @@ export function createDevStatus({ now = Date.now } = {}) {
         url: /** @type {any} */ (frame.url) ?? null,
         at: new Date(now()).toISOString(),
       });
-      // The same failure reported twice in a row (a render error the overlay
-      // and the onError funnel both see) is one entry, not two.
-      const last = errors[errors.length - 1];
-      if (last && last.kind === entry.kind && last.message === entry.message
-        && last.file === entry.file && last.line === entry.line && last.url === entry.url) return;
+      // The same failure seen again (a broken page requested twice) is one
+      // entry; the newer one replaces it, so `at` is the latest sighting.
+      errors = errors.filter((e) => !(e.kind === entry.kind && e.message === entry.message
+        && e.file === entry.file && e.line === entry.line && e.url === entry.url));
       errors.push(entry);
       if (errors.length > DEV_STATUS_MAX_ERRORS) errors = errors.slice(-DEV_STATUS_MAX_ERRORS);
     },
@@ -84,14 +86,25 @@ export function createDevStatus({ now = Date.now } = {}) {
     rebuildStarted() { rebuildsInFlight++; },
     /**
      * A rebuild finished.
-     * @param {{ cleared?: boolean }} [opts] `cleared` drops the recorded errors,
-     *   which describe the build that was just replaced.
+     * @param {{ cleared?: boolean }} [opts] `cleared` drops the recorded errors
+     *   that described the build just replaced. Render errors are kept: only a
+     *   successful render of that page proves it was fixed.
      */
     rebuildFinished({ cleared = true } = {}) {
       rebuildsInFlight = Math.max(0, rebuildsInFlight - 1);
       rebuilds++;
       if (rebuildsInFlight === 0) changeAt = null;
-      if (cleared) errors = [];
+      if (cleared) errors = errors.filter((e) => e.kind === 'render');
+    },
+    /**
+     * A page rendered without a server error, so its recorded render error is
+     * stale. Each candidate is matched with its query string ignored.
+     * @param {Array<string | null | undefined>} urls the page's path, and its
+     *   public url (base path included) as the overlay stamps it
+     */
+    renderSucceeded(urls) {
+      const paths = new Set(urls.filter(Boolean).map((u) => String(u).split('?')[0]));
+      errors = errors.filter((e) => !(e.kind === 'render' && e.url && paths.has(String(e.url).split('?')[0])));
     },
     /** True while a change is waiting on, or inside, a rebuild. */
     changing() {

@@ -7,7 +7,10 @@
  * sent before anything is re-imported, so a broken module only shows on the
  * next request. This command asks the dev server's own status endpoint
  * (`/__webjs/dev/status?wait=`), which holds until the change is rebuilt and
- * the app analysis has run again, then requests each given path so a render
+ * the app analysis has run again, then requests each given path (the app's
+ * root when none is given) plus every page with a recorded render error, so a
+ * page an edit broke, or fixed, is re-rendered before anything is reported. A
+ * render
  * error surfaces, and prints every error recorded since the last rebuild.
  *
  * Exit codes: 0 when settled with no errors and every path below 400, 1 when
@@ -98,7 +101,18 @@ export async function runStatus(opts) {
 
   /** @type {Array<{ path: string, status: number | null, error?: string }>} */
   const results = [];
-  for (const raw of paths) {
+  // The app root when no path is given, so a bare run still renders something:
+  // on Node most edits restart the server, which starts with no errors at all.
+  // Then every page with a recorded render error, so an error the edit fixed is
+  // cleared and one it did not fix is confirmed, rather than reported stale.
+  const toRequest = paths.length ? [...paths] : ['/'];
+  for (const e of body.errors) {
+    if (e.kind !== 'render' || !e.url) continue;
+    let p = String(e.url);
+    if (basePath && (p === basePath || p.startsWith(basePath + '/'))) p = p.slice(basePath.length) || '/';
+    if (!toRequest.includes(p)) toRequest.push(p);
+  }
+  for (const raw of toRequest) {
     const path = raw.startsWith('/') ? raw : '/' + raw;
     try {
       const res = await doFetch(base + path, { headers: { accept: 'text/html' }, redirect: 'manual' });
@@ -108,7 +122,8 @@ export async function runStatus(opts) {
       results.push({ path, status: null, error: String((e && /** @type {Error} */ (e).message) || e) });
     }
   }
-  // Requesting the paths can record new render errors, so read them again.
+  // Requesting the pages records new render errors and clears fixed ones, so
+  // read the list again.
   if (results.length) {
     try {
       const res = await doFetch(`${base}/__webjs/dev/status`, { headers: { accept: 'application/json' } });

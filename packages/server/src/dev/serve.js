@@ -201,7 +201,7 @@ export async function tryServePublicAsset(path, ctx) {
 }
 
 export async function handleCore(req, ctx) {
-  const { state, appDir, coreDir, dev, reportError, reportDevError, hasOnError, logger, cspEnabled, allowedOrigins } = ctx;
+  const { state, appDir, coreDir, dev, reportError, reportDevError, recordDevStatus, hasOnError, logger, cspEnabled, allowedOrigins } = ctx;
   const url = new URL(req.url);
   // Decode percent-encoded characters so filesystem lookups match real
   // filenames. Dynamic route segments like `[slug]` and route groups like
@@ -387,7 +387,14 @@ export async function handleCore(req, ctx) {
   // API route (route.js handler)
   const api = matchApi(state.routeTable, path);
   if (api) {
-    const handler = () => handleApi(api.route, api.params, req, dev);
+    // A handler that throws is recorded in the dev status as a `route` error
+    // HERE, before a root middleware wrapping `next()` reports the same error
+    // as its own (#1664). The rethrow keeps the response path unchanged.
+    const handler = recordDevStatus
+      ? async () => {
+        try { return await handleApi(api.route, api.params, req, dev); } catch (e) { recordDevStatus(e, req, 'route'); throw e; }
+      }
+      : () => handleApi(api.route, api.params, req, dev);
     return runWithSegmentMiddleware(req, api.route.middlewares, handler, dev);
   }
 
@@ -478,6 +485,9 @@ export async function handleCore(req, ctx) {
               before && state.lastDevError === before
               && before.kind === 'render' && before.url === devErrorUrl
             ) state.lastDevError = null;
+            // A page that renders again supersedes its recorded render error in
+            // the dev status, which keeps render errors across a rebuild (#1664).
+            if (resp.status < 500) state.devStatus?.renderSucceeded([url.pathname, devErrorUrl]);
             return resp;
           }
           : () => ssrPage(page.route, page.params, url, { ...ssrOpts, req });

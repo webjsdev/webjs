@@ -101,18 +101,69 @@ test('a failing render, a failing RPC action and a failing form action are all r
   } finally { restore(); }
 });
 
-test('a rebuild clears the errors it replaced', async () => {
+test('a rebuild keeps a render error until that page renders again, and clears the rest', async () => {
   const restore = quiet();
   try {
-    const app = await createRequestHandler({ appDir: makeApp(), dev: true, logger: { info() {}, warn() {}, error() {} } });
+    const appDir = makeApp();
+    const app = await createRequestHandler({ appDir, dev: true, logger: { info() {}, warn() {}, error() {} } });
     await app.warmup();
     await app.handle(new Request('http://x/boom'));
-    assert.equal((await status(app)).errors.length, 1);
+    await invokeActionForTest(app, join(appDir, 'modules/x/fail.server.ts'), 'failHard', []).catch(() => {});
+    assert.deepEqual((await status(app)).errors.map((e) => e.kind).sort(), ['action', 'render']);
+
+    // An unrelated rebuild: the page is still broken, so its error stays.
     await app.rebuild();
-    const body = await status(app, '?wait=5');
+    let body = await status(app, '?wait=5');
+    assert.deepEqual(body.errors.map((e) => e.kind), ['render'], 'the render error survives, the action error is cleared');
+    assert.equal(body.status, 'error');
+
+    // Requesting the still-broken page again does not duplicate the entry.
+    await app.handle(new Request('http://x/boom'));
+    assert.equal((await status(app)).errors.length, 1);
+
+    // Fix the page: once it renders, its error goes.
+    writeFileSync(join(appDir, 'app/boom/page.ts'), `import { html } from ${CORE};\nexport default () => html\`<p>fixed</p>\`;\n`);
+    await app.rebuild();
+    assert.equal((await app.handle(new Request('http://x/boom'))).status, 200);
+    body = await status(app, '?wait=5');
     assert.deepEqual(body.errors, []);
     assert.equal(body.status, 'ok');
   } finally { restore(); }
+});
+
+test('a throwing route handler is recorded as a route error, even under a root middleware', async () => {
+  const restore = quiet();
+  try {
+    const appDir = makeApp();
+    writeFileSync(join(appDir, 'middleware.ts'), `export default async (req, next) => next();\n`);
+    mkdirSync(join(appDir, 'app/api/bad'), { recursive: true });
+    writeFileSync(join(appDir, 'app/api/bad/route.ts'), `export async function GET() { throw new Error('route exploded'); }\n`);
+    const app = await createRequestHandler({ appDir, dev: true, logger: { info() {}, warn() {}, error() {} } });
+    await app.warmup();
+    assert.equal((await app.handle(new Request('http://x/api/bad'))).status, 500);
+    const body = await status(app);
+    assert.deepEqual(body.errors.map((e) => e.kind), ['route'], 'one entry, attributed to the route handler');
+    assert.match(body.errors[0].message, /route exploded/);
+    assert.match(String(body.errors[0].file), /api[\\/]bad[\\/]route\.ts$/);
+  } finally { restore(); }
+});
+
+test('a layout that crashes while wrapping the 500 error boundary is recorded', async () => {
+  const restore = quiet();
+  try {
+    const appDir = makeApp();
+    // The boundary marks that it rendered; the layout throws only when it is
+    // wrapping the boundary, the path that never reached the overlay.
+    writeFileSync(join(appDir, 'app/error.ts'), `import { html } from ${CORE};\nexport default () => { globalThis.__wj1664Boundary = true; return html\`<p>boundary</p>\`; };\n`);
+    writeFileSync(join(appDir, 'app/layout.ts'), `import { html } from ${CORE};\nexport default ({ children }) => { if (globalThis.__wj1664Boundary) { globalThis.__wj1664Boundary = false; throw new Error('layout exploded around the boundary'); } return html\`<main>\${children}</main>\`; };\n`);
+    const app = await createRequestHandler({ appDir, dev: true, logger: { info() {}, warn() {}, error() {} } });
+    await app.warmup();
+    await app.handle(new Request('http://x/boom'));
+    const body = await status(app);
+    assert.ok(body.errors.some((e) => /page exploded/.test(e.message)), 'the page error is listed');
+    assert.ok(body.errors.some((e) => /layout exploded around the boundary/.test(e.message)),
+      'and so is the layout crash on the boundary path');
+  } finally { restore(); delete globalThis.__wj1664Boundary; }
 });
 
 test('?wait holds until a pending change is rebuilt and the app is warm again', async () => {

@@ -1,10 +1,12 @@
 /**
  * `/__webjs/dev/status` behaves identically on Node and Bun (#1664): a clean
  * app settles, a failing render and a failing action are listed with their
- * file, a rebuild clears them, and production has no such endpoint.
+ * file, a rebuild clears the action error, a fixed page clears its render
+ * error, and production has no such endpoint.
  *
  * A plain assert script so it runs under either runtime; the sibling
- * `dev-status.test.mjs` wraps it for `node --test`.
+ * `dev-status.test.mjs` wraps it for `node --test`. A render error survives an
+ * unrelated rebuild until its page renders again.
  */
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -54,7 +56,14 @@ try {
 
   await app.rebuild();
   body = await status('?wait=5');
-  assert.deepEqual(body.errors, [], `[${runtime}] a rebuild clears the errors it replaced`);
+  assert.deepEqual(body.errors.map((e) => e.kind), ['render'],
+    `[${runtime}] a rebuild clears the action error but keeps the still-broken page's render error`);
+
+  writeFileSync(join(dir, 'app/boom/page.js'), `import { html } from ${CORE};\nexport default () => html\`<p>fixed</p>\`;\n`);
+  await app.rebuild();
+  assert.equal((await app.handle(new Request('http://x/boom'))).status, 200);
+  body = await status('?wait=5');
+  assert.deepEqual(body.errors, [], `[${runtime}] the page rendering again clears its error`);
 
   const prod = await createRequestHandler({ appDir: dir, dev: false, logger: SILENT });
   assert.equal((await prod.handle(new Request('http://x/__webjs/dev/status'))).status, 404,

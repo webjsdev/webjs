@@ -36,7 +36,8 @@ function makeApp() {
 
 /** A runStatus harness whose fetch is the dev handler itself. */
 async function harness(dev = true) {
-  const app = await createRequestHandler({ appDir: makeApp(), dev, logger: SILENT });
+  const appDir = makeApp();
+  const app = await createRequestHandler({ appDir, dev, logger: SILENT });
   const lines = [];
   const errs = [];
   const run = (opts = {}) => runStatus({
@@ -48,7 +49,7 @@ async function harness(dev = true) {
     err: (s) => errs.push(s),
     ...opts,
   });
-  return { app, run, lines, errs };
+  return { app, appDir, run, lines, errs };
 }
 
 function quiet() {
@@ -127,4 +128,31 @@ test('a base path prefixes the status endpoint and every requested path', async 
   assert.equal(code, 0);
   assert.ok(seen[0].startsWith('http://localhost:3999/docs/__webjs/dev/status?wait='));
   assert.equal(seen[1], 'http://localhost:3999/docs/intro');
+});
+
+// #1664 review: a bare run must still render something (a Node dev server
+// restarts on an edit and starts with no errors), and a page whose render
+// error was recorded is re-requested, so a fix clears it instead of the stale
+// error failing the run.
+test('with no paths it checks the root, and re-requests every page with a recorded render error', async () => {
+  const restore = quiet();
+  try {
+    const { app, appDir, run, lines } = await harness();
+    await app.handle(new Request('http://x/boom'));
+
+    let code = await run();
+    assert.equal(code, 1);
+    let out = lines.join('\n');
+    assert.match(out, /GET \/  200/, 'the root is checked by default');
+    assert.match(out, /GET \/boom  500/, 'the broken page is re-requested');
+
+    writeFileSync(join(appDir, 'app/boom/page.ts'), `import { html } from ${CORE};\nexport default () => html\`<p>fixed</p>\`;\n`);
+    await app.rebuild();
+    lines.length = 0;
+    code = await run();
+    out = lines.join('\n');
+    assert.equal(code, 0, out);
+    assert.match(out, /GET \/boom  200/, 'the fixed page is re-rendered, which clears its error');
+    assert.doesNotMatch(out, /error since/);
+  } finally { restore(); }
 });

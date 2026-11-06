@@ -345,7 +345,7 @@ const HELP = {
   },
   status: {
     usage: 'webjs status [path...] [--port N] [--json] [--timeout <seconds>]',
-    summary: 'Wait for a running `webjs dev` server to settle after an edit (the change rebuilt and the app analysed again), request each given path so a render error surfaces, then print every error recorded since the last rebuild: render, TypeScript strip, rebuild, server action, middleware. Use it after each edit instead of sleeping and fetching a page.',
+    summary: 'Wait for a running `webjs dev` server to settle after an edit (the change rebuilt and the app analysed again), request each given path (the app root when none is given) plus every page with a recorded render error, then print every error: render, TypeScript strip, rebuild, route handler, server action, middleware. A render error stays listed until its page renders again. Use it after each edit instead of sleeping and fetching a page.',
     options: [
       { flag: '--port <N>', description: 'The dev server port. Defaults to PORT (the shell or .env), then 8080, the same resolution `webjs dev` uses.' },
       { flag: '--json', description: 'Print one JSON document: { ok, url, settled, ready, rebuilds, paths, errors }, each error carrying kind, message, file, line, column and codeFrame.' },
