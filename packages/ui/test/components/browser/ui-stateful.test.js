@@ -1050,3 +1050,115 @@ suite('ui-carousel', () => {
     root.remove();
   });
 });
+
+suite('ui-resizable', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/resizable.ts`);
+  });
+
+  // This suite loads no stylesheet; the group needs the flex its class gives.
+  const LAYOUT = html`<style>
+    [data-slot="resizable-panel-group"] { display: flex; width: 400px; height: 120px; }
+    [data-slot="resizable-panel-group"][aria-orientation="vertical"] { flex-direction: column; }
+    ui-resizable-handle { display: block; flex: 0 0 4px; }
+  </style>`;
+  const group = (orientation = 'horizontal') => html`${LAYOUT}
+    <ui-resizable-panel-group orientation=${orientation}>
+      <ui-resizable-panel default-size="30" min-size="20" max-size="70">A</ui-resizable-panel>
+      <ui-resizable-handle with-handle></ui-resizable-handle>
+      <ui-resizable-panel>B</ui-resizable-panel>
+    </ui-resizable-panel-group>`;
+  const parts = (root) => {
+    const el = root.querySelector('ui-resizable-panel-group');
+    const [a, b] = el.querySelectorAll('ui-resizable-panel');
+    const handle = el.querySelector('ui-resizable-handle');
+    const size = (p) => Number(p.getAttribute('data-panel-size'));
+    return { el, a, b, handle, size };
+  };
+  const key = (target, k) => target.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+
+  test('the default layout: a sized panel keeps its share and the other takes the rest', async () => {
+    const root = await mount(group());
+    await tick();
+    const { a, b, size } = parts(root);
+    assert.equal(size(a), 30);
+    assert.equal(size(b), 70);
+    assert.ok(Math.abs(a.getBoundingClientRect().width / (a.getBoundingClientRect().width + b.getBoundingClientRect().width) - 0.3) < 0.02, 'drawn at 30%');
+    root.remove();
+  });
+
+  test('the handle is a focusable separator reporting the panel before it', async () => {
+    const root = await mount(group());
+    await tick();
+    const { a, handle } = parts(root);
+    assert.equal(handle.getAttribute('role'), 'separator');
+    assert.equal(handle.tabIndex, 0);
+    assert.equal(handle.getAttribute('aria-orientation'), 'vertical', 'a row of panels has an upright separator');
+    assert.equal(handle.getAttribute('aria-controls'), a.id);
+    assert.equal(handle.getAttribute('aria-valuenow'), '30');
+    assert.equal(handle.getAttribute('aria-valuemin'), '20');
+    assert.equal(handle.getAttribute('aria-valuemax'), '70');
+    assert.ok(handle.querySelector('.cn-resizable-handle-icon'), 'with-handle draws the grip');
+    root.remove();
+  });
+
+  test('the arrows move the boundary 10 points, Home and End to the limits, and report the layout', async () => {
+    const root = await mount(group());
+    await tick();
+    const { el, a, b, handle, size } = parts(root);
+    const layouts = [];
+    el.addEventListener('ui-layout-change', (e) => layouts.push(e.detail.sizes));
+    key(handle, 'ArrowRight');
+    await tick();
+    assert.deepEqual([size(a), size(b)], [40, 60]);
+    assert.equal(handle.getAttribute('aria-valuenow'), '40');
+    key(handle, 'End');
+    await tick();
+    assert.equal(size(a), 70, 'stops at the max-size');
+    key(handle, 'Home');
+    await tick();
+    assert.equal(size(a), 20, 'stops at the min-size');
+    assert.deepEqual(layouts[0], [40, 60]);
+    root.remove();
+  });
+
+  test('ArrowLeft grows the panel before under dir="rtl"', async () => {
+    const root = await mount(html`<div dir="rtl">${group()}</div>`);
+    await tick();
+    const { a, handle, size } = parts(root);
+    key(handle, 'ArrowLeft');
+    await tick();
+    assert.equal(size(a), 40);
+    root.remove();
+  });
+
+  test('a vertical group moves with Up / Down and draws a flat separator', async () => {
+    const root = await mount(group('vertical'));
+    await tick();
+    const { a, handle, size } = parts(root);
+    assert.equal(handle.getAttribute('aria-orientation'), 'horizontal');
+    key(handle, 'ArrowDown');
+    await tick();
+    assert.equal(size(a), 40);
+    key(handle, 'ArrowRight');
+    await tick();
+    assert.equal(size(a), 40, 'the cross arrows do nothing');
+    root.remove();
+  });
+
+  test('dragging the handle moves the boundary with the pointer', async () => {
+    const root = await mount(group());
+    await tick();
+    const { a, handle, size } = parts(root);
+    const r = handle.getBoundingClientRect();
+    const y = r.top + r.height / 2;
+    handle.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: r.left, clientY: y, pointerId: 1 }));
+    // 40px of a 400px group is 10 points.
+    handle.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: r.left + 40, clientY: y, pointerId: 1 }));
+    handle.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: r.left + 40, clientY: y, pointerId: 1 }));
+    await tick();
+    assert.ok(Math.abs(size(a) - 40) < 1.5, `about 40 after the drag (${size(a)})`);
+    assert.equal(document.activeElement, handle, 'the dragged handle takes focus');
+    root.remove();
+  });
+});

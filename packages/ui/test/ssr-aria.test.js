@@ -350,3 +350,19 @@ test('ui-carousel: the served slides scroll and snap with JavaScript off, each o
   assert.match(out, /data-carousel-snap[^>]*class="absolute size-px snap-start"/, 'and snaps on its content, through a marker with a size');
   assert.match(out, /<span class="sr-only">Next slide<\/span>/);
 });
+
+test('ui-resizable: the server draws each panel at its default share and each handle as a separator', { skip }, async () => {
+  const out = await ssr(
+    ['resizable.ts'],
+    (html) => html`<ui-resizable-panel-group orientation="horizontal"><ui-resizable-panel default-size="25">A</ui-resizable-panel><ui-resizable-handle></ui-resizable-handle><ui-resizable-panel default-size="75">B</ui-resizable-panel></ui-resizable-panel-group>`,
+  );
+  assert.match(out, /aria-orientation="horizontal"/, 'the group states its orientation');
+  assert.match(out, /<ui-resizable-panel[^>]*style="flex: 25 1 0px; overflow: hidden;"/, 'the first panel at 25');
+  assert.match(out, /<ui-resizable-panel[^>]*style="flex: 75 1 0px; overflow: hidden;"/, 'the second at 75');
+  // The handle's own class holds a '>' (its grip selector), so read the open
+  // tag attribute by attribute rather than up to the first '>'.
+  const handle = (out.match(/<ui-resizable-handle(?:\s+[\w-]+(?:="[^"]*")?)*/) ?? [''])[0];
+  for (const attr of ['role="separator"', 'tabindex="0"', 'aria-orientation="vertical"']) {
+    assert.ok(handle.includes(attr), `the handle is a focusable upright separator (${attr})`);
+  }
+});

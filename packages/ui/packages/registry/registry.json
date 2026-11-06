@@ -682,6 +682,22 @@
       ]
     },
     {
+      "name": "resizable",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "lib-utils"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/resizable.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
       "name": "scroll-area",
       "type": "registry:ui",
       "registryDependencies": [
