@@ -972,7 +972,7 @@ export function componentDoc(slug: string): ComponentDoc | undefined {
 
 /**
  * The header's main nav, shadcn's siteConfig.navItems. shadcn's also lists
- * Blocks, Charts, Directory, Typeset and Create; each joins in the step of
+ * Blocks, Charts, Typeset and Create; each joins in the step of
  * #1666 that builds its page, so the header never links to a page that does
  * not exist yet. The header and the search menu's Pages group both read it.
  */
@@ -980,6 +980,7 @@ export const HEADER_NAV: DocLink[] = [
   { title: 'Home', href: '/ui' },
   { title: 'Docs', href: '/ui/docs' },
   { title: 'Components', href: '/ui/docs/components' },
+  { title: 'Directory', href: '/ui/docs/directory' },
 ];
 
 /**
@@ -988,7 +989,7 @@ export const HEADER_NAV: DocLink[] = [
  * offers only these. Widen it as each page lands.
  */
 export function docPageExists(href: string): boolean {
-  if (href === '/ui/docs' || href === '/ui/docs/components') return true;
+  if (href === '/ui/docs' || href === '/ui/docs/components' || href === '/ui/docs/directory') return true;
   const prefix = '/ui/docs/components/';
   return href.startsWith(prefix) && !!componentDoc(href.slice(prefix.length));
 }

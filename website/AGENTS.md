@@ -101,6 +101,12 @@ website/
                        its order and the component records live in ONE
                        module, modules/ui/docs/nav.ts
           page.ts      /ui/docs, the introduction
+          components/page.ts
+                       /ui/docs/components, every component page as a link
+          directory/page.ts
+                       /ui/docs/directory, the registry directory: the
+                       registries in modules/ui/directory/registries.ts, with
+                       a GET-form search and an Add dialog per registry
           components/[name]/page.ts
                        /ui/docs/components/<name>: the lead demo, Installation
                        (the add command and the baked source), then the
@@ -109,6 +115,9 @@ website/
         (gallery)/     the interim component gallery, until the docs pages
                        replace it: layout.ts is its sidebar (new-york style)
           [name]/page.ts /ui/<name>, one page per component
+      r/registries.json/route.ts
+                       the registry directory as JSON, shadcn's
+                       /r/registries.json
       registry/**      the JSON API that shipped CLI versions fetch (see
                        modules/ui/ below). Its paths never move
     sitemap.ts         /sitemap.xml (enumerates docs + ui + articles + compare + blog)

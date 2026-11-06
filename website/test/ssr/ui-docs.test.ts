@@ -14,6 +14,7 @@ import { createRequestHandler } from '@webjsdev/server';
 import { renderDemo } from '#modules/ui/queries/render-demo.server.ts';
 import { componentSource } from '#modules/ui/queries/component-source.server.ts';
 import { COMPONENTS, HEADER_NAV, NAV, neighbours } from '#modules/ui/docs/nav.ts';
+import { REGISTRIES } from '#modules/ui/directory/registries.ts';
 
 const WEBSITE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 let handle: (path: string) => Promise<Response>;
@@ -113,4 +114,22 @@ test('the header search offers only pages that exist, starting with the header n
     if ((await handle(href)).status !== 200) broken.push(href);
   }
   assert.deepEqual(broken, [], 'no item opens a missing page');
+});
+
+test('the registry directory lists the registries, searches them, and serves them as JSON', async () => {
+  const page = await (await handle('/ui/docs/directory')).text();
+  assert.match(page, /<h1[^>]*>Registry Directory<\/h1>/);
+  for (const r of REGISTRIES) assert.ok(page.includes(r.name), `lists ${r.name}`);
+  assert.match(page, /<form method="get" action="\/ui\/docs\/directory" role="search"/, 'the search is a plain GET form, so it works with JavaScript off');
+  assert.match(page, /pnpm dlx @webjsdev\/ui add &lt;component&gt;|pnpm dlx @webjsdev\/ui add <component>/, 'Add shows a command this CLI runs');
+  const none = await (await handle('/ui/docs/directory?q=zzzz-no-such-registry')).text();
+  assert.match(none, /No registries match/);
+  assert.match(none, /0 registries/);
+  const res = await handle('/ui/r/registries.json');
+  assert.equal(res.status, 200);
+  const json = await res.json() as Array<Record<string, unknown>>;
+  assert.deepEqual(json.map((r) => r.name), REGISTRIES.map((r) => r.name));
+  assert.ok(json.every((r) => typeof r.url === 'string' && !('default' in r)), 'each entry carries its base url, and nothing internal');
+  const header = await (await handle('/ui')).text();
+  assert.match(header, /href="\/ui\/docs\/directory"[^>]*>Directory</, 'the header links it, now that it exists');
 });
