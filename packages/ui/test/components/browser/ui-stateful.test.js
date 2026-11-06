@@ -392,10 +392,10 @@ suite('ui-slider', () => {
     const at = (pct) => track.left + (track.width * pct) / 100;
     const root2 = el.querySelector('[data-slot="slider"]');
     const y = track.top + track.height / 2;
-    root2.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: at(70), clientY: y, button: 0, pointerId: 1 }));
-    assert.equal(inputs[1].value, '70', 'the upper thumb was nearer');
+    root2.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: at(72), clientY: y, button: 0, pointerId: 1 }));
+    assert.equal(inputs[1].value, '70', 'the upper thumb was nearer, and 72 snaps to the step of 5');
     assert.equal(document.activeElement, thumbs()[1], 'and takes focus');
-    root2.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: at(90), clientY: y, pointerId: 1 }));
+    root2.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: at(88), clientY: y, pointerId: 1 }));
     assert.equal(inputs[1].value, '90');
     assert.equal(commits.length, 0, 'no commit mid-drag');
     root2.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: at(90), clientY: y, pointerId: 1 }));
@@ -420,6 +420,8 @@ suite('ui-slider', () => {
     await tick();
     const { inputs, thumbs } = parts(root);
     key(thumbs()[0], 'ArrowRight');
+    await tick();
+    assert.equal(thumbs()[0].getAttribute('aria-valuenow'), '25');
     root.querySelector('form').reset();
     await tick();
     assert.equal(inputs[0].value, '20');
