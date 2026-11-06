@@ -69,6 +69,21 @@ const ROOT = 'ui-message-scroller';
 // How near an edge counts as being at it, in pixels.
 const EDGE = 24;
 
+// shadcn's className lands on the element each part renders (the frame, the
+// viewport, the list, the button), so each host hands its authored class to
+// that element and becomes display: contents. A block host would otherwise
+// sit between the frame's flex column and the viewport, the viewport would
+// grow to its content, and nothing would scroll.
+type Part = HTMLElement & { _authored?: string | null; _captured?: boolean };
+function takeAuthored(part: Part): string | null {
+  if (!part._captured) {
+    part._authored = part.getAttribute?.('class') ?? null;
+    part._captured = true;
+    part.setAttribute?.('class', 'contents');
+  }
+  return part._authored ?? null;
+}
+
 function rootOf(el: Element): UiMessageScroller | null {
   return (typeof el.closest === 'function' ? el.closest(ROOT) : null) as UiMessageScroller | null;
 }
@@ -113,7 +128,7 @@ export class UiMessageScroller extends WebComponent({
   }
 
   render() {
-    return html`<div data-slot="message-scroller" ?data-pending-scroll=${!!this.pending} class=${messageScrollerClass()}><slot></slot></div>`;
+    return html`<div data-slot="message-scroller" ?data-pending-scroll=${!!this.pending} class=${cn(messageScrollerClass(), takeAuthored(this))}><slot></slot></div>`;
   }
 
   viewport(): HTMLElement | null {
@@ -269,7 +284,7 @@ UiMessageScroller.register('ui-message-scroller');
 export class UiMessageScrollerViewport extends WebComponent {
   render() {
     const pending = rootOf(this)?.pending ?? true;
-    return html`<div data-slot="message-scroller-viewport" ?data-pending-scroll=${!!pending} class=${messageScrollerViewportClass()}><slot></slot></div>`;
+    return html`<div data-slot="message-scroller-viewport" ?data-pending-scroll=${!!pending} class=${cn(messageScrollerViewportClass(), takeAuthored(this))}><slot></slot></div>`;
   }
 }
 UiMessageScrollerViewport.register('ui-message-scroller-viewport');
@@ -281,7 +296,7 @@ export class UiMessageScrollerContent extends WebComponent {
       role="log"
       aria-relevant="additions"
       aria-label=${this.getAttribute?.('aria-label') || null}
-      class=${messageScrollerContentClass()}
+      class=${cn(messageScrollerContentClass(), takeAuthored(this))}
     ><slot></slot></div>`;
   }
 }
@@ -344,7 +359,7 @@ export class UiMessageScrollerButton extends WebComponent({
       data-active=${active ? 'true' : 'false'}
       tabindex=${active ? null : '-1'}
       aria-hidden=${active ? null : 'true'}
-      class=${cn(buttonClass({ variant: this.variant as ButtonVariant, size: this.size as ButtonSize }), messageScrollerButtonClass())}
+      class=${cn(buttonClass({ variant: this.variant as ButtonVariant, size: this.size as ButtonSize }), messageScrollerButtonClass(), takeAuthored(this))}
       @click=${() => (toStart ? root?.scrollToStart() : root?.scrollToEnd())}
     ><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg><span class="sr-only">${toStart ? 'Scroll to start' : 'Scroll to end'}</span></button>`;
   }

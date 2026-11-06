@@ -1485,3 +1485,52 @@ suite('ui-select: an unlabelled optgroup', () => {
     }
   });
 });
+
+suite('ui-message-scroller: the parts render the boxes, not their hosts', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/message-scroller.ts`);
+  });
+
+  test('the viewport is a flex item of the frame, so it scrolls at the frame\'s height', async () => {
+    // Only what the base classes say: the frame is a column (flex, size-full,
+    // min-h-0, overflow-hidden), the viewport is size-full min-h-0 with
+    // overflow-y-auto, and the button is absolute. Nothing gives the viewport
+    // a height of its own, so it scrolls only if no block host sits between
+    // it and the frame.
+    const root = await mount(html`<style>
+        .ms-box { height: 200px; }
+        .ms-box .contents { display: contents; }
+        [data-slot="message-scroller"] { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; }
+        [data-slot="message-scroller-viewport"] { height: 100%; min-height: 0; overflow-y: auto; }
+        .ms-row { height: 60px; }
+        [data-slot="message-scroller-button"] { position: absolute; }
+      </style>
+      <div class="ms-box">
+        <ui-message-scroller class="ms-authored">
+          <ui-message-scroller-viewport class="vp-authored">
+            <ui-message-scroller-content aria-label="Conversation" class="p-4">
+              ${Array.from({ length: 8 }, (_, i) => html`<ui-message-scroller-item message-id=${`r${i}`}><div class="ms-row">Row ${i}</div></ui-message-scroller-item>`)}
+            </ui-message-scroller-content>
+          </ui-message-scroller-viewport>
+          <ui-message-scroller-button class="btn-authored"></ui-message-scroller-button>
+        </ui-message-scroller>
+      </div>`);
+    try {
+      await new Promise((r) => setTimeout(r, 50));
+      await tick();
+      const el = root.querySelector('ui-message-scroller');
+      const viewport = el.querySelector('[data-slot="message-scroller-viewport"]');
+      assert.equal(Math.round(viewport.clientHeight), 200, 'the viewport is as tall as the frame');
+      assert.ok(viewport.scrollHeight > 400, 'and its messages overflow it');
+      for (const tag of ['ui-message-scroller', 'ui-message-scroller-viewport', 'ui-message-scroller-content', 'ui-message-scroller-button']) {
+        assert.equal(el.matches(tag) ? el.getAttribute('class') : el.querySelector(tag).getAttribute('class'), 'contents', `<${tag}> lays out its children directly`);
+      }
+      assert.match(el.querySelector('[data-slot="message-scroller"]').className, /\bms-authored\b/, 'the class written on the root lands on the frame');
+      assert.match(viewport.className, /\bvp-authored\b/);
+      assert.match(el.querySelector('[data-slot="message-scroller-content"]').className, /\bp-4\b/, 'and on the content, the list (shadcn\'s p-(--card-spacing))');
+      assert.match(el.querySelector('button[data-slot="message-scroller-button"]').className, /\bbtn-authored\b/);
+    } finally {
+      root.remove();
+    }
+  });
+});
