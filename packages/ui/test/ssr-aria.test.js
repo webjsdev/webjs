@@ -275,3 +275,14 @@ test('ui-slider: the first paint is the authored range inputs, unenhanced (D13)'
   assert.doesNotMatch(out, /<input[^>]*(aria-hidden|style=)/, 'and not hidden: with JavaScript off they are the control');
   assert.doesNotMatch(out, /role="slider"/, 'no drawn thumbs before the element upgrades');
 });
+
+test('ui-input-otp: the first paint is the authored input alone, the drawn parts hidden (D13)', { skip }, async () => {
+  const out = await ssr(
+    ['input-otp.ts'],
+    (html) => html`<ui-input-otp><input name="otp" maxlength="4" autocomplete="one-time-code" aria-label="Code"><ui-input-otp-group><ui-input-otp-slot index="0"></ui-input-otp-slot><ui-input-otp-slot index="1"></ui-input-otp-slot></ui-input-otp-group><ui-input-otp-separator></ui-input-otp-separator></ui-input-otp>`,
+  );
+  assert.match(out, /<input[^>]*name="otp"[^>]*autocomplete="one-time-code"/, 'the input is served as authored, a plain field');
+  assert.doesNotMatch(out, /<input[^>]*style=/, 'and not laid over anything before the element upgrades');
+  assert.match(out, /data-slot="input-otp-group"[^>]*hidden/, 'the group is hidden until the element upgrades');
+  assert.match(out, /data-slot="input-otp-separator"[^>]*hidden/, 'and so is the separator');
+});

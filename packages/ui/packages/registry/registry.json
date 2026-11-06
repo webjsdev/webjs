@@ -409,6 +409,20 @@
       ]
     },
     {
+      "name": "input-otp",
+      "type": "registry:ui",
+      "registryDependencies": [],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/input-otp.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
       "name": "item",
       "type": "registry:ui",
       "registryDependencies": [

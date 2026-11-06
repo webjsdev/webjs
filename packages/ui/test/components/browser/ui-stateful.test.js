@@ -441,3 +441,127 @@ suite('ui-slider', () => {
     root.remove();
   });
 });
+
+suite('ui-input-otp', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/input-otp.ts`);
+  });
+
+  const otp = () => html`
+    <form>
+      <label for="otp">Code</label>
+      <ui-input-otp>
+        <input id="otp" name="otp" maxlength="4" pattern="[0-9]*" inputmode="numeric" autocomplete="one-time-code">
+        <ui-input-otp-group>
+          <ui-input-otp-slot index="0"></ui-input-otp-slot>
+          <ui-input-otp-slot index="1" class="authored"></ui-input-otp-slot>
+        </ui-input-otp-group>
+        <ui-input-otp-separator></ui-input-otp-separator>
+        <ui-input-otp-group>
+          <ui-input-otp-slot index="2"></ui-input-otp-slot>
+          <ui-input-otp-slot index="3"></ui-input-otp-slot>
+        </ui-input-otp-group>
+      </ui-input-otp>
+    </form>
+  `;
+  const parts = (root) => {
+    const el = root.querySelector('ui-input-otp');
+    const input = el.querySelector('input');
+    const slots = [...el.querySelectorAll('ui-input-otp-slot')];
+    const chars = () => slots.map((s) => s.textContent.trim());
+    return { el, input, slots, chars };
+  };
+  const type = (input, value) => {
+    input.value = value;
+    input.setSelectionRange(value.length, value.length);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+
+  test('the input stays the named, focusable control, laid transparent over the drawn slots', async () => {
+    const root = await mount(otp());
+    await tick();
+    const { el, input, slots } = parts(root);
+    assert.equal(getComputedStyle(input).position, 'absolute');
+    assert.equal(getComputedStyle(input).color, 'rgba(0, 0, 0, 0)');
+    assert.equal(input.labels[0].textContent, 'Code', 'still labelled');
+    assert.equal(slots.length, 4);
+    for (const s of slots) {
+      assert.equal(s.hidden, false, 'slots show once enhanced');
+      assert.equal(s.getAttribute('aria-hidden'), 'true', 'and are decoration');
+      assert.ok(s.classList.contains('cn-input-otp-slot'), 'the slot styles its own host');
+    }
+    assert.ok(slots[1].classList.contains('authored'), 'keeping the author\'s classes');
+    assert.equal(el.querySelector('[data-slot="input-otp-separator"]').hidden, false);
+    root.remove();
+  });
+
+  test('typed characters land in their slots, the caret slot is active, and the form submits the input', async () => {
+    const root = await mount(otp());
+    await tick();
+    const { input, slots, chars } = parts(root);
+    input.focus();
+    type(input, '12');
+    await tick();
+    assert.deepEqual(chars(), ['1', '2', '', '']);
+    assert.deepEqual(slots.map((s) => s.getAttribute('data-active')), ['false', 'false', 'true', 'false']);
+    assert.ok(slots[2].querySelector('.cn-input-otp-caret'), 'the empty active slot draws a caret');
+    assert.equal(new FormData(root.querySelector('form')).get('otp'), '12');
+    input.blur();
+    await tick();
+    assert.ok(slots.every((s) => s.getAttribute('data-active') === 'false'), 'nothing is active without focus');
+    root.remove();
+  });
+
+  test('a keystroke that breaks the pattern is refused', async () => {
+    const root = await mount(otp());
+    await tick();
+    const { el, input, chars } = parts(root);
+    let changes = 0;
+    el.addEventListener('ui-value-change', () => changes++);
+    input.focus();
+    type(input, '1');
+    type(input, '1a');
+    await tick();
+    assert.equal(input.value, '1');
+    assert.deepEqual(chars(), ['1', '', '', '']);
+    assert.equal(changes, 1, 'only the accepted edit is reported');
+    root.remove();
+  });
+
+  test('filling every slot fires ui-complete once with the code', async () => {
+    const root = await mount(otp());
+    await tick();
+    const { el, input } = parts(root);
+    const done = [];
+    el.addEventListener('ui-complete', (e) => done.push(e.detail.value));
+    input.focus();
+    type(input, '123');
+    type(input, '1234');
+    assert.deepEqual(done, ['1234']);
+    root.remove();
+  });
+
+  test('a form reset clears the slots', async () => {
+    const root = await mount(otp());
+    await tick();
+    const { input, chars } = parts(root);
+    type(input, '98');
+    await tick();
+    root.querySelector('form').reset();
+    await tick();
+    assert.deepEqual(chars(), ['', '', '', '']);
+    root.remove();
+  });
+
+  test('aria-invalid on the input reaches the slots, and a disabled input marks the row', async () => {
+    const root = await mount(otp());
+    await tick();
+    const { el, input, slots } = parts(root);
+    input.setAttribute('aria-invalid', 'true');
+    input.disabled = true;
+    await tick();
+    assert.ok(slots.every((s) => s.getAttribute('aria-invalid') === 'true'));
+    assert.ok(el.querySelector('[data-slot="input-otp"]').hasAttribute('data-disabled'));
+    root.remove();
+  });
+});
