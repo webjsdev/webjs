@@ -15,6 +15,7 @@ import { renderDemo } from '#modules/ui/queries/render-demo.server.ts';
 import { componentSource } from '#modules/ui/queries/component-source.server.ts';
 import { COMPONENTS, HEADER_NAV, NAV, neighbours } from '#modules/ui/docs/nav.ts';
 import { REGISTRIES } from '#modules/ui/directory/registries.ts';
+import { DOC_PAGES } from '#modules/ui/docs/pages/index.ts';
 
 const WEBSITE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 let handle: (path: string) => Promise<Response>;
@@ -132,4 +133,20 @@ test('the registry directory lists the registries, searches them, and serves the
   assert.ok(json.every((r) => typeof r.url === 'string' && !('default' in r)), 'each entry carries its base url, and nothing internal');
   const header = await (await handle('/ui')).text();
   assert.match(header, /href="\/ui\/docs\/directory"[^>]*>Directory</, 'the header links it, now that it exists');
+});
+
+test('the docs catch-all serves the DOC_PAGES modules and nothing else', async () => {
+  // A non-component docs page is one module under modules/ui/docs/pages/,
+  // keyed by its path. An unknown path is a 404, and the specific docs
+  // routes still answer for their own paths.
+  assert.equal((await handle('/ui/docs/no-such-page')).status, 404);
+  assert.equal((await handle('/ui/docs/registry/no-such-page')).status, 404);
+  assert.equal((await handle('/ui/docs/components/button')).status, 200, 'a component page is not shadowed');
+  assert.equal((await handle('/ui/docs/directory')).status, 200);
+  for (const path of Object.keys(DOC_PAGES)) {
+    const res = await handle(`/ui/docs/${path}`);
+    assert.equal(res.status, 200, `/ui/docs/${path}`);
+    const mod = await DOC_PAGES[path]();
+    assert.match(await res.text(), new RegExp(`<h1[^>]*>${mod.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</h1>`));
+  }
 });

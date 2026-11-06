@@ -25,6 +25,8 @@ export interface ComponentDoc {
   description: string;
 }
 
+import { DOC_PAGES } from './pages/index.ts';
+
 /** The sidebar's first group, shadcn's TOP_LEVEL_SECTIONS. */
 export const SECTIONS: DocLink[] = [
   {
@@ -990,6 +992,7 @@ export const HEADER_NAV: DocLink[] = [
  */
 export function docPageExists(href: string): boolean {
   if (href === '/ui/docs' || href === '/ui/docs/components' || href === '/ui/docs/directory') return true;
+  if (href.startsWith('/ui/docs/') && href.slice('/ui/docs/'.length) in DOC_PAGES) return true;
   const prefix = '/ui/docs/components/';
   return href.startsWith(prefix) && !!componentDoc(href.slice(prefix.length));
 }
