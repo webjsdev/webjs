@@ -95,7 +95,7 @@
  */
 import { WebComponent, html, unsafeHTML, prop } from '@webjsdev/core';
 import { ref, createRef } from '@webjsdev/core/directives';
-import { ensureId } from '../lib/utils.ts';
+import { cn, ensureId } from '../lib/utils.ts';
 import { onBeforeCache } from '../lib/dom.ts';
 import { buttonClass } from './button.ts';
 
@@ -543,6 +543,19 @@ export class UiDialogContent extends WebComponent({
     return (this.constructor as typeof UiDialogContent).slotPrefix;
   }
 
+  // shadcn's className on the content lands on the panel it renders, so the
+  // class written on this host moves there, read once at first render.
+  _authored: string | null = null;
+  _captured = false;
+  _hostClass(): string | null {
+    if (!this._captured) {
+      this._captured = true;
+      this._authored = this.getAttribute?.('class') || null;
+      this.removeAttribute?.('class');
+    }
+    return this._authored;
+  }
+
   /** The visible panel's classes. A subclass (sheet) supplies its own. */
   _panelClass(): string {
     return dialogContentClass();
@@ -598,7 +611,7 @@ export class UiDialogContent extends WebComponent({
       data-state=${parentOpen ? 'open' : 'closed'}
       data-side=${this._side()}
       data-vaul-drawer-direction=${this._drawerDirection()}
-      class=${this._panelClass()}
+      class=${cn(this._panelClass(), this._hostClass())}
     >
       ${this._panelLead()}
       <slot></slot>

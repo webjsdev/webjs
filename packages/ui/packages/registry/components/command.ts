@@ -572,12 +572,22 @@ export class UiCommandDialog extends UiDialog {
   static contentTag = 'ui-command-dialog-content';
   static slotPrefix = 'dialog';
 
+  // shadcn's CommandDialog passes its className to the DialogContent, so the
+  // class written on this host goes to the content, which puts it on the panel.
+  _authored: string | null = null;
+  _captured = false;
+
   render() {
+    if (!this._captured) {
+      this._captured = true;
+      this._authored = this.getAttribute?.('class') || null;
+      this.removeAttribute?.('class');
+    }
     const title = this.getAttribute?.('title') || 'Command Palette';
     const description = this.getAttribute?.('description') || 'Search for a command to run...';
     const close = this.getAttribute?.('show-close-button') ?? 'false';
     return html`<div data-slot="dialog" data-state=${this.open ? 'open' : 'closed'}><ui-command-dialog-content
-      show-close-button=${close}><h2 data-slot="dialog-title" class="sr-only">${title}</h2><p
+      show-close-button=${close} class=${this._authored}><h2 data-slot="dialog-title" class="sr-only">${title}</h2><p
       data-slot="dialog-description" class="sr-only">${description}</p><slot></slot></ui-command-dialog-content></div>`;
   }
 }

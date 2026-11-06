@@ -94,7 +94,7 @@
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
 import { ref, createRef } from '@webjsdev/core/directives';
-import { ensureId } from '../lib/utils.ts';
+import { cn, ensureId } from '../lib/utils.ts';
 import { onBeforeCache } from '../lib/dom.ts';
 import { buttonClass, type ButtonVariant, type ButtonSize } from './button.ts';
 
@@ -496,6 +496,19 @@ export class UiAlertDialogContent extends WebComponent({
     if (native?.open) native.close();
   }
 
+  // shadcn's className on the content lands on the panel it renders, so the
+  // class written on this host moves there, read once at first render.
+  _authored: string | null = null;
+  _captured = false;
+  _hostClass(): string | null {
+    if (!this._captured) {
+      this._captured = true;
+      this._authored = this.getAttribute?.('class') || null;
+      this.removeAttribute?.('class');
+    }
+    return this._authored;
+  }
+
   render() {
     const parentOpen = !!this._parent()?.open;
     return html`<dialog
@@ -509,7 +522,7 @@ export class UiAlertDialogContent extends WebComponent({
       data-slot="alert-dialog-content"
       data-size=${this.size}
       data-state=${parentOpen ? 'open' : 'closed'}
-      class=${alertDialogContentClass()}
+      class=${cn(alertDialogContentClass(), this._hostClass())}
     ><slot></slot></div></dialog>`;
   }
 

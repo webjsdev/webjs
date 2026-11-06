@@ -2735,3 +2735,50 @@ suite('overlay positioning: the Radix variables shadcn\'s classes read', () => {
     }
   });
 });
+
+suite('dialog family: the class on the content lands on the panel', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/dialog.ts`);
+    await import(`${COMPONENTS_DIR}/alert-dialog.ts`);
+    await import(`${COMPONENTS_DIR}/command.ts`);
+  });
+
+  test('<ui-dialog-content class> styles the panel, as shadcn\'s DialogContent className does', async () => {
+    const root = await mount(html`<ui-dialog><ui-dialog-content class="sm:max-w-md dc-authored"><h2 data-slot="dialog-title">Edit</h2></ui-dialog-content></ui-dialog>`);
+    try {
+      await tick();
+      const host = root.querySelector('ui-dialog-content');
+      const panel = root.querySelector('[data-slot="dialog-content"]');
+      assert.match(panel.className, /\bsm:max-w-md\b/);
+      assert.match(panel.className, /\bdc-authored\b/);
+      assert.equal(host.getAttribute('class'), null, 'and leaves the host');
+    } finally {
+      root.remove();
+    }
+  });
+
+  test('<ui-alert-dialog-content class> styles the panel', async () => {
+    const root = await mount(html`<ui-alert-dialog><ui-alert-dialog-content class="ad-authored"><h2 data-slot="alert-dialog-title">Sure?</h2></ui-alert-dialog-content></ui-alert-dialog>`);
+    try {
+      await tick();
+      assert.match(root.querySelector('[data-slot="alert-dialog-content"]').className, /\bad-authored\b/);
+      assert.equal(root.querySelector('ui-alert-dialog-content').getAttribute('class'), null);
+    } finally {
+      root.remove();
+    }
+  });
+
+  test('<ui-command-dialog class> styles the panel, as shadcn\'s CommandDialog className does', async () => {
+    const root = await mount(html`<ui-command-dialog class="cd-authored"><ui-command label="Search"><ui-command-input></ui-command-input><ui-command-list><ui-command-item>One</ui-command-item></ui-command-list></ui-command></ui-command-dialog>`);
+    try {
+      await tick();
+      await tick();
+      const panel = root.querySelector('[data-slot="dialog-content"]');
+      assert.match(panel.className, /\bcd-authored\b/);
+      assert.match(panel.className, /\bcn-command-dialog\b/, 'beside the command dialog\'s own classes');
+      assert.equal(root.querySelector('ui-command-dialog').getAttribute('class'), null);
+    } finally {
+      root.remove();
+    }
+  });
+});
