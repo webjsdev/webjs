@@ -79,3 +79,12 @@ export function buttonClass(opts: ButtonClassOptions = {}): string {
   const size = opts.size ?? 'default';
   return cn(BASE, VARIANTS[variant], SIZES[size]);
 }
+
+/**
+ * shadcn's name for {@link buttonClass}, so shadcn code ports verbatim
+ * (`buttonVariants({ ... })` is shadcn's `cva` export for `Button`). Like cva, it
+ * merges a `className` into the result.
+ */
+export function buttonVariants(opts: ButtonClassOptions & { className?: string } = {}): string {
+  return cn(buttonClass(opts), opts.className);
+}

@@ -341,3 +341,28 @@ test('field: 11 subpart helpers with orientation + legend variants', { skip }, a
   assert.match(mod.fieldLabelClass(), /group-data-\[disabled=true\]\/field:opacity-50/);
   assert.match(mod.fieldDescriptionClass(), /text-muted-foreground/);
 });
+
+// ---------- shadcn's style-function names (#1666, D9) ----------
+
+test('the shadcn style-function aliases return the helper output, plus a merged className', { skip }, async () => {
+  const pairs = [
+    ['button.ts', 'buttonVariants', 'buttonClass', { variant: 'outline', size: 'sm' }],
+    ['badge.ts', 'badgeVariants', 'badgeClass', { variant: 'secondary' }],
+    ['toggle.ts', 'toggleVariants', 'toggleClass', { variant: 'outline', size: 'lg' }],
+    ['tabs.ts', 'tabsListVariants', 'tabsListClass', { variant: 'underline' }],
+  ];
+  for (const [file, alias, helper, opts] of pairs) {
+    const mod = await import(join(COMPONENTS_DIR, file));
+    assert.equal(typeof mod[alias], 'function', `${alias} is exported`);
+    assert.equal(mod[alias](opts), mod[helper](opts), `${alias} matches ${helper}`);
+    assert.match(mod[alias]({ ...opts, className: 'rounded-full' }), /(^|\s)rounded-full(\s|$)/, `${alias} merges className`);
+  }
+});
+
+test('alertDialogMediaClass: the header media slot', { skip }, async () => {
+  const { alertDialogMediaClass } = await import(join(COMPONENTS_DIR, 'alert-dialog.ts'));
+  const s = alertDialogMediaClass();
+  assert.match(s, /size-16/);
+  assert.match(s, /bg-muted/);
+  assert.doesNotMatch(s, /(^|\s)cn-/, 'baked, no cn-* name');
+});

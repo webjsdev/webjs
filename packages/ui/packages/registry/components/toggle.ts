@@ -97,6 +97,15 @@ export function toggleClass(opts: { variant?: ToggleVariant; size?: ToggleSize }
   return cn(BASE, VARIANTS[opts.variant ?? 'default'], SIZES[opts.size ?? 'default']);
 }
 
+/**
+ * shadcn's name for {@link toggleClass}, so shadcn code ports verbatim
+ * (`toggleVariants({ ... })` is shadcn's `cva` export for `Toggle`). Like cva, it
+ * merges a `className` into the result.
+ */
+export function toggleVariants(opts: { variant?: ToggleVariant; size?: ToggleSize } & { className?: string } = {}): string {
+  return cn(toggleClass(opts), opts.className);
+}
+
 // --------------------------------------------------------------------------
 // <ui-toggle> wraps a native <button> and tracks pressed state. Native
 // <button> handles Enter/Space → click + focus + disabled semantics for

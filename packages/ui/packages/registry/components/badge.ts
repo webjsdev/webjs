@@ -42,3 +42,12 @@ export type BadgeVariant = keyof typeof VARIANTS;
 export function badgeClass(opts: { variant?: BadgeVariant } = {}): string {
   return cn(BASE, VARIANTS[opts.variant ?? 'default']);
 }
+
+/**
+ * shadcn's name for {@link badgeClass}, so shadcn code ports verbatim
+ * (`badgeVariants({ ... })` is shadcn's `cva` export for `Badge`). Like cva, it
+ * merges a `className` into the result.
+ */
+export function badgeVariants(opts: { variant?: BadgeVariant } & { className?: string } = {}): string {
+  return cn(badgeClass(opts), opts.className);
+}

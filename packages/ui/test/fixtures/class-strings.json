@@ -16,6 +16,7 @@
   "flex flex-col-reverse gap-2 group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2 sm:flex-row sm:justify-end",
   "text-lg font-semibold",
   "text-sm text-muted-foreground",
+  "mb-2 inline-flex size-16 items-center justify-center rounded-md bg-muted sm:group-data-[size=default]/alert-dialog-content:row-span-2 *:[svg:not([class*='size-'])]:size-8",
   "\nui-alert-dialog:not([open]) ui-alert-dialog-content { display: none !important; }\nui-alert-dialog-content { display: grid; }\n",
   "fixed inset-0 border-0 bg-transparent p-0 m-0 max-w-none max-h-none overflow-visible text-inherit backdrop:bg-black/50",
   "undefined",

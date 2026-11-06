@@ -92,6 +92,15 @@ export function tabsListClass(opts: { variant?: TabsListVariant } = {}): string 
   return cn(TABS_LIST_BASE, TABS_LIST_VARIANTS[variant]);
 }
 
+/**
+ * shadcn's name for {@link tabsListClass}, so shadcn code ports verbatim
+ * (`tabsListVariants({ ... })` is shadcn's `cva` export for `TabsList`). Like cva, it
+ * merges a `className` into the result.
+ */
+export function tabsListVariants(opts: { variant?: TabsListVariant } & { className?: string } = {}): string {
+  return cn(tabsListClass(opts), opts.className);
+}
+
 // The trigger is rendered as a native <button role="tab">, which gives
 // us cursor-pointer + Enter/Space activation + focus for free. The class
 // here is essentially shadcn's tabs.tsx trigger output.

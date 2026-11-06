@@ -19,6 +19,7 @@
  *   AlertDialogTrigger       → <ui-alert-dialog-trigger>
  *   AlertDialogContent       → <ui-alert-dialog-content size>
  *   AlertDialogHeader        → <div class=${alertDialogHeaderClass()}>
+ *   AlertDialogMedia         → <div data-slot="alert-dialog-media" class=${alertDialogMediaClass()}>
  *   AlertDialogTitle         → <h2 class=${alertDialogTitleClass()}>
  *   AlertDialogDescription   → <p class=${alertDialogDescriptionClass()}>
  *   AlertDialogFooter        → <div class=${alertDialogFooterClass()}>
@@ -109,6 +110,14 @@ export const alertDialogFooterClass = (): string =>
 export const alertDialogTitleClass = (): string => 'cn-alert-dialog-title';
 
 export const alertDialogDescriptionClass = (): string => 'cn-alert-dialog-description';
+
+/**
+ * The media slot of the header: an icon or image shown beside (or, in the
+ * small size, above) the title. Mark the element `data-slot="alert-dialog-media"`
+ * so the header's grid makes room for it. Decorative media takes
+ * `aria-hidden="true"`; the dialog's name still comes from its title.
+ */
+export const alertDialogMediaClass = (): string => 'cn-alert-dialog-media';
 
 // Pre-hydration paint fallback (see dialog.ts for the long version).
 const STYLES = `

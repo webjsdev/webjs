@@ -55,6 +55,10 @@
     @apply text-sm text-muted-foreground;
   }
 
+  .cn-alert-dialog-media {
+    @apply mb-2 inline-flex size-16 items-center justify-center rounded-md bg-muted sm:group-data-[size=default]/alert-dialog-content:row-span-2 *:[svg:not([class*='size-'])]:size-8;
+  }
+
   /* MARK: avatar */
   .cn-avatar {
     @apply size-8 overflow-hidden rounded-full data-[size=lg]:size-10 data-[size=sm]:size-6;

@@ -171,8 +171,8 @@ tracked source, the standard shadcn "you own it" pattern.
 
 | Tier | Component | Surface |
 |---|---|---|
-| 1a | `button` | `buttonClass({ variant, size })`, 6 variants × 8 sizes |
-| 1a | `badge` | `badgeClass({ variant })`, 6 variants |
+| 1a | `button` | `buttonClass({ variant, size })`, 6 variants × 8 sizes; `buttonVariants` is the same helper under shadcn's name |
+| 1a | `badge` | `badgeClass({ variant })`, 6 variants; `badgeVariants` is the same helper under shadcn's name |
 | 1a | `alert` | `alertClass({ variant })`, `alertTitleClass`, `alertDescriptionClass` |
 | 1a | `card` | `cardClass`, `cardHeaderClass`, `cardTitleClass`, `cardDescriptionClass`, `cardActionClass`, `cardContentClass`, `cardFooterClass` |
 | 1a | `input` / `textarea` / `label` | `inputClass`, `textareaClass`, `labelClass` |
@@ -198,12 +198,19 @@ tracked source, the standard shadcn "you own it" pattern.
 | 1b | `progress` | `progressClass()`, apply to native `<progress value max>`. Browser draws the bar via `::-webkit-progress-value` and `::-moz-progress-bar`. Omit `value` for the indeterminate / pulse state. |
 | 2  | `toggle-group` | `<ui-toggle-group type value variant size>` + `<ui-toggle-group-item value disabled>`. Roving tabindex (one Tab stop) with Arrow / Home / End navigation, plus `aria-pressed` per item. A `disabled` item reports `aria-disabled`, refuses activation, and is skipped by navigation and by the tab stop. |
 | 2  | `dialog` | `<ui-dialog>` + `<ui-dialog-trigger>` / `<ui-dialog-content>` / `<ui-dialog-close>`. Built on native `<dialog>.showModal()`, top-layer rendering, ::backdrop overlay, focus trap, Escape close, and focus restoration are all platform-provided. We add a scroll lock (refcounted, and shift-free for a `position: fixed` header, see invariant 5) + class helpers for `dialogHeader/Title/Description/Footer`. On open it wires `aria-labelledby` / `aria-describedby` to the `data-slot="dialog-title"` / `dialog-description` nodes (falling back to the first heading / paragraph), onto the native `<dialog>`, which is also where `role="dialog"` sits so exactly ONE dialog-family node is exposed. There is no `aria-modal`: a `showModal()`-opened native dialog is already exposed as modal by the platform. |
-| 2  | `alert-dialog` | Like dialog, `role=alertdialog` on the native `<dialog>`. Native Escape close is cancelled via the `cancel` event; no backdrop-click dismissal. `<ui-alert-dialog-action>` / `<ui-alert-dialog-cancel>`. Wires `aria-labelledby` / `aria-describedby` to its `alert-dialog-title` / `alert-dialog-description` the same way. |
+| 2  | `alert-dialog` | `alertDialogMediaClass()` for the header media slot (`data-slot="alert-dialog-media"`). Like dialog, `role=alertdialog` on the native `<dialog>`. Native Escape close is cancelled via the `cancel` event; no backdrop-click dismissal. `<ui-alert-dialog-action>` / `<ui-alert-dialog-cancel>`. Wires `aria-labelledby` / `aria-describedby` to its `alert-dialog-title` / `alert-dialog-description` the same way. |
 | 2  | `tooltip` | `<ui-tooltip delay-duration>`, hover/focus + delay. Content uses `popover="manual"` for top-layer rendering. The trigger references the tip via `aria-describedby` (APG tooltip wiring). Escape dismisses a showing tip without moving focus; a closed tip never consumes Escape. |
 | 2  | `hover-card` | `<ui-hover-card open-delay close-delay>`, hover with linger-keep-open, mirrored for focus so in-card content is Tab-reachable. Content uses `popover="manual"` for top-layer rendering. The trigger (focusable, also opens on focus) gets `aria-haspopup` / `aria-expanded` / `aria-controls`; the `role="dialog"` panel is always named (author name, then a title node, then the trigger) and Escape dismisses it, returning focus to the trigger. |
 | 2  | `tabs` | `<ui-tabs value orientation>` + List / Trigger / Content. Arrow / Home / End move focus AND selection via a roving tabindex (one Tab stop). Triggers carry `aria-controls`, panels `aria-labelledby` (cross-linked per group), the list `aria-orientation`, and an inactive panel is `inert`. |
 | 2  | `dropdown-menu` | `<ui-dropdown-menu>` + Trigger / Content / Item (variant, `type="checkbox"` / `type="radio"` + `checked` / `value`) / Label / Separator / Shortcut / Group. Content uses `popover="manual"` for top-layer rendering. ArrowUp/Down nav, Home/End, typeahead, and synthesized Enter / Space activation (a `div[role=menuitem]` gets none natively). Escape closes the menu holding focus (a submenu first) and Tab closes and moves on; both return focus to the trigger, as do item activation and an outside click that did not itself land focus. Each submenu panel is named by its sub-trigger. Menu declares `aria-orientation`, a `data-disabled` item reflects `aria-disabled`, a checkable item carries `menuitemcheckbox` / `menuitemradio` + `aria-checked`, and the trigger gets `aria-haspopup` / `aria-expanded` / `aria-controls`. Emits a cancelable `ui-item-select`. |
 | 2  | `sonner` | `<ui-sonner position>` + `toast()` / `toast.success` / `toast.error` / `toast.promise` API, with `action` and `cancel` per toast. The viewport is a persistent polite `aria-live` region so inserted toasts are announced, and it is the ONLY live root an ordinary toast resolves under (an `error` toast additionally carries `role=alert`, which is the only way to make one item assertive inside a polite viewport, so it accepts a second live root; a non-error toast carries no role of its own). Every toast carries a labelled close button so even a never-auto-dismissing `toast.loading()` can be dismissed by hand. |
+
+**shadcn's style-function names (#1666, D9).** shadcn exports a `cva`
+function per component (`buttonVariants`, `badgeVariants`, `toggleVariants`,
+`tabsListVariants`, and later `buttonGroupVariants`, `markerVariants`,
+`navigationMenuTriggerStyle`). The kit exports each under the same name, beside
+its own helper, so shadcn code ports verbatim. Each returns exactly what the
+helper returns, and like `cva` it merges a `className` option into the result.
 
 ## Accessibility
 
