@@ -395,6 +395,12 @@ suite('ui-slider', () => {
     root2.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: at(72), clientY: y, button: 0, pointerId: 1 }));
     assert.equal(inputs[1].value, '70', 'the upper thumb was nearer, and 72 snaps to the step of 5');
     assert.equal(document.activeElement, thumbs()[1], 'and takes focus');
+    // The native input would snap a raw 71 to 70 by itself, so what the
+    // element's own snap buys is no event for a move within one step.
+    let changes = 0;
+    el.addEventListener('ui-value-change', () => changes++);
+    root2.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: at(71), clientY: y, pointerId: 1 }));
+    assert.equal(changes, 0, 'a move inside one step fires nothing');
     root2.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: at(88), clientY: y, pointerId: 1 }));
     assert.equal(inputs[1].value, '90');
     assert.equal(commits.length, 0, 'no commit mid-drag');
