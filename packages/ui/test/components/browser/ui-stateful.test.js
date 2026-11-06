@@ -1251,8 +1251,13 @@ suite('ui-message-scroller', () => {
       item.innerHTML = '<div class="msg">new</div>';
       content.appendChild(item);
     };
+    // Wait for the new message to lay out first; until then the list has not
+    // grown and "at the end" is trivially true.
+    const grown = viewport.scrollHeight;
     add('n1');
+    await until(() => viewport.scrollHeight > grown);
     await until(atEnd);
+    assert.ok(viewport.scrollHeight > grown, 'the list grew');
     assert.ok(atEnd(), 'followed the new message');
     viewport.scrollTop = 0;
     viewport.dispatchEvent(new Event('scroll'));
