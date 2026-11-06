@@ -172,7 +172,7 @@ export class MessageScrollerDemo extends WebComponent({
       return html`<div data-slot="empty" class=${cn(emptyClass(), 'h-full')}>
         <div data-slot="empty-header" class=${emptyHeaderClass()}>
           <div data-slot="empty-icon" data-variant="icon" class=${emptyMediaClass({ variant: 'icon' })}>${MessageCircleDashedIcon()}</div>
-          <div data-slot="empty-title" class=${emptyTitleClass()}>Morning, shadcn!</div>
+          <div data-slot="empty-title" class=${emptyTitleClass()}>Morning, webjs!</div>
           <div data-slot="empty-description" class=${emptyDescriptionClass()}>What are we working on today? Press send to start a new conversation</div>
         </div>
       </div>`;

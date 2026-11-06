@@ -450,7 +450,7 @@ test('the home page serves shadcn\'s chat card on its empty state, with the firs
   const card = home.slice(at, home.indexOf('</message-scroller-demo>', at));
   assert.match(home.slice(at - 120, at), /\*\*:\[\.text-center\.text-xs\]:hidden/, 'inside the wrapper that hides its footnote');
   assert.match(card, /New Chat/);
-  assert.match(card, /data-slot="empty-title"[^>]*>Morning, shadcn!/, 'the empty state, before anything is sent');
+  assert.match(card, /data-slot="empty-title"[^>]*>Morning, webjs!/, 'the empty state, before anything is sent');
   assert.match(card, /data-status="ready"[^>]*>I'm building a chat for our app/, 'the first question waits in the box');
   assert.match(card, /aria-label="Reset conversation"/);
   assert.match(card, /<span class="sr-only">Send<\/span>/);
