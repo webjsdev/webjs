@@ -35,11 +35,11 @@ import { readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { renderToString } from '@webjsdev/core/server';
 import type { LayoutProps } from '@webjsdev/core';
-import Home from '#app/page.ts';
-import WhatIsWebJs from '#app/what-is-webjs/page.ts';
-import Why from '#app/why-webjs/page.ts';
+import Home from '#app/(site)/page.ts';
+import WhatIsWebJs from '#app/(site)/what-is-webjs/page.ts';
+import Why from '#app/(site)/why-webjs/page.ts';
 import ErrorBoundary from '#app/error.ts';
-import DocsLayout from '#app/docs/layout.ts';
+import DocsLayout from '#app/(site)/docs/layout.ts';
 import UiLayout from '#app/ui/layout.ts';
 import { renderPostBody } from '#modules/blog/utils/render-post.ts';
 
@@ -84,7 +84,9 @@ async function htmlOf(page: Page) {
 async function sectionPages(dir: string, base: string, layout: (p: LayoutProps) => unknown, expectSome = true): Promise<Page[]> {
   const entries = await readdir(new URL(`../../app/${dir}`, import.meta.url), { withFileTypes: true });
   const pages: Page[] = [];
-  for (const entry of entries.filter((e) => e.isDirectory() && !e.name.startsWith('['))) {
+  // Route groups (`(name)`) are skipped: they add no URL segment, so their
+  // pages are covered by the walk of the section they belong to.
+  for (const entry of entries.filter((e) => e.isDirectory() && !e.name.startsWith('[') && !e.name.startsWith('('))) {
     // A segment can be a route handler rather than a page (app/ui/registry
     // serves the JSON API the CLI fetches), and those render no markup.
     const file = new URL(`../../app/${dir}/${entry.name}/page.ts`, import.meta.url);
@@ -122,7 +124,7 @@ const PAGES: Page[] = [
     name: 'the error boundary',
     render: () => ErrorBoundary({ error: new Error('a single unbroken line of detail long enough to overflow a narrow viewport') }),
   },
-  ...await sectionPages('docs', '/docs', DocsLayout),
+  ...await sectionPages('(site)/docs', '/docs', DocsLayout),
   ...await sectionPages('ui', '/ui', UiLayout, false),
   { name: '/ui', render: async () => UiLayout({ children: await uiIntro.default() } as unknown as LayoutProps) },
   ...uiComponents.map((name) => ({

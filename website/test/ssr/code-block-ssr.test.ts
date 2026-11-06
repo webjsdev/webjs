@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 import { html } from '@webjsdev/core';
 import { renderToString } from '@webjsdev/core/server';
 import '#components/code-block.ts';
-import Routing from '#app/docs/routing/page.ts';
+import Routing from '#app/(site)/docs/routing/page.ts';
 import { ssrMarkup, BROWSER_SAMPLES } from '#test/fixtures/code-block-markup.js';
 
 /** The text inside the block's `<pre>`, tags removed, entities decoded. */

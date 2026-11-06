@@ -14,7 +14,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderToString } from '@webjsdev/core/server';
-import BrandPage from '#app/brand/page.ts';
+import BrandPage from '#app/(site)/brand/page.ts';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 

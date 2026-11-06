@@ -1,4 +1,5 @@
 import type { LayoutProps } from '@webjsdev/core';
+import SiteLayout from '#app/(site)/layout.ts';
 import { docsShell } from '#lib/ui/docs-shell.ts';
 import '#components/docs-drawer.ts';
 import '#components/code-block.ts';
@@ -60,11 +61,14 @@ export function generateMetadata(ctx: { url: string }) {
   };
 }
 
-export default async function UiLayout({ children }: LayoutProps) {
+export default async function UiLayout(props: LayoutProps) {
+  const { children } = props;
   const all = await loadRegistryIndex();
   const { tier1, tier2 } = splitByTier(all.filter((i) => i.type === 'registry:ui'));
 
-  return docsShell({
+  // Interim: /ui borrows the marketing chrome until it gets its own
+  // `ui/(chrome)` layout later in #1666.
+  return SiteLayout({ ...props, children: docsShell({
     nav: [
       {
         title: 'Getting Started',
@@ -88,5 +92,5 @@ export default async function UiLayout({ children }: LayoutProps) {
     // utilities). Pages wrap their genuinely prose regions themselves.
     contentClass: '',
     children,
-  });
+  }) });
 }

@@ -1,14 +1,18 @@
 import { html, cspNonce, asset } from '@webjsdev/core';
 import type { LayoutProps } from '@webjsdev/core';
-import '#components/theme-toggle.ts';
-import '#components/site-nav-menu.ts';
-import { DOCS_START_PATH, UI_PATH, GALLERY_URL, GH_URL, NEW_TAB } from '#lib/links.ts';
 import { THEME_STORAGE_KEY, FORCED_THEMES } from '#lib/theme.ts';
-import { siteFooter } from '#lib/ui/site-footer.ts';
-import { brandLockup } from '#lib/design/brand.ts';
 
 /**
- * Root layout for the redesigned marketing site.
+ * Root layout: the document shell every page shares.
+ *
+ * It owns only what is the same on every page: metadata, analytics, the
+ * theme bootstrap, the stylesheet and the design tokens. The visible chrome
+ * (header, footer, glow, skip link) belongs to the section layouts, the
+ * `(site)` route group for the marketing site and `ui/(chrome)` for /ui,
+ * because the two sections have different chrome and only a layout INSIDE
+ * this one's children range is replaced on a soft navigation. Keep rendering
+ * `children` with nothing around it: the shared root boundary is what keeps
+ * a navigation between the sections soft.
  *
  * Styling is Tailwind-first: chrome and structure use utility classes,
  * with the design tokens declared once in the foundation <style> below
@@ -16,9 +20,6 @@ import { brandLockup } from '#lib/design/brand.ts';
  * genuinely un-utility-expressible pieces stay as CSS: the prefers-reduced-motion
  * clamp, the fixed static glow layer, the hover-only scrollbar (`.scroll-thin`),
  * and the <details> icon swap. Everything else is Tailwind.
- *
- * Shared link config (DOCS_START_PATH / UI_PATH / GH_URL / NEW_TAB) lives in
- * lib/links.ts, imported here and by app/page.ts.
  */
 
 // The title carries the CATEGORY, because that is what people type. The old
@@ -47,16 +48,6 @@ const TITLE = 'WebJs - Full-stack web components framework, no build step';
 // in the app's own node_modules at the installed version, so an agent opens
 // the file it needs instead of recalling an API from training data.
 const DESCRIPTION = 'A full-stack JavaScript web components framework with no build step. Production-ready architecture from your very first prompt. Node 24+ or Bun.';
-
-const NAV = [
-  { label: 'Docs', href: DOCS_START_PATH, ext: false },
-  { label: 'UI', href: UI_PATH, ext: false },
-  { label: 'Blog', href: '/blog', ext: false },
-  { label: 'Compare', href: '/compare', ext: false },
-  { label: 'Changelog', href: '/changelog', ext: false },
-  { label: 'Gallery', href: GALLERY_URL, ext: true },
-  { label: 'GitHub', href: GH_URL, ext: true },
-];
 
 export function generateMetadata(ctx: { url: string }) {
   const origin = new URL(ctx.url).origin;
@@ -126,9 +117,6 @@ export function generateMetadata(ctx: { url: string }) {
   };
 }
 
-const navLink = 'text-fg-muted no-underline font-medium text-sm px-3 py-2 rounded-lg transition-colors duration-[140ms] hover:text-fg hover:bg-[var(--hover-surface)]';
-const panelLink = 'text-fg-muted no-underline font-medium text-sm px-3 py-2.5 rounded-lg hover:text-fg hover:bg-[var(--hover-surface)]';
-
 export default function RootLayout({ children }: LayoutProps) {
   const nonce = cspNonce();
   return html`
@@ -181,23 +169,9 @@ export default function RootLayout({ children }: LayoutProps) {
           if (${JSON.stringify(FORCED_THEMES)}.indexOf(t) !== -1) document.documentElement.dataset.theme = t;
         } catch (_) {}
       })();
-      // #610: the header uses position fixed (not sticky, which flickers on iOS
-      // WebKit during a client-router nav). --header-h reserves the header
-      // height, measured here so it tracks the real height, with a :root
-      // default for no-JS / first paint.
-      (function(){
-        function measure(){
-          try {
-            var bar = document.querySelector('.site-top');
-            if (!bar) return;
-            var apply = function(){ document.documentElement.style.setProperty('--header-h', bar.offsetHeight + 'px'); };
-            apply();
-            if (window.ResizeObserver) new ResizeObserver(apply).observe(bar);
-          } catch (_) {}
-        }
-        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', measure);
-        else measure();
-      })();
+      /* --header-h (#610, the fixed header's reserved height) is measured by
+         an inline script in each chrome layout, next to its own header, so it
+         rebinds when a navigation swaps the chrome. */
     </script>
 
     <link rel="stylesheet" href=${asset('/public/tailwind.css')}>
@@ -302,7 +276,7 @@ export default function RootLayout({ children }: LayoutProps) {
         *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
       }
       html, body { margin: 0; }
-      :root { --header-h: 59px; } /* #610 fixed header offset (no banner); kept exact by the script above */
+      :root { --header-h: 59px; } /* #610 fixed header offset (no banner); kept exact by the chrome layout's script */
       body {
         padding-top: var(--header-h);
         background: var(--bg); color: var(--fg);
@@ -377,36 +351,6 @@ export default function RootLayout({ children }: LayoutProps) {
       .cmd-foot copy-cmd [data-copy-text]::-webkit-scrollbar { display: none; }
     </style>
 
-    <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-accent focus:text-accent-fg focus:shadow-[var(--shadow)]">Skip to content</a>
-
-    <div class="glow-layer" aria-hidden="true"></div>
-
-    <div class="site-top fixed inset-x-0 top-0 z-20">
-    <header class="backdrop-blur-md bg-[color-mix(in_oklch,var(--color-bg)_50%,transparent)] border-b border-border">
-      <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
-        <a class="inline-flex items-center no-underline text-fg shrink-0 transition-opacity duration-150 hover:opacity-80" href="/" aria-label="WebJs home">
-          ${brandLockup('hdr', { height: 26 })}
-        </a>
-
-        <nav class="hidden md:flex items-center gap-0.5 justify-center flex-1 mx-4" aria-label="Primary">
-          ${NAV.map(n => html`<a class=${navLink} href=${n.href} target=${n.ext ? '_blank' : '_self'} rel=${n.ext ? 'noopener noreferrer' : ''}>${n.label}${n.ext ? NEW_TAB : ''}</a>`)}
-        </nav>
-
-        <div class="flex items-center gap-2.5 shrink-0">
-          <theme-toggle></theme-toggle>
-
-          <site-nav-menu class="md:hidden" label="Toggle navigation">
-            ${NAV.map(n => html`<a class=${panelLink} href=${n.href} target=${n.ext ? '_blank' : '_self'} rel=${n.ext ? 'noopener noreferrer' : ''}>${n.label}${n.ext ? NEW_TAB : ''}</a>`)}
-          </site-nav-menu>
-        </div>
-      </div>
-    </header>
-    </div>
-
-    <div class="relative z-1">
-      ${children}
-
-      ${siteFooter()}
-    </div>
+    ${children}
   `;
 }

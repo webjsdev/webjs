@@ -71,21 +71,21 @@ COPY website   ./website
 # `npm run build:dist --workspace=@webjsdev/core` line, so the
 # scripts tree has to be in the image before that step runs.
 COPY scripts   ./scripts
-# website/app/changelog/page.ts reads ../../../changelog/<pkg>/*.md at
+# website/app/(site)/changelog/page.ts reads ../../../changelog/<pkg>/*.md at
 # SSR time. Without copying the changelog tree into the image, the
 # deployed page renders "No entries yet."
 COPY changelog ./changelog
-# website/app/blog/[slug]/page.ts reads ../../../../blog/<slug>.md at
+# website/app/(site)/blog/[slug]/page.ts reads ../../../../blog/<slug>.md at
 # SSR time (via modules/blog/queries/list-posts.server.ts). Same
 # reason as changelog: without the tree in the image, /blog renders
 # "No posts yet."
 COPY blog ./blog
-# website/app/compare/[slug]/page.ts and app/sitemap.ts read
+# website/app/(site)/compare/[slug]/page.ts and app/sitemap.ts read
 # ../../../../compare/<slug>.md at SSR time (via
 # modules/compare/queries/*.server.ts). Same reason as blog: without the
 # tree in the image, /compare renders "No comparisons yet."
 COPY compare ./compare
-# website/app/articles/[slug]/page.ts and app/sitemap.ts read
+# website/app/(site)/articles/[slug]/page.ts and app/sitemap.ts read
 # ../../../../articles/<slug>.md at SSR time (via
 # modules/articles/queries/*.server.ts). Same reason as compare: without
 # the tree in the image, /articles renders "No articles yet."

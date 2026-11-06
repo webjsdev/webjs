@@ -10,7 +10,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToString } from '@webjsdev/core/server';
 import { renderPostBody } from '#modules/blog/utils/render-post.ts';
-import ComparePage from '#app/compare/[slug]/page.ts';
+import ComparePage from '#app/(site)/compare/[slug]/page.ts';
 
 test('external markdown links open in a new tab with the a11y cue; internal links do not', () => {
   const external = renderPostBody('See the [Remix 3 beta](https://remix.run/blog/remix-3-beta-preview).');

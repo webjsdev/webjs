@@ -13,12 +13,24 @@ This file only covers what's specific to the landing site.
 ```
 website/
   app/
-    layout.ts          root layout (head, OG/Twitter metadata,
-                       header/footer chrome, Tailwind tokens)
-    page.ts            /  → the entire one-page landing site.
+    layout.ts          root layout, the DOCUMENT SHELL only (head, OG/Twitter
+                       metadata, analytics, the theme bootstrap, Tailwind
+                       tokens). It renders `children` bare and owns no
+                       visible chrome, see "Two sections, two chromes" below
+    not-found.ts       404 for an URL that matches no route (rendered with no
+                       layouts at all, so it stays importable on its own)
+    error.ts           last-resort 500 boundary
+    (site)/            the marketing section, a ROUTE GROUP (the folder is not
+                       in the URL). Every route below this line through
+                       founder-resources lives in here
+      layout.ts        the marketing chrome: skip link, glow layer, the fixed
+                       header with its --header-h script, footer
+      not-found.ts error.ts
+                       section boundaries, rendered inside (site)/layout.ts so
+                       a thrown notFound() or a 500 keeps the chrome
+      page.ts          /  → the entire one-page landing site.
                            Hero, features grid, code samples, and agent
-                           badges all live here. The header and footer
-                           chrome are in layout.ts (shared by every page).
+                           badges all live here.
     changelog/page.ts  /changelog. Reads ../../../changelog/<pkg>/*.md
                        at SSR time and renders the unified release
                        feed. The deployment image must include the
@@ -106,7 +118,7 @@ website/
                        returning `html`; nothing here registers a custom element
       page-header.ts   hub eyebrow + title + lede
       cta-panel.ts     the closing call to action
-      site-footer.ts   the footer, rendered by the root layout on every page
+      site-footer.ts   the footer, rendered by the (site) chrome layout
       docs-shell.ts    the shell stylesheet (.prose-docs typography, the sticky
                        desktop column) plus the function that turns a nav tree
                        into markup and slots it into <docs-drawer>. SHARED by
@@ -281,13 +293,39 @@ is split by editorial intent, which is what decides where a piece goes:
   live content queries, so a new article, comparison, or post needs no
   edit to those files.
 
+## Two sections, two chromes
+
+The site has two sections with different headers and footers: the marketing
+site and the component library under `/ui` (#1666). The chrome therefore
+belongs to a SECTION layout, never to `app/layout.ts`:
+
+- `app/(site)/layout.ts` owns the marketing chrome.
+- `app/ui/layout.ts` owns the `/ui` section.
+
+Do not make the root layout branch on the pathname instead. On a GET soft
+navigation the client sends `X-Webjs-Have`, the server short-circuits at the
+shared root boundary and never calls the root layout again, so a visitor going
+from `/` to `/ui` would keep the marketing header. A group layout sits INSIDE
+the root's children range, which is the range a navigation between the two
+sections replaces, so the chrome swaps with no full page load. That is also why
+the root layout must keep rendering `${children}` with nothing around it.
+
+Anything that reads a marketing route from the filesystem names the group
+folder: `lib/docs-llms.server.ts` walks `app/(site)/docs`, and the tests import
+`#app/(site)/...`. A test asserting on chrome renders both layouts through
+`test/helpers/site-shell.ts`.
+
 ## Header
 
-`app/layout.ts` renders the site header on every page. It is
+`app/(site)/layout.ts` renders the marketing header. It is
 `position: fixed`, NOT sticky: a sticky header flickers on iOS WebKit during
 a client-router navigation (#610), so the height is reserved on the content
-through a `--header-h` offset, measured by the inline script in the layout
-head and defaulted on `:root` for no-JS and first paint.
+through a `--header-h` offset, defaulted on `:root` for no-JS and first paint
+and kept exact by an inline script placed right after the header. The script
+lives in the chrome layout rather than the root layout's head because the
+header is swapped on a navigation between sections: the router re-runs a
+script inside the swapped range, so it rebinds its ResizeObserver to the new
+header (a once-at-boot observer would keep watching the detached one).
 
 There is no announcement banner. One used to sit above the header, and
 `--header-h` is why its removal is not free: re-adding a strip means the
@@ -301,14 +339,18 @@ element lays out against the initial containing block where no padding can
 reach it. `lib/scroll-lock.ts` publishes that measured width for it to opt into
 (#1144, #1147).
 
-## What stays inline script in the root layout
+## What stays inline script in the layouts
 
 Only two things, and both are genuinely boot work rather than interactivity:
 
-- the **theme bootstrap**, which must run before first paint or a reader who
-  chose dark sees the light palette flash. It cannot import, so it interpolates
-  the storage key from `lib/theme.ts`.
-- the **`--header-h` measurement**, which backs the fixed-header offset above.
+- the **theme bootstrap**, in the root layout's head, which must run before
+  first paint or a reader who chose dark sees the light palette flash. It
+  cannot import, so it interpolates the storage key from `lib/theme.ts`.
+- the **`--header-h` measurement**, in each chrome layout next to its header,
+  which backs the fixed-header offset above. It is written inline in the
+  layout rather than in a `lib/` helper on purpose: a layout's template is SSR
+  output, while the same text in a `lib/` module reads as client work to the
+  elision analyser and ships the layout to the browser.
 
 Everything else that used to live there is a component now. The drawer and the
 header menu were once one delegated click listener plus one delegated keydown
