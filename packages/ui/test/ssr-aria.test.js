@@ -338,3 +338,15 @@ test('ui-questionnaire: without JavaScript it is one plain form, every question 
   assert.match(out, /data-slot="questionnaire-previous"[^>]*hidden/, 'Previous is hidden');
   assert.doesNotMatch(out, /data-slot="questionnaire-submit"[^>]*hidden/, 'Submit is offered');
 });
+
+test('ui-carousel: the served slides scroll and snap with JavaScript off, each one a labelled slide', { skip }, async () => {
+  const out = await ssr(
+    ['carousel.ts'],
+    (html) => html`<ui-carousel aria-label="Featured"><ui-carousel-content><ui-carousel-item class="basis-1/2">A</ui-carousel-item><ui-carousel-item>B</ui-carousel-item></ui-carousel-content><ui-carousel-next></ui-carousel-next></ui-carousel>`,
+  );
+  assert.match(out, /role="region"[^>]*aria-roledescription="carousel"[^>]*aria-label="Featured"/);
+  assert.match(out, /data-slot="carousel-content"[^>]*class="[^"]*snap-x snap-mandatory/, 'a native scroll-snap strip');
+  assert.match(out, /<ui-carousel-item class="[^"]*basis-1\/2[^"]*"[^>]*role="group"[^>]*aria-roledescription="slide"/, 'a slide carries its own classes, keeping the author\'s, and its role');
+  assert.match(out, /data-carousel-snap[^>]*class="absolute size-px snap-start"/, 'and snaps on its content, through a marker with a size');
+  assert.match(out, /<span class="sr-only">Next slide<\/span>/);
+});

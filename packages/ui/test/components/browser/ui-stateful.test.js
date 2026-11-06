@@ -896,3 +896,123 @@ suite('ui-questionnaire', () => {
     root.remove();
   });
 });
+
+suite('ui-carousel', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/carousel.ts`);
+  });
+
+  // This suite loads no stylesheet; these are the rules the classes give a
+  // carousel, which scrolling and snapping need to exist at all.
+  const LAYOUT = html`<style>
+    [data-slot="carousel-content"] { overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+    [data-slot="carousel-content"] > div { display: flex; margin-inline-start: -16px; }
+    ui-carousel-item { flex: 0 0 100%; min-width: 0; padding-inline-start: 16px; display: block; position: relative; box-sizing: border-box; }
+    [data-carousel-snap] { position: absolute; width: 1px; height: 1px; scroll-snap-align: start; }
+    .slide { height: 80px; }
+  </style>`;
+  const carousel = (attrs = '') => html`${LAYOUT}
+    <div style="width: 300px; margin: 0 60px">
+      <ui-carousel aria-label="Featured" ?loop=${attrs === 'loop'}>
+        <ui-carousel-content>
+          <ui-carousel-item><div class="slide">1</div></ui-carousel-item>
+          <ui-carousel-item><div class="slide">2</div></ui-carousel-item>
+          <ui-carousel-item class="authored"><div class="slide">3</div></ui-carousel-item>
+        </ui-carousel-content>
+        <ui-carousel-previous></ui-carousel-previous>
+        <ui-carousel-next></ui-carousel-next>
+      </ui-carousel>
+    </div>`;
+  const parts = (root) => {
+    const el = root.querySelector('ui-carousel');
+    const scroller = el.querySelector('[data-slot="carousel-content"]');
+    const items = [...el.querySelectorAll('ui-carousel-item')];
+    const prev = el.querySelector('[data-slot="carousel-previous"]');
+    const next = el.querySelector('[data-slot="carousel-next"]');
+    return { el, scroller, items, prev, next };
+  };
+  const until = async (fn, ms = 2000) => {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      if (fn()) return true;
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    return fn();
+  };
+
+  test('a named region of slides, each a group, with the buttons named and disabled at the start', async () => {
+    const root = await mount(carousel());
+    await tick();
+    const { el, items, prev, next } = parts(root);
+    const region = el.querySelector('[data-slot="carousel"]');
+    assert.equal(region.getAttribute('role'), 'region');
+    assert.equal(region.getAttribute('aria-roledescription'), 'carousel');
+    assert.equal(region.getAttribute('aria-label'), 'Featured');
+    for (const item of items) {
+      assert.equal(item.getAttribute('role'), 'group');
+      assert.equal(item.getAttribute('aria-roledescription'), 'slide');
+    }
+    assert.ok(items[2].classList.contains('authored') && items[2].classList.contains('basis-full'), 'the author\'s classes are kept');
+    assert.equal(prev.textContent.trim(), 'Previous slide');
+    await until(() => prev.disabled && !next.disabled);
+    assert.ok(prev.disabled, 'nothing before the first slide');
+    assert.equal(next.disabled, false);
+    root.remove();
+  });
+
+  test('Next steps one slide, resting where the first one does, and reports it', async () => {
+    const root = await mount(carousel());
+    await tick();
+    const { el, scroller, items, prev, next } = parts(root);
+    const changes = [];
+    el.addEventListener('ui-slide-change', (e) => changes.push(e.detail.index));
+    const restLeft = items[0].querySelector('[data-carousel-snap]').getBoundingClientRect().left;
+    await until(() => !next.disabled);
+    next.click();
+    const mark = () => items[1].querySelector('[data-carousel-snap]').getBoundingClientRect().left;
+    await until(() => Math.abs(mark() - restLeft) <= 1);
+    assert.equal(el.selectedIndex, 1);
+    await until(() => changes.length > 0);
+    assert.deepEqual(changes.slice(-1), [1]);
+    await until(() => !prev.disabled);
+    assert.equal(prev.disabled, false);
+    const snapLeft = items[1].querySelector('[data-carousel-snap]').getBoundingClientRect().left;
+    assert.ok(Math.abs(snapLeft - restLeft) <= 1, `the slide rests where the first did (${snapLeft} vs ${restLeft})`);
+    void scroller;
+    root.remove();
+  });
+
+  test('the arrow keys step while focus is inside, and Next is disabled at the end', async () => {
+    const root = await mount(carousel());
+    await tick();
+    const { el, next } = parts(root);
+    const region = el.querySelector('[data-slot="carousel"]');
+    await until(() => !next.disabled);
+    next.focus();
+    region.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    await until(() => el.selectedIndex === 1);
+    region.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    await until(() => el.selectedIndex === 2);
+    assert.equal(el.selectedIndex, 2);
+    await until(() => next.disabled);
+    assert.ok(next.disabled, 'nothing after the last slide');
+    region.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    await until(() => el.selectedIndex === 1);
+    assert.equal(el.selectedIndex, 1);
+    root.remove();
+  });
+
+  test('loop wraps from the last slide to the first and keeps both buttons enabled', async () => {
+    const root = await mount(carousel('loop'));
+    await tick();
+    const { el, prev, next } = parts(root);
+    await tick();
+    assert.equal(prev.disabled, false, 'loop never runs out');
+    el.scrollTo(2);
+    await until(() => el.selectedIndex === 2);
+    next.click();
+    await until(() => el.selectedIndex === 0);
+    assert.equal(el.selectedIndex, 0);
+    root.remove();
+  });
+});

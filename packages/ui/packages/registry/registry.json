@@ -236,6 +236,22 @@
       ]
     },
     {
+      "name": "carousel",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "button"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/carousel.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
       "name": "checkbox",
       "type": "registry:ui",
       "dependencies": [

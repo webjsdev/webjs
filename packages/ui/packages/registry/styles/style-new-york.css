@@ -1365,4 +1365,13 @@
   .cn-questionnaire-actions {
     @apply gap-2 sm:min-h-9;
   }
+
+  /* MARK: carousel */
+  .cn-carousel-previous {
+    @apply size-8 rounded-full;
+  }
+
+  .cn-carousel-next {
+    @apply size-8 rounded-full;
+  }
 }
