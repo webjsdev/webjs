@@ -794,6 +794,26 @@
       ]
     },
     {
+      "name": "sidebar",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "button",
+        "input",
+        "separator",
+        "skeleton",
+        "sheet"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/sidebar.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
       "name": "skeleton",
       "type": "registry:ui",
       "registryDependencies": [

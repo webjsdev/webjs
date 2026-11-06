@@ -394,3 +394,17 @@ test('ui-code-block-copy-button: the served button is named Copy, with an empty 
   assert.match(out, /<button[\s\S]*?aria-label="Copy"/);
   assert.match(out, /<span aria-live="polite" class="sr-only"><\/span>/);
 });
+
+test('ui-sidebar: the served sidebar carries its state on its own host, so the inset beside it can style off it', { skip }, async () => {
+  const out = await ssr(
+    ['sidebar.ts'],
+    (html) => html`<ui-sidebar-provider default-open="false"><ui-sidebar collapsible="icon" variant="inset"><div>menu</div></ui-sidebar><ui-sidebar-inset class="authored"><ui-sidebar-trigger></ui-sidebar-trigger></ui-sidebar-inset></ui-sidebar-provider>`,
+  );
+  assert.match(out, /data-slot="sidebar-wrapper"\s+style="--sidebar-width: 16rem; --sidebar-width-icon: 3rem"/, 'the wrapper sets the widths');
+  const sidebar = (out.match(/<ui-sidebar (?:\s*[\w-]+(?:="[^"]*")?)*/) ?? [''])[0];
+  for (const attr of ['class="group peer hidden text-sidebar-foreground md:block"', 'data-state="collapsed"', 'data-collapsible="icon"', 'data-variant="inset"', 'data-side="left"']) {
+    assert.ok(sidebar.includes(attr), `the sidebar host carries ${attr}`);
+  }
+  assert.match(out, /<ui-sidebar-inset class="[^"]*authored[^"]*"[^>]*role="main"/, 'the inset is the main landmark, keeping the author\'s classes');
+  assert.match(out, /<span class="sr-only">Toggle Sidebar<\/span>/);
+});

@@ -1328,3 +1328,100 @@ npm run build</code></pre></div>`);
     root.remove();
   });
 });
+
+suite('ui-sidebar', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/sidebar.ts`);
+  });
+
+  const layout = (defaultOpen = 'true') => html`
+    <ui-sidebar-provider default-open=${defaultOpen}>
+      <ui-sidebar collapsible="icon"><nav aria-label="Main"><a href="#inbox">Inbox</a></nav><ui-sidebar-rail></ui-sidebar-rail></ui-sidebar>
+      <ui-sidebar-inset><ui-sidebar-trigger></ui-sidebar-trigger></ui-sidebar-inset>
+    </ui-sidebar-provider>`;
+  const parts = (root) => {
+    const provider = root.querySelector('ui-sidebar-provider');
+    const sidebar = root.querySelector('ui-sidebar');
+    const trigger = root.querySelector('[data-slot="sidebar-trigger"]');
+    const rail = root.querySelector('[data-slot="sidebar-rail"]');
+    return { provider, sidebar, trigger, rail };
+  };
+
+  test('the trigger collapses the sidebar to icons, keeps the choice in the cookie, and reports it', async () => {
+    const root = await mount(layout());
+    await tick();
+    const { provider, sidebar, trigger } = parts(root);
+    assert.equal(sidebar.getAttribute('data-state'), 'expanded');
+    assert.equal(sidebar.getAttribute('data-collapsible'), '');
+    const seen = [];
+    provider.addEventListener('ui-open-change', (e) => seen.push(e.detail.open));
+    trigger.click();
+    await tick();
+    assert.equal(sidebar.getAttribute('data-state'), 'collapsed');
+    assert.equal(sidebar.getAttribute('data-collapsible'), 'icon');
+    assert.deepEqual(seen, [false]);
+    assert.ok(document.cookie.includes('sidebar_state=false'), 'the cookie remembers it');
+    trigger.click();
+    await tick();
+    assert.equal(sidebar.getAttribute('data-state'), 'expanded');
+    root.remove();
+  });
+
+  test('Ctrl+B and the rail toggle it too', async () => {
+    const root = await mount(layout());
+    await tick();
+    const { sidebar, rail } = parts(root);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true, bubbles: true, cancelable: true }));
+    await tick();
+    assert.equal(sidebar.getAttribute('data-state'), 'collapsed');
+    rail.click();
+    await tick();
+    assert.equal(sidebar.getAttribute('data-state'), 'expanded');
+    assert.equal(rail.getAttribute('aria-label'), 'Toggle Sidebar');
+    root.remove();
+  });
+
+  test('default-open="false" starts collapsed', async () => {
+    const root = await mount(layout('false'));
+    await tick();
+    const { sidebar } = parts(root);
+    assert.equal(sidebar.getAttribute('data-state'), 'collapsed');
+    root.remove();
+  });
+
+  test('the sidebar is the peer the inset follows, and the inset is the main landmark', async () => {
+    const root = await mount(layout());
+    await tick();
+    const { sidebar } = parts(root);
+    const inset = root.querySelector('ui-sidebar-inset');
+    assert.ok(sidebar.classList.contains('peer') && sidebar.classList.contains('group'));
+    let next = sidebar.nextElementSibling;
+    while (next && next !== inset) next = next.nextElementSibling;
+    assert.equal(next, inset, 'the inset follows the sidebar as a sibling, so peer-data-* reaches it');
+    assert.equal(inset.getAttribute('role'), 'main');
+    root.remove();
+  });
+
+  test('on a phone it opens as a modal sheet named Sidebar, holding the same content', async () => {
+    const root = await mount(layout());
+    await tick();
+    const { provider, sidebar, trigger } = parts(root);
+    provider.isMobile = true;
+    await tick();
+    await tick();
+    const dialog = sidebar.querySelector('dialog');
+    assert.ok(dialog, 'a sheet is drawn');
+    assert.ok(sidebar.querySelector('a[href="#inbox"]'), 'with the authored content inside');
+    trigger.click();
+    await tick();
+    await tick();
+    assert.ok(dialog.open, 'the trigger opens it');
+    assert.equal(document.getElementById(dialog.getAttribute('aria-labelledby'))?.textContent, 'Sidebar');
+    dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+    dialog.close();
+    await tick();
+    await tick();
+    assert.equal(provider.openMobile, false, 'closing the sheet closes the phone sidebar');
+    root.remove();
+  });
+});
