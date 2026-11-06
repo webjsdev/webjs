@@ -1379,4 +1379,9 @@
   .cn-resizable-handle-icon {
     @apply h-4 w-3 items-center justify-center rounded-xs border bg-border;
   }
+
+  /* MARK: message-scroller */
+  .cn-message-scroller-content {
+    @apply gap-6;
+  }
 }

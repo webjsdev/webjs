@@ -1162,3 +1162,121 @@ suite('ui-resizable', () => {
     root.remove();
   });
 });
+
+suite('ui-message-scroller', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/message-scroller.ts`);
+  });
+
+  // This suite loads no stylesheet; the viewport needs a height and a scroll.
+  const LAYOUT = html`<style>
+    [data-slot="message-scroller"] { position: relative; height: 200px; display: flex; flex-direction: column; }
+    [data-slot="message-scroller-viewport"] { height: 200px; overflow-y: auto; }
+    [data-slot="message-scroller-viewport"][data-pending-scroll] { visibility: hidden; }
+    .msg { height: 60px; }
+  </style>`;
+  const messages = (n) => Array.from({ length: n }, (_, i) => html`<ui-message-scroller-item message-id=${`m${i + 1}`} ?scroll-anchor=${i === 2}><div class="msg">Message ${i + 1}</div></ui-message-scroller-item>`);
+  const scroller = (attrs = {}) => html`${LAYOUT}
+    <ui-message-scroller ?auto-scroll=${!!attrs.auto} default-scroll-position=${attrs.pos ?? 'end'}>
+      <ui-message-scroller-viewport>
+        <ui-message-scroller-content aria-label="Conversation">${messages(attrs.n ?? 8)}</ui-message-scroller-content>
+      </ui-message-scroller-viewport>
+      <ui-message-scroller-button></ui-message-scroller-button>
+    </ui-message-scroller>`;
+  const parts = (root) => {
+    const el = root.querySelector('ui-message-scroller');
+    const viewport = el.querySelector('[data-slot="message-scroller-viewport"]');
+    const button = el.querySelector('[data-slot="message-scroller-button"]');
+    const atEnd = () => viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 2;
+    return { el, viewport, button, atEnd };
+  };
+  const until = async (fn, ms = 2000) => {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      if (fn()) return true;
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    return fn();
+  };
+
+  test('it opens at the newest message and only then shows the viewport', async () => {
+    const root = await mount(scroller());
+    await tick();
+    const { viewport, button, atEnd } = parts(root);
+    await until(() => !viewport.hasAttribute('data-pending-scroll'));
+    assert.equal(viewport.hasAttribute('data-pending-scroll'), false, 'revealed once placed');
+    assert.ok(atEnd(), 'at the end');
+    assert.equal(button.getAttribute('data-active'), 'false', 'nothing further to go');
+    assert.equal(button.tabIndex, -1);
+    const log = root.querySelector('[role="log"]');
+    assert.equal(log.getAttribute('aria-relevant'), 'additions');
+    assert.equal(log.getAttribute('aria-label'), 'Conversation');
+    root.remove();
+  });
+
+  test('default-scroll-position="start" opens at the top, and the button takes the reader to the end', async () => {
+    const root = await mount(scroller({ pos: 'start' }));
+    await tick();
+    const { viewport, button, atEnd } = parts(root);
+    await until(() => !viewport.hasAttribute('data-pending-scroll'));
+    assert.equal(viewport.scrollTop, 0);
+    await until(() => button.getAttribute('data-active') === 'true');
+    assert.equal(button.getAttribute('data-active'), 'true');
+    assert.equal(button.textContent.trim(), 'Scroll to end');
+    button.click();
+    await until(atEnd);
+    assert.ok(atEnd());
+    root.remove();
+  });
+
+  test('last-anchor opens with the last anchored message at the top', async () => {
+    const root = await mount(scroller({ pos: 'last-anchor' }));
+    await tick();
+    const { viewport } = parts(root);
+    await until(() => !viewport.hasAttribute('data-pending-scroll'));
+    const anchor = root.querySelector('ui-message-scroller-item[message-id="m3"]');
+    assert.ok(Math.abs(anchor.getBoundingClientRect().top - viewport.getBoundingClientRect().top) <= 1);
+    root.remove();
+  });
+
+  test('auto-scroll follows a new message at the end, and not once the reader has scrolled up', async () => {
+    const root = await mount(scroller({ auto: true }));
+    await tick();
+    const { viewport, atEnd } = parts(root);
+    await until(() => !viewport.hasAttribute('data-pending-scroll'));
+    const content = root.querySelector('[data-slot="message-scroller-content"]');
+    const add = (id) => {
+      const item = document.createElement('ui-message-scroller-item');
+      item.setAttribute('message-id', id);
+      item.innerHTML = '<div class="msg">new</div>';
+      content.appendChild(item);
+    };
+    add('n1');
+    await until(atEnd);
+    assert.ok(atEnd(), 'followed the new message');
+    viewport.scrollTop = 0;
+    viewport.dispatchEvent(new Event('scroll'));
+    await tick();
+    add('n2');
+    await tick();
+    await tick();
+    assert.equal(viewport.scrollTop, 0, 'left the reader where they were');
+    root.remove();
+  });
+
+  test('scrollToMessage brings a message to the top, and the visible messages are reported', async () => {
+    const root = await mount(scroller({ pos: 'start' }));
+    await tick();
+    const { el, viewport } = parts(root);
+    await until(() => !viewport.hasAttribute('data-pending-scroll'));
+    await until(() => el.visibleMessageIds.length > 0);
+    assert.ok(el.visibleMessageIds.includes('m1'));
+    el.scrollToMessage('m5', { behavior: 'auto' });
+    const m5 = root.querySelector('ui-message-scroller-item[message-id="m5"]');
+    await until(() => Math.abs(m5.getBoundingClientRect().top - viewport.getBoundingClientRect().top) <= 1);
+    assert.ok(Math.abs(m5.getBoundingClientRect().top - viewport.getBoundingClientRect().top) <= 1);
+    await until(() => el.visibleMessageIds.includes('m5') && !el.visibleMessageIds.includes('m1'));
+    assert.ok(el.visibleMessageIds.includes('m5'));
+    root.remove();
+  });
+});
