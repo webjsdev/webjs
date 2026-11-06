@@ -4,7 +4,7 @@
  * A TemplateResult is an isomorphic description of HTML: the static string
  * pieces plus the dynamic values. Server and client renderers both consume it.
  *
- * @typedef {{ _$webjs: 'template', strings: TemplateStringsArray | string[], values: unknown[] }} TemplateResult
+ * @typedef {{ _$webjs: 'template', strings: TemplateStringsArray | string[], values: unknown[], svg?: boolean }} TemplateResult
  *
  * @param {TemplateStringsArray | string[]} strings
  * @param {...unknown} values
@@ -12,6 +12,27 @@
  */
 export function html(strings, ...values) {
   return { _$webjs: 'template', strings, values };
+}
+
+/**
+ * Tagged template literal for an SVG FRAGMENT, lit's `svg` tag.
+ *
+ * Use it for markup that sits INSIDE an `<svg>` element but is built in its
+ * own template (a `<rect>` per data point, a `<path>` a helper returns).
+ * An `html` template is parsed as HTML on the client, so a `<rect>` there
+ * becomes an HTML element and never paints. An `svg` template is parsed
+ * inside an `<svg>` wrapper, so its elements are SVG elements. A whole
+ * `<svg>` element still belongs in `html`.
+ *
+ * The server renders it exactly like `html` (markup is text there), so the
+ * two differ only in how the client parses the static strings.
+ *
+ * @param {TemplateStringsArray | string[]} strings
+ * @param {...unknown} values
+ * @returns {TemplateResult}
+ */
+export function svg(strings, ...values) {
+  return { _$webjs: 'template', strings, values, svg: true };
 }
 
 /**

@@ -364,6 +364,26 @@ class ThemedCard extends WebComponent({}) {
 
 `subscribe: true` re-renders the consumer on every provider change; omit it for a one-shot read. A component can also fire a `ContextRequestEvent` to pull a value imperatively.
 
+## SVG fragments: the `svg` tag
+
+A template is parsed as HTML on the client, so markup that belongs inside an
+`<svg>` but is built in its own template comes out as HTML elements and never
+paints. That is any fragment whose root is an SVG child: a `<rect>` per data
+point, a helper that returns a `<path>`, a `<g>` of labels. Write those with
+`svg` (lit's tag, from `@webjsdev/core`) and keep the outer `<svg>` in `html`:
+
+```ts
+import { html, svg } from '@webjsdev/core';
+
+const bar = (v: number, i: number) => svg`<rect x=${i * 12} width="10" height=${v}></rect>`;
+html`<svg viewBox="0 0 120 100">${values.map(bar)}</svg>`;
+```
+
+Every hole kind works in an `svg` fragment (`@event`, `.prop`, `?bool`,
+attributes, children). The server renders `svg` and `html` identically, so a
+first paint looks right either way; the `html` mistake shows only after the
+component re-renders in the browser.
+
 ## Directives (lit-html parity)
 
 Import from `@webjsdev/core/directives`. Everything a `class`/`style`/conditional needs is plain JS (`classMap` is `class=${cond ? 'a' : 'b'}`, `when` is a ternary, `map` is `.map`); reach for a directive only for the jobs below.

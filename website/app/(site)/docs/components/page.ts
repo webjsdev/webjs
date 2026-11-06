@@ -714,6 +714,14 @@ render() {
 
     <p>During SSR, <code>?disabled=\${true}</code> emits <code>disabled=""</code> and <code>?disabled=\${false}</code> emits nothing, matching how the browser interprets boolean attributes.</p>
 
+    <h3>SVG Fragments: <code>svg\`...\`</code></h3>
+    <p>A template is parsed as HTML in the browser, so markup that belongs inside an <code>&lt;svg&gt;</code> but is built in its own template (a <code>&lt;rect&gt;</code> per data point, a helper returning a <code>&lt;path&gt;</code>) comes out as HTML elements and never paints. Write those fragments with the <code>svg</code> tag from <code>@webjsdev/core</code>, the same tag Lit has, and keep the outer <code>&lt;svg&gt;</code> element in <code>html</code>. Every binding above works inside it. The server renders the two tags identically, so the <code>html</code> mistake shows only after a re-render in the browser.</p>
+
+    <code-block>import { html, svg } from '@webjsdev/core';
+
+const bar = (v, i) =&gt; svg\`&lt;rect x=\${i * 12} width="10" height=\${v}&gt;&lt;/rect&gt;\`;
+html\`&lt;svg viewBox="0 0 120 100"&gt;\${values.map(bar)}&lt;/svg&gt;\`</code-block>
+
     <h2>Class.register('tag')</h2>
     <p>Register the component with <code>Class.register('tag')</code> at the bottom of the file:</p>
 

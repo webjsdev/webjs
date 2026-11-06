@@ -268,7 +268,7 @@ The bare `@webjsdev/core` specifier resolves to a BROWSER bundle dropping server
 
 | Export | Purpose |
 |---|---|
-| `html` / `css` | Tagged template literals. `css` goes in `static styles`. |
+| `html` / `css` / `svg` | Tagged template literals. `css` goes in `static styles`. `svg` (lit's tag) is for a fragment that sits INSIDE an `<svg>` element but is built in its own template (a `<rect>` per data point, a helper returning a `<path>`): the client parses an `html` template as HTML, so a `<rect>` there never paints. A whole `<svg>` element stays in `html`. The server renders both alike. |
 | `WebComponent` | Base class for interactive components. Called as `WebComponent({ ... })` it returns a typed base declaring reactive properties. |
 | `prop(type?, opts?)` | Declares one reactive property inside the `WebComponent({ ... })` factory with options (`reflect`, `state`, `attribute`, `default`, `converter`, `hasChanged`) and a narrowable TS type (`prop<Student>(Object)`). |
 | `render(v, el)` | Client-side render into a DOM element. |

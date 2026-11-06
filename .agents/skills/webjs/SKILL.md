@@ -155,7 +155,7 @@ Find the right export fast. Load the linked reference for full examples.
 
 ### `@webjsdev/core` (browser + isomorphic)
 
-- `html` / `css` tagged templates. `WebComponent({ ... })` base-class factory; `prop(type?, opts?)` declares one reactive property. `Class.register('tag')` binds the tag.
+- `html` / `css` tagged templates, plus `svg` for a fragment rendered INSIDE an `<svg>` (a `<rect>` or `<path>` built in its own template; an `html` one would parse as HTML on the client and never paint). `WebComponent({ ... })` base-class factory; `prop(type?, opts?)` declares one reactive property. `Class.register('tag')` binds the tag.
 - `signal` / `computed` reactive state, `effect(fn)` client-only reaction (returns a disposer), `batch(fn)` coalesced writes; `render(v, el)` client render.
 - `notFound()` / `redirect(url[, status])` control-flow throws (page/layout/action only, NOT `route.ts`). `forbidden()` / `unauthorized()` render the nearest boundary.
 - `Suspense({fallback, children})` page-level streaming; `<webjs-suspense>` component-level streaming.
