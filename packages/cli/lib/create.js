@@ -1337,6 +1337,17 @@ export type ActionResult<T> =
 
 ${uiThemeRaw}
 
+/* A navbar pinned from a breakpoint up (md:fixed md:inset-x-0 md:top-0)
+   reserves its height from that breakpoint. @variant resolves each breakpoint
+   from this app's theme, so a customized --breakpoint-* stays in step; a
+   breakpoint you add under a new name needs its own line. The plain
+   \`fixed\` case lives beside the token in app/layout.ts. */
+body:has(> header[class~="sm:fixed"]) { @variant sm { padding-top: var(--header-h); } }
+body:has(> header[class~="md:fixed"]) { @variant md { padding-top: var(--header-h); } }
+body:has(> header[class~="lg:fixed"]) { @variant lg { padding-top: var(--header-h); } }
+body:has(> header[class~="xl:fixed"]) { @variant xl { padding-top: var(--header-h); } }
+body:has(> header[class~="2xl:fixed"]) { @variant 2xl { padding-top: var(--header-h); } }
+
 /* App @theme mappings. The token VALUES live on :root in app/layout.ts (plain
    CSS custom properties, so they resolve with JavaScript disabled); these
    @theme inline maps turn them into utilities (bg-primary, text-display, ...). */
@@ -1514,12 +1525,10 @@ export default function RootLayout({ children }: LayoutProps) {
         -moz-osx-font-smoothing: grayscale;
       }
       /* A fixed header leaves normal flow, so reserve its height. Keyed on the
-         class, so pinning the navbar below is a one-class edit, and pinning it
-         only from a breakpoint up (md:fixed) reserves the space from there. */
+         class, so pinning the navbar below is a one-class edit. Pinning it
+         from a breakpoint up (md:fixed) is handled in public/input.css, where
+         Tailwind resolves the breakpoint from this app's own theme. */
       body:has(> header.fixed) { padding-top: var(--header-h); }
-      @media (min-width: 40rem) { body:has(> header[class~="sm:fixed"]) { padding-top: var(--header-h); } }
-      @media (min-width: 48rem) { body:has(> header[class~="md:fixed"]) { padding-top: var(--header-h); } }
-      @media (min-width: 64rem) { body:has(> header[class~="lg:fixed"]) { padding-top: var(--header-h); } }
     </style>
     <!-- Top navbar, on every page: brand on the left, links + theme toggle on
          the right. It floats (no separator) and is in normal flow, so it just

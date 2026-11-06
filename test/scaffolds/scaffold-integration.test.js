@@ -149,8 +149,12 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(layoutSrc, /<header class="[^"]*h-\[var\(--header-h\)\]/, 'the navbar is sized by the token');
     assert.match(layoutSrc, /body:has\(> header\.fixed\) \{ padding-top: var\(--header-h\); \}/,
       'pinning the navbar is a one-class edit');
-    assert.match(layoutSrc, /@media \(min-width: 48rem\) \{ body:has\(> header\[class~="md:fixed"\]\) \{ padding-top: var\(--header-h\); \} \}/,
-      'and pinning it from a breakpoint up reserves the space from that breakpoint');
+    // Pinning from a breakpoint up is resolved by Tailwind from the app's own
+    // theme (@variant), never from hard-coded widths in the layout.
+    assert.doesNotMatch(layoutSrc, /min-width: \d/, 'the layout hard-codes no breakpoint width');
+    const inputCss = readFileSync(join(appDir, 'public', 'input.css'), 'utf8');
+    assert.match(inputCss, /body:has\(> header\[class~="md:fixed"\]\) \{ @variant md \{ padding-top: var\(--header-h\); \} \}/,
+      'and pinning it from a breakpoint up reserves the space through the app\'s own md breakpoint');
     assert.doesNotMatch(layoutSrc, /ResizeObserver/, 'the layout does not measure the header');
     assert.match(layoutSrc, /JetBrains\+Mono/, 'layout loads the JetBrains Mono font');
     assert.match(layoutSrc, /--primary:\s*light-dark\(#1e2226, #dee2e6\)/,

@@ -115,7 +115,7 @@ test('the bracket-less name reads a [] group through get, getAll and has', () =>
   assert.deepEqual(Object.fromEntries(input), { 'tags[]': 'b' }, 'iteration reports names as submitted, like FormData');
 });
 
-test('a plain name mixed with its [] form is one array group, in either order, with no warning', () => {
+test('a plain name mixed with its [] form is one array group, in either order, and dev warns about it', () => {
   const messages = [];
   const warn = (m) => messages.push(m);
   const a = formInput(fd([['x', '1'], ['x[]', '2']]), { warn, label: 'mixA' });
@@ -123,5 +123,10 @@ test('a plain name mixed with its [] form is one array group, in either order, w
   const b = formInput(fd([['x[]', '1'], ['x', '2']]), { warn, label: 'mixB' });
   assert.deepEqual(b.x, ['1', '2'], 'and the array is not replaced');
   assert.deepEqual(b.getAll('x').sort(), ['1', '2']);
-  assert.equal(messages.length, 0, 'an array group never warns');
+  assert.equal(messages.length, 2, 'the mixed spelling warns once per action, since Rails rejects it outright');
+  assert.match(messages[0], /"x" was submitted both as "x" and as "x\[\]" to mixA/);
+  formInput(fd([['x', '1'], ['x[]', '2']]), { warn, label: 'mixA' });
+  assert.equal(messages.length, 2, 'deduped per action and field');
+  formInput(fd([['g[]', '1'], ['g[]', '2']]), { warn, label: 'mixA' });
+  assert.equal(messages.length, 2, 'a consistent [] group never warns');
 });

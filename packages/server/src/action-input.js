@@ -27,7 +27,8 @@
  *     included, the way a `FormData` does.
  *   - A name submitted both plain and with `[]` (`x=1&x[]=2`) is one group:
  *     the property is the array of every value in submission order, so
- *     nothing is dropped.
+ *     nothing is dropped. It is still an authoring mistake (Rails rejects it
+ *     outright as a parameter type error), so dev warns once about it.
  *
  * Deliberately absent: the WRITERS (`append`, `set`, `delete`). A write through
  * to the original would leave the field properties stale, and an action has no
@@ -105,6 +106,16 @@ export function formInput(formData, opts = {}) {
   });
 
   if (typeof opts.warn === 'function') {
+    for (const key of grouped) {
+      if (!formData.has(key)) continue;
+      const warnKey = `${opts.label || ''}\u0000mixed\u0000${key}`;
+      if (warned.has(warnKey)) continue;
+      warned.add(warnKey);
+      opts.warn(
+        `[webjs] the form field "${key}" was submitted both as "${key}" and as "${key}[]"${opts.label ? ` to ${opts.label}` : ''}, `
+        + `so input.${key} holds every value as one array. Give the controls one spelling, "${key}[]" for a group.`,
+      );
+    }
     for (const [name, n] of counts) {
       if (n < 2 || grouped.has(name)) continue;
       const key = `${opts.label || ''}\u0000${name}`;
