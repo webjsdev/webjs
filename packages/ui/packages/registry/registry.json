@@ -601,6 +601,22 @@
       ]
     },
     {
+      "name": "select",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "popover"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/select.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
       "name": "separator",
       "type": "registry:ui",
       "registryDependencies": [

@@ -1102,4 +1102,49 @@
   .cn-navigation-menu-indicator-arrow {
     @apply rounded-ss-sm bg-border shadow-md;
   }
+
+  /* MARK: select */
+  .cn-select-trigger {
+    @apply gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 data-[placeholder]:text-muted-foreground data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:gap-2 dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:ring-destructive/40 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground;
+  }
+
+  .cn-select-trigger-icon {
+    @apply size-4 opacity-50;
+  }
+
+  .cn-select-content {
+    @apply fixed m-0 min-w-[8rem] rounded-md border bg-popover p-0 text-popover-foreground shadow-md;
+  }
+
+  .cn-select-viewport {
+    @apply p-1 data-[position=popper]:scroll-my-1;
+  }
+
+  .cn-select-label {
+    @apply px-2 py-1.5 text-xs text-muted-foreground;
+  }
+
+  .cn-select-item {
+    @apply gap-2 rounded-sm py-1.5 pe-8 ps-2 text-sm focus:bg-accent focus:text-accent-foreground [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2;
+  }
+
+  .cn-select-item-indicator {
+    @apply absolute end-2 flex size-3.5 items-center justify-center;
+  }
+
+  .cn-select-item-indicator-icon {
+    @apply size-4;
+  }
+
+  .cn-select-separator {
+    @apply -mx-1 my-1 h-px bg-border;
+  }
+
+  .cn-select-scroll-up-button {
+    @apply flex cursor-default items-center justify-center py-1;
+  }
+
+  .cn-select-scroll-down-button {
+    @apply flex cursor-default items-center justify-center py-1;
+  }
 }

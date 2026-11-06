@@ -1934,3 +1934,217 @@ suite('ui-navigation-menu', () => {
     root.remove();
   });
 });
+
+suite('ui-select', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/select.ts`);
+  });
+
+  const field = ({ required = false, extra = '' } = {}) => html`
+    <form data-testid="form">
+      <label for="fruit">Fruit</label>
+      <ui-select placeholder="Select a fruit">
+        <select id="fruit" name="fruit" ?required=${required} aria-describedby="fruit-hint">
+          <option value="" disabled selected hidden>Select a fruit</option>
+          <optgroup label="Fruits">
+            <option value="apple">Apple</option>
+            <option value="banana">Banana</option>
+            <option value="grapes" disabled>Grapes</option>
+          </optgroup>
+          <hr>
+          <option value="pineapple">Pineapple</option>
+        </select>
+      </ui-select>
+      <p id="fruit-hint">Pick one.</p>
+      <button type="submit">Save</button>${extra}
+    </form>
+  `;
+  const parts = (root) => {
+    const el = root.querySelector('ui-select');
+    const select = el.querySelector('select');
+    const trigger = el.querySelector('[data-slot="select-trigger"]');
+    const panel = el.querySelector('[data-slot="select-content"]');
+    const options = () => [...el.querySelectorAll('[data-slot="select-item"]')];
+    const value = () => el.querySelector('[data-slot="select-value"]').textContent.trim();
+    return { el, select, trigger, panel, options, value };
+  };
+  const key = (target, k, opts = {}) =>
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...opts }));
+
+  test('it hides the native select visually, keeps it in the form, and draws a combobox trigger', async () => {
+    const root = await mount(field());
+    await tick();
+    const { select, trigger, value } = parts(root);
+    assert.ok(trigger, 'a trigger is drawn');
+    assert.equal(trigger.getAttribute('role'), 'combobox');
+    assert.equal(trigger.getAttribute('aria-haspopup'), 'listbox');
+    assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+    assert.ok(trigger.hasAttribute('data-placeholder'));
+    assert.equal(value(), 'Select a fruit');
+    assert.equal(select.hidden, false, 'not hidden, so it can still anchor a validation bubble');
+    assert.notEqual(getComputedStyle(select).display, 'none');
+    assert.equal(getComputedStyle(select).opacity, '0');
+    assert.equal(select.getAttribute('aria-hidden'), 'true');
+    assert.equal(select.tabIndex, -1);
+    root.remove();
+  });
+
+  test('the trigger is named by the label, carries the describedby, and a label click focuses it', async () => {
+    const root = await mount(field());
+    await tick();
+    const { trigger } = parts(root);
+    const label = root.querySelector('label');
+    assert.equal(trigger.getAttribute('aria-labelledby'), label.id);
+    assert.equal(trigger.getAttribute('aria-describedby'), 'fruit-hint');
+    label.click();
+    await tick();
+    assert.equal(document.activeElement, trigger, 'the label click lands on the trigger');
+    root.remove();
+  });
+
+  test('the list mirrors the options: groups are named, the separator is hidden, the placeholder is not listed', async () => {
+    const root = await mount(field());
+    await tick();
+    const { el, trigger, panel, options } = parts(root);
+    trigger.click();
+    await tick();
+    assert.equal(panel.getAttribute('role'), 'listbox');
+    assert.equal(trigger.getAttribute('aria-controls'), panel.id);
+    assert.deepEqual(options().map((o) => o.textContent.trim()), ['Apple', 'Banana', 'Grapes', 'Pineapple']);
+    const group = el.querySelector('[role="group"]');
+    assert.equal(document.getElementById(group.getAttribute('aria-labelledby')).textContent, 'Fruits');
+    assert.equal(el.querySelector('[data-slot="select-separator"]').getAttribute('aria-hidden'), 'true');
+    assert.equal(options()[2].getAttribute('aria-disabled'), 'true', 'a disabled option says so');
+    el.hide();
+    root.remove();
+  });
+
+  test('choosing writes the native value, fires input, change and ui-value-change once, and closes on the trigger', async () => {
+    const root = await mount(field());
+    await tick();
+    const { el, select, trigger, options, value } = parts(root);
+    const seen = [];
+    select.addEventListener('input', () => seen.push('input'));
+    select.addEventListener('change', () => seen.push('change'));
+    el.addEventListener('ui-value-change', (e) => seen.push(`ui:${e.detail.value}`));
+    trigger.click();
+    await tick();
+    options()[1].click();
+    await tick();
+    assert.equal(select.value, 'banana');
+    assert.deepEqual(seen, ['input', 'change', 'ui:banana']);
+    assert.equal(value(), 'Banana');
+    assert.equal(trigger.hasAttribute('data-placeholder'), false);
+    assert.equal(el.open, false);
+    assert.equal(document.activeElement, trigger);
+    assert.equal(new FormData(root.querySelector('form')).get('fruit'), 'banana', 'the form submits it');
+    trigger.click();
+    await tick();
+    options()[1].click();
+    await tick();
+    assert.equal(seen.length, 3, 'choosing the same option again fires nothing');
+    root.remove();
+  });
+
+  test('ArrowDown opens on the selected option, arrows skip a disabled option, Enter chooses', async () => {
+    const root = await mount(field());
+    await tick();
+    const { el, select, trigger, options } = parts(root);
+    select.value = 'banana';
+    select.dispatchEvent(new Event('change'));
+    await tick();
+    trigger.focus();
+    key(trigger, 'ArrowDown');
+    await tick();
+    assert.ok(el.open);
+    assert.equal(document.activeElement, options()[1], 'opens on Banana');
+    key(document.activeElement, 'ArrowDown');
+    assert.equal(document.activeElement, options()[3], 'Grapes is disabled, so Pineapple');
+    key(document.activeElement, 'Enter');
+    await tick();
+    assert.equal(select.value, 'pineapple');
+    assert.equal(document.activeElement, trigger);
+    root.remove();
+  });
+
+  test('Escape closes without changing the value', async () => {
+    const root = await mount(field());
+    await tick();
+    const { el, select, trigger } = parts(root);
+    trigger.click();
+    await tick();
+    key(document.activeElement, 'ArrowDown');
+    key(document.activeElement, 'Escape');
+    await tick();
+    assert.equal(el.open, false);
+    assert.equal(select.value, '');
+    assert.equal(document.activeElement, trigger);
+    root.remove();
+  });
+
+  test('typing on the closed trigger picks the matching option, as a native select does', async () => {
+    const root = await mount(field());
+    await tick();
+    const { el, select, trigger } = parts(root);
+    trigger.focus();
+    key(trigger, 'p');
+    await tick();
+    assert.equal(select.value, 'pineapple');
+    assert.equal(el.open, false, 'without opening');
+    root.remove();
+  });
+
+  test('editing the options re-renders the list, and a form reset restores the trigger', async () => {
+    const root = await mount(field());
+    await tick();
+    const { el, select, trigger, options, value } = parts(root);
+    const o = document.createElement('option');
+    o.value = 'mango';
+    o.textContent = 'Mango';
+    select.appendChild(o);
+    await tick();
+    trigger.click();
+    await tick();
+    assert.ok(options().some((x) => x.textContent.trim() === 'Mango'), 'the new option is listed');
+    options().find((x) => x.textContent.trim() === 'Mango').click();
+    await tick();
+    assert.equal(value(), 'Mango');
+    root.querySelector('form').reset();
+    await tick();
+    assert.equal(select.value, '');
+    assert.equal(value(), 'Select a fruit', 'the trigger reverts with the form');
+    el.hide();
+    root.remove();
+  });
+
+  test('a required select that fails validation marks and focuses the trigger, without throwing', async () => {
+    const root = await mount(field({ required: true }));
+    await tick();
+    const { trigger, options } = parts(root);
+    const form = root.querySelector('form');
+    let ok = true;
+    assert.doesNotThrow(() => { ok = form.reportValidity(); });
+    await tick();
+    assert.equal(ok, false);
+    assert.equal(trigger.getAttribute('aria-invalid'), 'true');
+    assert.equal(document.activeElement, trigger);
+    trigger.click();
+    await tick();
+    options()[0].click();
+    await tick();
+    assert.equal(trigger.hasAttribute('aria-invalid'), false, 'a valid choice clears it');
+    root.remove();
+  });
+
+  test('an outside press closes the list', async () => {
+    const root = await mount(field());
+    await tick();
+    const { el, trigger } = parts(root);
+    trigger.click();
+    await tick();
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, composed: true }));
+    await tick();
+    assert.equal(el.open, false);
+    root.remove();
+  });
+});

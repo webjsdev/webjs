@@ -255,3 +255,13 @@ test('ui-navigation-menu: viewport="false" serves no viewport frame', { skip }, 
   assert.match(out, /data-viewport="false"/);
   assert.doesNotMatch(out, /data-slot="navigation-menu-viewport"/);
 });
+
+test('ui-select: the first paint is the authored native select, visible and unenhanced (D13)', { skip }, async () => {
+  const out = await ssr(
+    ['select.ts'],
+    (html) => html`<label for="fruit">Fruit</label><ui-select placeholder="Pick"><select id="fruit" name="fruit" required><option value="" disabled selected hidden>Pick</option><option value="apple">Apple</option></select></ui-select>`,
+  );
+  assert.match(out, /<select id="fruit" name="fruit" required>/, 'the native select is served as authored');
+  assert.doesNotMatch(out, /<select[^>]*(hidden|aria-hidden|style=)/, 'and not hidden: with JavaScript off it is the control');
+  assert.doesNotMatch(out, /role="combobox"|role="listbox"|<button/, 'no drawn trigger or list before the element upgrades');
+});
