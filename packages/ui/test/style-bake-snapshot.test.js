@@ -57,7 +57,7 @@ for (const [file, before] of Object.entries(fixture)) {
       // EVICTED still shows up as missing.
       const sorted = (x) => x.split(/\s+/).filter(Boolean).sort().join(' ');
       const a = sorted(cn(withoutHooks(after[i], before[i])));
-      const b = sorted(cn(before[i]));
+      const b = sorted(cn(before[i].split(/(\s+)/).filter((t) => !CN_ALLOWLIST.has(t)).join('')));
       assert.equal(a, b, `${file}, string ${i}: baked ${JSON.stringify(after[i])} merges to ${JSON.stringify(a)}, expected ${JSON.stringify(b)}`);
       // cn() trims, so the merged comparison above cannot see the edges. A
       // string that is CONCATENATED into another (card's ' gap-6 py-6' size

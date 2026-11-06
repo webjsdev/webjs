@@ -43,6 +43,7 @@ const V1_COMPONENTS = [
   // #1666: the components shadcn ships that the kit did not.
   'button-group', 'marker', 'message', 'scroll-area',
   'attachment', 'bubble', 'item', 'trace', 'input-group', 'direction',
+  'sheet',
 ];
 
 // Components that are Tier 2, must register a custom element.
@@ -54,6 +55,7 @@ const TIER_2 = new Set([
   'dialog', 'alert-dialog', 'tooltip', 'hover-card',
   'tabs',
   'dropdown-menu', 'sonner',
+  'sheet',
 ]);
 
 /**
@@ -140,6 +142,10 @@ test('every v1 component is declared in registry.json', { skip }, () => {
 test('every Tier-2 component imports WebComponent + html from @webjsdev/core', { skip }, () => {
   for (const name of TIER_2) {
     const src = readSource(name);
+    // An element built on a sibling Tier-2 element (sheet extends the dialog
+    // elements) reaches WebComponent through it, so it imports the sibling
+    // instead of core.
+    if (/\bextends\s+Ui\w+/.test(src) && /from\s+'\.\/[\w-]+\.ts'/.test(src)) continue;
     // Refactor: components moved from the local Base + defineElement
     // helpers (in lib/utils.ts) to the Lit-shaped WebComponent base
     // from @webjsdev/core (with html`…` templates and declarative

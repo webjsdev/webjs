@@ -173,3 +173,17 @@ test('ui-alert-dialog-content: the alertdialog role is on the native <dialog> at
 // branch in sonner.ts is still the correct shape (a nullish hole is the
 // documented footgun this file exists for), but its observable contract lives
 // in the browser suite and in the accessibility-tree e2e.
+
+test('ui-sheet: the native dialog carries role=dialog and the panel its data-side at SSR', { skip }, async () => {
+  const out = await ssr(
+    ['sheet.ts'],
+    (html) => html`<ui-sheet><ui-sheet-content side="left"><h2 data-slot="sheet-title">Filters</h2></ui-sheet-content></ui-sheet>`,
+  );
+  assert.match(out, /<dialog(?=[^>]*data-slot="sheet-native")(?=[^>]*role="dialog")/, 'the sheet renders its own native dialog with the dialog role');
+  assert.match(out, /data-slot="sheet-content"[^>]*data-side="left"/, 'the panel is attached to its side in the first paint');
+});
+
+test('ui-dialog: a centred dialog panel serves no data-side at SSR', { skip }, async () => {
+  const out = await ssr(['dialog.ts'], (html) => html`<ui-dialog><ui-dialog-content><h2>T</h2></ui-dialog-content></ui-dialog>`);
+  assert.doesNotMatch(out, /data-side=/, 'the null side omits the attribute instead of serving data-side=""');
+});

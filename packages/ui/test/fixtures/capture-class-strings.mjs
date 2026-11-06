@@ -33,7 +33,12 @@ import { classSegments, segmentValue, bakeForStyle } from '../../src/registry/st
 const HERE = dirname(fileURLToPath(import.meta.url));
 const COMPONENTS = join(HERE, '..', '..', 'packages', 'registry', 'components');
 const OUT = join(HERE, 'class-strings.json');
-const merge = process.argv.includes('--merge');
+const merge = process.argv.includes('--merge') || process.argv.includes('--allow-drop');
+// --allow-drop: a refactor removed NON-class strings (a selector, an id, a tag
+// name). Those may leave the baseline; a multi-class list never may, and every
+// drop is printed for review.
+const allowDrop = process.argv.includes('--allow-drop');
+const droppable = (v) => !/\s/.test(v.trim()) || /["{}\n]/.test(v);
 
 const stringsOf = (src) => classSegments(src).map((s) => segmentValue(src, s));
 const key = (v) => v.split(/\s+/).filter((t) => !/^(group|peer)(\/[\w-]+)?$/.test(t)).sort().join(' ');
@@ -62,6 +67,7 @@ for (const f of readdirSync(COMPONENTS).filter((x) => x.endsWith('.ts')).sort())
   while (i < a.length || j < b.length) {
     if (i < a.length && j < b.length && a[i] === b[j]) { merged.push(before[i]); i++; j++; }
     else if (j < b.length && (i >= a.length || dp[i][j + 1] >= dp[i + 1][j])) { merged.push(now[j]); added++; j++; }
+    else if (allowDrop && droppable(before[i])) { console.log(`  dropped from ${name}: ${JSON.stringify(before[i])}`); i++; }
     else { throw new Error(`${name}: the baseline string ${JSON.stringify(before[i])} no longer matches; a changed look needs a deliberate re-baseline, not --merge`); }
   }
   out[name] = merged;

@@ -109,7 +109,7 @@ import { buttonClass } from './button.ts';
 // The description is independent of the NAME, so it is wired on every path,
 // including the two authored-name early returns below. An author who names the
 // dialog still gets their description node described.
-function wireDialogDescription(host: Element, panel: Element): void {
+function wireDialogDescription(host: Element, panel: Element, prefix: string): void {
   const authored = host.getAttribute('aria-describedby');
   if (authored) {
     panel.setAttribute('aria-describedby', authored);
@@ -121,13 +121,13 @@ function wireDialogDescription(host: Element, panel: Element): void {
   // re-open, and the stale aria-describedby survives pointing at a dead IDREF.
   panel.removeAttribute('aria-describedby');
   const desc =
-    host.querySelector('[data-slot="dialog-description"]') ?? host.querySelector('p');
+    host.querySelector(`[data-slot="${prefix}-description"]`) ?? host.querySelector('p');
   if (desc) {
     panel.setAttribute('aria-describedby', ensureId(desc as HTMLElement, 'ui-dialog-desc'));
   }
 }
 
-export function wireDialogLabels(host: Element, panelSelector: string): void {
+export function wireDialogLabels(host: Element, panelSelector: string, prefix = 'dialog'): void {
   const panel = host.querySelector(panelSelector);
   if (!panel) return;
   // A name the author put on <ui-dialog-content> is where they naturally write
@@ -141,7 +141,7 @@ export function wireDialogLabels(host: Element, panelSelector: string): void {
   const authoredLabelledBy = host.getAttribute('aria-labelledby');
   if (authoredLabelledBy) {
     panel.setAttribute('aria-labelledby', authoredLabelledBy);
-    wireDialogDescription(host, panel);
+    wireDialogDescription(host, panel, prefix);
     return;
   }
   const authoredLabel = host.getAttribute('aria-label');
@@ -150,7 +150,7 @@ export function wireDialogLabels(host: Element, panelSelector: string): void {
     // An authored name replaces the title as the NAME, so any stale
     // aria-labelledby from an earlier open must go, or it would win over it.
     panel.removeAttribute('aria-labelledby');
-    wireDialogDescription(host, panel);
+    wireDialogDescription(host, panel, prefix);
     return;
   }
   // Same re-resolve rule: clear what a previous open wrote, or a removed title
@@ -158,11 +158,11 @@ export function wireDialogLabels(host: Element, panelSelector: string): void {
   // suppresses the floor below, which exists to prevent exactly that state.
   panel.removeAttribute('aria-labelledby');
   const title =
-    host.querySelector('[data-slot="dialog-title"]') ?? host.querySelector('h1, h2, h3');
+    host.querySelector(`[data-slot="${prefix}-title"]`) ?? host.querySelector('h1, h2, h3');
   if (title) {
     panel.setAttribute('aria-labelledby', ensureId(title as HTMLElement, 'ui-dialog-title'));
   }
-  wireDialogDescription(host, panel);
+  wireDialogDescription(host, panel, prefix);
   // APG: a modal MUST have an accessible name. Everything above supplies one
   // only when the author gave the dialog a title node or named it directly, so
   // a title-less dialog shipped unnamed and was announced as a bare "dialog".
@@ -207,10 +207,12 @@ const DIALOG_CLOSE_X_SVG =
 // `display: block` in the top layer.
 // --------------------------------------------------------------------------
 
-const STYLES = `
-ui-dialog:not([open]) ui-dialog-content { display: none !important; }
-ui-dialog[open] { display: contents; }
-ui-dialog-content { display: grid; }
+// Exported for the elements that reuse the dialog machinery under their own
+// tags (sheet), which pass their tags to installOverlayStyles().
+export const overlayStyles = (root: string, content: string): string => `
+${root}:not([open]) ${content} { display: none !important; }
+${root}[open] { display: contents; }
+${content} { display: grid; }
 `;
 
 // Clears the UA defaults on <dialog> so it becomes an invisible top-layer
@@ -225,14 +227,16 @@ ui-dialog-content { display: grid; }
 // viewport-sized transparent host gives the panel a correct containing block
 // on both engines; the panel still centers itself and the ::backdrop covers
 // the screen.
-const NATIVE_DIALOG_CLASS = 'fixed inset-0 border-0 bg-transparent p-0 m-0 max-w-none max-h-none overflow-visible text-inherit backdrop:bg-black/50';
+export const NATIVE_DIALOG_CLASS = 'fixed inset-0 border-0 bg-transparent p-0 m-0 max-w-none max-h-none overflow-visible text-inherit backdrop:bg-black/50';
 
-function installStyles(): void {
+/** Inject the pre-hydration rules for one root / content tag pair, once. */
+export function installOverlayStyles(root: string, content: string): void {
   if (typeof document === 'undefined') return;
-  if (document.getElementById('ui-dialog-styles')) return;
+  const id = `${root}-styles`;
+  if (document.getElementById(id)) return;
   const style = document.createElement('style');
-  style.id = 'ui-dialog-styles';
-  style.textContent = STYLES;
+  style.id = id;
+  style.textContent = overlayStyles(root, content);
   document.head.appendChild(style);
 }
 
@@ -375,6 +379,12 @@ function unlockScroll(): void {
 export class UiDialog extends WebComponent({
   open: prop(Boolean, { reflect: true }),
 }) {
+  // The tags this element pairs with. A subclass registered under its own tags
+  // (sheet) overrides these, which is the only thing that differs.
+  static rootTag = 'ui-dialog';
+  static contentTag = 'ui-dialog-content';
+  static slotPrefix = 'dialog';
+
   constructor() {
     super();
     this.open = false;
@@ -384,7 +394,8 @@ export class UiDialog extends WebComponent({
   _scrollLocked?: boolean;
 
   connectedCallback(): void {
-    installStyles();
+    const ctor = this.constructor as typeof UiDialog;
+    installOverlayStyles(ctor.rootTag, ctor.contentTag);
     // Legacy <ui-dialog-overlay> isn't supported anymore; the native
     // ::backdrop pseudo replaces it. Strip it if a stale doc uses it.
     this.querySelector<HTMLElement>(':scope > ui-dialog-overlay')?.remove();
@@ -408,7 +419,7 @@ export class UiDialog extends WebComponent({
   get isOpen(): boolean { return this.open; }
 
   render() {
-    return html`<div data-slot="dialog" data-state=${this.open ? 'open' : 'closed'}>
+    return html`<div data-slot=${(this.constructor as typeof UiDialog).slotPrefix} data-state=${this.open ? 'open' : 'closed'}>
       <slot></slot>
     </div>`;
   }
@@ -431,7 +442,7 @@ export class UiDialog extends WebComponent({
   }
 
   get _content(): UiDialogContent | null {
-    return this.querySelector('ui-dialog-content') as UiDialogContent | null;
+    return this.querySelector((this.constructor as typeof UiDialog).contentTag) as UiDialogContent | null;
   }
 
   _setup(): void {
@@ -472,15 +483,18 @@ UiDialog.register('ui-dialog');
 // --------------------------------------------------------------------------
 
 export class UiDialogTrigger extends WebComponent {
+  static rootTag = 'ui-dialog';
+  static slotPrefix = 'dialog';
+
   render() {
     return html`<div
-      data-slot="dialog-trigger"
+      data-slot=${`${(this.constructor as typeof UiDialogTrigger).slotPrefix}-trigger`}
       @click=${this._onClick}
     ><slot></slot></div>`;
   }
 
   _onClick = (): void => {
-    (this.closest('ui-dialog') as UiDialog | null)?.show();
+    (this.closest((this.constructor as typeof UiDialogTrigger).rootTag) as UiDialog | null)?.show();
   };
 }
 UiDialogTrigger.register('ui-dialog-trigger');
@@ -498,6 +512,9 @@ UiDialogTrigger.register('ui-dialog-trigger');
 export class UiDialogContent extends WebComponent({
   showCloseButton: prop(String, { reflect: true, attribute: 'show-close-button' }),
 }) {
+  static rootTag = 'ui-dialog';
+  static slotPrefix = 'dialog';
+
   // ref to the own-rendered native <dialog>. render() creates it, so a
   // ref() binding is the lit-idiomatic handle (no querySelector against
   // a string selector into the component's own output).
@@ -514,11 +531,29 @@ export class UiDialogContent extends WebComponent({
   // (#730). A direct querySelector is robust on every engine, and matches what
   // the tooltip / popover components already do.
   _native(): HTMLDialogElement | null {
-    return this.querySelector<HTMLDialogElement>('dialog[data-slot="dialog-native"]');
+    return this.querySelector<HTMLDialogElement>(`dialog[data-slot="${this._prefix()}-native"]`);
+  }
+
+  _prefix(): string {
+    return (this.constructor as typeof UiDialogContent).slotPrefix;
+  }
+
+  /** The visible panel's classes. A subclass (sheet) supplies its own. */
+  _panelClass(): string {
+    return dialogContentClass();
+  }
+
+  /**
+   * The edge the panel is attached to, written as data-side on the panel. A
+   * dialog is centred, so null, which omits the attribute; a sheet returns its
+   * side.
+   */
+  _side(): string | null {
+    return null;
   }
 
   showModal(): void {
-    wireDialogLabels(this, 'dialog[data-slot="dialog-native"]');
+    wireDialogLabels(this, `dialog[data-slot="${this._prefix()}-native"]`, this._prefix());
     const native = this._native();
     if (native && !native.open) native.showModal();
   }
@@ -531,29 +566,36 @@ export class UiDialogContent extends WebComponent({
   render() {
     const wantClose = this.showCloseButton !== 'false';
     const parentOpen = !!this._parent()?.open;
+    const prefix = this._prefix();
     return html`<dialog
-      data-slot="dialog-native"
+      data-slot=${`${prefix}-native`}
       role="dialog"
       class=${NATIVE_DIALOG_CLASS}
       ${ref(this.#dialog)}
       @close=${this._onNativeClose}
       @click=${this._onNativeBackdropClick}
     ><div
-      data-slot="dialog-content"
+      data-slot=${`${prefix}-content`}
       data-state=${parentOpen ? 'open' : 'closed'}
-      class=${dialogContentClass()}
+      data-side=${this._side()}
+      class=${this._panelClass()}
     >
       <slot></slot>
       ${wantClose
         ? html`<button
             type="button"
             aria-label="Close"
-            data-slot="dialog-close"
-            class=${dialogCloseButtonClass()}
+            data-slot=${`${prefix}-close`}
+            class=${this._closeClass()}
             @click=${this._onAutoCloseClick}
           >${unsafeHTML(DIALOG_CLOSE_X_SVG)}</button>`
         : ''}
     </div></dialog>`;
+  }
+
+  /** The auto-injected close button's classes. A subclass may supply its own. */
+  _closeClass(): string {
+    return dialogCloseButtonClass();
   }
 
   _onAutoCloseClick = (): void => {
@@ -575,7 +617,7 @@ export class UiDialogContent extends WebComponent({
   // SSR-safe: linkedom doesn't implement closest() on custom elements.
   _parent(): UiDialog | null {
     if (typeof this.closest !== 'function') return null;
-    return this.closest('ui-dialog') as UiDialog | null;
+    return this.closest((this.constructor as typeof UiDialogContent).rootTag) as UiDialog | null;
   }
 }
 UiDialogContent.register('ui-dialog-content');
@@ -585,15 +627,18 @@ UiDialogContent.register('ui-dialog-content');
 // --------------------------------------------------------------------------
 
 export class UiDialogClose extends WebComponent {
+  static rootTag = 'ui-dialog';
+  static slotPrefix = 'dialog';
+
   render() {
     return html`<div
-      data-slot="dialog-close"
+      data-slot=${`${(this.constructor as typeof UiDialogClose).slotPrefix}-close`}
       @click=${this._onClick}
     ><slot></slot></div>`;
   }
 
   _onClick = (): void => {
-    (this.closest('ui-dialog') as UiDialog | null)?.hide();
+    (this.closest((this.constructor as typeof UiDialogClose).rootTag) as UiDialog | null)?.hide();
   };
 }
 UiDialogClose.register('ui-dialog-close');

@@ -1165,3 +1165,78 @@ suite('ui-hover-card', () => {
     root.remove();
   });
 });
+
+// <ui-sheet> is the dialog machinery under its own tags (#1666), so these
+// cover what the sheet adds: its tags, its data-side and its title wiring.
+suite('ui-sheet', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/sheet.ts`);
+  });
+
+  test('the trigger opens the sheet as a modal native dialog', async () => {
+    const root = await mount(html`
+      <ui-sheet>
+        <ui-sheet-trigger><button>Open</button></ui-sheet-trigger>
+        <ui-sheet-content side="left"><h2 data-slot="sheet-title">Filters</h2></ui-sheet-content>
+      </ui-sheet>
+    `);
+    root.querySelector('ui-sheet-trigger [data-slot="sheet-trigger"]').click();
+    await tick();
+    const sheet = root.querySelector('ui-sheet');
+    assert.equal(sheet.isOpen, true, 'open after the trigger click');
+    const native = sheet.querySelector('dialog[data-slot="sheet-native"]');
+    assert.ok(native, 'the sheet renders its own native dialog');
+    assert.equal(native.open, true, 'opened with showModal');
+    assert.equal(native.getAttribute('role'), 'dialog');
+    sheet.hide();
+    root.remove();
+  });
+
+  test('the panel carries data-side from the side attribute, right by default', async () => {
+    const root = await mount(html`
+      <ui-sheet><ui-sheet-content side="bottom"><h2 data-slot="sheet-title">A</h2></ui-sheet-content></ui-sheet>
+      <ui-sheet><ui-sheet-content><h2 data-slot="sheet-title">B</h2></ui-sheet-content></ui-sheet>
+    `);
+    const panels = root.querySelectorAll('[data-slot="sheet-content"]');
+    assert.equal(panels[0].getAttribute('data-side'), 'bottom');
+    assert.equal(panels[1].getAttribute('data-side'), 'right');
+    root.remove();
+  });
+
+  test('on open the native dialog is named by the sheet-title node', async () => {
+    const root = await mount(html`
+      <ui-sheet>
+        <ui-sheet-content>
+          <p>intro</p>
+          <h2 data-slot="sheet-title">Settings</h2>
+          <p data-slot="sheet-description">Change how it works.</p>
+        </ui-sheet-content>
+      </ui-sheet>
+    `);
+    const sheet = root.querySelector('ui-sheet');
+    sheet.show();
+    await tick();
+    const native = sheet.querySelector('dialog[data-slot="sheet-native"]');
+    const title = sheet.querySelector('[data-slot="sheet-title"]');
+    const desc = sheet.querySelector('[data-slot="sheet-description"]');
+    assert.equal(native.getAttribute('aria-labelledby'), title.id, 'named by the sheet-title node');
+    // The description is found by its sheet-description slot, not by falling
+    // back to the first paragraph ("intro").
+    assert.equal(native.getAttribute('aria-describedby'), desc.id, 'described by the sheet-description node');
+    sheet.hide();
+    root.remove();
+  });
+
+  test('a native close (Escape) closes the host', async () => {
+    const root = await mount(html`
+      <ui-sheet><ui-sheet-content><h2 data-slot="sheet-title">T</h2></ui-sheet-content></ui-sheet>
+    `);
+    const sheet = root.querySelector('ui-sheet');
+    sheet.show();
+    await tick();
+    sheet.querySelector('dialog[data-slot="sheet-native"]').dispatchEvent(new Event('close'));
+    await tick();
+    assert.equal(sheet.isOpen, false);
+    root.remove();
+  });
+});
