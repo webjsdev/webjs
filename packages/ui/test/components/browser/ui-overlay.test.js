@@ -1240,3 +1240,75 @@ suite('ui-sheet', () => {
     root.remove();
   });
 });
+
+// <ui-drawer> is the dialog machinery plus a handle and drag-to-dismiss (#1666).
+suite('ui-drawer', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/drawer.ts`);
+  });
+
+  /** Drag the panel from its centre by `dy` pixels, as one pointer gesture. */
+  async function drag(target, dy, { slow = true } = {}) {
+    const rect = target.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+    const opts = (cy, extra = {}) => ({ pointerId: 7, clientX: x, clientY: cy, button: 0, bubbles: true, ...extra });
+    target.dispatchEvent(new PointerEvent('pointerdown', opts(y)));
+    if (slow) await new Promise((r) => setTimeout(r, 120));
+    target.dispatchEvent(new PointerEvent('pointermove', opts(y + dy)));
+    target.dispatchEvent(new PointerEvent('pointerup', opts(y + dy)));
+    await tick();
+  }
+
+  async function openDrawer(inner = '') {
+    const root = await mount(html`
+      <ui-drawer>
+        <ui-drawer-content>
+          <h2 data-slot="drawer-title">Share</h2>
+          <div style="height: 300px">body</div>
+          <button type="button" id="inside">Inside</button>
+        </ui-drawer-content>
+      </ui-drawer>
+    `);
+    const drawer = root.querySelector('ui-drawer');
+    drawer.show();
+    await tick();
+    const panel = drawer.querySelector('[data-slot="drawer-content"]');
+    return { root, drawer, panel };
+  }
+
+  test('the panel carries the vaul direction attribute, a hidden handle and no corner X', async () => {
+    const { root, drawer, panel } = await openDrawer();
+    assert.equal(panel.getAttribute('data-vaul-drawer-direction'), 'bottom');
+    const handle = panel.querySelector('[data-slot="drawer-handle"]');
+    assert.ok(handle, 'the handle is rendered');
+    assert.equal(handle.getAttribute('aria-hidden'), 'true');
+    assert.equal(drawer.querySelector('button[data-slot="drawer-close"]'), null, 'no auto-injected X');
+    drawer.hide();
+    root.remove();
+  });
+
+  test('dragging the panel down past a quarter of its height closes it', async () => {
+    const { root, drawer, panel } = await openDrawer();
+    await drag(panel, panel.offsetHeight * 0.5);
+    assert.equal(drawer.isOpen, false, 'a long drag dismisses');
+    root.remove();
+  });
+
+  test('a short slow drag snaps back and leaves it open', async () => {
+    const { root, drawer, panel } = await openDrawer();
+    await drag(panel, 10);
+    assert.equal(drawer.isOpen, true, 'a short drag does not dismiss');
+    assert.equal(panel.style.transform, '', 'the panel snaps back');
+    drawer.hide();
+    root.remove();
+  });
+
+  test('a drag that starts on a control inside the panel does not move it', async () => {
+    const { root, drawer } = await openDrawer();
+    await drag(drawer.querySelector('#inside'), 400);
+    assert.equal(drawer.isOpen, true, 'a button keeps its own pointer events');
+    drawer.hide();
+    root.remove();
+  });
+});

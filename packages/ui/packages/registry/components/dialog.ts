@@ -552,6 +552,20 @@ export class UiDialogContent extends WebComponent({
     return null;
   }
 
+  /**
+   * A drawer's direction, written as data-vaul-drawer-direction on the panel,
+   * the attribute shadcn's drawer styles key on. Null (omitted) for a dialog
+   * or a sheet.
+   */
+  _drawerDirection(): string | null {
+    return null;
+  }
+
+  /** Markup placed before the slotted content (a drawer's drag handle). */
+  _panelLead(): unknown {
+    return '';
+  }
+
   showModal(): void {
     wireDialogLabels(this, `dialog[data-slot="${this._prefix()}-native"]`, this._prefix());
     const native = this._native();
@@ -578,8 +592,10 @@ export class UiDialogContent extends WebComponent({
       data-slot=${`${prefix}-content`}
       data-state=${parentOpen ? 'open' : 'closed'}
       data-side=${this._side()}
+      data-vaul-drawer-direction=${this._drawerDirection()}
       class=${this._panelClass()}
     >
+      ${this._panelLead()}
       <slot></slot>
       ${wantClose
         ? html`<button

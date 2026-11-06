@@ -950,4 +950,29 @@
   .cn-sheet-description {
     @apply text-sm text-muted-foreground;
   }
+
+  /* MARK: drawer */
+  .cn-drawer-content {
+    @apply flex h-auto flex-col bg-background data-[vaul-drawer-direction=top]:rounded-b-lg data-[vaul-drawer-direction=top]:border-b data-[vaul-drawer-direction=bottom]:rounded-t-lg data-[vaul-drawer-direction=bottom]:border-t data-[vaul-drawer-direction=right]:border-l data-[vaul-drawer-direction=left]:border-r;
+  }
+
+  .cn-drawer-handle {
+    @apply mt-4 h-2 w-[100px] rounded-full bg-muted;
+  }
+
+  .cn-drawer-header {
+    @apply gap-0.5 p-4 md:gap-1.5 md:text-start;
+  }
+
+  .cn-drawer-footer {
+    @apply gap-2 p-4;
+  }
+
+  .cn-drawer-title {
+    @apply font-semibold text-foreground;
+  }
+
+  .cn-drawer-description {
+    @apply text-sm text-muted-foreground;
+  }
 }

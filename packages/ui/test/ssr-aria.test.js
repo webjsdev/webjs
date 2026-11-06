@@ -187,3 +187,18 @@ test('ui-dialog: a centred dialog panel serves no data-side at SSR', { skip }, a
   const out = await ssr(['dialog.ts'], (html) => html`<ui-dialog><ui-dialog-content><h2>T</h2></ui-dialog-content></ui-dialog>`);
   assert.doesNotMatch(out, /data-side=/, 'the null side omits the attribute instead of serving data-side=""');
 });
+
+test('ui-drawer: the panel serves its vaul direction, a hidden handle and no corner X at SSR', { skip }, async () => {
+  const out = await ssr(
+    ['drawer.ts'],
+    (html) => html`<ui-drawer><ui-drawer-content direction="left"><h2 data-slot="drawer-title">Share</h2></ui-drawer-content></ui-drawer>`,
+  );
+  assert.match(out, /data-slot="drawer-content"[^>]*data-vaul-drawer-direction="left"/, 'the direction is in the first paint');
+  assert.match(out, /data-slot="drawer-handle"[^>]*aria-hidden="true"|aria-hidden="true"[^>]*data-slot="drawer-handle"/, 'the handle is hidden from assistive technology');
+  assert.doesNotMatch(out, /<button[^>]*data-slot="drawer-close"/, 'no corner X is served and then removed');
+});
+
+test('ui-sheet: a sheet panel serves no vaul direction at SSR', { skip }, async () => {
+  const out = await ssr(['sheet.ts'], (html) => html`<ui-sheet><ui-sheet-content><h2>T</h2></ui-sheet-content></ui-sheet>`);
+  assert.doesNotMatch(out, /data-vaul-drawer-direction=/, 'the null direction omits the attribute');
+});

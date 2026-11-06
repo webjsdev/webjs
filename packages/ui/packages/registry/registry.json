@@ -278,6 +278,22 @@
       ]
     },
     {
+      "name": "drawer",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "dialog"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/drawer.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
       "name": "dropdown-menu",
       "type": "registry:ui",
       "registryDependencies": [
