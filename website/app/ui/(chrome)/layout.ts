@@ -2,6 +2,9 @@ import { html, cspNonce } from '@webjsdev/core';
 import type { LayoutProps } from '@webjsdev/core';
 import '#components/theme-toggle.ts';
 import '#components/site-nav-menu.ts';
+import '#components/docs-command-menu.ts';
+import { HEADER_NAV } from '#modules/ui/docs/nav.ts';
+import { commandMenu } from '#lib/ui/docs/command-menu.ts';
 import { GH_URL, NEW_TAB } from '#lib/links.ts';
 import { brandMark } from '#lib/design/brand.ts';
 
@@ -24,17 +27,6 @@ import { brandMark } from '#lib/design/brand.ts';
  * The link back to webjs.dev carries `data-no-router`, so leaving /ui is a
  * full load, mirroring the marketing side's UI link.
  */
-
-/**
- * The main nav. shadcn's nav also lists Blocks, Charts, Directory, Typeset
- * and Create. Each one joins this list in the step of #1666 that builds its
- * page, so the header never links to a page that does not exist yet.
- */
-const NAV = [
-  { href: '/ui', label: 'Home' },
-  { href: '/ui/docs', label: 'Docs' },
-  { href: '/ui/docs/components', label: 'Components' },
-];
 
 // shadcn's ghost `sm` button with its nav padding (`px-2.5`), written out so
 // the chrome does not depend on the kit mirror the gallery previews use.
@@ -61,16 +53,18 @@ export default function UiChromeLayout({ children, url }: LayoutProps) {
             <span class="hidden text-sm font-semibold sm:inline">WebJs UI</span>
           </a>
           <nav class="hidden items-center gap-0 lg:flex" aria-label="Main">
-            ${NAV.map((n) => html`<a class=${ghostSm} href=${n.href} aria-current=${pathname === n.href ? 'page' : null}>${n.label}</a>`)}
+            ${HEADER_NAV.map((n) => html`<a class=${ghostSm} href=${n.href} aria-current=${pathname === n.href ? 'page' : null}>${n.title}</a>`)}
           </nav>
           <div class="ml-auto flex items-center gap-2 md:flex-1 md:justify-end">
+            ${commandMenu()}
+            <div role="none" class="ml-2 hidden h-4 w-px shrink-0 bg-border lg:block"></div>
             <a class=${ghostSm} href=${GH_URL} target="_blank" rel="noopener noreferrer" aria-label="GitHub">${githubIcon}${NEW_TAB}</a>
             ${separator}
             <theme-toggle></theme-toggle>
             ${separator}
             <a class=${ghostSm} href="/" data-no-router>webjs.dev</a>
             <site-nav-menu class="lg:hidden" label="Toggle navigation">
-              ${NAV.map((n) => html`<a class=${panelLink} href=${n.href}>${n.label}</a>`)}
+              ${HEADER_NAV.map((n) => html`<a class=${panelLink} href=${n.href}>${n.title}</a>`)}
             </site-nav-menu>
           </div>
         </div>

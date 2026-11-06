@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequestHandler } from '@webjsdev/server';
 import { renderDemo } from '#modules/ui/queries/render-demo.server.ts';
 import { componentSource } from '#modules/ui/queries/component-source.server.ts';
-import { COMPONENTS, NAV, neighbours } from '#modules/ui/docs/nav.ts';
+import { COMPONENTS, HEADER_NAV, NAV, neighbours } from '#modules/ui/docs/nav.ts';
 
 const WEBSITE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 let handle: (path: string) => Promise<Response>;
@@ -92,4 +92,25 @@ test('the components index lists every component page, in title order as shadcn\
   const page = await res.text();
   assert.match(page, /<h1[^>]*>Components<\/h1>/);
   for (const i of items) assert.ok(page.includes(`href="${i.href}"`), `links ${i.title}`);
+});
+
+test('the header search offers only pages that exist, starting with the header nav', async () => {
+  // shadcn's CommandMenu: a Pages group (the header nav), then the docs tree's
+  // folders. Every link it offers must open a page, so each href is fetched.
+  const page = await (await handle('/ui/docs/components')).text();
+  const at = page.indexOf('<docs-command-menu');
+  assert.ok(at > 0, 'the header carries the search');
+  const menu = page.slice(at, page.indexOf('</docs-command-menu>', at));
+  assert.match(menu, /Search documentation\.\.\./);
+  assert.match(menu, /<ui-command-group heading="Pages"/);
+  const groups = [...menu.matchAll(/<ui-command-group heading="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(groups[0], 'Pages', 'the header nav comes first');
+  assert.ok(groups.includes('Components'));
+  const hrefs = [...new Set([...menu.matchAll(/<a href="([^"]+)"/g)].map((m) => m[1]))];
+  assert.ok(hrefs.length >= HEADER_NAV.length + COMPONENTS.length, `offers the nav and every component (${hrefs.length})`);
+  const broken: string[] = [];
+  for (const href of hrefs) {
+    if ((await handle(href)).status !== 200) broken.push(href);
+  }
+  assert.deepEqual(broken, [], 'no item opens a missing page');
 });

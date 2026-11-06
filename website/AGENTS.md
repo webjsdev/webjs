@@ -125,6 +125,12 @@ website/
     preview-tabs.ts    Preview / Code toggle around a gallery demo
     docs-drawer.ts     the /docs + /ui sidebar shell and its mobile drawer:
                        backdrop, toggle, aside, open state, every close path
+    docs-command-menu.ts
+                       the /ui header search's keyboard shortcuts (Cmd+K,
+                       Ctrl+K, "/") and close-on-navigate. The palette itself
+                       is server markup, lib/ui/docs/command-menu.ts, offering
+                       only the docs pages that exist (docPageExists in
+                       modules/ui/docs/nav.ts)
     message-scroller-demo.ts
                        shadcn's MessageScrollerDemo, the /ui home page's
                        "New Chat" card: a scripted conversation that streams

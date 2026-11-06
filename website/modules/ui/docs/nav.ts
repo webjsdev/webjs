@@ -969,3 +969,26 @@ export function neighbours(href: string): { previous: DocLink | null; next: DocL
 export function componentDoc(slug: string): ComponentDoc | undefined {
   return COMPONENTS.find((c) => c.slug === slug);
 }
+
+/**
+ * The header's main nav, shadcn's siteConfig.navItems. shadcn's also lists
+ * Blocks, Charts, Directory, Typeset and Create; each joins in the step of
+ * #1666 that builds its page, so the header never links to a page that does
+ * not exist yet. The header and the search menu's Pages group both read it.
+ */
+export const HEADER_NAV: DocLink[] = [
+  { title: 'Home', href: '/ui' },
+  { title: 'Docs', href: '/ui/docs' },
+  { title: 'Components', href: '/ui/docs/components' },
+];
+
+/**
+ * Whether a docs href has a page yet. The nav lists shadcn's whole tree so
+ * its order is settled, but only these routes are built; the search menu
+ * offers only these. Widen it as each page lands.
+ */
+export function docPageExists(href: string): boolean {
+  if (href === '/ui/docs' || href === '/ui/docs/components') return true;
+  const prefix = '/ui/docs/components/';
+  return href.startsWith(prefix) && !!componentDoc(href.slice(prefix.length));
+}
