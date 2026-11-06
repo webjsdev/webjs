@@ -377,3 +377,20 @@ test('ui-message-scroller: the served transcript is a log, held invisible until 
   assert.match(out, /<ui-message-scroller-item message-id="a" class="[^"]*shrink-0[^"]*" data-slot="message-scroller-item"/, 'an item carries its own classes');
   assert.match(out, /<span class="sr-only">Scroll to end<\/span>/);
 });
+
+test('code-block: codeBlockLines draws one line span per line, keeps blank lines, and marks variants', { skip }, async () => {
+  const { codeBlockLines } = await import(join(COMPONENTS, 'code-block.ts'));
+  const out = await ssr(
+    ['code-block.ts'],
+    (html) => html`<pre data-slot="code-block-content" data-numbered><code data-slot="code-block-code">${codeBlockLines('const a = 1\n\nconst b = 2\n', { variants: { 3: 'added' } })}</code></pre>`,
+  );
+  assert.equal((out.match(/data-slot="code-block-line"/g) ?? []).length, 3, 'three lines, the trailing newline dropped');
+  assert.match(out, /data-slot="code-block-line-content" class="min-w-0">\n<\/span>/, 'a blank line holds a newline, so a copied selection keeps it');
+  assert.match(out, /data-variant="added"[^>]*class="[^"]*cn-code-block-line-variant-added/, 'line 3 is marked added');
+});
+
+test('ui-code-block-copy-button: the served button is named Copy, with an empty polite live region', { skip }, async () => {
+  const out = await ssr(['code-block.ts'], (html) => html`<ui-code-block-copy-button></ui-code-block-copy-button>`);
+  assert.match(out, /<button[\s\S]*?aria-label="Copy"/);
+  assert.match(out, /<span aria-live="polite" class="sr-only"><\/span>/);
+});

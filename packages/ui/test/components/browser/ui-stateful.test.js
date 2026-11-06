@@ -1285,3 +1285,46 @@ suite('ui-message-scroller', () => {
     root.remove();
   });
 });
+
+suite('ui-code-block-copy-button', () => {
+  let copied = [];
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/code-block.ts`);
+    // A headless run cannot rely on clipboard permission, so the clipboard is
+    // stubbed; what is under test is what the button hands it.
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async (t) => { copied.push(t); } },
+    });
+  });
+
+  test('it copies its block\'s code, says Copied, and announces it', async () => {
+    copied = [];
+    const root = await mount(html`<div data-slot="code-block"><ui-code-block-copy-button></ui-code-block-copy-button><pre><code data-slot="code-block-code">npm run dev
+npm run build</code></pre></div>`);
+    await tick();
+    const el = root.querySelector('ui-code-block-copy-button');
+    const events = [];
+    el.addEventListener('ui-copy', (e) => events.push(e.detail.text));
+    const button = el.querySelector('button');
+    assert.equal(button.getAttribute('aria-label'), 'Copy');
+    button.click();
+    await tick();
+    assert.deepEqual(copied, ['npm run dev\nnpm run build']);
+    assert.equal(button.getAttribute('aria-label'), 'Copied');
+    assert.ok(button.hasAttribute('data-copied'));
+    assert.equal(el.querySelector('[aria-live="polite"]').textContent, 'Copied');
+    assert.deepEqual(events, ['npm run dev\nnpm run build']);
+    root.remove();
+  });
+
+  test('a value overrides the block\'s code', async () => {
+    copied = [];
+    const root = await mount(html`<div data-slot="code-block"><ui-code-block-copy-button value="pnpm dlx webjs"></ui-code-block-copy-button><pre><code>ignored</code></pre></div>`);
+    await tick();
+    root.querySelector('ui-code-block-copy-button button').click();
+    await tick();
+    assert.deepEqual(copied, ['pnpm dlx webjs']);
+    root.remove();
+  });
+});
