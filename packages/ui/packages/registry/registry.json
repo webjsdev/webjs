@@ -246,6 +246,23 @@
       ]
     },
     {
+      "name": "command",
+      "type": "registry:ui",
+      "registryDependencies": [
+        "input-group",
+        "dialog"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "components/command.ts",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
       "name": "context-menu",
       "type": "registry:ui",
       "registryDependencies": [

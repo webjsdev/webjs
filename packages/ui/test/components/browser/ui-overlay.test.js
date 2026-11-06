@@ -2197,3 +2197,178 @@ suite('ui-select', () => {
     root.remove();
   });
 });
+
+suite('ui-command', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/command.ts`);
+  });
+
+  const palette = (attrs = {}) => html`
+    <ui-command label="Command menu" ?loop=${!!attrs.loop} should-filter=${attrs.filter ?? 'true'}>
+      <ui-command-input placeholder="Type a command"></ui-command-input>
+      <ui-command-list>
+        <ui-command-empty>No results found.</ui-command-empty>
+        <ui-command-group heading="Suggestions">
+          <ui-command-item>Calendar</ui-command-item>
+          <ui-command-item keywords="emoji smiley">Search Emoji</ui-command-item>
+          <ui-command-item disabled>Calculator</ui-command-item>
+        </ui-command-group>
+        <ui-command-separator></ui-command-separator>
+        <ui-command-group heading="Settings">
+          <ui-command-item>Open Settings</ui-command-item>
+          <ui-command-item value="settings">Settings<ui-command-shortcut>⌘S</ui-command-shortcut></ui-command-item>
+          <ui-command-item value="docs"><a href="#docs" data-testid="docs">Docs</a></ui-command-item>
+        </ui-command-group>
+      </ui-command-list>
+    </ui-command>
+  `;
+  const parts = (root) => {
+    const el = root.querySelector('ui-command');
+    const input = el.querySelector('input[data-slot="command-input"]');
+    const items = () => [...el.querySelectorAll('ui-command-item')];
+    const shown = () => el.visibleItems().map((i) => i.itemValue);
+    const selected = () => items().find((i) => i.state.selected)?.itemValue ?? null;
+    return { el, input, items, shown, selected };
+  };
+  const search = async (input, text) => {
+    input.value = text;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await tick();
+  };
+  const key = (target, k, opts = {}) =>
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...opts }));
+
+  test('the input is a combobox over the listbox, pointing at the selected option', async () => {
+    const root = await mount(palette());
+    await tick();
+    const { el, input, items, selected } = parts(root);
+    const list = el.querySelector('[data-slot="command-list"]');
+    assert.equal(input.getAttribute('role'), 'combobox');
+    assert.equal(list.getAttribute('role'), 'listbox');
+    assert.equal(input.getAttribute('aria-controls'), list.id);
+    assert.equal(document.getElementById(input.getAttribute('aria-labelledby')).textContent, 'Command menu');
+    assert.equal(selected(), 'Calendar', 'the first enabled item starts selected');
+    const option = items()[0].querySelector('[role="option"]');
+    assert.equal(option.getAttribute('data-selected'), 'true');
+    assert.equal(input.getAttribute('aria-activedescendant'), option.id);
+    const group = el.querySelector('[role="group"]');
+    assert.equal(document.getElementById(group.getAttribute('aria-labelledby')).textContent, 'Suggestions');
+    assert.equal(items()[2].querySelector('[role="option"]').getAttribute('aria-disabled'), 'true');
+    root.remove();
+  });
+
+  test('typing filters by value and keywords, hides empty groups and separators, and reselects', async () => {
+    const root = await mount(palette());
+    await tick();
+    const { el, input, shown, selected } = parts(root);
+    const searches = [];
+    el.addEventListener('ui-search-change', (e) => searches.push(e.detail.search));
+    await search(input, 'smiley');
+    assert.deepEqual(shown(), ['Search Emoji'], 'a keyword matches');
+    assert.equal(selected(), 'Search Emoji');
+    assert.equal(el.querySelectorAll('ui-command-group')[1].hidden, true, 'the empty group hides');
+    assert.equal(el.querySelector('ui-command-separator [role="separator"]').hidden, true, 'separators hide while searching');
+    assert.equal(el.querySelector('[data-slot="command-empty"]').hidden, true);
+    await search(input, 'zzz');
+    assert.deepEqual(shown(), []);
+    assert.equal(el.querySelector('[data-slot="command-empty"]').hidden, false, 'nothing matches, so the empty state shows');
+    await search(input, '');
+    assert.equal(shown().length, 6, 'clearing the search shows everything');
+    assert.deepEqual(searches, ['smiley', 'zzz', '']);
+    root.remove();
+  });
+
+  test('a search ranks a prefix above a later word, and orders the list to match', async () => {
+    const root = await mount(palette());
+    await tick();
+    const { input, items, shown, selected } = parts(root);
+    await search(input, 'set');
+    assert.deepEqual(shown(), ['settings', 'Open Settings']);
+    assert.equal(selected(), 'settings', 'the best match is selected');
+    const [open, settings] = [items()[3], items()[4]];
+    assert.ok(Number(settings.style.order || 0) < Number(open.style.order || 0), 'the list shows it first');
+    root.remove();
+  });
+
+  test('arrows move the selection past a disabled item and stop at the ends; loop wraps', async () => {
+    const root = await mount(palette());
+    await tick();
+    const { el, input, selected } = parts(root);
+    input.focus();
+    key(input, 'ArrowDown');
+    assert.equal(selected(), 'Search Emoji');
+    key(input, 'ArrowDown');
+    assert.equal(selected(), 'Open Settings', 'Calculator is disabled');
+    key(input, 'End');
+    assert.equal(selected(), 'docs');
+    key(input, 'ArrowDown');
+    assert.equal(selected(), 'docs', 'no wrap without loop');
+    key(input, 'Home');
+    key(input, 'ArrowUp');
+    assert.equal(selected(), 'Calendar');
+    key(input, 'n', { ctrlKey: true });
+    assert.equal(selected(), 'Search Emoji', 'Ctrl+N moves down too');
+    el.loop = true;
+    key(input, 'Home');
+    key(input, 'ArrowUp');
+    assert.equal(selected(), 'docs', 'loop wraps');
+    root.remove();
+  });
+
+  test('Enter runs the selected item, a click runs any item, and a link inside is followed', async () => {
+    const root = await mount(palette());
+    await tick();
+    const { el, input, items } = parts(root);
+    const ran = [];
+    el.addEventListener('ui-select', (e) => ran.push(e.detail.value));
+    key(input, 'Enter');
+    assert.deepEqual(ran, ['Calendar']);
+    items()[1].querySelector('[role="option"]').click();
+    assert.deepEqual(ran, ['Calendar', 'Search Emoji']);
+    items()[2].querySelector('[role="option"]').click();
+    assert.equal(ran.length, 2, 'a disabled item does not run');
+    let followed = 0;
+    const link = root.querySelector('[data-testid="docs"]');
+    link.addEventListener('click', (e) => { followed++; e.preventDefault(); });
+    key(input, 'End');
+    key(input, 'Enter');
+    assert.equal(followed, 1, 'Enter on an item holding a link follows it');
+    root.remove();
+  });
+
+  test('pointing at an item selects it', async () => {
+    const root = await mount(palette());
+    await tick();
+    const { items, selected } = parts(root);
+    items()[3].querySelector('[role="option"]').dispatchEvent(new PointerEvent('pointermove', { bubbles: true }));
+    assert.equal(selected(), 'Open Settings');
+    items()[2].querySelector('[role="option"]').dispatchEvent(new PointerEvent('pointermove', { bubbles: true }));
+    assert.equal(selected(), 'Open Settings', 'not onto a disabled item');
+    root.remove();
+  });
+
+  test('should-filter="false" leaves every item shown', async () => {
+    const root = await mount(palette({ filter: 'false' }));
+    await tick();
+    const { input, shown } = parts(root);
+    await search(input, 'zzz');
+    assert.equal(shown().length, 6);
+    root.remove();
+  });
+
+  test('ui-command-dialog opens the command in a named native dialog', async () => {
+    const root = await mount(html`<ui-command-dialog title="Search the docs"><ui-command><ui-command-input placeholder="Search"></ui-command-input><ui-command-list><ui-command-item>Intro</ui-command-item></ui-command-list></ui-command></ui-command-dialog>`);
+    await tick();
+    const dlg = root.querySelector('ui-command-dialog');
+    dlg.show();
+    await tick();
+    const native = dlg.querySelector('dialog');
+    assert.ok(native.open, 'the native dialog is open');
+    assert.equal(document.getElementById(native.getAttribute('aria-labelledby'))?.textContent, 'Search the docs');
+    assert.ok(native.querySelector('ui-command [role="combobox"]'), 'the command is inside it');
+    assert.equal(native.querySelector('[data-slot="dialog-close"]'), null, 'no close button unless asked');
+    dlg.hide();
+    await tick();
+    root.remove();
+  });
+});

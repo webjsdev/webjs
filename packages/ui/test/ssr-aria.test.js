@@ -286,3 +286,15 @@ test('ui-input-otp: the first paint is the authored input alone, the drawn parts
   assert.match(out, /data-slot="input-otp-group"[^>]*hidden/, 'the group is hidden until the element upgrades');
   assert.match(out, /data-slot="input-otp-separator"[^>]*hidden/, 'and so is the separator');
 });
+
+test('ui-command: the served list shows every item as an option, under a combobox, with the empty state hidden', { skip }, async () => {
+  const out = await ssr(
+    ['command.ts'],
+    (html) => html`<ui-command label="Menu"><ui-command-input placeholder="Search"></ui-command-input><ui-command-list><ui-command-empty>None</ui-command-empty><ui-command-group heading="Pages"><ui-command-item>Home</ui-command-item><ui-command-item>About</ui-command-item></ui-command-group></ui-command-list></ui-command>`,
+  );
+  assert.match(out, /<input[^>]*role="combobox"/, 'the input is a combobox');
+  assert.match(out, /role="listbox"/, 'over a listbox');
+  assert.equal((out.match(/role="option"/g) ?? []).length, 2, 'every item is served, so the list reads with JavaScript off');
+  assert.match(out, /data-slot="command-empty"[^>]*hidden/, 'the empty state is hidden');
+  assert.match(out, /cmdk-group-heading=""[^>]*>Pages|cmdk-group-heading="">Pages/, 'the heading carries the hook shadcn styles key on');
+});
