@@ -2136,6 +2136,257 @@
           "target": "components/site-header.ts"
         }
       ]
+    },
+    {
+      "name": "chart-area-interactive",
+      "type": "registry:block",
+      "title": "Area Chart - Interactive",
+      "description": "An interactive area chart",
+      "categories": [
+        "chart",
+        "area"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart",
+        "select"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-area-interactive.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-area-interactive.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-area-default",
+      "type": "registry:block",
+      "title": "Area Chart",
+      "description": "A simple area chart",
+      "categories": [
+        "chart",
+        "area"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-area-default.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-area-default.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-area-linear",
+      "type": "registry:block",
+      "title": "Area Chart - Linear",
+      "description": "A linear area chart",
+      "categories": [
+        "chart",
+        "area"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-area-linear.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-area-linear.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-area-step",
+      "type": "registry:block",
+      "title": "Area Chart - Step",
+      "description": "A step area chart",
+      "categories": [
+        "chart",
+        "area"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-area-step.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-area-step.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-area-legend",
+      "type": "registry:block",
+      "title": "Area Chart - Legend",
+      "description": "An area chart with a legend",
+      "categories": [
+        "chart",
+        "area"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-area-legend.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-area-legend.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-area-stacked",
+      "type": "registry:block",
+      "title": "Area Chart - Stacked",
+      "description": "A stacked area chart",
+      "categories": [
+        "chart",
+        "area"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-area-stacked.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-area-stacked.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-area-stacked-expand",
+      "type": "registry:block",
+      "title": "Area Chart - Stacked Expanded",
+      "description": "A stacked area chart with expand stacking",
+      "categories": [
+        "chart",
+        "area"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-area-stacked-expand.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-area-stacked-expand.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-area-icons",
+      "type": "registry:block",
+      "title": "Area Chart - Icons",
+      "description": "An area chart with icons",
+      "categories": [
+        "chart",
+        "area"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-area-icons.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-area-icons.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-area-gradient",
+      "type": "registry:block",
+      "title": "Area Chart - Gradient",
+      "description": "An area chart with gradient fill",
+      "categories": [
+        "chart",
+        "area"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-area-gradient.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-area-gradient.ts"
+        }
+      ]
+    },
+    {
+      "name": "chart-area-axes",
+      "type": "registry:block",
+      "title": "Area Chart - Axes",
+      "description": "An area chart with axes",
+      "categories": [
+        "chart",
+        "area"
+      ],
+      "registryDependencies": [
+        "lib-utils",
+        "card",
+        "chart"
+      ],
+      "dependencies": [
+        "@webjsdev/core"
+      ],
+      "files": [
+        {
+          "path": "blocks/charts/chart-area-axes.ts",
+          "type": "registry:component",
+          "target": "components/charts/chart-area-axes.ts"
+        }
+      ]
     }
   ]
 }

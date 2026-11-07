@@ -34,6 +34,8 @@ export function extraStylesFor(pathname: string): string[] {
   // The blocks pages' header buttons, which shadcn's blocks layout imports
   // from its luma style.
   if (path === '/ui/blocks' || path.startsWith('/ui/blocks/')) return ['luma'];
+  // The same luma header buttons on the charts pages (shadcn's charts layout).
+  if (path === '/ui/charts' || path.startsWith('/ui/charts/')) return ['luma'];
   // The examples' header buttons, from the same luma import in shadcn's
   // examples layout. The examples themselves are new-york, and the RTL one
   // nova, both built into ui.css.

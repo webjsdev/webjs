@@ -131,6 +131,27 @@ suite('ui-chart', () => {
     root.remove();
   });
 
+  test('the labels keep their size and the axis thins them by their real widths', async () => {
+    const days = Array.from({ length: 30 }, (_, i) => ({ day: `April ${i + 1}`, v: i % 7 }));
+    const root = await mount(chart.lineChart({
+      config: CONFIG, data: days, xAxis: { dataKey: 'day', minTickGap: 8 },
+      lines: [{ dataKey: 'v', dot: false }],
+    }));
+    root.style.width = '300px';
+    await new Promise((r) => setTimeout(r, 120));
+    const el = root.querySelector('ui-chart');
+    const k = parseFloat(root.querySelector('svg').style.fontSize);
+    assert.ok(k > 1.4, `the chart is drawn smaller than its viewBox, so the labels are counter-scaled (k ${k})`);
+    const shown = [...root.querySelectorAll('.ui-chart-cartesian-axis-tick')].filter((g) => g.getAttribute('visibility') !== 'hidden');
+    assert.ok(shown.length > 1 && shown.length < 30, `${shown.length} of 30 labels fit`);
+    const boxes = shown.map((g) => g.querySelector('text').getBoundingClientRect()).sort((a, b) => a.left - b.left);
+    for (let i = 1; i < boxes.length; i++) assert.ok(boxes[i].left >= boxes[i - 1].right, 'no two shown labels overlap');
+    // The suite loads no stylesheet, so the inherited size is the 16px default:
+    // a label drawn at it, not shrunk with the chart, is about 16 to 20px tall.
+    assert.ok(boxes[0].height >= 14 && boxes[0].height <= 24, `a label renders at its font size (${boxes[0].height}px)`);
+    root.remove();
+  });
+
   test('a defaultIndex is showing from the start', async () => {
     const root = await mount(chart.barChart({
       config: CONFIG, data: MONTHS, tooltip: { defaultIndex: 1 },

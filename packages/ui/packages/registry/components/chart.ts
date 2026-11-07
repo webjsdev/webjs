@@ -357,12 +357,22 @@ interface Frame {
   margin: Margin;
 }
 
+// Recharts sorts a legend by each item's value (its `itemSorter` default),
+// which for a series is its name: a stable sort, so equal names keep order.
+function sortLegend(items: ChartPayloadItem[]): ChartPayloadItem[] {
+  return [...items].sort((a, b) => {
+    const x = String(a.value);
+    const y = String(b.value);
+    return x < y ? -1 : x > y ? 1 : 0;
+  });
+}
+
 function legendLayer(o: ChartBaseOptions, f: Frame) {
   if (!o.legend) return '';
   const h = o.legend.height ?? 28;
   const top = o.legend.verticalAlign === 'top';
   const y = top ? f.margin.top : f.height - f.margin.bottom - h;
-  return svg`<foreignObject class="ui-chart-legend-wrapper" x=${fmt(f.margin.left)} y=${fmt(y)} width=${fmt(f.width - f.margin.left - f.margin.right)} height=${fmt(h)}>${chartLegendContent(o.config, f.legend, o.legend)}</foreignObject>`;
+  return svg`<foreignObject class="ui-chart-legend-wrapper" x=${fmt(f.margin.left)} y=${fmt(y)} width=${fmt(f.width - f.margin.left - f.margin.right)} height=${fmt(h)}>${chartLegendContent(o.config, sortLegend(f.legend), o.legend)}</foreignObject>`;
 }
 
 function frame(o: ChartBaseOptions, f: Frame) {
@@ -377,7 +387,7 @@ function frame(o: ChartBaseOptions, f: Frame) {
   const views = t ? f.points.map((p) => chartTooltipView(o.config, p.label, p.payload, t)) : [];
   // cn() keeps both aspect utilities, so an authored one replaces the default here.
   const base = /(^|\s)aspect-/.test(o.class ?? '') ? chartContainerClass().replace(' aspect-video', '') : chartContainerClass();
-  return html`<ui-chart data-slot="chart" data-chart=${o.id ?? null} class=${cn(base, o.class)} style=${chartStyle(o.config) || null}><div class="ui-chart-wrapper relative h-full w-full min-w-0"><svg class="ui-chart-surface block h-full w-full" xmlns="http://www.w3.org/2000/svg" viewBox=${`0 0 ${fmt(f.width)} ${fmt(f.height)}`} role="img" aria-label=${o.title ?? null} data-hit=${t ? f.hit : null} data-keyboard=${t && a11y ? 'true' : null} data-default-index=${def ? String(t?.defaultIndex) : null}>${o.defs ? svg`<defs>${o.defs}</defs>` : ''}${f.body}${legendLayer(o, f)}</svg>${t ? html`<div data-slot="chart-tooltip" class="ui-chart-tooltip-wrapper pointer-events-none absolute top-0 left-0 z-10 [transition:transform_400ms]" ?hidden=${!def} style=${def ? `transform: translate(${fmt(def.x + 10)}px, ${fmt(def.y + 10)}px)` : null}>${def && t && t.defaultIndex != null ? chartTooltipMarkup(views[t.defaultIndex], look) : ''}</div><div data-slot="chart-tooltips" hidden data-look=${JSON.stringify(look)}>${views.map((v, i) => (isPlainView(v)
+  return html`<ui-chart data-slot="chart" data-chart=${o.id ?? null} class=${cn(base, o.class)} style=${chartStyle(o.config) || null}><div class="ui-chart-wrapper relative h-full w-full min-w-0"><svg class="ui-chart-surface block h-full w-full overflow-visible" xmlns="http://www.w3.org/2000/svg" viewBox=${`0 0 ${fmt(f.width)} ${fmt(f.height)}`} role="img" aria-label=${o.title ?? null} data-hit=${t ? f.hit : null} data-keyboard=${t && a11y ? 'true' : null} data-default-index=${def ? String(t?.defaultIndex) : null}>${o.defs ? svg`<defs>${o.defs}</defs>` : ''}${f.body}${legendLayer(o, f)}</svg>${t ? html`<div data-slot="chart-tooltip" class="ui-chart-tooltip-wrapper pointer-events-none absolute top-0 left-0 z-10 [transition:transform_400ms]" ?hidden=${!def} style=${def ? `transform: translate(${fmt(def.x + 10)}px, ${fmt(def.y + 10)}px)` : null}>${def && t && t.defaultIndex != null ? chartTooltipMarkup(views[t.defaultIndex], look) : ''}</div><div data-slot="chart-tooltips" hidden data-look=${JSON.stringify(look)}>${views.map((v, i) => (isPlainView(v)
       ? html`<div data-index=${String(i)} data-x=${fmt(f.points[i].x)} data-y=${fmt(f.points[i].y)} data-tip=${JSON.stringify(v)}></div>`
       : html`<div data-index=${String(i)} data-x=${fmt(f.points[i].x)} data-y=${fmt(f.points[i].y)}>${chartTooltipMarkup(v, look)}</div>`))}</div><span data-slot="chart-live" class="sr-only" aria-live="polite"></span>` : ''}</div></ui-chart>`;
 }
@@ -425,6 +435,12 @@ export type ChartDotRender = (props: { cx: number; cy: number; r: number; fill: 
 export interface ChartBarShapeProps {
   x: number; y: number; width: number; height: number;
   radius: number | number[]; fill: string; datum: ChartDatum; index: number; dataKey: string;
+  stroke?: string; strokeWidth?: number; fillOpacity?: number;
+}
+
+/** A bar as the kit draws one (Recharts' `<Rectangle>`), for a custom `shape` to reuse. */
+export function chartRectangle(p: Omit<ChartBarShapeProps, 'datum' | 'index' | 'dataKey'> & { strokeDasharray?: number | string; strokeDashoffset?: number; class?: string }) {
+  return svg`<path class=${cn('ui-chart-rectangle', p.class)} fill=${p.fill} fill-opacity=${p.fillOpacity ?? null} stroke=${p.stroke ?? null} stroke-width=${p.strokeWidth ?? null} stroke-dasharray=${p.strokeDasharray ?? null} stroke-dashoffset=${p.strokeDashoffset ?? null} d=${rectanglePath(p.x, p.y, p.width, p.height, p.radius)}></path>`;
 }
 
 export interface ChartSeriesOptions {
@@ -589,7 +605,7 @@ function cartesian(o: CartesianChartOptions, family: Family, all: ChartSeriesOpt
         const fill = typeof datum.fill === 'string' ? datum.fill : s.fill ?? '#808080';
         const active = s.activeIndex === index ? s.activeBar ?? {} : null;
         const shape = s.shape
-          ? s.shape({ ...box, radius: s.radius ?? 0, fill, datum, index, dataKey: s.dataKey })
+          ? s.shape({ ...box, radius: s.radius ?? 0, fill, datum, index, dataKey: s.dataKey, stroke: s.stroke, strokeWidth: s.strokeWidth, fillOpacity: s.fillOpacity })
           : svg`<path class="ui-chart-rectangle" fill=${active?.fill ?? fill} fill-opacity=${active?.fillOpacity ?? s.fillOpacity ?? null} stroke=${active?.stroke ?? s.stroke ?? null} stroke-width=${active?.strokeWidth ?? s.strokeWidth ?? null} stroke-dasharray=${active?.strokeDasharray ?? null} stroke-dashoffset=${active?.strokeDashoffset ?? null} d=${rectanglePath(box.x, box.y, box.width, box.height, s.radius ?? 0)}></path>`;
         return svg`<g class="ui-chart-layer ui-chart-bar-rectangle" data-index=${String(index)}>${shape}</g>`;
       })}</g>${labelList(s.labels, s.dataKey, boxes, 'center')}</g>`;
@@ -635,22 +651,28 @@ function cartesian(o: CartesianChartOptions, family: Family, all: ChartSeriesOpt
       ? categories.map((v, i) => ({ value: v, label: fmtTick(v, i), coord: catAt(i) }))
       : valueTicks.map((v, i) => ({ value: v, label: fmtTick(v, i), coord: vScale(v) }));
     const size = (t: Tick) => (which === 'x' ? estimateTextWidth(String(t.label ?? '')) : 14);
-    const shown = spec.tick === false ? [] : visibleTicks(ticks, size, which === 'x' ? 0 : 0, which === 'x' ? W : H, spec.minTickGap ?? 5, spec.interval ?? 'preserveEnd');
+    const interval = spec.interval ?? 'preserveEnd';
+    const minTickGap = spec.minTickGap ?? 5;
+    // Every tick is served; the ones that do not fit are hidden. The server
+    // can only estimate a label's width, so the element measures the real
+    // text and thins the ticks again (see `_fitTicks`).
+    const shown = new Map(visibleTicks(ticks, size, 0, which === 'x' ? W : H, minTickGap, interval).map((t) => [t.coord, t.at ?? t.coord]));
+    const all = spec.tick === false ? [] : ticks;
     const tickSize = spec.tickSize ?? 6;
     const margin2 = spec.tickMargin ?? 2;
     const edge = which === 'x' ? plot.y + plot.h : plot.x;
     const line = spec.axisLine === false ? '' : which === 'x'
       ? svg`<line class="ui-chart-cartesian-axis-line" stroke="#666" fill="none" x1=${fmt(plot.x)} y1=${fmt(edge)} x2=${fmt(plot.x + plot.w)} y2=${fmt(edge)}></line>`
       : svg`<line class="ui-chart-cartesian-axis-line" stroke="#666" fill="none" x1=${fmt(edge)} y1=${fmt(plot.y)} x2=${fmt(edge)} y2=${fmt(plot.y + plot.h)}></line>`;
-    return svg`<g class=${cn('ui-chart-layer ui-chart-cartesian-axis', which === 'x' ? 'ui-chart-xAxis' : 'ui-chart-yAxis', spec.class)}>${line}<g class="ui-chart-cartesian-axis-ticks">${shown.map((t) => {
-      const at = t.at ?? t.coord;
+    return svg`<g class=${cn('ui-chart-layer ui-chart-cartesian-axis', which === 'x' ? 'ui-chart-xAxis' : 'ui-chart-yAxis', spec.class)} data-axis=${which} data-gap=${String(minTickGap)} data-interval=${String(interval)} data-extent=${fmt(which === 'x' ? W : H)}>${line}<g class="ui-chart-cartesian-axis-ticks">${all.map((t) => {
+      const at = shown.get(t.coord) ?? t.coord;
       const tl = spec.tickLine === false ? '' : which === 'x'
         ? svg`<line class="ui-chart-cartesian-axis-tick-line" stroke="#666" fill="none" x1=${fmt(at)} y1=${fmt(edge + tickSize)} x2=${fmt(at)} y2=${fmt(edge)}></line>`
         : svg`<line class="ui-chart-cartesian-axis-tick-line" stroke="#666" fill="none" x1=${fmt(edge - tickSize)} y1=${fmt(at)} x2=${fmt(edge)} y2=${fmt(at)}></line>`;
       const text = which === 'x'
         ? chartText(at, edge + tickSize + margin2, t.label, { anchor: 'middle', vAnchor: 'start', fill: '#666', class: 'ui-chart-cartesian-axis-tick-value' })
         : chartText(edge - tickSize - margin2, at, t.label, { anchor: 'end', vAnchor: 'middle', fill: '#666', class: 'ui-chart-cartesian-axis-tick-value' });
-      return svg`<g class="ui-chart-layer ui-chart-cartesian-axis-tick">${tl}${text}</g>`;
+      return svg`<g class="ui-chart-layer ui-chart-cartesian-axis-tick" data-coord=${fmt(t.coord)} visibility=${shown.has(t.coord) ? null : 'hidden'}>${tl}${text}</g>`;
     })}</g></g>`;
   };
 
@@ -785,7 +807,7 @@ export function pieChart(o: ChartBaseOptions & { pies: ChartPieOptions[] }) {
       const item = { dataKey: p.dataKey, name, value: s.datum[p.dataKey], color: s.fill, payload: s.datum };
       const at = polarToCartesian(s.cx, s.cy, (s.innerRadius + s.outerRadius) / 2, s.midAngle);
       points.push({ label: name, payload: [item], x: at.x, y: at.y });
-      if (p === o.pies[0]) legend.push(item);
+      if (p === o.pies[0]) legend.push({ ...item, value: name });
     });
     const drawn = sectors.map((s) => {
       const isActive = p.activeIndex === s.index && p.activeShape;
@@ -1057,7 +1079,7 @@ export function radialBarChart(o: ChartBaseOptions & {
   const center = o.center ? o.center({ cx, cy, innerRadius: inner, outerRadius: outer }) : '';
   return frame(o, {
     width: W, height: H, hit: 'target', body: svg`${grid}<g class="ui-chart-layer ui-chart-radial-bar-background">${backgrounds}</g>${bars}${center}`, points, margin: plot.m,
-    legend: data.map((d, i) => ({ dataKey: o.bars[0]?.dataKey ?? 'value', name: String(i), value: d[o.bars[0]?.dataKey ?? 'value'], color: typeof d.fill === 'string' ? d.fill : o.bars[0]?.fill ?? '#808080', payload: d })),
+    legend: data.map((d, i) => ({ dataKey: o.bars[0]?.dataKey ?? 'value', name: String(i), value: String(i), color: typeof d.fill === 'string' ? d.fill : o.bars[0]?.fill ?? '#808080', payload: d })),
   });
 }
 
@@ -1068,6 +1090,7 @@ export function radialBarChart(o: ChartBaseOptions & {
 export class UiChart extends WebComponent {
   /** The point showing, or -1. */
   activeIndex = -1;
+  _resize: ResizeObserver | null = null;
 
   connectedCallback(): void {
     super.connectedCallback?.();
@@ -1090,6 +1113,8 @@ export class UiChart extends WebComponent {
     this.removeEventListener('focusin', this._onFocus);
     this.removeEventListener('focusout', this._onBlur);
     this.removeEventListener('keydown', this._onKey);
+    this._resize?.disconnect();
+    this._resize = null;
     super.disconnectedCallback?.();
   }
 
@@ -1112,7 +1137,9 @@ export class UiChart extends WebComponent {
 
   _init(): boolean {
     const s = this._svg();
-    if (!s || !s.dataset.hit) return false;
+    if (!s || !s.getAttribute('viewBox')) return false;
+    this._watchSize(s);
+    if (!s.dataset.hit) return true;
     if (s.dataset.keyboard === 'true') {
       s.setAttribute('tabindex', '0');
       s.setAttribute('role', 'application');
@@ -1121,6 +1148,68 @@ export class UiChart extends WebComponent {
     const d = s.dataset.defaultIndex;
     if (d != null) this.show(Number(d));
     return true;
+  }
+
+  /**
+   * Keep the labels at their font size. The SVG scales with its container,
+   * and a 12px label in a chart drawn 340px wide on a 450 unit viewBox would
+   * read as 9px; Recharts lays out at the real width, so its text never
+   * scales. The SVG's font size, in em of its container's, undoes the scale.
+   */
+  _watchSize(s: SVGSVGElement): void {
+    if (this._resize || typeof ResizeObserver !== 'function') return;
+    const width = Number(s.getAttribute('viewBox')?.split(/\s+/)[2]);
+    this._resize = new ResizeObserver(() => {
+      const shown = s.getBoundingClientRect();
+      const k = Math.max(width / shown.width, (Number(s.getAttribute('viewBox')?.split(/\s+/)[3]) || 0) / shown.height);
+      if (Number.isFinite(k) && k > 0) s.style.fontSize = `${Math.round(k * 1000) / 1000}em`;
+      this._fitTicks(s, Number.isFinite(k) && k > 0 ? k : 1);
+    });
+    this._resize.observe(s);
+  }
+
+  /**
+   * Thin each axis's labels again with their real widths, the way Recharts'
+   * getTicks does at render: the server could only estimate them, and the
+   * labels keep their font size while the chart scales.
+   */
+  _fitTicks(s: SVGSVGElement, k: number): void {
+    for (const axis of Array.from(s.querySelectorAll<SVGGElement>('[data-axis][data-interval]'))) {
+      const interval = axis.dataset.interval ?? 'preserveEnd';
+      const groups = Array.from(axis.querySelectorAll<SVGGElement>('[data-coord]'));
+      const isX = axis.dataset.axis === 'x';
+      const ticks: Tick[] = groups.map((g, i) => ({ value: i, label: '', coord: Number(g.dataset.coord) }));
+      const size = (t: Tick) => {
+        const text = groups[Number(t.value)].querySelector('text');
+        if (!text) return 0;
+        return isX ? text.getComputedTextLength() : text.getBBox().height;
+      };
+      // Recharts' edges are the chart's box, with its margins in pixels. Here
+      // the margins scale with the chart while the labels do not, so the room
+      // between the box and the outer ticks is widened back to its pixels.
+      const extent = Number(axis.dataset.extent);
+      const coords = ticks.map((t) => t.coord);
+      const before = coords.length ? Math.min(...coords) : 0;
+      const after = coords.length ? extent - Math.max(...coords) : 0;
+      const kept = visibleTicks(ticks, size, -before * (k - 1), extent + after * (k - 1), Number(axis.dataset.gap), /^\d+$/.test(interval) ? Number(interval) : (interval as 'preserveEnd'));
+      const at = new Map(kept.map((t) => [Number(t.value), t.at ?? t.coord]));
+      groups.forEach((g, i) => {
+        const pos = at.get(i);
+        if (pos == null) {
+          g.setAttribute('visibility', 'hidden');
+          return;
+        }
+        g.removeAttribute('visibility');
+        const v = String(Math.round(pos * 1e4) / 1e4);
+        for (const el of Array.from(g.querySelectorAll('text, tspan'))) {
+          if (isX) el.setAttribute('x', v);
+          else if (el.tagName.toLowerCase() === 'text') el.setAttribute('y', v);
+        }
+        for (const line of Array.from(g.querySelectorAll('line'))) {
+          if (isX) { line.setAttribute('x1', v); line.setAttribute('x2', v); } else { line.setAttribute('y1', v); line.setAttribute('y2', v); }
+        }
+      });
+    }
   }
 
   /** Where a point's tooltip anchors, in pixels from the chart's wrapper. */

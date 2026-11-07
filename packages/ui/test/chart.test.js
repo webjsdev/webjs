@@ -197,7 +197,9 @@ test('areaChart and lineChart: curves, dots and active dots per point', async ()
   assert.match(area, /d="M12,93.381C40.4,57.179/, 'Recharts\' natural curve');
   assert.match(area, /L438,223C409.6,223/, 'the baseline continues the path back');
   assert.equal(area.match(/ui-chart-active-dot/g).length, 6, 'one hidden active dot per point');
-  assert.equal(area.match(/visibility="hidden"/g).length, 6);
+  assert.equal(area.split('data-slot="chart-active"')[1].match(/visibility="hidden"/g).length, 6);
+  assert.equal(area.match(/class="ui-chart-layer ui-chart-cartesian-axis-tick" data-coord=/g).length, 6, 'every tick is served, for the element to thin with real widths');
+  assert.match(area, /data-axis="x" data-gap="5" data-interval="preserveEnd" data-extent="450"/);
   const line = await ssr(c.lineChart({
     config: CONFIG, data: MONTHS, xAxis: { dataKey: 'month' }, tooltip: {},
     lines: [{ dataKey: 'desktop', type: 'monotone', stroke: 'var(--color-desktop)', strokeWidth: 2, dot: { fill: 'var(--color-desktop)' } }],
@@ -293,6 +295,40 @@ test('a tooltip with a custom row or an icon is served as markup', async () => {
   assert.doesNotMatch(out, /data-tip=/);
   assert.match(out, /<div data-index="0"[^>]*><div class="cn-chart-tooltip/);
   assert.match(out, /186 kcal/);
+});
+
+test('add chart-area-interactive installs the block with its kit, and the page renders three ranges', async () => {
+  const { mkdirSync, writeFileSync, existsSync, rmSync } = await import('node:fs');
+  const { pathToFileURL } = await import('node:url');
+  const { add } = await import('../src/commands/add.js');
+  const d = join(HERE, '.baked', `chart-block-${process.pid}`);
+  rmSync(d, { recursive: true, force: true });
+  mkdirSync(join(d, 'styles'), { recursive: true });
+  writeFileSync(join(d, 'components.json'), JSON.stringify({
+    style: 'default',
+    tailwind: { css: 'styles/globals.css', baseColor: 'neutral', cssVariables: true },
+    aliases: { components: 'components', utils: 'lib/utils/cn', ui: 'components/ui', lib: 'lib' },
+  }));
+  const log = console.log;
+  console.log = () => {};
+  try {
+    await add.parseAsync(['chart-area-interactive', '--yes', '--cwd', d], { from: 'user' });
+  } finally {
+    console.log = log;
+  }
+  try {
+    const file = join(d, 'components', 'charts', 'chart-area-interactive.ts');
+    assert.ok(existsSync(file), 'the block lands at its target');
+    for (const dep of ['chart.ts', 'chart-geometry.ts', 'card.ts', 'select.ts']) assert.ok(existsSync(join(d, 'components', 'ui', dep)), `${dep} comes with it`);
+    const mod = await import(pathToFileURL(file).href);
+    const out = await ssr(mod.default());
+    assert.equal(out.match(/<ui-chart data-slot="chart"/g).length, 3, 'one chart per range, all served');
+    assert.match(out, /<option value="90d" selected(="")?>Last 3 months<\/option>/);
+    assert.equal(out.match(/data-tip=/g).length, 91 + 31 + 8, 'every point of every range is served as data');
+    assert.doesNotMatch(out, /class="[^"]*\bcn-[a-z]/, 'no base-form name reaches the page');
+  } finally {
+    rmSync(d, { recursive: true, force: true });
+  }
 });
 
 test('add chart installs chart.ts and chart-geometry.ts, and the installed copy renders', async () => {
