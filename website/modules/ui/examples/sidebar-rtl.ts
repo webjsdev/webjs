@@ -2,7 +2,9 @@ import { html } from '@webjsdev/core';
 import type { TemplateResult } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { avatarClass, avatarFallbackClass, avatarImageClass } from '#modules/ui/components/avatar.ts';
+import { buttonClass } from '#modules/ui/components/button.ts';
 import { collapsibleClass, collapsibleContentClass } from '#modules/ui/components/collapsible.ts';
+import { selectTriggerClass } from '#modules/ui/components/select.ts';
 import {
   sidebarContentClass,
   sidebarFooterClass,
@@ -140,6 +142,31 @@ const translations = {
 } as const;
 
 type Icon = (cls?: string) => TemplateResult;
+type Lang = keyof typeof translations;
+
+// shadcn's LanguageSelector languages, in its order.
+const LANGUAGES: { value: Lang; label: string }[] = [
+  { value: 'en', label: 'English' },
+  { value: 'ar', label: 'Arabic (العربية)' },
+  { value: 'he', label: 'Hebrew (עברית)' },
+];
+
+/**
+ * shadcn's LanguageSelector as a GET form: the language is the `?lang=` query
+ * string, so with JavaScript off the Apply button submits it, and with it on
+ * `<example-bind>` submits the select as soon as it changes.
+ */
+function languageSelector(lang: Lang) {
+  return html`<form method="get" data-view-submit class="absolute top-4 right-4 z-10 flex items-center gap-2 rtl:right-auto rtl:left-4" dir="ltr">
+    <label for="sidebar-rtl-language" class="sr-only">Language</label>
+    <ui-select size="sm">
+      <select id="sidebar-rtl-language" name="lang" data-autosubmit class=${cn(selectTriggerClass(), 'h-8 w-36')}>
+        ${LANGUAGES.map((l) => html`<option value=${l.value} ?selected=${l.value === lang}>${l.label}</option>`)}
+      </select>
+    </ui-select>
+    <noscript><button type="submit" class=${buttonClass({ variant: 'outline', size: 'sm' })}>Apply</button></noscript>
+  </form>`;
+}
 
 const user = {
   name: 'shadcn',
@@ -163,8 +190,9 @@ function userText() {
 
 // The provider is the dir attribute, and the sidebar sits on the reading
 // side: on the right when the page reads right to left.
-export default function SidebarRtl() {
-  const lang = 'ar';
+export default function SidebarRtl({ lang: asked }: { lang?: string } = {}) {
+  // Arabic unless ?lang= names another of the three, as shadcn's default.
+  const lang: Lang = asked === 'en' || asked === 'he' ? asked : 'ar';
   const { dir, values: t } = translations[lang];
   const side = dir === 'rtl' ? 'right' : 'left';
 
@@ -181,7 +209,8 @@ export default function SidebarRtl() {
   ];
 
   return html`
-    <div class="relative" dir=${dir} lang=${lang} data-lang=${lang}>
+    <example-bind class="relative block" dir=${dir} lang=${lang} data-lang=${lang}>
+      ${languageSelector(lang)}
       <ui-sidebar-provider>
         <ui-sidebar collapsible="icon" side=${side}>
           <div data-slot="sidebar-header" data-sidebar="header" class=${sidebarHeaderClass()}>
@@ -312,6 +341,6 @@ export default function SidebarRtl() {
           </header>
         </ui-sidebar-inset>
       </ui-sidebar-provider>
-    </div>
+    </example-bind>
   `;
 }

@@ -50,12 +50,18 @@ export interface RenderedDemo {
   source: string;
 }
 
-export async function renderDemo(name: string): Promise<RenderedDemo | null> {
+/**
+ * `opts.lang` is a language for a demo that has several (the RTL sidebar's
+ * `?lang=` on /ui/view): a two-letter code, passed to the demo as `{ lang }`,
+ * which picks it from the languages it knows. Anything else is dropped.
+ */
+export async function renderDemo(name: string, opts: { lang?: string } = {}): Promise<RenderedDemo | null> {
   if (typeof name !== 'string' || !NAME.test(name) || !(await demoNames()).has(name)) return null;
+  const lang = typeof opts?.lang === 'string' && /^[a-z]{2}$/.test(opts.lang) ? opts.lang : undefined;
   const file = join(EXAMPLES, `${name}.ts`);
   const mod = await import(`../examples/${name}.ts`);
   const [html, source] = await Promise.all([
-    renderToString(await mod.default(), { ssr: false }),
+    renderToString(await mod.default(lang ? { lang } : undefined), { ssr: false }),
     readFile(file, 'utf8'),
   ]);
   return { html, source: forApp(source) };
