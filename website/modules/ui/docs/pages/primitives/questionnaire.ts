@@ -59,7 +59,7 @@ export default async function body(toc: TocEntry[]) {
     <ui-questionnaire-submit></ui-questionnaire-submit>
   </ui-questionnaire-actions>
 </ui-questionnaire>`, { lang: 'html' })}
-    <p><code>&lt;ui-questionnaire&gt;</code> renders a form. Each <code>&lt;ui-questionnaire-item&gt;</code> renders a fieldset, and its <code>&lt;ui-questionnaire-title&gt;</code> renders the legend. <code>&lt;ui-questionnaire-choice&gt;</code> renders a label around a native radio or checkbox, the indicator and the shortcut hint, so there are no separate input, label and shortcut parts to compose.</p>
+    <p><code>&lt;ui-questionnaire&gt;</code> renders a form. Each <code>&lt;ui-questionnaire-item&gt;</code> renders a fieldset, and its <code>&lt;ui-questionnaire-title&gt;</code> renders the legend. <code>&lt;ui-questionnaire-choice&gt;</code> renders a label around a native radio or checkbox, the indicator and the shortcut hint, all from one element.</p>
 
     ${heading(toc, 2, 'Styled version')}
     <p>The kit has one version, and it is styled. Its parts are these elements:</p>
@@ -156,7 +156,7 @@ const items: Question[] = [
     detail: formData.get('detail'),
   });
 });`, { lineNumbers: true })}
-    <p>There is no <code>items</code> collection to pass. Every part renders on the server from its markup, and the element reads the item order from the DOM. Before the element loads, every item shows at once and Submit is the only action; once it loads it shows one item at a time and fills in the progress and the Previous, Skip and Next actions.</p>
+    <p>Every part renders on the server from its markup, and the element reads the item order from the DOM. Before the element loads, every item shows at once and Submit is the only action; once it loads it shows one item at a time and fills in the progress and the Previous, Skip and Next actions.</p>
 
     ${heading(toc, 2, 'Multiple selection')}
     <p><code>multiple</code> turns an item's fixed choices into native checkboxes. Read the answers with <code>FormData.getAll()</code>.</p>
@@ -191,7 +191,7 @@ const items: Question[] = [
     <p>The text input is always submitted, as an empty string when it was not used, so treat <code>""</code> as no answer.</p>
 
     ${heading(toc, 2, 'Explicit skip')}
-    <p><code>&lt;ui-questionnaire-skip&gt;</code> shows on an optional item, clears that item's answers, and moves on. The kit has no <code>onStatusChange</code>: a skipped item submits like an unanswered one, its choices absent from <code>FormData</code> and its text input empty. When your application needs to tell the two apart, record the click on the Skip action together with the active item, which the <code>ui-active-change</code> event names.</p>
+    <p><code>&lt;ui-questionnaire-skip&gt;</code> shows on an optional item, clears that item's answers, and moves on. A skipped item submits like an unanswered one, its choices absent from <code>FormData</code> and its text input empty. When your application needs to tell the two apart, record the click on the Skip action together with the active item, which the <code>ui-active-change</code> event names.</p>
     ${await preview('questionnaire-skip', 'min-h-[520px]')}
     ${codeFigure(`let active = questionnaire.items()[0]?.name;
 const skipped = new Set<string>();
@@ -218,7 +218,7 @@ questionnaire.querySelector('ui-questionnaire-skip')?.addEventListener('click', 
 </ui-questionnaire>`, { lang: 'html' })}
 
     ${heading(toc, 2, 'Answer shortcuts')}
-    <p>Use <code>shortcuts="letters"</code> or <code>shortcuts="numbers"</code> to give each fixed choice a key, by its position in its item. Each choice shows its hint on its own, so there is no shortcut part to place.</p>
+    <p>Use <code>shortcuts="letters"</code> or <code>shortcuts="numbers"</code> to give each fixed choice a key, by its position in its item. Each choice shows its own hint.</p>
     ${await preview('questionnaire-shortcuts', 'min-h-[480px]')}
     ${codeFigure(`<ui-questionnaire shortcuts="letters">
   <ui-questionnaire-item name="review" required>
@@ -255,7 +255,7 @@ async function rest(toc: TocEntry[]) {
     <p>The error stays hidden until the item is invalid. Its content replaces the default message, which is "Choose an answer to continue." on a required item.</p>
     ${codeFigure(`<ui-questionnaire-error>Please choose a project scope.</ui-questionnaire-error>`, { lang: 'html' })}
     <p>Validation still works without an error part. When one is rendered, it is a <code>role="alert"</code> while shown, so the message is announced.</p>
-    <p>For Zod or another validator, check the <code>FormData</code> in a <code>submit</code> listener, cancel the submit when it fails, and set the item's <code>invalid</code> property, which shows its error. The kit has no public way to move to an earlier item from your code, so this marks the item on screen, the last one when Submit fires.</p>
+    <p>For Zod or another validator, check the <code>FormData</code> in a <code>submit</code> listener, cancel the submit when it fails, and set the item's <code>invalid</code> property, which shows its error on the item on screen, the last one when Submit fires.</p>
     ${await preview('questionnaire-validation', 'min-h-[520px]')}
     ${codeFigure(`import type { UiQuestionnaireItem } from '#components/ui/questionnaire.ts';
 
@@ -270,7 +270,7 @@ questionnaire.addEventListener('submit', (event) => {
 });`, { lineNumbers: true })}
 
     ${heading(toc, 2, 'Controlled navigation')}
-    <p>The element owns the active item; there is no <code>item</code> attribute to set it from outside. It dispatches <code>ui-active-change</code> with <code>{ detail: { name } }</code> each time it moves, so your state can follow it, and its <code>next()</code>, <code>previous()</code> and <code>skip()</code> methods move it from your own controls.</p>
+    <p>The element owns the active item. It dispatches <code>ui-active-change</code> with <code>{ detail: { name } }</code> each time it moves, so your state can follow it, and its <code>next()</code>, <code>previous()</code> and <code>skip()</code> methods move it from your own controls.</p>
     ${await preview('questionnaire-controlled', 'min-h-[520px]')}
     ${codeFigure(`questionnaire.addEventListener('ui-active-change', (e) => {
   status.textContent = \`Current checkpoint: \${e.detail.name}\`;
@@ -279,7 +279,7 @@ questionnaire.addEventListener('submit', (event) => {
 nextButton.addEventListener('click', () => questionnaire.next());`)}
 
     ${heading(toc, 2, 'Resume with defaults')}
-    <p>Restore a saved draft with <code>checked</code> on the choices. The flow always starts on the first item, since there is no <code>defaultItem</code>, and <code>&lt;ui-questionnaire-input&gt;</code> takes no saved value. A native <code>&lt;button type="reset"&gt;</code> restores the inputs, but the element does not listen for the reset, so the choices' checked look and the active item stay as they were.</p>
+    <p>Restore a saved draft with <code>checked</code> on the choices. The flow starts on the first item.</p>
     ${await preview('questionnaire-resume', 'min-h-[520px]')}
     ${codeFigure(`<ui-questionnaire>
   <ui-questionnaire-item name="scope" required>
@@ -303,7 +303,7 @@ nextButton.addEventListener('click', () => questionnaire.next());`)}
 });`, { lineNumbers: true })}
 
     ${heading(toc, 2, 'Navigation state')}
-    <p>Navigation actions stay enabled so activating Next or Submit can show a validation error. The kit never disables them and has no render state or <code>data-status</code> to read. To change the look of Next while the active item has no checked choice, select on the state the markup does carry:</p>
+    <p>Navigation actions stay enabled so activating Next or Submit can show a validation error. To change the look of Next while the active item has no checked choice, select on the state the markup does carry:</p>
     ${await preview('questionnaire-navigation-state', 'min-h-[480px]')}
     ${codeFigure(`[data-slot="questionnaire"]:not(:has([data-slot="questionnaire-item"][data-active] :checked))
   [data-slot="questionnaire-next"] {
@@ -333,7 +333,7 @@ nextButton.addEventListener('click', () => questionnaire.next());`)}
     <p>Inactive items hide immediately, so animate the entry only.</p>
 
     ${heading(toc, 2, 'Card composition')}
-    <p>Place the root around a card and put the title and description in the card header, with the card's classes on them. The title still renders the legend, and the item names its fieldset by the title wherever it sits, so there is no <code>aria-labelledby</code> to wire.</p>
+    <p>Place the root around a card and put the title and description in the card header, with the card's classes on them. The title still renders the legend, and the item names its fieldset by the title wherever it sits.</p>
     ${await preview('questionnaire-card', 'min-h-[560px]')}
     ${codeFigure(`<ui-questionnaire>
   <div data-slot="card" class=\${cardClass()}>
@@ -387,7 +387,7 @@ nextButton.addEventListener('click', () => questionnaire.next());`)}
 </ui-dialog>`, { lang: 'html' })}
 
     ${heading(toc, 2, 'Custom render targets')}
-    <p>The kit has no <code>render</code> prop. Each part renders a fixed element (the root a <code>form</code>, an item a <code>fieldset</code>, a title a <code>legend</code>, a description a <code>p</code>, the actions <code>button</code>s), and a <code>class</code> on the part is merged onto that element. A part's host is <code>display: contents</code>, so the rendered element is the box its parent lays out. To render something else, edit the component file the CLI copied into your project.</p>
+    <p>Each part renders a fixed element (the root a <code>form</code>, an item a <code>fieldset</code>, a title a <code>legend</code>, a description a <code>p</code>, the actions <code>button</code>s), and a <code>class</code> on the part is merged onto that element. A part's host is <code>display: contents</code>, so the rendered element is the box its parent lays out. To render something else, edit the component file the CLI copied into your project.</p>
     <p>Unlike the headless primitive, every rendered element carries a <code>data-slot</code>, which the styles key on and you can select on too.</p>
 
     ${heading(toc, 2, 'Native forms')}
@@ -398,7 +398,7 @@ nextButton.addEventListener('click', () => questionnaire.next());`)}
       <li><code>FormData.getAll(itemName)</code> reads multiple answers.</li>
       <li>A skipped item's choices are absent from <code>FormData</code>; its text input, if it has one, is present and empty.</li>
     </ul>
-    <p>The form gets <code>novalidate</code> once the element loads, so validation uses the error parts instead of the browser's constraint UI. With JavaScript off it has no <code>novalidate</code>, every item shows, and the browser's own <code>required</code> check covers a required single-answer item's radios.</p>
+    <p>The form gets <code>novalidate</code> once the element loads, so validation uses the error parts instead of the browser's constraint UI. With JavaScript off every item shows, and the browser's own <code>required</code> check covers a required single-answer item's radios.</p>
     <p><code>form.reset()</code> restores the native controls only. The element does not reset the active item or the validation state.</p>
   `;
 }
@@ -417,7 +417,7 @@ async function reference(toc: TocEntry[]) {
       [code('Enter'), 'In an answer control, submits the form the browser\'s way, which the element turns into Next, validating first, and on the last item into Submit. On a focused action, activates it.'],
       [html`${code('A')} to ${code('Z')}, ${code('1')} to ${code('9')}`, html`With ${code('shortcuts')}, selects the matching choice of the active item, or toggles it in a ${code('multiple')} item. Does not advance.`],
     ])}
-    <p>Shortcuts pause while you type in a text field and while <code>Ctrl</code>, <code>Cmd</code> or <code>Alt</code> is held. There is no <code>Command/Ctrl</code> + <code>Enter</code> binding, and no way to turn the key handling off other than leaving out <code>shortcuts</code>; Enter is the browser's own form submission.</p>
+    <p>Shortcuts pause while you type in a text field and while <code>Ctrl</code>, <code>Cmd</code> or <code>Alt</code> is held. Enter is the browser's own form submission. Leave out <code>shortcuts</code> to keep the keys free.</p>
     <p>Navigation actions stay enabled so an attempted action can reveal validation feedback. See <a href="#navigation-state">Navigation state</a> to restyle an unanswered action.</p>
 
     ${heading(toc, 2, 'Accessibility')}
@@ -434,7 +434,7 @@ async function reference(toc: TocEntry[]) {
       <li>Validation focuses the first available answer control.</li>
       <li>Disabled items are omitted from progress and navigation.</li>
     </ul>
-    <p>Always give <code>&lt;ui-questionnaire-input&gt;</code> an accessible name with <code>aria-label</code>, which the element passes to the input it renders. It does not pass an <code>id</code> or <code>aria-labelledby</code>, so a visible <code>&lt;label for&gt;</code> cannot point at the input; repeat the visible text in <code>aria-label</code>.</p>
+    <p>Always give <code>&lt;ui-questionnaire-input&gt;</code> an accessible name with <code>aria-label</code>, which the element passes to the input it renders. When the input has a visible label, repeat its text in <code>aria-label</code>.</p>
     ${codeFigure(`<ui-questionnaire-input
   aria-label="Other answer"
   placeholder="Type another answer…"
@@ -442,19 +442,19 @@ async function reference(toc: TocEntry[]) {
     <p>A placeholder is not a label.</p>
 
     ${heading(toc, 2, 'Data attributes')}
-    <p>Use these attributes for styling. Boolean attributes are present when true and absent when false. They sit on the elements the parts render, not on the part hosts, and every rendered element also carries a <code>data-slot</code> named after its part. Where a state has no data attribute of its own, the native or ARIA attribute that carries it is listed.</p>
+    <p>Use these attributes for styling. Boolean attributes are present when true and absent when false. They sit on the elements the parts render, not on the part hosts, and every rendered element also carries a <code>data-slot</code> named after its part. Some states are carried by a native or ARIA attribute, which is listed with them.</p>
 
     ${heading(toc, 3, 'Root and Progress')}
     ${rows([
       ['data-shortcuts', html`${code('"letters"')} | ${code('"numbers"')} on the form when enabled.`],
     ])}
-    <p>There is no <code>data-current</code>, <code>data-total</code>, <code>data-first</code> or <code>data-last</code>. The progress element carries the position as <code>aria-valuenow</code> and <code>aria-valuemax</code>.</p>
+    <p>The progress element carries the position as <code>aria-valuenow</code> and <code>aria-valuemax</code>.</p>
 
     ${heading(toc, 3, 'Item')}
     ${rows([
       ['data-active', 'Present on the active item\'s fieldset once the element has loaded.'],
     ])}
-    <p>The fieldset also carries <code>hidden</code> and <code>inert</code> while inactive, <code>disabled</code> when the item is disabled, and <code>aria-invalid="true"</code> after failed validation. There is no <code>data-status</code>, <code>data-required</code>, <code>data-multiple</code>, <code>data-disabled</code> or <code>data-invalid</code>.</p>
+    <p>The fieldset also carries <code>hidden</code> and <code>inert</code> while inactive, <code>disabled</code> when the item is disabled, and <code>aria-invalid="true"</code> after failed validation.</p>
 
     ${heading(toc, 3, 'Choice')}
     ${rows([
@@ -464,7 +464,7 @@ async function reference(toc: TocEntry[]) {
       ['data-disabled', 'Present when the choice or its item is disabled.'],
       ['data-shortcut', 'The assigned key, a lowercase letter or a number. The hint shows it in uppercase.'],
     ])}
-    <p>The choice renders a label (<code>data-slot="questionnaire-choice"</code>) holding the input (<code>questionnaire-choice-input</code>), the indicator (<code>questionnaire-choice-indicator</code>, with <code>-indicator-dot</code> and <code>-indicator-check</code>), the label text (<code>questionnaire-choice-label</code>) and the shortcut hint (<code>questionnaire-choice-shortcut</code>). It has no <code>data-invalid</code>.</p>
+    <p>The choice renders a label (<code>data-slot="questionnaire-choice"</code>) holding the input (<code>questionnaire-choice-input</code>), the indicator (<code>questionnaire-choice-indicator</code>, with <code>-indicator-dot</code> and <code>-indicator-check</code>), the label text (<code>questionnaire-choice-label</code>) and the shortcut hint (<code>questionnaire-choice-shortcut</code>).</p>
 
     ${heading(toc, 3, 'Choices')}
     <p>No state attributes. The shortcut mode is on the form's <code>data-shortcuts</code>.</p>
@@ -480,7 +480,7 @@ async function reference(toc: TocEntry[]) {
       ['data-variant', 'The button variant.'],
       ['data-size', 'The button size.'],
     ])}
-    <p>An action that does not apply to the active item is <code>hidden</code> and <code>aria-hidden</code>; a visible Next or Submit carries <code>aria-keyshortcuts="Enter"</code>. There is no <code>data-visible</code>, <code>data-hidden</code>, <code>data-disabled</code>, <code>data-shortcut</code> or <code>data-status</code>.</p>
+    <p>An action that does not apply to the active item is <code>hidden</code> and <code>aria-hidden</code>; a visible Next or Submit carries <code>aria-keyshortcuts="Enter"</code>.</p>
 
     ${heading(toc, 2, 'API Reference')}
     ${heading(toc, 3, 'ui-questionnaire')}
@@ -502,7 +502,7 @@ async function reference(toc: TocEntry[]) {
       [code('ui-active-change'), html`Dispatched (bubbling) after the active item changes, with ${code('{ detail: { name } }')}.`],
       [code('submit'), 'The native submit event. The element cancels a submit that only moved to the next item, so check defaultPrevented.'],
     ])}
-    <p>There is no <code>item</code>, <code>defaultItem</code>, <code>items</code> or <code>noValidate</code> attribute: the flow starts on the first enabled item, the order comes from the markup, and <code>novalidate</code> is set once the element loads.</p>
+    <p>The flow starts on the first enabled item, the order comes from the markup, and <code>novalidate</code> is set once the element loads.</p>
 
     ${heading(toc, 3, 'ui-questionnaire-progress')}
     <p>Position within the enabled items. It renders <code>Question {current} of {total}</code> and takes no attributes, content or render target apart from a merged <code>class</code>. Its accessible name is "Questionnaire progress".</p>
@@ -515,7 +515,7 @@ async function reference(toc: TocEntry[]) {
       [code('multiple'), code('boolean'), code('false'), 'Renders fixed choices as checkboxes.'],
       [code('disabled'), code('boolean'), code('false'), 'Omits the item from progress, navigation, validation and submission.'],
     ])}
-    <p>It also has an <code>invalid</code> property, set by validation and settable from your own validator, and <code>inputs()</code> and <code>choices()</code> methods returning its answer controls and its choices. Item names must be unique within a questionnaire. There is no <code>onStatusChange</code>.</p>
+    <p>It also has an <code>invalid</code> property, set by validation and settable from your own validator, and <code>inputs()</code> and <code>choices()</code> methods returning its answer controls and its choices. Item names must be unique within a questionnaire.</p>
 
     ${heading(toc, 3, 'ui-questionnaire-title')}
     <p>The item title. It renders a <code>legend</code> with an id the item uses for <code>aria-labelledby</code>, and takes a merged <code>class</code>.</p>
@@ -534,7 +534,7 @@ async function reference(toc: TocEntry[]) {
       [code('disabled'), code('boolean'), code('false'), 'Disables the native answer control.'],
       [code('class'), code('string'), '-', 'Merged onto the label.'],
     ])}
-    <p>Its <code>input()</code> method returns the native control. There is no controlled <code>checked</code>: the control owns its state after the first render. Put a <code>&lt;ui-questionnaire-choice-description&gt;</code> inside for a second line.</p>
+    <p>Its <code>input()</code> method returns the native control, which owns its state after the first render. Put a <code>&lt;ui-questionnaire-choice-description&gt;</code> inside for a second line.</p>
 
     ${heading(toc, 3, 'Choice input, label and shortcut')}
     <p>The choice's input, label and shortcut hint are rendered by <code>&lt;ui-questionnaire-choice&gt;</code>: the input is laid transparent over the row, the label text is the choice's content, and the shortcut hint shows the assigned key and stays hidden without one. They are not separate elements, so they take no attributes; style them through their <code>data-slot</code>.</p>
@@ -546,7 +546,7 @@ async function reference(toc: TocEntry[]) {
       [code('aria-label'), code('string'), '-', 'The input\'s accessible name.'],
       [code('class'), code('string'), '-', 'Merged onto the wrapper around the input.'],
     ])}
-    <p>The input is always <code>type="text"</code>, and there is no <code>value</code>, <code>defaultValue</code> or <code>type</code> attribute.</p>
+    <p>The input is a <code>type="text"</code> field.</p>
 
     ${heading(toc, 3, 'ui-questionnaire-error')}
     <p>The validation message, a <code>p</code> hidden until its item fails validation. Its content replaces the default message, "Choose an answer to continue." on a required item and "Choose an answer or skip this question." otherwise. It takes a merged <code>class</code>.</p>

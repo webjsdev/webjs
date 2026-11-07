@@ -128,7 +128,7 @@ import { messageClass, messageContentClass } from '#components/ui/message.ts';`)
 
     ${heading(toc, 3, 'Keeping Context Visible')}
     <p>When a new turn starts, it should still feel like part of the same continuous thread. The scroller keeps a slice of the previous item visible above the anchor, so the reader keeps their context instead of feeling like the conversation restarted on a blank page.</p>
-    <p>The kit keeps 64px of the previous turn in view. The amount is fixed: there is no attribute to change it.</p>
+    <p>The kit keeps 64px of the previous turn in view.</p>
     ${codeFigure(`<!-- 64px of the previous turn stays visible above a newly anchored row. -->
 <ui-message-scroller>...</ui-message-scroller>`)}
     <p>The example below shows the peek in a live transcript. Its slider leaves the peek at 64px, since the amount is fixed.</p>
@@ -152,11 +152,11 @@ import { messageClass, messageContentClass } from '#components/ui/message.ts';`)
     ${heading(toc, 3, 'Avoiding a Flash on Reload')}
     <p>A scroll container always opens at the top. HTML has no way to set <code>scrollTop</code>, so a server-rendered transcript shows the oldest messages first. After JavaScript runs, <code>default-scroll-position</code> moves the view, and you would see a jump.</p>
     <p>The kit's viewport carries <code>data-pending-scroll</code> from the server render until the element applies the opening position, for every position including <code>"start"</code>. The styled viewport stays hidden while the attribute is present, so you see the frame instead of the jump.</p>
-    <p>There is no inline script that scrolls a server-rendered viewport before JavaScript loads: the element renders its own viewport and applies the position once it upgrades, so the hidden frame is what shows until then.</p>
+    <p>The element renders its own viewport and applies the position once it upgrades, so the hidden frame is what shows until then.</p>
 
     ${heading(toc, 3, 'Loading Earlier Messages')}
     <p>Loading earlier messages should not move the conversation the reader is already looking at. When older rows are prepended above the current transcript, the browser's own scroll anchoring keeps the visible row in place, so the reader stays where they are while history loads above them.</p>
-    <p>This needs no setting. The kit has no <code>preserveScrollOnPrepend</code> option, because the behavior is the browser's (<code>overflow-anchor</code>), and it is on by default.</p>
+    <p>This needs no setting: the behavior is the browser's own scroll anchoring (<code>overflow-anchor</code>), and it is on by default.</p>
     ${await componentPreview('message-scroller-load-history', PREVIEW)}
     <p>Use stable <code>message-id</code> values for message rows, and render the list with <code>repeat()</code> keyed on them, so a prepend inserts new rows rather than rewriting the ones the reader is looking at.</p>
 
@@ -187,7 +187,7 @@ scroller.scrollToStart();`)}
   const { visibleMessageIds } = e.detail;
 });`)}
     ${await componentPreview('message-scroller-visibility', { ...PREVIEW, hideCode: true })}
-    <p><code>visibleMessageIds</code> answers "what is on screen", in document order. The kit has no <code>currentAnchorId</code>: to answer "where am I", take the last anchored row at or above the first visible id.</p>
+    <p><code>visibleMessageIds</code> answers "what is on screen", in document order. To answer "where am I", take the last anchored row at or above the first visible id.</p>
     <p>Visibility tracking runs for every item that has a <code>message-id</code>, and rows need one to participate.</p>
 
     ${heading(toc, 3, 'Reading Scroll State')}
@@ -215,11 +215,11 @@ const viewport = scroller.viewport(); // the scrolling element`)}
     ${codeFigure(`<ui-message-scroller-content aria-label="Conversation">
   ...
 </ui-message-scroller-content>`)}
-    <p>The viewport is a plain scroll container: it does not add <code>role="region"</code>, a label, or <code>tabindex="0"</code>, so add those yourself if keyboard users should focus the transcript directly.</p>
+    <p>The viewport is a plain scroll container. To let keyboard users focus the transcript directly, set <code>role="region"</code>, an <code>aria-label</code> and <code>tabindex="0"</code> on the scrolling element, which the root's <code>viewport()</code> method returns.</p>
     <p><code>&lt;ui-message-scroller-button&gt;</code> renders a real button named "Scroll to end" or "Scroll to start". When there is nothing to scroll toward, it uses <code>tabindex="-1"</code> and <code>aria-hidden="true"</code>, and exposes <code>data-active="false"</code>, so inactive scroll controls do not create extra focus stops.</p>
 
     ${heading(toc, 2, 'Unstyled')}
-    <p>The kit has no separate headless package. The behavior lives in the elements, and the classes they apply are exported as helpers (<code>messageScrollerClass()</code>, <code>messageScrollerViewportClass()</code>, <code>messageScrollerContentClass()</code>, <code>messageScrollerItemClass()</code>, <code>messageScrollerButtonClass()</code>), so you can read or restyle them. A <code>class</code> on any part is merged with that part's classes.</p>
+    <p>The behavior lives in the elements, and the classes they apply are exported as helpers (<code>messageScrollerClass()</code>, <code>messageScrollerViewportClass()</code>, <code>messageScrollerContentClass()</code>, <code>messageScrollerItemClass()</code>, <code>messageScrollerButtonClass()</code>), so you can read or restyle them. A <code>class</code> on any part is merged with that part's classes.</p>
 
     ${heading(toc, 2, 'API Reference')}
     ${heading(toc, 3, 'ui-message-scroller')}
@@ -257,7 +257,7 @@ const viewport = scroller.viewport(); // the scrolling element`)}
     </div>
 
     ${heading(toc, 3, 'ui-message-scroller-viewport')}
-    <p>The scrolling element. It takes no attributes. It carries <code>data-pending-scroll</code> until the opening position applies and <code>data-autoscrolling</code> while it follows new output.</p>
+    <p>The scrolling element. It carries <code>data-pending-scroll</code> until the opening position applies and <code>data-autoscrolling</code> while it follows new output.</p>
 
     ${heading(toc, 3, 'ui-message-scroller-content')}
     <p>The transcript, a <code>role="log"</code> with <code>aria-relevant="additions"</code>. Its <code>aria-label</code> is passed to the log.</p>

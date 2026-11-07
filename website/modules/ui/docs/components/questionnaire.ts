@@ -138,19 +138,19 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('questionnaire-skip', { align: 'end', previewClass: 'min-h-[520px] p-4 sm:p-8' })}
 
     ${heading(toc, 2, 'Shortcuts')}
-    <p>Assign a letter or number key to each answer with <code>shortcuts="letters"</code> or <code>shortcuts="numbers"</code>. A key picks the matching answer, except while typing in a text field. Set the attribute in the markup: the choices read it when they render, so changing it after load does not redraw their badges, which is why this demo has no mode switcher.</p>
+    <p>Assign a letter or number key to each answer with <code>shortcuts="letters"</code> or <code>shortcuts="numbers"</code>. A key picks the matching answer, except while typing in a text field. Set the attribute in the markup, since the choices read it when they render.</p>
     ${await componentPreview('questionnaire-shortcuts', { align: 'end', previewClass: 'min-h-[480px] p-4 sm:p-8' })}
 
     ${heading(toc, 2, 'Custom Validation')}
-    <p>The element checks <code>required</code> items itself. For a rule across answers, listen for <code>submit</code>, check the <code>FormData</code> against a schema such as Zod, call <code>preventDefault()</code> when it fails, and put the message in the item's <code>&lt;ui-questionnaire-error&gt;</code>. The kit has no public way yet to return to an earlier item and mark it invalid from host code, so the demo below runs only the built-in required check.</p>
+    <p>The element checks <code>required</code> items itself. For a rule across answers, listen for <code>submit</code>, check the <code>FormData</code> against a schema such as Zod, call <code>preventDefault()</code> when it fails, and put the message in the item's <code>&lt;ui-questionnaire-error&gt;</code>. The demo below runs the built-in required check.</p>
     ${await componentPreview('questionnaire-validation', { align: 'end', previewClass: 'min-h-[520px] p-4 sm:p-8' })}
 
     ${heading(toc, 2, 'Controlled')}
-    <p>The element owns the active item and dispatches <code>ui-active-change</code> with <code>{ detail: { name } }</code> each time it moves, so host state can follow it. It has no attribute for setting the active item from outside, so the status line in this demo keeps its first value until a listener like that updates it.</p>
+    <p>The element owns the active item and dispatches <code>ui-active-change</code> with <code>{ detail: { name } }</code> each time it moves, so host state can follow it. Update a status line like the one in this demo from that listener.</p>
     ${await componentPreview('questionnaire-controlled', { align: 'end', previewClass: 'min-h-[520px] p-4 sm:p-8' })}
 
     ${heading(toc, 2, 'Resume')}
-    <p>Restore saved answers with <code>checked</code> on the choices. The flow always starts on the first item, and <code>&lt;ui-questionnaire-input&gt;</code> takes no saved value yet. A native <code>&lt;button type="reset"&gt;</code> restores the inputs, but the choices do not redraw on a reset yet, so the demo has no reset button.</p>
+    <p>Restore saved answers with <code>checked</code> on the choices. The flow starts on the first item.</p>
     ${await componentPreview('questionnaire-resume', { align: 'end', previewClass: 'min-h-[520px] p-4 sm:p-8' })}
 
     ${heading(toc, 2, 'Conditional Items')}
@@ -162,7 +162,7 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('questionnaire-navigation-state', { align: 'end', previewClass: 'min-h-[480px] p-4 sm:p-8' })}
 
     ${heading(toc, 2, 'Custom Progress')}
-    <p><code>&lt;ui-questionnaire-progress&gt;</code> renders a "Question 1 of 4" line and takes no custom render, so a segmented progress bar is not available yet. Style the line with classes on the element.</p>
+    <p><code>&lt;ui-questionnaire-progress&gt;</code> renders a "Question 1 of 4" line. Style the line with classes on the element.</p>
     ${await componentPreview('questionnaire-progress', { align: 'end', previewClass: 'min-h-[520px] p-4 sm:p-8' })}
 
     ${heading(toc, 2, 'Animated Items')}
@@ -183,7 +183,7 @@ export default async function body(toc: TocEntry[]) {
     <p>Always give <code>&lt;ui-questionnaire-input&gt;</code> an accessible name with <code>aria-label</code>. A placeholder is not a label.</p>
 
     ${heading(toc, 2, 'Unstyled')}
-    <p>There is no separate headless layer: the behavior lives in the <code>&lt;ui-questionnaire-*&gt;</code> elements, and the classes they apply are exported as helpers such as <code>questionnaireChoiceClass()</code>. Since <code>webjs ui add</code> copies the source into your project, change the markup or the classes there.</p>
+    <p>The behavior lives in the <code>&lt;ui-questionnaire-*&gt;</code> elements, and the classes they apply are exported as helpers such as <code>questionnaireChoiceClass()</code>. Since <code>webjs ui add</code> copies the source into your project, change the markup or the classes there.</p>
 
     ${heading(toc, 2, 'API Reference')}
     ${heading(toc, 3, 'ui-questionnaire')}
