@@ -316,8 +316,13 @@ test('ui-calendar: show-week-number serves a leading column of named week number
   const rows = [...out.matchAll(/<td role="rowheader" scope="row" aria-label="Week (\d+)"[^>]*><div[^>]*>(\d+)<\/div><\/td>/g)].map((m) => [m[1], m[2]]);
   assert.deepEqual(rows, [['1', '01'], ['2', '02'], ['3', '03'], ['4', '04'], ['5', '05']], 'January 2025, Sunday-first: weeks 1 to 5, shown two digits wide');
   assert.match(out, /\[&amp;:nth-child\(2\)\[data-selected=true\]_button\]:rounded-s-\(--cell-radius\)/, 'the first day\'s corner moves to the second cell');
-  const iso = await ssr(['calendar.ts'], (html) => html`<ui-calendar month="2021-01" locale="en-US" week-starts-on="1" show-week-number></ui-calendar>`);
-  assert.match(iso, /aria-label="Week 53"/, 'Monday-first weeks are ISO, so 2021 opens in week 53');
+  const monday = await ssr(['calendar.ts'], (html) => html`<ui-calendar month="2021-01" locale="en-US" week-starts-on="1" show-week-number></ui-calendar>`);
+  const mondayWeeks = [...monday.matchAll(/aria-label="Week (\d+)"/g)].map((m) => m[1]);
+  assert.deepEqual(mondayWeeks, ['1', '2', '3', '4', '5'], 'Monday-first January 2021 still numbers the week holding January 1 as week 1');
+  const iso = await ssr(['calendar.ts'], (html) => html`<ui-calendar month="2021-01" locale="en-US" iso-week show-week-number></ui-calendar>`);
+  const isoWeeks = [...iso.matchAll(/aria-label="Week (\d+)"/g)].map((m) => m[1]);
+  assert.deepEqual(isoWeeks, ['53', '1', '2', '3', '4'], 'iso-week numbers ISO weeks, so January 2021 opens in week 53');
+  assert.match(iso, /<th scope="col" aria-label="Week Number"[^>]*><\/th><th scope="col" aria-label="Monday"/, 'and starts the week on Monday');
   const plain = await ssr(['calendar.ts'], (html) => html`<ui-calendar month="2025-01" locale="en-US"></ui-calendar>`);
   assert.doesNotMatch(plain, /rowheader|Week Number/, 'without the attribute there is no column');
 });

@@ -14,6 +14,7 @@
  *   showOutsideDays          → `show-outside-days="false"` hides them (shown by default)
  *   weekStartsOn             → `week-starts-on` (0 is Sunday, the default)
  *   showWeekNumber           → `show-week-number` (a leading column of week numbers)
+ *   ISOWeek                  → `iso-week` (ISO 8601 weeks: Monday first, ISO numbers)
  *   captionLayout="dropdown" → `caption-layout="dropdown"` (month and year selects)
  *   disabled / startMonth / endMonth
  *                            → `min` / `max` ("2025-01-01"), and `disabled` for the whole grid
@@ -123,17 +124,19 @@ export function monthWeeks(y: number, m: number, weekStartsOn = 0): CalendarDate
 }
 
 /**
- * The number of the week `date` falls in, as the calendar labels a row. Weeks
- * starting on Monday are numbered ISO 8601 style (week 1 holds the year's
- * first Thursday). Otherwise week 1 is the week holding January 1, counted
- * from `weekStartsOn`, which is how react-day-picker numbers them by default.
+ * The number of the week `date` falls in, as the calendar labels a row, the
+ * way react-day-picker numbers it. By default week 1 is the week holding
+ * January 1, with weeks counted from `weekStartsOn` (date-fns getWeek, with
+ * the en-US first week). With `iso` the week is ISO 8601's: weeks start on
+ * Monday and week 1 holds the year's first Thursday (date-fns getISOWeek),
+ * whatever `weekStartsOn` says.
  */
-export function weekNumber(date: CalendarDate, weekStartsOn = 0): number {
+export function weekNumber(date: CalendarDate, weekStartsOn = 0, iso = false): number {
   const DAY = 86400000;
-  const iso = weekStartsOn === 1;
+  const start = iso ? 1 : weekStartsOn;
   // The day of January that week 1 must contain.
   const anchor = iso ? 4 : 1;
-  const startOfWeek = (ms: number): number => ms - ((new Date(ms).getUTCDay() - weekStartsOn + 7) % 7) * DAY;
+  const startOfWeek = (ms: number): number => ms - ((new Date(ms).getUTCDay() - start + 7) % 7) * DAY;
   const at = Date.UTC(date.y, date.m, date.d);
   const firstOf = (y: number): number => startOfWeek(Date.UTC(y, 0, anchor));
   const year = at >= firstOf(date.y + 1) ? date.y + 1 : at >= firstOf(date.y) ? date.y : date.y - 1;
@@ -197,6 +200,7 @@ export class UiCalendar extends WebComponent({
   showOutsideDays: prop(String, { attribute: 'show-outside-days' }),
   weekStartsOn: prop(Number, { attribute: 'week-starts-on' }),
   showWeekNumber: prop(Boolean, { attribute: 'show-week-number' }),
+  isoWeek: prop(Boolean, { attribute: 'iso-week' }),
   captionLayout: prop<'label' | 'dropdown'>(String, { attribute: 'caption-layout' }),
   min: String,
   max: String,
@@ -220,6 +224,7 @@ export class UiCalendar extends WebComponent({
     this.showOutsideDays = 'true';
     this.weekStartsOn = 0;
     this.showWeekNumber = false;
+    this.isoWeek = false;
     this.captionLayout = 'label';
     this.min = '';
     this.max = '';
@@ -384,7 +389,7 @@ export class UiCalendar extends WebComponent({
     const caption = this._fmt({ month: 'long', year: 'numeric' });
     const full = this._fmt({ weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     const en = this._locale().toLowerCase().startsWith('en');
-    const headerDays = monthWeeks(2024, 0, this.weekStartsOn || 0)[1];
+    const headerDays = monthWeeks(2024, 0, this._weekStart())[1];
     const dropdown = this.captionLayout === 'dropdown';
     const weeks = !!this.showWeekNumber;
     const hidden = this.name ? this._hiddenInputs() : '';
@@ -420,7 +425,7 @@ export class UiCalendar extends WebComponent({
         : ''}${headerDays.map((d) => {
         const short = weekday.format(toUTC(d));
         return html`<th scope="col" aria-label=${weekdayLong.format(toUTC(d))} class="flex-1 rounded-(--cell-radius) text-[0.8rem] font-normal text-muted-foreground select-none">${en ? short.slice(0, 2) : short}</th>`;
-      })}</tr></thead><tbody>${monthWeeks(mo.y, mo.m, this.weekStartsOn || 0).map((week) => html`<tr class="mt-2 flex w-full">${weeks
+      })}</tr></thead><tbody>${monthWeeks(mo.y, mo.m, this._weekStart()).map((week) => html`<tr class="mt-2 flex w-full">${weeks
         ? this._weekNumberCell(week)
         : ''}${week.map((day) => {
         const iso = formatDate(day);
@@ -471,10 +476,16 @@ export class UiCalendar extends WebComponent({
     })}</div>${hidden}</div>`;
   }
 
+  // The first day of a week: Monday for ISO weeks, as react-day-picker's
+  // ISOWeek lays them out, else `week-starts-on`.
+  _weekStart(): number {
+    return this.isoWeek ? 1 : this.weekStartsOn || 0;
+  }
+
   // A row's week number, a header cell for the row as react-day-picker draws
   // it: named "Week N" and shown two digits wide.
   _weekNumberCell(week: CalendarDate[]): unknown {
-    const n = weekNumber(week[0], this.weekStartsOn || 0);
+    const n = weekNumber(week[0], this._weekStart(), !!this.isoWeek);
     return html`<td role="rowheader" scope="row" aria-label=${`Week ${n}`} class="text-[0.8rem] text-muted-foreground select-none"><div class="flex size-(--cell-size) items-center justify-center text-center">${String(n).padStart(2, '0')}</div></td>`;
   }
 
@@ -515,7 +526,7 @@ export class UiCalendar extends WebComponent({
     const day = parseDate(iso);
     if (!day) return;
     const rtl = typeof getComputedStyle === 'function' && getComputedStyle(this).direction === 'rtl';
-    const w = this.weekStartsOn || 0;
+    const w = this._weekStart();
     let next: CalendarDate | null = null;
     switch (e.key) {
       case 'ArrowLeft': next = addDays(day, rtl ? 1 : -1); break;

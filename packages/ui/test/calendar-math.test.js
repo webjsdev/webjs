@@ -65,23 +65,33 @@ test('addToRange starts, ends, swaps a backwards end, and restarts a complete ra
 });
 
 // Each row: a date, then its week number as react-day-picker 9 numbers it with
-// date-fns 4, for weeks starting on Sunday (getWeek, the week holding January
-// 1 is week 1), on Monday (getISOWeek) and on Saturday (getWeek again). The
-// values were read from date-fns itself; the boundaries around New Year are
-// where the two schemes part.
+// date-fns 4: getWeek (the week holding January 1 is week 1) for weeks
+// starting on Sunday, Monday and Saturday, then getISOWeek, which its ISOWeek
+// option uses. The values were read from date-fns itself. Around New Year the
+// schemes part: Monday-first 2021-01-01 is week 1, but ISO week 53.
 const WEEKS = [
-  ['2020-12-31', 1, 53, 1], ['2021-01-01', 1, 53, 1], ['2021-01-03', 2, 53, 2], ['2021-01-04', 2, 1, 2],
-  ['2022-01-01', 1, 52, 1], ['2022-01-02', 2, 52, 1], ['2023-12-31', 1, 52, 1], ['2024-01-01', 1, 1, 1],
-  ['2024-12-29', 1, 52, 1], ['2024-12-30', 1, 1, 1], ['2025-01-12', 3, 2, 3], ['2025-06-15', 25, 24, 25],
-  ['2026-12-31', 1, 53, 1], ['2027-01-01', 1, 53, 1], ['2027-01-03', 2, 53, 2], ['2028-12-31', 1, 52, 1],
+  ['2020-12-31', 1, 1, 1, 53], ['2021-01-01', 1, 1, 1, 53], ['2021-01-03', 2, 1, 2, 53], ['2021-01-04', 2, 2, 2, 1],
+  ['2022-01-01', 1, 1, 1, 52], ['2022-01-02', 2, 1, 1, 52], ['2023-12-31', 1, 53, 1, 52], ['2024-01-01', 1, 1, 1, 1],
+  ['2024-12-29', 1, 52, 1, 52], ['2024-12-30', 1, 1, 1, 1], ['2025-01-12', 3, 2, 3, 2], ['2025-06-15', 25, 24, 25, 24],
+  ['2026-12-31', 1, 1, 1, 53], ['2027-01-01', 1, 1, 1, 53], ['2027-01-03', 2, 1, 2, 53], ['2028-12-31', 1, 53, 1, 52],
 ];
 
-test('weekNumber numbers a week as react-day-picker does: ISO from Monday, else the week holding January 1', () => {
+test('weekNumber numbers a week as react-day-picker does: the week holding January 1 is week 1, from any first day', () => {
   for (const [date, sunday, monday, saturday] of WEEKS) {
     assert.equal(weekNumber(d(date), 0), sunday, `${date}, Sunday-first`);
-    assert.equal(weekNumber(d(date), 1), monday, `${date}, Monday-first (ISO)`);
+    assert.equal(weekNumber(d(date), 1), monday, `${date}, Monday-first`);
     assert.equal(weekNumber(d(date), 6), saturday, `${date}, Saturday-first`);
   }
+});
+
+test('weekNumber with iso numbers ISO 8601 weeks, whatever the first day', () => {
+  for (const [date, , , , iso] of WEEKS) {
+    for (const start of [0, 1, 6]) assert.equal(weekNumber(d(date), start, true), iso, `${date}, ISO (week-starts-on ${start})`);
+  }
+  assert.equal(weekNumber(d('2021-01-01'), 1), 1, 'Monday-first 2021-01-01 is week 1');
+  assert.equal(weekNumber(d('2021-01-01'), 1, true), 53, 'and ISO week 53');
+  assert.equal(weekNumber(d('2027-01-01'), 1), 1);
+  assert.equal(weekNumber(d('2027-01-01'), 1, true), 53);
 });
 
 test('weekNumber gives every day of a calendar row the same number', () => {
@@ -92,5 +102,10 @@ test('weekNumber gives every day of a calendar row the same number', () => {
         for (const day of week) assert.equal(weekNumber(day, start), n, `${formatDate(day)} with weeks from ${start}`);
       }
     }
+  }
+  // ISO rows start on Monday.
+  for (const week of monthWeeks(2021, 0, 1)) {
+    const n = weekNumber(week[0], 1, true);
+    for (const day of week) assert.equal(weekNumber(day, 1, true), n, `${formatDate(day)}, ISO`);
   }
 });
