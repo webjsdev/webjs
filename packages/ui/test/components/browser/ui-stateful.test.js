@@ -685,6 +685,36 @@ suite('ui-calendar', () => {
     root.remove();
   });
 
+  // shadcn's Calendar › Week Numbers (react-day-picker's showWeekNumber).
+  test('show-week-number leads each row with its week number, and the days still pick and move', async () => {
+    const root = await mount(html`<ui-calendar mode="single" month="2025-01" value="2025-01-12" locale="en-US" show-week-number></ui-calendar>`);
+    try {
+      await tick();
+      const el = root.querySelector('ui-calendar');
+      const rows = [...el.querySelectorAll('[role="grid"] tbody tr')];
+      assert.equal(rows.length, 5);
+      for (const [i, row] of rows.entries()) {
+        const head = row.firstElementChild;
+        assert.equal(head.getAttribute('role'), 'rowheader', `row ${i + 1} opens with its week number`);
+        assert.equal(head.getAttribute('aria-label'), `Week ${i + 1}`);
+        assert.equal(head.textContent.trim(), String(i + 1).padStart(2, '0'));
+      }
+      assert.equal(el.querySelector('thead th').getAttribute('aria-label'), 'Week Number', 'over a header of its own');
+      btn(el, '2025-01-15').click();
+      await tick();
+      assert.deepEqual(el.selected, '2025-01-15', 'a day still picks');
+      btn(el, '2025-01-15').focus();
+      key(btn(el, '2025-01-15'), 'ArrowRight');
+      await tick();
+      assert.equal(document.activeElement, btn(el, '2025-01-16'), 'and the arrows move between days, past the week column');
+      key(btn(el, '2025-01-16'), 'ArrowDown');
+      await tick();
+      assert.equal(document.activeElement, btn(el, '2025-01-23'));
+    } finally {
+      root.remove();
+    }
+  });
+
   test('multiple: clicks toggle days in and out', async () => {
     const root = await mount(html`<ui-calendar mode="multiple" month="2025-06" locale="en-US"></ui-calendar>`);
     await tick();

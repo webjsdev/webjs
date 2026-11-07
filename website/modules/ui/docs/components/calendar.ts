@@ -88,7 +88,7 @@ export default async function body(toc: TocEntry[]) {
     <p><code>&lt;ui-calendar&gt;</code> renders its own day buttons and offers no slot for extra content in them, such as a price under each day.</p>
 
     ${heading(toc, 2, 'Week Numbers')}
-    <p>Use <code>week-starts-on</code> to choose the first day of the week (0 is Sunday).</p>
+    <p>Use <code>show-week-number</code> to show week numbers. Weeks that start on Monday (<code>week-starts-on="1"</code>) are numbered ISO 8601 style; otherwise week 1 is the week that holds January 1.</p>
     ${await componentPreview('calendar-week-numbers', { previewClass: 'h-96' })}
 
     ${heading(toc, 2, 'RTL')}
@@ -115,6 +115,7 @@ export default async function body(toc: TocEntry[]) {
           <tr><td><code>caption-layout</code></td><td><code>"label" | "dropdown"</code></td><td><code>"label"</code></td></tr>
           <tr><td><code>show-outside-days</code></td><td><code>"true" | "false"</code></td><td><code>"true"</code></td></tr>
           <tr><td><code>week-starts-on</code></td><td><code>number</code> (0 is Sunday)</td><td><code>0</code></td></tr>
+          <tr><td><code>show-week-number</code></td><td><code>boolean</code></td><td><code>false</code></td></tr>
           <tr><td><code>min</code> / <code>max</code></td><td><code>string</code>: <code>"2025-01-01"</code></td><td>-</td></tr>
           <tr><td><code>disabled</code></td><td><code>boolean</code></td><td><code>false</code></td></tr>
           <tr><td><code>locale</code></td><td><code>string</code>, a BCP 47 tag</td><td>the page's <code>lang</code></td></tr>

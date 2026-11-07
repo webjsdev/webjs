@@ -310,6 +310,18 @@ test('ui-combobox: the initial value is served in a hidden form control, so it s
   assert.match(out, /role="listbox"[^>]*aria-multiselectable="true"|aria-multiselectable="true"[^>]*role="listbox"/, 'a multiselectable listbox');
 });
 
+test('ui-calendar: show-week-number serves a leading column of named week numbers', { skip }, async () => {
+  const out = await ssr(['calendar.ts'], (html) => html`<ui-calendar mode="single" value="2025-01-12" month="2025-01" locale="en-US" show-week-number></ui-calendar>`);
+  assert.match(out, /<tr class="flex"><th scope="col" aria-label="Week Number" class="w-\(--cell-size\) select-none"><\/th><th/, 'the header row opens with the week-number header');
+  const rows = [...out.matchAll(/<td role="rowheader" scope="row" aria-label="Week (\d+)"[^>]*><div[^>]*>(\d+)<\/div><\/td>/g)].map((m) => [m[1], m[2]]);
+  assert.deepEqual(rows, [['1', '01'], ['2', '02'], ['3', '03'], ['4', '04'], ['5', '05']], 'January 2025, Sunday-first: weeks 1 to 5, shown two digits wide');
+  assert.match(out, /\[&amp;:nth-child\(2\)\[data-selected=true\]_button\]:rounded-s-\(--cell-radius\)/, 'the first day\'s corner moves to the second cell');
+  const iso = await ssr(['calendar.ts'], (html) => html`<ui-calendar month="2021-01" locale="en-US" week-starts-on="1" show-week-number></ui-calendar>`);
+  assert.match(iso, /aria-label="Week 53"/, 'Monday-first weeks are ISO, so 2021 opens in week 53');
+  const plain = await ssr(['calendar.ts'], (html) => html`<ui-calendar month="2025-01" locale="en-US"></ui-calendar>`);
+  assert.doesNotMatch(plain, /rowheader|Week Number/, 'without the attribute there is no column');
+});
+
 test('ui-calendar: the server renders the month grid, the chosen day and its hidden form value', { skip }, async () => {
   const out = await ssr(
     ['calendar.ts'],

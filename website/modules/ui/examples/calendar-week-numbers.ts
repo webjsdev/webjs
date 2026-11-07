@@ -2,8 +2,7 @@ import { html } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { cardClass, cardContentClass } from '#modules/ui/components/card.ts';
 
-// <ui-calendar> has no week-number column, so this is the same February with
-// the 3rd selected and the weeks unnumbered.
+// February with the 3rd selected, each row led by its week number.
 export default function CalendarWeekNumbers() {
   const year = new Date().getFullYear();
 
@@ -14,6 +13,7 @@ export default function CalendarWeekNumbers() {
           mode="single"
           value=${year + '-02-03'}
           month=${year + '-02'}
+          show-week-number
         ></ui-calendar>
       </div>
     </div>

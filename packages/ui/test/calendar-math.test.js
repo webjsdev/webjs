@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const {
-  parseDate, formatDate, addDays, addMonths, compareDates, sameDay, monthWeeks, addToRange,
+  parseDate, formatDate, addDays, addMonths, compareDates, sameDay, monthWeeks, addToRange, weekNumber,
 } = await import(join(HERE, '..', 'packages', 'registry', 'components', 'calendar.ts'));
 
 const d = (s) => parseDate(s);
@@ -62,4 +62,35 @@ test('addToRange starts, ends, swaps a backwards end, and restarts a complete ra
   assert.deepEqual([formatDate(back.from), formatDate(back.to)], ['2025-06-05', '2025-06-10'], 'an earlier end swaps');
   const r3 = addToRange(r2, d('2025-06-20'));
   assert.deepEqual([formatDate(r3.from), r3.to], ['2025-06-20', null], 'a pick on a complete range starts anew');
+});
+
+// Each row: a date, then its week number as react-day-picker 9 numbers it with
+// date-fns 4, for weeks starting on Sunday (getWeek, the week holding January
+// 1 is week 1), on Monday (getISOWeek) and on Saturday (getWeek again). The
+// values were read from date-fns itself; the boundaries around New Year are
+// where the two schemes part.
+const WEEKS = [
+  ['2020-12-31', 1, 53, 1], ['2021-01-01', 1, 53, 1], ['2021-01-03', 2, 53, 2], ['2021-01-04', 2, 1, 2],
+  ['2022-01-01', 1, 52, 1], ['2022-01-02', 2, 52, 1], ['2023-12-31', 1, 52, 1], ['2024-01-01', 1, 1, 1],
+  ['2024-12-29', 1, 52, 1], ['2024-12-30', 1, 1, 1], ['2025-01-12', 3, 2, 3], ['2025-06-15', 25, 24, 25],
+  ['2026-12-31', 1, 53, 1], ['2027-01-01', 1, 53, 1], ['2027-01-03', 2, 53, 2], ['2028-12-31', 1, 52, 1],
+];
+
+test('weekNumber numbers a week as react-day-picker does: ISO from Monday, else the week holding January 1', () => {
+  for (const [date, sunday, monday, saturday] of WEEKS) {
+    assert.equal(weekNumber(d(date), 0), sunday, `${date}, Sunday-first`);
+    assert.equal(weekNumber(d(date), 1), monday, `${date}, Monday-first (ISO)`);
+    assert.equal(weekNumber(d(date), 6), saturday, `${date}, Saturday-first`);
+  }
+});
+
+test('weekNumber gives every day of a calendar row the same number', () => {
+  for (const start of [0, 1, 6]) {
+    for (const [y, m] of [[2020, 11], [2021, 0], [2024, 11], [2027, 0]]) {
+      for (const week of monthWeeks(y, m, start)) {
+        const n = weekNumber(week[0], start);
+        for (const day of week) assert.equal(weekNumber(day, start), n, `${formatDate(day)} with weeks from ${start}`);
+      }
+    }
+  }
 });

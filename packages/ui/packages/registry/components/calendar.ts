@@ -13,6 +13,7 @@
  *   numberOfMonths           → `number-of-months`
  *   showOutsideDays          → `show-outside-days="false"` hides them (shown by default)
  *   weekStartsOn             → `week-starts-on` (0 is Sunday, the default)
+ *   showWeekNumber           → `show-week-number` (a leading column of week numbers)
  *   captionLayout="dropdown" → `caption-layout="dropdown"` (month and year selects)
  *   disabled / startMonth / endMonth
  *                            → `min` / `max` ("2025-01-01"), and `disabled` for the whole grid
@@ -121,6 +122,24 @@ export function monthWeeks(y: number, m: number, weekStartsOn = 0): CalendarDate
   return weeks;
 }
 
+/**
+ * The number of the week `date` falls in, as the calendar labels a row. Weeks
+ * starting on Monday are numbered ISO 8601 style (week 1 holds the year's
+ * first Thursday). Otherwise week 1 is the week holding January 1, counted
+ * from `weekStartsOn`, which is how react-day-picker numbers them by default.
+ */
+export function weekNumber(date: CalendarDate, weekStartsOn = 0): number {
+  const DAY = 86400000;
+  const iso = weekStartsOn === 1;
+  // The day of January that week 1 must contain.
+  const anchor = iso ? 4 : 1;
+  const startOfWeek = (ms: number): number => ms - ((new Date(ms).getUTCDay() - weekStartsOn + 7) % 7) * DAY;
+  const at = Date.UTC(date.y, date.m, date.d);
+  const firstOf = (y: number): number => startOfWeek(Date.UTC(y, 0, anchor));
+  const year = at >= firstOf(date.y + 1) ? date.y + 1 : at >= firstOf(date.y) ? date.y : date.y - 1;
+  return Math.round((startOfWeek(at) - firstOf(year)) / (7 * DAY)) + 1;
+}
+
 /** A range in progress or complete. */
 export type CalendarRange = { from: CalendarDate | null; to: CalendarDate | null };
 
@@ -177,6 +196,7 @@ export class UiCalendar extends WebComponent({
   numberOfMonths: prop(Number, { attribute: 'number-of-months' }),
   showOutsideDays: prop(String, { attribute: 'show-outside-days' }),
   weekStartsOn: prop(Number, { attribute: 'week-starts-on' }),
+  showWeekNumber: prop(Boolean, { attribute: 'show-week-number' }),
   captionLayout: prop<'label' | 'dropdown'>(String, { attribute: 'caption-layout' }),
   min: String,
   max: String,
@@ -199,6 +219,7 @@ export class UiCalendar extends WebComponent({
     this.numberOfMonths = 1;
     this.showOutsideDays = 'true';
     this.weekStartsOn = 0;
+    this.showWeekNumber = false;
     this.captionLayout = 'label';
     this.min = '';
     this.max = '';
@@ -365,6 +386,7 @@ export class UiCalendar extends WebComponent({
     const en = this._locale().toLowerCase().startsWith('en');
     const headerDays = monthWeeks(2024, 0, this.weekStartsOn || 0)[1];
     const dropdown = this.captionLayout === 'dropdown';
+    const weeks = !!this.showWeekNumber;
     const hidden = this.name ? this._hiddenInputs() : '';
     return html`<div
       data-slot="calendar"
@@ -393,10 +415,14 @@ export class UiCalendar extends WebComponent({
         aria-labelledby=${captionId}
         aria-multiselectable=${this.mode === 'single' ? null : 'true'}
         class="w-full border-collapse"
-      ><thead aria-hidden="true"><tr class="flex">${headerDays.map((d) => {
+      ><thead aria-hidden="true"><tr class="flex">${weeks
+        ? html`<th scope="col" aria-label="Week Number" class="w-(--cell-size) select-none"></th>`
+        : ''}${headerDays.map((d) => {
         const short = weekday.format(toUTC(d));
         return html`<th scope="col" aria-label=${weekdayLong.format(toUTC(d))} class="flex-1 rounded-(--cell-radius) text-[0.8rem] font-normal text-muted-foreground select-none">${en ? short.slice(0, 2) : short}</th>`;
-      })}</tr></thead><tbody>${monthWeeks(mo.y, mo.m, this.weekStartsOn || 0).map((week) => html`<tr class="mt-2 flex w-full">${week.map((day) => {
+      })}</tr></thead><tbody>${monthWeeks(mo.y, mo.m, this.weekStartsOn || 0).map((week) => html`<tr class="mt-2 flex w-full">${weeks
+        ? this._weekNumberCell(week)
+        : ''}${week.map((day) => {
         const iso = formatDate(day);
         const isOutside = day.m !== mo.m;
         if (isOutside && !outside) {
@@ -417,6 +443,9 @@ export class UiCalendar extends WebComponent({
           data-focused=${this.focused === iso ? 'true' : null}
           class=${cn(
             'group/day relative aspect-square h-full w-full rounded-(--cell-radius) p-0 text-center select-none [&:last-child[data-selected=true]_button]:rounded-e-(--cell-radius) [&:first-child[data-selected=true]_button]:rounded-s-(--cell-radius)',
+            // A week-number column makes the row's first day its second cell,
+            // which takes the first day's corner instead.
+            weeks ? '[&:nth-child(2)[data-selected=true]_button]:rounded-s-(--cell-radius)' : '',
             st.start ? 'relative isolate z-0 rounded-s-(--cell-radius) bg-muted after:absolute after:inset-y-0 after:end-0 after:w-4 after:bg-muted' : '',
             st.middle ? 'rounded-none' : '',
             st.end ? 'relative isolate z-0 rounded-e-(--cell-radius) bg-muted after:absolute after:inset-y-0 after:start-0 after:w-4 after:bg-muted' : '',
@@ -440,6 +469,13 @@ export class UiCalendar extends WebComponent({
         >${day.d}</button></td>`;
       })}</tr>`)}</tbody></table></div>`;
     })}</div>${hidden}</div>`;
+  }
+
+  // A row's week number, a header cell for the row as react-day-picker draws
+  // it: named "Week N" and shown two digits wide.
+  _weekNumberCell(week: CalendarDate[]): unknown {
+    const n = weekNumber(week[0], this.weekStartsOn || 0);
+    return html`<td role="rowheader" scope="row" aria-label=${`Week ${n}`} class="text-[0.8rem] text-muted-foreground select-none"><div class="flex size-(--cell-size) items-center justify-center text-center">${String(n).padStart(2, '0')}</div></td>`;
   }
 
   _hiddenInputs(): unknown {
