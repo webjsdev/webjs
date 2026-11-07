@@ -57,8 +57,8 @@ function walk(value: ClassValue, out: string[]): void {
 let _groups: Array<[RegExp, string]> | undefined;
 function GROUPS(): Array<[RegExp, string]> {
   return (_groups ??= [
-    [/^p-/, 'p'], [/^px-/, 'px'], [/^py-/, 'py'], [/^pt-/, 'pt'], [/^pr-/, 'pr'], [/^pb-/, 'pb'], [/^pl-/, 'pl'],
-    [/^m-/, 'm'], [/^mx-/, 'mx'], [/^my-/, 'my'], [/^mt-/, 'mt'], [/^mr-/, 'mr'], [/^mb-/, 'mb'], [/^ml-/, 'ml'],
+    [/^p-/, 'p'], [/^px-/, 'px'], [/^py-/, 'py'], [/^pt-/, 'pt'], [/^pr-/, 'pr'], [/^pb-/, 'pb'], [/^pl-/, 'pl'], [/^ps-/, 'ps'], [/^pe-/, 'pe'],
+    [/^m-/, 'm'], [/^mx-/, 'mx'], [/^my-/, 'my'], [/^mt-/, 'mt'], [/^mr-/, 'mr'], [/^mb-/, 'mb'], [/^ml-/, 'ml'], [/^ms-/, 'ms'], [/^me-/, 'me'],
     [/^w-/, 'w'], [/^h-/, 'h'], [/^size-/, 'size'],
     // A `bg-[url(…)]` / `bg-[linear-gradient(…)]` background image is classified
     // by its FUNCTION, since it carries no type hint to classify it by. The
@@ -148,6 +148,16 @@ function GROUPS(): Array<[RegExp, string]> {
     [/^grid-cols-/, 'grid-cols'],
     [/^grid-rows-/, 'grid-rows'],
     [/^grid-flow-/, 'grid-flow'],
+    // Flex basis and the alignment properties, one group per property:
+    // `justify-items-*` and `justify-self-*` precede `justify-*`, which is
+    // justify-content, and likewise `self-*` is align-self, apart from
+    // `items-*` (align-items).
+    [/^basis-/, 'basis'],
+    [/^justify-items-/, 'justify-items'],
+    [/^justify-self-/, 'justify-self'],
+    [/^justify-/, 'justify-content'],
+    [/^items-/, 'align-items'],
+    [/^self-/, 'align-self'],
   ]);
 }
 
@@ -266,10 +276,10 @@ function hintedGroup(bare: string): string | null | undefined {
 // the value lists the EARLIER groups whose survivors it removes (its own group
 // is always removed too, handled below).
 const CONFLICTS: Record<string, string[]> = {
-  p: ['px', 'py', 'pt', 'pr', 'pb', 'pl'],
+  p: ['px', 'py', 'pt', 'pr', 'pb', 'pl', 'ps', 'pe'],
   px: ['pl', 'pr'],
   py: ['pt', 'pb'],
-  m: ['mx', 'my', 'mt', 'mr', 'mb', 'ml'],
+  m: ['mx', 'my', 'mt', 'mr', 'mb', 'ml', 'ms', 'me'],
   mx: ['ml', 'mr'],
   my: ['mt', 'mb'],
   size: ['w', 'h'],
