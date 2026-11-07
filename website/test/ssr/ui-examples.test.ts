@@ -34,7 +34,7 @@ const KEY_CONTENT: Record<string, RegExp[]> = {
   tasks: [/Welcome back!/, /TASK-8782/, /Page 1 of 4/, /of 100 row\(s\) selected/],
   playground: [/Playground/, /Temperature/, /Maximum Length/, /Top P/],
   authentication: [/Create an account/, /Sofia Davis/, /name="__webjs_action"/],
-  rtl: [/data-slot="rtl-components"/, /dir="rtl"/],
+  rtl: [/data-slot="rtl-components"/, /dir="rtl"/, /<link rel="stylesheet" href="\/public\/rtl-fonts\.css/],
 };
 
 test('every example renders in the shell with its own nav link current', async () => {

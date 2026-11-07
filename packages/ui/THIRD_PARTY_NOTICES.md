@@ -306,3 +306,22 @@ This license is available with a FAQ at: http://scripts.sil.org/OFL
 
 The full text of the SIL Open Font License, Version 1.1 is reproduced under
 Geist and Geist Mono above.
+
+## Noto Sans Arabic and Noto Sans Hebrew
+
+The webjs.dev/ui site self-hosts the Noto Sans Arabic
+(https://github.com/notofonts/arabic) and Noto Sans Hebrew
+(https://github.com/notofonts/hebrew) typefaces for its RTL example, as
+Google Fonts serves them (each family's script subset and its latin subset,
+unmodified).
+
+```text
+Copyright 2022 The Noto Project Authors (https://github.com/notofonts/arabic)
+Copyright 2022 The Noto Project Authors (https://github.com/notofonts/hebrew)
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is available with a FAQ at: https://openfontlicense.org
+```
+
+The full text of the SIL Open Font License, Version 1.1 is reproduced under
+Geist and Geist Mono above.

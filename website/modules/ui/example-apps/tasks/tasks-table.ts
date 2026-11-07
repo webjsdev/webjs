@@ -14,24 +14,44 @@ import { WebComponent, html } from '@webjsdev/core';
  *   box's checked and indeterminate states, and the selected rows' shading;
  * - `aria-expanded` and `data-state` on a popover's button, from the
  *   popover's own `toggle` event;
- * - leaving an empty filter and the default page size out of the URL, and
- *   putting focus back in the title filter after its submission swaps the
- *   page, so typing carries on.
+ * - leaving an empty filter and the default page size out of the URL;
+ * - carrying the reader's place across the swap each submission makes:
+ *   focus and caret back in the title filter, so typing carries on, and a
+ *   faceted filter's popover open again with focus in its search, so several
+ *   values can be picked in a row as in shadcn's.
  *
- * The client router applies each submission in place.
+ * The client router applies each submission in place. With JavaScript off a
+ * faceted filter is applied by its Apply button, and the page that comes back
+ * has it closed, since a popover cannot be served open.
  */
 
-/** The field to refocus once the submission it started has been applied. */
-let refocus: { id: string; caret: number } | null = null;
+/** What to restore once the submission it started has been applied. */
+let restore: { input?: { id: string; caret: number }; popover?: string } | null = null;
 
-function restoreFocus(): void {
-  if (!refocus) return;
-  const input = document.getElementById(refocus.id) as HTMLInputElement | null;
-  if (input) {
-    input.focus();
-    input.setSelectionRange(refocus.caret, refocus.caret);
+function restorePlace(): void {
+  const r = restore;
+  restore = null;
+  if (r?.popover) {
+    const pop = document.getElementById(r.popover);
+    const source = document.querySelector<HTMLElement>(`[popovertarget="${CSS.escape(r.popover)}"]`);
+    if (pop && !pop.matches(':popover-open')) {
+      // `source` anchors it to its button as a click would (the position-area
+      // classes need that anchor); an engine without the option opens it anyway.
+      try {
+        (pop as HTMLElement & { showPopover(o?: { source?: HTMLElement }): void }).showPopover({ source: source ?? undefined });
+      } catch {
+        pop.showPopover();
+      }
+    }
+    pop?.querySelector<HTMLInputElement>('ui-command-input input')?.focus();
   }
-  refocus = null;
+  if (r?.input) {
+    const input = document.getElementById(r.input.id) as HTMLInputElement | null;
+    if (input) {
+      input.focus();
+      input.setSelectionRange(r.input.caret, r.input.caret);
+    }
+  }
 }
 export class TasksTable extends WebComponent {
   _timer: ReturnType<typeof setTimeout> | undefined;
@@ -45,7 +65,7 @@ export class TasksTable extends WebComponent {
     this.addEventListener('click', this._onClickCapture, true);
     this.addEventListener('toggle', this._onToggle, true);
     this.addEventListener('formdata', this._onFormData);
-    document.addEventListener('webjs:navigate', restoreFocus);
+    document.addEventListener('webjs:navigate', restorePlace);
   }
 
   disconnectedCallback() {
@@ -55,7 +75,7 @@ export class TasksTable extends WebComponent {
     this.removeEventListener('click', this._onClickCapture, true);
     this.removeEventListener('toggle', this._onToggle, true);
     this.removeEventListener('formdata', this._onFormData);
-    document.removeEventListener('webjs:navigate', restoreFocus);
+    document.removeEventListener('webjs:navigate', restorePlace);
     clearTimeout(this._timer);
     super.disconnectedCallback();
   }
@@ -74,9 +94,17 @@ export class TasksTable extends WebComponent {
     this._form()?.requestSubmit();
   }
 
+  /** Submit a facet's change, reopening its popover once the page is swapped. */
+  _submitFrom(el: Element): void {
+    const pop = el.closest<HTMLElement>('[popover]');
+    if (pop?.id) restore = { popover: pop.id };
+    this._submit();
+  }
+
   _onChange = (e: Event): void => {
     const el = e.target as HTMLInputElement;
-    if (el.matches('[data-filter], select[name="size"]')) this._submit();
+    if (el.matches('[data-filter]')) this._submitFrom(el);
+    else if (el.matches('select[name="size"]')) this._submit();
     else if (el.matches('[data-select]')) this._syncSelection(el);
   };
 
@@ -85,7 +113,7 @@ export class TasksTable extends WebComponent {
     if (!input.matches('[data-filter-text]')) return;
     clearTimeout(this._timer);
     this._timer = setTimeout(() => {
-      refocus = { id: input.id, caret: input.selectionStart ?? input.value.length };
+      restore = { input: { id: input.id, caret: input.selectionStart ?? input.value.length } };
       this._submit();
     }, 400);
   };
@@ -104,6 +132,9 @@ export class TasksTable extends WebComponent {
   _onClickCapture = (e: Event): void => {
     const target = e.target as Element;
     this._pointerItem = target.closest('label') ? target.closest('ui-command-item') : null;
+    // A facet's Clear filters link keeps its popover open too, as shadcn's does.
+    const pop = target.closest('a[href]')?.closest<HTMLElement>('[popover][id^="filter-"]');
+    if (pop) restore = { popover: pop.id };
   };
 
   _onSelect = (e: Event): void => {
@@ -116,7 +147,7 @@ export class TasksTable extends WebComponent {
     const box = item.querySelector<HTMLInputElement>('input[data-filter]');
     if (box) {
       box.checked = !box.checked;
-      this._submit();
+      this._submitFrom(box);
     }
   };
 

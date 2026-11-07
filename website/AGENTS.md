@@ -88,14 +88,30 @@ website/
       (chrome)/        the /ui header and footer, a route group so the iframe
                        targets outside it render with no chrome
         layout.ts      the fixed header with its --header-h script and the
-                       footer with the one shadcn/ui credit line. A page
-                       carrying data-slot="designer" (the typeset builder)
-                       makes it exactly the viewport with no footer, shadcn's
-                       has-data-[slot=designer] rule
+                       footer with the one shadcn/ui credit line, shadcn's
+                       SiteHeader and SiteFooter. The header row is shadcn's
+                       (below lg the "Menu" drawer, components/ui-mobile-nav.ts;
+                       from lg the nav; then search, the GitHub link with its
+                       star count, the mode switcher, "+ New") plus the WebJs
+                       mark in front, the one deliberate difference (D1); the
+                       link back to webjs.dev sits in the drawer and the
+                       footer. The layout is async because it awaits the star
+                       count (modules/ui/queries/github-stars.server.ts, cached
+                       an hour in lib/github-stars.server.ts, the mark alone
+                       when GitHub cannot be read). A page carrying
+                       data-slot="designer" (the typeset builder) makes it
+                       exactly the viewport with no footer, shadcn's
+                       has-data-[slot=designer] rule, and a docs page
+                       (data-slot="docs") has no footer either, as shadcn's.
+                       test/ssr/ui-chrome.test.ts
         not-found.ts error.ts
                        section boundaries, rendered inside the /ui chrome
         page.ts        /ui, shadcn's home page: the hero over the card grid
-                       (modules/ui/home/), in the luma and rhea styles
+                       (modules/ui/home/), in the luma and rhea styles. The
+                       grid has shadcn's five columns (md, lg, 1400px and
+                       1900px add one each); below md the page shows a picture
+                       of the grid instead (public/images/home-cards-*.png,
+                       scripts/shoot-home-cards.mjs), as shadcn's does
         docs/          /ui/docs, shadcn's docs (#1666, D15). layout.ts is the
                        sticky sidebar (lib/ui/docs/sidebar.ts, kept current on
                        a soft navigation by components/ui-docs-sidebar.ts) and
@@ -161,7 +177,9 @@ website/
                        with JS off; <tasks-table> adds live submit and the row
                        selection); authentication binds a real 'use server'
                        action; rtl is the nova style under dir="rtl" with a
-                       ?lang= selector
+                       ?lang= selector and shadcn's Noto Sans Arabic / Hebrew
+                       faces from public/rtl-fonts.css, linked by that page
+                       only (scripts/fetch-fonts.mjs rtl)
         [name]/page.ts /ui/<name>, the retired interim gallery's address: a
                        308 to /ui/docs/components/<name> for every component
                        record in modules/ui/docs/nav.ts, a 404 otherwise. A
@@ -283,6 +301,18 @@ website/
                        work with JS off
     site-nav-menu.ts   the header's mobile menu, wrapping a native <details>
                        so it still opens with JS off
+    ui-mobile-nav.ts   the /ui header's "Menu" drawer, shadcn's MobileNav: a
+                       subclass of site-nav-menu.ts with shadcn's look (the
+                       two bars crossing into an X, a panel over the page
+                       under the header), keeping every dismissal. Its links
+                       (the header links, the docs Sections, every docs
+                       group) are slotted from lib/ui/mobile-nav-links.ts
+    ui-mode-switcher.ts
+                       the /ui header's light / dark switch, shadcn's
+                       ModeSwitcher: two states, flipping the resolved theme,
+                       stored under lib/theme.ts's key, and pushed into any
+                       same-origin frame on the page (the configurator and
+                       typeset previews, the block viewer)
     color-swatches.ts  the /ui/colors behaviour around the server's markup: a
                        swatch copies its value in the chosen format (with a
                        toast), the format menus share one choice, and the
@@ -335,8 +365,16 @@ website/
                        globalThis counter so a drawer and a <ui-dialog>
                        interoperate. Measures and compensates the viewport
                        widening that hiding the scrollbar causes (#1147)
-    theme.ts           the theme storage key and forced values, read by BOTH
-                       the layout's bootstrap script and theme-toggle.ts
+    theme.ts           the theme storage key and forced values, read by the
+                       layout's bootstrap script, theme-toggle.ts and
+                       ui-mode-switcher.ts
+    github-stars.server.ts
+                       the webjsdev/webjs star count from the GitHub REST API
+                       for the /ui header: cached an hour, a stale value
+                       served while one refresh runs, a 2s timeout, a failure
+                       retried after five minutes, `GITHUB_TOKEN` used when
+                       set. Not an action (the reset is for tests); the layout
+                       reaches it through modules/ui/queries/github-stars.server.ts
     escape-target.ts   the one rule deciding whether an Escape press belongs to
                        the field the reader is editing. Shared, because every
                        dismissible surface has to answer it identically
@@ -497,6 +535,9 @@ website/
                        preview-frame (with the item explorer) / project-form /
                        welcome-dialog fragments, and placeholder.ts (the
                        stand-in preview)
+    ui/queries/github-stars.server.ts
+                       the action the /ui chrome layout awaits for the star
+                       count, over lib/github-stars.server.ts
     ui/queries/create-items.server.ts
                        what the item explorer lists: the registry's blocks
                        (shadcn drops numbered names) and every component with
@@ -518,6 +559,10 @@ website/
                        Playfair Display in public/sera-fonts.css, linked only
                        by /ui/sera)
     generate-og.mjs    regenerate the OG social card (needs playwright + ImageMagick)
+    shoot-home-cards.mjs
+                       regenerate public/images/home-cards-{light,dark}.png,
+                       the /ui home page's card grid as it shows below md,
+                       from a running site (needs playwright)
     copy-registry.mjs  mirror the kit sources into modules/ui/components/ +
                        lib/utils/{cn,dom}.ts, and the registry blocks into
                        modules/ui/blocks/.
@@ -534,7 +579,9 @@ website/
     sera-fonts.css     the /ui/sera faces (Noto Sans, Playfair Display), linked
                        only by that page
     images/            sera-0{1,2,3,6}-{light,dark}.png, shadcn's Sera
-                       screenshots, which /ui/sera shows below md
+                       screenshots, which /ui/sera shows below md, and
+                       home-cards-{light,dark}.png, the /ui home grid's
+                       picture for the same width
 ```
 
 ## How lib/ grows
@@ -685,7 +732,8 @@ There is no announcement banner. One used to sit above the header, and
 `--header-h` is why its removal is not free: re-adding a strip means the
 measurement has to cover it too.
 
-The header's mobile menu is `components/site-nav-menu.ts`, and the fixed
+The header's mobile menu is `components/site-nav-menu.ts` (on /ui, its
+subclass `components/ui-mobile-nav.ts`), and the fixed
 position is why it carries
 `border-right: var(--wj-scrollbar-compensation, 0px) solid transparent`. A
 scroll lock hides the page scrollbar, which widens the viewport, and a fixed
