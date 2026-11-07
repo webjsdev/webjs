@@ -102,18 +102,29 @@ test('there is exactly one header, one footer, and one theme control', async () 
   }
 });
 
-test('a full load of a /ui page has the /ui stylesheet in <head>, and a marketing page has none', async () => {
+test('a /ui page loads only the /ui stylesheet, and a marketing page only its own', async () => {
   // Only the ROOT layout's leading link run is hoisted into <head>, and a
   // stylesheet left in <body> is not reliably render-blocking (#406), so the
-  // root layout emits the /ui link itself, for /ui paths only.
+  // root layout links each section's stylesheet itself, by path. The two are
+  // exclusive: ui.css carries its own reset, and a /ui page that also loaded
+  // tailwind.css matched every shared utility and :has() rule twice.
   const headOf = (html: string) => html.slice(0, html.indexOf('</head>'));
-  const ui = await bodyOf(UI_COMPONENT);
-  assert.match(headOf(ui), /<link rel="stylesheet" href="\/public\/ui\.css/, '/ui has ui.css in <head>');
-  assert.match(headOf(ui), /\/public\/fonts\/geist\.woff2/, 'and preloads Geist');
+  const bodyPart = (html: string) => html.slice(html.indexOf('</head>'));
+  for (const path of [UI_COMPONENT, UI_INDEX, '/ui/view/dashboard-01']) {
+    const ui = await bodyOf(path);
+    assert.match(headOf(ui), /<link rel="stylesheet" href="\/public\/ui\.css/, `${path} has ui.css in <head>`);
+    assert.match(headOf(ui), /\/public\/fonts\/geist\.woff2/, 'and preloads Geist');
+    assert.ok(!ui.includes('/public/tailwind.css'), `${path} does not load the marketing stylesheet`);
+    assert.ok(!ui.includes('/public/fonts/inter.woff2'), `${path} does not preload the marketing fonts`);
+  }
   for (const path of [MARKETING_PATH, DOC_PATH, '/']) {
     const html = await bodyOf(path);
     assert.ok(!html.includes('/public/ui.css'), `${path} does not load the /ui stylesheet`);
     assert.ok(!html.includes('geist.woff2'), `${path} does not preload the /ui font`);
+    assert.match(headOf(html), /<link rel="stylesheet" href="\/public\/tailwind\.css/, `${path} has tailwind.css in <head>`);
+    // The marketing chrome repeats it, for a soft navigation in from /ui,
+    // where the root layout is not re-rendered.
+    assert.match(bodyPart(html), /<link rel="stylesheet" href="\/public\/tailwind\.css/, `${path} links it again in its own markup`);
   }
 });
 
@@ -217,7 +228,13 @@ test('the /ui tokens are scoped to .ui-site, so they cannot leak into the market
   assert.match(css, /\.ui-site\s*\{[^}]*--background:\s*light-dark\(/, 'the raw values sit on .ui-site, in light-dark() form');
   assert.match(css, /\.ui-site\s*\{[^}]*--sidebar-primary:/, 'including the sidebar family');
   assert.ok(!/:root\s*\{[^}]*--background:/.test(css), 'and none is declared at :root');
-  assert.ok(!/@import\s+["']tailwindcss["']/.test(css), 'ui.css does not ship a second preflight');
+  // ui.css stands alone, since a /ui page loads nothing else: Tailwind's
+  // reset, in the layer order @import "tailwindcss" declares, and the rules
+  // it shares with tailwind.css.
+  assert.match(css, /^@layer theme, base, components, utilities;$/m, 'ui.css declares the layer order');
+  assert.match(css, /@import "tailwindcss\/preflight\.css" layer\(base\);/, 'and imports the reset');
+  assert.match(css, /@import "\.\/shared-base\.css";/, 'and the shared rules');
+  assert.match(readFileSync(resolve(WEBSITE_ROOT, 'public/input.css'), 'utf8'), /@import "\.\/shared-base\.css";/, 'which tailwind.css imports too');
   const html = await bodyOf(UI_COMPONENT);
   assert.match(html, /<div class="ui-site/, 'every /ui page renders inside the .ui-site wrapper');
 });
@@ -393,19 +410,27 @@ test('the old /docs/ui page is gone, permanently redirected to /ui', async () =>
   assert.equal(new URL(res.headers.get('location')!, 'http://localhost').pathname, '/ui');
 });
 
-test('a page in an extra kit style links that style, in <head> and in its own markup', async () => {
-  // public/ui.css carries nova and new-york only. The other seven styles are
-  // one file each under public/ui-styles/, linked by the pages that render in
-  // them (lib/ui/style-links.ts). The root layout's copy makes a full load
+test('a page links its kit styles, in <head> and in its own markup', async () => {
+  // public/ui.css carries no kit style. Each is one file under
+  // public/ui-styles/, linked by the pages that render in it
+  // (lib/ui/style-links.ts). The root layout's copy makes a full load
   // flash-free, and the page's copy covers a soft navigation in.
+  // test/ssr/ui-style-links.test.ts holds every page to this.
   const headOf = (html: string) => html.slice(0, html.indexOf('</head>'));
   const bodyPart = (html: string) => html.slice(html.indexOf('</head>'));
   const home = await bodyOf(UI_INDEX);
   assert.match(headOf(home), /<link rel="stylesheet" href="\/public\/ui-styles\/rhea\.css/, 'the home page has rhea in <head>');
   assert.match(bodyPart(home), /<link rel="stylesheet" href="\/public\/ui-styles\/rhea\.css/, 'and in its own markup');
-  for (const path of [UI_COMPONENT, MARKETING_PATH, DOC_PATH]) {
+  const button = await bodyOf(UI_COMPONENT);
+  assert.match(headOf(button), /<link rel="stylesheet" href="\/public\/ui-styles\/nova\.css/, 'a docs page has nova, its previews\' style');
+  assert.match(headOf(button), /<link rel="stylesheet" href="\/public\/ui-styles\/new-york\.css/, 'and new-york, the chrome\'s');
+  assert.ok(!button.includes('/public/ui-styles/rhea.css'), 'and nothing it does not render');
+  const frame = await bodyOf('/ui/view/dashboard-01');
+  assert.match(headOf(frame), /\/public\/ui-styles\/new-york\.css/, 'a block frame has new-york');
+  assert.ok(!frame.includes('/public/ui-styles/nova.css'), 'and no nova');
+  for (const path of [MARKETING_PATH, DOC_PATH]) {
     const html = await bodyOf(path);
-    assert.ok(!html.includes('/public/ui-styles/'), `${path} links no extra style`);
+    assert.ok(!html.includes('/public/ui-styles/'), `${path} links no kit style`);
   }
 });
 
@@ -414,7 +439,7 @@ test('both /ui stylesheet inputs import the shared variants before any kit style
   // declared, and CSS allows no rule ahead of an @import, so the variants
   // live in public/ui-theme.css and are imported first.
   const ui = readFileSync(resolve(WEBSITE_ROOT, 'public/ui-input.css'), 'utf8');
-  assert.ok(ui.indexOf('./ui-theme.css') >= 0 && ui.indexOf('./ui-theme.css') < ui.indexOf('style-new-york.css'), 'ui-input.css imports ui-theme.css before the styles');
+  assert.ok(ui.indexOf('./ui-theme.css') >= 0, 'ui-input.css imports ui-theme.css, for its own dark: utilities');
   assert.ok(!ui.includes('@custom-variant dark'), 'and does not redeclare the variant');
   const build = readFileSync(resolve(WEBSITE_ROOT, 'scripts/build-ui-styles.mjs'), 'utf8');
   assert.ok(build.indexOf('ui-theme.css') < build.indexOf('style-${name}.css'), 'the per-style build imports it before the style too');
@@ -448,10 +473,38 @@ test('each kit style is scoped to its nearest wrapper, so a nested region takes 
   assert.equal((out.match(/@scope \(\.style-nova\) to \(:is\(/g) || []).length, 2, 'both top-level blocks become scopes');
   for (const n of STYLE_NAMES) assert.ok(out.includes(`.style-${n}`), `the scope stops at .style-${n}`);
   assert.throws(() => scopeStyle('nova', '.cn-button {}'), /no top-level/);
-  const ui = readFileSync(resolve(WEBSITE_ROOT, 'public/ui-input.css'), 'utf8');
-  assert.match(ui, /cache\/ui-styles\/scoped\/style-new-york\.css/, 'ui.css compiles the scoped copies');
-  assert.match(ui, /cache\/ui-styles\/scoped\/style-nova\.css/);
-  assert.ok(!/registry\/styles\/style-(nova|new-york)\.css/.test(ui), 'and not the unscoped originals');
   const build = readFileSync(resolve(WEBSITE_ROOT, 'scripts/build-ui-styles.mjs'), 'utf8');
-  assert.match(build, /SCOPED_DIR/, 'the per-style build compiles them too');
+  assert.match(build, /SCOPED_DIR/, 'the per-style build compiles the scoped copies');
+  assert.ok(!/registry\/styles\/style-/.test(build), 'and not the unscoped originals');
+});
+
+test('a /ui path that 404s or throws outside the chrome renders in /ui classes, with a way back', async () => {
+  // app/ui/not-found.ts and app/ui/error.ts catch the bare frames and a crash
+  // in the chrome layout itself. The root boundaries are written in the
+  // marketing site's classes, which a /ui path does not load.
+  const { renderToString } = await import('@webjsdev/core/server');
+  const { default: UiFrameNotFound } = await import('#app/ui/not-found.ts');
+  const { default: UiFrameError } = await import('#app/ui/error.ts');
+  const missing = await renderToString(UiFrameNotFound());
+  const crashed = await renderToString(UiFrameError({ error: new Error('boom <b>') }));
+  for (const [name, out] of [['not-found', missing], ['error', crashed]]) {
+    assert.match(out, /<main id="main"[^>]*class="flex min-h-svh/, `${name} fills the frame`);
+    assert.match(out, /href="\/ui">Back to WebJs UI<\/a>/, `${name} links back to /ui`);
+  }
+  assert.match(crashed, /boom &lt;b&gt;/, 'the error message is escaped');
+  const res = await handle('/ui/view/no-such-block');
+  assert.equal(res.status, 404);
+  assert.match(await res.text(), /Page not found[\s\S]*Back to WebJs UI/, 'a missing frame renders the /ui 404');
+});
+
+test('tailwind.css leaves out the /ui-only trees, which no page that loads it renders', () => {
+  // A /ui page loads public/ui.css alone, so compiling the /ui trees into
+  // tailwind.css only made every marketing page carry their utilities and
+  // :has() variants. lib/ui/ stays scanned, since the marketing chrome renders
+  // from it, all but its docs/ subtree.
+  const css = readFileSync(resolve(WEBSITE_ROOT, 'public/input.css'), 'utf8');
+  for (const tree of ['../app/ui', '../modules/ui', '../lib/ui/docs']) {
+    assert.ok(css.includes(`@source not "${tree}";`), `input.css leaves out ${tree}`);
+  }
+  assert.ok(!/@source "\.\.\/modules\/ui\//.test(css), 'and names no kit source back in');
 });

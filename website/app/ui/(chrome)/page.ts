@@ -2,7 +2,7 @@ import { html, asset } from '@webjsdev/core';
 import type { Metadata, PageProps } from '@webjsdev/core';
 import { buttonClass } from '#modules/ui/components/button.ts';
 import { cn } from '#lib/utils/cn.ts';
-import { extraStyleLinks } from '#lib/ui/style-links.ts';
+import { styleLinks } from '#lib/ui/style-links.ts';
 import { cardsDemo } from '#modules/ui/home/cards-demo.ts';
 import { announcement } from '#lib/ui/ui-page-header.ts';
 // The card grid's interactive parts. A page never hydrates, so it imports
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
 export default function UiHome({ url }: Pick<PageProps, 'url'>) {
   const { pathname } = new URL(url);
   return html`
-    ${extraStyleLinks(pathname)}
+    ${styleLinks(pathname)}
     <main id="main" tabindex="-1" class="flex flex-1 flex-col">
       <section class="border-grid md:**:[.container]:pb-8 lg:**:[.container]:pb-12">
         <div class="container-wrapper">

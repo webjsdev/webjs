@@ -22,7 +22,8 @@ import '#modules/ui/elements.ts';
  * - the /ui stylesheet link. The root layout already emits it in <head> on a
  *   full load of a /ui page. This copy covers a SOFT navigation into /ui from
  *   a marketing page, where the root layout is not re-rendered and the
- *   router's head merge only adds. The same URL twice costs one fetch.
+ *   router's head merge only adds. The bare frames, only ever full loads,
+ *   skip it, since every copy of a sheet is matched again.
  *
  * This is a NON-ROOT layout (invariant 8), so it writes no document shell.
  */
@@ -62,9 +63,14 @@ export function generateMetadata(ctx: { url: string }) {
   };
 }
 
-export default function UiLayout({ children }: LayoutProps) {
+export default function UiLayout({ children, url }: LayoutProps) {
+  // The bare frames are only ever full loads, so the root layout's <head>
+  // copy is enough, and a second copy would make the browser match every
+  // ui.css rule twice (lib/ui/style-links.ts).
+  const { pathname } = new URL(url);
+  const frame = pathname.startsWith('/ui/view/') || pathname.startsWith('/ui/preview/');
   return html`
-    <link rel="stylesheet" href=${asset('/public/ui.css')}>
+    ${frame ? '' : html`<link rel="stylesheet" href=${asset('/public/ui.css')}>`}
     <div class="ui-site">
       ${children}
     </div>

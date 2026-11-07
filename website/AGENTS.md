@@ -749,10 +749,15 @@ the root layout must keep rendering `${children}` with nothing around it.
 `/ui` also has its own stylesheet, `public/ui.css`, built from
 `public/ui-input.css` (`npm run css:build:ui`, and in `webjs.dev.before`,
 `webjs.dev.regenerate`, `webjs.start.before` and the Dockerfile). It carries
-two kit styles, nova and new-york. The other seven compile one file each into
+no kit style. All nine compile one file each into
 `public/ui-styles/<name>.css` (`scripts/build-ui-styles.mjs`, run by the same
-four hooks), and a page links only the styles it renders, listed once in
-`lib/ui/style-links.ts`. `ui.css` also carries shadcn's 24 themes as
+four hooks), and a page links only the styles its `.style-<name>` wrappers
+name, listed once in `lib/ui/style-links.ts`: new-york for the chrome and the
+block frames, nova where a docs preview renders, and so on. A style sheet is
+about 300 KB of rules, many of them `:has()`, so linking one a page does not
+render slows every style recalculation on it.
+`test/ssr/ui-style-links.test.ts` renders every `/ui` page and frame and
+fails when a wrapper's sheet is not linked. `ui.css` also carries shadcn's 24 themes as
 `.ui-site .theme-<name>` classes in `light-dark()` form, so a region wearing
 `theme-blue` repaints the way it does on shadcn's site; they are generated from
 the kit's own theme data (`scripts/build-ui-themes.mjs`), so the site and
@@ -766,8 +771,19 @@ wrapper (`scripts/scope-ui-styles.mjs`, run by `copy-registry.mjs` and by
 the NEAREST wrapper wins: a nova demo inside the new-york docs chrome takes
 only nova, the way shadcn's baked imports do. The registry's style files stay
 byte-for-byte shadcn's, since the CLI bake reads them. `ui.css` holds the
-`/ui` tokens on `.ui-site` and the utilities only `/ui` code uses, and no
-preflight, since the root stylesheet already supplies it. The link is emitted
+`/ui` tokens on `.ui-site` and the utilities `/ui` code uses, and it stands
+ALONE: a `/ui` path loads `ui.css` and no `tailwind.css`, so `ui.css` imports
+Tailwind's preflight itself (declaring the same layer order
+`@import "tailwindcss"` does) and the rules both sheets need come from
+`public/shared-base.css`, which both inputs import. Loading both used to match
+every shared utility and `:has()` rule twice, which made a menu open slow. The
+root layout therefore links exactly one of the two by path, and
+`app/(site)/layout.ts` repeats the `tailwind.css` link for a soft navigation
+in from `/ui`. A `/ui` path that 404s or throws renders `app/ui/not-found.ts`
+or `app/ui/error.ts`, in `/ui` classes, since the root boundaries are styled
+by `tailwind.css`. The fonts the configurator and typeset frames name
+(Inter and JetBrains Mono among them) are declared in
+`public/typeset-fonts.css`, not borrowed from `tailwind.css`. The link is emitted
 TWICE, deliberately. The root layout emits it in its leading head run for a
 `/ui` path, because only the root layout's leading `<link>` run is hoisted into
 `<head>` and a body stylesheet is not reliably render-blocking (#406).
@@ -775,8 +791,9 @@ TWICE, deliberately. The root layout emits it in its leading head run for a
 where the root layout is not re-rendered and the router's head merge only
 adds. The router loads a stylesheet the incoming page brings before it swaps
 the page in (#1666), so that inline copy is applied on the first paint, and so
-are the per-page kit styles `lib/ui/style-links.ts` lists (rhea on the AI
-Elements pages, luma on blocks and charts). The links that commonly cross sections (the marketing header and footer
+are the per-page kit styles `lib/ui/style-links.ts` lists (new-york, which
+`app/ui/(chrome)/layout.ts` also links for its own header, nova on the docs
+pages, rhea on the AI Elements pages, luma on blocks and charts). The links that commonly cross sections (the marketing header and footer
 UI links, the docs sidebar link, the `/ui` links back in the menu drawer
 and the footer) also carry
 `data-no-router`, so the usual path is a full load. Both stylesheets declare

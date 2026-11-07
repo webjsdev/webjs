@@ -126,7 +126,7 @@ RUN cd website && node scripts/copy-registry.mjs
 # to be ready in the image. Keep this list in sync with the apps that
 # have a public/input.css and a `css:build` script in their package.json
 # (website also builds public/ui.css, the /ui section's own stylesheet, and
-# public/ui-styles/, the seven kit styles ui.css does not carry).
+# public/ui-styles/, one sheet per kit style, linked per page).
 RUN npx tailwindcss -i website/public/input.css                       -o website/public/tailwind.css                       --minify \
  && npx tailwindcss -i website/public/ui-input.css                    -o website/public/ui.css                             --minify \
  && (cd website && node scripts/build-ui-styles.mjs) \
