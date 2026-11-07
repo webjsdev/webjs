@@ -658,3 +658,84 @@ test('add <block>: an item\'s cssVars are added to the app\'s stylesheet, leavin
     rmSync(d, { recursive: true });
   }
 });
+
+// Two block families writing the same file, as sidebar-07 and dashboard-01
+// both write components/app-sidebar.ts.
+const FAMILY_REG = {
+  ...REG,
+  'sidebar-x': {
+    name: 'sidebar-x', type: 'registry:block', categories: ['sidebar'],
+    files: [
+      { path: 'blocks/sidebar-x/app-sidebar.ts', type: 'registry:component', target: 'components/app-sidebar.ts', content: 'export const sidebar = "x";\n' },
+      { path: 'blocks/sidebar-x/page.ts', type: 'registry:page', target: 'app/dashboard/page.ts', content: 'export default () => "sidebar-x";\n' },
+    ],
+  },
+  'dashboard-y': {
+    name: 'dashboard-y', type: 'registry:block', categories: ['dashboard'],
+    files: [
+      { path: 'blocks/dashboard-y/app-sidebar.ts', type: 'registry:component', target: 'components/app-sidebar.ts', content: 'export const sidebar = "y";\n' },
+      { path: 'blocks/dashboard-y/page.ts', type: 'registry:page', target: 'app/dashboard/page.ts', content: 'export default () => "dashboard-y";\n' },
+      { path: 'blocks/dashboard-y/data.ts', type: 'registry:file', target: 'app/dashboard/data.ts', content: 'export const rows = [];\n' },
+    ],
+  },
+};
+
+function stubFamilyFetch() {
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.endsWith('/index.json')) {
+      return new Response(JSON.stringify(Object.values(FAMILY_REG).map(({ files, ...meta }) => meta)), { status: 200 });
+    }
+    const name = u.split('/').pop().replace('.json', '');
+    if (!FAMILY_REG[name]) return new Response('not found', { status: 404 });
+    return new Response(JSON.stringify(FAMILY_REG[name]), { status: 200 });
+  };
+}
+
+async function captured(fn) {
+  const out = [];
+  const log = console.log;
+  console.log = (...a) => out.push(a.join(' '));
+  try { await fn(); } finally { console.log = log; }
+  return out.join('\n');
+}
+
+test('add <block>: a file another block wrote is kept with a warning naming that block and the --overwrite command', async () => {
+  stubFamilyFetch();
+  const d = tmp();
+  try {
+    await captured(() => add.parseAsync(['sidebar-x', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/fam'], { from: 'user' }));
+    const out = await captured(() => add.parseAsync(['dashboard-y', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/fam'], { from: 'user' }));
+    assert.equal(readFileSync(join(d, 'components', 'app-sidebar.ts'), 'utf8'), 'export const sidebar = "x";\n', 'the existing file is still kept');
+    assert.match(out, /components\/app-sidebar\.ts was written by sidebar-x, not dashboard-y/);
+    assert.match(out, /2 files of dashboard-y were kept from sidebar-x, so the app mixes the blocks/);
+    assert.match(out, /npx @webjsdev\/ui add dashboard-y --overwrite/);
+    assert.ok(existsSync(join(d, 'app', 'dashboard', 'data.ts')), 'the files with no clash are still written');
+
+    await captured(() => add.parseAsync(['dashboard-y', '--overwrite', '--no-deps', '--cwd', d, '--registry', 'http://test/fam'], { from: 'user' }));
+    assert.equal(readFileSync(join(d, 'components', 'app-sidebar.ts'), 'utf8'), 'export const sidebar = "y";\n', '--overwrite replaces it');
+  } finally {
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});
+
+test('add <block>: re-adding the same block, or keeping an edited file, warns of no conflict', async () => {
+  stubFamilyFetch();
+  const d = tmp();
+  try {
+    await captured(() => add.parseAsync(['sidebar-x', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/fam'], { from: 'user' }));
+    const again = await captured(() => add.parseAsync(['sidebar-x', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/fam'], { from: 'user' }));
+    assert.match(again, /components\/app-sidebar\.ts is already sidebar-x's version/);
+    assert.doesNotMatch(again, /mixes the blocks/);
+
+    writeFileSync(join(d, 'components', 'app-sidebar.ts'), '// my edits\n');
+    const edited = await captured(() => add.parseAsync(['dashboard-y', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/fam'], { from: 'user' }));
+    assert.match(edited, /components\/app-sidebar\.ts already exists and differs from dashboard-y's version/);
+    assert.doesNotMatch(edited, /app-sidebar\.ts was written by/, 'an edited file is not blamed on another block');
+    assert.equal(readFileSync(join(d, 'components', 'app-sidebar.ts'), 'utf8'), '// my edits\n');
+  } finally {
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});

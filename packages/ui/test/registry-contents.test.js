@@ -439,3 +439,17 @@ test('sonner : branches the toast role rather than emitting a nullish hole', { s
     'a non-error toast still carries role=status, which nests a second live region inside the polite viewport',
   );
 });
+
+test('avatar : a broken image paints no alt text and pushes its glyph out, in every style', { skip }, () => {
+  // The image is laid over the fallback, so a 404 photo would paint its alt
+  // text and the broken-image glyph over the initials. `text-transparent`
+  // hides the alt text in every engine; the full-height `::before` box, which
+  // only a BROKEN image renders, pushes Chromium's glyph out of the clipped box.
+  for (const style of ['new-york', 'nova', 'vega', 'maia', 'lyra', 'mira', 'luma', 'sera', 'rhea']) {
+    const src = bakeForStyle(readFileSync(join(COMPONENTS_DIR, 'avatar.ts'), 'utf8'), style);
+    const image = /avatarImageClass = \(\): string =>\s*'([^']*)'/.exec(src)?.[1] ?? '';
+    for (const cls of ['absolute', 'inset-0', 'overflow-hidden', 'text-transparent', 'before:block', 'before:h-full']) {
+      assert.ok(image.split(/\s+/).includes(cls), `${style}: avatarImageClass carries ${cls} (got "${image}")`);
+    }
+  }
+});

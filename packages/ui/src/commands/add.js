@@ -8,7 +8,7 @@ import { getConfig } from '../utils/get-config.js';
 import { logger } from '../utils/logger.js';
 import { resolveTree, collectNpmDeps } from '../registry/resolver.js';
 import { withIconLibrary } from '../registry/icons.js';
-import { DEFAULT_REGISTRY_URL } from '../registry/fetcher.js';
+import { DEFAULT_REGISTRY_URL, getRegistryIndex, getRegistryItem } from '../registry/fetcher.js';
 import { isCustomElementSource } from '../registry/local.js';
 import { stripExample } from '../registry/example.js';
 import { ensureTheme } from '../utils/theme.js';
@@ -57,9 +57,15 @@ export const add = new Command()
     }
 
     const written = [];
+    // Block files another block already wrote (two families sharing a
+    // target, sidebar-07 then dashboard-01), collected for one summary.
+    /** @type {{ file: string, item: string, by: string[] }[]} */
+    const conflicts = [];
+    /** @type {{ blocks?: any[] }} */
+    const blockCache = {};
     for (const item of tree) {
       for (const file of item.files || []) {
-        const out = await writeRegistryFile(cwd, config, item, file, opts);
+        const out = await writeRegistryFile(cwd, config, item, file, { ...opts, conflicts, blockCache });
         if (out) written.push(out);
       }
       // A block or a component that needs tokens an existing app may lack
@@ -73,6 +79,19 @@ export const add = new Command()
     if (written.length) {
       logger.info('Files written:');
       for (const f of written) logger.info(`  ${f}`);
+    }
+    if (conflicts.length) {
+      const names = [...new Set(conflicts.map((c) => c.item))];
+      const others = [...new Set(conflicts.flatMap((c) => c.by))];
+      logger.warn(
+        `${conflicts.length} file${conflicts.length === 1 ? '' : 's'} of ${names.join(', ')} ` +
+        `${conflicts.length === 1 ? 'was' : 'were'} kept from ${others.join(', ')}, so the app mixes the blocks:`,
+      );
+      for (const c of conflicts) logger.warn(`  ${c.file} (from ${c.by.join(', ')})`);
+      logger.warn(
+        `Run ${logger.cyan(`npx @webjsdev/ui add ${names.join(' ')} --overwrite`)} to replace them with ${names.join(', ')}'s version ` +
+        '(it also replaces every kit component and helper the install writes, so commit your edits first).',
+      );
     }
 
     if (opts.deps !== false) {
@@ -102,9 +121,26 @@ async function writeRegistryFile(cwd, config, item, file, opts) {
   }
 
   // A block's files are app code the user owns (a page, a module), so `--yes`
-  // does not license replacing one: only `--overwrite` does (D18).
+  // does not license replacing one: only `--overwrite` does (D18). Keeping it
+  // silently is wrong when ANOTHER block wrote it (two block families share
+  // targets such as components/app-sidebar.ts), since the app then mixes the
+  // two, so the existing file is compared against what this block and every
+  // other block would write there, and a match with another block is a
+  // warning that names it.
   if (existsSync(target) && !opts.overwrite && isBlock(item, file)) {
-    logger.info(`${relative(cwd, target)} already exists: keeping it (pass --overwrite to replace it).`);
+    const rel = relative(cwd, target);
+    const local = readFileSync(target, 'utf8');
+    if (local === transformForProject(file.content || '', target, config, item, { file, cwd })) {
+      logger.info(`${rel} is already ${item.name}'s version: keeping it.`);
+      return null;
+    }
+    const by = await otherBlockWriters(cwd, config, item, target, local, opts);
+    if (by.length) {
+      logger.warn(`${rel} was written by ${by.join(', ')}, not ${item.name}: keeping it (pass --overwrite to replace it).`);
+      opts.conflicts?.push({ file: rel, item: item.name, by });
+    } else {
+      logger.info(`${rel} already exists and differs from ${item.name}'s version: keeping it (pass --overwrite to replace it).`);
+    }
     return null;
   }
 
@@ -125,6 +161,44 @@ async function writeRegistryFile(cwd, config, item, file, opts) {
   writeFileSync(target, content, 'utf8');
   logger.success(`Wrote ${relative(cwd, target)}`);
   return relative(cwd, target);
+}
+
+/**
+ * The OTHER blocks whose file at `target` is exactly `local`, by name: what
+ * `add` would have written for each of them there (the same transform, so a
+ * baked, import-rewritten file still matches). The registry's blocks are
+ * loaded once per `add` run, and only when a block file already exists.
+ *
+ * @param {string} cwd
+ * @param {any} config
+ * @param {{ name: string }} item the block being installed
+ * @param {string} target absolute path of the existing file
+ * @param {string} local its content
+ * @param {{ registry?: string, blockCache?: { blocks?: any[] } }} opts
+ * @returns {Promise<string[]>}
+ */
+async function otherBlockWriters(cwd, config, item, target, local, opts) {
+  const cache = opts.blockCache ?? {};
+  if (!cache.blocks) {
+    cache.blocks = [];
+    try {
+      const index = await getRegistryIndex(opts.registry);
+      for (const entry of index.filter((i) => i.type === 'registry:block')) {
+        cache.blocks.push(await getRegistryItem(entry.name, opts.registry));
+      }
+    } catch {
+      // An index that cannot be read only costs the warning its block name.
+    }
+  }
+  const by = [];
+  for (const other of cache.blocks) {
+    if (other.name === item.name) continue;
+    const match = (other.files || []).some((f) =>
+      resolveTarget(cwd, config, other, f) === target &&
+      transformForProject(f.content || '', target, config, other, { file: f, cwd }) === local);
+    if (match) by.push(other.name);
+  }
+  return by;
 }
 
 function isBlock(item, file) {

@@ -3,8 +3,13 @@
  * compose with a native `<span>` or `<img>`. As in shadcn, one of the two
  * shows, never both, and with no script: the image is laid over the fallback
  * (`absolute inset-0` inside the `relative` root), so a loaded image covers
- * it, and a missing or broken one leaves the fallback showing. Hide a broken
- * image (`onerror`) if its broken-image glyph would otherwise cover the text.
+ * it, and a missing or broken one leaves the fallback showing. A broken
+ * image paints neither its alt text (`text-transparent`) nor, in Chromium,
+ * its broken-image glyph: a broken `<img>` renders a `::before` box (a loaded
+ * one never does), and the full-height block it gets here pushes the glyph
+ * out of the clipped box. Safari ignores that box and draws its glyph over
+ * the initials (Firefox can too at larger sizes), so where that matters hide
+ * the image on failure with script (`onerror`).
  *
  * shadcn parity:
  *   Avatar (size: default | sm | lg)  → avatarClass({ size }) with `data-size`
@@ -53,7 +58,8 @@ export function avatarClass(_opts: { size?: AvatarSize } = {}): string {
   return cn(AVATAR_BASE);
 }
 
-export const avatarImageClass = (): string => 'cn-avatar-image absolute inset-0 aspect-square size-full object-cover';
+export const avatarImageClass = (): string =>
+  'cn-avatar-image absolute inset-0 aspect-square size-full object-cover overflow-hidden text-transparent before:block before:h-full';
 
 export const avatarFallbackClass = (): string =>
   'cn-avatar-fallback flex size-full items-center justify-center text-sm group-data-[size=sm]/avatar:text-xs';
