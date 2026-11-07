@@ -662,6 +662,9 @@ export function onPrefetchIntent(e) {
   prefetchHoverTimer = setTimeout(() => {
     prefetchHoverTimer = null;
     prefetchHoverAnchor = null;
+    // A navigation during the dwell can swap the hovered link out of the
+    // page; a link nobody can click any more warms nothing.
+    if (!anchor.isConnected) return;
     // Resolved at FIRE time, so it sees the document a click at this moment
     // would (a soft nav during the dwell can change which frame encloses it).
     prefetch(href, resolveTargetFrameId(anchor));
