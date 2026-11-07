@@ -2791,7 +2791,7 @@
     {
       "name": "chart-area-interactive",
       "type": "registry:block",
-      "title": "Area Chart - Interactive",
+      "title": "Area Chart: Interactive",
       "description": "An interactive area chart",
       "categories": [
         "chart",
@@ -2842,7 +2842,7 @@
     {
       "name": "chart-area-linear",
       "type": "registry:block",
-      "title": "Area Chart - Linear",
+      "title": "Area Chart: Linear",
       "description": "A linear area chart",
       "categories": [
         "chart",
@@ -2867,7 +2867,7 @@
     {
       "name": "chart-area-step",
       "type": "registry:block",
-      "title": "Area Chart - Step",
+      "title": "Area Chart: Step",
       "description": "A step area chart",
       "categories": [
         "chart",
@@ -2892,7 +2892,7 @@
     {
       "name": "chart-area-legend",
       "type": "registry:block",
-      "title": "Area Chart - Legend",
+      "title": "Area Chart: Legend",
       "description": "An area chart with a legend",
       "categories": [
         "chart",
@@ -2917,7 +2917,7 @@
     {
       "name": "chart-area-stacked",
       "type": "registry:block",
-      "title": "Area Chart - Stacked",
+      "title": "Area Chart: Stacked",
       "description": "A stacked area chart",
       "categories": [
         "chart",
@@ -2942,7 +2942,7 @@
     {
       "name": "chart-area-stacked-expand",
       "type": "registry:block",
-      "title": "Area Chart - Stacked Expanded",
+      "title": "Area Chart: Stacked Expanded",
       "description": "A stacked area chart with expand stacking",
       "categories": [
         "chart",
@@ -2967,7 +2967,7 @@
     {
       "name": "chart-area-icons",
       "type": "registry:block",
-      "title": "Area Chart - Icons",
+      "title": "Area Chart: Icons",
       "description": "An area chart with icons",
       "categories": [
         "chart",
@@ -2992,7 +2992,7 @@
     {
       "name": "chart-area-gradient",
       "type": "registry:block",
-      "title": "Area Chart - Gradient",
+      "title": "Area Chart: Gradient",
       "description": "An area chart with gradient fill",
       "categories": [
         "chart",
@@ -3017,7 +3017,7 @@
     {
       "name": "chart-area-axes",
       "type": "registry:block",
-      "title": "Area Chart - Axes",
+      "title": "Area Chart: Axes",
       "description": "An area chart with axes",
       "categories": [
         "chart",
@@ -3042,7 +3042,7 @@
     {
       "name": "chart-bar-interactive",
       "type": "registry:block",
-      "title": "Bar Chart - Interactive",
+      "title": "Bar Chart: Interactive",
       "description": "An interactive bar chart",
       "categories": [
         "chart",
@@ -3092,7 +3092,7 @@
     {
       "name": "chart-bar-horizontal",
       "type": "registry:block",
-      "title": "Bar Chart - Horizontal",
+      "title": "Bar Chart: Horizontal",
       "description": "A horizontal bar chart",
       "categories": [
         "chart",
@@ -3117,7 +3117,7 @@
     {
       "name": "chart-bar-multiple",
       "type": "registry:block",
-      "title": "Bar Chart - Multiple",
+      "title": "Bar Chart: Multiple",
       "description": "A multiple bar chart",
       "categories": [
         "chart",
@@ -3142,7 +3142,7 @@
     {
       "name": "chart-bar-stacked",
       "type": "registry:block",
-      "title": "Bar Chart - Stacked + Legend",
+      "title": "Bar Chart: Stacked + Legend",
       "description": "A stacked bar chart with a legend",
       "categories": [
         "chart",
@@ -3167,7 +3167,7 @@
     {
       "name": "chart-bar-label",
       "type": "registry:block",
-      "title": "Bar Chart - Label",
+      "title": "Bar Chart: Label",
       "description": "A bar chart with a label",
       "categories": [
         "chart",
@@ -3192,7 +3192,7 @@
     {
       "name": "chart-bar-label-custom",
       "type": "registry:block",
-      "title": "Bar Chart - Custom Label",
+      "title": "Bar Chart: Custom Label",
       "description": "A bar chart with a custom label",
       "categories": [
         "chart",
@@ -3217,7 +3217,7 @@
     {
       "name": "chart-bar-mixed",
       "type": "registry:block",
-      "title": "Bar Chart - Mixed",
+      "title": "Bar Chart: Mixed",
       "description": "A mixed bar chart",
       "categories": [
         "chart",
@@ -3242,7 +3242,7 @@
     {
       "name": "chart-bar-active",
       "type": "registry:block",
-      "title": "Bar Chart - Active",
+      "title": "Bar Chart: Active",
       "description": "A bar chart with an active bar",
       "categories": [
         "chart",
@@ -3267,7 +3267,7 @@
     {
       "name": "chart-bar-negative",
       "type": "registry:block",
-      "title": "Bar Chart - Negative",
+      "title": "Bar Chart: Negative",
       "description": "A bar chart with negative values",
       "categories": [
         "chart",
@@ -3292,7 +3292,7 @@
     {
       "name": "chart-line-interactive",
       "type": "registry:block",
-      "title": "Line Chart - Interactive",
+      "title": "Line Chart: Interactive",
       "description": "An interactive line chart",
       "categories": [
         "chart",
@@ -3342,7 +3342,7 @@
     {
       "name": "chart-line-linear",
       "type": "registry:block",
-      "title": "Line Chart - Linear",
+      "title": "Line Chart: Linear",
       "description": "A linear line chart",
       "categories": [
         "chart",
@@ -3367,7 +3367,7 @@
     {
       "name": "chart-line-step",
       "type": "registry:block",
-      "title": "Line Chart - Step",
+      "title": "Line Chart: Step",
       "description": "A line chart with step",
       "categories": [
         "chart",
@@ -3392,7 +3392,7 @@
     {
       "name": "chart-line-multiple",
       "type": "registry:block",
-      "title": "Line Chart - Multiple",
+      "title": "Line Chart: Multiple",
       "description": "A multiple line chart",
       "categories": [
         "chart",
@@ -3417,7 +3417,7 @@
     {
       "name": "chart-line-dots",
       "type": "registry:block",
-      "title": "Line Chart - Dots",
+      "title": "Line Chart: Dots",
       "description": "A line chart with dots",
       "categories": [
         "chart",
@@ -3442,7 +3442,7 @@
     {
       "name": "chart-line-dots-custom",
       "type": "registry:block",
-      "title": "Line Chart - Custom Dots",
+      "title": "Line Chart: Custom Dots",
       "description": "A line chart with custom dots",
       "categories": [
         "chart",
@@ -3467,7 +3467,7 @@
     {
       "name": "chart-line-dots-colors",
       "type": "registry:block",
-      "title": "Line Chart - Dots Colors",
+      "title": "Line Chart: Dots Colors",
       "description": "A line chart with dots and colors",
       "categories": [
         "chart",
@@ -3492,7 +3492,7 @@
     {
       "name": "chart-line-label",
       "type": "registry:block",
-      "title": "Line Chart - Label",
+      "title": "Line Chart: Label",
       "description": "A line chart with a label",
       "categories": [
         "chart",
@@ -3517,7 +3517,7 @@
     {
       "name": "chart-line-label-custom",
       "type": "registry:block",
-      "title": "Line Chart - Custom Label",
+      "title": "Line Chart: Custom Label",
       "description": "A line chart with a custom label",
       "categories": [
         "chart",
@@ -3567,7 +3567,7 @@
     {
       "name": "chart-pie-separator-none",
       "type": "registry:block",
-      "title": "Pie Chart - Separator None",
+      "title": "Pie Chart: Separator None",
       "description": "A pie chart with no separator",
       "categories": [
         "chart",
@@ -3592,7 +3592,7 @@
     {
       "name": "chart-pie-label",
       "type": "registry:block",
-      "title": "Pie Chart - Label",
+      "title": "Pie Chart: Label",
       "description": "A pie chart with a label",
       "categories": [
         "chart",
@@ -3617,7 +3617,7 @@
     {
       "name": "chart-pie-label-custom",
       "type": "registry:block",
-      "title": "Pie Chart - Custom Label",
+      "title": "Pie Chart: Custom Label",
       "description": "A pie chart with a custom label",
       "categories": [
         "chart",
@@ -3642,7 +3642,7 @@
     {
       "name": "chart-pie-label-list",
       "type": "registry:block",
-      "title": "Pie Chart - Label List",
+      "title": "Pie Chart: Label List",
       "description": "A pie chart with a label list",
       "categories": [
         "chart",
@@ -3667,7 +3667,7 @@
     {
       "name": "chart-pie-legend",
       "type": "registry:block",
-      "title": "Pie Chart - Legend",
+      "title": "Pie Chart: Legend",
       "description": "A pie chart with a legend",
       "categories": [
         "chart",
@@ -3692,7 +3692,7 @@
     {
       "name": "chart-pie-donut",
       "type": "registry:block",
-      "title": "Pie Chart - Donut",
+      "title": "Pie Chart: Donut",
       "description": "A donut chart",
       "categories": [
         "chart",
@@ -3717,7 +3717,7 @@
     {
       "name": "chart-pie-donut-active",
       "type": "registry:block",
-      "title": "Pie Chart - Donut Active",
+      "title": "Pie Chart: Donut Active",
       "description": "A donut chart with an active sector",
       "categories": [
         "chart",
@@ -3742,7 +3742,7 @@
     {
       "name": "chart-pie-donut-text",
       "type": "registry:block",
-      "title": "Pie Chart - Donut with Text",
+      "title": "Pie Chart: Donut with Text",
       "description": "A donut chart with text",
       "categories": [
         "chart",
@@ -3767,7 +3767,7 @@
     {
       "name": "chart-pie-stacked",
       "type": "registry:block",
-      "title": "Pie Chart - Stacked",
+      "title": "Pie Chart: Stacked",
       "description": "A pie chart with stacked sections",
       "categories": [
         "chart",
@@ -3792,7 +3792,7 @@
     {
       "name": "chart-pie-interactive",
       "type": "registry:block",
-      "title": "Pie Chart - Interactive",
+      "title": "Pie Chart: Interactive",
       "description": "An interactive pie chart",
       "categories": [
         "chart",
@@ -3843,7 +3843,7 @@
     {
       "name": "chart-radar-dots",
       "type": "registry:block",
-      "title": "Radar Chart - Dots",
+      "title": "Radar Chart: Dots",
       "description": "A radar chart with dots",
       "categories": [
         "chart",
@@ -3868,7 +3868,7 @@
     {
       "name": "chart-radar-lines-only",
       "type": "registry:block",
-      "title": "Radar Chart - Lines Only",
+      "title": "Radar Chart: Lines Only",
       "description": "A radar chart with lines only",
       "categories": [
         "chart",
@@ -3893,7 +3893,7 @@
     {
       "name": "chart-radar-label-custom",
       "type": "registry:block",
-      "title": "Radar Chart - Custom Label",
+      "title": "Radar Chart: Custom Label",
       "description": "A radar chart with a custom label",
       "categories": [
         "chart",
@@ -3918,7 +3918,7 @@
     {
       "name": "chart-radar-grid-custom",
       "type": "registry:block",
-      "title": "Radar Chart - Grid Custom",
+      "title": "Radar Chart: Grid Custom",
       "description": "A radar chart with a custom grid",
       "categories": [
         "chart",
@@ -3943,7 +3943,7 @@
     {
       "name": "chart-radar-grid-none",
       "type": "registry:block",
-      "title": "Radar Chart - Grid None",
+      "title": "Radar Chart: Grid None",
       "description": "A radar chart with no grid",
       "categories": [
         "chart",
@@ -3968,7 +3968,7 @@
     {
       "name": "chart-radar-grid-circle",
       "type": "registry:block",
-      "title": "Radar Chart - Grid Circle",
+      "title": "Radar Chart: Grid Circle",
       "description": "A radar chart with a grid and circle",
       "categories": [
         "chart",
@@ -3993,7 +3993,7 @@
     {
       "name": "chart-radar-grid-circle-no-lines",
       "type": "registry:block",
-      "title": "Radar Chart - Grid Circle - No lines",
+      "title": "Radar Chart: Grid Circle, No Lines",
       "description": "A radar chart with a grid and circle fill",
       "categories": [
         "chart",
@@ -4018,7 +4018,7 @@
     {
       "name": "chart-radar-grid-circle-fill",
       "type": "registry:block",
-      "title": "Radar Chart - Grid Circle Filled",
+      "title": "Radar Chart: Grid Circle Filled",
       "description": "A radar chart with a grid and circle fill",
       "categories": [
         "chart",
@@ -4043,7 +4043,7 @@
     {
       "name": "chart-radar-grid-fill",
       "type": "registry:block",
-      "title": "Radar Chart - Grid Filled",
+      "title": "Radar Chart: Grid Filled",
       "description": "A radar chart with a grid filled",
       "categories": [
         "chart",
@@ -4068,7 +4068,7 @@
     {
       "name": "chart-radar-multiple",
       "type": "registry:block",
-      "title": "Radar Chart - Multiple",
+      "title": "Radar Chart: Multiple",
       "description": "A radar chart with multiple data",
       "categories": [
         "chart",
@@ -4093,7 +4093,7 @@
     {
       "name": "chart-radar-legend",
       "type": "registry:block",
-      "title": "Radar Chart - Legend",
+      "title": "Radar Chart: Legend",
       "description": "A radar chart with a legend",
       "categories": [
         "chart",
@@ -4118,7 +4118,7 @@
     {
       "name": "chart-radar-icons",
       "type": "registry:block",
-      "title": "Radar Chart - Icons",
+      "title": "Radar Chart: Icons",
       "description": "A radar chart with icons",
       "categories": [
         "chart",
@@ -4143,7 +4143,7 @@
     {
       "name": "chart-radar-radius",
       "type": "registry:block",
-      "title": "Radar Chart - Radius Axis",
+      "title": "Radar Chart: Radius Axis",
       "description": "A radar chart with a radius axis",
       "categories": [
         "chart",
@@ -4193,7 +4193,7 @@
     {
       "name": "chart-radial-label",
       "type": "registry:block",
-      "title": "Radial Chart - Label",
+      "title": "Radial Chart: Label",
       "description": "A radial chart with a label",
       "categories": [
         "chart",
@@ -4218,7 +4218,7 @@
     {
       "name": "chart-radial-grid",
       "type": "registry:block",
-      "title": "Radial Chart - Grid",
+      "title": "Radial Chart: Grid",
       "description": "A radial chart with a grid",
       "categories": [
         "chart",
@@ -4243,7 +4243,7 @@
     {
       "name": "chart-radial-text",
       "type": "registry:block",
-      "title": "Radial Chart - Text",
+      "title": "Radial Chart: Text",
       "description": "A radial chart with text",
       "categories": [
         "chart",
@@ -4268,7 +4268,7 @@
     {
       "name": "chart-radial-shape",
       "type": "registry:block",
-      "title": "Radial Chart - Shape",
+      "title": "Radial Chart: Shape",
       "description": "A radial chart with a custom shape",
       "categories": [
         "chart",
@@ -4293,7 +4293,7 @@
     {
       "name": "chart-radial-stacked",
       "type": "registry:block",
-      "title": "Radial Chart - Stacked",
+      "title": "Radial Chart: Stacked",
       "description": "A radial chart with stacked sections",
       "categories": [
         "chart",
@@ -4318,7 +4318,7 @@
     {
       "name": "chart-tooltip-default",
       "type": "registry:block",
-      "title": "Tooltip - Default",
+      "title": "Tooltip: Default",
       "description": "A stacked bar chart with the default tooltip",
       "categories": [
         "chart",
@@ -4343,7 +4343,7 @@
     {
       "name": "chart-tooltip-indicator-line",
       "type": "registry:block",
-      "title": "Tooltip - Line Indicator",
+      "title": "Tooltip: Line Indicator",
       "description": "A stacked bar chart whose tooltip uses a line indicator",
       "categories": [
         "chart",
@@ -4368,7 +4368,7 @@
     {
       "name": "chart-tooltip-indicator-none",
       "type": "registry:block",
-      "title": "Tooltip - No Indicator",
+      "title": "Tooltip: No Indicator",
       "description": "A stacked bar chart whose tooltip has no indicator",
       "categories": [
         "chart",
@@ -4393,7 +4393,7 @@
     {
       "name": "chart-tooltip-label-custom",
       "type": "registry:block",
-      "title": "Tooltip - Custom label",
+      "title": "Tooltip: Custom label",
       "description": "A stacked bar chart whose tooltip label comes from the config",
       "categories": [
         "chart",
@@ -4418,7 +4418,7 @@
     {
       "name": "chart-tooltip-label-formatter",
       "type": "registry:block",
-      "title": "Tooltip - Label Formatter",
+      "title": "Tooltip: Label Formatter",
       "description": "A stacked bar chart whose tooltip formats its label",
       "categories": [
         "chart",
@@ -4443,7 +4443,7 @@
     {
       "name": "chart-tooltip-label-none",
       "type": "registry:block",
-      "title": "Tooltip - No Label",
+      "title": "Tooltip: No Label",
       "description": "A stacked bar chart whose tooltip has no label or indicator",
       "categories": [
         "chart",
@@ -4468,7 +4468,7 @@
     {
       "name": "chart-tooltip-formatter",
       "type": "registry:block",
-      "title": "Tooltip - Formatter",
+      "title": "Tooltip: Formatter",
       "description": "A stacked bar chart whose tooltip formats each row",
       "categories": [
         "chart",
@@ -4493,7 +4493,7 @@
     {
       "name": "chart-tooltip-icons",
       "type": "registry:block",
-      "title": "Tooltip - Icons",
+      "title": "Tooltip: Icons",
       "description": "A stacked bar chart whose tooltip shows each series icon",
       "categories": [
         "chart",
@@ -4518,7 +4518,7 @@
     {
       "name": "chart-tooltip-advanced",
       "type": "registry:block",
-      "title": "Tooltip - Advanced",
+      "title": "Tooltip: Advanced",
       "description": "A stacked bar chart whose tooltip adds a total row",
       "categories": [
         "chart",
