@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
-import { cardClass } from '#components/ui/card.ts';
-import { badgeClass } from '#components/ui/badge.ts';
+import { cardClass } from '#modules/gallery/ui/card.ts';
+import { badgeClass } from '#modules/gallery/ui/badge.ts';
 import { FEATURE_GROUPS, EXAMPLES } from '#modules/gallery/nav.ts';
 
 export const metadata = {

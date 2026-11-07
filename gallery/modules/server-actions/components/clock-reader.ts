@@ -6,8 +6,8 @@
 // from the action seed on its first client call, so "watch it hit the network"
 // would be wrong for the first paint.
 import { WebComponent, signal, html } from '@webjsdev/core';
-import { cardClass } from '#components/ui/card.ts';
-import { buttonClass } from '#components/ui/button.ts';
+import { cardClass } from '#modules/gallery/ui/card.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
 import { readClock } from '../queries/read-clock.server.ts';
 import { bumpClock } from '../actions/bump-clock.server.ts';
 

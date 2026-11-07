@@ -12,9 +12,9 @@
 // HTML), and `asyncAppend` / `asyncReplace` (stream values from an async
 // iterable, appending each or replacing with the latest).
 import { WebComponent, signal, html } from '@webjsdev/core';
-import { buttonClass } from '#components/ui/button.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
 import { cn } from '#lib/utils/cn.ts';
-import { inputClass } from '#components/ui/input.ts';
+import { inputClass } from '#modules/gallery/ui/input.ts';
 import { repeat, watch, live, until, keyed, unsafeHTML, ref, createRef, guard, cache, templateContent, asyncAppend, asyncReplace } from '@webjsdev/core/directives';
 
 interface Item { id: number; label: string }

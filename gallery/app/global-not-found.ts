@@ -5,7 +5,7 @@
 // here. Use a nested <segment>/not-found.ts for a section-specific 404 (nearest
 // wins); this file is the app-wide fallback.
 import { html } from '@webjsdev/core';
-import { buttonClass } from '#components/ui/button.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
 
 export default function GlobalNotFound() {
   return html`

@@ -2,7 +2,8 @@
  * ui.ts: repeated MARKUP-chunk helpers (the `lib/utils/ui.ts` pattern).
  *
  * A design system has two kinds of helper. A repeated PRIMITIVE with variants
- * (button, input, card, badge) is a CLASS helper in `components/ui/` returning a
+ * (button, input, card, badge) is a CLASS helper (the gallery's own live in
+ * `modules/gallery/ui/`; yours come from `webjs ui add` into `components/ui/`) returning a
  * class string. A repeated markup CHUNK (a heading, a lede, a back link) is an
  * `html`-fragment helper here in `lib/utils/ui.ts`: it returns SSR-time markup,
  * so the output is byte-identical to writing the tags inline, with no client

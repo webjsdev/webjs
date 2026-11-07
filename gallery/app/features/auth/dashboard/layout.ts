@@ -1,6 +1,6 @@
 import { html } from '@webjsdev/core';
 import type { LayoutProps } from '@webjsdev/core';
-import { buttonClass } from '#components/ui/button.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
 
 // Nested layout for the protected dashboard subtree. Logout is a plain
 // <form method="POST"> posting to the createAuth signout route: it clears the

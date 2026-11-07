@@ -4,8 +4,8 @@
 // closes in disconnectedCallback. At SSR it renders the disconnected state, so
 // the page still reads with JS off (a live feed has no no-JS equivalent).
 import { WebComponent, signal, html, connectWS } from '@webjsdev/core';
-import { buttonClass } from '#components/ui/button.ts';
-import { inputClass } from '#components/ui/input.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
+import { inputClass } from '#modules/gallery/ui/input.ts';
 
 export class BroadcastFeed extends WebComponent {
   private connected = signal(false);

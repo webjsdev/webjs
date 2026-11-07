@@ -17,7 +17,7 @@
  * A11y: a static badge is a plain non-focusable `<span>`. Make it an `<a>` only
  * when it links somewhere.
  *
- * Design tokens used (app/layout.ts): --color-primary, --color-border,
+ * Design tokens used (the theme): --color-primary, --color-border,
  * --color-muted-foreground.
  */
 import { cn } from '#lib/utils/cn.ts';

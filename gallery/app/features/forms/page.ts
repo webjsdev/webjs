@@ -9,9 +9,9 @@
 // to show a confirmation.
 import { html } from '@webjsdev/core';
 import { sendMessage, type Result } from '#modules/forms/actions/send-message.server.ts';
-import { cardClass } from '#components/ui/card.ts';
-import { inputClass } from '#components/ui/input.ts';
-import { buttonClass } from '#components/ui/button.ts';
+import { cardClass } from '#modules/gallery/ui/card.ts';
+import { inputClass } from '#modules/gallery/ui/input.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
 import { pageHeading } from '#lib/utils/ui.ts';
 import type { Metadata } from '@webjsdev/core';
 

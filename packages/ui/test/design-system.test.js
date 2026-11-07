@@ -327,3 +327,15 @@ test('add swaps lib-icons for the library components.json names', async () => {
   assert.equal(await withIconLibrary(tree, 'lucide'), tree, 'Lucide is the item itself');
   assert.equal(await withIconLibrary(tree, undefined), tree);
 });
+
+test('a preset\'s body font becomes the page\'s default family whatever its kind', async () => {
+  const { presetFontVars } = await import('../packages/registry/themes/preset.js');
+  const base = { style: 'nova', baseColor: 'neutral', theme: 'neutral', chartColor: 'neutral', iconLibrary: 'lucide', radius: 'default', menuAccent: 'subtle', menuColor: 'default' };
+  const serif = presetFontVars({ ...base, font: 'lora', fontHeading: 'inherit' });
+  assert.equal(serif['font-serif'], "'Lora', serif", 'the font keeps its own token');
+  assert.equal(serif['font-sans'], "'Lora', serif", 'and is the default family, so the page takes it');
+  assert.equal(serif['font-heading'], 'var(--font-serif)');
+  const sans = presetFontVars({ ...base, font: 'inter', fontHeading: 'lora' });
+  assert.deepEqual(Object.keys(sans).sort(), ['font-heading', 'font-sans'], 'a sans body sets --font-sans once');
+  assert.equal(sans['font-heading'], "'Lora', serif");
+});

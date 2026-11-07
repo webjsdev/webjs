@@ -4,10 +4,10 @@
  * directly; it's generated and gitignored. */
 @import "tailwindcss";
 
-/* Scan the shadcn-style component sources so their utility classes make it
- * into the generated bundle. (Tailwind v4 already scans the project tree by
- * default; this @source is belt-and-braces.) */
-@source "../components/ui/*.ts";
+/* Scan the gallery's class helpers so their utility classes make it into the
+ * generated bundle. (Tailwind v4 already scans the project tree by default;
+ * this @source is belt-and-braces.) */
+@source "../modules/gallery/ui/*.ts";
 
 /* The header logo swaps two files with dark:block / dark:hidden, so `dark:`
    has to mean the PAGE theme rather than the OS preference alone. Keyed off

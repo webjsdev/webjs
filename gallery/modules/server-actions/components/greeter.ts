@@ -1,9 +1,9 @@
 // Calls the 'use server' action via a normal import (the RPC stub). Never
 // hand-write fetch(); importing the action IS the API.
 import { WebComponent, signal, html } from '@webjsdev/core';
-import { cardClass } from '#components/ui/card.ts';
-import { buttonClass } from '#components/ui/button.ts';
-import { bareInputClass } from '#components/ui/input.ts';
+import { cardClass } from '#modules/gallery/ui/card.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
+import { bareInputClass } from '#modules/gallery/ui/input.ts';
 import { greet } from '../actions/greet.server.ts';
 
 export class Greeter extends WebComponent {

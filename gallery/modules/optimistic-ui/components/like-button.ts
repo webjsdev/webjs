@@ -10,7 +10,7 @@
 // /examples/todo app.
 import { WebComponent, signal, optimistic, html } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
-import { buttonClass } from '#components/ui/button.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
 import { likePost } from '../actions/like-post.server.ts';
 
 export class LikeButton extends WebComponent {

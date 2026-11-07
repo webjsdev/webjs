@@ -241,9 +241,15 @@ export function resolvePresetConfig(input) {
 
 /**
  * The `@theme inline` tokens a config's fonts set: the body font's own token
- * (`--font-sans`, `--font-mono` or `--font-serif`) and `--font-heading`,
- * which is the heading font or, when inherited, a reference to the body
- * font's token. Bare names, as `cssVars.theme` spells them.
+ * (`--font-sans`, `--font-mono` or `--font-serif`), `--font-sans` as well
+ * when the body font is a serif or a mono, and `--font-heading`, which is the
+ * heading font or, when inherited, a reference to the body font's token. Bare
+ * names, as `cssVars.theme` spells them.
+ *
+ * `--font-sans` is Tailwind's default family, the one the page's text takes.
+ * shadcn puts its body font's class on `<body>` from the Next layout; a WebJs
+ * app has no such hook, so the body font reaches the page through this token,
+ * which is how the configurator previews it whatever its kind.
  *
  * @param {PresetConfig} config
  * @returns {Record<string, string>}
@@ -252,10 +258,10 @@ export function presetFontVars(config) {
   const body = getFont(config.font);
   const heading = config.fontHeading !== 'inherit' ? getFont(config.fontHeading) : undefined;
   if (!body) return {};
-  return {
-    [body.variable.slice(2)]: body.family,
-    'font-heading': heading ? heading.family : `var(${body.variable})`,
-  };
+  const vars = { [body.variable.slice(2)]: body.family };
+  if (body.variable !== '--font-sans') vars['font-sans'] = body.family;
+  vars['font-heading'] = heading ? heading.family : `var(${body.variable})`;
+  return vars;
 }
 
 /**

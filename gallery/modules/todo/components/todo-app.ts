@@ -10,9 +10,9 @@
 // one coherent theme. Prefer these tokens (and opacity modifiers like
 // bg-primary/90) over ad-hoc colors.
 import { WebComponent, prop, optimistic, html } from '@webjsdev/core';
-import { cardClass } from '#components/ui/card.ts';
-import { buttonClass } from '#components/ui/button.ts';
-import { bareInputClass } from '#components/ui/input.ts';
+import { cardClass } from '#modules/gallery/ui/card.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
+import { bareInputClass } from '#modules/gallery/ui/input.ts';
 import { cn } from '#lib/utils/cn.ts';
 import { createTodo } from '../actions/create-todo.server.ts';
 import { toggleTodo } from '../actions/toggle-todo.server.ts';

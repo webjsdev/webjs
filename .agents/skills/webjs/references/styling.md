@@ -152,7 +152,7 @@ Native `<button>` / `<a>` / `<input>` already have correct focus + keyboard beha
 
 The default stack is a static compiled Tailwind stylesheet (`css:build` compiles `public/input.css` to the linked `public/tailwind.css`, so it works with JS off) plus `@theme` design tokens declared once in the root layout. You consume them as utility classes (`bg-background`, `text-foreground`, `bg-card`, `border-border`, `font-serif`).
 
-**Two halves.** (1) `public/input.css` MAPS token names into Tailwind with `@theme inline` (`--color-background: var(--background)`), so `bg-background` resolves to `var(--background)`. That is infrastructure; leave it. (2) The root layout (`app/layout.ts`) DEFINES the values as plain CSS custom properties in a `<style>` block. That is your palette; make it your own. A freshly cleared app (after `npm run gallery:clear`) ships only the OS system-colour base (`Canvas` / `CanvasText`) with NO tokens, so building this palette is your first styling step.
+**Two halves.** (1) The `@theme inline` maps (`--color-background: var(--background)`) turn token names into utilities, so `bg-background` resolves to `var(--background)`. That is infrastructure; leave it. (2) The VALUES live in `styles/globals.css`, inside the theme block `webjs ui init` owns (between `/* @webjsdev/ui theme */` and `/* @webjsdev/ui theme end */`): the light ones on `:root`, the dark ones on `.dark`, the fonts in the block's `@theme inline`. That is your palette; make it your own, by editing the block or with `npx webjsdev ui init --preset <code>` (a code from webjs.dev/ui/create), which replaces it. The scaffold writes its gallery palette there, and a cleared app keeps it. **Never redefine a theme token in the root layout**: a `<style>` there comes after the stylesheet, so it wins, and every later preset or block edit silently stops showing. Tokens your app adds itself go AFTER the block's end marker, where a preset leaves them alone.
 
 **`@theme` and `@theme inline` differ in whether the token reaches `:root`, and the difference is silent.** Measured on `tailwindcss@4.3.0`, a token mapped in a theme block is emitted as a real `:root` custom property when:
 
@@ -167,7 +167,7 @@ The one cell that bites is `inline` plus utility-only usage. Nothing on the page
 
 Whichever form you use, a token nothing references is dropped in both, so an unused mapping is dead configuration rather than a safety net.
 
-**Light and dark, defined once (DRY).** Write each colour token ONE time with the native CSS `light-dark(LIGHT, DARK)` function and let `color-scheme` pick the side. The default `color-scheme: light dark` follows the OS; a `[data-theme]` attribute forces one. No duplicated light/dark blocks:
+**Light and dark, defined once (DRY), for tokens you write by hand.** The kit's theme block uses `:root` plus `.dark`, the shape a preset writes. For a palette you author yourself (in place of the block's values, or for your own extra tokens after it), you can instead write each colour token ONE time with the native CSS `light-dark(LIGHT, DARK)` function and let `color-scheme` pick the side. The default `color-scheme: light dark` follows the OS; a `[data-theme]` attribute forces one. No duplicated light/dark blocks:
 
 ```html
 <style>

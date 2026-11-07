@@ -20,13 +20,16 @@
  * OWN-AND-THEME your copy: this file is `webjs ui add button` output THEMED to
  * this scaffold's look (rounded-xl, the primary / card / muted-link styles the
  * gallery uses). That is the intended `@webjsdev/ui` workflow: you own the
- * component file and tune its class values to your brand. Run
- * `webjs ui add button` (or edit here) to change the button system app-wide.
+ * component file and tune its class values to your brand. It lives in the
+ * gallery's own module, not in components/ui/, because `webjs ui add` writes
+ * there: your own `webjs ui add button` lands in components/ui/button.ts and
+ * never collides with this one, and gallery:clear removes this folder with the
+ * rest of the gallery.
  *
  * A11y: an icon-only button has no visible text, so give it an `aria-label`.
  * Native `<button>` focus + keyboard activation are already correct.
  *
- * Design tokens used (defined in app/layout.ts): --color-primary,
+ * Design tokens used (the theme, styles/globals.css in a scaffolded app): --color-primary,
  * --color-primary-foreground, --color-card, --color-border, --color-foreground,
  * --color-muted-foreground, --color-accent, --color-ring.
  */

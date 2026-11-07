@@ -5,7 +5,7 @@
 // import and call instead). The button is the interactivity signal, so this
 // component ships and hydrates.
 import { WebComponent, signal, html } from '@webjsdev/core';
-import { buttonClass } from '#components/ui/button.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
 
 interface Probe { n: number; status: number; remaining: string }
 

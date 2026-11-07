@@ -43,7 +43,7 @@ export default async function body(toc: TocEntry[]) {
 }`, { title: 'components.json', lang: 'json', lineNumbers: true })}
     <p>Tailwind maps these tokens into utilities like <code>bg-background</code>, <code>text-foreground</code>, <code>border-border</code>, and <code>ring-ring</code>.</p>
     <p>Dark mode works by overriding the same tokens inside a <code>.dark</code> selector. See the <a href="/ui/docs/dark-mode">dark mode docs</a> for setting and toggling the <code>.dark</code> class.</p>
-    ${callout(html`An app made with <code>webjs create</code> compiles <code>public/input.css</code>, which imports <code>styles/globals.css</code>, so the tokens there are the ones the page uses. Until you run <code>npm run gallery:clear</code>, though, the gallery's root layout sets its own values for most color tokens and the fonts on <code>:root</code> in <code>app/layout.ts</code>, and those win. Clear the gallery, or delete those values from the layout, before you theme the kit.`, { className: 'mt-4' })}
+    ${callout(html`An app made with <code>webjs create</code> compiles <code>public/input.css</code>, which imports <code>styles/globals.css</code>, so the tokens there are the ones the page uses. The gallery's own palette and fonts are written into that theme block too, and nothing in <code>app/layout.ts</code> overrides it, so <code>init --preset</code> or an edit to the block repaints the app straight away.`, { className: 'mt-4' })}
 
     ${heading(toc, 2, 'Token Convention')}
     <p>We use semantic background and foreground pairs. The base token controls the surface color and the <code>-foreground</code> token controls the text and icon color that sits on that surface.</p>

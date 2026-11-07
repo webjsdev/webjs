@@ -7,8 +7,8 @@
 // controllers automate. All light DOM, so the provider's <slot> projects its
 // children normally.
 import { WebComponent, html, signal } from '@webjsdev/core';
-import { buttonClass } from '#components/ui/button.ts';
-import { cardClass } from '#components/ui/card.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
+import { cardClass } from '#modules/gallery/ui/card.ts';
 import { createContext, ContextProvider, ContextConsumer, ContextRequestEvent } from '@webjsdev/core/context';
 
 type Theme = 'light' | 'dark';

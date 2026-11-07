@@ -20,8 +20,8 @@
 // requirement. The frame element itself upgrades because the root layout ships a
 // component (the theme toggle), so @webjsdev/core and the router load app-wide.
 import { html } from '@webjsdev/core';
-import { cardClass } from '#components/ui/card.ts';
-import { buttonClass } from '#components/ui/button.ts';
+import { cardClass } from '#modules/gallery/ui/card.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
 import { cn } from '#lib/utils/cn.ts';
 import { pageHeading, lede } from '#lib/utils/ui.ts';
 import type { Metadata } from '@webjsdev/core';
