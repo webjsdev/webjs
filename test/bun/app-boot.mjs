@@ -36,14 +36,15 @@ const runtime = process.versions.bun ? `bun ${process.versions.bun}` : `node ${p
  *
  *  Everything the project serves as HTML is now one app: the docs moved onto
  *  the website in #1098 and the component gallery in #1099. So the list is a
- *  single entry, and it carries a gallery component detail page (`/ui/button`),
- *  the exact route class that 500'd in #526 when the registry copy was skipped.
+ *  single entry, and it carries a component docs page
+ *  (`/ui/docs/components/button`), the route class that 500'd in #526 (then the
+ *  retired `/ui/button` gallery page) when the registry copy was skipped.
  *
  *  The old `docs` and `ui-website` apps used to be redirect-only hosts here.
  *  Both are Cloudflare redirect rules now, with no origin in this repo, so
  *  there is nothing left to boot for either. */
 const APPS = [
-  { name: 'website', dir: 'website', routes: ['/', '/docs/no-build', '/docs/components', '/ui', '/ui/button'] },
+  { name: 'website', dir: 'website', routes: ['/', '/docs/no-build', '/docs/components', '/ui', '/ui/docs/components/button'] },
 ];
 
 /** Run an app's `webjs.start.before` steps (registry copy, Tailwind build) the

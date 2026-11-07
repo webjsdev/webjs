@@ -162,9 +162,11 @@ website/
                        selection); authentication binds a real 'use server'
                        action; rtl is the nova style under dir="rtl" with a
                        ?lang= selector
-        (gallery)/     the interim component gallery, until the docs pages
-                       replace it: layout.ts is its sidebar (new-york style)
-          [name]/page.ts /ui/<name>, one page per component
+        [name]/page.ts /ui/<name>, the retired interim gallery's address: a
+                       308 to /ui/docs/components/<name> for every component
+                       record in modules/ui/docs/nav.ts, a 404 otherwise. A
+                       thin page rather than a webjs.redirects rule, so the
+                       name list is the nav's and static siblings still win
       preview/typeset/[name]/page.ts
                        the typeset builder's iframe target, one of shadcn's
                        specimens with the params as --preview-* properties.
@@ -240,7 +242,6 @@ website/
                        keyboard focus stop, the optional landmark name) and
                        colours the docs samples in the browser with the one
                        grammar from lib/utils/highlight.ts
-    preview-tabs.ts    Preview / Code toggle around a gallery demo
     docs-drawer.ts     the /docs + /ui sidebar shell and its mobile drawer:
                        backdrop, toggle, aside, open state, every close path
     docs-command-menu.ts
@@ -294,7 +295,7 @@ website/
                        (components/ui/ is intentionally EMPTY here, left free
                        for `webjs ui add` to own, exactly as the scaffold
                        expects, and gitignored so it stays that way. The
-                       gallery's preview copies live in modules/ui/components/
+                       /ui previews' copies live in modules/ui/components/
                        instead, see below. Enforced by
                        test/ssr/kit-surfaces.test.ts, because eleven copies of
                        that mirror were once committed here by accident and
@@ -433,8 +434,8 @@ website/
     ui/components/     GITIGNORED mirror of the @webjsdev/ui registry sources,
                        written by scripts/copy-registry.mjs. NEVER hand-write
                        here: it is wiped every dev cycle. It lives under the
-                       gallery's own module rather than in components/ui/
-                       because it is gallery INFRASTRUCTURE (live previews),
+                       /ui section's own module rather than in components/ui/
+                       because it is /ui INFRASTRUCTURE (live previews),
                        not this site's UI kit. That keeps components/ui/ free
                        so `webjs ui add` works here the same way it does in a
                        scaffolded app.
@@ -464,7 +465,8 @@ website/
                        shares the one kit instance the rest of /ui uses. It
                        also writes elements.ts, a barrel importing every block
                        file that registers a custom element
-    ui/utils/          tier classification, per-component examples + API metadata
+    ui/utils/          tier classification (the /ui/docs introduction's counts)
+                       and the registry route headers
     ui/typeset/        the typeset builder (#1666): params.ts (shadcn's params,
                        parse / serialize / shuffle, pure so the element shares
                        it), fonts.ts (the faces, which scripts/fetch-fonts.mjs
@@ -796,8 +798,7 @@ calling an action), re-enable it and delete the assertion in
   `.agents/skills/webjs/references/styling.md`. A token that is NOT a colour
   (`--glow-strength`, `--cta-mix`, `--shadow-spread`) cannot ride
   `light-dark()`, so it keeps an explicit override pair: the OS media query
-  plus the attribute rule. Nothing else may. The same rule governs the
-  `.ui-preview` kit palette in `public/input.css`. Both are pinned by
+  plus the attribute rule. Nothing else may. Pinned by
   `test/ssr/design-tokens.test.ts` and `test/ssr/kit-surfaces.test.ts`.
 - Each section in `page.ts` is a `<section>` wrapper for predictable
   scroll anchors.
@@ -821,10 +822,10 @@ calling an action), re-enable it and delete the assertion in
   without a pointer. `test/ssr/pre-block-a11y.test.ts` enforces all three
   across the marketing pages, the error boundary, the markdown post body
   (shared by `/blog/[slug]`, `/articles/[slug]`, and `/compare/[slug]`), every
-  page under `app/docs/` and `app/ui/`, and every gallery detail page. It does
-  not keep a list: the section pages are DISCOVERED from the file system and
-  the gallery components come from the same registry index the sidebar is
-  built from, so a page or a component added tomorrow is covered. It reads
+  page under `app/docs/` and `app/ui/`, and every /ui component docs page. It
+  does not keep a list: the section pages are DISCOVERED from the file system
+  and the component pages come from the same component records the /ui docs
+  sidebar is built from, so a page or a component added tomorrow is covered. It reads
   scrollability from the rendered document, not from the tag, since a docs
   block scrolls because of `.prose-docs pre { overflow-x: auto }` in
   `lib/ui/docs-shell.ts` and nothing on the tag records that.
@@ -892,7 +893,7 @@ neither the mirror nor the stylesheet goes stale without a live watcher. The
 mirror has to be refreshed as part of that command rather than only in
 `before`, because the generated sources are a scanned `@source`: recompiling
 the stylesheet against a stale mirror silently omits the utility classes the
-gallery previews need. In prod, `npm start` and `webjs start` are equivalent
+/ui previews need. In prod, `npm start` and `webjs start` are equivalent
 too, via `webjs.start.before`.
 
 Every nav entry is an in-app route and needs no env var: Blog, Changelog, Docs, and the UI gallery. (Docs and the gallery used to

@@ -77,7 +77,7 @@ test('form GET: body is promoted to query string and response is applied', async
       });
     });
 
-    await page.goto(`${BASE}/ui/button`);
+    await page.goto(`${BASE}/ui/docs/components/button`);
     await page.waitForLoadState('domcontentloaded');
 
     // Inject a form into the page and submit it (programmatically).
@@ -139,12 +139,12 @@ test('form POST: an urlencoded body is sent, response applied, snapshot cache cl
       });
     });
 
-    await page.goto(`${BASE}/ui/button`);
+    await page.goto(`${BASE}/ui/docs/components/button`);
     await page.waitForLoadState('domcontentloaded');
 
     // Visit a second URL so the snapshot cache has an entry to clear.
     // The router caches the URL we LEAVE, not the one we arrive at.
-    await page.locator('.docs-sidebar a:has-text("Card")').first().click();
+    await page.locator('ui-docs-sidebar a[href="/ui/docs/components/card"]').first().click();
     await page.waitForFunction(() => location.pathname.endsWith('/card'),
       { timeout: 4000 });
 
@@ -219,7 +219,7 @@ test('form POST: a DECLARED multipart enctype is still sent as multipart (#1307)
       });
     });
 
-    await page.goto(`${BASE}/ui/button`);
+    await page.goto(`${BASE}/ui/docs/components/button`);
     await page.waitForLoadState('domcontentloaded');
     await page.evaluate(() => {
       const f = document.createElement('form');
@@ -265,7 +265,7 @@ test('form with data-no-router: NOT intercepted (browser does full nav)', async 
       });
     });
 
-    await page.goto(`${BASE}/ui/button`);
+    await page.goto(`${BASE}/ui/docs/components/button`);
     await page.waitForLoadState('domcontentloaded');
     await page.evaluate(() => {
       const f = document.createElement('form');
@@ -308,12 +308,12 @@ test('concurrent navs: rapid second click aborts the first fetch', async () => {
       }
     });
 
-    await page.goto(`${BASE}/ui/button`);
+    await page.goto(`${BASE}/ui/docs/components/button`);
     await page.waitForLoadState('domcontentloaded');
 
     // Add a 600ms delay to the FIRST same-shell navigation request only.
     let delayed = false;
-    await page.route('**/ui/card', async (route) => {
+    await page.route('**/ui/docs/components/card', async (route) => {
       if (!delayed) {
         delayed = true;
         await new Promise(r => setTimeout(r, 600));
@@ -323,8 +323,8 @@ test('concurrent navs: rapid second click aborts the first fetch', async () => {
 
     // Click "card" link, then "switch" 100ms later. The card fetch
     // is intentionally slow; the switch fetch should win.
-    const card = page.locator('.docs-sidebar a:has-text("Card")').first();
-    const sw = page.locator('.docs-sidebar a:has-text("Switch")').first();
+    const card = page.locator('ui-docs-sidebar a[href="/ui/docs/components/card"]').first();
+    const sw = page.locator('ui-docs-sidebar a[href="/ui/docs/components/switch"]').first();
     await card.click();
     await page.waitForTimeout(100);
     await sw.click();
@@ -340,8 +340,8 @@ test('concurrent navs: rapid second click aborts the first fetch', async () => {
     // The first request (card) should have been aborted by the second
     // click. Either it shows up in requestfailed (network-level abort)
     // or it never makes it to requestfinished.
-    const cardCompleted = completed.some(u => u.endsWith('/ui/card'));
-    const cardAborted = aborted.some(u => u.includes('/ui/card'));
+    const cardCompleted = completed.some(u => u.endsWith('/ui/docs/components/card'));
+    const cardAborted = aborted.some(u => u.includes('/ui/docs/components/card'));
     assert.ok(cardAborted || !cardCompleted,
       `first (slow) request should have been aborted by the rapid second click. ` +
       `completed=${JSON.stringify(completed)}, aborted=${JSON.stringify(aborted)}`);
@@ -380,7 +380,7 @@ test('form POST returning 422: validation errors render in place, no full-page r
       });
     });
 
-    await page.goto(`${BASE}/ui/button`);
+    await page.goto(`${BASE}/ui/docs/components/button`);
     await page.waitForLoadState('domcontentloaded');
     const navCountBefore = pageNavigationCount;
 
@@ -431,11 +431,11 @@ test('scroll restoration: back-button restores window scroll position', async ()
   const browser = await chromium.launch();
   const page = await (await browser.newContext()).newPage();
   try {
-    // A /ui/<name> gallery page is the harder case on purpose: its component
+    // A /ui component docs page is the harder case on purpose: its component
     // previews settle taller AFTER the swap, which is what used to carry the
     // restore 763px past where the reader left (#1310). A /docs page does not
     // grow, so asserting there proves much less.
-    await page.goto(`${BASE}/ui/button`);
+    await page.goto(`${BASE}/ui/docs/components/button`);
     await page.waitForLoadState('domcontentloaded');
 
     // Scroll partway down.
@@ -450,14 +450,14 @@ test('scroll restoration: back-button restores window scroll position', async ()
     // so a link below the fold would move the window before the router
     // recorded its position, and the router would then be asserted against a
     // scroll it restored correctly.
-    await page.locator('a[href="/ui/card"]').first()
+    await page.locator('ui-docs-sidebar a[href="/ui/docs/components/card"]').first()
       .evaluate((el) => /** @type {HTMLElement} */ (el).click());
-    await page.waitForFunction(() => location.pathname.endsWith('/ui/card'),
+    await page.waitForFunction(() => location.pathname.endsWith('/ui/docs/components/card'),
       { timeout: 4000 });
 
     // Back. Scroll should restore.
     await page.goBack();
-    await page.waitForFunction(() => location.pathname.endsWith('/ui/button'),
+    await page.waitForFunction(() => location.pathname.endsWith('/ui/docs/components/button'),
       { timeout: 4000 });
     // Let the restored page finish growing AND revalidating. A frame is not
     // enough: the growth lands ~65ms after the swap and the revalidation's own
@@ -485,7 +485,7 @@ test('history: a scrolled forward nav records its entry before the swap (#1406)'
   const browser = await chromium.launch();
   const page = await (await browser.newContext()).newPage();
   try {
-    await page.goto(`${BASE}/ui/button`);
+    await page.goto(`${BASE}/ui/docs/components/button`);
     await page.waitForLoadState('domcontentloaded');
 
     // Wrap pushState BEFORE the click and record what the document held at the
@@ -521,16 +521,16 @@ test('history: a scrolled forward nav records its entry before the swap (#1406)'
     // In-page click, for the same reason the restore test uses one: Playwright's
     // own click scrolls the target into view first, which would move the window
     // before the router recorded its position.
-    await page.locator('a[href="/ui/card"]').first()
+    await page.locator('ui-docs-sidebar a[href="/ui/docs/components/card"]').first()
       .evaluate((el) => /** @type {HTMLElement} */ (el).click());
-    await page.waitForFunction(() => location.pathname.endsWith('/ui/card'),
+    await page.waitForFunction(() => location.pathname.endsWith('/ui/docs/components/card'),
       { timeout: 4000 });
 
     const at = await page.evaluate(() => window.__wjPushAt);
     assert.ok(at, 'the navigation recorded a history entry');
     assert.equal(at.heading, 'Button',
       `the outgoing page was still rendered when the entry was recorded (got "${at.heading}")`);
-    // Corroborating rather than discriminating: these two gallery pages settle
+    // Corroborating rather than discriminating: these two component pages settle
     // to similar heights, so 800 is a valid offset in both and the engine has
     // nothing to clamp. It still guards the offset against a future change that
     // moves the scroll-to-top ahead of the push. The clamp itself is asserted

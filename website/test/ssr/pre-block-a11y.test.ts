@@ -15,12 +15,12 @@
  *
  * This lives in its own file, and loops over pages, because the rules belong
  * to the site rather than to any one page. Coverage is not a hand-kept list:
- * the documentation and gallery pages are discovered from the file system, and
- * every gallery detail page comes from the registry index the sidebar is built
- * from, so a page or a component added tomorrow is checked without anyone
+ * the documentation pages are discovered from the file system, and every /ui
+ * component docs page comes from the component records the docs sidebar is
+ * built from, so a page or a component added tomorrow is checked without anyone
  * remembering to add it here. Six entries ARE listed by hand, because they have
  * no directory to walk: the three marketing pages, the error boundary, the
- * gallery introduction at /ui, and the markdown post body that /blog/[slug],
+ * /ui home page, and the markdown post body that /blog/[slug],
  * /articles/[slug], and /compare/[slug] all share.
  *
  * Pages are rendered THROUGH their layout, not alone. That is what makes rule
@@ -42,7 +42,6 @@ import ErrorBoundary from '#app/error.ts';
 import DocsLayout from '#app/(site)/docs/layout.ts';
 import UiLayout from '#app/ui/layout.ts';
 import UiChromeLayout from '#app/ui/(chrome)/layout.ts';
-import UiGalleryLayout from '#app/ui/(chrome)/(gallery)/layout.ts';
 import UiDocsLayout from '#app/ui/(chrome)/docs/layout.ts';
 import { layoutProps } from '#test/helpers/layout-props.ts';
 import { renderPostBody } from '#modules/blog/utils/render-post.ts';
@@ -60,8 +59,8 @@ const has = (tag: string, attr: RegExp) => attr.test(tag);
  * The blocks on a page that can scroll.
  *
  * Two ways a block becomes a scroll container, and both have to count. The
- * marketing pages put `overflow-x-auto` on the tag. The docs and gallery
- * shell instead sets it on every prose <pre> from its stylesheet, which no
+ * marketing pages put `overflow-x-auto` on the tag. The docs shell
+ * instead sets it on every prose <pre> from its stylesheet, which no
  * tag-level attribute records, so that rule is read out of the rendered
  * document itself. Reading only the utility class is the single easiest way
  * to close this issue without fixing anything.
@@ -86,14 +85,12 @@ async function htmlOf(page: Page) {
 
 /**
  * A /ui page wrapped the way the server wraps it: the `(chrome)` group layout
- * (header, footer) inside the minimal /ui layout, and for a gallery page the
- * interim gallery shell inside that, so the chrome's own markup is covered too.
+ * (header, footer) inside the minimal /ui layout, and for a docs page the docs
+ * layout inside that, so the chrome's own markup is covered too.
  */
-async function uiShell(children: TemplateResult, path: string, section: 'gallery' | 'docs' | null = 'gallery') {
+async function uiShell(children: TemplateResult, path: string, section: 'docs' | null) {
   const url = 'https://webjs.dev' + path;
-  const inner = section === 'gallery'
-    ? await UiGalleryLayout(layoutProps(children, { url }))
-    : section === 'docs' ? UiDocsLayout(layoutProps(children, { url })) : children;
+  const inner = section === 'docs' ? UiDocsLayout(layoutProps(children, { url })) : children;
   return UiLayout(layoutProps(await UiChromeLayout(layoutProps(inner, { url })), { url }));
 }
 
@@ -116,25 +113,16 @@ async function sectionPages(dir: string, base: string, layout: (p: LayoutProps) 
   }
   // app/docs is all static topic pages, so finding none there means discovery
   // broke. app/ui legitimately has none: its content is the index page plus
-  // the [name] route, and the only other segment is a route handler. Walking
-  // it anyway is what covers a static gallery page added later.
+  // the [name] redirect, and the other top-level segments are route handlers
+  // or bare iframe targets. Walking it anyway covers a static page added later.
   if (expectSome) assert.ok(pages.length > 0, `no pages discovered under app/${dir}, so this section is silently uncovered`);
   return pages;
 }
 
-const uiDetail = await import('#app/ui/(chrome)/(gallery)/[name]/page.ts');
 const uiIntro = await import('#app/ui/(chrome)/docs/page.ts');
 const uiComponentDoc = await import('#app/ui/(chrome)/docs/components/[name]/page.ts');
 const { COMPONENTS } = await import('#modules/ui/docs/nav.ts');
 const uiHome = await import('#app/ui/(chrome)/page.ts');
-const { loadRegistryIndex } = await import('#modules/ui/queries/registry.server.ts');
-
-/**
- * Every gallery detail page, from the same registry index the sidebar is built
- * from. Sampling one component here would leave the other thirty-one unchecked
- * while the file claimed to cover the gallery.
- */
-const uiComponents = (await loadRegistryIndex()).filter((i) => i.type === 'registry:ui').map((i) => i.name);
 
 const PAGES: Page[] = [
   { name: '/', render: () => Home() },
@@ -153,10 +141,6 @@ const PAGES: Page[] = [
   ...COMPONENTS.map((c) => ({
     name: `/ui/docs/components/${c.slug}`,
     render: async () => uiShell(await uiComponentDoc.default({ params: { name: c.slug } } as never), `/ui/docs/components/${c.slug}`, 'docs'),
-  })),
-  ...uiComponents.map((name) => ({
-    name: `/ui/${name}`,
-    render: async () => uiShell(await uiDetail.default({ params: { name } }), `/ui/${name}`),
   })),
   // The markdown renderer is one body shared by /blog/[slug], /articles/[slug],
   // and /compare/[slug], so covering it covers all three route families. A

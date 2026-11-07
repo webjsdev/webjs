@@ -145,8 +145,9 @@ now live outside this package:
 website/                          the marketing site, at the repo root
   app/ui/layout.ts                the minimal /ui layout: the .ui-site tokens + the /ui stylesheet link
   app/ui/(chrome)/layout.ts       the /ui header and footer, plus the sidebar shell shared with /docs
-  app/ui/(chrome)/page.ts         /ui, the gallery introduction
-  app/ui/(chrome)/[name]/page.ts  /ui/<name>, one page per component
+  app/ui/(chrome)/page.ts         /ui, the home page (the shadcn/ui site replica, #1666)
+  app/ui/(chrome)/docs/components/[name]/page.ts  /ui/docs/components/<name>, one docs page per component
+  app/ui/(chrome)/[name]/page.ts  /ui/<name>, a 308 to that docs page (the retired interim gallery's url)
   app/ui/registry/route.ts               GET /ui/registry, full manifest
   app/ui/registry/index.json/route.ts    GET /ui/registry/index.json, flat list
   app/ui/registry/[name]/route.ts        GET /ui/registry/<name>.json (the CLI fetches here)
@@ -1017,7 +1018,7 @@ the overall layout.
 ## Building / running
 
 ```sh
-npm run dev --workspace=@webjsdev/website   # the gallery at localhost:5001/ui
+npm run dev --workspace=@webjsdev/website   # the /ui site at localhost:5001/ui
 ```
 
 **No registry build step.** Registry JSON is composed on demand by the route

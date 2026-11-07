@@ -19,7 +19,7 @@
  */
 import test, { before } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequestHandler } from '@webjsdev/server';
@@ -27,7 +27,7 @@ import { createRequestHandler } from '@webjsdev/server';
 const WEBSITE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const UI_INDEX = '/ui';
-const UI_COMPONENT = '/ui/button';
+const UI_COMPONENT = '/ui/docs/components/button';
 const DOC_PATH = '/docs/routing';
 const MARKETING_PATH = '/what-is-webjs';
 
@@ -132,27 +132,6 @@ test('a thrown notFound() under /ui keeps the /ui chrome', async () => {
   assert.match(headerOf(html), /WebJs UI/, 'the /ui section boundary renders inside the /ui chrome');
 });
 
-test('the gallery uses the SAME sidebar shell as the docs', async () => {
-  // Not merely "has a sidebar": the same one, from lib/ui/docs-shell.ts. The
-  // whole reason that module was extracted is that two hand-maintained
-  // sidebars drift, which is how the old site ended up looking foreign.
-  const [ui, docs] = await Promise.all([bodyOf(UI_COMPONENT), bodyOf(DOC_PATH)]);
-  for (const marker of ['id="docs-sidebar"', 'class="docs-nav', 'class="docs-backdrop"']) {
-    assert.ok(ui.includes(marker), `the gallery renders ${marker}`);
-    assert.ok(docs.includes(marker), `and so do the docs, from the same shell`);
-  }
-});
-
-test('the sidebar groups components under bare Tier 1 and Tier 2 headers', async () => {
-  const ui = await bodyOf(UI_COMPONENT);
-  assert.match(ui, />Tier 1</, 'Tier 1 section header');
-  assert.match(ui, />Tier 2</, 'Tier 2 section header');
-  // The old site spelled these out as "Tier 1 Class helpers" / "Tier 2 Custom
-  // elements" in the nav. The tiers are explained on the introduction page;
-  // the sidebar only needs to group.
-  assert.ok(!/Tier 1\s*<span[^>]*>\s*Class helpers/.test(ui), 'no descriptive suffix in the nav');
-});
-
 test('/ui is the shadcn-shaped home page, and the introduction moved to /ui/docs', async () => {
   // #1666 replicates ui.shadcn.com, whose home is a hero over a grid of live
   // component cards with no sidebar. The introduction is a docs page.
@@ -167,28 +146,45 @@ test('/ui is the shadcn-shaped home page, and the introduction moved to /ui/docs
   assert.match(docs, /<h1[^>]*>Introduction<\/h1>/, 'with the introduction as its page');
 });
 
-test('every component in the registry has a reachable page', async () => {
-  // The sidebar is generated from the registry index, so a component that is
-  // listed but whose page 404s would be an invisible dead link on every page
-  // of the section.
+test('every component in the registry has a docs page, and its old gallery url redirects there', async () => {
+  // The interim /ui/<name> gallery is retired (#1666): the component pages are
+  // /ui/docs/components/<name>, and each old url is a permanent 308 there so
+  // a link or a search result pointing at it keeps working.
   const { loadRegistryIndex } = await import('#modules/ui/queries/registry.server.ts');
   const components = (await loadRegistryIndex()).filter((i: any) => i.type === 'registry:ui');
   assert.ok(components.length > 20, `sanity: expected the full kit, got ${components.length}`);
-  const dead: string[] = [];
+  const broken: string[] = [];
   for (const c of components) {
-    const res = await handle(`/ui/${c.name}`);
-    if (res.status !== 200) dead.push(`/ui/${c.name} (${res.status})`);
+    const old = await handle(`/ui/${c.name}`);
+    const to = old.headers.get('location');
+    if (old.status !== 308 || new URL(to ?? '', 'http://localhost').pathname !== `/ui/docs/components/${c.name}`) {
+      broken.push(`/ui/${c.name} (${old.status} -> ${to})`);
+      continue;
+    }
+    const page = await handle(`/ui/docs/components/${c.name}`);
+    if (page.status !== 200) broken.push(`/ui/docs/components/${c.name} (${page.status})`);
   }
-  assert.deepEqual(dead, [], `these components are listed but do not render:\n  ${dead.join('\n  ')}`);
+  assert.deepEqual(broken, [], `these components do not redirect to a rendering docs page:\n  ${broken.join('\n  ')}`);
 });
 
+test('the retired gallery leaves nothing behind', () => {
+  // Its layout, page and the modules only it used are deleted, not orphaned.
+  for (const gone of [
+    'app/ui/(chrome)/(gallery)',
+    'modules/ui/utils/examples.ts',
+    'modules/ui/utils/component-api.ts',
+    'components/preview-tabs.ts',
+  ]) {
+    assert.equal(existsSync(resolve(WEBSITE_ROOT, gone)), false, `${gone} is deleted`);
+  }
+});
 test('a non-component registry item does not get a page', async () => {
   // Themes and lib items are registry artifacts with nothing to render. They
   // resolve through loadRegistryItem, so without the type guard they would
   // 200 on an empty shell and land in search results as blank pages.
   for (const slug of ['theme-zinc', 'theme-neutral', 'lib-utils']) {
     const res = await handle(`/ui/${slug}`);
-    assert.equal(res.status, 404, `/ui/${slug} is not a component page`);
+    assert.equal(res.status, 404, `/ui/${slug} is not a component page and does not redirect`);
   }
 });
 
@@ -213,23 +209,6 @@ test('the /ui tokens are scoped to .ui-site, so they cannot leak into the market
   assert.match(html, /<div class="ui-site/, 'every /ui page renders inside the .ui-site wrapper');
 });
 
-test('the kit palette is scoped to previews, so it cannot leak into the chrome', () => {
-  // The shadcn values must live on .ui-preview, never on :root. Declared at
-  // :root they would repaint the whole marketing site with the kit's neutral
-  // palette. They also have to be declared through `@theme inline`, or the
-  // utilities resolve their var() at :root (where the kit palette does not
-  // exist) and every filled component in a preview renders transparent.
-  const css = readFileSync(resolve(WEBSITE_ROOT, 'public/input.css'), 'utf8');
-  const inlineBlock = css.match(/@theme inline\s*\{[^}]*\}/)?.[0] ?? '';
-  assert.ok(inlineBlock.includes('--color-primary'), 'the kit palette maps through @theme inline');
-  assert.ok(inlineBlock.includes('--color-accent'), 'including accent, which the preview re-scopes');
-  assert.match(css, /\.ui-preview\s*\{[^}]*--primary:/, 'raw values are scoped to .ui-preview');
-  assert.ok(
-    !/:root\s*\{[^}]*--primary:/.test(css),
-    'and never declared at :root, which would repaint the whole site'
-  );
-});
-
 test('the dark variant tracks the site theme, not just the OS preference', () => {
   // The kit's components carry `dark:` utilities and Tailwind's default `dark:`
   // is the OS preference alone, so without this override a reader on a dark OS
@@ -246,11 +225,6 @@ test('the dark variant tracks the site theme, not just the OS preference', () =>
     assert.match(variant!, /data-theme='light'/, `${file}: an explicit light choice beats a dark OS`);
     assert.match(variant!, /data-theme='dark'/, `${file}: an explicit dark choice beats a light OS`);
   }
-});
-
-test('a preview pane carries the scoping class', async () => {
-  const html = await bodyOf(UI_COMPONENT);
-  assert.ok(html.includes('class="ui-preview'), 'the preview pane opts into the kit palette');
 });
 
 /**
@@ -320,18 +294,19 @@ test('the static registry segment is not shadowed by the component page route', 
   assert.match(res.headers.get('content-type') ?? '', /application\/json/, 'JSON, not the component page');
 });
 
-test('the gallery appears in the sitemap, one URL per component', async () => {
+test('the sitemap lists each component docs page, never the retired gallery url', async () => {
   const res = await handle('/sitemap.xml');
   assert.equal(res.status, 200);
   const xml = await res.text();
-  assert.ok(xml.includes('<loc>https://webjs.dev/ui</loc>'), 'the gallery index is listed');
+  assert.ok(xml.includes('<loc>https://webjs.dev/ui</loc>'), 'the /ui home is listed');
   for (const name of ['button', 'dialog', 'alert-dialog']) {
-    assert.ok(xml.includes(`<loc>https://webjs.dev/ui/${name}</loc>`), `${name} is listed`);
+    assert.ok(xml.includes(`<loc>https://webjs.dev/ui/docs/components/${name}</loc>`), `${name} is listed`);
+    // A redirect in a sitemap makes a crawler spend a fetch to find the page.
+    assert.ok(!xml.includes(`<loc>https://webjs.dev/ui/${name}</loc>`), `the old /ui/${name} is not`);
   }
   // A theme is not a page, so listing it would submit a 404 to crawlers.
   assert.ok(!xml.includes('/ui/theme-zinc'), 'non-component registry items stay out');
 });
-
 test('the drawer is a component, so nothing has to grep the layout for it', () => {
   // This test used to pin the branches of an inline delegated listener in
   // app/layout.ts, because test/components/browser/docs-drawer.test.js could
@@ -357,28 +332,22 @@ test('the drawer is a component, so nothing has to grep the layout for it', () =
 });
 
 test('each component page describes itself, not the section', async () => {
-  // 33 URLs sharing one description is the duplicate-content shape this whole
-  // migration exists to avoid, so introducing it here would have been
-  // self-defeating. The layout still supplies the section default, which is
-  // what /ui itself uses.
+  // Many URLs sharing one description is the duplicate-content shape this
+  // whole migration exists to avoid. Each component docs page carries its
+  // own record's description from modules/ui/docs/nav.ts.
+  const { componentDoc } = await import('#modules/ui/docs/nav.ts');
   const descriptions = new Map<string, string>();
-  for (const path of ['/ui/button', '/ui/dialog', '/ui/alert-dialog', '/ui/table']) {
+  for (const name of ['button', 'dialog', 'alert-dialog', 'table']) {
+    const path = `/ui/docs/components/${name}`;
     const html = await bodyOf(path);
     const d = html.match(/<meta name="description" content="([^"]*)"/)?.[1];
     assert.ok(d, `${path} has a description`);
-    descriptions.set(path, d!);
+    descriptions.set(name, d!);
+    const own = componentDoc(name)?.description ?? '';
+    assert.ok(own && d!.includes(own.replace(/&/g, '&amp;').replace(/"/g, '&quot;').slice(0, 40)), `${path} uses its own record's description`);
   }
   assert.equal(new Set(descriptions.values()).size, descriptions.size, 'every page has its own');
-
-  // And it says something true about that component rather than a generic
-  // blurb: the tier decides which sentence, so a component moving tier moves
-  // its description with it.
-  assert.match(descriptions.get('/ui/button')!, /class helper/, 'a Tier-1 component reads as a helper');
-  assert.match(descriptions.get('/ui/button')!, /buttonClass\(\)/, 'and names its helper');
-  assert.match(descriptions.get('/ui/dialog')!, /custom element/, 'a Tier-2 component reads as an element');
-  assert.match(descriptions.get('/ui/alert-dialog')!, /ui-alert-dialog/, 'and names its tag');
 });
-
 test('no page ships a dead SSR action-seed payload', async () => {
   // Site-wide, not gallery-specific, but the gallery is what surfaced it.
   //
@@ -392,7 +361,7 @@ test('no page ships a dead SSR action-seed payload', async () => {
   //
   // If a component here ever DOES want seeding, re-enable it and delete this
   // test rather than working around it.
-  for (const path of ['/ui', '/ui/dropdown-menu', '/changelog', '/blog', '/docs/routing']) {
+  for (const path of ['/ui', '/ui/docs/components/dropdown-menu', '/changelog', '/blog', '/docs/routing']) {
     const html = await bodyOf(path);
     assert.ok(
       !html.includes('__webjs-seeds'),
@@ -401,7 +370,7 @@ test('no page ships a dead SSR action-seed payload', async () => {
   }
 });
 
-test('the old /docs/ui page is gone, permanently redirected to the gallery', async () => {
+test('the old /docs/ui page is gone, permanently redirected to /ui', async () => {
   // It was a second, hand-written description of the same kit and it had
   // drifted badly (roughly 55 components claimed against an actual 32, and a
   // <ui-button> API the kit does not have). Two pages chasing one keyword is

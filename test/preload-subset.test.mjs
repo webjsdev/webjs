@@ -36,10 +36,10 @@ const APPS = [
   // The docs (#1098) and the component gallery (#1099) are both served by the
   // website app, so their routes are probed as part of it.
   //
-  // /ui/button is the gallery's heaviest page: it is the one that pulls the
+  // /ui/docs/components/button is among the heaviest /ui pages: it pulls the
   // mirrored kit component sources, which is exactly the class of import a
   // broken preload would show up in.
-  { name: 'website', dir: 'website', routes: ['/', '/docs/architecture', '/docs/components', '/ui', '/ui/button'] },
+  { name: 'website', dir: 'website', routes: ['/', '/docs/architecture', '/docs/components', '/ui', '/ui/docs/components/button'] },
 ];
 
 const PRELOAD_RE = /<link[^>]+rel=["']modulepreload["'][^>]*href=["']([^"']+)["']/g;
