@@ -27,6 +27,9 @@ const BUILT_IN = new Set(['nova', 'new-york']);
 export function extraStylesFor(pathname: string): string[] {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
   if (STYLES_BY_PATH[path]) return STYLES_BY_PATH[path];
+  // The blocks pages' header buttons, which shadcn's blocks layout imports
+  // from its luma style.
+  if (path === '/ui/blocks' || path.startsWith('/ui/blocks/')) return ['luma'];
   // A component page whose lead demo shadcn shows in another style
   // (modules/ui/docs/lead-previews.ts).
   if (path.startsWith(COMPONENT_PAGE)) {

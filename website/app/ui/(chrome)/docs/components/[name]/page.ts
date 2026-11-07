@@ -28,9 +28,10 @@ export default async function ComponentPage({ params }: PageProps<'/ui/docs/comp
   const files = await componentSource(doc.slug);
   const toc: TocEntry[] = [];
   const lead = mod?.demo ? await componentPreview(mod.demo, { ...LEAD_PREVIEWS[doc.slug], ...mod.demoOptions }) : '';
+  const intro = mod?.intro ? await mod.intro(toc) : '';
   const install = files?.length
     ? html`${heading(toc, 2, 'Installation')}${installTabs(doc.slug, { source: files[0].content, title: `components/ui/${doc.slug}.ts` })}`
     : '';
   const rest = mod ? await mod.default(toc) : '';
-  return docsPage({ href, title: doc.title, description: doc.description, toc, body: html`${lead}${install}${rest}` });
+  return docsPage({ href, title: doc.title, description: doc.description, toc, body: html`${lead}${intro}${install}${rest}` });
 }

@@ -16,6 +16,8 @@ export interface ComponentDocModule {
   demo?: string;
   /** How the lead demo is shown, as shadcn's ComponentPreview props set it. */
   demoOptions?: PreviewOptions;
+  /** Sections shadcn's page puts between the lead demo and Installation. */
+  intro?: (toc: TocEntry[]) => Promise<TemplateResult> | TemplateResult;
   default: (toc: TocEntry[]) => Promise<TemplateResult> | TemplateResult;
 }
 
@@ -70,6 +72,7 @@ export const COMPONENT_DOCS: Record<string, () => Promise<ComponentDocModule>> =
   'select': () => import('./select.ts'),
   'separator': () => import('./separator.ts'),
   'sheet': () => import('./sheet.ts'),
+  'sidebar': () => import('./sidebar.ts'),
   'skeleton': () => import('./skeleton.ts'),
   'slider': () => import('./slider.ts'),
   'sonner': () => import('./sonner.ts'),
@@ -78,6 +81,7 @@ export const COMPONENT_DOCS: Record<string, () => Promise<ComponentDocModule>> =
   'table': () => import('./table.ts'),
   'tabs': () => import('./tabs.ts'),
   'textarea': () => import('./textarea.ts'),
+  'toast': () => import('./toast.ts'),
   'toggle': () => import('./toggle.ts'),
   'toggle-group': () => import('./toggle-group.ts'),
   'tooltip': () => import('./tooltip.ts'),

@@ -1,7 +1,7 @@
 import { html } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import {
-  accordionClass, accordionItemClass, accordionTriggerClass, accordionContentClass,
+  accordionClass, accordionItemClass, accordionTriggerClass, accordionContentClass, accordionContentInnerClass,
 } from '#modules/ui/components/accordion.ts';
 import { ChevronDownIcon, ChevronUpIcon } from '#lib/ui/lucide.ts';
 
@@ -33,7 +33,9 @@ export default function AccordionDemo() {
             ${ChevronDownIcon('pointer-events-none ml-auto size-4 shrink-0 text-muted-foreground group-open:hidden')}
             ${ChevronUpIcon('pointer-events-none ml-auto hidden size-4 shrink-0 text-muted-foreground group-open:inline')}
           </summary>
-          <div data-slot="accordion-content" class=${accordionContentClass()}>${item.content}</div>
+          <div data-slot="accordion-content" class=${accordionContentClass()}>
+            <div class=${accordionContentInnerClass()}>${item.content}</div>
+          </div>
         </details>
       `)}
     </div>

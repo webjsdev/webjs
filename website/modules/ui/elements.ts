@@ -13,6 +13,7 @@
 import '#modules/ui/components/alert-dialog.ts';
 import '#modules/ui/components/calendar.ts';
 import '#modules/ui/components/carousel.ts';
+import '#modules/ui/components/chart.ts';
 import '#modules/ui/components/checkbox.ts';
 import '#modules/ui/components/code-block.ts';
 import '#modules/ui/components/combobox.ts';
