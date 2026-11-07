@@ -22,7 +22,7 @@ export default function MessageGroupDemo() {
           <div data-slot="message-avatar" class=${messageAvatarClass()}>
             <span data-slot="avatar" data-size="default" class=${avatarClass()}>
               <span data-slot="avatar-fallback" class=${cn(avatarFallbackClass(), 'absolute inset-0')}>CN</span>
-              <img data-slot="avatar-image" src="/avatars/02.png" alt="@avatar" class=${cn(avatarImageClass(), 'relative')}>
+              <img data-slot="avatar-image" src="/public/avatars/02.png" alt="@avatar" class=${cn(avatarImageClass(), 'relative')}>
             </span>
           </div>
           <div data-slot="message-content" class=${messageContentClass()}>

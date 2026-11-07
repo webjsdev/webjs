@@ -24,7 +24,7 @@ export default function MessageDemo() {
     <div class="flex w-full max-w-sm flex-col gap-6 py-12">
       <div data-slot="message" data-align="end" class=${messageClass()}>
         <div data-slot="message-avatar" class=${messageAvatarClass()}>
-          ${avatar('/avatars/10.png', 'ME')}
+          ${avatar('/public/avatars/10.png', 'ME')}
         </div>
         <div data-slot="message-content" class=${messageContentClass()}>
           <div data-slot="bubble" data-variant="default" data-align="start" class=${bubbleClass()}>
@@ -34,7 +34,7 @@ export default function MessageDemo() {
       </div>
       <div data-slot="message" data-align="start" class=${messageClass()}>
         <div data-slot="message-avatar" class=${messageAvatarClass()}>
-          ${avatar('/avatars/02.png', 'R')}
+          ${avatar('/public/avatars/02.png', 'R')}
         </div>
         <div data-slot="message-content" class=${messageContentClass()}>
           <div data-slot="bubble" data-variant="muted" data-align="start" class=${bubbleClass({ variant: 'muted' })}>
@@ -44,7 +44,7 @@ export default function MessageDemo() {
       </div>
       <div data-slot="message" data-align="end" class=${messageClass()}>
         <div data-slot="message-avatar" class=${messageAvatarClass()}>
-          ${avatar('/avatars/10.png', 'ME')}
+          ${avatar('/public/avatars/10.png', 'ME')}
         </div>
         <div data-slot="message-content" class=${messageContentClass()}>
           <div data-slot="bubble" data-variant="default" data-align="start" class=${bubbleClass()}>
@@ -55,7 +55,7 @@ export default function MessageDemo() {
       </div>
       <div data-slot="message" data-align="start" class=${messageClass()}>
         <div data-slot="message-avatar" class=${messageAvatarClass()}>
-          ${avatar('/avatars/02.png', 'R')}
+          ${avatar('/public/avatars/02.png', 'R')}
         </div>
         <div data-slot="message-content" class=${messageContentClass()}>
           <div data-slot="bubble-group" class=${bubbleGroupClass()}>

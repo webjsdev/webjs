@@ -402,12 +402,10 @@ export const COMPONENTS: ComponentDoc[] = [
     slug: "trace",
     title: "Trace",
     description: "The building block for reasoning, tool calls, sources and more."
-  },
-  {
-    slug: "typography",
-    title: "Typography",
-    description: "Styles for headings, paragraphs, lists, etc."
   }
+  // Typography is not a page here: shadcn's sidebar still lists it, and its
+  // link redirects to the Typeset docs, as webjs.redirects in package.json
+  // does for /ui/docs/components/typography.
 ];
 
 /** The sidebar's groups after Sections, in shadcn's tree order. */
@@ -967,9 +965,21 @@ export function readingOrder(): DocLink[] {
   }).filter((l) => l.href.startsWith('/ui/docs'));
 }
 
+// Pages outside the sidebar's reading order that still carry previous and
+// next links, as shadcn gives them: its Registry Directory sits between the
+// CLI and the MCP Server page (here the registry's MCP Server page).
+const OFF_NAV: Record<string, { previous: string; next: string }> = {
+  '/ui/docs/directory': { previous: '/ui/docs/cli', next: '/ui/docs/registry/mcp' },
+};
+
 /** The pages either side of `href`, or null at an end. */
 export function neighbours(href: string): { previous: DocLink | null; next: DocLink | null } {
   const order = readingOrder();
+  const off = OFF_NAV[href];
+  if (off) {
+    const find = (h: string) => order.find((l) => l.href === h) ?? null;
+    return { previous: find(off.previous), next: find(off.next) };
+  }
   const i = order.findIndex((l) => l.href === href);
   if (i < 0) return { previous: null, next: null };
   return { previous: order[i - 1] ?? null, next: order[i + 1] ?? null };

@@ -88,5 +88,4 @@ export const COMPONENT_DOCS: Record<string, () => Promise<ComponentDocModule>> =
   'toggle-group': () => import('./toggle-group.ts'),
   'tooltip': () => import('./tooltip.ts'),
   'trace': () => import('./trace.ts'),
-  'typography': () => import('./typography.ts'),
 };

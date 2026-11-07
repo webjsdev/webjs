@@ -1,6 +1,9 @@
 import { html } from '@webjsdev/core';
-import { loadRegistryIndex } from '#modules/ui/queries/registry.server.ts';
-import { splitByTier } from '#modules/ui/utils/tier.ts';
+import { cn } from '#lib/utils/cn.ts';
+import {
+  accordionClass, accordionItemClass, accordionTriggerClass, accordionContentClass,
+} from '#modules/ui/components/accordion.ts';
+import { ChevronDownIcon, ChevronUpIcon } from '#lib/ui/lucide.ts';
 import { docsPage, heading, type TocEntry } from '#lib/ui/docs/page.ts';
 
 // Same "<Page> | <Section>" shape the documentation uses, so a tab or a search
@@ -10,161 +13,73 @@ export const metadata = {
 };
 
 /**
- * The component library's introduction, served at /ui.
- *
- * There is no separate landing page. /ui opens straight into the gallery
- * shell with this page in the content column, the way /docs opens on Getting
- * Started, so a reader arrives at the components rather than at a pitch for
- * them.
- *
- * Counts come from the live registry index rather than prose, because the
- * hand-written ones drifted badly on the page this replaces: it advertised
- * "~55 components" against an actual 32, listed two dozen that had been
- * removed, and showed a <ui-button> / <ui-card> API the kit does not have.
+ * The component library's introduction, /ui/docs, ported from shadcn's
+ * content/docs/(root)/index.mdx (#1666): the same opening, the same five
+ * principles in the same order, and the upstream-updates question, each
+ * rewritten to say what WebJs UI does. The kit's two tiers, its commands
+ * and its accessibility split are documented on the component, CLI and
+ * Installation pages, which these sections point to.
  */
 export default async function UiIntro() {
-  const all = await loadRegistryIndex();
-  const { tier1, tier2 } = splitByTier(all.filter((i) => i.type === 'registry:ui'));
-  const total = tier1.length + tier2.length;
-
   const toc: TocEntry[] = [];
   const body = html`
-      <p>
-        An AI-first component library of ${total} primitives, built on native HTML and styled with
-        Tailwind v4. The source is copied into your project, so you own every line and edit it
-        freely. Variant names, sizes, and the <code>data-state</code> conventions mirror shadcn,
-        so an agent trained on shadcn maps its knowledge across directly.
-      </p>
-      <p>
-        It is built for WebJs apps and styled with Tailwind v4. Tier-1 helpers are plain functions
-        returning class strings, and Tier-2 elements extend <code>WebComponent</code> from
-        <code>@webjsdev/core</code>, so the kit assumes the runtime a WebJs app already has.
-      </p>
+      <p><strong>This is not a component library. It is how you build your component library.</strong></p>
+      <p>You know how most traditional component libraries work: you install a package from npm, import the components, and use them in your app.</p>
+      <p>This approach works well until you need to customize a component to fit your design system or require one that isn't included in the library. <strong>Often, you end up wrapping library components, writing workarounds to override styles, or mixing components from different libraries with incompatible APIs.</strong></p>
+      <p>This is what WebJs UI aims to solve. It is built around the following principles:</p>
+      <ul>
+        <li><strong>Open Code:</strong> The top layer of your component code is open for modification.</li>
+        <li><strong>Composition:</strong> Every component uses a common, composable interface, making them predictable.</li>
+        <li><strong>Distribution:</strong> A flat-file schema and command-line tool make it easy to distribute components.</li>
+        <li><strong>Beautiful Defaults:</strong> Carefully chosen default styles, so you get great design out-of-the-box.</li>
+        <li><strong>AI-Ready:</strong> Open code for LLMs to read, understand, and improve.</li>
+      </ul>
 
-      ${heading(toc, 2, 'Two tiers, one mental model')}
-      <p>
-        <strong>Tier 1 (${tier1.length} components)</strong> is pure class-helper functions.
-        <code>buttonClass()</code>, <code>cardClass()</code>, and <code>inputClass()</code> return
-        Tailwind class strings that you apply to a real element, so a button is a real
-        <code>&lt;button&gt;</code> and a checkbox is a real <code>&lt;input&gt;</code>. Form
-        submission, autofill, browser validation, and screen readers all work natively, never
-        proxied. A few wrap a platform primitive instead of a plain element: accordion and
-        collapsible sit on <code>&lt;details&gt;</code>, progress on
-        <code>&lt;progress value max&gt;</code>, popover on the <code>popover</code> attribute.
-      </p>
-      <code-block>import { cardClass, cardHeaderClass, cardTitleClass, cardContentClass } from '#modules/ui/components/card.ts';
-import { buttonClass } from '#modules/ui/components/button.ts';
+      ${heading(toc, 2, 'Open Code')}
+      <p>WebJs UI hands you the actual component code: <code>webjs ui add</code> copies the source into your app's <code>components/ui/</code>. You have full control to customize and extend the components to your needs. This means:</p>
+      <ul>
+        <li><strong>Full Transparency:</strong> You see exactly how each component is built.</li>
+        <li><strong>Easy Customization:</strong> Modify any part of a component to fit your design and functionality requirements.</li>
+        <li><strong>AI Integration:</strong> Access to the code makes it straightforward for LLMs to read, understand, and even improve your components.</li>
+      </ul>
+      <p><em>In a typical library, if you need to change a button's behavior, you have to override styles or wrap the component. With WebJs UI, you simply edit the button code directly.</em></p>
+      <div data-slot="accordion" class=${cn(accordionClass(), 'not-typeset mt-6')}>
+        <details name="intro-faq" data-slot="accordion-item" class=${cn(accordionItemClass(), 'border-none')}>
+          <summary data-slot="accordion-trigger" class=${accordionTriggerClass()}>
+            How do I pull upstream updates in an Open Code approach?
+            ${ChevronDownIcon('pointer-events-none ml-auto size-4 shrink-0 text-muted-foreground group-open:hidden')}
+            ${ChevronUpIcon('pointer-events-none ml-auto hidden size-4 shrink-0 text-muted-foreground group-open:inline')}
+          </summary>
+          <div data-slot="accordion-content" class=${cn(accordionContentClass(), 'flex flex-col gap-4')}>
+            <p>WebJs UI builds on the platform rather than on a headless library: a dialog is a native <code>&lt;dialog&gt;</code>, a popover the <code>popover</code> attribute, and the few custom elements extend <code>WebComponent</code> from <code>@webjsdev/core</code>. So the core your components stand on receives fixes when you update <code>@webjsdev/core</code> and the browser.</p>
+            <p>The topmost layer, the code closest to your design system, is yours and is not coupled to the kit. Run <code>webjs ui diff</code> to see how your copy differs from the registry, and take the changes you want.</p>
+          </div>
+        </details>
+      </div>
 
-&lt;div class=\${cardClass()}&gt;
-  &lt;div class=\${cardHeaderClass()}&gt;
-    &lt;h3 class=\${cardTitleClass()}&gt;Hello&lt;/h3&gt;
-  &lt;/div&gt;
-  &lt;div class=\${cardContentClass()}&gt;
-    &lt;button class=\${buttonClass({ variant: 'default' })}&gt;Click me&lt;/button&gt;
-  &lt;/div&gt;
-&lt;/div&gt;</code-block>
+      ${heading(toc, 2, 'Composition')}
+      <p>Every component in WebJs UI shares a common, composable interface: a class helper you put on a native element (<code>buttonClass()</code> on a real <code>&lt;button&gt;</code>), or a custom element that mirrors shadcn's tree tag for tag (<code>&lt;ui-dialog-content&gt;</code> for <code>DialogContent</code>). <strong>If a component does not exist, we bring it in, make it composable, and adjust its style to match and work with the rest of the design system.</strong></p>
+      <p><em>A shared, composable interface means it's predictable for both your team and LLMs. You are not learning different APIs for every new component. Variant names, sizes and the data attributes match shadcn's, so what you know about shadcn/ui carries over.</em></p>
 
-      <p>
-        <strong>Tier 2 (${tier2.length} components)</strong> is a small set of stateful custom
-        elements, for the behaviour the platform still does not ship: dialogs, tabs, menus,
-        tooltips, hover cards, toggle groups, and toasts. Each one wraps the closest primitive it
-        can (<code>&lt;ui-dialog&gt;</code> drives a native <code>&lt;dialog&gt;</code>, tooltip
-        and hover-card use <code>popover="manual"</code>) and adds only the open-state tracking,
-        focus trap, or queue on top.
-      </p>
-      <code-block>&lt;ui-dialog&gt;
-  &lt;ui-dialog-trigger&gt;
-    &lt;button class=\${buttonClass({ variant: 'outline' })}&gt;Edit profile&lt;/button&gt;
-  &lt;/ui-dialog-trigger&gt;
-  &lt;ui-dialog-content&gt;
-    &lt;h2 data-slot="dialog-title" class=\${dialogTitleClass()}&gt;Edit profile&lt;/h2&gt;
-    &lt;form action="/profile" method="post"&gt;…&lt;/form&gt;
-  &lt;/ui-dialog-content&gt;
-&lt;/ui-dialog&gt;</code-block>
-      <p>
-        Reach for Tier 1 by default. Reach for Tier 2 only when the browser does not ship the
-        behaviour natively.
-      </p>
+      ${heading(toc, 2, 'Distribution')}
+      <p>WebJs UI is also a code distribution system. It defines a schema for components and a CLI to distribute them.</p>
+      <ul>
+        <li><strong>Schema:</strong> A flat-file structure that defines the components, their dependencies, and properties. It is shadcn's registry item format. See <a href="/ui/docs/registry/registry-item-json">registry-item.json</a>.</li>
+        <li><strong>CLI:</strong> A command-line tool to distribute and install components, blocks and charts across WebJs apps. See the <a href="/ui/docs/cli">CLI</a>.</li>
+      </ul>
+      <p><em>You can use the schema to distribute your components to other projects from a <a href="/ui/docs/registry">registry of your own</a>, or have AI generate completely new components based on existing schema.</em></p>
 
-      ${heading(toc, 2, 'Install')}
-      <p>
-        In a WebJs app there is nothing to install. <code>@webjsdev/ui</code> is a hard dependency
-        of <code>@webjsdev/cli</code>, so a global WebJs install already carries it. A scaffolded
-        app does not pin the kit either: <code>webjs ui add</code> copies component source into
-        <code>components/ui/</code>, and those files import <code>@webjsdev/core</code> rather
-        than the kit.
-      </p>
-      <code-block>webjs ui init
-webjs ui add button card dialog input label</code-block>
-      <p>
-        <code>init</code> writes <code>components.json</code>, copies the <code>cn()</code> helper
-        into <code>lib/utils/cn.ts</code>, and installs the theme tokens.
-        <code>add</code> resolves a component's transitive dependencies and copies the source into
-        <code>components/ui/</code>, which is yours to edit from that point on.
-      </p>
+      ${heading(toc, 2, 'Beautiful Defaults')}
+      <p>WebJs UI comes with a large collection of components that have carefully chosen default styles. They are designed to look good on their own and to work well together as a consistent system:</p>
+      <ul>
+        <li><strong>Good Out-of-the-Box:</strong> Your UI has a clean and minimal look without extra work.</li>
+        <li><strong>Unified Design:</strong> Components naturally fit with one another. Each component is built to match the others, keeping your UI consistent.</li>
+        <li><strong>Easily Customizable:</strong> If you want to change something, it's simple to override and extend the defaults, or pick another of shadcn's styles and themes in <a href="/ui/create">Create</a>.</li>
+      </ul>
 
-      ${heading(toc, 2, 'Commands')}
-      <table>
-        <thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead>
-        <tbody>
-          <tr><td><code>init</code></td><td>Writes <code>components.json</code>, copies <code>lib/utils/cn.ts</code>, installs the theme tokens. Re-running it preserves an existing project's settings and leaves edited helper files alone, so it is safe as a repair step (<code>--overwrite</code> resets them). Exits non-zero if the tokens cannot be written, because an unstyled install with a clean exit code is worse than a failure.</td></tr>
-          <tr><td><code>add &lt;names...&gt;</code></td><td>Resolves transitive dependencies, copies the source in, installs npm dependencies, and self-heals missing theme tokens.</td></tr>
-          <tr><td><code>list [filter]</code></td><td>Lists everything in the registry.</td></tr>
-          <tr><td><code>view &lt;name&gt;</code></td><td>Prints a component's helpers, its paste-ready example, and its full source.</td></tr>
-          <tr><td><code>diff [name]</code></td><td>Compares your local copy against the live registry.</td></tr>
-          <tr><td><code>info</code></td><td>Project diagnostics: the resolved config and registry URL.</td></tr>
-          <tr><td><code>lint</code></td><td>Opt-in design-system linter. Reports a raw palette colour, an arbitrary value, or a class composed over a kit helper, at the line, with a message built from your own theme tokens and helper variants. Off until <code>components.json</code> carries a <code>lint</code> block; with none it reports nothing and exits 0. <code>--json</code> for an agent loop. See <a href="/docs/styling#lint">the styling docs</a>.</td></tr>
-        </tbody>
-      </table>
-      <p>
-        Resolution is local-first. <code>init</code>, <code>add</code>, <code>list</code>, and
-        <code>view</code> read the registry that ships inside the installed
-        <code>@webjsdev/ui</code> package, so an install is deterministic and works offline. Only
-        <code>diff</code> and an explicit custom <code>--registry</code> go to the network. A Tier-1
-        component's worked structural example is served on demand by
-        <code>webjs ui view &lt;name&gt;</code> and by the read-only MCP <code>ui</code> tool, rather
-        than copied into your file.
-      </p>
-
-      ${heading(toc, 2, 'Accessibility')}
-      <p>
-        Responsibility splits by tier, and it matters which half you own.
-        <strong>Tier-2 elements wire their own ARIA</strong>, so do not hand-add it: tabs
-        cross-links its triggers and panels and reports orientation, toggle-group runs a roving
-        tabindex with Arrow, Home, and End, dropdown-menu declares orientation and reflects
-        <code>aria-disabled</code>, dialog and alert-dialog name themselves from their title and
-        description on open, tooltip wires <code>aria-describedby</code>, hover-card exposes the
-        popup relationship, and sonner is a live region.
-      </p>
-      <p>
-        <strong>Tier-1 helpers return only classes</strong>, so the semantic element, the role, and
-        the ARIA are yours. Every Tier-1 component's JSDoc carries an
-        <code>A11y (required for accessible output)</code> block naming exactly what to supply: a
-        name on an icon-only button, a role on an alert, <code>scope</code> on table headers,
-        <code>alt</code> on an avatar image, a labelled <code>&lt;nav&gt;</code> with
-        <code>aria-current="page"</code> on pagination and breadcrumb.
-      </p>
-
-      ${heading(toc, 2, 'Dependencies')}
-      <p>
-        None beyond Tailwind v4 and <code>@webjsdev/core</code>. No Radix, no clsx, no
-        tailwind-merge, no Floating UI, no Sonner. The <code>cn()</code> helper, the positioning,
-        the focus trap, and the toast queue are all hand-rolled, so the whole kit is auditable in
-        an afternoon and every line is yours to edit.
-      </p>
-
-      ${heading(toc, 2, 'Migrating from shadcn')}
-      <p>
-        A Tier-2 element maps mechanically: <code>&lt;DialogContent&gt;</code> becomes
-        <code>&lt;ui-dialog-content&gt;</code>, and variant and size props keep their names. A
-        Tier-1 component has no wrapper at all, so <code>&lt;Button variant="outline"&gt;</code>
-        becomes a real <code>&lt;button&gt;</code> carrying
-        <code>buttonClass({ variant: 'outline' })</code>. There is no Radix
-        <code>asChild</code> slot pattern to translate, because applying a class to the element you
-        already have is what <code>asChild</code> was working around. An
-        <code>onValueChange</code> prop becomes an
-        <code>addEventListener('ui-value-change', fn)</code>.
-      </p>
+      ${heading(toc, 2, 'AI-Ready')}
+      <p>The design of WebJs UI makes it easy for AI tools to work with your code. Its open code and consistent API allow AI models to read, understand, and even generate new components. Every WebJs app also ships a read-only MCP server whose <code>ui</code> tool lists the kit and returns any component's helpers and example, and the <a href="/ui/docs/skills">skill</a> tells an agent to install a ready-made block before writing a view by hand.</p>
+      <p><em>An AI model can learn how your components work and suggest improvements or even create new components that integrate with your existing design.</em></p>
   `;
   return docsPage({
     href: '/ui/docs',

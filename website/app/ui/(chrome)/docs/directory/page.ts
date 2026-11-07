@@ -9,7 +9,7 @@ import {
 } from '#modules/ui/components/item.ts';
 import { inputGroupClass, inputGroupAddonClass, inputGroupInputClass } from '#modules/ui/components/input-group.ts';
 import { dialogHeaderClass, dialogTitleClass, dialogDescriptionClass, dialogFooterClass } from '#modules/ui/components/dialog.ts';
-import { docsPage } from '#lib/ui/docs/page.ts';
+import { docsPage, heading, type TocEntry } from '#lib/ui/docs/page.ts';
 import { commandBlock, packageCommands } from '#lib/ui/docs/install.ts';
 import { searchRegistries, addArgs, type Registry } from '#modules/ui/directory/registries.ts';
 
@@ -33,6 +33,17 @@ export const metadata = {
  */
 
 const PER_PAGE = 10;
+
+// shadcn's Documentation section under the list: the registry docs as
+// LinkedCards.
+const DOC_CARDS = [
+  { href: '/ui/docs/registry/getting-started', name: 'Getting Started', text: 'Set up and build your own registry' },
+  { href: '/ui/docs/registry/authentication', name: 'Authentication', text: 'Secure your registry with authentication' },
+  { href: '/ui/docs/registry/namespace', name: 'Namespaces', text: 'Configure registries with namespaces' },
+  { href: '/ui/docs/registry/registry-index', name: 'Add a Registry', text: 'Learn how to add a registry to the directory' },
+  { href: '/ui/docs/registry/examples', name: 'Examples', text: 'Registry item examples and configurations' },
+  { href: '/ui/docs/registry/registry-json', name: 'Schema', text: 'Schema specification for registry.json' },
+];
 
 const searchIcon = html`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>`;
 const plusIcon = html`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5l0 14"></path><path d="M5 12l14 0"></path></svg>`;
@@ -86,6 +97,7 @@ export default async function DirectoryPage({ searchParams }: PageProps) {
   const shown = all.slice((page - 1) * PER_PAGE, page * PER_PAGE);
   const count = all.length;
 
+  const toc: TocEntry[] = [];
   const body = html`
     <p>
       These registries work with the WebJs UI CLI. To add a component from one, run
@@ -97,11 +109,7 @@ export default async function DirectoryPage({ searchParams }: PageProps) {
         Community registries are maintained by third-party developers. Always review code on installation to ensure it meets your security and quality standards.
       </div>
     </div>
-    <p>
-      Don't see a registry? A registry is a list of item JSON files served from one base URL. Add it to
-      <code>modules/ui/directory/registries.ts</code> in the WebJs repository and it is listed here and in
-      <a href="/ui/r/registries.json">/ui/r/registries.json</a>.
-    </p>
+    <p>Don't see a registry? Learn how to <a href="/ui/docs/registry/registry-index">add it here</a>.</p>
     <div data-not-typeset class="style-nova mt-6">
       <form method="get" action="/ui/docs/directory" role="search" data-slot="field" class="flex w-full flex-col gap-3">
         <div data-slot="input-group" role="group" class=${inputGroupClass()}>
@@ -127,11 +135,20 @@ export default async function DirectoryPage({ searchParams }: PageProps) {
           </nav>`
         : ''}
     </div>
+    ${heading(toc, 2, 'Documentation')}
+    <p>You can use the WebJs UI CLI to install from your own code registry. Running your own registry allows you to distribute your custom components, blocks, pages, config, rules and other files to any WebJs app.</p>
+    <div class="mt-6 grid gap-4 sm:grid-cols-2">
+      ${DOC_CARDS.map((c) => html`<a href=${c.href} data-not-typeset class="flex w-full flex-col items-start rounded-2xl bg-surface p-6 text-sm text-surface-foreground no-underline transition-colors hover:bg-surface/80">
+        <div class="font-medium">${c.name}</div>
+        <div class="text-muted-foreground">${c.text}</div>
+      </a>`)}
+    </div>
   `;
   return docsPage({
     href: '/ui/docs/directory',
     title: 'Registry Directory',
     description: 'Discover registries for WebJs UI components and blocks.',
+    toc,
     body,
   });
 }

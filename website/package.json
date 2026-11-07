@@ -31,6 +31,11 @@
         "source": "/docs/ui",
         "destination": "/ui",
         "permanent": true
+      },
+      {
+        "source": "/ui/docs/components/typography",
+        "destination": "/ui/docs/typeset",
+        "permanent": true
       }
     ],
     "dev": {

@@ -8,7 +8,10 @@ the projects below. Each is used under the license reproduced here.
 The component design, the component API (variant names, sizes, the
 sub-component breakdown, the data attributes), the style skins, the themes,
 the blocks and charts, and the layout of the webjs.dev/ui site are ported from
-shadcn/ui (https://github.com/shadcn-ui/ui).
+shadcn/ui (https://github.com/shadcn-ui/ui). The site also serves some of
+shadcn/ui's own assets unmodified: the avatars in website/public/avatars/
+(02.png, 03.png, 10.png, from apps/v4/public/avatars) and the Sera page
+screenshots in website/public/images/ (sera-0*.png, from apps/v4/public/images).
 
 ```text
 MIT License

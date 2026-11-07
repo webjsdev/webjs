@@ -15,6 +15,10 @@ export const demo = 'date-picker-demo';
 /** Everything after Installation. */
 export default async function body(toc: TocEntry[]) {
   return html`
+    ${heading(toc, 2, 'Installation')}
+    <p>The Date Picker is built using a composition of the <code>popover</code> attribute and the <code>&lt;ui-calendar&gt;</code> component.</p>
+    <p>See installation instructions for the <a href="/ui/docs/components/popover#installation">Popover</a> and the <a href="/ui/docs/components/calendar#installation">Calendar</a> components.</p>
+
     ${heading(toc, 2, 'Usage')}
     ${codeFigure(`import { html } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
