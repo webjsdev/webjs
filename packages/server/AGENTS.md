@@ -489,7 +489,11 @@ conditional leaves a CSP-off document one newline shorter than a CSP-on one).
    reference, so a `'lucide-app-window'` class string or an inline `<script>`'s
    `document` (which runs from the rendered HTML, never from loading the
    module) does not pin a module, while a genuine `document.x` in code still
-   flags, including code inside a `${...}` hole. The scans avoid the fully blanked mask,
+   flags, including code inside a `${...}` hole. The one form the redaction would
+   hide, a browser global reached through a string key on the global object
+   (`globalThis['matchMedia']`, `self["document"]`), is read from the RAW source by
+   `COMPONENT_CLIENT_GLOBAL_KEY_RE`, since `globalThis` itself exists on the server
+   and the key is a blanked string. The scans avoid the fully blanked mask,
    `redactStringsAndTemplates(src, true)`, which blanks hole code too and
    would hide `${window.innerWidth}`. A module-scope pure-data constructor
    (`new Set([...])` / `Map` / `Date` / `RegExp` / typed array / `URL`) is inert

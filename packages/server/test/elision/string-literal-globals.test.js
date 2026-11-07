@@ -132,6 +132,18 @@ test('component: a real global inside a template hole still ships', () => {
   assert.equal(r.reason, 'references a browser global at module scope');
 });
 
+test('component: a global reached through a string key on globalThis still ships', () => {
+  // The redaction blanks the key, and globalThis exists on the server, so
+  // this form is read from the raw source.
+  for (const access of [`globalThis['matchMedia']`, `globalThis["document"]`, 'self[`navigator`]', `globalThis?.['localStorage']`]) {
+    const r = analyzeComponentSource(component(`return html\`<p>\${${access} ? 'a' : 'b'}</p>\`;`));
+    assert.equal(r.interactive, true, access);
+    assert.equal(r.reason, 'references a browser global at module scope', access);
+  }
+  const plain = analyzeComponentSource(component(`return html\`<p>\${globalThis['webjsAppName'] ?? ''}</p>\`;`));
+  assert.equal(plain.interactive, false, 'a key that is not a browser global stays display-only');
+});
+
 test('component: a real module-scope global still ships', () => {
   const r = analyzeComponentSource(component('return html`<p>x</p>`;', 'const nav = navigator.language;'));
   assert.equal(r.interactive, true);

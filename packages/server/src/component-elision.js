@@ -279,6 +279,14 @@ const INSTANCEOF_RE = /\binstanceof\s+([A-Z][A-Za-z0-9_$]*)/g;
 const COMPONENT_CLIENT_GLOBAL_RE = /\b(?:window|document|navigator|localStorage|sessionStorage|matchMedia|addEventListener)\b/;
 
 /**
+ * The same globals reached through a string key on the global object
+ * (`globalThis['matchMedia']`, `self["document"]`). The global scan reads the
+ * placeholder redaction, which blanks string literals, and `globalThis` itself
+ * exists on the server, so this one form has to be read from the RAW source.
+ */
+const COMPONENT_CLIENT_GLOBAL_KEY_RE = /\b(?:globalThis|self)\s*(?:\?\.)?\[\s*(['"`])(?:window|document|navigator|localStorage|sessionStorage|matchMedia|addEventListener)\1\s*\]/;
+
+/**
  * Constructors that produce inert DATA with no side effect, so a module-scope
  * `export const X = new Set([...])` (a lookup table, a compiled RegExp, a
  * parsed URL) is not client work and must not pin an importing page/layout
@@ -715,7 +723,7 @@ export function analyzeComponentSource(src) {
   if (importsSideEffectNonCorePackage(src)) {
     return { interactive: true, reason: 'side-effect imports an npm package' };
   }
-  if (COMPONENT_CLIENT_GLOBAL_RE.test(redactToPlaceholders(src).redacted)) {
+  if (COMPONENT_CLIENT_GLOBAL_RE.test(redactToPlaceholders(src).redacted) || COMPONENT_CLIENT_GLOBAL_KEY_RE.test(src)) {
     return { interactive: true, reason: 'references a browser global at module scope' };
   }
   if (hasModuleScopeSideEffect(src)) {
