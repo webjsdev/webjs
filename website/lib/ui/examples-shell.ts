@@ -1,7 +1,7 @@
 import { html, asset } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
-import { extraStyleLinks } from '#lib/ui/style-links.ts';
+import { styleLinks } from '#lib/ui/style-links.ts';
 import { uiPageHeader, pageNav } from '#lib/ui/ui-page-header.ts';
 import { EXAMPLE_IMAGES } from '#modules/ui/example-apps/images.ts';
 import { themeSelector, readSelectorTheme, themeClass, withTheme } from '#lib/ui/theme-selector.ts';
@@ -84,7 +84,7 @@ export function examplesShell(url: URL, current: ExampleSlug, content: unknown, 
   const { pathname } = url;
   const theme = readSelectorTheme(url.searchParams);
   return html`
-    ${extraStyleLinks(pathname)}
+    ${styleLinks(pathname)}
     <main id="main" class="flex flex-1 flex-col">
       ${uiPageHeader({
         headingClass: 'max-w-4xl',

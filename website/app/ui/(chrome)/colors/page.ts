@@ -3,7 +3,7 @@ import type { Metadata } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
 import { selectTriggerClass } from '#modules/ui/components/select.ts';
-import { extraStyleLinks } from '#lib/ui/style-links.ts';
+import { styleLinks } from '#lib/ui/style-links.ts';
 import { uiPageHeader } from '#lib/ui/ui-page-header.ts';
 import {
   getColors, getColorFormat, COLOR_FORMATS, DEFAULT_COLOR_FORMAT,
@@ -102,7 +102,7 @@ function palette(p: ColorPalette) {
 
 export default function ColorsPage() {
   return html`
-    ${extraStyleLinks('/ui/colors')}
+    ${styleLinks('/ui/colors')}
     <main id="main" tabindex="-1" class="flex flex-1 flex-col">
       ${uiPageHeader({
         title: TITLE,

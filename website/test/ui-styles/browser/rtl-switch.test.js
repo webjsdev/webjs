@@ -17,7 +17,7 @@ const tick = () => new Promise((r) => requestAnimationFrame(() => requestAnimati
 
 suite('a switch thumb stays inside its track in either direction', () => {
   suiteSetup(async () => {
-    for (const href of ['/public/tailwind.css', '/public/ui.css']) {
+    for (const href of ['/public/ui.css', '/public/ui-styles/nova.css', '/public/ui-styles/new-york.css']) {
       if (document.querySelector(`link[href="${href}"]`)) continue;
       const link = document.createElement('link');
       link.rel = 'stylesheet';

@@ -410,19 +410,27 @@ test('the old /docs/ui page is gone, permanently redirected to /ui', async () =>
   assert.equal(new URL(res.headers.get('location')!, 'http://localhost').pathname, '/ui');
 });
 
-test('a page in an extra kit style links that style, in <head> and in its own markup', async () => {
-  // public/ui.css carries nova and new-york only. The other seven styles are
-  // one file each under public/ui-styles/, linked by the pages that render in
-  // them (lib/ui/style-links.ts). The root layout's copy makes a full load
+test('a page links its kit styles, in <head> and in its own markup', async () => {
+  // public/ui.css carries no kit style. Each is one file under
+  // public/ui-styles/, linked by the pages that render in it
+  // (lib/ui/style-links.ts). The root layout's copy makes a full load
   // flash-free, and the page's copy covers a soft navigation in.
+  // test/ssr/ui-style-links.test.ts holds every page to this.
   const headOf = (html: string) => html.slice(0, html.indexOf('</head>'));
   const bodyPart = (html: string) => html.slice(html.indexOf('</head>'));
   const home = await bodyOf(UI_INDEX);
   assert.match(headOf(home), /<link rel="stylesheet" href="\/public\/ui-styles\/rhea\.css/, 'the home page has rhea in <head>');
   assert.match(bodyPart(home), /<link rel="stylesheet" href="\/public\/ui-styles\/rhea\.css/, 'and in its own markup');
-  for (const path of [UI_COMPONENT, MARKETING_PATH, DOC_PATH]) {
+  const button = await bodyOf(UI_COMPONENT);
+  assert.match(headOf(button), /<link rel="stylesheet" href="\/public\/ui-styles\/nova\.css/, 'a docs page has nova, its previews\' style');
+  assert.match(headOf(button), /<link rel="stylesheet" href="\/public\/ui-styles\/new-york\.css/, 'and new-york, the chrome\'s');
+  assert.ok(!button.includes('/public/ui-styles/rhea.css'), 'and nothing it does not render');
+  const frame = await bodyOf('/ui/view/dashboard-01');
+  assert.match(headOf(frame), /\/public\/ui-styles\/new-york\.css/, 'a block frame has new-york');
+  assert.ok(!frame.includes('/public/ui-styles/nova.css'), 'and no nova');
+  for (const path of [MARKETING_PATH, DOC_PATH]) {
     const html = await bodyOf(path);
-    assert.ok(!html.includes('/public/ui-styles/'), `${path} links no extra style`);
+    assert.ok(!html.includes('/public/ui-styles/'), `${path} links no kit style`);
   }
 });
 
@@ -431,7 +439,7 @@ test('both /ui stylesheet inputs import the shared variants before any kit style
   // declared, and CSS allows no rule ahead of an @import, so the variants
   // live in public/ui-theme.css and are imported first.
   const ui = readFileSync(resolve(WEBSITE_ROOT, 'public/ui-input.css'), 'utf8');
-  assert.ok(ui.indexOf('./ui-theme.css') >= 0 && ui.indexOf('./ui-theme.css') < ui.indexOf('style-new-york.css'), 'ui-input.css imports ui-theme.css before the styles');
+  assert.ok(ui.indexOf('./ui-theme.css') >= 0, 'ui-input.css imports ui-theme.css, for its own dark: utilities');
   assert.ok(!ui.includes('@custom-variant dark'), 'and does not redeclare the variant');
   const build = readFileSync(resolve(WEBSITE_ROOT, 'scripts/build-ui-styles.mjs'), 'utf8');
   assert.ok(build.indexOf('ui-theme.css') < build.indexOf('style-${name}.css'), 'the per-style build imports it before the style too');
@@ -465,10 +473,7 @@ test('each kit style is scoped to its nearest wrapper, so a nested region takes 
   assert.equal((out.match(/@scope \(\.style-nova\) to \(:is\(/g) || []).length, 2, 'both top-level blocks become scopes');
   for (const n of STYLE_NAMES) assert.ok(out.includes(`.style-${n}`), `the scope stops at .style-${n}`);
   assert.throws(() => scopeStyle('nova', '.cn-button {}'), /no top-level/);
-  const ui = readFileSync(resolve(WEBSITE_ROOT, 'public/ui-input.css'), 'utf8');
-  assert.match(ui, /cache\/ui-styles\/scoped\/style-new-york\.css/, 'ui.css compiles the scoped copies');
-  assert.match(ui, /cache\/ui-styles\/scoped\/style-nova\.css/);
-  assert.ok(!/registry\/styles\/style-(nova|new-york)\.css/.test(ui), 'and not the unscoped originals');
   const build = readFileSync(resolve(WEBSITE_ROOT, 'scripts/build-ui-styles.mjs'), 'utf8');
-  assert.match(build, /SCOPED_DIR/, 'the per-style build compiles them too');
+  assert.match(build, /SCOPED_DIR/, 'the per-style build compiles the scoped copies');
+  assert.ok(!/registry\/styles\/style-/.test(build), 'and not the unscoped originals');
 });

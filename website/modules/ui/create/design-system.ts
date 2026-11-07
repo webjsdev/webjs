@@ -123,9 +123,9 @@ export function fontFamily(name: string): string {
   return getFont(name)?.family ?? 'inherit';
 }
 
-/** The extra stylesheet a style needs: public/ui.css carries nova and new-york. */
+/** The stylesheet a style needs: each kit style is its own sheet in public/ui-styles/. */
 export function styleSheetHref(style: string): string | null {
-  return style === 'nova' || style === 'new-york' ? null : `/public/ui-styles/${style}.css`;
+  return /^[a-z-]+$/.test(style) ? `/public/ui-styles/${style}.css` : null;
 }
 
 /**

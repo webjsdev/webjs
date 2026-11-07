@@ -29,24 +29,21 @@
    app the CLI bakes the chosen style into the installed file. On this site
    the components are rendered as they are, so the styles are loaded as CSS
    instead, in layer(base) the way shadcn's own preview route does, and a
-   `.style-<name>` wrapper picks the look: .style-new-york for the current
-   gallery, .style-nova for the docs. Being in layer(base), below utilities,
-   a utility written on a demo still overrides the style.
+   `.style-<name>` wrapper picks the look: .style-new-york for the chrome and
+   the blocks, .style-nova for the docs previews. Being in layer(base), below
+   utilities, a utility written on a demo still overrides the style.
 
    shadcn-tailwind.css carries the custom variants (data-open and the rest)
    and the scroll-fade and shimmer utilities the styles use, and
    tw-animate.css the enter and exit animations. Both are vendored into the
-   registry (see packages/ui/THIRD_PARTY_NOTICES.md). The other seven styles
-   go in a separate stylesheet, linked only by the pages that switch styles. */
+   registry (see packages/ui/THIRD_PARTY_NOTICES.md). The styles themselves
+   are NOT here: each is its own sheet in public/ui-styles/ (built by
+   scripts/build-ui-styles.mjs), and a page links the ones it renders
+   (lib/ui/style-links.ts), so no page carries a style it does not show. */
 @import "./ui-theme.css";
 @import "./ui-typeset.css";
 @import "../../packages/ui/packages/registry/styles/tw-animate.css";
 @import "../../packages/ui/packages/registry/styles/shadcn-tailwind.css";
-/* Each style is compiled from its scoped copy (scripts/scope-ui-styles.mjs),
-   so a region in one style nested inside a region in another takes only the
-   nearer one's rules. */
-@import "../node_modules/.cache/ui-styles/scoped/style-new-york.css" layer(base);
-@import "../node_modules/.cache/ui-styles/scoped/style-nova.css" layer(base);
 /* shadcn's 24 themes as .theme-<name> classes (#1666): a preview wearing
    theme-blue repaints in blue, as on shadcn's site. Generated from the kit's
    theme data by scripts/build-ui-themes.mjs (run by copy-registry.mjs), each

@@ -2,7 +2,7 @@ import { html } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
 import { neighbours } from '#modules/ui/docs/nav.ts';
-import { extraStyleLinks } from '#lib/ui/style-links.ts';
+import { styleLinks } from '#lib/ui/style-links.ts';
 import { uiMarkdownHref } from '#lib/ui/llm-path.ts';
 import { siteUrl } from '#lib/env.ts';
 // The Copy Page button and the code blocks' copy buttons (lib/ui/docs/code.ts).
@@ -71,7 +71,7 @@ export function docsPage(opts: { href: string; title: string; description?: stri
   // Markdown link stands in for it.
   const markdown = uiMarkdownHref(opts.href);
   return html`
-    ${extraStyleLinks(opts.href)}
+    ${styleLinks(opts.href)}
     <main id="main" data-slot="docs" class="flex scroll-mt-24 items-stretch pb-8 text-[1.05rem] sm:text-[15px] xl:w-full">
       <div class="flex min-w-0 flex-1 flex-col">
         <div class="h-(--top-spacing) shrink-0"></div>

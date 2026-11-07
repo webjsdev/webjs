@@ -2,7 +2,7 @@ import { html, cspNonce, asset } from '@webjsdev/core';
 import type { LayoutProps } from '@webjsdev/core';
 import { THEME_STORAGE_KEY, FORCED_THEMES } from '#lib/theme.ts';
 import { isUiPath } from '#lib/links.ts';
-import { extraStyleLinks } from '#lib/ui/style-links.ts';
+import { styleLinks } from '#lib/ui/style-links.ts';
 
 /**
  * Root layout: the document shell every page shares.
@@ -191,7 +191,7 @@ export default function RootLayout({ children, url }: LayoutProps) {
     </script>
 
     ${ui ? html`<link rel="stylesheet" href=${asset('/public/ui.css')}>
-    ${extraStyleLinks(pathname)}
+    ${styleLinks(pathname)}
     <link rel="preload" href="/public/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/public/fonts/geist-mono.woff2" as="font" type="font/woff2" crossorigin>` : html`<link rel="stylesheet" href=${asset('/public/tailwind.css')}>`}
     <style>

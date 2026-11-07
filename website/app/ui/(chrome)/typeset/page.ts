@@ -1,5 +1,6 @@
 import { html, asset } from '@webjsdev/core';
 import type { Metadata, PageProps } from '@webjsdev/core';
+import { styleLinks } from '#lib/ui/style-links.ts';
 import { parseParams } from '#modules/ui/typeset/params.ts';
 import { customizer } from '#modules/ui/typeset/customizer.ts';
 import { previewFrame } from '#modules/ui/typeset/preview-frame.ts';
@@ -41,6 +42,7 @@ export default async function TypesetPage({ url, searchParams }: PageProps) {
   const { origin } = new URL(url);
   return html`
     <link rel="stylesheet" href=${asset('/public/typeset-fonts.css')}>
+    ${styleLinks('/ui/typeset')}
     <main id="main" tabindex="-1" class="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden section-soft [--customizer-width:--spacing(48)] [--gap:--spacing(4)] md:[--gap:--spacing(6)] 2xl:[--customizer-width:--spacing(56)]">
       <typeset-customizer data-slot="designer" class="style-nova flex min-h-0 flex-1 flex-col items-start gap-(--gap) p-(--gap) pt-[calc(var(--gap)*0.25)] md:flex-row-reverse">
         ${docsPanel(params, origin)}
