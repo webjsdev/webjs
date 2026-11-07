@@ -200,16 +200,18 @@ test('the preview cards follow a live design-system wrapper with no re-render', 
   // on it: the names sit in spans the configurator rewrites, and the bar
   // charts are drawn rounded and square with the style variants choosing.
   const preview = await page('/ui/view/preview');
-  for (const key of ['style', 'font-heading', 'font']) {
-    assert.match(preview, new RegExp(`<span data-design-system-text="${key}"`), `a ${key} name span`);
+  for (const key of ['style', 'font-heading', 'font-heading-label', 'font']) {
+    assert.match(preview, new RegExp(`<span data-design-system-text="${key}">`), `a ${key} name span`);
   }
   // Every key is one the configurator writes (syncDesignSystemText), or the
   // span would keep its first value through every pick.
-  const keys = new Set([...preview.matchAll(/data-design-system-text="([^"]+)"/g)].map((m) => m[1]));
-  assert.deepEqual([...keys].sort(), ['font', 'font-heading', 'style']);
-  // A heading font of inherit reads "Inherit" on the typography card, as
-  // shadcn's does, where the font-heading title names the inherited font.
-  assert.match(preview, /<span data-design-system-text="font-heading" class="group-data-\[font-heading=inherit\]\/design-system:hidden">[^<]*<\/span><span class="hidden group-data-\[font-heading=inherit\]\/design-system:inline">Inherit<\/span>/);
+  const { syncDesignSystemText } = await import('#modules/ui/create/design-system.ts');
+  const synced = new Set<string>();
+  const el = (key: string) => ({ dataset: { designSystemText: key }, set textContent(_v: string) { synced.add(key); }, get textContent() { return ''; } });
+  const keys = [...new Set([...preview.matchAll(/data-design-system-text="([^"]+)"/g)].map((m) => m[1]))];
+  const { parseCreateParams } = await import('#modules/ui/create/params.ts');
+  syncDesignSystemText({ querySelectorAll: () => keys.map(el) } as never, parseCreateParams(new URLSearchParams()).config);
+  assert.deepEqual([...synced].sort(), [...keys].sort(), 'the configurator writes every key the cards use');
   const p02 = await page('/ui/view/preview-02');
   for (const html of [preview, p02]) {
     assert.match(html, /class="contents style-lyra:hidden style-sera:hidden"><ui-chart/, 'the rounded chart, hidden under lyra and sera');

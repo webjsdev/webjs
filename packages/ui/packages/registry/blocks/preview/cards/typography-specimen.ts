@@ -10,9 +10,8 @@
  * them in (`typographySpecimen({ heading, body })`) from the page that knows
  * them; `heading` is "Inherit" when the heading font is the body font. Each
  * name sits in a `data-design-system-text` span, so a host that restyles the
- * card live (the /ui/create configurator) rewrites the names in place. Inside
- * that host's `group/design-system` wrapper, a heading font of `inherit` (its
- * `data-font-heading`) shows "Inherit" in place of the font's title.
+ * card live (the /ui/create configurator) rewrites the names in place, the
+ * heading's as "Inherit" when it is the body font (`font-heading-label`).
  *
  * The dialog's `<form>` has no `action` yet. Bind a server action from a
  * `'use server'` file (`<form action=${sendFeedback}>`) before you ship it.
@@ -38,7 +37,7 @@ export function typographySpecimen(opts: { heading?: string; body?: string } = {
   return html`
     <div data-slot="card" data-size="default" class=${cardClass()}>
       <div data-slot="card-content" class=${cn(cardContentClass(), 'flex flex-col gap-2')}>
-        <div class="text-xs font-medium text-muted-foreground uppercase"><span data-design-system-text="font-heading" class="group-data-[font-heading=inherit]/design-system:hidden">${heading}</span><span class="hidden group-data-[font-heading=inherit]/design-system:inline">Inherit</span> - <span data-design-system-text="font">${body}</span></div>
+        <div class="text-xs font-medium text-muted-foreground uppercase"><span data-design-system-text="font-heading-label">${heading}</span> - <span data-design-system-text="font">${body}</span></div>
         <p class="font-heading text-2xl font-medium style-sera:text-lg style-sera:font-semibold style-sera:tracking-wider style-sera:uppercase">
           Designing with rhythm and hierarchy.
         </p>
