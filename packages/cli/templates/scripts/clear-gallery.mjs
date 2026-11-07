@@ -209,8 +209,9 @@ export default function RootLayout({ children }: LayoutProps) {
   const nonce = cspNonce();
   return html\`
     <script nonce="\${nonce}">
-      // The theme's dark tokens are on .dark: follow the OS until the app
-      // offers its own choice.
+      // The theme's dark tokens and color-scheme are both on .dark: follow the
+      // OS until the app offers its own choice. With JavaScript off the page
+      // is light throughout, controls included.
       (function(){
         try {
           var mq = window.matchMedia('(prefers-color-scheme: dark)');
@@ -220,13 +221,15 @@ export default function RootLayout({ children }: LayoutProps) {
         } catch (_) {}
       })();
     </script>
-    <meta name="color-scheme" content="light dark">
+    <meta name="color-scheme" content="light">
     <!-- asset() content-hashes the url in production, so a deploy that changes
          the CSS changes the url and the framework serves it immutable for a
          year. Without it this stable url can serve the PREVIOUS stylesheet
          from a CDN or a service-worker cache after a deploy. -->
     <link rel="stylesheet" href=\${asset('/public/tailwind.css')}>
     <style>
+      :root { color-scheme: light; }
+      :root.dark { color-scheme: dark; }
       html, body { margin: 0; }
       body {
         background: var(--background);

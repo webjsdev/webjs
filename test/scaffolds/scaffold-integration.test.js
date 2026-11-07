@@ -158,6 +158,16 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(inputCss, /body:has\(> header\[class~="md:fixed"\]\) \{ @variant md \{ padding-top: var\(--header-h\); \} \}/,
       'and pinning it from a breakpoint up reserves the space through the app\'s own md breakpoint');
     assert.doesNotMatch(layoutSrc, /ResizeObserver/, 'the layout does not measure the header');
+    // The dark tokens are on .dark, which only the head script sets, so native
+    // controls switch on the same class. With JavaScript off the page is light
+    // throughout, never light tokens over OS-dark controls and scrollbars.
+    assert.match(layoutSrc, /<meta name="color-scheme" content="light">/, 'the meta names light only');
+    assert.match(layoutSrc, /:root \{[^}]*color-scheme: light;/, 'color-scheme defaults to light');
+    assert.match(layoutSrc, /:root\.dark \{ color-scheme: dark; \}/, 'and turns dark with the tokens');
+    assert.doesNotMatch(layoutSrc, /color-scheme: light dark|content="light dark"/, 'never following the OS on its own');
+    const clearSrc = readFileSync(join(appDir, 'scripts', 'clear-gallery.mjs'), 'utf8');
+    assert.match(clearSrc, /:root\.dark \{ color-scheme: dark; \}/, 'the gallery:clear layout pairs them the same way');
+    assert.doesNotMatch(clearSrc, /content="light dark"/);
     assert.match(layoutSrc, /JetBrains\+Mono/, 'layout loads the JetBrains Mono font');
     // The palette lives in the theme block of styles/globals.css (light on
     // :root, dark on .dark), where a preset replaces it, never in the layout.

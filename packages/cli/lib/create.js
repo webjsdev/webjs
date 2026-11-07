@@ -1482,11 +1482,11 @@ export default function RootLayout({ children }: LayoutProps) {
   const nonce = cspNonce();
   return html\`
     <script nonce="\${nonce}">
-      // Light/dark theme: apply the saved choice before paint (no flash). The
-      // tokens follow color-scheme, which [data-theme] forces and otherwise
-      // follows the OS, so an unset choice needs NO inline work here. The .dark
-      // class is synced only for @webjsdev/ui components (they key off .dark).
-      // Delete this block and the [data-theme] rules below for a single-theme app.
+      // Light/dark theme: apply the saved choice, else the OS, before paint (no
+      // flash). The dark tokens and color-scheme both switch on the .dark class,
+      // so this sets .dark (and data-theme for a saved choice). With JavaScript
+      // off nothing sets .dark and the page is light throughout, controls
+      // included. Delete this block for a single-theme app.
       (function(){
         try {
           var mq = window.matchMedia('(prefers-color-scheme: dark)');
@@ -1503,7 +1503,7 @@ export default function RootLayout({ children }: LayoutProps) {
         } catch (_) {}
       })();
     </script>
-    <meta name="color-scheme" content="light dark">
+    <meta name="color-scheme" content="light">
     <!-- JetBrains Mono for body/UI (its monospaced, developer-console feel) and
          Bricolage Grotesque for the display wordmark. Swap these for your own
          fonts (and update --font-sans in styles/globals.css, or apply a preset
@@ -1531,17 +1531,17 @@ export default function RootLayout({ children }: LayoutProps) {
          CODE (a code from webjs.dev/ui/create) replaces them, and nothing here
          overrides them. The light tokens are on :root and the dark ones on
          .dark, which the script above keeps in step with the saved choice or
-         the OS. color-scheme follows the same choice, so native controls and
-         scrollbars match. */
+         the OS. color-scheme switches on the same class, so native controls
+         and scrollbars always match the tokens: with JavaScript off the page
+         is light throughout rather than light tokens over dark controls. */
       :root {
         /* The navbar height. The header is sized BY this token and nothing
            measures it, so the offset below can never drift from the header. */
         --header-h: 3.5rem;
 
-        color-scheme: light dark;                              /* default: follow the OS */
+        color-scheme: light;
       }
-      :root[data-theme='light'] { color-scheme: light; }
-      :root[data-theme='dark']  { color-scheme: dark; }
+      :root.dark { color-scheme: dark; }
     </style>
     <style>
       /* Base styles utility classes can't reach. */
@@ -1710,8 +1710,8 @@ export class ThemeToggle extends WebComponent {
     const el = document.documentElement;
     if (next === 'system') delete el.dataset.theme;
     else el.dataset.theme = next;
-    // The tokens in styles/globals.css switch on the .dark class, and
-    // color-scheme (native controls) follows data-theme, so set both.
+    // The tokens in styles/globals.css and color-scheme (native controls)
+    // both switch on the .dark class; data-theme records the saved choice.
     const dark = next === 'dark'
       || (next === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
     el.classList.toggle('dark', dark);
