@@ -82,7 +82,7 @@ export default function TableRtl() {
             <th scope="col" data-slot="table-head" class=${cn(tableHeadClass(), 'w-[100px]')}>${t.invoice}</th>
             <th scope="col" data-slot="table-head" class=${tableHeadClass()}>${t.status}</th>
             <th scope="col" data-slot="table-head" class=${tableHeadClass()}>${t.method}</th>
-            <th scope="col" data-slot="table-head" class=${cn(tableHeadClass(), 'text-right')}>${t.amount}</th>
+            <th scope="col" data-slot="table-head" class=${cn(tableHeadClass(), 'text-end')}>${t.amount}</th>
           </tr>
         </thead>
         <tbody data-slot="table-body" class=${tableBodyClass()}>
@@ -91,14 +91,14 @@ export default function TableRtl() {
               <td data-slot="table-cell" class=${cn(tableCellClass(), 'font-medium')}>${invoice.invoice}</td>
               <td data-slot="table-cell" class=${tableCellClass()}>${t[invoice.paymentStatus]}</td>
               <td data-slot="table-cell" class=${tableCellClass()}>${t[invoice.paymentMethod]}</td>
-              <td data-slot="table-cell" class=${cn(tableCellClass(), 'text-right')}>${invoice.totalAmount}</td>
+              <td data-slot="table-cell" class=${cn(tableCellClass(), 'text-end')}>${invoice.totalAmount}</td>
             </tr>
           `)}
         </tbody>
         <tfoot data-slot="table-footer" class=${tableFooterClass()}>
           <tr data-slot="table-row" class=${tableRowClass()}>
             <td colspan="3" data-slot="table-cell" class=${tableCellClass()}>${t.total}</td>
-            <td data-slot="table-cell" class=${cn(tableCellClass(), 'text-right')}>$2,500.00</td>
+            <td data-slot="table-cell" class=${cn(tableCellClass(), 'text-end')}>$2,500.00</td>
           </tr>
         </tfoot>
       </table>
