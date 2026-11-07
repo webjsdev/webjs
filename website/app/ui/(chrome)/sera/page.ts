@@ -2,7 +2,7 @@ import { html, asset } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
-import { extraStyleLinks } from '#lib/ui/style-links.ts';
+import { styleLinks } from '#lib/ui/style-links.ts';
 import { audienceAnalytics } from '#modules/ui/sera/audience-analytics.ts';
 import { articleDirectory } from '#modules/ui/sera/article-directory.ts';
 import { emptyState } from '#modules/ui/sera/empty-state.ts';
@@ -56,7 +56,7 @@ function imagePreview() {
 
 export default function SeraPage() {
   return html`
-    ${extraStyleLinks('/ui/sera')}
+    ${styleLinks('/ui/sera')}
     <link rel="stylesheet" href=${asset('/public/sera-fonts.css')}>
     <main id="main" tabindex="-1" class="style-sera flex flex-1 flex-col">
       <section class="border-grid">

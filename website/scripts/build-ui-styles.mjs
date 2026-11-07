@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 /**
- * Compile the kit styles that public/ui.css does not carry, one stylesheet
- * per style, into public/ui-styles/<name>.css (#1666, D8).
+ * Compile the kit styles, one stylesheet per style, into
+ * public/ui-styles/<name>.css (#1666, D8).
  *
- * public/ui.css holds nova (the docs) and new-york (blocks and charts). The
- * other seven are needed only by the pages that show them: the home page's
- * card grid (rhea), the configurator and its preview, Sera, typeset. One
- * style compiles to about 310 KB (24 KB gzipped) and all seven to about
- * 2 MB (154 KB gzipped), so each gets its own file and a page links only
- * the styles it renders (lib/ui/style-links.ts).
+ * public/ui.css carries none of them. One style compiles to about 300 KB
+ * (24 KB gzipped) and is full of :has() rules the browser re-checks on every
+ * style recalculation, so a page links only the styles it renders
+ * (lib/ui/style-links.ts): the chrome and the blocks new-york, the docs
+ * previews nova, the home page's card grid rhea, and so on. nova and
+ * new-york used to be compiled into ui.css, which made every /ui page carry
+ * both, a dashboard frame that renders only new-york included.
  *
  * Each style is nested rules keyed on cn-* names and built from @apply under
  * `.style-<name>`. The input therefore needs the theme (to resolve @apply),
@@ -20,18 +21,15 @@
  * The generated inputs go to node_modules/.cache, with absolute import paths,
  * so nothing but the outputs lands in the tree.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, utimesSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { writeScopedStyles, SCOPED_DIR } from './scope-ui-styles.mjs';
+import { writeScopedStyles, SCOPED_DIR, STYLE_NAMES } from './scope-ui-styles.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const site = resolve(here, '..');
 const styles = resolve(site, '../packages/ui/packages/registry/styles');
-
-/** The styles public/ui.css does NOT carry. */
-export const EXTRA_STYLES = ['luma', 'lyra', 'maia', 'mira', 'rhea', 'sera', 'vega'];
 
 const cacheDir = join(site, 'node_modules', '.cache', 'ui-styles');
 const outDir = join(site, 'public', 'ui-styles');
@@ -41,11 +39,14 @@ mkdirSync(outDir, { recursive: true });
 writeScopedStyles();
 
 const only = process.argv.slice(2);
-const names = only.length ? EXTRA_STYLES.filter((n) => only.includes(n)) : EXTRA_STYLES;
+const names = only.length ? STYLE_NAMES.filter((n) => only.includes(n)) : STYLE_NAMES;
 
 for (const name of names) {
   const input = join(cacheDir, `${name}.input.css`);
   writeFileSync(input, [
+    // The layer order ui.css declares, restated so a style sheet linked
+    // without it still keeps its rules (layer base) below the utilities.
+    '@layer theme, base, components, utilities;',
     '@import "tailwindcss/theme.css" layer(theme);',
     '@import "tailwindcss/utilities.css" layer(utilities) source(none);',
     `@import "${join(site, 'public', 'ui-theme.css')}";`,
@@ -60,5 +61,11 @@ for (const name of names) {
     process.stderr.write(r.stderr);
     process.exit(r.status ?? 1);
   }
+  // The Tailwind CLI leaves an output whose bytes did not change untouched,
+  // so its mtime stays older than the edit that triggered the build, and the
+  // dev regenerate rule (package.json) would then rebuild on every request.
+  // Stamping it marks the sheet fresh.
+  const now = new Date();
+  utimesSync(out, now, now);
 }
 console.log(`[build-ui-styles] wrote ${names.length} style${names.length === 1 ? '' : 's'} to public/ui-styles/`);

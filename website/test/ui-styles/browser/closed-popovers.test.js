@@ -16,11 +16,11 @@ const assert = {
 };
 
 suite('a closed popover panel is hidden whatever display its style gives it', () => {
-  // Both stylesheets, in the order every /ui page links them: the root one
-  // states the cascade layers (theme, base, components, utilities), so the
-  // styles' layer(base) rules sit below the utilities.
+  // The stylesheets a /ui page links: ui.css states the cascade layers
+  // (theme, base, components, utilities), so the styles' layer(base) rules
+  // sit below the utilities, and each style is its own sheet.
   suiteSetup(async () => {
-    for (const href of ['/public/tailwind.css', '/public/ui.css']) {
+    for (const href of ['/public/ui.css', '/public/ui-styles/nova.css', '/public/ui-styles/new-york.css']) {
       if (document.querySelector(`link[href="${href}"]`)) continue;
       const link = document.createElement('link');
       link.rel = 'stylesheet';

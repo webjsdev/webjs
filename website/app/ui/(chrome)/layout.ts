@@ -13,6 +13,7 @@ import { githubStars } from '#modules/ui/queries/github-stars.server.ts';
 import { brandMark } from '#lib/design/brand.ts';
 import { PlusSignIcon } from '#lib/ui/hugeicons.ts';
 import { uiMarkdownHref } from '#lib/ui/llm-path.ts';
+import { styleLink } from '#lib/ui/style-links.ts';
 
 /**
  * The /ui chrome: header and footer, ported from shadcn/ui's site
@@ -63,6 +64,10 @@ export default async function UiChromeLayout({ children, url }: LayoutProps) {
   const stars = await githubStars();
 
   return html`
+    <!-- new-york, the style the header's search and the toaster render in,
+         for a soft navigation in from the marketing site (the root layout
+         links it in head on a full load, lib/ui/style-links.ts). -->
+    ${styleLink('new-york')}
     <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[60] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground">Skip to content</a>
 
     <div class="site-top fixed inset-x-0 top-0 z-50">

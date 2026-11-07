@@ -2,7 +2,7 @@ import { html } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
 import { listBlocks } from '#modules/ui/queries/blocks.server.ts';
-import { extraStyleLinks } from '#lib/ui/style-links.ts';
+import { styleLinks } from '#lib/ui/style-links.ts';
 import { uiPageHeader, pageNav } from '#lib/ui/ui-page-header.ts';
 
 /**
@@ -54,7 +54,7 @@ async function blocksNav(current: string) {
 /** A blocks page: the header, the nav with `current` active, then `content`. */
 export async function blocksShell(pathname: string, current: string, content: unknown) {
   return html`
-    ${extraStyleLinks(pathname)}
+    ${styleLinks(pathname)}
     <main id="main" class="flex flex-1 flex-col">
       ${uiPageHeader({
         title: BLOCKS_TITLE,

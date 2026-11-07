@@ -4,7 +4,7 @@ import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
 import { sheetDescriptionClass, sheetHeaderClass, sheetTitleClass } from '#modules/ui/components/sheet.ts';
 import { renderChart, type RenderedChart } from '#modules/ui/queries/charts.server.ts';
-import { extraStyleLinks } from '#lib/ui/style-links.ts';
+import { styleLinks } from '#lib/ui/style-links.ts';
 import { uiPageHeader, pageNav } from '#lib/ui/ui-page-header.ts';
 import { codeFigure } from '#lib/ui/docs/code.ts';
 
@@ -158,7 +158,7 @@ export async function chartDisplay(name: string, opts: { fullWidth?: boolean } =
 /** A charts page: the header, the type nav with `current` active, then `content`. */
 export function chartsShell(pathname: string, current: string, content: unknown) {
   return html`
-    ${extraStyleLinks(pathname)}
+    ${styleLinks(pathname)}
     <main id="main" class="flex flex-1 flex-col">
       ${uiPageHeader({
         title: CHARTS_TITLE,
