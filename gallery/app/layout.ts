@@ -123,6 +123,9 @@ export default function RootLayout({ children }: { children: unknown }) {
         }
         :root[data-theme='dark'] { --glow-strength: 0.08; }
         html, body { margin: 0; }
+        /* An in-page #anchor jump (native, or the client router's scrollIntoView)
+           stops below the fixed header instead of under it. */
+        html { scroll-padding-top: var(--header-h); }
         body {
           padding-top: var(--header-h);
           background: var(--background);

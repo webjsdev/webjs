@@ -255,7 +255,10 @@ The fix is `position: fixed`. A fixed header is always pinned and never does the
 :root  { --header-h: 3.5rem; }
 header { position: fixed; inset-inline: 0; top: 0; height: var(--header-h); }
 body   { padding-top: var(--header-h); }
+html   { scroll-padding-top: var(--header-h); }  /* #anchor jumps stop below the header */
 ```
+
+The last line matters as soon as a page has in-page links: without it an `#anchor` jump, native or the client router's `scrollIntoView`, lands the target under the header. Next's app router reads the same `scroll-padding-top` when it scrolls a segment into view, and shadcn's site sets it from its header-height variable.
 
 With Tailwind, that is `class="fixed inset-x-0 top-0 h-[var(--header-h)]"` on the header. The scaffold's layout already carries the token and a `body:has(> header.fixed)` rule, so pinning its navbar is adding `fixed inset-x-0 top-0 z-20` and nothing else. Pinning from a breakpoint up works the same way: `md:fixed md:inset-x-0 md:top-0` pins it on wider screens only, because `public/input.css` carries a matching rule for each default breakpoint written with Tailwind's `@variant`, so it follows the app's own `--breakpoint-*` values. A breakpoint added under a new name needs its own line beside them.
 

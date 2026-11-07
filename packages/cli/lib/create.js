@@ -1347,6 +1347,11 @@ body:has(> header[class~="md:fixed"]) { @variant md { padding-top: var(--header-
 body:has(> header[class~="lg:fixed"]) { @variant lg { padding-top: var(--header-h); } }
 body:has(> header[class~="xl:fixed"]) { @variant xl { padding-top: var(--header-h); } }
 body:has(> header[class~="2xl:fixed"]) { @variant 2xl { padding-top: var(--header-h); } }
+html:has(> body > header[class~="sm:fixed"]) { @variant sm { scroll-padding-top: var(--header-h); } }
+html:has(> body > header[class~="md:fixed"]) { @variant md { scroll-padding-top: var(--header-h); } }
+html:has(> body > header[class~="lg:fixed"]) { @variant lg { scroll-padding-top: var(--header-h); } }
+html:has(> body > header[class~="xl:fixed"]) { @variant xl { scroll-padding-top: var(--header-h); } }
+html:has(> body > header[class~="2xl:fixed"]) { @variant 2xl { scroll-padding-top: var(--header-h); } }
 
 /* App @theme mappings. The token VALUES live on :root in app/layout.ts (plain
    CSS custom properties, so they resolve with JavaScript disabled); these
@@ -1529,6 +1534,9 @@ export default function RootLayout({ children }: LayoutProps) {
          from a breakpoint up (md:fixed) is handled in public/input.css, where
          Tailwind resolves the breakpoint from this app's own theme. */
       body:has(> header.fixed) { padding-top: var(--header-h); }
+      /* And an in-page #anchor jump (native, or the client router's
+         scrollIntoView) stops below the pinned header instead of under it. */
+      html:has(> body > header.fixed) { scroll-padding-top: var(--header-h); }
     </style>
     <!-- Top navbar, on every page: brand on the left, links + theme toggle on
          the right. It floats (no separator) and is in normal flow, so it just

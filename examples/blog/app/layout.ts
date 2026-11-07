@@ -215,7 +215,9 @@ export default function RootLayout({ children }: LayoutProps) {
          be reached by utility classes. A tiny decorative overlay, scrollbar
          colours, and selection tint also live here (no utility equivalent). */
       html, body { margin: 0; }
-      html { scroll-behavior: smooth; }
+      /* scroll-padding-top: an in-page #anchor jump (native, or the client
+         router's scrollIntoView) stops below the fixed header, not under it. */
+      html { scroll-behavior: smooth; scroll-padding-top: var(--header-h); }
       body {
         /* #610: the header is position:fixed (NOT sticky), because iOS WebKit
            (every iOS browser) flickers a sticky header's background for one

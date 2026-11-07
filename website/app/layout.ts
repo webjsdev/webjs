@@ -285,6 +285,9 @@ export default function RootLayout({ children }: LayoutProps) {
         *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
       }
       html, body { margin: 0; }
+      /* An in-page #anchor jump (native, or the client router's scrollIntoView)
+         stops below the fixed header instead of under it. */
+      html { scroll-padding-top: var(--header-h); }
       /* #610: the header is position: fixed (sticky flickers on iOS WebKit during
          a client-router nav), so the content reserves its height. The header is
          sized BY this token and nothing measures it, so a swap that replaces the

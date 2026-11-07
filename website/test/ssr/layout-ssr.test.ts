@@ -114,6 +114,7 @@ test('the layout keeps only boot-critical inline script', async () => {
   // replaced, and the content slid under the bar.
   assert.match(layoutSrc, /\.site-top > header \{[^}]*height: var\(--header-h\)/, 'the header is sized by the token');
   assert.ok(!layoutSrc.includes('ResizeObserver'), 'nothing measures the header');
+  assert.match(layoutSrc, /html \{ scroll-padding-top: var\(--header-h\); \}/, 'an #anchor jump stops below the fixed header');
   // The key is interpolated from lib/theme.ts rather than written out again,
   // so a rename cannot leave the two readers disagreeing.
   assert.ok(!/localStorage\.getItem\('webjs_theme'\)/.test(layoutSrc), 'the storage key is not hard-coded a second time');

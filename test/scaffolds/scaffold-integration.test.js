@@ -152,6 +152,8 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // Pinning from a breakpoint up is resolved by Tailwind from the app's own
     // theme (@variant), never from hard-coded widths in the layout.
     assert.doesNotMatch(layoutSrc, /min-width: \d/, 'the layout hard-codes no breakpoint width');
+    assert.match(layoutSrc, /html:has\(> body > header\.fixed\) \{ scroll-padding-top: var\(--header-h\); \}/,
+      'a pinned navbar also offsets in-page anchor jumps');
     const inputCss = readFileSync(join(appDir, 'public', 'input.css'), 'utf8');
     assert.match(inputCss, /body:has\(> header\[class~="md:fixed"\]\) \{ @variant md \{ padding-top: var\(--header-h\); \} \}/,
       'and pinning it from a breakpoint up reserves the space through the app\'s own md breakpoint');

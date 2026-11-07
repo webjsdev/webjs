@@ -127,3 +127,48 @@ suite('Client router: a fixed header offset survives a full-body swap (#1660)', 
     assert.equal(mainTop(), headerBottom(), 'the content still starts at the header bottom');
   });
 });
+
+suite('A fixed header and an in-page #anchor jump', () => {
+  let style, nodes;
+
+  setup(() => {
+    style = document.createElement('style');
+    style.textContent = ':root { --header-h: 40px; }'
+      + ' body { margin: 0; padding-top: var(--header-h); }'
+      + ' .wj1660-hdr { position: fixed; top: 0; left: 0; right: 0; height: var(--header-h); box-sizing: border-box; }';
+    document.head.appendChild(style);
+    const host = document.createElement('div');
+    host.innerHTML = '<header id="wj1660-anchor-hdr" class="wj1660-hdr">nav</header>'
+      + '<div style="height:2000px"></div><h2 id="wj1660-target" style="margin:0;height:20px">target</h2>'
+      + '<div style="height:2000px"></div>';
+    nodes = [...host.childNodes];
+    document.body.append(...nodes);
+  });
+
+  teardown(() => {
+    nodes.forEach((n) => n.remove());
+    style.remove();
+    document.documentElement.style.removeProperty('scroll-padding-top');
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  });
+
+  const jump = async () => {
+    document.getElementById('wj1660-target').scrollIntoView({ behavior: 'instant' });
+    await frame();
+    return {
+      targetTop: Math.round(document.getElementById('wj1660-target').getBoundingClientRect().top),
+      headerBottom: Math.round(document.getElementById('wj1660-anchor-hdr').getBoundingClientRect().bottom),
+    };
+  };
+
+  test('counterfactual: without scroll-padding-top the target lands under the header', async () => {
+    const { targetTop, headerBottom } = await jump();
+    assert.ok(targetTop < headerBottom, `target top ${targetTop} is under the header bottom ${headerBottom}`);
+  });
+
+  test('with scroll-padding-top: var(--header-h) the target lands just below the header', async () => {
+    document.documentElement.style.setProperty('scroll-padding-top', 'var(--header-h)');
+    const { targetTop, headerBottom } = await jump();
+    assert.equal(targetTop, headerBottom, 'the target starts exactly at the header bottom');
+  });
+});
