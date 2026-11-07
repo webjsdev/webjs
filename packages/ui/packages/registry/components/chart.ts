@@ -186,6 +186,8 @@ interface Frame {
   margin: Margin;
   /** The plot area, the box Recharts keeps a tooltip inside. */
   plot: { x: number; y: number; w: number; h: number };
+  /** The element may widen the plot to fill its box (a cartesian chart). */
+  fit?: boolean;
 }
 
 // Recharts sorts a legend by each item's value (its `itemSorter` default),
@@ -222,7 +224,7 @@ function frame(o: ChartBaseOptions, f: Frame) {
   const views = t ? f.points.map((p) => chartTooltipView(o.config, p.label, p.payload, t)) : [];
   // cn() keeps both aspect utilities, so an authored one replaces the default here.
   const base = /(^|\s)aspect-/.test(o.class ?? '') ? chartContainerClass().replace(' aspect-video', '') : chartContainerClass();
-  return html`<ui-chart data-slot="chart" data-chart=${o.id ?? null} class=${cn(base, o.class)} style=${chartStyle(o.config) || null}><div class="ui-chart-wrapper relative h-full w-full min-w-0"><svg class="ui-chart-surface block h-full w-full overflow-visible" xmlns="http://www.w3.org/2000/svg" viewBox=${`0 0 ${fmt(f.width)} ${fmt(f.height)}`} role="img" aria-label=${o.title ?? null} data-hit=${t ? f.hit : null} data-keyboard=${t && a11y ? 'true' : null} data-default-index=${def ? String(t?.defaultIndex) : null} data-plot=${t ? [f.plot.x, f.plot.y, f.plot.w, f.plot.h].map((v) => fmt(v)).join(' ') : null}>${o.defs ? svg`<defs>${o.defs}</defs>` : ''}${f.body}</svg>${legendLayer(o, f)}${t ? html`<div data-slot="chart-tooltip" class="ui-chart-tooltip-wrapper pointer-events-none absolute top-0 left-0 z-10 [transition:transform_400ms]" ?hidden=${!def} style=${def ? `transform: translate(${fmt(def.x + 10)}px, ${fmt(def.y + 10)}px)` : null}>${def && t && t.defaultIndex != null ? chartTooltipMarkup(views[t.defaultIndex], look) : ''}</div><div data-slot="chart-tooltips" hidden data-look=${JSON.stringify(look)}>${views.map((v, i) => (isPlainView(v)
+  return html`<ui-chart data-slot="chart" data-chart=${o.id ?? null} class=${cn(base, o.class)} style=${chartStyle(o.config) || null}><div class="ui-chart-wrapper relative h-full w-full min-w-0"><svg class="ui-chart-surface block h-full w-full overflow-visible" xmlns="http://www.w3.org/2000/svg" viewBox=${`0 0 ${fmt(f.width)} ${fmt(f.height)}`} role="img" aria-label=${o.title ?? null} data-hit=${t ? f.hit : null} data-keyboard=${t && a11y ? 'true' : null} data-default-index=${def ? String(t?.defaultIndex) : null} data-fit=${f.fit ? 'x' : null} data-plot=${t || f.fit ? [f.plot.x, f.plot.y, f.plot.w, f.plot.h].map((v) => fmt(v)).join(' ') : null}>${o.defs ? svg`<defs>${o.defs}</defs>` : ''}${f.body}</svg>${legendLayer(o, f)}${t ? html`<div data-slot="chart-tooltip" class="ui-chart-tooltip-wrapper pointer-events-none absolute top-0 left-0 z-10 [transition:transform_400ms]" ?hidden=${!def} style=${def ? `transform: translate(${fmt(def.x + 10)}px, ${fmt(def.y + 10)}px)` : null}>${def && t && t.defaultIndex != null ? chartTooltipMarkup(views[t.defaultIndex], look) : ''}</div><div data-slot="chart-tooltips" hidden data-look=${JSON.stringify(look)}>${views.map((v, i) => (isPlainView(v)
       ? html`<div data-index=${String(i)} data-x=${fmt(f.points[i].x)} data-y=${fmt(f.points[i].y)} data-tip=${JSON.stringify(v)}></div>`
       : html`<div data-index=${String(i)} data-x=${fmt(f.points[i].x)} data-y=${fmt(f.points[i].y)}>${chartTooltipMarkup(v, look)}</div>`))}</div><span data-slot="chart-live" class="sr-only" aria-live="polite"></span>` : ''}</div></ui-chart>`;
 }
@@ -525,7 +527,7 @@ function cartesian(o: CartesianChartOptions, family: Family, all: ChartSeriesOpt
 
   const body = svg`${grid}${overlay('chart-cursor', cursors, defaultIndex)}${marks}${axis('x')}${axis('y')}${actives.length ? overlay('chart-active', actives, defaultIndex) : ''}`;
   return frame(o, {
-    width: W, height: H, hit: vertical ? 'y' : 'x', body, points, margin, plot,
+    width: W, height: H, hit: vertical ? 'y' : 'x', body, points, margin, plot, fit: true,
     legend: series.map((s) => ({ dataKey: s.dataKey, name: s.name ?? s.dataKey, value: s.name ?? s.dataKey, color: color(s), payload: {} })),
   });
 }

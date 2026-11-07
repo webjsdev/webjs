@@ -152,6 +152,54 @@ suite('ui-chart', () => {
     root.remove();
   });
 
+  test('a wide chart in a narrow box of another shape fills it instead of letterboxing', async () => {
+    const days = Array.from({ length: 90 }, (_, i) => ({ day: `Day ${i + 1}`, v: (i * 37) % 100 }));
+    const root = await mount(chart.areaChart({
+      config: CONFIG, data: days, width: 1260, height: 250, tooltip: {},
+      xAxis: { dataKey: 'day', minTickGap: 32 },
+      areas: [{ dataKey: 'v', fill: 'red', stroke: 'red' }],
+    }));
+    // The suite has no stylesheet: give the SVG the box `aspect-auto h-[250px] w-full` would.
+    const svg = root.querySelector('svg.ui-chart-surface');
+    svg.style.cssText += 'display:block;width:100%;height:250px';
+    root.style.width = '300px';
+    await new Promise((r) => setTimeout(r, 150));
+    const [, , w, h] = svg.getAttribute('viewBox').split(' ').map(Number);
+    assert.ok(Math.abs(w - 300) < 1 && h === 250, `the viewBox takes the box's shape (${w} by ${h})`);
+    const box = svg.getBoundingClientRect();
+    const area = svg.querySelector('.ui-chart-area').getBoundingClientRect();
+    assert.ok(area.width > 250 && area.height > 100, `the marks fill the box (${Math.round(area.width)} by ${Math.round(area.height)})`);
+    assert.ok(area.right <= box.right + 1, 'and stay inside it');
+    const xs = [...root.querySelectorAll('[data-slot="chart-tooltips"] > [data-index]')].map((e) => Number(e.dataset.x));
+    assert.ok(xs[0] >= 0 && xs[89] <= w, `the tooltip anchors move with the plot (${xs[0]} to ${xs[89]})`);
+    const shown = [...root.querySelectorAll('[data-axis="x"] [data-coord]')].filter((g) => g.getAttribute('visibility') !== 'hidden');
+    assert.ok(shown.length >= 2 && shown.length <= 6, `the x axis is thinned for the narrow width (${shown.length} labels)`);
+    // A pointer at the right edge of the plot reaches the last point.
+    const { clientX, clientY } = clientPoint(svg, xs[89], 120);
+    svg.dispatchEvent(new PointerEvent('pointermove', { clientX, clientY, bubbles: true }));
+    await tick();
+    assert.equal(root.querySelector('ui-chart').activeIndex, 89);
+    // Widening the box again restores the served layout.
+    root.style.width = '1260px';
+    await new Promise((r) => setTimeout(r, 150));
+    assert.ok(Math.abs(Number(svg.getAttribute('viewBox').split(' ')[2]) - 1260) < 1, 'back at the nominal width');
+    root.remove();
+  });
+
+  test('a dot keeps its radius in pixels however the chart scales', async () => {
+    const root = await mount(chart.lineChart({
+      config: CONFIG, data: MONTHS, xAxis: { dataKey: 'month' },
+      lines: [{ dataKey: 'desktop', stroke: 'red', dot: { r: 4 } }],
+    }));
+    for (const width of ['225px', '900px']) {
+      root.style.width = width;
+      await new Promise((r) => setTimeout(r, 150));
+      const d = root.querySelector('circle.ui-chart-dot').getBoundingClientRect();
+      assert.ok(Math.abs(d.width - 8) < 1.5 && Math.abs(d.height - 8) < 1.5, `an r 4 dot is 8px across at ${width} (${d.width} by ${d.height})`);
+    }
+    root.remove();
+  });
+
   test('a tooltip that would leave the plot area opens above and to the left of its point', async () => {
     const root = await mount(chart.barChart({
       config: CONFIG, data: MONTHS, xAxis: { dataKey: 'month' }, tooltip: {},

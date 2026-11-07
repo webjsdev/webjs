@@ -271,22 +271,93 @@ export class UiChart extends WebComponent {
     return true;
   }
 
-  /**
-   * Keep the labels at their font size. The SVG scales with its container,
-   * and a 12px label in a chart drawn 340px wide on a 450 unit viewBox would
-   * read as 9px; Recharts lays out at the real width, so its text never
-   * scales. The SVG's font size, in em of its container's, undoes the scale.
-   */
+  /** Lay the chart out again whenever its box changes size. */
   _watchSize(s: SVGSVGElement): void {
     if (this._resize || typeof ResizeObserver !== 'function') return;
-    const width = Number(s.getAttribute('viewBox')?.split(/\s+/)[2]);
-    this._resize = new ResizeObserver(() => {
-      const shown = s.getBoundingClientRect();
-      const k = Math.max(width / shown.width, (Number(s.getAttribute('viewBox')?.split(/\s+/)[3]) || 0) / shown.height);
-      if (Number.isFinite(k) && k > 0) s.style.fontSize = `${Math.round(k * 1000) / 1000}em`;
-      this._fitTicks(s, Number.isFinite(k) && k > 0 ? k : 1);
-    });
+    this._resize = new ResizeObserver(() => this._layout(s));
     this._resize.observe(s);
+  }
+
+  /**
+   * Fit the served chart to its box, as Recharts lays out at the real size.
+   *
+   * The server draws at a nominal size, and the SVG scales to its box. Where
+   * the box has another shape (a wide chart in a fixed height on a phone), a
+   * cartesian chart (`data-fit`) is widened or narrowed to fill it: the
+   * viewBox takes the box's aspect, and the plot is stretched along x around
+   * its left edge while the margins and the y axis keep their size. That is
+   * exact for the marks Recharts would redraw (its scales and the d3 curves
+   * are linear in x), so only what has a size of its own is put back: each
+   * label and dot is drawn unstretched, and the x axis ticks move to their
+   * new places and are thinned again. Without JavaScript the served layout
+   * shows, letterboxed in a box of another shape.
+   *
+   * Then the labels and dots keep their size in pixels. A 12px label in a
+   * chart drawn 340px wide on a 450 unit viewBox would read as 9px, so the
+   * SVG's font size, in em of its container's, undoes the scale, and each
+   * dot is scaled by it around its centre (Recharts' `r` is in pixels).
+   */
+  _layout(s: SVGSVGElement): void {
+    const shown = s.getBoundingClientRect();
+    if (!shown.width || !shown.height) return;
+    const [, , w0, h] = (s.dataset.viewBox ??= s.getAttribute('viewBox') ?? '').split(/\s+/).map(Number);
+    if (!(w0 > 0 && h > 0)) return;
+    const round = (v: number) => Math.round(v * 1e4) / 1e4;
+    let w = w0;
+    let sx = 1;
+    const fit = s.dataset.fit === 'x' && s.dataset.plot != null;
+    if (fit) {
+      const [px, py, pw, ph] = (s.dataset.plot0 ??= s.dataset.plot ?? '').split(' ').map(Number);
+      const wide = (h * shown.width) / shown.height;
+      const stretch = (pw + wide - w0) / pw;
+      if (pw > 0 && stretch > 0.05) {
+        w = wide;
+        sx = Math.abs(stretch - 1) < 1e-3 ? 1 : stretch;
+      }
+      const map = (x: number) => (x <= px ? x : x >= px + pw ? x + (sx - 1) * pw : px + (x - px) * sx);
+      s.setAttribute('viewBox', `0 0 ${round(sx === 1 ? w0 : w)} ${h}`);
+      s.dataset.plot = [px, py, pw * sx, ph].map(round).join(' ');
+      const matrix = sx === 1 ? null : `matrix(${round(sx)} 0 0 1 ${round(px * (1 - sx))} 0)`;
+      for (const g of Array.from(s.children)) {
+        if (g.tagName.toLowerCase() === 'defs' || g.hasAttribute('data-axis')) continue;
+        if (matrix) g.setAttribute('transform', matrix);
+        else g.removeAttribute('transform');
+        for (const t of Array.from(g.querySelectorAll('text'))) {
+          const x = Number(t.getAttribute('x'));
+          if (matrix && Number.isFinite(x)) t.setAttribute('transform', `matrix(${round(1 / sx)} 0 0 1 ${round(x * (1 - 1 / sx))} 0)`);
+          else t.removeAttribute('transform');
+        }
+      }
+      const axis = s.querySelector<SVGGElement>('[data-axis="x"]');
+      if (axis) {
+        axis.dataset.extent = String(round(sx === 1 ? w0 : w));
+        for (const line of Array.from(axis.querySelectorAll('.ui-chart-cartesian-axis-line'))) {
+          for (const a of ['x1', 'x2']) {
+            const key = `data-${a}0`;
+            if (!line.hasAttribute(key)) line.setAttribute(key, line.getAttribute(a) ?? '0');
+            line.setAttribute(a, String(round(map(Number(line.getAttribute(key))))));
+          }
+        }
+        for (const t of Array.from(axis.querySelectorAll<SVGGElement>('[data-coord]'))) {
+          t.dataset.coord = String(round(map(Number((t.dataset.coord0 ??= t.dataset.coord)))));
+        }
+      }
+      for (const e of this._entries()) {
+        if (e.dataset.x != null) e.dataset.x = String(round(map(Number((e.dataset.x0 ??= e.dataset.x)))));
+      }
+    }
+    const k = Math.max((sx === 1 ? w0 : w) / shown.width, h / shown.height);
+    if (!(Number.isFinite(k) && k > 0)) return;
+    s.style.fontSize = `${round(k)}em`;
+    for (const c of Array.from(s.querySelectorAll('circle.ui-chart-dot'))) {
+      const cx = Number(c.getAttribute('cx'));
+      const cy = Number(c.getAttribute('cy'));
+      const a = k / (fit ? sx : 1);
+      c.setAttribute('transform', `matrix(${round(a)} 0 0 ${round(k)} ${round(cx * (1 - a))} ${round(cy * (1 - k))})`);
+    }
+    this._fitTicks(s, k);
+    const tip = this.querySelector<HTMLElement>('[data-slot="chart-tooltip"]');
+    if (this.activeIndex >= 0 && tip && !tip.hidden) this.show(this.activeIndex);
   }
 
   /**
