@@ -129,6 +129,13 @@ export default function RootLayout({ children, url }: LayoutProps) {
   // the top of its own markup, which covers a soft navigation INTO /ui (this
   // layout is not re-rendered then, and the router's head merge only adds).
   // The same URL twice costs one fetch. A marketing page emits neither.
+  //
+  // The two sections' stylesheets are exclusive: a /ui page links ui.css (and
+  // its kit styles) and NOT public/tailwind.css, and a marketing page the
+  // reverse, along with each section's font preloads. ui.css carries its own
+  // reset, so loading both only doubled the rules every style recalculation
+  // walks. app/(site)/layout.ts repeats the tailwind.css link for a soft
+  // navigation from /ui into the marketing site, the mirror of app/ui/layout.ts.
   const { pathname } = new URL(url);
   const ui = isUiPath(pathname);
   return html`
@@ -147,9 +154,9 @@ export default function RootLayout({ children, url }: LayoutProps) {
          final face without the late swap. Each family is one variable file
          covering every weight, so three small woff2 files over h2 is a cheap
          preload budget. -->
-    <link rel="preload" href="/public/fonts/inter-tight.woff2" as="font" type="font/woff2" crossorigin>
+    ${ui ? '' : html`<link rel="preload" href="/public/fonts/inter-tight.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/public/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/public/fonts/jetbrains-mono.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/public/fonts/jetbrains-mono.woff2" as="font" type="font/woff2" crossorigin>`}
 
     <!-- Warm the analytics connection so the async gtag handshake (and the
          beacon to google-analytics.com it then opens) overlaps head parse
@@ -183,11 +190,10 @@ export default function RootLayout({ children, url }: LayoutProps) {
       })();
     </script>
 
-    <link rel="stylesheet" href=${asset('/public/tailwind.css')}>
     ${ui ? html`<link rel="stylesheet" href=${asset('/public/ui.css')}>
     ${extraStyleLinks(pathname)}
     <link rel="preload" href="/public/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/public/fonts/geist-mono.woff2" as="font" type="font/woff2" crossorigin>` : ''}
+    <link rel="preload" href="/public/fonts/geist-mono.woff2" as="font" type="font/woff2" crossorigin>` : html`<link rel="stylesheet" href=${asset('/public/tailwind.css')}>`}
     <style>
       /* Foundation tokens + effects that Tailwind utilities cannot express. */
       /* A single static gradient glow layer. It used to breathe (two layers
