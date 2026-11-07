@@ -48,6 +48,17 @@ test('componentSource refuses a path, and serves a component baked for an app', 
   assert.match(files![0].content, /'[^'\n]*\binline-flex\b[^'\n]*'/, 'and the style\'s classes are inlined');
 });
 
+test('the Manual tab shows every file of a component, each under the path add writes it to', async () => {
+  const manualTitles = async (slug: string) => {
+    const page = await (await handle(`/ui/docs/components/${slug}`)).text();
+    const tab = page.slice(page.indexOf('<ui-tabs-content value="manual"'));
+    return [...tab.slice(0, tab.indexOf('</ui-tabs-content>')).matchAll(/<figcaption[^>]*>([^<]+)<\/figcaption>/g)].map((m) => m[1]);
+  };
+  assert.deepEqual(await manualTitles('button'), ['components/ui/button.ts']);
+  // chart is three registry files, and add installs all three.
+  assert.deepEqual(await manualTitles('chart'), ['components/ui/chart.ts', 'components/ui/chart-element.ts', 'components/ui/chart-geometry.ts']);
+});
+
 test('every component in the nav has a page, and an unknown one is a 404', async () => {
   const failed: string[] = [];
   for (const c of COMPONENTS) {

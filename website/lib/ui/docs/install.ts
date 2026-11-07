@@ -43,11 +43,16 @@ export function commandBlock(commands: Record<string, string>) {
     </figure>`;
 }
 
+/** One file the Manual tab shows: its source, under the path it lands at. */
+export interface ManualFile { source: string; title: string }
+
 /**
  * The Installation section: a Command tab with the add command, and a Manual
- * tab with the steps and the component's source.
+ * tab with the steps and the component's source. A component of several
+ * files (chart) passes `files`, and the tab shows each under its own path.
  */
-export function installTabs(slug: string, manual: { source: string; title: string; dependencies?: string[] }) {
+export function installTabs(slug: string, manual: { files?: ManualFile[]; source?: string; title?: string; dependencies?: string[] }) {
+  const files = manual.files ?? [{ source: manual.source ?? '', title: manual.title ?? '' }];
   return html`
     <ui-tabs value="cli" class="relative mt-6 w-full">
       <ui-tabs-list class="justify-start gap-4 rounded-none bg-transparent px-0">
@@ -63,7 +68,7 @@ export function installTabs(slug: string, manual: { source: string; title: strin
             <h3>Install the following dependencies:</h3>
             ${commandBlock(packageCommands(`add ${manual.dependencies.join(' ')}`))}` : ''}
           <h3>Copy and paste the following code into your project.</h3>
-          ${codeFigure(manual.source, { title: manual.title, lineNumbers: true })}
+          ${files.map((f) => codeFigure(f.source, { title: f.title, lineNumbers: true }))}
           <h3>Update the import paths to match your project setup.</h3>
         </div>
       </ui-tabs-content>

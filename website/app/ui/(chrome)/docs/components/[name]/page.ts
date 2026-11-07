@@ -19,6 +19,11 @@ export async function generateMetadata({ params }: PageProps<'/ui/docs/component
   return doc ? { title: `${doc.title} | WebJs UI`, description: doc.description } : {};
 }
 
+/** Where `add` writes a component file: `components/x.ts` lands at `components/ui/x.ts`. */
+function manualTitle(path: string): string {
+  return path.replace(/^components\//, 'components/ui/');
+}
+
 export default async function ComponentPage({ params }: PageProps<'/ui/docs/components/[name]'>) {
   const doc = componentDoc(params.name);
   if (!doc) notFound();
@@ -30,7 +35,7 @@ export default async function ComponentPage({ params }: PageProps<'/ui/docs/comp
   const lead = mod?.demo ? await componentPreview(mod.demo, { ...LEAD_PREVIEWS[doc.slug], ...mod.demoOptions }) : '';
   const intro = mod?.intro ? await mod.intro(toc) : '';
   const install = files?.length
-    ? html`${heading(toc, 2, 'Installation')}${installTabs(doc.slug, { source: files[0].content, title: `components/ui/${doc.slug}.ts` })}`
+    ? html`${heading(toc, 2, 'Installation')}${installTabs(doc.slug, { files: files.map((f) => ({ source: f.content, title: manualTitle(f.path) })) })}`
     : '';
   const rest = mod ? await mod.default(toc) : '';
   return docsPage({ href, title: doc.title, description: doc.description, toc, body: html`${lead}${intro}${install}${rest}` });
