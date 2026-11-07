@@ -199,6 +199,49 @@ test('the dashboard-01 chart takes its first range and a default tooltip point',
   assert.match(week, /data-default-index="3"/, 'the tooltip point is drawn from the first paint');
 });
 
+test('the dashboard-01 sidebar and header take the example dashboard\'s shape', async () => {
+  const { renderToString } = await import('@webjsdev/core/server');
+  const { html } = await import('@webjsdev/core');
+  const { appSidebar } = await import('#modules/ui/blocks/dashboard-01/components/app-sidebar.ts');
+  const { siteHeader } = await import('#modules/ui/blocks/dashboard-01/components/site-header.ts');
+  const render = (t: unknown) => renderToString(t as never, { ssr: false });
+
+  // The block's own shape is the default.
+  const block = await render(appSidebar());
+  assert.match(block, /<ui-sidebar collapsible="offcanvas"/);
+  assert.match(block, />Quick Create</);
+  assert.doesNotMatch(block, /data-sidebar="group-label"[^\n]*?">Home<\/div>/);
+  const header = await render(siteHeader());
+  assert.match(header, /<ui-sidebar-trigger/);
+  assert.doesNotMatch(header, />Quick Create</);
+  assert.doesNotMatch(header, /sticky/);
+
+  // shadcn's examples/dashboard: a fixed column with a Home group and no
+  // Quick Create row, a sticky header with the button and no trigger.
+  const example = await render(appSidebar({
+    collapsible: 'none',
+    class: 'h-auto border-r [--sidebar-width:calc(var(--spacing)*64)]',
+    headerClass: 'border-b',
+    logo: html`<svg data-test-logo></svg>`,
+    mainLabel: 'Home',
+    quickCreate: false,
+    data: { navMain: [{ title: 'Overview', url: '/x' }] },
+  }));
+  assert.match(example, /<ui-sidebar collapsible="none"[^>]*class="[^"]*h-auto border-r/);
+  assert.doesNotMatch(example, /spacing\)\*72/, 'a caller width replaces the block default');
+  assert.match(block, /<ui-sidebar [^>]*\[--sidebar-width:calc\(var\(--spacing\)\*72\)\]/);
+  assert.match(example, /data-sidebar="header" class="[^"]*border-b/);
+  assert.match(example, /data-test-logo/);
+  assert.match(example, /data-sidebar="group-label"[^\n]*?">Home<\/div>/);
+  assert.doesNotMatch(example, />Quick Create</);
+  assert.match(example, /href="\/x"[\s\S]*?>Overview</, 'the replaced main nav');
+  assert.match(example, />Data Library</, 'the lists not replaced keep the sample data');
+  const exHeader = await render(siteHeader({ trigger: false, quickCreate: true, sticky: true, title: 'Documents' }));
+  assert.doesNotMatch(exHeader, /<ui-sidebar-trigger/);
+  assert.match(exHeader, /<header class="[^"]*sticky top-0 z-10 bg-background\/90/);
+  assert.match(exHeader, />Quick Create</);
+});
+
 /** Every .ts file under a block's directory. */
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => {

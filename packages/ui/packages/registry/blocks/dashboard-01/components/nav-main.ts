@@ -4,7 +4,9 @@
  * shadcn/ui's dashboard-01.
  *
  * "Quick Create" and the inbox button are placeholders: point them at your
- * own create flow and inbox route.
+ * own create flow and inbox route. `quickCreate: false` drops that row and
+ * `label` titles the group (shadcn's examples/dashboard has a "Home" group with
+ * no Quick Create row).
  */
 import { html } from '@webjsdev/core';
 import type { TemplateResult } from '@webjsdev/core';
@@ -13,6 +15,7 @@ import { buttonClass } from '../../../components/button.ts';
 import {
   sidebarGroupClass,
   sidebarGroupContentClass,
+  sidebarGroupLabelClass,
   sidebarMenuButtonClass,
   sidebarMenuClass,
   sidebarMenuItemClass,
@@ -25,11 +28,12 @@ export interface NavMainItem {
   icon?: (cls?: string) => TemplateResult;
 }
 
-export function navMain({ items }: { items: NavMainItem[] }) {
+export function navMain({ items, label, quickCreate = true }: { items: NavMainItem[]; label?: string; quickCreate?: boolean }) {
   return html`
     <div data-slot="sidebar-group" data-sidebar="group" class=${sidebarGroupClass()}>
       <div data-slot="sidebar-group-content" data-sidebar="group-content" class=${cn(sidebarGroupContentClass(), 'flex flex-col gap-2')}>
-        <ul data-slot="sidebar-menu" data-sidebar="menu" class=${sidebarMenuClass()}>
+        ${label ? html`<div data-slot="sidebar-group-label" data-sidebar="group-label" class=${sidebarGroupLabelClass()}>${label}</div>` : ''}
+        ${quickCreate ? html`<ul data-slot="sidebar-menu" data-sidebar="menu" class=${sidebarMenuClass()}>
           <li data-slot="sidebar-menu-item" data-sidebar="menu-item" class=${cn(sidebarMenuItemClass(), 'flex items-center gap-2')}>
             <button type="button" data-slot="sidebar-menu-button" data-sidebar="menu-button" data-size="default" class=${cn(sidebarMenuButtonClass(), 'min-w-8 bg-primary text-primary-foreground duration-200 ease-linear hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground')}>
               ${CirclePlusIcon()}
@@ -40,7 +44,7 @@ export function navMain({ items }: { items: NavMainItem[] }) {
               <span class="sr-only">Inbox</span>
             </button>
           </li>
-        </ul>
+        </ul>` : ''}
         <ul data-slot="sidebar-menu" data-sidebar="menu" class=${sidebarMenuClass()}>
           ${items.map((item) => html`
             <li data-slot="sidebar-menu-item" data-sidebar="menu-item" class=${sidebarMenuItemClass()}>
