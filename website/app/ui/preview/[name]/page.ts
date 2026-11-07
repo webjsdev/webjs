@@ -64,6 +64,7 @@ export default async function CreatePreview({ params, searchParams }: PageProps)
 
   return html`
     <link rel="stylesheet" href=${asset('/public/typeset-fonts.css')}>
+    <link rel="stylesheet" href=${asset('/public/create-fonts.css')}>
     ${sheet ? html`<link rel="stylesheet" href=${asset(sheet)} data-style-sheet=${config.style}>` : ''}
     <!-- The root layout reserves the fixed header's height on the body, and
          this frame has no header. -->

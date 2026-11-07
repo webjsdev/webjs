@@ -47,6 +47,9 @@ const SHADCN_FILES: Array<[string, string]> = [
   ['roboto-slab.woff2', '479626dc09173ec7478c043e24082f41'],
   ['source-sans-3.woff2', '6e4bd172ce222a2a6c2a1669aa1905cc'],
   ['space-grotesk.woff2', '25ea4a783c12103f175f5b157b7d96aa'],
+  // The configurator's preview: two faces the typeset builder does not offer.
+  ['eb-garamond.woff2', '1a4b137019bd3e19c2a8c541e7f5fde3'],
+  ['instrument-serif.woff2', 'c008db4e8a972ad72dcbd4251a98ac63'],
   // The RTL example's faces, each script's subset and latin.
   ['noto-sans-arabic.woff2', '593878768b809251b8aea93f1831e86c'],
   ['noto-sans-arabic-latin.woff2', 'c951ffe24f5553a61892ebf51132657b'],
@@ -71,4 +74,14 @@ test('fetch-fonts asks Google with the user agent next/font sends', () => {
   assert.ok(src.includes(
     "'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36'",
   ));
+});
+
+test('the configurator preview declares the two faces only it offers', () => {
+  const css = readFileSync(resolve(ROOT, 'public/create-fonts.css'), 'utf8');
+  assert.match(css, /font-family:'EB Garamond';font-style:normal;font-weight:400 800;[^}]*eb-garamond\.woff2/);
+  assert.match(css, /font-family:'Instrument Serif';font-style:normal;font-weight:400;[^}]*instrument-serif\.woff2/);
+  const page = readFileSync(resolve(ROOT, 'app/ui/preview/[name]/page.ts'), 'utf8');
+  assert.match(page, /asset\('\/public\/create-fonts\.css'\)/, 'the preview frame links them');
+  const typeset = readFileSync(resolve(ROOT, 'public/typeset-fonts.css'), 'utf8');
+  assert.doesNotMatch(typeset, /EB Garamond|Instrument Serif/, 'and the typeset faces stay as they were');
 });

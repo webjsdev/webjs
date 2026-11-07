@@ -40,6 +40,12 @@
  * (Inter, JetBrains Mono, Geist, Geist Mono) are the same files, and the
  * typeset faces are printed as a second block for that stylesheet.
  *
+ * EB Garamond and Instrument Serif are two of the configurator's (/ui/create)
+ * fonts that the typeset builder does not offer. They are declared in
+ * public/create-fonts.css, which only the configurator's preview frame links,
+ * and printed as their own block for that stylesheet. Instrument Serif comes
+ * at weight 400 alone, as shadcn's preview loads it.
+ *
  * Playfair Display is the heading face of the /ui/sera showcase only, the one
  * shadcn's Sera page loads. It is declared in public/sera-fonts.css, which only
  * that page links, and printed as its own block for that stylesheet.
@@ -72,6 +78,9 @@ const FAMILIES = [
   { name: 'Geist Mono', slug: 'geist-mono-variable', range: '100..900' },
   // The Sera showcase's heading face (/ui/sera).
   { name: 'Playfair Display', slug: 'playfair-display', range: '400..900' },
+  // The configurator's fonts the typeset builder does not offer (/ui/create).
+  { name: 'EB Garamond', slug: 'eb-garamond', range: '400..800' },
+  { name: 'Instrument Serif', slug: 'instrument-serif', range: '400' },
   // The typeset builder's faces not already listed above.
   ...TYPESET_FONTS.filter((font) => !['inter', 'jetbrains-mono', 'geist', 'geist-mono'].includes(font.id))
     .map((font) => ({ name: font.name, slug: font.id, range: font.range })),
@@ -80,6 +89,7 @@ const FAMILIES = [
 // no other /ui stylesheet declares.
 const TYPESET_SLUGS = new Set(TYPESET_FONTS.map((font) => font.id).filter((id) => !['inter', 'jetbrains-mono', 'geist', 'geist-mono'].includes(id)));
 const SERA_SLUGS = new Set(['playfair-display']);
+const CREATE_SLUGS = new Set(['eb-garamond', 'instrument-serif']);
 
 // Optional slug filter, so adding a family does not re-download (and possibly
 // change the bytes of) the files already committed.
@@ -112,6 +122,7 @@ await mkdir(OUT_DIR, { recursive: true });
 const faces = [];
 const typesetFaces = [];
 const seraFaces = [];
+const createFaces = [];
 
 for (const fam of wanted) {
   const res = await fetch(cssUrl(fam.name, fam.range), { headers: { 'User-Agent': UA } });
@@ -129,6 +140,7 @@ for (const fam of wanted) {
   faces.push(face);
   if (TYPESET_SLUGS.has(fam.slug)) typesetFaces.push(face);
   if (SERA_SLUGS.has(fam.slug)) seraFaces.push(face);
+  if (CREATE_SLUGS.has(fam.slug)) createFaces.push(face);
 }
 
 // The RTL faces: one file per subset, declared with the subset's unicode-range.
@@ -158,3 +170,4 @@ if (faces.length) console.log('\n/* paste into public/input.css (or public/ui-in
 if (typesetFaces.length) console.log('\n/* the typeset faces, for public/typeset-fonts.css */\n' + typesetFaces.join('\n'));
 if (rtlFaces.length) console.log('\n/* the RTL example faces, for public/rtl-fonts.css */\n' + rtlFaces.join('\n'));
 if (seraFaces.length) console.log('\n/* the Sera showcase faces, for public/sera-fonts.css */\n' + seraFaces.join('\n'));
+if (createFaces.length) console.log('\n/* the configurator faces, for public/create-fonts.css */\n' + createFaces.join('\n'));

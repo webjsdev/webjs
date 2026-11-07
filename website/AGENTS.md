@@ -606,7 +606,9 @@ website/
                        typeset faces are declared in public/typeset-fonts.css,
                        linked only by the typeset pages, and the Sera page's
                        Playfair Display in public/sera-fonts.css, linked only
-                       by /ui/sera)
+                       by /ui/sera; the configurator's EB Garamond and
+                       Instrument Serif in public/create-fonts.css, linked only
+                       by its preview frame, app/ui/preview/[name])
     generate-og.mjs    regenerate the OG social card (needs playwright + ImageMagick)
     audit-390.mjs audit-390-overlays.mjs
                        the phone-width audit against a local shadcn/ui site:
