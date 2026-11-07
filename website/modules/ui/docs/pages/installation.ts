@@ -34,6 +34,7 @@ export default async function body(toc: TocEntry[]) {
   const themeCss = theme?.files?.[0]?.content ?? '';
 
   return html`
+    ${callout(html`<strong>Recommended for new projects:</strong> Use <a href="/ui/create">Create</a> to build your preset visually and get the command that applies it to your app.`, { className: 'mb-6 border-emerald-600 bg-emerald-100 dark:border-emerald-400 dark:bg-emerald-900' })}
     <p>WebJs UI is the component library for WebJs apps. Choose the setup that matches your starting point.</p>
     <div class="not-typeset mt-6 grid gap-4 sm:grid-cols-2 sm:gap-6">
       ${card('#use-create', 'Use Create', 'Build your design system visually and get the command that applies it.')}

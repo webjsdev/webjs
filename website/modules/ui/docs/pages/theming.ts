@@ -27,6 +27,7 @@ export default async function body(toc: TocEntry[]) {
   const themeCss = theme?.files?.[0]?.content ?? '';
 
   return html`
+    ${callout(html`Want to build your theme visually? Use <a href="/ui/create">Create</a> to preview colors, radius, fonts, and icons, then generate a preset for your project.`)}
     <p>We use CSS variables for theming.</p>
     <p>This gives you semantic theme tokens like <code>background</code>, <code>foreground</code>, and <code>primary</code> that components use by default. Override those tokens in your CSS to change the look of your app without rewriting component classes.</p>
     ${codeFigure(`<div class="bg-background text-foreground"></div>`)}

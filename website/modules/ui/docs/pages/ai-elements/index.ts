@@ -7,8 +7,9 @@ import { table } from './shared.ts';
 
 /**
  * AI Elements, ported from shadcn's content/docs/ai-elements/index.mdx
- * (#1666). shadcn's chatbot template is a Next.js app, so its pointer is
- * left out. AI SDK Elements are React components, which a WebJs app does not
+ * (#1666). shadcn's chatbot template is a Next.js app, so "Building a
+ * chatbot?" points at the Chat pattern and the AI SDK page instead. AI SDK
+ * Elements are React components, which a WebJs app does not
  * run, so the migration section maps each one onto the WebJs UI pattern that
  * replaces it rather than promising the copied code keeps working.
  */
@@ -99,6 +100,7 @@ export default async function body(toc: TocEntry[]) {
   return html`
     <p>AI Elements are patterns for building agentic interfaces. Each one is a composition of WebJs UI components that you copy into your project. There is no package to install. The code is yours.</p>
     <p>A <a href="/ui/docs/ai-elements/chat">Chat</a> is a list of <a href="/ui/docs/ai-elements/message">Message</a> turns inside a <a href="/ui/docs/components/message-scroller">Message Scroller</a>. The steps an agent takes inside a turn, like <a href="/ui/docs/ai-elements/reasoning">Reasoning</a>, <a href="/ui/docs/ai-elements/tool">Tool</a> and <a href="/ui/docs/ai-elements/plan">Plan</a>, are built on <a href="/ui/docs/components/trace">Trace</a>, so every step has the same shape.</p>
+    <p><strong>Building a chatbot?</strong> Start from the <a href="/ui/docs/ai-elements/chat">Chat</a> pattern. It puts Message Scroller, Message and Prompt Input together, and the <a href="/ui/docs/helpers/ai-sdk">AI SDK</a> page shows how a <code>'use server'</code> action streams the reply into it, with tool calls and reasoning as parts.</p>
     <p><strong>Coming from <a href="https://elements.ai-sdk.dev">elements.ai-sdk.dev</a>?</strong> See <a href="#migrating-from-ai-sdk-elements">Migrating from AI SDK Elements</a>.</p>
 
     ${heading(toc, 2, 'Patterns')}
@@ -129,7 +131,7 @@ export default async function body(toc: TocEntry[]) {
 
     ${heading(toc, 3, 'New projects')}
     <p>Build from WebJs UI components instead.</p>
-    <div class="steps mb-0 pt-2 [counter-reset:step] md:ml-4 md:border-l md:pl-8 [&>h3]:step">
+    <div class="steps mb-0 pt-2 [counter-reset:step] md:ml-4 md:border-l md:pl-8 [&>h3]:step min-w-0 [&>figure]:mx-0 [&>figure]:min-w-0 [&>figure]:max-w-full">
       <h3>Add the components</h3>
       ${commandBlock(packageCommands('add trace code-block'))}
       <h3>Copy a pattern</h3>
