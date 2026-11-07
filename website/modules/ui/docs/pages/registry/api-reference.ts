@@ -39,7 +39,7 @@ export default async function body(toc: TocEntry[]) {
     ${callout(html`<p>The bare <code>@webjsdev/ui</code> entry is the CLI itself and runs it when imported, so import a subpath. There is no API that fetches, resolves or installs items, and no preset codec: those happen inside the CLI commands.</p>`)}
 
     ${heading(toc, 2, '@webjsdev/ui/registry/schema')}
-    <p>The schemas are <a href="https://zod.dev">zod</a> schemas, a wire-compatible port of shadcn's registry schema. Use them to validate registry files or a project's config.</p>
+    <p>The schemas are <a href="https://zod.dev">zod</a> schemas of the registry format. Use them to validate registry files or a project's config.</p>
     ${codeFigure(`import { registrySchema, registryItemSchema } from '@webjsdev/ui/registry/schema';
 
 const manifest = registrySchema.parse(JSON.parse(text));

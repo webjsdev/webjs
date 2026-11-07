@@ -58,13 +58,13 @@ export default async function UiIntro() {
       </div>
 
       ${heading(toc, 2, 'Composition')}
-      <p>Every component in WebJs UI shares a common, composable interface: a class helper you put on a native element (<code>buttonClass()</code> on a real <code>&lt;button&gt;</code>), or a custom element that mirrors shadcn's tree tag for tag (<code>&lt;ui-dialog-content&gt;</code> for <code>DialogContent</code>). <strong>If a component does not exist, we bring it in, make it composable, and adjust its style to match and work with the rest of the design system.</strong></p>
-      <p><em>A shared, composable interface means it's predictable for both your team and LLMs. You are not learning different APIs for every new component. Variant names, sizes and the data attributes match shadcn's, so what you know about shadcn/ui carries over.</em></p>
+      <p>Every component in WebJs UI shares a common, composable interface: a class helper you put on a native element (<code>buttonClass()</code> on a real <code>&lt;button&gt;</code>), or a custom element for each part of a component (<code>&lt;ui-dialog&gt;</code>, <code>&lt;ui-dialog-content&gt;</code>). <strong>If a component does not exist, we bring it in, make it composable, and adjust its style to match and work with the rest of the design system.</strong></p>
+      <p><em>A shared, composable interface means it's predictable for both your team and LLMs. You are not learning different APIs for every new component. Variant names, sizes and data attributes follow the same scheme in every component, so what you learn in one carries over to the next.</em></p>
 
       ${heading(toc, 2, 'Distribution')}
       <p>WebJs UI is also a code distribution system. It defines a schema for components and a CLI to distribute them.</p>
       <ul>
-        <li><strong>Schema:</strong> A flat-file structure that defines the components, their dependencies, and properties. It is shadcn's registry item format. See <a href="/ui/docs/registry/registry-item-json">registry-item.json</a>.</li>
+        <li><strong>Schema:</strong> A flat-file structure that defines the components, their dependencies, and properties. See <a href="/ui/docs/registry/registry-item-json">registry-item.json</a>.</li>
         <li><strong>CLI:</strong> A command-line tool to distribute and install components, blocks and charts across WebJs apps. See the <a href="/ui/docs/cli">CLI</a>.</li>
       </ul>
       <p><em>You can use the schema to distribute your components to other projects from a <a href="/ui/docs/registry">registry of your own</a>, or have AI generate completely new components based on existing schema.</em></p>
@@ -74,7 +74,7 @@ export default async function UiIntro() {
       <ul>
         <li><strong>Good Out-of-the-Box:</strong> Your UI has a clean and minimal look without extra work.</li>
         <li><strong>Unified Design:</strong> Components naturally fit with one another. Each component is built to match the others, keeping your UI consistent.</li>
-        <li><strong>Easily Customizable:</strong> If you want to change something, it's simple to override and extend the defaults, or pick another of shadcn's styles and themes in <a href="/ui/create">Create</a>.</li>
+        <li><strong>Easily Customizable:</strong> If you want to change something, it's simple to override and extend the defaults, or pick another of the kit's styles and themes in <a href="/ui/create">Create</a>.</li>
       </ul>
 
       ${heading(toc, 2, 'AI-Ready')}

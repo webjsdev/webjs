@@ -38,7 +38,7 @@ export default async function body(toc: TocEntry[]) {
     }
   ]
 }`)}
-    <p>shadcn's <code>include</code> field, which composes a registry from several <code>registry.json</code> files, is not supported. Keep every item in the one file. See <a href="/ui/docs/registry/getting-started">Getting Started</a>.</p>
+    <p>There is no <code>include</code> field to compose a registry from several <code>registry.json</code> files. Keep every item in the one file. See <a href="/ui/docs/registry/getting-started">Getting Started</a>.</p>
 
     ${heading(toc, 2, 'Definitions')}
     <p>The schema is <code>registrySchema</code>, exported from <code>@webjsdev/ui/registry/schema</code>. See the <a href="/ui/docs/registry/api-reference">API Reference</a>.</p>

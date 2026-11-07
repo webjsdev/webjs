@@ -21,7 +21,7 @@ export default async function body(toc: TocEntry[]) {
   return html`
     <p>You render markdown and get back plain unstyled HTML: headings, paragraphs, lists, and tables. So you style the elements one by one: font sizes, line heights, spacing.</p>
     <p>You do it for your blog. Then you do it again for the docs. Then again for the chat app. Every time you're fighting the same thing: sizing and spacing.</p>
-    <p>Typeset fixes this. It's one CSS file, made by shadcn/ui and served here as it ships, that styles everything inside a <code>typeset</code> container. The file lives in your project, so you can change it directly when you need to.</p>
+    <p>Typeset fixes this. It's one CSS file that styles everything inside a <code>typeset</code> container. The file lives in your project, so you can change it directly when you need to.</p>
     <p>A typeset is just a small preset class. You can have multiple typesets in your app, for different contexts.</p>
     ${codeFigure(`.typeset-docs {
   --typeset-font-body: var(--font-geist);

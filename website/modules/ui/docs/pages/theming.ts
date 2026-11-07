@@ -81,7 +81,7 @@ export default async function body(toc: TocEntry[]) {
         </tbody>
       </table>
     </div>
-    <p>The kit's theme also defines <code>destructive-foreground</code>, the text color on a destructive surface, which shadcn's default theme leaves out.</p>
+    <p>The kit's theme also defines <code>destructive-foreground</code>, the text color on a destructive surface.</p>
     ${callout(html`The chart tokens are covered in more detail in the <a href="/ui/docs/components/chart">Chart docs</a>.`, { className: 'mt-4' })}
 
     ${heading(toc, 2, 'Radius Scale')}

@@ -19,7 +19,7 @@ const BASE = 'https://acme.com/r';
 export default async function body(toc: TocEntry[]) {
   return html`
     <p>Registries can change or go offline after they are added to the directory. Checking them keeps users from running an install command that fails.</p>
-    ${callout(html`<p>webjs.dev does not monitor the registries in the <a href="/ui/docs/directory">directory</a>, and it computes no status or score for them. shadcn/ui's Registry Health service has no WebJs counterpart. The checks below are the ones a registry owner runs with the CLI, which validates everything it fetches.</p>`, { title: 'There is no hosted health service.' })}
+    ${callout(html`<p>webjs.dev does not monitor the registries in the <a href="/ui/docs/directory">directory</a>, and it computes no status or score for them. The checks below are the ones a registry owner runs with the CLI, which validates everything it fetches.</p>`, { title: 'There is no hosted health service.' })}
 
     ${heading(toc, 2, 'What to check')}
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">

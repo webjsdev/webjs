@@ -50,7 +50,7 @@ export default async function body(toc: TocEntry[]) {
 }`, 'example-style.json')}
 
     ${heading(toc, 3, 'Custom style from scratch')}
-    <p>shadcn's <code>extends: "none"</code> is accepted by the schema and has no effect, since the CLI never installs anything an item does not list. A style from scratch is a style item whose <code>registryDependencies</code> are all your own items, and whose CSS variables are new names.</p>
+    <p><code>extends: "none"</code> is accepted by the schema and has no effect, since the CLI never installs anything an item does not list. A style from scratch is a style item whose <code>registryDependencies</code> are all your own items, and whose CSS variables are new names.</p>
     ${json(`{
   "name": "new-style",
   "type": "registry:style",
@@ -210,7 +210,7 @@ export default async function body(toc: TocEntry[]) {
 
     ${heading(toc, 2, 'registry:hook')}
     ${heading(toc, 3, 'Custom controller')}
-    <p>WebJs has no React hooks. A <code>registry:hook</code> file lands in <code>hooks/</code>, which suits reusable component logic such as a reactive controller.</p>
+    <p>A <code>registry:hook</code> file lands in <code>hooks/</code>, which suits reusable component logic such as a reactive controller.</p>
     ${json(`{
   "name": "media-query",
   "type": "registry:hook",
@@ -224,7 +224,7 @@ export default async function body(toc: TocEntry[]) {
 }`, 'media-query.json')}
 
     ${heading(toc, 2, 'Targets')}
-    <p>shadcn's target placeholders (<code>@components/</code>, <code>@ui/</code>, <code>@lib/</code>, <code>@hooks/</code>) are not supported. A <code>target</code> is a path from the project root, written as is, and it decides where the file lands even when it differs from the file <code>type</code>.</p>
+    <p>There are no target placeholders (<code>@components/</code>, <code>@ui/</code>, <code>@lib/</code>, <code>@hooks/</code>). A <code>target</code> is a path from the project root, written as is, and it decides where the file lands even when it differs from the file <code>type</code>.</p>
     ${json(`{
   "name": "type-mismatch",
   "type": "registry:item",
@@ -240,7 +240,7 @@ export default async function body(toc: TocEntry[]) {
     <p>To land a file in the user's configured folder instead, leave out <code>target</code> and let the file <code>type</code> pick it: <code>registry:ui</code> for <code>aliases.ui</code>, <code>registry:component</code> for <code>aliases.components</code>, <code>registry:lib</code> for <code>aliases.lib</code>.</p>
 
     ${heading(toc, 2, 'registry:font')}
-    <p>shadcn's <code>font</code> field is not part of the schema, and a <code>registry:font</code> item gets no special handling. Ship the font family as a theme variable, and the font files, if any, as <code>registry:file</code> entries.</p>
+    <p>There is no <code>font</code> field in the schema, and a <code>registry:font</code> item gets no special handling. Ship the font family as a theme variable, and the font files, if any, as <code>registry:file</code> entries.</p>
     ${json(`{
   "name": "font-inter",
   "type": "registry:font",
@@ -332,7 +332,7 @@ export default async function body(toc: TocEntry[]) {
 }`, 'example-theme.json')}
 
     ${heading(toc, 2, 'Add custom CSS')}
-    <p>The schema accepts shadcn's <code>css</code> field, and the CLI does not apply it. Base styles, component styles, <code>@utility</code> rules, <code>@import</code>, <code>@plugin</code> and <code>@keyframes</code> all ship the same way: as a CSS file the user imports.</p>
+    <p>The schema accepts a <code>css</code> field, and the CLI does not apply it. Base styles, component styles, <code>@utility</code> rules, <code>@import</code>, <code>@plugin</code> and <code>@keyframes</code> all ship the same way: as a CSS file the user imports.</p>
     ${json(`{
   "name": "acme-css",
   "type": "registry:style",
@@ -363,7 +363,7 @@ export default async function body(toc: TocEntry[]) {
 @import "./acme.css";`, { lang: 'css' })}
 
     ${heading(toc, 2, 'Add environment variables')}
-    <p>The schema accepts shadcn's <code>envVars</code> field, and the CLI does not write it to any file. Ship example variables as a file instead.</p>
+    <p>The schema accepts an <code>envVars</code> field, and the CLI does not write it to any file. Ship example variables as a file instead.</p>
     ${json(`{
   "name": "custom-item",
   "type": "registry:item",

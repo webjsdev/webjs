@@ -464,9 +464,9 @@ export function apiReference(toc: TocEntry[]) {
   `;
 }
 
-export function intro(opts: { library: unknown; hitl?: string }) {
+export function intro(opts: { hitl?: string } = {}) {
   return html`
-    <p>shadcn/ui's ${opts.library} helper writes an AI conversation in code and streams it through a React chat hook, with no model, API route, network request, or API key. WebJs has no React hooks and needs no helper for this: a <code>'use server'</code> action that is an async generator already streams its results over one response. So the script lives in an action that yields message parts, and a component appends each part as it arrives.</p>
+    <p>Write an AI conversation in code and stream it to the page, with no model, API route, network request, or API key. WebJs needs no helper package for this: a <code>'use server'</code> action that is an async generator already streams its results over one response. So the script lives in an action that yields message parts, and a component appends each part as it arrives.</p>
     ${ts(INTRO_ACTION, { lineNumbers: true })}
     <p>The component sends the transcript and folds each part into the assistant message it is building. The parts arrive as the action yields them, so your components behave as they would with a real model.</p>
     ${ts(INTRO_LOOP, { lineNumbers: true })}
@@ -490,9 +490,9 @@ export async function usage(toc: TocEntry[], demo: string) {
 }
 
 export default async function body(toc: TocEntry[]) {
-  const realModel = html`To answer from a real model, the same action can call the AI SDK's <code>streamText</code> (from the <code>ai</code> package) on the server and yield parts as its stream produces them. <code>@ai-sdk/react</code> is not needed, since the component is a WebComponent. See the <a href="https://ai-sdk.dev/docs">AI SDK docs</a> for the stream it returns.`;
+  const realModel = html`To answer from a real model, the same action can call the AI SDK's <code>streamText</code> (from the <code>ai</code> package) on the server and yield parts as its stream produces them. No client package is needed, since the component is a WebComponent. See the <a href="https://ai-sdk.dev/docs">AI SDK docs</a> for the stream it returns.`;
   return html`
-    ${intro({ library: html`<code>@shadcn/helpers/ai-sdk</code>` })}
+    ${intro()}
 
     ${whatItsFor(toc)}
     ${installation(toc, realModel)}

@@ -39,12 +39,12 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('scroll-fade-demo', { previewClass: 'h-auto' })}
 
     ${heading(toc, 2, 'Installation')}
-    <p><code>scroll-fade</code> ships in <code>shadcn-tailwind.css</code>, the stylesheet WebJs UI vendors from shadcn/ui alongside its styles. It lives in the <code>@webjsdev/ui</code> package at <code>packages/registry/styles/shadcn-tailwind.css</code>, which a WebJs app has through the WebJs CLI. <code>webjs ui init</code> does not copy it into your app yet, so copy it next to your stylesheet:</p>
+    <p><code>scroll-fade</code> ships in <code>shadcn-tailwind.css</code>, the kit's shared Tailwind stylesheet of utilities and variants. It lives in the <code>@webjsdev/ui</code> package at <code>packages/registry/styles/shadcn-tailwind.css</code>, which a WebJs app has through the WebJs CLI. <code>webjs ui init</code> does not copy it into your app yet, so copy it next to your stylesheet:</p>
     ${codeFigure('cp node_modules/@webjsdev/ui/packages/registry/styles/shadcn-tailwind.css styles/', { lang: 'bash' })}
     <p>Then import it after Tailwind in your global CSS file:</p>
     ${css(`@import "tailwindcss";
 @import "./shadcn-tailwind.css";`)}
-    <p>The same file carries the <code>shimmer</code> and <code>no-scrollbar</code> utilities and the <code>data-open</code> and <code>data-checked</code> variants the shadcn styles use.</p>
+    <p>The same file carries the <code>shimmer</code> and <code>no-scrollbar</code> utilities and the <code>data-open</code> and <code>data-checked</code> variants the kit's styles use.</p>
 
     ${heading(toc, 2, 'Usage')}
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">

@@ -21,8 +21,7 @@ export default async function body(toc: TocEntry[]) {
     ${callout(html`<p>The WebJs UI CLI has no namespaces. There is no <code>@acme/button</code> address, no <code>registry add</code> command, and no URL template. Each command reads one registry: the one <code>--registry</code> names, else the one the <code>REGISTRY_URL</code> environment variable names, else the WebJs UI registry. This page covers how to work with several registries under that model.</p>`, { title: 'Namespaces are not supported.' })}
 
     ${heading(toc, 2, 'Overview')}
-    <p>In shadcn/ui, a namespace such as <code>@acme</code> maps a short prefix to a registry URL template, so <code>@acme/auth-utils</code> installs from Acme's registry and <code>button</code> from the default one, in one command.</p>
-    <p>Here, a registry is addressed by its base URL, and the item by its name inside it. The CLI fetches <code>&lt;url&gt;/&lt;name&gt;.json</code>.</p>
+    <p>A registry is addressed by its base URL, and the item by its name inside it. The CLI fetches <code>&lt;url&gt;/&lt;name&gt;.json</code>.</p>
     ${commandBlock(packageCommands('add auth-utils --registry https://acme.com/r'))}
     <p>Every item named in one command, and every registry dependency they pull in, comes from that one registry. To install from two registries, run two commands.</p>
     ${codeFigure(`npx @webjsdev/ui add button card
@@ -44,7 +43,7 @@ https://registry.acme.com/beta      # experimental items`, { lang: 'txt' })}
 npx @webjsdev/ui list
 npx @webjsdev/ui add auth-utils`, { lang: 'bash' })}
     ${heading(toc, 3, 'components.json')}
-    <p><code>components.json</code> accepts a <code>registries</code> field, so a file written for shadcn still parses, but the CLI does not read it. A registry configured there is ignored.</p>
+    <p><code>components.json</code> accepts a <code>registries</code> field, so an older file still parses, but the CLI does not read it. A registry configured there is ignored.</p>
 
     ${heading(toc, 2, 'Authentication & Security')}
     <p>The CLI sends no credentials and expands no environment variables into headers or URLs. See <a href="/ui/docs/registry/authentication">Authentication</a> for what a private registry can do instead.</p>

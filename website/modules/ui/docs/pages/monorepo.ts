@@ -106,7 +106,7 @@ package.json      # The workspace root, with the lockfile.`, { lang: 'txt' })}
     <p>With no lockfile it reads the package manager that ran the command (<code>pnpm dlx</code>, <code>bunx</code> and friends set <code>npm_config_user_agent</code>), and falls back to npm.</p>
 
     ${heading(toc, 2, 'Sharing components across apps')}
-    ${callout(html`The kit has no shared UI package mode. There is no <code>init --monorepo</code>, and <code>add</code> does not route files into a <code>@workspace/ui</code> package and import them from there, as shadcn's CLI does. Each app holds its own copy of each component.`, { className: 'mt-6' })}
+    ${callout(html`The kit has no shared UI package mode. There is no <code>init --monorepo</code>, and <code>add</code> does not route files into a shared <code>@workspace/ui</code> package and import them from there. Each app holds its own copy of each component.`, { className: 'mt-6' })}
     <p>That copy is what makes the component yours to edit in that app, and it is what a WebJs app can serve: the server serves the files in the app's own import graph, as native modules with no bundler. To keep two apps' copies in step, run <code>diff</code> in each app to see what changed upstream, and add the component again with <code>--overwrite</code> where you want the new version.</p>
     ${commandBlock(packageCommands('diff --cwd apps/admin'))}
   `;

@@ -24,7 +24,7 @@ export default async function body(toc: TocEntry[]) {
     <p>You can turn <strong>a public GitHub repository into a registry.</strong></p>
     <p>Add a <code>registry.json</code> file to the repository, build it, commit the output, and users can install from the repository's raw file URL with the WebJs UI CLI.</p>
     ${commandBlock(packageCommands(`add <item> --registry ${RAW}`))}
-    ${callout(html`<p><strong>Note:</strong> shadcn's CLI reads a repository's <code>registry.json</code> directly through an <code>owner/repo/item</code> address. This CLI has no such address. It fetches built item files from a base URL, so the repository has to contain the <code>build</code> output, and the address is the URL of the folder that holds it.</p>`)}
+    ${callout(html`<p><strong>Note:</strong> The CLI has no <code>owner/repo/item</code> address that reads a repository's <code>registry.json</code> directly. It fetches built item files from a base URL, so the repository has to contain the <code>build</code> output, and the address is the URL of the folder that holds it.</p>`)}
 
     ${heading(toc, 2, 'Distribute Anything')}
     <p>Registry items are <strong>not limited to components.</strong> They can include any text file from your repository: source files, configuration, docs, templates, agent rules or project conventions. Each file names where it lands in the user's project with a <code>target</code>.</p>
@@ -128,7 +128,7 @@ export default async function body(toc: TocEntry[]) {
     <p><code>list</code> shows the items typed <code>registry:ui</code> and <code>registry:block</code>. An item of another type, such as <code>project-conventions</code> above, installs with <code>add</code> and prints with <code>view</code>, but is not listed.</p>
 
     ${heading(toc, 2, 'Organize the repository')}
-    <p>shadcn's <code>include</code> field is not supported, so the repository has one <code>registry.json</code>. Organize the source files in folders as you like, since each item's <code>path</code> points at its files wherever they are.</p>
+    <p>There is no <code>include</code> field, so the repository has one <code>registry.json</code>. Organize the source files in folders as you like, since each item's <code>path</code> points at its files wherever they are.</p>
 
     ${heading(toc, 2, 'Registry dependencies')}
     <p>A <code>registryDependencies</code> entry is the name of another item, and it is fetched from the same base URL as the item that lists it. So an item in your repository can depend on another item in your repository by name.</p>

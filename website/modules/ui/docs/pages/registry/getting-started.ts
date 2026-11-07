@@ -63,7 +63,7 @@ export default async function body(toc: TocEntry[]) {
 
     ${heading(toc, 2, 'Structure your registry')}
     <p>Define all items in a single root <code>registry.json</code>. Add every item to its <code>items</code> array. File paths are relative to the <code>registry.json</code> file.</p>
-    <p>shadcn's <code>include</code> field, which composes a registry from several <code>registry.json</code> files, is not supported. <code>build</code> reads only <code>items</code>, so a larger registry keeps one manifest and organizes its source files in folders.</p>
+    <p>A registry is one <code>registry.json</code>: there is no <code>include</code> field to compose it from several files. <code>build</code> reads only <code>items</code>, so a larger registry keeps one manifest and organizes its source files in folders.</p>
     ${json(`{
   "name": "acme",
   "homepage": "https://acme.com",
@@ -166,7 +166,7 @@ export async function GET(_req: Request, { params }: { params: { name: string } 
           ${ChevronUpIcon('pointer-events-none ml-auto hidden size-4 shrink-0 text-muted-foreground group-open:inline')}
         </summary>
         <div data-slot="accordion-content" class=${accordionContentClass()}>
-          <p>shadcn's CLI sends a vendor <code>Accept</code> header so one URL can serve HTML to a browser and JSON to the CLI. This CLI does not: it requests <code>&lt;url&gt;/&lt;name&gt;.json</code> with a plain <code>fetch</code> and no custom headers, so it cannot be told apart from any other client. Serve the registry under its own path, such as <code>/r</code>, rather than at the root of a site.</p>
+          <p>The CLI sends no vendor <code>Accept</code> header that would let one URL serve HTML to a browser and JSON to the CLI. It requests <code>&lt;url&gt;/&lt;name&gt;.json</code> with a plain <code>fetch</code> and no custom headers, so it cannot be told apart from any other client. Serve the registry under its own path, such as <code>/r</code>, rather than at the root of a site.</p>
         </div>
       </details>
     </div>
@@ -204,7 +204,7 @@ npx @webjsdev/ui add brand-button`)}
     ${heading(toc, 3, 'Share install instructions')}
     <p>Tell users the command, with your base URL in it. The base URL is the folder that holds the item files, not a template, and the CLI appends <code>/&lt;name&gt;.json</code> to it.</p>
     ${commandBlock(packageCommands('add brand-button --registry https://acme.com/r'))}
-    <p><code>components.json</code> accepts a <code>registries</code> field so a file written for shadcn still parses, but the CLI does not read it. Each command names its registry with <code>--registry</code> or <code>REGISTRY_URL</code>.</p>
+    <p><code>components.json</code> accepts a <code>registries</code> field so an older file still parses, but the CLI does not read it. Each command names its registry with <code>--registry</code> or <code>REGISTRY_URL</code>.</p>
 
     ${heading(toc, 3, 'Add your registry to the directory')}
     <p>If your registry is open source and publicly available, you can add it to the <a href="/ui/docs/directory">registry directory</a>, which shows readers the command that installs from it.</p>

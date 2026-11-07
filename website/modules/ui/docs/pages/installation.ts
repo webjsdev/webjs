@@ -76,7 +76,7 @@ cd my-app && npm run dev`, { lang: 'bash' })}
       ${commandBlock({ npm: 'npm install tailwindcss @tailwindcss/cli', pnpm: 'pnpm add tailwindcss @tailwindcss/cli', yarn: 'yarn add tailwindcss @tailwindcss/cli', bun: 'bun add tailwindcss @tailwindcss/cli' })}
 
       ${heading(toc, 3, 'Add dependencies')}
-      <p>The kit has one runtime dependency, <code>@webjsdev/core</code>, which the Tier-2 elements extend. A WebJs app already has it. There is no clsx, tailwind-merge, class-variance-authority, Radix or icon package to install.</p>
+      <p>The kit has one runtime dependency, <code>@webjsdev/core</code>, which the Tier-2 elements extend. A WebJs app already has it. There is no clsx, tailwind-merge, class-variance-authority, headless component library or icon package to install.</p>
       ${commandBlock({ npm: 'npm install @webjsdev/core', pnpm: 'pnpm add @webjsdev/core', yarn: 'yarn add @webjsdev/core', bun: 'bun add @webjsdev/core' })}
 
       ${heading(toc, 3, 'Configure import aliases')}

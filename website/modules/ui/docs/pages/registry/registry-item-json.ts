@@ -106,7 +106,7 @@ export default async function body(toc: TocEntry[]) {
       [c('registry:theme'), 'Use for themes.'],
       [c('registry:style'), 'Use for registry styles.'],
       [c('registry:item'), 'Use for universal registry items.'],
-      [html`${c('registry:base')}, ${c('registry:font')}, ${c('registry:example')}, ${c('registry:internal')}`, 'Accepted for compatibility with shadcn registries. The CLI gives them no special handling.'],
+      [html`${c('registry:base')}, ${c('registry:font')}, ${c('registry:example')}, ${c('registry:internal')}`, 'Accepted, so registries that use them still validate. The CLI gives them no special handling.'],
     ])}
     <p><code>list</code> shows only <code>registry:ui</code> and <code>registry:block</code> items. Every type installs with <code>add</code>.</p>
 
@@ -136,7 +136,7 @@ export default async function body(toc: TocEntry[]) {
   "registryDependencies": ["brand-button", "brand-card"]
 }`)}
     <p>The CLI resolves them transitively and installs the deepest dependency first. A name it has already visited is skipped, so a cycle cannot loop.</p>
-    ${callout(html`<p><strong>Note:</strong> There is no address for an item in another registry. shadcn's <code>@namespace/item</code>, <code>owner/repo/item</code>, URL and file path forms are not supported. A bare name such as <code>button</code> means <code>button.json</code> in your registry, not the WebJs UI button.</p>`)}
+    ${callout(html`<p><strong>Note:</strong> There is no address for an item in another registry: no <code>@namespace/item</code>, <code>owner/repo/item</code>, URL or file path form. A bare name such as <code>button</code> means <code>button.json</code> in your registry, not the WebJs UI button.</p>`)}
 
     ${heading(toc, 3, 'files')}
     <p>The <code>files</code> property is used to specify the files of your registry item. Each file has a <code>path</code>, <code>type</code>, <code>content</code> and an optional <code>target</code>.</p>
@@ -179,7 +179,7 @@ export default async function body(toc: TocEntry[]) {
     ])}
     <h4>target</h4>
     <p>The <code>target</code> property is used to indicate where the file should be placed in a project. It is a path from the project root, written as is, and it wins over the file type. Use it for routes, config, and every file of a block.</p>
-    <p>shadcn's <code>~/</code> prefix and its <code>@ui/</code>, <code>@components/</code>, <code>@lib/</code> and <code>@hooks/</code> placeholders are not supported. A target such as <code>@ui/button.ts</code> is written to a folder named <code>@ui</code>. To land a file in the user's configured folder, leave out <code>target</code> and pick the file <code>type</code>.</p>
+    <p>A target is written as is: there is no <code>~/</code> prefix and no <code>@ui/</code>, <code>@components/</code>, <code>@lib/</code> or <code>@hooks/</code> placeholder. A target such as <code>@ui/button.ts</code> is written to a folder named <code>@ui</code>. To land a file in the user's configured folder, leave out <code>target</code> and pick the file <code>type</code>.</p>
     <h4>Imports</h4>
     <p>On install, a relative import is resolved against the file's <code>path</code> in the registry and rewritten to where its target lands in the project, when it points at another file of the same item, <code>lib/utils.ts</code> (the user's <code>cn()</code> file), <code>lib/dom.ts</code>, <code>lib/icons.ts</code>, or a <code>components/&lt;name&gt;.ts</code> file (the <code>aliases.ui</code> folder). Any other import is left as written.</p>
 
@@ -212,7 +212,7 @@ export default async function body(toc: TocEntry[]) {
     <p>The <code>envVars</code> property is accepted by the schema, and the CLI does not write it to any <code>.env</code> file. To ship example variables, add an <code>.env.example</code> file as a <code>registry:file</code>, as above.</p>
 
     ${heading(toc, 3, 'font')}
-    <p>shadcn's <code>font</code> property is not part of the schema, and <code>registry:font</code> items get no special handling. Ship a font as files and <code>cssVars.theme</code> entries instead, such as <code>"font-heading": "Poppins, sans-serif"</code>.</p>
+    <p>There is no <code>font</code> property in the schema, and <code>registry:font</code> items get no special handling. Ship a font as files and <code>cssVars.theme</code> entries instead, such as <code>"font-heading": "Poppins, sans-serif"</code>.</p>
 
     ${heading(toc, 3, 'docs')}
     <p>The <code>docs</code> property is accepted by the schema, and the CLI does not print it on install. Put install notes in the <code>description</code>, which <code>list</code> and <code>view</code> show.</p>

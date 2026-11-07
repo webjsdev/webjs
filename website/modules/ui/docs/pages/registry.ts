@@ -21,7 +21,7 @@ const card = (href: string, name: string, text: string) => html`
 export default async function body(_toc: TocEntry[]) {
   return html`
     <p>You can use the WebJs UI CLI to install from your own code registry. Running your own registry allows you to distribute your custom components, blocks, helpers, pages and other files to any WebJs app, with the same <code>add</code>, <code>list</code>, <code>view</code> and <code>diff</code> commands that install the kit's own components.</p>
-    ${callout(html`<p><strong>Note:</strong> A registry is plain JSON served over HTTP, in the same item format shadcn/ui uses. The CLI writes whatever files an item carries, so a registry is not limited to UI components, but it installs into a project that has a <code>components.json</code>, which <code>webjs ui init</code> writes.</p>`)}
+    ${callout(html`<p><strong>Note:</strong> A registry is plain JSON served over HTTP, in the item format described in <a href="/ui/docs/registry/registry-item-json">registry-item.json</a>. The CLI writes whatever files an item carries, so a registry is not limited to UI components, but it installs into a project that has a <code>components.json</code>, which <code>webjs ui init</code> writes.</p>`)}
 
     <p>Ready to create your own registry? In the next section, we'll walk you through setting up your own custom registry step-by-step, from creating your first component to publishing it for others to use.</p>
 

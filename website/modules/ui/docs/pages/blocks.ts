@@ -20,7 +20,7 @@ const steps = 'steps mb-0 pt-2 [counter-reset:step] md:ml-4 md:border-l md:pl-8 
 export default async function body(toc: TocEntry[]) {
   return html`
     <p>A block is a ready-made view you install and then edit: a login or signup page, an app sidebar shell, a dashboard, a chart. Its files land in your app as code you own, so you spend your time on the app instead of rebuilding a page shell. Browse them on the <a href="/ui/blocks">blocks page</a>.</p>
-    <p>On the wire a block is a <code>registry:block</code> item, the same type shadcn uses. A chart is a block whose categories include <code>chart</code>.</p>
+    <p>On the wire a block is a <code>registry:block</code> item. A chart is a block whose categories include <code>chart</code>.</p>
 
     ${heading(toc, 2, 'Find a block')}
     <p>List the blocks with their one-line descriptions:</p>

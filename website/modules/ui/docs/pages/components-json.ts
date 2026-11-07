@@ -43,7 +43,7 @@ export default async function body(toc: TocEntry[]) {
     <p>See the <a href="/ui/docs/installation">installation section</a> for how to set up Tailwind CSS.</p>
 
     ${heading(toc, 3, 'tailwind.config', 'tailwindconfig')}
-    <p>The kit targets Tailwind CSS v4, which has no <code>tailwind.config.js</code>. The key is accepted so a config written for shadcn still parses, and the CLI never reads it. <strong>Leave it out.</strong></p>
+    <p>The kit targets Tailwind CSS v4, which has no <code>tailwind.config.js</code>. The key is accepted so an older config still parses, and the CLI never reads it. <strong>Leave it out.</strong></p>
 
     ${heading(toc, 3, 'tailwind.css', 'tailwindcss')}
     <p>Path to the CSS file that imports Tailwind CSS into your project. <code>init</code> appends the theme tokens to it, and <code>add</code> writes the tokens back if they go missing and merges in the CSS variables a component or block carries.</p>

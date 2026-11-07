@@ -35,7 +35,7 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('shimmer-demo')}
 
     ${heading(toc, 2, 'Installation')}
-    <p><code>shimmer</code> ships in <code>shadcn-tailwind.css</code>, the stylesheet WebJs UI vendors from shadcn/ui alongside its styles. It lives in the <code>@webjsdev/ui</code> package at <code>packages/registry/styles/shadcn-tailwind.css</code>, which a WebJs app has through the WebJs CLI. <code>webjs ui init</code> does not copy it into your app yet, so copy it next to your stylesheet:</p>
+    <p><code>shimmer</code> ships in <code>shadcn-tailwind.css</code>, the kit's shared Tailwind stylesheet of utilities and variants. It lives in the <code>@webjsdev/ui</code> package at <code>packages/registry/styles/shadcn-tailwind.css</code>, which a WebJs app has through the WebJs CLI. <code>webjs ui init</code> does not copy it into your app yet, so copy it next to your stylesheet:</p>
     ${codeFigure('cp node_modules/@webjsdev/ui/packages/registry/styles/shadcn-tailwind.css styles/', { lang: 'bash' })}
     <p>Then import it after Tailwind in your global CSS file:</p>
     ${codeFigure(`@import "tailwindcss";

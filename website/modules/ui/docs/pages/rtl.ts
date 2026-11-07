@@ -73,7 +73,7 @@ export default function RootLayout({ children }: LayoutProps) {
 
     ${heading(toc, 2, 'Supported Styles')}
     <p>Every style supports RTL. The default style, <code>new-york</code>, is written with logical properties throughout, as are the components' own classes.</p>
-    <p>The eight shadcn styles (<code>vega</code>, <code>nova</code>, <code>maia</code>, <code>lyra</code>, <code>mira</code>, <code>luma</code>, <code>sera</code> and <code>rhea</code>) are ported with shadcn's own RTL table already applied, the one shadcn's CLI uses when it installs into an RTL project. So their physical utilities (<code>pl-2</code>, <code>ml-auto</code>, <code>rounded-l-md</code>) arrive as logical ones, and the same files render a left-to-right page exactly as before and a right-to-left one correctly.</p>
+    <p>The eight styles (<code>vega</code>, <code>nova</code>, <code>maia</code>, <code>lyra</code>, <code>mira</code>, <code>luma</code>, <code>sera</code> and <code>rhea</code>) ship with a right-to-left conversion table already applied. So their physical utilities (<code>pl-2</code>, <code>ml-auto</code>, <code>rounded-l-md</code>) arrive as logical ones, and the same files render a left-to-right page exactly as before and a right-to-left one correctly.</p>
 
     ${heading(toc, 2, 'Font Recommendations')}
     <p>For the best RTL experience, we recommend using fonts that have proper support for your target language. <a href="https://fonts.google.com/noto">Noto</a> is a great font family for this and it pairs well with Inter and Geist.</p>
