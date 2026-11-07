@@ -507,7 +507,12 @@ website/
                        so the configurator runs the same theme builder and
                        preset code in the browser as `init --preset` runs
   scripts/             manual dev tools, NOT part of build/deploy
-    fetch-fonts.mjs    download the self-hosted variable woff2 fonts (the
+    fetch-fonts.mjs    download the self-hosted woff2 fonts with next/font's
+                       user agent, so the /ui faces are the files
+                       ui.shadcn.com serves (test/ssr/ui-fonts.test.ts pins
+                       their hashes; the site's Geist Mono is weight 400
+                       alone, as shadcn's is, and the variable one is
+                       'Geist Mono' for the previews). The
                        typeset faces are declared in public/typeset-fonts.css,
                        linked only by the typeset pages, and the Sera page's
                        Playfair Display in public/sera-fonts.css, linked only

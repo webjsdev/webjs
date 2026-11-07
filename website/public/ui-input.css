@@ -135,7 +135,7 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
-  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-mono: 'Geist Mono Regular', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* shadcn sizes its header and footer from these (14 and 16 spacing steps
      for the header, 14 and 24 for the footer). The header itself is
@@ -216,11 +216,16 @@
   }
 }
 
-/* Self-hosted Geist and Geist Mono (latin subset, one variable woff2 per
-   family, fetched by scripts/fetch-fonts.mjs). Declared here rather than in
-   input.css so a marketing page never downloads them. */
+/* Self-hosted Geist and Geist Mono (latin subset), the files ui.shadcn.com
+   serves, fetched by scripts/fetch-fonts.mjs. Declared here rather than in
+   input.css so a marketing page never downloads them. The site's mono is
+   shadcn's: weight 400 alone, so a font-medium in mono draws at 400 as it
+   does there. 'Geist Mono', the name the kit's font data and the typeset
+   builder use, is the variable file with every weight, which a page fetches
+   only when something renders in it. */
 @font-face{font-family:'Geist';font-style:normal;font-weight:100 900;font-display:swap;src:url('/public/fonts/geist.woff2') format('woff2');}
-@font-face{font-family:'Geist Mono';font-style:normal;font-weight:100 900;font-display:swap;src:url('/public/fonts/geist-mono.woff2') format('woff2');}
+@font-face{font-family:'Geist Mono Regular';font-style:normal;font-weight:400;font-display:swap;src:url('/public/fonts/geist-mono.woff2') format('woff2');}
+@font-face{font-family:'Geist Mono';font-style:normal;font-weight:100 900;font-display:swap;src:url('/public/fonts/geist-mono-variable.woff2') format('woff2');}
 
 /* shadcn's docs code blocks, steps and component-link rules
    (apps/v4/app/globals.css, MIT), so a /ui docs page's code figures, line
