@@ -42,24 +42,26 @@
  * ```
  */
 
-export const tableContainerClass = (): string => 'relative w-full overflow-x-auto';
+export const tableContainerClass = (): string => 'cn-table-container';
 
-export const tableClass = (): string => 'w-full caption-bottom text-sm';
+export const tableClass = (): string => 'cn-table';
 
-export const tableHeaderClass = (): string => '[&_tr]:border-b';
+export const tableHeaderClass = (): string => 'cn-table-header';
 
-export const tableBodyClass = (): string => '[&_tr:last-child]:border-0';
+export const tableBodyClass = (): string => 'cn-table-body';
 
 export const tableFooterClass = (): string =>
-  'border-t bg-muted/50 font-medium [&>tr]:last:border-b-0';
+  'cn-table-footer';
 
 export const tableRowClass = (): string =>
-  'border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted';
+  'cn-table-row has-aria-expanded:bg-muted/50';
 
+// The ported styles write a physical text-left; the logical one here keeps an
+// RTL table's headings at its start, as shadcn's RTL install does.
 export const tableHeadClass = (): string =>
-  'h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]';
+  'cn-table-head text-start';
 
 export const tableCellClass = (): string =>
-  'p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]';
+  'cn-table-cell';
 
-export const tableCaptionClass = (): string => 'mt-4 text-sm text-muted-foreground';
+export const tableCaptionClass = (): string => 'cn-table-caption';

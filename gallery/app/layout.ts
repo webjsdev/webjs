@@ -71,7 +71,7 @@ export default function RootLayout({ children }: { children: unknown }) {
           color-scheme: light dark;
           /* The shadcn token NAMES are kept and only their VALUES move to the
              website's warm oklch palette. Every demo under app/features/ and
-             every component under components/ui/ is scaffold payload written
+             every helper under modules/gallery/ui/ is scaffold payload written
              against this vocabulary, so renaming would mean editing payload,
              which is the one thing this app must not do. */
           --background:         light-dark(oklch(0.985 0.008 75), oklch(0.08 0.012 60));

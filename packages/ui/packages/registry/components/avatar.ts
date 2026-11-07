@@ -1,7 +1,15 @@
 /**
  * Avatar: circular user image with fallback. Tier-1 class helpers;
- * compose with a native `<span>` or `<img>`. The fallback shows when the
- * `<img>` is missing or fails to load (`onerror`).
+ * compose with a native `<span>` or `<img>`. As in shadcn, one of the two
+ * shows, never both, and with no script: the image is laid over the fallback
+ * (`absolute inset-0` inside the `relative` root), so a loaded image covers
+ * it, and a missing or broken one leaves the fallback showing. A broken
+ * image paints neither its alt text (`text-transparent`) nor, in Chromium,
+ * its broken-image glyph: a broken `<img>` renders a `::before` box (a loaded
+ * one never does), and the full-height block it gets here pushes the glyph
+ * out of the clipped box. Safari ignores that box and draws its glyph over
+ * the initials (Firefox can too at larger sizes), so where that matters hide
+ * the image on failure with script (`onerror`).
  *
  * shadcn parity:
  *   Avatar (size: default | sm | lg)  → avatarClass({ size }) with `data-size`
@@ -43,23 +51,24 @@ import { cn } from '../lib/utils.ts';
 export type AvatarSize = 'default' | 'sm' | 'lg';
 
 const AVATAR_BASE =
-  'group/avatar relative flex size-8 shrink-0 overflow-hidden rounded-full select-none data-[size=lg]:size-10 data-[size=sm]:size-6';
+  'cn-avatar group/avatar relative flex shrink-0 select-none';
 
 export function avatarClass(_opts: { size?: AvatarSize } = {}): string {
   // Size driven by data-size attribute on the element (matches shadcn).
   return cn(AVATAR_BASE);
 }
 
-export const avatarImageClass = (): string => 'aspect-square size-full';
+export const avatarImageClass = (): string =>
+  'cn-avatar-image absolute inset-0 aspect-square size-full object-cover overflow-hidden text-transparent before:block before:h-full';
 
 export const avatarFallbackClass = (): string =>
-  'flex size-full items-center justify-center rounded-full bg-muted text-sm text-muted-foreground group-data-[size=sm]/avatar:text-xs';
+  'cn-avatar-fallback flex size-full items-center justify-center text-sm group-data-[size=sm]/avatar:text-xs';
 
 export const avatarBadgeClass = (): string =>
-  'absolute right-0 bottom-0 z-10 inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground ring-2 ring-background select-none group-data-[size=sm]/avatar:size-2 group-data-[size=sm]/avatar:[&>svg]:hidden group-data-[size=default]/avatar:size-2.5 group-data-[size=default]/avatar:[&>svg]:size-2 group-data-[size=lg]/avatar:size-3 group-data-[size=lg]/avatar:[&>svg]:size-2';
+  'cn-avatar-badge absolute end-0 bottom-0 z-10 inline-flex items-center justify-center rounded-full bg-blend-color ring-2 select-none group-data-[size=sm]/avatar:size-2 group-data-[size=sm]/avatar:[&>svg]:hidden group-data-[size=default]/avatar:size-2.5 group-data-[size=default]/avatar:[&>svg]:size-2 group-data-[size=lg]/avatar:size-3 group-data-[size=lg]/avatar:[&>svg]:size-2';
 
 export const avatarGroupClass = (): string =>
-  'group/avatar-group flex -space-x-2 *:data-[slot=avatar]:ring-2 *:data-[slot=avatar]:ring-background';
+  'cn-avatar-group group/avatar-group flex -space-x-2 *:data-[slot=avatar]:ring-2 *:data-[slot=avatar]:ring-background';
 
 export const avatarGroupCountClass = (): string =>
-  'relative flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm text-muted-foreground ring-2 ring-background group-has-data-[size=lg]/avatar-group:size-10 group-has-data-[size=sm]/avatar-group:size-6 [&>svg]:size-4 group-has-data-[size=lg]/avatar-group:[&>svg]:size-5 group-has-data-[size=sm]/avatar-group:[&>svg]:size-3';
+  'cn-avatar-group-count relative flex shrink-0 items-center justify-center ring-2 ring-background';

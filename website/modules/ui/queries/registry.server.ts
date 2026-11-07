@@ -40,6 +40,12 @@ import {
   BASE_OVERRIDES,
   mergeThemeCss,
 } from '../../../../packages/ui/packages/registry/themes/base-colors.js';
+// The accent themes and the font items, built from data (#1666). The CLI's
+// composer (packages/ui/src/registry/local.js) serves the same two calls.
+import {
+  designSystemItem,
+  designSystemItems,
+} from '../../../../packages/ui/packages/registry/themes/items.js';
 
 // modules/ui/queries/ → repo root is four levels up; the registry stays in
 // the ui package (it ships inside the published npm tarball), the same way
@@ -68,15 +74,26 @@ export type RegistryFile = {
   content?: string;
 };
 
+export type RegistryCssVars = {
+  theme?: Record<string, string>;
+  light?: Record<string, string>;
+  dark?: Record<string, string>;
+};
+
 export type RegistryItem = {
   $schema?: string;
   name: string;
   type: string;
   description?: string;
   title?: string;
+  /** A block's or chart's groups, e.g. `['authentication', 'login']`. */
+  categories?: string[];
   dependencies?: string[];
   devDependencies?: string[];
   registryDependencies?: string[];
+  /** Theme tokens `add` merges into the app's stylesheet. */
+  cssVars?: RegistryCssVars;
+  meta?: Record<string, unknown>;
   files?: RegistryFile[];
 };
 
@@ -146,7 +163,9 @@ function synthesizeColorTheme(color: string): RegistryItem | null {
 export async function loadRegistryItem(name: string): Promise<RegistryItem | null> {
   if (itemCache.has(name)) return itemCache.get(name)!;
 
-  // Manifest items (components, lib-utils, theme-neutral): inline file content.
+  // Manifest items (components, blocks, lib-utils, theme-neutral): inline
+  // file content. A block's files sit in nested directories under
+  // `blocks/<name>/`, which the REGISTRY_ROOT-relative resolve reads as is.
   const manifestItem = readManifest().items.find((it) => it.name === name);
   if (manifestItem) {
     const composed = inlineFiles(manifestItem);
@@ -164,16 +183,27 @@ export async function loadRegistryItem(name: string): Promise<RegistryItem | nul
     }
   }
 
+  const data = designSystemItem(name);
+  if (data) {
+    const composed = { $schema: SCHEMA, ...data } as RegistryItem;
+    itemCache.set(name, composed);
+    return composed;
+  }
+
   return null;
 }
 
 /** Load the flat registry index (one entry per item, metadata-only: no inlined content). */
 export async function loadRegistryIndex(): Promise<RegistryItem[]> {
   if (indexCache) return indexCache;
+  // `title` and `categories` ride along so the /ui blocks and charts pages can
+  // list and group a block without loading its files (D18).
   const fromManifest = readManifest().items.map((item) => ({
     name: item.name,
     type: item.type,
+    title: item.title,
     description: item.description,
+    categories: item.categories,
     dependencies: item.dependencies,
     registryDependencies: item.registryDependencies,
   }));
@@ -186,7 +216,8 @@ export async function loadRegistryIndex(): Promise<RegistryItem[]> {
       type: 'registry:theme',
       description: BASE_DESCRIPTIONS[color as keyof typeof BASE_DESCRIPTIONS],
     }));
-  indexCache = [...fromManifest, ...synthesized];
+  const data = designSystemItems().map(({ name, type, title, description }) => ({ name, type, title, description }));
+  indexCache = [...fromManifest, ...synthesized, ...data];
   return indexCache;
 }
 
@@ -202,7 +233,14 @@ export async function loadRegistryManifest(): Promise<string> {
     .map((color) => synthesizeColorTheme(color))
     .filter((it): it is RegistryItem => it !== null);
   return JSON.stringify(
-    { ...manifest, items: [...manifestItems, ...synthesizedThemes] },
+    {
+      ...manifest,
+      items: [
+        ...manifestItems,
+        ...synthesizedThemes,
+        ...designSystemItems().map((it) => ({ $schema: SCHEMA, ...it })),
+      ],
+    },
     null,
     2,
   );

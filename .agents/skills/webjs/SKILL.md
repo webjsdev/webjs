@@ -84,6 +84,7 @@ The table above routes by the job; this one routes by the topic, for when you al
 | Client router, prefetch, frames, view transitions, Suspense streaming        | `references/client-router-and-streaming.md`   |
 | Optimistic UI for a user-facing mutation                                     | `references/optimistic-ui.md`                 |
 | The `@webjsdev/ui` component kit (a `components.json` is present): class helpers, tokens, `add` / `view`, the MCP `ui` tool | `references/ui-kit.md`                         |
+| About to hand-write a login or signup page, a sidebar shell, a dashboard, a data table or a chart: install a block instead | `references/ui-kit.md` (Blocks and charts)     |
 | TypeScript at runtime, erasable syntax, full-stack types, the derive-the-type rule (never `unknown` / `any`) | `references/typescript.md`                     |
 | Unit, browser, e2e tests, the `handle()` harness, Bun parity                 | `references/testing.md`                        |
 | Auth, caching, env vars, rate limit, file storage, the `webjs` config block  | `references/built-ins.md`                      |
@@ -155,7 +156,7 @@ Find the right export fast. Load the linked reference for full examples.
 
 ### `@webjsdev/core` (browser + isomorphic)
 
-- `html` / `css` tagged templates. `WebComponent({ ... })` base-class factory; `prop(type?, opts?)` declares one reactive property. `Class.register('tag')` binds the tag.
+- `html` / `css` tagged templates, plus `svg` for a fragment rendered INSIDE an `<svg>` (a `<rect>` or `<path>` built in its own template; an `html` one would parse as HTML on the client and never paint). `WebComponent({ ... })` base-class factory; `prop(type?, opts?)` declares one reactive property. `Class.register('tag')` binds the tag.
 - `signal` / `computed` reactive state, `effect(fn)` client-only reaction (returns a disposer), `batch(fn)` coalesced writes; `render(v, el)` client render.
 - `notFound()` / `redirect(url[, status])` control-flow throws (page/layout/action only, NOT `route.ts`). `forbidden()` / `unauthorized()` render the nearest boundary.
 - `Suspense({fallback, children})` page-level streaming; `<webjs-suspense>` component-level streaming.

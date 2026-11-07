@@ -19,6 +19,7 @@
  */
 
 import { loadRegistryItem, loadRegistryIndex, isCustomElementSource } from './local.js';
+import { bakeForStyle } from './style-bake.js';
 import { extractExample } from './example.js';
 
 /**
@@ -243,17 +244,23 @@ export function extractDocHeader(src) {
  * Project one registry component into the agent-facing shape. Returns null when
  * the name is not a `registry:ui` component.
  *
+ * The source is BAKED first (#1666): the registry is in base form, and what an
+ * agent copies from this projection must be the plain Tailwind an app gets,
+ * never a `cn-*` name. `style` is the app's `components.json` style, and an
+ * absent one means `new-york`, the kit's default look.
+ *
  * @param {string} name
+ * @param {{ style?: string }} [opts]
  * @returns {{
  *   name: string, tier: 1|2, type: string,
  *   description: string, helpers: string[], example: string,
  *   dependencies: string[], registryDependencies: string[],
  * } | null}
  */
-export function uiComponent(name) {
+export function uiComponent(name, opts = {}) {
   const item = loadRegistryItem(name);
   if (!item || item.type !== 'registry:ui') return null;
-  const src = (item.files || []).map((f) => f.content || '').join('\n');
+  const src = (item.files || []).map((f) => bakeForStyle(f.content || '', opts.style)).join('\n');
   const tier = isCustomElementSource(src) ? 2 : 1;
   return {
     name: item.name,
@@ -265,6 +272,21 @@ export function uiComponent(name) {
     dependencies: item.dependencies || [],
     registryDependencies: item.registryDependencies || [],
   };
+}
+
+/**
+ * A component's files baked for a style, as `webjs ui view` prints them and
+ * `add` writes them (paths are the registry's). The /ui docs' Manual tab
+ * shows these, so the page and the CLI cannot disagree about the source.
+ *
+ * @param {string} name
+ * @param {{ style?: string }} [opts]
+ * @returns {Array<{ path: string, content: string }> | null}
+ */
+export function uiComponentFiles(name, opts = {}) {
+  const item = loadRegistryItem(name);
+  if (!item) return null;
+  return (item.files || []).map((f) => ({ path: f.path, content: bakeForStyle(f.content || '', opts.style) }));
 }
 
 /**
@@ -288,6 +310,174 @@ export function uiInventory() {
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/* -------------------- blocks and charts (#1666, D18) -------------------- */
+
+/**
+ * What a block is, in the one phrasing every agent-facing surface uses. A
+ * block and a chart are both `registry:block` items on the wire (shadcn
+ * parity), told apart by a chart's `chart` category.
+ */
+export const BLOCK_DEFINITION = 'a ready-made view you install and then edit';
+
+/** The category that marks a `registry:block` as a chart. */
+export const CHART_CATEGORY = 'chart';
+
+/**
+ * The agent-facing kind of a registry item: `ui` for a component, `chart` for
+ * a block carrying the `chart` category, `block` for any other block, and
+ * null for everything else (a lib, a theme).
+ *
+ * @param {{ type?: string, categories?: string[] }} item
+ * @returns {'ui' | 'block' | 'chart' | null}
+ */
+export function itemKind(item) {
+  if (!item) return null;
+  if (item.type === 'registry:ui') return 'ui';
+  if (item.type !== 'registry:block') return null;
+  return (item.categories || []).includes(CHART_CATEGORY) ? 'chart' : 'block';
+}
+
+/**
+ * The category a block is grouped under in a compact listing: its LAST, most
+ * specific category (`login` for `['authentication', 'login']`, `area` for
+ * `['chart', 'area']`), so each name appears once. A block with none is
+ * grouped under `other`. Filtering by category still matches every one.
+ *
+ * @param {{ categories?: string[] }} item
+ * @returns {string}
+ */
+export function primaryCategory(item) {
+  const cats = (item.categories || []).filter((c) => c !== CHART_CATEGORY);
+  return cats.length ? cats[cats.length - 1] : 'other';
+}
+
+/**
+ * One compact entry per block or chart (and per component when `type` asks
+ * for them): `{ name, type, categories, description }`, sorted by name. The
+ * shape `webjsui list --json` prints and the MCP `ui` tool's filtered
+ * listing returns.
+ *
+ * @param {{ type?: 'ui' | 'block' | 'chart' | 'all', category?: string }} [opts]
+ *   `type` defaults to `block` plus `chart`; `all` adds the components.
+ * @param {any[]} [index] the registry index, the packaged one by default
+ * @returns {Array<{ name: string, type: 'ui' | 'block' | 'chart', categories: string[], description: string }>}
+ */
+export function uiBlocks(opts = {}, index = loadRegistryIndex()) {
+  const want = opts.type || 'blocks';
+  const keep = (/** @type {string|null} */ kind) =>
+    kind !== null && (
+      want === 'all' ? true
+        : want === 'blocks' ? kind === 'block' || kind === 'chart'
+          : kind === want
+    );
+  return index
+    .map((i) => ({ i, kind: itemKind(i) }))
+    .filter(({ i, kind }) => keep(kind) && (!opts.category || (i.categories || []).includes(opts.category)))
+    .map(({ i, kind }) => ({
+      name: i.name,
+      type: /** @type {'ui' | 'block' | 'chart'} */ (kind),
+      categories: i.categories || [],
+      description: i.description || '',
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * The blocks and charts as NAME LISTS grouped by {@link primaryCategory}, with
+ * no descriptions: `{ blocks: { login: [...] }, charts: { area: [...] } }`.
+ * The no-argument MCP `ui` payload carries this, so it stays cheap however
+ * many blocks the kit ships.
+ *
+ * @param {any[]} [index]
+ * @returns {{ blocks: Record<string, string[]>, charts: Record<string, string[]> }}
+ */
+export function uiBlockIndex(index = loadRegistryIndex()) {
+  /** @type {{ blocks: Record<string, string[]>, charts: Record<string, string[]> }} */
+  const out = { blocks: {}, charts: {} };
+  for (const b of uiBlocks({}, index)) {
+    const group = b.type === 'chart' ? out.charts : out.blocks;
+    (group[primaryCategory(b)] ??= []).push(b.name);
+  }
+  return out;
+}
+
+/** The command that installs a registry item, as every printed hint spells it (invariant 8). */
+export function installCommand(name) {
+  return `npx @webjsdev/ui add ${name}`;
+}
+
+/**
+ * Project one block (or chart) item into the agent-facing shape: what it is,
+ * how to install it, and the files it writes with their targets. Pure over
+ * the item, so `view` can project an item fetched from a custom registry.
+ * Returns null when the item is not a block.
+ *
+ * The sources are left out unless `source` is true, since the cheap path is
+ * to install the block and read the files on disk. When included they are
+ * BAKED (#1666), so no `cn-*` name reaches an agent, but their imports stay
+ * registry-relative: `add` is what rewrites them to the app's aliases.
+ *
+ * @param {any} item a registry item with its files
+ * @param {{ style?: string, source?: boolean }} [opts]
+ */
+export function projectBlock(item, opts = {}) {
+  const kind = itemKind(item);
+  if (kind !== 'block' && kind !== 'chart') return null;
+  return {
+    name: item.name,
+    type: kind,
+    title: item.title || item.name,
+    description: item.description || '',
+    categories: item.categories || [],
+    install: installCommand(item.name),
+    dependencies: item.dependencies || [],
+    registryDependencies: item.registryDependencies || [],
+    ...(item.cssVars ? { cssVars: item.cssVars } : {}),
+    files: (item.files || []).map((f) => ({
+      path: f.path,
+      type: f.type,
+      target: f.target || f.path,
+      ...(opts.source ? { content: bakeForStyle(f.content || '', opts.style) } : {}),
+    })),
+  };
+}
+
+/**
+ * {@link projectBlock} for a block in the packaged registry, by name. Null
+ * when the name is not a block.
+ *
+ * @param {string} name
+ * @param {{ style?: string, source?: boolean }} [opts]
+ */
+export function uiBlock(name, opts = {}) {
+  const item = loadRegistryItem(name);
+  return item ? projectBlock(item, opts) : null;
+}
+
+/**
+ * Render a block projection as human-readable text for `webjsui view`: the
+ * description, categories, dependencies, the install command and the file
+ * list with targets. The sources, when the projection carries them, follow.
+ *
+ * @param {ReturnType<typeof projectBlock>} b
+ * @returns {string}
+ */
+export function renderBlockText(b) {
+  if (!b) return '';
+  const lines = [`# ${b.name}  (${b.type})`];
+  if (b.description) lines.push('', b.description);
+  if (b.categories.length) lines.push('', `categories: ${b.categories.join(', ')}`);
+  if (b.registryDependencies.length) lines.push(`registry deps: ${b.registryDependencies.join(', ')}`);
+  if (b.dependencies.length) lines.push(`npm: ${b.dependencies.join(', ')}`);
+  lines.push('', `Install: ${b.install}`, '', 'Files:');
+  for (const f of b.files) lines.push(`  ${f.target}`);
+  for (const f of b.files) {
+    if (f.content === undefined) continue;
+    lines.push('', `# --- ${f.target} ---`, f.content.replace(/\n$/, ''));
+  }
+  return lines.join('\n');
 }
 
 /**

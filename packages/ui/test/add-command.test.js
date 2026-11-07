@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { add, rewriteUtilsImport } from '../src/commands/add.js';
@@ -279,6 +279,55 @@ test('add: local-first (no --registry) installs a real component, strips its exa
   }
 });
 
+// positionFloating moved out of popover.ts into floating.ts (#1666), so the
+// popover's class helpers carry no browser code. Every overlay that places
+// itself installs floating.ts beside it, and popover.ts beside that for the
+// placement types, and the pair resolves from where they landed.
+test('add: an overlay installs floating.ts beside it, and a bare popover does not', async () => {
+  globalThis.fetch = async () => { throw new Error('should not fetch (local-first)'); };
+  const origLog = console.log;
+  console.log = () => {};
+  try {
+    for (const name of ['tooltip', 'hover-card', 'dropdown-menu', 'context-menu', 'menubar', 'select', 'combobox']) {
+      const d = mkdtempSync(join(tmpdir(), `webjsui-add-floating-${name}-`));
+      try {
+        writeFileSync(join(d, 'components.json'), JSON.stringify({
+          style: 'default',
+          tailwind: { css: 'styles/globals.css', baseColor: 'neutral', cssVariables: true },
+          aliases: { components: 'components', utils: 'lib/utils/cn', ui: 'components/ui', lib: 'lib' },
+        }));
+        await add.parseAsync([name, '--yes', '--no-deps', '--cwd', d], { from: 'user' });
+        const ui = join(d, 'components', 'ui');
+        assert.ok(existsSync(join(ui, 'floating.ts')), `${name}: floating.ts lands in components/ui`);
+        assert.ok(existsSync(join(ui, 'popover.ts')), `${name}: popover.ts (its types) lands beside it`);
+        const floating = readFileSync(join(ui, 'floating.ts'), 'utf8');
+        assert.match(floating, /export function positionFloating/);
+        assert.match(floating, /from '\.\/popover\.ts'/, 'it reaches the types as a sibling');
+        const own = readFileSync(join(ui, `${name}.ts`), 'utf8');
+        if (name !== 'menubar') assert.match(own, /from '\.\/floating\.ts'/, `${name}: imports its sibling floating.ts`);
+      } finally {
+        rmSync(d, { recursive: true, force: true });
+      }
+    }
+    const d = mkdtempSync(join(tmpdir(), 'webjsui-add-popover-'));
+    try {
+      writeFileSync(join(d, 'components.json'), JSON.stringify({
+        style: 'default',
+        tailwind: { css: 'styles/globals.css', baseColor: 'neutral', cssVariables: true },
+        aliases: { components: 'components', utils: 'lib/utils/cn', ui: 'components/ui', lib: 'lib' },
+      }));
+      await add.parseAsync(['popover', '--yes', '--no-deps', '--cwd', d], { from: 'user' });
+      assert.ok(existsSync(join(d, 'components', 'ui', 'popover.ts')));
+      assert.equal(existsSync(join(d, 'components', 'ui', 'floating.ts')), false, 'the class helpers alone need no placement module');
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  } finally {
+    console.log = origLog;
+    globalThis.fetch = origFetch;
+  }
+});
+
 test('add: local-first installs empty, spinner and field together (#1569)', async () => {
   globalThis.fetch = async () => { throw new Error('should not fetch (local-first)'); };
   const d = mkdtempSync(join(tmpdir(), 'webjsui-add-real-'));
@@ -519,4 +568,223 @@ test('add: the no-components hint prints resolvable commands (#1264)', async () 
   assert.match(text, /npx @webjsdev\/ui add button/);
   assert.match(text, /npx @webjsdev\/ui list/);
   assert.doesNotMatch(text, /npx webjsui/);
+});
+
+// The style bake (#1666): the registry is in base form, so what `add` writes
+// must be plain Tailwind for the project's style, with no cn-* name left in it.
+for (const [style, expectIn, expectOut] of [
+  ['default', /hover:bg-primary\/90/, /hover:bg-primary\/80/],
+  ['nova', /hover:bg-primary\/80/, /hover:bg-primary\/90/],
+]) {
+  test(`add: bakes the components.json style into the written file (style ${style})`, async () => {
+    globalThis.fetch = async () => { throw new Error('should not fetch (local-first)'); };
+    const d = mkdtempSync(join(tmpdir(), 'webjsui-add-bake-'));
+    writeFileSync(join(d, 'components.json'), JSON.stringify({
+      style,
+      tailwind: { css: 'styles/globals.css', baseColor: 'neutral', cssVariables: true },
+      aliases: { components: 'components', utils: 'lib/utils', ui: 'components/ui', lib: 'lib' },
+    }));
+    const origLog = console.log;
+    console.log = () => {};
+    try {
+      await add.parseAsync(['button', '--yes', '--no-deps', '--cwd', d], { from: 'user' });
+      const body = readFileSync(join(d, 'components', 'ui', 'button.ts'), 'utf8');
+      const classStrings = body.replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, '');
+      assert.doesNotMatch(classStrings, /(['"\s])cn-[a-z]/, 'no cn-* name reaches the installed file');
+      assert.match(body, expectIn, `the ${style} style's default variant is baked in`);
+      assert.doesNotMatch(body, expectOut, 'and no other style leaks in');
+      assert.match(body, /inline-flex shrink-0 items-center/, 'the layout kept inline survives');
+    } finally {
+      console.log = origLog;
+      globalThis.fetch = origFetch;
+      rmSync(d, { recursive: true });
+    }
+  });
+}
+
+/* -------------------- blocks (#1666, D18) -------------------- */
+
+const BLOCK_REG = {
+  ...REG,
+  'dashboard-01': {
+    name: 'dashboard-01', type: 'registry:block',
+    description: 'A dashboard with a sidebar.',
+    categories: ['dashboard'],
+    registryDependencies: ['button'],
+    cssVars: { light: { 'chart-1': 'oklch(0.6 0.2 40)' }, dark: { 'chart-1': 'oklch(0.5 0.2 40)' }, theme: { 'color-chart-1': 'var(--chart-1)' } },
+    files: [
+      {
+        path: 'blocks/dashboard-01/page.ts', type: 'registry:block', target: 'app/dashboard/page.ts',
+        content: "import { buttonClass } from '../../components/button.ts';\nimport { ChartArea } from './components/chart-area.ts';\nimport { cn } from '../../lib/utils.ts';\nexport default () => [buttonClass, ChartArea, cn];\n",
+      },
+      {
+        path: 'blocks/dashboard-01/components/chart-area.ts', type: 'registry:block', target: 'modules/dashboard/components/chart-area.ts',
+        content: "import { cardClass } from '../../../components/card.ts';\nexport const ChartArea = cardClass;\n",
+      },
+    ],
+  },
+  'untargeted': {
+    name: 'untargeted', type: 'registry:block',
+    files: [
+      { path: 'blocks/untargeted/a/page.ts', type: 'registry:block', content: 'export const a = 1;\n' },
+      { path: 'blocks/untargeted/b/page.ts', type: 'registry:block', content: 'export const b = 2;\n' },
+    ],
+  },
+};
+
+function stubBlockFetch() {
+  globalThis.fetch = async (url) => {
+    const name = String(url).split('/').pop().replace('.json', '');
+    if (!BLOCK_REG[name]) return new Response('not found', { status: 404 });
+    return new Response(JSON.stringify(BLOCK_REG[name]), { status: 200 });
+  };
+}
+
+test('add <block>: each file lands at its target, its imports rewritten to where their files landed', async () => {
+  stubBlockFetch();
+  const d = tmp();
+  try {
+    await add.parseAsync(['dashboard-01', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
+    const page = readFileSync(join(d, 'app', 'dashboard', 'page.ts'), 'utf8');
+    assert.match(page, /from '\.\.\/\.\.\/components\/ui\/button\.ts'/, 'a component import points into the ui alias');
+    assert.match(page, /from '\.\.\/\.\.\/modules\/dashboard\/components\/chart-area\.ts'/, 'a sibling block file points at its own target');
+    assert.match(page, /from '\.\.\/\.\.\/lib\/utils\.ts'/, 'the utils import points at the utils alias');
+    const chart = readFileSync(join(d, 'modules', 'dashboard', 'components', 'chart-area.ts'), 'utf8');
+    assert.match(chart, /from '\.\.\/\.\.\/\.\.\/components\/ui\/card\.ts'/, 'a deeper file resolves the same way');
+    assert.ok(existsSync(join(d, 'components', 'ui', 'button.ts')), 'the block\'s registry dependency is installed');
+  } finally {
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});
+
+test('add <block>: an existing block file is kept under --yes and replaced only with --overwrite', async () => {
+  stubBlockFetch();
+  const d = tmp();
+  try {
+    await add.parseAsync(['dashboard-01', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
+    const page = join(d, 'app', 'dashboard', 'page.ts');
+    writeFileSync(page, '// my edits\n');
+    await add.parseAsync(['dashboard-01', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
+    assert.equal(readFileSync(page, 'utf8'), '// my edits\n', '--yes does not replace a block file');
+    await add.parseAsync(['dashboard-01', '--overwrite', '--no-deps', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
+    assert.notEqual(readFileSync(page, 'utf8'), '// my edits\n', '--overwrite does');
+  } finally {
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});
+
+test('add <block>: a file with no target keeps its registry path, so same-named files do not collide', async () => {
+  stubBlockFetch();
+  const d = tmp();
+  try {
+    await add.parseAsync(['untargeted', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
+    assert.equal(readFileSync(join(d, 'blocks', 'untargeted', 'a', 'page.ts'), 'utf8'), 'export const a = 1;\n');
+    assert.equal(readFileSync(join(d, 'blocks', 'untargeted', 'b', 'page.ts'), 'utf8'), 'export const b = 2;\n');
+    assert.equal(existsSync(join(d, 'page.ts')), false, 'nothing lands flat in the project root');
+  } finally {
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});
+
+test('add <block>: an item\'s cssVars are added to the app\'s stylesheet, leaving tokens it has', async () => {
+  stubBlockFetch();
+  const d = tmp();
+  try {
+    const css = join(d, 'app', 'globals.css');
+    mkdirSync(join(d, 'app'), { recursive: true });
+    writeFileSync(css, '/* @webjsdev/ui theme */\n@theme inline {\n  --color-background: var(--background);\n}\n:root {\n  --background: white;\n  --chart-1: red;\n}\n.dark {\n  --background: black;\n}\n');
+    await add.parseAsync(['dashboard-01', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
+    const out = readFileSync(css, 'utf8');
+    assert.match(out, /:root \{[^}]*--chart-1: red;/, 'an existing token keeps its value');
+    assert.doesNotMatch(out, /oklch\(0\.6 0\.2 40\)/, 'and is not added a second time');
+    assert.match(out, /\.dark \{[^}]*--chart-1: oklch\(0\.5 0\.2 40\);/, 'a missing dark token is added to .dark');
+    assert.match(out, /@theme inline \{[^}]*--color-chart-1: var\(--chart-1\);/, 'a missing theme token to @theme inline');
+  } finally {
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});
+
+// Two block families writing the same file, as sidebar-07 and dashboard-01
+// both write components/app-sidebar.ts.
+const FAMILY_REG = {
+  ...REG,
+  'sidebar-x': {
+    name: 'sidebar-x', type: 'registry:block', categories: ['sidebar'],
+    files: [
+      { path: 'blocks/sidebar-x/app-sidebar.ts', type: 'registry:component', target: 'components/app-sidebar.ts', content: 'export const sidebar = "x";\n' },
+      { path: 'blocks/sidebar-x/page.ts', type: 'registry:page', target: 'app/dashboard/page.ts', content: 'export default () => "sidebar-x";\n' },
+    ],
+  },
+  'dashboard-y': {
+    name: 'dashboard-y', type: 'registry:block', categories: ['dashboard'],
+    files: [
+      { path: 'blocks/dashboard-y/app-sidebar.ts', type: 'registry:component', target: 'components/app-sidebar.ts', content: 'export const sidebar = "y";\n' },
+      { path: 'blocks/dashboard-y/page.ts', type: 'registry:page', target: 'app/dashboard/page.ts', content: 'export default () => "dashboard-y";\n' },
+      { path: 'blocks/dashboard-y/data.ts', type: 'registry:file', target: 'app/dashboard/data.ts', content: 'export const rows = [];\n' },
+    ],
+  },
+};
+
+function stubFamilyFetch() {
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.endsWith('/index.json')) {
+      return new Response(JSON.stringify(Object.values(FAMILY_REG).map(({ files, ...meta }) => meta)), { status: 200 });
+    }
+    const name = u.split('/').pop().replace('.json', '');
+    if (!FAMILY_REG[name]) return new Response('not found', { status: 404 });
+    return new Response(JSON.stringify(FAMILY_REG[name]), { status: 200 });
+  };
+}
+
+async function captured(fn) {
+  const out = [];
+  const log = console.log;
+  console.log = (...a) => out.push(a.join(' '));
+  try { await fn(); } finally { console.log = log; }
+  return out.join('\n');
+}
+
+test('add <block>: a file another block wrote is kept with a warning naming that block and the --overwrite command', async () => {
+  stubFamilyFetch();
+  const d = tmp();
+  try {
+    await captured(() => add.parseAsync(['sidebar-x', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/fam'], { from: 'user' }));
+    const out = await captured(() => add.parseAsync(['dashboard-y', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/fam'], { from: 'user' }));
+    assert.equal(readFileSync(join(d, 'components', 'app-sidebar.ts'), 'utf8'), 'export const sidebar = "x";\n', 'the existing file is still kept');
+    assert.match(out, /components\/app-sidebar\.ts was written by sidebar-x, not dashboard-y/);
+    assert.match(out, /2 files of dashboard-y were kept from sidebar-x, so the app mixes the blocks/);
+    assert.match(out, /npx @webjsdev\/ui add dashboard-y --overwrite/);
+    assert.ok(existsSync(join(d, 'app', 'dashboard', 'data.ts')), 'the files with no clash are still written');
+
+    await captured(() => add.parseAsync(['dashboard-y', '--overwrite', '--no-deps', '--cwd', d, '--registry', 'http://test/fam'], { from: 'user' }));
+    assert.equal(readFileSync(join(d, 'components', 'app-sidebar.ts'), 'utf8'), 'export const sidebar = "y";\n', '--overwrite replaces it');
+  } finally {
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});
+
+test('add <block>: re-adding the same block, or keeping an edited file, warns of no conflict', async () => {
+  stubFamilyFetch();
+  const d = tmp();
+  try {
+    await captured(() => add.parseAsync(['sidebar-x', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/fam'], { from: 'user' }));
+    const again = await captured(() => add.parseAsync(['sidebar-x', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/fam'], { from: 'user' }));
+    assert.match(again, /components\/app-sidebar\.ts is already sidebar-x's version/);
+    assert.doesNotMatch(again, /mixes the blocks/);
+
+    writeFileSync(join(d, 'components', 'app-sidebar.ts'), '// my edits\n');
+    const edited = await captured(() => add.parseAsync(['dashboard-y', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/fam'], { from: 'user' }));
+    assert.match(edited, /components\/app-sidebar\.ts already exists and differs from dashboard-y's version/);
+    assert.doesNotMatch(edited, /app-sidebar\.ts was written by/, 'an edited file is not blamed on another block');
+    assert.equal(readFileSync(join(d, 'components', 'app-sidebar.ts'), 'utf8'), '// my edits\n');
+  } finally {
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
 });

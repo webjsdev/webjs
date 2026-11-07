@@ -1,7 +1,7 @@
 import { html } from '@webjsdev/core';
-import { cardClass } from '#components/ui/card.ts';
-import { inputClass } from '#components/ui/input.ts';
-import { buttonClass } from '#components/ui/button.ts';
+import { cardClass } from '#modules/gallery/ui/card.ts';
+import { inputClass } from '#modules/gallery/ui/input.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
 import { signup } from '#modules/auth/actions/signup.server.ts';
 
 export const metadata = { title: 'Sign up' };

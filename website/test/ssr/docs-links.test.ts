@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequestHandler } from '@webjsdev/server';
 
 const WEBSITE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const DOCS_ROOT = resolve(WEBSITE_ROOT, 'app', 'docs');
+const DOCS_ROOT = resolve(WEBSITE_ROOT, 'app', '(site)', 'docs');
 
 let handle: (path: string) => Promise<Response>;
 

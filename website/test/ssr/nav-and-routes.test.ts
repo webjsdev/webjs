@@ -21,14 +21,13 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { html } from '@webjsdev/core';
 import { renderToString } from '@webjsdev/core/server';
-import RootLayout from '#app/layout.ts';
 import Sitemap from '#app/sitemap.ts';
 import { siteFooter } from '#lib/ui/site-footer.ts';
-import { layoutProps } from '#test/helpers/layout-props.ts';
+import { siteShell } from '#test/helpers/site-shell.ts';
 
 const WEBSITE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-const renderLayout = () => renderToString(RootLayout(layoutProps(html`<main>x</main>`)));
+const renderLayout = () => renderToString(siteShell(html`<main>x</main>`));
 
 test('the header nav no longer carries Why WebJs', async () => {
   const out = await renderLayout();

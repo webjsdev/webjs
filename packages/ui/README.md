@@ -100,7 +100,39 @@ step. Pass `--overwrite` to reset those instead.
 - `components.json`, your project's UI config (aliases, base color, Tailwind path)
 - `lib/utils/cn.ts`, the `cn()` class-merge helper, and `lib/utils/dom.ts`
   beside it for the client-only `onBeforeCache()` helper
-- Tailwind tokens + CSS variables appended to `styles/globals.css`
+- Tailwind tokens + CSS variables appended to `styles/globals.css`, between a
+  `/* @webjsdev/ui theme */` and a `/* @webjsdev/ui theme end */` marker
+
+### Presets, styles and icon libraries
+
+The configurator at [webjs.dev/ui/create](https://webjs.dev/ui/create) builds a
+whole design system (style, base color, theme, chart color, font, radius, icon
+library) and prints one command for it:
+
+```sh
+npx @webjsdev/ui init --preset b0
+```
+
+That writes the style and icon library into `components.json`, the chosen
+icon library to `lib/utils/icons.ts`, and the theme, REPLACING the block
+between the two markers in place, so running it again with another code
+switches the design system without touching the rest of your stylesheet. A
+block from before the end marker existed is left alone and reported. The code
+is shadcn/ui's preset format, so a shadcn code works too. The site serves
+what a code installs at `/ui/init?preset=<code>` (JSON) and
+`/ui/init/md?preset=<code>` (step-by-step markdown).
+
+One choice at a time works the same way:
+
+```sh
+npx @webjsdev/ui init --style nova         # one of the nine styles the bake applies
+npx @webjsdev/ui init --icons tabler       # lucide, tabler, hugeicons, phosphor, remixicon
+```
+
+Every icon library exports the same function names (`ChevronDownIcon('size-4')`
+and so on), so switching libraries changes no import. The themes and fonts
+are registry items too: `theme-<name>` for shadcn's 24 themes and
+`font-<name>` / `font-heading-<name>` for its 26 font families.
 
 ## What `add` does
 
@@ -112,6 +144,33 @@ one-line pointer, and leaves the worked structural example OUT of the file (get
 it on demand with `npx @webjsdev/ui view <name>`, which is what the pointer it
 leaves behind says too). It also self-heals the theme tokens if
 they are missing.
+
+A block (a ready-made view such as a dashboard or a chart, registry type
+`registry:block`) installs the same way. Each of its files lands at its own
+target under the app (`app/...`, `modules/...`, `components/...`), and every
+relative import in it is rewritten to where the imported file landed: a kit
+component into your ui alias, the `cn()` helper to your utils alias, another
+file of the same block to its own target. A block's files are app code you
+own, so `add` never replaces one that exists unless you pass `--overwrite`
+(`--yes` alone keeps it), and it prints the list of files it wrote. A block or
+component that needs design tokens your theme may lack (the sidebar's
+`--sidebar-*`, a chart's `--chart-*`) carries them, and `add` adds the missing
+ones to your stylesheet without touching a token you already define.
+
+Before hand-writing a login or signup page, an app sidebar shell, a dashboard
+or a chart, list the blocks and install the closest one:
+
+```sh
+npx @webjsdev/ui list --type block          # every block, with its description
+npx @webjsdev/ui view login-03 --files-only  # what it installs, and where
+npx @webjsdev/ui add login-03                # app/login/page.ts + components/login-form.ts
+```
+
+The kit ships shadcn's ten authentication blocks today (`login-01` to
+`login-05`, `signup-01` to `signup-05`). Each page is a server-rendered page
+module and each form a real `<form>` built from the kit's class helpers, with
+no JavaScript. The form has no `action` yet: bind a server action
+(`<form action=${signIn}>`) when you wire it up.
 
 The install runs with your project's package manager. `add` looks for a
 lockfile in the current directory and then each parent, stopping at the
@@ -129,12 +188,12 @@ always compares against the live upstream.
 
 | Command | Effect |
 |---|---|
-| `webjsui init` | Initialize a project (writes `components.json`, `lib/utils/cn.ts`, the theme tokens). Preserves an existing project's settings and helper files; `-o, --overwrite` resets them. Exits non-zero if the tokens cannot be written. |
-| `webjsui add <names...>` | Add components (copies helpers + a pointer for Tier-1, self-heals theme tokens) |
-| `webjsui list` | List all available components |
-| `webjsui view <name>` | Print a component's projected view (helpers + paste-ready example) and full source |
-| `webjsui diff [name]` | Show diff between your local copy and the live registry |
-| `webjsui info` | Print project diagnostics |
+| `webjsui init` | Initialize a project (writes `components.json`, `lib/utils/cn.ts`, the theme tokens). Preserves an existing project's settings and helper files; `-o, --overwrite` resets them and replaces the theme block. `--preset <code>`, `--style <name>` and `--icons <library>` apply a design system or one choice of it. Exits non-zero if the tokens cannot be written. |
+| `webjsui add <names...>` | Add components or blocks (copies helpers + a pointer for Tier-1, writes a block's files to their targets, self-heals theme tokens) |
+| `webjsui list [filter]` | List the components, blocks and charts in three labelled groups. `--type <ui\|block\|chart\|all>`, `--category <name>`, and `--json` for one compact array of `{ name, type, categories, description }` |
+| `webjsui view <name>` | A component: its projected view (helpers + paste-ready example) and full source. A block: its description, categories, dependencies, install command and files with targets, then the sources (`--files-only` stops before them, `--json` prints one document) |
+| `webjsui diff [name]` | Show diff between your local copy and the live registry, installed blocks included |
+| `webjsui info` | Print project diagnostics, with the kit's component, block and chart counts |
 | `webjsui build` | (For registry authors) Compile a custom registry |
 | `webjsui lint` | Opt-in design-system linter. Reports raw palette colors, arbitrary values and classes composed over a kit helper, at the line, with a message built from your own theme tokens and helper variants. Configured by a `lint` block in `components.json`; with no block it reports nothing and exits 0. `--json` for an agent loop, `--max-warnings <n>` to pin a count. |
 

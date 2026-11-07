@@ -128,8 +128,8 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
 
     // Dark-mode wiring: the head init script (in layout) AND the theme-toggle
     // must toggle the shadcn `.dark` class, not only the `data-theme`
-    // attribute. Without `.dark`, the copied components/ui/* render light
-    // tokens on the dark chrome (white buttons/cards, invisible text). Light
+    // attribute. Without `.dark`, the theme (and the copied components/ui/*)
+    // render light tokens on the dark chrome (white buttons/cards, invisible text). Light
     // mode hides this, so guard it here. See .agents/skills/webjs/references/styling.md "Dark mode".
     const layoutSrc = readFileSync(join(appDir, 'app', 'layout.ts'), 'utf8');
     const toggleSrc = readFileSync(join(appDir, 'components', 'theme-toggle.ts'), 'utf8');
@@ -158,9 +158,23 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.match(inputCss, /body:has\(> header\[class~="md:fixed"\]\) \{ @variant md \{ padding-top: var\(--header-h\); \} \}/,
       'and pinning it from a breakpoint up reserves the space through the app\'s own md breakpoint');
     assert.doesNotMatch(layoutSrc, /ResizeObserver/, 'the layout does not measure the header');
+    // The dark tokens are on .dark, which only the head script sets, so native
+    // controls switch on the same class. With JavaScript off the page is light
+    // throughout, never light tokens over OS-dark controls and scrollbars.
+    assert.match(layoutSrc, /<meta name="color-scheme" content="light">/, 'the meta names light only');
+    assert.match(layoutSrc, /:root \{[^}]*color-scheme: light;/, 'color-scheme defaults to light');
+    assert.match(layoutSrc, /:root\.dark \{ color-scheme: dark; \}/, 'and turns dark with the tokens');
+    assert.doesNotMatch(layoutSrc, /color-scheme: light dark|content="light dark"/, 'never following the OS on its own');
+    const clearSrc = readFileSync(join(appDir, 'scripts', 'clear-gallery.mjs'), 'utf8');
+    assert.match(clearSrc, /:root\.dark \{ color-scheme: dark; \}/, 'the gallery:clear layout pairs them the same way');
+    assert.doesNotMatch(clearSrc, /content="light dark"/);
     assert.match(layoutSrc, /JetBrains\+Mono/, 'layout loads the JetBrains Mono font');
-    assert.match(layoutSrc, /--primary:\s*light-dark\(#1e2226, #dee2e6\)/,
-      'layout ships the DRY light-dark() surface palette');
+    // The palette lives in the theme block of styles/globals.css (light on
+    // :root, dark on .dark), where a preset replaces it, never in the layout.
+    const themeSrc = readFileSync(join(appDir, 'styles', 'globals.css'), 'utf8');
+    assert.match(themeSrc, /:root \{[\s\S]*?--primary: #1e2226;/, 'the theme ships the cool neutral-grey palette');
+    assert.match(themeSrc, /\.dark \{[\s\S]*?--primary: #dee2e6;/, 'with its dark half on .dark');
+    assert.doesNotMatch(layoutSrc, /--primary\s*:/, 'and the layout overrides none of it');
     assert.doesNotMatch(layoutSrc, /oklch\(0\.7 0\.16 52\)/,
       'no orange brand color survives in the neutral scaffold');
 
@@ -371,7 +385,7 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     assert.deepEqual(pkg.webjs?.dev?.regenerate, [{
       output: 'public/tailwind.css',
       command: 'tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify',
-      inputs: ['app', 'components', 'modules', 'lib', 'public/input.css'],
+      inputs: ['app', 'components', 'modules', 'lib', 'styles', 'public/input.css'],
     }], 'webjs.dev.regenerate recompiles the static CSS on request (#967)');
     assert.equal(pkg.scripts['css:build'], 'tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify');
     // A production DEPENDENCY (#1606): `webjs start` compiles the CSS at every

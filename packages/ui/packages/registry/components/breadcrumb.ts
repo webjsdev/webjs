@@ -37,14 +37,14 @@
  */
 
 export const breadcrumbListClass = (): string =>
-  'flex flex-wrap items-center gap-1.5 text-sm break-words text-muted-foreground sm:gap-2.5';
+  'cn-breadcrumb-list flex flex-wrap items-center wrap-break-word';
 
-export const breadcrumbItemClass = (): string => 'inline-flex items-center gap-1.5';
+export const breadcrumbItemClass = (): string => 'cn-breadcrumb-item inline-flex items-center';
 
-export const breadcrumbLinkClass = (): string => 'transition-colors hover:text-foreground';
+export const breadcrumbLinkClass = (): string => 'cn-breadcrumb-link';
 
-export const breadcrumbPageClass = (): string => 'font-normal text-foreground';
+export const breadcrumbPageClass = (): string => 'cn-breadcrumb-page';
 
-export const breadcrumbSeparatorClass = (): string => '[&>svg]:size-3.5';
+export const breadcrumbSeparatorClass = (): string => 'cn-breadcrumb-separator';
 
-export const breadcrumbEllipsisClass = (): string => 'flex size-9 items-center justify-center';
+export const breadcrumbEllipsisClass = (): string => 'cn-breadcrumb-ellipsis flex items-center justify-center';

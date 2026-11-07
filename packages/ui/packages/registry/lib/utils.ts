@@ -57,8 +57,8 @@ function walk(value: ClassValue, out: string[]): void {
 let _groups: Array<[RegExp, string]> | undefined;
 function GROUPS(): Array<[RegExp, string]> {
   return (_groups ??= [
-    [/^p-/, 'p'], [/^px-/, 'px'], [/^py-/, 'py'], [/^pt-/, 'pt'], [/^pr-/, 'pr'], [/^pb-/, 'pb'], [/^pl-/, 'pl'],
-    [/^m-/, 'm'], [/^mx-/, 'mx'], [/^my-/, 'my'], [/^mt-/, 'mt'], [/^mr-/, 'mr'], [/^mb-/, 'mb'], [/^ml-/, 'ml'],
+    [/^p-/, 'p'], [/^px-/, 'px'], [/^py-/, 'py'], [/^pt-/, 'pt'], [/^pr-/, 'pr'], [/^pb-/, 'pb'], [/^pl-/, 'pl'], [/^ps-/, 'ps'], [/^pe-/, 'pe'],
+    [/^m-/, 'm'], [/^mx-/, 'mx'], [/^my-/, 'my'], [/^mt-/, 'mt'], [/^mr-/, 'mr'], [/^mb-/, 'mb'], [/^ml-/, 'ml'], [/^ms-/, 'ms'], [/^me-/, 'me'],
     [/^w-/, 'w'], [/^h-/, 'h'], [/^size-/, 'size'],
     // A `bg-[url(…)]` / `bg-[linear-gradient(…)]` background image is classified
     // by its FUNCTION, since it carries no type hint to classify it by. The
@@ -110,6 +110,7 @@ function GROUPS(): Array<[RegExp, string]> {
     [/^rounded(-[a-z]+)?$/, 'rounded'],
     [/^rounded-/, 'rounded'],
     [/^opacity-/, 'opacity'],
+    [/^leading-/, 'leading'],
     [/^font-(thin|light|normal|medium|semibold|bold|black|extralight|extrabold)$/, 'font-weight'],
     // Box-shadow SIZE and box-shadow COLOUR are two properties (`box-shadow` and
     // `--tw-shadow-color`), so they need two groups. `shadow-none` is a size,
@@ -148,6 +149,16 @@ function GROUPS(): Array<[RegExp, string]> {
     [/^grid-cols-/, 'grid-cols'],
     [/^grid-rows-/, 'grid-rows'],
     [/^grid-flow-/, 'grid-flow'],
+    // Flex basis and the alignment properties, one group per property:
+    // `justify-items-*` and `justify-self-*` precede `justify-*`, which is
+    // justify-content, and likewise `self-*` is align-self, apart from
+    // `items-*` (align-items).
+    [/^basis-/, 'basis'],
+    [/^justify-items-/, 'justify-items'],
+    [/^justify-self-/, 'justify-self'],
+    [/^justify-/, 'justify-content'],
+    [/^items-/, 'align-items'],
+    [/^self-/, 'align-self'],
   ]);
 }
 
@@ -266,10 +277,10 @@ function hintedGroup(bare: string): string | null | undefined {
 // the value lists the EARLIER groups whose survivors it removes (its own group
 // is always removed too, handled below).
 const CONFLICTS: Record<string, string[]> = {
-  p: ['px', 'py', 'pt', 'pr', 'pb', 'pl'],
+  p: ['px', 'py', 'pt', 'pr', 'pb', 'pl', 'ps', 'pe'],
   px: ['pl', 'pr'],
   py: ['pt', 'pb'],
-  m: ['mx', 'my', 'mt', 'mr', 'mb', 'ml'],
+  m: ['mx', 'my', 'mt', 'mr', 'mb', 'ml', 'ms', 'me'],
   mx: ['ml', 'mr'],
   my: ['mt', 'mb'],
   size: ['w', 'h'],
@@ -374,6 +385,40 @@ export function domId(prefix = 'ui'): string {
 export function ensureId(el: { id: string }, prefix = 'ui'): string {
   if (!el.id) el.id = domId(prefix);
   return el.id;
+}
+
+/** A Tier-2 host whose authored class {@link takeAuthoredClass} reads. */
+export type ClassHost = {
+  getAttribute?(name: string): string | null;
+  setAttribute?(name: string, value: string): void;
+  removeAttribute?(name: string): void;
+  _authoredClass?: string | null;
+};
+
+/**
+ * The class an author wrote on a Tier-2 part's host, which is shadcn's
+ * `className` and belongs on the element the part renders. Read once per
+ * element, then `hostClass` replaces it on the host (`null` removes the
+ * class, `undefined` leaves the attribute to the caller, for a host that
+ * styles itself).
+ *
+ * The first read records the class in `data-authored-class`, which the server
+ * serves, because the class attribute cannot be trusted on hydration: the
+ * server sends the class a tag was written with, and a host written with none
+ * is sent the class the element gave it (`contents`, its own classes). The
+ * element that upgrades the served markup is a fresh instance, so without the
+ * record it would read that class back as the author's.
+ */
+export function takeAuthoredClass(host: ClassHost, hostClass?: string | null): string | null {
+  if (host._authoredClass === undefined) {
+    const recorded = host.getAttribute?.('data-authored-class') ?? null;
+    const authored = recorded ?? host.getAttribute?.('class') ?? '';
+    host._authoredClass = authored || null;
+    if (recorded === null) host.setAttribute?.('data-authored-class', authored);
+    if (hostClass) host.setAttribute?.('class', hostClass);
+    else if (hostClass === null) host.removeAttribute?.('class');
+  }
+  return host._authoredClass;
 }
 
 // NOTE: the old `HTMLElement`-era `Base` / `defineElement` / SSR-stub helpers

@@ -40,9 +40,13 @@
 export const progressClass = (): string =>
   [
     // Reset native styling. WebKit / Blink draw a default 3D bar that we
-    // strip via appearance-none + classic clear of border/bg.
-    'block h-2 w-full overflow-hidden rounded-full',
-    'appearance-none border-0 bg-primary/20 [&::-webkit-progress-bar]:bg-primary/20',
+    // strip via appearance-none + classic clear of the border. The TRACK
+    // colour is the style's (`.cn-progress` sets the element's background),
+    // so the native track pseudo-element is transparent and shows it, and
+    // overflow-hidden clips the fill to the style's corners. A colour here
+    // would sit in the utilities layer and beat every style.
+    'cn-progress w-full',
+    'appearance-none overflow-hidden border-0 [&::-webkit-progress-bar]:bg-transparent',
     // Bar fill: blink/webkit + firefox both via Tailwind 4's arbitrary-
     // pseudo variant. Smooth animation on width change matches shadcn.
     "[&::-webkit-progress-value]:bg-primary [&::-webkit-progress-value]:transition-all",

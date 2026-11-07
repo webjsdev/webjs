@@ -46,6 +46,9 @@ test('every sibling-component import is declared in registryDependencies', () =>
       (manifest.items.find((i) => i.name === name).registryDependencies) || [],
     );
     for (const sib of siblings) {
+      // A file of the SAME item (chart.ts importing chart-geometry.ts) is
+      // installed with it, so it needs no dependency of its own.
+      if (fileToItem.get(`components/${sib}.ts`) === name) continue;
       if (!declared.has(sib)) gaps.push(`${name} imports ./${sib}.ts but does not declare it`);
     }
   }

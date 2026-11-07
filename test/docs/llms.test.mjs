@@ -39,7 +39,7 @@ before(async () => {
 
 /** Count the topic folders under website/app/docs that hold a page.{ts,js}. */
 async function countTopicPages() {
-  const root = resolve(DOCS_DIR, 'app', 'docs');
+  const root = resolve(DOCS_DIR, 'app', '(site)', 'docs');
   const dirents = await readdir(root, { withFileTypes: true });
   let n = 0;
   for (const d of dirents) {

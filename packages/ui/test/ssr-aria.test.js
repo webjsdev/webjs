@@ -173,3 +173,338 @@ test('ui-alert-dialog-content: the alertdialog role is on the native <dialog> at
 // branch in sonner.ts is still the correct shape (a nullish hole is the
 // documented footgun this file exists for), but its observable contract lives
 // in the browser suite and in the accessibility-tree e2e.
+
+test('ui-sheet: the native dialog carries role=dialog and the panel its data-side at SSR', { skip }, async () => {
+  const out = await ssr(
+    ['sheet.ts'],
+    (html) => html`<ui-sheet><ui-sheet-content side="left"><h2 data-slot="sheet-title">Filters</h2></ui-sheet-content></ui-sheet>`,
+  );
+  assert.match(out, /<dialog(?=[^>]*data-slot="sheet-native")(?=[^>]*role="dialog")/, 'the sheet renders its own native dialog with the dialog role');
+  assert.match(out, /data-slot="sheet-content"[^>]*data-side="left"/, 'the panel is attached to its side in the first paint');
+});
+
+test('ui-dialog: a centred dialog panel serves no data-side at SSR', { skip }, async () => {
+  const out = await ssr(['dialog.ts'], (html) => html`<ui-dialog><ui-dialog-content><h2>T</h2></ui-dialog-content></ui-dialog>`);
+  assert.doesNotMatch(out, /data-side=/, 'the null side omits the attribute instead of serving data-side=""');
+});
+
+test('ui-drawer: the panel serves its vaul direction, a hidden handle and no corner X at SSR', { skip }, async () => {
+  const out = await ssr(
+    ['drawer.ts'],
+    (html) => html`<ui-drawer><ui-drawer-content direction="left"><h2 data-slot="drawer-title">Share</h2></ui-drawer-content></ui-drawer>`,
+  );
+  assert.match(out, /data-slot="drawer-content"[^>]*data-vaul-drawer-direction="left"/, 'the direction is in the first paint');
+  assert.match(out, /data-slot="drawer-handle"[^>]*aria-hidden="true"|aria-hidden="true"[^>]*data-slot="drawer-handle"/, 'the handle is hidden from assistive technology');
+  assert.doesNotMatch(out, /<button[^>]*data-slot="drawer-close"/, 'no corner X is served and then removed');
+});
+
+test('ui-sheet: a sheet panel serves no vaul direction at SSR', { skip }, async () => {
+  const out = await ssr(['sheet.ts'], (html) => html`<ui-sheet><ui-sheet-content><h2>T</h2></ui-sheet-content></ui-sheet>`);
+  assert.doesNotMatch(out, /data-vaul-drawer-direction=/, 'the null direction omits the attribute');
+});
+
+test('ui-context-menu: the served parts carry context-menu slots and the menu role, and the region no popup ARIA', { skip }, async () => {
+  const out = await ssr(
+    ['context-menu.ts'],
+    (html) => html`<ui-context-menu><ui-context-menu-trigger><div tabindex="0">Region</div></ui-context-menu-trigger><ui-context-menu-content><ui-context-menu-item>Rename</ui-context-menu-item><ui-context-menu-item type="checkbox" checked>Show</ui-context-menu-item></ui-context-menu-content></ui-context-menu>`,
+  );
+  assert.match(out, /data-slot="context-menu-content"[^>]*role="menu"|role="menu"[^>]*data-slot="context-menu-content"/, 'the panel is a menu under its own slot');
+  assert.match(out, /data-slot="context-menu-item"[^>]*role="menuitem"|role="menuitem"[^>]*data-slot="context-menu-item"/, 'a plain item');
+  assert.match(out, /data-slot="context-menu-checkbox-item"/, 'a checkbox item takes the family slot too');
+  assert.match(out, /aria-checked="true"/, 'its state is served');
+  assert.doesNotMatch(out, /data-slot="dropdown-menu/, 'no dropdown slot names');
+  assert.doesNotMatch(out, /aria-haspopup|aria-expanded/, 'a context region is not a menu button');
+});
+
+test('ui-menubar: the bar serves role=menubar, each trigger a menuitem button with its popup, and menubar slots', { skip }, async () => {
+  const out = await ssr(
+    ['menubar.ts'],
+    (html) => html`<ui-menubar aria-label="Editor"><ui-menubar-menu><ui-menubar-trigger>File</ui-menubar-trigger><ui-menubar-content><ui-menubar-item>New</ui-menubar-item><ui-menubar-item type="radio" value="a" checked>A</ui-menubar-item></ui-menubar-content></ui-menubar-menu></ui-menubar>`,
+  );
+  assert.match(out, /data-slot="menubar"[^>]*role="menubar"/, 'the bar is a menubar');
+  assert.match(out, /role="menubar"[^>]*aria-label="Editor"/, 'the bar carries its name');
+  assert.match(out, /<button[^>]*data-slot="menubar-trigger"[^>]*role="menuitem"[^>]*aria-haspopup="menu"[^>]*aria-expanded="false"/, 'the trigger is the focusable menuitem with its popup state');
+  assert.match(out, /data-slot="menubar-menu"/, 'each menu takes its own root slot');
+  assert.match(out, /data-slot="menubar-content"[^>]*role="menu"|role="menu"[^>]*data-slot="menubar-content"/, 'the panel is a menu');
+  assert.match(out, /data-slot="menubar-radio-item"/, 'a radio item takes the family slot');
+  assert.match(out, /cn-menubar-radio-item-indicator/, 'the radio indicator is styled apart from the checkbox one');
+  assert.doesNotMatch(out, /data-slot="dropdown-menu/, 'no dropdown slot names');
+});
+
+test('ui-navigation-menu: a named nav of ul / li, a closed disclosure trigger, a hidden panel and a current-page link at SSR', { skip }, async () => {
+  const out = await ssr(
+    ['navigation-menu.ts'],
+    (html) => html`<ui-navigation-menu><ui-navigation-menu-list><ui-navigation-menu-item><ui-navigation-menu-trigger>Components</ui-navigation-menu-trigger><ui-navigation-menu-content><ui-navigation-menu-link href="/ui/dialog">Dialog</ui-navigation-menu-link></ui-navigation-menu-content></ui-navigation-menu-item><ui-navigation-menu-item><ui-navigation-menu-link href="/docs" active>Docs</ui-navigation-menu-link></ui-navigation-menu-item></ui-navigation-menu-list></ui-navigation-menu>`,
+  );
+  assert.match(out, /<nav[^>]*data-slot="navigation-menu"[^>]*aria-label="Main"/, 'a nav named Main by default');
+  assert.match(out, /data-viewport="true"/, 'the viewport is on by default');
+  assert.match(out, /<ul[^>]*data-slot="navigation-menu-list"/, 'the list is a real ul');
+  assert.match(out, /<li[^>]*data-slot="navigation-menu-item"/, 'each item is a real li');
+  assert.match(out, /<button[^>]*data-slot="navigation-menu-trigger"[^>]*aria-expanded="false"/, 'the trigger is a collapsed disclosure button');
+  assert.match(out, /data-slot="navigation-menu-content"[^>]*hidden/, 'a closed panel is hidden in the first paint');
+  assert.match(out, /<a[^>]*href="\/docs"[^>]*data-active="true"[^>]*aria-current="page"|<a[^>]*aria-current="page"[^>]*href="\/docs"/, 'the active link is a real anchor marked as the current page');
+  assert.doesNotMatch(out, /<a[^>]*href="\/ui\/dialog"[^>]*aria-current/, 'an inactive link carries no aria-current');
+  assert.doesNotMatch(out, /role="menu/, 'navigation is not an ARIA menu');
+});
+
+test('ui-navigation-menu: viewport="false" serves no viewport frame', { skip }, async () => {
+  const out = await ssr(
+    ['navigation-menu.ts'],
+    (html) => html`<ui-navigation-menu viewport="false"><ui-navigation-menu-list></ui-navigation-menu-list></ui-navigation-menu>`,
+  );
+  assert.match(out, /data-viewport="false"/);
+  assert.doesNotMatch(out, /data-slot="navigation-menu-viewport"/);
+});
+
+test('ui-select: the first paint is the authored native select, visible and unenhanced (D13)', { skip }, async () => {
+  const out = await ssr(
+    ['select.ts'],
+    (html) => html`<label for="fruit">Fruit</label><ui-select placeholder="Pick"><select id="fruit" name="fruit" required><option value="" disabled selected hidden>Pick</option><option value="apple">Apple</option></select></ui-select>`,
+  );
+  assert.match(out, /<select id="fruit" name="fruit" required>/, 'the native select is served as authored');
+  assert.doesNotMatch(out, /<select[^>]*(hidden|aria-hidden|style=)/, 'and not hidden: with JavaScript off it is the control');
+  assert.doesNotMatch(out, /role="combobox"|role="listbox"|<button/, 'no drawn trigger or list before the element upgrades');
+});
+
+test('ui-slider: the first paint is the authored range inputs, unenhanced (D13)', { skip }, async () => {
+  const out = await ssr(
+    ['slider.ts'],
+    (html) => html`<ui-slider><input type="range" name="lo" min="0" max="100" value="20" aria-label="Minimum"><input type="range" name="hi" min="0" max="100" value="80" aria-label="Maximum"></ui-slider>`,
+  );
+  assert.match(out, /<input type="range" name="lo" min="0" max="100" value="20" aria-label="Minimum">/, 'the inputs are served as authored');
+  assert.doesNotMatch(out, /<input[^>]*(aria-hidden|style=)/, 'and not hidden: with JavaScript off they are the control');
+  assert.doesNotMatch(out, /role="slider"/, 'no drawn thumbs before the element upgrades');
+});
+
+test('ui-input-otp: the first paint is the authored input alone, the drawn parts hidden (D13)', { skip }, async () => {
+  const out = await ssr(
+    ['input-otp.ts'],
+    (html) => html`<ui-input-otp><input name="otp" maxlength="4" autocomplete="one-time-code" aria-label="Code"><ui-input-otp-group><ui-input-otp-slot index="0"></ui-input-otp-slot><ui-input-otp-slot index="1"></ui-input-otp-slot></ui-input-otp-group><ui-input-otp-separator></ui-input-otp-separator></ui-input-otp>`,
+  );
+  assert.match(out, /<input[^>]*name="otp"[^>]*autocomplete="one-time-code"/, 'the input is served as authored, a plain field');
+  assert.doesNotMatch(out, /<input[^>]*style=/, 'and not laid over anything before the element upgrades');
+  assert.match(out, /data-slot="input-otp-group"[^>]*hidden/, 'the group is hidden until the element upgrades');
+  assert.match(out, /data-slot="input-otp-separator"[^>]*hidden/, 'and so is the separator');
+});
+
+test('ui-command: the served list shows every item as an option, under a combobox, with the empty state hidden', { skip }, async () => {
+  const out = await ssr(
+    ['command.ts'],
+    (html) => html`<ui-command label="Menu"><ui-command-input placeholder="Search"></ui-command-input><ui-command-list><ui-command-empty>None</ui-command-empty><ui-command-group heading="Pages"><ui-command-item>Home</ui-command-item><ui-command-item>About</ui-command-item></ui-command-group></ui-command-list></ui-command>`,
+  );
+  assert.match(out, /<input[^>]*role="combobox"/, 'the input is a combobox');
+  assert.match(out, /role="listbox"/, 'over a listbox');
+  assert.equal((out.match(/role="option"/g) ?? []).length, 2, 'every item is served, so the list reads with JavaScript off');
+  assert.match(out, /data-slot="command-empty"[^>]*hidden/, 'the empty state is hidden');
+  assert.match(out, /cmdk-group-heading=""[^>]*>Pages|cmdk-group-heading="">Pages/, 'the heading carries the hook shadcn styles key on');
+});
+
+test('ui-combobox: the initial value is served in a hidden form control, so it submits with JavaScript off', { skip }, async () => {
+  const out = await ssr(
+    ['combobox.ts'],
+    (html) => html`<ui-combobox name="tags" multiple value="a,b"><ui-combobox-chips><ui-combobox-chips-input aria-label="Tags"></ui-combobox-chips-input></ui-combobox-chips><ui-combobox-content><ui-combobox-list><ui-combobox-item value="a">A</ui-combobox-item></ui-combobox-list></ui-combobox-content></ui-combobox>`,
+  );
+  assert.match(out, /<input type="hidden" name="tags" value="a">/, 'one control per value');
+  assert.match(out, /<input type="hidden" name="tags" value="b">/);
+  assert.match(out, /<input[^>]*role="combobox"[^>]*aria-expanded="false"/, 'a collapsed combobox input');
+  assert.match(out, /role="listbox"[^>]*aria-multiselectable="true"|aria-multiselectable="true"[^>]*role="listbox"/, 'a multiselectable listbox');
+});
+
+test('ui-calendar: show-week-number serves a leading column of named week numbers', { skip }, async () => {
+  const out = await ssr(['calendar.ts'], (html) => html`<ui-calendar mode="single" value="2025-01-12" month="2025-01" locale="en-US" show-week-number></ui-calendar>`);
+  assert.match(out, /<tr class="flex"><th scope="col" aria-label="Week Number" class="w-\(--cell-size\) select-none"><\/th><th/, 'the header row opens with the week-number header');
+  const rows = [...out.matchAll(/<td role="rowheader" scope="row" aria-label="Week (\d+)"[^>]*><div[^>]*>(\d+)<\/div><\/td>/g)].map((m) => [m[1], m[2]]);
+  assert.deepEqual(rows, [['1', '01'], ['2', '02'], ['3', '03'], ['4', '04'], ['5', '05']], 'January 2025, Sunday-first: weeks 1 to 5, shown two digits wide');
+  assert.match(out, /\[&amp;:nth-child\(2\)\[data-selected=true\]_button\]:rounded-s-\(--cell-radius\)/, 'the first day\'s corner moves to the second cell');
+  const monday = await ssr(['calendar.ts'], (html) => html`<ui-calendar month="2021-01" locale="en-US" week-starts-on="1" show-week-number></ui-calendar>`);
+  const mondayWeeks = [...monday.matchAll(/aria-label="Week (\d+)"/g)].map((m) => m[1]);
+  assert.deepEqual(mondayWeeks, ['1', '2', '3', '4', '5'], 'Monday-first January 2021 still numbers the week holding January 1 as week 1');
+  const iso = await ssr(['calendar.ts'], (html) => html`<ui-calendar month="2021-01" locale="en-US" iso-week show-week-number></ui-calendar>`);
+  const isoWeeks = [...iso.matchAll(/aria-label="Week (\d+)"/g)].map((m) => m[1]);
+  assert.deepEqual(isoWeeks, ['53', '1', '2', '3', '4'], 'iso-week numbers ISO weeks, so January 2021 opens in week 53');
+  assert.match(iso, /<th scope="col" aria-label="Week Number"[^>]*><\/th><th scope="col" aria-label="Monday"/, 'and starts the week on Monday');
+  const plain = await ssr(['calendar.ts'], (html) => html`<ui-calendar month="2025-01" locale="en-US"></ui-calendar>`);
+  assert.doesNotMatch(plain, /rowheader|Week Number/, 'without the attribute there is no column');
+});
+
+test('ui-calendar: the server renders the month grid, the chosen day and its hidden form value', { skip }, async () => {
+  const out = await ssr(
+    ['calendar.ts'],
+    (html) => html`<ui-calendar mode="single" value="2025-06-12" name="day" locale="en-US"></ui-calendar>`,
+  );
+  assert.match(out, /role="grid"/, 'a grid');
+  assert.match(out, />June 2025</, 'captioned by its month');
+  assert.match(out, /aria-label="Thursday, June 12, 2025, selected"/, 'the chosen day is named and marked');
+  assert.match(out, /data-day="2025-06-12"[^>]*aria-selected="true"/, 'and selected');
+  assert.equal((out.match(/<button[^>]*data-day="2025-06-/g) ?? []).length, 30, 'every day of June is a button');
+  assert.match(out, /<input type="hidden" name="day" value="2025-06-12">/, 'the value is in the form');
+  assert.match(out, /<button[^>]*tabindex="0"[^>]*data-day="2025-06-12"|<button[^>]*data-day="2025-06-12"[^>]*tabindex="0"/, 'the chosen day holds the tab stop');
+});
+
+test('ui-questionnaire: without JavaScript it is one plain form, every question shown and only Submit offered', { skip }, async () => {
+  const out = await ssr(
+    ['questionnaire.ts'],
+    (html) => html`<ui-questionnaire><ui-questionnaire-item name="a" required><ui-questionnaire-title>First?</ui-questionnaire-title><ui-questionnaire-choices><ui-questionnaire-choice value="x">X</ui-questionnaire-choice></ui-questionnaire-choices></ui-questionnaire-item><ui-questionnaire-item name="b"><ui-questionnaire-title>Second?</ui-questionnaire-title><ui-questionnaire-choices><ui-questionnaire-choice value="y">Y</ui-questionnaire-choice></ui-questionnaire-choices></ui-questionnaire-item><ui-questionnaire-actions><ui-questionnaire-previous></ui-questionnaire-previous><ui-questionnaire-next></ui-questionnaire-next><ui-questionnaire-submit></ui-questionnaire-submit></ui-questionnaire-actions></ui-questionnaire>`,
+  );
+  assert.match(out, /<form\s+data-slot="questionnaire"/, 'a native form');
+  assert.doesNotMatch(out, /<form[^>]*novalidate/, 'with the browser\'s own validation');
+  assert.equal((out.match(/<fieldset/g) ?? []).length, 2);
+  assert.doesNotMatch(out, /<fieldset[^>]*hidden/, 'every question is shown');
+  assert.match(out, /<input[^>]*type="radio"[^>]*name="a"[^>]*value="x"[^>]*required|<input[^>]*name="a"[^>]*required/, 'a required question\'s radios are required');
+  assert.match(out, /data-slot="questionnaire-next"[^>]*hidden/, 'Next is hidden');
+  assert.match(out, /data-slot="questionnaire-previous"[^>]*hidden/, 'Previous is hidden');
+  assert.doesNotMatch(out, /data-slot="questionnaire-submit"[^>]*hidden/, 'Submit is offered');
+});
+
+test('ui-carousel: the served slides scroll and snap with JavaScript off, each one a labelled slide', { skip }, async () => {
+  const out = await ssr(
+    ['carousel.ts'],
+    (html) => html`<ui-carousel aria-label="Featured"><ui-carousel-content><ui-carousel-item class="basis-1/2">A</ui-carousel-item><ui-carousel-item>B</ui-carousel-item></ui-carousel-content><ui-carousel-next></ui-carousel-next></ui-carousel>`,
+  );
+  assert.match(out, /role="region"[^>]*aria-roledescription="carousel"[^>]*aria-label="Featured"/);
+  assert.match(out, /data-slot="carousel-content"[^>]*class="[^"]*snap-x snap-mandatory/, 'a native scroll-snap strip');
+  assert.match(out, /<ui-carousel-item class="[^"]*basis-1\/2[^"]*"[^>]*role="group"[^>]*aria-roledescription="slide"/, 'a slide carries its own classes, keeping the author\'s, and its role');
+  assert.match(out, /data-carousel-snap[^>]*class="absolute size-px snap-start"/, 'and snaps on its content, through a marker with a size');
+  assert.match(out, /<span class="sr-only">Next slide<\/span>/);
+});
+
+test('ui-resizable: the server draws each panel at its default share and each handle as a separator', { skip }, async () => {
+  const out = await ssr(
+    ['resizable.ts'],
+    (html) => html`<ui-resizable-panel-group orientation="horizontal"><ui-resizable-panel default-size="25">A</ui-resizable-panel><ui-resizable-handle></ui-resizable-handle><ui-resizable-panel default-size="75">B</ui-resizable-panel></ui-resizable-panel-group>`,
+  );
+  assert.match(out, /aria-orientation="horizontal"/, 'the group states its orientation');
+  assert.match(out, /<ui-resizable-panel[^>]*style="flex: 25 1 0px; overflow: hidden;"/, 'the first panel at 25');
+  assert.match(out, /<ui-resizable-panel[^>]*style="flex: 75 1 0px; overflow: hidden;"/, 'the second at 75');
+  // The handle's own class holds a '>' (its grip selector), so read the open
+  // tag attribute by attribute rather than up to the first '>'.
+  const handle = (out.match(/<ui-resizable-handle(?:\s+[\w-]+(?:="[^"]*")?)*/) ?? [''])[0];
+  for (const attr of ['role="separator"', 'tabindex="0"', 'aria-orientation="vertical"']) {
+    assert.ok(handle.includes(attr), `the handle is a focusable upright separator (${attr})`);
+  }
+});
+
+// The served transcript is VISIBLE: with JavaScript off nothing would ever lift
+// a pending flag, so the conversation would never show. Only a scroller built
+// in the browser, which has not painted, waits for its opening position.
+test('ui-message-scroller: the served transcript is a visible log', { skip }, async () => {
+  const out = await ssr(
+    ['message-scroller.ts'],
+    (html) => html`<ui-message-scroller><ui-message-scroller-viewport><ui-message-scroller-content aria-label="Chat"><ui-message-scroller-item message-id="a">Hi</ui-message-scroller-item></ui-message-scroller-content></ui-message-scroller-viewport><ui-message-scroller-button></ui-message-scroller-button></ui-message-scroller>`,
+  );
+  assert.doesNotMatch(out, /data-pending-scroll/, 'nothing in the served transcript is held invisible');
+  assert.match(out, /role="log"[\s\S]*?aria-relevant="additions"[\s\S]*?aria-label="Chat"/, 'a labelled log that announces additions');
+  assert.match(out, /<ui-message-scroller-item message-id="a"[^>]* class="[^"]*shrink-0[^"]*"[^>]* data-slot="message-scroller-item"/, 'an item carries its own classes');
+  assert.match(out, /<span class="sr-only">Scroll to end<\/span>/);
+});
+
+test('ui-message-scroller-button: a label names the button in place of the default text', { skip }, async () => {
+  const out = await ssr(
+    ['message-scroller.ts'],
+    (html) => html`<ui-message-scroller><ui-message-scroller-viewport><ui-message-scroller-content aria-label="Chat"></ui-message-scroller-content></ui-message-scroller-viewport><ui-message-scroller-button label="Zum Ende"></ui-message-scroller-button></ui-message-scroller>`,
+  );
+  assert.match(out, /data-slot="message-scroller-button"[^>]*aria-label="Zum Ende"/);
+  assert.doesNotMatch(out, /Scroll to end/, 'the default name is not served beside it');
+});
+
+test('code-block: codeBlockLines draws one line span per line, keeps blank lines, and marks variants', { skip }, async () => {
+  const { codeBlockLines } = await import(join(COMPONENTS, 'code-block.ts'));
+  const out = await ssr(
+    ['code-block.ts'],
+    (html) => html`<pre data-slot="code-block-content" data-numbered><code data-slot="code-block-code">${codeBlockLines('const a = 1\n\nconst b = 2\n', { variants: { 3: 'added' } })}</code></pre>`,
+  );
+  assert.equal((out.match(/data-slot="code-block-line"/g) ?? []).length, 3, 'three lines, the trailing newline dropped');
+  assert.match(out, /data-slot="code-block-line-content" class="min-w-0">\n<\/span>/, 'a blank line holds a newline, so a copied selection keeps it');
+  assert.match(out, /data-variant="added"[^>]*class="[^"]*cn-code-block-line-variant-added/, 'line 3 is marked added');
+});
+
+test('ui-code-block-copy-button: the served button is named Copy, with an empty polite live region', { skip }, async () => {
+  const out = await ssr(['code-block.ts'], (html) => html`<ui-code-block-copy-button></ui-code-block-copy-button>`);
+  assert.match(out, /<button[\s\S]*?aria-label="Copy"/);
+  assert.match(out, /<span aria-live="polite" class="sr-only"><\/span>/);
+});
+
+test('ui-sidebar: the served sidebar carries its state on its own host, so the inset beside it can style off it', { skip }, async () => {
+  const out = await ssr(
+    ['sidebar.ts'],
+    (html) => html`<ui-sidebar-provider default-open="false"><ui-sidebar collapsible="icon" variant="inset"><div>menu</div></ui-sidebar><ui-sidebar-inset class="authored"><ui-sidebar-trigger></ui-sidebar-trigger></ui-sidebar-inset></ui-sidebar-provider>`,
+  );
+  assert.match(out, /data-slot="sidebar-wrapper"\s+style="--sidebar-width: 16rem; --sidebar-width-icon: 3rem"/, 'the wrapper sets the widths');
+  const sidebar = (out.match(/<ui-sidebar (?:\s*[\w-]+(?:="[^"]*")?)*/) ?? [''])[0];
+  for (const attr of ['class="group peer hidden text-sidebar-foreground md:block"', 'data-state="collapsed"', 'data-collapsible="icon"', 'data-variant="inset"', 'data-side="left"']) {
+    assert.ok(sidebar.includes(attr), `the sidebar host carries ${attr}`);
+  }
+  assert.match(out, /<ui-sidebar-inset class="[^"]*authored[^"]*"[^>]*role="main"/, 'the inset is the main landmark, keeping the author\'s classes');
+  assert.match(out, /<span class="sr-only">Toggle Sidebar<\/span>/);
+});
+
+test('ui-switch: the served switch is a real, named, checked control inside shadcn\'s root and thumb', { skip }, async () => {
+  const out = await ssr(['switch.ts'], (html) => html`<ui-switch name="airplane" value="on" checked aria-label="Airplane mode" input-id="airplane"></ui-switch>`);
+  assert.match(out, /<span\s+data-slot="switch"\s+data-size="default"\s+data-state="checked"/, 'the root carries shadcn\'s slot, size and state');
+  const input = (out.match(/<input[^>]*>/) ?? [''])[0];
+  for (const attr of ['type="checkbox"', 'role="switch"', 'id="airplane"', 'name="airplane"', 'value="on"', 'checked', 'aria-label="Airplane mode"']) {
+    assert.ok(input.includes(attr), `the checkbox carries ${attr}, so it submits and is named with JavaScript off`);
+  }
+  assert.match(out, /<span\s+data-slot="switch-thumb"\s+data-state="checked"/, 'and the thumb follows');
+  // The checkbox is laid over the whole track, transparent, so a click
+  // anywhere on the switch is a click on the real control. (The browser suite
+  // loads no stylesheet, so this is asserted on the served classes.)
+  for (const cls of ['absolute', 'inset-0', 'size-full', 'opacity-0', 'z-10']) {
+    assert.match(input, new RegExp(`class="[^"]*\\b${cls}\\b`), `the checkbox carries ${cls}`);
+  }
+  const off = await ssr(['switch.ts'], (html) => html`<ui-switch aria-label="Wi-Fi"></ui-switch>`);
+  assert.match(off, /data-state="unchecked"/);
+  assert.doesNotMatch((off.match(/<input[^>]*>/) ?? [''])[0], /\s(checked|name|id|value)[=\s>]/, 'an unset attribute is not served empty');
+});
+
+test('hosts that hand their box to what they render serve display: contents, so the first paint has one box', { skip }, async () => {
+  const group = await ssr(['resizable.ts'], (html) => html`<ui-resizable-panel-group class="max-w-sm border"><ui-resizable-panel default-size="100">x</ui-resizable-panel></ui-resizable-panel-group>`);
+  assert.match(group, /<ui-resizable-panel-group[^>]*style="display: contents"/, 'the group host draws no box');
+  assert.match(group, /data-slot="resizable-panel-group"[^>]*class="[^"]*\bmax-w-sm border\b/, 'and its class is on the group box');
+  const select = await ssr(['select.ts'], (html) => html`<ui-select><select aria-label="Fruit"><option>Apple</option></select></ui-select>`);
+  assert.match(select, /<ui-select[^>]*style="display: contents"/, 'the select host draws no box');
+  const command = await ssr(['command.ts'], (html) => html`<ui-command label="Menu"><ui-command-list><ui-command-item>A<ui-command-shortcut>P</ui-command-shortcut></ui-command-item></ui-command-list></ui-command>`);
+  assert.match(command, /<ui-command [^>]*style="display: contents"/, 'nor does the command root');
+  assert.match(command, /<ui-command-shortcut[^>]*style="display: contents"/, 'nor the shortcut, whose span is the item\'s flex item');
+  const q = await ssr(['questionnaire.ts'], (html) => html`<ui-questionnaire><ui-questionnaire-item name="a"><ui-questionnaire-title>A?</ui-questionnaire-title></ui-questionnaire-item></ui-questionnaire>`);
+  for (const tag of ['ui-questionnaire', 'ui-questionnaire-item', 'ui-questionnaire-title']) {
+    assert.match(q, new RegExp(`<${tag}[ >][^>]*style="display: contents"`), `<${tag}> draws no box`);
+  }
+});
+
+test('ui-tabs-list: shadcn\'s `line` variant, and `underline` as its alias, are both served as data-variant="line"', { skip }, async () => {
+  for (const variant of ['line', 'underline']) {
+    const out = await ssr(['tabs.ts'], (html) => html`<ui-tabs value="a"><ui-tabs-list variant=${variant}><ui-tabs-trigger value="a">A</ui-tabs-trigger></ui-tabs-list></ui-tabs>`);
+    assert.match(out, /role="tablist"[^>]*data-variant="line"/, `variant="${variant}" is keyed as line, which the styles select on`);
+    assert.match(out, /class="[^"]*\bcn-tabs-list-variant-line\b/);
+  }
+});
+
+test('ui-tabs-trigger: a disabled trigger is served as a disabled button with data-disabled', { skip }, async () => {
+  const out = await ssr(['tabs.ts'], (html) => html`<ui-tabs value="a"><ui-tabs-list><ui-tabs-trigger value="a">A</ui-tabs-trigger><ui-tabs-trigger value="b" disabled>B</ui-tabs-trigger></ui-tabs-list></ui-tabs>`);
+  const [a, b] = [...out.matchAll(/<button[^>]*role="tab"[^>]*>/g)].map((m) => m[0]);
+  assert.match(b, /\sdisabled(="")?[\s>]/, 'the disabled trigger\'s button is disabled');
+  assert.match(b, /\sdata-disabled(="")?[\s>]/, 'and carries data-disabled');
+  assert.doesNotMatch(a, /\s(data-)?disabled(="")?[\s>]/, 'an enabled trigger carries neither');
+});
+
+test('ui-toggle-group: with no spacing written the style decides (shadcn\'s gap of 2), and a written one is served', { skip }, async () => {
+  const bare = await ssr(['toggle-group.ts'], (html) => html`<ui-toggle-group><ui-toggle-group-item value="a">A</ui-toggle-group-item></ui-toggle-group>`);
+  const root = (bare.match(/<div[^>]*data-slot="toggle-group"[^>]*>/) ?? [''])[0];
+  assert.doesNotMatch(root, /data-spacing=/, 'no data-spacing, so no style joins the items by default');
+  assert.match(root, /style="--gap: 2"/, 'and shadcn\'s default gap');
+  assert.doesNotMatch((bare.match(/<ui-toggle-group-item[^>]*>/) ?? [''])[0], /data-spacing=/);
+  const joined = await ssr(['toggle-group.ts'], (html) => html`<ui-toggle-group spacing="0"><ui-toggle-group-item value="a">A</ui-toggle-group-item></ui-toggle-group>`);
+  assert.match(joined, /data-slot="toggle-group"[^>]*style="--gap: 0"[^>]*data-spacing="0"/);
+  const legacy = await ssr(['toggle-group.ts'], (html) => html`<ui-toggle-group spacing="default"><ui-toggle-group-item value="a">A</ui-toggle-group-item></ui-toggle-group>`);
+  assert.match(legacy, /data-spacing="1"/, 'the kit\'s earlier "default" is a gap of 1');
+});
+
+test('ui-switch: aria-invalid reaches the root (the styles\' error ring) and the input, and the host draws no box', { skip }, async () => {
+  const out = await ssr(['switch.ts'], (html) => html`<ui-switch aria-label="Airplane" aria-invalid="true"></ui-switch>`);
+  assert.match(out, /<ui-switch[^>]*style="display: contents"/, 'the root is the box, as shadcn\'s is');
+  assert.match(out, /<span\s+data-slot="switch"[^>]*aria-invalid="true"/, 'the root carries aria-invalid');
+  assert.match((out.match(/<input[^>]*>/) ?? [''])[0], /aria-invalid="true"/, 'and so does the control');
+  const ok = await ssr(['switch.ts'], (html) => html`<ui-switch aria-label="Airplane"></ui-switch>`);
+  assert.doesNotMatch(ok.replace(/<ui-switch[^>]*>/, ''), /aria-invalid/, 'no attribute when the field is valid');
+});

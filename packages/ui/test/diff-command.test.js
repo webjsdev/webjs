@@ -149,3 +149,68 @@ test('diff: exits with error when components.json missing', async () => {
     rmSync(d, { recursive: true });
   }
 });
+
+/* -------------------- blocks (#1666, D18) -------------------- */
+
+// Two blocks writing the same page target, as every login block does, each
+// importing a component, so a pristine install only diffs clean when `diff`
+// compares against the import-rewritten file at the block's own target.
+const BLOCK_REG = {
+  card: {
+    name: 'card', type: 'registry:ui',
+    files: [{ path: 'components/card.ts', type: 'registry:ui', content: 'export const cardClass = () => "card";\n' }],
+  },
+  'login-a': {
+    name: 'login-a', type: 'registry:block', categories: ['login'], registryDependencies: ['card'],
+    files: [{ path: 'blocks/login-a/page.ts', type: 'registry:page', target: 'app/login/page.ts', content: "import { cardClass } from '../../components/card.ts';\nexport default () => cardClass('a');\n" }],
+  },
+  'login-b': {
+    name: 'login-b', type: 'registry:block', categories: ['login'], registryDependencies: ['card'],
+    files: [{ path: 'blocks/login-b/page.ts', type: 'registry:page', target: 'app/login/page.ts', content: "import { cardClass } from '../../components/card.ts';\nexport default () => cardClass('b');\n" }],
+  },
+};
+
+function stubBlockFetch() {
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.endsWith('/index.json')) return new Response(JSON.stringify(Object.values(BLOCK_REG)), { status: 200 });
+    const name = u.split('/').pop().replace('.json', '');
+    if (!BLOCK_REG[name]) return new Response('not found', { status: 404 });
+    return new Response(JSON.stringify(BLOCK_REG[name]), { status: 200 });
+  };
+}
+
+test('diff <block>: a pristine add diffs clean at the block\'s target, an edit is flagged', async () => {
+  stubBlockFetch();
+  const d = setupProject();
+  try {
+    await captureLog(() => add.parseAsync(['login-a', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/blocks'], { from: 'user' }));
+    const clean = await captureLog(() => diff.parseAsync(['login-a', '--cwd', d, '--registry', 'http://test/blocks'], { from: 'user' }));
+    assert.match(clean, /match the registry/, 'the import-rewritten page matches');
+
+    writeFileSync(join(d, 'app', 'login', 'page.ts'), '// edited\n');
+    const edited = await captureLog(() => diff.parseAsync(['login-a', '--cwd', d, '--registry', 'http://test/blocks'], { from: 'user' }));
+    assert.match(edited, /login-a.*app\/login\/page\.ts differs from registry/);
+  } finally {
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});
+
+test('diff with no name: a target shared by two blocks matches either, and is reported once when it matches neither', async () => {
+  stubBlockFetch();
+  const d = setupProject();
+  try {
+    await captureLog(() => add.parseAsync(['login-a', '--yes', '--no-deps', '--cwd', d, '--registry', 'http://test/blocks'], { from: 'user' }));
+    const clean = await captureLog(() => diff.parseAsync(['--cwd', d, '--registry', 'http://test/blocks'], { from: 'user' }));
+    assert.match(clean, /match the registry/, 'login-b writing the same file does not make login-a\'s page stale');
+
+    writeFileSync(join(d, 'app', 'login', 'page.ts'), '// edited\n');
+    const edited = await captureLog(() => diff.parseAsync(['--cwd', d, '--registry', 'http://test/blocks'], { from: 'user' }));
+    assert.match(edited, /app\/login\/page\.ts differs from every item that writes it \(login-a, login-b\)/);
+    assert.match(edited, /^1 file differ/m);
+  } finally {
+    globalThis.fetch = origFetch;
+    rmSync(d, { recursive: true });
+  }
+});

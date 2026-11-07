@@ -2,8 +2,7 @@ import { listComparisons } from '#modules/compare/queries/list-comparisons.serve
 import { listArticles } from '#modules/articles/queries/list-articles.server.ts';
 import { listPosts } from '#modules/blog/queries/list-posts.server.ts';
 import { renderDocsIndexSection } from '#lib/docs-llms.server.ts';
-import { loadRegistryIndex } from '#modules/ui/queries/registry.server.ts';
-import { splitByTier } from '#modules/ui/utils/tier.ts';
+import { listUiPages, renderUiIndexSection, renderExamplesSection } from '#lib/ui/llm.server.ts';
 import { UI_PATH, GH_URL } from '#lib/links.ts';
 import { siteUrl } from '#lib/env.ts';
 
@@ -39,12 +38,13 @@ function section(title: string, items: string[]): string[] {
 }
 
 export async function GET(): Promise<Response> {
-  const [comparisons, articles, posts, docLinks, registry] = await Promise.all([
+  const [comparisons, articles, posts, docLinks, uiPages, examples] = await Promise.all([
     listComparisons(),
     listArticles(),
     listPosts(),
     renderDocsIndexSection(SITE_URL),
-    loadRegistryIndex(),
+    listUiPages(SITE_URL),
+    renderExamplesSection(SITE_URL),
   ]);
 
   // Blog is capped so the file stays a concise index rather than a full
@@ -77,7 +77,8 @@ export async function GET(): Promise<Response> {
     `- [What is WebJs?](${SITE_URL}/what-is-webjs): the definitional overview, what it is, what it gives you, and how it differs from the unrelated projects that share the name`,
     `- [Why WebJs](${SITE_URL}/why-webjs): the case for the architecture, and who it is not for`,
     `- [AGENTS.md](${GH_URL}/blob/main/AGENTS.md): the agent-facing contract, the conventions and API for building a WebJs app`,
-    `- [Full documentation corpus](${SITE_URL}/llms-full.txt): every doc page below, concatenated as markdown in one file`,
+    `- [Full documentation corpus](${SITE_URL}/llms-full.txt): every doc page and every /ui page below, concatenated as markdown in one file`,
+    `- [WebJs UI index](${SITE_URL}${UI_PATH}/llms.txt): the /ui section on its own, every component, docs page and block`,
   ]));
 
   // Every doc page, enumerated. Each link is the page's raw-markdown variant
@@ -85,23 +86,15 @@ export async function GET(): Promise<Response> {
   // HTML it has to strip.
   lines.push(...section('Documentation', docLinks));
 
-  // Every component, enumerated the same way the doc pages are. Without this
-  // an agent entering through llms.txt could not discover a single component
-  // page, while the sitemap advertised all of them, and the whole point of an
-  // AI-first kit is that an agent can find the piece it needs. Split by tier
-  // because the tier decides HOW you use one: a class helper on a native
-  // element, or a custom element tag.
-  const uiComponents = registry.filter((i) => i.type === 'registry:ui');
-  const { tier1, tier2 } = splitByTier(uiComponents);
-  const uiLink = (i: { name: string }) => `- [${i.name}](${SITE_URL}${UI_PATH}/${i.name})`;
-  lines.push(...section(
-    `UI components, Tier 1 (class helpers on native elements)`,
-    tier1.map(uiLink),
-  ));
-  lines.push(...section(
-    `UI components, Tier 2 (stateful custom elements)`,
-    tier2.map(uiLink),
-  ));
+  // Every /ui page, then the example apps. WebJs UI is where an agent learns
+  // what a WebJs app looks like (each page's markdown carries its demos'
+  // source), and the /ui site is itself a WebJs app, so the whole section is
+  // enumerated here rather than reduced to one link. Both lists come from
+  // lib/ui/llm.server.ts, the builders /ui/llms.txt uses too, and each is
+  // derived from the data the pages render from, so a new page cannot be
+  // missing from either.
+  lines.push('', ...(await renderUiIndexSection(SITE_URL, uiPages)));
+  lines.push('', ...examples);
 
   lines.push(...section('Project', [
     `- [GitHub repository](${GH_URL}): source, issues, and the framework monorepo (plain JS with JSDoc, so what you read is what runs)`,

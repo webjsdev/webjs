@@ -14,6 +14,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Every job runs on ubuntu-24.04, not ubuntu-latest: GitHub moved
+# ubuntu-latest to 26.04, where `playwright install --with-deps` refuses
+# ("Playwright does not support chromium on ubuntu26.04-x64"), which fails
+# every job that installs a browser. Move to latest once Playwright supports it.
+
 # A newer push to the same branch cancels the older in-flight run.
 concurrency:
   group: ci-${{ github.ref }}
@@ -196,6 +201,12 @@ jobs:
       # corpus and holds it to the committed fixtures.
       - name: One-pass SSR renderer byte parity on Bun
         run: bun test/bun/ssr-one-pass-parity.mjs
+      # A custom element's attributes are served as the element left them
+      # after the server pass (lit-ssr's renderAttributes shape): the opening
+      # tag is re-read and spliced by position, string work a runtime
+      # difference would show as bytes.
+      - name: Served host attributes on Bun
+        run: bun test/bun/ssr-served-attrs.mjs
       # asset() url resolution on Bun (#1194): the helper reads the file
       # synchronously, hashes it with node:crypto, and compares node:path
       # containment to decide whether a url may be fingerprinted at all. A
@@ -557,7 +568,11 @@ jobs:
       #
       # `webjs dev` runs the website's own `webjs.dev.before` tasks (the registry
       # copy and the Tailwind build), so no extra setup step is needed here.
-      - name: Run form-submission + scroll-restoration e2e (#1310)
+      #
+      # The same server also runs the chrome-swap e2e (#1666): the marketing
+      # site and /ui have different chrome owned by two route-group layouts,
+      # and a soft navigation between them must swap it with no full load.
+      - name: Run form-submission + scroll-restoration + chrome-swap e2e (#1310, #1666)
         env:
           WEBJS_E2E: '1'
         run: |
@@ -590,7 +605,7 @@ jobs:
           done
           curl -sf -o /dev/null http://localhost:5001/ui/button \
             || { echo "website dev server never came up"; exit 1; }
-          node --test test/e2e/form-submission-and-race.test.mjs
+          node --test test/e2e/form-submission-and-race.test.mjs test/e2e/ui-chrome-swap.test.mjs
       # Touch-emulation e2e for interactive Tier-2 ui components (#745/#747):
       # boots the site serving the gallery and taps hover-card / dropdown-submenu / sonner
       # under a Chromium iPhone context (faithful touch events, no real device).

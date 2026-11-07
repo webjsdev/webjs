@@ -6,8 +6,8 @@
 // the button is inert and the empty output renders (streaming is inherently a
 // JS behaviour), so nothing here breaks the no-JS first paint.
 import { WebComponent, signal, html } from '@webjsdev/core';
-import { cardClass } from '#components/ui/card.ts';
-import { buttonClass } from '#components/ui/button.ts';
+import { cardClass } from '#modules/gallery/ui/card.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
 import { streamTokens } from '../actions/stream-tokens.server.ts';
 
 export class TokenStream extends WebComponent {

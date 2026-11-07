@@ -6,7 +6,7 @@
 // (it runs in the browser), so it lives in a component; with JS off this button
 // is inert and the page still reads.
 import { WebComponent, signal, html, richFetch } from '@webjsdev/core';
-import { buttonClass } from '#components/ui/button.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
 
 interface RichPayload { at: Date; ip: string; requestId: string; cookieCount: number }
 

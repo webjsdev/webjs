@@ -2,7 +2,8 @@
 
 This scaffold ships a browsable feature gallery to learn from: single-concept
 demos under `app/features/`, the `app/examples/todo` app, and an example design
-system under `components/ui/`, with logic in `modules/`. Build in this order.
+system under `modules/gallery/ui/` (kept out of `components/ui/`, which is where
+`npx webjsdev ui add` writes), with logic in `modules/`. Build in this order.
 
 ### 1. Study the gallery, then clear it
 
@@ -10,10 +11,14 @@ Read the demos under `app/features/` (and `app/examples/todo`) that match what
 you are building, so you copy the real idiom: server actions, queries,
 optimistic UI, component hydration, design tokens. Then run
 `npm run gallery:clear` to shed the whole gallery and reset `app/page.ts` and
-`app/layout.ts` to a blank slate. The clear also removes the example
-`components/ui/` primitives, the demo `todos` table, and the demo migrations;
-it keeps the agent skill, the database wiring, and `lib/utils/cn.ts` (needed by
-`npx webjsdev ui add`). The skill teaches the same patterns, so the gallery is
+`app/layout.ts` to a blank slate (a layout that renders each page bare, so a
+full-screen block page fills the window). The clear also removes the gallery's
+example primitives, the demo `todos` table, and the demo migrations; it keeps
+the agent skill, the database wiring, the theme in `styles/globals.css`,
+anything `ui add` put in `components/ui/`, and `lib/utils/cn.ts` (needed by
+`npx webjsdev ui add`). The colours and fonts are the theme block in
+`styles/globals.css`; `npx webjsdev ui init --preset <code>` (a code from
+webjs.dev/ui/create) replaces it, before or after the clear. The skill teaches the same patterns, so the gallery is
 a runnable copy you study first, not something you lose.
 
 ### 2. Model the data

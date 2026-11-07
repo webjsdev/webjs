@@ -1,12 +1,14 @@
 import { Command } from 'commander';
+import { bakeForStyle } from '../registry/style-bake.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, basename, relative as relPath } from 'node:path';
+import { dirname, join, basename, posix, relative as relPath } from 'node:path';
 import prompts from 'prompts';
 import { execSync } from 'node:child_process';
 import { getConfig } from '../utils/get-config.js';
 import { logger } from '../utils/logger.js';
 import { resolveTree, collectNpmDeps } from '../registry/resolver.js';
-import { DEFAULT_REGISTRY_URL } from '../registry/fetcher.js';
+import { withIconLibrary } from '../registry/icons.js';
+import { DEFAULT_REGISTRY_URL, getRegistryIndex, getRegistryItem } from '../registry/fetcher.js';
 import { isCustomElementSource } from '../registry/local.js';
 import { stripExample } from '../registry/example.js';
 import { ensureTheme } from '../utils/theme.js';
@@ -36,7 +38,8 @@ export const add = new Command()
       process.exit(1);
     }
 
-    const tree = await resolveTree(components, opts.registry);
+    // The icon library is the one components.json names, not always Lucide.
+    const tree = await withIconLibrary(await resolveTree(components, opts.registry), config.iconLibrary, opts.registry);
     logger.info(`Installing ${logger.bold(components.join(', '))}…`);
 
     // Self-heal missing theme tokens (#983): the helpers render against CSS
@@ -53,10 +56,42 @@ export const add = new Command()
       }
     }
 
+    const written = [];
+    // Block files another block already wrote (two families sharing a
+    // target, sidebar-07 then dashboard-01), collected for one summary.
+    /** @type {{ file: string, item: string, by: string[] }[]} */
+    const conflicts = [];
+    /** @type {{ blocks?: any[] }} */
+    const blockCache = {};
     for (const item of tree) {
       for (const file of item.files || []) {
-        await writeRegistryFile(cwd, config, item, file, opts);
+        const out = await writeRegistryFile(cwd, config, item, file, { ...opts, conflicts, blockCache });
+        if (out) written.push(out);
       }
+      // A block or a component that needs tokens an existing app may lack
+      // (sidebar's --sidebar-*, chart's --chart-*) carries them as cssVars,
+      // and the missing ones are added to the app's stylesheet (D18).
+      if (item.cssVars && tw.css) {
+        const added = mergeCssVars(cwd, tw.css, item.cssVars);
+        if (added > 0) logger.success(`Added ${added} theme token${added === 1 ? '' : 's'} for ${item.name} to ${tw.css}`);
+      }
+    }
+    if (written.length) {
+      logger.info('Files written:');
+      for (const f of written) logger.info(`  ${f}`);
+    }
+    if (conflicts.length) {
+      const names = [...new Set(conflicts.map((c) => c.item))];
+      const others = [...new Set(conflicts.flatMap((c) => c.by))];
+      logger.warn(
+        `${conflicts.length} file${conflicts.length === 1 ? '' : 's'} of ${names.join(', ')} ` +
+        `${conflicts.length === 1 ? 'was' : 'were'} kept from ${others.join(', ')}, so the app mixes the blocks:`,
+      );
+      for (const c of conflicts) logger.warn(`  ${c.file} (from ${c.by.join(', ')})`);
+      logger.warn(
+        `Run ${logger.cyan(`npx @webjsdev/ui add ${names.join(' ')} --overwrite`)} to replace them with ${names.join(', ')}'s version ` +
+        '(it also replaces every kit component and helper the install writes, so commit your edits first).',
+      );
     }
 
     if (opts.deps !== false) {
@@ -82,7 +117,31 @@ async function writeRegistryFile(cwd, config, item, file, opts) {
   // replace edited source on every `add`. Only an explicit `--overwrite` may.
   if (existsSync(target) && !opts.overwrite && helperTarget(config, item, file)) {
     logger.info(`${relative(cwd, target)} already exists: keeping it.`);
-    return;
+    return null;
+  }
+
+  // A block's files are app code the user owns (a page, a module), so `--yes`
+  // does not license replacing one: only `--overwrite` does (D18). Keeping it
+  // silently is wrong when ANOTHER block wrote it (two block families share
+  // targets such as components/app-sidebar.ts), since the app then mixes the
+  // two, so the existing file is compared against what this block and every
+  // other block would write there, and a match with another block is a
+  // warning that names it.
+  if (existsSync(target) && !opts.overwrite && isBlock(item, file)) {
+    const rel = relative(cwd, target);
+    const local = readFileSync(target, 'utf8');
+    if (local === transformForProject(file.content || '', target, config, item, { file, cwd })) {
+      logger.info(`${rel} is already ${item.name}'s version: keeping it.`);
+      return null;
+    }
+    const by = await otherBlockWriters(cwd, config, item, target, local, opts);
+    if (by.length) {
+      logger.warn(`${rel} was written by ${by.join(', ')}, not ${item.name}: keeping it (pass --overwrite to replace it).`);
+      opts.conflicts?.push({ file: rel, item: item.name, by });
+    } else {
+      logger.info(`${rel} already exists and differs from ${item.name}'s version: keeping it (pass --overwrite to replace it).`);
+    }
+    return null;
   }
 
   if (existsSync(target) && !opts.overwrite && !opts.yes) {
@@ -94,20 +153,67 @@ async function writeRegistryFile(cwd, config, item, file, opts) {
     });
     if (!r.overwrite) {
       logger.info(`Skipped ${basename(target)}`);
-      return;
+      return null;
     }
   }
 
-  const content = transformForProject(file.content || '', target, config, item);
+  const content = transformForProject(file.content || '', target, config, item, { file, cwd });
   writeFileSync(target, content, 'utf8');
   logger.success(`Wrote ${relative(cwd, target)}`);
+  return relative(cwd, target);
+}
+
+/**
+ * The OTHER blocks whose file at `target` is exactly `local`, by name: what
+ * `add` would have written for each of them there (the same transform, so a
+ * baked, import-rewritten file still matches). The registry's blocks are
+ * loaded once per `add` run, and only when a block file already exists.
+ *
+ * @param {string} cwd
+ * @param {any} config
+ * @param {{ name: string }} item the block being installed
+ * @param {string} target absolute path of the existing file
+ * @param {string} local its content
+ * @param {{ registry?: string, blockCache?: { blocks?: any[] } }} opts
+ * @returns {Promise<string[]>}
+ */
+async function otherBlockWriters(cwd, config, item, target, local, opts) {
+  const cache = opts.blockCache ?? {};
+  if (!cache.blocks) {
+    cache.blocks = [];
+    try {
+      const index = await getRegistryIndex(opts.registry);
+      for (const entry of index.filter((i) => i.type === 'registry:block')) {
+        cache.blocks.push(await getRegistryItem(entry.name, opts.registry));
+      }
+    } catch {
+      // An index that cannot be read only costs the warning its block name.
+    }
+  }
+  const by = [];
+  for (const other of cache.blocks) {
+    if (other.name === item.name) continue;
+    const match = (other.files || []).some((f) =>
+      resolveTarget(cwd, config, other, f) === target &&
+      transformForProject(f.content || '', target, config, other, { file: f, cwd }) === local);
+    if (match) by.push(other.name);
+  }
+  return by;
+}
+
+function isBlock(item, file) {
+  return item?.type === 'registry:block' || file?.type === 'registry:block';
 }
 
 /**
  * The single transform that turns a registry file's raw content into what
  * lands in the user's project. `add` writes this; `diff` compares against it,
- * so the two cannot disagree (#983). Two steps:
+ * so the two cannot disagree (#983). Three steps:
  *
+ *  0. Bake the style (#1666): a registry file in base form carries semantic
+ *     `cn-*` names, which are replaced by the Tailwind classes of the style
+ *     `components.json` names (`new-york` when it names none), so the file an
+ *     app owns is plain Tailwind. A file with no `cn-*` name is untouched.
  *  1. Retarget the registry-relative `../lib/utils.ts` / `../lib/dom.ts` imports
  *     to the project's resolved helper paths (see {@link rewriteUtilsImport}).
  *  2. For a Tier-1 helper component (a `registry:ui` file that is NOT a custom
@@ -118,12 +224,15 @@ async function writeRegistryFile(cwd, config, item, file, opts) {
  *
  * @param {string} content raw registry file content
  * @param {string} target absolute path where the file will be written
- * @param {{ resolvedPaths: { utils: string } }} config parsed components.json
+ * @param {{ resolvedPaths: { utils: string }, style?: string }} config parsed components.json
  * @param {{ name: string, type?: string }} [item] the registry item
  * @returns {string}
  */
-export function transformForProject(content, target, config, item) {
-  let out = rewriteUtilsImport(content, target, config);
+export function transformForProject(content, target, config, item, where = {}) {
+  let out = bakeForStyle(content, config?.style);
+  out = where.file?.path && where.cwd
+    ? rewriteRegistryImports(out, where.file.path, target, config, where.cwd, item)
+    : rewriteUtilsImport(out, target, config);
   if (item && item.type === 'registry:ui' && !isCustomElementSource(content)) {
     out = stripExample(out, item.name);
   }
@@ -161,6 +270,100 @@ export function rewriteUtilsImport(content, target, config) {
 }
 
 /**
+ * Rewrite every registry-relative import in a file to the path that resolves
+ * from where the file lands in the app (D18). Each relative specifier is
+ * resolved against the file's own registry path, then mapped to where THAT
+ * registry file lands:
+ *
+ *  - another file of the same item (a block's page importing its own
+ *    component) lands at its own target;
+ *  - `lib/utils.ts` and `lib/dom.ts` land at the utils alias and beside it,
+ *    as {@link rewriteUtilsImport} has always done (and `lib/icons.ts` beside
+ *    them too);
+ *  - a component (`components/<name>.ts`) lands in the ui alias directory.
+ *
+ * Anything else is left as written. This is the general form of the two
+ * fixed literals {@link rewriteUtilsImport} rewrites, which a block, whose
+ * files sit at other depths and import components and each other, needs.
+ *
+ * @param {string} content
+ * @param {string} fromPath the file's path inside the registry
+ * @param {string} target absolute path where the file is written
+ * @param {object} config parsed components.json
+ * @param {string} cwd the project root
+ * @param {{ files?: { path: string }[] }} [item] the item the file belongs to
+ */
+export function rewriteRegistryImports(content, fromPath, target, config, cwd, item) {
+  const utilsAbs = config?.resolvedPaths?.utils;
+  const uiDir = config?.resolvedPaths?.ui ?? join(cwd, (config?.aliases?.ui || 'components/ui').replace(/^@\//, ''));
+  const own = new Map((item?.files || []).map((f) => [posix.normalize(f.path), f]));
+  const destOf = (regPath) => {
+    if (own.has(regPath) && regPath !== posix.normalize(fromPath)) return resolveTarget(cwd, config, item, own.get(regPath));
+    if (utilsAbs && regPath === 'lib/utils.ts') return utilsAbs;
+    if (utilsAbs && (regPath === 'lib/dom.ts' || regPath === 'lib/icons.ts')) return join(dirname(utilsAbs), posix.basename(regPath));
+    if (regPath.startsWith('components/') && !regPath.slice('components/'.length).includes('/')) return join(uiDir, posix.basename(regPath));
+    return null;
+  };
+  return content.replace(/((?:from|import)\s*\(?\s*)(['"])(\.{1,2}\/[^'"]+)\2/g, (whole, lead, q, spec) => {
+    const regPath = posix.normalize(posix.join(posix.dirname(fromPath), spec));
+    const dest = destOf(regPath);
+    if (!dest) return whole;
+    let rel = relPath(dirname(target), dest).split(/[\\/]/).join('/');
+    if (!rel.startsWith('.')) rel = './' + rel;
+    return `${lead}${q}${rel}${q}`;
+  });
+}
+
+/**
+ * Add the CSS variables an item carries to the app's stylesheet, leaving
+ * every one the app already defines as it is. `light` goes in the `:root`
+ * block, `dark` in `.dark`, and `theme` in `@theme inline`, which is where
+ * the kit's theme puts each. A missing block is appended. Returns how many
+ * variables were added.
+ *
+ * @param {string} cwd
+ * @param {string} cssPath the app's stylesheet, relative to cwd
+ * @param {{ theme?: Record<string, string>, light?: Record<string, string>, dark?: Record<string, string> }} cssVars
+ */
+export function mergeCssVars(cwd, cssPath, cssVars) {
+  const file = join(cwd, cssPath);
+  let css = existsSync(file) ? readFileSync(file, 'utf8') : '';
+  let added = 0;
+  const groups = [
+    ['@theme inline', cssVars.theme],
+    [':root', cssVars.light],
+    ['.dark', cssVars.dark],
+  ];
+  for (const [selector, vars] of groups) {
+    const entries = Object.entries(vars || {});
+    if (!entries.length) continue;
+    // A token counts as present only inside ITS block: a light value in
+    // :root says nothing about the dark one .dark still needs.
+    const open = css.indexOf(`${selector} {`);
+    const body = open >= 0 ? css.slice(open, css.indexOf('}', open)) : '';
+    const missing = entries.filter(([name]) => !new RegExp(`--${escapeRe(name)}\\s*:`).test(body));
+    if (!missing.length) continue;
+    const lines = missing.map(([name, value]) => `  --${name}: ${value};`).join('\n');
+    if (open >= 0) {
+      const close = css.indexOf('}', open);
+      css = `${css.slice(0, close).replace(/\s*$/, '')}\n${lines}\n${css.slice(close)}`;
+    } else {
+      css = `${css.replace(/\s*$/, '')}\n\n${selector} {\n${lines}\n}\n`;
+    }
+    added += missing.length;
+  }
+  if (added) {
+    ensureDir(dirname(file));
+    writeFileSync(file, css, 'utf8');
+  }
+  return added;
+}
+
+function escapeRe(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * Replace a single registry-relative import specifier with the relative path
  * from `target`'s directory to `destAbs`. No-op when `spec` is absent.
  *
@@ -178,7 +381,19 @@ function replaceImportSpecifier(content, spec, destAbs, target) {
     .replaceAll(`"${spec}"`, `"${rel}"`);
 }
 
-function resolveTarget(cwd, config, item, file) {
+/**
+ * The absolute path a registry file is written to: the helper alias for the
+ * shared helpers, else the file's own `target`, else a folder picked by the
+ * file's type. `diff` reads the same answer, so it compares the file `add`
+ * would have written.
+ *
+ * @param {string} cwd
+ * @param {any} config parsed components.json
+ * @param {any} item the registry item
+ * @param {{ path: string, type?: string, target?: string }} file
+ * @returns {string}
+ */
+export function resolveTarget(cwd, config, item, file) {
   // The two shared helpers are pinned to `lib/utils.ts` / `lib/dom.ts` by the
   // registry manifest, but where they actually BELONG is wherever the project's
   // `utils` alias points, because that is the path `rewriteUtilsImport` writes
@@ -205,6 +420,11 @@ function resolveTarget(cwd, config, item, file) {
       return join(cwd, (aliases.lib || 'lib').replace(/^@\//, ''), fileName);
     case 'registry:hook':
       return join(cwd, 'hooks', fileName);
+    case 'registry:block':
+      // Every shipped block file names its target (a registry test enforces
+      // it). A custom registry's block that does not keeps its path, so two
+      // files called page.ts cannot land on one another.
+      return join(cwd, file.path);
     default:
       return join(cwd, fileName);
   }
@@ -236,6 +456,10 @@ function helperTarget(config, item, file) {
   const name = basename(file.path || '');
   if (item.name === 'lib-utils' && name === 'utils.ts') return utilsAbs;
   if (item.name === 'lib-dom' && name === 'dom.ts') return join(dirname(utilsAbs), 'dom.ts');
+  // Every icon library (lib-icons, lib-icons-tabler, ...) is the SAME file in
+  // an app, the utils file's sibling `icons.ts`, which is where a block's
+  // `../lib/icons.ts` import is rewritten to (#1666).
+  if (/^lib-icons(-|$)/.test(item.name) && /^icons(-[a-z]+)?\.ts$/.test(name)) return join(dirname(utilsAbs), 'icons.ts');
   return null;
 }
 

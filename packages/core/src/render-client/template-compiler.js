@@ -262,7 +262,17 @@ export function compile(tr) {
   }
 
   const templateEl = document.createElement('template');
-  templateEl.innerHTML = html;
+  if (tr.svg) {
+    // An svg`` fragment is parsed inside an <svg> wrapper so its elements
+    // land in the SVG namespace, then the wrapper is unwrapped BEFORE the
+    // slot and path walks, so every recorded path is relative to the
+    // fragment's own root, as it is for an html`` template (lit does the same).
+    templateEl.innerHTML = `<svg>${html}</svg>`;
+    const wrapper = /** @type {Element} */ (templateEl.content.firstChild);
+    wrapper.replaceWith(...wrapper.childNodes);
+  } else {
+    templateEl.innerHTML = html;
+  }
 
   // Mark every <slot> in the template for framework projection and
   // register a SLOT part for each so the slot-apply step can find them on

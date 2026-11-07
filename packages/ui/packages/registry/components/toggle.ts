@@ -77,18 +77,17 @@ import { cn } from '../lib/utils.ts';
 // icon/label glyphs that aren't meant to be selectable. disabled:
 // pointer-events-none below already suppresses cursor for disabled buttons.
 const BASE =
-  "inline-flex cursor-pointer items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap select-none transition-[color,box-shadow] outline-none hover:bg-muted hover:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 data-[state=on]:bg-accent data-[state=on]:text-accent-foreground dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
+  'cn-toggle group/toggle inline-flex items-center justify-center whitespace-nowrap outline-none hover:bg-muted focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0';
 
 const VARIANTS = {
-  default: 'bg-transparent',
-  outline:
-    'border border-input bg-transparent shadow-xs hover:bg-accent hover:text-accent-foreground',
+  default: 'cn-toggle-variant-default',
+  outline: 'cn-toggle-variant-outline',
 } as const;
 
 const SIZES = {
-  default: 'h-9 min-w-9 px-2',
-  sm: 'h-8 min-w-8 px-1.5',
-  lg: 'h-10 min-w-10 px-2.5',
+  default: 'cn-toggle-size-default',
+  sm: 'cn-toggle-size-sm',
+  lg: 'cn-toggle-size-lg',
 } as const;
 
 export type ToggleVariant = keyof typeof VARIANTS;
@@ -96,6 +95,15 @@ export type ToggleSize = keyof typeof SIZES;
 
 export function toggleClass(opts: { variant?: ToggleVariant; size?: ToggleSize } = {}): string {
   return cn(BASE, VARIANTS[opts.variant ?? 'default'], SIZES[opts.size ?? 'default']);
+}
+
+/**
+ * shadcn's name for {@link toggleClass}, so shadcn code ports verbatim
+ * (`toggleVariants({ ... })` is shadcn's `cva` export for `Toggle`). Like cva, it
+ * merges a `className` into the result.
+ */
+export function toggleVariants(opts: { variant?: ToggleVariant; size?: ToggleSize } & { className?: string } = {}): string {
+  return cn(toggleClass(opts), opts.className);
 }
 
 // --------------------------------------------------------------------------

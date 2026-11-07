@@ -71,21 +71,21 @@ COPY website   ./website
 # `npm run build:dist --workspace=@webjsdev/core` line, so the
 # scripts tree has to be in the image before that step runs.
 COPY scripts   ./scripts
-# website/app/changelog/page.ts reads ../../../changelog/<pkg>/*.md at
+# website/app/(site)/changelog/page.ts reads ../../../changelog/<pkg>/*.md at
 # SSR time. Without copying the changelog tree into the image, the
 # deployed page renders "No entries yet."
 COPY changelog ./changelog
-# website/app/blog/[slug]/page.ts reads ../../../../blog/<slug>.md at
+# website/app/(site)/blog/[slug]/page.ts reads ../../../../blog/<slug>.md at
 # SSR time (via modules/blog/queries/list-posts.server.ts). Same
 # reason as changelog: without the tree in the image, /blog renders
 # "No posts yet."
 COPY blog ./blog
-# website/app/compare/[slug]/page.ts and app/sitemap.ts read
+# website/app/(site)/compare/[slug]/page.ts and app/sitemap.ts read
 # ../../../../compare/<slug>.md at SSR time (via
 # modules/compare/queries/*.server.ts). Same reason as blog: without the
 # tree in the image, /compare renders "No comparisons yet."
 COPY compare ./compare
-# website/app/articles/[slug]/page.ts and app/sitemap.ts read
+# website/app/(site)/articles/[slug]/page.ts and app/sitemap.ts read
 # ../../../../articles/<slug>.md at SSR time (via
 # modules/articles/queries/*.server.ts). Same reason as compare: without
 # the tree in the image, /articles renders "No articles yet."
@@ -124,8 +124,12 @@ RUN cd website && node scripts/copy-registry.mjs
 # Each compose service's command invokes `webjs.js start` directly, which
 # bypasses the per-package `prestart: css:build` hook in npm; the CSS has
 # to be ready in the image. Keep this list in sync with the apps that
-# have a public/input.css and a `css:build` script in their package.json.
+# have a public/input.css and a `css:build` script in their package.json
+# (website also builds public/ui.css, the /ui section's own stylesheet, and
+# public/ui-styles/, the seven kit styles ui.css does not carry).
 RUN npx tailwindcss -i website/public/input.css                       -o website/public/tailwind.css                       --minify \
+ && npx tailwindcss -i website/public/ui-input.css                    -o website/public/ui.css                             --minify \
+ && (cd website && node scripts/build-ui-styles.mjs) \
  && npx tailwindcss -i examples/blog/public/input.css                 -o examples/blog/public/tailwind.css                 --minify \
  && npx tailwindcss -i gallery/public/input.css                       -o gallery/public/tailwind.css                       --minify
 

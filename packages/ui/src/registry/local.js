@@ -32,6 +32,7 @@ import {
   BASE_OVERRIDES,
   mergeThemeCss,
 } from '../../packages/registry/themes/base-colors.js';
+import { designSystemItem, designSystemItems } from '../../packages/registry/themes/items.js';
 
 /** Absolute path to the packaged registry root (`packages/ui/packages/registry`). */
 export const REGISTRY_ROOT = resolve(
@@ -136,6 +137,14 @@ export function loadRegistryItem(name) {
     }
   }
 
+  // The accent themes and the font items, built from data (#1666).
+  const data = designSystemItem(name);
+  if (data) {
+    const composed = { $schema: SCHEMA, ...data };
+    itemCache.set(name, composed);
+    return composed;
+  }
+
   return null;
 }
 
@@ -147,10 +156,14 @@ export function loadRegistryItem(name) {
  */
 export function loadRegistryIndex() {
   if (indexCache) return indexCache;
+  // `title` and `categories` ride along so a block or chart can be listed and
+  // grouped without loading its files (D18).
   const fromManifest = readManifest().items.map((item) => ({
     name: item.name,
     type: item.type,
+    title: item.title,
     description: item.description,
+    categories: item.categories,
     dependencies: item.dependencies,
     registryDependencies: item.registryDependencies,
   }));
@@ -162,7 +175,8 @@ export function loadRegistryIndex() {
     type: 'registry:theme',
     description: BASE_DESCRIPTIONS[color],
   }));
-  indexCache = [...fromManifest, ...synthesized];
+  const data = designSystemItems().map(({ name, type, title, description }) => ({ name, type, title, description }));
+  indexCache = [...fromManifest, ...synthesized, ...data];
   return indexCache;
 }
 

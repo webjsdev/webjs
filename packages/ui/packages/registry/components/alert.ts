@@ -6,6 +6,8 @@
  *   Alert (variant: default | destructive)  → alertClass({ variant })
  *   AlertTitle                              → alertTitleClass()
  *   AlertDescription                        → alertDescriptionClass()
+ *   AlertAction                             → alertActionClass() with data-slot="alert-action"
+ *                                             (a button or link in the alert's corner)
  *
  * A11y (required for accessible output): put role="alert" on the container
  * for an urgent, interrupting message, or role="status" for a polite,
@@ -37,12 +39,11 @@
 import { cn } from '../lib/utils.ts';
 
 const BASE =
-  'relative grid w-full grid-cols-[0_1fr] items-start gap-y-0.5 rounded-lg border px-4 py-3 text-sm has-[>svg]:grid-cols-[calc(var(--spacing)*4)_1fr] has-[>svg]:gap-x-3 [&>svg]:size-4 [&>svg]:translate-y-0.5 [&>svg]:text-current';
+  'cn-alert group/alert relative w-full';
 
 const VARIANTS = {
-  default: 'bg-card text-card-foreground',
-  destructive:
-    'bg-card text-destructive *:data-[slot=alert-description]:text-destructive/90 [&>svg]:text-current',
+  default: 'cn-alert-variant-default',
+  destructive: 'cn-alert-variant-destructive',
 } as const;
 
 export type AlertVariant = keyof typeof VARIANTS;
@@ -52,7 +53,11 @@ export function alertClass(opts: { variant?: AlertVariant } = {}): string {
 }
 
 export const alertTitleClass = (): string =>
-  'col-start-2 line-clamp-1 min-h-4 font-medium tracking-tight';
+  'cn-alert-title';
 
 export const alertDescriptionClass = (): string =>
-  'col-start-2 grid justify-items-start gap-1 text-sm text-muted-foreground [&_p]:leading-relaxed';
+  'cn-alert-description';
+
+/** The alert's action, in its corner. Set `data-slot="alert-action"`, which the alert reserves room for. */
+export const alertActionClass = (): string =>
+  'cn-alert-action';

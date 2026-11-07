@@ -502,3 +502,26 @@ test('cn: the memoised table is built once (#1320)', () => {
   assert.equal(cn('p-2', 'px-4'), cn('p-2', 'px-4'));
   assert.equal(cn('border-border', 'border-accent'), cn('border-border', 'border-accent'));
 });
+
+test('cn: logical inline spacing, flex basis and alignment merge by property', () => {
+  for (const [args, expected] of [
+    // carousel-spacing: a demo's `ps-1` replaces the item's `ps-4`
+    [['min-w-0 shrink-0 grow-0 basis-full ps-4', 'basis-1/2 ps-1'], 'min-w-0 shrink-0 grow-0 basis-1/2 ps-1'],
+    [['pe-2', 'pe-8'], 'pe-8'],
+    [['ms-auto', 'ms-2'], 'ms-2'],
+    [['me-1', 'me-0'], 'me-0'],
+    // a shorthand subsumes the logical sides, a later side only refines it
+    [['ps-4 pe-4', 'p-2'], 'p-2'],
+    [['p-2', 'ps-4'], 'p-2 ps-4'],
+    [['ms-4', 'm-0'], 'm-0'],
+    // date-picker: a demo's `justify-start` replaces the button's `justify-center`
+    [['inline-flex items-center justify-center', 'justify-start'], 'inline-flex items-center justify-start'],
+    [['justify-items-center', 'justify-start'], 'justify-items-center justify-start'],
+    [['justify-self-end', 'justify-self-start'], 'justify-self-start'],
+    [['items-center', 'items-start'], 'items-start'],
+    [['self-start', 'items-start'], 'self-start items-start'],
+    [['self-auto', 'self-stretch'], 'self-stretch'],
+  ]) {
+    assert.equal(cn(...args), expected, JSON.stringify(args));
+  }
+});

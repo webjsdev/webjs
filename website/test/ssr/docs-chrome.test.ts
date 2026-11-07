@@ -120,9 +120,9 @@ test('the docs use the marketing design tokens, with no duplicate theme block', 
   // so neither the docs layout nor the shared shell it renders may declare
   // one: they read the root layout's tokens. The shell moved to
   // lib/ui/docs-shell.ts when /ui started sharing it, so both files are guarded.
-  const docsLayout = readFileSync(resolve(WEBSITE_ROOT, 'app/docs/layout.ts'), 'utf8');
+  const docsLayout = readFileSync(resolve(WEBSITE_ROOT, 'app/(site)/docs/layout.ts'), 'utf8');
   const shell = readFileSync(resolve(WEBSITE_ROOT, 'lib/ui/docs-shell.ts'), 'utf8');
-  for (const [name, src] of [['app/docs/layout.ts', docsLayout], ['lib/ui/docs-shell.ts', shell]] as const) {
+  for (const [name, src] of [['app/(site)/docs/layout.ts', docsLayout], ['lib/ui/docs-shell.ts', shell]] as const) {
     assert.ok(!src.includes('@theme'), `${name} declares no design tokens`);
     assert.ok(
       !/--fg\s*:|--bg\s*:|--accent\s*:/.test(src),

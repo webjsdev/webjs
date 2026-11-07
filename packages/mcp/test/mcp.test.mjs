@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(__dirname, '..', '..', '..');
-const { runMcpServer, extractExportNames, extractRouteMethods, extractActionConfig, loadUiDeps } = await import(
+const { runMcpServer, extractExportNames, extractRouteMethods, extractActionConfig, loadUiDeps, runUiTool } = await import(
   resolve(REPO, 'packages', 'mcp', 'src', 'mcp.js')
 );
 
@@ -910,4 +910,92 @@ test('mcp: a request split across stdin chunks (mid-line) still parses', async (
   assert.equal(frames.length, 1);
   assert.equal(frames[0].id, 7, 'the chunk-split request parsed once the full line arrived');
   assert.ok(frames[0].result.tools, 'and dispatched correctly');
+});
+
+/* ---------------- the ui tool and blocks (#1666, D18) ---------------- */
+
+// The no-argument `ui` call is what an agent makes first, every session, so
+// its size is a running cost. Measured as the server sends it (pretty
+// printed): about 16 KB with 62 components and the ten authentication
+// blocks. The cap leaves room for the chart and sidebar blocks, whose NAMES
+// are all the bare call carries; a later addition that has to cross it should
+// make the payload more compact rather than raise the number.
+const UI_NO_ARG_BYTE_CAP = 20_000;
+
+test('mcp: ui with no args lists the blocks by category as names only, under a byte cap', async () => {
+  const { uiBlockIndex } = await import('@webjsdev/ui/registry/extract');
+  const dir = tmpDir();
+  const { frames } = await driveMcp(dir, [
+    { jsonrpc: '2.0', id: 80, method: 'tools/call', params: { name: 'ui', arguments: {} } },
+  ]);
+  const text = frames.find((f) => f.id === 80).result.content[0].text;
+  const payload = JSON.parse(text);
+  assert.deepEqual({ blocks: payload.blocks, charts: payload.charts }, uiBlockIndex(), 'matches the shared projector');
+  assert.deepEqual(payload.blocks.login, ['login-01', 'login-02', 'login-03', 'login-04', 'login-05']);
+  assert.deepEqual(payload.blocks.signup, ['signup-01', 'signup-02', 'signup-03', 'signup-04', 'signup-05']);
+  for (const group of [payload.blocks, payload.charts]) {
+    for (const names of Object.values(group)) assert.ok(names.every((n) => typeof n === 'string'), 'names only, no descriptions');
+  }
+  const bytes = Buffer.byteLength(text, 'utf8');
+  assert.ok(bytes < UI_NO_ARG_BYTE_CAP, `the no-arg ui payload is ${bytes} bytes, over the ${UI_NO_ARG_BYTE_CAP} cap`);
+});
+
+test('mcp: ui type / category filters list blocks with their one-line descriptions', async () => {
+  const dir = tmpDir();
+  const { frames } = await driveMcp(dir, [
+    { jsonrpc: '2.0', id: 81, method: 'tools/call', params: { name: 'ui', arguments: { type: 'block' } } },
+    { jsonrpc: '2.0', id: 82, method: 'tools/call', params: { name: 'ui', arguments: { category: 'signup' } } },
+  ]);
+  const byType = JSON.parse(frames.find((f) => f.id === 81).result.content[0].text);
+  assert.ok(byType.items.length >= 10);
+  assert.ok(byType.items.every((i) => i.type === 'block' && i.description));
+  const byCategory = JSON.parse(frames.find((f) => f.id === 82).result.content[0].text);
+  assert.deepEqual(byCategory.items.map((i) => i.name), ['signup-01', 'signup-02', 'signup-03', 'signup-04', 'signup-05']);
+});
+
+test('mcp: ui with a block name returns the install command and file targets, and no cn-* name', async () => {
+  const { uiBlock } = await import('@webjsdev/ui/registry/extract');
+  const dir = tmpDir();
+  const { frames } = await driveMcp(dir, [
+    { jsonrpc: '2.0', id: 83, method: 'tools/call', params: { name: 'ui', arguments: { name: 'login-03' } } },
+    { jsonrpc: '2.0', id: 84, method: 'tools/call', params: { name: 'ui', arguments: { name: 'login-03', source: true } } },
+    { jsonrpc: '2.0', id: 85, method: 'tools/call', params: { name: 'ui', arguments: { name: 'card' } } },
+  ]);
+  const text = frames.find((f) => f.id === 83).result.content[0].text;
+  const block = JSON.parse(text);
+  assert.deepEqual(block, uiBlock('login-03'), 'matches the shared projector');
+  assert.equal(block.install, 'npx @webjsdev/ui add login-03');
+  assert.deepEqual(block.files.map((f) => f.target), ['app/login/page.ts', 'components/login-form.ts']);
+  assert.ok(block.files.every((f) => f.content === undefined), 'no sources by default');
+
+  const withSource = frames.find((f) => f.id === 84).result.content[0].text;
+  assert.match(withSource, /export function loginForm/, 'source: true includes them');
+  // Everything an agent copies from must be baked plain Tailwind (D8).
+  const component = frames.find((f) => f.id === 85).result.content[0].text;
+  for (const out of [text, withSource, component]) {
+    assert.doesNotMatch(out, /(["'\s])cn-[a-z]/, 'no cn-* name in the ui tool output');
+  }
+});
+
+test('runUiTool: an unknown name names both components and blocks', () => {
+  const none = () => null;
+  assert.throws(
+    () => runUiTool({ uiInventory: none, uiComponent: none, uiBlocks: none, uiBlockIndex: none, uiBlock: none }, { name: 'nope' }),
+    /Unknown component or block "nope"/,
+  );
+  assert.throws(
+    () => runUiTool({ uiInventory: none, uiComponent: none, uiBlocks: () => [], uiBlockIndex: none, uiBlock: none }, { type: 'blocks' }),
+    /Unknown type "blocks"/,
+    'a misspelt type is an error, not an empty list',
+  );
+});
+
+test('loadUiDeps: a @webjsdev/ui that predates blocks still serves components, the block deps answer empty', async () => {
+  const old = await loadUiDeps(async () => ({ uiInventory: () => [], uiComponent: () => null }));
+  assert.deepEqual(old.uiBlocks(), []);
+  assert.deepEqual(old.uiBlockIndex(), { blocks: {}, charts: {} });
+  assert.equal(old.uiBlock('login-01'), null);
+  const gone = await loadUiDeps(async () => { throw new Error('missing'); });
+  assert.throws(() => gone.uiBlock('login-01'), /@webjsdev\/ui is not available/);
+  assert.throws(() => gone.uiBlockIndex(), /@webjsdev\/ui is not available/);
 });

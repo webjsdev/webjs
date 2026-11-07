@@ -16,7 +16,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, readFile, stat, writeFile } from 'node:fs/promises';
 import { existsSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
@@ -187,7 +187,11 @@ test('full-stack gallery:clear strips the app to a barebones blank slate', async
     assert.ok(has('app', 'features'), 'pre: app/features exists');
     assert.ok(has('app', 'examples'), 'pre: app/examples exists');
     assert.ok(has('modules', 'todo'), 'pre: modules/todo exists');
-    assert.ok(has('components', 'ui', 'button.ts'), 'pre: components/ui design system exists');
+    assert.ok(has('modules', 'gallery', 'ui', 'button.ts'), 'pre: the gallery design system exists, in its own module');
+    assert.equal(has('components', 'ui'), false, 'pre: components/ui is left to webjs ui add');
+    // An app's own `webjs ui add` output in components/ui/ must survive the reset.
+    await mkdir(join(appDir, 'components', 'ui'), { recursive: true });
+    await writeFile(join(appDir, 'components', 'ui', 'dialog.ts'), '// added by webjs ui add\n');
     assert.ok(has('components', 'theme-toggle.ts'), 'pre: example theme-toggle exists');
     assert.ok(has('test', 'hello'), 'pre: example test suite exists');
     assert.ok(has('lib', 'utils', 'ui.ts'), 'pre: gallery ui.ts fragment helpers exist');
@@ -201,7 +205,8 @@ test('full-stack gallery:clear strips the app to a barebones blank slate', async
     assert.equal(has('app', 'examples'), false, 'app/examples removed');
     assert.equal(has('modules', 'todo'), false, 'demo module removed');
     assert.equal(has('modules', 'auth'), false, 'auth demo module removed');
-    assert.equal(has('components', 'ui'), false, 'components/ui design system removed');
+    assert.equal(has('modules', 'gallery'), false, 'the gallery design system removed with its module');
+    assert.ok(has('components', 'ui', 'dialog.ts'), 'what webjs ui add wrote is kept');
     assert.equal(has('components', 'theme-toggle.ts'), false, 'example theme-toggle removed');
     assert.equal(has('test', 'hello'), false, 'example test suite removed');
     // Empty leftover dirs pruned to a true blank slate.
@@ -223,17 +228,25 @@ test('full-stack gallery:clear strips the app to a barebones blank slate', async
     // gallery content, add its removal to templates/scripts/clear-gallery.mjs.
     const modulesLeft = readdirSync(join(appDir, 'modules'));
     assert.deepEqual(modulesLeft, [], `modules/ must be empty after clear, found: ${modulesLeft.join(', ')}`);
+    // components/ui/ holds only what the app added itself (the planted dialog).
     const componentsLeft = readdirSync(join(appDir, 'components'));
-    assert.deepEqual(componentsLeft, [], `components/ must be empty after clear, found: ${componentsLeft.join(', ')}`);
+    assert.deepEqual(componentsLeft, ['ui'], `components/ must hold only the app's own ui after clear, found: ${componentsLeft.join(', ')}`);
     assert.ok(has('app', 'layout.ts'), 'root layout kept');
 
-    // The layout is reset to a blank-slate base: no theme-toggle, no design-token
-    // palette, just the OS light/dark system colours (Canvas / CanvasText). The
-    // design system is taught in the skill, not baked into the blank slate.
+    // The layout is reset to a blank-slate base: no theme-toggle and no palette
+    // of its own. It paints with the theme tokens in styles/globals.css (so a
+    // preset repaints it) and renders each page bare, so a full-screen block
+    // page is not squeezed into a reading column.
     const layout = await readFile(join(appDir, 'app', 'layout.ts'), 'utf8');
     assert.doesNotMatch(layout, /theme-toggle/, 'layout theme-toggle import stripped');
-    assert.doesNotMatch(layout, /--(?:background|foreground|primary):/, 'reset layout ships no design-token palette');
-    assert.match(layout, /background:\s*Canvas/, 'reset layout uses OS system colours');
+    assert.doesNotMatch(layout, /--(?:background|foreground|primary):/, 'reset layout defines no tokens of its own');
+    assert.match(layout, /background:\s*var\(--background\)/, 'reset layout paints with the theme tokens');
+    assert.match(layout, /classList\.toggle\('dark'/, 'and keeps .dark (the theme\'s dark switch) in step with the OS');
+    assert.doesNotMatch(layout, /<main|max-w-/, 'reset layout wraps no page in a column');
+    assert.match(layout, /\n\s*\$\{children\}\n/, 'it renders the page bare');
+    // The gallery's monospaced faces leave with its font link.
+    const theme = await readFile(join(appDir, 'styles', 'globals.css'), 'utf8');
+    assert.doesNotMatch(theme, /JetBrains Mono', ui-monospace/, 'the gallery faces are dropped from the theme');
 
     // The blank slate keeps the asset() marking (#1194). The clear script writes
     // its OWN layout, so it can silently drop what create.js emitted: an
@@ -278,9 +291,9 @@ test('gallery:clear keeps a hand-customised root layout (brand guard)', async ()
 
     const kept = await readFile(layoutPath, 'utf8');
     assert.match(kept, /Acme Notes/, 'the customised layout survives the clear');
-    assert.match(kept, /light-dark\(/, "the user's palette survives too");
+    assert.match(kept, /<header/, "the user's header survives too");
     assert.doesNotMatch(kept, /theme-toggle/, 'the dangling theme-toggle wiring is stripped');
-    assert.doesNotMatch(kept, /background:\s*Canvas/, 'the blank-slate layout was NOT applied');
+    assert.doesNotMatch(kept, /follow the OS until the app/, 'the blank-slate layout was NOT applied');
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }

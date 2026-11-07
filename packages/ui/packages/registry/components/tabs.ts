@@ -8,7 +8,7 @@
  * shadcn parity:
  *   Tabs           → <ui-tabs value orientation>
  *   TabsList       → <ui-tabs-list variant>
- *   TabsTrigger    → <ui-tabs-trigger value>
+ *   TabsTrigger    → <ui-tabs-trigger value disabled>
  *   TabsContent    → <ui-tabs-content value>
  *
  * Attributes on <ui-tabs>:
@@ -16,10 +16,17 @@
  *   `orientation`: "horizontal" (default) | "vertical".
  *
  * Attributes on <ui-tabs-list>:
- *   `variant`: "default" (default, pill-on-muted) | "underline".
+ *   `variant`: "default" (default, pill-on-muted) | "line" (shadcn's name;
+ *   "underline", the kit's earlier name, is an alias). The list is served
+ *   `data-variant="line"` for either, which is what every style keys on.
  *
  * Attributes on <ui-tabs-trigger> / <ui-tabs-content>:
  *   `value`: string. Identifier this trigger / panel pair shares.
+ *
+ * Attributes on <ui-tabs-trigger>:
+ *   `disabled`: boolean (reflected). The rendered `<button>` is disabled, so it
+ *   takes the `disabled:` styles and `data-disabled`, a click never selects its
+ *   tab, and Arrow / Home / End skip it.
  *
  * Events:
  *   `ui-value-change` on <ui-tabs>: `{ detail: { value } }` after a change.
@@ -28,6 +35,7 @@
  *   ArrowRight / ArrowLeft   next / previous (horizontal)
  *   ArrowDown / ArrowUp      next / previous (vertical)
  *   Home / End               first / last
+ *   (a `disabled` trigger is skipped by all four)
  *   Enter / Space            activate (native button activation)
  *
  * A11y (owned by the element, nothing to supply beyond trigger names):
@@ -65,7 +73,7 @@
  * ```
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
-import { cn, ensureId } from '../lib/utils.ts';
+import { cn, ensureId, takeAuthoredClass } from '../lib/utils.ts';
 
 // A tab `value` becomes part of an id, so reduce it to id-safe characters.
 const idSafe = (s: string): string => s.replace(/[^A-Za-z0-9_-]/g, '-');
@@ -74,39 +82,66 @@ const idSafe = (s: string): string => s.replace(/[^A-Za-z0-9_-]/g, '-');
 // Class helpers
 // --------------------------------------------------------------------------
 
-const TABS_BASE = 'group/tabs flex gap-2 data-[orientation=horizontal]:flex-col';
+const TABS_BASE = 'cn-tabs group/tabs flex';
 
 const TABS_LIST_BASE =
-  'group/tabs-list inline-flex w-fit items-center justify-center rounded-lg p-[3px] text-muted-foreground group-data-[orientation=horizontal]/tabs:h-9 group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:flex-col data-[variant=underline]:rounded-none';
+  'cn-tabs-list group/tabs-list inline-flex w-fit items-center justify-center text-muted-foreground';
 
 const TABS_LIST_VARIANTS = {
-  default: 'bg-muted',
-  underline: 'gap-1 bg-transparent',
+  default: 'cn-tabs-list-variant-default bg-muted',
+  line: 'cn-tabs-list-variant-line gap-1 bg-transparent',
 } as const;
 
-export type TabsListVariant = keyof typeof TABS_LIST_VARIANTS;
+/** The list's look: `line` is shadcn's name, and `underline` an alias for it. */
+export type TabsListVariant = keyof typeof TABS_LIST_VARIANTS | 'underline';
+
+/** The variant every style keys on, with `underline` read as `line`. */
+export function tabsListVariant(variant: TabsListVariant | string | null | undefined): keyof typeof TABS_LIST_VARIANTS {
+  return variant === 'line' || variant === 'underline' ? 'line' : 'default';
+}
 
 /** Optional helper exposing the tabs-list class for advanced overrides. */
 export function tabsListClass(opts: { variant?: TabsListVariant } = {}): string {
-  const variant = opts.variant ?? 'default';
-  return cn(TABS_LIST_BASE, TABS_LIST_VARIANTS[variant]);
+  return cn(TABS_LIST_BASE, TABS_LIST_VARIANTS[tabsListVariant(opts.variant)]);
+}
+
+/**
+ * shadcn's name for {@link tabsListClass}, so shadcn code ports verbatim
+ * (`tabsListVariants({ ... })` is shadcn's `cva` export for `TabsList`). Like cva, it
+ * merges a `className` into the result.
+ */
+export function tabsListVariants(opts: { variant?: TabsListVariant } & { className?: string } = {}): string {
+  return cn(tabsListClass(opts), opts.className);
 }
 
 // The trigger is rendered as a native <button role="tab">, which gives
 // us cursor-pointer + Enter/Space activation + focus for free. The class
 // here is essentially shadcn's tabs.tsx trigger output.
 const TABS_TRIGGER_CLASS = [
-  "relative inline-flex h-[calc(100%-1px)] flex-1 cursor-pointer select-none items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium whitespace-nowrap text-foreground/60 transition-all group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-sm group-data-[variant=underline]/tabs-list:data-[state=active]:shadow-none dark:text-muted-foreground dark:hover:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-  // These mirror shadcn's tabs.tsx (modulo variant=line → variant=underline).
+  'cn-tabs-trigger relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center whitespace-nowrap text-foreground/60 transition-all hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 dark:text-muted-foreground dark:hover:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0',
+  // These mirror shadcn's tabs.tsx.
   // Light-mode active state uses bg-background + shadow only; dark mode
   // additionally borders. Adding light-mode border made the underline
   // variant look like outline and made default look like two buttons.
-  'group-data-[variant=underline]/tabs-list:bg-transparent group-data-[variant=underline]/tabs-list:data-[state=active]:bg-transparent dark:group-data-[variant=underline]/tabs-list:data-[state=active]:border-transparent dark:group-data-[variant=underline]/tabs-list:data-[state=active]:bg-transparent',
-  'data-[state=active]:bg-background data-[state=active]:text-foreground dark:data-[state=active]:border-input dark:data-[state=active]:bg-input/30 dark:data-[state=active]:text-foreground',
-  'after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=underline]/tabs-list:data-[state=active]:after:opacity-100',
+  // shadcn keeps all three inline in every style; the part names carry the
+  // new-york spelling of the same rules.
+  'cn-tabs-trigger-part-2 group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent',
+  'cn-tabs-trigger-part-3 data-active:bg-background data-active:text-foreground dark:data-active:border-input dark:data-active:bg-input/30 dark:data-active:text-foreground',
+  'cn-tabs-trigger-part-4 after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-horizontal/tabs:after:inset-x-0 group-data-horizontal/tabs:after:bottom-[-5px] group-data-horizontal/tabs:after:h-0.5 group-data-vertical/tabs:after:inset-y-0 group-data-vertical/tabs:after:-end-1 group-data-vertical/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100',
 ].join(' ');
 
-const TABS_CONTENT_CLASS = 'flex-1 outline-none';
+const TABS_CONTENT_CLASS = 'cn-tabs-content flex-1 outline-none';
+
+/**
+ * The class an author wrote on a tabs part, as shadcn's `className`: it
+ * belongs on the element the part RENDERS (the tablist, the tab button, the
+ * panel), which is what shadcn's styles and an author's utilities target. It
+ * is read once from the host, before the part re-renders, and the host then
+ * carries `hostClass` instead (or nothing).
+ */
+function takeAuthored(part: HTMLElement, hostClass: string | null): string | null {
+  return takeAuthoredClass(part, hostClass);
+}
 
 // --------------------------------------------------------------------------
 // <ui-tabs> owns active `value` + `orientation`. Children read its state
@@ -149,11 +184,13 @@ export class UiTabs extends WebComponent({
     return { trigger: `${this.scopeId}-trigger-${v}`, panel: `${this.scopeId}-panel-${v}` };
   }
 
+
   render() {
+    const authored = takeAuthored(this, null);
     return html`<div
       data-slot="tabs"
       data-orientation=${this.orientation}
-      class=${TABS_BASE}
+      class=${cn(TABS_BASE, authored)}
     ><slot></slot></div>`;
   }
 
@@ -196,14 +233,16 @@ export class UiTabsList extends WebComponent({
     return this.closest('ui-tabs') as UiTabs | null;
   }
 
+
   render() {
+    const authored = takeAuthored(this, 'contents');
     const orientation = this._tabs?.orientation ?? 'horizontal';
     return html`<div
       data-slot="tabs-list"
       role="tablist"
       aria-orientation=${orientation}
-      data-variant=${this.variant}
-      class=${tabsListClass({ variant: this.variant })}
+      data-variant=${tabsListVariant(this.variant)}
+      class=${cn(tabsListClass({ variant: this.variant }), authored)}
     ><slot></slot></div>`;
   }
 }
@@ -215,10 +254,12 @@ UiTabsList.register('ui-tabs-list');
 
 export class UiTabsTrigger extends WebComponent({
   value: prop(String, { reflect: true }),
+  disabled: prop(Boolean, { reflect: true }),
 }) {
   constructor() {
     super();
     this.value = '';
+    this.disabled = false;
   }
 
   // render() runs server-side too. webjs resolves closest() at SSR against
@@ -229,7 +270,9 @@ export class UiTabsTrigger extends WebComponent({
     return this.closest('ui-tabs') as UiTabs | null;
   }
 
+
   render() {
+    const authored = takeAuthored(this, 'contents');
     const tabs = this._tabs;
     const active = !!tabs && tabs.value === this.value && this.value !== '';
     const ids = tabs && this.value ? tabs.idsFor(this.value) : null;
@@ -242,14 +285,16 @@ export class UiTabsTrigger extends WebComponent({
       data-state=${active ? 'active' : 'inactive'}
       aria-selected=${String(active)}
       tabindex=${active ? '0' : '-1'}
-      class=${TABS_TRIGGER_CLASS}
+      ?disabled=${this.disabled}
+      ?data-disabled=${this.disabled}
+      class=${cn(TABS_TRIGGER_CLASS, authored)}
       @click=${this._onClick}
       @keydown=${this._onKeyDown}
     ><slot></slot></button>`;
   }
 
   _onClick = (): void => {
-    if (this.value) this._tabs?.setAttribute('value', this.value);
+    if (this.value && !this.disabled) this._tabs?.setAttribute('value', this.value);
   };
 
   _onKeyDown = (e: KeyboardEvent): void => {
@@ -260,8 +305,10 @@ export class UiTabsTrigger extends WebComponent({
     // a nested <ui-tabs> inside a panel, and arrow nav at the boundary would
     // jump into the inner group and set this group's value to an inner-only
     // value (hiding every panel). Same scoping dropdown-menu applies to items.
+    // A disabled trigger is skipped by every key, as Radix's roving focus
+    // skips an item that is not focusable.
     const triggers = Array.from(tabs.querySelectorAll<UiTabsTrigger>('ui-tabs-trigger')).filter(
-      (t) => t._tabs === tabs,
+      (t) => t._tabs === tabs && (!t.disabled || t === this),
     );
     const idx = triggers.indexOf(this);
     const nextKey = orientation === 'horizontal' ? 'ArrowRight' : 'ArrowDown';
@@ -270,8 +317,8 @@ export class UiTabsTrigger extends WebComponent({
     let target: UiTabsTrigger | null = null;
     if (e.key === nextKey) target = triggers[(idx + 1) % triggers.length] ?? null;
     else if (e.key === prevKey) target = triggers[(idx - 1 + triggers.length) % triggers.length] ?? null;
-    else if (e.key === 'Home') target = triggers[0] ?? null;
-    else if (e.key === 'End') target = triggers[triggers.length - 1] ?? null;
+    else if (e.key === 'Home') target = triggers.find((t) => !t.disabled) ?? null;
+    else if (e.key === 'End') target = [...triggers].reverse().find((t) => !t.disabled) ?? null;
     // Enter/Space already handled natively by <button>; no preventDefault needed.
 
     if (target) {
@@ -307,7 +354,11 @@ export class UiTabsContent extends WebComponent({
     return this.closest('ui-tabs') as UiTabs | null;
   }
 
+
   render() {
+    // The panel's host keeps no class of its own (it toggles `hidden`, which a
+    // `display` utility would override), so the authored class moves whole.
+    const authored = takeAuthored(this, null);
     const tabs = this._tabs;
     const active = !!tabs && tabs.value === this.value && this.value !== '';
     const ids = tabs && this.value ? tabs.idsFor(this.value) : null;
@@ -326,7 +377,7 @@ export class UiTabsContent extends WebComponent({
       aria-labelledby=${ids ? ids.trigger : ''}
       tabindex="0"
       data-state=${active ? 'active' : 'inactive'}
-      class=${TABS_CONTENT_CLASS}
+      class=${cn(TABS_CONTENT_CLASS, authored)}
     ><slot></slot></section>`;
   }
 }

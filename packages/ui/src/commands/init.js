@@ -5,7 +5,16 @@ import prompts from 'prompts';
 import { writeConfig, CONFIG_FILE } from '../utils/get-config.js';
 import { logger } from '../utils/logger.js';
 import { getRegistryItem, DEFAULT_REGISTRY_URL } from '../registry/fetcher.js';
-import { ensureTheme } from '../utils/theme.js';
+import { ensureTheme, presetThemeBlock } from '../utils/theme.js';
+import { STYLE_NAMES } from '../registry/style-bake.js';
+import {
+  ICON_LIBRARIES,
+  decodePreset,
+  getIconLibrary,
+  isPresetCode,
+  presetFontUrls,
+  resolvePresetConfig,
+} from '../../packages/registry/themes/preset.js';
 
 const BASE_COLORS = ['neutral', 'stone', 'zinc', 'mauve', 'olive', 'mist', 'taupe'];
 
@@ -50,10 +59,45 @@ export const init = new Command()
   .option('-y, --yes', 'skip confirmation prompts', false)
   .option('--base-color <color>', `base color (${BASE_COLORS.join('|')})`)
   .option('--css <path>', 'path to the project Tailwind CSS file')
-  .option('-o, --overwrite', 'replace an existing alias map and existing helper files', false)
+  .option('-o, --overwrite', 'replace an existing alias map, existing helper files and the theme block', false)
+  .option('--preset <code>', 'apply a design-system preset code from webjs.dev/ui/create (style, colors, font, radius, icons)')
+  .option('--style <name>', `component style (${STYLE_NAMES.join('|')})`)
+  .option('--icons <library>', `icon library (${ICON_LIBRARIES.map((l) => l.name).join('|')})`)
   .option('--registry <url>', 'registry base URL', DEFAULT_REGISTRY_URL)
   .action(async (opts) => {
     const cwd = opts.cwd;
+
+    // A preset is the configurator's whole design system in one code (#1666).
+    // An explicit flag beside it wins over the field it names, so a code can
+    // be reused with one choice changed.
+    /** @type {import('../../packages/registry/themes/preset.js').PresetConfig | null} */
+    let preset = null;
+    if (opts.preset) {
+      const decoded = isPresetCode(opts.preset) ? decodePreset(opts.preset) : null;
+      if (!decoded) {
+        logger.error(`"${opts.preset}" is not a preset code. Copy one from ${logger.cyan('https://webjs.dev/ui/create')}.`);
+        process.exit(1);
+      }
+      const resolved = resolvePresetConfig({
+        ...decoded,
+        ...(opts.style ? { style: opts.style } : null),
+        ...(opts.icons ? { iconLibrary: opts.icons } : null),
+        ...(opts.baseColor ? { baseColor: opts.baseColor } : null),
+      });
+      if (resolved.error) {
+        logger.error(`Preset ${opts.preset}: ${resolved.error}.`);
+        process.exit(1);
+      }
+      preset = resolved.config;
+    }
+    if (opts.style && !STYLE_NAMES.includes(opts.style)) {
+      logger.error(`Unknown style "${opts.style}". Use one of: ${STYLE_NAMES.join(', ')}.`);
+      process.exit(1);
+    }
+    if (opts.icons && !getIconLibrary(opts.icons)) {
+      logger.error(`Unknown icon library "${opts.icons}". Use one of: ${ICON_LIBRARIES.map((l) => l.name).join(', ')}.`);
+      process.exit(1);
+    }
 
     // Re-running `init` on a project that already has one must not RELOCATE it.
     // The alias map decides where cn() lives and what every already-added
@@ -97,7 +141,7 @@ export const init = new Command()
 
     /** @type {{ baseColor: string, css: string }} */
     let answers = {
-      baseColor: opts.baseColor || initialBaseColor,
+      baseColor: (preset && preset.baseColor) || opts.baseColor || initialBaseColor,
       css: opts.css || initialCss,
     };
 
@@ -105,7 +149,7 @@ export const init = new Command()
       const r = await prompts(
         [
           {
-            type: opts.baseColor ? null : 'select',
+            type: opts.baseColor || preset ? null : 'select',
             name: 'baseColor',
             message: 'Base color?',
             choices: BASE_COLORS.map((c) => ({ title: c, value: c })),
@@ -127,9 +171,12 @@ export const init = new Command()
     // unrecognised key through here would write a file that `getConfig` (and
     // therefore `add` / `diff` / `info`) throws on. Preserving a project's
     // settings means its VALUES, not arbitrary extra fields.
+    // A style or icon library the command names replaces the stored one,
+    // since naming it is the request; otherwise a re-run keeps what is there.
+    const iconLibrary = (preset && preset.iconLibrary) || opts.icons || (keep && existing.iconLibrary) || 'lucide';
     const config = {
       $schema: 'https://ui.webjs.dev/schema.json',
-      style: (keep && existing.style) || 'default',
+      style: (preset && preset.style) || opts.style || (keep && existing.style) || 'default',
       tailwind: {
         css: answers.css,
         baseColor: answers.baseColor,
@@ -138,7 +185,7 @@ export const init = new Command()
           : true,
       },
       aliases,
-      iconLibrary: (keep && existing.iconLibrary) || 'lucide',
+      iconLibrary,
     };
 
     writeConfig(cwd, config);
@@ -147,17 +194,49 @@ export const init = new Command()
     // Pull lib/utils + the chosen theme from the registry and write them in.
     await writeLibUtils(cwd, aliases.utils, opts.registry, opts.overwrite);
 
+    // The icon library is written only when the command names one, since it
+    // is a large file an app that draws no kit icons does not need.
+    if (preset || opts.icons) await writeIcons(cwd, aliases.utils, iconLibrary, opts.registry, opts.overwrite);
+
+    // A preset's tokens are its own palette over the kit's theme file.
+    let block;
+    if (preset) {
+      try {
+        const neutral = await getRegistryItem('theme-neutral', opts.registry);
+        block = presetThemeBlock(neutral.files[0].content || '', preset);
+      } catch (e) {
+        logger.error(`Could not build the theme for preset ${opts.preset}: ${e.message}`);
+        process.exit(1);
+      }
+    }
+
     // The theme tokens are what the class helpers render against. A silent
     // failure here (the old behaviour) left an unstyled install with a clean
     // exit code, the exact trap for an autonomous agent, so hard-fail (#983).
-    const theme = await ensureTheme(cwd, answers.baseColor, answers.css, opts.registry);
+    // A preset, or --overwrite, replaces an existing block in place (#1666).
+    const theme = await ensureTheme(cwd, answers.baseColor, answers.css, opts.registry, {
+      replace: Boolean(preset || opts.overwrite),
+      block,
+    });
     if (theme.status === 'failed') {
       logger.error(`Could not write theme tokens into ${answers.css}: ${theme.error}`);
       logger.info('The class helpers render against these tokens, so this must succeed.');
       process.exit(1);
     }
     if (theme.status === 'written') logger.success(`Wrote theme into ${answers.css}`);
-    else logger.info(`Theme already present in ${answers.css}: skipping.`);
+    else if (theme.status === 'replaced') logger.success(`Replaced the theme in ${answers.css}`);
+    else if (theme.status === 'legacy') {
+      logger.warn(`The theme block in ${answers.css} predates the end marker, so it was left as it is.`);
+      logger.info(`To replace it, delete the block (from ${logger.cyan('/* @webjsdev/ui theme */')} to the end of its rules) and re-run init.`);
+    } else logger.info(`Theme already present in ${answers.css}: skipping.`);
+
+    if (preset) {
+      const urls = presetFontUrls(preset);
+      if (urls.length) {
+        logger.info('The preset names its fonts in the theme. Load the faces, either self-hosted under public/ or from:');
+        for (const url of urls) logger.info(`  ${url}`);
+      }
+    }
 
     logger.break();
     logger.success('Done.');
@@ -221,6 +300,44 @@ async function writeLibUtils(cwd, utilsAlias, registryUrl, overwrite) {
     }
   } catch (e) {
     logger.warn(`Could not fetch lib-dom from registry (${e.message}). You may need to write ${relative(cwd, domTarget)} manually.`);
+  }
+}
+
+/**
+ * Write the chosen icon library as the utils file's sibling `icons.ts`, the
+ * path a block's icon import is rewritten to (#1666). Naming a library is a
+ * request to switch, so a file that is still one of the five libraries as
+ * shipped is replaced. A file the app has edited is kept unless `--overwrite`
+ * says otherwise, the same rule as the other helpers.
+ */
+async function writeIcons(cwd, utilsAlias, library, registryUrl, overwrite) {
+  const lib = getIconLibrary(library);
+  if (!lib) return;
+  const target = join(dirname(join(cwd, utilsAlias.replace(/^@\//, '') + '.ts')), 'icons.ts');
+  const rel = relative(cwd, target);
+  try {
+    const item = await getRegistryItem(lib.item, registryUrl);
+    const content = item.files && item.files[0] ? item.files[0].content || '' : '';
+    if (!content) throw new Error(`${lib.item} has no content`);
+    if (existsSync(target) && !overwrite) {
+      const current = readFileSync(target, 'utf8');
+      if (current === content) {
+        logger.info(`${rel} is already ${lib.title}: keeping it.`);
+        return;
+      }
+      const pristine = await Promise.all(
+        ICON_LIBRARIES.map((l) => getRegistryItem(l.item, registryUrl).then((it) => it.files[0].content, () => null)),
+      );
+      if (!pristine.includes(current)) {
+        logger.warn(`${rel} has been edited, so it was kept. Re-run with --overwrite to replace it with ${lib.title}.`);
+        return;
+      }
+    }
+    ensureDir(dirname(target));
+    writeFileSync(target, content, 'utf8');
+    logger.success(`Wrote ${rel} (${lib.title})`);
+  } catch (e) {
+    logger.warn(`Could not fetch ${lib.item} from the registry (${e.message}).`);
   }
 }
 

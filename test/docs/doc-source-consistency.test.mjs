@@ -121,7 +121,7 @@ async function walkFiles(dir, re, out = []) {
 async function docCorpus() {
   const files = [join(ROOT, 'AGENTS.md'), join(ROOT, 'README.md'), join(ROOT, 'packages/cli/templates/AGENTS.md')];
   await walkFiles(join(ROOT, '.agents', 'skills', 'webjs'), /\.md$/, files);
-  await walkFiles(join(ROOT, 'website', 'app', 'docs'), /\.(ts|md|mdx)$/, files);
+  await walkFiles(join(ROOT, 'website', 'app', '(site)', 'docs'), /\.(ts|md|mdx)$/, files);
   // Marketing site (its sample-code strings + its own components import the
   // framework) and every package README are first-class doc surfaces too.
   await walkFiles(join(ROOT, 'website'), /\.(ts|md|mdx)$/, files);

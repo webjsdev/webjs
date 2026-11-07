@@ -10,11 +10,13 @@
     "dev": "webjs dev --port ${PORT:-5001}",
     "start": "webjs start",
     "typecheck": "node scripts/copy-registry.mjs && webjs typecheck",
-    "pretest": "node scripts/copy-registry.mjs",
+    "pretest": "node scripts/copy-registry.mjs && npm run css:build && npm run css:build:ui",
     "test": "webjs test",
-    "pretest:browser": "node scripts/copy-registry.mjs",
+    "pretest:browser": "node scripts/copy-registry.mjs && npm run css:build && npm run css:build:ui",
     "test:browser": "webjs test --browser",
     "css:build": "tailwindcss -i ./public/input.css -o ./public/tailwind.css --minify",
+    "css:build:ui": "tailwindcss -i ./public/ui-input.css -o ./public/ui.css --minify",
+    "css:build:ui-styles": "node scripts/build-ui-styles.mjs",
     "ci": "webjs ci"
   },
   "webjs": {
@@ -29,12 +31,19 @@
         "source": "/docs/ui",
         "destination": "/ui",
         "permanent": true
+      },
+      {
+        "source": "/ui/docs/components/typography",
+        "destination": "/ui/docs/typeset",
+        "permanent": true
       }
     ],
     "dev": {
       "before": [
         "node scripts/copy-registry.mjs",
-        "npm run css:build"
+        "npm run css:build",
+        "npm run css:build:ui",
+        "npm run css:build:ui-styles"
       ],
       "regenerate": [
         {
@@ -49,6 +58,33 @@
             "../packages/ui/packages/registry/lib",
             "public/input.css"
           ]
+        },
+        {
+          "output": "public/ui.css",
+          "command": "node scripts/copy-registry.mjs && tailwindcss -i ./public/ui-input.css -o ./public/ui.css --minify",
+          "inputs": [
+            "app/ui",
+            "components",
+            "lib/ui",
+            "modules/ui",
+            "../packages/ui/packages/registry/components",
+            "../packages/ui/packages/registry/blocks",
+            "../packages/ui/packages/registry/lib",
+            "../packages/ui/packages/registry/styles",
+            "../packages/ui/packages/registry/themes",
+            "scripts/build-ui-themes.mjs",
+            "public/ui-input.css",
+            "public/ui-theme.css"
+          ]
+        },
+        {
+          "output": "public/ui-styles/rhea.css",
+          "command": "node scripts/build-ui-styles.mjs",
+          "inputs": [
+            "../packages/ui/packages/registry/styles",
+            "public/ui-theme.css",
+            "scripts/build-ui-styles.mjs"
+          ]
         }
       ],
       "watch": [
@@ -58,7 +94,9 @@
     "start": {
       "before": [
         "node scripts/copy-registry.mjs",
-        "npm run css:build"
+        "npm run css:build",
+        "npm run css:build:ui",
+        "npm run css:build:ui-styles"
       ]
     },
     "doctor": {

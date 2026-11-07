@@ -7,7 +7,7 @@
 // JS off, every link is a normal full-page navigation.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
-import { buttonClass } from '#components/ui/button.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
 import { pageHeading, lede } from '#lib/utils/ui.ts';
 import '#modules/client-router/components/router-controls.ts';
 

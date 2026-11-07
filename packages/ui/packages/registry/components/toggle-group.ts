@@ -18,7 +18,11 @@
  *                  multiple: comma-separated values.
  *   `variant`:     "default" (default) | "outline".
  *   `size`:        "default" (default) | "sm" | "lg".
- *   `spacing`:     "0" (default, joined corners) | "default" (gapped).
+ *   `spacing`:     shadcn's number: "0" joins the items' corners, and N gaps
+ *                  them by N spacing units. Left out, the style decides:
+ *                  shadcn's styles gap by 2, as shadcn's default does, and
+ *                  new-york joins them. "default" is the kit's earlier name
+ *                  for a gap, read as 1.
  *   `orientation`: "horizontal" (default) | "vertical".
  *
  * Attributes on <ui-toggle-group-item>:
@@ -77,7 +81,17 @@ import { cn } from '../lib/utils.ts';
 import { toggleClass, type ToggleVariant, type ToggleSize } from './toggle.ts';
 
 const ROOT_BASE =
-  'group/toggle-group flex w-fit items-center rounded-md data-[spacing=default]:data-[variant=outline]:shadow-xs data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch';
+  'cn-toggle-group group/toggle-group flex w-fit flex-row items-center gap-[--spacing(var(--gap))] data-vertical:flex-col data-vertical:items-stretch';
+
+/**
+ * The spacing a group renders: the author's number, `default` read as 1, or
+ * null when the author set none, which leaves `data-spacing` off so the style
+ * decides (a gap of 2 in shadcn's styles, joined items in new-york).
+ */
+export function toggleGroupSpacing(raw: string | null | undefined): string | null {
+  if (raw === null || raw === undefined || raw === '') return null;
+  return raw === 'default' ? '1' : raw;
+}
 
 // The `disabled:` variants inside toggleClass() key on the :disabled pseudo,
 // which only ever matches a real form control. An item's host IS the button
@@ -85,7 +99,7 @@ const ROOT_BASE =
 // browser are concerned, and the disabled look has to come from the
 // aria-disabled variant instead.
 const ITEM_EXTRA =
-  'w-auto min-w-0 shrink-0 px-3 focus:z-10 focus-visible:z-10 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[spacing=0]:rounded-none data-[spacing=0]:shadow-none data-[spacing=0]:first:rounded-l-md data-[spacing=0]:last:rounded-r-md data-[spacing=0]:data-[variant=outline]:border-l-0 data-[spacing=0]:data-[variant=outline]:first:border-l';
+  'cn-toggle-group-item shrink-0 focus:z-10 focus-visible:z-10';
 
 // --------------------------------------------------------------------------
 // <ui-toggle-group>
@@ -111,7 +125,7 @@ export class UiToggleGroup extends WebComponent({
     this.type = 'single';
     this.variant = 'default';
     this.size = 'default';
-    this.spacing = '0';
+    this.spacing = '';
     this.orientation = 'horizontal';
   }
 
@@ -121,14 +135,15 @@ export class UiToggleGroup extends WebComponent({
   }
 
   render() {
-    const gap = this.spacing === '0' ? '' : 'gap-1';
+    const spacing = toggleGroupSpacing(this.spacing);
     return html`<div
       data-slot="toggle-group"
       role="group"
-      class=${cn(ROOT_BASE, gap)}
+      class=${ROOT_BASE}
+      style=${`--gap: ${spacing ?? 2}`}
       data-variant=${this.variant}
       data-size=${this.size}
-      data-spacing=${this.spacing}
+      data-spacing=${spacing}
       data-orientation=${this.orientation}
       @ui-toggle-item-click=${this._onItemClick}
     ><slot></slot></div>`;
@@ -283,10 +298,11 @@ export class UiToggleGroupItem extends WebComponent({
     const group = this._group;
     const variant = (group?.variant ?? 'default') as ToggleVariant;
     const size = (group?.size ?? 'default') as ToggleSize;
-    const spacing = group?.spacing ?? '0';
+    const spacing = toggleGroupSpacing(group?.spacing);
     this.dataset.variant = variant;
     this.dataset.size = size;
-    this.dataset.spacing = spacing;
+    if (spacing === null) this.removeAttribute('data-spacing');
+    else this.dataset.spacing = spacing;
     this.dataset.state = this.pressed ? 'on' : 'off';
     // role and data-slot are set HERE as well as in connectedCallback, because
     // SSR runs render() but NOT connectedCallback. Without this the served item

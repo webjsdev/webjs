@@ -120,6 +120,11 @@ try {
     const hints = raw.slice(0, raw.indexOf('http/1.1 200'));
     assert.ok(hints.includes('/components/hot-button.ts'), `[${runtime}] the interactive component is early-hinted`);
     assert.ok(!hints.includes('/components/lazy-panel.ts'), `[${runtime}] the lazy component is NOT early-hinted (the hints share the boot's assembly)`);
+    // A module preload in a 103 starts module loading before the page's
+    // import map is parsed, and Firefox then refuses the map, so the hints
+    // are plain script preloads (earlyHintLinks).
+    assert.ok(!hints.includes('modulepreload'), `[${runtime}] no 103 hint is a modulepreload`);
+    assert.ok(/\/components\/hot-button\.ts[^>]*>; rel=preload; as=script; crossorigin=anonymous/.test(hints), `[${runtime}] the hint is a CORS script preload`);
   }
 
   console.log(`OK  prod-perf-memos #1644 passed on ${runtime} (identical renders modulo nonce, memoized importmap body)`);

@@ -54,7 +54,7 @@ function readAll(dir, exts, out) {
 const DOCS = [readFileSync(join(REPO, 'AGENTS.md'), 'utf8')]
   .concat(readAll(join(REPO, '.agents', 'skills', 'webjs'), ['.md'], []))
   // The docs site lives in the marketing app now (#1098): webjs.dev/docs.
-  .concat(readAll(join(REPO, 'website', 'app', 'docs'), ['.ts'], []))
+  .concat(readAll(join(REPO, 'website', 'app', '(site)', 'docs'), ['.ts'], []))
   .join('\n');
 const TESTS = readAll(join(REPO, 'test'), ['.js', '.mjs', '.ts'], [])
   .concat(readAll(join(REPO, 'packages', 'core', 'test'), ['.js', '.mjs'], []))

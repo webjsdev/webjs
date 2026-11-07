@@ -105,13 +105,26 @@ const DOCS_SCHEMA = {
   required: [],
 };
 
-/** `ui` lists the @webjsdev/ui kit, or details one component by `name`. */
+/** `ui` lists the @webjsdev/ui kit, or details one component or block by `name`. */
 const UI_SCHEMA = {
   type: 'object',
   properties: {
     name: {
       type: 'string',
-      description: 'A component name (e.g. button, accordion, dialog). Omit for the full kit inventory.',
+      description: 'A component (button, dialog) or block (login-01) name. Omit for the inventory.',
+    },
+    type: {
+      type: 'string',
+      enum: ['ui', 'block', 'chart', 'all'],
+      description: 'List one kind with one-line descriptions: ui (components), block, chart, or all.',
+    },
+    category: {
+      type: 'string',
+      description: 'List the blocks and charts in one category (login, signup, sidebar, dashboard, area, ...) with descriptions.',
+    },
+    source: {
+      type: 'boolean',
+      description: 'With a block `name`: include the file sources. Off by default, since installing the block and reading the files is cheaper.',
     },
   },
   required: [],
@@ -170,7 +183,7 @@ const TOOL_DEFS = [
   {
     name: 'ui',
     description:
-      'The @webjsdev/ui component kit (shadcn-style, copied into your repo). No args returns the inventory (each component: tier, helper signatures, npm deps); pass `name` for one component: helper signatures, the paste-ready structural example, the a11y/description header, and deps. Use before hand-writing UI so you reach for a helper (e.g. buttonClass()) and the accessible structure instead of expanding Tailwind blind. Reads the kit, not your app. Read-only.',
+      'The @webjsdev/ui kit (shadcn-style, copied into your repo): components, plus blocks and charts (a block is a ready-made view you install and then edit: a login or signup page, a sidebar shell, a dashboard, a chart). No args returns the component inventory (tier, helper signatures, npm deps) and the block and chart NAMES grouped by category; `type` / `category` list them with one-line descriptions. Pass `name` for one component (helper signatures, the paste-ready example, the a11y header, deps) or one block (description, dependencies, the install command, and the files it writes with their targets; `source: true` adds the sources). Before hand-writing a page, a dashboard, a sidebar shell, an auth form or a chart, look for a block and install it. Reads the kit, not your app. Read-only.',
     inputSchema: UI_SCHEMA,
   },
   {
@@ -421,16 +434,6 @@ export function makeToolRunners(deps) {
 }
 
 /**
- * Run the `ui` tool: the @webjsdev/ui kit inventory (no args) or one component's
- * projection (helper signatures + paste-ready example + a11y/description header
- * + deps). Projects the SHARED `@webjsdev/ui/registry/extract` leaf, the same
- * one `webjsui view` renders, so the CLI and MCP cannot drift (#983, the #979
- * shared-projector pattern). `uiDeps` is injected so tests need no real package.
- *
- * @param {{ uiInventory: Function, uiComponent: Function }} uiDeps
- * @param {{ name?: string }} args
- */
-/**
  * Resolve the `ui` tool's deps from the shared `@webjsdev/ui/registry/extract`
  * leaf, GUARDED (#983): if `@webjsdev/ui` is absent or too old to carry the
  * `./registry/extract` subpath (a cross-package version skew), only the `ui`
@@ -439,29 +442,70 @@ export function makeToolRunners(deps) {
  * top-level import would instead reject during bootstrap and sink the whole
  * server. `importer` is injected so the failure path is unit-testable.
  *
- * @param {() => Promise<{ uiInventory: Function, uiComponent: Function }>} importer
- * @returns {Promise<{ uiInventory: Function, uiComponent: Function }>}
+ * A `@webjsdev/ui` that predates blocks (no `uiBlocks` export) still serves
+ * the components: the block deps then answer with nothing rather than throw.
+ *
+ * @param {() => Promise<any>} importer
+ * @returns {Promise<UiDeps>}
  */
 export async function loadUiDeps(importer) {
   try {
     const ui = await importer();
-    return { uiInventory: ui.uiInventory, uiComponent: ui.uiComponent };
+    return {
+      uiInventory: ui.uiInventory,
+      uiComponent: ui.uiComponent,
+      uiBlocks: ui.uiBlocks ?? (() => []),
+      uiBlockIndex: ui.uiBlockIndex ?? (() => ({ blocks: {}, charts: {} })),
+      uiBlock: ui.uiBlock ?? (() => null),
+    };
   } catch {
     const unavailable = () => {
       throw new Error('@webjsdev/ui is not available (install/upgrade @webjsdev/ui to use the ui tool)');
     };
-    return { uiInventory: unavailable, uiComponent: unavailable };
+    return { uiInventory: unavailable, uiComponent: unavailable, uiBlocks: unavailable, uiBlockIndex: unavailable, uiBlock: unavailable };
   }
 }
 
+/**
+ * @typedef {{
+ *   uiInventory: Function, uiComponent: Function,
+ *   uiBlocks: Function, uiBlockIndex: Function, uiBlock: Function,
+ * }} UiDeps
+ */
+
+/**
+ * Run the `ui` tool. No args: the component inventory plus the block and chart
+ * names grouped by category. `type` / `category`: one compact entry per match
+ * with its description. A component `name`: its projection (helper signatures,
+ * paste-ready example, a11y header, deps). A block `name`: its description,
+ * dependencies, install command and files with targets (sources with
+ * `source: true`). Projects the SHARED `@webjsdev/ui/registry/extract` leaf,
+ * the same one `webjsui view` renders, so the CLI and MCP cannot drift (#983,
+ * the #979 shared-projector pattern). `uiDeps` is injected so tests need no
+ * real package.
+ *
+ * @param {UiDeps} uiDeps
+ * @param {{ name?: string, type?: string, category?: string, source?: boolean }} args
+ */
 export function runUiTool(uiDeps, args) {
   const name = typeof args.name === 'string' && args.name ? args.name : null;
-  if (!name) return { inventory: uiDeps.uiInventory() };
-  const component = uiDeps.uiComponent(name);
-  if (!component) {
-    throw new Error(`Unknown component "${String(name)}". Call ui with no args for the inventory.`);
+  const type = typeof args.type === 'string' && args.type ? args.type : null;
+  if (type && !['ui', 'block', 'chart', 'all'].includes(type)) {
+    throw new Error(`Unknown type "${type}". Use ui, block, chart or all.`);
   }
-  return component;
+  const category = typeof args.category === 'string' && args.category ? args.category : null;
+  if (!name) {
+    // A filter lists one kind with its one-line descriptions. The bare call
+    // stays cheap: the component inventory plus the block and chart NAMES by
+    // category (D18), and a test caps its size.
+    if (type || category) return { items: uiDeps.uiBlocks({ type: type ?? undefined, category: category ?? undefined }) };
+    return { inventory: uiDeps.uiInventory(), ...uiDeps.uiBlockIndex() };
+  }
+  const component = uiDeps.uiComponent(name);
+  if (component) return component;
+  const block = uiDeps.uiBlock(name, { source: args.source === true });
+  if (block) return block;
+  throw new Error(`Unknown component or block "${String(name)}". Call ui with no args for the inventory.`);
 }
 
 /**

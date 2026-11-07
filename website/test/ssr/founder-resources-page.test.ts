@@ -18,11 +18,10 @@ import { resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { html } from '@webjsdev/core';
 import { renderToString } from '@webjsdev/core/server';
-import FounderResourcesPage, * as ResourcesModule from '#app/founder-resources/page.ts';
-import RootLayout from '#app/layout.ts';
+import FounderResourcesPage, * as ResourcesModule from '#app/(site)/founder-resources/page.ts';
 import Sitemap from '#app/sitemap.ts';
 import { GET as llmsTxt } from '#app/llms.txt/route.ts';
-import { layoutProps } from '#test/helpers/layout-props.ts';
+import { siteShell } from '#test/helpers/site-shell.ts';
 
 const WEBSITE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const LINKS = [
@@ -74,7 +73,7 @@ test('/llms.txt does not list /founder-resources', async () => {
 });
 
 test('neither the header nor the footer links /founder-resources', async () => {
-  const out = await renderToString(RootLayout(layoutProps(html`<main>x</main>`)));
+  const out = await renderToString(siteShell(html`<main>x</main>`));
   assert.ok(out.includes('href="/blog"'), 'sanity: the chrome rendered');
   assert.ok(!out.includes('/founder-resources'), 'no chrome link to the page');
 });
@@ -82,7 +81,7 @@ test('neither the header nor the footer links /founder-resources', async () => {
 test('no other source file references /founder-resources', () => {
   // The rendered checks above cover the surfaces that exist today. This one
   // covers a link added tomorrow on any page, fragment or component.
-  const self = resolve(WEBSITE_ROOT, 'app', 'founder-resources');
+  const self = resolve(WEBSITE_ROOT, 'app', '(site)', 'founder-resources');
   const hits: string[] = [];
   for (const dir of ['app', 'lib', 'components', 'modules']) {
     for (const entry of readdirSync(resolve(WEBSITE_ROOT, dir), { recursive: true, withFileTypes: true })) {

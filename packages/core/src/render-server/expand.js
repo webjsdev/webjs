@@ -3,9 +3,10 @@ import { unsafeHTML } from '../directives.js';
 import { escapeAttr } from '../escape.js';
 import { defaultSSRErrorTemplate, browserMemberHint } from './errors.js';
 import {
-  appendReflectedAttrs, applyAttrsToInstance, consumePropAttrs, parseAttrs, seedServerAttrs,
+  applyAttrsToInstance, consumePropAttrs, parseAttrs, seedServerAttrs,
   withHostMarker,
 } from './attrs.js';
+import { serveInstanceAttrs } from './served-attrs.js';
 
 /**
  * Custom-element expansion inside the op walk (#1646): what `injectDSD`
@@ -113,10 +114,11 @@ export async function settleRender(frame) {
 }
 
 function afterRender(frame) {
-  // Surface attributes the component set up to and including render() that
-  // were not in the source tag (reflected props, an explicit setAttribute,
-  // a host mutation inside render()). Reading after render() captures all.
-  frame.opening = appendReflectedAttrs(frame.opening, frame.instance, frame.presentAttrNames);
+  // Serve the attributes as the component left them up to and including
+  // render(): one it added is appended, one it changed carries its new value,
+  // and one it removed is dropped, as lit-ssr's renderAttributes() does (see
+  // served-attrs.js). Reading after render() captures all.
+  frame.opening = serveInstanceAttrs(frame.opening, frame.instance, frame.presentAttrNames);
   // Mark LIGHT-DOM hosts for the `@layer webjs-host` display:block default.
   // Shadow hosts are NOT marked: a document-level rule on the host beats the
   // shadow tree's own `:host { display }`.
@@ -253,14 +255,39 @@ async function errorState(w, frame) {
  * The `slot` attribute value of an element's attribute text, or null when
  * absent. `slot=""` and the reserved alias `default` both mean the default
  * slot (#1015), matching the client record.
+ *
+ * The attributes are read one by one, the way the HTML tokenizer reads them,
+ * rather than by searching for `slot=`. A search has two false matches: the
+ * tail of another name (`data-slot="button"`, which every shadcn-shaped part
+ * carries, since `\b` sits between the hyphen and the `s`) and text inside a
+ * quoted value (`title="a slot=b"`). Either one routed the child to a named
+ * slot the template does not have, and the server dropped it (#1666).
  * @param {string} attrsRaw
  * @returns {string | null}
  */
 export function extractSlotAttr(attrsRaw) {
-  const m = /\bslot\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrsRaw);
-  if (!m) return null;
-  const value = m[1] ?? m[2] ?? m[3] ?? '';
-  return value === '' || value === 'default' ? null : value;
+  const found = findAttr(attrsRaw, 'slot');
+  if (!found) return null;
+  return found.value === '' || found.value === 'default' ? null : found.value;
+}
+
+/**
+ * Find one attribute by name in an element's attribute text, reading the
+ * attributes in order as the HTML tokenizer does, so a name that merely ENDS
+ * in `attrName` or a quoted value that mentions it never matches. Returns
+ * the value (empty for a bare attribute) and the span of the whole attribute.
+ * @param {string} attrsRaw
+ * @param {string} attrName  lowercase
+ * @returns {{ value: string, start: number, end: number } | null}
+ */
+function findAttr(attrsRaw, attrName) {
+  const attr = /([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
+  let m;
+  while ((m = attr.exec(attrsRaw))) {
+    if (m[1].toLowerCase() !== attrName) continue;
+    return { value: m[2] ?? m[3] ?? m[4] ?? '', start: m.index, end: m.index + m[0].length };
+  }
+  return null;
 }
 
 /**
@@ -278,9 +305,9 @@ export function finishSlot(frame, fallback) {
   let name = null;
   let otherAttrs = '';
   if (NON_BLANK.test(attrsRaw)) {
-    const nameMatch = /\bname\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrsRaw);
-    name = nameMatch ? (nameMatch[1] ?? nameMatch[2] ?? nameMatch[3]) : null;
-    otherAttrs = attrsRaw.replace(/\bname\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/i, '').trim();
+    const found = findAttr(attrsRaw, 'name');
+    name = found ? found.value : null;
+    otherAttrs = (found ? attrsRaw.slice(0, found.start) + attrsRaw.slice(found.end) : attrsRaw).trim();
   }
   const slotKey = name === 'default' || name === '' ? null : name;
   const projected = owner.partition.get(slotKey);

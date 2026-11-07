@@ -21,7 +21,7 @@
 // home; a page/layout never hydrates. With JS off the plain link still works
 // (progressive enhancement), while the buttons are inert.
 import { WebComponent, html, signal, navigate, revalidate, refreshPage, disableClientRouter, enableClientRouter } from '@webjsdev/core';
-import { buttonClass } from '#components/ui/button.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
 
 export class RouterControls extends WebComponent {
   // Instance signal mirroring whether soft navigation is currently on.

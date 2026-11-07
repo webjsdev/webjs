@@ -5,8 +5,21 @@
  * thumb (positioned via the `peer-checked:` variant).
  *
  * shadcn parity:
- *   Switch (size: default | sm)  → switchInputClass() on a hidden <input> +
- *                                   switchTrackClass({ size }) on a sibling <span>
+ *   Switch (size: default | sm)  → <ui-switch size checked name value disabled
+ *                                   required aria-label input-id>, which renders
+ *                                   shadcn's switch (a `data-slot="switch"` root
+ *                                   and a `switch-thumb`) around a real checkbox,
+ *                                   so every shadcn style draws it
+ *                                 → or, as plain markup, switchInputClass() on a
+ *                                   hidden <input> + switchTrackClass({ size }) on
+ *                                   a sibling <span> (the default style only)
+ *
+ * <ui-switch> renders on the server too: its checkbox is a real form control
+ * laid transparent over the track, so it submits, takes a <label>, and toggles
+ * with JavaScript off. `data-state` follows it, and the data-checked variant
+ * also reads the native state (a switch root whose own checkbox is checked, a
+ * thumb after a checked checkbox), so the look follows the control without
+ * script too. `ui-checked-change` reports a change ({ detail: { checked } }).
  *
  * Design tokens used: --primary, --input, --background, --foreground, --ring,
  * --primary-foreground.
@@ -29,6 +42,14 @@
  *
  * @example
  * ```html
+ * <ui-switch name="airplane" aria-label="Airplane mode" checked></ui-switch>
+ *
+ * <!-- With a visible label, which names the switch. -->
+ * <label class="inline-flex items-center gap-2">
+ *   <ui-switch name="notify"></ui-switch> Notifications
+ * </label>
+ *
+ * <!-- The helpers, for a plain-markup switch. -->
  * <label class="inline-flex items-center gap-2">
  *   <input type="checkbox" role="switch" name="notify" class=${switchInputClass()}>
  *   <span class=${switchTrackClass()}></span>
@@ -46,27 +67,27 @@
  * <span class=${switchTrackClass({ size: 'sm' })}></span>
  * ```
  */
+import { WebComponent, html, prop } from '@webjsdev/core';
 import { cn } from '../lib/utils.ts';
 
 /** Hidden native checkbox: handles form value + keyboard activation. */
 export const switchInputClass = (): string => 'peer sr-only';
 
 const TRACK_BASE =
-  'inline-flex shrink-0 cursor-pointer items-center rounded-full border border-transparent shadow-xs transition-all outline-none peer-focus-visible:border-ring peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 bg-input dark:bg-input/80 peer-checked:bg-primary relative';
+  'cn-switch peer group/switch inline-flex items-center transition-all outline-none relative';
 
 const TRACK_SIZES = {
-  default: 'h-[1.15rem] w-8',
-  sm: 'h-3.5 w-6',
+  default: 'cn-switch-size-default',
+  sm: 'cn-switch-size-sm',
 } as const;
 
 const THUMB_SIZES = {
-  default:
-    "after:size-4 after:translate-x-px peer-checked:after:translate-x-[calc(100%-2px)]",
-  sm: "after:size-3 after:translate-x-px peer-checked:after:translate-x-[calc(100%-1px)]",
+  default: 'cn-switch-thumb-size-default',
+  sm: 'cn-switch-thumb-size-sm',
 } as const;
 
 const THUMB_BASE =
-  'after:pointer-events-none after:absolute after:left-0 after:rounded-full after:bg-background after:transition-transform peer-checked:after:bg-primary-foreground dark:after:bg-foreground';
+  'cn-switch-thumb';
 
 export type SwitchSize = keyof typeof TRACK_SIZES;
 
@@ -74,3 +95,90 @@ export function switchTrackClass(opts: { size?: SwitchSize } = {}): string {
   const size = opts.size ?? 'default';
   return cn(TRACK_BASE, TRACK_SIZES[size], THUMB_BASE, THUMB_SIZES[size]);
 }
+
+// --------------------------------------------------------------------------
+// <ui-switch>
+// --------------------------------------------------------------------------
+
+/**
+ * shadcn's Switch: a root and a thumb around a real checkbox. The authored
+ * attributes that belong to the control (`name`, `value`, `checked`,
+ * `disabled`, `required`, `aria-label`, `aria-labelledby`,
+ * `aria-describedby`, `aria-invalid`, and `input-id` for a `<label for>`) are
+ * passed to it. `aria-invalid` also lands on the root, where every style draws
+ * the error ring (shadcn's root is the control itself).
+ */
+export class UiSwitch extends WebComponent({
+  size: prop<SwitchSize>(String, { reflect: true }),
+  checked: prop(Boolean),
+  disabled: prop(Boolean),
+  required: prop(Boolean),
+  name: prop(String),
+  value: prop(String),
+  inputId: prop(String, { attribute: 'input-id' }),
+  // Observed so a re-validation that sets or clears it re-renders the switch.
+  invalid: prop(String, { attribute: 'aria-invalid' }),
+}) {
+  constructor() {
+    super();
+    this.size = 'default';
+    this.checked = false;
+    this.disabled = false;
+    this.required = false;
+    this.name = '';
+    this.value = '';
+    this.inputId = '';
+    this.invalid = '';
+  }
+
+  _attr(name: string): string | null {
+    return typeof this.getAttribute === 'function' ? this.getAttribute(name) : null;
+  }
+
+  _onChange = (e: Event): void => {
+    const input = e.target as HTMLInputElement;
+    this.checked = input.checked;
+    this.dispatchEvent(new CustomEvent('ui-checked-change', { detail: { checked: input.checked }, bubbles: true }));
+  };
+
+  // The focus ring sits on the root and keys on the checkbox inside having
+  // keyboard focus: in shadcn the focused element IS the root (a Radix
+  // button), here it is the real checkbox the root contains.
+  // The root is the box, as shadcn's root (a Radix button) is: a flex item
+  // its row centres. A block host around it added a line box of its own and
+  // sat the switch a few pixels high, so the host is display: contents,
+  // through its style, which the server serves.
+  render() {
+    if (typeof this.getAttribute === 'function' && !this.getAttribute('style')) this.setAttribute('style', 'display: contents');
+    const size = this.size === 'sm' ? 'sm' : 'default';
+    const state = this.checked ? 'checked' : 'unchecked';
+    return html`<span
+      data-slot="switch"
+      data-size=${size}
+      data-state=${state}
+      aria-invalid=${this.invalid === 'true' ? 'true' : null}
+      ?data-disabled=${this.disabled}
+      class=${cn('cn-switch peer group/switch relative inline-flex items-center transition-all outline-none after:absolute after:-inset-x-3 after:-inset-y-2 data-disabled:cursor-not-allowed data-disabled:opacity-50 has-[>input:focus-visible]:ring-[3px] has-[>input:focus-visible]:ring-ring/50', TRACK_SIZES[size])}
+    ><input
+      type="checkbox"
+      role="switch"
+      id=${this.inputId || null}
+      name=${this.name || null}
+      value=${this.value || null}
+      ?checked=${this.checked}
+      ?disabled=${this.disabled}
+      ?required=${this.required}
+      aria-label=${this._attr('aria-label')}
+      aria-labelledby=${this._attr('aria-labelledby')}
+      aria-describedby=${this._attr('aria-describedby')}
+      aria-invalid=${this.invalid === 'true' ? 'true' : null}
+      class="peer absolute inset-0 z-10 m-0 size-full cursor-pointer appearance-none opacity-0 disabled:cursor-not-allowed"
+      @change=${this._onChange}
+    ><span
+      data-slot="switch-thumb"
+      data-state=${state}
+      class=${cn('cn-switch-thumb cn-switch-knob pointer-events-none block ring-0 transition-transform', THUMB_SIZES[size])}
+    ></span></span>`;
+  }
+}
+UiSwitch.register('ui-switch');

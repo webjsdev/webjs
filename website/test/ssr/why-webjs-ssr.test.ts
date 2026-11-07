@@ -11,7 +11,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToString } from '@webjsdev/core/server';
-import Why, { generateMetadata } from '#app/why-webjs/page.ts';
+import Why, { generateMetadata } from '#app/(site)/why-webjs/page.ts';
 
 test('the pitch page SSRs with its headline, terminals, reason cards, and a main landmark', async () => {
   const out = await renderToString(Why());

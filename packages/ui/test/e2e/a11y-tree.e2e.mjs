@@ -31,6 +31,9 @@
  *     entirely. They are absent, not returned with `ignored: true`. So probe
  *     sonner with no dialog open, and probe a dialog only while it is open.
  *
+ * The pages are the component docs pages, /ui/docs/components/<name>. The
+ * interim /ui/<name> gallery this used to drive was retired in #1666.
+ *
  * Self-contained: boots the site, runs the checks, tears down. Needs Playwright
  * plus a browser. Run: `node packages/ui/test/e2e/a11y-tree.e2e.mjs`. Skips with
  * a clear message if Playwright or a browser is unavailable.
@@ -77,7 +80,7 @@ for (let i = 0; i < 40; i++) {
   } catch { /* retry */ }
   await sleep(500);
 }
-if (!up) { fail('the gallery site did not become ready'); teardown(); process.exit(1); }
+if (!up) { fail('the site did not become ready'); teardown(); process.exit(1); }
 
 // Headless is verified to return a fully populated tree, so CI needs no display
 // server. A desktop context, NOT the iPhone descriptor `touch.e2e.mjs` uses:
@@ -140,11 +143,13 @@ const dialogNodesIn = (chain) => chain.filter((n) => DIALOG_ROLES.has(n.role?.va
 const liveNodesIn = (chain) => chain.filter((n) => propOf(n, 'live') !== undefined);
 
 // ---------------------------------------------------------------------------
-// 1) dialog, titled path. The gallery title is an <h2> with no
-// data-slot="dialog-title", so the name resolves through wireDialogLabels()'s
-// `h1, h2, h3` fallback. That is the common path, and the one being asserted.
+// 1) dialog, titled path. The docs page's lead demo (shadcn's DialogDemo)
+// titles its panel with an <h2 data-slot="dialog-title">, which
+// wireDialogLabels() wires as the dialog's name. The page also carries the
+// header's command-menu dialog, closed, so every selector below is scoped to
+// the demo or to the OPEN dialog.
 // ---------------------------------------------------------------------------
-await page.goto(BASE + '/ui/dialog', { waitUntil: 'domcontentloaded' });
+await page.goto(BASE + '/ui/docs/components/dialog', { waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(1800);
 await page.evaluate(() => {
   const btn = [...document.querySelectorAll('ui-dialog-trigger button')]
@@ -170,15 +175,17 @@ const DIALOG_PANEL = 'dialog[data-slot="dialog-native"][open] [data-slot="dialog
 }
 
 // ---------------------------------------------------------------------------
-// 2) dialog, title-less path. Built in the page rather than added to the
-// gallery, so no registry or website surface changes. Asserts the #1230
+// 2) dialog, title-less path. Built in the page rather than added to a
+// docs demo, so no registry or website surface changes. Asserts the #1230
 // generic-name fallback still lands on whichever node owns the role.
 // ---------------------------------------------------------------------------
 // Append and open in SEPARATE steps. The host defers its open to a microtask
 // and needs `<ui-dialog-content>` upgraded and rendered first, so appending and
 // calling show() in one evaluate opens nothing.
 await page.evaluate(() => {
-  document.querySelector('ui-dialog')?.hide?.();
+  // Close the demo dialog opened above. The first <ui-dialog> in the document
+  // is the header's command menu, so close by open state, not by position.
+  for (const d of document.querySelectorAll('ui-dialog')) if (d.open) d.hide?.();
   const host = document.createElement('ui-dialog');
   host.id = 'untitled-probe';
   host.innerHTML = '<ui-dialog-content><p>No title here.</p></ui-dialog-content>';
@@ -208,11 +215,11 @@ await page.evaluate(() => document.getElementById('untitled-probe')?.remove());
 // question: if the platform reports `dialog`, the urgency is lost AND the user
 // is told they can dismiss it with Escape, which alert-dialog blocks by design.
 // ---------------------------------------------------------------------------
-await page.goto(BASE + '/ui/alert-dialog', { waitUntil: 'domcontentloaded' });
+await page.goto(BASE + '/ui/docs/components/alert-dialog', { waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(1800);
 await page.evaluate(() => {
   const btn = [...document.querySelectorAll('ui-alert-dialog-trigger button')]
-    .find((b) => /delete account/i.test(b.textContent || ''));
+    .find((b) => /show dialog/i.test(b.textContent || ''));
   btn?.click();
 });
 await page.waitForTimeout(700);
@@ -229,7 +236,7 @@ const ALERT_PANEL = 'dialog[data-slot="alert-dialog-native"][open] [data-slot="a
       + JSON.stringify(dlgs[0]?.name?.value ?? null));
     results.push(['alert-dialog exposes exactly one dialog-family node', dlgs.length === 1]);
     results.push(['alert-dialog is exposed as alertdialog', dlgs[0]?.role?.value === 'alertdialog']);
-    results.push(['alert-dialog takes its name from the title', dlgs[0]?.name?.value === 'Are you sure?']);
+    results.push(['alert-dialog takes its name from the title', dlgs[0]?.name?.value === 'Are you absolutely sure?']);
     results.push(['alert-dialog is exposed as modal', propOf(dlgs[0], 'modal') === true]);
   }
 }
@@ -237,7 +244,7 @@ const ALERT_PANEL = 'dialog[data-slot="alert-dialog-native"][open] [data-slot="a
 // Close it by calling hide(), NEVER by pressing Escape: alert-dialog blocks the
 // native `cancel` event by design, so Escape does nothing and the next
 // navigation would run with a modal still open, which empties the tree.
-await page.evaluate(() => document.querySelector('ui-alert-dialog')?.hide?.());
+await page.evaluate(() => { for (const d of document.querySelectorAll('ui-alert-dialog')) if (d.open) d.hide?.(); });
 await page.waitForTimeout(300);
 
 // ---------------------------------------------------------------------------
@@ -277,13 +284,16 @@ await page.waitForTimeout(300);
 // 5) sonner. No dialog open here, per the top-layer note above.
 //
 // Fire through the served module rather than by matching button text: the
-// gallery's own buttons import exactly this path, so it is a dependency the
-// gallery already has, while the labels are template-generated strings a copy
-// edit can change. Locate each toast by its own text, since the page mounts
-// several viewports and the last to connect wins.
+// /ui layout registers the kit from exactly this path, so it is a dependency
+// the page already has, while the labels are demo strings a copy edit can
+// change. The docs page mounts no viewport of its own (its demos are static
+// markup), so one <ui-sonner> is mounted here. Locate each toast by its own
+// text.
 // ---------------------------------------------------------------------------
-await page.goto(BASE + '/ui/sonner', { waitUntil: 'domcontentloaded' });
+await page.goto(BASE + '/ui/docs/components/sonner', { waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(1800);
+await page.evaluate(() => document.body.appendChild(document.createElement('ui-sonner')));
+await page.waitForTimeout(400);
 
 async function probeToast(label, fire, probeId, expectAssertive) {
   await page.evaluate(fire);
@@ -318,7 +328,7 @@ async function probeToast(label, fire, probeId, expectAssertive) {
 
 // `duration: 0` disables auto-dismiss. Without it a toast defaults to 4000ms
 // and the probe races it: this waits 700ms, tags the node, then issues a full
-// DOM.getDocument plus getFullAXTree against a large gallery page, and if that
+// DOM.getDocument plus getFullAXTree against a large docs page, and if that
 // budget is ever exceeded the toast is gone, the chain resolves to null, and a
 // null chain is a hard FAIL by design rather than a skip. The probe never
 // asserts dismissal, so removing the timer costs nothing.

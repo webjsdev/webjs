@@ -64,16 +64,9 @@ const KNOWN_FLAGGED = [
   'components/progress.ts', // `=> [ ... ].join(' ')`
   'components/sonner.ts', // `=> makeToast(...)`
   'components/tabs.ts', // `=> s.replace(...)`
-  // REAL module-scope style injection, the same defect #1320 fixed in
-  // native-select. NOT moved with it, because their injected CSS is the ONLY
-  // source of the checkmark and the radio dot, `ensureTheme` never rewrites an
-  // existing theme block, and an already-initialised app would therefore lose
-  // the indicator entirely (a WCAG 1.4.1 failure, not a cosmetic one). Moving
-  // these needs a theme-block upgrade path in `ensureTheme` first. Native
-  // select's equivalent gap only degrades <option> legibility back to the
-  // browser default, which is why it could move and these cannot.
-  'components/checkbox.ts', // `if (typeof document !== 'undefined') installCheckboxStyles();`
-  'components/radio-group.ts', // `if (typeof document !== 'undefined') installRadioStyles();`
+  // checkbox.ts and radio-group.ts used to inject their checked-state
+  // stylesheet from module scope. Their tick and dot now ride the helpers' own
+  // classes (#1666), so both left this list.
 ].sort();
 
 test('registry modules do no module-scope work (#1320)', () => {

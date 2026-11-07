@@ -5,8 +5,12 @@
  * APG pattern: https://www.w3.org/WAI/ARIA/apg/patterns/menu/
  *
  * shadcn parity:
- *   DropdownMenu              → <ui-dropdown-menu open>
- *   DropdownMenuTrigger       → <ui-dropdown-menu-trigger>
+ *   DropdownMenu              → <ui-dropdown-menu open trigger>
+ *   DropdownMenuTrigger       → <ui-dropdown-menu-trigger>, or, for a trigger
+ *                               that must be a direct child of something
+ *                               else (a button group's corner rules select
+ *                               direct children), the button itself named by
+ *                               the menu's `trigger="<id>"`
  *   DropdownMenuContent       → <ui-dropdown-menu-content side align side-offset align-offset>
  *   DropdownMenuItem          → <ui-dropdown-menu-item variant inset>
  *   DropdownMenuCheckboxItem  → <ui-dropdown-menu-item type="checkbox" checked>
@@ -135,42 +139,107 @@
  * ```
  */
 import { WebComponent, html, unsafeHTML, signal, prop } from '@webjsdev/core';
-import { ensureId } from '../lib/utils.ts';
+import { cn, ensureId, takeAuthoredClass } from '../lib/utils.ts';
 import { onBeforeCache } from '../lib/dom.ts';
-import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
+
+/**
+ * The tag family an element belongs to: `ui-dropdown-menu` here, and the
+ * family a subclass names when it reuses these elements under its own tags
+ * (context-menu, menubar). Every tag this file looks up is built from it, so
+ * a subclass's elements find each other and never a dropdown's.
+ */
+function fam(el: Element): string {
+  return (el.constructor as { family?: string }).family ?? 'ui-dropdown-menu';
+}
+
+/** The data-slot for one part of an element's family: `dropdown-menu-item`, `context-menu-item`. */
+function slot(el: Element, part: string): string {
+  return fam(el).replace(/^ui-/, '') + part;
+}
+
+/**
+ * The tag of the element that owns one menu: the family tag itself for a
+ * dropdown or a context menu, and `ui-menubar-menu` for a menubar, whose
+ * family tag is the bar that holds several menus.
+ */
+function rootTag(el: Element): string {
+  return (el.constructor as { rootTag?: string }).rootTag ?? fam(el);
+}
+import { positionFloating } from './floating.ts';
+import type { PopoverSide, PopoverAlign } from './popover.ts';
 
 // --------------------------------------------------------------------------
 // Class helpers
 // --------------------------------------------------------------------------
 
 export const dropdownMenuContentClass = (): string =>
-  'fixed z-50 max-h-[--available-height] min-w-[8rem] m-0 overflow-x-hidden overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md';
+  'cn-dropdown-menu-content z-50 origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto data-[state=closed]:overflow-hidden not-open:hidden';
 
 export const dropdownMenuItemClass = (): string =>
-  "relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:hover:bg-destructive/10 data-[variant=destructive]:hover:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 dark:data-[variant=destructive]:hover:bg-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4";
+  'cn-dropdown-menu-item group/dropdown-menu-item relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0';
 
 export const dropdownMenuCheckboxItemClass = (): string =>
-  "relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0";
+  'cn-dropdown-menu-checkbox-item relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0';
 
 export const dropdownMenuRadioItemClass = (): string =>
-  "relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8";
+  'cn-dropdown-menu-radio-item relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0';
 
 export const dropdownMenuLabelClass = (): string =>
-  'px-2 pt-2 pb-1.5 text-xs font-semibold text-muted-foreground data-[inset]:pl-8';
+  'cn-dropdown-menu-label';
 
-export const dropdownMenuSeparatorClass = (): string => '-mx-1 my-1 h-px bg-border';
+export const dropdownMenuSeparatorClass = (): string => 'cn-dropdown-menu-separator';
 
 export const dropdownMenuShortcutClass = (): string =>
-  'ml-auto text-xs tracking-widest text-muted-foreground';
+  'cn-dropdown-menu-shortcut';
 
 export const dropdownMenuSubTriggerClass = (): string =>
-  "flex cursor-default items-center rounded-sm px-2 py-1.5 text-sm select-none outline-hidden focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&>svg:last-child]:ml-auto";
+  'cn-dropdown-menu-sub-trigger flex cursor-default items-center select-none outline-hidden [&_svg]:pointer-events-none [&_svg]:shrink-0';
 
 export const dropdownMenuSubContentClass = (): string =>
-  'fixed z-50 min-w-[8rem] m-0 overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg';
+  'cn-dropdown-menu-sub-content z-50 origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden not-open:hidden';
+
+const dropdownMenuItemIndicatorClass = (): string =>
+  'cn-dropdown-menu-item-indicator pointer-events-none';
+
+/**
+ * The classes one menu family paints its parts with. Every element reads its
+ * classes through its family's table, so context-menu and menubar render the
+ * same elements under their own `cn-context-menu-*` / `cn-menubar-*` names,
+ * which is what each style keys on.
+ */
+export interface MenuClasses {
+  content(): string;
+  item(): string;
+  checkboxItem(): string;
+  radioItem(): string;
+  /** A checkable item's indicator; menubar styles the checkbox and radio ones apart. */
+  itemIndicator(type?: 'checkbox' | 'radio'): string;
+  label(): string;
+  separator(): string;
+  shortcut(): string;
+  subTrigger(): string;
+  subContent(): string;
+}
+
+const DROPDOWN_MENU_CLASSES: MenuClasses = {
+  content: dropdownMenuContentClass,
+  item: dropdownMenuItemClass,
+  checkboxItem: dropdownMenuCheckboxItemClass,
+  radioItem: dropdownMenuRadioItemClass,
+  itemIndicator: dropdownMenuItemIndicatorClass,
+  label: dropdownMenuLabelClass,
+  separator: dropdownMenuSeparatorClass,
+  shortcut: dropdownMenuShortcutClass,
+  subTrigger: dropdownMenuSubTriggerClass,
+  subContent: dropdownMenuSubContentClass,
+};
+
+function cls(el: Element): MenuClasses {
+  return (el.constructor as { classes?: MenuClasses }).classes ?? DROPDOWN_MENU_CLASSES;
+}
 
 const CHEVRON_RIGHT_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-auto size-4" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>';
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="cn-rtl-flip ms-auto size-4 rtl:rotate-180" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>';
 
 // Checked-state indicators for a checkbox / radio item. Decorative: the state
 // they draw is announced from aria-checked, so both are aria-hidden.
@@ -195,11 +264,15 @@ const ENABLED_MENU_ITEM = `${MENU_ITEM}:not([data-disabled])`;
 export class UiDropdownMenu extends WebComponent({
   open: prop(Boolean, { reflect: true }),
 }) {
+  static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
   _typeBuffer = '';
   _typeBufferTimer: number | undefined;
 
   _docClickHandler = (e: MouseEvent): void => this._onDocClick(e);
   _docPointerDownHandler = (e: Event): void => this._onDocPointerDown(e);
+  _externalClick = (e: MouseEvent): void => this.toggle(e);
+  _wiredExternal: HTMLElement | null = null;
   _keyHandler = (e: KeyboardEvent): void => this._onKeyDown(e);
   _resizeHandler = (): void => this._reposition();
 
@@ -213,10 +286,60 @@ export class UiDropdownMenu extends WebComponent({
   disconnectedCallback(): void {
     if (this.open) this._teardown();
     this._disposeBeforeCache?.();
+    this._wiredExternal?.removeEventListener('click', this._externalClick);
+    this._wiredExternal = null;
     super.disconnectedCallback?.();
   }
 
-  toggle(): void { this.open = !this.open; }
+  /**
+   * The control a `trigger="<id>"` attribute names, when the menu has no
+   * <ui-dropdown-menu-trigger> child. shadcn's trigger is `asChild`, so the
+   * button is wherever the author put it, typically the direct child of a
+   * button group, whose corner rules select direct children. A wrapper there
+   * would be the child instead of the button, so the menu can name a button
+   * that lives outside it.
+   */
+  _external(): HTMLElement | null {
+    const id = typeof this.getAttribute === 'function' ? this.getAttribute('trigger') : null;
+    if (!id || typeof document === 'undefined') return null;
+    if (this.querySelector(`${fam(this)}-trigger`)) return null;
+    return document.getElementById(id);
+  }
+
+  /**
+   * The element the panel is positioned against: the control itself, as
+   * Radix's asChild trigger is, never the `-trigger` wrapper, which is a block
+   * and would lend the panel a whole row's width and start edge.
+   */
+  _anchor(): HTMLElement | null {
+    return this._triggerControl();
+  }
+
+  /** Inside the menu for an outside-click check: the menu itself, or its named trigger. */
+  _owns(n: EventTarget): boolean {
+    return n === this || (!!this._wiredExternal && n === this._wiredExternal);
+  }
+
+  _wireExternal(): void {
+    const control = this._external();
+    if (control === this._wiredExternal) return;
+    this._wiredExternal?.removeEventListener('click', this._externalClick);
+    control?.addEventListener('click', this._externalClick);
+    this._wiredExternal = control;
+  }
+
+  /**
+   * Whether the menu was last opened by a pointer. A click a keyboard
+   * produced (Enter or Space on the trigger) has `detail` 0; a real press
+   * counts its clicks. As in shadcn, a pointer open focuses the panel and
+   * highlights nothing, and a keyboard open moves to the first item.
+   */
+  _pointerOpen = false;
+
+  toggle(e?: MouseEvent): void {
+    this._pointerOpen = !!e && e.detail > 0;
+    this.open = !this.open;
+  }
   show(): void { this.open = true; }
   hide(): void { this.open = false; }
 
@@ -245,7 +368,7 @@ export class UiDropdownMenu extends WebComponent({
   }
 
   render() {
-    return html`<div data-slot="dropdown-menu" data-state=${this.open ? 'open' : 'closed'}>
+    return html`<div data-slot=${rootTag(this).replace(/^ui-/, '')} data-state=${this.open ? 'open' : 'closed'}>
       <slot></slot>
     </div>`;
   }
@@ -263,7 +386,10 @@ export class UiDropdownMenu extends WebComponent({
     // render, so the trigger button and the menu are not in place at
     // connect. Defer to the next frame, when the projection has run.
     if (typeof requestAnimationFrame === 'function') {
-      requestAnimationFrame(() => this._wireAria());
+      requestAnimationFrame(() => {
+        this._wireExternal();
+        this._wireAria();
+      });
     }
     // Close (and tear down) before a back/forward snapshot so the menu does not
     // restore open (#766). Closing the root also hides any open submenu.
@@ -286,8 +412,8 @@ export class UiDropdownMenu extends WebComponent({
   // the menu, and the menu is labelled back by the trigger. Done at runtime
   // because the menu is JS-driven (never shown without script).
   _triggerControl(): HTMLElement | null {
-    const trigger = this.querySelector('ui-dropdown-menu-trigger');
-    if (!trigger) return null;
+    const trigger = this.querySelector(`${fam(this)}-trigger`);
+    if (!trigger) return this._external();
     return (
       trigger.querySelector<HTMLElement>('button, [role="button"], a[href], [tabindex]') ??
       (trigger as HTMLElement)
@@ -295,7 +421,7 @@ export class UiDropdownMenu extends WebComponent({
   }
 
   _menuEl(): HTMLElement | null {
-    return this.querySelector('ui-dropdown-menu-content [role="menu"]');
+    return this.querySelector(`${fam(this)}-content [role="menu"]`);
   }
 
   _wireAria(): void {
@@ -317,19 +443,19 @@ export class UiDropdownMenu extends WebComponent({
   // menuitem that opens it, with that menuitem pointing back via aria-controls.
   // Only the root panel was wired, so every submenu shipped as an unnamed menu.
   _wireSubmenuAria(): void {
-    this.querySelectorAll<HTMLElement>('ui-dropdown-menu-sub').forEach((sub) => {
+    this.querySelectorAll<HTMLElement>(`${fam(this)}-sub`).forEach((sub) => {
       // NOT `:scope >`: the sub renders its own wrapper div with a <slot>, so the
       // trigger and content are grandchildren, not direct children. Match on the
       // nearest enclosing sub instead, which also keeps a NESTED submenu's nodes
       // from being wired to its outer sub.
       const owns = (el: Element | null): boolean =>
-        !!el && el.closest('ui-dropdown-menu-sub') === sub;
+        !!el && el.closest(`${fam(this)}-sub`) === sub;
       const trigger = Array.from(
-        sub.querySelectorAll<HTMLElement>(`ui-dropdown-menu-sub-trigger ${MENU_ITEM}`),
-      ).find((el) => owns(el.closest('ui-dropdown-menu-sub-trigger')));
+        sub.querySelectorAll<HTMLElement>(`${fam(this)}-sub-trigger ${MENU_ITEM}`),
+      ).find((el) => owns(el.closest(`${fam(this)}-sub-trigger`)));
       const panel = Array.from(
-        sub.querySelectorAll<HTMLElement>('ui-dropdown-menu-sub-content [role="menu"]'),
-      ).find((el) => owns(el.closest('ui-dropdown-menu-sub-content')));
+        sub.querySelectorAll<HTMLElement>(`${fam(this)}-sub-content [role="menu"]`),
+      ).find((el) => owns(el.closest(`${fam(this)}-sub-content`)));
       if (!trigger || !panel) return;
       trigger.setAttribute('aria-controls', ensureId(panel, 'ui-submenu'));
       if (!panel.hasAttribute('aria-label') && !panel.hasAttribute('aria-labelledby')) {
@@ -339,7 +465,7 @@ export class UiDropdownMenu extends WebComponent({
   }
 
   _content(): HTMLElement | null {
-    return this.querySelector('ui-dropdown-menu-content [popover]');
+    return this.querySelector(`${fam(this)}-content [popover]`);
   }
 
   _syncContentPopover(content: HTMLElement): void {
@@ -353,16 +479,24 @@ export class UiDropdownMenu extends WebComponent({
     else if (!this.open && p.matches(':popover-open')) p.hidePopover();
   }
 
+  /**
+   * The panel's offsets when its content element names none: shadcn's
+   * dropdown sits 4px off its trigger, a menubar menu 8px off and 4px back.
+   */
+  static placement = { sideOffset: 4, alignOffset: 0 };
+
   _reposition(): void {
-    const trigger = this.querySelector<HTMLElement>('ui-dropdown-menu-trigger');
+    const placement = (this.constructor as typeof UiDropdownMenu).placement;
+    const trigger = this._anchor();
     const content = this._content();
-    const host = this.querySelector<HTMLElement>('ui-dropdown-menu-content');
+    const host = this.querySelector<HTMLElement>(`${fam(this)}-content`);
     if (!trigger || !content || !host) return;
     positionFloating(trigger, content, {
       side: (host.getAttribute('side') ?? 'bottom') as PopoverSide,
       align: (host.getAttribute('align') ?? 'start') as PopoverAlign,
-      sideOffset: Number(host.getAttribute('side-offset') ?? 4),
-      alignOffset: Number(host.getAttribute('align-offset') ?? 0),
+      sideOffset: Number(host.getAttribute('side-offset') ?? placement.sideOffset),
+      alignOffset: Number(host.getAttribute('align-offset') ?? placement.alignOffset),
+      radix: fam(this).slice(3),
     });
   }
 
@@ -374,8 +508,12 @@ export class UiDropdownMenu extends WebComponent({
     window.addEventListener('resize', this._resizeHandler);
     window.addEventListener('scroll', this._resizeHandler, true);
     queueMicrotask(() => {
+      if (this._pointerOpen) {
+        this._menuEl()?.focus();
+        return;
+      }
       const first = this.querySelector<HTMLElement>(
-        `ui-dropdown-menu-item:not([data-disabled]) ${MENU_ITEM}`,
+        `${fam(this)}-item:not([data-disabled]) ${MENU_ITEM}`,
       );
       first?.focus();
     });
@@ -388,7 +526,7 @@ export class UiDropdownMenu extends WebComponent({
     this._focusWasInsideAtPointerDown = false;
     window.removeEventListener('resize', this._resizeHandler);
     window.removeEventListener('scroll', this._resizeHandler, true);
-    this.querySelectorAll<UiDropdownMenuSub>('ui-dropdown-menu-sub[open]').forEach(
+    this.querySelectorAll<UiDropdownMenuSub>(`${fam(this)}-sub[open]`).forEach(
       (sub) => sub.hide(),
     );
   }
@@ -402,13 +540,13 @@ export class UiDropdownMenu extends WebComponent({
 
   _onDocPointerDown(e: Event): void {
     if (!this.open) return;
-    if (e.composedPath().some((n) => n === this)) return;
+    if (e.composedPath().some((n) => this._owns(n))) return;
     this._focusWasInsideAtPointerDown = this._focusIsInside();
   }
 
   _onDocClick(e: MouseEvent): void {
     if (!this.open) return;
-    if (e.composedPath().some((n) => n === this)) return;
+    if (e.composedPath().some((n) => this._owns(n))) return;
     // An outside click dismisses the menu, and it is still a close of a
     // popover="manual" panel, so it owes the same focus care as Escape: leaving
     // focus on an item that is about to become display:none drops it to <body>.
@@ -440,10 +578,10 @@ export class UiDropdownMenu extends WebComponent({
       // submenu first"). Focus on the sub-trigger itself is focus in the ROOT
       // panel, so that case closes the whole menu, which is why this reads the
       // panel rather than walking up to any open <ui-dropdown-menu-sub>.
-      const subContent = context?.closest('ui-dropdown-menu-sub-content');
-      const sub = subContent?.closest('ui-dropdown-menu-sub') as UiDropdownMenuSub | null;
+      const subContent = context?.closest(`${fam(this)}-sub-content`);
+      const sub = subContent?.closest(`${fam(this)}-sub`) as UiDropdownMenuSub | null;
       if (sub) {
-        sub.querySelector<HTMLElement>(`ui-dropdown-menu-sub-trigger ${MENU_ITEM}`)?.focus();
+        sub.querySelector<HTMLElement>(`${fam(this)}-sub-trigger ${MENU_ITEM}`)?.focus();
         sub.hide();
         return;
       }
@@ -476,7 +614,8 @@ export class UiDropdownMenu extends WebComponent({
       items[(idx + 1) % items.length].focus();
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      items[(idx - 1 + items.length) % items.length].focus();
+      // From the panel itself (a pointer open), ArrowUp goes to the last item.
+      items[idx < 0 ? items.length - 1 : (idx - 1 + items.length) % items.length].focus();
     } else if (e.key === 'Home') {
       e.preventDefault();
       items[0].focus();
@@ -485,10 +624,10 @@ export class UiDropdownMenu extends WebComponent({
       items[items.length - 1].focus();
     } else if (e.key === 'ArrowRight') {
       // Open submenu owned by the focused sub-trigger and move focus into it.
-      const subTrigger = active?.closest('ui-dropdown-menu-sub-trigger');
+      const subTrigger = active?.closest(`${fam(this)}-sub-trigger`);
       if (subTrigger) {
         e.preventDefault();
-        const sub = subTrigger.closest('ui-dropdown-menu-sub') as UiDropdownMenuSub | null;
+        const sub = subTrigger.closest(`${fam(this)}-sub`) as UiDropdownMenuSub | null;
         // The sub owns the open-then-focus sequencing: its panel is
         // popover="manual" and only becomes visible a microtask later, so
         // focusing from here races the reveal and loses (see the method).
@@ -496,11 +635,11 @@ export class UiDropdownMenu extends WebComponent({
       }
     } else if (e.key === 'ArrowLeft') {
       // Inside a sub-content: close the submenu and refocus its trigger.
-      if (context.closest('ui-dropdown-menu-sub-content')) {
+      if (context.closest(`${fam(this)}-sub-content`)) {
         e.preventDefault();
-        const sub = context.closest('ui-dropdown-menu-sub') as UiDropdownMenuSub | null;
+        const sub = context.closest(`${fam(this)}-sub`) as UiDropdownMenuSub | null;
         const trigger = sub?.querySelector<HTMLElement>(
-          `ui-dropdown-menu-sub-trigger ${MENU_ITEM}`,
+          `${fam(this)}-sub-trigger ${MENU_ITEM}`,
         );
         trigger?.focus();
         sub?.hide();
@@ -516,8 +655,8 @@ export class UiDropdownMenu extends WebComponent({
       // too, so preventing Space unconditionally would swallow it there with
       // nothing to handle it, and the user could not type a space into their own
       // input. Bail before touching the event when the focus is not an item.
-      const subTrigger = active?.closest('ui-dropdown-menu-sub-trigger');
-      const activeItem = active?.closest('ui-dropdown-menu-item') as UiDropdownMenuItem | null;
+      const subTrigger = active?.closest(`${fam(this)}-sub-trigger`);
+      const activeItem = active?.closest(`${fam(this)}-item`) as UiDropdownMenuItem | null;
       if (!subTrigger && !activeItem) return;
       // Space while a typeahead search is in flight belongs to the SEARCH, or a
       // multi-word item is unreachable past its first word ("Status bar" could
@@ -533,7 +672,7 @@ export class UiDropdownMenu extends WebComponent({
       if (subTrigger) {
         // Same as ArrowRight on a sub-trigger: open it and move focus in.
         if (!subTrigger.hasAttribute('data-disabled')) {
-          const sub = subTrigger.closest('ui-dropdown-menu-sub') as UiDropdownMenuSub | null;
+          const sub = subTrigger.closest(`${fam(this)}-sub`) as UiDropdownMenuSub | null;
           sub?.openAndFocusFirstItem();
         }
         return;
@@ -566,14 +705,16 @@ UiDropdownMenu.register('ui-dropdown-menu');
 // --------------------------------------------------------------------------
 
 export class UiDropdownMenuTrigger extends WebComponent {
+  static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
   render() {
     return html`<div
-      data-slot="dropdown-menu-trigger"
+      data-slot=${slot(this, '-trigger')}
       @click=${this._onClick}
     ><slot></slot></div>`;
   }
 
-  _onClick = (): void => (this.closest('ui-dropdown-menu') as UiDropdownMenu | null)?.toggle();
+  _onClick = (e: MouseEvent): void => (this.closest(rootTag(this)) as UiDropdownMenu | null)?.toggle(e);
 }
 UiDropdownMenuTrigger.register('ui-dropdown-menu-trigger');
 
@@ -582,13 +723,25 @@ UiDropdownMenuTrigger.register('ui-dropdown-menu-trigger');
 // --------------------------------------------------------------------------
 
 export class UiDropdownMenuContent extends WebComponent {
+  static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
+  _authored: string | null = null;
+
+  // The class an author writes on the content is shadcn's `className` on
+  // DropdownMenuContent, which lands on the menu panel (a `w-40`, say), so it
+  // moves from this host onto the panel. `text-start` undoes the legacy HTML
+  // `align` attribute: `align="end"` here means "align the panel's end with
+  // the trigger's", but browsers also map it to `text-align: end`, which every
+  // label and item in the menu would inherit.
   render() {
+    this._authored = takeAuthoredClass(this, null);
     return html`<div
-      data-slot="dropdown-menu-content"
+      data-slot=${slot(this, '-content')}
       role="menu"
       aria-orientation="vertical"
       popover="manual"
-      class=${dropdownMenuContentClass()}
+      tabindex="-1"
+      class=${cn(cls(this).content(), 'text-start', this._authored)}
     ><slot></slot></div>`;
   }
 }
@@ -609,6 +762,8 @@ export class UiDropdownMenuItem extends WebComponent({
   checked: prop(Boolean, { reflect: true }),
   value: prop(String, { reflect: true }),
 }) {
+  static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
   // Keyboard / pointer highlight state for the own-rendered menuitem. A
   // local signal bound with ?data-highlighted keeps the highlight in the
   // declarative template instead of an imperative setAttribute on
@@ -645,7 +800,7 @@ export class UiDropdownMenuItem extends WebComponent({
     // shapes differ by the indicator anyway.
     if (checkbox || radio) {
       return html`<div
-        data-slot=${`dropdown-menu-${this.type}-item`}
+        data-slot=${slot(this, `-${this.type}-item`)}
         role=${checkbox ? 'menuitemcheckbox' : 'menuitemradio'}
         tabindex="-1"
         data-variant=${this.variant}
@@ -655,17 +810,17 @@ export class UiDropdownMenuItem extends WebComponent({
         aria-checked=${String(this.checked)}
         data-state=${this.checked ? 'checked' : 'unchecked'}
         ?data-highlighted=${this.#highlighted.get()}
-        class=${checkbox ? dropdownMenuCheckboxItemClass() : dropdownMenuRadioItemClass()}
+        class=${checkbox ? cls(this).checkboxItem() : cls(this).radioItem()}
         @click=${this._onClick}
         @pointerenter=${this._onPointerEnter}
         @focus=${this._onFocus}
         @blur=${this._onBlur}
       ><span
-        class="pointer-events-none absolute left-2 flex size-3.5 items-center justify-center"
+        class=${cls(this).itemIndicator(checkbox ? 'checkbox' : 'radio')}
       >${this.checked ? unsafeHTML(radio ? RADIO_DOT_SVG : CHECK_SVG) : ''}</span><slot></slot></div>`;
     }
     return html`<div
-      data-slot="dropdown-menu-item"
+      data-slot=${slot(this, '-item')}
       role="menuitem"
       tabindex="-1"
       data-variant=${this.variant}
@@ -673,7 +828,7 @@ export class UiDropdownMenuItem extends WebComponent({
       ?data-disabled=${disabled}
       aria-disabled=${disabled ? 'true' : 'false'}
       ?data-highlighted=${this.#highlighted.get()}
-      class=${dropdownMenuItemClass()}
+      class=${cls(this).item()}
       @click=${this._onClick}
       @pointerenter=${this._onPointerEnter}
       @focus=${this._onFocus}
@@ -702,7 +857,7 @@ export class UiDropdownMenuItem extends WebComponent({
       }),
     );
     if (!proceed) return;
-    (this.closest('ui-dropdown-menu') as UiDropdownMenu | null)?._closeAndRestoreFocus();
+    (this.closest(rootTag(this)) as UiDropdownMenu | null)?._closeAndRestoreFocus();
   }
 
   // The radio set is the nearest <ui-dropdown-menu-group>, which is the APG
@@ -711,9 +866,9 @@ export class UiDropdownMenuItem extends WebComponent({
   _radioScope(): Element | null {
     if (typeof this.closest !== 'function') return null;
     return (
-      this.closest('ui-dropdown-menu-group') ??
-      this.closest('ui-dropdown-menu-sub-content') ??
-      this.closest('ui-dropdown-menu-content')
+      this.closest(`${fam(this)}-group`) ??
+      this.closest(`${fam(this)}-sub-content`) ??
+      this.closest(`${fam(this)}-content`)
     );
   }
 
@@ -727,7 +882,7 @@ export class UiDropdownMenuItem extends WebComponent({
     // is unreflected, so an item configured through the property alone would
     // be invisible to an attribute query and survive as a second checked item.
     // The scope re-check keeps a nested group's items out of this set.
-    Array.from(scope.querySelectorAll<UiDropdownMenuItem>('ui-dropdown-menu-item'))
+    Array.from(scope.querySelectorAll<UiDropdownMenuItem>(`${fam(this)}-item`))
       .filter((it) => it.type === 'radio' && it._radioScope() === scope)
       .forEach((it) => {
         it.checked = it === this;
@@ -755,6 +910,8 @@ UiDropdownMenuItem.register('ui-dropdown-menu-item');
 // --------------------------------------------------------------------------
 
 export class UiDropdownMenuLabel extends WebComponent({ inset: Boolean }) {
+  static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
   constructor() {
     super();
     this.inset = false;
@@ -762,9 +919,9 @@ export class UiDropdownMenuLabel extends WebComponent({ inset: Boolean }) {
 
   render() {
     return html`<div
-      data-slot="dropdown-menu-label"
+      data-slot=${slot(this, '-label')}
       ?data-inset=${this.inset}
-      class=${dropdownMenuLabelClass()}
+      class=${cls(this).label()}
     ><slot></slot></div>`;
   }
 }
@@ -775,11 +932,13 @@ UiDropdownMenuLabel.register('ui-dropdown-menu-label');
 // --------------------------------------------------------------------------
 
 export class UiDropdownMenuSeparator extends WebComponent {
+  static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
   render() {
     return html`<div
-      data-slot="dropdown-menu-separator"
+      data-slot=${slot(this, '-separator')}
       role="separator"
-      class=${dropdownMenuSeparatorClass()}
+      class=${cls(this).separator()}
     ></div>`;
   }
 }
@@ -790,10 +949,16 @@ UiDropdownMenuSeparator.register('ui-dropdown-menu-separator');
 // --------------------------------------------------------------------------
 
 export class UiDropdownMenuShortcut extends WebComponent {
+  static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
+  // The span is the item's flex item, as shadcn's shortcut is, so the styles'
+  // `ms-auto` pushes it to the end of the row. The host's box is turned off
+  // through its style, which the server serves.
   render() {
+    if (typeof this.getAttribute === 'function' && !this.getAttribute('style')) this.setAttribute('style', 'display: contents');
     return html`<span
-      data-slot="dropdown-menu-shortcut"
-      class=${dropdownMenuShortcutClass()}
+      data-slot=${slot(this, '-shortcut')}
+      class=${cls(this).shortcut()}
     ><slot></slot></span>`;
   }
 }
@@ -804,6 +969,8 @@ UiDropdownMenuShortcut.register('ui-dropdown-menu-shortcut');
 // --------------------------------------------------------------------------
 
 export class UiDropdownMenuGroup extends WebComponent {
+  static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
   // role="group", NOT role="radiogroup". radiogroup is the grouping role for
   // role="radio"; the grouping role ARIA specifies for menuitemradio is plain
   // group, so a radio set inside this element is already correctly grouped.
@@ -822,20 +989,20 @@ export class UiDropdownMenuGroup extends WebComponent {
     const label = attr('aria-label');
     if (labelledBy) {
       return html`<div
-        data-slot="dropdown-menu-group"
+        data-slot=${slot(this, '-group')}
         role="group"
         aria-labelledby=${labelledBy}
       ><slot></slot></div>`;
     }
     if (label) {
       return html`<div
-        data-slot="dropdown-menu-group"
+        data-slot=${slot(this, '-group')}
         role="group"
         aria-label=${label}
       ><slot></slot></div>`;
     }
     return html`<div
-      data-slot="dropdown-menu-group"
+      data-slot=${slot(this, '-group')}
       role="group"
     ><slot></slot></div>`;
   }
@@ -849,6 +1016,8 @@ UiDropdownMenuGroup.register('ui-dropdown-menu-group');
 export class UiDropdownMenuSub extends WebComponent({
   open: prop(Boolean, { reflect: true }),
 }) {
+  static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
   _closeTimer: number | undefined;
 
   constructor() {
@@ -883,7 +1052,7 @@ export class UiDropdownMenuSub extends WebComponent({
 
   _panelIsOpen(): boolean {
     const panel = this.querySelector<HTMLElement & { showPopover?: () => void }>(
-      'ui-dropdown-menu-sub-content [popover]',
+      `${fam(this)}-sub-content [popover]`,
     );
     // Gate on showPopover, not just on matches, like the two sibling call sites.
     // `:popover-open` is an unknown pseudo-class where the Popover API is
@@ -898,13 +1067,13 @@ export class UiDropdownMenuSub extends WebComponent({
     if (!this._focusFirstOnOpen) return;
     this._focusFirstOnOpen = false;
     this.querySelector<HTMLElement>(
-      `ui-dropdown-menu-sub-content ${ENABLED_MENU_ITEM}`,
+      `${fam(this)}-sub-content ${ENABLED_MENU_ITEM}`,
     )?.focus();
   }
 
   render() {
     return html`<div
-      data-slot="dropdown-menu-sub"
+      data-slot=${slot(this, '-sub')}
       data-state=${this.open ? 'open' : 'closed'}
       @pointerenter=${this._cancelCloseHandler}
       @pointerleave=${this._scheduleCloseHandler}
@@ -918,7 +1087,7 @@ export class UiDropdownMenuSub extends WebComponent({
   }
 
   _afterRender(): void {
-    const subContent = this.querySelector<HTMLElement>('ui-dropdown-menu-sub-content [popover]');
+    const subContent = this.querySelector<HTMLElement>(`${fam(this)}-sub-content [popover]`);
     if (subContent) {
       const p = subContent as HTMLElement & {
         showPopover?: () => void;
@@ -963,24 +1132,27 @@ export class UiDropdownMenuSub extends WebComponent({
 
   _position(): void {
     const trigger = this.querySelector<HTMLElement>(
-      'ui-dropdown-menu-sub-trigger [role="menuitem"]',
+      `${fam(this)}-sub-trigger [role="menuitem"]`,
     );
     const content = this.querySelector<HTMLElement>(
-      'ui-dropdown-menu-sub-content [popover]',
+      `${fam(this)}-sub-content [popover]`,
     );
-    const contentHost = this.querySelector<HTMLElement>('ui-dropdown-menu-sub-content');
+    const contentHost = this.querySelector<HTMLElement>(`${fam(this)}-sub-content`);
     if (!trigger || !content || !contentHost) return;
     positionFloating(trigger, content, {
       side: (contentHost.getAttribute('side') ?? 'right') as PopoverSide,
       align: (contentHost.getAttribute('align') ?? 'start') as PopoverAlign,
       sideOffset: Number(contentHost.getAttribute('side-offset') ?? -4),
       alignOffset: Number(contentHost.getAttribute('align-offset') ?? 0),
+      radix: fam(this).slice(3),
     });
   }
 }
 UiDropdownMenuSub.register('ui-dropdown-menu-sub');
 
 export class UiDropdownMenuSubTrigger extends WebComponent({ inset: Boolean }) {
+  static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
   constructor() {
     super();
     this.inset = false;
@@ -989,14 +1161,14 @@ export class UiDropdownMenuSubTrigger extends WebComponent({ inset: Boolean }) {
   // SSR-safe: linkedom doesn't implement closest() on custom elements.
   _sub(): UiDropdownMenuSub | null {
     if (typeof this.closest !== 'function') return null;
-    return this.closest('ui-dropdown-menu-sub') as UiDropdownMenuSub | null;
+    return this.closest(`${fam(this)}-sub`) as UiDropdownMenuSub | null;
   }
 
   render() {
     const open = !!this._sub()?.open;
     const disabled = typeof this.hasAttribute === 'function' && this.hasAttribute('data-disabled');
     return html`<div
-      data-slot="dropdown-menu-sub-trigger"
+      data-slot=${slot(this, '-sub-trigger')}
       role="menuitem"
       tabindex="-1"
       aria-haspopup="menu"
@@ -1005,7 +1177,7 @@ export class UiDropdownMenuSubTrigger extends WebComponent({ inset: Boolean }) {
       data-state=${open ? 'open' : 'closed'}
       ?data-inset=${this.inset}
       ?data-disabled=${disabled}
-      class=${dropdownMenuSubTriggerClass()}
+      class=${cls(this).subTrigger()}
       @click=${this._onClick}
       @pointerenter=${this._onPointerEnter}
     ><slot></slot>${unsafeHTML(CHEVRON_RIGHT_SVG)}</div>`;
@@ -1031,13 +1203,20 @@ export class UiDropdownMenuSubTrigger extends WebComponent({ inset: Boolean }) {
 UiDropdownMenuSubTrigger.register('ui-dropdown-menu-sub-trigger');
 
 export class UiDropdownMenuSubContent extends WebComponent {
+  static family = 'ui-dropdown-menu';
+  static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
+  _authored: string | null = null;
+
+  // As on the content: shadcn's className on the sub-content lands on the
+  // submenu panel, so the class written on this host moves there.
   render() {
+    this._authored = takeAuthoredClass(this, null);
     return html`<div
-      data-slot="dropdown-menu-sub-content"
+      data-slot=${slot(this, '-sub-content')}
       role="menu"
       aria-orientation="vertical"
       popover="manual"
-      class=${dropdownMenuSubContentClass()}
+      class=${cn(cls(this).subContent(), this._authored)}
     ><slot></slot></div>`;
   }
 }

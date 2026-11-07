@@ -55,9 +55,14 @@ src/
                          it projects the shared `@webjsdev/ui/registry/extract`
                          leaf (the kit inventory, or one component's helper
                          signatures + paste-ready @example + a11y header + deps),
-                         the SAME leaf `webjsui view` renders. A drift test in
-                         mcp.test.mjs asserts the tool output equals that leaf's
-                         output.
+                         the SAME leaf `webjsui view` renders. Blocks and charts
+                         (#1666, D18) ride the same leaf: the no-args call adds
+                         their names by category (uiBlockIndex), `type` /
+                         `category` list them (uiBlocks), and a block `name`
+                         returns uiBlock (install command + file targets). A
+                         drift test in mcp.test.mjs asserts the tool output
+                         equals that leaf's output, and another caps the
+                         no-args payload's byte size.
                          `deps` / `docsDeps` / `sourceDeps` / `uiDeps` are
                          injectable for in-process tests.
   mcp-docs.js            KNOWLEDGE layer (#376): resolveDocsLocation (the app's

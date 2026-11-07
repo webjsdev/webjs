@@ -43,7 +43,7 @@ applies, then update or consciously skip each.
    relevant `references/` file.
 2. **`README.md`** (repo root). Update when a headline capability changes (the
    feature list, the quickstart, the runtime/template matrix).
-3. **The docs site: `website/app/docs/<topic>/page.ts`.** This is the
+3. **The docs site: `website/app/(site)/docs/<topic>/page.ts`.** This is the
    user-facing documentation at webjs.dev/docs. Find the topic page(s) that cover
    the area (`server-actions`, `routing`, `components`, `caching`, `configuration`,
    `client-router`, `data-fetching`, ...) and update them. `llms.txt` /
@@ -51,7 +51,7 @@ applies, then update or consciously skip each.
    never need a manual edit. A brand-new capability may need a NEW topic page plus
    a nav entry.
 4. **The marketing website: `website/`.** Update landing/feature copy when a
-   headline capability changes. The changelog (`website/app/changelog`) is
+   headline capability changes. The changelog (`website/app/(site)/changelog`) is
    auto-generated from conventional PR titles, so NEVER hand-write it; the blog is
    manual.
 5. **The scaffold templates: `packages/cli/templates/`.** Every new app ships
@@ -93,7 +93,7 @@ The surface checks below are independent reads, so run them fanned out: one read
    be) described:
    ```sh
    git grep -n -iE '<token1>|<token2>' -- \
-     AGENTS.md '.agents/skills/webjs/**' README.md 'website/app/docs/**' \
+     AGENTS.md '.agents/skills/webjs/**' README.md 'website/app/(site)/docs/**' \
      'website/**' 'packages/cli/templates/**' 'examples/**/CONVENTIONS.md'
    ```
 3. For each surface in the mapping that applies, update it. For a behaviour

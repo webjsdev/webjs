@@ -4,7 +4,7 @@
 // across the swap: the text you typed on page one is still here.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
-import { inputClass } from '#components/ui/input.ts';
+import { inputClass } from '#modules/gallery/ui/input.ts';
 import { pageHeading } from '#lib/utils/ui.ts';
 
 export const metadata: Metadata = {

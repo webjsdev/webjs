@@ -322,6 +322,9 @@
     },
     "FORM_ACTION_ID_KEY": {
       "exempt": "internal: the property a generated RPC stub carries its own identity on"
+    },
+    "svg": {
+      "exempt": "deferred: agent-facing (the html tag's SVG-fragment sibling, documented in AGENTS.md and the skill's components reference); no single-concept gallery demo yet"
     }
   },
   "serverSpecifier": "@webjsdev/server",

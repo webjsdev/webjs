@@ -4,8 +4,8 @@
 // component authoring shape. Styling is crafted Tailwind on the app's design
 // tokens so it stays visually coherent with the rest of the app.
 import { WebComponent, prop, signal, html } from '@webjsdev/core';
-import { cardClass } from '#components/ui/card.ts';
-import { buttonClass } from '#components/ui/button.ts';
+import { cardClass } from '#modules/gallery/ui/card.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
 
 export class CounterCard extends WebComponent({
   // A reactive prop rides an HTML attribute / SSR hydration. Declared ONLY here

@@ -32,7 +32,7 @@ test('every docs page that authors a code sample emits it fenced', async () => {
   const missing: string[] = [];
   let checked = 0;
   for (const page of pages) {
-    const src = await readFile(new URL(`../../app${page.path}/page.ts`, import.meta.url), 'utf8');
+    const src = await readFile(new URL(`../../app/(site)${page.path}/page.ts`, import.meta.url), 'utf8');
     const authored = (src.match(/<code-block(?=[\s>])/g) ?? []).length;
     if (!authored) continue;
     checked++;
@@ -67,7 +67,7 @@ test('every sample a page authors reaches the corpus', async () => {
   const off: string[] = [];
   let checked = 0;
   for (const page of await getDocPages()) {
-    const src = await readFile(new URL(`../../app${page.path}/page.ts`, import.meta.url), 'utf8');
+    const src = await readFile(new URL(`../../app/(site)${page.path}/page.ts`, import.meta.url), 'utf8');
     const authored = (src.match(/<code-block(?=[\s>])/g) ?? []).length;
     if (!authored) continue;
     checked++;
@@ -94,7 +94,7 @@ test('a sample that reaches the corpus reaches it whole', async () => {
   const mangled: string[] = [];
   let compared = 0;
   for (const page of await getDocPages()) {
-    const src = await readFile(new URL(`../../app${page.path}/page.ts`, import.meta.url), 'utf8');
+    const src = await readFile(new URL(`../../app/(site)${page.path}/page.ts`, import.meta.url), 'utf8');
     const authored = [...src.matchAll(/<code-block(?=[\s>])[^>]*>([\s\S]*?)<\/code-block>/g)];
     if (!authored.length || fenceCount(page.markdown) !== authored.length) continue;
     for (const m of authored) {
@@ -271,7 +271,7 @@ test('no docs page escapes a letter, which the extractor would fold away', async
   // notice the next one.
   const offenders: string[] = [];
   for (const page of await getDocPages()) {
-    const src = await readFile(new URL(`../../app${page.path}/page.ts`, import.meta.url), 'utf8');
+    const src = await readFile(new URL(`../../app/(site)${page.path}/page.ts`, import.meta.url), 'utf8');
     // Pair-consuming, so the `\\` in a correctly authored `\\s` is eaten as
     // one escape and its `s` is never read as escaped.
     for (const m of src.matchAll(/\\([\s\S])/g)) {

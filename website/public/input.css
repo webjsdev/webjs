@@ -129,8 +129,10 @@
    fine, because only the latter got their color from a border utility.
 
    `inline` instead compiles the utility to `background-color: var(--primary)`,
-   which resolves at the element and therefore picks up whatever .ui-preview
-   declares. So every name a preview needs to re-scope lives in this block.
+   which resolves at the element and therefore picks up whatever palette the
+   nearest ancestor declares. (The retired /ui/<name> gallery re-scoped these on
+   a .ui-preview container; the /ui section now declares its own palette in
+   public/ui.css.)
 
    `--color-accent` and `--color-border` moved here from the block above for
    the same reason: a preview needs them to mean the kit's neutral values while
@@ -162,61 +164,11 @@
   --color-ring:                 var(--ring);
 }
 
-/* --------------------------------------------------------------------------
-   Component-preview palette, scoped to .ui-preview.
-
-   A preview shows a component the way it will look in the READER's app, which
-   means the kit's neutral shadcn palette, not this site's warm editorial one.
-   The old ui.webjs.dev declared these values on :root, which it could afford
-   because nothing else lived on that domain. Here they must not leak, so every
-   raw value is declared on the preview container instead.
-
-   The VALUES are the kit's, the same ones `webjs ui init` writes into a user's
-   globals.css (packages/ui/packages/registry/themes/index.css), which is the
-   point: what you see is what you get. The SHAPE differs on two counts, both
-   deliberate. The kit keys its dark half off a `.dark` class, while this site
-   keys the whole page off `[data-theme]` (see the `dark` custom variant at the
-   top of this file), and each colour here is written ONCE via light-dark()
-   rather than as a light block plus a dark block. `color-scheme` inherits, so
-   the container picks up whatever the root resolved and every light-dark()
-   below lands on the matching side with no selector of its own.
-   -------------------------------------------------------------------------- */
-.ui-preview {
-  --background:               light-dark(oklch(1 0 0),             oklch(0.145 0 0));
-  --foreground:               light-dark(oklch(0.145 0 0),         oklch(0.985 0 0));
-  --card:                     light-dark(oklch(1 0 0),             oklch(0.205 0 0));
-  --card-foreground:          light-dark(oklch(0.145 0 0),         oklch(0.985 0 0));
-  --popover:                  light-dark(oklch(1 0 0),             oklch(0.205 0 0));
-  --popover-foreground:       light-dark(oklch(0.145 0 0),         oklch(0.985 0 0));
-  --primary:                  light-dark(oklch(0.205 0 0),         oklch(0.922 0 0));
-  --primary-foreground:       light-dark(oklch(0.985 0 0),         oklch(0.205 0 0));
-  --secondary:                light-dark(oklch(0.97 0 0),          oklch(0.269 0 0));
-  --secondary-foreground:     light-dark(oklch(0.205 0 0),         oklch(0.985 0 0));
-  --muted:                    light-dark(oklch(0.97 0 0),          oklch(0.269 0 0));
-  --muted-foreground:         light-dark(oklch(0.556 0 0),         oklch(0.708 0 0));
-  --accent:                   light-dark(oklch(0.97 0 0),          oklch(0.371 0 0));
-  --accent-foreground:        light-dark(oklch(0.205 0 0),         oklch(0.985 0 0));
-  --destructive:              light-dark(oklch(0.577 0.245 27.325), oklch(0.704 0.191 22.216));
-  --destructive-foreground:   light-dark(oklch(0.97 0.01 17),      oklch(0.58 0.22 27));
-  --border:                   light-dark(oklch(0.922 0 0),         oklch(1 0 0 / 10%));
-  --input:                    light-dark(oklch(0.922 0 0),         oklch(1 0 0 / 15%));
-  --ring:                     light-dark(oklch(0.708 0 0),         oklch(0.556 0 0));
-}
-
 @layer base {
-  /* Tailwind's preflight leaves every element at `border: 0 solid`, so a bare
-     `border` utility (which sets width only) paints in currentColor. The kit's
-     components rely on the app having set a default border color, which is
-     what `webjs ui init` writes (`@layer base { * { @apply border-border } }`).
-     Reproduced here scoped to the preview, in the SAME layer, so any explicit
-     Tailwind color utility on the element still wins (utilities are layered
-     after base regardless of specificity). */
-  .ui-preview, .ui-preview * { border-color: var(--border); }
-  /* Same reason: another rule the kit's theme block carries and this site never
-     receives, because it writes its own stylesheet instead of running
+  /* A rule the kit's theme block carries and this site never receives, because it writes its own stylesheet instead of running
      `webjs ui init`. A native <option> paints transparent over the browser
-     popup when no rule applies, so in dark mode the /ui/native-select preview's
-     options disappear. Canvas / CanvasText are the system colours the browser
+     popup when no rule applies, so in dark mode a native select's options
+     disappear. Canvas / CanvasText are the system colours the browser
      would have painted anyway. Two ELEMENT selectors (specificity 0,0,2) and no
      wrapper requirement, matching the kit rule exactly. */
   select option,

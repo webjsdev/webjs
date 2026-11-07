@@ -1,0 +1,411 @@
+/* Tailwind CSS v4 input for the /ui section, compiled to public/ui.css (#1666).
+
+   /ui is a replica of the shadcn/ui site, with its own palette, type and
+   chrome, so it gets its own stylesheet and a marketing page never pays for
+   it. A /ui page loads BOTH stylesheets: public/tailwind.css stays in the root
+   layout and supplies the reset (preflight), and this file adds the /ui
+   tokens and the utilities only /ui code uses. That is why it imports the
+   theme and the utilities but NOT preflight, which would otherwise ship twice.
+
+   `source(none)` turns off automatic content detection, so only the /ui code
+   named by the @source lines below is scanned. lib/utils/{cn,dom}.ts is
+   gitignored and an explicit file @source is scanned regardless; the kit's
+   mirrored components and blocks are read at their registry source instead,
+   see the last two @source lines. */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+
+/* The kit's styles (#1666, D8). The registry components are in BASE FORM,
+   carrying semantic cn-* names, and a style maps each name to Tailwind. In an
+   app the CLI bakes the chosen style into the installed file. On this site
+   the components are rendered as they are, so the styles are loaded as CSS
+   instead, in layer(base) the way shadcn's own preview route does, and a
+   `.style-<name>` wrapper picks the look: .style-new-york for the current
+   gallery, .style-nova for the docs. Being in layer(base), below utilities,
+   a utility written on a demo still overrides the style.
+
+   shadcn-tailwind.css carries the custom variants (data-open and the rest)
+   and the scroll-fade and shimmer utilities the styles use, and
+   tw-animate.css the enter and exit animations. Both are vendored into the
+   registry (see packages/ui/THIRD_PARTY_NOTICES.md). The other seven styles
+   go in a separate stylesheet, linked only by the pages that switch styles. */
+@import "./ui-theme.css";
+@import "./ui-typeset.css";
+@import "../../packages/ui/packages/registry/styles/tw-animate.css";
+@import "../../packages/ui/packages/registry/styles/shadcn-tailwind.css";
+/* Each style is compiled from its scoped copy (scripts/scope-ui-styles.mjs),
+   so a region in one style nested inside a region in another takes only the
+   nearer one's rules. */
+@import "../node_modules/.cache/ui-styles/scoped/style-new-york.css" layer(base);
+@import "../node_modules/.cache/ui-styles/scoped/style-nova.css" layer(base);
+/* shadcn's 24 themes as .theme-<name> classes (#1666): a preview wearing
+   theme-blue repaints in blue, as on shadcn's site. Generated from the kit's
+   theme data by scripts/build-ui-themes.mjs (run by copy-registry.mjs), each
+   colour in the light-dark() form the .ui-site tokens below use. */
+@import "../node_modules/.cache/ui-styles/themes.css";
+
+@source "../app/ui/**/*.ts";
+@source "../modules/ui/**/*.{ts,js}";
+@source "../components/**/*.ts";
+@source "../lib/ui/**/*.ts";
+@source "../lib/utils/{cn,dom}.ts";
+/* The kit components and the registry blocks /ui/view renders, read at their
+   source: the glob over modules/ui/ above does not reach into the gitignored
+   mirrors of them (modules/ui/components/, modules/ui/blocks/), so a layout
+   class only a kit component carries inline (the sidebar wrapper's
+   has-data-[variant=inset]:bg-sidebar) was never generated. */
+@source "../../packages/ui/packages/registry/components/*.ts";
+@source "../../packages/ui/packages/registry/blocks/**/*.ts";
+
+/* The /ui palette: shadcn's site tokens, the same values as its :root and
+   .dark blocks, written once each as light-dark(LIGHT, DARK) the way the
+   marketing palette is (see app/layout.ts). `color-scheme` is set on the
+   root by the theme bootstrap and inherits, so every light-dark() below
+   lands on the side the reader picked with no selector of its own.
+
+   Declared on a wrapper rather than :root, so nothing leaks into the
+   marketing pages: app/ui/layout.ts renders `.ui-site` around every /ui page,
+   iframe targets included. The --chart-* values are Tailwind's blue-300 to
+   blue-800, written out because shadcn references them as theme variables,
+   which Tailwind emits only when a utility uses them. */
+.ui-site {
+  --radius: 0.625rem;
+  --background:                 light-dark(oklch(1 0 0),               oklch(0.145 0 0));
+  --foreground:                 light-dark(oklch(0% 0 0),              oklch(0.985 0 0));
+  --card:                       light-dark(oklch(1 0 0),               oklch(0.205 0 0));
+  --card-foreground:            light-dark(oklch(0% 0 0),              oklch(0.985 0 0));
+  --popover:                    light-dark(oklch(1 0 0),               oklch(0.205 0 0));
+  --popover-foreground:         light-dark(oklch(0% 0 0),              oklch(0.985 0 0));
+  --primary:                    light-dark(oklch(0% 0 0),              oklch(0.922 0 0));
+  --primary-foreground:         light-dark(oklch(0.985 0 0),           oklch(0.205 0 0));
+  --secondary:                  light-dark(oklch(0.97 0 0),            oklch(0.269 0 0));
+  --secondary-foreground:       light-dark(oklch(0.205 0 0),           oklch(0.985 0 0));
+  --muted:                      light-dark(oklch(0.97 0 0),            oklch(0.269 0 0));
+  --muted-foreground:           light-dark(oklch(0.556 0 0),           oklch(0.708 0 0));
+  --accent:                     light-dark(oklch(0.97 0 0),            oklch(0.371 0 0));
+  --accent-foreground:          light-dark(oklch(0.205 0 0),           oklch(0.985 0 0));
+  --destructive:                light-dark(oklch(0.577 0.245 27.325),  oklch(0.704 0.191 22.216));
+  --destructive-foreground:     light-dark(oklch(0.97 0.01 17),        oklch(0.58 0.22 27));
+  --border:                     light-dark(oklch(0.922 0 0),           oklch(1 0 0 / 10%));
+  --input:                      light-dark(oklch(0.922 0 0),           oklch(1 0 0 / 15%));
+  --ring:                       light-dark(oklch(0.708 0 0),           oklch(0.556 0 0));
+  --chart-1:                    oklch(80.9% 0.105 251.813);
+  --chart-2:                    oklch(62.3% 0.214 259.815);
+  --chart-3:                    oklch(54.6% 0.245 262.881);
+  --chart-4:                    oklch(48.8% 0.243 264.376);
+  --chart-5:                    oklch(42.4% 0.199 265.638);
+  --sidebar:                    light-dark(oklch(0.985 0 0),           oklch(0.205 0 0));
+  --sidebar-foreground:         light-dark(oklch(0% 0 0),              oklch(0.985 0 0));
+  --sidebar-primary:            light-dark(oklch(0.205 0 0),           oklch(0.488 0.243 264.376));
+  --sidebar-primary-foreground: light-dark(oklch(0.985 0 0),           oklch(0.985 0 0));
+  --sidebar-accent:             light-dark(oklch(0.97 0 0),            oklch(0.269 0 0));
+  --sidebar-accent-foreground:  light-dark(oklch(0.205 0 0),           oklch(0.985 0 0));
+  --sidebar-border:             light-dark(oklch(0.922 0 0),           oklch(1 0 0 / 10%));
+  --sidebar-ring:               light-dark(oklch(0.708 0 0),           oklch(0.439 0 0));
+  --surface:                    light-dark(oklch(0.98 0 0),            oklch(0.2 0 0));
+  --surface-foreground:         light-dark(oklch(0% 0 0),              oklch(0.708 0 0));
+  --code:                       var(--surface);
+  --code-foreground:            var(--surface-foreground);
+  --code-highlight:             light-dark(oklch(0.96 0 0),            oklch(0.27 0 0));
+  --code-number:                light-dark(oklch(0.56 0 0),            oklch(0.72 0 0));
+  --selection:                  light-dark(oklch(0% 0 0),              oklch(0.922 0 0));
+  --selection-foreground:       light-dark(oklch(1 0 0),               oklch(0.205 0 0));
+
+  /* The code tokens under their Tailwind theme names, which shadcn's ported
+     code-figure rules read raw (`var(--color-code)`). The theme maps them
+     inline, so Tailwind never declares these variables itself. */
+  --color-code:                 var(--code);
+  --color-code-foreground:      var(--code-foreground);
+  --color-code-highlight:       var(--code-highlight);
+  --color-code-number:          var(--code-number);
+
+  /* shadcn's type: Geist for text and headings, Geist Mono for code. */
+  --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+
+  /* The radius scale, restated here because the kit styles read it raw
+     (rhea's cards are rounded-[min(var(--radius-4xl),24px)]). Tailwind emits
+     a raw-read theme variable at :root, where --radius is not declared, so
+     there it computes invalid and the corner falls to 0. Declared on the
+     wrapper, it computes against the wrapper's --radius. */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --font-mono: 'Geist Mono Regular', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* shadcn sizes its header and footer from these (14 and 16 spacing steps
+     for the header, 14 and 24 for the footer). The header itself is
+     position: fixed (#610), and the layout reserves its height through
+     --header-h, the same token the marketing header uses (see below). */
+  --header-height: calc(var(--spacing) * 14);
+  --footer-height: calc(var(--spacing) * 14);
+
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-synthesis-weight: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+@media (width >= 64rem) {
+  .ui-site { --header-height: calc(var(--spacing) * 16); }
+}
+/* --header-h is the height the root layout reserves for a fixed header (body
+   padding, scroll-padding-top, and .site-top > header's own height). On a
+   page with the /ui header it is that header's --header-height, so the header
+   is SIZED by the token and nothing measures it (#1660). Literals, because
+   :root cannot read a variable declared on .ui-site; keep them equal to the
+   two --header-height values above. The bare iframe targets have no
+   .site-top, so they keep their own 0px. */
+:root:has(.ui-site .site-top) { --header-h: 3.5rem; }
+@media (width >= 64rem) {
+  :root:has(.ui-site .site-top) { --header-h: 4rem; }
+}
+@media (width >= 80rem) {
+  .ui-site { --footer-height: calc(var(--spacing) * 24); }
+}
+
+@layer base {
+  /* shadcn's base rules, scoped to the section: every border defaults to the
+     border token and every outline to a half-strength ring. In the SAME
+     layer as Tailwind's own base, so an explicit utility still wins. */
+  .ui-site, .ui-site * {
+    border-color: var(--border);
+    outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
+  }
+  .ui-site ::selection {
+    background-color: var(--selection);
+    color: var(--selection-foreground);
+  }
+  .ui-site .cn-font-heading { font-family: var(--font-heading); }
+}
+
+/* shadcn's site utilities (apps/v4/app/globals.css). */
+@utility container-wrapper {
+  @apply mx-auto w-full px-2 3xl:fixed:max-w-[calc(var(--breakpoint-2xl)+2rem)];
+}
+@utility container {
+  @apply mx-auto max-w-[1400px] px-4 3xl:max-w-screen-2xl lg:px-8;
+}
+@utility border-grid {
+  @apply border-border/50 dark:border-border;
+}
+@utility section-soft {
+  @apply bg-linear-to-b from-background to-surface/40 dark:bg-background 3xl:fixed:bg-none;
+}
+@utility theme-container {
+  @apply font-sans;
+}
+@utility border-ghost {
+  @apply relative after:absolute after:inset-0 after:border after:border-border after:mix-blend-darken dark:after:mix-blend-lighten;
+}
+@utility step {
+  counter-increment: step;
+
+  &:before {
+    @apply mr-2 inline-flex size-6 items-center justify-center rounded-full border-background bg-muted text-center -indent-px font-mono text-sm font-medium md:absolute md:mt-[-4px] md:ml-[-50px] md:size-9 md:border-4;
+    content: counter(step);
+  }
+}
+/* shadcn's docs use scrollbar-none from a Tailwind plugin; it is the same
+   rule as no-scrollbar. */
+@utility scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+@utility extend-touch-target {
+  @media (pointer: coarse) {
+    @apply relative touch-manipulation after:absolute after:-inset-2;
+  }
+}
+
+/* Self-hosted Geist and Geist Mono (latin subset), the files ui.shadcn.com
+   serves, fetched by scripts/fetch-fonts.mjs. Declared here rather than in
+   input.css so a marketing page never downloads them. The site's mono is
+   shadcn's: weight 400 alone, so a font-medium in mono draws at 400 as it
+   does there. 'Geist Mono', the name the kit's font data and the typeset
+   builder use, is the variable file with every weight, which a page fetches
+   only when something renders in it. */
+@font-face{font-family:'Geist';font-style:normal;font-weight:100 900;font-display:swap;src:url('/public/fonts/geist.woff2') format('woff2');}
+@font-face{font-family:'Geist Mono Regular';font-style:normal;font-weight:400;font-display:swap;src:url('/public/fonts/geist-mono.woff2') format('woff2');}
+@font-face{font-family:'Geist Mono';font-style:normal;font-weight:100 900;font-display:swap;src:url('/public/fonts/geist-mono-variable.woff2') format('woff2');}
+
+/* shadcn's docs code blocks, steps and component-link rules
+   (apps/v4/app/globals.css, MIT), so a /ui docs page's code figures, line
+   numbers and numbered steps match shadcn's. The one Shiki colour rule is
+   left out, since the site's highlighter colours tokens by class. */
+@layer components {
+  /* Component links (asChild buttons, cards) keep their own affordances
+     inside typeset prose. Consumer-level rule: this app knows its components
+     carry data-slot. Same layer as typeset, wins on specificity. */
+  .typeset a[data-slot] {
+    font-weight: inherit;
+    text-decoration-line: none;
+  }
+
+  .steps {
+    &:first-child {
+      @apply !mt-0;
+    }
+
+    &:first-child > h3:first-child {
+      @apply !mt-0;
+    }
+
+    > h3 {
+      @apply !mt-8;
+    }
+
+    > h3 + p {
+      @apply !mt-2;
+    }
+  }
+
+  [data-rehype-pretty-code-figure] {
+    background-color: var(--color-code);
+    color: var(--color-code-foreground);
+    border-radius: var(--radius-2xl);
+    border-width: 0px;
+    border-color: var(--border);
+    margin-top: calc(var(--spacing) * 6);
+    overflow: hidden;
+    font-size: var(--text-sm);
+    outline: none;
+    position: relative;
+    @apply -mx-1 md:-mx-1;
+
+    &:has([data-rehype-pretty-code-title]) [data-slot="copy-button"] {
+      top: calc(var(--spacing) * 1.5) !important;
+    }
+  }
+
+  [data-rehype-pretty-code-figure] code,
+  [data-rehype-pretty-code-figure] code span {
+    font-variant-ligatures: none;
+    font-feature-settings:
+      "liga" 0,
+      "calt" 0;
+  }
+
+  [data-rehype-pretty-code-title] {
+    border-bottom: color-mix(in oklab, var(--border) 30%, transparent);
+    border-bottom-width: 1px;
+    border-bottom-style: solid;
+    padding-block: calc(var(--spacing) * 2.5);
+    padding-inline: calc(var(--spacing) * 4);
+    font-size: var(--text-sm);
+    font-family: var(--font-mono);
+    color: var(--color-code-foreground);
+  }
+
+  [data-rehype-pretty-code-figure] pre[data-prompt] code {
+    white-space: pre-wrap;
+  }
+
+  [data-line-numbers] {
+    display: grid;
+    min-width: 100%;
+    white-space: pre;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    counter-reset: line;
+    box-decoration-break: clone;
+  }
+
+  [data-line-numbers] [data-line]::before {
+    font-size: var(--text-sm);
+    counter-increment: line;
+    content: counter(line);
+    display: inline-block;
+    width: calc(var(--spacing) * 16);
+    padding-right: calc(var(--spacing) * 6);
+    text-align: right;
+    color: var(--color-code-number);
+    background-color: var(--color-code);
+    position: sticky;
+    left: 0;
+  }
+
+  [data-line-numbers] [data-highlighted-line][data-line]::before {
+    background-color: var(--color-code-highlight);
+  }
+
+  [data-line] {
+    padding-top: calc(var(--spacing) * 0.25);
+    padding-bottom: calc(var(--spacing) * 0.25);
+    min-height: calc(var(--spacing) * 0.875);
+    width: 100%;
+    display: inline-block;
+  }
+
+  /*
+   * ```text composition trees use box-drawing characters; per-line padding makes
+   * vertical connectors look broken. rehype-pretty-code sets `data-language` on
+   * `pre`/`code` (not `language-*` classes). It also sets `code { display: grid }`,
+   * which can add visible row separation, reset to a normal pre stack for text.
+   */
+  [data-rehype-pretty-code-figure] pre[data-language="text"] code,
+  [data-rehype-pretty-code-figure] pre[data-language="plaintext"] code,
+  [data-slot="docs"] pre[data-language="text"] code,
+  [data-slot="docs"] pre[data-language="plaintext"] code {
+    display: block !important;
+    white-space: pre;
+    line-height: 0.95;
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+      "Courier New", monospace;
+    font-variant-ligatures: none;
+  }
+
+  [data-rehype-pretty-code-figure] pre[data-language="text"] [data-line],
+  [data-rehype-pretty-code-figure] pre[data-language="plaintext"] [data-line],
+  [data-rehype-pretty-code-figure] code[data-language="text"] [data-line],
+  [data-rehype-pretty-code-figure] code[data-language="plaintext"] [data-line],
+  [data-slot="docs"] pre[data-language="text"] [data-line],
+  [data-slot="docs"] pre[data-language="plaintext"] [data-line] {
+    padding-top: 0;
+    padding-bottom: 0;
+    min-height: unset;
+    line-height: 0.95;
+    display: block;
+  }
+
+  [data-highlighted-line],
+  [data-highlighted-chars] {
+    position: relative;
+    background-color: var(--color-code-highlight);
+  }
+
+  [data-highlighted-line] {
+    &:after {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 2px;
+      height: 100%;
+      content: "";
+      background-color: color-mix(
+        in oklab,
+        var(--muted-foreground) 50%,
+        transparent
+      );
+    }
+  }
+
+  [data-highlighted-chars] {
+    border-radius: var(--radius-sm);
+    padding-inline: 0.3rem;
+    padding-block: 0.1rem;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+  }
+}

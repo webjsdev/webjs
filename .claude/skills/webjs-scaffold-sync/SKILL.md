@@ -159,7 +159,7 @@ it applies, then update or consciously skip each.
    here, including the counterfactual (a per-template exclusion test).
 6. **The framework docs that DESCRIBE the scaffold** (shared with doc-sync):
    - Root `AGENTS.md` "Scaffolding" section.
-   - The docs site: `website/app/docs/getting-started/page.ts` (+ `backend-only`,
+   - The docs site: `website/app/(site)/docs/getting-started/page.ts` (+ `backend-only`,
      `ai-first`, `conventions` where they describe generated structure).
    - `README.md` (the template matrix + the "scaffold is the tutorial" note).
 7. **The CLI surface**: `packages/cli/` `--template` validation + `--help`/usage
@@ -195,7 +195,7 @@ Run the mandatory generate + boot + check verifications in PARALLEL when more th
    ```sh
    git grep -n -iE '<token1>|<token2>' -- \
      'packages/cli/lib/**' 'packages/cli/templates/**' 'test/scaffolds/**' \
-     AGENTS.md README.md 'website/app/docs/**'
+     AGENTS.md README.md 'website/app/(site)/docs/**'
    ```
 3. Update every surface the mapping says applies. For a SCOPING or wording change
    (e.g. "gallery is full-stack only" becoming "full-stack and saas"), the grep

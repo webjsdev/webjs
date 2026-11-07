@@ -37,8 +37,10 @@ export function closestAnchor(target) {
       const a = el.closest && el.closest('a');
       if (a instanceof HTMLAnchorElement) return a;
     }
+    // Only a real ShadowRoot has a host to cross to (a detached subtree's
+    // root can be an <a>, whose `host` is a URL string).
     const root = node.getRootNode ? node.getRootNode() : null;
-    node = root && /** @type any */ (root).host ? /** @type any */ (root).host : null;
+    node = typeof ShadowRoot !== 'undefined' && root instanceof ShadowRoot ? root.host : null;
   }
   return null;
 }

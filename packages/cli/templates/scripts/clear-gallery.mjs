@@ -11,17 +11,19 @@
 //
 // It strips the app down to a TRULY BAREBONES blank slate: it removes the
 // gallery routes + modules + demo metadata routes, the gallery's example design
-// system (components/ui/), the example theme-toggle component, the example test
-// suite (test/hello/), and every empty leftover dir, then resets app/page.ts to
-// a minimal home AND app/layout.ts to a blank-slate base (the gallery's navbar,
-// theme toggle, Google Fonts, AND design-token palette dropped: the reset layout
-// carries NO design system, just the OS light/dark system colours, so the agent
-// builds the palette as its own, guided by the skill), and drops the demo `todos`
-// table plus the auth card's `passwordHash` column from the schema. It KEEPS only
-// the buildable base: the agent skill (.agents/skills/webjs/), the reset root
-// layout (the Tailwind wiring + a system-colour base, no tokens), the database
-// wiring, the example `users` table, and `lib/utils/cn.ts` (the `webjs ui add`
-// prerequisite).
+// system (its class helpers, in modules/gallery/ui/), the example theme-toggle
+// component, the example test suite (test/hello/), and every empty leftover dir,
+// then resets app/page.ts to a minimal home AND app/layout.ts to a blank-slate
+// base (the gallery's navbar, theme toggle and Google Fonts dropped; the reset
+// layout paints with the theme tokens in styles/globals.css and renders each
+// page bare, so a full-screen block page fills the window), drops the gallery's
+// monospaced faces from the theme so the type falls back to the system sans,
+// and drops the demo `todos` table plus the auth card's `passwordHash` column
+// from the schema. It KEEPS the buildable base: the agent skill
+// (.agents/skills/webjs/), the reset root layout, the theme in
+// styles/globals.css (which `webjs ui init --preset <code>` replaces), anything
+// `webjs ui add` put in components/ui/, the database wiring, the example
+// `users` table, and `lib/utils/cn.ts` (the `webjs ui add` prerequisite).
 //
 // Why strip so much: the demos, the design system, and the example component /
 // tests are all EXAMPLES to learn FROM, not a base to inherit. Leaving them
@@ -63,10 +65,9 @@ const galleryPaths = [
   'app/icon.ts', 'app/apple-icon.ts', 'app/manifest.ts', 'app/opengraph-image.ts',
   'app/twitter-image.ts', 'app/robots.ts', 'app/sitemap.ts',
   'app/global-error.ts', 'app/global-not-found.ts',
-  // The gallery's EXAMPLE design system. Removed so the reset app is a blank
-  // slate: the agent builds its own components/ui/ (run `webjs ui add`, cn.ts is
-  // kept), learning the pattern from the skill, not inheriting the gallery's.
-  'components/ui',
+  // components/ui/ is NOT listed: the gallery's example helpers live in
+  // modules/gallery/ui/ (removed with modules/gallery below), and
+  // components/ui/ is where `webjs ui add` writes, so it holds the app's own.
   // Example scaffold artifacts (invariant 2): the theme-toggle component and the
   // example test suite are things to learn from, not the agent's app. Removed
   // for a true blank slate; the root layout is reset to a minimal base below
@@ -108,12 +109,11 @@ if (existsSync(schemaPath)) {
 }
 
 // 5) Reset the root layout to a blank-slate base. The gallery layout ships a
-// navbar, a theme toggle, Google Fonts, and a full design-token palette; a blank
-// slate should inherit NONE of that, so OVERWRITE it with a minimal layout that
-// carries no design system: the Tailwind stylesheet + OS light/dark system
-// colours (Canvas / CanvasText) + a bare <main>. The agent then builds the
-// palette (CSS tokens + @theme + a light-dark() theme) as its own, guided by
-// .agents/skills/webjs/references/styling.md.
+// navbar, a theme toggle and Google Fonts; a blank slate should inherit none of
+// that, so OVERWRITE it with a minimal layout: the Tailwind stylesheet, a body
+// painted with the theme tokens (styles/globals.css, which a preset replaces),
+// the .dark class following the OS, and each page rendered bare, so a page owns
+// its width and a full-screen block fills the window.
 // GUARD: overwrite only while the layout still carries the gallery's own navbar
 // brand. A hand-customised layout (the brand removed / replaced) is the user's
 // work, so it is KEPT and only the dangling references to the removed
@@ -134,6 +134,16 @@ if (existsSync(layoutPath)) {
   }
 }
 
+// 5b) The gallery's monospaced faces leave with its Google Fonts link, so drop
+// them from the theme block too, while they are still the gallery's: the type
+// then falls back to the system sans. A preset's fonts (or your own) are kept.
+const themePath = join(root, 'styles/globals.css');
+if (existsSync(themePath)) {
+  const css = readFileSync(themePath, 'utf8');
+  const next = css.replace(/\n[ \t]*--font-(?:sans|mono): 'JetBrains Mono', ui-monospace[^;\n]*;/g, '');
+  if (next !== css) writeFileSync(themePath, next);
+}
+
 // 6) Drop generated migrations + the dev database so the next db:generate is
 // clean against the reset schema (safe: the scaffold has no real data yet).
 rm('db/migrations');
@@ -147,7 +157,7 @@ for (const f of ['db/dev.db', 'db/dev.db-shm', 'db/dev.db-wal']) rm(f);
 // children before test/ so it reads as empty.
 for (const d of ['app/api', 'test/unit', 'test/e2e', 'test']) if (pruneEmpty(d)) removed++;
 
-console.log(`Gallery cleared (${removed} paths removed). The agent skill and your database wiring are kept. Build your own design system: run \`npx webjsdev ui add <name>\` and theme it (see .agents/skills/webjs/references/styling.md).`);
+console.log(`Gallery cleared (${removed} paths removed). The agent skill and your database wiring are kept. Pick a look with \`npx webjsdev ui init --preset <code>\` (from webjs.dev/ui/create), then add components with \`npx webjsdev ui add <name>\` (see .agents/skills/webjs/references/styling.md).`);
 console.log('Next: regenerate the database (db:generate then db:migrate), then start the dev server and build your app in app/ and modules/.');
 
 function MINIMAL_PAGE() {
@@ -159,7 +169,7 @@ export const metadata = {
 
 export default function Home() {
   return html\`
-    <div class="max-w-2xl mx-auto px-6 py-24 flex flex-col items-center text-center gap-6">
+    <main class="max-w-2xl mx-auto px-6 py-24 flex flex-col items-center text-center gap-6">
       <h1 class="text-4xl font-bold tracking-tight m-0">Your app</h1>
       <p class="text-base leading-relaxed m-0 opacity-70">
         The gallery is cleared. This is <code class="text-[0.9em]">app/page.ts</code>. Build your
@@ -169,26 +179,26 @@ export default function Home() {
         <a href="https://webjs.dev/docs" target="_blank" rel="noopener" class="hover:opacity-100 transition-opacity no-underline">Docs</a>
         <a href="https://github.com/webjsdev/webjs" target="_blank" rel="noopener" class="hover:opacity-100 transition-opacity no-underline">GitHub</a>
       </nav>
-    </div>
+    </main>
   \`;
 }
 `;
 }
 
 function MINIMAL_LAYOUT() {
-  return `import { html, asset } from '@webjsdev/core';
+  return `import { html, asset, cspNonce } from '@webjsdev/core';
 import type { LayoutProps } from '@webjsdev/core';
 
 /**
  * Root layout: the ONLY file that writes the document shell. It links the
- * Tailwind stylesheet and renders \${children} in a bare container. This is a
- * BLANK SLATE with no design system: it uses the OS light/dark system colours
- * (Canvas / CanvasText) so it reads fine immediately, and it is where YOU build
- * the app's look. The recommended setup, CSS custom-property tokens mapped into
- * Tailwind via @theme (so bg-background / text-foreground work), a DRY
- * light-dark() palette, a header/nav, and the ui class helpers, is taught in
- * .agents/skills/webjs/references/styling.md. Run \`npx webjsdev ui add <name>\`
- * to pull primitives, then theme them here.
+ * Tailwind stylesheet and renders each page as it is, with no wrapper, so a
+ * page owns its own width: the home page centres a column, and a full-screen
+ * page (a block from \`npx webjsdev ui add login-03\`, a dashboard) fills the
+ * window. It paints with the theme tokens in styles/globals.css, the block
+ * \`npx webjsdev ui init --preset <code>\` replaces, so a preset from
+ * webjs.dev/ui/create repaints the app. Grow it in place (a header, nav,
+ * footer) as the app needs; .agents/skills/webjs/references/styling.md covers
+ * the patterns.
  */
 
 // The favicon is app/icon.svg (and the manifest app/manifest.webmanifest): the
@@ -196,26 +206,39 @@ import type { LayoutProps } from '@webjsdev/core';
 // placeholder icon with this app's own.
 
 export default function RootLayout({ children }: LayoutProps) {
+  const nonce = cspNonce();
   return html\`
-    <meta name="color-scheme" content="light dark">
+    <script nonce="\${nonce}">
+      // The theme's dark tokens and color-scheme are both on .dark: follow the
+      // OS until the app offers its own choice. With JavaScript off the page
+      // is light throughout, controls included.
+      (function(){
+        try {
+          var mq = window.matchMedia('(prefers-color-scheme: dark)');
+          var apply = function(){ document.documentElement.classList.toggle('dark', mq.matches); };
+          apply();
+          mq.addEventListener('change', apply);
+        } catch (_) {}
+      })();
+    </script>
+    <meta name="color-scheme" content="light">
     <!-- asset() content-hashes the url in production, so a deploy that changes
          the CSS changes the url and the framework serves it immutable for a
          year. Without it this stable url can serve the PREVIOUS stylesheet
          from a CDN or a service-worker cache after a deploy. -->
     <link rel="stylesheet" href=\${asset('/public/tailwind.css')}>
     <style>
+      :root { color-scheme: light; }
+      :root.dark { color-scheme: dark; }
       html, body { margin: 0; }
       body {
-        background: Canvas;
-        color: CanvasText;
-        font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        background: var(--background);
+        color: var(--foreground);
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
       }
     </style>
-    <main class="min-h-dvh max-w-3xl mx-auto px-6 py-10">
-      \${children}
-    </main>
+    \${children}
   \`;
 }
 `;

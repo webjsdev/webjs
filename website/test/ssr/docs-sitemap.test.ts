@@ -26,7 +26,7 @@ const xml = () => Sitemap();
 
 /** The doc topic folders on disk that actually hold a page. */
 async function docTopics(): Promise<string[]> {
-  const root = resolve(WEBSITE_ROOT, 'app', 'docs');
+  const root = resolve(WEBSITE_ROOT, 'app', '(site)', 'docs');
   const dirents = await readdir(root, { withFileTypes: true });
   const out: string[] = [];
   for (const d of dirents) {

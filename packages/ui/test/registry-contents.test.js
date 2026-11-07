@@ -19,6 +19,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { bakeForStyle } from '../src/registry/style-bake.js';
 
 const REGISTRY_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'packages', 'registry');
 const COMPONENTS_DIR = join(REGISTRY_DIR, 'components');
@@ -39,6 +40,10 @@ const V1_COMPONENTS = [
   'tabs', 'accordion', 'collapsible',
   'dropdown-menu', 'sonner',
   'empty', 'spinner', 'field',
+  // #1666: the components shadcn ships that the kit did not.
+  'button-group', 'marker', 'message', 'scroll-area',
+  'attachment', 'bubble', 'item', 'trace', 'input-group', 'direction',
+  'sheet', 'drawer', 'context-menu', 'menubar', 'navigation-menu', 'select', 'slider', 'input-otp', 'command', 'combobox', 'calendar', 'questionnaire', 'carousel', 'resizable', 'message-scroller', 'code-block', 'sidebar',
 ];
 
 // Components that are Tier 2, must register a custom element.
@@ -50,10 +55,19 @@ const TIER_2 = new Set([
   'dialog', 'alert-dialog', 'tooltip', 'hover-card',
   'tabs',
   'dropdown-menu', 'sonner',
+  'sheet', 'drawer', 'context-menu', 'menubar', 'navigation-menu', 'select', 'slider', 'input-otp', 'command', 'combobox', 'calendar', 'questionnaire', 'carousel', 'resizable', 'message-scroller', 'code-block', 'sidebar',
 ]);
 
+/**
+ * A component's source as an app receives it: baked with the default
+ * `new-york` style (#1666). The registry files are in base form, carrying
+ * semantic `cn-*` names where the classes used to be, so the hallmark class
+ * assertions below read what `add` writes rather than the base form itself.
+ * The bake only rewrites class strings, so the JSDoc and structure checks see
+ * the file unchanged.
+ */
 function readSource(name) {
-  return readFileSync(join(COMPONENTS_DIR, `${name}.ts`), 'utf8');
+  return bakeForStyle(readFileSync(join(COMPONENTS_DIR, `${name}.ts`), 'utf8'), 'new-york');
 }
 
 function readManifest() {
@@ -128,6 +142,10 @@ test('every v1 component is declared in registry.json', { skip }, () => {
 test('every Tier-2 component imports WebComponent + html from @webjsdev/core', { skip }, () => {
   for (const name of TIER_2) {
     const src = readSource(name);
+    // An element built on a sibling Tier-2 element (sheet extends the dialog
+    // elements) reaches WebComponent through it, so it imports the sibling
+    // instead of core.
+    if (/\bextends\s+Ui\w+/.test(src) && /from\s+'\.\/[\w-]+\.ts'/.test(src)) continue;
     // Refactor: components moved from the local Base + defineElement
     // helpers (in lib/utils.ts) to the Lit-shaped WebComponent base
     // from @webjsdev/core (with html`…` templates and declarative
@@ -153,8 +171,13 @@ test('Tier-2 components register at least one ui-* element via WebComponent.regi
   }
 });
 
+// Tier-1 components with no classes at all. `direction` is the native `dir`
+// attribute, which every component already follows through logical
+// properties, so it exports only readDirection() (#1666).
+const NO_CLASS_HELPER = new Set(['direction']);
+
 test('Tier-1 components export named class-helper functions ending in *Class', { skip }, () => {
-  const tier1 = V1_COMPONENTS.filter((n) => !TIER_2.has(n));
+  const tier1 = V1_COMPONENTS.filter((n) => !TIER_2.has(n) && !NO_CLASS_HELPER.has(n));
   for (const name of tier1) {
     const src = readSource(name);
     assert.match(
@@ -212,12 +235,16 @@ test('alert-dialog : uses alertdialog role, blocks Escape via cancel event', { s
   assert.match(src, /showModal/);
 });
 
-test('popover : tier-1 class helpers + positionFloating utility export', { skip }, () => {
+test('popover : tier-1 class helpers, with the positioning utility in floating.ts', { skip }, () => {
   const src = readSource('popover');
-  // No custom element: pure class helpers + a positioning utility for
-  // sibling tier-2 components.
+  // No custom element: pure class helpers. The positioning utility the
+  // sibling tier-2 components use is floating.ts, so a page importing only
+  // these helpers reaches no browser code (and neither re-exports the other).
   assert.doesNotMatch(src, /defineElement\(/);
-  assert.match(src, /export\s+function\s+positionFloating/);
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  assert.doesNotMatch(code, /positionFloating|from '\.\/floating\.ts'/);
+  assert.doesNotMatch(code, /\b(window|document)\b/, 'no browser global in the class helpers');
+  assert.match(readSource('floating'), /export\s+function\s+positionFloating/);
   // Parameterized helper with shadcn parity for side / align / sideOffset / alignOffset.
   assert.match(src, /export\s+function\s+popoverContentClass\s*\(/);
   assert.match(src, /PopoverContentOptions/);
@@ -238,7 +265,7 @@ test('popover : tier-1 class helpers + positionFloating utility export', { skip 
 });
 
 test('positionFloating : accepts alignOffset for tier-2 placement', { skip }, () => {
-  const src = readSource('popover');
+  const src = readSource('floating');
   // The utility consumed by tooltip / hover-card / dropdown-menu must
   // accept alignOffset alongside sideOffset.
   assert.match(src, /alignOffset\??:\s*number/);
@@ -317,13 +344,11 @@ test('accordion : supports single/multiple + collapsible', { skip }, () => {
   assert.match(src, /collapsible/);
 });
 
-// #1080: checkbox / radio draw their checked indicator from an injected
-// stylesheet that keys on a `data-slot` attribute, and neither class helper
-// carries a fallback fill for the checked state (radioClass has no
-// checked:bg-* at all). So an @example that omits the attribute teaches a
-// copy-paste whose checked state is conveyed by colour alone, the WCAG 1.4.1
-// trap both examples used to ship. Assert the pairing at the source, since the
-// examples are what `webjsui view` and the MCP `ui` tool hand to an agent.
+// #1080: checkbox / radio examples carry their `data-slot`, as shadcn's do.
+// The tick and the dot no longer depend on it (#1666 moved them into the
+// helpers' own classes), but the styles' field rules select on the slot, and
+// the examples are what `webjsui view` and the MCP `ui` tool hand to an agent,
+// so assert the pairing at the source.
 test('checkbox / radio examples pair the class helper with its data-slot', { skip }, async () => {
   const { extractExample } = await import('../src/registry/example.js');
   for (const [name, type, slot] of [
@@ -417,4 +442,18 @@ test('sonner : branches the toast role rather than emitting a nullish hole', { s
     !/role="status"/.test(code),
     'a non-error toast still carries role=status, which nests a second live region inside the polite viewport',
   );
+});
+
+test('avatar : a broken image paints no alt text and pushes its glyph out, in every style', { skip }, () => {
+  // The image is laid over the fallback, so a 404 photo would paint its alt
+  // text and the broken-image glyph over the initials. `text-transparent`
+  // hides the alt text in every engine; the full-height `::before` box, which
+  // only a BROKEN image renders, pushes Chromium's glyph out of the clipped box.
+  for (const style of ['new-york', 'nova', 'vega', 'maia', 'lyra', 'mira', 'luma', 'sera', 'rhea']) {
+    const src = bakeForStyle(readFileSync(join(COMPONENTS_DIR, 'avatar.ts'), 'utf8'), style);
+    const image = /avatarImageClass = \(\): string =>\s*'([^']*)'/.exec(src)?.[1] ?? '';
+    for (const cls of ['absolute', 'inset-0', 'overflow-hidden', 'text-transparent', 'before:block', 'before:h-full']) {
+      assert.ok(image.split(/\s+/).includes(cls), `${style}: avatarImageClass carries ${cls} (got "${image}")`);
+    }
+  }
 });

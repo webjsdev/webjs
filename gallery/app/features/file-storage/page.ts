@@ -6,8 +6,8 @@
 // through file/[key]/route.ts. Works with JS off; the client router applies the
 // same flow in place with JS on.
 import { html } from '@webjsdev/core';
-import { buttonClass } from '#components/ui/button.ts';
-import { cardClass } from '#components/ui/card.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
+import { cardClass } from '#modules/gallery/ui/card.ts';
 import { pageHeading, lede } from '#lib/utils/ui.ts';
 import type { Metadata } from '@webjsdev/core';
 import { storeUpload } from '#modules/file-storage/actions/store-upload.server.ts';

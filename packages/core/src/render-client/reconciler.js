@@ -10,6 +10,7 @@ import { isLive } from '../directives.js';
 import { attrHoleValue } from '../binding-prefixes.js';
 import { RENDERING, SLOT_OWNER, SLOT_STATE, drainRendererBackstop, rescueAssignedNodes } from '../slot.js';
 import { compile, submitterActionBindings, INSTANCE } from './template-compiler.js';
+import { commitAdoption, planSlotAdoption, retargetParts } from './adopt-slots.js';
 import {
   applyPart, bindPart, currentRenderRoot, findSlotHost, setCurrentRenderRoot, updateInstance,
 } from './parts.js';
@@ -44,12 +45,12 @@ export function render(value, container) {
 
       // Light DOM hydration: if container has SSR content (marked by
       // <!--webjs-hydrate-->), remove the marker and proceed with normal
-      // rendering. The content will be replaced with identical output -
-      // no visible flash because SSR and client render produce the same HTML.
+      // rendering. The content is replaced with identical output, so nothing
+      // flashes, except that the SSR slots holding projected children stay in
+      // place (createInstance, #1666), so those children never leave the page.
       const firstChild = container.firstChild;
-      if (firstChild && firstChild.nodeType === 8 && /** @type {Comment} */ (firstChild).data === 'webjs-hydrate') {
-        firstChild.remove();
-      }
+      const hydrating = !!firstChild && firstChild.nodeType === 8 && /** @type {Comment} */ (firstChild).data === 'webjs-hydrate';
+      if (hydrating) firstChild.remove();
 
       // Pre-set the symbol to an explicit null BEFORE the commit,
       // UNCONDITIONALLY: if createInstance throws after its replaceChildren
@@ -59,7 +60,7 @@ export function render(value, container) {
       // instance on the template-swap path (whose bookends would misclassify
       // the half-committed new roots as unowned and fold them).
       host[INSTANCE] = null;
-      const inst = createInstance(tr, container);
+      const inst = createInstance(tr, container, hydrating);
       host[INSTANCE] = inst;
       return;
     }
@@ -307,7 +308,7 @@ function resolveHoleValue(v) {
  * @param {import('../html.js').TemplateResult} tr
  * @param {Element | DocumentFragment | ShadowRoot} container
  */
-function createInstance(tr, container) {
+function createInstance(tr, container, hydrating = false) {
   const { templateEl, parts, formActions } = compile(tr);
   const frag = /** @type DocumentFragment */ (templateEl.content.cloneNode(true));
   // Bookend markers bound the instance so we can tear it down cleanly.
@@ -315,6 +316,11 @@ function createInstance(tr, container) {
   const endNode = document.createComment(`${MARKER}e`);
 
   const bound = parts.map((p) => bindPart(p, frag));
+  // Hydration keeps the SSR slots that hold projected children, and their
+  // ancestors, in the document (#1666): the parts targeting them are pointed at
+  // the live elements now, before any applies.
+  const adoption = hydrating ? planSlotAdoption(container, frag, bound) : null;
+  if (adoption) retargetParts(adoption, bound);
   const lastValues = [];
   for (let i = 0; i < tr.values.length; i++) {
     applyPart(bound[i], tr.values[i], undefined, tr.values, reconcileFormActions);
@@ -322,7 +328,11 @@ function createInstance(tr, container) {
   }
   reconcileFormActions(formActions, bound, tr.values);
 
-  /** @type any */ (container).replaceChildren(startNode, ...frag.childNodes, endNode);
+  if (adoption) {
+    commitAdoption(adoption, /** @type {Element} */ (container), [startNode, ...frag.childNodes, endNode]);
+  } else {
+    /** @type any */ (container).replaceChildren(startNode, ...frag.childNodes, endNode);
+  }
 
   // Slot parts have no value-hole to drive applyPart from the loop above.
   // Apply them once now that the fragment is inserted into the live

@@ -23,6 +23,19 @@
  *   `action`:      { label, onClick } | undefined. Renders an action button.
  *   `cancel`:      { label, onClick } | undefined. Renders a cancel button.
  *                  Both buttons dismiss the toast after running their onClick.
+ *   `position`:    one of the viewport positions. The toast shows at that
+ *                  corner instead of the viewport's own (shadcn's per-toast
+ *                  `position`).
+ *
+ * Firing a toast with no script of your own: any element carrying
+ * `data-toast="<message>"` fires one when clicked, as shadcn's demos do with
+ * `onClick={() => toast(...)}`. A mounted `<ui-sonner>` handles the clicks
+ * for the whole page through one delegated listener. The optional attributes
+ * are `data-toast-type` (`success` | `error` | `info` | `warning` |
+ * `loading`), `data-toast-description`, `data-toast-position`,
+ * `data-toast-duration` (ms), and `data-toast-action` (a button label; the
+ * button dismisses the toast). Put it on a real `<button type="button">` so it
+ * is focusable and fires from the keyboard too.
  *
  * Events: none dispatched (consumers act on the id returned by `toast()`).
  *
@@ -83,6 +96,7 @@ interface ToastOptions {
   duration?: number;
   action?: { label: string; onClick: () => void };
   cancel?: { label: string; onClick: () => void };
+  position?: SonnerPosition;
 }
 
 interface ToastItem extends ToastOptions {
@@ -126,7 +140,45 @@ function makeToast(message: string, opts: ToastOptions = {}, type: ToastType = '
     duration: opts.duration ?? (type === 'loading' ? 0 : 4000),
     action: opts.action,
     cancel: opts.cancel,
+    position: opts.position,
   });
+}
+
+const TOAST_TYPES = ['default', 'success', 'error', 'info', 'warning', 'loading'];
+
+/**
+ * A click on (or inside) an element carrying `data-toast` fires the toast it
+ * describes. One listener serves the page, however many viewports are
+ * mounted, and it routes through the same bus `toast()` uses.
+ */
+function onToastClick(e: Event): void {
+  const target = e.target as Element | null;
+  const el = target && typeof target.closest === 'function' ? target.closest('[data-toast]') : null;
+  if (!el) return;
+  const message = el.getAttribute('data-toast') || '';
+  if (!message) return;
+  const rawType = el.getAttribute('data-toast-type') || 'default';
+  const type = (TOAST_TYPES.includes(rawType) ? rawType : 'default') as ToastType;
+  const position = el.getAttribute('data-toast-position') as SonnerPosition | null;
+  const duration = Number(el.getAttribute('data-toast-duration'));
+  const action = el.getAttribute('data-toast-action');
+  makeToast(message, {
+    description: el.getAttribute('data-toast-description') || undefined,
+    position: position && position in POSITIONS ? position : undefined,
+    duration: el.hasAttribute('data-toast-duration') && Number.isFinite(duration) ? duration : undefined,
+    action: action ? { label: action, onClick: () => {} } : undefined,
+  }, type);
+}
+
+/** Install the page's one `data-toast` listener, counted per mounted viewport. */
+function holdToastClicks(): () => void {
+  const g = globalThis as unknown as { __webjsSonnerClicks?: number };
+  if (!g.__webjsSonnerClicks) document.addEventListener('click', onToastClick);
+  g.__webjsSonnerClicks = (g.__webjsSonnerClicks ?? 0) + 1;
+  return () => {
+    g.__webjsSonnerClicks = (g.__webjsSonnerClicks ?? 1) - 1;
+    if (!g.__webjsSonnerClicks) document.removeEventListener('click', onToastClick);
+  };
 }
 
 export function toast(message: string, opts?: ToastOptions): string | number {
@@ -159,11 +211,11 @@ toast.promise = <T,>(p: Promise<T>, opts: { loading: string; success: string; er
 // --------------------------------------------------------------------------
 
 const POSITIONS = {
-  'top-right': 'top-4 right-4',
-  'top-left': 'top-4 left-4',
+  'top-right': 'top-4 end-4',
+  'top-left': 'top-4 start-4',
   'top-center': 'top-4 left-1/2 -translate-x-1/2',
-  'bottom-right': 'bottom-4 right-4',
-  'bottom-left': 'bottom-4 left-4',
+  'bottom-right': 'bottom-4 end-4',
+  'bottom-left': 'bottom-4 start-4',
   'bottom-center': 'bottom-4 left-1/2 -translate-x-1/2',
 } as const;
 
@@ -187,6 +239,7 @@ export class UiSonner extends WebComponent({
   items = signal<ToastItem[]>([]);
 
   _disposeBeforeCache?: () => void;
+  _releaseClicks?: () => void;
 
   constructor() {
     super();
@@ -198,10 +251,13 @@ export class UiSonner extends WebComponent({
     // Clear pending toasts before a back/forward snapshot so a restored page
     // does not show stale toasts that should have auto-dismissed (#766).
     this._disposeBeforeCache = onBeforeCache(() => this.items.set([]));
+    this._releaseClicks = holdToastClicks();
   }
 
   disconnectedCallback(): void {
     this._disposeBeforeCache?.();
+    this._releaseClicks?.();
+    this._releaseClicks = undefined;
     super.disconnectedCallback?.();
   }
 
@@ -235,6 +291,7 @@ export class UiSonner extends WebComponent({
       duration: opts.duration ?? (type === 'loading' ? 0 : 4000),
       action: opts.action,
       cancel: opts.cancel,
+      position: opts.position,
     });
     return id;
   }
@@ -251,7 +308,16 @@ export class UiSonner extends WebComponent({
   }
 
   render() {
-    const pos = POSITIONS[this.position] ?? POSITIONS['bottom-right'];
+    const own = this.position in POSITIONS ? this.position : 'bottom-right';
+    const items = this.items.get();
+    // A toast with its own position shows at that corner, in a region of its
+    // own; the viewport's region stays in the DOM from the first render.
+    const elsewhere = [...new Set(items.map((i) => i.position).filter((p): p is SonnerPosition => !!p && p !== own && p in POSITIONS))];
+    return html`${this._region(own, items.filter((i) => !i.position || i.position === own || !(i.position in POSITIONS)))}${elsewhere.map((p) => this._region(p, items.filter((i) => i.position === p)))}`;
+  }
+
+  _region(position: SonnerPosition, items: ToastItem[]) {
+    const pos = POSITIONS[position];
     // The container is a persistent live region: it is in the DOM from the
     // first render (even with zero toasts), so a screen reader announces
     // each toast as it is inserted. It is polite, and it is the ONLY live
@@ -266,6 +332,7 @@ export class UiSonner extends WebComponent({
     // polite viewport, and its second live root is the accepted cost.
     return html`<div
       data-slot="sonner"
+      data-position=${position}
       role="region"
       aria-label="Notifications"
       aria-live="polite"
@@ -274,7 +341,7 @@ export class UiSonner extends WebComponent({
       class=${`pointer-events-none fixed z-[100] flex flex-col gap-2 ${pos}`}
     >
       ${repeat(
-        this.items.get(),
+        items,
         (item) => item.id,
         // The role is BRANCHED rather than written as a nullish hole. A hole
         // that evaluates to null serves role="" from the server renderer while

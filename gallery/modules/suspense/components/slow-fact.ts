@@ -7,7 +7,7 @@
 // navigation too). Same component either way; the boundary is what changes the
 // SSR behaviour from block to stream.
 import { WebComponent, html } from '@webjsdev/core';
-import { cardClass } from '#components/ui/card.ts';
+import { cardClass } from '#modules/gallery/ui/card.ts';
 
 export class SlowFact extends WebComponent {
   async render() {

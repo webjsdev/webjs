@@ -1,0 +1,10 @@
+/*
+ * The Sera showcase's faces (/ui/sera, #1666), the two shadcn's Sera page
+ * loads: Noto Sans for the previews' text and Playfair Display for their
+ * headings. Linked only by that page, so no other page downloads them. Each
+ * is the latin variable woff2 that scripts/fetch-fonts.mjs saves into
+ * public/fonts/ (it prints the Playfair Display rule; Noto Sans is the same
+ * file and rule public/typeset-fonts.css declares).
+ */
+@font-face{font-family:'Noto Sans';font-style:normal;font-weight:100 900;font-display:swap;src:url('/public/fonts/noto-sans.woff2') format('woff2');}
+@font-face{font-family:'Playfair Display';font-style:normal;font-weight:400 900;font-display:swap;src:url('/public/fonts/playfair-display.woff2') format('woff2');}

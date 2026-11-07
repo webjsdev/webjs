@@ -1,5 +1,5 @@
 import { html } from '@webjsdev/core';
-import { cardClass } from '#components/ui/card.ts';
+import { cardClass } from '#modules/gallery/ui/card.ts';
 import { currentUser } from '#modules/auth/queries/current-user.server.ts';
 
 export const metadata = { title: 'Settings' };

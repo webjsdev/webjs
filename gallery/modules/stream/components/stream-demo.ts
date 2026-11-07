@@ -12,7 +12,7 @@
 // That is the whole point: out-of-band updates that a signal re-render or a frame
 // region-swap would clobber.
 import { WebComponent, html, renderStream } from '@webjsdev/core';
-import { buttonClass } from '#components/ui/button.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
 // The row markup lives in ONE place, a feature-local view fragment under
 // `utils/ui/` (see references/styling.md for that folder). A fragment rather
 // than a display-only <stream-row> element because BOTH of this demo's uses

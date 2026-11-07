@@ -5,8 +5,14 @@
 # and lib modules live directly in components/*.ts and lib/*.ts, which
 # stay tracked; only these generated subdirectories are ignored.
 /modules/ui/components/
+# The registry blocks, mirrored the same way for the /ui/view/<name> frame.
+/modules/ui/blocks/
 /lib/utils/cn.ts
 /lib/utils/dom.ts
+/lib/utils/icons.ts
+# The design-system data (themes, fonts, the preset code) the /ui/create
+# configurator runs in the browser too.
+/modules/ui/design-system/
 
 # components/ui/ belongs to `webjs ui add`, exactly as it does in a scaffolded
 # app, so this site keeps it empty and tracks nothing there. It is ignored
@@ -14,3 +20,11 @@
 # accident once: eleven byte-identical copies of the generated mirror above
 # landed here and sat unimported until they were noticed.
 /components/ui/
+
+# The /ui stylesheet, compiled from public/ui-input.css by `npm run
+# css:build:ui` (and by webjs.dev.before / webjs.start.before / the
+# Dockerfile), the same way public/tailwind.css is built. A build output.
+/public/ui.css
+# The seven kit styles ui.css does not carry, one file each, compiled by
+# scripts/build-ui-styles.mjs (`npm run css:build:ui-styles`). Build outputs.
+/public/ui-styles/

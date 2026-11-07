@@ -1,24 +1,25 @@
 /**
- * The component gallery shares the marketing site's chrome (#1099).
+ * The /ui section's contract with the rest of the site (#1099, #1666).
  *
- * The gallery used to live on ui.webjs.dev with its own root layout, nav,
- * footer, announce strip, and a duplicated `@theme` block. Moving it to
- * webjs.dev/ui is only half the point; the other half is that it now renders
- * inside the SAME shell every other page uses, and specifically inside the
- * same sidebar shell as /docs, so a reader crossing from the documentation
- * into the components does not leave one design system and enter another.
+ * The gallery moved from ui.webjs.dev into webjs.dev/ui in #1099 and shared
+ * the marketing chrome. #1666 turns /ui into a replica of the shadcn/ui site,
+ * so it now has its OWN header, footer, palette and type. What stays shared,
+ * and is pinned here, is the mechanics: one root layout and one theme
+ * signal, so a light or dark choice made in either section holds in the
+ * other, and a navigation between them swaps the chrome without a full load.
  *
- * Nothing about that is self-enforcing. Someone can reintroduce a gallery-only
- * header, a second theme toggle, or a duplicate token block and the pages will
- * still render fine, just as two subtly different sites again.
+ * Nothing about the split is self-enforcing. A token block that slips onto
+ * :root repaints the marketing site, a stylesheet link that falls out of the
+ * head run flashes unstyled, and a second set of chrome renders fine while
+ * looking wrong. So each of those is asserted here.
  *
- * Asserted against the REAL request pipeline rather than the layout function
- * in isolation, because "the gallery page ends up wrapped in the root layout"
- * is exactly the property under test.
+ * Asserted against the REAL request pipeline rather than the layout functions
+ * in isolation, because "which layouts wrap which page" is exactly the
+ * property under test.
  */
 import test, { before } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequestHandler } from '@webjsdev/server';
@@ -26,7 +27,7 @@ import { createRequestHandler } from '@webjsdev/server';
 const WEBSITE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const UI_INDEX = '/ui';
-const UI_COMPONENT = '/ui/button';
+const UI_COMPONENT = '/ui/docs/components/button';
 const DOC_PATH = '/docs/routing';
 const MARKETING_PATH = '/what-is-webjs';
 
@@ -58,121 +59,185 @@ function footerOf(html: string): string {
   return html.slice(start, html.indexOf('</footer>', start));
 }
 
-test('a gallery page renders the SAME header and footer as a marketing page', async () => {
+test('a /ui page renders the /ui chrome, not the marketing chrome', async () => {
   const [ui, marketing] = await Promise.all([bodyOf(UI_COMPONENT), bodyOf(MARKETING_PATH)]);
-  assert.equal(headerOf(ui), headerOf(marketing), 'the header is the shared one, byte for byte');
-  assert.equal(footerOf(ui), footerOf(marketing), 'and so is the footer');
+  const uiHeader = headerOf(ui);
+  const marketingHeader = headerOf(marketing);
+  assert.notEqual(uiHeader, marketingHeader, 'the two sections have different headers');
+  assert.match(uiHeader, /WebJs UI/, 'the /ui header names the section');
+  // By href, not label: the /ui menu has a Changelog of its own (the docs
+  // Sections' /ui/docs/changelog), which is not the marketing one.
+  for (const href of ['href="/blog"', 'href="/compare"', 'href="/changelog"']) {
+    assert.ok(!uiHeader.includes(href), `the marketing nav item ${href} is not in the /ui header`);
+    assert.ok(marketingHeader.includes(href), `and it IS in the marketing header`);
+  }
+  const uiFooter = footerOf(ui);
+  assert.match(uiFooter, /ported from <a[^>]*>shadcn\/ui/, 'the /ui footer carries the one credit line');
+  assert.ok(!footerOf(marketing).includes('shadcn'), 'and the marketing footer does not');
 });
 
-test('there is exactly one header, one footer, and one theme toggle', async () => {
-  // The real regression to guard is a SECOND set of chrome rendered by a
-  // gallery-specific layout, which byte-comparing the first match cannot see.
-  const ui = await bodyOf(UI_COMPONENT);
-  assert.equal(ui.split('<div class="site-top').length - 1, 1, 'one header');
-  assert.equal(ui.split('<footer').length - 1, 1, 'one footer');
-  assert.equal(ui.split('<theme-toggle').length - 1, 1, 'one theme toggle, the shared one');
+test('the links that cross between the sections take a full page load', async () => {
+  // A soft navigation across sections is CORRECT (the route groups swap the
+  // chrome), but the /ui stylesheet would then arrive after the swap, since
+  // the router's head merge only adds. The common links take a full load.
+  const [ui, marketing, docs] = await Promise.all([bodyOf(UI_COMPONENT), bodyOf(MARKETING_PATH), bodyOf(DOC_PATH)]);
+  assert.match(headerOf(marketing), /href="\/ui"[^>]*data-no-router/, 'the marketing header links to /ui with a full load');
+  assert.match(footerOf(marketing), /href="\/ui"[^>]*data-no-router/, 'and so does the marketing footer');
+  assert.match(docs, /href="\/ui"[^>]*data-no-router/, 'and so does the docs sidebar');
+  assert.match(headerOf(ui), /href="\/"[^>]*data-no-router/, 'the /ui header links back with a full load');
 });
 
-test('the gallery uses the SAME sidebar shell as the docs', async () => {
-  // Not merely "has a sidebar": the same one, from lib/ui/docs-shell.ts. The
-  // whole reason that module was extracted is that two hand-maintained
-  // sidebars drift, which is how the old site ended up looking foreign.
-  const [ui, docs] = await Promise.all([bodyOf(UI_COMPONENT), bodyOf(DOC_PATH)]);
-  for (const marker of ['id="docs-sidebar"', 'class="docs-nav', 'class="docs-backdrop"']) {
-    assert.ok(ui.includes(marker), `the gallery renders ${marker}`);
-    assert.ok(docs.includes(marker), `and so do the docs, from the same shell`);
+test('there is exactly one header, one footer, and one theme control', async () => {
+  // The real regression to guard is a SECOND set of chrome, which comparing
+  // the first match cannot see: the marketing chrome rendered around the /ui
+  // chrome, say, because a page landed outside the route groups.
+  // The /ui header carries shadcn's two-state <ui-mode-switcher>, the
+  // marketing one the three-state <theme-toggle>, and neither carries both.
+  for (const [path, control, other] of [[UI_COMPONENT, '<ui-mode-switcher', '<theme-toggle'], [MARKETING_PATH, '<theme-toggle', '<ui-mode-switcher']]) {
+    const html = await bodyOf(path);
+    assert.equal(html.split('<div class="site-top').length - 1, 1, `${path}: one header`);
+    assert.equal(html.split('<footer').length - 1, 1, `${path}: one footer`);
+    assert.equal(html.split(control).length - 1, 1, `${path}: one theme control`);
+    assert.ok(!html.includes(other), `${path}: and not the other section's`);
   }
 });
 
-test('the sidebar groups components under bare Tier 1 and Tier 2 headers', async () => {
-  const ui = await bodyOf(UI_INDEX);
-  assert.match(ui, />Tier 1</, 'Tier 1 section header');
-  assert.match(ui, />Tier 2</, 'Tier 2 section header');
-  // The old site spelled these out as "Tier 1 Class helpers" / "Tier 2 Custom
-  // elements" in the nav. The tiers are explained on the introduction page;
-  // the sidebar only needs to group.
-  assert.ok(!/Tier 1\s*<span[^>]*>\s*Class helpers/.test(ui), 'no descriptive suffix in the nav');
+test('a full load of a /ui page has the /ui stylesheet in <head>, and a marketing page has none', async () => {
+  // Only the ROOT layout's leading link run is hoisted into <head>, and a
+  // stylesheet left in <body> is not reliably render-blocking (#406), so the
+  // root layout emits the /ui link itself, for /ui paths only.
+  const headOf = (html: string) => html.slice(0, html.indexOf('</head>'));
+  const ui = await bodyOf(UI_COMPONENT);
+  assert.match(headOf(ui), /<link rel="stylesheet" href="\/public\/ui\.css/, '/ui has ui.css in <head>');
+  assert.match(headOf(ui), /\/public\/fonts\/geist\.woff2/, 'and preloads Geist');
+  for (const path of [MARKETING_PATH, DOC_PATH, '/']) {
+    const html = await bodyOf(path);
+    assert.ok(!html.includes('/public/ui.css'), `${path} does not load the /ui stylesheet`);
+    assert.ok(!html.includes('geist.woff2'), `${path} does not preload the /ui font`);
+  }
 });
 
-test('/ui opens on the introduction, with no separate landing page', async () => {
-  // A marketing landing page in front of the gallery is exactly what this
-  // migration removed: /ui IS the gallery, the way /docs opens on Getting
-  // Started rather than on a pitch for the documentation.
-  const res = await handle(UI_INDEX);
-  assert.equal(res.status, 200, '/ui renders directly, no redirect to a sub-path');
+test('neither chrome layout measures its header; the --header-h token sizes it', () => {
+  // #1660: a measuring script read 0 from a header a full-body swap had
+  // replaced, and the content slid under the bar. Both headers are sized BY
+  // the token instead (the root layout's .site-top > header rule), so no
+  // chrome layout may carry a script that writes it.
+  for (const file of ['app/(site)/layout.ts', 'app/ui/(chrome)/layout.ts']) {
+    const src = readFileSync(resolve(WEBSITE_ROOT, file), 'utf8');
+    assert.ok(src.includes('class="site-top'), `${file} renders the fixed header`);
+    assert.ok(!src.includes('ResizeObserver'), `${file} does not measure the header`);
+    assert.ok(!/setProperty\('--header-h'/.test(src), `${file} does not write --header-h`);
+  }
+  // On /ui the token is the /ui header's own --header-height, written as
+  // literals on :root (which cannot read a variable set on .ui-site). Hold
+  // the two pairs equal so a resized header cannot leave a stale offset.
+  const css = readFileSync(resolve(WEBSITE_ROOT, 'public/ui-input.css'), 'utf8');
+  const heights = [...css.matchAll(/--header-height: calc\(var\(--spacing\) \* (\d+)\)/g)].map((m) => Number(m[1]) * 0.25 + 'rem');
+  const tokens = [...css.matchAll(/:root:has\(\.ui-site \.site-top\) \{ --header-h: ([\d.]+rem); \}/g)].map((m) => m[1]);
+  assert.deepEqual(heights, ['3.5rem', '4rem'], 'the /ui header is 3.5rem, then 4rem from 64rem');
+  assert.deepEqual(tokens, heights, 'and --header-h follows it at both widths');
+});
+
+test('a thrown notFound() under /ui keeps the /ui chrome', async () => {
+  const res = await handle('/ui/theme-zinc');
+  assert.equal(res.status, 404);
   const html = await res.text();
-  assert.ok(html.includes('id="docs-sidebar"'), 'and it renders inside the gallery shell');
+  assert.match(headerOf(html), /WebJs UI/, 'the /ui section boundary renders inside the /ui chrome');
 });
 
-test('every component in the registry has a reachable page', async () => {
-  // The sidebar is generated from the registry index, so a component that is
-  // listed but whose page 404s would be an invisible dead link on every page
-  // of the section.
+test('/ui is the shadcn-shaped home page, and the introduction moved to /ui/docs', async () => {
+  // #1666 replicates ui.shadcn.com, whose home is a hero over a grid of live
+  // component cards with no sidebar. The introduction is a docs page.
+  const home = await bodyOf(UI_INDEX);
+  assert.match(home, /<h1[^>]*>The Foundation for your Design System<\/h1>/, 'the hero heading');
+  assert.match(home, /data-slot="demo"/, 'the card grid');
+  assert.match(home, /class="style-rhea[\s"]/, 'rendered in the rhea style, as shadcn renders it');
+  assert.ok(!home.includes('id="docs-sidebar"'), 'with no docs sidebar');
+  assert.equal(home.split('<main').length - 1, 1, 'and one main landmark');
+  const docs = await bodyOf('/ui/docs');
+  assert.match(docs, /<ui-docs-sidebar[\s>]/, '/ui/docs renders inside the docs layout');
+  assert.match(docs, /<h1[^>]*>Introduction<\/h1>/, 'with the introduction as its page');
+});
+
+test('every component in the registry has a docs page, and its old gallery url redirects there', async () => {
+  // The interim /ui/<name> gallery is retired (#1666): the component pages are
+  // /ui/docs/components/<name>, and each old url is a permanent 308 there so
+  // a link or a search result pointing at it keeps working.
   const { loadRegistryIndex } = await import('#modules/ui/queries/registry.server.ts');
   const components = (await loadRegistryIndex()).filter((i: any) => i.type === 'registry:ui');
   assert.ok(components.length > 20, `sanity: expected the full kit, got ${components.length}`);
-  const dead: string[] = [];
+  const broken: string[] = [];
   for (const c of components) {
-    const res = await handle(`/ui/${c.name}`);
-    if (res.status !== 200) dead.push(`/ui/${c.name} (${res.status})`);
+    const old = await handle(`/ui/${c.name}`);
+    const to = old.headers.get('location');
+    if (old.status !== 308 || new URL(to ?? '', 'http://localhost').pathname !== `/ui/docs/components/${c.name}`) {
+      broken.push(`/ui/${c.name} (${old.status} -> ${to})`);
+      continue;
+    }
+    const page = await handle(`/ui/docs/components/${c.name}`);
+    if (page.status !== 200) broken.push(`/ui/docs/components/${c.name} (${page.status})`);
   }
-  assert.deepEqual(dead, [], `these components are listed but do not render:\n  ${dead.join('\n  ')}`);
+  assert.deepEqual(broken, [], `these components do not redirect to a rendering docs page:\n  ${broken.join('\n  ')}`);
 });
 
+test('the retired gallery leaves nothing behind', () => {
+  // Its layout, page and the modules only it used are deleted, not orphaned.
+  for (const gone of [
+    'app/ui/(chrome)/(gallery)',
+    'modules/ui/utils/examples.ts',
+    'modules/ui/utils/component-api.ts',
+    'components/preview-tabs.ts',
+  ]) {
+    assert.equal(existsSync(resolve(WEBSITE_ROOT, gone)), false, `${gone} is deleted`);
+  }
+});
 test('a non-component registry item does not get a page', async () => {
   // Themes and lib items are registry artifacts with nothing to render. They
   // resolve through loadRegistryItem, so without the type guard they would
   // 200 on an empty shell and land in search results as blank pages.
   for (const slug of ['theme-zinc', 'theme-neutral', 'lib-utils']) {
     const res = await handle(`/ui/${slug}`);
-    assert.equal(res.status, 404, `/ui/${slug} is not a component page`);
+    assert.equal(res.status, 404, `/ui/${slug} is not a component page and does not redirect`);
   }
 });
 
-test('the gallery declares no design tokens of its own', () => {
-  // A second @theme block is how the two sites drifted apart the first time.
+test('the /ui tokens are scoped to .ui-site, so they cannot leak into the marketing pages', async () => {
+  // The /ui palette lives in public/ui-input.css on the .ui-site wrapper, never
+  // on :root and never in a layout's own style block, where a second copy
+  // would drift from the stylesheet the way the old ui.webjs.dev did.
   const layout = readFileSync(resolve(WEBSITE_ROOT, 'app/ui/layout.ts'), 'utf8');
-  assert.ok(!layout.includes('@theme'), 'the gallery sub-layout declares no tokens');
-  assert.ok(
-    !/--fg\s*:|--bg\s*:|--accent\s*:/.test(layout),
-    'and redefines none of the core color tokens either'
-  );
-});
-
-test('the kit palette is scoped to previews, so it cannot leak into the chrome', () => {
-  // The shadcn values must live on .ui-preview, never on :root. Declared at
-  // :root they would repaint the whole marketing site with the kit's neutral
-  // palette. They also have to be declared through `@theme inline`, or the
-  // utilities resolve their var() at :root (where the kit palette does not
-  // exist) and every filled component in a preview renders transparent.
-  const css = readFileSync(resolve(WEBSITE_ROOT, 'public/input.css'), 'utf8');
-  const inlineBlock = css.match(/@theme inline\s*\{[^}]*\}/)?.[0] ?? '';
-  assert.ok(inlineBlock.includes('--color-primary'), 'the kit palette maps through @theme inline');
-  assert.ok(inlineBlock.includes('--color-accent'), 'including accent, which the preview re-scopes');
-  assert.match(css, /\.ui-preview\s*\{[^}]*--primary:/, 'raw values are scoped to .ui-preview');
-  assert.ok(
-    !/:root\s*\{[^}]*--primary:/.test(css),
-    'and never declared at :root, which would repaint the whole site'
-  );
+  assert.ok(!layout.includes('@theme'), 'the /ui layout declares no tokens itself');
+  assert.ok(!/--background\s*:|--fg\s*:|--accent\s*:/.test(layout), 'and redefines no color token');
+  const css = readFileSync(resolve(WEBSITE_ROOT, 'public/ui-input.css'), 'utf8');
+  const shared = readFileSync(resolve(WEBSITE_ROOT, 'public/ui-theme.css'), 'utf8');
+  const inlineBlock = shared.match(/@theme inline\s*\{[^}]*\}/)?.[0] ?? '';
+  for (const t of ['--color-background', '--color-primary', '--color-chart-1', '--color-sidebar']) {
+    assert.ok(inlineBlock.includes(t), `${t} maps through @theme inline`);
+  }
+  assert.match(css, /\.ui-site\s*\{[^}]*--background:\s*light-dark\(/, 'the raw values sit on .ui-site, in light-dark() form');
+  assert.match(css, /\.ui-site\s*\{[^}]*--sidebar-primary:/, 'including the sidebar family');
+  assert.ok(!/:root\s*\{[^}]*--background:/.test(css), 'and none is declared at :root');
+  assert.ok(!/@import\s+["']tailwindcss["']/.test(css), 'ui.css does not ship a second preflight');
+  const html = await bodyOf(UI_COMPONENT);
+  assert.match(html, /<div class="ui-site/, 'every /ui page renders inside the .ui-site wrapper');
 });
 
 test('the dark variant tracks the site theme, not just the OS preference', () => {
   // The kit's components carry `dark:` utilities and Tailwind's default `dark:`
   // is the OS preference alone, so without this override a reader on a dark OS
-  // who picks light gets light page tokens and dark component internals. The
-  // marketing pages use no `dark:` utilities, so the override is inert outside
-  // previews, which is also why nothing else would catch its removal.
-  const css = readFileSync(resolve(WEBSITE_ROOT, 'public/input.css'), 'utf8');
-  const variant = css.match(/@custom-variant dark \{[\s\S]*?\n\}/)?.[0];
-  assert.ok(variant, 'the dark variant is redefined');
-  assert.match(variant!, /prefers-color-scheme: dark/, 'it still honours the OS preference');
-  assert.match(variant!, /data-theme='light'/, 'an explicit light choice beats a dark OS');
-  assert.match(variant!, /data-theme='dark'/, 'an explicit dark choice beats a light OS');
-});
-
-test('a preview pane carries the scoping class', async () => {
-  const html = await bodyOf(UI_COMPONENT);
-  assert.ok(html.includes('class="ui-preview'), 'the preview pane opts into the kit palette');
+  // who picks light gets light page tokens and dark component internals. BOTH
+  // stylesheets need it: a `dark:` utility compiled into ui.css follows only
+  // the variant declared in ui-theme.css (imported by ui-input.css). One
+  // attribute drives both, which is what makes a theme choice hold across the
+  // two sections.
+  for (const file of ['public/input.css', 'public/ui-theme.css']) {
+    const css = readFileSync(resolve(WEBSITE_ROOT, file), 'utf8');
+    const variant = css.match(/@custom-variant dark \{[\s\S]*?\n\}/)?.[0];
+    assert.ok(variant, `${file} redefines the dark variant`);
+    assert.match(variant!, /prefers-color-scheme: dark/, `${file}: it still honours the OS preference`);
+    assert.match(variant!, /data-theme='light'/, `${file}: an explicit light choice beats a dark OS`);
+    assert.match(variant!, /data-theme='dark'/, `${file}: an explicit dark choice beats a light OS`);
+  }
 });
 
 /**
@@ -242,18 +307,19 @@ test('the static registry segment is not shadowed by the component page route', 
   assert.match(res.headers.get('content-type') ?? '', /application\/json/, 'JSON, not the component page');
 });
 
-test('the gallery appears in the sitemap, one URL per component', async () => {
+test('the sitemap lists each component docs page, never the retired gallery url', async () => {
   const res = await handle('/sitemap.xml');
   assert.equal(res.status, 200);
   const xml = await res.text();
-  assert.ok(xml.includes('<loc>https://webjs.dev/ui</loc>'), 'the gallery index is listed');
+  assert.ok(xml.includes('<loc>https://webjs.dev/ui</loc>'), 'the /ui home is listed');
   for (const name of ['button', 'dialog', 'alert-dialog']) {
-    assert.ok(xml.includes(`<loc>https://webjs.dev/ui/${name}</loc>`), `${name} is listed`);
+    assert.ok(xml.includes(`<loc>https://webjs.dev/ui/docs/components/${name}</loc>`), `${name} is listed`);
+    // A redirect in a sitemap makes a crawler spend a fetch to find the page.
+    assert.ok(!xml.includes(`<loc>https://webjs.dev/ui/${name}</loc>`), `the old /ui/${name} is not`);
   }
   // A theme is not a page, so listing it would submit a 404 to crawlers.
   assert.ok(!xml.includes('/ui/theme-zinc'), 'non-component registry items stay out');
 });
-
 test('the drawer is a component, so nothing has to grep the layout for it', () => {
   // This test used to pin the branches of an inline delegated listener in
   // app/layout.ts, because test/components/browser/docs-drawer.test.js could
@@ -279,28 +345,22 @@ test('the drawer is a component, so nothing has to grep the layout for it', () =
 });
 
 test('each component page describes itself, not the section', async () => {
-  // 33 URLs sharing one description is the duplicate-content shape this whole
-  // migration exists to avoid, so introducing it here would have been
-  // self-defeating. The layout still supplies the section default, which is
-  // what /ui itself uses.
+  // Many URLs sharing one description is the duplicate-content shape this
+  // whole migration exists to avoid. Each component docs page carries its
+  // own record's description from modules/ui/docs/nav.ts.
+  const { componentDoc } = await import('#modules/ui/docs/nav.ts');
   const descriptions = new Map<string, string>();
-  for (const path of ['/ui/button', '/ui/dialog', '/ui/alert-dialog', '/ui/table']) {
+  for (const name of ['button', 'dialog', 'alert-dialog', 'table']) {
+    const path = `/ui/docs/components/${name}`;
     const html = await bodyOf(path);
     const d = html.match(/<meta name="description" content="([^"]*)"/)?.[1];
     assert.ok(d, `${path} has a description`);
-    descriptions.set(path, d!);
+    descriptions.set(name, d!);
+    const own = componentDoc(name)?.description ?? '';
+    assert.ok(own && d!.includes(own.replace(/&/g, '&amp;').replace(/"/g, '&quot;').slice(0, 40)), `${path} uses its own record's description`);
   }
   assert.equal(new Set(descriptions.values()).size, descriptions.size, 'every page has its own');
-
-  // And it says something true about that component rather than a generic
-  // blurb: the tier decides which sentence, so a component moving tier moves
-  // its description with it.
-  assert.match(descriptions.get('/ui/button')!, /class helper/, 'a Tier-1 component reads as a helper');
-  assert.match(descriptions.get('/ui/button')!, /buttonClass\(\)/, 'and names its helper');
-  assert.match(descriptions.get('/ui/dialog')!, /custom element/, 'a Tier-2 component reads as an element');
-  assert.match(descriptions.get('/ui/alert-dialog')!, /ui-alert-dialog/, 'and names its tag');
 });
-
 test('no page ships a dead SSR action-seed payload', async () => {
   // Site-wide, not gallery-specific, but the gallery is what surfaced it.
   //
@@ -314,7 +374,7 @@ test('no page ships a dead SSR action-seed payload', async () => {
   //
   // If a component here ever DOES want seeding, re-enable it and delete this
   // test rather than working around it.
-  for (const path of ['/ui', '/ui/dropdown-menu', '/changelog', '/blog', '/docs/routing']) {
+  for (const path of ['/ui', '/ui/docs/components/dropdown-menu', '/changelog', '/blog', '/docs/routing']) {
     const html = await bodyOf(path);
     assert.ok(
       !html.includes('__webjs-seeds'),
@@ -323,7 +383,7 @@ test('no page ships a dead SSR action-seed payload', async () => {
   }
 });
 
-test('the old /docs/ui page is gone, permanently redirected to the gallery', async () => {
+test('the old /docs/ui page is gone, permanently redirected to /ui', async () => {
   // It was a second, hand-written description of the same kit and it had
   // drifted badly (roughly 55 components claimed against an actual 32, and a
   // <ui-button> API the kit does not have). Two pages chasing one keyword is
@@ -331,4 +391,67 @@ test('the old /docs/ui page is gone, permanently redirected to the gallery', asy
   const res = await handle('/docs/ui');
   assert.ok([301, 308].includes(res.status), `expected a permanent redirect, got ${res.status}`);
   assert.equal(new URL(res.headers.get('location')!, 'http://localhost').pathname, '/ui');
+});
+
+test('a page in an extra kit style links that style, in <head> and in its own markup', async () => {
+  // public/ui.css carries nova and new-york only. The other seven styles are
+  // one file each under public/ui-styles/, linked by the pages that render in
+  // them (lib/ui/style-links.ts). The root layout's copy makes a full load
+  // flash-free, and the page's copy covers a soft navigation in.
+  const headOf = (html: string) => html.slice(0, html.indexOf('</head>'));
+  const bodyPart = (html: string) => html.slice(html.indexOf('</head>'));
+  const home = await bodyOf(UI_INDEX);
+  assert.match(headOf(home), /<link rel="stylesheet" href="\/public\/ui-styles\/rhea\.css/, 'the home page has rhea in <head>');
+  assert.match(bodyPart(home), /<link rel="stylesheet" href="\/public\/ui-styles\/rhea\.css/, 'and in its own markup');
+  for (const path of [UI_COMPONENT, MARKETING_PATH, DOC_PATH]) {
+    const html = await bodyOf(path);
+    assert.ok(!html.includes('/public/ui-styles/'), `${path} links no extra style`);
+  }
+});
+
+test('both /ui stylesheet inputs import the shared variants before any kit style', () => {
+  // A style's @apply can use a variant (rhea's `not-dark:`) only once it is
+  // declared, and CSS allows no rule ahead of an @import, so the variants
+  // live in public/ui-theme.css and are imported first.
+  const ui = readFileSync(resolve(WEBSITE_ROOT, 'public/ui-input.css'), 'utf8');
+  assert.ok(ui.indexOf('./ui-theme.css') >= 0 && ui.indexOf('./ui-theme.css') < ui.indexOf('style-new-york.css'), 'ui-input.css imports ui-theme.css before the styles');
+  assert.ok(!ui.includes('@custom-variant dark'), 'and does not redeclare the variant');
+  const build = readFileSync(resolve(WEBSITE_ROOT, 'scripts/build-ui-styles.mjs'), 'utf8');
+  assert.ok(build.indexOf('ui-theme.css') < build.indexOf('style-${name}.css'), 'the per-style build imports it before the style too');
+  const theme = readFileSync(resolve(WEBSITE_ROOT, 'public/ui-theme.css'), 'utf8');
+  assert.match(theme, /@custom-variant not-dark \{/, 'not-dark is spelled out, since the two-branch dark variant cannot be negated');
+});
+
+test('the home page serves shadcn\'s chat card on its empty state, with the first question queued', async () => {
+  // The card is <message-scroller-demo>, shadcn's MessageScrollerDemo. Its
+  // first paint is the server's: the empty state and the queued question,
+  // inside the wrapper that hides the card's footnote on the home page.
+  const home = await bodyOf(UI_INDEX);
+  const at = home.indexOf('<message-scroller-demo');
+  assert.ok(at > 0, 'the card is in the grid');
+  const card = home.slice(at, home.indexOf('</message-scroller-demo>', at));
+  assert.match(home.slice(at - 120, at), /\*\*:\[\.text-center\.text-xs\]:hidden/, 'inside the wrapper that hides its footnote');
+  assert.match(card, /New Chat/);
+  assert.match(card, /data-slot="empty-title"[^>]*>Morning, webjs!/, 'the empty state, before anything is sent');
+  assert.match(card, /data-status="ready"[^>]*>I'm building a chat for our app/, 'the first question waits in the box');
+  assert.match(card, /aria-label="Reset conversation"/);
+  assert.match(card, /<span class="sr-only">Send<\/span>/);
+  assert.ok(!card.includes(String.fromCharCode(0x2014)), 'the script keeps the prose rule');
+});
+
+test('each kit style is scoped to its nearest wrapper, so a nested region takes one style', async () => {
+  // A nova demo sits inside the new-york docs chrome. As plain descendant
+  // rules both styles matched it; as @scope blocks that stop at any style
+  // wrapper, only the nearer one does (scripts/scope-ui-styles.mjs).
+  const { scopeStyle, STYLE_NAMES } = await import('../../scripts/scope-ui-styles.mjs');
+  const out = scopeStyle('nova', '/* x */\n.style-nova {\n  .cn-button { @apply rounded-lg; }\n}\n.style-nova {\n  .cn-card { @apply p-4; }\n}\n');
+  assert.equal((out.match(/@scope \(\.style-nova\) to \(:is\(/g) || []).length, 2, 'both top-level blocks become scopes');
+  for (const n of STYLE_NAMES) assert.ok(out.includes(`.style-${n}`), `the scope stops at .style-${n}`);
+  assert.throws(() => scopeStyle('nova', '.cn-button {}'), /no top-level/);
+  const ui = readFileSync(resolve(WEBSITE_ROOT, 'public/ui-input.css'), 'utf8');
+  assert.match(ui, /cache\/ui-styles\/scoped\/style-new-york\.css/, 'ui.css compiles the scoped copies');
+  assert.match(ui, /cache\/ui-styles\/scoped\/style-nova\.css/);
+  assert.ok(!/registry\/styles\/style-(nova|new-york)\.css/.test(ui), 'and not the unscoped originals');
+  const build = readFileSync(resolve(WEBSITE_ROOT, 'scripts/build-ui-styles.mjs'), 'utf8');
+  assert.match(build, /SCOPED_DIR/, 'the per-style build compiles them too');
 });

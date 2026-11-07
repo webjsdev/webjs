@@ -62,6 +62,18 @@ const cssValueSchema = z.lazy(() =>
 export const registryItemCssSchema = z.record(z.string(), cssValueSchema);
 export const registryItemEnvVarsSchema = z.record(z.string(), z.string());
 
+/** A `registry:font` item's face (shadcn's `registryItemFontSchema`, #1666). */
+export const registryItemFontSchema = z.object({
+  family: z.string(),
+  provider: z.literal('google'),
+  import: z.string(),
+  variable: z.string(),
+  weight: z.array(z.string()).optional(),
+  subsets: z.array(z.string()).optional(),
+  selector: z.string().optional(),
+  dependency: z.string().optional(),
+});
+
 export const registryItemCommonSchema = z.object({
   $schema: z.string().optional(),
   extends: z.string().optional(),
@@ -80,6 +92,7 @@ export const registryItemCommonSchema = z.object({
   meta: z.record(z.string(), z.any()).optional(),
   docs: z.string().optional(),
   categories: z.array(z.string()).optional(),
+  font: registryItemFontSchema.optional(),
 });
 
 /** A rule's severity. Absent from `lint.rules` means `off`. */

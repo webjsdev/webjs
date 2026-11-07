@@ -11,6 +11,7 @@ import {
   SLOT_FALLBACK_FRAG, SLOT_STATE, SLOT_OWNER, applySlotAssignments, withRendererWrites,
 } from '../slot.js';
 import { compile, templateCache } from './template-compiler.js';
+import { adoptedSlots } from './adopt-slots.js';
 import { attrHoleValue } from '../binding-prefixes.js';
 
 /**
@@ -333,9 +334,16 @@ export function applyPart(part, value, _prev, allValues, reconcileFormActionsCb)
         // application is deferred one microtask so the documented
         // lifecycle timing holds: firstUpdated() sees the <slot>
         // element itself, the populated content lands right after.
-        const frag = document.createDocumentFragment();
-        while (slotEl.firstChild) frag.appendChild(slotEl.firstChild);
-        /** @type {any} */ (slotEl)[SLOT_FALLBACK_FRAG] = frag;
+        // A slot a hydration render ADOPTED (#1666) is the live SSR slot: its
+        // children are the projected nodes, left in place, and its holding
+        // fragment already carries the fresh clone's fallback.
+        if (adoptedSlots.has(slotEl)) {
+          adoptedSlots.delete(slotEl);
+        } else {
+          const frag = document.createDocumentFragment();
+          while (slotEl.firstChild) frag.appendChild(slotEl.firstChild);
+          /** @type {any} */ (slotEl)[SLOT_FALLBACK_FRAG] = frag;
+        }
         queueMicrotask(() => applySlotAssignments(host));
       };
       const directHost = findSlotHost(slotEl);

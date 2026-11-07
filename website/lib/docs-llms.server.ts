@@ -29,7 +29,10 @@ import { siteUrl } from '#lib/env.ts';
 // createRequestHandler test harness (cwd = repo root), and in a
 // standalone deploy, all without depending on the working directory.
 const APP_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const DOCS_PAGES_ROOT = join(APP_ROOT, 'app', 'docs');
+// The marketing routes live in the `(site)` route group, which owns the
+// marketing chrome. The group folder is dropped from the URL, so the pages
+// still serve at /docs/<topic>.
+const DOCS_PAGES_ROOT = join(APP_ROOT, 'app', '(site)', 'docs');
 
 /** One doc topic, extracted from its page module. */
 export type DocPage = {

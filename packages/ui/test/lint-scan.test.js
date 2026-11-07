@@ -29,8 +29,8 @@ test('scan: the blog nested-template shape yields a site', () => {
   assert.equal(sites[0].classes[1].line, 2);
 });
 
-test('scan: the escaped code sample in website/app/docs/file-storage/page.ts yields ZERO sites', () => {
-  const src = readFileSync(new URL('../../../website/app/docs/file-storage/page.ts', import.meta.url), 'utf8');
+test('scan: the escaped code sample in website/app/(site)/docs/file-storage/page.ts yields ZERO sites', () => {
+  const src = readFileSync(new URL('../../../website/app/(site)/docs/file-storage/page.ts', import.meta.url), 'utf8');
   assert.match(src, /&lt;p class="text-sm text-red-600"&gt;/); // the fixture is still there
   assert.deepEqual(scanClassSites(src), []);
   // Prove the scanner walked the whole file rather than bailing: a real tagged

@@ -1,39 +1,41 @@
+import { html, asset } from '@webjsdev/core';
 import type { LayoutProps } from '@webjsdev/core';
-import { docsShell } from '#lib/ui/docs-shell.ts';
-import '#components/docs-drawer.ts';
-import '#components/code-block.ts';
-import { loadRegistryIndex } from '#modules/ui/queries/registry.server.ts';
-import { splitByTier } from '#modules/ui/utils/tier.ts';
+// Every kit element, so the docs demos (rendered to strings) upgrade (D14).
+import '#modules/ui/elements.ts';
 
 /**
- * Component-library sub-layout: the same shell as /docs (lib/ui/docs-shell.ts),
- * with the component list in the sidebar instead of the docs page tree.
+ * The /ui section's outermost layout, deliberately minimal (#1666).
+ *
+ * EVERY /ui page renders inside it, including the bare iframe targets under
+ * /ui/view and /ui/preview, which must show no header or footer. No export or
+ * flag lets a page skip a parent layout, so anything visible belongs one level
+ * down, in app/ui/(chrome)/layout.ts, and this file holds only what every /ui
+ * page needs:
+ *
+ * - the `.ui-site` wrapper, which declares the /ui palette and type (see
+ *   public/ui-input.css). The tokens live on the wrapper rather than :root so
+ *   they never leak into a marketing page. It carries NO kit style: the
+ *   registry components are in base form and take their look from the
+ *   nearest `.style-<name>` ancestor (#1666, D8), and two style wrappers on
+ *   one path both apply, so each region names its own (the gallery
+ *   new-york, the home page luma and rhea).
+ * - the /ui stylesheet link. The root layout already emits it in <head> on a
+ *   full load of a /ui page. This copy covers a SOFT navigation into /ui from
+ *   a marketing page, where the root layout is not re-rendered and the
+ *   router's head merge only adds. The same URL twice costs one fetch.
  *
  * This is a NON-ROOT layout (invariant 8), so it writes no document shell.
- * The header, footer, theme toggle, fonts, and design tokens all come from
- * app/layout.ts, exactly as they do on /docs and /what-is-webjs. That is the
- * point of serving the gallery from webjs.dev instead of ui.webjs.dev: one
- * design system, one set of tokens, no parallel shell to drift.
- *
- * The sidebar is generated from the registry index at request time so adding
- * a new component to the registry shows up here automatically. Section
- * headers are deliberately just "Tier 1" / "Tier 2" (the intro page explains
- * what the tiers mean; the sidebar only needs to group).
- *
- * There is no landing page: /ui opens straight onto this shell with the
- * introduction in the content column, the way /docs opens on Getting
- * Started.
  */
 
 const UI_DESCRIPTION =
-  'The AI-first component library for WebJs: 35 primitives in two tiers, class-helper functions for visuals and custom elements only where state matters, source-copied into your project and styled with Tailwind v4.';
-const UI_OG_TITLE = 'WebJs UI components';
+  'Accessible components for WebJs, built on native HTML and styled with Tailwind v4. Copy the source into your app and make it your own.';
+const UI_OG_TITLE = 'WebJs UI';
 
 /**
  * UI-scoped metadata, merged over the root layout's for every page under
- * /ui. Same shallow-merge caveat as the docs layout: `openGraph` and
- * `twitter` REPLACE the root's objects, so every field is restated here.
- * Keep these in step with app/layout.ts.
+ * /ui. `openGraph` and `twitter` REPLACE the root's objects rather than
+ * merging into them, so every field is restated here. Keep these in step with
+ * app/layout.ts.
  */
 export function generateMetadata(ctx: { url: string }) {
   const { origin, pathname } = new URL(ctx.url);
@@ -60,33 +62,11 @@ export function generateMetadata(ctx: { url: string }) {
   };
 }
 
-export default async function UiLayout({ children }: LayoutProps) {
-  const all = await loadRegistryIndex();
-  const { tier1, tier2 } = splitByTier(all.filter((i) => i.type === 'registry:ui'));
-
-  return docsShell({
-    nav: [
-      {
-        title: 'Getting Started',
-        items: [{ href: '/ui', label: 'Introduction' }],
-      },
-      {
-        title: 'Tier 1',
-        count: tier1.length,
-        items: tier1.map((c) => ({ href: `/ui/${c.name}`, label: c.name })),
-      },
-      {
-        title: 'Tier 2',
-        count: tier2.length,
-        items: tier2.map((c) => ({ href: `/ui/${c.name}`, label: c.name })),
-      },
-    ],
-    label: 'Component library',
-    menuLabel: 'Components menu',
-    // No prose wrapper: the component pages carry live previews that the
-    // unlayered .prose-docs rules would restyle (they win over Tailwind
-    // utilities). Pages wrap their genuinely prose regions themselves.
-    contentClass: '',
-    children,
-  });
+export default function UiLayout({ children }: LayoutProps) {
+  return html`
+    <link rel="stylesheet" href=${asset('/public/ui.css')}>
+    <div class="ui-site">
+      ${children}
+    </div>
+  `;
 }

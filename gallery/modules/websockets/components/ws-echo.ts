@@ -5,8 +5,8 @@
 // component renders its disconnected state, so with JS off the page still reads
 // (a live socket has no no-JS equivalent, which is the honest fallback here).
 import { WebComponent, signal, html, connectWS, renderStream } from '@webjsdev/core';
-import { buttonClass } from '#components/ui/button.ts';
-import { inputClass } from '#components/ui/input.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
+import { inputClass } from '#modules/gallery/ui/input.ts';
 
 export class WsEcho extends WebComponent {
   private connected = signal(false);

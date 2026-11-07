@@ -21,8 +21,9 @@
  *   `side-offset`:  number, default 4. Pixels between trigger and content.
  *   `align-offset`: number, default 0. Pixels of cross-axis shift.
  *
- * Events: none dispatched at present; observe the reflected `open`
- * attribute from CSS or JS.
+ * Events:
+ *   `ui-open-change` on <ui-hover-card>: `{ detail: { open } }` on every open
+ *   and close, shadcn's `onOpenChange`. The `open` attribute is reflected too.
  *
  * Programmatic API on <ui-hover-card>: `.show()` · `.hide()`.
  *
@@ -70,16 +71,18 @@
  * ```
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
-import { ensureId } from '../lib/utils.ts';
+import { cn, ensureId, takeAuthoredClass } from '../lib/utils.ts';
 import { onBeforeCache } from '../lib/dom.ts';
-import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
+import { positionFloating } from './floating.ts';
+import type { PopoverSide, PopoverAlign } from './popover.ts';
 
 // `fixed m-0` opts out of the UA `[popover]` auto-centering margin so
 // JS-computed top/left from positionFloating lands correctly. shadcn's
-// visual layer sits on top. UA `[popover]:not(:popover-open) {
-// display: none }` handles closed-state hiding.
+// visual layer sits on top. `not-open:hidden` hides a closed panel, which
+// the UA `[popover]:not(:popover-open)` rule cannot do once any author
+// `display` applies (see popoverContentClass).
 export const hoverCardContentClass = (): string =>
-  'fixed z-50 w-64 m-0 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-hidden';
+  'cn-hover-card-content z-50 origin-(--radix-hover-card-content-transform-origin) outline-hidden not-open:hidden';
 
 // --------------------------------------------------------------------------
 // <ui-hover-card>
@@ -314,6 +317,7 @@ export class UiHoverCard extends WebComponent({
     // engines with no Popover API: Escape has to work regardless of that.
     if (this.open) this._bindEscape();
     else this._unbindEscape();
+    this.dispatchEvent(new CustomEvent('ui-open-change', { detail: { open: this.open }, bubbles: true }));
     // Wait one microtask for <ui-hover-card-content>'s inner [popover]
     // element to commit; we drive its showPopover() / hidePopover() and
     // refresh the trigger's aria-expanded.
@@ -352,6 +356,7 @@ export class UiHoverCard extends WebComponent({
       align: (contentHost.getAttribute('align') ?? 'center') as PopoverAlign,
       sideOffset: Number(contentHost.getAttribute('side-offset') ?? 4),
       alignOffset: Number(contentHost.getAttribute('align-offset') ?? 0),
+      radix: this.localName.slice(3),
     });
   }
 }
@@ -419,12 +424,18 @@ UiHoverCardTrigger.register('ui-hover-card-trigger');
 // --------------------------------------------------------------------------
 
 export class UiHoverCardContent extends WebComponent {
+  _authored: string | null = null;
+
+  // shadcn's className on HoverCardContent lands on the card panel (a `w-80`,
+  // say), so the class written on this host moves there, read once at first
+  // render.
   render() {
+    this._authored = takeAuthoredClass(this, null);
     return html`<div
       data-slot="hover-card-content"
       role="dialog"
       popover="manual"
-      class=${hoverCardContentClass()}
+      class=${cn(hoverCardContentClass(), this._authored)}
       @mouseenter=${this._onEnter}
       @mouseleave=${this._onLeave}
       @focusin=${this._onEnter}

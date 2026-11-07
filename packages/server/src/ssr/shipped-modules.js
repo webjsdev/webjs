@@ -103,6 +103,36 @@ export function assembleBootModules(files, deps) {
 }
 
 /**
+ * The 103 Early Hints `Link` values for the boot's modules: a plain
+ * `rel=preload; as=script; crossorigin=anonymous` per url, NEVER
+ * `rel=modulepreload`.
+ *
+ * A module hint in a 103 arrives before the document, so it is processed
+ * before the page's `<script type="importmap">` can be parsed. Firefox treats
+ * a modulepreload as the start of module loading and then refuses the import
+ * map ("Import maps are not allowed after a module load or preload has
+ * started"), so every bare `@webjsdev/core` import failed and no script ran on
+ * a Node-served page. The HTML spec gives modulepreload no early-hint
+ * behaviour at all (its "process a link header" steps do nothing), and
+ * Chromium acts only on preload and preconnect there, so the modulepreload
+ * hint was a no-op in Chromium and fatal in Firefox.
+ *
+ * A plain preload only puts the bytes in the preload cache: it creates no
+ * module script, resolves no specifier and fetches no descendants, so it
+ * cannot run ahead of the import map on any engine. `as=script` with
+ * `crossorigin=anonymous` is a CORS fetch with same-origin credentials,
+ * which is exactly the request a module script makes, so the body's
+ * `<link rel="modulepreload">` and the boot's import reuse the response
+ * instead of fetching it again.
+ *
+ * @param {string[]} urls  the hinted boot module urls (`hintedBootModules`)
+ * @returns {string[]}
+ */
+export function earlyHintLinks(urls) {
+  return urls.map((u) => `<${u}>; rel=preload; as=script; crossorigin=anonymous`);
+}
+
+/**
  * The 103 Early Hints url list for `route`: the SAME modules the boot
  * imports, through `withBasePath` then `withAssetHash`, so the hint warms
  * exactly the url the body requests (#243). Memoized beside the assembly.

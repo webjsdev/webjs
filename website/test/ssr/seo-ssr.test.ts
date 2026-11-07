@@ -18,11 +18,11 @@ import { renderToString } from '@webjsdev/core/server';
 import Robots from '#app/robots.ts';
 import { GET as llmsGet } from '#app/llms.txt/route.ts';
 import { listPosts } from '#modules/blog/queries/list-posts.server.ts';
-import ArticlesHub from '#app/articles/page.ts';
-import { generateMetadata as articleMeta } from '#app/articles/[slug]/page.ts';
-import { generateMetadata as compareMeta } from '#app/compare/[slug]/page.ts';
-import { generateMetadata as blogMeta } from '#app/blog/[slug]/page.ts';
-import * as HomeModule from '#app/page.ts';
+import ArticlesHub from '#app/(site)/articles/page.ts';
+import { generateMetadata as articleMeta } from '#app/(site)/articles/[slug]/page.ts';
+import { generateMetadata as compareMeta } from '#app/(site)/compare/[slug]/page.ts';
+import { generateMetadata as blogMeta } from '#app/(site)/blog/[slug]/page.ts';
+import * as HomeModule from '#app/(site)/page.ts';
 
 const types = (jsonLd: any): string[] => (Array.isArray(jsonLd) ? jsonLd : [jsonLd]).map((o) => o['@type']);
 

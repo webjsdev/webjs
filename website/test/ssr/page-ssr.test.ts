@@ -9,7 +9,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToString } from '@webjsdev/core/server';
-import LandingPage, * as PageModule from '#app/page.ts';
+import LandingPage, * as PageModule from '#app/(site)/page.ts';
 import { generateMetadata } from '#app/layout.ts';
 
 test('the landing page SSRs with its command, highlighted code, and a main landmark', async () => {

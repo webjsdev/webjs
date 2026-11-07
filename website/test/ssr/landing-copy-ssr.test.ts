@@ -15,7 +15,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToString } from '@webjsdev/core/server';
-import LandingPage from '#app/page.ts';
+import LandingPage from '#app/(site)/page.ts';
 
 const render = () => renderToString(LandingPage());
 

@@ -19,6 +19,7 @@
  *   AlertDialogTrigger       → <ui-alert-dialog-trigger>
  *   AlertDialogContent       → <ui-alert-dialog-content size>
  *   AlertDialogHeader        → <div class=${alertDialogHeaderClass()}>
+ *   AlertDialogMedia         → <div data-slot="alert-dialog-media" class=${alertDialogMediaClass()}>
  *   AlertDialogTitle         → <h2 class=${alertDialogTitleClass()}>
  *   AlertDialogDescription   → <p class=${alertDialogDescriptionClass()}>
  *   AlertDialogFooter        → <div class=${alertDialogFooterClass()}>
@@ -93,22 +94,30 @@
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
 import { ref, createRef } from '@webjsdev/core/directives';
-import { ensureId } from '../lib/utils.ts';
+import { cn, ensureId, takeAuthoredClass } from '../lib/utils.ts';
 import { onBeforeCache } from '../lib/dom.ts';
 import { buttonClass, type ButtonVariant, type ButtonSize } from './button.ts';
 
 export const alertDialogContentClass = (): string =>
-  'group/alert-dialog-content fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadcn-lg shadow-lg duration-200 data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-lg';
+  'cn-alert-dialog-content group/alert-dialog-content fixed z-50 grid w-full';
 
 export const alertDialogHeaderClass = (): string =>
-  'grid grid-rows-[auto_1fr] place-items-center gap-1.5 text-center sm:group-data-[size=default]/alert-dialog-content:place-items-start sm:group-data-[size=default]/alert-dialog-content:text-left';
+  'cn-alert-dialog-header';
 
 export const alertDialogFooterClass = (): string =>
-  'flex flex-col-reverse gap-2 group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2 sm:flex-row sm:justify-end';
+  'cn-alert-dialog-footer flex flex-col-reverse gap-2 group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2 sm:flex-row sm:justify-end';
 
-export const alertDialogTitleClass = (): string => 'text-lg font-semibold';
+export const alertDialogTitleClass = (): string => 'cn-alert-dialog-title';
 
-export const alertDialogDescriptionClass = (): string => 'text-sm text-muted-foreground';
+export const alertDialogDescriptionClass = (): string => 'cn-alert-dialog-description';
+
+/**
+ * The media slot of the header: an icon or image shown beside (or, in the
+ * small size, above) the title. Mark the element `data-slot="alert-dialog-media"`
+ * so the header's grid makes room for it. Decorative media takes
+ * `aria-hidden="true"`; the dialog's name still comes from its title.
+ */
+export const alertDialogMediaClass = (): string => 'cn-alert-dialog-media';
 
 // Pre-hydration paint fallback (see dialog.ts for the long version).
 const STYLES = `
@@ -119,7 +128,10 @@ ui-alert-dialog-content { display: grid; }
 // Fills the viewport (fixed inset-0), NOT 0x0 (#730): WebKit makes a
 // top-layer <dialog> the containing block for its position:fixed descendants,
 // so a 0x0 host collapsed the fixed content panel to 0x0 (invisible on iOS).
-const NATIVE_DIALOG_CLASS = 'fixed inset-0 border-0 bg-transparent p-0 m-0 max-w-none max-h-none overflow-visible text-inherit backdrop:bg-black/50';
+const NATIVE_DIALOG_CLASS = 'fixed inset-0 border-0 bg-transparent p-0 m-0 max-w-none max-h-none overflow-visible text-inherit backdrop:bg-transparent';
+
+/** The overlay behind the panel, which each style dims in its own way. */
+export const alertDialogOverlayClass = (): string => 'cn-alert-dialog-overlay fixed inset-0 z-50';
 
 function installStyles(): void {
   if (typeof document === 'undefined') return;
@@ -309,10 +321,20 @@ export class UiAlertDialog extends WebComponent({
     if (!changedProperties.has('open')) return;
     // Skip the constructor's initial open=false set so we don't fire
     // teardown for the closed-on-mount state.
-    if (changedProperties.get('open') === undefined) return;
+    // One written `open` still opens on that first update (shadcn's
+    // `defaultOpen`).
+    const initial = changedProperties.get('open') === undefined;
+    if (initial && !this.open) return;
+    // The content renders its data-state from this element's `open`, and
+    // nothing else re-renders it, so ask it to now. Every shadcn style
+    // animates out on data-closed: left closed while the native dialog
+    // opens, the content played its exit animation as it appeared.
+    this._content?.requestUpdate?.();
     // Defer one microtask so the content child has rendered its inner
-    // native <dialog>; that's where showModal() / close() act.
-    queueMicrotask(() => {
+    // native <dialog>; that's where showModal() / close() act. On the first
+    // update the content may not have rendered yet, so that one waits.
+    queueMicrotask(async () => {
+      if (initial) await this._content?.updateComplete;
       if (this.open) this._setup();
       else this._teardown();
     });
@@ -482,6 +504,13 @@ export class UiAlertDialogContent extends WebComponent({
     if (native?.open) native.close();
   }
 
+  // shadcn's className on the content lands on the panel it renders, so the
+  // class written on this host moves there, read once at first render.
+  _authored: string | null = null;
+  _hostClass(): string | null {
+    return (this._authored = takeAuthoredClass(this, null));
+  }
+
   render() {
     const parentOpen = !!this._parent()?.open;
     return html`<dialog
@@ -492,10 +521,15 @@ export class UiAlertDialogContent extends WebComponent({
       @cancel=${this._onNativeCancel}
       @close=${this._onNativeClose}
     ><div
+      data-slot="alert-dialog-overlay"
+      data-state=${parentOpen ? 'open' : 'closed'}
+      aria-hidden="true"
+      class=${alertDialogOverlayClass()}
+    ></div><div
       data-slot="alert-dialog-content"
       data-size=${this.size}
       data-state=${parentOpen ? 'open' : 'closed'}
-      class=${alertDialogContentClass()}
+      class=${cn(alertDialogContentClass(), this._hostClass())}
     ><slot></slot></div></dialog>`;
   }
 
@@ -542,6 +576,15 @@ UiAlertDialogContent.register('ui-alert-dialog-content');
 
 const ALERT_DIALOG_ACTION_GRID_STRETCH = 'group-data-[size=sm]/alert-dialog-content:w-full';
 
+// The action and the cancel render the button shadcn's AlertDialogAction /
+// AlertDialogCancel are, so the BUTTON is the footer's flex or grid item: on a
+// phone the column footer stretches it full width. The host draws no box of
+// its own, turned off through its style, which the server serves, and a class
+// written on it lands on the button, as shadcn's className does.
+function boxless(host: HTMLElement): void {
+  if (typeof host.getAttribute === 'function' && !host.getAttribute('style')) host.setAttribute('style', 'display: contents');
+}
+
 export class UiAlertDialogCancel extends WebComponent({
   variant: prop<ButtonVariant>(String, { reflect: true }),
   size: prop<ButtonSize>(String, { reflect: true }),
@@ -553,10 +596,11 @@ export class UiAlertDialogCancel extends WebComponent({
   }
 
   render() {
+    boxless(this);
     return html`<button
       type="button"
       data-slot="alert-dialog-cancel"
-      class="${buttonClass({ variant: this.variant, size: this.size })} ${ALERT_DIALOG_ACTION_GRID_STRETCH}"
+      class=${cn(buttonClass({ variant: this.variant, size: this.size }), ALERT_DIALOG_ACTION_GRID_STRETCH, takeAuthoredClass(this, null))}
       @click=${this._onClick}
     ><slot></slot></button>`;
   }
@@ -576,10 +620,11 @@ export class UiAlertDialogAction extends WebComponent({
   }
 
   render() {
+    boxless(this);
     return html`<button
       type="button"
       data-slot="alert-dialog-action"
-      class="${buttonClass({ variant: this.variant, size: this.size })} ${ALERT_DIALOG_ACTION_GRID_STRETCH}"
+      class=${cn(buttonClass({ variant: this.variant, size: this.size }), ALERT_DIALOG_ACTION_GRID_STRETCH, takeAuthoredClass(this, null))}
       @click=${this._onClick}
     ><slot></slot></button>`;
   }

@@ -134,7 +134,8 @@ test('init: theme is idempotent (doesn\'t append twice)', async () => {
     await init.parseAsync(['--yes', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
     await init.parseAsync(['--yes', '--cwd', d, '--registry', 'http://test/r'], { from: 'user' });
     const css = readFileSync(join(d, 'styles', 'globals.css'), 'utf8');
-    const occurrences = (css.match(/@webjsdev\/ui theme/g) || []).length;
+    // The opening marker only: the block also closes with `@webjsdev/ui theme end`.
+    const occurrences = (css.match(/\/\* @webjsdev\/ui theme \*\//g) || []).length;
     assert.equal(occurrences, 1, 'theme block should only appear once');
   } finally {
     globalThis.fetch = origFetch;

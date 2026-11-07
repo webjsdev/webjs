@@ -33,6 +33,15 @@ export const DOCS_START_PATH = '/docs/getting-started';
 export const UI_PATH = '/ui';
 
 /**
+ * Whether a pathname belongs to the /ui section, which has its own chrome,
+ * stylesheet and fonts (#1666). `/ui` itself and anything under `/ui/`, but
+ * not a sibling that merely starts with the same letters (`/uikit`).
+ */
+export function isUiPath(pathname: string) {
+  return pathname === UI_PATH || pathname.startsWith(UI_PATH + '/');
+}
+
+/**
  * The feature gallery is its own deployed WebJs app (a scaffolded app running
  * the framework's own demos), so unlike the docs and the component library it
  * is a real cross-origin URL rather than a path this app serves. It opens in a

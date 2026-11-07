@@ -89,21 +89,23 @@ export type FieldLegendVariant = 'legend' | 'label';
 export type FieldOrientation = 'vertical' | 'horizontal' | 'responsive';
 
 const LEGEND_VARIANTS = {
-  legend: 'text-base',
-  label: 'text-sm',
+  legend: 'cn-field-legend-variant-legend',
+  label: 'cn-field-legend-variant-label',
 } as const;
 
+// shadcn's `*:w-full` widens a field's control because the control is the
+// field's child. A `<ui-select>` host is `display: contents` and its trigger
+// (or, before it upgrades, the native select) sits two levels down, so the
+// same width reaches through the host to it.
 const ORIENTATIONS = {
-  vertical: 'flex-col [&>*]:w-full [&>.sr-only]:w-auto',
-  horizontal:
-    'flex-row items-center [&>[data-slot=field-label]]:flex-auto has-[>[data-slot=field-content]]:items-start has-[>[data-slot=field-content]]:[&>[type=checkbox],[type=radio]]:mt-px',
-  responsive:
-    'flex-col @md/field-group:flex-row @md/field-group:items-center [&>*]:w-full @md/field-group:[&>*]:w-auto [&>.sr-only]:w-auto @md/field-group:[&>[data-slot=field-label]]:flex-auto @md/field-group:has-[>[data-slot=field-content]]:items-start @md/field-group:has-[>[data-slot=field-content]]:[&>[type=checkbox],[type=radio]]:mt-px',
+  vertical: 'cn-field-orientation-vertical flex-col *:w-full [&>.sr-only]:w-auto [&>ui-select_:is(select,[data-slot=select-trigger])]:w-full',
+  horizontal: 'cn-field-orientation-horizontal flex-row items-center has-[>[data-slot=field-content]]:items-start *:data-[slot=field-label]:flex-auto has-[>[data-slot=field-content]]:[&>[role=checkbox],[role=radio]]:mt-px',
+  responsive: 'cn-field-orientation-responsive flex-col *:w-full @md/field-group:flex-row @md/field-group:items-center @md/field-group:*:w-auto @md/field-group:has-[>[data-slot=field-content]]:items-start @md/field-group:*:data-[slot=field-label]:flex-auto [&>.sr-only]:w-auto @md/field-group:has-[>[data-slot=field-content]]:[&>[role=checkbox],[role=radio]]:mt-px [&>ui-select_:is(select,[data-slot=select-trigger])]:w-full @md/field-group:[&>ui-select_:is(select,[data-slot=select-trigger])]:w-auto',
 } as const;
 
 /** Field set: a native `<fieldset>` holding a legend and a group of fields. */
 export const fieldSetClass = (): string =>
-  'flex flex-col gap-6 has-[>[data-slot=checkbox-group]]:gap-3 has-[>[data-slot=radio-group]]:gap-3';
+  'cn-field-set flex flex-col';
 
 /**
  * Field legend: the `<legend>` naming a field set. `legend` is section-sized,
@@ -112,12 +114,12 @@ export const fieldSetClass = (): string =>
  * tightens its spacing.
  */
 export function fieldLegendClass(opts: { variant?: FieldLegendVariant } = {}): string {
-  return 'mb-3 font-medium ' + LEGEND_VARIANTS[opts.variant ?? 'legend'];
+  return 'cn-field-legend ' + LEGEND_VARIANTS[opts.variant ?? 'legend'];
 }
 
 /** Field group: stacks fields, and is the container `responsive` fields measure. */
 export const fieldGroupClass = (): string =>
-  'group/field-group @container/field-group flex w-full flex-col gap-7 data-[slot=checkbox-group]:gap-3 [&>[data-slot=field-group]]:gap-4';
+  'cn-field-group group/field-group @container/field-group flex w-full flex-col';
 
 /**
  * Field: one label + control + text unit. `vertical` stacks them, `horizontal`
@@ -126,29 +128,29 @@ export const fieldGroupClass = (): string =>
  */
 export function fieldClass(opts: { orientation?: FieldOrientation } = {}): string {
   return (
-    'group/field flex w-full gap-3 data-[invalid=true]:text-destructive ' +
+    'cn-field group/field flex w-full ' +
     ORIENTATIONS[opts.orientation ?? 'vertical']
   );
 }
 
 /** Field content: wraps a label and description beside a horizontal control. */
 export const fieldContentClass = (): string =>
-  'group/field-content flex flex-1 flex-col gap-1.5 leading-snug';
+  'cn-field-content group/field-content flex flex-1 flex-col leading-snug';
 
 /** Field label: the `<label for>` of the control. Fades when the field is data-disabled. */
 export const fieldLabelClass = (): string =>
-  'group/field-label peer/field-label flex w-fit items-center gap-2 text-sm leading-snug font-medium select-none group-data-[disabled=true]/field:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50 has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col has-[>[data-slot=field]]:rounded-md has-[>[data-slot=field]]:border [&>*]:data-[slot=field]:p-4 has-checked:border-primary has-checked:bg-primary/5 dark:has-checked:bg-primary/10';
+  'cn-label cn-field-label group/field-label peer/field-label flex w-fit items-center select-none group-data-[disabled=true]:pointer-events-none peer-disabled:cursor-not-allowed has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col';
 
 /** Field title: label-styled text that is not a `<label>` (a choice card's heading). */
 export const fieldTitleClass = (): string =>
-  'flex w-fit items-center gap-2 text-sm leading-snug font-medium group-data-[disabled=true]/field:opacity-50';
+  'cn-field-title flex w-fit items-center';
 
 /** Field description: the muted helper text under (or beside) the control. */
 export const fieldDescriptionClass = (): string =>
-  'text-sm leading-normal font-normal text-muted-foreground group-has-[[data-orientation=horizontal]]/field:text-balance last:mt-0 nth-last-2:-mt-1 [[data-variant=legend]+&]:-mt-1.5 [&>a]:underline [&>a]:underline-offset-4 [&>a:hover]:text-primary';
+  'cn-field-description leading-normal font-normal group-has-data-horizontal/field:text-balance last:mt-0 nth-last-2:-mt-1 [&>a]:underline [&>a]:underline-offset-4 [&>a:hover]:text-primary';
 
 /** Field error: the inline validation message. Give it an id the control's aria-describedby lists. */
-export const fieldErrorClass = (): string => 'text-sm font-normal text-destructive';
+export const fieldErrorClass = (): string => 'cn-field-error font-normal';
 
 /**
  * Field separator: a horizontal rule between fields, drawn by the element's own
@@ -156,8 +158,8 @@ export const fieldErrorClass = (): string => 'text-sm font-normal text-destructi
  * span.
  */
 export const fieldSeparatorClass = (): string =>
-  'relative -my-2 h-5 text-sm group-data-[variant=outline]/field-group:-mb-2 before:absolute before:inset-x-0 before:top-1/2 before:h-px before:bg-border';
+  'cn-field-separator relative before:absolute before:inset-x-0 before:top-1/2 before:h-px before:bg-border';
 
 /** Field separator content: the text on the separator line (`or`, a section name). */
 export const fieldSeparatorContentClass = (): string =>
-  'relative mx-auto block w-fit bg-background px-2 text-muted-foreground';
+  'cn-field-separator-content relative mx-auto block w-fit bg-background';

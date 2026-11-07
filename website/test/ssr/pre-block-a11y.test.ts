@@ -15,12 +15,12 @@
  *
  * This lives in its own file, and loops over pages, because the rules belong
  * to the site rather than to any one page. Coverage is not a hand-kept list:
- * the documentation and gallery pages are discovered from the file system, and
- * every gallery detail page comes from the registry index the sidebar is built
- * from, so a page or a component added tomorrow is checked without anyone
+ * the documentation pages are discovered from the file system, and every /ui
+ * component docs page comes from the component records the docs sidebar is
+ * built from, so a page or a component added tomorrow is checked without anyone
  * remembering to add it here. Six entries ARE listed by hand, because they have
  * no directory to walk: the three marketing pages, the error boundary, the
- * gallery introduction at /ui, and the markdown post body that /blog/[slug],
+ * /ui home page, and the markdown post body that /blog/[slug],
  * /articles/[slug], and /compare/[slug] all share.
  *
  * Pages are rendered THROUGH their layout, not alone. That is what makes rule
@@ -34,13 +34,16 @@ import assert from 'node:assert/strict';
 import { readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { renderToString } from '@webjsdev/core/server';
-import type { LayoutProps } from '@webjsdev/core';
-import Home from '#app/page.ts';
-import WhatIsWebJs from '#app/what-is-webjs/page.ts';
-import Why from '#app/why-webjs/page.ts';
+import type { LayoutProps, TemplateResult } from '@webjsdev/core';
+import Home from '#app/(site)/page.ts';
+import WhatIsWebJs from '#app/(site)/what-is-webjs/page.ts';
+import Why from '#app/(site)/why-webjs/page.ts';
 import ErrorBoundary from '#app/error.ts';
-import DocsLayout from '#app/docs/layout.ts';
+import DocsLayout from '#app/(site)/docs/layout.ts';
 import UiLayout from '#app/ui/layout.ts';
+import UiChromeLayout from '#app/ui/(chrome)/layout.ts';
+import UiDocsLayout from '#app/ui/(chrome)/docs/layout.ts';
+import { layoutProps } from '#test/helpers/layout-props.ts';
 import { renderPostBody } from '#modules/blog/utils/render-post.ts';
 
 /** Every `<pre …>` open tag in the rendered HTML, attribute order as authored. */
@@ -56,8 +59,8 @@ const has = (tag: string, attr: RegExp) => attr.test(tag);
  * The blocks on a page that can scroll.
  *
  * Two ways a block becomes a scroll container, and both have to count. The
- * marketing pages put `overflow-x-auto` on the tag. The docs and gallery
- * shell instead sets it on every prose <pre> from its stylesheet, which no
+ * marketing pages put `overflow-x-auto` on the tag. The docs shell
+ * instead sets it on every prose <pre> from its stylesheet, which no
  * tag-level attribute records, so that rule is read out of the rendered
  * document itself. Reading only the utility class is the single easiest way
  * to close this issue without fixing anything.
@@ -80,11 +83,24 @@ async function htmlOf(page: Page) {
   return typeof out === 'string' ? out : await renderToString(out);
 }
 
+/**
+ * A /ui page wrapped the way the server wraps it: the `(chrome)` group layout
+ * (header, footer) inside the minimal /ui layout, and for a docs page the docs
+ * layout inside that, so the chrome's own markup is covered too.
+ */
+async function uiShell(children: TemplateResult, path: string, section: 'docs' | null) {
+  const url = 'https://webjs.dev' + path;
+  const inner = section === 'docs' ? UiDocsLayout(layoutProps(children, { url })) : children;
+  return UiLayout(layoutProps(await UiChromeLayout(layoutProps(inner, { url })), { url }));
+}
+
 /** Discover a section's pages instead of listing them by hand. */
 async function sectionPages(dir: string, base: string, layout: (p: LayoutProps) => unknown, expectSome = true): Promise<Page[]> {
   const entries = await readdir(new URL(`../../app/${dir}`, import.meta.url), { withFileTypes: true });
   const pages: Page[] = [];
-  for (const entry of entries.filter((e) => e.isDirectory() && !e.name.startsWith('['))) {
+  // Route groups (`(name)`) are skipped: they add no URL segment, so their
+  // pages are covered by the walk of the section they belong to.
+  for (const entry of entries.filter((e) => e.isDirectory() && !e.name.startsWith('[') && !e.name.startsWith('('))) {
     // A segment can be a route handler rather than a page (app/ui/registry
     // serves the JSON API the CLI fetches), and those render no markup.
     const file = new URL(`../../app/${dir}/${entry.name}/page.ts`, import.meta.url);
@@ -97,22 +113,16 @@ async function sectionPages(dir: string, base: string, layout: (p: LayoutProps) 
   }
   // app/docs is all static topic pages, so finding none there means discovery
   // broke. app/ui legitimately has none: its content is the index page plus
-  // the [name] route, and the only other segment is a route handler. Walking
-  // it anyway is what covers a static gallery page added later.
+  // the [name] redirect, and the other top-level segments are route handlers
+  // or bare iframe targets. Walking it anyway covers a static page added later.
   if (expectSome) assert.ok(pages.length > 0, `no pages discovered under app/${dir}, so this section is silently uncovered`);
   return pages;
 }
 
-const uiDetail = await import('#app/ui/[name]/page.ts');
-const uiIntro = await import('#app/ui/page.ts');
-const { loadRegistryIndex } = await import('#modules/ui/queries/registry.server.ts');
-
-/**
- * Every gallery detail page, from the same registry index the sidebar is built
- * from. Sampling one component here would leave the other thirty-one unchecked
- * while the file claimed to cover the gallery.
- */
-const uiComponents = (await loadRegistryIndex()).filter((i) => i.type === 'registry:ui').map((i) => i.name);
+const uiIntro = await import('#app/ui/(chrome)/docs/page.ts');
+const uiComponentDoc = await import('#app/ui/(chrome)/docs/components/[name]/page.ts');
+const { COMPONENTS } = await import('#modules/ui/docs/nav.ts');
+const uiHome = await import('#app/ui/(chrome)/page.ts');
 
 const PAGES: Page[] = [
   { name: '/', render: () => Home() },
@@ -122,12 +132,15 @@ const PAGES: Page[] = [
     name: 'the error boundary',
     render: () => ErrorBoundary({ error: new Error('a single unbroken line of detail long enough to overflow a narrow viewport') }),
   },
-  ...await sectionPages('docs', '/docs', DocsLayout),
+  ...await sectionPages('(site)/docs', '/docs', DocsLayout),
   ...await sectionPages('ui', '/ui', UiLayout, false),
-  { name: '/ui', render: async () => UiLayout({ children: await uiIntro.default() } as unknown as LayoutProps) },
-  ...uiComponents.map((name) => ({
-    name: `/ui/${name}`,
-    render: async () => UiLayout({ children: await uiDetail.default({ params: { name } }) } as unknown as LayoutProps),
+  { name: '/ui', render: async () => uiShell(uiHome.default({ url: 'https://webjs.dev/ui' }), '/ui', null) },
+  { name: '/ui/docs', render: async () => uiShell(await uiIntro.default(), '/ui/docs', 'docs') },
+  // Every docs component page: the code figures, the install command and the
+  // preview's source all render a <pre>, so each is covered.
+  ...COMPONENTS.map((c) => ({
+    name: `/ui/docs/components/${c.slug}`,
+    render: async () => uiShell(await uiComponentDoc.default({ params: { name: c.slug } } as never), `/ui/docs/components/${c.slug}`, 'docs'),
   })),
   // The markdown renderer is one body shared by /blog/[slug], /articles/[slug],
   // and /compare/[slug], so covering it covers all three route families. A
@@ -164,9 +177,16 @@ for (const page of PAGES) {
 test('the suite still has scrollable blocks to check rule 3 against', async () => {
   const counts = await Promise.all(PAGES.map(async (p) => [p.name, scrollableTags(await htmlOf(p)).length] as const));
   const total = counts.reduce((n, [, c]) => n + c, 0);
-  const pagesWithBlocks = counts.filter(([, c]) => c > 0).map(([n]) => n);
+  // A docs page for a component with no registry item (shadcn's docs-only
+  // pages: chart, data-table, date-picker, toast, typography) has no
+  // installation block until its content lands, so it is not counted.
+  const { componentSource } = await import('#modules/ui/queries/component-source.server.ts');
+  const noInstall = new Set<string>();
+  for (const c of COMPONENTS) if (!(await componentSource(c.slug))) noInstall.add(`/ui/docs/components/${c.slug}`);
+  const considered = counts.filter(([n]) => !noInstall.has(n));
+  const pagesWithBlocks = considered.filter(([, c]) => c > 0).map(([n]) => n);
   assert.ok(total > 400, `only ${total} scrollable blocks found across the site, so rule 3 is checking far less than it should`);
-  assert.ok(pagesWithBlocks.length > PAGES.length - 5, `${PAGES.length - pagesWithBlocks.length} pages render no scrollable block at all: ${counts.filter(([, c]) => !c).map(([n]) => n).join(', ')}`);
+  assert.ok(pagesWithBlocks.length > considered.length - 5, `${considered.length - pagesWithBlocks.length} pages render no scrollable block at all: ${considered.filter(([, c]) => !c).map(([n]) => n).join(', ')}`);
 });
 
 test('the suite still has named blocks to check rules 1 and 2 against', async () => {

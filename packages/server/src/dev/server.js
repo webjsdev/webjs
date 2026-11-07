@@ -18,6 +18,7 @@ import { stripBasePath } from '../base-path.js';
 import { basePath } from '../importmap.js';
 import { attachWebSocket } from '../websocket.js';
 import { toWebRequest, sendWebResponse } from './helpers.js';
+import { earlyHintLinks } from '../ssr/shipped-modules.js';
 import { isAddrInUse, portInUseError, reusePortRequested } from '../port-in-use.js';
 
 /** This copy of `@webjsdev/server`'s version, so a hot re-run can tell the framework itself changed. */
@@ -156,7 +157,10 @@ async function startNodeListener(ctx) {
       // 103 Early Hints: before running SSR, send preload hints for the
       // page's module URLs so the browser can begin fetching them while
       // the server is still computing the body. Skipped in dev (file churn
-      // would send stale URLs after rebuilds) and for non-GET/HEAD.
+      // would send stale URLs after rebuilds) and for non-GET/HEAD. Plain
+      // preloads, never modulepreload: a module hint arrives before the
+      // page's import map, and Firefox then refuses the map (see
+      // earlyHintLinks in ../ssr/shipped-modules.js).
       if (
         !dev &&
         (req.method === 'GET' || req.method === 'HEAD') &&
@@ -166,7 +170,7 @@ async function startNodeListener(ctx) {
         if (match && match.moduleUrls.length) {
           try {
             res.writeEarlyHints({
-              link: match.moduleUrls.map((u) => `<${u}>; rel=modulepreload`),
+              link: earlyHintLinks(match.moduleUrls),
             });
           } catch (e) {
             logger.warn('writeEarlyHints failed', { err: String(e) });

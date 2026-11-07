@@ -8,8 +8,8 @@
 // across the swap: type into it, navigate, and your text survives the transition.
 import { html } from '@webjsdev/core';
 import type { Metadata } from '@webjsdev/core';
-import { buttonClass } from '#components/ui/button.ts';
-import { inputClass } from '#components/ui/input.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
+import { inputClass } from '#modules/gallery/ui/input.ts';
 import { pageHeading } from '#lib/utils/ui.ts';
 
 export const metadata: Metadata = {

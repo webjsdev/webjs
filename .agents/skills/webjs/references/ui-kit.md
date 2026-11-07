@@ -29,14 +29,48 @@ once while composing, not code that should sit in your repo. Get the full
 paste-ready structure on demand:
 
 - **MCP `ui` tool** (preferred when available): call `ui` with no args for the
-  kit inventory (each component's tier, helper signatures, npm deps); pass
-  `{ name: "accordion" }` for one component's helper signatures, the paste-ready
-  structural example, the accessibility header, and deps.
+  kit inventory (each component's tier, helper signatures, npm deps, plus the
+  block and chart names); pass `{ name: "accordion" }` for one component's
+  helper signatures, the paste-ready structural example, the accessibility
+  header, and deps.
 - **CLI**: `npx webjsdev ui list` (inventory), `npx webjsdev ui view <name>` (the projected
   view plus the full source). Same data as the MCP tool (one shared projector).
 
 So the loop is: `add` the component, then query `ui <name>` (MCP) or
 `npx webjsdev ui view <name>` for the accessible structure, paste it, and fill it in.
+
+## Blocks and charts: install a view, do not write one
+
+**Rule: before hand-writing a login or signup page, an app sidebar shell, a
+dashboard, a data table or a chart, list the blocks and install the closest
+one.** A block is a ready-made view you install and then edit. Its files land
+in your app as code you own, so you spend your effort on the app instead of
+regenerating a page shell.
+
+- **Find one.** The MCP `ui` tool with no args lists the block and chart NAMES
+  grouped by category; `{ type: "block" }` or `{ category: "login" }` adds a
+  one-line description each. On the CLI, `npx webjsdev ui list --type block`
+  (or `--category login`, and `--json` for a compact array).
+- **See what it installs.** `ui { name: "login-03" }` (MCP) or
+  `npx webjsdev ui view login-03 --files-only` returns the description, the
+  components it depends on, the install command, and every file with the path
+  it lands at (`app/login/page.ts`, `components/login-form.ts`). Ask for the
+  sources only if you need them before installing (`source: true`, or `view`
+  without `--files-only`); installing and reading the files is cheaper.
+- **Install it.** `npx webjsdev ui add login-03`. It writes each file to its
+  target, installs the components it uses, rewrites every import to your
+  aliases, and adds any design tokens it needs that your stylesheet lacks. A
+  file that already exists is kept unless you pass `--overwrite`, and the
+  command lists what it wrote.
+- **Then edit it.** Rename the route, change the copy, and wire the form: a
+  block's form has no `action`, so bind your `'use server'` action
+  (`<form action=${signIn}>`) as `references/data-and-actions.md` describes.
+
+Shipped today: shadcn's ten authentication blocks, `login-01` to `login-05`
+and `signup-01` to `signup-05` (categories `authentication` plus `login` or
+`signup`). A chart is a block whose categories include `chart`
+(`type: "chart"` lists them). The list grows, so query it rather than trusting
+this paragraph.
 
 ## Setup and resolution
 

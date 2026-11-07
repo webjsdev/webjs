@@ -3,7 +3,7 @@
 // button is inert (cache eviction there happens as a side effect of the write
 // action that changed the data).
 import { WebComponent, signal, html } from '@webjsdev/core';
-import { buttonClass } from '#components/ui/button.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
 import { bustCaches } from '#modules/caching/actions/bust-caches.server.ts';
 
 export class CacheBuster extends WebComponent {

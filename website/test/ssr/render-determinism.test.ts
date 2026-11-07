@@ -24,12 +24,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { TemplateResult } from '@webjsdev/core';
 import { renderToString } from '@webjsdev/core/server';
-import RootLayout from '#app/layout.ts';
-import LandingPage from '#app/page.ts';
-import WhatIsWebJs from '#app/what-is-webjs/page.ts';
-import WhyWebJs from '#app/why-webjs/page.ts';
-import GettingStarted from '#app/docs/getting-started/page.ts';
-import { layoutProps } from '#test/helpers/layout-props.ts';
+import LandingPage from '#app/(site)/page.ts';
+import WhatIsWebJs from '#app/(site)/what-is-webjs/page.ts';
+import WhyWebJs from '#app/(site)/why-webjs/page.ts';
+import GettingStarted from '#app/(site)/docs/getting-started/page.ts';
+import { siteShell } from '#test/helpers/site-shell.ts';
 
 // Render each page THROUGH the root layout. The ETag is computed over the whole
 // served document, so a page-only render would miss anything the layout
@@ -46,8 +45,8 @@ const PAGES: Array<[string, () => TemplateResult]> = [
 
 for (const [route, render] of PAGES) {
   test(`${route} renders identical bytes twice (ETag stability)`, async () => {
-    const first = await renderToString(RootLayout(layoutProps(render())));
-    const second = await renderToString(RootLayout(layoutProps(render())));
+    const first = await renderToString(siteShell(render()));
+    const second = await renderToString(siteShell(render()));
     assert.ok(first.length > 5000, 'renders a substantial full document, not a fragment');
     if (first !== second) {
       // Surface the first divergence rather than dumping two large documents,

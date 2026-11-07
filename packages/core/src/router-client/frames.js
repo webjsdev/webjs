@@ -24,10 +24,13 @@ export function activeFrameId(el) {
   while (cur) {
     const frame = cur.closest('webjs-frame');
     if (frame && frame.id) return frame.id;
-    // Cross shadow boundary upwards if necessary.
+    // Cross a shadow boundary upwards if necessary. Only a real ShadowRoot
+    // has a host to cross to: a DETACHED element's root is the top of its
+    // own subtree, and when that is an <a>, its `host` is the URL's host
+    // STRING, which the next closest() call threw on.
     const root = cur.getRootNode();
-    if (root && /** @type any */ (root).host) {
-      cur = /** @type any */ (root).host;
+    if (typeof ShadowRoot !== 'undefined' && root instanceof ShadowRoot) {
+      cur = root.host;
     } else {
       break;
     }

@@ -12,8 +12,8 @@
  * normally; only the ui/ subdirectories are generated.
  *
  * Each component's relative `../lib/utils.ts` / `../lib/dom.ts` import
- * (the registry's local layout) is rewritten to `../../lib/ui/*` (this
- * site's layout). The kit's helpers land at `lib/utils/cn.ts` and
+ * (the registry's local layout) is rewritten to `../../../lib/utils/cn.ts` /
+ * `../../../lib/utils/dom.ts` (this site's layout, from modules/ui/components/). The kit's helpers land at `lib/utils/cn.ts` and
  * `lib/utils/dom.ts`, which is exactly where `webjs ui add` writes them in a
  * real app (see packages/ui/src/commands/add.js: "the scaffold puts it at
  * lib/utils/dom.ts, next to cn.ts"). The site is the dogfood, so the mirror
@@ -21,8 +21,10 @@
  * Missing the dom.ts rewrite 500s SSR (#819).
  */
 import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync, copyFileSync, rmSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { writeScopedStyles } from './scope-ui-styles.mjs';
+import { writeThemeStyles } from './build-ui-themes.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SITE_ROOT = resolve(__dirname, '..');
@@ -96,6 +98,19 @@ for (const name of readdirSync(COMPONENTS_DST)) {
 let changed = 0;
 if (writeIfChanged(join(LIB_DST_DIR, 'cn.ts'), readFileSync(LIB_SRC, 'utf8'))) changed++;
 if (writeIfChanged(join(LIB_DST_DIR, 'dom.ts'), readFileSync(LIB_DOM_SRC, 'utf8'))) changed++;
+// The kit's icons (Lucide, the default library) land beside cn() in an app
+// (`lib/utils/icons.ts`), so they land there here too (#1666).
+if (writeIfChanged(join(LIB_DST_DIR, 'icons.ts'), readFileSync(join(REGISTRY_ROOT, 'lib', 'icons.ts'), 'utf8'))) changed++;
+
+// The design-system data (shadcn's themes, fonts and the preset code), as
+// plain ESM the /ui/create configurator runs on the server AND in the browser
+// (#1666). They import each other by sibling path, so they are copied as one
+// directory, unchanged.
+const DESIGN_SYSTEM_DST = join(SITE_ROOT, 'modules', 'ui', 'design-system');
+mkdirSync(DESIGN_SYSTEM_DST, { recursive: true });
+for (const name of ['base-colors.js', 'themes.js', 'fonts.js', 'preset.js']) {
+  if (writeIfChanged(join(DESIGN_SYSTEM_DST, name), readFileSync(join(REGISTRY_ROOT, 'themes', name), 'utf8'))) changed++;
+}
 
 for (const name of upstream) {
   const rewritten = readFileSync(join(COMPONENTS_SRC, name), 'utf8')
@@ -106,6 +121,93 @@ for (const name of upstream) {
   if (writeIfChanged(join(COMPONENTS_DST, name), rewritten)) changed++;
 }
 
+// The blocks (#1666, D18), mirrored to modules/ui/blocks/<name>/ for the
+// /ui/view/<name> frame the block viewer shows. A mirror rather than an
+// import straight from the registry, for the reason the components have one:
+// a block's registry-relative imports (`'../../../components/card.ts'`) name
+// the registry's own layout, so imported in place it would load the registry
+// copy of every kit module beside the site's mirror, two module instances
+// registering the same custom element tags. Rewriting each import that leaves
+// the block onto the site's aliases makes a block share the one kit instance
+// the rest of /ui uses. Imports inside the block stay relative, since the
+// mirror keeps the block's own layout. Only .ts files are mirrored: the one
+// asset blocks carry, placeholder.svg, is served from public/.
+const BLOCKS_SRC = join(REGISTRY_ROOT, 'blocks');
+const BLOCKS_DST = join(SITE_ROOT, 'modules', 'ui', 'blocks');
+
+/** Every .ts file under `dir`, as a posix path relative to it. */
+function tsFiles(dir, base = '') {
+  if (!existsSync(dir)) return [];
+  const out = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const rel = base ? `${base}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) out.push(...tsFiles(join(dir, entry.name), rel));
+    else if (entry.name.endsWith('.ts')) out.push(rel);
+  }
+  return out;
+}
+
+/**
+ * A block file's imports that leave the block, onto the site's aliases. Its
+ * absolute links to this site's own assets (the sample avatar,
+ * `https://webjs.dev/public/avatars/vivek.jpg`, which an installed block
+ * hotlinks) become site-relative, so the local /ui/view frame shows the file
+ * from public/ before it is deployed.
+ */
+function rewriteBlockImports(source, file) {
+  return source.replace(/((?:from|import)\s*\(?\s*)(['"])(\.{1,2}\/[^'"]+)\2/g, (whole, lead, q, spec) => {
+    const reg = posix.normalize(posix.join('blocks', posix.dirname(file), spec));
+    let to = null;
+    if (reg === 'lib/utils.ts') to = '#lib/utils/cn.ts';
+    else if (reg === 'lib/dom.ts') to = '#lib/utils/dom.ts';
+    else if (reg === 'lib/icons.ts') to = '#lib/utils/icons.ts';
+    else if (/^components\/[^/]+\.ts$/.test(reg)) to = `#modules/ui/${reg}`;
+    return to ? `${lead}${q}${to}${q}` : whole;
+  }).replaceAll('https://webjs.dev/public/', '/public/');
+}
+
+const blockFiles = tsFiles(BLOCKS_SRC).filter((f) => !f.startsWith('_'));
+const blockSet = new Set(blockFiles);
+let blocksChanged = 0;
+for (const f of blockFiles) {
+  const dst = join(BLOCKS_DST, f);
+  mkdirSync(dirname(dst), { recursive: true });
+  if (writeIfChanged(dst, rewriteBlockImports(readFileSync(join(BLOCKS_SRC, f), 'utf8'), f))) blocksChanged++;
+}
+// The custom elements the blocks define (an animated card, a sortable table),
+// gathered into one barrel /ui/view/[name]/page.ts imports. The frame renders
+// a block as a string, so the block's own modules never load in the browser,
+// and without this its elements would never upgrade. A block element's tag is
+// named after its block (`preview-live-waveform`), so every block's elements
+// can register on one page. The barrel is generated, like the mirror.
+const ELEMENTS = 'elements.ts';
+const elementFiles = blockFiles.filter((f) => /\.register\(\s*['"`][a-z][a-z0-9]*-/.test(readFileSync(join(BLOCKS_SRC, f), 'utf8')));
+blockSet.add(ELEMENTS);
+mkdirSync(BLOCKS_DST, { recursive: true });
+if (writeIfChanged(join(BLOCKS_DST, ELEMENTS), [
+  '// GENERATED by scripts/copy-registry.mjs: every registry block file that defines a custom element.',
+  ...elementFiles.map((f) => `import './${f}';`),
+  'export {};',
+  '',
+].join('\n'))) blocksChanged++;
+
+// Drop mirrored block files whose source is gone, then any block left empty.
+for (const f of tsFiles(BLOCKS_DST)) {
+  if (!blockSet.has(f)) rmSync(join(BLOCKS_DST, f));
+}
+if (existsSync(BLOCKS_DST)) {
+  for (const entry of readdirSync(BLOCKS_DST, { withFileTypes: true })) {
+    const dir = join(BLOCKS_DST, entry.name);
+    if (entry.isDirectory() && tsFiles(dir).length === 0) rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 console.log(
-  `[website] ui gallery mirror: ${upstream.size} components + lib/utils/{cn,dom}.ts, ${changed} file(s) written`,
+  `[website] ui gallery mirror: ${upstream.size} components + lib/utils/{cn,dom}.ts, ${changed} file(s) written; ${blockFiles.length} block files, ${blocksChanged} written`,
 );
+
+// The scoped kit styles public/ui.css compiles (scripts/scope-ui-styles.mjs).
+writeScopedStyles();
+
+// The .theme-<name> classes public/ui.css compiles (scripts/build-ui-themes.mjs).
+writeThemeStyles();

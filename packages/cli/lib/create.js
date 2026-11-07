@@ -120,12 +120,13 @@ async function copyGallery(appDir) {
   const galleryDir = existsSync(bundledGallery) ? bundledGallery : repoRootGallery;
   // `test` carries the auth card's real request-pipeline test (test/auth); it
   // ships with the gallery and is pruned by gallery:clear alongside the card.
-  // `components` carries the gallery's EXAMPLE design system (components/ui/ class
-  // helpers) the demos import. It ships here so a fresh app's demos work, but it
-  // is an example to learn from, so gallery:clear REMOVES it (the agent then runs
-  // `webjs ui add` and themes its own components/ui/); only cn.ts is kept as the
-  // `webjs ui add` prerequisite. It merges into the app's components/ alongside
-  // the separately-written theme toggle (also removed by gallery:clear).
+  // The gallery's EXAMPLE design system (its class helpers) lives in its own
+  // module, modules/gallery/ui/, NOT in components/ui/: that is where
+  // `webjs ui add` writes, so a fresh app's `add dialog` (which pulls the kit's
+  // card and input) would otherwise overwrite the gallery's helpers and break
+  // the demos. gallery:clear removes it with modules/gallery. `components`
+  // carries nothing the scaffold does not write itself (the theme toggle is an
+  // app shell file), and is kept in the list for a gallery that adds one.
   // `lib` merges the gallery's markup-chunk helpers (lib/utils/ui.ts) alongside
   // the ui bootstrap's cn.ts/dom.ts (written earlier); gallery:clear removes just
   // ui.ts. cp is recursive-merge, so the pre-written lib/utils/ files are kept.
@@ -208,21 +209,83 @@ async function writeUiBootstrap(appDir) {
     join(UI_REGISTRY_ROOT, 'themes', 'index.css'), 'utf8',
   );
   await mkdir(join(appDir, 'styles'), { recursive: true });
-  await writeFile(join(appDir, 'styles', 'globals.css'), css);
+  await writeFile(join(appDir, 'styles', 'globals.css'), galleryTheme(css));
 }
 
 /**
- * Read the @webjsdev/ui theme CSS so we can write it into public/input.css,
- * which css:build compiles into the static public/tailwind.css the layout
- * links. The theme tokens (`--color-primary`, `--color-card`, …) the registry
- * components consume become real utility classes in the compiled stylesheet,
- * so the app is styled with JavaScript off.
+ * The gallery's palette and type, written INTO the kit's theme block rather
+ * than onto :root in app/layout.ts. The block is what `webjs ui init --preset`
+ * replaces, so a preset repaints a fresh app, and a token defined in the
+ * layout (later in the cascade) would silently override every preset. The
+ * light values go on :root and the dark on .dark, the kit's shape, and the
+ * fonts on @theme inline, where a preset writes its own. The app's extra
+ * tokens (border-strong, primary-tint, the display face) follow the block's
+ * end marker, so a preset leaves them alone.
  *
- * @returns {Promise<string>} theme CSS source
+ * @param {string} css the kit's themes/index.css
  */
-async function readThemeCss() {
-  const src = join(UI_REGISTRY_ROOT, 'themes', 'index.css');
-  return await readFile(src, 'utf8');
+function galleryTheme(css) {
+  const pairs = {
+    background: ['#ffffff', '#1e2226'],
+    foreground: ['#191c20', '#dee2e6'],
+    card: ['#f7f8fa', '#313539'],
+    'card-foreground': ['#191c20', '#dee2e6'],
+    popover: ['#ffffff', '#313539'],
+    'popover-foreground': ['#191c20', '#dee2e6'],
+    primary: ['#1e2226', '#dee2e6'],
+    'primary-foreground': ['#ffffff', '#1e2226'],
+    secondary: ['#eef0f2', '#363a3e'],
+    'secondary-foreground': ['#191c20', '#dee2e6'],
+    muted: ['#eef0f2', '#313539'],
+    'muted-foreground': ['#565c64', '#94989c'],
+    accent: ['#e9ebef', '#363a3e'],
+    'accent-foreground': ['#191c20', '#f7fbff'],
+    border: ['#e2e5e9', '#3d434b'],
+    input: ['#e2e5e9', '#34393e'],
+    ring: ['#8b9198', '#6b7075'],
+  };
+  const mono = "'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace";
+  let out = setThemeVars(css, ':root', Object.fromEntries(Object.entries(pairs).map(([k, v]) => [k, v[0]])));
+  out = setThemeVars(out, '.dark', Object.fromEntries(Object.entries(pairs).map(([k, v]) => [k, v[1]])));
+  out = setThemeVars(out, '@theme inline', { 'font-sans': mono, 'font-mono': mono });
+  return out.replace(/\s*$/, '\n') + `
+/* The app's own tokens, outside the theme block, so a preset leaves them in
+   place. public/input.css maps them into utilities. */
+:root {
+  --border-strong: #ccd1d7;
+  /* A translucent tint of the primary, so it follows every theme and preset. */
+  --primary-tint: color-mix(in srgb, var(--primary) 22%, transparent);
+  --font-display: 'Bricolage Grotesque', 'JetBrains Mono', ui-sans-serif, system-ui, sans-serif;
+}
+.dark {
+  --border-strong: #454b51;
+}
+`;
+}
+
+/**
+ * Set CSS variables in the first `<selector> {` block of `css`, replacing a
+ * declared one where it stands and appending the rest at the block's end. The
+ * same rule as @webjsdev/ui's setBlockVars (packages/ui/src/utils/theme.js),
+ * which `init --preset` uses on this block.
+ *
+ * @param {string} css
+ * @param {string} selector
+ * @param {Record<string, string>} vars bare names (`primary`, not `--primary`)
+ */
+function setThemeVars(css, selector, vars) {
+  const esc = (v) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(${esc(selector)}\\s*\\{)([\\s\\S]*?)(\\n\\})`);
+  return css.replace(re, (_m, open, body, close) => {
+    let next = body;
+    const missing = [];
+    for (const [key, value] of Object.entries(vars)) {
+      const varRe = new RegExp(`(\\n\\s*--${esc(key)}\\s*:\\s*)[^;\\n]+`);
+      if (varRe.test(next)) next = next.replace(varRe, (_v, lead) => lead + value);
+      else missing.push(`  --${key}: ${value};`);
+    }
+    return open + next + (missing.length ? '\n' + missing.join('\n') : '') + close;
+  });
 }
 
 /**
@@ -566,7 +629,7 @@ export async function scaffoldApp(name, cwd, opts = {}) {
           regenerate: [{
             output: 'public/tailwind.css',
             command: cssBuildCmd,
-            inputs: ['app', 'components', 'modules', 'lib', 'public/input.css'],
+            inputs: ['app', 'components', 'modules', 'lib', 'styles', 'public/input.css'],
           }],
         }),
       },
@@ -1320,13 +1383,16 @@ export type ActionResult<T> =
     // @custom-variant, @keyframes) plus the app @theme mappings are compiled from
     // public/input.css into the STATIC public/tailwind.css that app/layout.ts
     // links, so the app is fully styled with JavaScript disabled. Write input.css:
-    // `@import "tailwindcss"`, source globs, the ui theme (read from the registry
-    // themes/index.css), then the app @theme inline block. The token VALUES live
-    // on :root in app/layout.ts (plain CSS, so they resolve with JS off) and the
-    // @theme inline maps here reference them by var(), the same split the blog
-    // uses. Same theme also lives at styles/globals.css for `webjsui` tooling.
-    const uiThemeRaw = await readThemeCss();
+    // `@import "tailwindcss"`, source globs, an import of the ui theme at
+    // styles/globals.css, then the app @theme inline block. The theme is
+    // IMPORTED, not copied: styles/globals.css is the stylesheet components.json
+    // names, so the tokens `webjs ui add` merges into it for a block (sidebar's
+    // --sidebar-*, chart's --chart-*) reach the compiled CSS. The token VALUES
+    // live there too, inside the theme block `init` owns, so
+    // `webjs ui init --preset <code>` repaints a fresh app: nothing in
+    // app/layout.ts overrides them.
     await writeFile(join(publicDir, 'input.css'), `@import "tailwindcss";
+@import "../styles/globals.css";
 
 /* Scan app sources so their utility classes make it into the compiled bundle.
    Tailwind v4 auto-scans the project too; these @source lines are explicit. */
@@ -1334,8 +1400,6 @@ export type ActionResult<T> =
 @source "../components/**/*.{ts,js}";
 @source "../modules/**/*.{ts,js}";
 @source "../lib/**/*.{ts,js}";
-
-${uiThemeRaw}
 
 /* A navbar pinned from a breakpoint up (md:fixed md:inset-x-0 md:top-0)
    reserves its height from that breakpoint. @variant resolves each breakpoint
@@ -1353,15 +1417,13 @@ html:has(> body > header[class~="lg:fixed"]) { @variant lg { scroll-padding-top:
 html:has(> body > header[class~="xl:fixed"]) { @variant xl { scroll-padding-top: var(--header-h); } }
 html:has(> body > header[class~="2xl:fixed"]) { @variant 2xl { scroll-padding-top: var(--header-h); } }
 
-/* App @theme mappings. The token VALUES live on :root in app/layout.ts (plain
-   CSS custom properties, so they resolve with JavaScript disabled); these
-   @theme inline maps turn them into utilities (bg-primary, text-display, ...). */
+/* App @theme mappings. The token VALUES live in styles/globals.css: the
+   colours and fonts in its theme block (which webjs ui init --preset
+   replaces), the app's own extras after it. These @theme inline maps turn the
+   extras and the type scale into utilities (border-border-strong, text-display). */
 @theme inline {
   --color-border-strong: var(--border-strong);
   --color-primary-tint: var(--primary-tint);
-  --font-sans:  var(--font-sans);
-  --font-serif: var(--font-serif);
-  --font-mono:  var(--font-mono);
   --text-display: clamp(2.6rem, 1.6rem + 3.2vw, 4.25rem);
   --text-h1:      clamp(2rem, 1.5rem + 1.6vw, 2.85rem);
   --text-h2:      clamp(1.35rem, 1.15rem + 0.7vw, 1.7rem);
@@ -1420,11 +1482,11 @@ export default function RootLayout({ children }: LayoutProps) {
   const nonce = cspNonce();
   return html\`
     <script nonce="\${nonce}">
-      // Light/dark theme: apply the saved choice before paint (no flash). The
-      // tokens follow color-scheme, which [data-theme] forces and otherwise
-      // follows the OS, so an unset choice needs NO inline work here. The .dark
-      // class is synced only for @webjsdev/ui components (they key off .dark).
-      // Delete this block and the [data-theme] rules below for a single-theme app.
+      // Light/dark theme: apply the saved choice, else the OS, before paint (no
+      // flash). The dark tokens and color-scheme both switch on the .dark class,
+      // so this sets .dark (and data-theme for a saved choice). With JavaScript
+      // off nothing sets .dark and the page is light throughout, controls
+      // included. Delete this block for a single-theme app.
       (function(){
         try {
           var mq = window.matchMedia('(prefers-color-scheme: dark)');
@@ -1441,10 +1503,11 @@ export default function RootLayout({ children }: LayoutProps) {
         } catch (_) {}
       })();
     </script>
-    <meta name="color-scheme" content="light dark">
+    <meta name="color-scheme" content="light">
     <!-- JetBrains Mono for body/UI (its monospaced, developer-console feel) and
          Bricolage Grotesque for the display wordmark. Swap these for your own
-         fonts (and update --font-sans / --font-display below). -->
+         fonts (and update --font-sans in styles/globals.css, or apply a preset
+         with webjs ui init --preset, which prints the faces to load). -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;500;700&display=swap">
@@ -1463,61 +1526,22 @@ export default function RootLayout({ children }: LayoutProps) {
 
     <link rel="stylesheet" href=\${asset('/public/tailwind.css')}>
     <style>
-      /* Design tokens: ONE definition per colour via light-dark(LIGHT, DARK), so
-         a palette change lands in a single place (DRY). The token NAMES are
-         infrastructure (public/input.css maps them into Tailwind via @theme); the
-         VALUES are a cool neutral-grey palette with a monospaced type system.
-         color-scheme decides which side of each light-dark() applies: the default
-         'light dark' follows the OS, and the toggle FORCES one via [data-theme]
-         below. The light theme is a crisp WHITE page with near-black text, a
-         readable muted grey, and visible borders (a washed-out light theme comes
-         from a grey page + too-light muted text + faint borders). For a
-         single-theme app, delete the [data-theme] rules and give each token a
-         single colour instead of light-dark().
-         EDGE CASES: light-dark() is COLOUR-only. A colour needed in just one
-         theme sets the unused side to a no-op, e.g. light-dark(#fff, transparent).
-         A DERIVED token that references a light-dark() one (like --primary-tint
-         below) tracks both themes for free. A NON-colour token that must differ
-         per theme (a shadow's geometry, a gradient, a size, an image) cannot use
-         light-dark(); give it a :root[data-theme='dark'] override plus an
-         @media (prefers-color-scheme: dark) { :root:not([data-theme]) { ... } }
-         rule for the OS default. */
+      /* The design tokens (colours, fonts, radius) live in styles/globals.css,
+         in the theme block that webjs ui init owns: npx webjsdev ui init --preset
+         CODE (a code from webjs.dev/ui/create) replaces them, and nothing here
+         overrides them. The light tokens are on :root and the dark ones on
+         .dark, which the script above keeps in step with the saved choice or
+         the OS. color-scheme switches on the same class, so native controls
+         and scrollbars always match the tokens: with JavaScript off the page
+         is light throughout rather than light tokens over dark controls. */
       :root {
-        --font-sans:  'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
-        --font-serif: ui-serif, 'Iowan Old Style', Palatino, Georgia, serif;
-        --font-mono:  'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
-        --font-display: 'Bricolage Grotesque', 'JetBrains Mono', ui-sans-serif, system-ui, sans-serif;
         /* The navbar height. The header is sized BY this token and nothing
            measures it, so the offset below can never drift from the header. */
         --header-h: 3.5rem;
 
-        color-scheme: light dark;                              /* default: follow the OS */
-        --background:         light-dark(#ffffff, #1e2226);
-        --foreground:         light-dark(#191c20, #dee2e6);
-        --card:               light-dark(#f7f8fa, #313539);
-        --card-foreground:    light-dark(#191c20, #dee2e6);
-        --popover:            light-dark(#ffffff, #313539);
-        --popover-foreground: light-dark(#191c20, #dee2e6);
-        --primary:            light-dark(#1e2226, #dee2e6);
-        --primary-foreground: light-dark(#ffffff, #1e2226);
-        --secondary:          light-dark(#eef0f2, #363a3e);
-        --secondary-foreground: light-dark(#191c20, #dee2e6);
-        --muted:              light-dark(#eef0f2, #313539);
-        --muted-foreground:   light-dark(#565c64, #94989c);
-        --accent:             light-dark(#e9ebef, #363a3e);
-        --accent-foreground:  light-dark(#191c20, #f7fbff);
-        --border:             light-dark(#e2e5e9, #3d434b);
-        --border-strong:      light-dark(#ccd1d7, #454b51);
-        --input:              light-dark(#e2e5e9, #34393e);
-        --ring:               light-dark(#8b9198, #6b7075);
-        /* A translucent tint of the primary, tracked automatically across
-           light/dark. Used for focus rings (ring-primary-tint). */
-        --primary-tint: color-mix(in srgb, var(--primary) 22%, transparent);
+        color-scheme: light;
       }
-      /* The toggle writes data-theme to FORCE a scheme; with neither attribute
-         the default 'color-scheme: light dark' above follows the OS. */
-      :root[data-theme='light'] { color-scheme: light; }
-      :root[data-theme='dark']  { color-scheme: dark; }
+      :root.dark { color-scheme: dark; }
     </style>
     <style>
       /* Base styles utility classes can't reach. */
@@ -1570,8 +1594,8 @@ export default function RootLayout({ children }: LayoutProps) {
   // app/features/<x> route AND its modules/<x>), then reshape this page into the
   // app's real landing page.
   await writeFile(join(appDir, 'app', 'page.ts'), `import { html } from '@webjsdev/core';
-import { cardClass } from '#components/ui/card.ts';
-import { badgeClass } from '#components/ui/badge.ts';
+import { cardClass } from '#modules/gallery/ui/card.ts';
+import { badgeClass } from '#modules/gallery/ui/badge.ts';
 // The demo index is defined once in modules/gallery/nav.ts (the same source the
 // left sidebar reads), so the home cards and the sidebar can never drift.
 import { featureList, EXAMPLES } from '#modules/gallery/nav.ts';
@@ -1650,7 +1674,7 @@ function iconGithub() {
 
   await writeFile(join(appDir, 'components', 'theme-toggle.ts'), `import { WebComponent, html, signal } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
-import { buttonClass } from '#components/ui/button.ts';
+import { buttonClass } from '#modules/gallery/ui/button.ts';
 
 type Theme = 'system' | 'light' | 'dark';
 
@@ -1686,8 +1710,8 @@ export class ThemeToggle extends WebComponent {
     const el = document.documentElement;
     if (next === 'system') delete el.dataset.theme;
     else el.dataset.theme = next;
-    // Our own tokens follow color-scheme via data-theme (set above). Keep the
-    // .dark class in sync only for @webjsdev/ui components, which key off it.
+    // The tokens in styles/globals.css and color-scheme (native controls)
+    // both switch on the .dark class; data-theme records the saved choice.
     const dark = next === 'dark'
       || (next === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
     el.classList.toggle('dark', dark);

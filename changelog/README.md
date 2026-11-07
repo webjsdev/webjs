@@ -23,7 +23,7 @@ changelog/
     …
 ```
 
-The website (`website/app/changelog/page.ts`) reads every
+The website (`website/app/(site)/changelog/page.ts`) reads every
 `<pkg>/<version>.md` at SSR time, sorts by date descending, and
 renders the unified release feed.
 
