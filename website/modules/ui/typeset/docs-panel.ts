@@ -91,7 +91,7 @@ export function docsContent(params: TypesetParams, origin: string) {
     <div class="min-h-0 flex-1 scroll-fade scrollbar-none overflow-y-auto p-4 md:p-6">
       <ui-tabs-content value="docs" class="flex flex-col gap-6">
         ${section(1, 'Create typeset.css', html`
-          ${prose(html`Copy the stylesheet into <code class="font-mono">public/typeset.css</code>, next to your <code class="font-mono">public/input.css</code>, then import it:`)}
+          ${prose(html`Copy the stylesheet into <code class="font-mono">public/typeset.css</code>, then import it in <code class="font-mono">public/input.css</code>:`)}
           ${copyButton('Copy typeset.css', 'css', '/ui/typeset.css')}
           ${code('import', IMPORT_CSS)}`)}
         ${section(2, 'Add the fonts', html`
