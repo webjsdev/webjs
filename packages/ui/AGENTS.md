@@ -320,7 +320,13 @@ tag starts with the block name (`dashboard-01-data-table`,
 and adds only the behaviour. Every block's elements can then register on one
 page, which the site's /ui/view frame does through a barrel
 `website/scripts/copy-registry.mjs` generates. Element ids inside a card carry
-the card's name, since a board renders dozens of cards on one page.
+the card's name, since a board renders dozens of cards on one page. A list
+that pages keeps one page in the document:
+the server renders the first page and writes every row on the element as JSON
+(`<dashboard-01-data-table rows=...>`, an `Array` reactive property), and the
+element renders each later page from that data, with the order, the selection
+and the edited cells held in the element, so a long list costs the page only
+the rows on screen.
 
 **How a sidebar block maps shadcn's React.** The shell is the kit's
 `<ui-sidebar-provider>` / `<ui-sidebar>` / `<ui-sidebar-inset>` /

@@ -154,6 +154,11 @@ for (const name of ['sidebar-07', 'sidebar-13', 'sidebar-15', 'dashboard-01']) {
         .filter((c) => /^cn-[a-z]/.test(c) && !CN_ALLOWLIST.has(c));
       assert.deepEqual([...new Set(kept)], [], 'no unbaked cn-* name reaches the rendered page');
       assert.ok(mod.metadata?.title, 'the page names itself');
+      if (name === 'dashboard-01') {
+        // The data table serves its first page, and every row rides on the element.
+        assert.equal([...out.matchAll(/<tr data-slot="table-row" data-row-id=/g)].length, 10, 'ten body rows');
+        assert.match(out, /<dashboard-01-data-table rows="\[\{&quot;id&quot;:1,/, 'the rows attribute');
+      }
     } finally {
       rmSync(d, { recursive: true, force: true });
     }

@@ -160,6 +160,10 @@ test('the preview blocks and dashboard-01 render in the frame, and their element
   }
   const dash = await page('/ui/view/dashboard-01');
   assert.match(dash, /<dashboard-01-data-table[\s>]/, 'the data table element');
+  // The table serves its first page only, and every row rides on the element.
+  assert.equal([...dash.matchAll(/<tr data-slot="table-row" data-row-id=/g)].length, 10, 'ten body rows');
+  const rows = /<dashboard-01-data-table rows="([^"]*)"/.exec(dash)?.[1] ?? '';
+  assert.equal(JSON.parse(rows.replaceAll('&quot;', '"').replaceAll('&amp;', '&')).length, 68, 'all 68 rows on the element');
   assert.match(dash, /<ui-sidebar-provider[\s>]/, 'in the kit sidebar shell');
   // The frame loads the generated barrel of block elements, so a block's own
   // element upgrades even though the block itself renders as a string.
