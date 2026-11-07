@@ -30,6 +30,9 @@ export function extraStylesFor(pathname: string): string[] {
   // The blocks pages' header buttons, which shadcn's blocks layout imports
   // from its luma style.
   if (path === '/ui/blocks' || path.startsWith('/ui/blocks/')) return ['luma'];
+  // shadcn shows every AI Elements pattern and the helper pages' demos in
+  // rhea. The AI Elements index has no preview, so it stays on the default.
+  if (path.startsWith('/ui/docs/ai-elements/') || path.startsWith('/ui/docs/helpers/')) return ['rhea'];
   // A component page whose lead demo shadcn shows in another style
   // (modules/ui/docs/lead-previews.ts).
   if (path.startsWith(COMPONENT_PAGE)) {
