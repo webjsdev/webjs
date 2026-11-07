@@ -14,7 +14,7 @@ export const demo = 'card-rtl';
 export default async function body(toc: TocEntry[]) {
   return html`
     ${heading(toc, 2, 'Usage')}
-    <p>There is no provider component to wrap your app in. Every kit component styles itself with logical properties (<code>ps-*</code>, <code>ms-*</code>, <code>start-*</code>, <code>text-start</code>), which the browser resolves from the nearest <code>dir</code> attribute, so setting <code>dir="rtl"</code> on an ancestor is the whole of it. Set <code>lang</code> on the same element, since a screen reader picks its voice from <code>lang</code>.</p>
+    <p>Every kit component styles itself with logical properties (<code>ps-*</code>, <code>ms-*</code>, <code>start-*</code>, <code>text-start</code>), which the browser resolves from the nearest <code>dir</code> attribute, so setting <code>dir="rtl"</code> on an ancestor is the whole of it. Set <code>lang</code> on the same element, since a screen reader picks its voice from <code>lang</code>.</p>
     ${codeFigure(`<html lang="ar" dir="rtl">
   <body>
     <!-- Your app content -->

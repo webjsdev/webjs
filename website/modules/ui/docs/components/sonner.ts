@@ -14,7 +14,7 @@ export const demo = 'sonner-demo';
 export async function intro(toc: TocEntry[]) {
   return html`
     ${heading(toc, 2, 'About')}
-    <p>The kit's toaster is written for WebJs and does not depend on the <code>sonner</code> package. It is one <code>&lt;ui-sonner&gt;</code> viewport you mount once, plus an imperative <code>toast()</code> function with Sonner's API: <code>toast.success()</code>, <code>toast.error()</code>, <code>toast.promise()</code> and the rest.</p>
+    <p>The kit's toaster is written for WebJs. It is one <code>&lt;ui-sonner&gt;</code> viewport you mount once, plus an imperative <code>toast()</code> function: <code>toast.success()</code>, <code>toast.error()</code>, <code>toast.promise()</code> and the rest.</p>
   `;
 }
 

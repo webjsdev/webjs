@@ -50,7 +50,7 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('accordion-multiple', { ...PREVIEW, previewClass: '*:data-[slot=accordion]:max-w-sm h-[36rem] md:h-[30rem]' })}
 
     ${heading(toc, 2, 'Disabled')}
-    <p>A <code>&lt;details&gt;</code> has no <code>disabled</code> attribute. Use <code>accordionTriggerClass({ disabled: true })</code> for the disabled look and add <code>inert</code> to the item so it cannot be focused or opened.</p>
+    <p>To disable an item, use <code>accordionTriggerClass({ disabled: true })</code> for the disabled look and add <code>inert</code> to the item so it cannot be focused or opened.</p>
     ${await componentPreview('accordion-disabled', PREVIEW)}
 
     ${heading(toc, 2, 'Borders')}
@@ -66,7 +66,7 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('accordion-rtl', { align: 'start', direction: 'rtl' })}
 
     ${heading(toc, 2, 'API Reference')}
-    <p>Every part is a class helper you put on a native element. The browser supplies the button semantics, the expanded state and the keyboard handling, so there is nothing to wire up.</p>
+    <p>Every part is a class helper you put on a native element. The browser supplies the button semantics, the expanded state and the keyboard handling.</p>
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">
       <table>
         <thead><tr><th>Helper</th><th>Element</th><th>Notes</th></tr></thead>

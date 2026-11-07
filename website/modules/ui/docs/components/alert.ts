@@ -48,7 +48,7 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('alert-destructive', PREVIEW)}
 
     ${heading(toc, 2, 'Action')}
-    <p>Add an element marked <code>data-slot="alert-action"</code> to hold a button or other action element. The alert reserves room for it on the inline end, and <code>absolute top-2 right-2</code> places it in the corner. The kit has no class helper for this part.</p>
+    <p>Add an element marked <code>data-slot="alert-action"</code> to hold a button or other action element. The alert reserves room for it on the inline end, and <code>absolute top-2 right-2</code> places it in the corner.</p>
     ${await componentPreview('alert-action', PREVIEW)}
 
     ${heading(toc, 2, 'Custom Colors')}

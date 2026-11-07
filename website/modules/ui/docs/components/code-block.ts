@@ -59,7 +59,7 @@ export default async function body(toc: TocEntry[]) {
       <li><strong>It stays small.</strong> A string renders as one text node, and <code>codeBlockLines()</code> splits text into line spans only when you need numbers or line variants.</li>
       <li><strong>It copies cleanly.</strong> Line numbers and diff markers are left out of a selection, and blank lines survive the copy.</li>
       <li><strong>It reads left to right.</strong> The content is always <code>dir="ltr"</code>. The header follows the page direction.</li>
-      <li><strong>It brings no highlighter.</strong> Lines are plain text, and the token spans of any highlighter fit inside a line. See <a href="#syntax-highlighting">Syntax Highlighting</a>.</li>
+      <li><strong>It works with any highlighter.</strong> Lines are plain text, and the token spans of any highlighter fit inside a line. See <a href="#syntax-highlighting">Syntax Highlighting</a>.</li>
       <li><strong>It fits where code shows up.</strong> Use it in a message, a Markdown fence, a Trace line, Tabs, a Dialog or a <code>typeset</code> container.</li>
       <li><strong>It scrolls by keyboard.</strong> The content is focusable, and floating actions show on focus as well as on hover.</li>
     </ul>
@@ -183,7 +183,7 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('code-block-rtl', { direction: 'rtl' })}
 
     ${heading(toc, 2, 'Syntax Highlighting')}
-    <p>The kit ships no highlighter, so a block that only shows plain output stays small and no grammar reaches the browser. <code>codeBlockLines()</code> renders plain text. To highlight, run the highlighter of your choice and put its token spans inside each line, built with <code>codeBlockLineClass()</code>.</p>
+    <p><code>codeBlockLines()</code> renders plain text, so a block that only shows plain output stays small and no grammar reaches the browser. To highlight, run the highlighter of your choice and put its token spans inside each line, built with <code>codeBlockLineClass()</code>.</p>
     ${await componentPreview('code-block-highlighting', rhea)}
     ${codeFigure(`// tokens: one array of { text, className } per line, from your highlighter.
 <pre data-slot="code-block-content" tabindex="0" dir="ltr" class=\${codeBlockContentClass()}><code
@@ -219,13 +219,13 @@ export default async function Page() {
 }`, { lineNumbers: true })}
 
     ${heading(toc, 3, 'Streaming')}
-    <p>The kit has no streaming hook. A block renders the text it is given, so a component that holds the streaming text in a signal re-renders its lines as the text grows. The preview shows the settled result.</p>
+    <p>A block renders the text it is given, so a component that holds the streaming text in a signal re-renders its lines as the text grows. The preview shows the settled result.</p>
     ${await componentPreview('code-block-streaming', rhea)}
 
     ${heading(toc, 3, 'Markdown')}
     <p>The kit does not parse Markdown. Render the message with the Markdown renderer of your choice and route each fenced code block to a code block titled by its language. Inline code stays an inline <code>&lt;code&gt;</code>.</p>
     ${await componentPreview('code-block-markdown', rhea)}
-    <p>The copy button has no disabled state, so while a fence is still streaming and its closing fence has not arrived, leave the copy button out.</p>
+    <p>While a fence is still streaming, leave the copy button out, and add it once the closing fence arrives.</p>
 
     ${heading(toc, 2, 'Accessibility')}
     <ul>
@@ -307,6 +307,6 @@ export default async function Page() {
     <p>A row below the content, such as for a Show More button, on a <code>&lt;div data-slot="code-block-footer"&gt;</code>. It takes no options.</p>
 
     ${heading(toc, 3, 'useHighlightedCode')}
-    <p>The kit has no highlighting hook. See <a href="#syntax-highlighting">Syntax Highlighting</a> for how token spans from a highlighter of your own go into the lines.</p>
+    <p>See <a href="#syntax-highlighting">Syntax Highlighting</a> for how token spans from a highlighter of your own go into the lines.</p>
   `;
 }

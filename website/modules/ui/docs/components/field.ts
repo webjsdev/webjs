@@ -213,7 +213,7 @@ export default async function body(toc: TocEntry[]) {
 </div>`)}
 
     ${heading(toc, 3, 'fieldLabelClass')}
-    <p>Classes for the <code>&lt;label data-slot="field-label"&gt;</code>, styled for both direct inputs and nested fields. Takes no options. A class helper styles any element, so there is no <code>asChild</code>.</p>
+    <p>Classes for the <code>&lt;label data-slot="field-label"&gt;</code>, styled for both direct inputs and nested fields. Takes no options. A class helper styles any element.</p>
     ${codeFigure(`<label data-slot="field-label" for="email" class=\${fieldLabelClass()}>Email</label>`)}
 
     ${heading(toc, 3, 'fieldTitleClass')}
@@ -234,7 +234,7 @@ export default async function body(toc: TocEntry[]) {
 </div>`)}
 
     ${heading(toc, 3, 'fieldErrorClass')}
-    <p>Classes for the inline validation message, a <code>&lt;div data-slot="field-error" role="alert"&gt;</code>. Takes no options. There is no <code>errors</code> prop: render the messages your server action returned, and for several, a list inside the same element.</p>
+    <p>Classes for the inline validation message, a <code>&lt;div data-slot="field-error" role="alert"&gt;</code>. Takes no options. Render the messages your server action returned, and for several, a list inside the same element.</p>
     ${codeFigure(`\${actionData?.fieldErrors?.username
   ? html\`<div data-slot="field-error" id="username-error" role="alert" class=\${fieldErrorClass()}>\${actionData.fieldErrors.username}</div>\`
   : ''}`)}

@@ -16,7 +16,7 @@ export const demo = 'tooltip-demo';
 export default async function body(toc: TocEntry[]) {
   return html`
     ${heading(toc, 2, 'Usage')}
-    <p>Importing the module registers the tooltip elements. There is no provider to add: each tooltip keeps its own delay, and the short skip window after one closes is shared across the page.</p>
+    <p>Importing the module registers the tooltip elements. Each tooltip keeps its own delay, and the short skip window after one closes is shared across the page.</p>
     ${codeFigure(`import '#components/ui/tooltip.ts';`, { lineNumbers: true })}
     ${codeFigure(`<ui-tooltip>
   <ui-tooltip-trigger>
@@ -63,7 +63,7 @@ export default async function body(toc: TocEntry[]) {
     </div>
 
     ${heading(toc, 3, 'ui-tooltip-trigger')}
-    <p>Wraps the control that shows the tip. The control is described by the tip through <code>aria-describedby</code>, so an icon-only control still needs its own <code>aria-label</code>. It takes no attributes.</p>
+    <p>Wraps the control that shows the tip. The control is described by the tip through <code>aria-describedby</code>, so an icon-only control still needs its own <code>aria-label</code>.</p>
 
     ${heading(toc, 3, 'ui-tooltip-content')}
     <p>The tip, rendered in the top layer with the Popover API.</p>

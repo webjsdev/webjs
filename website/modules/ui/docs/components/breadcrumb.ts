@@ -79,7 +79,7 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('breadcrumb-ellipsis', { previewClass: 'p-2' })}
 
     ${heading(toc, 2, 'Link component')}
-    <p>A breadcrumb link is a plain <code>&lt;a&gt;</code> with <code>breadcrumbLinkClass()</code>. WebJs's client router handles a plain link on its own, so there is no router-specific link component to swap in and no <code>asChild</code>.</p>
+    <p>A breadcrumb link is a plain <code>&lt;a&gt;</code> with <code>breadcrumbLinkClass()</code>. WebJs's client router handles a plain link on its own.</p>
     ${await componentPreview('breadcrumb-link')}
 
     ${heading(toc, 2, 'RTL')}

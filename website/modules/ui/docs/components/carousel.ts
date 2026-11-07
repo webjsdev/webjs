@@ -94,7 +94,7 @@ export default async function body(toc: TocEntry[]) {
 </ui-carousel>`, { lineNumbers: true })}
 
     ${heading(toc, 2, 'Options')}
-    <p>The carousel is native CSS scroll snap, not Embla, so it has no <code>opts</code> object. Slides always snap to their start, which is Embla's <code>align: "start"</code>. The one option is the <code>loop</code> attribute, which makes the previous and next buttons (and the arrow keys) wrap around at the ends.</p>
+    <p>The carousel is native CSS scroll snap, and slides snap to their start. The one option is the <code>loop</code> attribute, which makes the previous and next buttons (and the arrow keys) wrap around at the ends.</p>
     ${codeFigure(`<ui-carousel loop>
   <ui-carousel-content>
     <ui-carousel-item>...</ui-carousel-item>
@@ -104,7 +104,7 @@ export default async function body(toc: TocEntry[]) {
 </ui-carousel>`, { lineNumbers: true })}
 
     ${heading(toc, 2, 'API')}
-    <p>The <code>&lt;ui-carousel&gt;</code> element is the API: query it and call its methods, or read its state. There is no <code>setApi</code>.</p>
+    <p>The <code>&lt;ui-carousel&gt;</code> element is the API: query it and call its methods, or read its state.</p>
     ${await componentPreview('carousel-api', { previewClass: 'sm:h-[32rem]' })}
     ${codeFigure(`import { WebComponent, html, signal } from '@webjsdev/core';
 import '#components/ui/carousel.ts';
@@ -144,7 +144,7 @@ carousel.addEventListener('ui-slide-change', (e) => {
 });`, { lineNumbers: true })}
 
     ${heading(toc, 2, 'Plugins')}
-    <p>The kit's carousel has no plugin system. Behaviour such as autoplay is a few lines in a component of your own that steps the carousel with <code>scrollNext()</code>, here with <code>loop</code> so it wraps back to the first slide.</p>
+    <p>Add behaviour such as autoplay with a few lines in a component of your own that steps the carousel with <code>scrollNext()</code>, here with <code>loop</code> so it wraps back to the first slide.</p>
     ${codeFigure(`import { WebComponent, html } from '@webjsdev/core';
 import '#components/ui/carousel.ts';
 
@@ -174,7 +174,7 @@ AutoplayCarousel.register('autoplay-carousel');`, { lineNumbers: true })}
     ${heading(toc, 2, 'RTL')}
     <p>To enable RTL support, see the <a href="/ui/docs/rtl">RTL configuration guide</a>.</p>
     ${await componentPreview('carousel-rtl', { direction: 'rtl', previewClass: 'h-80 sm:h-[32rem]' })}
-    <p>When localizing the carousel for RTL languages, set <code>dir</code> on the carousel or any ancestor. There is no separate <code>direction</code> option: the carousel reads its direction from the page, so it scrolls the right way, the arrow keys swap, and the navigation buttons flip their icons on their own.</p>
+    <p>When localizing the carousel for RTL languages, set <code>dir</code> on the carousel or any ancestor. The carousel reads its direction from the page, so it scrolls the right way, the arrow keys swap, and the navigation buttons flip their icons on their own.</p>
     ${codeFigure(`<ui-carousel dir="rtl">
   <ui-carousel-content>
     <ui-carousel-item>...</ui-carousel-item>
@@ -221,7 +221,7 @@ AutoplayCarousel.register('autoplay-carousel');`, { lineNumbers: true })}
     </div>
 
     ${heading(toc, 3, 'ui-carousel-content')}
-    <p>The scroller. It holds the slides and takes the height of a vertical carousel. It has no attributes.</p>
+    <p>The scroller. It holds the slides and takes the height of a vertical carousel.</p>
 
     ${heading(toc, 3, 'ui-carousel-item')}
     <p>One slide, a <code>role="group"</code> with <code>aria-roledescription="slide"</code>. Size it with a <code>basis-*</code> class.</p>

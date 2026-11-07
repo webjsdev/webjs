@@ -80,7 +80,7 @@ import { cn } from '#lib/utils/cn.ts';`, { lineNumbers: true })}
     ${await componentPreview('table-actions')}
 
     ${heading(toc, 2, 'Data Table')}
-    <p>You can use the table helpers to build more complex data tables. The kit ships no table engine, so sorting, filtering and pagination are yours to add: the server can sort and slice the rows before it renders them, driven by the query string, which keeps the table working with JavaScript off.</p>
+    <p>You can use the table helpers to build more complex data tables. Add sorting, filtering and pagination on the server, which can sort and slice the rows before it renders them, driven by the query string, which keeps the table working with JavaScript off.</p>
     <p>See the <a href="/ui/docs/components/data-table">Data Table</a> documentation for more information.</p>
 
     ${heading(toc, 2, 'RTL')}

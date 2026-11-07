@@ -66,7 +66,7 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('drawer-sides')}
 
     ${heading(toc, 2, 'Responsive Dialog')}
-    <p>You can combine the Dialog and Drawer components to create a responsive dialog. This renders a Dialog on desktop and a Drawer on mobile. There is no media-query hook: both are in the page, and a breakpoint class shows one trigger and hides the other, so the first paint is already the right one.</p>
+    <p>You can combine the Dialog and Drawer components to create a responsive dialog. This renders a Dialog on desktop and a Drawer on mobile. Both are in the page, and a breakpoint class shows one trigger and hides the other, so the first paint is already the right one.</p>
     ${await componentPreview('drawer-dialog')}
 
     ${heading(toc, 2, 'RTL')}

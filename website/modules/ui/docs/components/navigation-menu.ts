@@ -40,7 +40,7 @@ export default async function body(toc: TocEntry[]) {
 └── ui-navigation-menu-indicator`, { lang: 'text' })}
 
     ${heading(toc, 2, 'Link Component')}
-    <p>There is no <code>asChild</code>. A link that sits in the bar beside the triggers is your own <code>&lt;a&gt;</code> with the link and trigger classes, so the client router, a <code>data-no-router</code> opt-out, or any other attribute goes straight on it.</p>
+    <p>A link that sits in the bar beside the triggers is your own <code>&lt;a&gt;</code> with the link and trigger classes, so the client router, a <code>data-no-router</code> opt-out, or any other attribute goes straight on it.</p>
     ${codeFigure(`import { cn } from '#lib/utils/cn.ts';
 import {
   navigationMenuLinkClass,

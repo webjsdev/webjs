@@ -628,7 +628,7 @@ export default async function body(toc: TocEntry[]) {
     </ol>
     ${commandBlock(packageCommands('add table'))}
     <ol start="2">
-      <li><p>There is no table library to install. A WebJs page runs on the server, so it filters, sorts and paginates plain arrays before it renders, and the browser receives finished HTML. The few behaviours that need the browser are a small custom element each.</p></li>
+      <li><p>A WebJs page runs on the server, so it filters, sorts and paginates plain arrays before it renders, and the browser receives finished HTML. The few behaviours that need the browser are a small custom element each.</p></li>
     </ol>
 
     ${heading(toc, 2, 'Prerequisites')}

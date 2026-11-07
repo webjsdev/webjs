@@ -48,7 +48,7 @@ export function DatePickerDemo() {
     <p>The calendar dispatches <code>ui-value-change</code> with the picked date in <code>detail.value</code> (a <code>"YYYY-MM-DD"</code> string), so a component that wants the trigger to show the date listens for it and re-renders the label. With <code>name</code>, the date also submits with the surrounding form. See the <a href="/ui/docs/components/calendar">Calendar</a> documentation for more information.</p>
 
     ${heading(toc, 2, 'Composition')}
-    <p>A date picker is built from a popover and <code>&lt;ui-calendar&gt;</code> (there is no date picker element of its own):</p>
+    <p>A date picker is built from a popover and <code>&lt;ui-calendar&gt;</code>:</p>
     ${codeFigure(`button[popovertarget]
 div[popover]  popoverContentClass()
 └── ui-calendar`, { lang: 'text' })}
@@ -74,7 +74,7 @@ div[popover]  popoverContentClass()
     ${await componentPreview('date-picker-time')}
 
     ${heading(toc, 2, 'Natural Language Picker')}
-    <p>A natural language picker turns text such as "In 2 days" into a date. The kit ships no date parser, so the demo shows the first paint for "In 2 days" and leaves parsing what the reader types to a library of your choice.</p>
+    <p>A natural language picker turns text such as "In 2 days" into a date. Parse what the reader types with a library of your choice. The demo shows the first paint for "In 2 days".</p>
     ${await componentPreview('date-picker-natural-language')}
 
     ${heading(toc, 2, 'RTL')}

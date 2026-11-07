@@ -230,6 +230,6 @@ export default async function body(toc: TocEntry[]) {
     ])}
 
     ${heading(toc, 3, 'Layout parts')}
-    <p><code>&lt;ui-questionnaire-progress&gt;</code>, <code>&lt;ui-questionnaire-title&gt;</code>, <code>&lt;ui-questionnaire-description&gt;</code>, <code>&lt;ui-questionnaire-choices&gt;</code> and <code>&lt;ui-questionnaire-actions&gt;</code> take no attributes. <code>&lt;ui-questionnaire-actions&gt;</code> is a styled-only layout helper.</p>
+    <p><code>&lt;ui-questionnaire-actions&gt;</code> is a styled-only layout helper.</p>
   `;
 }

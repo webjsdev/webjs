@@ -77,7 +77,7 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('marker-icon', RHEA)}
 
     ${heading(toc, 2, 'Links and Buttons')}
-    <p>A class helper styles any element, so a marker that links or acts is an <code>&lt;a&gt;</code> or a <code>&lt;button&gt;</code> with the marker's classes. There is no wrapper and no <code>asChild</code>.</p>
+    <p>A class helper styles any element, so a marker that links or acts is an <code>&lt;a&gt;</code> or a <code>&lt;button&gt;</code> with the marker's classes.</p>
     ${await componentPreview('marker-link-button', RHEA)}
     ${codeFigure(`import { html } from '@webjsdev/core';
 import { markerClass, markerContentClass } from '#components/ui/marker.ts';

@@ -142,7 +142,7 @@ export default async function body(toc: TocEntry[]) {
   <div class=\${buttonGroupTextClass()}>Text</div>
   <button class=\${buttonClass()}>Button</button>
 </div>`)}
-    <p>A class helper styles any element, so there is no <code>asChild</code>: to render the text as a label, put the classes on a <code>&lt;label&gt;</code>.</p>
+    <p>A class helper styles any element, so to render the text as a label, put the classes on a <code>&lt;label&gt;</code>.</p>
     ${codeFigure(`import { buttonGroupClass, buttonGroupTextClass } from '#components/ui/button-group.ts';
 import { inputClass } from '#components/ui/input.ts';
 

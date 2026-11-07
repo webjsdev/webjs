@@ -99,7 +99,7 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('bubble-group-demo', RHEA)}
 
     ${heading(toc, 2, 'Links and Buttons')}
-    <p>You can turn a bubble into a link or button by putting <code>bubbleContentClass()</code> on an <code>&lt;a&gt;</code> or <code>&lt;button&gt;</code> instead of a <code>&lt;div&gt;</code>. There is no wrapper and no <code>asChild</code>.</p>
+    <p>You can turn a bubble into a link or button by putting <code>bubbleContentClass()</code> on an <code>&lt;a&gt;</code> or <code>&lt;button&gt;</code> instead of a <code>&lt;div&gt;</code>.</p>
     ${await componentPreview('bubble-link-button', RHEA)}
     ${codeFigure(`import { bubbleClass, bubbleContentClass } from '#components/ui/bubble.ts';
 

@@ -49,7 +49,7 @@ div popover id="id"          popoverContentClass()
 └── div                      popoverHeaderClass()
     ├── h3                   popoverTitleClass()
     └── p                    popoverDescriptionClass()`, { lang: 'text' })}
-    <p>The popover is the browser's own Popover API. The <code>popovertarget</code> button opens the panel, which renders in the top layer, closes on an outside click or Escape, returns focus to the button, and is anchored to the button by CSS Anchor Positioning. There is no script and no wrapper element.</p>
+    <p>The popover is the browser's own Popover API. The <code>popovertarget</code> button opens the panel, which renders in the top layer, closes on an outside click or Escape, returns focus to the button, and is anchored to the button by CSS Anchor Positioning, all with no script.</p>
 
     ${heading(toc, 2, 'Basic')}
     <p>A simple popover with a header, title, and description.</p>

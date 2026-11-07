@@ -231,7 +231,7 @@ style="--sidebar-width: var(--sidebar-width-mobile, 18rem)"`, { title: 'componen
 </ui-sidebar-provider>`, { lineNumbers: true })}
 
     ${heading(toc, 2, 'useSidebar')}
-    <p>There is no hook: the provider element is the sidebar's state. From a component inside it, reach it with <code>closest()</code> and read or call the members below.</p>
+    <p>The provider element is the sidebar's state. From a component inside it, reach it with <code>closest()</code> and read or call the members below.</p>
     ${codeFigure(`import type { UiSidebarProvider } from '#components/ui/sidebar.ts';
 
 const sidebar = this.closest<UiSidebarProvider>('ui-sidebar-provider');
@@ -461,7 +461,7 @@ export async function sidebarOpen() {
 
     ${heading(toc, 2, 'Changelog')}
     ${heading(toc, 3, 'RTL Support')}
-    <p>Right-to-left support takes five things, and the kit's sidebar ships with all of them, so there is nothing to apply:</p>
+    <p>Right-to-left support takes five things, and the kit's sidebar ships with all of them:</p>
     <div class=${steps}>
       <h3>No <code>dir</code> prop to add.</h3>
       <p>The direction comes from the <code>dir</code> attribute on an ancestor, and the phone sheet inherits it.</p>

@@ -81,7 +81,7 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('item-header', { previewClass: 'h-96' })}
 
     ${heading(toc, 2, 'Link')}
-    <p>A class helper styles any element, so an item that is a link is an <code>&lt;a&gt;</code> with the item's classes. There is no wrapper and no <code>asChild</code>. The hover and focus states apply to the anchor element.</p>
+    <p>A class helper styles any element, so an item that is a link is an <code>&lt;a&gt;</code> with the item's classes. The hover and focus states apply to the anchor element.</p>
     ${await componentPreview('item-link')}
     ${codeFigure(`<a href="/dashboard" data-slot="item" class=\${itemClass()}>
   <div data-slot="item-media" data-variant="icon" class=\${itemMediaClass({ variant: 'icon' })}>

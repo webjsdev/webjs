@@ -29,7 +29,7 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('badge-spinner')}
 
     ${heading(toc, 2, 'Link')}
-    <p>A class helper styles any element, so a link that looks like a badge is an <code>&lt;a&gt;</code> with the badge's classes. There is no <code>asChild</code>. The hover styles apply only when the element is a link.</p>
+    <p>A class helper styles any element, so a link that looks like a badge is an <code>&lt;a&gt;</code> with the badge's classes. The hover styles apply only when the element is a link.</p>
     ${await componentPreview('badge-link')}
 
     ${heading(toc, 2, 'Custom Colors')}

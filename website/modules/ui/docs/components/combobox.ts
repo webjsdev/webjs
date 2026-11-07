@@ -55,7 +55,7 @@ export function exampleCombobox() {
         └── ui-combobox-item`, { lang: 'text' })}
 
     ${heading(toc, 3, 'With groups and collection')}
-    <p>Items nested in each <code>&lt;ui-combobox-group&gt;</code>, with a separator between groups (see <a href="#groups">Groups</a>). There is no collection part: the items go straight into the group, after its label.</p>
+    <p>Items nested in each <code>&lt;ui-combobox-group&gt;</code>, with a separator between groups (see <a href="#groups">Groups</a>). The items go straight into the group, after its label.</p>
     ${codeFigure(`ui-combobox
 ├── ui-combobox-input
 └── ui-combobox-content
@@ -149,7 +149,7 @@ export function exampleComboboxMultiple() {
     ${await componentPreview('combobox-disabled')}
 
     ${heading(toc, 2, 'Auto Highlight')}
-    <p>The combobox always highlights the first match as you type, so Enter picks it. This is Base UI's <code>autoHighlight</code> behavior, and there is no attribute to set.</p>
+    <p>The combobox always highlights the first match as you type, so Enter picks it.</p>
     ${await componentPreview('combobox-auto-highlight')}
 
     ${heading(toc, 2, 'Popup')}
@@ -165,7 +165,7 @@ export function exampleComboboxMultiple() {
     ${await componentPreview('combobox-rtl', { direction: 'rtl', align: 'start' })}
 
     ${heading(toc, 2, 'API Reference')}
-    <p>The combobox follows Base UI's Combobox: typing filters the list, the arrow keys highlight while focus stays in the input, and Enter picks. The choice lives in a real form control, one <code>&lt;input type="hidden" name&gt;</code> per chosen value, served by the server, so the form submits it with or without JavaScript.</p>
+    <p>Typing filters the list, the arrow keys highlight while focus stays in the input, and Enter picks. The choice lives in a real form control, one <code>&lt;input type="hidden" name&gt;</code> per chosen value, served by the server, so the form submits it with or without JavaScript.</p>
 
     ${heading(toc, 3, 'Elements')}
     <div class="typeset-scroll scroll-fade-x scrollbar-none *:[table]:w-full">

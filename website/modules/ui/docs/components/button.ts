@@ -69,7 +69,7 @@ export default async function body(toc: TocEntry[]) {
     <p>To create a button group, use the <code>buttonGroupClass()</code> helper. See the <a href="/ui/docs/components/button-group">Button Group</a> documentation for more details.</p>
 
     ${heading(toc, 2, 'As Link')}
-    <p>A class helper styles any element, so a link that looks like a button is a link with the button's classes. There is no wrapper and no <code>asChild</code>.</p>
+    <p>A class helper styles any element, so a link that looks like a button is a link with the button's classes.</p>
     ${await componentPreview('button-aschild')}
 
     ${heading(toc, 2, 'RTL')}

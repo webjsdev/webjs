@@ -34,12 +34,12 @@ export default async function body(toc: TocEntry[]) {
     <p>You can use <code>&lt;ui-calendar&gt;</code> to build a date picker. See the <a href="/ui/docs/components/date-picker">Date Picker</a> page for more information.</p>
 
     ${heading(toc, 2, 'Persian / Hijri / Jalali Calendar')}
-    <p><code>&lt;ui-calendar&gt;</code> lays out Gregorian months, and has no other calendar system. What a <code>locale</code> changes is the language its months and weekdays are named in, so a Persian locale gives Persian names over Gregorian dates, as below. Add <code>-u-ca-gregory</code> to the locale so the caption names the same month the grid shows.</p>
+    <p><code>&lt;ui-calendar&gt;</code> lays out Gregorian months. What a <code>locale</code> changes is the language its months and weekdays are named in, so a Persian locale gives Persian names over Gregorian dates, as below. Add <code>-u-ca-gregory</code> to the locale so the caption names the same month the grid shows.</p>
     ${codeFigure(`<ui-calendar mode="single" locale="fa-IR-u-ca-gregory" dir="rtl"></ui-calendar>`)}
     ${await componentPreview('calendar-hijri', { previewClass: 'h-[400px]' })}
 
     ${heading(toc, 2, 'Selected Date (With TimeZone)')}
-    <p>A selected day never drifts by one between time zones, and <code>&lt;ui-calendar&gt;</code> has no time zone to set: its values are date-only strings, <code>"YYYY-MM-DD"</code>, and its arithmetic runs on UTC calendar dates, so a time zone can never move a day.</p>
+    <p>A selected day never drifts by one between time zones: <code>&lt;ui-calendar&gt;</code> values are date-only strings, <code>"YYYY-MM-DD"</code>, and its arithmetic runs on UTC calendar dates, so a time zone can never move a day.</p>
     ${codeFigure(`<ui-calendar
   mode="single"
   @ui-value-change=\${(e) => {
@@ -62,7 +62,7 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('calendar-caption', { previewClass: 'h-96' })}
 
     ${heading(toc, 2, 'Presets')}
-    <p>Presets are buttons beside the calendar that set its <code>value</code> and <code>month</code>. The calendar has no presets option of its own, so the component that owns the card wires each button's click.</p>
+    <p>Presets are buttons beside the calendar that set its <code>value</code> and <code>month</code>. The component that owns the card wires each button's click.</p>
     ${await componentPreview('calendar-presets', { previewClass: 'h-[650px]' })}
 
     ${heading(toc, 2, 'Date and Time Picker')}
@@ -70,7 +70,7 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('calendar-time', { previewClass: 'h-[600px]' })}
 
     ${heading(toc, 2, 'Booked dates')}
-    <p>DayPicker takes a list of single days to disable and style. <code>&lt;ui-calendar&gt;</code> disables the days outside a <code>min</code> / <code>max</code> window (or the whole grid with <code>disabled</code>) and takes no list of single days, so this demo closes the booked end of February with <code>max</code>.</p>
+    <p><code>&lt;ui-calendar&gt;</code> disables the days outside a <code>min</code> / <code>max</code> window, or the whole grid with <code>disabled</code>. This demo closes the booked end of February with <code>max</code>.</p>
     ${await componentPreview('calendar-booked-dates', { previewClass: 'h-96' })}
 
     ${heading(toc, 2, 'Custom Cell Size')}
@@ -88,7 +88,7 @@ export default async function body(toc: TocEntry[]) {
     <p><code>&lt;ui-calendar&gt;</code> renders its own day buttons and offers no slot for extra content in them, such as a price under each day.</p>
 
     ${heading(toc, 2, 'Week Numbers')}
-    <p>DayPicker's <code>showWeekNumber</code> adds a column of week numbers. <code>&lt;ui-calendar&gt;</code> has no week-number column, so the demo shows the same month without one. Use <code>week-starts-on</code> to choose the first day of the week (0 is Sunday).</p>
+    <p>Use <code>week-starts-on</code> to choose the first day of the week (0 is Sunday).</p>
     ${await componentPreview('calendar-week-numbers', { previewClass: 'h-96' })}
 
     ${heading(toc, 2, 'RTL')}
@@ -136,7 +136,7 @@ export default async function body(toc: TocEntry[]) {
 
     ${heading(toc, 2, 'Changelog')}
     ${heading(toc, 3, 'RTL Support')}
-    <p><code>&lt;ui-calendar&gt;</code> supports right-to-left layouts and localized labels out of the box, so there is nothing to apply: it takes <code>locale</code>, formats every label with it, and rounds range ends with logical properties (<code>rounded-s</code> / <code>rounded-e</code>, <code>start</code> / <code>end</code>), so <code>dir="rtl"</code> flips the grid with no other change.</p>
+    <p><code>&lt;ui-calendar&gt;</code> supports right-to-left layouts and localized labels out of the box: it takes <code>locale</code>, formats every label with it, and rounds range ends with logical properties (<code>rounded-s</code> / <code>rounded-e</code>, <code>start</code> / <code>end</code>), so <code>dir="rtl"</code> flips the grid with no other change.</p>
     ${callout(html`If you copied <code>components/ui/calendar.ts</code> before it took <code>locale</code>, run <code>webjs ui diff calendar</code> to see what changed and <code>webjs ui add calendar --overwrite</code> to take the current version.`)}
     ${codeFigure(`<ui-calendar mode="single" locale="en-US"></ui-calendar>`)}
   `;

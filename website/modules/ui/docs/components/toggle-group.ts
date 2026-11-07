@@ -45,7 +45,7 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('toggle-group-vertical')}
 
     ${heading(toc, 2, 'Disabled')}
-    <p>The group has no <code>disabled</code> attribute of its own. Put <code>disabled</code> on each item instead: a disabled item refuses clicks and is skipped by the arrow keys.</p>
+    <p>To disable items, put <code>disabled</code> on each item: a disabled item refuses clicks and is skipped by the arrow keys.</p>
     ${await componentPreview('toggle-group-disabled')}
 
     ${heading(toc, 2, 'Custom')}

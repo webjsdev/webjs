@@ -90,7 +90,7 @@ export default async function body(toc: TocEntry[]) {
           <tr><td><code>&lt;ui-command-item&gt;</code></td><td>One action, a <code>role="option"</code> carrying <code>data-selected="true"</code> while selected.</td></tr>
           <tr><td><code>&lt;ui-command-shortcut&gt;</code></td><td>A keyboard shortcut hint at the end of an item.</td></tr>
           <tr><td><code>&lt;ui-command-separator&gt;</code></td><td>A divider between groups, hidden while a search runs.</td></tr>
-          <tr><td><code>&lt;ui-command-dialog&gt;</code></td><td>A <code>&lt;ui-command&gt;</code> in a native modal dialog, with a screen-reader title and description. It has no trigger part, so open it with <code>show()</code>, or compose a Dialog as the demos above do.</td></tr>
+          <tr><td><code>&lt;ui-command-dialog&gt;</code></td><td>A <code>&lt;ui-command&gt;</code> in a native modal dialog, with a screen-reader title and description. Open it with <code>show()</code>, or compose a Dialog as the demos above do.</td></tr>
         </tbody>
       </table>
     </div>

@@ -143,7 +143,7 @@ import '#components/ui/input-otp.ts';`, { lineNumbers: true })}
     <p>Draws the character at <code>index</code> and the blinking caret. The slot styles its own host, so a class written on it is kept, and it carries <code>data-slot="input-otp-slot"</code> and <code>data-active</code>.</p>
 
     ${heading(toc, 3, 'ui-input-otp-separator')}
-    <p>A dash between groups. It takes no attributes.</p>
+    <p>A dash between groups.</p>
 
     <p>The slots, groups and separator are decoration hidden from assistive technology. The real input is what a screen reader meets, so give it a <code>&lt;label for&gt;</code> or an <code>aria-label</code>.</p>
   `;
