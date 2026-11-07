@@ -43,7 +43,7 @@ export default async function body(toc: TocEntry[]) {
     <p>See the <a href="/ui/docs/installation">installation section</a> for how to set up Tailwind CSS.</p>
 
     ${heading(toc, 3, 'tailwind.config', 'tailwindconfig')}
-    <p>The kit targets Tailwind CSS v4, which has no <code>tailwind.config.js</code>. The key is accepted so an older config still parses, and the CLI never reads it. <strong>Leave it out.</strong></p>
+    <p>The kit targets Tailwind CSS v4, which is configured in CSS. The key is accepted so an older config still parses. <strong>Leave it out.</strong></p>
 
     ${heading(toc, 3, 'tailwind.css', 'tailwindcss')}
     <p>Path to the CSS file that imports Tailwind CSS into your project. <code>init</code> appends the theme tokens to it, and <code>add</code> writes the tokens back if they go missing and merges in the CSS variables a component or block carries.</p>
@@ -70,16 +70,16 @@ export default async function body(toc: TocEntry[]) {
     "cssVariables": true
   }
 }`, { title: 'components.json', lang: 'json' })}
-    <p><code>init</code> writes <code>true</code>. There is no inline-utility variant of the components, so <code>false</code> changes nothing. For more information, see the <a href="/ui/docs/theming">theming docs</a>.</p>
+    <p><code>init</code> writes <code>true</code>, which the components are built for: their classes name the theme tokens. For more information, see the <a href="/ui/docs/theming">theming docs</a>.</p>
 
     ${heading(toc, 3, 'tailwind.prefix', 'tailwindprefix')}
-    <p>The key is accepted for compatibility, but the CLI does not apply a prefix to the classes it writes. A component lands with Tailwind's unprefixed utilities.</p>
+    <p>A component lands with Tailwind's unprefixed utilities, so leave the prefix empty.</p>
 
     ${heading(toc, 2, 'rsc')}
-    <p>WebJs has no server and client component split, so there is no <code>"use client"</code> directive to add and no <code>rsc</code> key. A page renders on the server, and a component that needs JavaScript ships it on its own.</p>
+    <p>A page renders on the server, and a component that needs JavaScript ships it on its own, with nothing to mark. Leave <code>rsc</code> out of <code>components.json</code>: the config schema is strict, so an unknown key is an error.</p>
 
     ${heading(toc, 2, 'tsx')}
-    <p>The kit ships TypeScript sources only, and there is no <code>tsx</code> key. WebJs strips the types when it serves a file, with no build step, so a JavaScript app imports the <code>.ts</code> files as they are. See <a href="/ui/docs/javascript">JavaScript</a>.</p>
+    <p>The kit ships TypeScript sources, so leave <code>tsx</code> out of <code>components.json</code>. WebJs strips the types when it serves a file, with no build step, so a JavaScript app imports the <code>.ts</code> files as they are. See <a href="/ui/docs/javascript">JavaScript</a>.</p>
 
     ${heading(toc, 2, 'aliases')}
     <p>The CLI uses these values to place the files it writes. Each one is a <strong>directory path</strong> relative to the project root, not an import specifier. A leading <code>@/</code> is accepted and dropped.</p>
@@ -131,7 +131,7 @@ export default async function body(toc: TocEntry[]) {
 }`, { title: 'components.json', lang: 'json' })}
 
     ${heading(toc, 3, 'aliases.hooks', 'aliaseshooks')}
-    <p>There is no <code>hooks</code> alias. WebJs components keep state in signals and reactive properties rather than hooks, and no registry item installs a hook.</p>
+    <p>WebJs components keep state in signals and reactive properties. Reusable component logic, such as a reactive controller, ships as a <code>registry:hook</code> file and lands in <code>hooks/</code>.</p>
 
     ${heading(toc, 2, 'iconLibrary')}
     <p>The icon library the components and blocks draw with: <code>lucide</code> (the default), <code>tabler</code>, <code>hugeicons</code>, <code>phosphor</code> or <code>remixicon</code>. The icons are inline SVG, so no icon package is installed. An item that draws icons depends on the kit's icon module, and <code>add</code> installs the one for this library at <code>lib/utils/icons.ts</code>, beside <code>cn.ts</code>. <code>init --icons &lt;library&gt;</code>, or a preset, sets the key and writes that file.</p>
@@ -154,7 +154,7 @@ export default async function body(toc: TocEntry[]) {
     <p>A rule is a bare severity (<code>"off"</code>, <code>"warn"</code> or <code>"error"</code>) or an object adding <code>allow</code>, which takes a category name or a class group. A rule left out is off. See the <a href="/ui/docs/cli">CLI</a> for the command.</p>
 
     ${heading(toc, 2, 'registries')}
-    <p>The key is accepted, but the CLI does not read namespaced registries from it, so <code>add @acme/button</code> is not supported. To install from a registry other than the kit's own, pass its base URL with <code>--registry</code>:</p>
+    <p>To install from a registry other than the kit's own, pass its base URL with <code>--registry</code>:</p>
     ${commandBlock(packageCommands('add button --registry https://registry.example.com'))}
     <p>See the <a href="/ui/docs/registry">Registry</a> documentation for building and hosting one.</p>
   `;

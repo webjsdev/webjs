@@ -179,7 +179,7 @@ async function liveDemo(state: BugReportState) {
 export default async function body(toc: TocEntry[], ctx: DocPageContext = {}) {
   return html`
     <p>In this guide, we will take a look at building forms with WebJs, using a server action bound to a <code>&lt;form&gt;</code>. We'll cover building forms, validation, pending states, accessibility, and more.</p>
-    <p>WebJs has one way to write a form, so there is no form library to choose: a <code>'use server'</code> action bound with <code>&lt;form action=\${importedAction}&gt;</code>, rendered with the <a href="/ui/docs/components/field">Field</a> helpers. The same form works with JavaScript off.</p>
+    <p>A WebJs form is a <code>'use server'</code> action bound with <code>&lt;form action=\${importedAction}&gt;</code>, rendered with the <a href="/ui/docs/components/field">Field</a> helpers. The same form works with JavaScript off.</p>
 
     ${heading(toc, 2, 'Demo')}
     <p>We are going to build the following form with a simple text input and a textarea. On submit, a server action validates the form data, and the page re-renders with the errors when it is invalid.</p>
@@ -224,7 +224,7 @@ export default async function body(toc: TocEntry[], ctx: DocPageContext = {}) {
     ${heading(toc, 2, 'Usage')}
 
     ${heading(toc, 3, 'Validate the form data')}
-    <p>We'll start with the rules the form data has to meet. WebJs ships no validation library, so write the checks in the action, as below, or call the schema library of your choice there. Whatever you use, turn its result into a <code>fieldErrors</code> object keyed by field name.</p>
+    <p>We'll start with the rules the form data has to meet. Write the checks in the action, as below, or call the schema library of your choice there. Whatever you use, turn its result into a <code>fieldErrors</code> object keyed by field name.</p>
 
     ${heading(toc, 3, 'Define the form state type')}
     <p>Next, the shape the action returns and the page reads. An action returns the <code>ActionResult</code> envelope, and on a failure the page receives it as <code>actionData</code>.</p>

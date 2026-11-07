@@ -28,7 +28,7 @@ export default async function body(toc: TocEntry[]) {
     <hr>
 
     ${heading(toc, 2, 'Install')}
-    <p>An app created with <code>webjs create</code> already has the skill. The scaffold writes it to <code>.agents/skills/webjs/</code>, next to an <code>AGENTS.md</code> that points every agent at it (and a <code>CLAUDE.md</code> that points Claude Code at <code>AGENTS.md</code>). There is nothing to install.</p>
+    <p>An app created with <code>webjs create</code> already has the skill. The scaffold writes it to <code>.agents/skills/webjs/</code>, next to an <code>AGENTS.md</code> that points every agent at it (and a <code>CLAUDE.md</code> that points Claude Code at <code>AGENTS.md</code>).</p>
     <p>For an app that was not scaffolded, copy the <code>.agents/skills/webjs/</code> folder from the <a href="https://github.com/webjsdev/webjs">WebJs repository</a> into your project and reference it from your <code>AGENTS.md</code>. The skill is plain Markdown, a routing <code>SKILL.md</code> plus one file per topic under <code>references/</code>, so any assistant that reads files can use it.</p>
 
     <hr>

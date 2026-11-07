@@ -35,7 +35,7 @@ export default async function body(toc: TocEntry[]) {
   --foreground: oklch(0.985 0 0);
   /* ... */
 }`, { title: 'styles/globals.css', lang: 'css', lineNumbers: true })}
-    <p>So dark mode is one class on the <code>&lt;html&gt;</code> element. There is no theme provider to install: the page needs a script that sets the class before it paints, and a control that changes it.</p>
+    <p>So dark mode is one class on the <code>&lt;html&gt;</code> element. The page needs a script that sets the class before it paints, and a control that changes it.</p>
     ${callout(html`An app made with <code>webjs create</code> already has both: the root layout carries the theme script, and <code>components/theme-toggle.ts</code> cycles between system, light and dark. Follow the steps below for an app that does not.`, { className: 'mt-6' })}
 
     ${heading(toc, 2, 'Add dark mode')}

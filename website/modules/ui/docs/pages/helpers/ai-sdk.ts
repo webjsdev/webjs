@@ -208,7 +208,7 @@ export function whatItsFor(toc: TocEntry[]) {
 export function installation(toc: TocEntry[], realModel: unknown) {
   return html`
     ${heading(toc, 2, 'Installation')}
-    <p>There is no package to install. WebJs streams an action's results on its own, so the helper is three files you write: the message types, the scripted action, and the chat component, all shown below. The thread renders with the kit's components:</p>
+    <p>WebJs streams an action's results on its own, so the helper is three files you write: the message types, the scripted action, and the chat component, all shown below. The thread renders with the kit's components:</p>
     ${commandBlock(packageCommands('add message-scroller message bubble'))}
     <p>${realModel}</p>
   `;
@@ -434,7 +434,7 @@ export function metadataAndIds(toc: TocEntry[]) {
 export function apiReference(toc: TocEntry[]) {
   return html`
     ${heading(toc, 2, 'API Reference')}
-    <p>There is no helper API. The pieces are the streaming action, the stub the browser gets for it, and the kit's message scroller.</p>
+    <p>The pieces are the streaming action, the stub the browser gets for it, and the kit's message scroller.</p>
     ${heading(toc, 3, 'Streaming Action')}
     ${table(['Piece', 'Behavior'], [
       [html`<code>'use server'</code> async generator`, html`Each <code>yield</code> is one chunk, serialized and flushed as it is produced. Returning an async iterable or a <code>ReadableStream</code> streams the same way.`],

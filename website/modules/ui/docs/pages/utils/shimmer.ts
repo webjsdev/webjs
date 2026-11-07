@@ -114,7 +114,7 @@ export default async function body(toc: TocEntry[]) {
 </p>`)}
 
     ${heading(toc, 2, 'Reduced Motion')}
-    <p>When the user prefers reduced motion, the animation is disabled automatically and the text renders normally. There is nothing to configure.</p>
+    <p>When the user prefers reduced motion, the animation is disabled automatically and the text renders normally.</p>
 
     ${heading(toc, 2, 'RTL')}
     <p>To enable RTL support in WebJs UI, see the <a href="/ui/docs/rtl">RTL configuration guide</a>.</p>

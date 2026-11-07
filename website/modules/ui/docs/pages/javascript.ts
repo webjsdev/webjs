@@ -16,8 +16,8 @@ export const description = 'How to use WebJs UI with JavaScript.';
 export default async function body(toc: TocEntry[]) {
   return html`
     <p>This project and the components are written in TypeScript. We recommend using TypeScript for your project as well.</p>
-    <p>There is no separate JavaScript version of the components, and none is needed. A WebJs app runs TypeScript with no build step: when the server loads or serves a <code>.ts</code> file it strips the types (with Node's built-in <code>module.stripTypeScriptTypes</code> on Node 24 and later, and with <code>amaro</code> on Bun) and leaves the code where it was. So a JavaScript app imports the kit's <code>.ts</code> files directly, from <code>.js</code> pages and components, and the browser receives plain JavaScript.</p>
-    ${callout(html`There is no <code>tsx</code> option in <code>components.json</code>, and the config schema is strict, so adding one is an error. <code>add</code> always writes <code>.ts</code> files.`, { className: 'mt-6' })}
+    <p>The components work in a JavaScript app as they are. A WebJs app runs TypeScript with no build step: when the server loads or serves a <code>.ts</code> file it strips the types (with Node's built-in <code>module.stripTypeScriptTypes</code> on Node 24 and later, and with <code>amaro</code> on Bun) and leaves the code where it was. So a JavaScript app imports the kit's <code>.ts</code> files directly, from <code>.js</code> pages and components, and the browser receives plain JavaScript.</p>
+    ${callout(html`<code>add</code> always writes <code>.ts</code> files. Leave <code>tsx</code> out of <code>components.json</code>, since the config schema is strict and an unknown key is an error.`, { className: 'mt-6' })}
 
     ${heading(toc, 2, 'Importing from JavaScript')}
     <p>Write the import with the <code>.ts</code> extension, as every import in a WebJs app carries its extension:</p>

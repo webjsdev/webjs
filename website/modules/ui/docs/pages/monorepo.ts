@@ -91,7 +91,7 @@ package.json      # The workspace root, with the lockfile.`, { lang: 'txt' })}
 }`, { title: 'apps/web/components.json', lang: 'json', lineNumbers: true })}
     <ol start="3">
       <li><p>Use the same <code>style</code> and <code>baseColor</code> in every app that should look the same. Each app bakes its own copy, so two apps with different styles look different, which is also how you give an admin app a different look.</p></li>
-      <li><p><strong>Tailwind CSS v4 has no config file, so leave <code>tailwind.config</code> out of <code>components.json</code>.</strong></p></li>
+      <li><p><strong>Tailwind CSS v4 is configured in CSS, so leave <code>tailwind.config</code> out of <code>components.json</code>.</strong></p></li>
     </ol>
     <p>By following these requirements, the CLI will install components, blocks and their helpers to the correct paths in each app and rewrite their imports for you.</p>
 
@@ -106,7 +106,7 @@ package.json      # The workspace root, with the lockfile.`, { lang: 'txt' })}
     <p>With no lockfile it reads the package manager that ran the command (<code>pnpm dlx</code>, <code>bunx</code> and friends set <code>npm_config_user_agent</code>), and falls back to npm.</p>
 
     ${heading(toc, 2, 'Sharing components across apps')}
-    ${callout(html`The kit has no shared UI package mode. There is no <code>init --monorepo</code>, and <code>add</code> does not route files into a shared <code>@workspace/ui</code> package and import them from there. Each app holds its own copy of each component.`, { className: 'mt-6' })}
+    ${callout(html`Each app holds its own copy of each component: run <code>init</code> and <code>add</code> in every app that uses the kit.`, { className: 'mt-6' })}
     <p>That copy is what makes the component yours to edit in that app, and it is what a WebJs app can serve: the server serves the files in the app's own import graph, as native modules with no bundler. To keep two apps' copies in step, run <code>diff</code> in each app to see what changed upstream, and add the component again with <code>--overwrite</code> where you want the new version.</p>
     ${commandBlock(packageCommands('diff --cwd apps/admin'))}
   `;

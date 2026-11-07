@@ -98,7 +98,7 @@ const noReplacement: [unknown, unknown][] = [
 
 export default async function body(toc: TocEntry[]) {
   return html`
-    <p>AI Elements are patterns for building agentic interfaces. Each one is a composition of WebJs UI components that you copy into your project. There is no package to install. The code is yours.</p>
+    <p>AI Elements are patterns for building agentic interfaces. Each one is a composition of WebJs UI components that you copy into your project. The code is yours.</p>
     <p>A <a href="/ui/docs/ai-elements/chat">Chat</a> is a list of <a href="/ui/docs/ai-elements/message">Message</a> turns inside a <a href="/ui/docs/components/message-scroller">Message Scroller</a>. The steps an agent takes inside a turn, like <a href="/ui/docs/ai-elements/reasoning">Reasoning</a>, <a href="/ui/docs/ai-elements/tool">Tool</a> and <a href="/ui/docs/ai-elements/plan">Plan</a>, are built on <a href="/ui/docs/components/trace">Trace</a>, so every step has the same shape.</p>
     <p><strong>Building a chatbot?</strong> Start from the <a href="/ui/docs/ai-elements/chat">Chat</a> pattern. It puts Message Scroller, Message and Prompt Input together, and the <a href="/ui/docs/helpers/ai-sdk">AI SDK</a> page shows how a <code>'use server'</code> action streams the reply into it, with tool calls and reasoning as parts.</p>
     <p><strong>Coming from <a href="https://elements.ai-sdk.dev">elements.ai-sdk.dev</a>?</strong> See <a href="#migrating-from-ai-sdk-elements">Migrating from AI SDK Elements</a>.</p>
@@ -125,7 +125,7 @@ export default async function body(toc: TocEntry[]) {
     ${table(['AI SDK Elements', 'WebJs UI'], replacements.map(([file, to]) => [html`<code>${file}</code>`, to]))}
 
     ${heading(toc, 3, 'Elements without a replacement')}
-    <p>These elements have no pattern of their own. Each one is a small composition you can build from components WebJs UI already has, listed below.</p>
+    <p>Each of these elements is a small composition you can build from components WebJs UI already has, listed below.</p>
     <p>If you need one of these, <a href=${ISSUES}>open an issue</a> and we will help you build it.</p>
     ${table(['AI SDK Elements', 'Build it with'], noReplacement)}
 
@@ -140,6 +140,6 @@ export default async function body(toc: TocEntry[]) {
       ${codeFigure('Add the Reasoning pattern from https://webjs.dev/ui/llm/docs/ai-elements/reasoning to my chat.', { title: 'Prompt', lang: 'text' })}
     </div>
 
-    ${callout(html`<strong>Missing an element?</strong> <a href=${ISSUES}>Open an issue</a> and tell us what you need.`, { className: 'mt-6' })}
+    ${callout(html`<strong>Need another element?</strong> <a href=${ISSUES}>Open an issue</a> and tell us what you need.`, { className: 'mt-6' })}
   `;
 }

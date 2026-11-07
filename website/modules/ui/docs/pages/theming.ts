@@ -139,6 +139,6 @@ export default async function body(toc: TocEntry[]) {
     ${codeFigure(`@import "tailwindcss";`, { lang: 'css' })}
 
     ${heading(toc, 2, 'Without CSS Variables')}
-    <p>There is no mode without CSS variables. Every component's classes name the theme tokens (<code>bg-primary</code>, <code>text-muted-foreground</code>), so the tokens are the one place a color is decided, and changing them is how you restyle the kit. <code>tailwind.cssVariables</code> is accepted in <code>components.json</code> for compatibility, and <code>init</code> always writes <code>true</code>.</p>
+    <p>Every component's classes name the theme tokens (<code>bg-primary</code>, <code>text-muted-foreground</code>), so the tokens are the one place a color is decided, and changing them is how you restyle the kit. <code>tailwind.cssVariables</code> is accepted in <code>components.json</code> for compatibility, and <code>init</code> always writes <code>true</code>.</p>
   `;
 }

@@ -22,7 +22,7 @@ export default async function body(toc: TocEntry[]) {
   return html`
     <p>WebJs UI components have first-class support for right-to-left (RTL) layouts. Text alignment, positioning, and directional styles automatically adapt for languages like Arabic, Hebrew, and Persian.</p>
     ${await componentPreview('card-rtl', { direction: 'rtl', previewClass: 'h-auto', hideCode: true, className: 'mb-8' })}
-    <p>The components are written with logical properties, so there is nothing to transform when you install them and nothing to configure. Set <code>dir="rtl"</code> on an element and every component inside it lays itself out from the right.</p>
+    <p>The components are written with logical properties, so they install ready for both directions. Set <code>dir="rtl"</code> on an element and every component inside it lays itself out from the right.</p>
 
     ${heading(toc, 2, 'Get Started')}
     <div class=${steps}>
@@ -38,7 +38,7 @@ export default function RootLayout({ children }: LayoutProps) {
   <body>\${children}</body>
 </html>\`;
 }`, { title: 'app/layout.ts', lineNumbers: true })}
-      <p>There is no direction provider. The <code>dir</code> attribute is the provider, and it works on any element, so one region of a left-to-right page can be right-to-left: <code>&lt;section dir="rtl" lang="ar"&gt;</code>. Set <code>lang</code> beside it, since a screen reader picks its voice from <code>lang</code> while the layout comes from <code>dir</code>.</p>
+      <p>The <code>dir</code> attribute is the direction provider, and it works on any element, so one region of a left-to-right page can be right-to-left: <code>&lt;section dir="rtl" lang="ar"&gt;</code>. Set <code>lang</code> beside it, since a screen reader picks its voice from <code>lang</code> while the layout comes from <code>dir</code>.</p>
 
       ${heading(toc, 3, 'Add Font')}
       <p>For the best RTL experience, we recommend using fonts that have proper support for your target language. <a href="https://fonts.google.com/noto">Noto</a> is a great font family for this and it pairs well with Inter and Geist.</p>
@@ -81,7 +81,7 @@ export default function RootLayout({ children }: LayoutProps) {
 
     ${heading(toc, 2, 'Animations')}
     <p>A dropdown, a popover or a tooltip slides in from the side it opened on. The positioning reports that side on the panel as <code>data-side</code>, the side it was actually placed on, and the animation keys on it, so it is right in either direction.</p>
-    <p>Overlays render in the top layer through the native <code>&lt;dialog&gt;</code> element and the Popover API, but they stay where you wrote them in the document rather than moving to a portal. So they inherit <code>dir</code> from their ancestors like everything else, and there is no <code>dir</code> to pass to the content.</p>
+    <p>Overlays render in the top layer through the native <code>&lt;dialog&gt;</code> element and the Popover API, but they stay where you wrote them in the document rather than moving to a portal. So they inherit <code>dir</code> from their ancestors like everything else.</p>
     ${codeFigure(`<div dir="rtl">
   <ui-tooltip>
     <ui-tooltip-trigger>...</ui-tooltip-trigger>
