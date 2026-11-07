@@ -181,18 +181,6 @@ const LIBRARIES = {
   },
 };
 
-/**
- * A glyph class can spell a browser global (`lucide-app-window`). WebJs's
- * elision analyser reads a non-route module's template text for those names,
- * and one in a class string would mark the whole icon file as client work,
- * pinning every page that imports it to the browser. Escaping one character
- * keeps the runtime string identical and the word out of the source.
- */
-const BROWSER_GLOBALS = /\b(window|document|navigator|localStorage|sessionStorage|customElements|matchMedia|addEventListener)\b/g;
-function guardGlobals(text) {
-  return text.replace(BROWSER_GLOBALS, (word) => `\\u${word.charCodeAt(0).toString(16).padStart(4, '0')}${word.slice(1)}`);
-}
-
 const canonical = Object.keys(MAP).sort();
 
 for (const [lib, def] of Object.entries(LIBRARIES)) {
@@ -202,7 +190,7 @@ for (const [lib, def] of Object.entries(LIBRARIES)) {
     const glyph = MAP[name][lib];
     if (!glyph) throw new Error(`icon-map.json has no ${lib} glyph for ${name}`);
     const { open, cls, inner } = def.render(glyph, ctx);
-    const classExpr = cls ? `\${'${guardGlobals(cls)}' + (cls ? ' ' + cls : '')}` : '${cls || null}';
+    const classExpr = cls ? `\${'${cls}' + (cls ? ' ' + cls : '')}` : '${cls || null}';
     const doc = lib === 'lucide' ? '' : `/** ${def.title}: ${glyph}. */\n`;
     body += `${doc}export function ${name}(cls = '') {\n  return html\`${open} class=${classExpr}>${inner}</svg>\`;\n}\n\n`;
   }

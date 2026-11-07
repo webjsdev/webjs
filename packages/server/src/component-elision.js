@@ -247,7 +247,17 @@ const CLIENT_ROUTER_SUBPATH_RE = /['"]@webjsdev\/core\/client-router['"]/;
  */
 export const CLIENT_ROUTER_IMPORTS = ['navigate', 'enableClientRouter', 'disableClientRouter', 'revalidate', 'refreshPage', 'loadFrame'];
 
-/** Identifiers that only exist in a browser; their presence means client work. */
+/**
+ * Identifiers that only exist in a browser; their presence means client work.
+ * Both this and COMPONENT_CLIENT_GLOBAL_RE are tested against the
+ * PLACEHOLDER redaction (`redactToPlaceholders`), never against raw or
+ * comment-masked source: a quoted string body or a template literal's TEXT is
+ * data, not a reference, so `'lucide-app-window'` must not read as `window`,
+ * while code inside a `${...}` hole stays real code and still matches. A global
+ * written in template text is SSR output (an inline `<script>` runs from the
+ * served HTML whether or not the module ships), the reasoning #623 applied to
+ * route modules, now extended to every module.
+ */
 const CLIENT_GLOBAL_RE = /\b(?:window|document|navigator|localStorage|sessionStorage|customElements|matchMedia|addEventListener)\b/;
 
 /**
@@ -699,11 +709,13 @@ export function analyzeComponentSource(src) {
   // loads, and a browser global (window/document/…, excluding the
   // registration's customElements) means the module does client work even
   // if its render is otherwise pure. Eliding such a component would drop
-  // that effect, so ship. (Mirrors the route-module analysis.)
+  // that effect, so ship. (Mirrors the route-module analysis.) The global
+  // scan reads the placeholder redaction, so a name inside a string or in
+  // template text is not a reference, while one in a `${...}` hole still is.
   if (importsSideEffectNonCorePackage(src)) {
     return { interactive: true, reason: 'side-effect imports an npm package' };
   }
-  if (COMPONENT_CLIENT_GLOBAL_RE.test(src)) {
+  if (COMPONENT_CLIENT_GLOBAL_RE.test(redactToPlaceholders(src).redacted)) {
     return { interactive: true, reason: 'references a browser global at module scope' };
   }
   if (hasModuleScopeSideEffect(src)) {
@@ -1196,7 +1208,9 @@ function scanFileUncached(file, src, { isRoute, isComponent, appDir, scanStrippe
   // `@event`, a browser global, an `import`, or a `whenDefined` written in a
   // comment must not register as a real signal. String and template content
   // is kept, so a real rendered tag, a real `@click=${}` in an html template,
-  // and a real `whenDefined('tag')` (the tag rides a string) still match.
+  // and a real `whenDefined('tag')` (the tag rides a string) still match. The
+  // browser-global scans are the exception: they read `redacted` below, since
+  // a global's name inside a string or template text is data, not a reference.
   // (`importsSideEffectNonCorePackage` / `hasModuleScopeSideEffect` /
   // `analyzeComponentSource` also redact strings/templates internally; running
   // them on the comment-masked source just additionally drops comment prose.)
@@ -1206,15 +1220,20 @@ function scanFileUncached(file, src, { isRoute, isComponent, appDir, scanStrippe
   // A page/layout NEVER hydrates (#605), so its `html` TEMPLATE content is
   // SSR output, not module client work: an inline `<script>`'s browser
   // globals run from the rendered HTML, and a page-template `@event` is
-  // dropped at SSR. For a route module, scan those two template-borne signals
-  // on the template-redacted source so they do not pin the module, while a
-  // genuine module-scope `document.x` OUTSIDE any template still flags (#623).
+  // dropped at SSR. For a route module, scan the `@event` signals on the
+  // template-redacted source so they do not pin the module; a non-route
+  // module keeps its template text, because a helper's `@click=${}` binds when
+  // a shipping component renders it. The browser-global scan reads `redacted`
+  // for EVERY module: a global's name in a string or template text is data
+  // (an inline `<script>` runs from the HTML, a `'lucide-app-window'` class
+  // is a class), while a genuine `document.x` in code, including code in a
+  // `${...}` hole, still flags (#623).
   // The import-based checks stay on `redacted`: a real `import 'pkg'` side
   // effect DOES run when a page/layout module loads in the browser, and
   // `importsSideEffectNonCorePackage` itself skips local `#`-alias imports.
   const templateScan = isRoute ? redacted : masked;
   const clientGlobalOrBare = EVENT_BINDING_RE.test(templateScan) || EVENT_PROP_RE.test(templateScan) ||
-    importsSideEffectNonCorePackage(redacted, appDir, literals) || CLIENT_GLOBAL_RE.test(templateScan) ||
+    importsSideEffectNonCorePackage(redacted, appDir, literals) || CLIENT_GLOBAL_RE.test(redacted) ||
     hasModuleScopeSideEffect(redacted, literals);
   let interactive = false;
   /** @type {string | null} */

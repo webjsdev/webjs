@@ -71,6 +71,20 @@ export const LINES: readonly (readonly [number, number, number])[] = [[0, 1, 2],
 `);
   write('app/typed/page.ts', "import { html } from '@webjsdev/core';\nimport { LINES } from '../../modules/game/utils/game.ts';\nexport default () => html`<p>${LINES.length}</p>`;");
 
+  // Inert: a browser global's NAME inside a string in a template hole is data,
+  // not a reference (the kit's `'lucide lucide-app-window'` icon class, #1666),
+  // so the TypeScript icon helper does not pin the page that imports it.
+  write('lib/icons.ts', `
+import { html } from '@webjsdev/core';
+export function AppWindow(cls: string = '') {
+  return html\`<svg class=\${'lucide lucide-app-window' + (cls ? ' ' + cls : '')}></svg>\`;
+}
+`);
+  write('app/icons/page.ts', "import { html } from '@webjsdev/core';\nimport { AppWindow } from '../../lib/icons.ts';\nexport default () => html`<p>${AppWindow()}</p>`;");
+  // Shipped whole: the same global as real code inside a hole is a reference.
+  write('lib/title.js', "import { html } from '@webjsdev/core';\nexport const Title = () => html`<p>${document.title}</p>`;\n");
+  write('app/titled/page.js', "import { html } from '@webjsdev/core';\nimport { Title } from '../../lib/title.js';\nexport default () => html`${Title()}`;");
+
   const r = await analyzeAppElision(dir);
 
   assert.equal(r.analysed, true, 'the fixture app must be analysable');
@@ -93,7 +107,9 @@ export const LINES: readonly (readonly [number, number, number])[] = [[0, 1, 2],
     r.routeModules.map((m) => [m.file, m.verdict, m.emits.join(',')]),
     [
       ['app/about/page.js', 'inert', ''],
+      ['app/icons/page.ts', 'inert', ''],
       ['app/page.js', 'import-only', 'components/counter.js'],
+      ['app/titled/page.js', 'shipped', ''],
       ['app/typed/page.ts', 'inert', ''],
     ],
   );
@@ -101,7 +117,7 @@ export const LINES: readonly (readonly [number, number, number])[] = [[0, 1, 2],
   assert.deepEqual(r.orphans, []);
   assert.deepEqual(r.summary, {
     components: 2, elided: 1, shipped: 1,
-    routeModules: 3, inert: 2, importOnly: 1, shippedWhole: 0,
+    routeModules: 5, inert: 3, importOnly: 1, shippedWhole: 1,
     orphans: 0,
   });
 

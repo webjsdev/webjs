@@ -471,17 +471,25 @@ conditional leaves a CSP-off document one newline shorter than a CSP-on one).
    A page/layout NEVER hydrates, so its detection differs from a component's in
    two ways the analyser must respect (#623), or a route module is wrongly pinned
    to the browser by a false positive: (1) its `html` TEMPLATE content is SSR
-   output, not module client work, so the `@event` / client-global scans run on
-   the template-REDACTED source for route modules (an inline `<script>`'s
-   `document` / `localStorage` runs from the rendered HTML, never from loading
-   the module; a genuine module-scope `document.x` OUTSIDE any template still
-   flags), while COMPONENT detection keeps scanning template content (a
-   component's `@event` IS its signal); and (2) a `#`-alias side-effect import
+   output, not module client work, so the `@event` scans run on the
+   template-REDACTED source for route modules, while COMPONENT detection (and a
+   non-route helper module) keeps scanning template content (a component's
+   `@event` IS its signal); and (2) a `#`-alias side-effect import
    (`import '#components/x.ts'`, the idiomatic component registration) resolves to
    a LOCAL file via the app's `package.json` "imports", so it is expanded with
    `expandImportAlias` and treated like a relative import, not a bare npm package
    (the `#`-imported file still rides the closure and is flagged on its own merits
-   if it does real client work). A module-scope pure-data constructor
+   if it does real client work). The browser-global scans
+   (`CLIENT_GLOBAL_RE`, and `COMPONENT_CLIENT_GLOBAL_RE` in
+   `analyzeComponentSource`) read the PLACEHOLDER redaction
+   (`redactToPlaceholders`) for EVERY module, route, helper, and component
+   alike: a quoted string body or a template literal's TEXT is data, not a
+   reference, so a `'lucide-app-window'` class string or an inline `<script>`'s
+   `document` (which runs from the rendered HTML, never from loading the
+   module) does not pin a module, while a genuine `document.x` in code still
+   flags, including code inside a `${...}` hole. The scans avoid the fully blanked mask,
+   `redactStringsAndTemplates(src, true)`, which blanks hole code too and
+   would hide `${window.innerWidth}`. A module-scope pure-data constructor
    (`new Set([...])` / `Map` / `Date` / `RegExp` / typed array / `URL`) is inert
    data, not a side effect; any other constructor (`new WebSocket()` / `Worker()`)
    still ships. A `function` declaration's parameter list and the expression

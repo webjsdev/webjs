@@ -13,6 +13,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { analyzeElision } from '../../server/src/component-elision.js';
 import { init } from '../src/commands/init.js';
 import { registryItemSchema } from '../src/registry/schema.js';
 import { loadRegistryItem, loadRegistryIndex } from '../src/registry/local.js';
@@ -111,17 +112,25 @@ test('the five icon libraries are registry items exporting the same function nam
   }
 });
 
-test('no icon file spells a browser global, which would ship every page importing it', () => {
-  // WebJs's elision analyser reads a module's template text for these names
-  // (CLIENT_GLOBAL_RE in packages/server/src/component-elision.js), and a
-  // glyph class such as `lucide-app-window` once pinned lib/icons.ts.
-  const globals = /\b(window|document|navigator|localStorage|sessionStorage|customElements|matchMedia|addEventListener)\b/;
+test('no icon library pins a page that imports it to the browser', async () => {
+  // A glyph class can spell a browser global (`lucide-app-window`). The elision
+  // analyser reads a string literal as data, not a reference, so an icon file
+  // stays pure markup and a page importing it stays inert. Drive the real
+  // analyser rather than grepping for the word, so the test tracks its rule.
+  // The analyser only scans files under the app, so mount each library there.
+  const page = '/app/page.js';
   for (const lib of ICON_LIBRARIES) {
-    const src = readFileSync(join(REGISTRY, lib.path), 'utf8');
-    assert.doesNotMatch(src, globals, `${lib.path} names a browser global`);
+    const file = `/app/${lib.path}`;
+    const files = {
+      [page]: `import { html } from '@webjsdev/core';\nimport { AppWindowIcon } from '${file}';\nexport default () => html\`<p>\${AppWindowIcon()}</p>\`;`,
+      [file]: readFileSync(join(REGISTRY, lib.path), 'utf8'),
+    };
+    const graph = new Map([[page, new Set([file])]]);
+    const r = await analyzeElision([], [page], graph, async (f) => files[f], '/app');
+    assert.ok(r.inertRouteModules.has(page), `${lib.path} pins its importer: ${r.shippedRouteModules?.get?.(page)?.reason ?? ''}`);
   }
-  // The escape keeps the runtime class unchanged.
-  assert.match(readFileSync(join(REGISTRY, 'lib', 'icons.ts'), 'utf8'), /'lucide lucide-app-\\u0077indow'/);
+  // The class string carries the word literally, so the runtime class is the glyph's own.
+  assert.match(readFileSync(join(REGISTRY, 'lib', 'icons.ts'), 'utf8'), /'lucide lucide-app-window'/);
 });
 
 test('the preset module does no work at module scope (the configurator runs it in the browser)', () => {
