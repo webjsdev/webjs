@@ -13,7 +13,8 @@
  *   <Accordion type="multiple">           → same, omit `name`
  *   <AccordionItem>                       → <details class=${accordionItemClass()}>
  *   <AccordionTrigger>                    → <summary class=${accordionTriggerClass()}>
- *   <AccordionContent>                    → <div class=${accordionContentClass()}>
+ *   <AccordionContent>                    → <div class=${accordionContentClass()}> around
+ *                                            <div class=${accordionContentInnerClass()}>
  *
  * Initial state: add `open` on the <details> that should render expanded
  * on first paint. Programmatic toggling: `el.open = true | false`.
@@ -50,21 +51,25 @@
  *       <span>Is it accessible?</span>
  *       <svg class="size-4 shrink-0 transition-transform group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
  *     </summary>
- *     <div class=${accordionContentClass()}>Yes, it uses a native disclosure widget.</div>
+ *     <div class=${accordionContentClass()}>
+ *       <div class=${accordionContentInnerClass()}>Yes, it uses a native disclosure widget.</div>
+ *     </div>
  *   </details>
  *   <details name="faq" class=${accordionItemClass()}>
  *     <summary class=${accordionTriggerClass()}>
  *       <span>Is it styled?</span>
  *       <svg class="size-4 shrink-0 transition-transform group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
  *     </summary>
- *     <div class=${accordionContentClass()}>Yes, with the shadcn design tokens.</div>
+ *     <div class=${accordionContentClass()}>
+ *       <div class=${accordionContentInnerClass()}>Yes, with the shadcn design tokens.</div>
+ *     </div>
  *   </details>
  * </div>
  * ```
  */
 
 /** Root wrapper. Holds the column-of-items rhythm; no display: rules. */
-export const accordionClass = (): string => 'cn-accordion w-full';
+export const accordionClass = (): string => 'cn-accordion flex w-full flex-col';
 
 /**
  * Item: each <details>. The `group` utility lets the trigger's chevron
@@ -85,7 +90,7 @@ export const accordionItemClass = (): string => 'cn-accordion-item group';
  * prop combines both; native HTML has no `disabled` on <details>.
  */
 export const accordionTriggerClass = (opts: { disabled?: boolean } = {}): string => {
-  const base = 'cn-accordion-trigger group/accordion-trigger flex justify-between outline-none transition-all';
+  const base = 'cn-accordion-trigger group/accordion-trigger relative flex justify-between outline-none transition-all disabled:pointer-events-none disabled:opacity-50';
   if (opts.disabled) return `${base} pointer-events-none cursor-not-allowed opacity-50`;
   return base;
 };
@@ -94,4 +99,12 @@ export const accordionTriggerClass = (opts: { disabled?: boolean } = {}): string
  * Content: <details> hides this entirely when not [open], so all we add
  * is the typography rhythm matching shadcn (bottom padding, small text).
  */
-export const accordionContentClass = (): string => 'cn-accordion-content';
+export const accordionContentClass = (): string => 'cn-accordion-content overflow-hidden';
+
+/**
+ * Content inner: the wrapper shadcn's AccordionContent renders inside the
+ * content, around what you write. The styles put the content's padding here,
+ * and it underlines links and spaces paragraphs.
+ */
+export const accordionContentInnerClass = (): string =>
+  'cn-accordion-content-inner h-(--radix-accordion-content-height) [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground [&_p:not(:last-child)]:mb-4';

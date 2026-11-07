@@ -72,7 +72,7 @@
  * ```
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
-import { cn } from '../lib/utils.ts';
+import { cn, takeAuthoredClass } from '../lib/utils.ts';
 import { buttonClass } from './button.ts';
 import { inputClass } from './input.ts';
 import { separatorClass } from './separator.ts';
@@ -327,7 +327,6 @@ export class UiSidebar extends WebComponent({
   collapsible: prop<'offcanvas' | 'icon' | 'none'>(String),
 }) {
   _authored: string | null = null;
-  _captured = false;
 
   constructor() {
     super();
@@ -349,10 +348,7 @@ export class UiSidebar extends WebComponent({
   // the inset beside it styles itself with peer-data-*, which needs a real
   // sibling, and everything inside reads group-data-*.
   render() {
-    if (!this._captured) {
-      this._authored = this.getAttribute?.('class') ?? null;
-      this._captured = true;
-    }
+    this._authored = takeAuthoredClass(this);
     const provider = providerOf(this);
     const side = this.side === 'right' ? 'right' : 'left';
     const floating = this.variant === 'floating' || this.variant === 'inset';
@@ -440,15 +436,11 @@ UiSidebarRail.register('ui-sidebar-rail');
 
 export class UiSidebarInset extends WebComponent {
   _authored: string | null = null;
-  _captured = false;
 
   // The inset is the sidebar's following sibling, so peer-data-* reaches it
   // only on its own host, which is also the page's main landmark.
   render() {
-    if (!this._captured) {
-      this._authored = this.getAttribute?.('class') ?? null;
-      this._captured = true;
-    }
+    this._authored = takeAuthoredClass(this);
     if (typeof this.setAttribute === 'function') {
       this.setAttribute('class', cn('cn-sidebar-inset relative flex w-full flex-1 flex-col', this._authored));
       this.setAttribute('data-slot', 'sidebar-inset');

@@ -1654,3 +1654,222 @@ suite('ui-command: a class on a part lands on the element it renders', () => {
     }
   });
 });
+
+suite('base form: a part whose box shadcn renders is the box here too', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/command.ts`);
+    await import(`${COMPONENTS_DIR}/resizable.ts`);
+    await import(`${COMPONENTS_DIR}/select.ts`);
+    await import(`${COMPONENTS_DIR}/questionnaire.ts`);
+  });
+
+  test('a command shortcut is the item\'s flex item, so its auto start margin ends the row', async () => {
+    const root = await mount(html`<style>
+        [data-slot="command-item"] { display: flex; width: 300px; }
+        [data-slot="command-item"] > svg { display: none; }
+        [data-slot="command-shortcut"] { margin-inline-start: auto; }
+      </style>
+      <ui-command label="Menu">
+        <ui-command-list>
+          <ui-command-item>Profile<ui-command-shortcut class="sc-authored">P</ui-command-shortcut></ui-command-item>
+        </ui-command-list>
+      </ui-command>`);
+    try {
+      await tick();
+      const host = root.querySelector('ui-command-shortcut');
+      const span = host.querySelector('[data-slot="command-shortcut"]');
+      const item = root.querySelector('[data-slot="command-item"]');
+      assert.equal(getComputedStyle(host).display, 'contents', 'the host draws no box');
+      assert.match(span.className, /\bsc-authored\b/, 'the class written on the host lands on the span');
+      assert.ok(Math.abs(span.getBoundingClientRect().right - item.getBoundingClientRect().right) < 1, 'the shortcut ends the row');
+    } finally {
+      root.remove();
+    }
+  });
+
+  test('the command box sizes against its parent, as shadcn\'s Command does', async () => {
+    const root = await mount(html`<style>
+        .cmd-row { display: flex; justify-content: center; width: 600px; }
+        [data-slot="command"] { width: 100%; }
+        .cmd-max { max-width: 384px; }
+      </style>
+      <div class="cmd-row"><ui-command label="Menu" class="cmd-max"><ui-command-list></ui-command-list></ui-command></div>`);
+    try {
+      await tick();
+      assert.equal(getComputedStyle(root.querySelector('ui-command')).display, 'contents');
+      assert.equal(Math.round(root.querySelector('[data-slot="command"]').getBoundingClientRect().width), 384);
+    } finally {
+      root.remove();
+    }
+  });
+
+  test('a panel group\'s class sizes the group box, and a nested group fills its panel', async () => {
+    const root = await mount(html`<style>
+        .rz-row { display: flex; justify-content: center; width: 800px; height: 240px; }
+        .rz-max { max-width: 384px; }
+        [data-slot="resizable-panel-group"] { display: flex; width: 100%; height: 100%; }
+        [data-slot="resizable-panel-group"][aria-orientation="vertical"] { flex-direction: column; }
+        .rz-tall { height: 200px; }
+      </style>
+      <div class="rz-row">
+        <ui-resizable-panel-group orientation="horizontal" class="rz-max">
+          <ui-resizable-panel default-size="50"><div class="rz-tall">One</div></ui-resizable-panel>
+          <ui-resizable-handle></ui-resizable-handle>
+          <ui-resizable-panel default-size="50">
+            <ui-resizable-panel-group orientation="vertical">
+              <ui-resizable-panel default-size="25">Two</ui-resizable-panel>
+              <ui-resizable-handle></ui-resizable-handle>
+              <ui-resizable-panel default-size="75">Three</ui-resizable-panel>
+            </ui-resizable-panel-group>
+          </ui-resizable-panel>
+        </ui-resizable-panel-group>
+      </div>`);
+    try {
+      await tick();
+      await tick();
+      const outer = root.querySelector('ui-resizable-panel-group');
+      const box = outer.querySelector('[data-slot="resizable-panel-group"]');
+      assert.equal(getComputedStyle(outer).display, 'contents', 'the host draws no box');
+      assert.match(box.className, /\brz-max\b/, 'the class written on the host lands on the group box');
+      assert.equal(Math.round(box.getBoundingClientRect().width), 384, 'and the box takes the row\'s width up to its max');
+      const [two, three] = outer.querySelector('ui-resizable-panel-group').querySelectorAll('ui-resizable-panel');
+      assert.equal(Math.round(two.getBoundingClientRect().height), 60, 'the nested panels share the panel\'s height');
+      assert.equal(Math.round(three.getBoundingClientRect().height), 180);
+    } finally {
+      root.remove();
+    }
+  });
+
+  test('the select trigger is the flex item, so a full width sizes against the row', async () => {
+    const root = await mount(html`<style>
+        .sel-row { display: flex; justify-content: center; width: 600px; }
+        .sel-row .contents { display: contents; }
+        .sel-w { width: 100%; max-width: 192px; }
+      </style>
+      <div class="sel-row">
+        <ui-select placeholder="Fruit">
+          <select aria-label="Fruit" class="sel-w"><option value="" disabled selected hidden>Fruit</option><option value="a">Apple</option></select>
+        </ui-select>
+      </div>`);
+    try {
+      await new Promise((r) => setTimeout(r, 50));
+      await tick();
+      const host = root.querySelector('ui-select');
+      const trigger = host.querySelector('[data-slot="select-trigger"]');
+      assert.ok(trigger, 'the select upgraded');
+      assert.equal(getComputedStyle(host).display, 'contents', 'the host draws no box');
+      assert.equal(Math.round(trigger.getBoundingClientRect().width), 192);
+    } finally {
+      root.remove();
+    }
+  });
+
+  test('questionnaire hosts draw no box, so a hidden question adds no gap and the root\'s class lands on the form', async () => {
+    const root = await mount(html`<style>
+        [data-slot="questionnaire"] { display: flex; flex-direction: column; gap: 16px; }
+      </style>
+      <ui-questionnaire class="q-authored">
+        <ui-questionnaire-item name="one">
+          <ui-questionnaire-title>One?</ui-questionnaire-title>
+          <ui-questionnaire-choices><ui-questionnaire-choice value="a">A</ui-questionnaire-choice></ui-questionnaire-choices>
+        </ui-questionnaire-item>
+        <ui-questionnaire-item name="two">
+          <ui-questionnaire-title>Two?</ui-questionnaire-title>
+          <ui-questionnaire-choices><ui-questionnaire-choice value="b">B</ui-questionnaire-choice></ui-questionnaire-choices>
+        </ui-questionnaire-item>
+        <ui-questionnaire-item name="three">
+          <ui-questionnaire-title>Three?</ui-questionnaire-title>
+          <ui-questionnaire-choices><ui-questionnaire-choice value="c">C</ui-questionnaire-choice></ui-questionnaire-choices>
+        </ui-questionnaire-item>
+        <ui-questionnaire-actions><ui-questionnaire-next></ui-questionnaire-next></ui-questionnaire-actions>
+      </ui-questionnaire>`);
+    try {
+      await tick();
+      await tick();
+      const el = root.querySelector('ui-questionnaire');
+      const form = el.querySelector('form');
+      assert.match(form.className, /\bq-authored\b/, 'the root\'s class lands on the form');
+      for (const host of [el, ...el.querySelectorAll('ui-questionnaire-item, ui-questionnaire-title, ui-questionnaire-choices, ui-questionnaire-choice, ui-questionnaire-actions, ui-questionnaire-next')]) {
+        assert.equal(getComputedStyle(host).display, 'contents', `<${host.localName}> draws no box`);
+      }
+      const shown = el.querySelector('ui-questionnaire-item[name="one"] fieldset');
+      const actions = el.querySelector('[data-slot="questionnaire-actions"]');
+      assert.equal(shown.hidden, false);
+      assert.equal(Math.round(actions.getBoundingClientRect().top - shown.getBoundingClientRect().bottom), 16, 'one gap between the shown question and the actions');
+    } finally {
+      root.remove();
+    }
+  });
+});
+
+// --------------------------------------------------------------------------
+// A part that moves its authored class to the element it renders keeps it
+// across server render plus hydration: the HTML the server sends is put in
+// the document and the elements upgrade from it, as on a page load.
+// --------------------------------------------------------------------------
+
+suite('host class: server render plus hydration', () => {
+  let renderToString;
+  suiteSetup(async () => {
+    ({ renderToString } = await import('../../../../core/src/render-server.js'));
+    for (const name of ['tabs', 'message-scroller', 'command', 'dialog', 'alert-dialog', 'resizable', 'context-menu', 'hover-card', 'questionnaire', 'dropdown-menu']) {
+      await import(`${COMPONENTS_DIR}/${name}.ts`);
+    }
+  });
+
+  /** Render on the server, put the HTML in the document, let it upgrade. */
+  async function hydrate(tpl) {
+    const out = await renderToString(tpl);
+    const root = document.createElement('div');
+    root.innerHTML = out;
+    document.body.appendChild(root);
+    await tick();
+    await tick();
+    return root;
+  }
+  const classes = (el) => (el?.getAttribute('class') ?? '').split(/\s+/).filter(Boolean);
+
+  const CASES = [
+    ['ui-tabs-list', '[role="tablist"]', 'cn-tabs-list', html`<ui-tabs value="a"><ui-tabs-list class="w-full tl-authored"><ui-tabs-trigger value="a" class="tt-authored">A</ui-tabs-trigger></ui-tabs-list><ui-tabs-content value="a">A</ui-tabs-content></ui-tabs>`, 'tl-authored'],
+    ['ui-tabs-trigger', '[role="tab"]', 'cn-tabs-trigger', html`<ui-tabs value="a"><ui-tabs-list><ui-tabs-trigger value="a" class="tt-authored">A</ui-tabs-trigger></ui-tabs-list></ui-tabs>`, 'tt-authored'],
+    ['ui-message-scroller', '[data-slot="message-scroller"]', 'cn-message-scroller', html`<ui-message-scroller class="ms-authored"><ui-message-scroller-viewport><ui-message-scroller-content aria-label="Log"></ui-message-scroller-content></ui-message-scroller-viewport></ui-message-scroller>`, 'ms-authored'],
+    ['ui-command-input', 'input[data-slot="command-input"]', 'cn-command-input', html`<ui-command label="Menu" class="c-root"><ui-command-input class="ci-authored" placeholder="Search"></ui-command-input><ui-command-list><ui-command-item class="it-authored">A<ui-command-shortcut class="sc-authored">P</ui-command-shortcut></ui-command-item></ui-command-list></ui-command>`, 'ci-authored'],
+    ['ui-command', '[data-slot="command"]', 'cn-command', html`<ui-command label="Menu" class="c-root"><ui-command-list></ui-command-list></ui-command>`, 'c-root'],
+    ['ui-command-shortcut', '[data-slot="command-shortcut"]', 'cn-command-shortcut', html`<ui-command label="Menu"><ui-command-list><ui-command-item>A<ui-command-shortcut class="sc-authored">P</ui-command-shortcut></ui-command-item></ui-command-list></ui-command>`, 'sc-authored'],
+    ['ui-dialog-content', '[data-slot="dialog-content"]', 'cn-dialog-content', html`<ui-dialog><ui-dialog-content class="dc-authored"><h2 data-slot="dialog-title">T</h2></ui-dialog-content></ui-dialog>`, 'dc-authored'],
+    ['ui-alert-dialog-content', '[data-slot="alert-dialog-content"]', 'cn-alert-dialog-content', html`<ui-alert-dialog><ui-alert-dialog-content class="ad-authored"><h2 data-slot="alert-dialog-title">T</h2></ui-alert-dialog-content></ui-alert-dialog>`, 'ad-authored'],
+    ['ui-resizable-panel-group', '[data-slot="resizable-panel-group"]', 'cn-resizable-panel-group', html`<ui-resizable-panel-group class="rz-authored"><ui-resizable-panel default-size="100">A</ui-resizable-panel></ui-resizable-panel-group>`, 'rz-authored'],
+    ['ui-context-menu-trigger', '[data-slot="context-menu-trigger"]', 'cn-context-menu-trigger', html`<ui-context-menu><ui-context-menu-trigger class="ct-authored">Area</ui-context-menu-trigger><ui-context-menu-content><ui-context-menu-item>A</ui-context-menu-item></ui-context-menu-content></ui-context-menu>`, 'ct-authored'],
+    ['ui-hover-card-content', '[data-slot="hover-card-content"]', 'cn-hover-card-content', html`<ui-hover-card><ui-hover-card-trigger><a href="#x">x</a></ui-hover-card-trigger><ui-hover-card-content class="hc-authored">Card</ui-hover-card-content></ui-hover-card>`, 'hc-authored'],
+    ['ui-dropdown-menu-content', '[role="menu"]', 'cn-dropdown-menu-content', html`<ui-dropdown-menu><ui-dropdown-menu-trigger><button>Open</button></ui-dropdown-menu-trigger><ui-dropdown-menu-content class="dm-authored"><ui-dropdown-menu-item>A</ui-dropdown-menu-item></ui-dropdown-menu-content></ui-dropdown-menu>`, 'dm-authored'],
+    ['ui-questionnaire', 'form[data-slot="questionnaire"]', 'cn-questionnaire', html`<ui-questionnaire class="q-authored"><ui-questionnaire-item name="a"><ui-questionnaire-title>A?</ui-questionnaire-title></ui-questionnaire-item></ui-questionnaire>`, 'q-authored'],
+  ];
+
+  for (const [host, part, base, tpl, authored] of CASES) {
+    test(`<${host}>: the authored class, plus the base classes, on the rendered element after hydration`, async () => {
+      const root = await hydrate(tpl);
+      try {
+        const el = root.querySelector(host).querySelector(part);
+        assert.ok(el, `${host} rendered ${part}`);
+        const list = classes(el);
+        assert.ok(list.includes(authored), `${part} carries ${authored}: ${list.join(' ')}`);
+        assert.ok(list.includes(base), `${part} keeps ${base}`);
+        assert.ok(!list.includes('contents'), `${part} is not display: contents: ${list.join(' ')}`);
+      } finally {
+        root.remove();
+      }
+    });
+  }
+
+  test('a part with no authored class does not take the host class the server sent', async () => {
+    const root = await hydrate(html`<ui-tabs value="a"><ui-tabs-list><ui-tabs-trigger value="a">A</ui-tabs-trigger></ui-tabs-list></ui-tabs>`);
+    try {
+      for (const part of ['[role="tablist"]', '[role="tab"]']) {
+        const list = classes(root.querySelector(part));
+        assert.ok(!list.includes('contents'), `${part}: ${list.join(' ')}`);
+      }
+    } finally {
+      root.remove();
+    }
+  });
+});

@@ -146,11 +146,17 @@ export function calendarClass(): string {
 }
 /** A month caption's label. */
 export const calendarCaptionClass = (): string => 'cn-calendar-caption text-sm';
+// shadcn names the dropdown caption's box and label `cn-calendar-dropdown-root`
+// and `cn-calendar-caption-label`, but its build bakes only the first name of
+// each component file, so `shadcn add` leaves both unstyled in every style and
+// ui.shadcn.com draws neither a border nor a padded label. The kit gives them
+// names only new-york maps, which keeps new-york's bordered dropdowns and
+// matches shadcn's output in the other styles.
 /** A dropdown caption's visible label. */
 export const calendarCaptionLabelClass = (): string =>
-  'cn-calendar-caption-label flex items-center gap-1 rounded-(--cell-radius) text-sm [&>svg]:size-3.5 [&>svg]:text-muted-foreground';
+  'cn-calendar-dropdown-label flex items-center gap-1 rounded-(--cell-radius) text-sm [&>svg]:size-3.5 [&>svg]:text-muted-foreground';
 /** A caption dropdown's box. */
-export const calendarDropdownRootClass = (): string => 'cn-calendar-dropdown-root relative rounded-(--cell-radius)';
+export const calendarDropdownRootClass = (): string => 'cn-calendar-dropdown-box relative rounded-(--cell-radius)';
 /** A day button's classes (the element applies them). */
 export const calendarDayButtonClass = (): string =>
   'cn-calendar-day-button relative isolate z-10 flex aspect-square size-auto w-full min-w-(--cell-size) flex-col gap-1 border-0 leading-none font-normal group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:border-ring group-data-[focused=true]/day:ring-[3px] group-data-[focused=true]/day:ring-ring/50 data-[range-end=true]:rounded-(--cell-radius) data-[range-end=true]:rounded-e-(--cell-radius) data-[range-end=true]:bg-primary data-[range-end=true]:text-primary-foreground data-[range-middle=true]:rounded-none data-[range-middle=true]:bg-muted data-[range-middle=true]:text-foreground data-[range-start=true]:rounded-(--cell-radius) data-[range-start=true]:rounded-s-(--cell-radius) data-[range-start=true]:bg-primary data-[range-start=true]:text-primary-foreground data-[selected-single=true]:bg-primary data-[selected-single=true]:text-primary-foreground dark:hover:text-foreground [&>span]:text-xs [&>span]:opacity-70';

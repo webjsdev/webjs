@@ -51,7 +51,7 @@
  * ```
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
-import { cn } from '../lib/utils.ts';
+import { cn, takeAuthoredClass } from '../lib/utils.ts';
 import { buttonClass, type ButtonVariant, type ButtonSize } from './button.ts';
 
 /** The frame's classes (the element applies them). */
@@ -81,14 +81,8 @@ const PEEK = 64;
 // that element and becomes display: contents. A block host would otherwise
 // sit between the frame's flex column and the viewport, the viewport would
 // grow to its content, and nothing would scroll.
-type Part = HTMLElement & { _authored?: string | null; _captured?: boolean };
-function takeAuthored(part: Part): string | null {
-  if (!part._captured) {
-    part._authored = part.getAttribute?.('class') ?? null;
-    part._captured = true;
-    part.setAttribute?.('class', 'contents');
-  }
-  return part._authored ?? null;
+function takeAuthored(part: HTMLElement): string | null {
+  return takeAuthoredClass(part, 'contents');
 }
 
 function rootOf(el: Element): UiMessageScroller | null {
@@ -388,7 +382,6 @@ UiMessageScrollerContent.register('ui-message-scroller-content');
 
 export class UiMessageScrollerItem extends WebComponent {
   _authored: string | null = null;
-  _captured = false;
 
   connectedCallback(): void {
     super.connectedCallback?.();
@@ -397,10 +390,7 @@ export class UiMessageScrollerItem extends WebComponent {
 
   // An item is a flex child of the column, so it carries its own classes.
   render() {
-    if (!this._captured) {
-      this._authored = this.getAttribute?.('class') ?? null;
-      this._captured = true;
-    }
+    this._authored = takeAuthoredClass(this);
     if (typeof this.setAttribute === 'function') {
       this.setAttribute('class', cn(messageScrollerItemClass(), this._authored));
       this.setAttribute('data-slot', 'message-scroller-item');

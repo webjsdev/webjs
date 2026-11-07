@@ -76,7 +76,7 @@ const CHECKMARK_DARK =
   'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'black\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'><path d=\'M20 6 9 17l-5-5\'/></svg>")';
 
 const CHECKBOX_CLASS =
-  'cn-checkbox peer shrink-0 appearance-none outline-none disabled:cursor-not-allowed disabled:opacity-50';
+  'cn-checkbox peer relative shrink-0 appearance-none outline-none after:absolute after:-inset-x-3 after:-inset-y-2 disabled:cursor-not-allowed disabled:opacity-50';
 
 // Inject style once for the checkmark background-image when :checked.
 //

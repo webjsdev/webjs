@@ -61,7 +61,7 @@ export type EmptyMediaVariant = keyof typeof MEDIA_VARIANTS;
 
 /** Empty root: centred column with generous padding. Add `border` for the dashed outline. */
 export const emptyClass = (): string =>
-  'cn-empty flex min-w-0 flex-1 flex-col items-center justify-center text-center text-balance';
+  'cn-empty flex w-full min-w-0 flex-1 flex-col items-center justify-center text-center text-balance';
 
 /** Empty header: groups the media, title, and description. */
 export const emptyHeaderClass = (): string =>

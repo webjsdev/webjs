@@ -376,6 +376,40 @@ export function ensureId(el: { id: string }, prefix = 'ui'): string {
   return el.id;
 }
 
+/** A Tier-2 host whose authored class {@link takeAuthoredClass} reads. */
+export type ClassHost = {
+  getAttribute?(name: string): string | null;
+  setAttribute?(name: string, value: string): void;
+  removeAttribute?(name: string): void;
+  _authoredClass?: string | null;
+};
+
+/**
+ * The class an author wrote on a Tier-2 part's host, which is shadcn's
+ * `className` and belongs on the element the part renders. Read once per
+ * element, then `hostClass` replaces it on the host (`null` removes the
+ * class, `undefined` leaves the attribute to the caller, for a host that
+ * styles itself).
+ *
+ * The first read records the class in `data-authored-class`, which the server
+ * serves, because the class attribute cannot be trusted on hydration: the
+ * server sends the class a tag was written with, and a host written with none
+ * is sent the class the element gave it (`contents`, its own classes). The
+ * element that upgrades the served markup is a fresh instance, so without the
+ * record it would read that class back as the author's.
+ */
+export function takeAuthoredClass(host: ClassHost, hostClass?: string | null): string | null {
+  if (host._authoredClass === undefined) {
+    const recorded = host.getAttribute?.('data-authored-class') ?? null;
+    const authored = recorded ?? host.getAttribute?.('class') ?? '';
+    host._authoredClass = authored || null;
+    if (recorded === null) host.setAttribute?.('data-authored-class', authored);
+    if (hostClass) host.setAttribute?.('class', hostClass);
+    else if (hostClass === null) host.removeAttribute?.('class');
+  }
+  return host._authoredClass;
+}
+
 // NOTE: the old `HTMLElement`-era `Base` / `defineElement` / SSR-stub helpers
 // were removed. The ui registry components extend `WebComponent` from
 // `@webjsdev/core` now, so those helpers were dead code, and referencing

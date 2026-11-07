@@ -1,7 +1,10 @@
 /**
  * Avatar: circular user image with fallback. Tier-1 class helpers;
- * compose with a native `<span>` or `<img>`. The fallback shows when the
- * `<img>` is missing or fails to load (`onerror`).
+ * compose with a native `<span>` or `<img>`. As in shadcn, one of the two
+ * shows, never both, and with no script: the image is laid over the fallback
+ * (`absolute inset-0` inside the `relative` root), so a loaded image covers
+ * it, and a missing or broken one leaves the fallback showing. Hide a broken
+ * image (`onerror`) if its broken-image glyph would otherwise cover the text.
  *
  * shadcn parity:
  *   Avatar (size: default | sm | lg)  → avatarClass({ size }) with `data-size`
@@ -50,13 +53,13 @@ export function avatarClass(_opts: { size?: AvatarSize } = {}): string {
   return cn(AVATAR_BASE);
 }
 
-export const avatarImageClass = (): string => 'cn-avatar-image aspect-square size-full';
+export const avatarImageClass = (): string => 'cn-avatar-image absolute inset-0 aspect-square size-full object-cover';
 
 export const avatarFallbackClass = (): string =>
   'cn-avatar-fallback flex size-full items-center justify-center text-sm group-data-[size=sm]/avatar:text-xs';
 
 export const avatarBadgeClass = (): string =>
-  'cn-avatar-badge absolute end-0 bottom-0 z-10 inline-flex items-center justify-center rounded-full ring-2 select-none';
+  'cn-avatar-badge absolute end-0 bottom-0 z-10 inline-flex items-center justify-center rounded-full bg-blend-color ring-2 select-none group-data-[size=sm]/avatar:size-2 group-data-[size=sm]/avatar:[&>svg]:hidden group-data-[size=default]/avatar:size-2.5 group-data-[size=default]/avatar:[&>svg]:size-2 group-data-[size=lg]/avatar:size-3 group-data-[size=lg]/avatar:[&>svg]:size-2';
 
 export const avatarGroupClass = (): string =>
   'cn-avatar-group group/avatar-group flex -space-x-2 *:data-[slot=avatar]:ring-2 *:data-[slot=avatar]:ring-background';

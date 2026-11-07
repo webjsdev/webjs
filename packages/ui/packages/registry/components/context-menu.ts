@@ -9,7 +9,8 @@
  *
  * shadcn parity:
  *   ContextMenu              → <ui-context-menu>
- *   ContextMenuTrigger       → <ui-context-menu-trigger> around the region
+ *   ContextMenuTrigger       → <ui-context-menu-trigger> around the region; a class
+ *                              written on it lands on the region box it renders
  *   ContextMenuContent       → <ui-context-menu-content>
  *   ContextMenuItem          → <ui-context-menu-item> (variant, type="checkbox" | "radio", checked, value)
  *   ContextMenuLabel / Separator / Shortcut / Group
@@ -57,20 +58,25 @@ import {
   UiDropdownMenuSubContent,
   type MenuClasses,
 } from './dropdown-menu.ts';
+import { html } from '@webjsdev/core';
+import { cn, takeAuthoredClass } from '../lib/utils.ts';
 import { positionFloating } from './popover.ts';
+
+/** The trigger region's classes (the element applies them). */
+export const contextMenuTriggerClass = (): string => 'cn-context-menu-trigger select-none';
 
 /** The menu panel's classes (the element applies them). */
 export const contextMenuContentClass = (): string =>
-  'cn-context-menu-content z-50 overflow-x-hidden overflow-y-auto';
+  'cn-context-menu-content z-50 origin-(--radix-context-menu-content-transform-origin) overflow-x-hidden overflow-y-auto';
 /** A menu item's classes (the element applies them). */
 export const contextMenuItemClass = (): string =>
-  'cn-context-menu-item group/context-menu-item relative flex cursor-default items-center outline-hidden select-none [&_svg]:pointer-events-none [&_svg]:shrink-0';
+  'cn-context-menu-item group/context-menu-item relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0';
 /** A checkbox item's classes (the element applies them). */
 export const contextMenuCheckboxItemClass = (): string =>
-  'cn-context-menu-checkbox-item relative flex cursor-default items-center outline-hidden select-none [&_svg]:pointer-events-none [&_svg]:shrink-0';
+  'cn-context-menu-checkbox-item relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0';
 /** A radio item's classes (the element applies them). */
 export const contextMenuRadioItemClass = (): string =>
-  'cn-context-menu-radio-item relative flex cursor-default items-center outline-hidden select-none';
+  'cn-context-menu-radio-item relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0';
 /** A group label's classes. */
 export const contextMenuLabelClass = (): string =>
   'cn-context-menu-label';
@@ -84,7 +90,7 @@ export const contextMenuSubTriggerClass = (): string =>
   'cn-context-menu-sub-trigger flex cursor-default items-center select-none outline-hidden [&_svg]:pointer-events-none [&_svg]:shrink-0';
 /** A sub-menu panel's classes (the element applies them). */
 export const contextMenuSubContentClass = (): string =>
-  'cn-context-menu-sub-content z-50 overflow-hidden';
+  'cn-context-menu-sub-content z-50 origin-(--radix-context-menu-content-transform-origin) overflow-hidden';
 
 const contextMenuItemIndicatorClass = (): string =>
   'cn-context-menu-item-indicator pointer-events-none';
@@ -173,6 +179,22 @@ UiContextMenu.register('ui-context-menu');
 export class UiContextMenuTrigger extends UiDropdownMenuTrigger {
   static family = FAMILY;
   static classes = CONTEXT_MENU_CLASSES;
+  _authored: string | null = null;
+
+  // shadcn's className on ContextMenuTrigger styles the region itself (its
+  // size, the dashed border), so the class written on this host moves to the
+  // box it renders and the host becomes `display: contents`. The host's box is
+  // turned off through its style, which the server serves, so the first paint
+  // has one region, not a host and a region both carrying the class.
+  render() {
+    this._authored = takeAuthoredClass(this, null);
+    if (!this.getAttribute?.('style')) this.setAttribute?.('style', 'display: contents');
+    return html`<div
+      data-slot="context-menu-trigger"
+      class=${cn(contextMenuTriggerClass(), this._authored)}
+      @click=${this._onClick}
+    ><slot></slot></div>`;
+  }
 
   // A left click on the region never opens the menu. It closes an open one,
   // as a click anywhere outside the panel does.
@@ -208,7 +230,8 @@ export class UiContextMenuTrigger extends UiDropdownMenuTrigger {
   // Below the focused element's start corner, where a keyboard-opened menu goes.
   _openFromFocus(): void {
     const returnTo = this._returnTarget();
-    const r = (returnTo ?? this).getBoundingClientRect();
+    // The host is display: contents and has no box of its own.
+    const r = (returnTo ?? this.querySelector<HTMLElement>('[data-slot="context-menu-trigger"]') ?? this).getBoundingClientRect();
     this._root()?.openAt(r.left, r.bottom, returnTo);
   }
 

@@ -16,7 +16,9 @@
  *   `orientation`: "horizontal" (default) | "vertical".
  *
  * Attributes on <ui-tabs-list>:
- *   `variant`: "default" (default, pill-on-muted) | "underline".
+ *   `variant`: "default" (default, pill-on-muted) | "line" (shadcn's name;
+ *   "underline", the kit's earlier name, is an alias). The list is served
+ *   `data-variant="line"` for either, which is what every style keys on.
  *
  * Attributes on <ui-tabs-trigger> / <ui-tabs-content>:
  *   `value`: string. Identifier this trigger / panel pair shares.
@@ -65,7 +67,7 @@
  * ```
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
-import { cn, ensureId } from '../lib/utils.ts';
+import { cn, ensureId, takeAuthoredClass } from '../lib/utils.ts';
 
 // A tab `value` becomes part of an id, so reduce it to id-safe characters.
 const idSafe = (s: string): string => s.replace(/[^A-Za-z0-9_-]/g, '-');
@@ -81,15 +83,20 @@ const TABS_LIST_BASE =
 
 const TABS_LIST_VARIANTS = {
   default: 'cn-tabs-list-variant-default bg-muted',
-  underline: 'cn-tabs-list-variant-line gap-1 bg-transparent',
+  line: 'cn-tabs-list-variant-line gap-1 bg-transparent',
 } as const;
 
-export type TabsListVariant = keyof typeof TABS_LIST_VARIANTS;
+/** The list's look: `line` is shadcn's name, and `underline` an alias for it. */
+export type TabsListVariant = keyof typeof TABS_LIST_VARIANTS | 'underline';
+
+/** The variant every style keys on, with `underline` read as `line`. */
+export function tabsListVariant(variant: TabsListVariant | string | null | undefined): keyof typeof TABS_LIST_VARIANTS {
+  return variant === 'line' || variant === 'underline' ? 'line' : 'default';
+}
 
 /** Optional helper exposing the tabs-list class for advanced overrides. */
 export function tabsListClass(opts: { variant?: TabsListVariant } = {}): string {
-  const variant = opts.variant ?? 'default';
-  return cn(TABS_LIST_BASE, TABS_LIST_VARIANTS[variant]);
+  return cn(TABS_LIST_BASE, TABS_LIST_VARIANTS[tabsListVariant(opts.variant)]);
 }
 
 /**
@@ -106,13 +113,15 @@ export function tabsListVariants(opts: { variant?: TabsListVariant } & { classNa
 // here is essentially shadcn's tabs.tsx trigger output.
 const TABS_TRIGGER_CLASS = [
   'cn-tabs-trigger relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center whitespace-nowrap text-foreground/60 transition-all hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 dark:text-muted-foreground dark:hover:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0',
-  // These mirror shadcn's tabs.tsx (modulo variant=line → variant=underline).
+  // These mirror shadcn's tabs.tsx.
   // Light-mode active state uses bg-background + shadow only; dark mode
   // additionally borders. Adding light-mode border made the underline
   // variant look like outline and made default look like two buttons.
-  'cn-tabs-trigger-part-2',
-  'cn-tabs-trigger-part-3',
-  'cn-tabs-trigger-part-4',
+  // shadcn keeps all three inline in every style; the part names carry the
+  // new-york spelling of the same rules.
+  'cn-tabs-trigger-part-2 group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent',
+  'cn-tabs-trigger-part-3 data-active:bg-background data-active:text-foreground dark:data-active:border-input dark:data-active:bg-input/30 dark:data-active:text-foreground',
+  'cn-tabs-trigger-part-4 after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-horizontal/tabs:after:inset-x-0 group-data-horizontal/tabs:after:bottom-[-5px] group-data-horizontal/tabs:after:h-0.5 group-data-vertical/tabs:after:inset-y-0 group-data-vertical/tabs:after:-end-1 group-data-vertical/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100',
 ].join(' ');
 
 const TABS_CONTENT_CLASS = 'cn-tabs-content flex-1 outline-none';
@@ -124,16 +133,8 @@ const TABS_CONTENT_CLASS = 'cn-tabs-content flex-1 outline-none';
  * is read once from the host, before the part re-renders, and the host then
  * carries `hostClass` instead (or nothing).
  */
-function takeAuthored(part: HTMLElement & { _authored?: string | null; _captured?: boolean }, hostClass: string | null): string | null {
-  if (!part._captured) {
-    part._authored = part.getAttribute?.('class') ?? null;
-    part._captured = true;
-    if (typeof part.setAttribute === 'function') {
-      if (hostClass) part.setAttribute('class', hostClass);
-      else part.removeAttribute('class');
-    }
-  }
-  return part._authored ?? null;
+function takeAuthored(part: HTMLElement, hostClass: string | null): string | null {
+  return takeAuthoredClass(part, hostClass);
 }
 
 // --------------------------------------------------------------------------
@@ -177,8 +178,6 @@ export class UiTabs extends WebComponent({
     return { trigger: `${this.scopeId}-trigger-${v}`, panel: `${this.scopeId}-panel-${v}` };
   }
 
-  _authored: string | null = null;
-  _captured = false;
 
   render() {
     const authored = takeAuthored(this, null);
@@ -228,8 +227,6 @@ export class UiTabsList extends WebComponent({
     return this.closest('ui-tabs') as UiTabs | null;
   }
 
-  _authored: string | null = null;
-  _captured = false;
 
   render() {
     const authored = takeAuthored(this, 'contents');
@@ -238,7 +235,7 @@ export class UiTabsList extends WebComponent({
       data-slot="tabs-list"
       role="tablist"
       aria-orientation=${orientation}
-      data-variant=${this.variant}
+      data-variant=${tabsListVariant(this.variant)}
       class=${cn(tabsListClass({ variant: this.variant }), authored)}
     ><slot></slot></div>`;
   }
@@ -265,8 +262,6 @@ export class UiTabsTrigger extends WebComponent({
     return this.closest('ui-tabs') as UiTabs | null;
   }
 
-  _authored: string | null = null;
-  _captured = false;
 
   render() {
     const authored = takeAuthored(this, 'contents');
@@ -347,8 +342,6 @@ export class UiTabsContent extends WebComponent({
     return this.closest('ui-tabs') as UiTabs | null;
   }
 
-  _authored: string | null = null;
-  _captured = false;
 
   render() {
     // The panel's host keeps no class of its own (it toggles `hidden`, which a

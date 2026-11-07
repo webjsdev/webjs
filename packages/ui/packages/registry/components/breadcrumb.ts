@@ -37,7 +37,7 @@
  */
 
 export const breadcrumbListClass = (): string =>
-  'cn-breadcrumb-list flex flex-wrap items-center';
+  'cn-breadcrumb-list flex flex-wrap items-center wrap-break-word';
 
 export const breadcrumbItemClass = (): string => 'cn-breadcrumb-item inline-flex items-center';
 

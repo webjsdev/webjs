@@ -78,12 +78,12 @@ export const comboboxClearClass = (): string => 'cn-combobox-clear';
 export const comboboxClearIconClass = (): string => 'cn-combobox-clear-icon pointer-events-none';
 /** The popup's classes (the element applies them). */
 export const comboboxContentClass = (): string =>
-  'cn-combobox-content group/combobox-content z-50 max-h-(--available-height) w-(--anchor-width) max-w-(--available-width) min-w-[calc(var(--anchor-width)+--spacing(7))] data-[chips=true]:min-w-(--anchor-width)';
+  'cn-combobox-content group/combobox-content z-50 max-h-(--available-height) origin-(--transform-origin) w-(--anchor-width) max-w-(--available-width) min-w-[calc(var(--anchor-width)+--spacing(7))] data-[chips=true]:min-w-(--anchor-width)';
 /** The list's classes (the element applies them). */
 export const comboboxListClass = (): string => 'cn-combobox-list overflow-y-auto overscroll-contain';
 /** An item's classes (the element applies them). */
 export const comboboxItemClass = (): string =>
-  'cn-combobox-item relative flex w-full cursor-default items-center outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0';
+  'cn-combobox-item relative flex w-full cursor-default items-center outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0';
 /** A chosen item's check mark slot. */
 export const comboboxItemIndicatorClass = (): string => 'cn-combobox-item-indicator';
 /** A chosen item's check mark. */
@@ -460,7 +460,7 @@ export class UiComboboxInput extends WebComponent({
       class=${inputGroupInputClass()}
       @input=${(e: Event) => rootOf(this)?._onInput((e.target as HTMLInputElement).value)}
       @click=${() => rootOf(this)?.show()}
-    ><div data-slot="input-group-addon" class=${inputGroupAddonClass({ align: 'inline-end' })}>${this.showTrigger !== 'false'
+    ><div data-slot="input-group-addon" data-align="inline-end" class=${inputGroupAddonClass({ align: 'inline-end' })}>${this.showTrigger !== 'false'
       ? html`<button
           type="button"
           data-slot="input-group-button"

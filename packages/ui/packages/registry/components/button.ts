@@ -43,7 +43,7 @@ import { cn } from '../lib/utils.ts';
 // issue shadcn-ui/ui#1791). disabled:pointer-events-none below already
 // suppresses the cursor on a disabled button.
 const BASE =
-  'cn-button group/button inline-flex shrink-0 items-center justify-center whitespace-nowrap transition-all outline-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0';
+  'cn-button group/button inline-flex shrink-0 items-center justify-center whitespace-nowrap transition-all outline-none select-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0';
 
 const VARIANTS = {
   default: 'cn-button-variant-default',

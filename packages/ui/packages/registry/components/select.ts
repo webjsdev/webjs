@@ -82,7 +82,7 @@ export const selectTriggerIconClass = (): string =>
   'cn-select-trigger-icon pointer-events-none';
 /** The listbox panel's classes (the element applies them). */
 export const selectContentClass = (): string =>
-  'cn-select-content z-50 max-h-(--radix-select-content-available-height) overflow-x-hidden overflow-y-auto';
+  'cn-select-content z-50 max-h-(--radix-select-content-available-height) origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto data-[align-trigger=true]:animate-none';
 /** The listbox's inner viewport (the element applies them). */
 export const selectViewportClass = (): string =>
   'cn-select-viewport data-[position=popper]:w-full data-[position=popper]:min-w-(--radix-select-trigger-width)';
@@ -92,7 +92,7 @@ export const selectGroupClass = (): string => 'cn-select-group';
 export const selectLabelClass = (): string => 'cn-select-label';
 /** An option's classes (the element applies them). */
 export const selectItemClass = (): string =>
-  'cn-select-item relative flex w-full cursor-default items-center outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0';
+  'cn-select-item relative flex w-full cursor-default items-center outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0';
 /** The selected option's check mark slot. */
 export const selectItemIndicatorClass = (): string => 'cn-select-item-indicator';
 /** The selected option's check mark. */
@@ -301,9 +301,15 @@ export class UiSelect extends WebComponent({
     return p?.text ?? '';
   }
 
+  // The trigger, as shadcn's SelectTrigger, is the box that sits in the
+  // layout (a flex item a `w-full max-w-48` sizes against the row, a field's
+  // column), so neither the host nor the wrapper draws a box of its own. The
+  // host's is turned off through its style, which the server serves, unlike
+  // a class the element changes.
   render() {
+    if (typeof this.getAttribute === 'function' && !this.getAttribute('style')) this.setAttribute('style', 'display: contents');
     if (!this.enhanced) {
-      return html`<div data-slot="select" class="relative"><slot></slot></div>`;
+      return html`<div data-slot="select" class="contents"><slot></slot></div>`;
     }
     void this.revision;
     const select = this.select;
@@ -344,7 +350,7 @@ export class UiSelect extends WebComponent({
         ? html`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class=${selectItemIndicatorIconClass()}><path d="M20 6 9 17l-5-5"></path></svg>`
         : ''}</span><span>${e.label}</span></div>`;
     };
-    return html`<div data-slot="select" class="relative"><slot></slot><button
+    return html`<div data-slot="select" class="contents"><slot></slot><button
       type="button"
       data-slot="select-trigger"
       role="combobox"

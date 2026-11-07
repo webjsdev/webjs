@@ -366,3 +366,51 @@ test('alertDialogMediaClass: the header media slot', { skip }, async () => {
   assert.match(s, /bg-muted/);
   assert.doesNotMatch(s, /(^|\s)cn-/, 'baked, no cn-* name');
 });
+
+// ---------- base form keeps shadcn's inline utilities (#1666) ----------
+// These read the BASE-FORM source, not a baked copy: a utility shadcn keeps
+// inline must be inline here too, or a style that does not map it (every
+// shadcn style but the kit's new-york) draws the part without it.
+
+const baseHelpers = (name) => import(join(SOURCE_DIR, `${name}.ts`));
+const tokens = (s) => s.split(/\s+/);
+
+test('avatar: the image lies over the fallback, so only one of them shows', { skip }, async () => {
+  const { avatarClass, avatarImageClass } = await baseHelpers('avatar');
+  assert.ok(tokens(avatarClass()).includes('relative'), 'the root positions the image');
+  for (const t of ['absolute', 'inset-0', 'object-cover']) assert.ok(tokens(avatarImageClass()).includes(t), `the image carries ${t}`);
+});
+
+test('avatar: the badge sizes itself from the avatar size in base form', { skip }, async () => {
+  const { avatarBadgeClass } = await baseHelpers('avatar');
+  for (const t of ['group-data-[size=sm]/avatar:size-2', 'group-data-[size=default]/avatar:size-2.5', 'group-data-[size=lg]/avatar:size-3']) {
+    assert.ok(tokens(avatarBadgeClass()).includes(t), t);
+  }
+});
+
+test('separator: shadcn\'s inline size and colour are kept inline', { skip }, async () => {
+  const { separatorClass } = await baseHelpers('separator');
+  for (const t of ['shrink-0', 'bg-border', 'data-horizontal:h-px', 'data-horizontal:w-full', 'data-vertical:w-px', 'data-vertical:self-stretch']) {
+    assert.ok(tokens(separatorClass()).includes(t), t);
+  }
+});
+
+test('field separator: the rule is drawn in base form, not only by new-york', { skip }, async () => {
+  const { fieldSeparatorClass } = await baseHelpers('field');
+  for (const t of ['before:absolute', 'before:top-1/2', 'before:h-px', 'before:bg-border']) assert.ok(tokens(fieldSeparatorClass()).includes(t), t);
+});
+
+test('field: the field carries cn-field, which the styles space', { skip }, async () => {
+  const { fieldClass } = await baseHelpers('field');
+  assert.ok(tokens(fieldClass()).includes('cn-field'));
+  assert.ok(tokens(fieldClass()).includes('*:w-full'), 'a vertical field widens its controls in base form');
+});
+
+test('accordion: accordionContentInnerClass is shadcn\'s inner content wrapper', { skip }, async () => {
+  const { accordionContentInnerClass, accordionClass } = await baseHelpers('accordion');
+  const inner = tokens(accordionContentInnerClass());
+  assert.ok(inner.includes('cn-accordion-content-inner'));
+  assert.ok(inner.includes('[&_a]:underline'));
+  assert.ok(inner.includes('[&_p:not(:last-child)]:mb-4'));
+  assert.ok(tokens(accordionClass()).includes('flex') && tokens(accordionClass()).includes('flex-col'));
+});

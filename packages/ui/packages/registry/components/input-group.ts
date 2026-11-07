@@ -6,7 +6,9 @@
  * shadcn parity:
  *   InputGroup                 → inputGroupClass()
  *   InputGroupAddon (align: inline-start | inline-end | block-start | block-end)
- *                              → inputGroupAddonClass({ align }), alias inputGroupAddonVariants
+ *                              → inputGroupAddonClass({ align }), alias inputGroupAddonVariants,
+ *                                plus the same `data-align` on the addon (the styles pad the
+ *                                control beside it by it)
  *   InputGroupButton (size)    → inputGroupButtonClass({ size }) with buttonClass({ variant })
  *   InputGroupText             → inputGroupTextClass()
  *   InputGroupInput / InputGroupTextarea
@@ -27,7 +29,7 @@
  * @example
  * ```html
  * <div class=${inputGroupClass()} data-slot="input-group" role="group">
- *   <label class=${inputGroupAddonClass()} data-slot="input-group-addon" for="site">https://</label>
+ *   <label class=${inputGroupAddonClass()} data-slot="input-group-addon" data-align="inline-start" for="site">https://</label>
  *   <input class=${inputGroupInputClass()} data-slot="input-group-control" id="site" name="site" aria-label="Website">
  * </div>
  * ```

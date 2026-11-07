@@ -41,7 +41,7 @@
  * ```
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
-import { cn } from '../lib/utils.ts';
+import { cn, takeAuthoredClass } from '../lib/utils.ts';
 import { buttonClass, type ButtonVariant, type ButtonSize } from './button.ts';
 
 /** The scroller's classes (the element applies them). */
@@ -266,7 +266,6 @@ UiCarouselContent.register('ui-carousel-content');
 
 export class UiCarouselItem extends WebComponent {
   _authored: string | null = null;
-  _captured = false;
 
   _root: UiCarousel | null = null;
 
@@ -288,10 +287,7 @@ export class UiCarouselItem extends WebComponent {
   // A slide is the flex child itself, so it carries its own classes, role and
   // slot name; the first render keeps whatever classes the author wrote.
   render() {
-    if (!this._captured) {
-      this._authored = this.getAttribute?.('class') ?? null;
-      this._captured = true;
-    }
+    this._authored = takeAuthoredClass(this);
     if (typeof this.setAttribute === 'function') {
       this.setAttribute('class', cn(carouselItemClass(orientationOf(this)), this._authored));
       this.setAttribute('role', 'group');

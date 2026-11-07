@@ -139,7 +139,7 @@
  * ```
  */
 import { WebComponent, html, unsafeHTML, signal, prop } from '@webjsdev/core';
-import { cn, ensureId } from '../lib/utils.ts';
+import { cn, ensureId, takeAuthoredClass } from '../lib/utils.ts';
 import { onBeforeCache } from '../lib/dom.ts';
 
 /**
@@ -172,16 +172,16 @@ import { positionFloating, type PopoverSide, type PopoverAlign } from './popover
 // --------------------------------------------------------------------------
 
 export const dropdownMenuContentClass = (): string =>
-  'cn-dropdown-menu-content z-50 overflow-x-hidden overflow-y-auto';
+  'cn-dropdown-menu-content z-50 origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto data-[state=closed]:overflow-hidden';
 
 export const dropdownMenuItemClass = (): string =>
-  'cn-dropdown-menu-item group/dropdown-menu-item relative flex cursor-default items-center outline-hidden select-none [&_svg]:pointer-events-none [&_svg]:shrink-0';
+  'cn-dropdown-menu-item group/dropdown-menu-item relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0';
 
 export const dropdownMenuCheckboxItemClass = (): string =>
-  'cn-dropdown-menu-checkbox-item relative flex cursor-default items-center outline-hidden select-none [&_svg]:pointer-events-none [&_svg]:shrink-0';
+  'cn-dropdown-menu-checkbox-item relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0';
 
 export const dropdownMenuRadioItemClass = (): string =>
-  'cn-dropdown-menu-radio-item relative flex cursor-default items-center outline-hidden select-none';
+  'cn-dropdown-menu-radio-item relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0';
 
 export const dropdownMenuLabelClass = (): string =>
   'cn-dropdown-menu-label';
@@ -195,7 +195,7 @@ export const dropdownMenuSubTriggerClass = (): string =>
   'cn-dropdown-menu-sub-trigger flex cursor-default items-center select-none outline-hidden [&_svg]:pointer-events-none [&_svg]:shrink-0';
 
 export const dropdownMenuSubContentClass = (): string =>
-  'cn-dropdown-menu-sub-content z-50 overflow-hidden';
+  'cn-dropdown-menu-sub-content z-50 origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden';
 
 const dropdownMenuItemIndicatorClass = (): string =>
   'cn-dropdown-menu-item-indicator pointer-events-none';
@@ -725,7 +725,6 @@ export class UiDropdownMenuContent extends WebComponent {
   static family = 'ui-dropdown-menu';
   static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
   _authored: string | null = null;
-  _captured = false;
 
   // The class an author writes on the content is shadcn's `className` on
   // DropdownMenuContent, which lands on the menu panel (a `w-40`, say), so it
@@ -734,11 +733,7 @@ export class UiDropdownMenuContent extends WebComponent {
   // the trigger's", but browsers also map it to `text-align: end`, which every
   // label and item in the menu would inherit.
   render() {
-    if (!this._captured) {
-      this._authored = typeof this.getAttribute === 'function' ? this.getAttribute('class') : null;
-      this._captured = true;
-      if (this._authored && typeof this.removeAttribute === 'function') this.removeAttribute('class');
-    }
+    this._authored = takeAuthoredClass(this, null);
     return html`<div
       data-slot=${slot(this, '-content')}
       role="menu"
@@ -955,7 +950,11 @@ UiDropdownMenuSeparator.register('ui-dropdown-menu-separator');
 export class UiDropdownMenuShortcut extends WebComponent {
   static family = 'ui-dropdown-menu';
   static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
+  // The span is the item's flex item, as shadcn's shortcut is, so the styles'
+  // `ms-auto` pushes it to the end of the row. The host's box is turned off
+  // through its style, which the server serves.
   render() {
+    if (typeof this.getAttribute === 'function' && !this.getAttribute('style')) this.setAttribute('style', 'display: contents');
     return html`<span
       data-slot=${slot(this, '-shortcut')}
       class=${cls(this).shortcut()}
@@ -1205,13 +1204,18 @@ UiDropdownMenuSubTrigger.register('ui-dropdown-menu-sub-trigger');
 export class UiDropdownMenuSubContent extends WebComponent {
   static family = 'ui-dropdown-menu';
   static classes: MenuClasses = DROPDOWN_MENU_CLASSES;
+  _authored: string | null = null;
+
+  // As on the content: shadcn's className on the sub-content lands on the
+  // submenu panel, so the class written on this host moves there.
   render() {
+    this._authored = takeAuthoredClass(this, null);
     return html`<div
       data-slot=${slot(this, '-sub-content')}
       role="menu"
       aria-orientation="vertical"
       popover="manual"
-      class=${cls(this).subContent()}
+      class=${cn(cls(this).subContent(), this._authored)}
     ><slot></slot></div>`;
   }
 }

@@ -2782,3 +2782,100 @@ suite('dialog family: the class on the content lands on the panel', () => {
     }
   });
 });
+
+suite('overlay parts: a class on the host lands on the element it renders', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/hover-card.ts`);
+    await import(`${COMPONENTS_DIR}/dropdown-menu.ts`);
+    await import(`${COMPONENTS_DIR}/context-menu.ts`);
+    await import(`${COMPONENTS_DIR}/menubar.ts`);
+  });
+
+  test('<ui-hover-card-content class> styles the card panel', async () => {
+    const root = await mount(html`<ui-hover-card><ui-hover-card-trigger><a href="#x">x</a></ui-hover-card-trigger><ui-hover-card-content class="w-80 hc-authored">Card</ui-hover-card-content></ui-hover-card>`);
+    try {
+      await tick();
+      const host = root.querySelector('ui-hover-card-content');
+      const panel = host.querySelector('[data-slot="hover-card-content"]');
+      assert.match(panel.className, /\bhc-authored\b/);
+      assert.match(panel.className, /\bw-80\b/);
+      assert.equal(host.getAttribute('class'), null, 'and leaves the host');
+    } finally {
+      root.remove();
+    }
+  });
+
+  test('<ui-dropdown-menu-sub-content class> styles the submenu panel', async () => {
+    const root = await mount(html`<ui-dropdown-menu><ui-dropdown-menu-trigger><button>Open</button></ui-dropdown-menu-trigger><ui-dropdown-menu-content><ui-dropdown-menu-sub><ui-dropdown-menu-sub-trigger>More</ui-dropdown-menu-sub-trigger><ui-dropdown-menu-sub-content class="w-44 sub-authored"><ui-dropdown-menu-item>One</ui-dropdown-menu-item></ui-dropdown-menu-sub-content></ui-dropdown-menu-sub></ui-dropdown-menu-content></ui-dropdown-menu>`);
+    try {
+      await tick();
+      const host = root.querySelector('ui-dropdown-menu-sub-content');
+      assert.match(host.querySelector('[role="menu"]').className, /\bsub-authored\b/);
+      assert.equal(host.getAttribute('class'), null, 'and leaves the host');
+    } finally {
+      root.remove();
+    }
+  });
+
+  test('<ui-context-menu-sub-content class> styles the submenu panel', async () => {
+    const root = await mount(html`<ui-context-menu><ui-context-menu-trigger><div tabindex="0">Area</div></ui-context-menu-trigger><ui-context-menu-content><ui-context-menu-sub><ui-context-menu-sub-trigger>More</ui-context-menu-sub-trigger><ui-context-menu-sub-content class="w-44 sub-authored"><ui-context-menu-item>One</ui-context-menu-item></ui-context-menu-sub-content></ui-context-menu-sub></ui-context-menu-content></ui-context-menu>`);
+    try {
+      await tick();
+      const host = root.querySelector('ui-context-menu-sub-content');
+      assert.match(host.querySelector('[role="menu"]').className, /\bsub-authored\b/);
+      assert.equal(host.getAttribute('class'), null, 'and leaves the host');
+    } finally {
+      root.remove();
+    }
+  });
+
+  test('<ui-menubar-sub-content class> styles the submenu panel', async () => {
+    const root = await mount(html`<ui-menubar><ui-menubar-menu><ui-menubar-trigger>File</ui-menubar-trigger><ui-menubar-content><ui-menubar-sub><ui-menubar-sub-trigger>Share</ui-menubar-sub-trigger><ui-menubar-sub-content class="sub-authored"><ui-menubar-item>Email</ui-menubar-item></ui-menubar-sub-content></ui-menubar-sub></ui-menubar-content></ui-menubar-menu></ui-menubar>`);
+    try {
+      await tick();
+      const host = root.querySelector('ui-menubar-sub-content');
+      assert.match(host.querySelector('[role="menu"]').className, /\bsub-authored\b/);
+      assert.equal(host.getAttribute('class'), null, 'and leaves the host');
+    } finally {
+      root.remove();
+    }
+  });
+
+  test('<ui-context-menu-trigger class> styles the region, as shadcn\'s ContextMenuTrigger className does', async () => {
+    const root = await mount(html`<ui-context-menu><ui-context-menu-trigger class="ctx-area"><span>Right click</span></ui-context-menu-trigger><ui-context-menu-content><ui-context-menu-item>One</ui-context-menu-item></ui-context-menu-content></ui-context-menu>`);
+    try {
+      await tick();
+      const host = root.querySelector('ui-context-menu-trigger');
+      const region = host.querySelector('[data-slot="context-menu-trigger"]');
+      assert.ok(region, 'the trigger renders its region');
+      assert.match(region.className, /\bctx-area\b/);
+      assert.equal(host.getAttribute('class'), null, 'and leaves the host');
+      assert.equal(getComputedStyle(host).display, 'contents', 'which draws no box of its own');
+    } finally {
+      root.remove();
+    }
+  });
+
+  test('a menu shortcut is the item\'s flex item, so its auto start margin ends the row', async () => {
+    const root = await mount(html`<style>
+        .ms-item { display: flex; width: 240px; }
+        [data-slot="dropdown-menu-shortcut"] { margin-inline-start: auto; }
+      </style>
+      <ui-dropdown-menu><ui-dropdown-menu-trigger><button>Open</button></ui-dropdown-menu-trigger><ui-dropdown-menu-content>
+        <div class="ms-item">Copy<ui-dropdown-menu-shortcut>C</ui-dropdown-menu-shortcut></div>
+      </ui-dropdown-menu-content></ui-dropdown-menu>`);
+    try {
+      await tick();
+      root.querySelector('ui-dropdown-menu').show();
+      await tick();
+      await tick();
+      const host = root.querySelector('ui-dropdown-menu-shortcut');
+      const span = host.querySelector('[data-slot="dropdown-menu-shortcut"]');
+      const row = root.querySelector('.ms-item');
+      assert.equal(getComputedStyle(host).display, 'contents');
+      assert.ok(Math.abs(span.getBoundingClientRect().right - row.getBoundingClientRect().right) < 1, 'the shortcut ends the row');
+    } finally {
+      root.remove();
+    }
+  });
+});

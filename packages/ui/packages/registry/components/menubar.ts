@@ -77,35 +77,35 @@ export const menubarTriggerClass = (): string =>
   'cn-menubar-trigger flex items-center outline-hidden select-none';
 /** A menu panel's classes (the element applies them). */
 export const menubarContentClass = (): string =>
-  'cn-menubar-content z-50 overflow-x-hidden overflow-y-auto';
+  'cn-menubar-content z-50 origin-(--radix-menubar-content-transform-origin) overflow-x-hidden overflow-y-auto';
 /** A menu item's classes (the element applies them). */
 export const menubarItemClass = (): string =>
-  'cn-menubar-item group/menubar-item relative flex cursor-default items-center outline-hidden select-none [&_svg]:pointer-events-none [&_svg]:shrink-0';
+  'cn-menubar-item group/menubar-item relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0';
 /** A checkbox item's classes (the element applies them). */
 export const menubarCheckboxItemClass = (): string =>
-  'cn-menubar-checkbox-item relative flex cursor-default items-center outline-hidden select-none [&_svg]:pointer-events-none [&_svg]:shrink-0';
+  'cn-menubar-checkbox-item relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0';
 /** A radio item's classes (the element applies them). */
 export const menubarRadioItemClass = (): string =>
-  'cn-menubar-radio-item relative flex cursor-default items-center outline-hidden select-none';
+  'cn-menubar-radio-item relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0';
 /** A group label's classes. */
 export const menubarLabelClass = (): string =>
   'cn-menubar-label';
 /** A separator's classes. */
-export const menubarSeparatorClass = (): string => 'cn-menubar-separator';
+export const menubarSeparatorClass = (): string => 'cn-menubar-separator -mx-1 my-1 h-px';
 /** A keyboard shortcut hint's classes. */
 export const menubarShortcutClass = (): string =>
-  'cn-menubar-shortcut';
+  'cn-menubar-shortcut ms-auto';
 /** A sub-menu trigger's classes (the element applies them). */
 export const menubarSubTriggerClass = (): string =>
   'cn-menubar-sub-trigger flex cursor-default items-center select-none outline-hidden [&_svg]:pointer-events-none [&_svg]:shrink-0';
 /** A sub-menu panel's classes (the element applies them). */
 export const menubarSubContentClass = (): string =>
-  'cn-menubar-sub-content z-50 overflow-hidden';
+  'cn-menubar-sub-content z-50 origin-(--radix-menubar-content-transform-origin) overflow-hidden';
 
 const menubarItemIndicatorClass = (type?: 'checkbox' | 'radio'): string =>
   type === 'radio'
-    ? 'cn-menubar-radio-item-indicator pointer-events-none'
-    : 'cn-menubar-checkbox-item-indicator pointer-events-none';
+    ? 'cn-menubar-radio-item-indicator pointer-events-none absolute flex items-center justify-center'
+    : 'cn-menubar-checkbox-item-indicator pointer-events-none absolute flex items-center justify-center';
 
 // The dropdown elements paint each part through this table, so every part
 // carries a cn-menubar-* name, the one shadcn's styles give it.

@@ -70,7 +70,7 @@
  * ```
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
-import { ensureId } from '../lib/utils.ts';
+import { cn, ensureId, takeAuthoredClass } from '../lib/utils.ts';
 import { onBeforeCache } from '../lib/dom.ts';
 import { positionFloating, type PopoverSide, type PopoverAlign } from './popover.ts';
 
@@ -79,7 +79,7 @@ import { positionFloating, type PopoverSide, type PopoverAlign } from './popover
 // visual layer sits on top. UA `[popover]:not(:popover-open) {
 // display: none }` handles closed-state hiding.
 export const hoverCardContentClass = (): string =>
-  'cn-hover-card-content z-50 outline-hidden';
+  'cn-hover-card-content z-50 origin-(--radix-hover-card-content-transform-origin) outline-hidden';
 
 // --------------------------------------------------------------------------
 // <ui-hover-card>
@@ -420,12 +420,18 @@ UiHoverCardTrigger.register('ui-hover-card-trigger');
 // --------------------------------------------------------------------------
 
 export class UiHoverCardContent extends WebComponent {
+  _authored: string | null = null;
+
+  // shadcn's className on HoverCardContent lands on the card panel (a `w-80`,
+  // say), so the class written on this host moves there, read once at first
+  // render.
   render() {
+    this._authored = takeAuthoredClass(this, null);
     return html`<div
       data-slot="hover-card-content"
       role="dialog"
       popover="manual"
-      class=${hoverCardContentClass()}
+      class=${cn(hoverCardContentClass(), this._authored)}
       @mouseenter=${this._onEnter}
       @mouseleave=${this._onLeave}
       @focusin=${this._onEnter}

@@ -40,7 +40,7 @@
  * ```
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
-import { cn } from '../lib/utils.ts';
+import { cn, takeAuthoredClass } from '../lib/utils.ts';
 
 /** The group's classes (the element applies them). */
 export const resizablePanelGroupClass = (): string =>
@@ -73,18 +73,30 @@ export class UiResizablePanelGroup extends WebComponent({
 }) {
   // The current sizes, in percent, panel by panel; empty until first laid out.
   sizes: number[] = [];
+  _authored: string | null = null;
 
   constructor() {
     super();
     this.orientation = 'horizontal';
   }
 
+  // shadcn's className on ResizablePanelGroup lands on the group box, which
+  // is the flex item of whatever holds it (a `max-w-sm` on the group, the
+  // `h-full` that lets a nested group fill its panel). So the class written
+  // on this host moves to the box it renders, read once at first render, and
+  // the host becomes `display: contents`, leaving the box to size itself
+  // against the host's parent as shadcn's does. The host's box is turned off
+  // through its style rather than a class: the server serves the class the
+  // tag was written with, but it does serve a style the element adds, so the
+  // first paint already has one box, not two.
   render() {
+    this._authored = takeAuthoredClass(this, null);
+    if (!this.getAttribute?.('style')) this.setAttribute?.('style', 'display: contents');
     return html`<div
       data-slot="resizable-panel-group"
       data-panel-group-direction=${this.orientation}
       aria-orientation=${this.orientation}
-      class=${resizablePanelGroupClass()}
+      class=${cn(resizablePanelGroupClass(), this._authored)}
     ><slot></slot></div>`;
   }
 
@@ -207,7 +219,6 @@ export class UiResizableHandle extends WebComponent({
   withHandle: prop(Boolean, { attribute: 'with-handle' }),
 }) {
   _authored: string | null = null;
-  _captured = false;
   _drag: { at: number; extent: number } | null = null;
 
   constructor() {
@@ -247,10 +258,7 @@ export class UiResizableHandle extends WebComponent({
 
   // The handle is the separator itself: a flex child that takes focus.
   render() {
-    if (!this._captured) {
-      this._authored = this.getAttribute?.('class') ?? null;
-      this._captured = true;
-    }
+    this._authored = takeAuthoredClass(this);
     const group = groupOf(this);
     const vertical = group?.orientation === 'vertical';
     const i = typeof this.compareDocumentPosition === 'function' ? this._index() : -1;

@@ -213,7 +213,7 @@ export function popoverContentClass(opts: PopoverContentOptions = {}): string {
     alignClass = ALIGN_OFFSET_CLASS[`${axis}-${align}`][alignOffset];
   }
   return [
-    'cn-popover-content w-72 outline-hidden',
+    'cn-popover-content z-50 w-72 origin-(--radix-popover-content-transform-origin) outline-hidden',
     POSITION_AREA_CLASS[`${side}-${align}`],
     MARGIN_OFFSET_CLASS[side][sideOffset],
     alignClass,

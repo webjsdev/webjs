@@ -45,6 +45,7 @@
  * ```
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
+import { takeAuthoredClass } from '../lib/utils.ts';
 
 /** The row's classes (the element applies them). */
 export const inputOtpClass = (): string =>
@@ -287,7 +288,6 @@ export class UiInputOtpSlot extends WebComponent({
   state: prop<SlotState>({ state: true }),
 }) {
   _authored: string | null = null;
-  _captured = false;
 
   constructor() {
     super();
@@ -297,10 +297,7 @@ export class UiInputOtpSlot extends WebComponent({
 
   connectedCallback(): void {
     // The author's own classes, read once: later the host carries ours too.
-    if (!this._captured) {
-      this._authored = this.getAttribute('class');
-      this._captured = true;
-    }
+    this._authored = takeAuthoredClass(this);
     super.connectedCallback?.();
     (this.closest(ROOT) as UiInputOtp | null)?._partConnected();
   }

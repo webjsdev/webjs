@@ -74,7 +74,7 @@
  * ```
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
-import { cn } from '../lib/utils.ts';
+import { cn, takeAuthoredClass } from '../lib/utils.ts';
 import { buttonClass, type ButtonVariant, type ButtonSize } from './button.ts';
 
 /** The form's classes (the element applies them). */
@@ -85,7 +85,12 @@ export const questionnaireProgressClass = (): string =>
 /** A question's fieldset (the element applies them). */
 export const questionnaireItemClass = (): string => 'cn-questionnaire-item min-w-0 border-0 p-0 outline-none';
 /** A question's title (the element applies them). */
-export const questionnaireTitleClass = (): string => 'cn-questionnaire-title cn-font-heading text-pretty';
+// The styles space the title from what follows only when no description is its
+// following sibling. Here the title and the description sit in their own part
+// hosts, so they are never siblings, and the question is asked of the item
+// instead: an item holding a description takes the margin back.
+export const questionnaireTitleClass = (): string =>
+  'cn-questionnaire-title cn-font-heading text-pretty [[data-slot=questionnaire-item]:has([data-slot=questionnaire-description])_&]:mb-0';
 /** A question's description (the element applies them). */
 export const questionnaireDescriptionClass = (): string =>
   'cn-questionnaire-description text-pretty text-muted-foreground';
@@ -116,6 +121,18 @@ function rootOf(el: Element): UiQuestionnaire | null {
 
 function itemOf(el: Element): UiQuestionnaireItem | null {
   return (typeof el.closest === 'function' ? el.closest(ITEM) : null) as UiQuestionnaireItem | null;
+}
+
+// shadcn's className on each questionnaire part lands on the element that part
+// renders, and no host draws a box of its own: the rendered elements are the
+// flex and grid items the styles space (a hidden question's fieldset drops out
+// of the form's gap, a button's column placement reaches the actions grid).
+// No host hides itself, since every part hides its rendered element. The
+// host's box is turned off through its style, which the server serves, unlike
+// a class the element changes.
+function takeAuthored(part: HTMLElement): string | null {
+  if (!part.getAttribute?.('style')) part.setAttribute?.('style', 'display: contents');
+  return takeAuthoredClass(part, null);
 }
 
 // A part connected after the root's first update asks it to push its state.
@@ -164,7 +181,7 @@ export class UiQuestionnaire extends WebComponent({
       method=${this.method || null}
       ?novalidate=${!!this.enhanced}
       data-shortcuts=${this.shortcuts || null}
-      class=${questionnaireClass()}
+      class=${cn(questionnaireClass(), takeAuthored(this))}
       @submit=${this._onSubmit}
       @keydown=${this._onKeyDown}
       @change=${this._onChange}
@@ -373,7 +390,7 @@ export class UiQuestionnaireProgress extends WebComponent({
       aria-valuemax=${total ? String(total) : null}
       aria-valuenow=${total ? String(current) : null}
       aria-valuetext=${label || null}
-      class=${questionnaireProgressClass()}
+      class=${cn(questionnaireProgressClass(), takeAuthored(this))}
     >${label}</div>`;
   }
 }
@@ -462,7 +479,7 @@ export class UiQuestionnaireItem extends WebComponent({
       aria-labelledby=${hasTitle && this._id ? this.titleId : null}
       aria-describedby=${described || null}
       aria-invalid=${this.invalid ? 'true' : null}
-      class=${questionnaireItemClass()}
+      class=${cn(questionnaireItemClass(), takeAuthored(this))}
     ><slot></slot></fieldset>`;
   }
 }
@@ -480,7 +497,7 @@ export class UiQuestionnaireTitle extends WebComponent {
 
   render() {
     const item = itemOf(this);
-    return html`<legend data-slot="questionnaire-title" id=${item?._id ? item.titleId : null} class=${questionnaireTitleClass()}><slot></slot></legend>`;
+    return html`<legend data-slot="questionnaire-title" id=${item?._id ? item.titleId : null} class=${cn(questionnaireTitleClass(), takeAuthored(this))}><slot></slot></legend>`;
   }
 }
 UiQuestionnaireTitle.register('ui-questionnaire-title');
@@ -493,7 +510,7 @@ export class UiQuestionnaireDescription extends WebComponent {
 
   render() {
     const item = itemOf(this);
-    return html`<p data-slot="questionnaire-description" id=${item?._id ? item.descriptionId : null} class=${questionnaireDescriptionClass()}><slot></slot></p>`;
+    return html`<p data-slot="questionnaire-description" id=${item?._id ? item.descriptionId : null} class=${cn(questionnaireDescriptionClass(), takeAuthored(this))}><slot></slot></p>`;
   }
 }
 UiQuestionnaireDescription.register('ui-questionnaire-description');
@@ -504,7 +521,7 @@ UiQuestionnaireDescription.register('ui-questionnaire-description');
 
 export class UiQuestionnaireChoices extends WebComponent {
   render() {
-    return html`<div data-slot="questionnaire-choices" class=${questionnaireChoicesClass()}><slot></slot></div>`;
+    return html`<div data-slot="questionnaire-choices" class=${cn(questionnaireChoicesClass(), takeAuthored(this))}><slot></slot></div>`;
   }
 }
 UiQuestionnaireChoices.register('ui-questionnaire-choices');
@@ -562,7 +579,7 @@ export class UiQuestionnaireChoice extends WebComponent({
       ?data-unchecked=${!this.live}
       ?data-disabled=${disabled}
       data-shortcut=${shortcut || null}
-      class=${questionnaireChoiceClass()}
+      class=${cn(questionnaireChoiceClass(), takeAuthored(this))}
     ><input
       data-slot="questionnaire-choice-input"
       type=${type}
@@ -590,7 +607,7 @@ UiQuestionnaireChoice.register('ui-questionnaire-choice');
 
 export class UiQuestionnaireChoiceDescription extends WebComponent {
   render() {
-    return html`<span data-slot="questionnaire-choice-description" class=${questionnaireChoiceDescriptionClass()}><slot></slot></span>`;
+    return html`<span data-slot="questionnaire-choice-description" class=${cn(questionnaireChoiceDescriptionClass(), takeAuthored(this))}><slot></slot></span>`;
   }
 }
 UiQuestionnaireChoiceDescription.register('ui-questionnaire-choice-description');
@@ -614,7 +631,7 @@ export class UiQuestionnaireInput extends WebComponent({
 
   render() {
     const item = itemOf(this);
-    return html`<div data-slot="questionnaire-input-wrapper" class="cn-questionnaire-input-wrapper group/questionnaire-input relative min-w-0"><input
+    return html`<div data-slot="questionnaire-input-wrapper" class=${cn('cn-questionnaire-input-wrapper group/questionnaire-input relative min-w-0', takeAuthored(this))}><input
       data-slot="questionnaire-input"
       type="text"
       name=${item?.name || null}
@@ -646,7 +663,7 @@ export class UiQuestionnaireError extends WebComponent {
       id=${item?._id ? item.errorId : null}
       ?hidden=${!invalid}
       role=${invalid ? 'alert' : null}
-      class=${questionnaireErrorClass()}
+      class=${cn(questionnaireErrorClass(), takeAuthored(this))}
     ><slot>${fallback}</slot></p>`;
   }
 }
@@ -658,7 +675,7 @@ UiQuestionnaireError.register('ui-questionnaire-error');
 
 export class UiQuestionnaireActions extends WebComponent {
   render() {
-    return html`<div data-slot="questionnaire-actions" class=${questionnaireActionsClass()}><slot></slot></div>`;
+    return html`<div data-slot="questionnaire-actions" class=${cn(questionnaireActionsClass(), takeAuthored(this))}><slot></slot></div>`;
   }
 }
 UiQuestionnaireActions.register('ui-questionnaire-actions');
@@ -698,7 +715,7 @@ export class UiQuestionnaireButton extends WebComponent({
       ?hidden=${!this.visible}
       aria-hidden=${this.visible ? null : 'true'}
       aria-keyshortcuts=${this.visible && (ctor.part === 'next' || ctor.part === 'submit') ? 'Enter' : null}
-      class=${cn(buttonClass({ variant: this.variant as ButtonVariant, size: this.size as ButtonSize }), ctor.place)}
+      class=${cn(buttonClass({ variant: this.variant as ButtonVariant, size: this.size as ButtonSize }), ctor.place, takeAuthored(this))}
       @click=${this._onClick}
     ><slot>${ctor.label}</slot></button>`;
   }

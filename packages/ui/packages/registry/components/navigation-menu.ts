@@ -69,7 +69,7 @@ import { ensureId } from '../lib/utils.ts';
 
 /** The root's classes (the element applies them). */
 export const navigationMenuClass = (): string =>
-  'cn-navigation-menu group/navigation-menu relative flex flex-1 items-center justify-center';
+  'cn-navigation-menu group/navigation-menu relative flex max-w-max flex-1 items-center justify-center';
 /** The list's classes (the element applies them). */
 export const navigationMenuListClass = (): string =>
   'cn-navigation-menu-list group flex flex-1 list-none items-center justify-center';

@@ -94,7 +94,7 @@
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
 import { ref, createRef } from '@webjsdev/core/directives';
-import { cn, ensureId } from '../lib/utils.ts';
+import { cn, ensureId, takeAuthoredClass } from '../lib/utils.ts';
 import { onBeforeCache } from '../lib/dom.ts';
 import { buttonClass, type ButtonVariant, type ButtonSize } from './button.ts';
 
@@ -499,14 +499,8 @@ export class UiAlertDialogContent extends WebComponent({
   // shadcn's className on the content lands on the panel it renders, so the
   // class written on this host moves there, read once at first render.
   _authored: string | null = null;
-  _captured = false;
   _hostClass(): string | null {
-    if (!this._captured) {
-      this._captured = true;
-      this._authored = this.getAttribute?.('class') || null;
-      this.removeAttribute?.('class');
-    }
-    return this._authored;
+    return (this._authored = takeAuthoredClass(this, null));
   }
 
   render() {

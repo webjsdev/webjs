@@ -374,7 +374,7 @@ test('ui-message-scroller: the served transcript is a log, held invisible until 
   );
   assert.match(out, /data-slot="message-scroller-viewport"\s+data-pending-scroll/, 'the viewport waits for its opening position');
   assert.match(out, /role="log"[\s\S]*?aria-relevant="additions"[\s\S]*?aria-label="Chat"/, 'a labelled log that announces additions');
-  assert.match(out, /<ui-message-scroller-item message-id="a" class="[^"]*shrink-0[^"]*" data-slot="message-scroller-item"/, 'an item carries its own classes');
+  assert.match(out, /<ui-message-scroller-item message-id="a"[^>]* class="[^"]*shrink-0[^"]*"[^>]* data-slot="message-scroller-item"/, 'an item carries its own classes');
   assert.match(out, /<span class="sr-only">Scroll to end<\/span>/);
 });
 
@@ -426,4 +426,27 @@ test('ui-switch: the served switch is a real, named, checked control inside shad
   const off = await ssr(['switch.ts'], (html) => html`<ui-switch aria-label="Wi-Fi"></ui-switch>`);
   assert.match(off, /data-state="unchecked"/);
   assert.doesNotMatch((off.match(/<input[^>]*>/) ?? [''])[0], /\s(checked|name|id|value)[=\s>]/, 'an unset attribute is not served empty');
+});
+
+test('hosts that hand their box to what they render serve display: contents, so the first paint has one box', { skip }, async () => {
+  const group = await ssr(['resizable.ts'], (html) => html`<ui-resizable-panel-group class="max-w-sm border"><ui-resizable-panel default-size="100">x</ui-resizable-panel></ui-resizable-panel-group>`);
+  assert.match(group, /<ui-resizable-panel-group[^>]*style="display: contents"/, 'the group host draws no box');
+  assert.match(group, /data-slot="resizable-panel-group"[^>]*class="[^"]*\bmax-w-sm border\b/, 'and its class is on the group box');
+  const select = await ssr(['select.ts'], (html) => html`<ui-select><select aria-label="Fruit"><option>Apple</option></select></ui-select>`);
+  assert.match(select, /<ui-select[^>]*style="display: contents"/, 'the select host draws no box');
+  const command = await ssr(['command.ts'], (html) => html`<ui-command label="Menu"><ui-command-list><ui-command-item>A<ui-command-shortcut>P</ui-command-shortcut></ui-command-item></ui-command-list></ui-command>`);
+  assert.match(command, /<ui-command [^>]*style="display: contents"/, 'nor does the command root');
+  assert.match(command, /<ui-command-shortcut[^>]*style="display: contents"/, 'nor the shortcut, whose span is the item\'s flex item');
+  const q = await ssr(['questionnaire.ts'], (html) => html`<ui-questionnaire><ui-questionnaire-item name="a"><ui-questionnaire-title>A?</ui-questionnaire-title></ui-questionnaire-item></ui-questionnaire>`);
+  for (const tag of ['ui-questionnaire', 'ui-questionnaire-item', 'ui-questionnaire-title']) {
+    assert.match(q, new RegExp(`<${tag}[ >][^>]*style="display: contents"`), `<${tag}> draws no box`);
+  }
+});
+
+test('ui-tabs-list: shadcn\'s `line` variant, and `underline` as its alias, are both served as data-variant="line"', { skip }, async () => {
+  for (const variant of ['line', 'underline']) {
+    const out = await ssr(['tabs.ts'], (html) => html`<ui-tabs value="a"><ui-tabs-list variant=${variant}><ui-tabs-trigger value="a">A</ui-tabs-trigger></ui-tabs-list></ui-tabs>`);
+    assert.match(out, /role="tablist"[^>]*data-variant="line"/, `variant="${variant}" is keyed as line, which the styles select on`);
+    assert.match(out, /class="[^"]*\bcn-tabs-list-variant-line\b/);
+  }
 });

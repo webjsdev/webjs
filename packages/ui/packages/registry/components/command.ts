@@ -60,7 +60,7 @@
  * ```
  */
 import { WebComponent, html, prop } from '@webjsdev/core';
-import { cn } from '../lib/utils.ts';
+import { cn, takeAuthoredClass } from '../lib/utils.ts';
 import { inputGroupClass, inputGroupAddonClass } from './input-group.ts';
 import { UiDialog, UiDialogContent } from './dialog.ts';
 
@@ -128,14 +128,8 @@ let uid = 0;
 // hosts stay boxes rather than display: contents, since a group, an item and
 // the empty state hide themselves through the hidden attribute, which a
 // display utility on the host would override.
-type Part = HTMLElement & { _authored?: string | null; _captured?: boolean };
-function takeAuthored(part: Part): string | null {
-  if (!part._captured) {
-    part._authored = part.getAttribute?.('class') || null;
-    part._captured = true;
-    part.removeAttribute?.('class');
-  }
-  return part._authored ?? null;
+function takeAuthored(part: HTMLElement): string | null {
+  return takeAuthoredClass(part, null);
 }
 
 type ItemState = { visible: boolean; selected: boolean; order: number };
@@ -172,8 +166,14 @@ export class UiCommand extends WebComponent({
     return `${this._id}-label`;
   }
 
+  // The root never hides itself, so its host can be display: contents: the
+  // command box is then the flex item of whatever holds it, and a `max-w-sm`
+  // with the box's `size-full` sizes against that parent, as shadcn's does.
+  // The host's box is turned off through its style, which the server serves.
   render() {
-    return html`<div data-slot="command" cmdk-root="" class=${cn(commandClass(), takeAuthored(this))} @keydown=${this._onKeyDown}>${this.label
+    const authored = takeAuthored(this);
+    if (typeof this.getAttribute === 'function' && !this.getAttribute('style')) this.setAttribute('style', 'display: contents');
+    return html`<div data-slot="command" cmdk-root="" class=${cn(commandClass(), authored)} @keydown=${this._onKeyDown}>${this.label
       ? html`<label id=${this.labelId} cmdk-label="" class="sr-only">${this.label}</label>`
       : ''}<slot></slot></div>`;
   }
@@ -359,7 +359,7 @@ export class UiCommandInput extends WebComponent({
       placeholder=${this.placeholder || null}
       class=${cn(commandInputClass(), takeAuthored(this))}
       @input=${this._onInput}
-    ><div data-slot="input-group-addon" class=${inputGroupAddonClass()}><svg
+    ><div data-slot="input-group-addon" data-align="inline-start" class=${inputGroupAddonClass()}><svg
       xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
       class=${commandInputIconClass()}
     ><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></div></div></div>`;
@@ -568,8 +568,14 @@ UiCommandItem.register('ui-command-item');
 // --------------------------------------------------------------------------
 
 export class UiCommandShortcut extends WebComponent {
+  // The span is the item's flex item, as shadcn's CommandShortcut is, so the
+  // styles' `ml-auto` pushes it to the end of the row. A shortcut never hides
+  // itself, so unlike the other parts its host can be display: contents,
+  // turned off through its style, which the server serves.
   render() {
-    return html`<span data-slot="command-shortcut" class=${commandShortcutClass()}><slot></slot></span>`;
+    const authored = takeAuthored(this);
+    if (typeof this.getAttribute === 'function' && !this.getAttribute('style')) this.setAttribute('style', 'display: contents');
+    return html`<span data-slot="command-shortcut" class=${cn(commandShortcutClass(), authored)}><slot></slot></span>`;
   }
 }
 UiCommandShortcut.register('ui-command-shortcut');
@@ -591,14 +597,9 @@ export class UiCommandDialog extends UiDialog {
   // shadcn's CommandDialog passes its className to the DialogContent, so the
   // class written on this host goes to the content, which puts it on the panel.
   _authored: string | null = null;
-  _captured = false;
 
   render() {
-    if (!this._captured) {
-      this._captured = true;
-      this._authored = this.getAttribute?.('class') || null;
-      this.removeAttribute?.('class');
-    }
+    this._authored = takeAuthoredClass(this, null);
     const title = this.getAttribute?.('title') || 'Command Palette';
     const description = this.getAttribute?.('description') || 'Search for a command to run...';
     const close = this.getAttribute?.('show-close-button') ?? 'false';
