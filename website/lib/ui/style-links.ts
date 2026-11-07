@@ -86,7 +86,7 @@ export function stylesFor(pathname: string): string[] {
 
 /** The stylesheet links for a pathname's styles. */
 export function styleLinks(pathname: string) {
-  return stylesFor(pathname).map((name) => html`<link rel="stylesheet" href=${asset(`/public/ui-styles/${name}.css`)}>`);
+  return stylesFor(pathname).map(styleLink);
 }
 
 /** One style's stylesheet link, for a region that renders a style its path does not imply. */
