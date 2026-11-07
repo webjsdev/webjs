@@ -68,7 +68,7 @@ export default async function CreatePreview({ params, searchParams }: PageProps)
     <!-- The root layout reserves the fixed header's height on the body, and
          this frame has no header. -->
     <style>:root { --header-h: 0px; } ${menuColorCss()}</style>
-    <div data-slot="design-system" data-item=${name} data-menu-color=${data.menuColor} data-style=${data.style} data-radius=${data.radius} data-font=${data.font} data-font-heading=${data.fontHeading} data-style-title=${data.styleTitle} data-font-title=${data.fontTitle} data-font-heading-title=${data.fontHeadingTitle} class=${designSystemClass(config)} style=${designSystemStyle(config)}>
+    <div data-slot="design-system" data-item=${name} data-menu-color=${data.menuColor} data-style=${data.style} data-radius=${data.radius} data-font=${data.font} data-font-heading=${data.fontHeading} data-style-title=${data.styleTitle} data-font-title=${data.fontTitle} data-font-heading-title=${data.fontHeadingTitle} data-font-heading-label=${data.fontHeadingLabel} class=${designSystemClass(config)} style=${designSystemStyle(config)}>
       ${content}
     </div>
     <script src=${asset('/public/ui-menu-color.js')} defer></script>

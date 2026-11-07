@@ -15,8 +15,8 @@ import { fileURLToPath } from 'node:url';
 import { createRequestHandler } from '@webjsdev/server';
 import { encodePreset, isPresetCode } from '../../../packages/ui/packages/registry/themes/preset.js';
 import { buildThemeVars } from '../../../packages/ui/packages/registry/themes/themes.js';
-import { FIELDS, SHUFFLE_PRESETS, normalizeConfig, shuffleConfig } from '#modules/ui/create/params.ts';
-import { MENU_TARGETS } from '#modules/ui/create/design-system.ts';
+import { FIELDS, SHUFFLE_PRESETS, DEFAULT_CONFIG, normalizeConfig, shuffleConfig } from '#modules/ui/create/params.ts';
+import { MENU_TARGETS, designSystemData } from '#modules/ui/create/design-system.ts';
 import { newProjectCommand } from '#modules/ui/create/project.ts';
 
 const WEBSITE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -169,4 +169,16 @@ test('the item explorer lists component demos, and the frame renders one', async
   assert.match(frame, /<div data-slot="design-system" data-item="button-demo"/);
   assert.match(frame, /data-slot="button"/, 'the demo renders');
   assert.equal((await handle('/ui/preview/no-such-demo')).status, 404);
+});
+
+test('the specimen label names the heading font only when it is a different face', () => {
+  // shadcn's typography specimen labels an inheriting heading "Inherit"
+  // until the heading is set to another font, unlike the font-heading title,
+  // which names the inherited body font.
+  const label = (fontHeading: string, font = 'inter') =>
+    designSystemData(normalizeConfig({ ...DEFAULT_CONFIG, font, fontHeading })).fontHeadingLabel;
+  assert.equal(label('inherit'), 'Inherit');
+  assert.equal(label('inter'), 'Inherit', 'the body face chosen again is still no different face');
+  assert.equal(label('lora'), 'Lora');
+  assert.equal(designSystemData(normalizeConfig({ ...DEFAULT_CONFIG, fontHeading: 'inherit' })).fontHeadingTitle, 'Inter', 'while the title names the inherited font');
 });

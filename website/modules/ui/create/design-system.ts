@@ -71,8 +71,11 @@ export function designSystemClass(config: CreateConfig): string {
  * radius). Keyed on the wrapper, which /ui/create rewrites in place, rather
  * than read once at render, so a pick repaints them with no new render: CSS
  * reads the values (`group-data-[radius=none]/design-system:`), and an element
- * marked `data-design-system-text="style|font|font-heading"` gets the
- * matching title as its text. Keys are the dataset names.
+ * marked `data-design-system-text="style|font|font-heading|font-heading-label"`
+ * gets the matching title as its text. `font-heading` names the body font when
+ * the heading inherits it; `font-heading-label` is shadcn's specimen label,
+ * the heading font's name only when it is a different face, else "Inherit".
+ * Keys are the dataset names.
  */
 export function designSystemData(config: CreateConfig): Record<string, string> {
   return {
@@ -84,13 +87,21 @@ export function designSystemData(config: CreateConfig): Record<string, string> {
     styleTitle: optionLabel('style', config.style, config),
     fontTitle: optionLabel('font', config.font, config),
     fontHeadingTitle: optionLabel('fontHeading', config.fontHeading, config),
+    fontHeadingLabel: config.fontHeading !== 'inherit' && config.fontHeading !== config.font
+      ? optionLabel('fontHeading', config.fontHeading, config)
+      : 'Inherit',
   };
 }
 
 /** Write the titles into the elements that show them. */
 export function syncDesignSystemText(root: Element, config: CreateConfig): void {
   const data = designSystemData(config);
-  const titles: Record<string, string> = { style: data.styleTitle, font: data.fontTitle, 'font-heading': data.fontHeadingTitle };
+  const titles: Record<string, string> = {
+    style: data.styleTitle,
+    font: data.fontTitle,
+    'font-heading': data.fontHeadingTitle,
+    'font-heading-label': data.fontHeadingLabel,
+  };
   for (const el of root.querySelectorAll<HTMLElement>('[data-design-system-text]')) {
     const title = titles[el.dataset.designSystemText || ''];
     if (title !== undefined && el.textContent !== title) el.textContent = title;
