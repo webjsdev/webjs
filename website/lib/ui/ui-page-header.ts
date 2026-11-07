@@ -20,8 +20,8 @@ const arrowRight = html`<svg xmlns="http://www.w3.org/2000/svg" width="24" heigh
 /** shadcn's Announcement: the release badge over a page header. */
 export function announcement() {
   return html`<span class="style-new-york contents">
-    <a href="/changelog" data-slot="badge" class=${cn(badgeClass({ variant: 'secondary' }), 'bg-muted no-underline')}>
-      Sidebar, Carousel and Code Block ${arrowRight}
+    <a href="/ui/docs/changelog" data-slot="badge" class=${cn(badgeClass({ variant: 'secondary' }), 'bg-muted no-underline')}>
+      Trace, Code Block and AI Elements ${arrowRight}
     </a>
   </span>`;
 }
@@ -31,6 +31,8 @@ export interface UiPageHeaderOptions {
   description: string;
   /** PageActions: the buttons under the description. */
   actions?: unknown;
+  /** The heading's width, shadcn's PageHeaderHeading className; `max-w-3xl` unless a page sets one. */
+  headingClass?: string;
 }
 
 /** PageHeader with the announcement, the heading, the description and the actions. */
@@ -39,7 +41,7 @@ export function uiPageHeader(opts: UiPageHeaderOptions) {
     <div class="container-wrapper">
       <div class="container flex flex-col items-center gap-2 px-6 py-8 text-center md:py-16 lg:py-20 xl:gap-4">
         ${announcement()}
-        <h1 class="leading-tighter max-w-3xl text-3xl font-semibold tracking-tight text-balance text-primary lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">${opts.title}</h1>
+        <h1 class=${cn('leading-tighter text-3xl font-semibold tracking-tight text-balance text-primary lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter', opts.headingClass ?? 'max-w-3xl')}>${opts.title}</h1>
         <p class="max-w-4xl text-base text-balance text-foreground sm:text-lg">${opts.description}</p>
         ${opts.actions
           ? html`<div class="flex w-full items-center justify-center gap-2 pt-2 **:data-[slot=button]:shadow-none">${opts.actions}</div>`

@@ -2,6 +2,8 @@ import type { Metadata, PageProps } from '@webjsdev/core';
 import type { ActionResult } from '@webjsdev/server';
 import { examplesShell } from '#lib/ui/examples-shell.ts';
 import { authenticationExample } from '#modules/ui/example-apps/authentication/authentication.ts';
+// The theme selector's element. A page never hydrates, so it imports it.
+import '#components/theme-selector.ts';
 
 /**
  * /ui/examples/authentication, shadcn/ui's apps/v4/app/(app)/examples/authentication
@@ -17,7 +19,7 @@ export const metadata: Metadata = {
 
 export default function AuthenticationExample({ url, actionData }: Pick<PageProps, 'url'> & { actionData?: ActionResult }) {
   const u = new URL(url);
-  return examplesShell(u.pathname, 'authentication', authenticationExample({
+  return examplesShell(u, 'authentication', authenticationExample({
     actionData,
     sent: u.searchParams.get('sent') === '1',
   }));

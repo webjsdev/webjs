@@ -12,6 +12,7 @@ import '#modules/ui/components/slider.ts';
 import '#modules/ui/components/switch.ts';
 import '#modules/ui/components/tooltip.ts';
 import '#modules/ui/example-apps/example-bind.ts';
+import '#components/theme-selector.ts';
 
 /**
  * /ui/examples/rtl, shadcn/ui's apps/v4/app/(app)/examples/rtl (#1666): the
@@ -28,7 +29,7 @@ export const metadata: Metadata = {
 
 export default async function RtlPage({ url, searchParams }: Pick<PageProps, 'url' | 'searchParams'>) {
   const lang = readLang((await searchParams).lang);
-  return examplesShell(new URL(url).pathname, 'rtl', html`
+  return examplesShell(new URL(url), 'rtl', html`
     <link rel="stylesheet" href=${asset('/public/rtl-fonts.css')}>
     ${rtlComponents(lang)}
   `, { style: 'nova' });

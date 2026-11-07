@@ -12,6 +12,7 @@ import { dashboardData } from '#modules/ui/blocks/dashboard-01/components/dashbo
 // its markup uses to register them.
 import '#modules/ui/components/sidebar.ts';
 import '#modules/ui/components/dropdown-menu.ts';
+import '#components/theme-selector.ts';
 
 /**
  * /ui/examples/dashboard, shadcn/ui's apps/v4/app/(app)/examples/dashboard
@@ -37,7 +38,7 @@ export const metadata: Metadata = {
 };
 
 export default function DashboardExample({ url }: Pick<PageProps, 'url'>) {
-  return examplesShell(new URL(url).pathname, 'dashboard', html`
+  return examplesShell(new URL(url), 'dashboard', html`
     <ui-sidebar-provider class="[--header-height:calc(var(--spacing)*12+1px)]">
       ${appSidebar({
         collapsible: 'none',

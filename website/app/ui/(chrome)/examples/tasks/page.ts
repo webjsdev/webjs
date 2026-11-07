@@ -9,6 +9,7 @@ import '#modules/ui/components/dropdown-menu.ts';
 import '#modules/ui/components/command.ts';
 import '#modules/ui/components/select.ts';
 import '#modules/ui/example-apps/tasks/tasks-table.ts';
+import '#components/theme-selector.ts';
 
 /**
  * /ui/examples/tasks, shadcn/ui's apps/v4/app/(app)/examples/tasks (#1666):
@@ -24,5 +25,5 @@ export const metadata: Metadata = {
 
 export default function TasksExample({ url }: Pick<PageProps, 'url'>) {
   const u = new URL(url);
-  return examplesShell(u.pathname, 'tasks', tasksExample(TASKS, parseState(u.searchParams)));
+  return examplesShell(u, 'tasks', tasksExample(TASKS, parseState(u.searchParams)));
 }

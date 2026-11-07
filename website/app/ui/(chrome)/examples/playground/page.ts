@@ -13,6 +13,7 @@ import '#modules/ui/components/sonner.ts';
 import '#modules/ui/components/switch.ts';
 import '#modules/ui/components/tabs.ts';
 import '#modules/ui/example-apps/example-bind.ts';
+import '#components/theme-selector.ts';
 
 /**
  * /ui/examples/playground, shadcn/ui's apps/v4/app/(app)/examples/playground
@@ -25,5 +26,5 @@ export const metadata: Metadata = {
 };
 
 export default function PlaygroundPage({ url }: Pick<PageProps, 'url'>) {
-  return examplesShell(new URL(url).pathname, 'playground', playground());
+  return examplesShell(new URL(url), 'playground', playground());
 }

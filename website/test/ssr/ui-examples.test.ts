@@ -54,6 +54,19 @@ test('below md the four examples shadcn pictures show their picture, and rtl sho
   }
 });
 
+test('the examples nav carries the theme selector, and ?theme= themes the region below it', async () => {
+  const plain = await page('/ui/examples/dashboard');
+  assert.ok(/<theme-selector[^>]*>/.test(plain), 'the selector renders');
+  assert.ok(/<option value="neutral"[^>]*selected/.test(plain), 'neutral is the default');
+  assert.ok(!/data-theme-target class="[^"]*theme-(?!container)/.test(plain), 'the default theme adds no class');
+  const blue = await page('/ui/examples/dashboard?theme=blue');
+  assert.ok(/data-theme-target class="[^"]*\btheme-blue\b/.test(blue), 'the region wears theme-blue');
+  assert.ok(/href="\/ui\/examples\/tasks\?theme=blue"/.test(blue), 'the nav links carry the theme');
+  assert.ok(/<option value="blue"[^>]*selected/.test(blue), 'the select shows it');
+  const unknown = await page('/ui/examples/dashboard?theme=nope');
+  assert.ok(/<option value="neutral"[^>]*selected/.test(unknown), 'an unknown theme falls back to neutral');
+});
+
 test('the tasks state round-trips through the query string, leaving out the defaults', () => {
   const s = parseState(new URLSearchParams('q=pixel&status=todo&status=done&sort=title.desc&hide=priority&size=10&page=2'));
   assert.deepEqual(s, { q: 'pixel', status: ['todo', 'done'], priority: [], sort: { id: 'title', desc: true }, hide: ['priority'], size: 10, page: 2 });
