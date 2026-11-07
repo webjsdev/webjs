@@ -989,14 +989,7 @@
  ],
  "components/checkbox.ts": [
   "../lib/utils.ts",
-  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 6 9 17l-5-5'/></svg>\")",
-  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 6 9 17l-5-5'/></svg>\")",
-  "size-4 appearance-none rounded-[4px] border border-input bg-transparent shadow-xs transition-shadow focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 checked:border-primary checked:bg-primary checked:bg-no-repeat checked:bg-center dark:bg-input/30 dark:aria-invalid:ring-destructive/40 peer shrink-0 outline-none disabled:cursor-not-allowed disabled:opacity-50 relative after:absolute after:-inset-x-3 after:-inset-y-2",
-  "undefined",
-  "ui-checkbox-styles",
-  "style",
-  "ui-checkbox-styles",
-  "undefined"
+  "size-4 appearance-none rounded-[4px] border border-input bg-transparent shadow-xs transition-shadow focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 checked:border-primary checked:bg-primary checked:bg-no-repeat checked:bg-center dark:bg-input/30 dark:aria-invalid:ring-destructive/40 peer shrink-0 outline-none disabled:cursor-not-allowed disabled:opacity-50 relative after:absolute after:-inset-x-3 after:-inset-y-2 checked:text-primary-foreground checked:before:absolute checked:before:inset-0 checked:before:bg-current checked:before:[mask:url(data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2024%2024%22%20fill=%22none%22%20stroke=%22%23000%22%20stroke-width=%222%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%3Cpath%20d=%22M20%206%209%2017l-5-5%22/%3E%3C/svg%3E)_center/contain_no-repeat] indeterminate:border-primary indeterminate:bg-primary indeterminate:text-primary-foreground indeterminate:before:absolute indeterminate:before:inset-0 indeterminate:before:bg-current indeterminate:before:[mask:linear-gradient(#000,#000)_center/60%_2px_no-repeat]"
  ],
  "components/code-block.ts": [
   "@webjsdev/core",
@@ -2544,13 +2537,7 @@
  ],
  "components/radio-group.ts": [
   "../lib/utils.ts",
-  "size-4 appearance-none rounded-full border-input bg-transparent shadow-xs transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 checked:border-primary checked:text-primary checked:bg-no-repeat checked:bg-center dark:bg-input/30 dark:aria-invalid:ring-destructive/40 group/radio-group-item peer aspect-square shrink-0 border outline-none disabled:cursor-not-allowed disabled:opacity-50",
-  "\ninput[type=\"radio\"][data-slot=\"radio\"]:checked {\n  background-image: radial-gradient(circle closest-side, currentColor 50%, transparent calc(50% + 0.5px));\n}\n",
-  "undefined",
-  "ui-radio-styles",
-  "style",
-  "ui-radio-styles",
-  "undefined",
+  "size-4 appearance-none rounded-full border-input bg-transparent shadow-xs transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 checked:border-primary checked:text-primary checked:bg-no-repeat checked:bg-center dark:bg-input/30 dark:aria-invalid:ring-destructive/40 group/radio-group-item peer aspect-square shrink-0 border outline-none disabled:cursor-not-allowed disabled:opacity-50 checked:bg-[image:radial-gradient(circle_closest-side,currentColor_50%,transparent_calc(50%+0.5px))]",
   "vertical",
   "horizontal",
   "vertical",

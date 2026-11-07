@@ -12,11 +12,10 @@
  * Design tokens used: --input, --primary, --ring, --destructive.
  *
  * A11y (required for accessible output):
- *   `data-slot="radio"` is REQUIRED, not decoration. The injected stylesheet
- *   keys the indicator dot on it, and `radioClass()` carries no checked
- *   background fill, so without the attribute a SELECTED radio differs from an
- *   unselected one by border colour alone. That is both easy to miss and a
- *   WCAG 1.4.1 problem (state by colour only). Every example here carries it.
+ *   The dot is drawn by the class itself, so a selected radio never differs
+ *   from an unselected one by colour alone (WCAG 1.4.1), with or without
+ *   JavaScript. Keep `data-slot="radio"` on the input, as every example here
+ *   does, since the styles' field rules select on it.
  *   NAME THE GROUP. A bare `<div role="radiogroup">` has no accessible name, so
  *   a screen reader announces "radio group" with no idea what is being chosen.
  *   Point `aria-labelledby` at the visible group label, as below, or use a
@@ -48,9 +47,6 @@
  */
 import { cn } from '../lib/utils.ts';
 
-const RADIO_CLASS =
-  'cn-radio-group-item group/radio-group-item peer aspect-square shrink-0 appearance-none border outline-none disabled:cursor-not-allowed disabled:opacity-50';
-
 // The dot is a radial gradient in `currentColor`, the radio's own text colour,
 // which the style chooses. shadcn's styles fill a checked radio with the
 // primary colour and set `data-checked:text-primary-foreground`, so the dot is
@@ -58,28 +54,10 @@ const RADIO_CLASS =
 // sets `checked:text-primary`, so the dot is the primary one. A fixed colour
 // (the SVG this replaced, one per theme) could only match one of the two, and
 // disappeared into the fill under every shadcn style. Half the box across,
-// as shadcn's indicator is.
-const STYLES = `
-input[type="radio"][data-slot="radio"]:checked {
-  background-image: radial-gradient(circle closest-side, currentColor 50%, transparent calc(50% + 0.5px));
-}
-`;
-
-let installed = false;
-export function installRadioStyles(): void {
-  if (installed || typeof document === 'undefined') return;
-  if (document.getElementById('ui-radio-styles')) {
-    installed = true;
-    return;
-  }
-  const style = document.createElement('style');
-  style.id = 'ui-radio-styles';
-  style.textContent = STYLES;
-  document.head.appendChild(style);
-  installed = true;
-}
-
-if (typeof document !== 'undefined') installRadioStyles();
+// as shadcn's indicator is. It rides the class itself, so a checked radio
+// paints in the first paint and with JavaScript off.
+const RADIO_CLASS =
+  'cn-radio-group-item group/radio-group-item peer aspect-square shrink-0 appearance-none border outline-none disabled:cursor-not-allowed disabled:opacity-50 checked:bg-[image:radial-gradient(circle_closest-side,currentColor_50%,transparent_calc(50%+0.5px))]';
 
 /** Tailwind classes for a `<div role="radiogroup">` container. */
 export type RadioGroupOrientation = 'vertical' | 'horizontal';
@@ -101,12 +79,9 @@ export function radioGroupClass(opts: { orientation?: RadioGroupOrientation } = 
 }
 
 /**
- * Tailwind classes for a styled `<input type="radio">`.
- *
- * PAIR THIS WITH `data-slot="radio"` ON THE SAME INPUT. The injected stylesheet
- * keys the indicator dot on that attribute, and this class deliberately carries
- * no checked background fill, so the class alone leaves a selected radio
- * differing from an unselected one by border colour and nothing else.
+ * Tailwind classes for a styled `<input type="radio">`. The class draws the
+ * checked dot itself, so a selected radio paints with JavaScript off. Keep
+ * `data-slot="radio"` on the input as shadcn does.
  */
 export function radioClass(): string {
   return cn(RADIO_CLASS);

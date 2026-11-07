@@ -188,8 +188,8 @@ tracked source, the standard shadcn "you own it" pattern.
 | 1a | `alert` | `alertClass({ variant })`, `alertTitleClass`, `alertDescriptionClass`, `alertActionClass` (with `data-slot="alert-action"`, a control in the alert's corner) |
 | 1a | `card` | `cardClass`, `cardHeaderClass`, `cardTitleClass`, `cardDescriptionClass`, `cardActionClass`, `cardContentClass`, `cardFooterClass` |
 | 1a | `input` / `textarea` / `label` | `inputClass`, `textareaClass`, `labelClass` |
-| 1a | `checkbox` | `checkboxClass`, native `<input type="checkbox">` with shadcn's Lucide check drawn on `:checked`. REQUIRES `data-slot="checkbox"` on the input for the check to render. The `data-checked:` variant also matches `:checked`, so every style fills it. |
-| 1a | `radio-group` | `radioGroupClass`, `radioClass`, native `<input type="radio">`. REQUIRES `data-slot="radio"` on the input for the dot to render. The dot is drawn in `currentColor`, so it takes the style's colour (light on a filled radio, primary on a ring). |
+| 1a | `checkbox` | `checkboxClass`, native `<input type="checkbox">` with shadcn's Lucide check drawn on `:checked` by the class itself (a `::before` in `currentColor` masked to the icon, and a dash for `indeterminate`), so it is in the first paint and renders with JavaScript off, in every style. Keep `data-slot="checkbox"` on the input, as shadcn does. The `data-checked:` variant also matches `:checked`, so every style fills it. |
+| 1a | `radio-group` | `radioGroupClass`, `radioClass`, native `<input type="radio">`. The class draws the dot (a `checked:` radial-gradient background), so it renders with JavaScript off. The dot is drawn in `currentColor`, so it takes the style's colour (light on a filled radio, primary on a ring). |
 | 1a/2 | `switch` | `<ui-switch size checked name value disabled required input-id>` renders shadcn's switch, a `data-slot="switch"` root and a `switch-thumb`, around a real `role="switch"` checkbox laid transparent over the track, so it submits, takes a `<label>`, and toggles with JavaScript off, and every style draws it. `data-state` follows the checkbox and `ui-checked-change` reports a change. `aria-invalid` lands on the checkbox and on the root, where the styles draw the error ring, and the host is `display: contents`, so the root is the flex item a row centres, as shadcn's is. `switchInputClass` / `switchTrackClass({ size })` still give the plain-markup switch (hidden checkbox plus a sibling track), which only the default style draws. |
 | 1a | `native-select` | `nativeSelectWrapperClass`, `nativeSelectClass`, `nativeSelectIconClass`, `nativeSelectOptionClass`, `nativeSelectOptGroupClass`. The `<option>` / `<optgroup>` colours come from the theme block's `select option, select optgroup` rule, NOT from importing the module (#1320), so they are in the first paint and hold with JavaScript off. |
 | 1a | `avatar` | `avatarClass`, `avatarImageClass`, `avatarFallbackClass`, `avatarBadgeClass`, `avatarGroupClass`, `avatarGroupCountClass`. The image is laid over the fallback (`absolute inset-0` in the `relative` root), so a loaded image covers it and a missing one leaves it showing, with no script, as shadcn shows one or the other. |
@@ -423,7 +423,7 @@ obligations:
 - `pagination` / `breadcrumb`: a labelled `<nav>`, `aria-current="page"`, and hidden separators / icon-only control names.
 - `progress`: an `aria-label` (the native element supplies the role + value).
 - **form controls** (`input` / `textarea` / `native-select` / `checkbox` / `radio-group` / `switch`): a real `<label for>` (or a wrapping `<label>`) is the accessible name, and a `placeholder` is not one. On failure, `aria-invalid="true"` plus an `aria-describedby` pointing at error text that EXISTS on the page. A standalone switch needs `aria-label`, since its visible track is a `<span>` and the real input is `sr-only`. Group radios by a shared `name` and NAME the group (`aria-labelledby` on the `role="radiogroup"`, or `<fieldset>` + `<legend>`).
-- **`checkbox` / `radio-group` also need `data-slot`** on the input (`data-slot="checkbox"` / `data-slot="radio"`). The injected stylesheet keys the checkmark and the radio dot on it, and neither class carries a fallback fill, so without it the checked state reads as colour alone (WCAG 1.4.1). Source tests assert the examples keep the pairing. These two are the only Tier-1 parts whose appearance needs JavaScript, because they are the only ones whose stylesheet is injected rather than shipped in the theme block. `dialog` and `alert-dialog` inject one too, but from a lifecycle hook on a Tier-2 element that needs JavaScript regardless.
+- **`checkbox` / `radio-group` draw their checked state from the class.** The tick, the indeterminate dash and the radio dot are utilities on the input itself, so a checked control never reads as colour alone (WCAG 1.4.1), with JavaScript off and in the first paint, and the modules do no work when they load. They used to inject a stylesheet from module scope, which left a checked box tickless with JavaScript off and shipped every importing page whole. Keep `data-slot="checkbox"` / `data-slot="radio"` on the input as shadcn does; source tests assert the examples keep the pairing. `dialog` and `alert-dialog` still inject a stylesheet, but from a lifecycle hook on a Tier-2 element that needs JavaScript regardless.
 - **`native-select`'s `<option>` colours come from the theme block**, not from importing the module (#1320). A bare `<option>` paints transparent over the browser popup, so in dark mode the unselected options disappear, and the `select option, select optgroup` rule in `@layer base` forces Canvas / CanvasText back. An app whose theme block predates that rule keeps the browser default until it re-runs `init` or adds the rule by hand, since `ensureTheme` never rewrites an existing block. It is two ELEMENT selectors (specificity 0,0,2) with no wrapper requirement, so a bare `<select class=${nativeSelectClass()}>` is covered and any single class overrides it.
 - `popover`: the biggest Tier-1 obligation, because the panel is a bare `<div popover>` with no role and no name. Supply `role="dialog"` + `aria-labelledby` to the `popoverTitleClass()` heading, `aria-haspopup="dialog"` + a `toggle`-event-synced `aria-expanded` on the trigger, and prefer `popover` (auto) over `popover="manual"` so the platform still gives you light-dismiss, Escape, and focus restoration.
 - `card`: use a REAL heading for `cardTitleClass()`, at the level the surrounding document wants, and never wrap a whole card in one `<a>`.
@@ -855,12 +855,14 @@ names mechanically:
   CSS in the theme block instead, which also puts it in the first paint and
   makes it work with JavaScript off. `packages/ui/test/utils-purity.test.js`
   pins the flagged set as an EQUALITY, so a new offender fails immediately and
-  the remaining entries can only be removed deliberately. Six are still on that
-  list and DO pin an importing page today: `checkbox` and `radio-group` inject a
-  stylesheet for real, and `pagination`, `progress`, `sonner` and `tabs` are an
-  analyser precision gap, since an arrow with an expression body puts its call
-  at brace depth 0 and reads as a top-level statement. The page ships either
-  way, so do not treat the second group as harmless.
+  the remaining entries can only be removed deliberately. Four are still on
+  that list and DO pin an importing page today: `pagination`, `progress`,
+  `sonner` and `tabs`, an analyser precision gap, since an arrow with an
+  expression body puts its call at brace depth 0 and reads as a top-level
+  statement. The page ships either way, so do not treat them as harmless.
+  `checkbox` and `radio-group` left the list when their checked paint moved
+  into their own classes (#1666), which is the third fix for an injection and
+  the one that needs neither JavaScript nor the app's theme block.
 - **The kit is copy-on-add, so fixing the registry does not fix an app.** An
   existing app holds its own copy of every component and of `lib/utils/cn.ts`,
   and `npx @webjsdev/ui diff` is the discovery channel for the drift. The theme
@@ -876,8 +878,10 @@ names mechanically:
   scaffolded app is fine, since `webjs create` copies `themes/index.css`
   verbatim, end marker included. Weigh that gap before moving CSS into the theme block: for the
   native `<option>` colours the app degrades to the browser default, which is a
-  worse read rather than a broken control, and that asymmetry is why the
-  checkbox and radio-group injections were left where they are.
+  worse read rather than a broken control. The checkbox tick and the radio
+  dot could not take that route, since an old app would lose them outright,
+  so they moved into the helpers' own classes instead (#1666), which reach an
+  app with the component file itself.
 - **A `cn()` conflict group is one CSS PROPERTY, never one class prefix.**
   Utilities that merely share a prefix must land in different groups, or the
   merger silently drops one of them. Two defects came from getting this wrong:

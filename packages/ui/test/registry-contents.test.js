@@ -340,13 +340,11 @@ test('accordion : supports single/multiple + collapsible', { skip }, () => {
   assert.match(src, /collapsible/);
 });
 
-// #1080: checkbox / radio draw their checked indicator from an injected
-// stylesheet that keys on a `data-slot` attribute, and neither class helper
-// carries a fallback fill for the checked state (radioClass has no
-// checked:bg-* at all). So an @example that omits the attribute teaches a
-// copy-paste whose checked state is conveyed by colour alone, the WCAG 1.4.1
-// trap both examples used to ship. Assert the pairing at the source, since the
-// examples are what `webjsui view` and the MCP `ui` tool hand to an agent.
+// #1080: checkbox / radio examples carry their `data-slot`, as shadcn's do.
+// The tick and the dot no longer depend on it (#1666 moved them into the
+// helpers' own classes), but the styles' field rules select on the slot, and
+// the examples are what `webjsui view` and the MCP `ui` tool hand to an agent,
+// so assert the pairing at the source.
 test('checkbox / radio examples pair the class helper with its data-slot', { skip }, async () => {
   const { extractExample } = await import('../src/registry/example.js');
   for (const [name, type, slot] of [

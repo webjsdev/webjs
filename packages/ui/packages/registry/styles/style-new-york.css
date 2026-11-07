@@ -241,7 +241,7 @@
 
   /* MARK: checkbox */
   .cn-checkbox {
-    @apply size-4 appearance-none rounded-[4px] border border-input bg-transparent shadow-xs transition-shadow focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 checked:border-primary checked:bg-primary checked:bg-no-repeat checked:bg-center dark:bg-input/30 dark:aria-invalid:ring-destructive/40;
+    @apply size-4 appearance-none rounded-[4px] border border-input bg-transparent shadow-xs transition-shadow focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 checked:border-primary checked:bg-primary checked:bg-no-repeat checked:bg-center checked:text-primary-foreground dark:bg-input/30 dark:aria-invalid:ring-destructive/40;
   }
 
   /* MARK: dialog */
