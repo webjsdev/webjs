@@ -46,6 +46,14 @@ test('every example renders in the shell with its own nav link current', async (
   }
 });
 
+test('below md the four examples shadcn pictures show their picture, and rtl shows itself', async () => {
+  for (const { slug } of EXAMPLES) {
+    const html = await page(`/ui/examples/${slug}`);
+    const picture = /<img src="\/public\/images\/examples\/[a-z]+-light\.png[^"]*" width="2668"/.test(html);
+    assert.equal(picture, slug !== 'rtl', `${slug} picture below md`);
+  }
+});
+
 test('the tasks state round-trips through the query string, leaving out the defaults', () => {
   const s = parseState(new URLSearchParams('q=pixel&status=todo&status=done&sort=title.desc&hide=priority&size=10&page=2'));
   assert.deepEqual(s, { q: 'pixel', status: ['todo', 'done'], priority: [], sort: { id: 'title', desc: true }, hide: ['priority'], size: 10, page: 2 });

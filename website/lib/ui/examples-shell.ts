@@ -1,8 +1,9 @@
-import { html } from '@webjsdev/core';
+import { html, asset } from '@webjsdev/core';
 import { cn } from '#lib/utils/cn.ts';
 import { buttonClass } from '#modules/ui/components/button.ts';
 import { extraStyleLinks } from '#lib/ui/style-links.ts';
 import { uiPageHeader, pageNav } from '#lib/ui/ui-page-header.ts';
+import { EXAMPLE_IMAGES } from '#modules/ui/example-apps/images.ts';
 
 /**
  * The /ui/examples page chrome, shadcn/ui's apps/v4/app/(app)/examples/layout.tsx
@@ -53,6 +54,23 @@ function examplesNav(current: ExampleSlug) {
 }
 
 /**
+ * Below md shadcn shows a picture of an example rather than the example
+ * itself, one per theme, and so does this (scripts/shoot-example-images.mjs
+ * takes them from the examples). The live example is hidden there with a
+ * display: contents wrapper, which adds no box at md and up.
+ */
+function mobilePicture(name: ExampleSlug) {
+  const size = EXAMPLE_IMAGES[name];
+  if (!size) return '';
+  const [width, height] = size;
+  const title = EXAMPLES.find((e) => e.slug === name)?.name ?? name;
+  return html`<div class="md:hidden">
+    <img src=${asset(`/public/images/examples/${name}-light.png`)} width=${String(width)} height=${String(height)} alt=${title} class="block h-auto w-full dark:hidden">
+    <img src=${asset(`/public/images/examples/${name}-dark.png`)} width=${String(width)} height=${String(height)} alt=${title} class="hidden h-auto w-full dark:block">
+  </div>`;
+}
+
+/**
  * An example page: the header, the nav with `current` active, then the
  * example inside shadcn's frame. The frame drops its border and background
  * when the example is the RTL one (`data-slot="rtl-components"`), as shadcn's
@@ -74,8 +92,10 @@ export function examplesShell(pathname: string, current: ExampleSlug, content: u
       ${pageNav(examplesNav(current), { id: 'examples', class: 'hidden md:flex' })}
       <div class="container-wrapper flex flex-1 flex-col section-soft pb-6">
         <div class="container flex flex-1 scroll-mt-20 flex-col theme-container">
-          <div class=${cn('flex flex-col overflow-hidden rounded-lg border bg-background bg-clip-padding has-[[data-slot=rtl-components]]:overflow-visible has-[[data-slot=rtl-components]]:border-0 has-[[data-slot=rtl-components]]:bg-transparent md:flex-1 xl:rounded-xl', `style-${opts.style ?? 'new-york'}`)}>
-            ${content}
+          <div data-example-frame class=${cn('flex flex-col overflow-hidden rounded-lg border bg-background bg-clip-padding has-[[data-slot=rtl-components]]:overflow-visible has-[[data-slot=rtl-components]]:border-0 has-[[data-slot=rtl-components]]:bg-transparent md:flex-1 xl:rounded-xl', `style-${opts.style ?? 'new-york'}`)}>
+            ${EXAMPLE_IMAGES[current]
+              ? html`${mobilePicture(current)}<div class="contents max-md:hidden">${content}</div>`
+              : content}
           </div>
         </div>
       </div>
