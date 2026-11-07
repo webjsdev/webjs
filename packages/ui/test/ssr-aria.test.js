@@ -462,3 +462,12 @@ test('ui-toggle-group: with no spacing written the style decides (shadcn\'s gap 
   const legacy = await ssr(['toggle-group.ts'], (html) => html`<ui-toggle-group spacing="default"><ui-toggle-group-item value="a">A</ui-toggle-group-item></ui-toggle-group>`);
   assert.match(legacy, /data-spacing="1"/, 'the kit\'s earlier "default" is a gap of 1');
 });
+
+test('ui-switch: aria-invalid reaches the root (the styles\' error ring) and the input, and the host draws no box', { skip }, async () => {
+  const out = await ssr(['switch.ts'], (html) => html`<ui-switch aria-label="Airplane" aria-invalid="true"></ui-switch>`);
+  assert.match(out, /<ui-switch[^>]*style="display: contents"/, 'the root is the box, as shadcn\'s is');
+  assert.match(out, /<span\s+data-slot="switch"[^>]*aria-invalid="true"/, 'the root carries aria-invalid');
+  assert.match((out.match(/<input[^>]*>/) ?? [''])[0], /aria-invalid="true"/, 'and so does the control');
+  const ok = await ssr(['switch.ts'], (html) => html`<ui-switch aria-label="Airplane"></ui-switch>`);
+  assert.doesNotMatch(ok.replace(/<ui-switch[^>]*>/, ''), /aria-invalid/, 'no attribute when the field is valid');
+});

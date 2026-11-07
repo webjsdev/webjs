@@ -457,3 +457,13 @@ test('new-york: the <ui-switch> thumb draws itself, and the sidebar trigger is s
   const sb = readFileSync(join(COMPONENTS_DIR, 'sidebar.ts'), 'utf8');
   assert.match(sb, /'size-7'|\bsize-7\b/, 'new-york sizes the trigger as shadcn new-york does');
 });
+
+test('spinner: data-icon is passed through, and the table head aligns to the logical start', { skip }, async () => {
+  const { renderToString } = await import('@webjsdev/core/server');
+  const { spinner } = await baseHelpers('spinner');
+  assert.match(await renderToString(spinner({ icon: 'inline-start' })), /data-icon="inline-start"/);
+  assert.doesNotMatch(await renderToString(spinner()), /data-icon/, 'left out, no attribute');
+  assert.match(await renderToString(spinner({ decorative: true, icon: 'inline-end' })), /data-icon="inline-end"/);
+  const { tableHeadClass } = await baseHelpers('table');
+  assert.ok(tokens(tableHeadClass()).includes('text-start'), 'text-start, not the styles\' text-left, so RTL works');
+});

@@ -56,8 +56,10 @@ export const tableFooterClass = (): string =>
 export const tableRowClass = (): string =>
   'cn-table-row has-aria-expanded:bg-muted/50';
 
+// The ported styles write a physical text-left; the logical one here keeps an
+// RTL table's headings at its start, as shadcn's RTL install does.
 export const tableHeadClass = (): string =>
-  'cn-table-head';
+  'cn-table-head text-start';
 
 export const tableCellClass = (): string =>
   'cn-table-cell';

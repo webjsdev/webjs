@@ -1873,3 +1873,105 @@ suite('host class: server render plus hydration', () => {
     }
   });
 });
+
+suite('host class: the served first paint has one box', () => {
+  let renderToString;
+  suiteSetup(async () => {
+    ({ renderToString } = await import('../../../../core/src/render-server.js'));
+    for (const name of ['tabs', 'command', 'resizable', 'context-menu', 'hover-card', 'dialog', 'questionnaire']) {
+      await import(`${COMPONENTS_DIR}/${name}.ts`);
+    }
+  });
+
+  // The server used to send the class a host was written with even after the
+  // element moved it to the box it renders, so until the page hydrated both
+  // drew it (two borders, a narrow host). It now serves the host as the
+  // element left it.
+  const CASES = [
+    ['ui-tabs-list', html`<ui-tabs value="a"><ui-tabs-list class="fp-a"><ui-tabs-trigger value="a">A</ui-tabs-trigger></ui-tabs-list></ui-tabs>`],
+    ['ui-command', html`<ui-command label="Menu" class="fp-a"><ui-command-list></ui-command-list></ui-command>`],
+    ['ui-resizable-panel-group', html`<ui-resizable-panel-group class="fp-a"><ui-resizable-panel default-size="100">A</ui-resizable-panel></ui-resizable-panel-group>`],
+    ['ui-context-menu-trigger', html`<ui-context-menu><ui-context-menu-trigger class="fp-a">Area</ui-context-menu-trigger></ui-context-menu>`],
+    ['ui-hover-card-content', html`<ui-hover-card><ui-hover-card-content class="fp-a">Card</ui-hover-card-content></ui-hover-card>`],
+    ['ui-dialog-content', html`<ui-dialog><ui-dialog-content class="fp-a"><h2 data-slot="dialog-title">T</h2></ui-dialog-content></ui-dialog>`],
+    ['ui-questionnaire', html`<ui-questionnaire class="fp-a"><ui-questionnaire-item name="a"><ui-questionnaire-title>A?</ui-questionnaire-title></ui-questionnaire-item></ui-questionnaire>`],
+  ];
+
+  for (const [host, tpl] of CASES) {
+    test(`<${host} class> is served with the class on the rendered element only`, async () => {
+      const out = await renderToString(tpl);
+      const open = out.match(new RegExp(`<${host}[\\s>][^>]*>`))[0];
+      assert.ok(!/\bfp-a\b/.test(open.replace(/data-authored-class="[^"]*"/, '')), `the host's class is not served: ${open}`);
+      assert.match(open, /data-authored-class="fp-a"/, 'the record the hydrating element reads');
+      assert.equal(out.match(/\bfp-a\b/g).length, 2, 'the class appears once in the record and once on the box');
+      // Parsed as a page would be, the class is on exactly one box.
+      const root = document.createElement('div');
+      root.innerHTML = out;
+      document.body.appendChild(root);
+      try {
+        await tick();
+        assert.equal(root.querySelectorAll('.fp-a').length, 1, 'one element carries the class');
+        assert.notEqual(root.querySelector('.fp-a').localName, host, 'and it is not the host');
+      } finally {
+        root.remove();
+      }
+    });
+  }
+});
+
+suite('ui-sonner: a toast from markup, and a toast with its own position', () => {
+  suiteSetup(async () => {
+    await import(`${COMPONENTS_DIR}/sonner.ts`);
+  });
+
+  test('a click on a data-toast button fires the toast it describes, with no script of the page\'s own', async () => {
+    const root = await mount(html`<ui-sonner position="bottom-right"></ui-sonner>
+      <button type="button" data-toast="Event has been created" data-toast-type="success" data-toast-description="Sunday at 9am" data-toast-action="Undo">Show</button>`);
+    try {
+      await tick();
+      root.querySelector('button[data-toast]').click();
+      await tick();
+      const t = root.querySelector('[data-slot="sonner-toast"]');
+      assert.ok(t, 'a toast was added');
+      assert.equal(t.getAttribute('data-type'), 'success');
+      assert.match(t.textContent, /Event has been created/);
+      assert.match(t.textContent, /Sunday at 9am/);
+      assert.ok(t.querySelector('[data-slot="sonner-action"]'), 'with its action button');
+    } finally {
+      root.remove();
+    }
+  });
+
+  test('a toast with its own position shows at that corner, in its own region', async () => {
+    const root = await mount(html`<ui-sonner position="bottom-right"></ui-sonner>
+      <button type="button" data-toast="Top" data-toast-position="top-center">Show</button>`);
+    try {
+      await tick();
+      root.querySelector('button[data-toast]').click();
+      await tick();
+      const region = root.querySelector('[data-slot="sonner"][data-position="top-center"]');
+      assert.ok(region, 'a region at the toast\'s position');
+      assert.match(region.textContent, /Top/);
+      const own = root.querySelector('[data-slot="sonner"][data-position="bottom-right"]');
+      assert.ok(own, 'the viewport\'s own region stays');
+      assert.equal(own.querySelectorAll('[data-slot="sonner-toast"]').length, 0);
+    } finally {
+      root.remove();
+    }
+  });
+
+  test('the delegated listener goes when the last viewport does', async () => {
+    const root = await mount(html`<ui-sonner></ui-sonner>`);
+    await tick();
+    root.remove();
+    const btn = document.createElement('button');
+    btn.setAttribute('data-toast', 'nobody');
+    document.body.appendChild(btn);
+    try {
+      btn.click();
+      assert.equal(globalThis.__webjsSonnerClicks ?? 0, 0, 'no viewport holds the listener');
+    } finally {
+      btn.remove();
+    }
+  });
+});

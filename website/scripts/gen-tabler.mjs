@@ -25,7 +25,7 @@ for (const name of [...new Set(wanted)].sort()) {
   const slug = kebab(name);
   const svgText = readFileSync(`${pkg}/icons/outline/${slug}.svg`, 'utf8');
   const inner = svgText.slice(svgText.indexOf('>') + 1, svgText.lastIndexOf('</svg>')).replace(/\s+/g, ' ').trim();
-  body += `\nexport function ${name}(cls = '') {\n  return svg\`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class=\${'tabler-icon tabler-icon-${slug}' + (cls ? ' ' + cls : '')}>${inner}</svg>\`;\n}\n`;
+  body += `\nexport function ${name}(cls = '', opts: IconOptions = {}) {\n  return svg\`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" data-icon=\${opts.icon ?? null} class=\${'tabler-icon tabler-icon-${slug}' + (cls ? ' ' + cls : '')}>${inner}</svg>\`;\n}\n`;
 }
 
 writeFileSync(out, `import { svg } from '@webjsdev/core';
@@ -36,5 +36,12 @@ writeFileSync(out, `import { svg } from '@webjsdev/core';
  * scripts/gen-tabler.mjs. Each is named as the @tabler/icons-react import a
  * shadcn demo writes, and renders the SVG that component renders.
  */
+
+/**
+ * What an icon helper takes beside its class: \`icon\` is shadcn's \`data-icon\`
+ * ("inline-start" | "inline-end"), which a button, badge or input group reads
+ * to tighten its padding on the icon's side.
+ */
+export type IconOptions = { icon?: 'inline-start' | 'inline-end' };
 ${body}`);
 console.log(`wrote ${new Set(wanted).size} icons`);

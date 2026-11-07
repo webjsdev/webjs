@@ -51,13 +51,16 @@ export const spinnerClass = (): string => 'size-4 animate-spin';
  * "Loading"), and `decorative` hides it from assistive tech for use beside
  * visible text such as a busy button's label.
  */
-export function spinner(opts: { class?: string; label?: string; decorative?: boolean } = {}) {
+export function spinner(opts: { class?: string; label?: string; decorative?: boolean; icon?: 'inline-start' | 'inline-end' } = {}) {
   const cls = cn(spinnerClass(), opts.class);
+  // shadcn's `data-icon`, which a button or badge reads to tighten its padding
+  // on the spinner's side. Left out, the attribute is omitted.
+  const icon = opts.icon ?? null;
   // Branched rather than a nullish `role=${...}` hole: the server renderer
   // stringifies a null attribute value, so a single template would serve
   // `role=""` on the decorative form.
   if (opts.decorative) {
-    return html`<svg data-slot="spinner" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class=${cls}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>`;
+    return html`<svg data-slot="spinner" data-icon=${icon} aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class=${cls}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>`;
   }
-  return html`<svg data-slot="spinner" role="status" aria-label=${opts.label ?? 'Loading'} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class=${cls}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>`;
+  return html`<svg data-slot="spinner" data-icon=${icon} role="status" aria-label=${opts.label ?? 'Loading'} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class=${cls}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>`;
 }

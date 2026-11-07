@@ -104,7 +104,9 @@ export function switchTrackClass(opts: { size?: SwitchSize } = {}): string {
  * shadcn's Switch: a root and a thumb around a real checkbox. The authored
  * attributes that belong to the control (`name`, `value`, `checked`,
  * `disabled`, `required`, `aria-label`, `aria-labelledby`,
- * `aria-describedby`, and `input-id` for a `<label for>`) are passed to it.
+ * `aria-describedby`, `aria-invalid`, and `input-id` for a `<label for>`) are
+ * passed to it. `aria-invalid` also lands on the root, where every style draws
+ * the error ring (shadcn's root is the control itself).
  */
 export class UiSwitch extends WebComponent({
   size: prop<SwitchSize>(String, { reflect: true }),
@@ -114,6 +116,8 @@ export class UiSwitch extends WebComponent({
   name: prop(String),
   value: prop(String),
   inputId: prop(String, { attribute: 'input-id' }),
+  // Observed so a re-validation that sets or clears it re-renders the switch.
+  invalid: prop(String, { attribute: 'aria-invalid' }),
 }) {
   constructor() {
     super();
@@ -124,6 +128,7 @@ export class UiSwitch extends WebComponent({
     this.name = '';
     this.value = '';
     this.inputId = '';
+    this.invalid = '';
   }
 
   _attr(name: string): string | null {
@@ -139,13 +144,19 @@ export class UiSwitch extends WebComponent({
   // The focus ring sits on the root and keys on the checkbox inside having
   // keyboard focus: in shadcn the focused element IS the root (a Radix
   // button), here it is the real checkbox the root contains.
+  // The root is the box, as shadcn's root (a Radix button) is: a flex item
+  // its row centres. A block host around it added a line box of its own and
+  // sat the switch a few pixels high, so the host is display: contents,
+  // through its style, which the server serves.
   render() {
+    if (typeof this.getAttribute === 'function' && !this.getAttribute('style')) this.setAttribute('style', 'display: contents');
     const size = this.size === 'sm' ? 'sm' : 'default';
     const state = this.checked ? 'checked' : 'unchecked';
     return html`<span
       data-slot="switch"
       data-size=${size}
       data-state=${state}
+      aria-invalid=${this.invalid === 'true' ? 'true' : null}
       ?data-disabled=${this.disabled}
       class=${cn('cn-switch peer group/switch relative inline-flex items-center transition-all outline-none after:absolute after:-inset-x-3 after:-inset-y-2 data-disabled:cursor-not-allowed data-disabled:opacity-50 has-[>input:focus-visible]:ring-[3px] has-[>input:focus-visible]:ring-ring/50', TRACK_SIZES[size])}
     ><input
@@ -160,6 +171,7 @@ export class UiSwitch extends WebComponent({
       aria-label=${this._attr('aria-label')}
       aria-labelledby=${this._attr('aria-labelledby')}
       aria-describedby=${this._attr('aria-describedby')}
+      aria-invalid=${this.invalid === 'true' ? 'true' : null}
       class="peer absolute inset-0 z-10 m-0 size-full cursor-pointer appearance-none opacity-0 disabled:cursor-not-allowed"
       @change=${this._onChange}
     ><span
