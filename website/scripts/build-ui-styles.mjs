@@ -21,7 +21,7 @@
  * The generated inputs go to node_modules/.cache, with absolute import paths,
  * so nothing but the outputs lands in the tree.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, utimesSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -61,5 +61,11 @@ for (const name of names) {
     process.stderr.write(r.stderr);
     process.exit(r.status ?? 1);
   }
+  // The Tailwind CLI leaves an output whose bytes did not change untouched,
+  // so its mtime stays older than the edit that triggered the build, and the
+  // dev regenerate rule (package.json) would then rebuild on every request.
+  // Stamping it marks the sheet fresh.
+  const now = new Date();
+  utimesSync(out, now, now);
 }
 console.log(`[build-ui-styles] wrote ${names.length} style${names.length === 1 ? '' : 's'} to public/ui-styles/`);

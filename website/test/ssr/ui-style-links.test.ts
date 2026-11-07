@@ -58,6 +58,22 @@ test('ui.css carries no kit style; each is its own sheet', async () => {
   assert.equal(styleSheetHref('not-a-style'), null, 'a name nothing builds gets no sheet');
 });
 
+test('every kit sheet regenerates in dev when its sources change', async () => {
+  // webjs.dev.regenerate is keyed by the requested output path, so a sheet
+  // with no rule of its own is served stale after a style edit in dev.
+  const { STYLE_NAMES } = await import('../../scripts/scope-ui-styles.mjs');
+  const pkg = JSON.parse(readFileSync(resolve(WEBSITE_ROOT, 'package.json'), 'utf8'));
+  const rules: { output: string; command: string; inputs: string[] }[] = pkg.webjs.dev.regenerate;
+  for (const name of STYLE_NAMES) {
+    const rule = rules.find((r) => r.output === `public/ui-styles/${name}.css`);
+    assert.ok(rule, `${name}.css has a regenerate rule`);
+    assert.ok(rule.command.endsWith(` ${name}`), `and it rebuilds ${name} alone`);
+    assert.ok(rule.inputs.includes('../packages/ui/packages/registry/styles'), 'from the registry styles');
+  }
+  const ui = rules.find((r) => r.output === 'public/ui.css');
+  assert.ok(ui && !ui.inputs.includes('../packages/ui/packages/registry/styles'), 'ui.css no longer rebuilds on a kit style edit');
+});
+
 /** The pathnames to render: every /ui page, and the frames pages embed. */
 async function uiPaths(): Promise<string[]> {
   const pages = await listUiPages('http://localhost');

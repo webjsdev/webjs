@@ -56,7 +56,8 @@
             "modules",
             "../packages/ui/packages/registry/components",
             "../packages/ui/packages/registry/lib",
-            "public/input.css"
+            "public/input.css",
+            "public/shared-base.css"
           ]
         },
         {
@@ -70,22 +71,25 @@
             "../packages/ui/packages/registry/components",
             "../packages/ui/packages/registry/blocks",
             "../packages/ui/packages/registry/lib",
-            "../packages/ui/packages/registry/styles",
+            "../packages/ui/packages/registry/styles/tw-animate.css",
+            "../packages/ui/packages/registry/styles/shadcn-tailwind.css",
             "../packages/ui/packages/registry/themes",
             "scripts/build-ui-themes.mjs",
             "public/ui-input.css",
-            "public/ui-theme.css"
+            "public/ui-theme.css",
+            "public/ui-typeset.css",
+            "public/shared-base.css"
           ]
         },
-        {
-          "output": "public/ui-styles/rhea.css",
-          "command": "node scripts/build-ui-styles.mjs",
-          "inputs": [
-            "../packages/ui/packages/registry/styles",
-            "public/ui-theme.css",
-            "scripts/build-ui-styles.mjs"
-          ]
-        }
+        { "output": "public/ui-styles/luma.css", "command": "node scripts/build-ui-styles.mjs luma", "inputs": ["../packages/ui/packages/registry/styles", "../packages/ui/packages/registry/components", "public/ui-theme.css", "scripts/build-ui-styles.mjs", "scripts/scope-ui-styles.mjs"] },
+        { "output": "public/ui-styles/lyra.css", "command": "node scripts/build-ui-styles.mjs lyra", "inputs": ["../packages/ui/packages/registry/styles", "../packages/ui/packages/registry/components", "public/ui-theme.css", "scripts/build-ui-styles.mjs", "scripts/scope-ui-styles.mjs"] },
+        { "output": "public/ui-styles/maia.css", "command": "node scripts/build-ui-styles.mjs maia", "inputs": ["../packages/ui/packages/registry/styles", "../packages/ui/packages/registry/components", "public/ui-theme.css", "scripts/build-ui-styles.mjs", "scripts/scope-ui-styles.mjs"] },
+        { "output": "public/ui-styles/mira.css", "command": "node scripts/build-ui-styles.mjs mira", "inputs": ["../packages/ui/packages/registry/styles", "../packages/ui/packages/registry/components", "public/ui-theme.css", "scripts/build-ui-styles.mjs", "scripts/scope-ui-styles.mjs"] },
+        { "output": "public/ui-styles/new-york.css", "command": "node scripts/build-ui-styles.mjs new-york", "inputs": ["../packages/ui/packages/registry/styles", "../packages/ui/packages/registry/components", "public/ui-theme.css", "scripts/build-ui-styles.mjs", "scripts/scope-ui-styles.mjs"] },
+        { "output": "public/ui-styles/nova.css", "command": "node scripts/build-ui-styles.mjs nova", "inputs": ["../packages/ui/packages/registry/styles", "../packages/ui/packages/registry/components", "public/ui-theme.css", "scripts/build-ui-styles.mjs", "scripts/scope-ui-styles.mjs"] },
+        { "output": "public/ui-styles/rhea.css", "command": "node scripts/build-ui-styles.mjs rhea", "inputs": ["../packages/ui/packages/registry/styles", "../packages/ui/packages/registry/components", "public/ui-theme.css", "scripts/build-ui-styles.mjs", "scripts/scope-ui-styles.mjs"] },
+        { "output": "public/ui-styles/sera.css", "command": "node scripts/build-ui-styles.mjs sera", "inputs": ["../packages/ui/packages/registry/styles", "../packages/ui/packages/registry/components", "public/ui-theme.css", "scripts/build-ui-styles.mjs", "scripts/scope-ui-styles.mjs"] },
+        { "output": "public/ui-styles/vega.css", "command": "node scripts/build-ui-styles.mjs vega", "inputs": ["../packages/ui/packages/registry/styles", "../packages/ui/packages/registry/components", "public/ui-theme.css", "scripts/build-ui-styles.mjs", "scripts/scope-ui-styles.mjs"] }
       ],
       "watch": [
         "../blog"
