@@ -1,4 +1,4 @@
-import { html, svg } from '@webjsdev/core';
+import { asset, html, svg } from '@webjsdev/core';
 import { blockDisplay, type BlockFile } from '#modules/ui/queries/blocks.server.ts';
 import { codeFigure } from '#lib/ui/docs/code.ts';
 
@@ -121,12 +121,13 @@ export interface BlockViewerOptions {
 /**
  * shadcn's ComponentPreview with `type="block"` (components/component-preview.tsx),
  * which a docs page leads with: the block's frame in a bordered box, clipped
- * to its top left at a 1600px width, with an optional caption. shadcn shows a
- * screenshot below `md`; the frame stands in for it at every width here.
+ * to its top left at a 1600px width, with an optional caption. Below `md` it
+ * shows the block's screenshot instead, as shadcn does.
  */
 export function blockPreview(name: string, opts: { caption?: string } = {}) {
   const content = html`<div data-not-typeset data-slot="block-preview" class="relative mt-6 aspect-[4/2.5] w-full overflow-hidden rounded-2xl border md:-mx-1">
-    <div class="absolute inset-0 w-[1600px] bg-background">
+    ${blockImage(name, 'absolute top-0 left-0 z-20 h-full w-[1600px] max-w-none bg-background object-cover object-left-top md:hidden')}
+    <div class="absolute inset-0 hidden w-[1600px] bg-background md:block">
       <iframe src=${`/ui/view/${name}`} title=${`${name} preview`} loading="lazy" class="size-full"></iframe>
     </div>
   </div>`;
@@ -135,6 +136,19 @@ export function blockPreview(name: string, opts: { caption?: string } = {}) {
     ${content}
     <figcaption class="text-center text-sm text-muted-foreground">${opts.caption}</figcaption>
   </figure>`;
+}
+
+/**
+ * A block's screenshot in both themes, shadcn's two next/image pictures:
+ * public/images/blocks/<name>-{light,dark}.png at shadcn's 1440 by 900, shot
+ * by scripts/shoot-block-images.mjs. A phone sees it in place of the live
+ * frame, which would render the block's own small-screen layout rather than
+ * the desktop page a reader is choosing.
+ */
+function blockImage(name: string, cls: string) {
+  const src = (theme: string) => asset(`/public/images/blocks/${name}-${theme}.png`);
+  return html`<img src=${src('light')} alt=${name} data-block=${name} width="1440" height="900" loading="lazy" decoding="async" class=${`${cls} dark:hidden`}>
+    <img src=${src('dark')} alt=${name} data-block=${name} width="1440" height="900" loading="lazy" decoding="async" class=${`${cls} hidden dark:block`}>`;
 }
 
 /** The viewer for one block, or nothing when `name` is not a block. */
@@ -219,7 +233,7 @@ export async function blockViewer(name: string, opts: BlockViewerOptions = {}) {
         <div class="ml-auto shrink-0 font-mono text-xs text-muted-foreground">${block.name}</div>
       </div>
       <div class="overflow-hidden rounded-xl border">
-        <iframe src=${src} title=${`${block.title} preview, small screen`} loading="lazy" class="aspect-[4/5] w-full bg-background"></iframe>
+        ${blockImage(block.name, 'object-cover')}
       </div>
     </div>
   </block-viewer>`;

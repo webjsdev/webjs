@@ -354,7 +354,10 @@ website/
                        pages (blocks, charts)
       block-viewer.ts  shadcn's BlockViewer as server markup (blockViewer)
                        and its docs-page preview frame (blockPreview); the
-                       behaviour is components/block-viewer.ts
+                       behaviour is components/block-viewer.ts. Below lg the
+                       viewer, and below md the preview, show the block's
+                       screenshot (public/images/blocks/) in place of the
+                       frame, as shadcn's do
       blocks-shell.ts  the /ui/blocks page chrome: header, categories nav
                        (shadcn's lib/categories.ts), the featured list
       examples-shell.ts
@@ -582,6 +585,12 @@ website/
                        the pictures the /ui example pages show below md in
                        place of the example, as shadcn's do (sizes in
                        modules/ui/example-apps/images.ts; needs playwright)
+    shoot-block-images.mjs
+                       regenerate public/images/blocks/<name>-{light,dark}.png,
+                       each listed block's /ui/view frame at shadcn's 1440 by
+                       900, the picture the block viewer shows below lg
+                       (needs playwright and ImageMagick). A new block needs a
+                       run, which test/ssr/ui-blocks.test.ts enforces
     copy-registry.mjs  mirror the kit sources into modules/ui/components/ +
                        lib/utils/{cn,dom}.ts, and the registry blocks into
                        modules/ui/blocks/.
@@ -600,7 +609,8 @@ website/
     images/            sera-0{1,2,3,6}-{light,dark}.png, shadcn's Sera
                        screenshots, which /ui/sera shows below md, and
                        home-cards-{light,dark}.png, the /ui home grid's
-                       picture for the same width
+                       picture for the same width; blocks/ holds the block
+                       screenshots (scripts/shoot-block-images.mjs)
 ```
 
 ## How lib/ grows

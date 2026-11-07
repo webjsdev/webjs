@@ -97,6 +97,31 @@ test('a block viewer carries the toolbar, the frame, the install command and eve
   assert.match(one, /\.\/ui\/card\.ts/);
 });
 
+test('below lg a block viewer shows the block\'s screenshot, not a second frame', async () => {
+  // shadcn's BlockViewerMobile: a picture in each theme. A frame there would
+  // render the block's own phone layout, not the page a reader is choosing.
+  const html = await page('/ui/blocks/login');
+  const one = html.match(/<block-viewer[^>]*id="login-01"[\s\S]*?<\/block-viewer>/)?.[0] ?? '';
+  const mobile = one.slice(one.indexOf('data-slot="block-viewer-mobile"'));
+  assert.match(mobile, /class="flex flex-col gap-2 lg:hidden"/);
+  assert.match(mobile, /<img src="\/public\/images\/blocks\/login-01-light\.png[^"]*" alt="login-01" data-block="login-01" width="1440" height="900" loading="lazy"[^>]*class="object-cover dark:hidden"/);
+  assert.match(mobile, /<img src="\/public\/images\/blocks\/login-01-dark\.png[^"]*"[^>]*class="object-cover hidden dark:block"/);
+  assert.doesNotMatch(mobile, /<iframe/);
+  assert.equal(one.match(/<iframe/g)?.length, 1, 'one frame per viewer, the desktop one');
+});
+
+test('every block the pages list has its screenshot in both themes', () => {
+  // scripts/shoot-block-images.mjs writes them; a new block needs a run.
+  for (const b of blocks) {
+    for (const theme of ['light', 'dark']) {
+      const file = join(WEBSITE_ROOT, 'public', 'images', 'blocks', `${b.name}-${theme}.png`);
+      const bytes = readFileSync(file);
+      assert.equal(bytes.readUInt32BE(16), 1440, `${b.name}-${theme}.png is 1440 wide`);
+      assert.equal(bytes.readUInt32BE(20), 900, `${b.name}-${theme}.png is 900 high`);
+    }
+  }
+});
+
 test('a blocks page ships the viewer element and nothing else of its own', async () => {
   // The element is the island; the page and the viewer's markup fragment are
   // server-only, so a module-scope call creeping into either would pin them.
@@ -271,6 +296,11 @@ test('no block writes a cn-* name in its own markup', () => {
 test('the Sidebar docs page leads with the sidebar-07 block', async () => {
   const html = await page('/ui/docs/components/sidebar');
   assert.match(html, /data-slot="block-preview"[\s\S]*?<iframe src="\/ui\/view\/sidebar-07"/);
+  // Below md the frame gives way to the block's screenshot, as shadcn's does.
+  const preview = html.match(/data-slot="block-preview"[\s\S]*?<\/iframe>/)?.[0] ?? '';
+  assert.match(preview, /<img src="\/public\/images\/blocks\/sidebar-07-light\.png[^"]*"[^>]*class="[^"]*md:hidden[^"]*dark:hidden"/);
+  assert.match(preview, /<img src="\/public\/images\/blocks\/sidebar-07-dark\.png[^"]*"[^>]*class="[^"]*hidden dark:block"/);
+  assert.match(preview, /<div class="absolute inset-0 hidden w-\[1600px\] bg-background md:block">\s*<iframe/);
   assert.match(html, /A sidebar that collapses to icons\./);
   assert.match(html, /<a href="\/ui\/blocks">Browse the Blocks Library<\/a>/);
 });
