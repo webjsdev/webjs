@@ -63,8 +63,11 @@
             "lib/ui",
             "modules/ui",
             "../packages/ui/packages/registry/components",
+            "../packages/ui/packages/registry/blocks",
             "../packages/ui/packages/registry/lib",
             "../packages/ui/packages/registry/styles",
+            "../packages/ui/packages/registry/themes",
+            "scripts/build-ui-themes.mjs",
             "public/ui-input.css",
             "public/ui-theme.css"
           ]
