@@ -97,26 +97,6 @@ export default function RootLayout({ children }: LayoutProps) {
           mq.addEventListener('change', apply);
         } catch (_) {}
       })();
-      // #610: keep --header-h equal to the fixed header's real height. The
-      // :root default is a sane SSR first-paint value; this refines it once the
-      // header exists and on any resize, so the content offset never drifts
-      // (responsive headers, font swaps, a wrapped nav). Degrades fine with no
-      // JS (the :root default holds).
-      (function(){
-        function measure(){
-          try {
-            var hdr = document.querySelector('.site-header');
-            if (!hdr) return;
-            var apply = function(){
-              document.documentElement.style.setProperty('--header-h', hdr.offsetHeight + 'px');
-            };
-            apply();
-            if (window.ResizeObserver) new ResizeObserver(apply).observe(hdr);
-          } catch (_) {}
-        }
-        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', measure);
-        else measure();
-      })();
       // Mobile menu auto-close: close on link click (inside the panel)
       // AND on any click outside the menu. Delegated on document so
       // it survives client-router navigations without rebinding.
@@ -139,7 +119,7 @@ export default function RootLayout({ children }: LayoutProps) {
     <style>
       :root {
         color-scheme: light dark;
-        --header-h: 61px; /* #610 fixed-header offset, kept exact by the ResizeObserver below */
+        --header-h: 61px; /* #610 fixed-header height and content offset; .site-header is sized by it */
 
         /* dark (default). shadcn token names, the same vocabulary the scaffold
            and the @webjsdev/ui kit use. --primary is the orange BRAND color;
@@ -235,7 +215,9 @@ export default function RootLayout({ children }: LayoutProps) {
          be reached by utility classes. A tiny decorative overlay, scrollbar
          colours, and selection tint also live here (no utility equivalent). */
       html, body { margin: 0; }
-      html { scroll-behavior: smooth; }
+      /* scroll-padding-top: an in-page #anchor jump (native, or the client
+         router's scrollIntoView) stops below the fixed header, not under it. */
+      html { scroll-behavior: smooth; scroll-padding-top: var(--header-h); }
       body {
         /* #610: the header is position:fixed (NOT sticky), because iOS WebKit
            (every iOS browser) flickers a sticky header's background for one
@@ -243,8 +225,9 @@ export default function RootLayout({ children }: LayoutProps) {
            sticky stuck-to-static recompute WebKit mis-repaints, iOS-only, fine
            on desktop and Android, confirmed on-device). fixed leaves normal
            flow, so offset the content by the header height. --header-h is the
-           single source of truth: a sane SSR first-paint default in :root,
-           kept exact and responsive by the ResizeObserver inline script. */
+           single source of truth: the header is sized BY it, so nothing has to
+           measure the header, and a client-router swap that replaces the
+           header cannot zero the offset (#1660). */
         padding-top: var(--header-h);
         background: var(--background);
         color: var(--foreground);
@@ -276,7 +259,7 @@ export default function RootLayout({ children }: LayoutProps) {
          has to restate the base value, once per responsive variant. Declared
          after the Tailwind link above, so it wins the border-right-color the
          border-* utilities also set. Resolves to 0px at every other moment. */
-      .site-header { border-right: var(--wj-scrollbar-compensation, 0px) solid transparent; }
+      .site-header { border-right: var(--wj-scrollbar-compensation, 0px) solid transparent; height: var(--header-h); }
       ::selection { background: var(--primary-tint); color: var(--foreground); }
       ::-webkit-scrollbar { width: 10px; height: 10px; }
       ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }

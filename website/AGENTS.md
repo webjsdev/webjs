@@ -24,7 +24,7 @@ website/
                        in the URL). Every route below this line through
                        founder-resources lives in here
       layout.ts        the marketing chrome: skip link, glow layer, the fixed
-                       header with its --header-h script, footer
+                       header (sized by the --header-h token), footer
       not-found.ts error.ts
                        section boundaries, rendered inside (site)/layout.ts so
                        a thrown notFound() or a 500 keeps the chrome
@@ -87,7 +87,7 @@ website/
                        may live here
       (chrome)/        the /ui header and footer, a route group so the iframe
                        targets outside it render with no chrome
-        layout.ts      the fixed header with its --header-h script and the
+        layout.ts      the fixed header (sized by the --header-h token) and the
                        footer with the one shadcn/ui credit line, shadcn's
                        SiteHeader and SiteFooter. The header row is shadcn's
                        (below lg the "Menu" drawer, components/ui-mobile-nav.ts;
@@ -790,16 +790,19 @@ folder: `lib/docs-llms.server.ts` walks `app/(site)/docs`, and the tests import
 `app/(site)/layout.ts` renders the marketing header. It is
 `position: fixed`, NOT sticky: a sticky header flickers on iOS WebKit during
 a client-router navigation (#610), so the height is reserved on the content
-through a `--header-h` offset, defaulted on `:root` for no-JS and first paint
-and kept exact by an inline script placed right after the header. The script
-lives in the chrome layout rather than the root layout's head because the
-header is swapped on a navigation between sections: the router re-runs a
-script inside the swapped range, so it rebinds its ResizeObserver to the new
-header (a once-at-boot observer would keep watching the detached one).
+through the `--header-h` token on `:root`. The header is sized BY that token
+(`.site-top > header { height: var(--header-h) }`) and nothing measures it: a
+measuring script read 0 from a detached header after a full-body swap and
+slid the content under the bar (#1660). The root layout sets the marketing
+value (61px) and `html { scroll-padding-top: var(--header-h) }`, so an
+`#anchor` jump stops below the bar. The `/ui` header
+(`app/ui/(chrome)/layout.ts`) is fixed the same way; `public/ui-input.css`
+sets `--header-h` to its height (shadcn's `--header-height`, 3.5rem, 4rem
+from 64rem) on any page that has it.
 
 There is no announcement banner. One used to sit above the header, and
-`--header-h` is why its removal is not free: re-adding a strip means the
-measurement has to cover it too.
+`--header-h` is why its removal is not free: re-adding a strip means adding
+its height to the token.
 
 The header's mobile menu is `components/site-nav-menu.ts` (on /ui, its
 subclass `components/ui-mobile-nav.ts`), and the fixed
@@ -812,16 +815,12 @@ reach it. `lib/scroll-lock.ts` publishes that measured width for it to opt into
 
 ## What stays inline script in the layouts
 
-Only two things, and both are genuinely boot work rather than interactivity:
-
-- the **theme bootstrap**, in the root layout's head, which must run before
-  first paint or a reader who chose dark sees the light palette flash. It
-  cannot import, so it interpolates the storage key from `lib/theme.ts`.
-- the **`--header-h` measurement**, in each chrome layout next to its header,
-  which backs the fixed-header offset above. It is written inline in the
-  layout rather than in a `lib/` helper on purpose: a layout's template is SSR
-  output, while the same text in a `lib/` module reads as client work to the
-  elision analyser and ships the layout to the browser.
+Only one thing, and it is genuinely boot work rather than interactivity: the
+**theme bootstrap**, in the root layout's head, which must run before first
+paint or a reader who chose dark sees the light palette flash. It cannot
+import, so it interpolates the storage key from `lib/theme.ts`. The header
+height used to be measured by an inline script too; it is a CSS token now
+(see Header above).
 
 Everything else that used to live there is a component now. The drawer and the
 header menu were once one delegated click listener plus one delegated keydown

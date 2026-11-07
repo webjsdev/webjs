@@ -168,3 +168,26 @@ test('the form scan ignores a commented-out form and a close tag in an attribute
   const byIndex = await submitForm(a.handle, '/tricky', { email: 'ada@example.com' }, { index: 0 });
   assert.equal(byIndex.headers.get('location'), '/welcome');
 });
+
+// #1664 review: an array field value posts once per element, so a test can
+// exercise the `name[]` checkbox-group convention end to end.
+test('submitForm posts an array value once per element, reaching the action as a [] group', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'webjs-submit-form-tags-'));
+  await mkdir(join(dir, 'app/tags'), { recursive: true });
+  await mkdir(join(dir, 'modules/t'), { recursive: true });
+  await writeFile(join(dir, 'modules/t/tags.server.ts'),
+    `'use server';
+export async function saveTags(input) {
+  return { success: true, redirect: '/saved/' + input.tags.join('+') + '/' + input.getAll('tags').length };
+}
+`);
+  await writeFile(join(dir, 'app/tags/page.ts'),
+    `import { html } from ${CORE};
+import { saveTags } from '../../modules/t/tags.server.ts';
+export default () => html\`<form action=\${saveTags}><input type="checkbox" name="tags[]" value="a"></form>\`;
+`);
+  const app = await createRequestHandler({ appDir: dir, dev: false });
+  const res = await submitForm(app.handle, '/tags', { 'tags[]': ['a', 'b'] });
+  assert.equal(res.status, 303);
+  assert.equal(res.headers.get('location'), '/saved/a+b/2', 'two separate values, not one comma-joined string');
+});

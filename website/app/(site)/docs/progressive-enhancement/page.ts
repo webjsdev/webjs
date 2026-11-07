@@ -137,10 +137,11 @@ Counter.register('my-counter');</code-block>
 
     <code-block>// modules/posts/actions/create-post.server.ts
 'use server';
-// A form-bound action always receives the FormData.
-export async function createPost(formData: FormData) {
-  const title = String(formData.get('title') || '').trim();
-  const body = String(formData.get('body') || '').trim();
+// A form-bound action receives the submitted fields as one object, read by
+// property (input.get('title') works too).
+export async function createPost(input: { title?: string; body?: string }) {
+  const title = String(input.title || '').trim();
+  const body = String(input.body || '').trim();
   const values = { title, body };
   if (!title) {
     return { success: false, fieldErrors: { title: 'Title is required' }, values, status: 422 };

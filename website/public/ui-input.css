@@ -139,8 +139,8 @@
 
   /* shadcn sizes its header and footer from these (14 and 16 spacing steps
      for the header, 14 and 24 for the footer). The header itself is
-     position: fixed (#610), and the layout reserves its measured height
-     through --header-h, the same mechanism the marketing header uses. */
+     position: fixed (#610), and the layout reserves its height through
+     --header-h, the same token the marketing header uses (see below). */
   --header-height: calc(var(--spacing) * 14);
   --footer-height: calc(var(--spacing) * 14);
 
@@ -153,6 +153,17 @@
 }
 @media (width >= 64rem) {
   .ui-site { --header-height: calc(var(--spacing) * 16); }
+}
+/* --header-h is the height the root layout reserves for a fixed header (body
+   padding, scroll-padding-top, and .site-top > header's own height). On a
+   page with the /ui header it is that header's --header-height, so the header
+   is SIZED by the token and nothing measures it (#1660). Literals, because
+   :root cannot read a variable declared on .ui-site; keep them equal to the
+   two --header-height values above. The bare iframe targets have no
+   .site-top, so they keep their own 0px. */
+:root:has(.ui-site .site-top) { --header-h: 3.5rem; }
+@media (width >= 64rem) {
+  :root:has(.ui-site .site-top) { --header-h: 4rem; }
 }
 @media (width >= 80rem) {
   .ui-site { --footer-height: calc(var(--spacing) * 24); }

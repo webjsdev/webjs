@@ -141,9 +141,23 @@ test('scaffoldApp full-stack: writes the canonical full-stack app layout', async
     // Re-skinned shell: a JetBrains Mono type system on a cool neutral-grey
     // surface palette (not the old orange brand), a floating top navbar, and a
     // main that fills the viewport minus the navbar.
-    assert.match(layoutSrc, /<main class="min-h-\[calc\(100dvh-3\.5rem\)\][^"]*">/,
+    assert.match(layoutSrc, /<main class="min-h-\[calc\(100dvh-var\(--header-h\)\)\][^"]*">/,
       'layout main fills the viewport minus the navbar');
     assert.match(layoutSrc, /<header\b/, 'the shell ships a floating top navbar');
+    // #1660: the navbar is sized by --header-h and nothing measures it, so a
+    // client-router swap that replaces the header cannot zero the offset.
+    assert.match(layoutSrc, /<header class="[^"]*h-\[var\(--header-h\)\]/, 'the navbar is sized by the token');
+    assert.match(layoutSrc, /body:has\(> header\.fixed\) \{ padding-top: var\(--header-h\); \}/,
+      'pinning the navbar is a one-class edit');
+    // Pinning from a breakpoint up is resolved by Tailwind from the app's own
+    // theme (@variant), never from hard-coded widths in the layout.
+    assert.doesNotMatch(layoutSrc, /min-width: \d/, 'the layout hard-codes no breakpoint width');
+    assert.match(layoutSrc, /html:has\(> body > header\.fixed\) \{ scroll-padding-top: var\(--header-h\); \}/,
+      'a pinned navbar also offsets in-page anchor jumps');
+    const inputCss = readFileSync(join(appDir, 'public', 'input.css'), 'utf8');
+    assert.match(inputCss, /body:has\(> header\[class~="md:fixed"\]\) \{ @variant md \{ padding-top: var\(--header-h\); \} \}/,
+      'and pinning it from a breakpoint up reserves the space through the app\'s own md breakpoint');
+    assert.doesNotMatch(layoutSrc, /ResizeObserver/, 'the layout does not measure the header');
     assert.match(layoutSrc, /JetBrains\+Mono/, 'layout loads the JetBrains Mono font');
     // The palette lives in the theme block of styles/globals.css (light on
     // :root, dark on .dark), where a preset replaces it, never in the layout.
@@ -588,7 +602,10 @@ test('scaffoldApp full-stack: the auth card wires createAuth + dashboard + User 
     assert.match(signup, /actionData/, 'signup page reads actionData for re-render');
     const signupAction = readFileSync(
       join(appDir, 'modules', 'auth', 'actions', 'signup.server.ts'), 'utf8');
-    assert.match(signupAction, /formData: FormData/, 'the action takes the FormData directly');
+    // #1664: a form-bound action reads its fields as properties, the same shape
+    // it would get over RPC, so a scaffolded app teaches that shape.
+    assert.match(signupAction, /input: SignupInput/, 'the action takes the readable form input');
+    assert.match(signupAction, /input\.email/, 'and reads a field as a property');
     assert.match(signupAction, /fieldErrors/, 'and returns field errors');
 
     // #904: a signed-in user must be able to log out. The dashboard subtree ships

@@ -54,6 +54,12 @@ webjs routes --json             # structured JSON (matches the MCP list_routes t
 webjs source optimistic --pkg core   # narrow to one installed @webjsdev/* package</code-block>
     <p>Prints one export's declaration from the installed framework packages instead of the file around it: the typed declaration (<code>index.d.ts</code> or <code>src/*.d.ts</code>) with the doc comment above it, the authored JSDoc from <code>src/</code> when no typed declaration carries one, and every overload. A miss names the packages that were searched. The read-only MCP <code>source</code> tool returns the same text for <code>&#123; export: "createAuth" &#125;</code>, so an agent checks a contract for the price of the declaration, and opens the source file only for behaviour the signature does not state.</p>
 
+    <h3>webjs status</h3>
+    <code-block>webjs status                      # wait for the running dev server to settle, report errors since the last rebuild
+webjs status / /todos            # also request these paths, so a broken page shows up
+webjs status /todos --json       # one JSON document: ok, settled, ready, paths, errors</code-block>
+    <p>After an edit the dev server rebuilds and re-analyses the app, and on Node it may restart first. The reload a tab receives is sent before anything is re-imported, so a broken module only shows on the next request. This command waits for that to finish (retrying through a restart), requests each path you name (the app root when you name none) plus every page that last failed to render, and prints every error, render, TypeScript strip, rebuild, route handler, server action and middleware, each with its file, line and code frame. A render error stays listed until its page renders again, so an unrelated edit cannot hide a page that is still broken. It exits 0 when everything is clean, 1 on any problem, and 2 when no dev server answered, so an agent can run it after every edit instead of sleeping and fetching a page. The same data is the dev-only <code>GET /__webjs/dev/status?wait=&lt;seconds&gt;</code>, which answers 404 in production.</p>
+
     <h3>webjs doctor</h3>
     <code-block>webjs doctor            # human-readable project-health checklist
 webjs doctor --json     # structured results (each with a stable code) + a summary

@@ -181,9 +181,6 @@ export default function RootLayout({ children, url }: LayoutProps) {
           if (${JSON.stringify(FORCED_THEMES)}.indexOf(t) !== -1) document.documentElement.dataset.theme = t;
         } catch (_) {}
       })();
-      /* --header-h (#610, the fixed header's reserved height) is measured by
-         an inline script in each chrome layout, next to its own header, so it
-         rebinds when a navigation swaps the chrome. */
     </script>
 
     <link rel="stylesheet" href=${asset('/public/tailwind.css')}>
@@ -292,7 +289,14 @@ export default function RootLayout({ children, url }: LayoutProps) {
         *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
       }
       html, body { margin: 0; }
-      :root { --header-h: 59px; } /* #610 fixed header offset (no banner); kept exact by the chrome layout's script */
+      /* An in-page #anchor jump (native, or the client router's scrollIntoView)
+         stops below the fixed header instead of under it. */
+      html { scroll-padding-top: var(--header-h); }
+      /* #610: the header is position: fixed (sticky flickers on iOS WebKit during
+         a client-router nav), so the content reserves its height. The header is
+         sized BY this token and nothing measures it, so a swap that replaces the
+         header cannot zero the offset (#1660). */
+      :root { --header-h: 61px; }
       body {
         padding-top: var(--header-h);
         background: var(--bg); color: var(--fg);
@@ -321,7 +325,7 @@ export default function RootLayout({ children, url }: LayoutProps) {
          whatever padding is already there instead of restating it. The child
          selector outranks the border-* utilities that also set
          border-right-color, so cascade order does not matter. */
-      .site-top > header { border-right: var(--wj-scrollbar-compensation, 0px) solid transparent; }
+      .site-top > header { border-right: var(--wj-scrollbar-compensation, 0px) solid transparent; height: var(--header-h); }
       /* Background glow layer with soft radial ambient glow */
       .glow-layer { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
       .glow-layer::before {

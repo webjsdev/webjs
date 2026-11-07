@@ -1005,15 +1005,25 @@ import { fileURLToPath } from 'node:url';
 import * as schema from './schema.server.ts';
 
 // The only file that opens the driver. Runtime-neutral and ZERO native deps:
-// built-in bun:sqlite on Bun, built-in node:sqlite on Node. Cached on
-// globalThis across dev reloads.
+// built-in bun:sqlite on Bun, built-in node:sqlite on Node.
 // A relative SQLite path resolves against the app root (the parent of db/), not
 // process.cwd(), so the connection works under \`webjs dev\` AND when the app is
 // embedded via createRequestHandler from a different working directory.
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const raw = process.env.DATABASE_URL?.replace(/^file:/, '') ?? 'db/dev.db';
 const url = raw === ':memory:' || isAbsolute(raw) ? raw : resolve(appRoot, raw);
-const g = globalThis as unknown as { __webjs_db?: unknown };
+
+// Only the DRIVER handle is cached on globalThis (per database url), so a dev
+// reload reuses one open connection. The Drizzle wrapper below is rebuilt each
+// time this module is evaluated, because it captures schema.relations: caching
+// the wrapper kept the first load's relations, so a table added while
+// \`webjs dev\` ran stayed undefined on db.query until a restart.
+const g = globalThis as unknown as { __webjs_db_clients?: Map<string, unknown> };
+const clients = (g.__webjs_db_clients ??= new Map());
+function cached<T>(open: () => T): T {
+  if (!clients.has(url)) clients.set(url, open());
+  return clients.get(url) as T;
+}
 
 // Both node:sqlite and bun:sqlite default \`busy_timeout\` to 0, so a concurrent
 // writer throws \`database is locked\` immediately. Restore a 5s wait (the old
@@ -1025,32 +1035,41 @@ function tune<T extends { exec(sql: string): unknown }>(client: T): T {
   return client;
 }
 
-async function open() {
+async function connect() {
   if ((globalThis as { Bun?: unknown }).Bun) {
     // @ts-expect-error bun:sqlite is a Bun builtin with no Node typings
     const { Database } = await import('bun:sqlite');
     const { drizzle } = await import('drizzle-orm/bun-sqlite');
-    return drizzle({ client: tune(new Database(url)), relations: schema.relations });
+    return drizzle({ client: cached(() => tune(new Database(url))), relations: schema.relations });
   }
   const { DatabaseSync } = await import('node:sqlite');
   const { drizzle } = await import('drizzle-orm/node-sqlite');
-  return drizzle({ client: tune(new DatabaseSync(url)), relations: schema.relations });
+  return drizzle({ client: cached(() => tune(new DatabaseSync(url))), relations: schema.relations });
 }
 
-export const db = (g.__webjs_db ??= await open()) as Awaited<ReturnType<typeof open>>;
+export const db = await connect();
 `;
 
   const connPg = `import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema.server.ts';
 
-// The only file that opens the driver. Cached on globalThis across dev reloads.
-// The pool relies on no session state (no SET, no LISTEN, no advisory locks
-// held across queries), so it also works behind a transaction pooler. Idle
-// connections close after 10 s; a database that is down fails a request in
-// 5 s instead of hanging it; DATABASE_POOL_MAX caps the pool (default 10).
-const g = globalThis as unknown as { __webjs_db?: unknown };
-function open() {
+// The only file that opens the driver. The pool relies on no session state (no
+// SET, no LISTEN, no advisory locks held across queries), so it also works
+// behind a transaction pooler. Idle connections close after 10 s; a database
+// that is down fails a request in 5 s instead of hanging it; DATABASE_POOL_MAX
+// caps the pool (default 10).
+//
+// Only the POOL is cached on globalThis (per connection string), so a dev
+// reload reuses it. The Drizzle wrapper is rebuilt each time this module is
+// evaluated, because it captures schema.relations: caching the wrapper kept the
+// first load's relations, so a table added while \`webjs dev\` ran stayed
+// undefined on db.query until a restart.
+const url = process.env.DATABASE_URL ?? '';
+const g = globalThis as unknown as { __webjs_db_pools?: Map<string, Pool> };
+const pools = (g.__webjs_db_pools ??= new Map());
+
+function openPool() {
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     max: Number(process.env.DATABASE_POOL_MAX) || 10,
@@ -1060,9 +1079,11 @@ function open() {
   // An idle connection the server drops (a restart, a failover) emits
   // 'error' on the pool, and an unhandled one would crash the process.
   pool.on('error', (err) => console.error('[db] idle connection lost:', err.message));
-  return drizzle({ client: pool, relations: schema.relations });
+  return pool;
 }
-export const db = (g.__webjs_db ??= open()) as ReturnType<typeof open>;
+
+if (!pools.has(url)) pools.set(url, openPool());
+export const db = drizzle({ client: pools.get(url) as Pool, relations: schema.relations });
 `;
 
   await writeFile(join(appDir, 'db', 'connection.server.ts'), dialect === 'postgres' ? connPg : connSqlite);
@@ -1380,6 +1401,22 @@ export type ActionResult<T> =
 @source "../modules/**/*.{ts,js}";
 @source "../lib/**/*.{ts,js}";
 
+/* A navbar pinned from a breakpoint up (md:fixed md:inset-x-0 md:top-0)
+   reserves its height from that breakpoint. @variant resolves each breakpoint
+   from this app's theme, so a customized --breakpoint-* stays in step; a
+   breakpoint you add under a new name needs its own line. The plain
+   \`fixed\` case lives beside the token in app/layout.ts. */
+body:has(> header[class~="sm:fixed"]) { @variant sm { padding-top: var(--header-h); } }
+body:has(> header[class~="md:fixed"]) { @variant md { padding-top: var(--header-h); } }
+body:has(> header[class~="lg:fixed"]) { @variant lg { padding-top: var(--header-h); } }
+body:has(> header[class~="xl:fixed"]) { @variant xl { padding-top: var(--header-h); } }
+body:has(> header[class~="2xl:fixed"]) { @variant 2xl { padding-top: var(--header-h); } }
+html:has(> body > header[class~="sm:fixed"]) { @variant sm { scroll-padding-top: var(--header-h); } }
+html:has(> body > header[class~="md:fixed"]) { @variant md { scroll-padding-top: var(--header-h); } }
+html:has(> body > header[class~="lg:fixed"]) { @variant lg { scroll-padding-top: var(--header-h); } }
+html:has(> body > header[class~="xl:fixed"]) { @variant xl { scroll-padding-top: var(--header-h); } }
+html:has(> body > header[class~="2xl:fixed"]) { @variant 2xl { scroll-padding-top: var(--header-h); } }
+
 /* App @theme mappings. The token VALUES live in styles/globals.css: the
    colours and fonts in its theme block (which webjs ui init --preset
    replaces), the app's own extras after it. These @theme inline maps turn the
@@ -1465,27 +1502,6 @@ export default function RootLayout({ children }: LayoutProps) {
           mq.addEventListener('change', apply);
         } catch (_) {}
       })();
-      // Header-measure: dormant until you add a fixed header. A fixed header
-      // (use position:fixed, NOT sticky, which flickers on iOS WebKit during a
-      // client-router nav) leaves normal flow, so --header-h reserves its height
-      // for the content below. No header means a no-op and --header-h stays 0.
-      (function(){
-        function measure(){
-          try {
-            var hdr = document.querySelector('header');
-            // Only a FIXED header leaves normal flow and needs its height
-            // reserved; a normal in-flow header (the gallery's navbar) does not.
-            if (!hdr || getComputedStyle(hdr).position !== 'fixed') return;
-            var apply = function(){
-              document.documentElement.style.setProperty('--header-h', hdr.offsetHeight + 'px');
-            };
-            apply();
-            if (window.ResizeObserver) new ResizeObserver(apply).observe(hdr);
-          } catch (_) {}
-        }
-        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', measure);
-        else measure();
-      })();
     </script>
     <meta name="color-scheme" content="light dark">
     <!-- JetBrains Mono for body/UI (its monospaced, developer-console feel) and
@@ -1518,7 +1534,10 @@ export default function RootLayout({ children }: LayoutProps) {
          the OS. color-scheme follows the same choice, so native controls and
          scrollbars match. */
       :root {
-        --header-h: 0px;
+        /* The navbar height. The header is sized BY this token and nothing
+           measures it, so the offset below can never drift from the header. */
+        --header-h: 3.5rem;
+
         color-scheme: light dark;                              /* default: follow the OS */
       }
       :root[data-theme='light'] { color-scheme: light; }
@@ -1528,19 +1547,28 @@ export default function RootLayout({ children }: LayoutProps) {
       /* Base styles utility classes can't reach. */
       html, body { margin: 0; }
       body {
-        padding-top: var(--header-h);
         background: var(--background);
         color: var(--foreground);
         font: 15px/1.6 var(--font-sans);
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
       }
+      /* A fixed header leaves normal flow, so reserve its height. Keyed on the
+         class, so pinning the navbar below is a one-class edit. Pinning it
+         from a breakpoint up (md:fixed) is handled in public/input.css, where
+         Tailwind resolves the breakpoint from this app's own theme. */
+      body:has(> header.fixed) { padding-top: var(--header-h); }
+      /* And an in-page #anchor jump (native, or the client router's
+         scrollIntoView) stops below the pinned header instead of under it. */
+      html:has(> body > header.fixed) { scroll-padding-top: var(--header-h); }
     </style>
     <!-- Top navbar, on every page: brand on the left, links + theme toggle on
          the right. It floats (no separator) and is in normal flow, so it just
-         scrolls with the page; make it a fixed header only if you want it pinned
-         (position: fixed, never sticky, which flickers on iOS during a nav). -->
-    <header class="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+         scrolls with the page. To pin it, add fixed inset-x-0 top-0 z-20 to its
+         class (position: fixed, never sticky, which flickers on iOS during a nav).
+         Its height is the --header-h token, so keep it one row: nothing measures
+         it, which is what keeps the offset right after a client-router swap. -->
+    <header class="max-w-5xl mx-auto px-4 sm:px-6 h-[var(--header-h)] flex items-center justify-between gap-4">
       <a href="/" class="inline-flex items-center gap-2 no-underline text-foreground font-bold tracking-tight" style="font-family: var(--font-display)">
         <span class="w-[22px] h-[22px] rounded-[7px] bg-gradient-to-br from-foreground to-muted-foreground" aria-hidden="true"></span>
         WebJs Gallery
@@ -1551,9 +1579,9 @@ export default function RootLayout({ children }: LayoutProps) {
         <theme-toggle></theme-toggle>
       </nav>
     </header>
-    <!-- Fill the viewport minus the h-14 (3.5rem) navbar, so a short page has no
-         spurious scrollbar (min-h-dvh alone would overflow by the navbar height). -->
-    <main class="min-h-[calc(100dvh-3.5rem)] max-w-5xl mx-auto px-4 sm:px-6 py-8">
+    <!-- Fill the viewport minus the navbar, so a short page has no spurious
+         scrollbar (min-h-dvh alone would overflow by the navbar height). -->
+    <main class="min-h-[calc(100dvh-var(--header-h))] max-w-5xl mx-auto px-4 sm:px-6 py-8">
       \${children}
     </main>
   \`;

@@ -117,17 +117,25 @@ test('a full load of a /ui page has the /ui stylesheet in <head>, and a marketin
   }
 });
 
-test('the two chrome layouts measure their header with the same script', () => {
-  // Each chrome layout carries its own copy of the --header-h script, next to
-  // the header it measures, so the router re-runs it after a swap. Two copies
-  // drift, so they are held identical here.
-  const scriptOf = (file: string) => {
+test('neither chrome layout measures its header; the --header-h token sizes it', () => {
+  // #1660: a measuring script read 0 from a header a full-body swap had
+  // replaced, and the content slid under the bar. Both headers are sized BY
+  // the token instead (the root layout's .site-top > header rule), so no
+  // chrome layout may carry a script that writes it.
+  for (const file of ['app/(site)/layout.ts', 'app/ui/(chrome)/layout.ts']) {
     const src = readFileSync(resolve(WEBSITE_ROOT, file), 'utf8');
-    const m = src.match(/<script nonce=\$\{nonce\}>[\s\S]*?<\/script>/);
-    assert.ok(m, `${file} carries the header script`);
-    return m![0];
-  };
-  assert.equal(scriptOf('app/ui/(chrome)/layout.ts'), scriptOf('app/(site)/layout.ts'));
+    assert.ok(src.includes('class="site-top'), `${file} renders the fixed header`);
+    assert.ok(!src.includes('ResizeObserver'), `${file} does not measure the header`);
+    assert.ok(!/setProperty\('--header-h'/.test(src), `${file} does not write --header-h`);
+  }
+  // On /ui the token is the /ui header's own --header-height, written as
+  // literals on :root (which cannot read a variable set on .ui-site). Hold
+  // the two pairs equal so a resized header cannot leave a stale offset.
+  const css = readFileSync(resolve(WEBSITE_ROOT, 'public/ui-input.css'), 'utf8');
+  const heights = [...css.matchAll(/--header-height: calc\(var\(--spacing\) \* (\d+)\)/g)].map((m) => Number(m[1]) * 0.25 + 'rem');
+  const tokens = [...css.matchAll(/:root:has\(\.ui-site \.site-top\) \{ --header-h: ([\d.]+rem); \}/g)].map((m) => m[1]);
+  assert.deepEqual(heights, ['3.5rem', '4rem'], 'the /ui header is 3.5rem, then 4rem from 64rem');
+  assert.deepEqual(tokens, heights, 'and --header-h follows it at both widths');
 });
 
 test('a thrown notFound() under /ui keeps the /ui chrome', async () => {

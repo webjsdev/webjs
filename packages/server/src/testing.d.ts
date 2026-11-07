@@ -51,7 +51,7 @@ export declare function withSessionCookie(init: RequestInit | undefined, session
 export declare function submitForm(
   handle: Handle,
   path: string,
-  fields?: Record<string, string> | URLSearchParams | FormData,
+  fields?: Record<string, string | string[]> | URLSearchParams | FormData,
   opts?: {
     index?: number;
     match?: string | RegExp;

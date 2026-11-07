@@ -11,8 +11,10 @@
  *   2. The /ui stylesheet applies after that swap (the root layout is not
  *      re-rendered on a soft navigation, so the link app/ui/layout.ts emits is
  *      what brings it in).
- *   3. --header-h tracks the NEW header: the measuring script re-runs inside
- *      the swapped range and rebinds its observer.
+ *   3. The content's offset fits the NEW header: each header is sized by the
+ *      --header-h token, which follows the section (and the /ui header's
+ *      breakpoint), so nothing measures a header a swap may have replaced
+ *      (#1660).
  *   4. Back swaps the marketing chrome in again, still without a reload.
  *   5. A dark choice made on the marketing side holds on /ui, because both
  *      sections read the one `data-theme` attribute.
@@ -92,24 +94,27 @@ test('marketing to /ui and back swaps the chrome softly', { skip: !enabled }, as
       return !!el && getComputedStyle(el).fontFamily.includes('Geist');
     }, null, { timeout: 10_000 });
 
-    // --header-h follows the new header, not the detached one.
-    await page.waitForFunction(() => {
+    // The offset fits the header that is on screen now: the bar's height
+    // equals the body's top padding, at the /ui header's two sizes.
+    const headerFits = () => page.waitForFunction(() => {
       const bar = document.querySelector('.site-top');
-      const h = getComputedStyle(document.documentElement).getPropertyValue('--header-h').trim();
-      return !!bar && h === bar.offsetHeight + 'px';
+      const pad = parseFloat(getComputedStyle(document.body).paddingTop);
+      return !!bar && pad > 0 && Math.abs(bar.getBoundingClientRect().height - pad) < 0.5;
     });
+    await headerFits();
     await page.setViewportSize({ width: 500, height: 800 });
-    await page.waitForFunction(() => {
-      const bar = document.querySelector('.site-top');
-      const h = getComputedStyle(document.documentElement).getPropertyValue('--header-h').trim();
-      return !!bar && h === bar.offsetHeight + 'px';
-    });
+    await headerFits();
+    assert.equal(await page.evaluate(() => document.querySelector('.site-top').getBoundingClientRect().height), 56, 'the /ui header is 3.5rem below 64rem');
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await headerFits();
+    assert.equal(await page.evaluate(() => document.querySelector('.site-top').getBoundingClientRect().height), 64, 'and 4rem from 64rem');
 
     await page.goBack();
     await page.waitForURL(BASE + MARKETING);
     await page.waitForFunction(() => (document.querySelector('.site-top')?.textContent || '').includes('Blog'));
     assert.equal(await page.evaluate(() => window.__sameDocument), true, 'Back is still the same document');
     assert.doesNotMatch(await headerText(page), /WebJs UI/, 'the /ui header is gone again');
+    await headerFits();
     assert.deepEqual(errors, [], 'no page errors');
   } finally {
     await browser.close();

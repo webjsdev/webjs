@@ -138,3 +138,49 @@ test('ERROR SANITIZATION: prod hides the thrown error stack/extra fields the dir
   assert.ok(!/boom message/.test(text), 'the raw thrown message is not leaked');
   assert.ok(!/hunter2|secretField|DB_PASSWORD/.test(text), 'no secret field leaks over the wire');
 });
+
+// #1664: a FormData sent as the first RPC argument reaches the action (and its
+// validate) in the SAME readable shape a bound form submission gives, so an
+// action's input never depends on the boundary it was reached through.
+test('a FormData first RPC argument arrives as the readable form input (#1664)', async () => {
+  const appDir = makeApp({
+    'app/page.js':
+      `import { html } from ${HTML_URL};\n` +
+      `import { describeInput } from '../modules/f/describe.server.js';\n` +
+      `export default () => html\`<p>\${describeInput}</p>\`;\n`,
+    'modules/f/describe.server.js':
+      `'use server';\n` +
+      `export const validate = (raw) => ({ success: true, data: { title: raw.title, via: raw.get('title'), n: raw.getAll('n') } });\n` +
+      `export async function describeInput(input) { return input; }\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: false });
+  const fd = new FormData();
+  fd.append('title', 'Hello');
+  fd.append('n', '1');
+  fd.append('n', '2');
+  const out = await invokeActionForTest(app, join(appDir, 'modules/f/describe.server.js'), 'describeInput', [fd]);
+  assert.deepEqual(out, { title: 'Hello', via: 'Hello', n: ['1', '2'] });
+});
+
+// #1664 review: a caller that builds a FormData keeps every FormData behaviour,
+// and the hidden identity of an intercepted bound form never reaches the action.
+test('an RPC FormData stays a FormData and drops the bound-form identity field (#1664)', async () => {
+  const appDir = makeApp({
+    'app/page.js':
+      `import { html } from ${HTML_URL};\n` +
+      `import { inspect } from '../modules/f/inspect.server.js';\n` +
+      `export default () => html\`<p>\${inspect}</p>\`;\n`,
+    'modules/f/inspect.server.js':
+      `'use server';\n` +
+      `export async function inspect(fd) {\n` +
+      `  fd.append('added', 'yes');\n` +
+      `  return { isFd: fd instanceof FormData, keys: Object.keys(fd), added: fd.added, identity: fd.has('__webjs_action') };\n` +
+      `}\n`,
+  });
+  const app = await createRequestHandler({ appDir, dev: false });
+  const fd = new FormData();
+  fd.append('__webjs_action', 'abc123/whatever');
+  fd.append('title', 'Hi');
+  const out = await invokeActionForTest(app, join(appDir, 'modules/f/inspect.server.js'), 'inspect', [fd]);
+  assert.deepEqual(out, { isFd: true, keys: ['title', 'added'], added: 'yes', identity: false });
+});

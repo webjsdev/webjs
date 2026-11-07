@@ -1,4 +1,4 @@
-import { html, cspNonce } from '@webjsdev/core';
+import { html } from '@webjsdev/core';
 import type { LayoutProps } from '@webjsdev/core';
 import '#components/ui-mode-switcher.ts';
 import '#components/ui-mobile-nav.ts';
@@ -26,8 +26,10 @@ import { uiMarkdownHref } from '#lib/ui/llm-path.ts';
  *
  * Two deliberate departures from shadcn. The header is `position: fixed`
  * rather than sticky (#610: sticky flickers on iOS WebKit during a
- * client-router navigation), reserving its height through the same measured
- * --header-h the marketing header uses. And the identity is WebJs's (the
+ * client-router navigation), reserving its height through the same
+ * --header-h token the marketing header uses, which public/ui-input.css sets
+ * to this header's height (shadcn's --header-height) on a page that has it.
+ * Nothing measures the header (#1660). And the identity is WebJs's (the
  * WebJs mark, the name "WebJs UI"), with one credit line in the footer.
  *
  * The link back to webjs.dev carries `data-no-router`, so leaving /ui is a
@@ -57,7 +59,6 @@ export function generateMetadata(ctx: { url: string }) {
 }
 
 export default async function UiChromeLayout({ children, url }: LayoutProps) {
-  const nonce = cspNonce();
   const { pathname } = new URL(url);
   const stars = await githubStars();
 
@@ -105,20 +106,6 @@ export default async function UiChromeLayout({ children, url }: LayoutProps) {
       </div>
     </header>
     </div>
-    <script nonce=${nonce}>
-      (function(){
-        try {
-          var w = window;
-          if (w.__wjHeaderRO) { w.__wjHeaderRO.disconnect(); w.__wjHeaderRO = null; }
-          var bars = document.querySelectorAll('.site-top');
-          var bar = bars[bars.length - 1];
-          if (!bar) return;
-          var apply = function(){ document.documentElement.style.setProperty('--header-h', bar.offsetHeight + 'px'); };
-          apply();
-          if (w.ResizeObserver) { w.__wjHeaderRO = new ResizeObserver(apply); w.__wjHeaderRO.observe(bar); }
-        } catch (_) {}
-      })();
-    </script>
 
     <!-- A page carrying data-slot="designer" (the typeset builder) fills
          exactly the viewport with no footer, shadcn's app layout rule

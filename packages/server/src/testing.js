@@ -221,7 +221,7 @@ export async function loginAndGetCookies(handle, credentials, opts = {}) {
  *
  * @param {Handle} handle
  * @param {string} path the page to render AND, by default, to submit back to
- * @param {Record<string, string> | URLSearchParams | FormData} [fields]
+ * @param {Record<string, string | string[]> | URLSearchParams | FormData} [fields]
  * @param {{
  *   index?: number,
  *   match?: string | RegExp,
@@ -299,7 +299,12 @@ export async function submitForm(handle, path, fields = {}, opts = {}) {
   const entries = fields instanceof URLSearchParams || fields instanceof FormData
     ? fields.entries()
     : Object.entries(fields);
-  for (const [k, v] of entries) body.append(k, String(v));
+  // An array value posts once per element, the way a checkbox group submits,
+  // so a test can exercise the `name[]` convention (#1664).
+  for (const [k, v] of entries) {
+    if (Array.isArray(v)) for (const item of v) body.append(k, String(item));
+    else body.append(k, String(v));
+  }
 
   const init = {
     method: 'POST',

@@ -249,21 +249,22 @@ Verify a layout by USING it, not by glancing at the first paint. A layout bug on
 
 A `position: sticky` header (the common `sticky top-0` pattern) flickers its background for one frame on iOS WebKit (every iOS browser uses WebKit) during a client-router forward navigation. The router's scroll-to-top after the content swap drives a sticky recompute that WebKit mis-repaints. It is iOS-only (fine on desktop and Android, invisible in DevTools emulation), and neither compositor promotion (`translateZ(0)` / `will-change`) nor changing the swap paint timing fixes it. Preserving the header across nav is correct and standard, only the `sticky` positioning is the problem.
 
-The fix is `position: fixed`. A fixed header is always pinned and never does the scroll-relative recompute, so the repaint bug never fires. Because fixed leaves normal flow, reserve the header height on the content below with a single `--header-h` custom property (kept exact with a `ResizeObserver`, degrading fine with no JS):
+The fix is `position: fixed`. A fixed header is always pinned and never does the scroll-relative recompute, so the repaint bug never fires. Because fixed leaves normal flow, reserve the header height on the content below with a single `--header-h` custom property, and size the header BY that property:
 
 ```css
-:root  { --header-h: 56px; }              /* sane SSR first-paint default */
-header { position: fixed; inset-inline: 0; top: 0; }
+:root  { --header-h: 3.5rem; }
+header { position: fixed; inset-inline: 0; top: 0; height: var(--header-h); }
 body   { padding-top: var(--header-h); }
-```
-```js
-const hdr = document.querySelector('header');
-const apply = () => document.documentElement.style.setProperty('--header-h', hdr.offsetHeight + 'px');
-apply();
-new ResizeObserver(apply).observe(hdr);
+html   { scroll-padding-top: var(--header-h); }  /* #anchor jumps stop below the header */
 ```
 
-For a dashboard, an alternative is an app-shell scroll container (a non-scrolling `100dvh` flex column with `<main>` as the internal scroller), which needs no offset but changes the scroll model.
+The last line matters as soon as a page has in-page links: without it an `#anchor` jump, native or the client router's `scrollIntoView`, lands the target under the header. Next's app router reads the same `scroll-padding-top` when it scrolls a segment into view, and shadcn's site sets it from its header-height variable.
+
+With Tailwind, that is `class="fixed inset-x-0 top-0 h-[var(--header-h)]"` on the header. The scaffold's layout already carries the token and a `body:has(> header.fixed)` rule, so pinning its navbar is adding `fixed inset-x-0 top-0 z-20` and nothing else. Pinning from a breakpoint up works the same way: `md:fixed md:inset-x-0 md:top-0` pins it on wider screens only, because `public/input.css` carries a matching rule for each default breakpoint written with Tailwind's `@variant`, so it follows the app's own `--breakpoint-*` values. A breakpoint added under a new name needs its own line beside them.
+
+**Do not measure the header with JavaScript.** The tempting version, a `<head>` script that writes `offsetHeight` into `--header-h` from a `ResizeObserver`, breaks on a client-router swap that replaces the header (a layout refresh, a form action that re-renders the layouts): the observer fires for the detached old node, reads a height of 0, and the content slides under the navbar with no way back short of a reload. The head script never re-runs, so nothing re-measures. A token the header is sized by cannot drift, because there is nothing to keep in sync.
+
+A header whose height changes by breakpoint sets the token per breakpoint (`@media (min-width: 768px) { :root { --header-h: 4rem } }`). A header that genuinely wraps to an unknown height belongs in an app-shell scroll container instead: a non-scrolling `100dvh` flex column with `<main>` as the internal scroller, which needs no offset at all but changes the scroll model.
 
 ### A fixed header and a modal that locks scroll
 

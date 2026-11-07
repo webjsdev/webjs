@@ -12,16 +12,20 @@
 // mints a collision-free, traversal-safe key preserving a whitelisted
 // extension.
 //
-// It takes the FormData, which is what a form-bound action always receives, and
-// pulls the File out of it. The framework emits the multipart enctype the
+// It receives the submitted fields as one object, so the upload is
+// `input.file`, a real File. The framework emits the multipart enctype the
 // upload needs, so a bound form carries a file with no extra attribute.
 import { getFileStore, generateKey } from '@webjsdev/server';
 // Importing the config module runs setFileStore(diskStore(...)) once at load,
 // so uploads land in the configured store. See ../store.server.ts.
 import '../store.server.ts';
 
-export async function storeUpload(formData: FormData) {
-  const file = formData.get('file');
+export interface UploadInput {
+  file?: File | string;
+}
+
+export async function storeUpload(input: UploadInput) {
+  const file = input.file;
   if (!(file instanceof File) || file.size === 0) {
     return { success: false as const, error: 'Choose a file to upload.' };
   }

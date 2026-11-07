@@ -1,4 +1,4 @@
-import { html, cspNonce } from '@webjsdev/core';
+import { html } from '@webjsdev/core';
 import type { LayoutProps } from '@webjsdev/core';
 import '#components/theme-toggle.ts';
 import '#components/site-nav-menu.ts';
@@ -23,18 +23,12 @@ import { brandLockup } from '#lib/design/brand.ts';
  * head merge is add-only and a body stylesheet is not render-blocking), so
  * the known cross-section links take a full load and never paint unstyled.
  *
- * The inline script after the header keeps `--header-h` equal to the fixed
- * header's real height (#610: fixed, not sticky, so the content reserves the
- * height through that variable, with a :root default for first paint and
- * no-JS). It lives HERE, next to the header it measures, rather than in the
- * root layout's head: a navigation into the other section swaps this header
- * out, and a ResizeObserver bound once at boot would keep watching the
- * detached node. The client router re-runs a script inside the swapped range,
- * so it rebinds to the new header every time, disconnecting the old observer
- * first. The `/ui` chrome layout carries the same script, and a test holds
- * the two copies identical. It stays inline in the layout because a page or
- * layout template is SSR output, while the same text in a `lib/` module would
- * read as client work and ship the layout to the browser.
+ * The header is `position: fixed` (#610: sticky flickers on iOS WebKit during
+ * a client-router navigation), so the content reserves its height through
+ * `--header-h`, which the root layout sets on `:root`. The header is SIZED by
+ * that token (`.site-top > header { height: var(--header-h) }`), so nothing
+ * measures it and a navigation that swaps this header cannot leave a stale
+ * offset behind (#1660).
  */
 
 const NAV = [
@@ -57,7 +51,6 @@ function navAnchor(n: NavItem, cls: string) {
 }
 
 export default function SiteLayout({ children }: LayoutProps) {
-  const nonce = cspNonce();
   return html`
     <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-accent focus:text-accent-fg focus:shadow-[var(--shadow)]">Skip to content</a>
 
@@ -65,7 +58,7 @@ export default function SiteLayout({ children }: LayoutProps) {
 
     <div class="site-top fixed inset-x-0 top-0 z-20">
     <header class="backdrop-blur-md bg-[color-mix(in_oklch,var(--color-bg)_50%,transparent)] border-b border-border">
-      <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+      <div class="max-w-7xl mx-auto px-6 h-full flex items-center justify-between gap-4">
         <a class="inline-flex items-center no-underline text-fg shrink-0 transition-opacity duration-150 hover:opacity-80" href="/" aria-label="WebJs home">
           ${brandLockup('hdr', { height: 26 })}
         </a>
@@ -84,20 +77,6 @@ export default function SiteLayout({ children }: LayoutProps) {
       </div>
     </header>
     </div>
-    <script nonce=${nonce}>
-      (function(){
-        try {
-          var w = window;
-          if (w.__wjHeaderRO) { w.__wjHeaderRO.disconnect(); w.__wjHeaderRO = null; }
-          var bars = document.querySelectorAll('.site-top');
-          var bar = bars[bars.length - 1];
-          if (!bar) return;
-          var apply = function(){ document.documentElement.style.setProperty('--header-h', bar.offsetHeight + 'px'); };
-          apply();
-          if (w.ResizeObserver) { w.__wjHeaderRO = new ResizeObserver(apply); w.__wjHeaderRO.observe(bar); }
-        } catch (_) {}
-      })();
-    </script>
 
     <div class="relative z-1">
       ${children}

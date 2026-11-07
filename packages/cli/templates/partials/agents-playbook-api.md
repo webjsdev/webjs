@@ -52,7 +52,10 @@ same list; `.agents/rules/workflow.md` has what each gate checks. While
 iterating, `npm run ci -- --only Tests` runs one layer.
 
 Then boot `npm run dev` and probe each endpoint for the expected status and JSON
-shape.
+shape. After each edit, run `npx webjs status /api/your-route` instead of sleeping: it
+waits until the dev server has rebuilt, requests each path, and prints every
+error since the last rebuild with its file and line, exiting non-zero on any
+problem.
 
 ### Commands
 

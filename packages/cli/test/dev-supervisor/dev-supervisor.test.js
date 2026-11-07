@@ -28,7 +28,7 @@ import { planDevSupervisor, sourceLocationsOn } from '../../lib/dev-supervisor.j
 
 const ARGV = ['/path/to/webjs.js', 'dev', '--port', '8080'];
 const WATCH = {
-  watchDirs: ['app', 'components', 'modules', 'lib', 'actions'],
+  watchDirs: ['app', 'components', 'modules', 'lib', 'actions', 'db'],
   watchFiles: [
     'middleware.ts', 'middleware.js', 'middleware.mts', 'middleware.mjs',
     // The boot hooks run once per process, so an edit restarts it (#1575).
