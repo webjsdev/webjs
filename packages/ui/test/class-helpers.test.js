@@ -467,3 +467,15 @@ test('spinner: data-icon is passed through, and the table head aligns to the log
   const { tableHeadClass } = await baseHelpers('table');
   assert.ok(tokens(tableHeadClass()).includes('text-start'), 'text-start, not the styles\' text-left, so RTL works');
 });
+
+test('new-york: a card defines --card-spacing, and an input group stacks around a block addon', { skip }, async () => {
+  const { cardClass } = await import(join(COMPONENTS_DIR, 'card.ts'));
+  const card = tokens(cardClass());
+  assert.ok(card.includes('[--card-spacing:--spacing(6)]'), 'the padding a block reads for its own content');
+  assert.ok(card.includes('data-[size=sm]:[--card-spacing:--spacing(4)]'));
+  const { inputGroupClass } = await import(join(COMPONENTS_DIR, 'input-group.ts'));
+  const group = tokens(inputGroupClass());
+  for (const c of ['has-[>[data-align=block-end]]:flex-col', 'has-[>[data-align=block-end]]:h-auto', 'has-[>[data-align=block-start]]:flex-col']) {
+    assert.ok(group.includes(c), c);
+  }
+});

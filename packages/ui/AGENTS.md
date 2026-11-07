@@ -621,7 +621,10 @@ the CLI gains no dependency:
   (or `"default"`), so an app's installed files keep exactly the classes they
   had before the conversion.
 - `style-{vega,nova,maia,lyra,mira,luma,sera,rhea}.css` are shadcn's eight
-  styles, copied unchanged by `scripts/port-styles.mjs` plus one appended BASE
+  styles, copied by `scripts/port-styles.mjs` with every `@apply` class mapped to
+  its logical form through shadcn's own RTL table (`scripts/logical-classes.mjs`:
+  `rounded-l` to `rounded-s`, `border-r` to `border-e`), which renders the same
+  left to right and flips under `dir="rtl"`, plus one appended BASE
   SUPPLEMENT block. The kit's base form keeps inline what shadcn's base form
   keeps inline (the separator's `data-horizontal:h-px`, the avatar badge's
   sizes, the menus' `origin-(...)`), because a utility only the kit's

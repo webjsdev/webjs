@@ -5,8 +5,16 @@
  *   node packages/ui/scripts/port-styles.mjs <shadcn>/apps/v4/registry/styles
  *
  * Copies `style-<name>.css` for each of shadcn's eight styles into
- * packages/registry/styles/, unchanged, then appends one block: the BASE
- * SUPPLEMENT from packages/registry/styles/supplement.json.
+ * packages/registry/styles/, then appends one block: the BASE SUPPLEMENT from
+ * packages/registry/styles/supplement.json.
+ *
+ * One change is made on the way: every `@apply` class is mapped from its
+ * physical form to its logical one (`rounded-l-lg` to `rounded-s-lg`,
+ * `border-r` to `border-e`, `pl-2` to `ps-2`), through the same table
+ * shadcn's own install-time RTL transform uses (scripts/logical-classes.mjs).
+ * The kit is logical throughout, so a `dir="rtl"` page flips with no build
+ * step, and a left-to-right page renders the mapped class exactly as the
+ * physical one.
  *
  * The supplement exists because the kit's base form is not quite shadcn's.
  * Each kit component keeps inline only the classes shadcn's base form ALSO
@@ -20,6 +28,7 @@
  * shadcn/ui is MIT licensed; see packages/ui/THIRD_PARTY_NOTICES.md.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
+import { logicalClassList } from './logical-classes.mjs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -46,6 +55,7 @@ for (const name of PORTED_STYLES) {
   block += '}\n';
   const header = `/* Ported from shadcn/ui (apps/v4/registry/styles/style-${name}.css, MIT).
    Regenerate with packages/ui/scripts/port-styles.mjs. */\n`;
-  writeFileSync(join(OUT, `style-${name}.css`), header + original + block);
+  const logical = (css) => css.replace(/(@apply\s+)([^;]+)(;)/g, (m, a, classes, z) => a + logicalClassList(classes) + z);
+  writeFileSync(join(OUT, `style-${name}.css`), header + logical(original + block));
 }
 console.log(`ported ${PORTED_STYLES.length} styles with ${Object.keys(supplement).length} supplement rule(s)`);
