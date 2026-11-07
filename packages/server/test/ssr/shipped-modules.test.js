@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { shippedBootModules, hintedBootModules, assembleBootModules } from '../../src/ssr/shipped-modules.js';
+import { shippedBootModules, hintedBootModules, assembleBootModules, earlyHintLinks } from '../../src/ssr/shipped-modules.js';
 import { bumpBuildEpoch } from '../../src/build-epoch.js';
 
 const appDir = '/srv/app';
@@ -77,4 +77,22 @@ test('assembleBootModules is the un-memoized loop the boundary render shares (#1
   // The memoized form is the same loop over the route's own file list.
   const r = route();
   assert.deepEqual(shippedBootModules(r, deps), assembleBootModules([r.file, ...r.layouts], deps));
+});
+
+// A 103 hint that starts module loading (a modulepreload) runs before the
+// page's import map is parsed, and Firefox then refuses the map, so no bare
+// import resolves and no script runs (the Firefox Early Hints bug).
+const startsModuleLoading = (link) => /;\s*rel=["']?modulepreload/i.test(link);
+
+test('the 103 Early Hints are CORS script preloads, never modulepreload', () => {
+  const links = earlyHintLinks(['/components/hot-button.ts?v=abc', '/app/page.ts']);
+  assert.deepEqual(links, [
+    '</components/hot-button.ts?v=abc>; rel=preload; as=script; crossorigin=anonymous',
+    '</app/page.ts>; rel=preload; as=script; crossorigin=anonymous',
+  ]);
+  assert.equal(links.filter(startsModuleLoading).length, 0);
+  // The counterfactual: the form the listener used to send is what the
+  // predicate catches.
+  assert.ok(startsModuleLoading('</components/hot-button.ts>; rel=modulepreload'));
+  assert.deepEqual(earlyHintLinks([]), [], 'nothing to hint, nothing sent');
 });

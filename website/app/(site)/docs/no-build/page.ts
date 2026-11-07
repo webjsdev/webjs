@@ -85,16 +85,17 @@ export default function NoBuild() {
     <p>The graph walker also stops AT server-file boundaries. Files imported only by a <code>.server.{js,ts}</code> file stay out of the gate, since the browser only ever sees the stub for the server file, never its transitive imports. A <code>lib/secrets.ts</code> consumed only by a server action is unreachable to direct URL fetches; a <code>lib/format.ts</code> consumed by both a page and a server action stays reachable through the page edge. Same posture as Next.js, where server-component code lands in separate chunks the client bundle never references.</p>
 
     <h2>103 Early Hints</h2>
-    <p>In production, when a GET or HEAD request matches a page route, WebJs sends a <code>103 Early Hints</code> response <em>before</em> SSR begins. The hints carry <code>Link: &lt;url&gt;; rel=modulepreload</code> headers for the page's modules:</p>
+    <p>In production, when a GET or HEAD request matches a page route, WebJs sends a <code>103 Early Hints</code> response <em>before</em> SSR begins. The hints carry <code>Link: &lt;url&gt;; rel=preload; as=script; crossorigin=anonymous</code> headers for the page's modules:</p>
     <code-block>HTTP/1.1 103 Early Hints
-Link: &lt;/app/page.ts&gt;; rel=modulepreload
-Link: &lt;/components/post-card.ts&gt;; rel=modulepreload
+Link: &lt;/app/page.ts&gt;; rel=preload; as=script; crossorigin=anonymous
+Link: &lt;/components/post-card.ts&gt;; rel=preload; as=script; crossorigin=anonymous
 ...
 
 HTTP/1.1 200 OK
 Content-Type: text/html
 ...</code-block>
     <p>The browser starts fetching JS modules while the server is still rendering HTML. By the time the document parser reaches the import statements, those files are already in cache. Most major edges (Cloudflare, fly-proxy, Fastly) forward 103 responses to the client. Early Hints are disabled in dev because file churn could send stale URLs before a rebuild.</p>
+    <p>The hints are plain preloads on purpose, not <code>rel=modulepreload</code>. A 103 arrives before the document, so a module preload would start module loading before the page's import map is parsed, and Firefox then refuses the import map, which leaves every bare import unresolved. A plain preload only fetches the bytes, so the import map still applies, and because it is a CORS request with same-origin credentials, the request a module script makes, the page's own <code>modulepreload</code> and its imports reuse it.</p>
 
     <h2>Bare specifiers (npm packages)</h2>
     <p>The browser can't resolve <code>import dayjs from 'dayjs'</code> on its own. WebJs follows the Rails 7 + <code>importmap-rails</code> posture: bare specifiers resolve through an importmap to <strong>jspm.io</strong> CDN URLs, and the browser fetches the bundle directly from jspm.io. The WebJs server doesn't bundle, cache, or proxy vendor packages.</p>
