@@ -14,8 +14,8 @@ export default function EmptyAvatarGroup() {
         <div data-slot="empty-icon" data-variant="default" class=${emptyMediaClass()}>
           <div class="flex -space-x-2 *:data-[slot=avatar]:size-12 *:data-[slot=avatar]:ring-2 *:data-[slot=avatar]:ring-background *:data-[slot=avatar]:grayscale">
             <span data-slot="avatar" data-size="default" class=${avatarClass()}>
-              <img data-slot="avatar-image" src="https://github.com/shadcn.png" alt="@shadcn" class=${avatarImageClass()}>
-              <span data-slot="avatar-fallback" class=${avatarFallbackClass()}>CN</span>
+              <img data-slot="avatar-image" src="/public/avatars/vivek.jpg" alt="@vivek" class=${avatarImageClass()}>
+              <span data-slot="avatar-fallback" class=${avatarFallbackClass()}>VK</span>
             </span>
             <span data-slot="avatar" data-size="default" class=${avatarClass()}>
               <img data-slot="avatar-image" src="https://github.com/maxleiter.png" alt="@maxleiter" class=${avatarImageClass()}>

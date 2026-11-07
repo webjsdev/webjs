@@ -9,8 +9,8 @@ export default function AvatarDropdown() {
       <ui-dropdown-menu-trigger>
         <button type="button" data-slot="button" data-variant="ghost" data-size="icon" class=${cn(buttonClass({ variant: 'ghost', size: 'icon' }), 'rounded-full')}>
           <span data-slot="avatar" data-size="default" class=${avatarClass()}>
-            <img data-slot="avatar-image" src="https://github.com/shadcn.png" alt="shadcn" class=${avatarImageClass()}>
-            <span data-slot="avatar-fallback" class=${avatarFallbackClass()}>CN</span>
+            <img data-slot="avatar-image" src="/public/avatars/vivek.jpg" alt="vivek" class=${avatarImageClass()}>
+            <span data-slot="avatar-fallback" class=${avatarFallbackClass()}>VK</span>
           </span>
         </button>
       </ui-dropdown-menu-trigger>

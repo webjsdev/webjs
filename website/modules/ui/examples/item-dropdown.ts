@@ -10,7 +10,7 @@ import { ChevronDownIcon } from '#lib/ui/lucide.ts';
 const people = [
   {
     username: 'shadcn',
-    avatar: 'https://github.com/shadcn.png',
+    avatar: '/public/avatars/vivek.jpg',
     email: 'shadcn@vercel.com',
   },
   {

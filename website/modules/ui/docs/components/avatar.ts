@@ -27,8 +27,8 @@ export default async function body(toc: TocEntry[]) {
   avatarFallbackClass,
 } from '#components/ui/avatar.ts';`, { lineNumbers: true })}
     ${codeFigure(`<span data-slot="avatar" data-size="default" class=\${avatarClass()}>
-  <img data-slot="avatar-image" src="https://github.com/shadcn.png" alt="@shadcn" class=\${avatarImageClass()}>
-  <span data-slot="avatar-fallback" class=\${avatarFallbackClass()}>CN</span>
+  <img data-slot="avatar-image" src="/public/avatars/vivek.jpg" alt="@vivek" class=\${avatarImageClass()}>
+  <span data-slot="avatar-fallback" class=\${avatarFallbackClass()}>VK</span>
 </span>`, { lineNumbers: true })}
 
     ${heading(toc, 2, 'Composition')}
@@ -58,8 +58,8 @@ export default async function body(toc: TocEntry[]) {
     ${await componentPreview('avatar-badge')}
     <p>Merge your own classes with the helper through <code>cn()</code> to add custom styles to the badge such as custom colors, sizes, etc.</p>
     ${codeFigure(`<span data-slot="avatar" data-size="default" class=\${avatarClass()}>
-  <img data-slot="avatar-image" src="https://github.com/shadcn.png" alt="@shadcn" class=\${avatarImageClass()}>
-  <span data-slot="avatar-fallback" class=\${avatarFallbackClass()}>CN</span>
+  <img data-slot="avatar-image" src="/public/avatars/vivek.jpg" alt="@vivek" class=\${avatarImageClass()}>
+  <span data-slot="avatar-fallback" class=\${avatarFallbackClass()}>VK</span>
   <span data-slot="avatar-badge" class=\${cn(avatarBadgeClass(), 'bg-green-600 dark:bg-green-800')}></span>
 </span>`, { lineNumbers: true })}
 

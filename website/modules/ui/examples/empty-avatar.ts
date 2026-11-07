@@ -13,8 +13,8 @@ export default function EmptyAvatar() {
       <div data-slot="empty-header" class=${emptyHeaderClass()}>
         <div data-slot="empty-icon" data-variant="default" class=${emptyMediaClass({ variant: 'default' })}>
           <span data-slot="avatar" data-size="default" class=${cn(avatarClass(), 'size-12')}>
-            <img data-slot="avatar-image" src="https://github.com/shadcn.png" alt="" class=${cn(avatarImageClass(), 'grayscale')}>
-            <span data-slot="avatar-fallback" class=${avatarFallbackClass()}>LR</span>
+            <img data-slot="avatar-image" src="/public/avatars/vivek.jpg" alt="" class=${cn(avatarImageClass(), 'grayscale')}>
+            <span data-slot="avatar-fallback" class=${avatarFallbackClass()}>VK</span>
           </span>
         </div>
         <div data-slot="empty-title" class=${emptyTitleClass()}>User Offline</div>
