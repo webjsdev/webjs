@@ -3,6 +3,9 @@ import type { Metadata, PageProps } from '@webjsdev/core';
 import { parseCreateParams } from '#modules/ui/create/params.ts';
 import { customizer } from '#modules/ui/create/customizer.ts';
 import { previewFrame } from '#modules/ui/create/preview-frame.ts';
+import { projectForm } from '#modules/ui/create/project-form.ts';
+import { welcomeDialog } from '#modules/ui/create/welcome-dialog.ts';
+import { explorerItems } from '#modules/ui/queries/create-items.server.ts';
 // The behaviour around the server's markup. A page never hydrates, so it
 // imports the element to register it.
 import '#components/create-customizer.ts';
@@ -33,11 +36,14 @@ export const metadata: Metadata = {
 
 export default async function CreatePage({ searchParams }: PageProps) {
   const params = parseCreateParams(await searchParams);
+  const groups = await explorerItems();
   return html`
     <main id="main" tabindex="-1" class="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden section-soft [--customizer-width:--spacing(48)] [--gap:--spacing(4)] md:[--gap:--spacing(6)] 2xl:[--customizer-width:--spacing(56)]">
       <create-customizer data-slot="designer" class="style-nova flex min-h-0 flex-1 flex-col gap-(--gap) p-(--gap) pt-[calc(var(--gap)*0.25)] md:flex-row-reverse">
-        ${previewFrame(params)}
+        ${previewFrame(params, groups)}
         ${customizer(params)}
+        ${projectForm(params)}
+        ${welcomeDialog()}
       </create-customizer>
     </main>
   `;

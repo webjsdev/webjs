@@ -1,5 +1,6 @@
 import { buildThemeVars, getTheme, isBaseColor } from '#modules/ui/design-system/themes.js';
 import { getFont } from '#modules/ui/design-system/fonts.js';
+import { presetFontVars } from '#modules/ui/design-system/preset.js';
 import type { CreateConfig } from './params.ts';
 
 /**
@@ -82,4 +83,35 @@ export function fontFamily(name: string): string {
 /** The extra stylesheet a style needs: public/ui.css carries nova and new-york. */
 export function styleSheetHref(style: string): string | null {
   return style === 'nova' || style === 'new-york' ? null : `/public/ui-styles/${style}.css`;
+}
+
+/**
+ * The menu surfaces the menu color applies to: shadcn's `cn-menu-target`
+ * parts (dropdown, context and menubar menus and their submenus, select,
+ * combobox), matched by the data-slot the kit renders them with. A literal,
+ * since this module does no work at import time.
+ */
+export const MENU_TARGETS =
+  '.cn-menu-target, [data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="context-menu-content"], [data-slot="context-menu-sub-content"], [data-slot="menubar-content"], [data-slot="menubar-sub-content"], [data-slot="select-content"], [data-slot="combobox-content"]';
+
+/**
+ * An inverted menu is a dark menu on a light page: shadcn adds `dark` to each
+ * menu target. Here every token is one light-dark() value, so flipping the
+ * menu's color scheme flips its tokens, keyed on the wrapper's
+ * `data-menu-color` with no script.
+ */
+export function menuColorCss(): string {
+  return `[data-slot="design-system"][data-menu-color^="inverted"] :is(${MENU_TARGETS}) { color-scheme: dark; }`;
+}
+
+/**
+ * The tokens a config installs, as the CSS `webjsui init --preset` writes into
+ * the theme block: the font tokens in `@theme inline`, then `:root` and
+ * `.dark`. For the Get Code dialog's Theme tab, to paste by hand.
+ */
+export function themeTokensCss(config: CreateConfig): string {
+  const { light, dark } = buildThemeVars(config);
+  const block = (selector: string, vars: Record<string, string>) =>
+    `${selector} {\n${Object.entries(vars).map(([k, v]) => `  --${k}: ${v};`).join('\n')}\n}`;
+  return [block('@theme inline', presetFontVars(config)), block(':root', light), block('.dark', dark)].join('\n\n');
 }

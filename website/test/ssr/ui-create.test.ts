@@ -9,12 +9,15 @@
  */
 import test, { before } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequestHandler } from '@webjsdev/server';
-import { encodePreset } from '../../../packages/ui/packages/registry/themes/preset.js';
+import { encodePreset, isPresetCode } from '../../../packages/ui/packages/registry/themes/preset.js';
 import { buildThemeVars } from '../../../packages/ui/packages/registry/themes/themes.js';
-import { FIELDS, normalizeConfig } from '#modules/ui/create/params.ts';
+import { FIELDS, SHUFFLE_PRESETS, normalizeConfig, shuffleConfig } from '#modules/ui/create/params.ts';
+import { MENU_TARGETS } from '#modules/ui/create/design-system.ts';
+import { newProjectCommand } from '#modules/ui/create/project.ts';
 
 const WEBSITE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -91,4 +94,78 @@ test('the /ui header lists Create and carries shadcn\'s New button', async () =>
   const html = await page('/ui');
   assert.match(html, /<a class="[^"]*" href="\/ui\/create"[^>]*>Create<\/a>/, 'Create in the main nav');
   assert.match(html, /<a href="\/ui\/create" data-new-project[^>]*>[\s\S]*?New<\/a>/, 'the New button');
+});
+
+// ---------------------------------------------------------------------------
+// The rest of shadcn's configurator: menu color, the main menu and locks, the
+// dialogs, the item explorer.
+// ---------------------------------------------------------------------------
+
+test('the menu color rides the frame wrapper: inverted by CSS, translucent by the menu script', async () => {
+  const config = normalizeConfig({ menuColor: 'inverted-translucent', menuAccent: 'bold' });
+  assert.equal(config.menuAccent, 'subtle', 'a translucent menu takes the subtle accent, as shadcn sets it');
+  const html = await page(`/ui/preview/preview?preset=${encodePreset(config)}`);
+  assert.match(html, /<div data-slot="design-system"[^>]*data-menu-color="inverted-translucent"/);
+  assert.match(html, /\[data-slot="design-system"\]\[data-menu-color\^="inverted"\] :is\([^)]*\[data-slot="dropdown-menu-content"\][^)]*\) \{ color-scheme: dark; \}/, 'the inverted rule');
+  assert.match(html, /<script src="\/public\/ui-menu-color\.js[^"]*" defer><\/script>/, 'the translucent script');
+});
+
+test('the menu script and the CSS name the same menu surfaces', () => {
+  const script = readFileSync(resolve(WEBSITE_ROOT, 'public/ui-menu-color.js'), 'utf8');
+  assert.ok(script.includes(`var TARGETS = '${MENU_TARGETS}';`));
+});
+
+test('the customizer carries shadcn\'s main menu, a lock per picker, and Get Code', async () => {
+  const html = await page('/ui/create');
+  assert.match(html, /<div popover id="create-menu" role="menu"/);
+  for (const action of ['navigate', 'theme', 'undo', 'redo']) {
+    assert.match(html, new RegExp(`<button type="button" role="menuitem" disabled data-action="${action}"`), `${action} waits for the element`);
+  }
+  assert.match(html, /<a role="menuitem" href="\/ui\/create\?preset=[^"]+" data-action="shuffle"/, 'Shuffle is a link with JS off');
+  assert.match(html, /<a role="menuitem" href="\/ui\/create" data-action="reset"/, 'Reset is a link with JS off');
+  for (const field of FIELDS) assert.match(html, new RegExp(`data-lock="${field}"`), `a lock for ${field}`);
+  assert.match(html, /<button type="button" commandfor="create-project" command="show-modal" data-action="get-code"/);
+});
+
+test('Shuffle draws from shadcn\'s curated presets, keeping locked fields', () => {
+  const config = normalizeConfig({ style: 'lyra', baseColor: 'stone', theme: 'rose', font: 'lora' });
+  for (let i = 0; i < 20; i++) {
+    let n = i;
+    const next = shuffleConfig(config, ['style', 'font'], () => ((n = (n * 7 + 3) % 25) / 25));
+    assert.equal(next.style, 'lyra', 'a locked style holds');
+    assert.equal(next.font, 'lora', 'a locked font holds');
+    assert.notEqual(encodePreset(next), encodePreset(config));
+  }
+  for (const code of SHUFFLE_PRESETS) assert.ok(isPresetCode(code), `${code} is a preset code`);
+});
+
+test('the Get Code dialog offers the real WebJs commands, one per package manager', async () => {
+  const code = encodePreset(normalizeConfig({ theme: 'blue' }));
+  const html = await page(`/ui/create?preset=${code}`);
+  assert.match(html, /<dialog id="create-project"/);
+  for (const tab of ['new', 'existing', 'theme']) assert.match(html, new RegExp(`data-tab="${tab}"`));
+  assert.ok(html.includes(`npm create webjs@latest my-app &amp;&amp; cd my-app &amp;&amp; npx @webjsdev/ui init --preset ${code}`), 'npm, new project');
+  assert.ok(html.includes(`bun create webjs my-app --runtime node &amp;&amp; cd my-app &amp;&amp; bunx @webjsdev/ui init --preset ${code}`), 'bun, new project');
+  assert.ok(html.includes(`pnpm dlx @webjsdev/ui init --preset ${code}`), 'pnpm, existing project');
+  assert.match(html, /data-theme-css>@theme inline \{/, 'the theme tokens');
+  // The scaffold's own flags, and only those.
+  assert.equal(newProjectCommand({ pm: 'npm', runtime: 'bun', db: 'postgres', name: 'shop' }, code), `npm create webjs@latest shop -- --runtime bun --db postgres && cd shop && npx @webjsdev/ui init --preset ${code}`);
+  assert.equal(newProjectCommand({ pm: 'bun', runtime: 'node', db: 'sqlite', name: 'shop' }, code), `bun create webjs shop --runtime node && cd shop && bunx @webjsdev/ui init --preset ${code}`);
+});
+
+test('the welcome dialog is in the markup, closed', async () => {
+  const html = await page('/ui/create');
+  assert.match(html, /<dialog id="create-welcome"[^>]*>/);
+  assert.doesNotMatch(html, /<dialog id="create-welcome"[^>]*\sopen[\s>=]/);
+  assert.match(html, /Build your own WebJs UI/);
+});
+
+test('the item explorer lists component demos, and the frame renders one', async () => {
+  const html = await page('/ui/create');
+  assert.match(html, /<div popover id="create-explorer" data-explorer/);
+  assert.match(html, /href="\/ui\/create\?preset=[^"]+&amp;item=button-demo"\s+data-item="button-demo"/, 'button-demo is listed');
+  const frame = await page('/ui/preview/button-demo');
+  assert.match(frame, /<div data-slot="design-system" data-item="button-demo"/);
+  assert.match(frame, /data-slot="button"/, 'the demo renders');
+  assert.equal((await handle('/ui/preview/no-such-demo')).status, 404);
 });

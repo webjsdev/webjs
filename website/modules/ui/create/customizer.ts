@@ -24,6 +24,7 @@ import {
   type Option,
 } from './params.ts';
 import { fontFamily, themeSwatch } from './design-system.ts';
+import { Menu09Icon, SquareLock01Icon, SquareUnlock01Icon } from '#modules/ui/typeset/icons.ts';
 
 /**
  * The /ui/create customizer, shadcn/ui's Customizer
@@ -59,12 +60,53 @@ const APPLY =
 
 const SWATCH = 'pointer-events-none size-4 shrink-0 rounded-full bg-(--color) select-none';
 
+const MENU_ITEM =
+  'relative flex w-full cursor-default items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm font-medium no-underline text-neutral-100 outline-hidden select-none hover:bg-neutral-600 focus-visible:bg-neutral-600 disabled:pointer-events-none disabled:opacity-50 dark:hover:bg-neutral-700/80 dark:focus-visible:bg-neutral-700/80';
+const SHORTCUT = 'ml-auto text-xs tracking-widest text-neutral-400';
+
+/**
+ * shadcn's LockButton: a lock that keeps its field through a shuffle. Locks
+ * are page state that only Shuffle reads, and Shuffle with JavaScript off is
+ * a link, so the button shows once the element is defined.
+ */
+function lockButton(field: CreateField) {
+  return html`<button type="button" data-lock=${field} title="Lock" aria-label=${`Lock ${field}`} aria-pressed="false" class="group/lock absolute top-1/2 right-8 flex size-4 -translate-y-1/2 cursor-pointer items-center justify-center rounded opacity-0 ring-foreground/60 transition-opacity outline-none group-focus-within/picker:opacity-100 group-hover/picker:opacity-100 focus:opacity-100 focus-visible:ring-1 aria-pressed:opacity-100 max-md:hidden pointer-coarse:hidden [create-customizer:not(:defined)_&]:hidden">
+    <span class="contents group-aria-pressed/lock:hidden">${SquareUnlock01Icon('size-5 text-foreground', 2)}</span>
+    <span class="hidden group-aria-pressed/lock:contents">${SquareLock01Icon('size-5 text-foreground', 2)}</span>
+  </button>`;
+}
+
+/**
+ * shadcn's MainMenu: Navigate (the item explorer), Shuffle, Light/Dark, Undo,
+ * Redo, Reset. Shuffle and Reset are links, so they work with JavaScript off;
+ * the rest need the element and are disabled until it enables them.
+ */
+function mainMenu(params: CreateParams) {
+  const button = (label: string, action: string, shortcut: string) => html`<button type="button" role="menuitem" disabled data-action=${action} class=${MENU_ITEM}>${label} <span class=${SHORTCUT} data-shortcut=${action}>${shortcut}</span></button>`;
+  const link = (label: string, action: string, shortcut: string, href: string) => html`<a role="menuitem" href=${href} data-action=${action} data-prefetch="false" class=${MENU_ITEM}>${label} <span class=${SHORTCUT}>${shortcut}</span></a>`;
+  return html`
+    <button type="button" popovertarget="create-menu" data-slot="dropdown-menu-trigger" class=${cn(TRIGGER, 'flex items-center justify-between gap-2 rounded-lg px-1.75 ring-1 ring-foreground/10 focus-visible:ring-1')}>
+      <span class="font-medium">Menu</span>
+      ${Menu09Icon('size-5', 2)}
+    </button>
+    <div popover id="create-menu" role="menu" aria-label="Menu" data-picker-content="menu" data-align-offset="-8" data-slot="dropdown-menu-content" class=${CONTENT}>
+      ${button('Navigate...', 'navigate', 'Ctrl+P')}
+      ${link('Shuffle', 'shuffle', 'R', createHref({ config: shuffleConfig(params.config), item: params.item }))}
+      ${button('Light/Dark', 'theme', 'D')}
+      <div role="separator" class=${SEPARATOR}></div>
+      ${button('Undo', 'undo', 'Ctrl+Z')}
+      ${button('Redo', 'redo', 'Ctrl+Shift+Z')}
+      <div role="separator" class=${SEPARATOR}></div>
+      ${link('Reset', 'reset', '\u21E7R', '/ui/create')}
+    </div>`;
+}
+
 // A function rather than a constant: a module-scope call is import-time
 // work, which would ship the page that imports this module.
 function footerButton() {
   return cn(
     buttonClass({ variant: 'outline' }),
-    'min-w-0 flex-1 touch-manipulation bg-transparent! px-2! py-0! text-sm! no-underline transition-none select-none hover:bg-muted! md:w-full md:flex-none pointer-coarse:h-10!',
+    'min-w-0 flex-1 touch-manipulation bg-transparent! px-2! py-0! text-sm! no-underline transition-none select-none hover:bg-muted! pointer-coarse:h-10!',
   );
 }
 
@@ -93,6 +135,7 @@ function picker(field: CreateField, label: string, current: string, trailing: un
       <div role="radiogroup" aria-label=${label}>${items}</div>
       <button type="submit" class=${APPLY}>Apply</button>
     </div>
+    ${lockButton(field)}
   </div>`;
 }
 
@@ -153,8 +196,8 @@ export function customizer(params: CreateParams) {
   return html`<form method="get" action="/ui/create" data-slot="card" data-size="sm" class=${cn(cardClass({ size: 'sm' }), 'isolate z-10 max-h-full min-h-0 w-full self-start rounded-2xl bg-card/90 [color-scheme:dark] backdrop-blur-xl md:w-(--customizer-width)')}>
       <input type="hidden" name="item" value=${params.item}>
       <div data-slot="card-header" class=${cn(cardHeaderClass(), 'hidden items-center justify-between gap-2 border-b md:flex')}>
-        <h1 class="m-0 text-sm font-medium">Customize</h1>
-        <a href="/ui/create" data-action="reset" data-prefetch="false" class="text-xs text-muted-foreground no-underline hover:text-foreground">Reset</a>
+        <h1 class="sr-only">Customize your design system</h1>
+        ${mainMenu(params)}
       </div>
       <div data-slot="card-content" class=${cn(cardContentClass(), 'no-scrollbar min-h-0 flex-1 overflow-x-auto overflow-y-hidden max-md:px-0 md:overflow-y-auto')}>
         <div data-slot="field-group" class=${cn(fieldGroupClass(), 'flex-row gap-2.5 py-px **:data-[slot=field-separator]:-mx-4 **:data-[slot=field-separator]:w-auto max-md:px-3 md:flex-col md:gap-3.25')}>
@@ -193,6 +236,10 @@ export function customizer(params: CreateParams) {
             <span class="w-full truncate text-center font-medium">Instructions</span>
           </a>
         </div>
+        <!-- shadcn's Get Code: the project dialog (modules/ui/create/project-form.ts).
+             The invoker command opens it with no script where the browser
+             supports one, and the element opens it everywhere else. -->
+        <button type="button" commandfor="create-project" command="show-modal" data-action="get-code" data-slot="button" class=${cn(buttonClass(), 'h-9 w-full')}>Get Code</button>
       </div>
     </form>`;
 }

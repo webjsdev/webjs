@@ -48,13 +48,24 @@ export interface Option {
   description?: string;
 }
 
-/** The preview blocks the configurator shows, shadcn's preview set. */
+/** The preview blocks the configurator's switch shows, shadcn's preview set. */
 export const PREVIEW_ITEMS: readonly Option[] = [
   { value: 'preview', label: 'Preview' },
   { value: 'preview-02', label: 'Preview 02' },
   { value: 'preview-03', label: 'Preview 03' },
 ];
 export const DEFAULT_ITEM = 'preview';
+
+/**
+ * What the preview can show: a preview block, or any item the explorer lists
+ * (a block, or a component's `<name>-demo`). Only the shape is checked here,
+ * so the browser can share it; /ui/preview/<item> answers 404 for a name that
+ * is neither.
+ */
+export const ITEM_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/** The fields a lock can hold through a shuffle, shadcn's LockableParam. */
+export type LockableField = CreateField;
 
 /**
  * shadcn's styles (apps/v4/registry/styles.tsx), in its order, then the kit's
@@ -97,12 +108,18 @@ export function radiusOptions(): Option[] {
   return RADII.map((r: { name: string; label: string }) => ({ value: r.name, label: r.label }));
 }
 
+/** shadcn's menu picker: a color (default or inverted) and a surface (solid or translucent). */
 export const MENU_COLOR_OPTIONS: readonly Option[] = [
-  { value: 'default', label: 'Default' },
-  { value: 'inverted', label: 'Inverted' },
-  { value: 'default-translucent', label: 'Default Translucent' },
-  { value: 'inverted-translucent', label: 'Inverted Translucent' },
+  { value: 'default', label: 'Default / Solid' },
+  { value: 'default-translucent', label: 'Default / Translucent' },
+  { value: 'inverted', label: 'Inverted / Solid' },
+  { value: 'inverted-translucent', label: 'Inverted / Translucent' },
 ];
+
+/** True for the two translucent menu surfaces. */
+export function isTranslucentMenuColor(value: string | undefined): boolean {
+  return value === 'default-translucent' || value === 'inverted-translucent';
+}
 
 export const MENU_ACCENT_OPTIONS: readonly Option[] = [
   { value: 'subtle', label: 'Subtle' },
@@ -148,6 +165,8 @@ export function normalizeConfig(input: Partial<Record<CreateField, string | null
   if (!input.chartColor && input.theme && wearable.includes(input.theme)) out.chartColor = out.theme;
   if (!wearable.includes(out.chartColor)) out.chartColor = out.theme;
   if (out.fontHeading === out.font) out.fontHeading = 'inherit';
+  // A translucent menu takes the subtle accent, as shadcn's menu picker sets it.
+  if (isTranslucentMenuColor(out.menuColor)) out.menuAccent = 'subtle';
   return out as CreateConfig;
 }
 
@@ -174,7 +193,7 @@ export function parseCreateParams(search: Search): CreateParams {
   const item = read('item');
   return {
     config: normalizeConfig(input),
-    item: item && PREVIEW_ITEMS.some((p) => p.value === item) ? item : DEFAULT_ITEM,
+    item: item && ITEM_NAME.test(item) ? item : DEFAULT_ITEM,
   };
 }
 
@@ -200,34 +219,42 @@ export function previewHref(params: CreateParams): string {
 }
 
 /**
- * A random design, shadcn's randomize: every field drawn from its choices,
- * the theme and chart color from those the drawn base color can wear. Seeded
- * from the current code, so a page renders the same Shuffle link every time
- * (the page's bytes, and so its ETag, stay stable), and each shuffle leads to
- * a new one.
+ * shadcn's curated shuffle list (apps/v4/app/(app)/(create)/lib/shuffle-presets.ts,
+ * from dialectcn.xyz): Shuffle picks one of these rather than drawing every
+ * field at random, so each result is a design someone chose.
  */
-export function shuffleConfig(config: CreateConfig): CreateConfig {
-  let seed = 0;
-  for (const ch of presetCode(config)) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
-  const next = () => {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    return seed / 2 ** 32;
-  };
-  const pick = <T,>(list: readonly T[]): T => list[Math.floor(next() * list.length)];
-  const baseColor = pick(BASE_COLOR_NAMES as readonly string[]);
-  const wearable = themeNamesFor(baseColor);
-  return normalizeConfig({
-    style: pick(PRESET_STYLES as readonly string[]),
-    baseColor,
-    theme: pick(wearable),
-    chartColor: pick(wearable),
-    font: pick(fontOptions()).value,
-    fontHeading: next() < 0.5 ? 'inherit' : pick(fontOptions()).value,
-    iconLibrary: pick(iconLibraryOptions()).value,
-    radius: pick(radiusOptions()).value,
-    menuColor: pick(MENU_COLOR_OPTIONS).value,
-    menuAccent: pick(MENU_ACCENT_OPTIONS).value,
-  });
+export const SHUFFLE_PRESETS: readonly string[] = [
+  'b6sUj34d9', 'b2tqYzpa88', 'b1W4tDrk', 'b1aIuQ2XC', 'b7jsW1RxJ5', 'b870VEw0in', 'b3Zheoix4U',
+  'b1x9M2c4aI', 'b1W7jDEW', 'b51GFh7y6', 'b2fms620zo', 'b1Q5GC', 'buKEvLs', 'b5rR41Mtnc',
+  'b6tOz2I0x', 'b2hNTREGRN', 'bdIJ7Sq', 'b6TqMNb5Wb', 'bJIirQ', 'b4aRK5K0fb', 'b5HCiD38LI',
+  'bdHjvCi', 'b7QDHijUjj', 'b4ZVZIPi9h', 'b1W4bcno',
+];
+
+/**
+ * shadcn's randomize: one of the curated presets, never the one showing, with
+ * every locked field kept as it is. `random` defaults to a generator seeded
+ * from the current code, so the server renders the same Shuffle link every
+ * time (the page's bytes, and so its ETag, stay stable); the browser passes
+ * Math.random.
+ */
+export function shuffleConfig(config: CreateConfig, locks: Iterable<LockableField> = [], random?: () => number): CreateConfig {
+  let next = random;
+  if (!next) {
+    let seed = 0;
+    for (const ch of presetCode(config)) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+    next = () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 2 ** 32;
+    };
+  }
+  const current = presetCode(config);
+  const pool = SHUFFLE_PRESETS.filter((code) => code !== current);
+  const decoded = decodePreset(pool[Math.floor(next() * pool.length)]) ?? {};
+  const locked = new Set(locks);
+  const picked: Partial<Record<CreateField, string>> = {};
+  for (const field of FIELDS) picked[field] = locked.has(field) ? config[field] : (decoded as Record<string, string>)[field];
+  if (!locked.has('chartColor') && !picked.chartColor) picked.chartColor = picked.theme;
+  return normalizeConfig(picked);
 }
 
 /** The label for a field's value, for the picker triggers. */
