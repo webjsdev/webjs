@@ -19,18 +19,22 @@ import { renderPostBody } from '#modules/blog/utils/render-post.ts';
 
 const render = (code: string) => renderToString(html`<pre>${highlight(code)}</pre>`);
 
-test('every token class highlight() emits is styled in public/input.css', () => {
-  // highlight.ts emits t-* classes; they are styled globally in
-  // public/input.css (so every surface, the home page code windows and the
-  // blog code fences, shares one palette). A rename/drop on EITHER side passes
+test('every token class highlight() emits is styled in public/shared-base.css', () => {
+  // highlight.ts emits t-* classes; they are styled in public/shared-base.css,
+  // which both site stylesheets import (so every surface, the home page code
+  // windows, the blog code fences and the /ui docs, shares one palette). A
+  // rename/drop on EITHER side passes
   // the whole suite while shipping plain (unstyled) code samples, so pin the
   // contract (mirrors the no-animations pin in layout-ssr.test.ts).
   const read = (p: string) => readFileSync(fileURLToPath(new URL(p, import.meta.url)), 'utf8');
   const classes = [...read('../../lib/utils/highlight.ts').matchAll(/'(t-[a-z]+)'/g)].map((m) => m[1]);
-  const css = read('../../public/input.css');
+  const css = read('../../public/shared-base.css');
+  for (const input of ['../../public/input.css', '../../public/ui-input.css']) {
+    assert.match(read(input), /@import "\.\/shared-base\.css";/, `${input.slice(6)} imports the shared rules`);
+  }
   assert.ok(classes.length >= 6, `extracted the emitted token classes, got ${classes.join(',')}`);
   for (const cls of new Set(classes)) {
-    assert.ok(css.includes(`.${cls}`), `public/input.css must style the .${cls} token class`);
+    assert.ok(css.includes(`.${cls}`), `public/shared-base.css must style the .${cls} token class`);
   }
 });
 

@@ -39,6 +39,7 @@ test('no colour is declared under a per-theme selector anywhere', () => {
   // Add it here the moment a feature module starts writing styles.
   const files = [
     'public/input.css',
+    'public/shared-base.css',
     ...['app', 'lib', 'components'].flatMap(function walk(dir: string): string[] {
       const abs = resolve(ROOT, dir);
       if (!existsSync(abs)) return [];
