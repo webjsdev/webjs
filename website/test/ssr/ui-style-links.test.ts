@@ -21,4 +21,6 @@ test('the AI Elements index and the react pages link nothing extra', () => {
 test('the home and blocks pages keep their styles', () => {
   assert.deepEqual(extraStylesFor('/ui'), ['luma', 'rhea']);
   assert.deepEqual(extraStylesFor('/ui/blocks/sidebar'), ['luma']);
+  assert.deepEqual(extraStylesFor('/ui/colors'), ['luma']);
+  assert.deepEqual(extraStylesFor('/ui/sera'), ['sera']);
 });

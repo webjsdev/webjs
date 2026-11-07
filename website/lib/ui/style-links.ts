@@ -17,6 +17,10 @@ const STYLES_BY_PATH: Record<string, string[]> = {
   // The home page as shadcn renders it: the hero's buttons in luma and the
   // card grid in rhea.
   '/ui': ['luma', 'rhea'],
+  // The header buttons, from the luma import in shadcn's colors layout.
+  '/ui/colors': ['luma'],
+  // The Sera style's own page, every component on it in sera.
+  '/ui/sera': ['sera'],
 };
 
 const COMPONENT_PAGE = '/ui/docs/components/';
@@ -30,6 +34,10 @@ export function extraStylesFor(pathname: string): string[] {
   // The blocks pages' header buttons, which shadcn's blocks layout imports
   // from its luma style.
   if (path === '/ui/blocks' || path.startsWith('/ui/blocks/')) return ['luma'];
+  // The examples' header buttons, from the same luma import in shadcn's
+  // examples layout. The examples themselves are new-york, and the RTL one
+  // nova, both built into ui.css.
+  if (path.startsWith('/ui/examples/')) return ['luma'];
   // shadcn shows every AI Elements pattern and the helper pages' demos in
   // rhea. The AI Elements index has no preview, so it stays on the default.
   if (path.startsWith('/ui/docs/ai-elements/') || path.startsWith('/ui/docs/helpers/')) return ['rhea'];
